@@ -50,8 +50,12 @@ const SPECS: &[Spec] = &[
     name: "get_project",
     description: "A project's setup: id, key, name, folder, limits, code index, the environment variables its agents \
                   and command tools get (plain text by design: they hold no secrets), whether agents load the \
-                  repository's own agent files (AGENTS.md, CLAUDE.md), its GitHub link, how many connections, \
-                  profiles, pipelines and instructions it has, and its link in the app (its Overview).",
+                  repository's own agent files (AGENTS.md, CLAUDE.md), its base branch (`base_branch.branch`: the \
+                  branch new runs start from and deliver into, null while they take the branch the checkout has \
+                  checked out; `base_branch.missing`: the branch set is gone and new runs are refused, null when \
+                  git cannot tell; kept on this computer only; each run's own base is in its reads), its GitHub \
+                  link, how many connections, profiles, pipelines and instructions it has, and its link in the app \
+                  (its Overview).",
     schema: schema_for_type::<super::projects::InProject>,
     read_only: true,
   },

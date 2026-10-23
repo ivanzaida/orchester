@@ -1,9 +1,10 @@
-//! Integrating a task's latest run (02.13 `vpgrJ`): merging it into the branch the user's checkout
-//! had when it started, recording the merge, and removing what the run left — its worktrees and
-//! its merged branches — right after the merge, or for a run that ended once a person confirms it.
-//! The rules are core's (`orchester_core::integration`); this reads and records what they need.
-//! The codebase indexes only removed worktrees used are removed with them (`orchester_index`).
-//! Blocks on SQLite and git; the UI calls it off the UI thread.
+//! Integrating a task's latest run (02.13 `vpgrJ`): merging it into the base branch it recorded
+//! when it started (in the user's checkout, or beside it when the project's base branch is set and
+//! the checkout has another branch), recording the merge, and removing what the run left — its
+//! worktrees and its merged branches — right after the merge, or for a run that ended once a person
+//! confirms it. The rules are core's (`orchester_core::integration`); this reads and records what
+//! they need. The codebase indexes only removed worktrees used are removed with them
+//! (`orchester_index`). Blocks on SQLite and git; the UI calls it off the UI thread.
 
 use std::{path::Path, sync::Arc};
 
@@ -12,7 +13,8 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, TemporaryLeft, clean_up_recorded_as_seen, leftovers_of, merge_run_as,
+    RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing, clean_up_recorded_as_seen, leftovers_of,
+    merge_run_as,
   },
   revision::Revision,
   run::{BranchName, Run},
@@ -181,6 +183,12 @@ fn merge_message(error: &MergeError, separator: &str) -> Message {
     MergeError::BranchMissing(branch) => {
       Message::new("runs.merge.failure.branchMissing").with("branch", branch.to_string())
     }
+    MergeError::BaseMissing(branch) => {
+      Message::new("runs.merge.failure.baseMissing").with("branch", branch.to_string())
+    }
+    MergeError::CheckedOutIn { branch, path } => Message::new("runs.merge.failure.checkedOutIn")
+      .with("branch", branch.to_string())
+      .with("path", path.clone()),
     MergeError::BranchMoved { branch, expected } => Message::new("runs.merge.failure.branchMoved")
       .with("branch", branch.to_string())
       .with("revision", crate::display::short_revision(expected.as_str()).to_owned()),
@@ -368,11 +376,12 @@ pub fn merge_in_as(
     return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
   }
   let git = programs.git_work();
+  let landing = Landing::of(&db.base_branch_setting()?);
   let outcome = merge_run_as(
     &git,
     (Path::new(GIT), repo_root),
     (&run, task.key()),
-    (expected, delivering),
+    (expected, delivering, landing),
     Timestamp::now(),
   )
   .map_err(IntegrationProblem::Merge)?;

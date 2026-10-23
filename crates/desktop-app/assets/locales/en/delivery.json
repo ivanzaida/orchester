@@ -120,6 +120,8 @@
         "uncommittedOther": "· {{count}} uncommitted files",
         "otherBranch": "· on {{branch}}",
         "detached": "· detached HEAD",
+        "beside": "· on {{branch}}, runs land beside it",
+        "besideDetached": "· detached HEAD, runs land beside it",
         "inProgress": "· a merge is in progress",
         "unknown": "· couldn't be read"
       },

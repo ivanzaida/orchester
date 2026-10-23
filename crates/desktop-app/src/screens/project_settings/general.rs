@@ -1,6 +1,8 @@
 //! General (tLCm1, tQFZQ): project identity, GitHub, repository agent files, telling working agents when the base
-//! branch moves (ORC-54, no frame of its own: laid out as the agent files' switch row) and auto mode.
+//! branch moves (ORC-54), auto mode and the base branch (ORC-81). Neither ORC-54 nor ORC-81 has a frame of its own:
+//! they are laid out as the tab's switch and select rows.
 mod auto_mode;
+mod base_branch;
 mod github;
 use lurq::{
   app::{
@@ -91,6 +93,13 @@ impl Component for General {
         own: self.own.clone(),
       },
     );
+    let branch = ctx.mount_keyed::<base_branch::BaseBranch>("settings-base-branch-setting", props.clone());
+    let branch = section(
+      "settings-base-branch-setting-section",
+      &ctx.t("project_settings.baseBranchSection"),
+      None,
+      vec![branch],
+    );
     page::scroll(
       Column::new()
         .spacing(crate::theme::ExtraSpacing::Roomy.role())
@@ -99,7 +108,8 @@ impl Component for General {
         .child(github)
         .child(files)
         .child(base)
-        .child(auto),
+        .child(auto)
+        .child(branch),
     )
   }
 }

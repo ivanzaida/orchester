@@ -117,6 +117,25 @@ take refuses the send with why. `send_message` and `get_conversation` carry the 
 **Open:** no Pencil frames exist for the chips, the drop highlight, the refusals or the previews; design verification
 against the composer (`QQ2ZM`) and message (`mr4lC`) frames only. Not checked on macOS.
 
+### D6 · The project's base branch (ORC-81) · branch `orchester/orc-81-run-1` (implemented 2026-10-23, waiting for review and design verification)
+
+Project settings › General › *Base branch*: *Checked-out branch* (the default, exactly the behaviour before), a local
+branch, or a remote-tracking one that creates its local branch when chosen; kept in the project's database on this
+computer only (`project_base_branch`). With a branch set, a new run starts from its tip wherever the checkout is and
+records it as its base (`runs.base_branch`), so every delivery follows it; a merge into a base the checkout does not
+have checked out lands beside the checkout through the temporary worktree and `git update-ref`, never switching it
+(`orchester_core::integration::base`, `merge::beside`); the merge queue lands the same way. A branch set that is gone
+refuses new runs (preflight `base_branch_missing`) and the row shows the problem; a change says how many unfinished
+runs keep their base; `get_project` reports `base_branch`. Design: `docs/design/orchester-workspace.md` › *Base branch
+(ORC-81)*; storage: `docs/architecture/storage.md` › *Integration*. Tests: `orchester-core --test integration
+base_branch`, `orchester-store --test integration integration_base`, `orchester-runner --features test-agent --test
+execution execution_starts_from_the_base_branch_set`, `orchester-workspace --test base_branch base_branch`,
+`orchester-workspace --test merge_queue merge_queue`, `orchester-workspace --test pull_requests pull_request_creation`,
+`orchester-app --test project_settings project_settings_base_branch`.
+**Open:** no Pencil frame exists for the row (built with General's select row, hint and error line); Local integration
+works in the checkout, so it still needs the base branch checked out there; the Files page's *Base* version still
+reads the checked-out branch.
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still

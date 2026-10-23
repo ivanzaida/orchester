@@ -1,4 +1,4 @@
-//! Merging a run that succeeded into the branch the user's checkout had when it started, in that
+//! Merging a run that succeeded into the base branch it recorded when it started, in the user's
 //! checkout. It merges only a checkout on that branch with no merge, cherry-pick or revert in
 //! progress, and never stashes, resets or touches uncommitted work: uncommitted changes and
 //! untracked files the merge does not reach stay as they are. It fast-forwards when it can, else
@@ -7,8 +7,10 @@
 //! without reaching the checkout. Either result reaches the checkout as a fast-forward
 //! ([`bring_in`]), which git refuses, changing nothing, when it would overwrite or remove a file
 //! with uncommitted changes, an untracked one or an ignored one; the refusal names exactly those.
-//! The repository's hooks run: they are the user's.
+//! The repository's hooks run: they are the user's. A project whose base branch is set lands a run
+//! beside a checkout on another branch instead ([`beside`]).
 
+mod beside;
 mod bring_in;
 mod restore;
 mod temporary;
@@ -18,7 +20,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{GitError, git::Git};
+use super::{GitError, base::Landing, git::Git};
 use crate::{
   command::CommandRunner,
   id::RunId,
@@ -112,6 +114,13 @@ pub enum MergeError {
   InProgress,
   #[error("the run's branch {0} does not exist")]
   BranchMissing(BranchName),
+  /// The base branch the run would land beside the checkout is gone.
+  #[error("the base branch {0} does not exist")]
+  BaseMissing(BranchName),
+  /// The base branch the run would land beside the checkout is checked out in the worktree at `path`, as git
+  /// prints it: moving it would leave that worktree's files behind.
+  #[error("the base branch {branch} is checked out in {path}")]
+  CheckedOutIn { branch: BranchName, path: String },
   /// The run's branch is no longer at the commit the merge was asked for, e.g. the one a person reviewed.
   #[error("the run's branch {branch} is no longer at {expected}")]
   BranchMoved { branch: BranchName, expected: Revision },
@@ -153,19 +162,26 @@ pub fn merge_run_at(
   expected: Option<&Revision>,
   now: Timestamp,
 ) -> Result<MergeOutcome, MergeError> {
-  merge_run_as(runner, (git, repo), (run, task), (expected, None), now)
+  merge_run_as(
+    runner,
+    (git, repo),
+    (run, task),
+    (expected, None, Landing::Checkout),
+    now,
+  )
 }
 
 /// [`merge_run_at`], landed as `delivering` says when the merge queue asks (`None`: fast-forwarding when it can, as
-/// the task page merges).
+/// the task page merges), where `landing` lets it: beside a checkout on another branch for a project whose base
+/// branch is set.
 pub fn merge_run_as(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
   (run, task): (&Run, &TaskKey),
-  (expected, delivering): (Option<&Revision>, Option<Delivering<'_>>),
+  (expected, delivering, landing): (Option<&Revision>, Option<Delivering<'_>>, Landing),
   now: Timestamp,
 ) -> Result<MergeOutcome, MergeError> {
-  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, delivering))?;
+  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, delivering, landing))?;
   let merge = RunMerge {
     run: run.id(),
     into: run.base_branch().ok_or(MergeError::NoBaseBranch)?.clone(),
@@ -182,26 +198,19 @@ fn merge(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
   (run, task): (&Run, &TaskKey),
-  (expected, delivering): (Option<&Revision>, Option<Delivering<'_>>),
+  (expected, delivering, landing): (Option<&Revision>, Option<Delivering<'_>>, Landing),
 ) -> Result<Merged, MergeError> {
   if run.status() != &RunStatus::Succeeded {
     return Err(MergeError::NotSucceeded);
   }
   let into = run.base_branch().ok_or(MergeError::NoBaseBranch)?;
   let git = Git::new(runner, git, repo);
-  check_checkout(&git, into)?;
-  let branch = run.branch();
-  let head = git
-    .commit(&format!("refs/heads/{branch}"))?
-    .ok_or_else(|| MergeError::BranchMissing(branch.clone()))?;
-  if let Some(expected) = expected
-    && head != expected.as_str()
-  {
-    return Err(MergeError::BranchMoved {
-      branch: branch.clone(),
-      expected: expected.clone(),
-    });
+  if landing.beside(into, git.checked_out_branch()?.as_ref()) {
+    let head = run_head(&git, run, expected)?;
+    return beside::merge(&git, (run, task), (into, &head), delivering);
   }
+  check_checkout(&git, into)?;
+  let head = run_head(&git, run, expected)?;
   let base = git
     .commit("HEAD")?
     .ok_or_else(|| GitError::Failed("HEAD names no commit".to_owned()))?;
@@ -217,11 +226,8 @@ fn merge(
     bring_in::bring_in(&git, (&base, &head))?;
     return Ok((revision(&head)?, MergeKind::FastForward, None));
   }
-  let title = format!("Merge {task} run #{}", run.number().get());
-  let (made, kind) = match delivering.map(|delivering| delivering.as_delivered) {
-    Some(DeliveredAs::Squash { title, body }) => (temporary::Made::Squash { title, body }, MergeKind::Squash),
-    Some(DeliveredAs::MergeCommit) | None => (temporary::Made::Merge { title: &title }, MergeKind::MergeCommit),
-  };
+  let title = title(run, task);
+  let (made, kind) = made(&title, delivering);
   let (merged, left) = temporary::merge_commit(&git, run.id(), (&base, &head), made)?;
   // Hooks ran meanwhile, and so may the person: the checkout must still be where the merge began.
   check_checkout(&git, into)?;
@@ -230,6 +236,36 @@ fn merge(
   }
   bring_in::bring_in(&git, (&base, &merged))?;
   Ok((revision(&merged)?, kind, left))
+}
+
+/// The tip of `run`'s branch, while it is at `expected` when that names one.
+fn run_head<R: CommandRunner>(git: &Git<'_, R>, run: &Run, expected: Option<&Revision>) -> Result<String, MergeError> {
+  let branch = run.branch();
+  let head = git
+    .commit(&format!("refs/heads/{branch}"))?
+    .ok_or_else(|| MergeError::BranchMissing(branch.clone()))?;
+  if let Some(expected) = expected
+    && head != expected.as_str()
+  {
+    return Err(MergeError::BranchMoved {
+      branch: branch.clone(),
+      expected: expected.clone(),
+    });
+  }
+  Ok(head)
+}
+
+/// The merge commit's title: *Merge ORC-12 run #3*.
+fn title(run: &Run, task: &TaskKey) -> String {
+  format!("Merge {task} run #{}", run.number().get())
+}
+
+/// The commit a merge that cannot fast-forward makes: as `delivering` says, else a merge commit titled `title`.
+fn made<'a>(title: &'a str, delivering: Option<Delivering<'a>>) -> (temporary::Made<'a>, MergeKind) {
+  match delivering.map(|delivering| delivering.as_delivered) {
+    Some(DeliveredAs::Squash { title, body }) => (temporary::Made::Squash { title, body }, MergeKind::Squash),
+    Some(DeliveredAs::MergeCommit) | None => (temporary::Made::Merge { title }, MergeKind::MergeCommit),
+  }
 }
 
 /// Refuses a checkout that is not on `into` or has an operation in progress.

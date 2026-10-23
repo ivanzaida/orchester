@@ -62,7 +62,8 @@ pub(super) fn header(ctx: &Ctx, read: &QueueRead, checkout: &Arc<str>) -> Row {
 }
 
 fn base_box(ctx: &Ctx, base: &BaseState, checkout: &Arc<str>) -> Column {
-  let clean = base.checkout == CheckoutState::Clean;
+  // A checkout the runs land beside does not keep delivery out either.
+  let clean = matches!(base.checkout, CheckoutState::Clean | CheckoutState::Beside(_));
   // The panel's own fill, or `warning_muted` in `warning` while the checkout keeps delivery out.
   let (fill, stroke, mark) = if clean {
     (PaletteColor::SurfacePanel, PaletteColor::Border, PaletteColor::Success)
@@ -156,6 +157,11 @@ fn checkout_words(ctx: &Ctx, checkout: &CheckoutState) -> (Arc<str>, PaletteColo
       PaletteColor::Warning,
     ),
     CheckoutState::OtherBranch(None) => (ctx.t("delivery.queue.base.detached"), PaletteColor::Warning),
+    CheckoutState::Beside(Some(branch)) => (
+      ctx.t_args("delivery.queue.base.beside", [("branch", branch.as_str())]),
+      PaletteColor::TextSecondary,
+    ),
+    CheckoutState::Beside(None) => (ctx.t("delivery.queue.base.besideDetached"), PaletteColor::TextSecondary),
     CheckoutState::InProgress => (ctx.t("delivery.queue.base.inProgress"), PaletteColor::Warning),
     CheckoutState::Unknown => (ctx.t("delivery.queue.base.unknown"), PaletteColor::TextMuted),
   }

@@ -131,14 +131,21 @@ impl CommandRunner for FakeGitHub {
       args if args.starts_with("--git-dir ") && args.ends_with(" remote -v") => answer(0, self.remotes, ""),
       args if args.starts_with("auth status") => answer(0, self.auth, ""),
       args if args.starts_with("push ") => self.push.clone(),
-      "fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main" => {
+      "fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main"
+      | "fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/staging:refs/remotes/origin/staging" => {
         answer(0, "", "")
       }
-      "rev-parse --verify --quiet --end-of-options refs/remotes/origin/main^{commit}" => match self.base_ahead {
+      "rev-parse --verify --quiet --end-of-options refs/remotes/origin/main^{commit}"
+      | "rev-parse --verify --quiet --end-of-options refs/remotes/origin/staging^{commit}" => match self.base_ahead {
         Some(_) => answer(0, &commit(7), ""),
         None => answer(1, "", ""),
       },
-      args if args.starts_with("merge-base --all --end-of-options refs/heads/main ") => answer(0, &commit(5), ""),
+      args
+        if args.starts_with("merge-base --all --end-of-options refs/heads/main ")
+          || args.starts_with("merge-base --all --end-of-options refs/heads/staging ") =>
+      {
+        answer(0, &commit(5), "")
+      }
       args if args.starts_with("merge-base --is-ancestor ") => answer(0, "", ""),
       args if args.starts_with("rev-list --count ") => {
         let count = self.base_ahead.unwrap_or_default();
@@ -312,6 +319,28 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
   let listed = list.find(143).expect("the sync stored it");
   let task = listed.task.as_ref().expect("linked to its task");
   assert_eq!((task.key.to_string(), task.run), ("KON-1".to_owned(), run.id()));
+}
+
+/// ORC-81: a run that started on the project's base branch `staging` asks for its pull request into `staging`, the
+/// base it recorded, whatever the checkout has checked out.
+#[test]
+fn pull_request_creation_asks_for_the_base_branch_the_run_recorded() {
+  let mut fixture = Fixture::keyed("KON");
+  let task = fixture.queued_task("Typed errors", at(10));
+  let mut run = fixture.started_run_from(task, (&"a".repeat(40), "staging"), at(20));
+  fixture.succeed(&mut run, at(30));
+  link(&mut fixture);
+  let fake = Arc::new(FakeGitHub::new(run.branch().as_str()));
+  create_in(
+    fixture.repo.path(),
+    &programs(&fake),
+    (run.id(), true, UnpushedBase::Refuse),
+  )
+  .expect("created");
+  let create = fake.ran_one(CREATE).expect("GitHub was asked to open it");
+  let request: serde_json::Value =
+    serde_json::from_str(create.stdin().expect("the request on standard input")).expect("JSON");
+  assert_eq!(request["base"], serde_json::json!("staging"));
 }
 
 #[test]

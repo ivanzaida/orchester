@@ -2,6 +2,7 @@
 //! repositories: merging it into the branch it started from, beside uncommitted work too, and
 //! clearing its worktrees and branches.
 
+mod base_branch;
 mod cleanup;
 mod forgotten;
 mod fork;
