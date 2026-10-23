@@ -4,12 +4,14 @@
 //! the steps a failure kept from starting, returns and restarts and the run's end ([`divider`]); an agent's
 //! message with its tool groups ([`message`], [`chips`]); the person's message, or the Orchestrator chat's; a card
 //! that waits for or records a decision ([`cards`], C3's); a problem row ([`entry`]); a step's result card
-//! ([`result`]); after them the answers and messages the Orchestrator chat proposed that no one applied
-//! ([`proposal`]); and last, while an agent works, the working line ([`working`]). A person's choice to open or fold a
-//! step or a group is kept while the timeline grows ([`Toggles`]).
+//! ([`result`]); what the merge queue did with the run, among them by time ([`delivery`]); after them the answers and
+//! messages the Orchestrator chat proposed that no one applied ([`proposal`]); and last, while an agent works, the
+//! working line ([`working`]). A person's choice to open or fold a step or a group is kept while the timeline grows
+//! ([`Toggles`]).
 
 mod cards;
 mod chips;
+mod delivery;
 mod divider;
 mod entry;
 mod message;
@@ -36,6 +38,7 @@ use orchester_workspace::tasks::{
   detail::TaskDetail,
   timeline::{
     Item, ItemKind,
+    delivery::DeliveryLine,
     group::unwrapped,
     view::{Row, Shown},
     waits_for_you,
@@ -204,6 +207,8 @@ impl Toggles {
 enum Line {
   /// Shared with the tab's built timeline (`super::built`), so a render of the list copies none of it.
   Row(Arc<Row>),
+  /// What the merge queue did with the run ([`delivery`]), shared with the built timeline too.
+  Delivery(Arc<DeliveryLine>),
   /// An answer or a message the Orchestrator chat proposed for the run and no one applied ([`proposal`]).
   Proposal(Box<Proposal>),
   /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
@@ -226,6 +231,7 @@ impl RowProps {
   fn of(line: Line) -> Self {
     let key = match &line {
       Line::Row(row) => row.key().clone(),
+      Line::Delivery(line) => line.key.clone(),
       Line::Proposal(proposal) => proposal.key(),
       Line::Working(_) => "conversation-working".into(),
       Line::JumpRoom => "conversation-jump-room".into(),
@@ -239,26 +245,44 @@ impl RowProps {
   }
 }
 
-/// The chat of `rows`, what the timeline `items` show, then the Orchestrator chat's `proposals` for the run, then
-/// `working`, the working line while an agent works; *Jump to latest* under it while it does not follow the run, with
-/// what arrived since (`arrived` counts the transcript's entries, the conversation's messages and the proposals so
-/// far).
+/// A line of what the merge queue did with the run, and the index of the row it goes before (`super::built`).
+pub(super) type Placed = (usize, Arc<DeliveryLine>);
+
+/// `rows` with the merge queue's lines among them, each before the row its index names.
+fn with_delivery(rows: &[Arc<Row>], delivery: &[Placed]) -> Vec<Line> {
+  let mut lines = Vec::with_capacity(rows.len() + delivery.len());
+  let mut queued = delivery.iter().peekable();
+  for (index, row) in rows.iter().enumerate() {
+    while let Some((_, line)) = queued.next_if(|(before, _)| *before <= index) {
+      lines.push(Line::Delivery(line.clone()));
+    }
+    lines.push(Line::Row(row.clone()));
+  }
+  lines.extend(queued.map(|(_, line)| Line::Delivery(line.clone())));
+  lines
+}
+
+/// The chat of `rows` with the merge queue's lines (`delivery`) among them, what the timeline `items` show, then the
+/// Orchestrator chat's `proposals` for the run, then `working`, the working line while an agent works; *Jump to latest*
+/// under it while it does not follow the run, with what arrived since (`arrived` counts the transcript's entries, the
+/// conversation's messages and the proposals so far; the queue's lines count too).
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
-  (rows, items, proposals): (&[Arc<Row>], &[Item], &[Proposal]),
+  (rows, delivery): (&[Arc<Row>], &[Placed]),
+  (items, proposals): (&[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
 ) -> Element {
+  let arrived = arrived + delivery.len();
   // Until the person scrolls, the first card that waits for them opens the chat instead of its end.
   let waiting = items
     .iter()
     .find(|item| waits_for_you(item))
     .map(|item| item.key.to_string());
-  let reveal = follow.follow(rows.len(), arrived, waiting);
+  let reveal = follow.follow(rows.len() + delivery.len(), arrived, waiting);
   let rows: Arc<Vec<RowProps>> = Arc::new(
-    rows
-      .iter()
-      .map(|row| Line::Row(row.clone()))
+    with_delivery(rows, delivery)
+      .into_iter()
       .chain(
         proposals
           .iter()
@@ -329,6 +353,10 @@ impl Component for RowView {
       Line::Working(working) => ctx.mount_keyed::<working::WorkingLine>("conversation-working-line", working.clone()),
       Line::JumpRoom => follow::jump_room(),
       Line::Row(row) => row_content(ctx, row),
+      Line::Delivery(line) => {
+        let timeline = Timeline::of(ctx);
+        delivery::line(ctx, &timeline, line)
+      }
       Line::Proposal(proposal) => {
         let props = ProposalProps {
           project: Timeline::of(ctx).chat_project,

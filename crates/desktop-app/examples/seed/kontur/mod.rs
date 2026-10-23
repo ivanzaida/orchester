@@ -160,6 +160,14 @@ impl Kontur {
     catalogue::kontur(&mut self.db, connection, published)
   }
 
+  /// The design's catalogue with Feature delivery ending in a Deliver step ([`catalogue::delivering`]), published a
+  /// week before now.
+  fn delivering_catalogue(&mut self) -> Result<Catalogue, SeedError> {
+    let published = self.ago(7 * 24 * 60);
+    let connection = catalogue::codex(&mut self.db, self.fake_codex.as_deref(), published)?;
+    catalogue::delivering(&mut self.db, connection, published)
+  }
+
   /// The Usage page's catalogue ([`catalogue::usage`]) on a Codex and a Claude Code connection that are
   /// recorded, never run, published two weeks before now.
   fn usage_catalogue(&mut self) -> Result<Catalogue, SeedError> {

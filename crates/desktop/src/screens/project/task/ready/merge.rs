@@ -131,7 +131,7 @@ pub(super) fn readiness(ctx: &Ctx, merge: Option<&RunMerge>, leftovers: Option<&
 fn merged_detail(ctx: &Ctx, merge: &RunMerge) -> Arc<str> {
   let key = match merge.kind {
     MergeKind::FastForward => "runs.merge.mergedDetail.fastForward",
-    MergeKind::MergeCommit => "runs.merge.mergedDetail.mergeCommit",
+    MergeKind::MergeCommit | MergeKind::Squash => "runs.merge.mergedDetail.mergeCommit",
     MergeKind::AlreadyMerged => "runs.merge.mergedDetail.alreadyMerged",
   };
   let time = display::clock(merge.merged_at);

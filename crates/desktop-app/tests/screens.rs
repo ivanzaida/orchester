@@ -1,5 +1,5 @@
-//! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
-//! screen is built (`BUILT`; Settings is `tests/settings`). A path that names nothing shows
+//! Every route's path shows its screen's own element, `screen-<name>`, which the screen's own tests read (`BUILT`;
+//! Settings is `tests/settings`; the Merge queue is `tests/merge_queue.rs`). A path that names nothing shows
 //! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
 //! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
 //! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
@@ -52,7 +52,6 @@ use support::Data;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
-const NOT_BUILT: &str = "This screen isn't built yet.";
 /// What a task's page shows while the project's tasks are read; nothing reads them here.
 const READING_TASK: &str = "Reading the task…";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
@@ -68,6 +67,7 @@ const BUILT: &[Screen] = &[
   Screen::ImportResources,
   Screen::Instructions,
   Screen::Memory,
+  Screen::MergeQueue,
   Screen::Modules,
   Screen::NewConnection,
   Screen::NewTask,
@@ -261,13 +261,12 @@ fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
   .to_vec()
 }
 
-/// A route of every screen, with what it shows: a placeholder's title and that it is not built, or what
-/// a built screen shows first.
+/// A route of every screen, with what it shows first; a screen in `BUILT` its own tests read, by its title here.
 fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   let changes = TaskView::Changes(Some(
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
-  let placeholder = |title| vec![title, NOT_BUILT];
+  let placeholder = |title| vec![title];
   let pull_request = NonZeroU64::new(142).expect("a pull request number");
   let mut all = home_screens();
   all.extend([

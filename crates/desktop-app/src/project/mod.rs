@@ -13,6 +13,7 @@ mod feedback;
 pub mod hold;
 mod host;
 mod known;
+pub(crate) mod merge_queue;
 pub mod own;
 mod state;
 mod waits;

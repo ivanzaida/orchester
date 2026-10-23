@@ -138,8 +138,10 @@ const fn glyph(kind: NeedKind) -> Icon {
     NeedKind::PlanReview => Icon::Map,
     NeedKind::Decision | NeedKind::Input => Icon::Hand,
     NeedKind::StoppedAtLimit => Icon::Gauge,
-    NeedKind::Interrupted => Icon::CirclePause,
+    NeedKind::Interrupted | NeedKind::DeliveryBlocked => Icon::CirclePause,
     NeedKind::ReadyToMerge => Icon::GitMerge,
+    NeedKind::Conflicts => Icon::GitCompareArrows,
+    NeedKind::DeliveryStopped => Icon::GitBranch,
     NeedKind::Memory => Icon::Brain,
   }
 }
@@ -164,6 +166,9 @@ const fn kind_name(kind: NeedKind) -> &'static str {
     NeedKind::StoppedAtLimit => "limit",
     NeedKind::Interrupted => "interrupted",
     NeedKind::ReadyToMerge => "merge",
+    NeedKind::Conflicts => "conflicts",
+    NeedKind::DeliveryStopped => "delivery-stopped",
+    NeedKind::DeliveryBlocked => "delivery-blocked",
     NeedKind::Memory => "memory",
   }
 }

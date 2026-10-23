@@ -1,7 +1,7 @@
 //! What the pipeline screens say about a step, a version or a change, as messages.
 
 use orchester_core::{
-  resource::{PipelineChange, RepositoryAccess, Step, StepChange, StepKind},
+  resource::{DeliverChange, PipelineChange, RepositoryAccess, Step, StepChange, StepKind},
   tokens::compact_tokens,
 };
 
@@ -117,8 +117,12 @@ pub fn run_count(count: usize) -> Message {
 
 /// One line of the change list in the publish confirmation (`LXUS6`) and the version history.
 pub fn change(change: &PipelineChange) -> Message {
-  let PipelineChange::Step { name, change, .. } = change else {
-    return Message::new("pipelines.changes.description");
+  let (name, change) = match change {
+    PipelineChange::Step { name, change, .. } => (name, change),
+    PipelineChange::Description => return Message::new("pipelines.changes.description"),
+    PipelineChange::Deliver(DeliverChange::Added) => return Message::new("pipelines.changes.deliverAdded"),
+    PipelineChange::Deliver(DeliverChange::Removed) => return Message::new("pipelines.changes.deliverRemoved"),
+    PipelineChange::Deliver(DeliverChange::Changed) => return Message::new("pipelines.changes.deliverChanged"),
   };
   let about = |key: &'static str| Message::new(key).with("step", name.as_str().to_owned());
   match change {

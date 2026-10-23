@@ -1,6 +1,7 @@
 //! The Overview's recent runs (`Recent activity` `BZ65j`): on a panel, the latest change of the most
 //! recently changed runs, each its status's icon, what happened and its task with the time, opening the
-//! task. Without any it says why (`nttN9`); while the tasks are read, a reading line (`GVk14`).
+//! task; a run of the merge queue as the queue has it (`Urfxj` in `K1d1mi`), and a blocked queue on top, opening the
+//! Merge queue. Without any it says why (`nttN9`); while the tasks are read, a reading line (`GVk14`).
 
 use lurq::{
   app::{
@@ -10,22 +11,27 @@ use lurq::{
   components::{Button, Column, Text},
   node::{Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ProjectId;
+use orchester_core::{
+  id::ProjectId,
+  merge_queue::{Left, QueueState},
+  run::TaskPhase,
+};
 use orchester_workspace::{
   display,
   tasks::{
     data::ProjectTasks,
-    overview::{RecentRun, activity_empty, recent_runs},
+    overview::{RecentRun, activity_empty, recent_activity},
   },
 };
 
 use super::{open_task, tasks::reading};
 use crate::{
-  routes::TaskTab,
+  navigation::Navigation,
+  routes::{ProjectPage, Route, TaskTab},
   theme::{ExtraColor, ExtraSpacing, IconSize, OverviewText},
   ui::{
     card::{CardSurface, card_frame},
-    icon::icon,
+    icon::{Icon, icon},
     message::message_text,
     pressable::opening,
     status::Status,
@@ -48,7 +54,7 @@ pub(super) fn section(ctx: &mut Ctx, project: ProjectId, tasks: Option<&ProjectT
       "overview-activity-reading",
     ));
   };
-  let recent = recent_runs(&tasks.tasks, &tasks.phases, SHOWN);
+  let recent = recent_activity(tasks, SHOWN);
   if recent.is_empty() {
     return section.child(
       Text::new(&message_text(ctx, &activity_empty(&tasks.phases)))
@@ -57,7 +63,11 @@ pub(super) fn section(ctx: &mut Ctx, project: ProjectId, tasks: Option<&ProjectT
         .color(PaletteColor::TextMuted),
     );
   }
-  let entries: Vec<Button> = recent.iter().map(|run| entry(ctx, project, run)).collect();
+  let blocked = blocked_entry(ctx, project, tasks);
+  let entries: Vec<Button> = blocked
+    .into_iter()
+    .chain(recent.iter().map(|run| entry(ctx, project, run)))
+    .collect();
   section.child(
     card_frame("overview-activity-list", CardSurface::Panel)
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Xs))
@@ -68,6 +78,7 @@ pub(super) fn section(ctx: &mut Ctx, project: ProjectId, tasks: Option<&ProjectT
 /// One run (`Activity row` `JUUSu`): *Run #128 completed*, *KON-9 · 13:12*.
 fn entry(ctx: &mut Ctx, project: ProjectId, run: &RecentRun) -> Button {
   let status = Status::of_phase(run.phase);
+  let (glyph, color) = queue_look(run).unwrap_or_else(|| (status.icon(), status.color()));
   let meta = ctx.t_args(
     "overview.activity.meta",
     [("task", run.key.to_string()), ("time", display::clock(run.at))],
@@ -79,7 +90,7 @@ fn entry(ctx: &mut Ctx, project: ProjectId, run: &RecentRun) -> Button {
     .spacing(ExtraSpacing::Loose.role())
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .describe("status", status.key())
-    .child(icon(status.icon(), IconSize::Md, status.color()))
+    .child(icon(glyph, IconSize::Md, color))
     .child(
       Text::new(&message_text(ctx, &run.title()))
         .variant(OverviewText::Event.role())
@@ -87,4 +98,54 @@ fn entry(ctx: &mut Ctx, project: ProjectId, run: &RecentRun) -> Button {
         .min_width(Dimension::Px(0.0)),
     )
     .child(Text::new(&meta).variant(OverviewText::FigureDetail.role()).nowrap())
+}
+
+/// The glyph of a run of the merge queue: waiting its turn, delivered, waiting for the person, or out of it.
+fn queue_look(run: &RecentRun) -> Option<(Icon, PaletteColor)> {
+  if run.phase != TaskPhase::Succeeded {
+    return None;
+  }
+  Some(match &run.queue.as_ref()?.0 {
+    QueueState::Queued => (Icon::Clock3, PaletteColor::TextSecondary),
+    QueueState::Syncing | QueueState::Rechecking { .. } | QueueState::Integrating { .. } => {
+      (Icon::LoaderCircle, PaletteColor::TextSecondary)
+    }
+    QueueState::WaitingForApproval => (Icon::Hand, PaletteColor::Warning),
+    QueueState::Blocked(_) => (Icon::CirclePause, PaletteColor::Warning),
+    QueueState::Left(left) if left.failed() => (Icon::CircleX, PaletteColor::Danger),
+    QueueState::Left(Left::KeepsMoving { .. } | Left::Conflicts { .. } | Left::CheckFailed { .. }) => {
+      (Icon::Hand, PaletteColor::Warning)
+    }
+    QueueState::Left(_) | QueueState::Merged(_) | QueueState::Removed => return None,
+  })
+}
+
+/// *Merge queue blocked: uncommitted changes in your checkout*, at the time it blocked, opening the Merge queue.
+fn blocked_entry(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> Option<Button> {
+  let since = tasks.merge_queue.iter().find_map(|entry| match &entry.state {
+    QueueState::Blocked(_) => Some(entry.since),
+    _ => None,
+  })?;
+  let route = Navigation::of(ctx).to(Route::Project(project, ProjectPage::MergeQueue));
+  Some(
+    opening(route)
+      .id("overview-event-merge-queue")
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::vertical(SpacingSize::Sm))
+      .spacing(ExtraSpacing::Loose.role())
+      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+      .describe("status", "blocked")
+      .child(icon(Icon::CirclePause, IconSize::Md, PaletteColor::Warning))
+      .child(
+        Text::new(&ctx.t("overview.activity.mergeQueueBlocked"))
+          .variant(OverviewText::Event.role())
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0)),
+      )
+      .child(
+        Text::new(&display::clock(since))
+          .variant(OverviewText::FigureDetail.role())
+          .nowrap(),
+      ),
+  )
 }

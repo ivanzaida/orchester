@@ -173,7 +173,18 @@
       "succeeded": "Run #{{run}} completed",
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
-      "cancelled": "Run #{{run}} was canceled"
+      "cancelled": "Run #{{run}} was canceled",
+      "queue": {
+        "joined": "Run #{{run}} joined the merge queue · #{{place}} in line",
+        "delivering": "Run #{{run}} is being delivered",
+        "integrating": "Run #{{run}} integrates {{count}} conflicting files",
+        "ready": "Run #{{run}} is ready to merge",
+        "blocked": "Run #{{run}} waits: the merge queue is blocked",
+        "conflicts": "Run #{{run}} left the merge queue: Integrate couldn't resolve {{count}} files",
+        "keepsMoving": "Run #{{run}} left the merge queue: {{base}} keeps moving",
+        "checkFailed": "Run #{{run}} left the merge queue: {{tool}} failed on the merged result",
+        "stopped": "Run #{{run}} left the merge queue"
+      }
     },
     "board": {
       "noRuns": "No runs yet",
@@ -227,10 +238,14 @@
         "stoppedAtLimit": "Stopped at limit",
         "interrupted": "Interrupted",
         "readyToMerge": "Ready to merge",
+        "conflicts": "Conflicts need you",
+        "deliveryStopped": "Delivery stopped",
+        "deliveryBlocked": "Delivery blocked",
         "memory": "Memory"
       },
       "context": "{{task}} · {{title}}",
       "contextMemory": "Project memory",
+      "contextMergeQueue": "Merge queue · {{count}} runs wait",
       "contextUnread": "Its run cannot be read, so its task is not known",
       "title": {
         "command": "{{agent}} asks to run {{command}}",
@@ -245,6 +260,15 @@
         "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
         "interrupted": "Run #{{run}} was interrupted",
         "readyToMerge": "{{task}} is ready to merge: every step passed",
+        "conflicts": "Integrate couldn't resolve {{files}}.",
+        "checkFailed": "Check on the merged result failed: {{tool}}; the run left the queue.",
+        "keepsMoving": "{{base}} moved during each of {{count}} checks; the run left the queue.",
+        "deliveryStopped": "Run #{{run}} left the merge queue: {{detail}}",
+        "laterRun": "Run #{{run}} left the merge queue: the task has a later run.",
+        "blockedUncommitted": "Your checkout has uncommitted changes.",
+        "blockedOtherBranch": "Your checkout is not on the base branch.",
+        "blockedInProgress": "A merge is in progress in your checkout.",
+        "blockedHeld": "A local integration holds your checkout.",
         "memoryOne": "1 memory record waits for approval",
         "memoryOther": "{{count}} memory records wait for approval"
       },
@@ -258,6 +282,8 @@
         "raiseLimit": "Raise the limit",
         "reviewMerge": "Review & merge",
         "openTask": "Open task",
+        "openConflicts": "Open conflicts",
+        "openMergeQueue": "Open merge queue",
         "reviewRecords": "Review records"
       },
       "unavailable": {
@@ -1188,7 +1214,10 @@
       "approvalRemoved": "{{step}} · no longer waits for approval",
       "failureRoute": "{{step}} · when changes are requested changed",
       "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
-      "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
+      "budget": "{{step}} · step budget {{from}} → {{to}} tokens",
+      "deliverAdded": "Deliver · added: runs that pass every step join the merge queue",
+      "deliverRemoved": "Deliver · removed: runs end in Ready for review and you merge them from the task",
+      "deliverChanged": "Deliver · mode, merge method, integrator or re-check changed"
     },
     "starter": {
       "research": {
@@ -1404,6 +1433,7 @@
       "runNotReady": "Only a run that is ready for review can be merged.",
       "noBaseBranch": "The run did not start from a branch, so there is no branch to merge it into.",
       "alreadyMerged": "The run was merged already.",
+      "deliveredByQueue": "The run's pipeline ends in a Deliver step, so the merge queue delivers it: it merges in its turn, after its approval when the pipeline asks for one.",
       "mergedOutside": "The run’s work is in {{branch}} already: it was merged without Orchester.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
@@ -1913,7 +1943,8 @@
         "markedBlocked": "Run #{{run}} was not merged on its own: its task is marked Blocked ({{reason}}). Nothing was merged; the merge is the person's.",
         "blockedByTasks": "Run #{{run}} was not merged on its own: unfinished tasks block its task ({{tasks}}). Nothing was merged; the merge is the person's.",
         "held": "Run #{{run}} was not merged on its own: new starts are held for its group or the project. Nothing was merged; the merge is the person's.",
-        "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's."
+        "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
+        "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
       },
       "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "releaseNothing": {
@@ -1961,6 +1992,14 @@
     "settings": {
       "recordsInvalid": "Enter a whole number of records from {{min}} to {{max}}.",
       "tokensInvalid": "Enter a whole number of tokens from {{min}} to {{max}}."
+    }
+  },
+  "mergeQueue": {
+    "refused": {
+      "notThere": "The run is no longer where this page showed it in the merge queue. Look at the queue again.",
+      "first": "The run is first in line already.",
+      "personOnly": "Only a person approves a merge from the merge queue. Press Merge into the base branch yourself.",
+      "resolve": "The run's worktree could not be merged: {{detail}}"
     }
   }
 }

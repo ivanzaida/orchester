@@ -41,6 +41,26 @@ pub enum MergeKind {
   MergeCommit,
   /// The base branch already held every commit of the run's branch; nothing changed.
   AlreadyMerged,
+  /// One commit on the base branch holds the run's work squashed (a Deliver step's *Squash*); the run's branch is
+  /// not part of the base branch's history.
+  Squash,
+}
+
+/// How the merge queue lands a run as its pipeline's Deliver step asks: always a merge commit, or one squashed commit
+/// with its `title` and `body`. A merge from the task page fast-forwards when it can instead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeliveredAs<'a> {
+  MergeCommit,
+  Squash { title: &'a str, body: &'a str },
+}
+
+/// What the merge queue lands: `as_delivered`, onto the base branch only while it is at `base`, the head the run was
+/// synced and checked on. A base that moved since, by anyone, merges nothing ([`MergeError::BaseMoved`]): a run is
+/// never merged on a check of an older base.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Delivering<'a> {
+  pub as_delivered: DeliveredAs<'a>,
+  pub base: &'a Revision,
 }
 
 /// A run whose work was merged: into which branch, the commit that branch was at afterwards, and
@@ -133,7 +153,19 @@ pub fn merge_run_at(
   expected: Option<&Revision>,
   now: Timestamp,
 ) -> Result<MergeOutcome, MergeError> {
-  let (revision, kind, left) = merge(runner, (git, repo), (run, task), expected)?;
+  merge_run_as(runner, (git, repo), (run, task), (expected, None), now)
+}
+
+/// [`merge_run_at`], landed as `delivering` says when the merge queue asks (`None`: fast-forwarding when it can, as
+/// the task page merges).
+pub fn merge_run_as(
+  runner: &impl CommandRunner,
+  (git, repo): (&Path, &Path),
+  (run, task): (&Run, &TaskKey),
+  (expected, delivering): (Option<&Revision>, Option<Delivering<'_>>),
+  now: Timestamp,
+) -> Result<MergeOutcome, MergeError> {
+  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, delivering))?;
   let merge = RunMerge {
     run: run.id(),
     into: run.base_branch().ok_or(MergeError::NoBaseBranch)?.clone(),
@@ -150,7 +182,7 @@ fn merge(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
   (run, task): (&Run, &TaskKey),
-  expected: Option<&Revision>,
+  (expected, delivering): (Option<&Revision>, Option<Delivering<'_>>),
 ) -> Result<Merged, MergeError> {
   if run.status() != &RunStatus::Succeeded {
     return Err(MergeError::NotSucceeded);
@@ -173,22 +205,31 @@ fn merge(
   let base = git
     .commit("HEAD")?
     .ok_or_else(|| GitError::Failed("HEAD names no commit".to_owned()))?;
+  if let Some(delivering) = delivering
+    && base != delivering.base.as_str()
+  {
+    return Err(MergeError::BaseMoved { branch: into.clone() });
+  }
   if git.is_ancestor(&head, &base)? {
     return Ok((revision(&base)?, MergeKind::AlreadyMerged, None));
   }
-  if git.is_ancestor(&base, &head)? {
+  if delivering.is_none() && git.is_ancestor(&base, &head)? {
     bring_in::bring_in(&git, (&base, &head))?;
     return Ok((revision(&head)?, MergeKind::FastForward, None));
   }
   let title = format!("Merge {task} run #{}", run.number().get());
-  let (merged, left) = temporary::merge_commit(&git, run.id(), (&base, &head), &title)?;
+  let (made, kind) = match delivering.map(|delivering| delivering.as_delivered) {
+    Some(DeliveredAs::Squash { title, body }) => (temporary::Made::Squash { title, body }, MergeKind::Squash),
+    Some(DeliveredAs::MergeCommit) | None => (temporary::Made::Merge { title: &title }, MergeKind::MergeCommit),
+  };
+  let (merged, left) = temporary::merge_commit(&git, run.id(), (&base, &head), made)?;
   // Hooks ran meanwhile, and so may the person: the checkout must still be where the merge began.
   check_checkout(&git, into)?;
   if git.commit("HEAD")?.as_deref() != Some(base.as_str()) {
     return Err(MergeError::BaseMoved { branch: into.clone() });
   }
   bring_in::bring_in(&git, (&base, &merged))?;
-  Ok((revision(&merged)?, MergeKind::MergeCommit, left))
+  Ok((revision(&merged)?, kind, left))
 }
 
 /// Refuses a checkout that is not on `into` or has an operation in progress.
@@ -200,12 +241,20 @@ fn check_checkout<R: CommandRunner>(git: &Git<'_, R>, into: &BranchName) -> Resu
       current,
     });
   }
-  for operation in IN_PROGRESS {
-    if git.succeeds(&["rev-parse", "--verify", "--quiet", operation])? {
-      return Err(MergeError::InProgress);
-    }
+  if in_progress(git)? {
+    return Err(MergeError::InProgress);
   }
   Ok(())
+}
+
+/// Whether a merge, cherry-pick or revert is in progress where `git` runs.
+pub(super) fn in_progress<R: CommandRunner>(git: &Git<'_, R>) -> Result<bool, GitError> {
+  for operation in IN_PROGRESS {
+    if git.succeeds(&["rev-parse", "--verify", "--quiet", operation])? {
+      return Ok(true);
+    }
+  }
+  Ok(false)
 }
 
 fn revision(sha: &str) -> Result<Revision, GitError> {

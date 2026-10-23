@@ -1,7 +1,11 @@
 //! `list_runs`: the runs of a task, of a project or of every project the app knows, newest first, each as its
-//! task's Summary lists it (*Runs of this task*): where it stands, what happened and its link.
+//! task's Summary lists it (*Runs of this task*): where it stands, its place in the merge queue, what happened and its
+//! link.
 
-use std::{cmp::Reverse, collections::HashSet};
+use std::{
+  cmp::Reverse,
+  collections::{HashMap, HashSet},
+};
 
 use orchester_core::{
   id::{ProjectId, RunId},
@@ -17,6 +21,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::{Across, across, needs_project},
+  merge_queue::deliveries,
   tasks::find_task,
   wire,
 };
@@ -68,18 +73,19 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
         Some(named) => vec![find_task(db, named)?],
         None => db.tasks()?,
       };
-      tasks
+      let tasks = tasks
         .into_iter()
         .map(|task| {
           let runs = runs_of(db, &task)?;
           Ok((task, runs))
         })
-        .collect::<Result<Vec<_>, ToolError>>()
+        .collect::<Result<Vec<_>, ToolError>>()?;
+      Ok((tasks, deliveries(db)?))
     })?;
     // Git tells the runs merged outside Orchester, as the task's Summary reads them: only for the runs given, and
     // once for each project.
     let given = newest(&read, limit);
-    read.each_mut(|open, tasks| {
+    read.each_mut(|open, (tasks, _)| {
       let runs = tasks
         .iter_mut()
         .flat_map(|(_, runs)| runs.iter_mut())
@@ -89,10 +95,14 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
     Ok(read)
   })
   .await?;
-  let mut runs = read.items(|open, tasks| {
+  let mut runs = read.items(|open, (tasks, deliveries)| {
     tasks
       .iter()
-      .flat_map(|(task, runs)| runs.iter().map(|run| run_json(open.project.id(), task, run, translate)))
+      .flat_map(|(task, runs)| {
+        runs
+          .iter()
+          .map(|run| run_json(open.project.id(), (task, run, deliveries.get(&run.id)), translate))
+      })
       .collect()
   });
   // Newest first across tasks and projects; a run that cannot be read has no time and comes last.
@@ -102,21 +112,29 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
   Ok(json!({ "runs": runs, "more": more, "unreadable_projects": read.unreadable(translate) }))
 }
 
+/// A project's tasks with their runs, and the place of each run that joined the merge queue.
+type Listed = (Vec<(Task, Vec<RunRecord>)>, HashMap<RunId, Value>);
+
 /// The `limit` runs of `read` the answer gives, newest first as it sorts them: the items' order, then by when they
 /// started, a run that cannot be read last.
-fn newest(read: &Across<Vec<(Task, Vec<RunRecord>)>>, limit: usize) -> HashSet<RunId> {
+fn newest(read: &Across<Listed>, limit: usize) -> HashSet<RunId> {
   let mut runs: Vec<(RunId, Option<i64>)> = read
     .found()
-    .flat_map(|(_, tasks)| tasks.iter().flat_map(|(_, runs)| runs.iter()))
+    .flat_map(|(_, (tasks, _))| tasks.iter().flat_map(|(_, runs)| runs.iter()))
     .map(|run| (run.id, run.run.as_ref().map(|run| wire::time(run.created_at()))))
     .collect();
   runs.sort_by_key(|(_, created)| Reverse(*created));
   runs.into_iter().take(limit).map(|(id, _)| id).collect()
 }
 
-/// A run of `task` of `project` as the task's Summary lists it, with its state, its tokens and its link: the
-/// task's page. A run that cannot be read has its id, number and why alone.
-fn run_json(project: ProjectId, task: &Task, record: &RunRecord, translate: &Translate) -> Value {
+/// A run of `task` of `project` as the task's Summary lists it, with its state, its place in the merge queue
+/// (`delivery`, when it joined it), its tokens and its link: the task's page. A run that cannot be read has its id,
+/// number and why alone.
+fn run_json(
+  project: ProjectId,
+  (task, record, delivery): (&Task, &RunRecord, Option<&Value>),
+  translate: &Translate,
+) -> Value {
   let run = record.run.as_deref();
   json!({
     "id": record.id.to_string(),
@@ -124,6 +142,7 @@ fn run_json(project: ProjectId, task: &Task, record: &RunRecord, translate: &Tra
     "task": { "key": task.key().to_string(), "title": task.details().title.as_str() },
     "phase": record.phase.map(wire::phase),
     "status": run.map(|run| wire::run_status(run.status(), record.runner_failure)),
+    "delivery": delivery,
     "detail": translate.text(&record.detail),
     "tokens": run.map(|run| json!({ "used": run.used().get(), "budget": run.budget().map(TokenBudget::get) })),
     "created_at": run.map(|run| wire::time(run.created_at())),

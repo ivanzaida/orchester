@@ -24,6 +24,9 @@ use crate::ui::{
 
 pub fn panel(ctx: &mut Ctx, state: &State, busy: bool, navigation_busy: bool) -> Element {
   let editing = state.get();
+  if editing.panel == Panel::Deliver {
+    return super::deliver::panel(ctx, state, busy || editing.viewing.is_some());
+  }
   let shown = editing.shown();
   if let Panel::Step(key) = &editing.panel
     && let Some(step) = shown.step(key)

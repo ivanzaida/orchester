@@ -157,12 +157,16 @@ fn restore_button(ctx: &Ctx, state: &State, writing: bool) -> ActionButton {
   });
   if writing { button.disabled() } else { button }
 }
+/// Where the comparison counts the Deliver step among the changed steps: no step key holds a space.
+const DELIVER_KEY: &str = "deliver step";
+
 fn comparison_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
   let count = editing.viewing.as_ref().map_or(0, |before| {
     orchester_core::resource::changes(before, &editing.opened.body)
       .iter()
       .filter_map(|change| match change {
-        orchester_core::resource::PipelineChange::Step { key, .. } => Some(key),
+        orchester_core::resource::PipelineChange::Step { key, .. } => Some(key.as_str()),
+        orchester_core::resource::PipelineChange::Deliver(_) => Some(DELIVER_KEY),
         orchester_core::resource::PipelineChange::Description => None,
       })
       .collect::<std::collections::BTreeSet<_>>()

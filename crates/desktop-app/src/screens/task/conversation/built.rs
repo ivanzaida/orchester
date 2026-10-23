@@ -2,7 +2,8 @@
 //! transcript and requests as read, the task, the conversation and the rows the person opened or folded. The tab
 //! renders again for what changes none of them (another read of the page, the chat following its end or not), and
 //! building a long run's timeline is the tab's costliest work: 8 ms a render for 1,250 entries in a release build,
-//! twice as the chat opened. Its rows are shared with the list, which then compares them by address.
+//! twice as the chat opened. Its rows are shared with the list, which then compares them by address. What the merge
+//! queue did with the run (ORC-19) comes with them, each line with the row it goes before.
 
 use std::sync::Arc;
 
@@ -10,21 +11,22 @@ use orchester_workspace::tasks::{
   conversation::{Conversation, orchestrator::continued},
   detail::{RunView, TaskDetail},
   timeline::{
-    self as items, Item, Sources,
+    self as items, Item, Sources, delivery,
     load::Loaded,
     view::{self, Choice, Row},
   },
 };
 use parking_lot::Mutex;
 
-use super::timeline::{OpenRows, without_usage};
+use super::timeline::{OpenRows, Placed, without_usage};
 use crate::ui::markdown::plain;
 
-/// The timeline's items, and the rows the chat shows of them.
+/// The timeline's items, the rows the chat shows of them, and the merge queue's lines with the row each goes before.
 #[derive(Clone)]
 pub(super) struct Built {
   pub(super) items: Arc<Vec<Item>>,
   pub(super) rows: Arc<Vec<Arc<Row>>>,
+  pub(super) delivery: Arc<Vec<Placed>>,
 }
 
 /// What a timeline was built from.
@@ -73,9 +75,21 @@ impl BuiltTimeline {
       &|key: &str, default: bool| open.is_open(key, default),
       &plain::rendered,
     ));
+    let rows: Vec<Arc<Row>> = shown.rows.into_iter().map(Arc::new).collect();
+    let lines = detail
+      .queue
+      .as_ref()
+      .and_then(|queue| queue.delivery.as_ref())
+      .map(delivery::lines)
+      .unwrap_or_default();
+    let placed = delivery::places(&rows, &lines)
+      .into_iter()
+      .zip(lines.into_iter().map(Arc::new))
+      .collect();
     let built = Built {
       items: Arc::new(items),
-      rows: Arc::new(shown.rows.into_iter().map(Arc::new).collect()),
+      rows: Arc::new(rows),
+      delivery: Arc::new(placed),
     };
     *last = Some((
       Source {

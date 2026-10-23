@@ -8,9 +8,9 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
-    AgentProfile, CommandAction, CommandArg, CommandProgram, Draft, FailureRoute, ModelId, Pipeline, PromptText,
-    ProviderSettings, RepositoryAccess, ResourceBody, Slug, StarterAssignments, StarterStep, StarterStepText, Step,
-    StepKey, StepKind, Tool, Version, feature_delivery,
+    AgentProfile, CommandAction, CommandArg, CommandProgram, DeliverMode, DeliverStep, Draft, FailureRoute,
+    MergeMethod, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, Slug,
+    StarterAssignments, StarterStep, StarterStepText, Step, StepKey, StepKind, Tool, Version, feature_delivery,
   },
   run::{PublishedVersions, RunSnapshot},
   store::{ConnectionStore, ResourceStore},
@@ -27,6 +27,9 @@ pub const MODEL: &str = "gpt-5.5";
 /// The command lines of the static catalogue's tools, by the key of the step that runs them.
 const CHECKS: &[&str] = &["cargo", "test"];
 const PULL_REQUEST: &[&str] = &["gh", "pr", "create", "--fill"];
+/// The checks of the delivering catalogue, which the merge queue runs again on the merged result: what the QA
+/// repository passes (no whitespace error in the worktree), so a run checked there merges.
+const DELIVERY_CHECKS: &[&str] = &["git", "diff", "--check"];
 
 /// A pipeline's latest published version, pinned the way a run pins it.
 pub struct Published {
@@ -236,7 +239,7 @@ pub fn usage(
     },
     now,
   )?;
-  starter_catalogue(db, &profiles, now)
+  starter_catalogue(db, &profiles, now, false)
 }
 
 /// The model of the usage scenario's Claude Code profiles.
@@ -248,12 +251,26 @@ const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
 /// pass: runs here are recorded, not run.
 pub fn kontur(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Result<Catalogue, SeedError> {
   let profiles = Profiles::publish(db, connection, now)?;
-  starter_catalogue(db, &profiles, now)
+  starter_catalogue(db, &profiles, now, false)
 }
 
-/// Feature delivery v3 and Quick fix v2 on `profiles`, with the checks and pull request tools.
-fn starter_catalogue(db: &mut ProjectDb, profiles: &Profiles, now: Timestamp) -> Result<Catalogue, SeedError> {
-  let checks = command_tool(db, "Run checks", CHECKS, now)?;
+/// [`kontur`] with Feature delivery v3 ending in a Deliver step (ORC-19, `Delivery` `p9aqZc`): approve to merge,
+/// merge commits, conflicts to Builder, Check again on the merged result.
+pub fn delivering(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Result<Catalogue, SeedError> {
+  let profiles = Profiles::publish(db, connection, now)?;
+  starter_catalogue(db, &profiles, now, true)
+}
+
+/// Feature delivery v3 and Quick fix v2 on `profiles`, with the checks and pull request tools; Feature delivery's
+/// last version ends in a Deliver step when it `delivers`.
+fn starter_catalogue(
+  db: &mut ProjectDb,
+  profiles: &Profiles,
+  now: Timestamp,
+  delivers: bool,
+) -> Result<Catalogue, SeedError> {
+  let line = if delivers { DELIVERY_CHECKS } else { CHECKS };
+  let checks = command_tool(db, "Run checks", line, now)?;
   let pull_request = command_tool(db, "Create pull request", PULL_REQUEST, now)?;
   let assignments = StarterAssignments {
     explorer: Some(profiles.explorer),
@@ -263,14 +280,32 @@ fn starter_catalogue(db: &mut ProjectDb, profiles: &Profiles, now: Timestamp) ->
     checks: Some(checks.0),
     pull_request: Some(pull_request.0),
   };
-  let versions = [
+  let deliver = delivers.then(|| {
+    DeliverStep::new(
+      DeliverMode::ApproveToMerge,
+      MergeMethod::MergeCommit,
+      Some(profiles.builder),
+      true,
+    )
+  });
+  let implements = [
     "Implement the plan.",
     "Implement the approved plan.",
     "Implement the approved plan in small commits.",
-  ]
-  .into_iter()
-  .map(|implement| feature_delivery(|step| starter_text(step, implement), assignments))
-  .collect();
+  ];
+  let last = implements.len() - 1;
+  let versions = implements
+    .into_iter()
+    .enumerate()
+    .map(|(index, implement)| {
+      let pipeline = feature_delivery(|step| starter_text(step, implement), assignments);
+      if index == last {
+        pipeline.with_deliver(deliver.clone())
+      } else {
+        pipeline
+      }
+    })
+    .collect();
   let feature = publish(db, "Feature delivery", versions, now)?;
   let quick_fix = publish(
     db,

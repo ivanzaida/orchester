@@ -44,7 +44,8 @@
     "activity": {
       "title": "Recent activity",
       "reading": "Reading activity…",
-      "meta": "{{task}} · {{time}}"
+      "meta": "{{task}} · {{time}}",
+      "mergeQueueBlocked": "Merge queue blocked: your checkout keeps delivery out"
     },
     "needs": {
       "title": "Needs you",

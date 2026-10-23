@@ -1,9 +1,8 @@
 //! The screens the router shows inside the shell, one module per screen. Every route of the router's
 //! table comes here: the path is read as a [`Route`] once, and its screen gets what the route names. A
 //! project's screen gets the project open ([`ShownProject`]); until it is, the content panel stays empty,
-//! and a project that cannot be opened shows why instead (`unavailable_project`). None is built yet:
-//! each shows an honest placeholder (`placeholder`), and a path that names nothing says why
-//! (`not_found`).
+//! and a project that cannot be opened shows why instead (`unavailable_project`). A path that names nothing
+//! says why (`not_found`).
 
 mod add_project;
 mod agents;
@@ -16,6 +15,7 @@ mod import;
 mod instructions;
 mod kept;
 pub(crate) mod memory;
+pub(crate) mod merge_queue;
 pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
@@ -43,7 +43,6 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 
-use self::placeholder::placeholder;
 use crate::{
   project::{ProjectState, Projects, ShownProject},
   routes::{ProjectPage, Route},
@@ -93,8 +92,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
-    // Listed in the sidebar as the design draws it (`q9mf0k`); its own task builds it.
-    ProjectPage::MergeQueue => placeholder(ctx, page.screen()),
+    ProjectPage::MergeQueue => merge_queue::screen(ctx, project),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),

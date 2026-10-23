@@ -441,6 +441,6 @@ fn change_icon(change: &PipelineChange) -> Icon {
       change: StepChange::Removed,
       ..
     } => Icon::Minus,
-    PipelineChange::Step { .. } | PipelineChange::Description => Icon::Pencil,
+    PipelineChange::Step { .. } | PipelineChange::Description | PipelineChange::Deliver(_) => Icon::Pencil,
   }
 }

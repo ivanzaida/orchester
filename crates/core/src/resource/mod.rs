@@ -26,9 +26,10 @@ pub use self::{
     Draft, DraftSaved, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish,
   },
   pipeline::{
-    EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, PipelineSources,
-    PipelineSourcesError, RepositoryAccess, StarterAssignments, StarterStep, StarterStepText, Step, StepChange,
-    StepKey, StepKind, Weaker, changes, feature_delivery, takes_base_moves, takes_base_moves_by_default, weaker_than,
+    DeliverChange, DeliverMode, DeliverStep, EditProblem, FailureRoute, MergeMethod, Pipeline, PipelineChange,
+    PipelineEdit, PipelineError, PipelineSources, PipelineSourcesError, RepositoryAccess, StarterAssignments,
+    StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, Weaker, changes, feature_delivery,
+    takes_base_moves, takes_base_moves_by_default, weaker_than,
   },
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},

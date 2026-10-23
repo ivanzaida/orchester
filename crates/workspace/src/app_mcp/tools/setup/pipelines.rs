@@ -243,6 +243,15 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     .iter()
     .map(|step| step_json(step, &opened.body, &opened.assignables))
     .collect();
+  // The Deliver step the pipeline ends in (ORC-19): its runs join the project's merge queue; null without one.
+  let deliver = opened.body.deliver().map(|deliver| {
+    json!({
+      "mode": deliver.mode(),
+      "method": deliver.method(),
+      "integrator": deliver.integrator().map(|profile| profile.to_string()),
+      "recheck": deliver.recheck(),
+    })
+  });
   json!({
     "id": opened.id.to_string(),
     "name": &*opened.name,
@@ -250,6 +259,7 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     "state": state,
     "published_version": opened.latest.as_ref().map(|latest| latest.number.get()),
     "steps": steps,
+    "deliver": deliver,
     "problems": problems,
     "assignable": assignable_json(&opened.assignables),
     "link": Link::Pipeline(project, opened.id).path(),

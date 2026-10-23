@@ -5,7 +5,9 @@
 
 use std::collections::BTreeSet;
 
-use super::{Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind, unassigned};
+use super::{
+  DeliverStep, Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind, unassigned,
+};
 use crate::{name::Name, permission::StepPermissions, resource::prompt::PromptText};
 
 /// Base of the keys given to added steps: `step`, `step-2`, …
@@ -40,6 +42,8 @@ pub struct PipelineEdit {
   /// The pipeline's sources; a removed step's go with it.
   sources: PipelineSources,
   steps: Vec<Step>,
+  /// The Deliver step the edited pipeline ends in, if any.
+  deliver: Option<DeliverStep>,
 }
 
 impl PipelineEdit {
@@ -47,17 +51,19 @@ impl PipelineEdit {
     Self {
       description: pipeline.description().to_owned(),
       sources: pipeline.sources().clone(),
+      deliver: pipeline.deliver().cloned(),
       steps: pipeline.into_steps(),
     }
   }
 
   /// Steps given whole, valid or not, as automation sends a draft's steps: [`Self::problems`] says
-  /// which rules they break.
+  /// which rules they break. Without a Deliver step until [`Self::set_deliver`] gives one.
   pub fn from_steps(description: &str, sources: PipelineSources, steps: Vec<Step>) -> Self {
     Self {
       description: description.to_owned(),
       sources,
       steps,
+      deliver: None,
     }
   }
 
@@ -76,6 +82,16 @@ impl PipelineEdit {
 
   pub fn set_sources(&mut self, sources: PipelineSources) {
     self.sources = sources;
+  }
+
+  /// The Deliver step the edited pipeline ends in.
+  pub const fn deliver(&self) -> Option<&DeliverStep> {
+    self.deliver.as_ref()
+  }
+
+  /// Ends the edited pipeline in `deliver`, or in no Deliver step.
+  pub fn set_deliver(&mut self, deliver: Option<DeliverStep>) {
+    self.deliver = deliver;
   }
 
   /// Steps in the order the user arranged them.
@@ -169,7 +185,9 @@ impl PipelineEdit {
   /// steps it still has.
   pub fn validate(&self) -> Result<Pipeline, PipelineError> {
     let sources = self.sources.clone().of_steps(&self.steps);
-    let pipeline = Pipeline::new(self.steps.clone())?.with_description(self.description.clone());
+    let pipeline = Pipeline::new(self.steps.clone())?
+      .with_description(self.description.clone())
+      .with_deliver(self.deliver.clone());
     Ok(
       pipeline
         .with_sources(sources)

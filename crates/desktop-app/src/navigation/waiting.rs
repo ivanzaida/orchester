@@ -37,6 +37,12 @@ impl Destination {
           pointed: None,
         });
       }
+      Decided::MergeQueue => {
+        return Ok(Self {
+          route: Route::Project(project, ProjectPage::MergeQueue),
+          pointed: None,
+        });
+      }
       Decided::Card(_) | Decided::Conversation => (TaskView::Conversation, None),
       Decided::Summary(card) => (TaskView::of(TaskTab::Summary), card),
     };

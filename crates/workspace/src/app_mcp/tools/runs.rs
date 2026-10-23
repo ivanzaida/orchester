@@ -134,6 +134,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "auto_mode": auto_mode,
     "worktree": worktree,
     "merge": merge,
+    "delivery": super::merge_queue::run_delivery(&db, run.id())?,
     "base_moved": base_moved::of_run(&view),
     "awaiting": {
       "plan_decisions": run.awaiting_plan().len(),

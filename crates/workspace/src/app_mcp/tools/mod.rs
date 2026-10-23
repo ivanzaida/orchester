@@ -11,6 +11,7 @@ mod conversation;
 mod daily_report;
 mod delivery;
 mod limits;
+mod merge_queue;
 mod message_waits;
 mod messages;
 mod modules;
@@ -174,15 +175,22 @@ const SPECS: &[Spec] = &[
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
                   state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
                   that never merge the base such as Review or Verify are left, kept_until_run_goes_on, \
-                  waits_for_follow_up, or delivered with the agent and step that read it). The run's link is its \
-                  task's page; the waiting approvals, \
+                  waits_for_follow_up, or delivered with the agent and step that read it). delivery is the run's \
+                  place in the project's merge queue (null when its pipeline has no Deliver step or it never joined): \
+                  state queued (place: its place in line), syncing, rechecking, integrating (integrate_step, \
+                  files), waiting_for_approval, blocked (blocked.why: uncommitted_changes with files, \
+                  other_branch_checked_out, operation_in_progress, local_integration), failed or needs_you (reason.why: \
+                  conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
+                  (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \
+                  resyncs, approved_at and checked_on (the base the last passed check ran on). A run the merge queue \
+                  delivers is not merged by merge_run. The run's link is its task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
   Spec {
     name: "list_runs",
-    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase; merged also when git proves its work merged outside Orchester), its state and why (with runner_failure, as get_run gives it, for a run the runner interrupted after its own failure), what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
+    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase; merged also when git proves its work merged outside Orchester), its state and why (with runner_failure, as get_run gives it, for a run the runner interrupted after its own failure), its place in the merge queue (delivery, as get_run gives it: queued, syncing, rechecking, integrating, waiting_for_approval, blocked, failed, needs_you, merged or removed; null when it never joined), what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
     schema: schema_for_type::<run_list::ListRuns>,
     read_only: true,
   },
@@ -344,7 +352,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_daily_report",
-    description: "A project's report of one local day (today when `day` is left out, up to now), the one its Orchestrator conversation got for that day when it was delivered (delivered: true), else read now from what Orchester holds: the tasks merged that day (key, title, run, when); the tasks' latest runs as they stand, ready to merge, stopped (failed, at a limit, waiting for a decision or interrupted, with `end` telling how and the step) or at work; what waits for the person (tool requests, questions, messages, plans, the Orchestrator's proposals); what the Orchestrator did that day (way: direct, itself, or applied by the person); the day's tokens (spent) and active agent time by task and by account, as get_usage reads them, against the daily budget (null: no limit); and the queued tasks in order. Every item has its app `link`.",
+    description: "A project's report of one local day (today when `day` is left out, up to now), the one its Orchestrator conversation got for that day when it was delivered (delivered: true), else read now from what Orchester holds: the tasks merged that day (key, title, run, when); the tasks' latest runs as they stand, ready to merge, stopped (failed, at a limit, waiting for a decision or interrupted, with `end` telling how and the step) or at work; what waits for the person (tool requests, questions, messages, plans, the Orchestrator's proposals); what the Orchestrator did that day (way: direct, itself, or applied by the person); the day's tokens (spent) and active agent time by task and by account, as get_usage reads them, against the daily budget (null: no limit); and the queued tasks in order. Every item has its app `link`. merge_queue lists the runs in the project's merge queue now and those merged, failed or taken out of it since that day began, each with its run, task and delivery state as get_run gives it (queued, syncing, rechecking, integrating, waiting_for_approval, blocked, failed, needs_you, merged, removed).",
     schema: schema_for_type::<daily_report::GetDailyReport>,
     read_only: true,
   },

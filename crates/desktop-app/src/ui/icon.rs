@@ -48,6 +48,7 @@ icons! {
   ArrowRightLeft => '\u{e417}',
   ArrowUp => '\u{e04a}',
   ArrowUpRight => '\u{e04d}',
+  ArrowUpToLine => '\u{e45b}',
   Ban => '\u{e051}',
   Bell => '\u{e059}',
   Binary => '\u{e1f2}',

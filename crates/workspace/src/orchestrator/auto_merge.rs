@@ -47,6 +47,9 @@ fn left(db: &ProjectDb, run: RunId) -> Result<Option<MergeLeft>, StoreError> {
   if !latest_succeeded(db, &run)? {
     return Ok(Some(MergeLeft::NotReady));
   }
+  if crate::merge_queue::delivered_by_queue(db, &run)? {
+    return Ok(Some(MergeLeft::DeliveredByQueue));
+  }
   let organization = task.organization();
   if organization.no_automatic_merge() {
     return Ok(Some(MergeLeft::OptedOut));
@@ -196,5 +199,6 @@ pub fn left_message(why: &MergeLeft, number: u32) -> Message {
       .with("tasks", tasks.join(", ")),
     MergeLeft::Held => Message::new("orchestrator.tools.mergeLeft.held").with("run", run),
     MergeLeft::OptedOut => Message::new("orchestrator.tools.mergeLeft.optedOut").with("run", run),
+    MergeLeft::DeliveredByQueue => Message::new("orchestrator.tools.mergeLeft.deliveredByQueue").with("run", run),
   }
 }

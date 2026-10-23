@@ -279,6 +279,8 @@ impl Component for FeedLoader {
     let runner = status(ctx, &runners, &root);
     // Held pull request feedback goes once the runs' state lets it (ORC-14).
     super::feedback::follow(ctx, (&open, states), runner.as_ref());
+    // Runs of pipelines with a Deliver step are delivered one at a time (ORC-19).
+    super::merge_queue::follow(ctx, &open);
     publish(&self.feed.status, runner);
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);
@@ -287,8 +289,9 @@ impl Component for FeedLoader {
     if let Some(state) = jobs(ctx, self.feed.jobs.clone()) {
       publish(&self.feed.job_state, state);
     }
-    // Tasks automation saved count as the screens' own saves.
-    let saved = self.feed.revision.get() + outside.tasks;
+    // Tasks automation saved count as the screens' own saves, and so does a change of the merge queue: a run it
+    // merged is done, and the sidebar counts the queue.
+    let saved = self.feed.revision.get() + outside.tasks + super::merge_queue::changes(ctx, &root);
     let hold = services.hold;
     // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
     let settled = answers(ctx, (runners.clone(), root.clone())).settled();

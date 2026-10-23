@@ -48,6 +48,7 @@ pub fn run_details(
     rows.push(row(ctx, "summary.runDetails.agents", &list, DetailValue::Text));
   }
   rows.extend(permissions(ctx, run));
+  rows.extend(super::decisions::delivery_rows(ctx, task.detail.queue.as_ref()));
   panel(
     "task-run-details",
     &ctx.t("summary.runDetails.title"),
