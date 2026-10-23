@@ -3305,7 +3305,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-agent"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "orchester-core",
  "orchester-exec",
@@ -3324,7 +3324,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-api"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3348,7 +3348,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-app"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "block2 0.6.2",
@@ -3391,7 +3391,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-cloud"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-web",
  "argon2",
@@ -3419,7 +3419,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3435,7 +3435,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-desktop"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "chrono",
@@ -3468,7 +3468,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-exec"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "libc",
  "orchester-core",
@@ -3484,7 +3484,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-index"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "orchester-core",
  "orchester-exec",
@@ -3505,7 +3505,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-ipc"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "orchester-core",
  "orchester-exec",
@@ -3524,7 +3524,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-runner"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -3549,7 +3549,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-server"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3575,7 +3575,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "orchester-core",
  "orchester-store",
@@ -3592,7 +3592,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-vault"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "apple-native-keyring-store",
  "keyring-core",
@@ -3603,7 +3603,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-workspace"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "lurq 0.42.0",
