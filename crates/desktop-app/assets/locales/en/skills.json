@@ -183,6 +183,8 @@
     "openInstructions": "Open Instructions",
     "publishPlain": "Publish",
     "savedPublished": "Draft saved · Published v{{version}}",
+    "automationSavedPublished": "Draft written by automation · Published v{{version}}",
+    "automationSavedUnpublished": "Draft written by automation · Not published",
     "fixFields": "Not saved · fix marked fields",
     "publishUnavailable": "Publish v{{version}} is unavailable: {{reason}}",
     "fileMarkdown": "Markdown",

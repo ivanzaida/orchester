@@ -61,6 +61,8 @@ impl Editor {
             crate::ui::icon::Icon::CircleAlert
           } else if busy {
             crate::ui::icon::Icon::LoaderCircle
+          } else if automated(p, entry) {
+            crate::ui::icon::Icon::Bot
           } else if entry.is_some_and(|e| e.state.has_draft() && e.state.published().is_some()) {
             crate::ui::icon::Icon::CloudCheck
           } else if entry.is_some_and(|e| e.state.has_draft()) {
@@ -123,6 +125,7 @@ impl Editor {
       let name = self.name.get();
       let submitted = self.submitted.clone();
       let choosing = self.choosing_file.clone();
+      let authorship = self.authorship.clone();
       let button = ActionButton::new("skill-create", ButtonKind::Primary, ctx.t("skills.create"));
       if body.is_err() || busy || self.choosing_file.get() {
         button.disabled()
@@ -139,6 +142,7 @@ impl Editor {
                 before: None,
                 name: name.clone(),
                 body: body.clone(),
+                by_automation: authorship.saving(),
               },
             ));
           }
@@ -166,6 +170,7 @@ impl Editor {
         ctx.t("skills.notSaved")
       }
     } else {
+      let automated = automated(p, entry);
       entry.map_or_else(
         || ctx.t("skills.notSaved"),
         |e| {
@@ -175,17 +180,29 @@ impl Editor {
           ) {
             return words::version(ctx, e.state);
           }
-          if e.state.has_draft()
-            && let Some(version) = e.state.published()
-          {
-            ctx.t_args("skills.savedPublished", [("version", version.get().to_string())])
-          } else if e.state.has_draft() {
-            ctx.t("skills.savedUnpublished")
-          } else {
-            words::version(ctx, e.state)
+          match (e.state.has_draft(), e.state.published(), automated) {
+            (true, Some(version), true) => ctx.t_args(
+              "skills.automationSavedPublished",
+              [("version", version.get().to_string())],
+            ),
+            (true, None, true) => ctx.t("skills.automationSavedUnpublished"),
+            (true, Some(version), false) => {
+              ctx.t_args("skills.savedPublished", [("version", version.get().to_string())])
+            }
+            (true, None, false) => ctx.t("skills.savedUnpublished"),
+            (false, ..) => words::version(ctx, e.state),
           }
         },
       )
     }
   }
+}
+
+/// Whether `entry`'s draft, current and saved, is the one automation saved over Orchester's MCP server (ORC-79, as
+/// ORC-30 marks an instruction's): who wrote it shows before a person publishes it.
+fn automated(p: &Props, entry: Option<&SkillEntry>) -> bool {
+  entry.is_some_and(|e| {
+    matches!(e.state, orchester_workspace::agents::data::VersionState::Draft { .. })
+      && p.page.data.listed.by_automation(e)
+  })
 }

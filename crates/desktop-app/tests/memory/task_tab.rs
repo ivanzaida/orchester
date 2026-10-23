@@ -254,3 +254,41 @@ fn memory_task_tab_search_and_filters_say_what_matches() {
   });
   assert_eq!(page.text("memory-filter-status"), "Status · All");
 }
+
+#[test]
+fn memory_task_tab_keeps_a_long_record_in_place_under_the_pointer() {
+  let mut page = kon_12();
+  page.window.press("memory-new");
+  let text = "## How each acceptance criterion is checked\n| Criterion | Check |\n|---|---|\n| Build on Windows; no \
+              Bevy under `terrane_core` | `cargo build --workspace`; `cargo tree -p terrane_core` (also enforced in \
+              check.ps1) |\n| Window opens with the Sculpt layout | `cargo test -p bevy_terrane_editor --test \
+              shell_layout shell_regions_match_sculpt_layout`: lays out at 1920×1080 with `pass_headless` and asserts \
+              region bounds (top bar 40, mode strip 64, tool panel 280, viewport 1276×1014, inspector 300, status \
+              bar 26) |";
+  page.window.set("memory-editor-new-text", text);
+  page.press_until("memory-editor-new-save", "the new record", |window| {
+    window.texts("memory-editor-new").is_none()
+  });
+  let row = format!("memory-record-{}", page.record("## How each acceptance criterion").id());
+  page.until("the new record's row", |window| window.texts(&row).is_some());
+  let before = page.bounds(&format!("{row}-text"));
+  let line = page.bounds(&format!("{row}-meta")).height;
+  assert!(before.height > 4.0 * line, "a long record wraps: {before:?}");
+  assert!(!page.has(&format!("{row}-actions")), "no actions away from the pointer");
+  page.hover(&row);
+  assert!(
+    page.has(&format!("{row}-actions")),
+    "the actions show under the pointer"
+  );
+  let during = page.bounds(&format!("{row}-text"));
+  assert_eq!(
+    (before.x, before.y, before.width, before.height),
+    (during.x, during.y, during.width, during.height),
+    "the text keeps its width and its lines under the pointer"
+  );
+  let actions = page.bounds(&format!("{row}-actions"));
+  assert!(
+    actions.x >= during.x + during.width,
+    "the actions stand beside the text, not over it: {during:?} {actions:?}"
+  );
+}

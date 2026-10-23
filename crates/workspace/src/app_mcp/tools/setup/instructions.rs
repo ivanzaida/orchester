@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
-  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PublishError},
+  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PublishError, StepKey},
   store::ResourceStore,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -267,32 +267,28 @@ fn instruction(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Resul
 fn scope(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<ScopeChoice, ToolError> {
   Ok(match args.applies_in {
     AppliesIn::Project => ScopeChoice::Project,
-    AppliesIn::AgentRole => {
-      ScopeChoice::AgentRole(args.role.as_deref().map(|role| role_named(data, role)).transpose()?)
-    }
+    AppliesIn::AgentRole => ScopeChoice::AgentRole(
+      args
+        .role
+        .as_deref()
+        .map(|role| role_named(data.roles(), role))
+        .transpose()?,
+    ),
     AppliesIn::Pipeline => ScopeChoice::Pipeline(
       args
         .pipeline
         .as_deref()
-        .map(|named| pipeline_named(data, named).map(|pipeline| pipeline.id))
+        .map(|named| pipeline_named(&data.pipelines, named).map(|pipeline| pipeline.id))
         .transpose()?,
     ),
     AppliesIn::Step => {
       let pipeline = args
         .pipeline
         .as_deref()
-        .map(|named| pipeline_named(data, named))
+        .map(|named| pipeline_named(&data.pipelines, named))
         .transpose()?;
       let step = match (pipeline, args.step.as_deref()) {
-        (Some(pipeline), Some(named)) => {
-          let lowered = named.to_lowercase();
-          let step = pipeline
-            .steps
-            .iter()
-            .find(|step| step.key.as_str() == named || step.name.to_lowercase() == lowered)
-            .ok_or_else(|| ToolError::not_found(Missing::Step, named))?;
-          Some(step.key.clone())
-        }
+        (Some(pipeline), Some(named)) => Some(step_named(pipeline, named)?),
         _ => None,
       };
       ScopeChoice::Step(pipeline.map(|pipeline| pipeline.id), step)
@@ -306,7 +302,7 @@ fn targets(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<Ve
     Agents::Roles => args
       .agent_roles
       .iter()
-      .map(|role| role_named(data, role).map(Target::Role))
+      .map(|role| role_named(data.roles(), role).map(Target::Role))
       .collect::<Result<_, _>>()?,
     Agents::Profiles => args
       .agent_profiles
@@ -324,11 +320,10 @@ fn targets(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Result<Ve
   })
 }
 
-/// A role of the project's profiles, as the editor offers them.
-fn role_named(data: &ProjectInstructions, named: &str) -> Result<Name, ToolError> {
+/// One of `roles`, the roles of the project's profiles, as the instruction and skill editors offer them.
+pub(super) fn role_named(roles: BTreeSet<Name>, named: &str) -> Result<Name, ToolError> {
   let lowered = named.trim().to_lowercase();
-  data
-    .roles()
+  roles
     .into_iter()
     .find(|role| role.as_str().to_lowercase() == lowered)
     .ok_or_else(|| {
@@ -339,13 +334,27 @@ fn role_named(data: &ProjectInstructions, named: &str) -> Result<Name, ToolError
     })
 }
 
-fn pipeline_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a PipelineChoice, ToolError> {
+/// One of the project's `pipelines`, by id or, ignoring case, by name.
+pub(super) fn pipeline_named<'a>(
+  pipelines: &'a [PipelineChoice],
+  named: &str,
+) -> Result<&'a PipelineChoice, ToolError> {
   let lowered = named.to_lowercase();
-  data
-    .pipelines
+  pipelines
     .iter()
     .find(|pipeline| pipeline.id.to_string() == named || pipeline.name.to_lowercase() == lowered)
     .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
+}
+
+/// The step of `pipeline` named by its key or, ignoring case, its name.
+pub(super) fn step_named(pipeline: &PipelineChoice, named: &str) -> Result<StepKey, ToolError> {
+  let lowered = named.to_lowercase();
+  pipeline
+    .steps
+    .iter()
+    .find(|step| step.key.as_str() == named || step.name.to_lowercase() == lowered)
+    .map(|step| step.key.clone())
+    .ok_or_else(|| ToolError::not_found(Missing::Step, named))
 }
 
 /// An instruction of `project` as Instructions lists it, with its link: the page, which opens on its library.

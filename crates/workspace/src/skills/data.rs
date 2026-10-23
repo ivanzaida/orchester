@@ -4,7 +4,12 @@
 //! saved as they are edited, by each app. Every function blocks on SQLite or the disk;
 //! the UI calls them off the UI thread.
 
-use std::{collections::BTreeSet, fs, io, path::Path, sync::Arc};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  fs, io,
+  path::Path,
+  sync::Arc,
+};
 
 use orchester_core::{
   agent_files::import::RepositoryOrigin,
@@ -92,6 +97,9 @@ pub struct ProjectSkills {
   pub entries: Arc<Vec<SkillEntry>>,
   pub profiles: Arc<Vec<ProfileChoice>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// The drafts automation saved over Orchester's MCP server (ORC-79, as ORC-30 for instructions), with when
+  /// ([`Self::by_automation`]).
+  pub automation_drafts: Arc<BTreeMap<ResourceId, Timestamp>>,
 }
 
 impl ProjectSkills {
@@ -100,6 +108,7 @@ impl ProjectSkills {
       entries: Arc::new(entries(db)?),
       profiles: Arc::new(profiles(db)?),
       pipelines: Arc::new(pipelines(db)?),
+      automation_drafts: Arc::new(db.automation_drafts()?),
     })
   }
 
@@ -109,6 +118,14 @@ impl ProjectSkills {
 
   pub fn entry(&self, id: ResourceId) -> Option<&SkillEntry> {
     self.entries.iter().find(|entry| entry.id == id)
+  }
+
+  /// Whether `entry`'s draft is the one automation saved: a draft saved since, by a person, is theirs, and a
+  /// published one has none.
+  pub fn by_automation(&self, entry: &SkillEntry) -> bool {
+    entry
+      .draft_saved_at
+      .is_some_and(|saved| self.automation_drafts.get(&entry.id) == Some(&saved))
   }
 
   /// The roles of the project's profiles, each once, in name order.

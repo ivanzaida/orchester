@@ -482,17 +482,23 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
   })
 }
 
-/// The resource of kind `kind` named by its id or, ignoring case, its name (a profile also by its role), and its
-/// name as people read it (a profile's role).
+/// The resource of kind `kind` named by its id or, ignoring case, its name (a profile also by its role, a skill by its
+/// slug, as their tools name them), and its name as people read it (a profile's role).
 fn draft_named(db: &ProjectDb, kind: Publishing, named: &str) -> Result<(ResourceId, String), ToolError> {
   let resources = db.resources(resource_kind(kind))?;
   let lowered = named.to_lowercase();
   let by_id = resources.iter().find(|resource| resource.id().to_string() == named);
-  let found = by_id.or_else(|| {
+  let by_name = || {
     resources
       .iter()
       .find(|resource| resource.name().as_str().to_lowercase() == lowered)
-  });
+  };
+  let by_slug = || {
+    resources
+      .iter()
+      .find(|resource| kind == Publishing::Skill && resource.slug().as_str().to_lowercase() == lowered)
+  };
+  let found = by_id.or_else(by_name).or_else(by_slug);
   if kind != Publishing::Profile {
     return found
       .map(|resource| (resource.id(), resource.name().as_str().to_owned()))

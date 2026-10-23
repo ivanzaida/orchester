@@ -66,6 +66,7 @@ pub struct Editor {
   submitted: Signal<bool>,
   dirty: Signal<bool>,
   leave: crate::navigation::guard::LeaveGuard,
+  authorship: work::Authorship,
 }
 impl Component for Editor {
   type Props = Props;
@@ -92,7 +93,19 @@ impl Component for Editor {
       operation: ctx.signal(work::Operation::Save),
       asking: ctx.signal(false),
       submitted: ctx.signal(false),
+      authorship: work::Authorship::default(),
     };
+    // Signals change while lurq delivers the input that changed them, so a client's edit is told from a person's.
+    let authorship = editor.authorship.clone();
+    ctx.watch(&editor.name, move |_| authorship.edited());
+    let authorship = editor.authorship.clone();
+    ctx.watch(&editor.description, move |_| authorship.edited());
+    let authorship = editor.authorship.clone();
+    ctx.watch(&editor.body, move |_| authorship.edited());
+    let authorship = editor.authorship.clone();
+    ctx.watch(&editor.scope, move |_| authorship.edited());
+    let authorship = editor.authorship.clone();
+    ctx.watch(&editor.files, move |_| authorship.edited());
     let baseline = editor.baseline.clone();
     let (revision, skills) = (p.page.view.revision.clone(), p.page.view.skills.clone());
     let changes = crate::services::Services::of(ctx).changes;
@@ -223,6 +236,7 @@ impl Editor {
         before: self.baseline.get().0,
         name: self.name.get(),
         body,
+        by_automation: self.authorship.saving(),
       },
     ));
   }
@@ -322,6 +336,7 @@ impl Editor {
     let operation = self.operation.clone();
     let asking = self.asking.clone();
     let choosing = self.choosing_file.clone();
+    let authorship = self.authorship.clone();
     let retry = ActionButton::new("skill-retry", ButtonKind::Secondary, ctx.t("skills.retry")).on_click(move || {
       if submitted.get_untracked() || (before.is_none() && choosing.get_untracked()) {
         return;
@@ -338,6 +353,7 @@ impl Editor {
             before: before.clone(),
             name: name.clone(),
             body: body.clone(),
+            by_automation: authorship.retrying(),
           },
         ));
       }

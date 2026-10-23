@@ -26,6 +26,7 @@ mod repository;
 mod review;
 mod scroll;
 mod settings;
+mod skills;
 mod start;
 #[path = "../support/mod.rs"]
 mod support;

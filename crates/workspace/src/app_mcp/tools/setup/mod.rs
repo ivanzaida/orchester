@@ -1,5 +1,5 @@
 //! The tools that set a project up as its configuration screens do: the project itself, agent
-//! connections, agent profiles, pipelines, instructions and project settings, and the end of a run's
+//! connections, agent profiles, pipelines, instructions, skills and project settings, and the end of a run's
 //! work (its changes, and merging them). They are listed apart from the tools that drive work
 //! ([`super::listed`]), so only the app that serves them offers them; no tool takes or returns a
 //! secret's value.
@@ -18,6 +18,7 @@ mod profiles;
 mod project;
 mod project_tools;
 mod secrets;
+mod skill_input;
 mod skills;
 mod tool_input;
 mod tool_program;

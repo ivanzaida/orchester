@@ -1,9 +1,10 @@
 //! A record in a list (`Memory / Record row` `J1utD`): its type's glyph; its key and, on the task's latest handoff,
 //! the flag *Latest · given to every agent*; what it says (a handoff's summary, then its lists as label and text
 //! lines); the meta line with its tags; *Supersedes N earlier versions*, which unfolds them; and at its end the pin,
-//! the status of a record no agent is given and, under the pointer, its actions. A record no agent is given says
-//! what it says in `text_muted`; a deprecated one is restored or deleted, the others only deleted. On the
-//! project's page a press opens the record's details in place, and a second press closes them.
+//! the status of a record no agent is given and, under the pointer, its actions, whose room the end keeps while they
+//! are hidden, so the text never reflows under the pointer. A record no agent is given says what it says in
+//! `text_muted`; a deprecated one is restored or deleted, the others only deleted. On the project's page a press
+//! opens the record's details in place, and a second press closes them.
 
 use std::sync::Arc;
 
@@ -28,7 +29,7 @@ use super::{
   work::Write,
 };
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, MemoryText},
+  theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, MemoryText},
   ui::{
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -118,7 +119,7 @@ impl Component for RecordRow {
 }
 
 impl RecordRow {
-  /// The pin, a closed record's status, and the actions under the pointer (`I74BQb`).
+  /// The pin, a closed record's status, and the actions under the pointer or the room they take (`I74BQb`).
   fn trailing(&self, ctx: &mut Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Element {
     let mut trailing = Row::new()
       .flex_shrink(0.0)
@@ -134,10 +135,12 @@ impl RecordRow {
         PaletteColor::TextSecondary,
       ));
     }
-    if self.hovered.get() && !state.busy() {
-      trailing = trailing.child(actions(ctx, state, memory, id));
-    }
-    trailing.into()
+    let actions = if self.hovered.get() && !state.busy() {
+      actions(ctx, state, memory, id)
+    } else {
+      actions_room(memory, id)
+    };
+    trailing.child(actions).into()
   }
 }
 
@@ -290,71 +293,107 @@ fn history(ctx: &mut Ctx, state: &MemoryState, props: &RowProps, id: &str) -> El
   history.into()
 }
 
-/// A record's actions under the pointer (`O8wNd`): Edit, Pin or Unpin and Deprecate on an active record, Restore on
-/// a deprecated one, and Delete on every record.
-fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Element {
-  let (record, revision) = (memory.id(), memory.revision());
-  let button = |ctx: &mut Ctx, name: &str, glyph: Icon, label: &str, press: Box<dyn Fn() + Send + Sync>| {
-    IconButton::new(format!("{id}-{name}"), glyph, ctx.t(label))
-      .inspector()
-      .on_click(press)
-      .render(ctx)
+/// What one of a record's actions does when pressed.
+enum Press {
+  Open(Opened),
+  Write(Change),
+}
+
+/// One of a record's actions: its id suffix, glyph, label key and what it does.
+struct Action {
+  name: &'static str,
+  glyph: Icon,
+  label: &'static str,
+  press: Press,
+}
+
+/// A record's actions under the pointer (`O8wNd`), in their order: Edit, Pin or Unpin and Deprecate on an active
+/// record, Restore on a deprecated one, and Delete on every record.
+fn actions_of(memory: &Memory) -> Vec<Action> {
+  let record = memory.id();
+  let action = |name, glyph, label, press| Action {
+    name,
+    glyph,
+    label,
+    press,
   };
-  let write = |change: Change| {
-    let state = state.clone();
-    Box::new(move || state.write(Write::Change(record, revision, change.clone()))) as Box<dyn Fn() + Send + Sync>
-  };
-  let open = |opened: Opened| {
-    let state = state.clone();
-    Box::new(move || state.open(opened)) as Box<dyn Fn() + Send + Sync>
-  };
-  let mut actions = Row::new()
-    .id(format!("{id}-actions"))
-    .spacing(ExtraSpacing::Tight.role())
-    .align_items(Alignment::Center);
+  let mut actions = Vec::new();
   match memory.status() {
     MemoryStatus::Active => {
-      actions = actions.child(button(
-        ctx,
-        "edit",
-        Icon::Pencil,
-        "memory.actions.edit",
-        open(Opened::Edit(record)),
-      ));
       let pinned = memory.is_pinned();
       let (glyph, label) = if pinned {
         (Icon::PinOff, "memory.actions.unpin")
       } else {
         (Icon::Pin, "memory.actions.pin")
       };
-      actions = actions
-        .child(button(ctx, "pin", glyph, label, write(Change::Pin(!pinned))))
-        .child(button(
-          ctx,
-          "deprecate",
-          Icon::Archive,
-          "memory.actions.deprecate",
-          write(Change::Deprecate),
-        ));
+      actions.push(action(
+        "edit",
+        Icon::Pencil,
+        "memory.actions.edit",
+        Press::Open(Opened::Edit(record)),
+      ));
+      actions.push(action("pin", glyph, label, Press::Write(Change::Pin(!pinned))));
+      actions.push(action(
+        "deprecate",
+        Icon::Archive,
+        "memory.actions.deprecate",
+        Press::Write(Change::Deprecate),
+      ));
     }
     MemoryStatus::Deprecated => {
-      actions = actions.child(button(
-        ctx,
+      actions.push(action(
         "restore",
         Icon::ArchiveRestore,
         "memory.actions.restore",
-        write(Change::Restore),
+        Press::Write(Change::Restore),
       ));
     }
     MemoryStatus::Proposed | MemoryStatus::Superseded | MemoryStatus::Rejected | MemoryStatus::Withdrawn => {}
   }
+  actions.push(action(
+    "delete",
+    Icon::Trash2,
+    "memory.actions.delete",
+    Press::Open(Opened::Delete(record)),
+  ));
   actions
-    .child(button(
-      ctx,
-      "delete",
-      Icon::Trash2,
-      "memory.actions.delete",
-      open(Opened::Delete(record)),
+}
+
+/// The record's actions as buttons (`O8wNd`).
+fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Element {
+  let (record, revision) = (memory.id(), memory.revision());
+  let buttons: Vec<Element> = actions_of(memory)
+    .into_iter()
+    .map(|action| {
+      let state = state.clone();
+      let press: Box<dyn Fn() + Send + Sync> = match action.press {
+        Press::Open(opened) => Box::new(move || state.open(opened)),
+        Press::Write(change) => Box::new(move || state.write(Write::Change(record, revision, change.clone()))),
+      };
+      IconButton::new(format!("{id}-{}", action.name), action.glyph, ctx.t(action.label))
+        .inspector()
+        .on_click(press)
+        .render(ctx)
+    })
+    .collect();
+  Row::new()
+    .id(format!("{id}-actions"))
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Center)
+    .with_children(buttons)
+    .into()
+}
+
+/// The room the record's actions take, kept while they are hidden so that the pointer coming onto the row moves
+/// nothing in it: the design draws them in the row's trailing column beside the text (`I74BQb`), never over it.
+fn actions_room(memory: &Memory, id: &str) -> Element {
+  let count = actions_of(memory).len() as f32;
+  let side = ControlHeight::Inspector.value();
+  Row::new()
+    .id(format!("{id}-actions-room"))
+    .width(Dimension::Px(
+      count * side + (count - 1.0) * ExtraSpacing::Tight.value(),
     ))
+    .height(Dimension::Px(side))
     .into()
 }
