@@ -31,6 +31,7 @@ use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{
+  approve::approval_holds,
   check::{Checked, check},
   integrate::{integrate, integrate_step},
   join::join,
@@ -286,14 +287,15 @@ impl Driver<'_> {
   }
 
   /// Checked on the base as it is (or not checked again, as the pipeline says): it waits for a person's approval
-  /// unless it has it or merges on its own.
+  /// unless it has one for the run's work as it is now, or merges on its own.
   fn checked(
     self,
-    entry: QueueEntry,
+    mut entry: QueueEntry,
     run: &Run,
     (deliver, events): (&DeliverStep, Vec<QueueEvent>),
   ) -> Result<Advance, StoreError> {
-    if deliver.mode() == DeliverMode::ApproveToMerge && entry.approved_at.is_none() {
+    if deliver.mode() == DeliverMode::ApproveToMerge && !approval_holds(&self.db, &entry, run)? {
+      entry.approved_at = None;
       return self.save(entry, QueueState::WaitingForApproval, &events);
     }
     self.land(entry, run, (deliver, events))

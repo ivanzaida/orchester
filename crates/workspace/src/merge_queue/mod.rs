@@ -24,7 +24,7 @@ mod read;
 mod wake;
 
 pub use self::{
-  approve::{approve, reject, resolve_myself, resolved},
+  approve::{approve, reject, requeue, resolve_myself, resolved},
   check::rechecks,
   checks::{DeliveryCheck, checks},
   drive::{Advance, advance, integrate_sent},
@@ -32,7 +32,7 @@ pub use self::{
   order::{Move, move_run, remove},
   read::{
     BaseState, CheckoutState, PhaseState, PipelineDelivery, QueueRead, QueueRow, RowPhase, RunDelivery, TaskDelivery,
-    delivered_by_queue, delivery_of, read, task_delivery,
+    delivered_by_queue, delivery_of, in_queue, read, task_delivery,
   },
   wake::{changes, wake},
 };
@@ -45,6 +45,8 @@ pub enum QueueRefusal {
   NotThere,
   /// The run is first among the waiting runs already.
   First,
+  /// Only a person makes this change; automation asked.
+  PersonOnly,
   /// The project's data could not be read or written.
   Store(Message),
   /// What git or the run's worktree said.
@@ -57,6 +59,7 @@ impl QueueRefusal {
     match self {
       Self::NotThere => "not_in_queue",
       Self::First => "already_first",
+      Self::PersonOnly => "person_only",
       Self::Store(_) => "store",
       Self::Resolve(_) => "not_resolved",
     }
@@ -67,6 +70,7 @@ impl QueueRefusal {
     match self {
       Self::NotThere => Message::new("mergeQueue.refused.notThere"),
       Self::First => Message::new("mergeQueue.refused.first"),
+      Self::PersonOnly => Message::new("mergeQueue.refused.personOnly"),
       Self::Store(message) | Self::Resolve(message) => message.clone(),
     }
   }

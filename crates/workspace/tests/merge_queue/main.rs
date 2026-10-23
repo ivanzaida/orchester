@@ -7,6 +7,7 @@
 //! Deliver step keeps its runs out of the queue. The check is a command tool whose program the tests answer for
 //! (`harness`). `cargo test -p orchester-workspace --test merge_queue merge_queue`.
 
+mod decisions;
 mod harness;
 
 use std::{fs, sync::Arc};
@@ -14,7 +15,7 @@ use std::{fs, sync::Arc};
 use orchester_core::{
   merge_queue::{Blocked, Left, QueueEvent, QueueState},
   revision::Revision,
-  run::Run,
+  run::{Answerer, Run},
   store::MergeStore,
   task::Task,
 };
@@ -321,7 +322,7 @@ fn merge_queue_waiting_for_approval_does_not_hold_later_runs_and_checks_again_on
   let row = read.rows.iter().find(|row| row.entry.run == waiting.id()).expect("row");
   assert!(row.base_moved, "main moved since its check");
 
-  merge_queue::approve(repo.root(), waiting.id(), at(1_000)).expect("approved");
+  merge_queue::approve(repo.root(), waiting.id(), at(1_000), Answerer::Person).expect("approved");
   repo.drive();
   assert!(
     matches!(repo.state(&waiting), QueueState::Merged(_)),

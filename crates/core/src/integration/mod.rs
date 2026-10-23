@@ -31,7 +31,8 @@ pub use self::{
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
   merge::{
-    DeliveredAs, MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_as, merge_run_at,
+    DeliveredAs, Delivering, MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_as,
+    merge_run_at,
   },
   merged::{Branches, Delivered, RunWork},
   recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen},

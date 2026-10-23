@@ -1981,6 +1981,7 @@
     "refused": {
       "notThere": "The run is no longer where this page showed it in the merge queue. Look at the queue again.",
       "first": "The run is first in line already.",
+      "personOnly": "Only a person approves a merge from the merge queue. Press Merge into the base branch yourself.",
       "resolve": "The run's worktree could not be merged: {{detail}}"
     }
   }

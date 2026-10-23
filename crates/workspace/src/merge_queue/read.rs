@@ -37,8 +37,13 @@ pub struct QueueRead {
 impl QueueRead {
   /// The runs in the queue: not merged, not out of it.
   pub fn in_queue(&self) -> usize {
-    self.rows.iter().filter(|row| row.entry.state.in_queue()).count()
+    in_queue(self.rows.iter().map(|row| &row.entry))
   }
+}
+
+/// How many of `entries` are in the queue, not merged and not out of it: the count beside *Merge queue*.
+pub fn in_queue<'a>(entries: impl IntoIterator<Item = &'a QueueEntry>) -> usize {
+  entries.into_iter().filter(|entry| entry.state.in_queue()).count()
 }
 
 /// The base branch the queue delivers into and how the person's checkout stands.

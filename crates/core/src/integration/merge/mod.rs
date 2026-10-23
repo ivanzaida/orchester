@@ -54,6 +54,15 @@ pub enum DeliveredAs<'a> {
   Squash { title: &'a str, body: &'a str },
 }
 
+/// What the merge queue lands: `as_delivered`, onto the base branch only while it is at `base`, the head the run was
+/// synced and checked on. A base that moved since, by anyone, merges nothing ([`MergeError::BaseMoved`]): a run is
+/// never merged on a check of an older base.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Delivering<'a> {
+  pub as_delivered: DeliveredAs<'a>,
+  pub base: &'a Revision,
+}
+
 /// A run whose work was merged: into which branch, the commit that branch was at afterwards, and
 /// when. Written once, by whoever merged it (the desktop).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -147,16 +156,16 @@ pub fn merge_run_at(
   merge_run_as(runner, (git, repo), (run, task), (expected, None), now)
 }
 
-/// [`merge_run_at`], landed `as_delivered` when the merge queue asks (`None`: fast-forwarding when it can, as the
-/// task page merges).
+/// [`merge_run_at`], landed as `delivering` says when the merge queue asks (`None`: fast-forwarding when it can, as
+/// the task page merges).
 pub fn merge_run_as(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
   (run, task): (&Run, &TaskKey),
-  (expected, as_delivered): (Option<&Revision>, Option<DeliveredAs<'_>>),
+  (expected, delivering): (Option<&Revision>, Option<Delivering<'_>>),
   now: Timestamp,
 ) -> Result<MergeOutcome, MergeError> {
-  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, as_delivered))?;
+  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, delivering))?;
   let merge = RunMerge {
     run: run.id(),
     into: run.base_branch().ok_or(MergeError::NoBaseBranch)?.clone(),
@@ -173,7 +182,7 @@ fn merge(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
   (run, task): (&Run, &TaskKey),
-  (expected, as_delivered): (Option<&Revision>, Option<DeliveredAs<'_>>),
+  (expected, delivering): (Option<&Revision>, Option<Delivering<'_>>),
 ) -> Result<Merged, MergeError> {
   if run.status() != &RunStatus::Succeeded {
     return Err(MergeError::NotSucceeded);
@@ -196,15 +205,20 @@ fn merge(
   let base = git
     .commit("HEAD")?
     .ok_or_else(|| GitError::Failed("HEAD names no commit".to_owned()))?;
+  if let Some(delivering) = delivering
+    && base != delivering.base.as_str()
+  {
+    return Err(MergeError::BaseMoved { branch: into.clone() });
+  }
   if git.is_ancestor(&head, &base)? {
     return Ok((revision(&base)?, MergeKind::AlreadyMerged, None));
   }
-  if as_delivered.is_none() && git.is_ancestor(&base, &head)? {
+  if delivering.is_none() && git.is_ancestor(&base, &head)? {
     bring_in::bring_in(&git, (&base, &head))?;
     return Ok((revision(&head)?, MergeKind::FastForward, None));
   }
   let title = format!("Merge {task} run #{}", run.number().get());
-  let (made, kind) = match as_delivered {
+  let (made, kind) = match delivering.map(|delivering| delivering.as_delivered) {
     Some(DeliveredAs::Squash { title, body }) => (temporary::Made::Squash { title, body }, MergeKind::Squash),
     Some(DeliveredAs::MergeCommit) | None => (temporary::Made::Merge { title: &title }, MergeKind::MergeCommit),
   };

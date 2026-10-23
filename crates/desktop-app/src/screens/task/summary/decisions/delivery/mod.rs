@@ -23,6 +23,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, Interval},
+    events::is_synthetic_input,
   },
   components::Column,
   core::Signal,
@@ -32,7 +33,7 @@ use orchester_core::{
   id::RunId,
   merge_queue::{Left, QueueState},
   resource::DeliverMode,
-  run::{PauseReason, RunStatus},
+  run::{Answerer, PauseReason, RunStatus},
   time::Timestamp,
 };
 use orchester_ipc::Command;
@@ -91,10 +92,13 @@ pub enum Act {
 
 impl DevtoolsInspectable for Act {}
 
+/// A decision on a run, and who pressed it: a person, or an MCP client driving the window.
+type Decision = (RunId, Act, Answerer);
+
 /// The person's decisions on the run, the one last pressed, and why the last one did not happen.
 #[derive(Clone)]
 pub(super) struct Acts {
-  action: FutureAction<(RunId, Act), Act, Message>,
+  action: FutureAction<Decision, Act, Message>,
   pressed: Signal<Option<Act>>,
   run: RunId,
 }
@@ -119,8 +123,13 @@ impl Acts {
     button.on_click(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
       if !action.state().get_untracked().is_pending() {
+        let by = if is_synthetic_input() {
+          Answerer::Automation
+        } else {
+          Answerer::Person
+        };
         pressed.set(Some(act));
-        action.run((run, act));
+        action.run((run, act, by));
       }
     })
   }
@@ -134,7 +143,7 @@ pub struct DeliveryDecision {
   back: Signal<bool>,
   /// The decision last pressed, for its button.
   pressed: Signal<Option<Act>>,
-  action: FutureAction<(RunId, Act), Act, Message>,
+  action: FutureAction<Decision, Act, Message>,
 }
 
 impl Component for DeliveryDecision {
@@ -327,50 +336,69 @@ impl View<'_> {
 }
 
 /// Makes the person's decisions on the queue of `task`'s project off the UI thread; *I've resolved it* also sends the
-/// run's work back to its Integrate step through the project's runner.
-fn decide(ctx: &mut Ctx, task: &TaskContext) -> FutureAction<(RunId, Act), Act, Message> {
+/// run's work back to its Integrate step through the project's runner, then puts the run back in the queue. Only a
+/// person approves a merge: the press of an MCP client driving the window is refused by the queue's rule.
+fn decide(ctx: &mut Ctx, task: &TaskContext) -> FutureAction<Decision, Act, Message> {
   let services = Services::of(ctx);
   let (runners, programs, project) = (services.runners, services.programs, task.project.open.clone());
-  ctx.future_action(move |(run, act): (RunId, Act)| {
+  ctx.future_action(move |(run, act, by): Decision| {
     let (runners, programs, project) = (runners.clone(), programs.clone(), project.clone());
     async move {
       let root = project.repo_root.clone();
-      let command = background::run(move || made(&root, &programs, (run, act)))
+      let made = background::run(move || made(&root, &programs, (run, act), by))
         .await?
-        .map_err(|refusal| {
-          tracing::info!(code = refusal.code(), "a decision on the merge queue did not happen");
-          refusal.message()
-        })?;
-      if let Some(command) = command {
-        runners.control_run_in(&project, command).await.map_err(|error| {
+        .map_err(|refusal| refused(&refusal))?;
+      let Made::Resolved(command) = made else {
+        return Ok(act);
+      };
+      let sent = match command {
+        Some(command) => runners.control_run_in(&project, command).await.map_err(|error| {
           tracing::warn!(%error, "the runner did not take the resolved run back");
           control_message(&error)
-        })?;
-      }
+        }),
+        None => Ok(()),
+      };
+      let root = project.repo_root.clone();
+      background::run(move || merge_queue::requeue(&root, run, sent, Timestamp::now()))
+        .await?
+        .map_err(|refusal| refused(&refusal))?;
       Ok(act)
     }
   })
 }
 
-/// Makes `act` on `run` in the queue of the project at `root`; gives the command the runner is sent after it. *Resolve
-/// myself* where git merges the base without a conflict now goes on as *I've resolved it* at once: nothing is left
-/// for the person.
+fn refused(refusal: &QueueRefusal) -> Message {
+  tracing::info!(code = refusal.code(), "a decision on the merge queue did not happen");
+  refusal.message()
+}
+
+/// What a decision left to do once it was made.
+enum Made {
+  Done,
+  /// The person resolved the conflicts: the command sends the run's work back to its Integrate step, if it has one,
+  /// and the run goes back in the queue after it.
+  Resolved(Option<Command>),
+}
+
+/// Makes `act` on `run`, pressed by `by`, in the queue of the project at `root`. *Resolve myself* where git merges the
+/// base without a conflict now goes on as *I've resolved it* at once: nothing is left for the person.
 fn made(
   root: &std::path::Path,
   programs: &orchester_exec::programs::Programs,
   (run, act): (RunId, Act),
-) -> Result<Option<Command>, QueueRefusal> {
+  by: Answerer,
+) -> Result<Made, QueueRefusal> {
   let now = Timestamp::now();
   match act {
-    Act::Approve => merge_queue::approve(root, run, now).map(|()| None),
-    Act::Reject => merge_queue::reject(root, run, now).map(|()| None),
+    Act::Approve => merge_queue::approve(root, run, now, by).map(|()| Made::Done),
+    Act::Reject => merge_queue::reject(root, run, now).map(|()| Made::Done),
     Act::ResolveMyself => {
       if merge_queue::resolve_myself(root, programs, run)?.is_empty() {
-        merge_queue::resolved(root, programs, run, now).map(Some)
+        merge_queue::resolved(root, programs, run).map(Made::Resolved)
       } else {
-        Ok(None)
+        Ok(Made::Done)
       }
     }
-    Act::Resolved => merge_queue::resolved(root, programs, run, now).map(Some),
+    Act::Resolved => merge_queue::resolved(root, programs, run).map(Made::Resolved),
   }
 }

@@ -9,7 +9,7 @@ use std::path::Path;
 
 use orchester_core::{
   integration::{
-    DeliveredAs, MergeError, MergeKind, branch_head,
+    DeliveredAs, Delivering, MergeError, MergeKind, branch_head,
     delivery::{self, Checkout},
     drift,
   },
@@ -28,6 +28,10 @@ use crate::tasks::{
 
 /// Characters of the task's brief the squash commit's body keeps.
 const SUMMARY_CHARS: usize = 200;
+
+/// What `merge_in_as` says when the checkout's integration lease or its metadata cannot be taken now: another merge or
+/// local integration has them.
+const PREFLIGHT_FAILED: &str = "localIntegration.preflightFailed";
 
 /// How landing a run went.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -91,7 +95,13 @@ pub(super) fn land(
       body: &body,
     },
   };
-  match merge_in_as(root, programs, (run.id(), Some(&tip), Some(as_delivered))) {
+  // The heads were read before the integration lease is taken: the merge compares them again under it, so a merge
+  // that lands meanwhile, from the task page say, sends the run back to sync instead.
+  let delivering = Delivering {
+    as_delivered,
+    base: &base_head,
+  };
+  match merge_in_as(root, programs, (run.id(), Some(&tip), Some(delivering))) {
     Ok(merged) => Landed::Merged(cleared(programs, (root, run), &merged)),
     Err(problem) => not_landed(problem),
   }
@@ -133,6 +143,9 @@ fn not_landed(problem: IntegrationProblem) -> Landed {
     IntegrationProblem::HeldLocally(CheckoutHolder::ThisRun | CheckoutHolder::OtherRun { .. }) => {
       Landed::Blocked(Blocked::HeldLocally)
     }
+    // Another merge or local integration holds the checkout's integration lease now: the run waits for it, and
+    // delivery goes on by itself once it is free.
+    IntegrationProblem::Store(message) if message.key == PREFLIGHT_FAILED => Landed::Blocked(Blocked::HeldLocally),
     IntegrationProblem::Merge(MergeError::BaseMoved { .. } | MergeError::BranchMoved { .. }) => Landed::Moved,
     IntegrationProblem::Merge(error) => Landed::Stopped(error.to_string()),
     IntegrationProblem::Cleanup(error) => Landed::Stopped(error.to_string()),

@@ -11,7 +11,7 @@ use orchester_core::{
   command::CommandError,
   id::{RunId, StepExecutionId},
   integration::{
-    Cleanup, CleanupError, DeliveredAs, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
+    Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
     RecordedCleanupError, RunMerge, TemporaryLeft, clean_up_recorded_as_seen, leftovers_of, merge_run_as,
   },
   revision::Revision,
@@ -318,11 +318,11 @@ pub fn merge_in(
   merge_in_as(repo_root, programs, (run, expected, None))
 }
 
-/// [`merge_in`], landed `as_delivered` when the merge queue delivers the run (`None`: as the task page merges).
+/// [`merge_in`], landed as `delivering` says when the merge queue delivers the run (`None`: as the task page merges).
 pub fn merge_in_as(
   repo_root: &Path,
   programs: &Programs,
-  (run, expected, as_delivered): (RunId, Option<&Revision>, Option<DeliveredAs<'_>>),
+  (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
 ) -> Result<Merged, IntegrationProblem> {
   let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
@@ -372,7 +372,7 @@ pub fn merge_in_as(
     &git,
     (Path::new(GIT), repo_root),
     (&run, task.key()),
-    (expected, as_delivered),
+    (expected, delivering),
     Timestamp::now(),
   )
   .map_err(IntegrationProblem::Merge)?;

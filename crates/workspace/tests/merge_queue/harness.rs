@@ -23,7 +23,7 @@ use orchester_core::{
     ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind, Tool,
   },
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot},
+  run::{Answerer, BranchName, NewRun, PublishedVersions, ReviewNote, Run, RunSnapshot},
   store::{ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskLimits},
   time::Timestamp,
@@ -196,18 +196,45 @@ impl Repo {
     );
     fs::write(worktree.join(edit.0), edit.1).expect("edit");
     git(&worktree, &["commit", "-am", &format!("{}: Implement", task.key())]);
-    for (index, time) in [(0, finished - 3), (1, finished)] {
-      let execution = run.current_attempt().expect("attempt").executions()[index].id();
-      let events = run.start_step(execution, at(time - 1)).expect("start step");
-      self.db.append_events(&run, &events).expect("events");
-      let events = run.complete_step(execution, at(time)).expect("pass");
-      self.db.append_events(&run, &events).expect("events");
-    }
+    self.pass_both(&mut run, finished);
     run
   }
 
   pub fn worktree(&self, run: &Run) -> PathBuf {
     self.root().join(".orchester/worktrees").join(run.id().to_string())
+  }
+
+  /// What the runner and the Integrate step's agent do with `run`'s conflicts: its work goes back to Implement, which
+  /// merges `main` into the run's branch keeping `text` in `file`, and both steps pass again at `finished`.
+  pub fn integrated(&mut self, run: &mut Run, (file, text): (&str, &str), finished: i64) {
+    let note = ReviewNote::new("Merge main and resolve the conflicts.").expect("note");
+    let implement = StepKey::new("implement").expect("key");
+    let events = run
+      .return_ended(&implement, (&note, None), Answerer::Automation, at(finished - 3))
+      .expect("returned");
+    self.db.append_events(run, &events).expect("events");
+    let worktree = self.worktree(run);
+    // The merge conflicts: its status is not asked for.
+    Command::new("git")
+      .args(["merge", "main"])
+      .current_dir(&worktree)
+      .output()
+      .expect("git");
+    fs::write(worktree.join(file), text).expect("resolve");
+    git(&worktree, &["add", "-A"]);
+    git(&worktree, &["commit", "--no-edit", "-m", "Merge main"]);
+    self.pass_both(run, finished);
+  }
+
+  /// Both steps of `run`'s current attempt start and pass, the last at `finished`.
+  fn pass_both(&mut self, run: &mut Run, finished: i64) {
+    for (index, time) in [(0, finished - 2), (1, finished)] {
+      let execution = run.current_attempt().expect("attempt").executions()[index].id();
+      let events = run.start_step(execution, at(time - 1)).expect("start step");
+      self.db.append_events(run, &events).expect("events");
+      let events = run.complete_step(execution, at(time)).expect("pass");
+      self.db.append_events(run, &events).expect("events");
+    }
   }
 
   /// Commits `text` to `file` on `main` in the checkout, as a person does; the new head.
@@ -287,8 +314,9 @@ fn builder(
   (builder, BTreeMap::from([(builder, version)]))
 }
 
-/// The ways a pipeline delivers, by name.
-fn ways(builder: ResourceId) -> [(&'static str, Option<DeliverStep>); 4] {
+/// The ways a pipeline delivers, by name; `unfit`'s integrator works in none of its steps, so its conflicts go
+/// straight to a person.
+fn ways(builder: ResourceId) -> [(&'static str, Option<DeliverStep>); 5] {
   let deliver = |mode, method, integrator| Some(DeliverStep::new(mode, method, integrator, true));
   [
     (
@@ -300,6 +328,14 @@ fn ways(builder: ResourceId) -> [(&'static str, Option<DeliverStep>); 4] {
       deliver(DeliverMode::AutoMerge, MergeMethod::MergeCommit, Some(builder)),
     ),
     ("squash", deliver(DeliverMode::AutoMerge, MergeMethod::Squash, None)),
+    (
+      "unfit",
+      deliver(
+        DeliverMode::AutoMerge,
+        MergeMethod::MergeCommit,
+        Some(ResourceId::generate()),
+      ),
+    ),
     ("none", None),
   ]
 }

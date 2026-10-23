@@ -143,7 +143,7 @@ fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<(Screen, String)> {
       (Screen::Tasks, tasks.tasks.len()),
       (
         Screen::MergeQueue,
-        tasks.merge_queue.iter().filter(|entry| entry.state.in_queue()).count(),
+        orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()),
       ),
       (Screen::Memory, tasks.proposed_memory.len()),
     ]

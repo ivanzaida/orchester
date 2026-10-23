@@ -193,7 +193,10 @@ fn merged_by_queue(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
   let at = kontur.today_ago(30);
   let mut events = checked_events(&base);
   events.extend([
-    QueueEvent::Approved,
+    QueueEvent::Approved {
+      by: orchester_core::run::Answerer::Person,
+      after: Some(run.last_sequence().get()),
+    },
     QueueEvent::Merged {
       revision: merge.revision.clone(),
       kind: merge.kind,

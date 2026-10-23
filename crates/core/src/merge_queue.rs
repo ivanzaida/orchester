@@ -10,6 +10,7 @@ use crate::{
   integration::MergeKind,
   resource::StepKey,
   revision::Revision,
+  run::Answerer,
   time::Timestamp,
 };
 
@@ -172,7 +173,15 @@ pub enum QueueEvent {
     base: Revision,
     now: Revision,
   },
-  Approved,
+  /// `by` approved the merge when the run's last event was `after` (`None`: recorded before it was kept). The
+  /// approval holds for that work only: once the run works again (its Integrate step, a follow-up), it waits for
+  /// approval again.
+  Approved {
+    #[serde(default)]
+    by: Answerer,
+    #[serde(default)]
+    after: Option<u64>,
+  },
   Blocked(Blocked),
   Merged {
     revision: Revision,
