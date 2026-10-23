@@ -30,4 +30,5 @@ mod settings;
 mod start;
 #[path = "../support/mod.rs"]
 mod support;
+mod tall_reply;
 mod waits;

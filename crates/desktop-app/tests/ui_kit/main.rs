@@ -17,3 +17,4 @@ mod markdown_link_layout;
 mod prompt_input;
 mod textarea_focus;
 mod virtualized_list;
+mod virtualized_list_follow;

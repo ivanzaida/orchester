@@ -19,7 +19,7 @@ fn long_text() -> String {
 }
 
 /// Pastes [`long_text`] into the composer and waits for its chip.
-fn paste_long_text(screen: &mut Orchestrator) {
+pub(super) fn paste_long_text(screen: &mut Orchestrator) {
   screen.click("orchestrator-input");
   screen
     .window
@@ -36,7 +36,7 @@ fn paste_long_text(screen: &mut Orchestrator) {
 }
 
 /// The sent message's element id and its file chip's, once the conversation keeps the file.
-fn sent_message(screen: &Orchestrator) -> Option<(String, String)> {
+pub(super) fn sent_message(screen: &Orchestrator) -> Option<(String, String)> {
   let db = screen.db();
   let chat = db.chats().ok()?.into_iter().next()?.chat.id();
   let (message, attached) = db.chat_attachments(chat).ok()?.into_iter().next()?;
@@ -74,7 +74,7 @@ fn at_end(screen: &mut Orchestrator, when: &str) {
 }
 
 /// Turns the wheel over the middle of `id`: up (`delta` above 0) scrolls toward the start.
-fn wheel_over(screen: &mut Orchestrator, id: &str, delta: f32) {
+pub(super) fn wheel_over(screen: &mut Orchestrator, id: &str, delta: f32) {
   let frame = screen.bounds(id);
   let (x, y) = (frame.x + frame.width / 2.0, frame.y + frame.height / 2.0);
   let tree = &mut screen.window.tree;
