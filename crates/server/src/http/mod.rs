@@ -9,6 +9,7 @@ mod extract;
 mod internal;
 mod invites;
 mod managed;
+mod modules;
 mod projects;
 mod scheme;
 mod settings;
@@ -65,6 +66,7 @@ fn api(server: &Server) -> Router<Server> {
     .route("/auth/pairings", post(auth::pairing))
     .merge(projects::app_routes())
     .merge(tasks::routes())
+    .merge(modules::routes())
     .merge(claims::routes())
     .route("/projects/{project}/events", get(events::subscribe))
     .route_layer(middleware::from_fn(app_only));

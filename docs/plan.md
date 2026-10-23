@@ -894,6 +894,37 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-78 · Modules in shared projects: made, changed and synced through the team server · branch `orchester/orc-78-run-1`
+(implemented 2026-10-22; pipeline Check and Review follow). Spec: `docs/architecture/server.md`, *Modules*, rows 66–71.
+- **Server** (schema 7): `modules` under a revision (names unique per project without regard to case, core's
+  `ModuleDetails` rules), `tasks.module` changed under the task's revision with every move kept (`module_changes`,
+  append-only, with actor), `change_keys` answering a repeated module create or change, the `modules` event kind (the
+  `events` table rebuilt with its sequence carried over). `GET …/modules?after=`, `POST …/modules`, `PATCH
+  …/modules/{module}`; `409 revision_conflict { current }`, `409 module_exists { module }`, `422 module { reason }`;
+  link and import uploads carry modules, each kept by id or mapped onto the project's module of its name, and record
+  each uploaded task's move. API types in `orchester-api` (`modules.rs`, `client/modules.rs`; `chrono` added to the
+  crate for the days, already built for core).
+- **Desktop**: `TaskWriter` sends a shared project's module creates, changes and task moves through
+  `RemoteTaskStore` (`sharing/project/modules.rs`), so the Modules page, the task form's and task page's module picker
+  and the domain tools (`create_module`, `update_module`, the module of `create_task`, `update_task`) work in shared
+  projects; refusals read as core's module errors (`ensure_modules` removed). The cache (`shared_modules.rs`, project
+  migration `modules::SHARED_MIGRATION`) keeps module revisions and the server's moves by sequence; sync reads modules
+  before tasks and moves after them; Share and Join upload every local module and adopt the server's (a local module of
+  a server module's name takes its id, in its tasks and moves); Make local keeps them. Offline, module writes fail at
+  once as task writes do (the person, 2026-10-22: no outbox until S4); no visible change, so no design verification.
+- **The ORC project's `sharing` row** links to a live server: `https://orc.lurq.dev/orchester` (server
+  `01a1590b-1605-7209-82c6-e7fc39b47e91`, server project `01a14a4f-889b-729f-8f44-6ca7164b63b6`), role owner, joined
+  2026-10-20, last synced 2026-10-22 20:45 UTC, not removed; all 78 tasks are the server's. Not stale; left unchanged.
+- Tests: `cargo test -p orchester-server --test sharing` (`modules` and the rest), `--test accounts host_locks`;
+  `cargo test -p orchester-workspace --test shared_modules shared_modules_`, `--test shared_projects shared_`, `--test
+  joined_projects joined_`, `--test joined_share_task joined_`, `--test shared_statuses statuses_`, `--test modules
+  modules`; `cargo test -p orchester-store --test modules modules`, `--test shared_tasks shared_tasks`, `--test
+  joined_tasks joined`, `--test task_creation_snapshots creation_snapshots`; `cargo test -p orchester-api --features
+  client --test client sharing`; `cargo test -p orchester-runner --test pipeline_pin pin`; `cargo test -p
+  orchester-app --test mcp_domain modules`.
+- **Open:** with S4 the module entries of the outbox (row 71); with S2d the `modules` event and a `task` event's module
+  applied from the stream.
+
 ORC-50 · Delivery charts and a delivery forecast · branch `orchester/orc-50-run-1` (implemented 2026-10-22; pipeline
 Check and Review follow).
 - **Domain** (`orchester_workspace::delivery`): facts read from the store only (`DeliveryFacts::read`: each task's

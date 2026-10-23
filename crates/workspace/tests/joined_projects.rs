@@ -389,6 +389,7 @@ fn joined_a_join_after_a_lost_answer_does_not_upload_twice() {
     tag_names: Vec::new(),
     blocking: Vec::new(),
     blocked_reason: None,
+    module: None,
     status: read.status(),
     created_at: read.created_at().unix_millis(),
     claim: true,
@@ -401,6 +402,7 @@ fn joined_a_join_after_a_lost_answer_does_not_upload_twice() {
       &orchester_api::TasksImport {
         idempotency_key: IdempotencyKey::generate(),
         tasks: vec![earlier],
+        modules: Vec::new(),
       },
     ))
     .expect("the earlier join's import");

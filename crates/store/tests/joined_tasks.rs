@@ -100,6 +100,7 @@ fn server_task(id: TaskId, number: u32, title: &str, former: Option<&str>) -> Ca
     limits: TaskLimits::NONE,
     status: TaskStatus::Draft,
     organization: TaskOrganization::default(),
+    module: None,
     former_key: former.map(str::to_owned),
     created_by: "Alice Moreau".to_owned(),
     created_at: at(50),

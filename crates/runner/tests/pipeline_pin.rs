@@ -114,6 +114,7 @@ async fn shared_queued_task_runs_from_the_cache_unchanged() {
     limits: details.limits,
     status: task.status(),
     organization: db.task_organization(task.id()).expect("organization"),
+    module: None,
     former_key: None,
     created_by: "Alice Moreau".into(),
     created_at: task.created_at(),

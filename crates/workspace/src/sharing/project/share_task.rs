@@ -118,7 +118,7 @@ pub fn kept_preview(root: &Path, task: TaskId) -> Result<KeptPreview, StoreError
   })
 }
 
-/// The import of the kept `task`, with the tag names it kept.
+/// The import of the kept `task`, with the tag names it kept and its module.
 fn kept_upload(root: &Path, task: TaskId, key: IdempotencyKey) -> Result<TasksImport, StoreError> {
   let db = ProjectDb::open(root)?;
   let kept = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
@@ -128,8 +128,10 @@ fn kept_upload(root: &Path, task: TaskId, key: IdempotencyKey) -> Result<TasksIm
     .ok_or(StoreError::TaskNotFound(task))?;
   let mut upload = share::upload_task(&db, &kept, &std::collections::HashMap::new(), share::UploadAs::Import)?;
   upload.tag_names = names;
+  let module = kept.module().map(|id| db.module(id)).transpose()?.flatten();
   Ok(TasksImport {
     idempotency_key: key,
     tasks: vec![upload],
+    modules: module.iter().map(super::convert::upload_module).collect(),
   })
 }

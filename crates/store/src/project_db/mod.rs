@@ -59,6 +59,7 @@ mod runs;
 mod schema;
 mod secrets;
 mod shared_members;
+mod shared_modules;
 mod shared_tasks;
 mod sharing;
 mod sources;
@@ -102,6 +103,7 @@ pub use self::{
   run_ends::EndedRun,
   runs::RunBranch,
   shared_members::SharedMember,
+  shared_modules::{CachedModule, CachedModuleChange},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,
 };

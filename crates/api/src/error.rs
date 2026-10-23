@@ -33,6 +33,11 @@ pub enum ErrorCode {
   ClaimChanged,
   TagExists,
   SameTag,
+  /// Another module of the project has this name, without regard to case; the error names it
+  /// ([`SharingErrorDetails::Module`]).
+  ModuleExists,
+  /// Core's module rules refused a module or a task's module (`reason`: `target_before_start`, `module_not_found`).
+  Module,
   /// API 3: a cloud identity token that is malformed, forged, expired, used or for another server.
   InvalidIdentity,
   /// API 3: a valid identity with no account here and no open invite for it.
@@ -98,6 +103,14 @@ pub enum SharingErrorDetails {
   },
   Revision {
     current: Box<crate::SharedTask>,
+  },
+  /// A module's `409 revision_conflict`: the module as it is now.
+  ModuleRevision {
+    current: Box<crate::SharedModule>,
+  },
+  /// `409 module_exists`: the module that has the name.
+  Module {
+    module: Box<crate::SharedModule>,
   },
   Claim {
     #[serde(deserialize_with = "required_claim")]

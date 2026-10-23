@@ -198,6 +198,7 @@ fn shared(id: TaskId, number: u32, revision: TaskRevision) -> CachedTask {
     limits: details.limits,
     status: TaskStatus::Draft,
     organization: TaskOrganization::default(),
+    module: None,
     former_key: None,
     created_by: "Alice Moreau".into(),
     created_at: at(20),

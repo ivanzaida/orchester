@@ -1,5 +1,5 @@
 use orchester_core::{
-  id::{ClaimId, IdempotencyKey, TagId, TaskId},
+  id::{ClaimId, IdempotencyKey, ModuleId, TagId, TaskId},
   run::TaskPhase,
   sharing::{ClaimKind, TaskRevision},
   task::{
@@ -102,6 +102,9 @@ pub struct TaskContent {
   pub blocking: Vec<Blocking>,
   #[serde(default)]
   pub blocked_reason: Option<String>,
+  /// The project's module the task is in.
+  #[serde(default)]
+  pub module: Option<ModuleId>,
 }
 impl TaskContent {
   pub fn organization(&self) -> Organization {
@@ -190,6 +193,9 @@ pub struct UploadTask {
   #[serde(default)]
   pub blocking: Vec<Blocking>,
   pub blocked_reason: Option<String>,
+  /// The task's module: one of the upload's modules, or one the project has.
+  #[serde(default)]
+  pub module: Option<ModuleId>,
   #[serde(with = "wire::Status")]
   pub status: TaskStatus,
   pub created_at: i64,
@@ -217,6 +223,9 @@ pub struct TaskChanges {
   pub blocking: Option<Vec<Blocking>>,
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
   pub blocked_reason: Option<Option<String>>,
+  /// The module the task moves to; `null` takes it out of its module.
+  #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
+  pub module: Option<Option<ModuleId>>,
   #[serde(default, with = "wire::optional_actor")]
   pub actor: Option<ChangeActor>,
 }
@@ -241,6 +250,9 @@ pub struct TasksCreate {
 pub struct TasksImport {
   pub idempotency_key: IdempotencyKey,
   pub tasks: Vec<UploadTask>,
+  /// The modules the tasks name that the project may not have yet.
+  #[serde(default)]
+  pub modules: Vec<crate::UploadModule>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -273,6 +285,11 @@ pub struct TasksCreated {
   pub tasks: Vec<SharedTask>,
   #[serde(default)]
   pub dropped_links: Vec<DroppedLink>,
+  /// After an upload: the project's modules, and the uploaded ones that became a module of their name.
+  #[serde(default)]
+  pub modules: Vec<crate::SharedModule>,
+  #[serde(default)]
+  pub mapped: Vec<crate::MappedModule>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Tasks {

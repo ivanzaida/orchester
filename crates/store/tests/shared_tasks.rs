@@ -96,6 +96,7 @@ fn cached(db: &ProjectDb, task: &orchester_core::task::Task, pipeline: Option<&s
     limits: details.limits,
     status: task.status(),
     organization: db.task_organization(task.id()).expect("organization"),
+    module: None,
     former_key: None,
     created_by: by.to_owned(),
     created_at: task.created_at(),

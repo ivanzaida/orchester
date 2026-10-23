@@ -480,6 +480,7 @@ fn ran_on_a_teammates_computer(page: &Page, task: &Task) {
     limits: details.limits,
     status: task.status(),
     organization: db.task_organization(task.id()).expect("organization"),
+    module: None,
     former_key: None,
     created_by: alice.name.clone(),
     created_at: task.created_at(),

@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-use super::{conflict, encode, events, organization, reason, sql_integer, task_rows, unsigned};
+use super::{conflict, encode, events, modules, organization, reason, sql_integer, task_rows, unsigned};
 use crate::error::ServerError;
 
 pub fn validate(content: &mut TaskContent) -> Result<(), ServerError> {
@@ -99,11 +99,22 @@ pub struct NewTask {
   pub has_run: bool,
 }
 
+/// Inserts `task`; a task made in a module keeps the move into it, as a person's.
 pub fn insert(db: &Connection, project: ProjectId, user: UserId, task: &NewTask, now: i64) -> Result<(), ServerError> {
   let limits = task.content.limits.as_ref();
-  db.execute("INSERT INTO tasks(id,project,number,former_key,title,brief,criteria,pipeline,budget_tokens,max_duration_ms,status,workflow,priority,blocked_reason,revision,has_run,created_by,created_at,updated_by,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,NULL,1,?14,?15,?16,?15,?17)",
+  db.execute("INSERT INTO tasks(id,project,number,former_key,title,brief,criteria,pipeline,budget_tokens,max_duration_ms,status,workflow,priority,blocked_reason,revision,has_run,created_by,created_at,updated_by,updated_at,module) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,NULL,1,?14,?15,?16,?15,?17,?18)",
     params![task.id.to_string(),project.to_string(),task.number,task.former_key,task.content.title,task.content.brief,encode(&task.content.criteria)?,task.content.pipeline,
-      limits.and_then(|v|v.budget_tokens).map(|v|v.to_string()),limits.and_then(|v|v.max_duration_ms).map(|v|v.to_string()),status_name(task.status),encode(&orchester_core::task::organization::WorkflowStatus::Backlog)?,encode(&orchester_core::task::organization::Priority::None)?,task.has_run || task.claim,user.to_string(),task.created_at,now])?;
+      limits.and_then(|v|v.budget_tokens).map(|v|v.to_string()),limits.and_then(|v|v.max_duration_ms).map(|v|v.to_string()),status_name(task.status),encode(&orchester_core::task::organization::WorkflowStatus::Backlog)?,encode(&orchester_core::task::organization::Priority::None)?,task.has_run || task.claim,user.to_string(),task.created_at,now,task.content.module.map(|id| id.to_string())])?;
+  if task.content.module.is_some() {
+    modules::record(
+      db,
+      project,
+      task.id,
+      (None, task.content.module),
+      (user, orchester_core::task::organization::ChangeActor::Person),
+      now,
+    )?;
+  }
   Ok(())
 }
 
@@ -169,23 +180,29 @@ pub fn patch(
     .core()
     .map_err(|error| organization::failure(&error))?;
   organization::validate(db, project, task, &from, &to)?;
+  // The module, like the organization, changes whatever the task's status.
+  modules::check(db, project, content.module)?;
   if content == old.content && status == old.status {
     return Ok(old);
   }
+  let actor = changes
+    .actor
+    .unwrap_or(orchester_core::task::organization::ChangeActor::Person);
   if from != to {
-    organization::record(
+    organization::record(db, task, user, actor, now, (from, to.clone()))?;
+  }
+  if content.module != old.content.module {
+    modules::record(
       db,
+      project,
       task,
-      user,
-      changes
-        .actor
-        .unwrap_or(orchester_core::task::organization::ChangeActor::Person),
+      (old.content.module, content.module),
+      (user, actor),
       now,
-      (from, to.clone()),
     )?;
   }
   let limits = content.limits.as_ref();
-  db.execute("UPDATE tasks SET title=?1,brief=?2,criteria=?3,pipeline=?4,budget_tokens=?5,max_duration_ms=?6,status=?7 WHERE id=?8",params![content.title,content.brief,encode(&content.criteria)?,content.pipeline,limits.and_then(|v|v.budget_tokens).map(|v|v.to_string()),limits.and_then(|v|v.max_duration_ms).map(|v|v.to_string()),status_name(status),task.to_string()])?;
+  db.execute("UPDATE tasks SET title=?1,brief=?2,criteria=?3,pipeline=?4,budget_tokens=?5,max_duration_ms=?6,status=?7,module=?9 WHERE id=?8",params![content.title,content.brief,encode(&content.criteria)?,content.pipeline,limits.and_then(|v|v.budget_tokens).map(|v|v.to_string()),limits.and_then(|v|v.max_duration_ms).map(|v|v.to_string()),status_name(status),task.to_string(),content.module.map(|id| id.to_string())])?;
   organization::save(db, task, &to)?;
   bump(db, task, user, now)?;
   events::task(db, project, task, now)?;
@@ -222,5 +239,8 @@ fn apply_changes(content: &mut TaskContent, changes: &TaskChanges) {
   }
   if let Some(blocked_reason) = &changes.blocked_reason {
     content.blocked_reason.clone_from(blocked_reason);
+  }
+  if let Some(module) = changes.module {
+    content.module = module;
   }
 }

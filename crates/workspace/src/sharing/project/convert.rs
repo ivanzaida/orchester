@@ -38,6 +38,7 @@ pub fn cached(task: &SharedTask) -> Result<CachedTask, SharingError> {
       .organization()
       .core()
       .map_err(|_| SharingError::InvalidAnswer("task organization"))?,
+    module: content.module,
     former_key: task.former_key.clone(),
     created_by: task.created.by.display_name.clone(),
     created_at: Timestamp::from_unix_millis(task.created.at),
@@ -111,7 +112,7 @@ pub fn pipeline_slug(db: &ProjectDb, id: Option<ResourceId>) -> Result<Option<St
   .transpose()
 }
 
-/// A new task's content: `details` and its `organization`.
+/// A new task's content: `details` and its `organization`, in no module (its module is a move of its own, as locally).
 pub fn content(
   db: &ProjectDb,
   details: &TaskDetails,
@@ -128,6 +129,7 @@ pub fn content(
     tags: Vec::new(),
     blocking: Vec::new(),
     blocked_reason: None,
+    module: None,
   };
   content.set_organization(organization);
   Ok(content)
@@ -198,4 +200,45 @@ pub fn is_empty(changes: &TaskChanges) -> bool {
     && changes.tags.is_none()
     && changes.blocking.is_none()
     && changes.blocked_reason.is_none()
+    && changes.module.is_none()
+}
+
+/// `module` as the server keeps it.
+pub fn module_fields(module: &orchester_core::module::Module) -> orchester_api::ModuleFields {
+  orchester_api::ModuleFields::from_core(module.details())
+}
+
+/// `module` as the server confirmed it, for the cache.
+pub fn cached_module(module: &orchester_api::SharedModule) -> Result<orchester_store::CachedModule, SharingError> {
+  let details = module
+    .fields
+    .details()
+    .map_err(|_| SharingError::InvalidAnswer("module"))?;
+  Ok(orchester_store::CachedModule {
+    module: orchester_core::module::Module::new(module.id, details, Timestamp::from_unix_millis(module.created.at)),
+    revision: module.revision,
+  })
+}
+
+/// A move the server kept, for the cache.
+pub fn cached_change(change: &orchester_api::SharedModuleChange) -> orchester_store::CachedModuleChange {
+  orchester_store::CachedModuleChange {
+    sequence: change.sequence,
+    change: orchester_core::module::MembershipChange {
+      task: change.task,
+      from: change.from,
+      to: change.to,
+      actor: change.actor,
+      at: Timestamp::from_unix_millis(change.at),
+    },
+  }
+}
+
+/// A local module, uploaded when the project is shared or joins.
+pub fn upload_module(module: &orchester_core::module::Module) -> orchester_api::UploadModule {
+  orchester_api::UploadModule {
+    id: module.id(),
+    module: module_fields(module),
+    created_at: module.created_at().unix_millis(),
+  }
 }

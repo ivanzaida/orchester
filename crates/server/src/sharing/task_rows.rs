@@ -33,7 +33,7 @@ pub fn project_of(db: &Connection, task: TaskId) -> Result<Option<ProjectId>, Se
 }
 
 pub fn load(db: &Connection, project: ProjectId, task: TaskId, now: i64) -> Result<SharedTask, ServerError> {
-  let mut query = db.prepare("SELECT t.number,p.key,t.former_key,t.revision,t.title,t.brief,t.criteria,t.pipeline,t.budget_tokens,t.max_duration_ms,t.status,t.has_run,t.created_by,t.created_at,t.updated_by,t.updated_at FROM tasks t JOIN projects p ON p.id=t.project WHERE t.id=?1 AND t.project=?2")?;
+  let mut query = db.prepare("SELECT t.number,p.key,t.former_key,t.revision,t.title,t.brief,t.criteria,t.pipeline,t.budget_tokens,t.max_duration_ms,t.status,t.has_run,t.created_by,t.created_at,t.updated_by,t.updated_at,t.module FROM tasks t JOIN projects p ON p.id=t.project WHERE t.id=?1 AND t.project=?2")?;
   let mut rows = query.query(params![task.to_string(), project.to_string()])?;
   let row = rows.next()?.ok_or(ErrorCode::NotFound)?;
   let status: String = row.get(10)?;
@@ -52,6 +52,10 @@ pub fn load(db: &Connection, project: ProjectId, task: TaskId, now: i64) -> Resu
     tags: Vec::new(),
     blocking: Vec::new(),
     blocked_reason: None,
+    module: row
+      .get::<_, Option<String>>(16)?
+      .map(|id| id.parse().map_err(|_| ServerError::StoredData))
+      .transpose()?,
   };
   content.set_organization(&organization::load(db, task)?);
   Ok(SharedTask {

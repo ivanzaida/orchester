@@ -15,6 +15,7 @@ pub mod link;
 pub mod lookup;
 mod make_local;
 mod members;
+mod modules;
 mod organization;
 mod share;
 pub mod share_task;

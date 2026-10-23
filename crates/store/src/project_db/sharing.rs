@@ -84,7 +84,8 @@ impl ProjectDb {
   /// id, number and organization as last synced, becomes a local task of the project; their
   /// pipelines are this computer's pipelines of their slugs. Claims and run statuses leave the
   /// cache, as do the members, and the next task number follows the highest. The project's tags, the server project's
-  /// as last synced, become its local tags with their ids. The tasks kept *Not shared* when it
+  /// as last synced, become its local tags with their ids, as its modules, each task's module and their moves become
+  /// its own. The tasks kept *Not shared* when it
   /// joined return to the list after the highest number; they are returned with their keys.
   pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
     let transaction = self.connection.transaction()?;
@@ -102,6 +103,7 @@ impl ProjectDb {
        DELETE FROM shared_automatic_status;
        DELETE FROM shared_members;
        DELETE FROM sharing;
+       UPDATE modules SET revision = NULL;
        UPDATE counters SET next = (SELECT COALESCE(MAX(number), 0) + 1 FROM tasks) WHERE name = 'task';",
     )?;
     transaction.commit()?;

@@ -6,7 +6,7 @@
 use std::num::NonZeroU32;
 
 use orchester_core::{
-  id::{ClaimId, TaskId, UserId},
+  id::{ClaimId, ModuleId, TaskId, UserId},
   name::Name,
   resource::VersionNumber,
   run::TaskPhase,
@@ -70,6 +70,8 @@ pub struct CachedTask {
   pub limits: TaskLimits,
   pub status: TaskStatus,
   pub organization: TaskOrganization,
+  /// The module the task is in; the cache has it ([`ProjectDb::cache_shared_modules`]).
+  pub module: Option<ModuleId>,
   pub former_key: Option<String>,
   pub created_by: String,
   pub created_at: Timestamp,
@@ -292,6 +294,7 @@ pub(super) fn write_cached(
     super::task_snapshots::record_shared_creation(transaction, cached)?;
   }
   organization::store_cached(transaction, cached.id, &cached.organization, cached.updated_at)?;
+  super::shared_modules::write_task_module(transaction, cached.id, cached.module)?;
   write_claim(transaction, cached.id, cached.claim.as_ref())?;
   write_run_status(transaction, cached.id, cached.run.as_ref())
 }

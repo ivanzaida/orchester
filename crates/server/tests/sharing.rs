@@ -12,6 +12,8 @@ mod events;
 mod fixture;
 #[path = "sharing/migration.rs"]
 mod migration;
+#[path = "sharing/modules.rs"]
+mod modules;
 #[path = "sharing/organization.rs"]
 mod organization;
 #[path = "sharing/projects.rs"]

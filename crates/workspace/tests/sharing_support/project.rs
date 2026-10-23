@@ -97,6 +97,8 @@ impl SecretVault for MemoryVault {
 /// One person's computer: the desktop's servers and a local project Kontur (key ORC).
 pub struct Person {
   pub servers: Servers,
+  /// The application's projects, as the domain tools find them.
+  pub workspace: Workspace,
   pub runtime: Runtime,
   pub repo: TempDir,
   _data: TempDir,
@@ -134,6 +136,7 @@ impl Person {
     workspace.open(repo.path()).expect("register the project");
     let desktop = Self {
       servers,
+      workspace,
       runtime: Runtime::new().expect("desktop runtime"),
       repo,
       _data: data,
