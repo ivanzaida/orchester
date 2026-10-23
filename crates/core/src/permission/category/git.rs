@@ -172,7 +172,9 @@ fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
       vec![operands(rest).get(1).cloned().unwrap_or_else(|| ".".to_owned())],
     ),
     "apply" | "am" if has_option(rest, &["--directory"]) => Judged::unknown(),
-    "fetch" | "pull" | "ls-remote" => Judged::of(Kind::Network),
+    "fetch" | "pull" => Judged::of(Kind::Network),
+    // It asks the remote and prints its answer; nothing is kept.
+    "ls-remote" => Judged::of(Kind::Network).looking_up(),
     "submodule" => submodule(rest),
     "lfs" => lfs(rest),
     "notes" => Judged::of(Kind::Worktree),
@@ -255,9 +257,9 @@ fn config(rest: &[String]) -> Judged {
 fn remote(rest: &[String]) -> Judged {
   match rest.first().map(String::as_str) {
     None | Some("-v" | "--verbose" | "get-url") => Judged::of(Kind::ReadOnly),
-    // `show` asks the remote, unless `-n` keeps it to what is cached.
+    // `show` asks the remote, unless `-n` keeps it to what is cached; it keeps nothing of the answer.
     Some("show") if rest.iter().any(|arg| arg == "-n") => Judged::of(Kind::ReadOnly),
-    Some("show") => Judged::of(Kind::Network),
+    Some("show") => Judged::of(Kind::Network).looking_up(),
     Some("update" | "prune") => Judged::of(Kind::Network),
     Some(_) => Judged::unknown(),
   }

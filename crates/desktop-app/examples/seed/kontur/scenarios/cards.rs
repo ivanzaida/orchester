@@ -1,9 +1,9 @@
 //! `cards`: one task per state of the conversation's decision cards (`Cards and rows inside the conversation`
 //! `YhiGC`), each a Feature delivery run at work on Implement unless said otherwise: a question its step waits
 //! on; questions with suggested answers waiting (one answer, several answers), answered by the person,
-//! answered by automation and ended before an answer; a command waiting for approval; commands approved once
-//! by the person, denied by the person with a message ([`DENIAL_NOTE`]), approved by automation and ended without an
-//! answer; a plan longer
+//! answered by automation and ended before an answer; a command waiting for approval, which auto mode left to the
+//! person by a hard rule (its card says why); commands approved once by the person, denied by the person with a
+//! message ([`DENIAL_NOTE`]), approved by automation and ended without an answer; a plan longer
 //! than its card shows waiting (v1), and a plan revised after changes were asked for (v2); Orchester's
 //! `start_qa_app` waiting for approval, which offers *Approve for every run of this project*, with a rule of the
 //! project kept for an earlier version of the QA script (Project settings › Auto mode lists it), made by approving a
@@ -21,6 +21,7 @@ use orchester_core::{
   run::{
     Answerer, DecidedBy, DenialNote, Invocation, PendingToolApproval, ProjectScope, Run, ToolApprovalDecision,
     WaitReason,
+    review::{Review, ReviewHold},
   },
   store::{ActivityStore, RunStore},
   task::Task,
@@ -230,6 +231,9 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
         }
         Card::Command(command, ends, held) => {
           approval(kontur, (&run, &invocation), command, (ends, at))?;
+          if held && ends.is_none() {
+            held_by_auto_mode(kontur, (&run, &invocation))?;
+          }
           hold(kontur, run, (&invocation, held))?;
         }
         Card::OutsideRead => {
@@ -279,6 +283,18 @@ fn hold(kontur: &mut Kontur, mut run: Run, (invocation, held): (&Invocation, boo
   let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 3 * 60_000);
   let events = run.wait_step(invocation.execution, WaitReason::Approval, at)?;
   kontur.db.append_events(&run, &events)?;
+  Ok(())
+}
+
+/// Auto mode left the waiting request of `invocation` to the person without a review, by a hard rule (the step's
+/// network is off and the command installs), so its card says why.
+fn held_by_auto_mode(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation)) -> Result<(), SeedError> {
+  let held = Review::Held {
+    hold: ReviewHold::NetworkOff,
+  };
+  kontur
+    .db
+    .record_review(run.id(), &format!("{}:call_1", invocation.id), &held)?;
   Ok(())
 }
 

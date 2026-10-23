@@ -97,6 +97,10 @@ pub struct CommandPart {
   pub(super) edits: bool,
   /// A Cargo build's target directory, where it writes its output ([`super::build_output`]).
   pub(super) build_output: Option<BuildOutput>,
+  /// A Network part that only asks ([`Judged::looks_up`]).
+  pub(super) looks_up: bool,
+  /// It may write a tool's cache or a lock file ([`Judged::updates_cache`]).
+  pub(super) updates_cache: bool,
 }
 
 impl CommandPart {
@@ -129,6 +133,8 @@ impl CommandPart {
       through_path: false,
       edits: judged.edits,
       build_output: None,
+      looks_up: judged.looks_up,
+      updates_cache: judged.updates_cache,
     }
   }
 
@@ -205,6 +211,18 @@ impl CommandPart {
         && !self.runs_script
         && self.outside.is_empty()
     })
+  }
+
+  /// Whether it writes nothing at all, a tool's own cache outside the worktree included (the person's decision of
+  /// 2026-10-23): a read, or a lookup over the network ([`Judged::looks_up`]), that refreshes no cache or lock file,
+  /// redirects into no file and writes nothing outside the worktree.
+  pub const fn writes_nothing(&self) -> bool {
+    let reads = match self.category {
+      CommandCategory::ReadOnly => true,
+      CommandCategory::Network => self.looks_up,
+      _ => false,
+    };
+    reads && !self.updates_cache && !self.writes_output && !self.installs && !self.runs_script && !self.writes_outside()
   }
 
   /// Whether it runs a script file of the worktree, whose content Orchester does not read.

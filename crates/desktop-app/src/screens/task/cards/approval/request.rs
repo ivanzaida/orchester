@@ -1,8 +1,9 @@
 //! What a waiting tool request asks (`Approval card` `gwOaJ`, with the agent's note of `YDJsC`): *Approve
 //! command?* and since when it waits; what the agent wants and what waiting does; its category chip and the
-//! setting it asks under; why the classifier asks; the command whole, or an MCP call's arguments, in a mono
-//! box with Copy; the agent · step · run · task, the working directory and the agent's note; and the words
-//! Deny tells the agent.
+//! setting it asks under; why the classifier asks; that auto mode is reviewing it, or why it did not (the hard
+//! rule that held it, a note as *reviewing* is: no frame draws it); the command whole, or an MCP call's
+//! arguments, in a mono box with Copy; the agent · step · run · task, the working directory and the agent's
+//! note; and the words Deny tells the agent.
 
 use lurq::{
   app::{
@@ -30,6 +31,7 @@ use crate::{
     code_box::CodeBox,
     detail_row::{DetailValue, detail_row},
     icon::Icon,
+    message::message_text,
   },
 };
 
@@ -93,6 +95,12 @@ pub(super) fn body(
       .into()
   }));
   body.extend(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()));
+  // Why auto mode left it to the person without a review: the hard rule that held it.
+  body.extend(
+    shown
+      .and_then(ShownApproval::hold_cause)
+      .map(|cause| note(&format!("{id}-hold-cause"), &message_text(ctx, &cause)).into()),
+  );
   body.extend(value_box(ctx, id, request));
   body.push(facts(ctx, id, (place, request), shown));
   if !editing {

@@ -80,6 +80,11 @@ pub(super) fn place(part: &mut CommandPart, words: &BuildWords, placing: Placing
   });
 }
 
+/// Whether an alias of the project's environment may stand in for Cargo's built-in `subcommand`.
+pub(super) fn aliased(scope: &CommandScope, subcommand: &str) -> bool {
+  scope.cargo().may_alias(subcommand, true)
+}
+
 /// The target directory a build of `words` run in `folder` writes to, resolved, and where it lies; `None` when it
 /// cannot be told.
 fn target(scope: &CommandScope, folder: &Path, words: &BuildWords) -> Option<(PathBuf, Place)> {
