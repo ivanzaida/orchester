@@ -41,7 +41,6 @@
     "description": "Each profile is a role for pipeline steps: what the agent is for, the connection and model it runs on, and what it may do.",
     "new": "New agent",
     "import": "Import agents",
-    "importUnavailable": "Importing agents is not built in this app yet.",
     "reading": "Reading agent profiles…",
     "loadFailed": "Agent profiles couldn’t be read",
     "retry": "Try again",

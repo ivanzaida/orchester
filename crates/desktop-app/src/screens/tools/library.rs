@@ -24,7 +24,7 @@ use super::words;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route, ToolTab},
+  routes::{ImportTab, ProjectPage, Route, ToolTab},
   theme::{ConnectionsSpacing, ConnectionsText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -157,7 +157,10 @@ impl Library {
           .child(
             ActionButton::new("tools-import", ButtonKind::Secondary, ctx.t("tools.import"))
               .icon(Icon::Download)
-              .unavailable(ctx.t("tools.importUnavailable")),
+              .opens(Navigation::of(ctx).to(Route::Project(
+                props.project.open.project.id(),
+                ProjectPage::Import(ImportTab::Tools),
+              ))),
           )
           .child(MenuButton::new(
             "tools-add",

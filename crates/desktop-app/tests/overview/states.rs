@@ -130,10 +130,7 @@ fn overview_of_a_project_without_tasks_says_what_a_task_is() {
   let mut seeded = Seeded::overview("empty", OverviewTab::Running);
   assert_eq!(seeded.text("overview-empty-title"), "No tasks yet");
   assert!(seeded.shows("overview-empty-new-task"));
-  assert_eq!(
-    seeded.text("overview-empty-import-reason"),
-    "Import resources isn't built in this app yet."
-  );
+  assert!(seeded.shows("overview-empty-import"));
   assert_eq!(seeded.text("overview-needs-count"), "0");
   assert_eq!(
     seeded.texts("overview-needs-empty")[..1],

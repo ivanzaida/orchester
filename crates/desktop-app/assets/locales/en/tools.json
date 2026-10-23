@@ -4,7 +4,6 @@
     "description": "Define what agents can do in {{project}}. Connect credentials and control access here.",
     "add": "Add tool",
     "import": "Import from project",
-    "importUnavailable": "Importing tools from another project is not available yet.",
     "allTypes": "All types",
     "filterUnavailable": "Filtering by type is not available yet.",
     "ownership": "Tools and secrets belong to {{project}}. Import from another project to create independent local copies.",

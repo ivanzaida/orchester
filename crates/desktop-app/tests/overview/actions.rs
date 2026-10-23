@@ -1,10 +1,12 @@
 //! Where the Overview's actions lead: a tab is the route's, a row opens its task's Details and a run its Summary, a
 //! *Needs you* card opens its task where it is decided, pointing at its decision card as the Needs you panel
-//! does, *View all tasks* the Tasks list and New task its form, and the project's memory records its Memory page.
-//! Import resources is not built, and a request whose task cannot be read has nothing to open: they stay locked
-//! and go nowhere.
+//! does, *View all tasks* the Tasks list, Import resources its page on All and New task its form, and the project's
+//! memory records its Memory page. A request whose task cannot be read has nothing to open: it stays locked and
+//! goes nowhere.
 
-use orchester_app::routes::{MemoryTab, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
+use orchester_app::routes::{
+  ImportTab, MemoryTab, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView,
+};
 use orchester_core::project::TaskKey;
 use orchester_workspace::tasks::{
   attention::{self, NeedKind},
@@ -217,9 +219,10 @@ fn overview_view_all_and_new_task_lead_to_their_screens() {
   seeded.click("overview-import");
   assert_eq!(
     seeded.window.navigation().route_now(),
-    seeded.route(OverviewTab::Running),
-    "Import resources is locked"
+    Route::Project(seeded.project, ProjectPage::Import(ImportTab::All)),
+    "Import resources opens on All"
   );
+  seeded.go(OverviewTab::Running);
   seeded.click("overview-new-task");
   assert_eq!(
     seeded.window.navigation().route_now(),

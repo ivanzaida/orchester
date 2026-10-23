@@ -18,7 +18,7 @@ use crate::{
   conversation::Message,
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
-  import::ImportBatch,
+  import::{ImportBatch, ImportRecord},
   integration::{RemovalStart, RunMerge},
   limits::ProjectLimits,
   name::Name,
@@ -211,9 +211,13 @@ pub trait ImportStore {
 
   /// Creates every copy of `batch` as a resource whose only content is a draft, with where it
   /// came from and when (the copy's creation), atomically, after checking that the project still has every resource,
-  /// connection and secret the copies rely on and that each copy's slug is free. Repeating the call with the
-  /// same key returns the resources created the first time instead of new ones.
+  /// connection and secret the copies rely on and that each copy's slug is free. Also records what the import
+  /// used of this project's and left unresolved. Repeating the call with the same key returns the resources
+  /// created the first time instead of new ones.
   fn import(&mut self, batch: &ImportBatch) -> Result<Vec<Resource>, Self::Error>;
+
+  /// The import that created `resource`; `None` when no import did.
+  fn import_record(&self, resource: ResourceId) -> Result<Option<ImportRecord>, Self::Error>;
 }
 
 /// Project connections. Written by the desktop; the runner only reads them.

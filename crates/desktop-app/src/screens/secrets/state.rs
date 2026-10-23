@@ -46,6 +46,13 @@ impl View {
     let view = self.clone();
     Arc::new(move |at| view.navigation.open(view.route(chosen(view.now())), at))
   }
+  /// What opens Import resources on its Secrets tab, which says why secrets are not imported (`G69AHh`).
+  pub fn import(&self) -> Open {
+    self.navigation.to(Route::Project(
+      self.project,
+      ProjectPage::Import(crate::routes::ImportTab::Secrets),
+    ))
+  }
   /// What opens a tab the person chose, with the list's inspector.
   pub fn tab(&self, tab: SecretsTab) -> Open {
     self.to(move |now| SecretsView {

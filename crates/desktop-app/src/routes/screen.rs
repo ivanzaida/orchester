@@ -1,5 +1,5 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS,
+  ADD_PROJECT, CONNECTIONS, EDIT, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS,
   files::FILES, project_screen_path,
 };
 
@@ -34,10 +34,12 @@ pub enum Screen {
   ProjectSettings,
   /// The code viewer.
   Files,
+  /// Import resources, which no sidebar item names (`Baggg` in `G69AHh`).
+  ImportResources,
 }
 
 impl Screen {
-  pub const ALL: [Self; 26] = [
+  pub const ALL: [Self; 27] = [
     Self::AllProjects,
     Self::AddProject,
     Self::Settings,
@@ -64,6 +66,7 @@ impl Screen {
     Self::EditConnection,
     Self::ProjectSettings,
     Self::Files,
+    Self::ImportResources,
   ];
   /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`), Modules under
   /// Tasks (ORC-48, no frame yet), and Files under Usage (`Nav · Files` `E0b2rn` in `o1Uea4`).
@@ -118,6 +121,7 @@ impl Screen {
       Self::EditConnection => "edit_connection",
       Self::ProjectSettings => "project_settings",
       Self::Files => "files",
+      Self::ImportResources => "import_resources",
     }
   }
 
@@ -154,6 +158,7 @@ impl Screen {
       Self::EditConnection => "shell.screens.editConnection",
       Self::ProjectSettings => "shell.screens.projectSettings",
       Self::Files => "shell.screens.files",
+      Self::ImportResources => "shell.screens.importResources",
     }
   }
 
@@ -187,6 +192,7 @@ impl Screen {
       Self::Connections => Some(CONNECTIONS),
       Self::ProjectSettings => Some(SETTINGS),
       Self::Files => Some(FILES),
+      Self::ImportResources => Some(IMPORT),
     }
   }
 
