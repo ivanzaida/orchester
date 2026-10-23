@@ -807,6 +807,16 @@ scaled displays in 0.30.4. This workspace uses 0.41.2 (a long text clipped to it
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
 
+**Markdown code blocks scroll sideways (ORC-82, lurq 0.51.1).** A fenced code block keeps its lines unwrapped and,
+since lurq 0.51.1, scrolls them sideways inside its box (`ScrollHorizontal` under the label, the theme's
+`code_block_scrollbar`, `None` in `theme::markdown` so the app's own scrollbar draws it, overlaid on the box's bottom
+padding); 0.50.0 painted a line wider than the column past the box, out of reach. Every chat and agent Markdown goes
+through `ui::markdown::MarkdownView` or `ui::chat::agent_text` with the app's theme, so the Orchestrator chat, the task
+Conversation, plans, Details' brief and decision cards all have it. Headless: `ui_kit markdown_code_scroll`,
+`conversation code_block` and `orchestrator code_block` (the swipe moves the line and nothing else, the line's end
+comes into the box, a wheel up over the block scrolls the chat and stops following, a swipe leaves it following, a
+selection copies the long line whole).
+
 ## S · Shared server (self-hosted)
 
 The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
