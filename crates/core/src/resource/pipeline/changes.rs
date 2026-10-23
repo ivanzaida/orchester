@@ -14,6 +14,16 @@ pub enum PipelineChange {
     name: Name,
     change: StepChange,
   },
+  /// The Deliver step was added, removed or set differently.
+  Deliver(DeliverChange),
+}
+
+/// How the Deliver step changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeliverChange {
+  Added,
+  Removed,
+  Changed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,8 +57,20 @@ pub enum StepChange {
 }
 
 /// Changes from `from` to `to`: the description, then edited and added steps in the order of
-/// `to`, then removed steps in the order of `from`.
+/// `to`, then removed steps in the order of `from`, then the Deliver step, which always comes last.
 pub fn changes(from: &Pipeline, to: &Pipeline) -> Vec<PipelineChange> {
+  let mut changes = steps_changes(from, to);
+  let deliver = match (from.deliver(), to.deliver()) {
+    (None, Some(_)) => Some(DeliverChange::Added),
+    (Some(_), None) => Some(DeliverChange::Removed),
+    (Some(was), Some(now)) if was != now => Some(DeliverChange::Changed),
+    _ => None,
+  };
+  changes.extend(deliver.map(PipelineChange::Deliver));
+  changes
+}
+
+fn steps_changes(from: &Pipeline, to: &Pipeline) -> Vec<PipelineChange> {
   let mut changes = Vec::new();
   if from.description() != to.description() {
     changes.push(PipelineChange::Description);

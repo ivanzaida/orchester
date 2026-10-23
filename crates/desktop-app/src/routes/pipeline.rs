@@ -23,6 +23,8 @@ pub enum PipelinePanel {
   Pipeline,
   /// A step's inspector, by the step's key; the summary when the draft has no such step.
   Step(StepKey),
+  /// The Deliver step's inspector (`?panel=deliver`), which adds the step when the pipeline has none.
+  Deliver,
   Settings,
   History,
   Publish,
@@ -31,10 +33,11 @@ pub enum PipelinePanel {
 impl lurq::app::component::DevtoolsInspectable for PipelinePanel {}
 
 impl PipelinePanel {
-  const NAMED: [Self; 3] = [Self::Settings, Self::History, Self::Publish];
+  const NAMED: [Self; 4] = [Self::Deliver, Self::Settings, Self::History, Self::Publish];
 
   const fn name(&self) -> Option<&'static str> {
     match self {
+      Self::Deliver => Some("deliver"),
       Self::Settings => Some("settings"),
       Self::History => Some("history"),
       Self::Publish => Some("publish"),

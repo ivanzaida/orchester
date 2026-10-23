@@ -36,6 +36,9 @@ pub enum MergeLeft {
   Held,
   /// The task says *Don't merge automatically*.
   OptedOut,
+  /// Its pipeline ends in a Deliver step: the merge queue delivers it, after a person's approval when the step asks
+  /// for one (ORC-19).
+  DeliveredByQueue,
 }
 
 impl MergeLeft {

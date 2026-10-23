@@ -85,6 +85,7 @@ const fn kind_text(kind: MergeKind) -> &'static str {
     MergeKind::FastForward => "fast_forward",
     MergeKind::MergeCommit => "merge_commit",
     MergeKind::AlreadyMerged => "already_merged",
+    MergeKind::Squash => "squash",
   }
 }
 
@@ -93,6 +94,7 @@ fn parse_kind(text: &str) -> Result<MergeKind, StoreError> {
     "fast_forward" => Ok(MergeKind::FastForward),
     "merge_commit" => Ok(MergeKind::MergeCommit),
     "already_merged" => Ok(MergeKind::AlreadyMerged),
+    "squash" => Ok(MergeKind::Squash),
     other => Err(corrupt("merge kind", other)),
   }
 }

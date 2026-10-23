@@ -10,7 +10,7 @@
 //! went and what was cleared after it.
 
 mod card;
-mod changed;
+pub(super) mod changed;
 mod external;
 mod local;
 mod pull_request;
@@ -144,7 +144,7 @@ impl Component for ReadyForReview {
       (None, _) => vec![
         external.unwrap_or_else(|| card::ready(ctx, &props, run, &pull)),
         stages(run, None, now),
-        changed::columns(ctx, &props, read.as_ref()),
+        changed::columns(ctx, &props, read.as_ref(), (Vec::new(), None)),
       ]
       .into_iter()
       .chain(runs_section(ctx, &props))

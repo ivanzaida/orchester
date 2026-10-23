@@ -11,8 +11,8 @@ use orchester_core::{
   command::CommandError,
   id::{RunId, StepExecutionId},
   integration::{
-    Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, TemporaryLeft, clean_up_recorded_as_seen, leftovers_of, merge_run_at,
+    Cleanup, CleanupError, DeliveredAs, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
+    RecordedCleanupError, RunMerge, TemporaryLeft, clean_up_recorded_as_seen, leftovers_of, merge_run_as,
   },
   revision::Revision,
   run::{BranchName, Run},
@@ -315,6 +315,15 @@ pub fn merge_in(
   programs: &Programs,
   (run, expected): (RunId, Option<&Revision>),
 ) -> Result<Merged, IntegrationProblem> {
+  merge_in_as(repo_root, programs, (run, expected, None))
+}
+
+/// [`merge_in`], landed `as_delivered` when the merge queue delivers the run (`None`: as the task page merges).
+pub fn merge_in_as(
+  repo_root: &Path,
+  programs: &Programs,
+  (run, expected, as_delivered): (RunId, Option<&Revision>, Option<DeliveredAs<'_>>),
+) -> Result<Merged, IntegrationProblem> {
   let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(repo_root)
@@ -359,11 +368,11 @@ pub fn merge_in(
     return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
   }
   let git = programs.git_work();
-  let outcome = merge_run_at(
+  let outcome = merge_run_as(
     &git,
     (Path::new(GIT), repo_root),
     (&run, task.key()),
-    expected,
+    (expected, as_delivered),
     Timestamp::now(),
   )
   .map_err(IntegrationProblem::Merge)?;

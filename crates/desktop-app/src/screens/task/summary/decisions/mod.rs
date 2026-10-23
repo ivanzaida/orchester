@@ -8,6 +8,7 @@
 //! go back to one of its steps: that card stands above *Run details* ([`return_ended`]).
 
 mod action;
+mod delivery;
 mod limit;
 mod plan;
 mod plan_limit;
@@ -27,6 +28,7 @@ use lurq::{
 use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
+pub(super) use self::delivery::details::rows as delivery_rows;
 pub(super) use self::return_ended::return_card;
 pub use self::return_ended::returnable;
 use super::{
@@ -60,6 +62,11 @@ pub fn decisions(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
     let waiting = review.waiting();
     let key = format!("decision-plan-{id}-{}-{}", waiting.execution, waiting.version);
     return Some(ctx.mount_keyed::<plan::PlanDecision>(&key, props.clone()));
+  }
+  // A run its pipeline's Deliver step hands to the merge queue is not merged from here.
+  if delivery::shown(props) {
+    let key = format!("decision-delivery-{id}");
+    return Some(ctx.mount_keyed::<delivery::DeliveryDecision>(&key, props.clone()));
   }
   match run.run.status() {
     RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { .. })) => {

@@ -6,6 +6,7 @@ use std::{num::NonZeroU32, sync::Arc};
 
 use orchester_core::{
   id::TaskId,
+  merge_queue::{Left, QueueState},
   run::{RunNumber, TaskPhase},
   task::Task,
   time::Timestamp,
@@ -171,11 +172,21 @@ pub struct RecentRun {
   pub phase: TaskPhase,
   /// When the run last changed.
   pub at: Timestamp,
+  /// Where it stands in the project's merge queue, once it passed every step and joined it ([`recent_activity`]),
+  /// with its place among the waiting runs.
+  pub queue: Option<(QueueState, Option<usize>)>,
 }
 
 impl RecentRun {
-  /// "Run #128 completed".
+  /// "Run #128 completed"; a run of the merge queue as the queue has it: *Run #134 joined the merge queue · 1st in
+  /// line*, *Run #133 is ready to merge*, *Run #128 left the merge queue: Integrate couldn't resolve 2 files*.
   pub fn title(&self) -> Message {
+    if self.phase == TaskPhase::Succeeded
+      && let Some((state, place)) = &self.queue
+      && let Some(title) = queue_title(state, *place)
+    {
+      return title.with("run", self.number.get().to_string());
+    }
     let key = match self.phase {
       TaskPhase::Draft | TaskPhase::Queued => "overview.activity.queued",
       TaskPhase::Running => "overview.activity.running",
@@ -190,6 +201,56 @@ impl RecentRun {
     };
     Message::new(key).with("run", self.number.get().to_string())
   }
+}
+
+/// What a run in `state` of the merge queue did last, in Recent activity's words; `None` once a person took it out.
+fn queue_title(state: &QueueState, place: Option<usize>) -> Option<Message> {
+  Some(match state {
+    QueueState::Queued => Message::new("overview.activity.queue.joined").with("place", place.unwrap_or(1).to_string()),
+    QueueState::Syncing | QueueState::Rechecking { .. } => Message::new("overview.activity.queue.delivering"),
+    QueueState::Integrating { files, .. } => {
+      Message::new("overview.activity.queue.integrating").with("count", files.len().to_string())
+    }
+    QueueState::WaitingForApproval => Message::new("overview.activity.queue.ready"),
+    QueueState::Blocked(_) => Message::new("overview.activity.queue.blocked"),
+    QueueState::Left(Left::Conflicts { files }) => {
+      Message::new("overview.activity.queue.conflicts").with("count", files.len().to_string())
+    }
+    QueueState::Left(Left::KeepsMoving { base, .. }) => {
+      Message::new("overview.activity.queue.keepsMoving").with("base", base.clone())
+    }
+    QueueState::Left(Left::CheckFailed { tool, .. }) => {
+      Message::new("overview.activity.queue.checkFailed").with("tool", tool.clone())
+    }
+    QueueState::Left(Left::Stopped { .. } | Left::LaterRun) => Message::new("overview.activity.queue.stopped"),
+    QueueState::Merged(_) | QueueState::Removed => return None,
+  })
+}
+
+/// Recent activity of `tasks` ([`recent_runs`]), each run of the merge queue as the queue has it.
+pub fn recent_activity(tasks: &super::data::ProjectTasks, limit: usize) -> Vec<RecentRun> {
+  let waiting: Vec<_> = tasks
+    .merge_queue
+    .iter()
+    .filter(|entry| entry.state == QueueState::Queued)
+    .map(|entry| entry.run)
+    .collect();
+  let mut recent = recent_runs(&tasks.tasks, &tasks.phases, usize::MAX);
+  for run in &mut recent {
+    let Some(latest) = tasks.phases.get(&run.task).and_then(Latest::run) else {
+      continue;
+    };
+    let Some(entry) = tasks.merge_queue.iter().find(|entry| entry.run == latest.id) else {
+      continue;
+    };
+    let place = waiting.iter().position(|queued| *queued == entry.run).map(|index| index + 1);
+    // The queue's own changes are when the run last changed for the person.
+    run.at = run.at.max(entry.since);
+    run.queue = Some((entry.state.clone(), place));
+  }
+  recent.sort_by(|a, b| b.at.cmp(&a.at).then(b.number.cmp(&a.number)));
+  recent.truncate(limit);
+  recent
 }
 
 /// What Recent activity says when [`recent_runs`] lists nothing: that the project has no runs yet,
@@ -219,6 +280,7 @@ pub fn recent_runs(tasks: &[Task], phases: &Phases, limit: usize) -> Vec<RecentR
         number: latest.number,
         phase: latest.phase,
         at: latest.updated_at,
+        queue: None,
       })
     })
     .collect();

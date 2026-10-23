@@ -21,6 +21,7 @@ pub mod import;
 pub mod integration;
 pub mod limits;
 pub mod memory;
+pub mod merge_queue;
 pub mod module;
 pub mod name;
 pub mod native;

@@ -70,7 +70,7 @@ impl Compared {
       .into_iter()
       .filter_map(|change| match change {
         PipelineChange::Step { key, .. } => Some(key),
-        PipelineChange::Description => None,
+        PipelineChange::Description | PipelineChange::Deliver(_) => None,
       })
       .collect();
     Self { draft, steps }

@@ -120,6 +120,7 @@ pub fn change_row(ctx: &Ctx, change: &orchester_core::resource::PipelineChange) 
   use crate::ui::icon::{Icon, icon};
   let glyph = match change {
     PipelineChange::Description => Icon::FilePen,
+    PipelineChange::Deliver(_) => Icon::GitMerge,
     PipelineChange::Step { change, .. } => match change {
       StepChange::Added => Icon::Plus,
       StepChange::Removed => Icon::Minus,

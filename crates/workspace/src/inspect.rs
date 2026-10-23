@@ -54,6 +54,10 @@ macro_rules! markers {
     impl $inspect for crate::memory::read::GivenTo {}
     impl $inspect for crate::memory::read::ProjectMemory {}
     impl $inspect for crate::memory::read::TaskMemory {}
+    impl $inspect for crate::merge_queue::QueueRead {}
+    impl $inspect for crate::merge_queue::QueueRefusal {}
+    impl $inspect for crate::merge_queue::QueueRow {}
+    impl $inspect for crate::merge_queue::RunDelivery {}
     impl $inspect for crate::messages::Message {}
     impl $inspect for crate::modules::ModuleChoice {}
     impl $inspect for crate::modules::ModuleFilter {}
@@ -66,6 +70,7 @@ macro_rules! markers {
     impl $inspect for crate::orchestrator::settings::OrchestratorSetup {}
     impl $inspect for crate::orchestrator::settings::Saving {}
     impl $inspect for crate::pipelines::data::OpenedPipeline {}
+    impl $inspect for crate::pipelines::deliver::IntegratorChoice {}
     impl $inspect for crate::pipelines::fields::AccessChoice {}
     impl $inspect for crate::pipelines::fields::Executor {}
     impl $inspect for crate::pipelines::fields::ModelChoice {}

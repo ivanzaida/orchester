@@ -5,6 +5,7 @@
 
 pub mod create;
 pub mod data;
+pub mod deliver;
 pub mod describe;
 pub mod fields;
 pub mod history;

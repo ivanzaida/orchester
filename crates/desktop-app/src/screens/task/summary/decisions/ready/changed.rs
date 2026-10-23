@@ -84,20 +84,29 @@ pub fn read(ctx: &mut Ctx, task: &TaskContext) -> Option<Result<Checkpointed, Me
   }
 }
 
-pub fn columns(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpointed, Message>>) -> Element {
+/// *What changed* and *Verification* side by side; `delivered` are the rows the run's delivery adds under its
+/// steps' checks, `head` the figure at *Verification*'s end in place of the commit the run's work ended at.
+pub fn columns(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  read: Option<&Result<Checkpointed, Message>>,
+  (delivered, head): (Vec<Element>, Option<Arc<str>>),
+) -> Element {
   let run = task.detail.run.as_ref();
+  let verified = run.map(|run| verification(ctx, run, (delivered, head)));
   Row::new()
     .id("task-ready-columns")
     .width(Dimension::Pct(100.0))
     .spacing(DecisionSpacing::Columns.role())
     .align_items(Alignment::Start)
     .child(Column::new().flex(1.0).child(what_changed(ctx, task, read)))
-    .with_children(run.map(|run| Column::new().flex(1.0).child(verification(ctx, run))))
+    .with_children(verified.map(|verified| Column::new().flex(1.0).child(verified)))
     .into()
 }
 
-fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpointed, Message>>) -> Element {
-  let size = match read {
+/// "4 files · +120 / −18" of what was read, once it was.
+pub(in super::super) fn size(ctx: &Ctx, read: Option<&Result<Checkpointed, Message>>) -> Option<Arc<str>> {
+  match read {
     Some(Ok(Checkpointed::Read { changes, .. })) => Some(size_line(
       ctx,
       changes.diff.files().len(),
@@ -109,7 +118,11 @@ fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpoi
       (size.additions, size.deletions),
     )),
     _ => None,
-  };
+  }
+}
+
+fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpointed, Message>>) -> Element {
+  let size = size(ctx, read);
   let body: Element = match read {
     None => note(&ctx.t("decisions.ready.reading")),
     Some(Err(error)) => note(&message_text(ctx, error)),
@@ -191,18 +204,21 @@ fn count(text: &str, color: PaletteColor) -> Element {
     .into()
 }
 
-/// *Verification*: the commit the run's work ended at, and the steps that passed after the work was
-/// first committed.
-fn verification(ctx: &Ctx, run: &RunView) -> Element {
-  let revision = run.run.last_checkpoint().map(|checkpoint| {
-    ctx.t_args(
-      "decisions.ready.commit",
-      [("revision", display::short_revision(checkpoint.revision().as_str()))],
-    )
+/// *Verification*: the commit the run's work ended at (or `head`), the steps that passed after the work was
+/// first committed, and what its delivery adds (`delivered`).
+fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Option<Arc<str>>)) -> Element {
+  let revision = head.or_else(|| {
+    run.run.last_checkpoint().map(|checkpoint| {
+      ctx.t_args(
+        "decisions.ready.commit",
+        [("revision", display::short_revision(checkpoint.revision().as_str()))],
+      )
+    })
   });
   let checks: Vec<Element> = verifying_steps(run)
     .into_iter()
     .map(|step| check(ctx, run, step))
+    .chain(delivered)
     .collect();
   let body = if checks.is_empty() {
     note(&ctx.t("decisions.ready.noChecks"))
@@ -276,7 +292,7 @@ fn check(ctx: &Ctx, run: &RunView, step: &StepView) -> Element {
 }
 
 /// A section with its title, a figure at its end, and its body.
-fn section(ctx: &Ctx, (id, title): (&str, &str), figure: Option<Arc<str>>, body: Element) -> Element {
+pub(in super::super) fn section(ctx: &Ctx, (id, title): (&str, &str), figure: Option<Arc<str>>, body: Element) -> Element {
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -299,7 +315,7 @@ fn section(ctx: &Ctx, (id, title): (&str, &str), figure: Option<Arc<str>>, body:
     .into()
 }
 
-fn note(text: &str) -> Element {
+pub(in super::super) fn note(text: &str) -> Element {
   Text::new(text)
     .variant(ExtraTypography::Note.role())
     .width(Dimension::Pct(100.0))

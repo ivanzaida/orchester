@@ -129,8 +129,9 @@ fn pinned(child: impl Into<Element>) -> Column {
 }
 
 /// The counts beside the project's screens: how many tasks `project` has, a dash while they are read,
-/// and how many memory records wait for approval (`Nav · Memory` in `q9mf0k`). A count of none is left
-/// out, and so are both when the tasks cannot be read or the project is not open.
+/// how many runs are in its merge queue (`Nav · Merge queue`) and how many memory records wait for approval
+/// (`Nav · Memory` in `q9mf0k`). A count of none is left out, and so are all when the tasks cannot be read or the
+/// project is not open.
 fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<(Screen, String)> {
   let projects = Projects::of(ctx);
   if projects.state(project).is_none_or(|state| state.open().is_none()) {
@@ -140,6 +141,10 @@ fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<(Screen, String)> {
     TasksState::Ready(tasks) => [
       // A project without tasks shows no count (`a5CcQx`).
       (Screen::Tasks, tasks.tasks.len()),
+      (
+        Screen::MergeQueue,
+        tasks.merge_queue.iter().filter(|entry| entry.state.in_queue()).count(),
+      ),
       (Screen::Memory, tasks.proposed_memory.len()),
     ]
     .into_iter()

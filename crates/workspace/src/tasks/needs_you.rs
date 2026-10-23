@@ -19,6 +19,7 @@ use std::{
 
 use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
+  merge_queue::{Blocked, Left, QueueState},
   question::{Answer, AskedQuestions, QuestionState},
   run::{Answerer, DecidedBy, RunNumber, TaskPhase, ToolApprovalDecision},
   task::{Task, organization::WorkflowStatus},
@@ -93,8 +94,14 @@ pub enum WaitingKind {
   StoppedAtLimit {
     daily_budget: bool,
   },
-  /// A run whose every step passed: its work waits for review and to be merged.
+  /// A run whose every step passed: its work waits for review and to be merged; for a run the merge queue delivers,
+  /// for the person's approval after Check passed on the merged result.
   ReadyToMerge,
+  /// A run that left the merge queue without being merged and waits for the person: conflicts its Integrate step
+  /// could not resolve, a failed check on the merged result, a base that kept moving.
+  DeliveryLeft(Left),
+  /// The project's merge queue is blocked by the person's checkout, with this many runs waiting behind it.
+  DeliveryBlocked { blocked: Blocked, waiting: usize },
   /// The project's memory records waiting for a person's approval, this many.
   Memory {
     count: usize,
@@ -114,6 +121,8 @@ impl WaitingKind {
       | Self::Interrupted { .. }
       | Self::StoppedAtLimit { .. }
       | Self::ReadyToMerge
+      | Self::DeliveryLeft(_)
+      | Self::DeliveryBlocked { .. }
       | Self::Memory { .. } => None,
     }
   }
@@ -209,6 +218,7 @@ impl ProjectTasks {
     for task in self.tasks.iter() {
       self.run_items(task, &mut items);
     }
+    items.extend(self.blocked_delivery());
     if let Some(oldest) = self.proposed_memory.iter().min() {
       items.push(WaitingItem {
         task: None,
@@ -291,18 +301,27 @@ impl ProjectTasks {
       kind,
     };
     let settled = match latest.phase {
-      TaskPhase::Interrupted if !latest.lost_runner => Some(WaitingKind::Interrupted {
-        checkpoint: latest.checkpoint.clone(),
-      }),
-      TaskPhase::StoppedAtLimit => Some(WaitingKind::StoppedAtLimit {
-        daily_budget: latest.daily_budget,
-      }),
-      TaskPhase::Succeeded if !latest.nothing_to_merge && !settled_by_person(task) => Some(WaitingKind::ReadyToMerge),
+      TaskPhase::Interrupted if !latest.lost_runner => Some((
+        WaitingKind::Interrupted {
+          checkpoint: latest.checkpoint.clone(),
+        },
+        latest.updated_at,
+      )),
+      TaskPhase::StoppedAtLimit => Some((
+        WaitingKind::StoppedAtLimit {
+          daily_budget: latest.daily_budget,
+        },
+        latest.updated_at,
+      )),
+      TaskPhase::Succeeded if !latest.nothing_to_merge && !settled_by_person(task) => self.merge_wait(latest),
       _ => None,
     };
     let before = items.len();
-    if let Some(kind) = settled {
-      items.push(item(latest.step.clone(), kind));
+    if let Some((kind, since)) = settled {
+      items.push(WaitingItem {
+        since,
+        ..item(latest.step.clone(), kind)
+      });
     } else if !latest.phase.needs_you() {
       return;
     }
@@ -332,6 +351,41 @@ impl ProjectTasks {
     self
       .waiting_choices()
       .any(|asked| asked.request.run() == run && asked.request.execution() == execution)
+  }
+
+  /// What `latest`, which passed every step, waits for from the person, and since when. A run the merge queue
+  /// delivers waits only for its approval, or once it left the queue without being merged; while the queue works
+  /// on it, and before it joins, nothing waits. A run a person took out of the queue is merged by hand.
+  fn merge_wait(&self, latest: &LatestRun) -> Option<(WaitingKind, Timestamp)> {
+    let entry = self.merge_queue.iter().find(|entry| entry.run == latest.id);
+    match entry.map(|entry| (&entry.state, entry.since)) {
+      Some((QueueState::WaitingForApproval, since)) => Some((WaitingKind::ReadyToMerge, since)),
+      Some((QueueState::Left(left), since)) => Some((WaitingKind::DeliveryLeft(left.clone()), since)),
+      Some((QueueState::Removed, _)) => Some((WaitingKind::ReadyToMerge, latest.updated_at)),
+      Some(_) => None,
+      None if latest.delivers => None,
+      None => Some((WaitingKind::ReadyToMerge, latest.updated_at)),
+    }
+  }
+
+  /// The merge queue blocked by the person's checkout, which only they can clean.
+  fn blocked_delivery(&self) -> Option<WaitingItem> {
+    let (blocked, since) = self.merge_queue.iter().find_map(|entry| match &entry.state {
+      QueueState::Blocked(blocked) => Some((blocked.clone(), entry.since)),
+      _ => None,
+    })?;
+    let waiting = self
+      .merge_queue
+      .iter()
+      .filter(|entry| entry.state == QueueState::Queued)
+      .count();
+    Some(WaitingItem {
+      task: None,
+      run: None,
+      step: None,
+      since,
+      kind: WaitingKind::DeliveryBlocked { blocked, waiting },
+    })
   }
 }
 

@@ -19,6 +19,7 @@ mod composer;
 mod connections;
 mod conversation;
 mod decisions;
+mod delivery;
 mod files;
 mod fonts;
 mod form;
@@ -66,6 +67,7 @@ pub use self::{
   connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
+  delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   gate::{GateSpacing, GateText},
@@ -142,6 +144,7 @@ pub fn install(app: &mut App, mode: Mode) {
   usage::install(theme);
   memory::install(theme);
   sources::install(theme);
+  delivery::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

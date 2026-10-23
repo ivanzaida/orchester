@@ -26,32 +26,40 @@ use crate::{
   },
 };
 
-/// Merges `head` into `base` with a merge commit titled `title`, the merge of `run`: the commit, and
-/// the temporary worktree when it could not be removed afterwards.
+/// The commit made on the base: a merge commit titled `title`, or one squashed commit of the run's work with its
+/// `title` and `body` (a Deliver step's *Squash*).
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Made<'a> {
+  Merge { title: &'a str },
+  Squash { title: &'a str, body: &'a str },
+}
+
+/// Merges `head` into `base` with the commit `made`, the merge of `run`: the commit, and the temporary worktree
+/// when it could not be removed afterwards.
 pub(super) fn merge_commit<R: CommandRunner>(
   git: &Git<'_, R>,
   run: RunId,
   (base, head): (&str, &str),
-  title: &str,
+  made: Made<'_>,
 ) -> Result<(String, Option<TemporaryLeft>), MergeError> {
   let common = git.stdout(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
   let hooks = git.stdout(&["rev-parse", "--path-format=absolute", "--git-path", "hooks"])?;
   let path = format!("{common}/orchester-merge-{run}");
   remove(git, &path).map_err(GitError::Failed)?;
-  let made = merge_in(git, (&path, &hooks), (base, head), title);
+  let merged = merge_in(git, (&path, &hooks), (base, head), made);
   // A merge that stopped says why; a folder that stays after it is the next merge's to remove.
   let left = remove(git, &path).err().map(|detail| TemporaryLeft {
     path: path.clone(),
     detail,
   });
-  Ok((made?, left))
+  Ok((merged?, left))
 }
 
 fn merge_in<R: CommandRunner>(
   git: &Git<'_, R>,
   (path, hooks): (&str, &str),
   (base, head): (&str, &str),
-  title: &str,
+  made: Made<'_>,
 ) -> Result<String, MergeError> {
   // Twice `--force` takes over the place of one a killed merge left registered with its folder
   // gone, locked as `worktree add` keeps it while it runs.
@@ -71,22 +79,20 @@ fn merge_in<R: CommandRunner>(
   // Submodules are not set up in the temporary worktree: neither command may try to update them.
   temporary.stdout(&["-c", "submodule.recurse=false", "reset", "--hard", "--quiet"])?;
   let hooks = format!("core.hooksPath={hooks}");
-  let output = temporary.output(&[
-    "-c",
-    &hooks,
-    "-c",
-    "submodule.recurse=false",
-    "merge",
-    "--no-ff",
-    "--no-autostash",
-    "--no-edit",
-    "--no-overwrite-ignore",
-    "-m",
-    title,
-    head,
-  ])?;
+  let settings = ["-c", hooks.as_str(), "-c", "submodule.recurse=false"];
+  let merge = ["merge", "--no-autostash", "--no-overwrite-ignore"];
+  let output = match made {
+    Made::Merge { title } => temporary.output(&[&settings[..], &merge, &["--no-ff", "--no-edit", "-m", title, head]].concat())?,
+    Made::Squash { .. } => temporary.output(&[&settings[..], &merge, &["--squash", head]].concat())?,
+  };
   if !output.success() {
     return Err(stopped(&temporary, message(&output)));
+  }
+  if let Made::Squash { title, body } = made {
+    let output = temporary.output(&[&settings[..], &["commit", "--quiet", "-m", title, "-m", body]].concat())?;
+    if !output.success() {
+      return Err(MergeError::Refused(message(&output)));
+    }
   }
   Ok(temporary.stdout(&["rev-parse", "--verify", "HEAD"])?)
 }

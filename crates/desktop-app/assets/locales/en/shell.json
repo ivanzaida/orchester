@@ -76,9 +76,6 @@
       "projectSettings": "Project settings",
       "files": "Files"
     },
-    "placeholder": {
-      "notBuilt": "This screen isn't built yet."
-    },
     "notFound": {
       "title": "Nothing here",
       "noScreen": "No screen has the address {{path}}.",

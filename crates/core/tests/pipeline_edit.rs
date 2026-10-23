@@ -287,6 +287,7 @@ fn changes_list_edited_added_and_removed_steps() {
     .map(|change| match change {
       PipelineChange::Step { key, change, .. } => (key.as_str().to_owned(), change),
       PipelineChange::Description => ("description".to_owned(), StepChange::Instructions),
+      PipelineChange::Deliver(_) => panic!("the edit leaves the Deliver step as it is"),
     })
     .collect();
   assert_eq!(
