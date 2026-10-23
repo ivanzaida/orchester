@@ -234,6 +234,16 @@ impl Catalog {
     }
   }
 
+  /// The name of `entity`; `None` when the catalog does not have it.
+  pub fn name(&self, entity: Entity) -> Option<&str> {
+    match entity {
+      Entity::Resource(id) => self.resource(id).map(|entry| entry.resource().name().as_str()),
+      Entity::Connection(id) => self.connection(id).map(|connection| connection.name().as_str()),
+      Entity::McpServer(id) => self.mcp_server(id).map(|server| server.name().as_str()),
+      Entity::Secret(id) => self.secret(id).map(|secret| secret.name().as_str()),
+    }
+  }
+
   /// The entity whose id is `uuid`, if the catalog has one.
   pub(super) fn entity(&self, uuid: uuid::Uuid) -> Option<Entity> {
     [

@@ -97,14 +97,21 @@ impl Component for ResourceRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ResourceRowProps>().clone();
     let id = props.id;
-    Row::new()
+    let row = Row::new()
       .id(format!("import-resource-{id}"))
       .width(Dimension::Pct(100.0))
       .padding(Padding::new().right(SpacingSize::Sm))
       .spacing(SpacingSize::Lg)
       .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .describe("selected", if props.selected { "true" } else { "false" })
+      .describe("selected", if props.selected { "true" } else { "false" });
+    // A selected resource's row has the `hover` fill (`nmu27`).
+    let row = if props.selected {
+      row.background(PaletteColor::AccentMuted)
+    } else {
+      row
+    };
+    row
       .child(self.item(&props))
       .child(self.version(ctx, &props))
       .child(depends_on(ctx, &props))
@@ -145,7 +152,7 @@ impl ResourceRow {
           .child(
             Text::new(&props.name)
               .id(format!("import-name-{id}"))
-              .variant(TypographyStyle::Mono)
+              .variant(ExtraTypography::Strong.role())
               .nowrap(),
           )
           .child(

@@ -13,15 +13,17 @@ use std::{
 
 use fixture::{Source, Target, profile, published, source, target};
 use orchester_core::{
-  id::ResourceId,
-  import::{Choice, Choices, Entity, Pick, Plan},
+  id::{IdempotencyKey, ResourceId},
+  import::{Catalog, CatalogResource, Choice, Choices, Entity, ImportRecord, Pick, Plan},
   resource::{ResourceKind, ToolKind},
+  time::Timestamp,
 };
 use orchester_store::StoreError;
 use orchester_workspace::{
   import::{
     data::{self, Catalogs, ImportFailure, LoadError, LoadNotice},
     drafts,
+    imported::{self, Came},
     review::{self, Blocker, Offer, OfferDetail, Planned, Readiness, Selection, Status, Subject},
     select::{self, Summary, Users},
   },
@@ -323,4 +325,89 @@ fn import_review_load_notice_names_the_project_and_the_refused_folder() {
   let target = data::load_notice(&LoadError::Target(missing), "Personal website");
   assert_eq!(target.body, Message::new("errors.projectMissing"));
   assert!(!target.refused);
+}
+
+#[test]
+fn import_review_imported_copy_shows_where_it_came_from_and_what_came_with_it() {
+  let source = source();
+  let builder = published(
+    "builder",
+    "Builder",
+    1,
+    profile("Builder", fixture::codex("Codex").id()),
+  );
+  let target = target(vec![builder]);
+  let catalogs = catalogs(&source, &target);
+  let mut choices = Choices::default();
+  choices.choose(Entity::Resource(source.deploy), Choice::Rename);
+  choices.rename(Entity::Resource(source.deploy), "Website preview".into());
+  let plan = preview(&source, &catalogs, &choices);
+  let at = Timestamp::from_unix_millis(10);
+  let batch = plan
+    .batch(&catalogs.source, IdempotencyKey::generate(), at)
+    .expect("ready");
+  let record = ImportRecord {
+    imported_at: at,
+    copies: batch
+      .copies()
+      .iter()
+      .map(|copy| (copy.resource().id(), copy.provenance().clone()))
+      .collect(),
+    resolved: batch.resolved().to_vec(),
+  };
+  // This project once the copies are written: its own resources and every copy, as a draft.
+  let written = Catalog::new(
+    catalogs.target.project().clone(),
+    catalogs
+      .target
+      .resources()
+      .iter()
+      .cloned()
+      .chain(
+        batch
+          .copies()
+          .iter()
+          .filter_map(|copy| CatalogResource::new(copy.resource().clone(), None, Some(copy.content().clone()))),
+      )
+      .collect(),
+    catalogs.target.connections().to_vec(),
+    catalogs.target.mcp_servers().to_vec(),
+    catalogs.target.secrets().to_vec(),
+  );
+  let pipeline = batch.copies()[0].resource().id();
+
+  let shown = imported::view(&record, &written, pipeline).expect("the pipeline was imported");
+
+  assert_eq!(shown.at, at);
+  assert_eq!(shown.project, "Personal website");
+  assert_eq!(shown.source, "Preview release");
+  assert_eq!(shown.version, Some(fixture::version(3)));
+  let with_it: Vec<(&str, Came, Option<u32>)> = shown
+    .with_it
+    .iter()
+    .map(|came| (came.name.as_str(), came.came, came.published.map(|v| v.get())))
+    .collect();
+  assert_eq!(
+    with_it,
+    [
+      ("Website preview", Came::Created { renamed: true }, None),
+      ("Release rules", Came::Created { renamed: false }, None),
+      ("Builder", Came::Reused, Some(1)),
+    ]
+  );
+  let missing: Vec<&str> = shown.missing.iter().map(|missing| missing.name.as_str()).collect();
+  assert_eq!(missing, ["PREVIEW_HOST_API_KEY"]);
+  assert_eq!(
+    (shown.created, shown.reused, shown.unresolved),
+    (3, 1, 1),
+    "the pipeline, its tool and its rules; Builder; the secret"
+  );
+  assert!(shown.shows_result(false), "shown until it is published");
+  assert!(!shown.shows_result(true));
+  assert!(shown.needs_setup(), "a secret is left unresolved");
+  assert_eq!(
+    imported::view(&record, &written, ResourceId::generate()),
+    None,
+    "a resource the import did not create"
+  );
 }

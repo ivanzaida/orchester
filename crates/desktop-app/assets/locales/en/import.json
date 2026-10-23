@@ -270,6 +270,34 @@
       "detail": "Importing never grants access. Copies use {{project}}'s own connections and secrets; what is left unresolved stays missing until you choose one in {{project}}."
     },
     "provenance": "Each copy records its source project, resource and version. Later edits in {{project}} never reach it.",
+    "result": {
+      "title": "Imported from {{project}}",
+      "created": {
+        "one": "1 draft created",
+        "other": "{{count}} drafts created"
+      },
+      "summary": "{{totals}}. Nothing is published and nothing runs until you review and publish.",
+      "openTools": "Open Tools",
+      "imported": "Imported",
+      "today": "Today {{time}}",
+      "day": "{{month}} {{day}}, {{time}}",
+      "from": "From",
+      "sourceVersion": "Source version",
+      "sourcePublished": "{{name}} v{{version}}",
+      "sourceDraft": "{{name}} · draft",
+      "independent": "An independent copy: later edits in {{project}} never reach it.",
+      "withIt": "Imported with it",
+      "link": {
+        "draft": "{{name}} · Draft v1",
+        "draftRenamed": "{{name}} · Draft v1 · renamed",
+        "published": "{{name}} v{{version}}",
+        "publishedRenamed": "{{name}} v{{version}} · renamed",
+        "reused": "{{name}} v{{version}} · reused",
+        "reusedDraft": "{{name}} · draft · reused"
+      },
+      "missing": "Missing in {{project}}",
+      "missingNote": "The copies show them as missing until you choose {{project}}'s own."
+    },
     "failed": {
       "title": "Could not import from {{project}}",
       "detail": "The drafts could not be created; nothing was imported. Your choices are kept: Try again repeats this import and never creates a copy twice.",

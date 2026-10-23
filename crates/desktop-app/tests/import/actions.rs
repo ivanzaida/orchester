@@ -149,6 +149,62 @@ fn import_writes_only_what_the_person_accepted_and_opens_the_first_copy() {
 }
 
 #[test]
+fn import_opens_the_copy_with_what_its_import_did() {
+  let mut import = Import::new();
+  import.open(ImportTab::All);
+  import.go_to_create();
+  import.click("import-submit");
+  import.until("the copy's import strip", |import| {
+    import.exists("pipeline-import-strip")
+  });
+  assert_eq!(import.text("pipeline-import-title"), "Imported from Personal website");
+  assert_eq!(
+    import.text("pipeline-import-summary"),
+    "3 drafts created · 1 left unresolved. Nothing is published and nothing runs until you review and publish."
+  );
+  import.until("the summary's Imported section", |import| {
+    import.exists("pipeline-imported")
+  });
+  assert!(
+    import.text("pipeline-imported-meta").starts_with("Today "),
+    "imported just now"
+  );
+  assert_eq!(import.text("pipeline-imported-from-value"), "Personal website");
+  assert_eq!(import.text("pipeline-imported-source-value"), "Preview release v1");
+  assert_eq!(import.text("pipeline-imported-with-meta"), "2");
+  let builder = import
+    .kontur_resource(ResourceKind::AgentProfile, "Builder")
+    .expect("Builder's copy");
+  let rules = import
+    .kontur_resource(ResourceKind::Instruction, "Release rules (Personal website)")
+    .expect("the rules' copy");
+  assert_eq!(
+    import.text(&format!("pipeline-imported-link-{builder}")),
+    "Builder · Draft v1"
+  );
+  assert_eq!(
+    import.text(&format!("pipeline-imported-link-{rules}")),
+    "Release rules (Personal website) · Draft v1 · renamed"
+  );
+  assert_eq!(import.text("pipeline-imported-missing-meta"), "1");
+  assert_eq!(import.text("pipeline-imported-missing-0"), "Codex · Personal website");
+  import.click(&format!("pipeline-imported-link-{builder}"));
+  assert_eq!(
+    import.route(),
+    Route::Project(project_id(), ProjectPage::Agent(builder, Default::default())),
+    "a link opens what came along"
+  );
+  import.window.navigation().back();
+  import.until("the copy again", |import| import.exists("pipeline-import-strip"));
+  import.click("pipeline-import-open-tools");
+  assert_eq!(
+    import.route(),
+    Route::Project(project_id(), ProjectPage::Tools),
+    "something was left unresolved"
+  );
+}
+
+#[test]
 fn import_leaves_out_what_the_person_leaves_out() {
   let mut import = Import::new();
   import.open(ImportTab::All);

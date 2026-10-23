@@ -73,13 +73,7 @@ pub fn subject(catalog: &Catalog, entity: Entity, pick: Option<Pick>) -> Option<
 
 /// The name of `entity` in `catalog`; empty when the catalog does not have it.
 pub fn name(catalog: &Catalog, entity: Entity) -> String {
-  let name = match entity {
-    Entity::Resource(id) => catalog.resource(id).map(|entry| entry.resource().name().as_str()),
-    Entity::Connection(id) => catalog.connection(id).map(|connection| connection.name().as_str()),
-    Entity::McpServer(id) => catalog.mcp_server(id).map(|server| server.name().as_str()),
-    Entity::Secret(id) => catalog.secret(id).map(|secret| secret.name().as_str()),
-  };
-  name.unwrap_or_default().to_owned()
+  catalog.name(entity).unwrap_or_default().to_owned()
 }
 
 /// The name an item's copy gets; `None` while it is not copied or its typed name is not valid.

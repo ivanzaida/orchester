@@ -7,6 +7,7 @@ use lurq::app::{
   ctx::{Ctx, FutureAction},
 };
 use orchester_core::{
+  id::ResourceId,
   import::{Content, CopiedResource, ImportBatch},
   resource::{InstructionScope, Resource, ResourceKind},
 };
@@ -73,14 +74,13 @@ fn first_page(created: &[Resource], copies: &[CopiedResource]) -> Option<Project
     .iter()
     .find(|copy| copy.resource().kind() == resource.kind() && copy.resource().slug() == resource.slug())
     .map(CopiedResource::content);
-  Some(page_of(resource, content))
+  Some(page_of(resource.id(), resource.kind(), content))
 }
 
-/// The page that shows `resource`: a pipeline's editor, an agent profile, an instruction in its scope's tab
-/// (Project when its content is not known), a tool, or a skill.
-fn page_of(resource: &Resource, content: Option<&Content>) -> ProjectPage {
-  let id = resource.id();
-  match resource.kind() {
+/// The page that shows the resource `id` of `kind`: a pipeline's editor, an agent profile, an instruction in its
+/// scope's tab (Project when its content is not known), a tool, or a skill.
+pub(super) fn page_of(id: ResourceId, kind: ResourceKind, content: Option<&Content>) -> ProjectPage {
+  match kind {
     ResourceKind::Pipeline => ProjectPage::Pipeline(id, Default::default()),
     ResourceKind::AgentProfile => ProjectPage::Agent(id, Default::default()),
     ResourceKind::Instruction => {

@@ -2,11 +2,13 @@
 //! the project to import from and its resources (Select resources `DsqQJ`), how everything their copies refer to is
 //! resolved in this project (Resolve dependencies `xp4dr`, `jsMUX`), then what the import creates (Create drafts
 //! `A5Av4`). Nothing is saved before Import resources: the copies are written at once, as local drafts, and the
-//! first one opens. What each step says and allows comes from `orchester_workspace::import`.
+//! first one opens, a pipeline with what its import did (`z3vhzo`, [`imported`]). What each step says and allows
+//! comes from `orchester_workspace::import`.
 
 mod create;
 mod drafts_view;
 mod frame;
+pub(crate) mod imported;
 mod mapping_row;
 mod resolve;
 mod resource_row;

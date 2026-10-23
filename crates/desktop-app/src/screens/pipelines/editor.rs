@@ -147,8 +147,16 @@ impl Component for Editor {
         .into()
     };
     let leave = super::leaving::question(ctx, &self.leave, writing, editing.name.as_str());
+    // A copy shows what its import did until it is published (`z3vhzo`).
+    let imported = editing
+      .opened
+      .imported
+      .as_ref()
+      .filter(|imported| imported.shows_result(editing.opened.latest.is_some()))
+      .map(|imported| crate::screens::import::imported::strip(ctx, props.project.open.project.id(), imported));
     let mut page = parts::page()
       .child(head)
+      .with_children(imported)
       .with_children(leave)
       .with_children(super::publication::problems(ctx, &self.state))
       .child(content);

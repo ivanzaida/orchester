@@ -13,12 +13,14 @@
 mod batch;
 mod catalog;
 mod plan;
+mod record;
 mod references;
 
 pub use self::{
-  batch::{CopiedResource, ImportBatch, ImportError, Provenance},
+  batch::{CopiedResource, ImportBatch, ImportError, Provenance, Resolved},
   catalog::{Catalog, CatalogResource, Content, Pick},
   plan::{Choice, Choices, Counts, Item, Plan, Problem, Resolution, Role},
+  record::ImportRecord,
 };
 use crate::id::{ConnectionId, ResourceId, SecretId};
 
