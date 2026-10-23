@@ -1,10 +1,11 @@
 //! Following a chat live, a task's Conversation and the project's Orchestrator chat alike
 //! (`docs/design/orchester-workspace.md`, "Following live (ORC-36)"): the chat opens at the very end of its newest
 //! row and keeps it in view while it follows, or the card that waits for the person until the person scrolls; any
-//! scroll up stops following and shows *Jump to latest · N new* (`Jump to latest` `tvvRD`: a 30 pill on
-//! `surface_raised` in a `border_strong` stroke, its 13 `arrow-down` and 12/500 words 6 apart, 12 from its sides,
-//! over a 0 4 16 shadow), floating centered over the chat's foot, *N* counting what arrived since; pressing it, or
-//! sending a message ([`Follow::follow_again`]), goes to the end and follows again.
+//! scroll that moves the chat up (not a box that scrolls inside a row) stops following and shows *Jump to latest ·
+//! N new* (`Jump to latest` `tvvRD`: a 30 pill on `surface_raised` in a `border_strong` stroke, its 13 `arrow-down`
+//! and 12/500 words 6 apart, 12 from its sides, over a 0 4 16 shadow), floating centered over the chat's foot, *N*
+//! counting what arrived since; pressing it, or sending a message ([`Follow::follow_again`]), goes to the end and
+//! follows again.
 
 use std::sync::Arc;
 
@@ -44,11 +45,23 @@ struct Reveal {
   scrolled: bool,
 }
 
+/// A turn of the wheel over the chat, until the layout after it shows whether it moved the chat: a wheel over a
+/// box that scrolls inside a row (an attached file's text) moves that box and leaves the chat where it is.
+#[derive(Clone, Copy)]
+struct Wheel {
+  /// Toward the start.
+  up: bool,
+  /// The chat's scroll before it.
+  from: f32,
+  /// What had arrived then, for *N new*.
+  arrived: usize,
+}
+
 /// Whether the chat follows, and what it needs to: its scroll, what had arrived when it stopped following (for
 /// *N new*) and at the last render, whether it has shown rows yet, whether it is going to the end after something
 /// arrived, how tall its content was at the last layout, the card it reveals instead of its end, and which
-/// conversation it shows when one chat shows several. Only arrivals move a following chat: a row the person opens or
-/// folds leaves it where it is.
+/// conversation it shows when one chat shows several, and the turn of the wheel the next layout settles. Only
+/// arrivals move a following chat: a row the person opens or folds leaves it where it is.
 #[derive(Clone)]
 pub struct Follow {
   pub following: Signal<bool>,
@@ -61,6 +74,7 @@ pub struct Follow {
   height: Arc<Mutex<f32>>,
   reveal: Arc<Mutex<Reveal>>,
   shows: Arc<Mutex<Option<String>>>,
+  wheel: Arc<Mutex<Option<Wheel>>>,
 }
 
 impl PartialEq for Follow {
@@ -84,6 +98,7 @@ impl Follow {
       height: Arc::default(),
       reveal: Arc::default(),
       shows: Arc::default(),
+      wheel: Arc::default(),
     }
   }
 
@@ -93,6 +108,7 @@ impl Follow {
       key: None,
       scrolled: true,
     };
+    *self.wheel.lock() = None;
     self.to_end();
     self.following.set(true);
   }
@@ -112,6 +128,7 @@ impl Follow {
     *self.left_at.lock() = None;
     *self.height.lock() = 0.0;
     *self.to_end.lock() = false;
+    *self.wheel.lock() = None;
     if !self.following.get_untracked() {
       self.following.set(true);
     }
@@ -166,30 +183,44 @@ impl Follow {
     arrived: usize,
     reveal: Option<String>,
   ) -> VirtualizedList<'a, T> {
-    let (scroll, following, left_at, revealed) = (
-      self.scroll.clone(),
-      self.following.clone(),
-      self.left_at.clone(),
-      self.reveal.clone(),
-    );
+    let (scroll, wheel) = (self.scroll.clone(), self.wheel.clone());
     list
       .with_scroll_state(self.scroll.clone())
       .reveal_key(reveal)
       .on_scroll(move |event: ScrollEvent| {
-        // The person scrolls: the card the chat opened at no longer holds it.
-        *revealed.lock() = Reveal {
-          key: None,
-          scrolled: true,
-        };
-        // The handler runs before the wheel moves the list, which moves by the opposite of the delta: a
-        // positive delta scrolls toward the start.
-        let end = (scroll.content_height() - scroll.viewport_height()).max(0.0);
-        let at_end = event.delta_y <= 0.0 && scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;
-        if at_end != following.get_untracked() {
-          *left_at.lock() = (!at_end).then_some(arrived);
-          following.set(at_end);
-        }
+        // The handler runs before the wheel moves anything, also for a wheel over a box that scrolls inside a row,
+        // which moves that box instead: the layout after it tells (`settle_wheel`). The list moves by the opposite
+        // of the delta: a positive delta scrolls toward the start.
+        let mut wheel = wheel.lock();
+        let from = wheel.map_or_else(|| scroll.scroll_y(), |earlier| earlier.from);
+        *wheel = Some(Wheel {
+          up: event.delta_y > 0.0,
+          from,
+          arrived,
+        });
       })
+  }
+
+  /// A turn of the wheel that moved the chat: the card the chat opened at no longer holds it, a move up stops
+  /// following, and a move down to the end follows again. One that moved only a box inside a row changes nothing.
+  fn settle_wheel(&self) {
+    let Some(wheel) = self.wheel.lock().take() else {
+      return;
+    };
+    let now = self.scroll.scroll_y();
+    if (now - wheel.from).abs() <= AT_END {
+      return;
+    }
+    *self.reveal.lock() = Reveal {
+      key: None,
+      scrolled: true,
+    };
+    let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
+    let at_end = !wheel.up && now >= end - FOLLOW_SLACK;
+    if at_end != self.following.get_untracked() {
+      *self.left_at.lock() = (!at_end).then_some(wheel.arrived);
+      self.following.set(at_end);
+    }
   }
 
   /// *Jump to latest · N new*: what arrived since the chat stopped following.
@@ -218,7 +249,8 @@ impl Follow {
     Row::new().padding_bottom(SpacingSize::Sm).child(button).into()
   }
 
-  /// What holds a following chat at its end, mounted after the list ([`FollowEnd`]); `key` names it.
+  /// What holds a following chat at its end and settles the person's wheel, mounted after the list
+  /// ([`FollowEnd`]); `key` names it.
   pub fn end(&self, ctx: &mut Ctx, key: &str) -> Element {
     ctx.mount_keyed::<FollowEnd>(key, self.clone())
   }
@@ -228,6 +260,7 @@ impl Follow {
   /// under the view, and rows it measures late (Markdown, cards) move the end further. A layout that did not grow
   /// the content ends that; a row the person opened never starts it, so the scroll stays as the person left it.
   fn keep_at_end(&self) {
+    self.settle_wheel();
     let height = self.scroll.content_height();
     let grew = {
       let mut last = self.height.lock();
@@ -257,7 +290,8 @@ pub fn jump_room() -> Element {
   Column::new().height(Dimension::Px(JUMP_HEIGHT)).into()
 }
 
-/// Mounted after the chat's list, so that its `after_layout` runs after the list's, which moves the scroll.
+/// Mounted after the chat's list, so that its `after_layout` runs after the list's, which moves the scroll, and after
+/// a wheel has moved what it moves.
 struct FollowEnd {
   follow: Mutex<Option<Follow>>,
 }
