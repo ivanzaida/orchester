@@ -18,6 +18,7 @@ mod history;
 mod layout;
 mod links;
 mod open_long;
+mod paste;
 mod proposal;
 mod queue;
 mod references;
