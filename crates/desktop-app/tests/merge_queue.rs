@@ -68,9 +68,9 @@ impl Seeded {
 
   fn queue_screen(&mut self) {
     self.go(ProjectPage::MergeQueue);
-    self.window.until("the merge queue", |window| {
-      window.texts("merge-queue-header").is_some()
-    });
+    self
+      .window
+      .until("the merge queue", |window| window.texts("merge-queue-header").is_some());
   }
 
   fn summary(&mut self, key: &str) {
@@ -128,23 +128,25 @@ fn merge_queue_blocked_by_a_dirty_checkout_says_why_and_goes_on_once_it_is_clean
   assert!(held.contains("Held until the checkout is clean"), "{held}");
   // Retry while the checkout is still dirty leaves the run blocked.
   seeded.window.press("merge-queue-retry");
-  seeded.window.until("the retry", |window| window.texts("merge-queue-blocked").is_some());
+  seeded
+    .window
+    .until("the retry", |window| window.texts("merge-queue-blocked").is_some());
   assert!(matches!(seeded.entry(1).state, QueueState::Blocked(_)));
   discard(&seeded.repo, "src/webhooks/settings.rs");
   seeded.window.press("merge-queue-retry");
   let repo = seeded.repo.clone();
-  seeded.window.until_within(GIT_WORK, "the blocked run to merge", |_| {
-    merged(&repo, 1)
-  });
+  seeded
+    .window
+    .until_within(GIT_WORK, "the blocked run to merge", |_| merged(&repo, 1));
 }
 
 #[test]
 fn merge_queue_removes_a_waiting_run_which_then_merges_by_hand() {
   let mut seeded = Seeded::new("delivery-blocked");
   seeded.queue_screen();
-  seeded
-    .window
-    .until("the waiting run", |window| window.texts("merge-queue-row-2-remove").is_some());
+  seeded.window.until("the waiting run", |window| {
+    window.texts("merge-queue-row-2-remove").is_some()
+  });
   // A long checkout path keeps the head its size: the rows stay in view (the base box shortens the path).
   let header = seeded
     .window
@@ -158,7 +160,9 @@ fn merge_queue_removes_a_waiting_run_which_then_merges_by_hand() {
   seeded.window.until("the run to leave the queue", |_| {
     entry_state(&repo, 2) == Some(QueueState::Removed)
   });
-  seeded.window.until("the row to go", |window| window.texts("merge-queue-row-2").is_none());
+  seeded
+    .window
+    .until("the row to go", |window| window.texts("merge-queue-row-2").is_none());
   seeded.summary("KON-2");
   seeded
     .window
@@ -169,7 +173,9 @@ fn merge_queue_removes_a_waiting_run_which_then_merges_by_hand() {
 fn merge_queue_review_before_merging_approves_and_the_queue_merges_the_run() {
   let mut seeded = Seeded::new("delivery");
   seeded.summary("KON-2");
-  seeded.window.until("the review", |window| window.texts("task-review").is_some());
+  seeded
+    .window
+    .until("the review", |window| window.texts("task-review").is_some());
   assert_eq!(
     seeded.window.text("task-delivery-decision-title"),
     "Ready to merge into main"
@@ -180,10 +186,12 @@ fn merge_queue_review_before_merging_approves_and_the_queue_merges_the_run() {
   assert!(details.contains("Approve to merge"), "{details}");
   seeded.window.press("task-delivery-merge");
   let repo = seeded.repo.clone();
+  seeded.window.until("the approval", |_| {
+    entry_of(&repo, 2).is_some_and(|entry| entry.approved_at.is_some())
+  });
   seeded
     .window
-    .until("the approval", |_| entry_of(&repo, 2).is_some_and(|entry| entry.approved_at.is_some()));
-  seeded.window.until_within(GIT_WORK, "the queue to merge the run", |_| merged(&repo, 2));
+    .until_within(GIT_WORK, "the queue to merge the run", |_| merged(&repo, 2));
   seeded.window.until("the merged notice", |window| {
     window
       .texts("task-notice")
@@ -195,16 +203,18 @@ fn merge_queue_review_before_merging_approves_and_the_queue_merges_the_run() {
 fn merge_queue_integrate_failed_offers_resolve_myself_which_leaves_the_merge_in_the_worktree() {
   let mut seeded = Seeded::new("delivery");
   seeded.summary("KON-3");
-  seeded
-    .window
-    .until("Integrate failed", |window| window.texts("task-delivery-conflicts").is_some());
+  seeded.window.until("Integrate failed", |window| {
+    window.texts("task-delivery-conflicts").is_some()
+  });
   assert_eq!(seeded.window.text("task-delivery-decision-title"), "Conflicts need you");
   let conflicts = seeded.window.text("task-delivery-conflicts");
   assert!(conflicts.contains("src/webhooks/sender.rs"), "{conflicts}");
   seeded.window.press("task-delivery-resolve-myself");
-  seeded.window.until_within(GIT_WORK, "the worktree to hold the merge", |window| {
-    window.texts("task-delivery-resolve").is_some()
-  });
+  seeded
+    .window
+    .until_within(GIT_WORK, "the worktree to hold the merge", |window| {
+      window.texts("task-delivery-resolve").is_some()
+    });
   assert!(seeded.shows("task-delivery-resolved"), "I've resolved it is offered");
   seeded.window.press("task-delivery-back");
   seeded.window.until("the decision again", |window| {

@@ -66,7 +66,10 @@ struct Driving(PathBuf);
 
 impl Driving {
   fn take(root: &Path) -> Option<Self> {
-    DRIVING.lock().insert(root.to_path_buf()).then(|| Self(root.to_path_buf()))
+    DRIVING
+      .lock()
+      .insert(root.to_path_buf())
+      .then(|| Self(root.to_path_buf()))
   }
 }
 
@@ -115,7 +118,8 @@ fn next(db: &ProjectDb) -> Result<Option<(QueueEntry, Option<Run>)>, StoreError>
   );
   for entry in candidates {
     let run = db.run(entry.run).map_err(run_store_error)?;
-    let waits = entry.state == QueueState::Queued && run.as_ref().is_some_and(|run| *run.status() != RunStatus::Succeeded);
+    let waits =
+      entry.state == QueueState::Queued && run.as_ref().is_some_and(|run| *run.status() != RunStatus::Succeeded);
     if !waits {
       return Ok(Some((entry.clone(), run)));
     }
@@ -141,7 +145,7 @@ impl Driver<'_> {
       return self.leave(entry, stopped("the run's pipeline has no Deliver step"), Vec::new());
     };
     match entry.state.clone() {
-      QueueState::Queued => self.save(entry, QueueState::Syncing, Vec::new()),
+      QueueState::Queued => self.save(entry, QueueState::Syncing, &[]),
       QueueState::Syncing => self.sync(entry, &run, &deliver),
       QueueState::Rechecking { base, tip } => self.recheck(entry, &run, (base, tip), &deliver),
       QueueState::Integrating { after, files, .. } => self.integrating(entry, &run, (after, files)),
@@ -167,7 +171,11 @@ impl Driver<'_> {
       return self.leave(entry, stopped("the run did not record its base branch"), Vec::new());
     };
     let worktree = run_worktree(self.root, run.id());
-    let synced = delivery::sync(&self.programs.git_work(), Path::new(GIT), (&worktree, base, run.branch()));
+    let synced = delivery::sync(
+      &self.programs.git_work(),
+      Path::new(GIT),
+      (&worktree, base, run.branch()),
+    );
     match synced {
       Ok(Synced::Clean { base, tip }) => {
         let events = vec![QueueEvent::Synced {
@@ -183,7 +191,7 @@ impl Driver<'_> {
         }
         let mut events = events;
         events.push(QueueEvent::CheckStarted { base: base.clone() });
-        self.save(entry, QueueState::Rechecking { base, tip }, events)
+        self.save(entry, QueueState::Rechecking { base, tip }, &events)
       }
       Ok(Synced::Conflicts { base, files }) => self.conflicts(entry, run, deliver, (base, files)),
       Err(error) => self.leave(entry, stopped(&error.to_string()), Vec::new()),
@@ -208,7 +216,7 @@ impl Driver<'_> {
       return self.leave(entry, Left::Conflicts { files }, events);
     };
     let run_id = entry.run;
-    match self.save(entry, state, events)? {
+    match self.save(entry, state, &events)? {
       Advance::Changed => Ok(Advance::Integrate { run: run_id, command }),
       other => Ok(other),
     }
@@ -267,28 +275,44 @@ impl Driver<'_> {
         QueueEvent::CheckSuperseded { now, .. } => Some(now.clone()),
         _ => None,
       }));
-      let base = run.base_branch().map_or_else(String::new, |branch| branch.as_str().to_owned());
+      let base = run
+        .base_branch()
+        .map_or_else(String::new, |branch| branch.as_str().to_owned());
       return self.leave(entry, Left::KeepsMoving { base, heads }, events);
     }
     entry.resyncs += 1;
     entry.checked = None;
-    self.save(entry, QueueState::Syncing, events)
+    self.save(entry, QueueState::Syncing, &events)
   }
 
   /// Checked on the base as it is (or not checked again, as the pipeline says): it waits for a person's approval
   /// unless it has it or merges on its own.
-  fn checked(self, entry: QueueEntry, run: &Run, (deliver, events): (&DeliverStep, Vec<QueueEvent>)) -> Result<Advance, StoreError> {
+  fn checked(
+    self,
+    entry: QueueEntry,
+    run: &Run,
+    (deliver, events): (&DeliverStep, Vec<QueueEvent>),
+  ) -> Result<Advance, StoreError> {
     if deliver.mode() == DeliverMode::ApproveToMerge && entry.approved_at.is_none() {
-      return self.save(entry, QueueState::WaitingForApproval, events);
+      return self.save(entry, QueueState::WaitingForApproval, &events);
     }
     self.land(entry, run, (deliver, events))
   }
 
-  fn land(self, entry: QueueEntry, run: &Run, (deliver, mut events): (&DeliverStep, Vec<QueueEvent>)) -> Result<Advance, StoreError> {
+  fn land(
+    self,
+    entry: QueueEntry,
+    run: &Run,
+    (deliver, mut events): (&DeliverStep, Vec<QueueEvent>),
+  ) -> Result<Advance, StoreError> {
     let Some(task) = self.db.task(run.task())? else {
       return self.leave(entry, stopped("the run's task cannot be read"), events);
     };
-    match land((self.root, self.programs), (run, &task), (deliver, entry.checked.as_ref())) {
+    match land(
+      (self.root, self.programs),
+      (run, &task),
+      (deliver, entry.checked.as_ref()),
+    ) {
       Landed::Merged(delivered) => {
         events.push(QueueEvent::Merged {
           revision: delivered.revision.clone(),
@@ -298,27 +322,32 @@ impl Driver<'_> {
           worktree_removed: delivered.worktree_removed,
           branch_deleted: delivered.branch_deleted,
         });
-        self.save(entry, QueueState::Merged(delivered), events)
+        self.save(entry, QueueState::Merged(delivered), &events)
       }
       Landed::Blocked(blocked) if entry.state == QueueState::Blocked(blocked.clone()) && events.is_empty() => {
         Ok(Advance::Idle { poll: true })
       }
       Landed::Blocked(blocked) => {
         events.push(QueueEvent::Blocked(blocked.clone()));
-        self.save(entry, QueueState::Blocked(blocked), events)
+        self.save(entry, QueueState::Blocked(blocked), &events)
       }
-      Landed::Moved => self.save(entry, QueueState::Syncing, events),
+      Landed::Moved => self.save(entry, QueueState::Syncing, &events),
       Landed::Stopped(detail) => self.leave(entry, Left::Stopped { detail }, events),
     }
   }
 
   /// The Integrate step works on `files`; the run's events since it went were `after`.
-  fn integrating(self, entry: QueueEntry, run: &Run, (after, files): (u64, Vec<String>)) -> Result<Advance, StoreError> {
+  fn integrating(
+    self,
+    entry: QueueEntry,
+    run: &Run,
+    (after, files): (u64, Vec<String>),
+  ) -> Result<Advance, StoreError> {
     if run.last_sequence().get() <= after {
       return Ok(Advance::Idle { poll: false });
     }
     match run.status() {
-      RunStatus::Succeeded => self.save(entry, QueueState::Syncing, Vec::new()),
+      RunStatus::Succeeded => self.save(entry, QueueState::Syncing, &[]),
       RunStatus::Failed(_) | RunStatus::Cancelled => self.leave(entry, Left::Conflicts { files }, Vec::new()),
       _ => Ok(Advance::Idle { poll: false }),
     }
@@ -326,17 +355,17 @@ impl Driver<'_> {
 
   fn leave(self, entry: QueueEntry, left: Left, mut events: Vec<QueueEvent>) -> Result<Advance, StoreError> {
     events.push(QueueEvent::Left(left.clone()));
-    self.save(entry, QueueState::Left(left), events)
+    self.save(entry, QueueState::Left(left), &events)
   }
 
   /// Saves `entry` in `state` with `events`, unless it moved on meanwhile: either way the queue changed.
-  fn save(mut self, mut entry: QueueEntry, state: QueueState, events: Vec<QueueEvent>) -> Result<Advance, StoreError> {
+  fn save(mut self, mut entry: QueueEntry, state: QueueState, events: &[QueueEvent]) -> Result<Advance, StoreError> {
     let expected = std::mem::replace(&mut entry.state, state);
     let now = Timestamp::now();
     if entry.state != expected {
       entry.since = now;
     }
-    if !self.db.save_merge_queue_entry(&entry, &expected, (&events, now))? {
+    if !self.db.save_merge_queue_entry(&entry, &expected, (events, now))? {
       tracing::info!(run = %entry.run, "the merge queue entry changed meanwhile; it is read again");
     }
     Ok(Advance::Changed)

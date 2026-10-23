@@ -127,7 +127,10 @@ pub(super) fn checks_card(ctx: &Ctx, id: &str, rows: Vec<Element>) -> Element {
     return note(&ctx.t("delivery.task.failed.nothing"));
   }
   card(id, CardSurface::Outline)
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Snug.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Loose.role(),
+      ExtraSpacing::Snug.role(),
+    ))
     .with_children(rows)
     .into()
 }

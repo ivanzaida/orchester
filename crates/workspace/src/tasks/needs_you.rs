@@ -101,7 +101,10 @@ pub enum WaitingKind {
   /// could not resolve, a failed check on the merged result, a base that kept moving.
   DeliveryLeft(Left),
   /// The project's merge queue is blocked by the person's checkout, with this many runs waiting behind it.
-  DeliveryBlocked { blocked: Blocked, waiting: usize },
+  DeliveryBlocked {
+    blocked: Blocked,
+    waiting: usize,
+  },
   /// The project's memory records waiting for a person's approval, this many.
   Memory {
     count: usize,

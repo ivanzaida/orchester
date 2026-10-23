@@ -38,7 +38,12 @@ pub fn rechecks(key: &StepKey) -> bool {
 }
 
 /// Runs the command tools of `run`'s checking tool steps again in its `worktree`, with the project's settings in `db`.
-pub(super) fn check(db: &ProjectDb, programs: &Programs, (root, worktree): (&Path, &Path), run: &Run) -> Result<Checked, StoreError> {
+pub(super) fn check(
+  db: &ProjectDb,
+  programs: &Programs,
+  (root, worktree): (&Path, &Path),
+  run: &Run,
+) -> Result<Checked, StoreError> {
   let environment = db.project_environment()?;
   let mut passed: Vec<String> = Vec::new();
   for step in run.snapshot().steps().iter().filter(|step| rechecks(step.key())) {
@@ -51,9 +56,10 @@ pub(super) fn check(db: &ProjectDb, programs: &Programs, (root, worktree): (&Pat
     let ToolAction::Command(action) = version.body().action() else {
       continue;
     };
-    let tool = db
-      .resource(pinned.resource)?
-      .map_or_else(|| step.key().to_string(), |resource| resource.name().as_str().to_owned());
+    let tool = db.resource(pinned.resource)?.map_or_else(
+      || step.key().to_string(),
+      |resource| resource.name().as_str().to_owned(),
+    );
     let failed = |detail: String| Checked::Failed {
       tool: tool.clone(),
       detail,
@@ -67,11 +73,23 @@ pub(super) fn check(db: &ProjectDb, programs: &Programs, (root, worktree): (&Pat
       return Ok(failed(format!("{} was not found", action.program().as_str())));
     };
     if action.program().check_place(&program, root).is_err() {
-      return Ok(failed(format!("{} leads elsewhere than when it was saved", action.program().as_str())));
+      return Ok(failed(format!(
+        "{} leads elsewhere than when it was saved",
+        action.program().as_str()
+      )));
     }
-    let command = action.process(&program, worktree, std::env::vars_os(), &environment, Platform::current());
+    let command = action.process(
+      &program,
+      worktree,
+      std::env::vars_os(),
+      &environment,
+      Platform::current(),
+    );
     let end = match programs.timed(action.timeout().duration()).run(&command) {
-      Ok(output) => (CommandEnd::Exited { code: output.code }, last_lines(&output.stdout, &output.stderr)),
+      Ok(output) => (
+        CommandEnd::Exited { code: output.code },
+        last_lines(&output.stdout, &output.stderr),
+      ),
       Err(CommandError::TimedOut) => (CommandEnd::TimedOut, String::new()),
       Err(error) => return Ok(failed(error.to_string())),
     };

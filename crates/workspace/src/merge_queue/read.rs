@@ -96,13 +96,26 @@ pub enum RowPhase {
     conflicts: usize,
   },
   /// The check on the base at `base` no longer matches what would land: the base moved to `now`.
-  Superseded { base: Revision, now: Revision },
-  Integrate { state: PhaseState },
+  Superseded {
+    base: Revision,
+    now: Revision,
+  },
+  Integrate {
+    state: PhaseState,
+  },
   /// Check on the merged result; running since `since`.
-  Check { state: PhaseState, since: Option<Timestamp> },
+  Check {
+    state: PhaseState,
+    since: Option<Timestamp>,
+  },
   /// A person's approval, given at `at`.
-  Approval { state: PhaseState, at: Option<Timestamp> },
-  Merge { state: PhaseState },
+  Approval {
+    state: PhaseState,
+    at: Option<Timestamp>,
+  },
+  Merge {
+    state: PhaseState,
+  },
 }
 
 /// Where a phase stands.
@@ -386,9 +399,7 @@ fn base_state(branch: BranchName, (root, programs): (&Path, &Programs)) -> BaseS
   let checkout = match delivery::checkout(&runner, Path::new(GIT), (root, &branch)) {
     Ok(Checkout::OnBase { uncommitted }) if uncommitted.is_empty() => CheckoutState::Clean,
     Ok(Checkout::OnBase { uncommitted }) => CheckoutState::Uncommitted(uncommitted),
-    Ok(Checkout::OtherBranch(current)) => {
-      CheckoutState::OtherBranch(current.map(|branch| branch.as_str().to_owned()))
-    }
+    Ok(Checkout::OtherBranch(current)) => CheckoutState::OtherBranch(current.map(|branch| branch.as_str().to_owned())),
     Ok(Checkout::InProgress) => CheckoutState::InProgress,
     Err(error) => {
       tracing::warn!(%error, "cannot tell how the checkout stands for delivering");

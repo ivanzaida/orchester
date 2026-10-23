@@ -30,9 +30,17 @@ pub enum DeliveryCheck {
   /// Check on the merged result is still to run.
   CheckWaits,
   /// Check passed on the merged result with the base at `base`: `tool` ran.
-  Checked { base: Revision, tool: String, at: Timestamp },
+  Checked {
+    base: Revision,
+    tool: String,
+    at: Timestamp,
+  },
   /// Check failed on the merged result with the base at `base`: `tool`.
-  CheckFailed { base: Revision, tool: String, at: Timestamp },
+  CheckFailed {
+    base: Revision,
+    tool: String,
+    at: Timestamp,
+  },
   /// A person approved the merge at `at`.
   Approved { at: Timestamp },
 }

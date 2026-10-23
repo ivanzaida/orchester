@@ -35,9 +35,7 @@ pub fn integrating_step<'a>(
   deliver: &DeliverStep,
   considered: impl Fn(&StepKey) -> bool,
 ) -> Option<&'a Step> {
-  let writing: Vec<&Step> = writing(pipeline.steps())
-    .filter(|step| considered(&step.key))
-    .collect();
+  let writing: Vec<&Step> = writing(pipeline.steps()).filter(|step| considered(&step.key)).collect();
   match deliver.integrator() {
     Some(profile) => writing
       .iter()

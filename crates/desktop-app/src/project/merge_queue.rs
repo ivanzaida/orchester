@@ -26,12 +26,15 @@ const AFTER_FAILURE: Duration = Duration::from_secs(30);
 /// Follows `open`'s merge queue. Renders nothing.
 pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
   let services = Services::of(ctx);
-  let deps = (open.clone(), services.runners.clone(), services.programs.clone());
-  ctx.stream(deps, |(open, runners, programs), emitter: StreamEmitter<(), ()>| async move {
-    drive(open, runners, programs).await;
-    // The stream lives while its emitter does: lurq stops a stream whose emitter is gone.
-    drop(emitter);
-  });
+  let deps = (open.clone(), services.runners.clone(), services.programs);
+  ctx.stream(
+    deps,
+    |(open, runners, programs), emitter: StreamEmitter<(), ()>| async move {
+      drive(open, runners, programs).await;
+      // The stream lives while its emitter does: lurq stops a stream whose emitter is gone.
+      drop(emitter);
+    },
+  );
 }
 
 async fn drive(open: OpenProject, runners: Runners, programs: Programs) {
@@ -49,7 +52,10 @@ async fn drive(open: OpenProject, runners: Runners, programs: Programs) {
           .await
           .map_err(|error| control_message(&error));
         let root = root.clone();
-        if let Err(error) = background::run(move || merge_queue::integrate_sent(&root, run, sent)).await.and_then(|told| told) {
+        if let Err(error) = background::run(move || merge_queue::integrate_sent(&root, run, sent))
+          .await
+          .and_then(|told| told)
+        {
           tracing::warn!(key = error.key, "the merge queue could not record its Integrate step");
         }
         continue;
@@ -86,7 +92,10 @@ async fn advance(root: &Path, programs: &Programs) -> Result<Advance, ()> {
   match background::run(move || merge_queue::advance(&root, &programs)).await {
     Ok(Ok(advance)) => Ok(advance),
     Ok(Err(error)) | Err(error) => {
-      tracing::warn!(key = error.key, "the merge queue could not move on; it tries again later");
+      tracing::warn!(
+        key = error.key,
+        "the merge queue could not move on; it tries again later"
+      );
       Err(())
     }
   }

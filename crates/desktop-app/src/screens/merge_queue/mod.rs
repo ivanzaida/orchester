@@ -99,7 +99,10 @@ impl Component for MergeQueueScreen {
       }
       Read::Failed(reason) => {
         let retries = self.retries.clone();
-        let body = ctx.t_args("delivery.queue.readFailedBody", [("reason", message_text(ctx, &reason))]);
+        let body = ctx.t_args(
+          "delivery.queue.readFailedBody",
+          [("reason", message_text(ctx, &reason))],
+        );
         return frame
           .child(load_error(
             ctx,
@@ -116,11 +119,18 @@ impl Component for MergeQueueScreen {
     let rows = Rows {
       project: project.open.project.id(),
       checkout: checkout.clone(),
-      held: read.rows.iter().any(|row| matches!(row.entry.state, QueueState::Blocked(_))),
+      held: read
+        .rows
+        .iter()
+        .any(|row| matches!(row.entry.state, QueueState::Blocked(_))),
       actions: actions.clone(),
     };
     let failed = self.failed.get().map(|reason| {
-      Notice::new("merge-queue-not-done", NoticeTone::Danger, ctx.t_args("delivery.queue.notDone", [("reason", message_text(ctx, &reason))]))
+      Notice::new(
+        "merge-queue-not-done",
+        NoticeTone::Danger,
+        ctx.t_args("delivery.queue.notDone", [("reason", message_text(ctx, &reason))]),
+      )
     });
     let body = body(ctx, &read, &rows);
     frame
@@ -194,7 +204,10 @@ fn today_section(ctx: &mut Ctx, today: &[&QueueRow], rows: &Rows) -> Element {
   if !today.is_empty() {
     head = head.note(ctx.t_args(
       "delivery.queue.section.todayNote",
-      [("merged", merged.to_string()), ("failed", (today.len() - merged).to_string())],
+      [
+        ("merged", merged.to_string()),
+        ("failed", (today.len() - merged).to_string()),
+      ],
     ));
   }
   if today.is_empty() {
@@ -202,7 +215,11 @@ fn today_section(ctx: &mut Ctx, today: &[&QueueRow], rows: &Rows) -> Element {
       .id("merge-queue-today-nothing")
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Lg))
-      .child(Text::new(&ctx.t("delivery.queue.section.nothingToday")).variant(ExtraTypography::Prose.role()).color(PaletteColor::TextMuted));
+      .child(
+        Text::new(&ctx.t("delivery.queue.section.nothingToday"))
+          .variant(ExtraTypography::Prose.role())
+          .color(PaletteColor::TextMuted),
+      );
     return section_frame(ctx, ("today", head, false), vec![nothing.into()]);
   }
   section(ctx, ("today", head, false), today, rows)
@@ -256,11 +273,11 @@ fn section_frame(_ctx: &Ctx, (name, head, blocked): (&str, Head, bool), children
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(Text::new(&head.title).variant(ExtraTypography::FormSection.role()))
-        .with_children(
-          head
-            .count
-            .map(|count| Text::new(&count.to_string()).id(format!("merge-queue-{name}-count")).variant(DeliveryText::Count.role())),
-        )
+        .with_children(head.count.map(|count| {
+          Text::new(&count.to_string())
+            .id(format!("merge-queue-{name}-count"))
+            .variant(DeliveryText::Count.role())
+        }))
         .with_children(head.note.map(|note| {
           Text::new(&note)
             .variant(ExtraTypography::Prose.role())

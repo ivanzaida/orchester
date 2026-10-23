@@ -52,7 +52,11 @@ pub(super) fn header(ctx: &Ctx, read: &QueueRead, checkout: &Arc<str>) -> Row {
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Snug.role())
         .child(Text::new(&ctx.t("delivery.queue.title")).variant(ExtraTypography::Display.role()))
-        .child(Text::new(&lead).id("merge-queue-lead").variant(DeliveryText::Lead.role())),
+        .child(
+          Text::new(&lead)
+            .id("merge-queue-lead")
+            .variant(DeliveryText::Lead.role()),
+        ),
     )
     .with_children(read.base.as_ref().map(|base| base_box(ctx, base, checkout)))
 }
@@ -70,7 +74,10 @@ fn base_box(ctx: &Ctx, base: &BaseState, checkout: &Arc<str>) -> Column {
     |head| {
       ctx.t_args(
         "delivery.queue.base.value",
-        [("branch", base.branch.as_str()), ("revision", short_revision(head.as_str()))],
+        [
+          ("branch", base.branch.as_str()),
+          ("revision", short_revision(head.as_str())),
+        ],
       )
     },
   );
@@ -83,7 +90,10 @@ fn base_box(ctx: &Ctx, base: &BaseState, checkout: &Arc<str>) -> Column {
   Column::new()
     .id("merge-queue-base")
     .flex_shrink(0.0)
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Inset.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Loose.role(),
+      ExtraSpacing::Inset.role(),
+    ))
     .spacing(ExtraSpacing::Snug.role())
     .background(fill)
     .border(Border::inside(BorderSize::Sm, stroke))
@@ -135,7 +145,10 @@ fn checkout_words(ctx: &Ctx, checkout: &CheckoutState) -> (Arc<str>, PaletteColo
       (ctx.t("delivery.queue.base.uncommittedOne"), PaletteColor::Warning)
     }
     CheckoutState::Uncommitted(files) => (
-      ctx.t_args("delivery.queue.base.uncommittedOther", [("count", files.len().to_string())]),
+      ctx.t_args(
+        "delivery.queue.base.uncommittedOther",
+        [("count", files.len().to_string())],
+      ),
       PaletteColor::Warning,
     ),
     CheckoutState::OtherBranch(Some(branch)) => (
@@ -149,7 +162,12 @@ fn checkout_words(ctx: &Ctx, checkout: &CheckoutState) -> (Arc<str>, PaletteColo
 }
 
 /// While the run being delivered is blocked: why, with *Open folder* and *Retry*.
-pub(super) fn blocked(ctx: &Ctx, read: &QueueRead, (root, checkout): (&Path, &Arc<str>), actions: &QueueActions) -> Option<Element> {
+pub(super) fn blocked(
+  ctx: &Ctx,
+  read: &QueueRead,
+  (root, checkout): (&Path, &Arc<str>),
+  actions: &QueueActions,
+) -> Option<Element> {
   let blocked = read.rows.iter().find_map(|row| match &row.entry.state {
     QueueState::Blocked(blocked) => Some((blocked, row)),
     _ => None,
@@ -164,19 +182,34 @@ pub(super) fn blocked(ctx: &Ctx, read: &QueueRead, (root, checkout): (&Path, &Ar
     ),
     Blocked::OtherBranch { .. } => (
       ctx.t_args("delivery.queue.blocked.otherBranchTitle", [("base", base)]),
-      ctx.t_args("delivery.queue.blocked.otherBranchBody", [("base", base), ("path", path)]),
+      ctx.t_args(
+        "delivery.queue.blocked.otherBranchBody",
+        [("base", base), ("path", path)],
+      ),
     ),
     Blocked::InProgress => (
       ctx.t("delivery.queue.blocked.inProgressTitle"),
       ctx.t_args("delivery.queue.blocked.inProgressBody", [("path", path)]),
     ),
-    Blocked::HeldLocally => (ctx.t("delivery.queue.blocked.heldTitle"), ctx.t("delivery.queue.blocked.heldBody")),
+    Blocked::HeldLocally => (
+      ctx.t("delivery.queue.blocked.heldTitle"),
+      ctx.t("delivery.queue.blocked.heldBody"),
+    ),
   };
   let folder = root.to_path_buf();
-  let open_folder = ActionButton::new("merge-queue-open-folder", ButtonKind::Secondary, ctx.t("delivery.queue.blocked.openFolder"))
-    .on_click(move || open_folder(&folder));
+  let open_folder = ActionButton::new(
+    "merge-queue-open-folder",
+    ButtonKind::Secondary,
+    ctx.t("delivery.queue.blocked.openFolder"),
+  )
+  .on_click(move || open_folder(&folder));
   let retry = actions.retries(
-    ActionButton::new("merge-queue-retry", ButtonKind::Primary, ctx.t("delivery.queue.blocked.retry")).icon(Icon::RotateCcw),
+    ActionButton::new(
+      "merge-queue-retry",
+      ButtonKind::Primary,
+      ctx.t("delivery.queue.blocked.retry"),
+    )
+    .icon(Icon::RotateCcw),
   );
   Some(
     Notice::new("merge-queue-blocked", NoticeTone::Warning, title)
@@ -191,11 +224,13 @@ pub(super) fn blocked(ctx: &Ctx, read: &QueueRead, (root, checkout): (&Path, &Ar
 /// Opens the person's checkout in the system's file manager, on a thread of its own.
 fn open_folder(folder: &Path) {
   let folder = folder.to_path_buf();
-  let opened = std::thread::Builder::new().name("open-checkout".to_owned()).spawn(move || {
-    if let Err(error) = orchester_exec::external::open_path(&folder) {
-      tracing::warn!(%error, "the system did not open the checkout's folder");
-    }
-  });
+  let opened = std::thread::Builder::new()
+    .name("open-checkout".to_owned())
+    .spawn(move || {
+      if let Err(error) = orchester_exec::external::open_path(&folder) {
+        tracing::warn!(%error, "the system did not open the checkout's folder");
+      }
+    });
   if let Err(error) = opened {
     tracing::error!(%error, "cannot start opening the checkout's folder");
   }

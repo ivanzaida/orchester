@@ -1,5 +1,5 @@
-//! An empty merge queue (`Empty queue` `i59Cus` in `mtrlT`): the git-merge tile, *Nothing in the merge queue* and when a
-//! run joins it, then how each of the project's published pipelines delivers: its Deliver step's mode and merge
+//! An empty merge queue (`Empty queue` `i59Cus` in `mtrlT`): the git-merge tile, *Nothing in the merge queue* and when
+//! a run joins it, then how each of the project's published pipelines delivers: its Deliver step's mode and merge
 //! method, or that it has none, with *Add a Deliver step*, which opens the pipeline's editor on its Deliver step.
 
 use lurq::{
@@ -89,11 +89,18 @@ fn pipeline_line(ctx: &mut Ctx, project: ProjectId, pipeline: &PipelineDelivery)
   let id = format!("merge-queue-pipeline-{}", pipeline.id);
   let name = ctx.t_args(
     "delivery.queue.empty.pipeline",
-    [("name", pipeline.name.clone()), ("version", pipeline.version.to_string())],
+    [
+      ("name", pipeline.name.clone()),
+      ("version", pipeline.version.to_string()),
+    ],
   );
   let (glyph, words, color) = match &pipeline.deliver {
     Some(deliver) => (Icon::GitMerge, delivers(ctx, deliver), PaletteColor::TextSecondary),
-    None => (Icon::CircleDashed, ctx.t("delivery.queue.empty.none"), PaletteColor::TextMuted),
+    None => (
+      Icon::CircleDashed,
+      ctx.t("delivery.queue.empty.none"),
+      PaletteColor::TextMuted,
+    ),
   };
   let mut line = Row::new()
     .id(id.clone())
@@ -115,9 +122,13 @@ fn pipeline_line(ctx: &mut Ctx, project: ProjectId, pipeline: &PipelineDelivery)
   if pipeline.deliver.is_none() {
     let route = Route::Project(project, ProjectPage::Pipeline(pipeline.id, PipelinePanel::Deliver));
     line = line.child(
-      ActionButton::new(format!("{id}-add-deliver"), ButtonKind::Secondary, ctx.t("delivery.queue.empty.addDeliver"))
-        .icon(Icon::Plus)
-        .opens(Navigation::of(ctx).to(route)),
+      ActionButton::new(
+        format!("{id}-add-deliver"),
+        ButtonKind::Secondary,
+        ctx.t("delivery.queue.empty.addDeliver"),
+      )
+      .icon(Icon::Plus)
+      .opens(Navigation::of(ctx).to(route)),
     );
   }
   line

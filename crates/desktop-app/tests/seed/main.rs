@@ -185,6 +185,9 @@ fn seed_names_every_scenario_once() {
       "changes",
       "cards",
       "decisions",
+      "delivery",
+      "delivery-blocked",
+      "delivery-empty",
       "interrupted",
       "unreadable-db",
       "tasks-unreadable",
@@ -197,6 +200,7 @@ fn seed_names_every_scenario_once() {
       "accounts",
       "pull-requests",
       "pull-request-feedback",
+      "sources",
       "usage",
       "usage-empty",
       "usage-bare"

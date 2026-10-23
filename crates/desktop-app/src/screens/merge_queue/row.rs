@@ -192,8 +192,12 @@ fn buttons(ctx: &mut Ctx, id: &str, rows: &Rows, row: &QueueRow) -> Row {
     QueueState::Blocked(_) => vec![
       open_task,
       rows.actions.retries(
-        ActionButton::new(format!("{id}-retry"), ButtonKind::Secondary, ctx.t("delivery.queue.action.retry"))
-          .icon(Icon::RotateCcw),
+        ActionButton::new(
+          format!("{id}-retry"),
+          ButtonKind::Secondary,
+          ctx.t("delivery.queue.action.retry"),
+        )
+        .icon(Icon::RotateCcw),
       ),
     ],
     _ => vec![open_task],
@@ -219,8 +223,12 @@ fn waiting_buttons(ctx: &Ctx, id: &str, rows: &Rows, row: &QueueRow) -> Vec<Acti
   };
   vec![
     moving(
-      ActionButton::new(format!("{id}-move-up"), ButtonKind::Ghost, ctx.t("delivery.queue.action.moveUp"))
-        .icon(Icon::ArrowUp),
+      ActionButton::new(
+        format!("{id}-move-up"),
+        ButtonKind::Ghost,
+        ctx.t("delivery.queue.action.moveUp"),
+      )
+      .icon(Icon::ArrowUp),
       Move::Up,
     ),
     moving(
@@ -233,7 +241,12 @@ fn waiting_buttons(ctx: &Ctx, id: &str, rows: &Rows, row: &QueueRow) -> Vec<Acti
       Move::ToTop,
     ),
     rows.actions.removes(
-      ActionButton::new(format!("{id}-remove"), ButtonKind::Ghost, ctx.t("delivery.queue.action.remove")).icon(Icon::X),
+      ActionButton::new(
+        format!("{id}-remove"),
+        ButtonKind::Ghost,
+        ctx.t("delivery.queue.action.remove"),
+      )
+      .icon(Icon::X),
       run,
     ),
   ]

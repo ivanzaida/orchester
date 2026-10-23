@@ -82,7 +82,9 @@ fn merge_in<R: CommandRunner>(
   let settings = ["-c", hooks.as_str(), "-c", "submodule.recurse=false"];
   let merge = ["merge", "--no-autostash", "--no-overwrite-ignore"];
   let output = match made {
-    Made::Merge { title } => temporary.output(&[&settings[..], &merge, &["--no-ff", "--no-edit", "-m", title, head]].concat())?,
+    Made::Merge { title } => {
+      temporary.output(&[&settings[..], &merge, &["--no-ff", "--no-edit", "-m", title, head]].concat())?
+    }
     Made::Squash { .. } => temporary.output(&[&settings[..], &merge, &["--squash", head]].concat())?,
   };
   if !output.success() {

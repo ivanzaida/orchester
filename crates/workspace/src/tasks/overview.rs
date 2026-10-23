@@ -243,7 +243,10 @@ pub fn recent_activity(tasks: &super::data::ProjectTasks, limit: usize) -> Vec<R
     let Some(entry) = tasks.merge_queue.iter().find(|entry| entry.run == latest.id) else {
       continue;
     };
-    let place = waiting.iter().position(|queued| *queued == entry.run).map(|index| index + 1);
+    let place = waiting
+      .iter()
+      .position(|queued| *queued == entry.run)
+      .map(|index| index + 1);
     // The queue's own changes are when the run last changed for the person.
     run.at = run.at.max(entry.since);
     run.queue = Some((entry.state.clone(), place));

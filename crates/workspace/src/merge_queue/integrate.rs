@@ -22,7 +22,11 @@ pub(super) fn integrate_step(run: &Run, deliver: &DeliverStep) -> Option<StepKey
 
 /// What sends `run`'s conflicts in `files`, with its base branch at `base`, to its Integrate step `step`, and the
 /// state the run is in while it works on them; `None` for a run that names no base branch.
-pub(super) fn integrate(run: &Run, step: StepKey, (base, files): (&Revision, Vec<String>)) -> Option<(Command, QueueState)> {
+pub(super) fn integrate(
+  run: &Run,
+  step: StepKey,
+  (base, files): (&Revision, Vec<String>),
+) -> Option<(Command, QueueState)> {
   let branch = run.base_branch()?;
   let command = Command::ReturnRun(WorkReturn {
     run: run.id(),

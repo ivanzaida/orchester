@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, app::theme::PaletteColor};
+use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
   integration::MergeKind,
   merge_queue::{Left, QueueEvent, QueueState},
@@ -56,11 +56,21 @@ pub(crate) fn state(ctx: &Ctx, row: &QueueRow) -> StateLook {
       ctx.t("delivery.queue.state.waitingForApproval"),
       PaletteColor::Warning,
     ),
-    QueueState::Blocked(_) => tinted(Icon::CirclePause, ctx.t("delivery.queue.state.blocked"), PaletteColor::Warning),
-    QueueState::Left(left) if left.failed() => {
-      tinted(Icon::CircleX, ctx.t("delivery.queue.state.failed"), PaletteColor::Danger)
-    }
-    QueueState::Left(_) => tinted(Icon::Hand, ctx.t("delivery.queue.state.needsYou"), PaletteColor::Warning),
+    QueueState::Blocked(_) => tinted(
+      Icon::CirclePause,
+      ctx.t("delivery.queue.state.blocked"),
+      PaletteColor::Warning,
+    ),
+    QueueState::Left(left) if left.failed() => tinted(
+      Icon::CircleX,
+      ctx.t("delivery.queue.state.failed"),
+      PaletteColor::Danger,
+    ),
+    QueueState::Left(_) => tinted(
+      Icon::Hand,
+      ctx.t("delivery.queue.state.needsYou"),
+      PaletteColor::Warning,
+    ),
     QueueState::Merged(_) => look(Icon::GitMerge, ctx.t("delivery.queue.state.merged")),
   }
 }
@@ -120,7 +130,10 @@ fn merged_method(ctx: &Ctx, kind: MergeKind) -> Arc<str> {
 pub(crate) fn pipeline(ctx: &Ctx, row: &QueueRow) -> Arc<str> {
   ctx.t_args(
     "delivery.queue.empty.pipeline",
-    [("name", row.pipeline.0.clone()), ("version", row.pipeline.1.to_string())],
+    [
+      ("name", row.pipeline.0.clone()),
+      ("version", row.pipeline.1.to_string()),
+    ],
   )
 }
 
@@ -166,7 +179,11 @@ pub(crate) fn meta(ctx: &Ctx, row: &QueueRow) -> Arc<str> {
     },
     QueueState::Blocked(_) if entry.approved_at.is_some() => ctx.t_args(
       "delivery.queue.meta.approved",
-      [("run", run), ("pipeline", pipeline.to_string()), ("method", method.to_string())],
+      [
+        ("run", run),
+        ("pipeline", pipeline.to_string()),
+        ("method", method.to_string()),
+      ],
     ),
     QueueState::Merged(delivered) => ctx.t_args(
       "delivery.queue.meta.merged",
@@ -227,7 +244,10 @@ pub(crate) fn detail(ctx: &Ctx, row: &QueueRow) -> Option<Arc<str>> {
     }
     QueueState::Merged(delivered) => Some(match (delivered.worktree_removed, delivered.branch_deleted) {
       (true, true) => ctx.t_args("delivery.queue.detail.cleared", [("branch", row.branch.as_str())]),
-      (true, false) => ctx.t_args("delivery.queue.detail.clearedKeptBranch", [("branch", row.branch.as_str())]),
+      (true, false) => ctx.t_args(
+        "delivery.queue.detail.clearedKeptBranch",
+        [("branch", row.branch.as_str())],
+      ),
       (false, _) => ctx.t("delivery.queue.detail.notCleared"),
     }),
     QueueState::Left(left) => Some(left_reason(ctx, left)),

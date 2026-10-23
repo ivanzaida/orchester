@@ -29,7 +29,10 @@ pub fn rows(ctx: &Ctx, queue: Option<&TaskDelivery>) -> Vec<Element> {
   let entry = queue.delivery.as_ref().map(|delivery| &delivery.entry);
   let mode = words::mode(ctx, queue.deliver.mode());
   let mode = match entry.and_then(|entry| entry.approved_at) {
-    Some(at) => ctx.t_args("delivery.task.details.approvedAt", [("mode", mode.to_string()), ("time", clock(at))]),
+    Some(at) => ctx.t_args(
+      "delivery.task.details.approvedAt",
+      [("mode", mode.to_string()), ("time", clock(at))],
+    ),
     None => mode,
   };
   let method = match queue.deliver.method() {
@@ -48,7 +51,13 @@ pub fn rows(ctx: &Ctx, queue: Option<&TaskDelivery>) -> Vec<Element> {
     )
   });
   let row = |id: &str, key: &str, value: &str| -> Element {
-    detail_row(&format!("task-delivery-detail-{id}"), &ctx.t(key), value, DetailValue::Text).into()
+    detail_row(
+      &format!("task-delivery-detail-{id}"),
+      &ctx.t(key),
+      value,
+      DetailValue::Text,
+    )
+    .into()
   };
   let mut rows = vec![
     Column::new()

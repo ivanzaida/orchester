@@ -24,9 +24,9 @@ const COLUMNS: &str = "run_id, task_id, finished_at, position, state, since, res
 impl ProjectDb {
   /// Every entry of the merge queue, the runs that left it or were merged included, in the queue's order.
   pub fn merge_queue(&self) -> Result<Vec<QueueEntry>, StoreError> {
-    let mut statement = self
-      .connection
-      .prepare(&format!("SELECT {COLUMNS} FROM merge_queue ORDER BY position, finished_at"))?;
+    let mut statement = self.connection.prepare(&format!(
+      "SELECT {COLUMNS} FROM merge_queue ORDER BY position, finished_at"
+    ))?;
     let rows = statement.query_map([], read_row)?;
     rows.map(|row| entry(row?)).collect()
   }
@@ -158,7 +158,9 @@ impl ProjectDb {
     let mut statement = self
       .connection
       .prepare("SELECT at, event FROM merge_queue_events WHERE run_id = ?1 ORDER BY sequence")?;
-    let rows = statement.query_map([run.to_string()], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?;
+    let rows = statement.query_map([run.to_string()], |row| {
+      Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
     rows
       .map(|row| {
         let (at, event) = row?;

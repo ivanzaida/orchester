@@ -96,7 +96,11 @@ pub(super) fn queue_of_day(db: &ProjectDb, day_start: Timestamp) -> Result<Value
 fn places(entries: &[QueueEntry]) -> HashMap<RunId, usize> {
   let mut queue: Vec<&QueueEntry> = entries.iter().filter(|entry| entry.state.in_queue()).collect();
   queue.sort_by_key(|entry| !entry.state.delivering());
-  queue.iter().enumerate().map(|(index, entry)| (entry.run, index + 1)).collect()
+  queue
+    .iter()
+    .enumerate()
+    .map(|(index, entry)| (entry.run, index + 1))
+    .collect()
 }
 
 const fn state_name(state: &QueueState) -> &'static str {

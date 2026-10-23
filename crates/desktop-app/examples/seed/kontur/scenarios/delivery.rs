@@ -82,7 +82,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
         at,
       });
     },
-    checked_events(&main),
+    &checked_events(&main),
   )?;
   let files: Vec<String> = CONFLICTS.iter().map(|file| (*file).to_owned()).collect();
   let at = kontur.today_ago(10);
@@ -91,7 +91,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     &conflicting,
     (QueueState::Left(Left::Conflicts { files: files.clone() }), at),
     |_| {},
-    vec![
+    &[
       QueueEvent::Synced {
         base: main,
         files: files.clone(),
@@ -130,10 +130,10 @@ pub fn blocked(kontur: &mut Kontur) -> Result<(), SeedError> {
     (QueueState::Blocked(Blocked::Uncommitted { files: dirty.clone() }), at),
     // Approved, it was about to merge when the checkout blocked it.
     |entry| entry.approved_at = Some(at),
-    vec![QueueEvent::Blocked(Blocked::Uncommitted { files: dirty })],
+    &[QueueEvent::Blocked(Blocked::Uncommitted { files: dirty })],
   )?;
   let queued_at = kontur.ago(14);
-  enter(kontur, &second, (QueueState::Queued, queued_at), |_| {}, Vec::new())?;
+  enter(kontur, &second, (QueueState::Queued, queued_at), |_| {}, &[])?;
   let initial = files::initial();
   let settings = initial
     .iter()
@@ -214,7 +214,7 @@ fn merged_by_queue(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
     run,
     (QueueState::Merged(delivered), at),
     |entry| entry.approved_at = Some(at),
-    events,
+    &events,
   )
 }
 
@@ -240,7 +240,7 @@ fn enter(
   run: &Run,
   (state, at): (QueueState, Timestamp),
   shaped: impl FnOnce(&mut QueueEntry),
-  events: Vec<QueueEvent>,
+  events: &[QueueEvent],
 ) -> Result<(), SeedError> {
   let finished = kontur
     .db
@@ -256,8 +256,13 @@ fn enter(
   entry.state = state;
   entry.since = at;
   shaped(&mut entry);
-  if !kontur.db.save_merge_queue_entry(&entry, &QueueState::Queued, (&events, at))? {
-    return Err(SeedError::Invalid("the merge queue entry changed while it was seeded".to_owned()));
+  if !kontur
+    .db
+    .save_merge_queue_entry(&entry, &QueueState::Queued, (events, at))?
+  {
+    return Err(SeedError::Invalid(
+      "the merge queue entry changed while it was seeded".to_owned(),
+    ));
   }
   Ok(())
 }

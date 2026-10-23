@@ -1,9 +1,9 @@
 //! The decision above *Run details* (`Decision` `c5VJ9A` in `wN5Bz`, `Namyk` in `hKct7`): a 16 glyph and its title,
 //! what it is about, and its buttons as wide as the card, with what each does under it; 16 inside, 10 apart,
 //! `surface_raised` in a 10 corner. *Ready to merge into main*: how it merges and what is cleared after it, *Merge into
-//! main*, *Open changes* and *Reject*. *Conflicts need you*: *Resolve myself* (*Continue resolving* while the merge waits
-//! in the run's worktree) and *Reject*. *Delivery stopped*: why, and *Take out of the queue*, after which the run is
-//! merged from its task page as any run.
+//! main*, *Open changes* and *Reject*. *Conflicts need you*: *Resolve myself* (*Continue resolving* while the merge
+//! waits in the run's worktree) and *Reject*. *Delivery stopped*: why, and *Take out of the queue*, after which the run
+//! is merged from its task page as any run.
 
 use lurq::{
   app::{
@@ -43,7 +43,10 @@ pub(super) fn review(ctx: &mut Ctx, view: &View<'_>) -> Element {
   let note = match checked {
     Some(checked) => ctx.t_args(
       "delivery.task.decision.readyBody",
-      [("base", base.to_owned()), ("revision", short_revision(checked.base.as_str()).to_owned())],
+      [
+        ("base", base.to_owned()),
+        ("revision", short_revision(checked.base.as_str()).to_owned()),
+      ],
     ),
     None => ctx.t("delivery.task.decision.readyNoCheckBody"),
   };
@@ -75,7 +78,11 @@ pub(super) fn review(ctx: &mut Ctx, view: &View<'_>) -> Element {
   decision(
     ctx,
     view,
-    (Icon::Hand, &ctx.t_args("delivery.task.decision.readyTitle", [("base", base)]), &note),
+    (
+      Icon::Hand,
+      &ctx.t_args("delivery.task.decision.readyTitle", [("base", base)]),
+      &note,
+    ),
     vec![
       detail_row(
         "task-delivery-method",
@@ -156,7 +163,11 @@ pub(super) fn left(ctx: &mut Ctx, view: &View<'_>, left: &Left) -> Element {
   decision(
     ctx,
     view,
-    (Icon::TriangleAlert, &title, &crate::screens::merge_queue::words::left_reason(ctx, left)),
+    (
+      Icon::TriangleAlert,
+      &title,
+      &crate::screens::merge_queue::words::left_reason(ctx, left),
+    ),
     vec![take_out.into(), muted(&ctx.t("delivery.task.decision.takeOutNote"))],
   )
 }

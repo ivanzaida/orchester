@@ -142,15 +142,22 @@ fn delivery_check(ctx: &Ctx, id: &str, check: &DeliveryCheck, (base, integrator)
       let end = format!("{base} {}", short_revision(revision.as_str()));
       check_row(id, Look::WORKING, (&check_title, &detail), Some(&end))
     }
-    DeliveryCheck::CheckWaits => {
-      check_row(id, Look::PENDING, (&check_title, &ctx.t("delivery.task.check.waits")), None)
-    }
-    DeliveryCheck::Checked { base: revision, tool, .. } => {
+    DeliveryCheck::CheckWaits => check_row(
+      id,
+      Look::PENDING,
+      (&check_title, &ctx.t("delivery.task.check.waits")),
+      None,
+    ),
+    DeliveryCheck::Checked {
+      base: revision, tool, ..
+    } => {
       let detail = ctx.t_args("delivery.task.check.passed", [("tool", tool.as_str())]);
       let end = format!("{base} {}", short_revision(revision.as_str()));
       check_row(id, Look::DONE, (&check_title, &detail), Some(&end))
     }
-    DeliveryCheck::CheckFailed { base: revision, tool, .. } => {
+    DeliveryCheck::CheckFailed {
+      base: revision, tool, ..
+    } => {
       let detail = ctx.t_args("delivery.task.check.failed", [("tool", tool.as_str())]);
       let end = format!("{base} {}", short_revision(revision.as_str()));
       check_row(id, Look::FAILED, (&check_title, &detail), Some(&end))

@@ -191,13 +191,13 @@ impl Component for DeliveryDecision {
         (view.review(ctx), Some(side::review(ctx, &view)))
       }
       Some(QueueState::Left(Left::Conflicts { files })) => match in_merge.as_ref() {
-        Some(resolution) if !self.back.get() => (
-          resolve::resolving(ctx, &view, (files, resolution), &self.back),
-          None,
-        ),
+        Some(resolution) if !self.back.get() => (resolve::resolving(ctx, &view, (files, resolution), &self.back), None),
         _ => {
           let back = self.back.clone();
-          (integrate::failed(ctx, &view, files), Some(side::conflicts(ctx, &view, in_merge.is_some(), &back)))
+          (
+            integrate::failed(ctx, &view, files),
+            Some(side::conflicts(ctx, &view, in_merge.is_some(), &back)),
+          )
         }
       },
       Some(QueueState::Left(left)) => (view.left(ctx, left), Some(side::left(ctx, &view, left))),

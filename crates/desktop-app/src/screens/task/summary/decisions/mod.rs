@@ -28,9 +28,8 @@ use lurq::{
 use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
-pub(super) use self::delivery::details::rows as delivery_rows;
-pub(super) use self::return_ended::return_card;
 pub use self::return_ended::returnable;
+pub(super) use self::{delivery::details::rows as delivery_rows, return_ended::return_card};
 use super::{
   column, layout,
   notice::{self, Said},

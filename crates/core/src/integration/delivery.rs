@@ -27,7 +27,11 @@ pub enum Checkout {
 }
 
 /// How the person's checkout at `repo` stands for delivering into `base`. Ignored files are not uncommitted.
-pub fn checkout(runner: &impl CommandRunner, git: &Path, (repo, base): (&Path, &BranchName)) -> Result<Checkout, GitError> {
+pub fn checkout(
+  runner: &impl CommandRunner,
+  git: &Path,
+  (repo, base): (&Path, &BranchName),
+) -> Result<Checkout, GitError> {
   let git = Git::new(runner, git, repo);
   let current = git.checked_out_branch()?;
   if current.as_ref() != Some(base) {
@@ -118,7 +122,11 @@ pub fn head(runner: &impl CommandRunner, git: &Path, worktree: &Path) -> Result<
 
 /// Deletes `branch` in the repository at `repo`, whose work landed squashed: git does not see it merged, so
 /// clearing up after the merge keeps it.
-pub fn delete_branch(runner: &impl CommandRunner, git: &Path, (repo, branch): (&Path, &BranchName)) -> Result<(), GitError> {
+pub fn delete_branch(
+  runner: &impl CommandRunner,
+  git: &Path,
+  (repo, branch): (&Path, &BranchName),
+) -> Result<(), GitError> {
   Git::new(runner, git, repo)
     .stdout(&["branch", "--quiet", "-D", "--end-of-options", branch.as_str()])
     .map(drop)

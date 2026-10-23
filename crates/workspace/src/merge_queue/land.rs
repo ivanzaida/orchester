@@ -156,7 +156,11 @@ fn squash_body(task: &Task, run: &Run) -> String {
     .chars()
     .take(SUMMARY_CHARS)
     .collect();
-  let delivered = format!("Delivered by Orchester's merge queue: {} run #{}.", task.key(), run.number().get());
+  let delivered = format!(
+    "Delivered by Orchester's merge queue: {} run #{}.",
+    task.key(),
+    run.number().get()
+  );
   if summary.is_empty() {
     delivered
   } else {

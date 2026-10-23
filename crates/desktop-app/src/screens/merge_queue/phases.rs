@@ -52,7 +52,10 @@ pub(crate) fn phases(ctx: &mut Ctx, id: &str, (phases, named): (&[RowPhase], Nam
     if index > 0 {
       line = line.child(icon(Icon::ChevronRight, IconSize::Xs, PaletteColor::TextMuted));
     }
-    let around = (index.checked_sub(1).map(|before| &phases[before]), phases.get(index + 1));
+    let around = (
+      index.checked_sub(1).map(|before| &phases[before]),
+      phases.get(index + 1),
+    );
     line = line.child(phase_item(ctx, &format!("{id}-phase-{index}"), named, (phase, around)));
   }
   Some(line.into())
@@ -82,7 +85,7 @@ fn phase_item(ctx: &mut Ctx, id: &str, named: Named<'_>, (phase, around): (&RowP
         ),
         _ => ctx.t_args("delivery.queue.phase.synced", [("base", base)]),
       };
-      item(id, *state, label)
+      item(id, *state, &label)
     }
     RowPhase::Superseded { .. } => superseded(ctx, id),
     RowPhase::Integrate { state } => {
@@ -90,19 +93,25 @@ fn phase_item(ctx: &mut Ctx, id: &str, named: Named<'_>, (phase, around): (&RowP
         || ctx.t("delivery.queue.phase.integrateStep"),
         |integrator| ctx.t_args("delivery.queue.phase.integrate", [("integrator", integrator)]),
       );
-      item(id, *state, label)
+      item(id, *state, &label)
     }
     RowPhase::Check {
       state: PhaseState::Active,
       since: Some(since),
-    } => ctx.mount_keyed::<RunningCheck>(id, RunningProps { id: id.into(), since: *since }),
+    } => ctx.mount_keyed::<RunningCheck>(
+      id,
+      RunningProps {
+        id: id.into(),
+        since: *since,
+      },
+    ),
     RowPhase::Check { state, .. } => {
       let key = if *state == PhaseState::Done {
         "delivery.queue.phase.checkPassed"
       } else {
         "delivery.queue.phase.check"
       };
-      item(id, *state, ctx.t(key))
+      item(id, *state, &ctx.t(key))
     }
     RowPhase::Approval { state, at } => {
       let label = match at {
@@ -112,7 +121,7 @@ fn phase_item(ctx: &mut Ctx, id: &str, named: Named<'_>, (phase, around): (&RowP
         ),
         _ => ctx.t("delivery.queue.phase.approval"),
       };
-      item(id, *state, label)
+      item(id, *state, &label)
     }
     RowPhase::Merge { state } => {
       let key = if *state == PhaseState::Blocked {
@@ -120,7 +129,7 @@ fn phase_item(ctx: &mut Ctx, id: &str, named: Named<'_>, (phase, around): (&RowP
       } else {
         "delivery.queue.phase.merge"
       };
-      item(id, *state, ctx.t_args(key, [("base", base)]))
+      item(id, *state, &ctx.t_args(key, [("base", base)]))
     }
   }
 }
@@ -134,7 +143,10 @@ fn synced_with(ctx: &Ctx, base: &str, revision: &str, active: bool) -> Arc<str> 
   };
   ctx.t_args(
     key,
-    [("base", base.to_owned()), ("revision", short_revision(revision).to_owned())],
+    [
+      ("base", base.to_owned()),
+      ("revision", short_revision(revision).to_owned()),
+    ],
   )
 }
 
@@ -154,11 +166,26 @@ fn superseded(ctx: &Ctx, id: &str) -> Element {
 }
 
 /// A phase's glyph and word in its state's colors.
-fn item(id: &str, state: PhaseState, label: Arc<str>) -> Element {
+fn item(id: &str, state: PhaseState, label: &str) -> Element {
   let (glyph, color, word, strong) = match state {
-    PhaseState::Done => (Icon::CircleCheck, PaletteColor::Success, PaletteColor::TextSecondary, false),
-    PhaseState::Active => (Icon::LoaderCircle, PaletteColor::TextPrimary, PaletteColor::TextPrimary, true),
-    PhaseState::Pending => (Icon::CircleDashed, PaletteColor::TextMuted, PaletteColor::TextMuted, false),
+    PhaseState::Done => (
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      PaletteColor::TextSecondary,
+      false,
+    ),
+    PhaseState::Active => (
+      Icon::LoaderCircle,
+      PaletteColor::TextPrimary,
+      PaletteColor::TextPrimary,
+      true,
+    ),
+    PhaseState::Pending => (
+      Icon::CircleDashed,
+      PaletteColor::TextMuted,
+      PaletteColor::TextMuted,
+      false,
+    ),
     PhaseState::Blocked => (Icon::CirclePause, PaletteColor::Warning, PaletteColor::Warning, false),
   };
   let style = if strong {
@@ -172,7 +199,7 @@ fn item(id: &str, state: PhaseState, label: Arc<str>) -> Element {
     .align_items(Alignment::Center)
     .describe("state", state_name(state))
     .child(icon(glyph, IconSize::Sm, color))
-    .child(Text::new(&label).variant(style).color(word))
+    .child(Text::new(label).variant(style).color(word))
     .into()
 }
 
@@ -218,6 +245,6 @@ impl Component for RunningCheck {
     let RunningProps { id, since } = ctx.props::<RunningProps>().clone();
     let elapsed = super::words::elapsed(ctx, since, Timestamp::now());
     let label = ctx.t_args("delivery.queue.phase.checkRunning", [("elapsed", elapsed)]);
-    item(&id, PhaseState::Active, label)
+    item(&id, PhaseState::Active, &label)
   }
 }

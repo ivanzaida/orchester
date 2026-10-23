@@ -83,7 +83,6 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     let auto_mode = db.run_auto_mode(run.id())?;
     let worktree = worktree_state(&db, &root, run.id())?;
     let merge = merge_state(&db, (&root, &services.programs), &run)?;
-    let delivery = super::merge_queue::run_delivery(&db, run.id())?;
     let view = run_view(&db, run)?;
     let plan = PlanReview::of(&view).map(|review| {
       let mut plan = plans::waiting(&review, true);
@@ -124,7 +123,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       "auto_mode": auto_mode,
       "worktree": worktree,
       "merge": merge,
-      "delivery": delivery,
+      "delivery": super::merge_queue::run_delivery(&db, run.id())?,
       "base_moved": base_moved::of_run(&view),
       "awaiting": {
         "plan_decisions": run.awaiting_plan().len(),

@@ -69,7 +69,7 @@ impl Component for DeliverInspector {
       integrator: ctx.signal(IntegratorChoice(chosen)),
       locked: ctx.create_ref(props.locked),
     };
-    let (state, locked) = (props.state.clone(), inspector.locked.clone());
+    let (state, locked) = (props.state, inspector.locked.clone());
     ctx.watch(&inspector.integrator, move |choice| {
       if !locked.get() {
         edit(&state, |deliver| deliver.with_integrator(choice.0));
@@ -165,32 +165,52 @@ fn mode_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Colum
 
 fn merge_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
   let segments = [
-    (MergeMethod::MergeCommit, "deliver-merge-commit", "delivery.step.mergeCommit"),
+    (
+      MergeMethod::MergeCommit,
+      "deliver-merge-commit",
+      "delivery.step.mergeCommit",
+    ),
     (MergeMethod::Squash, "deliver-squash", "delivery.step.squash"),
   ]
   .map(|(method, id, label)| {
     let (state, locked) = (props.state.clone(), props.locked);
-    Segment::new(id, SegmentFace::Text(ctx.t(label)), deliver.method() == method, move || {
-      if !locked {
-        edit(&state, |deliver| deliver.with_method(method));
-      }
-    })
+    Segment::new(
+      id,
+      SegmentFace::Text(ctx.t(label)),
+      deliver.method() == method,
+      move || {
+        if !locked {
+          edit(&state, |deliver| deliver.with_method(method));
+        }
+      },
+    )
   });
   let mut section = section("deliver-merge", SpacingSize::Xs)
-    .child(section_title("deliver-merge-title", &ctx.t("delivery.step.merge"), None))
+    .child(section_title(
+      "deliver-merge-title",
+      &ctx.t("delivery.step.merge"),
+      None,
+    ))
     .child(control(
       "deliver-method",
       &ctx.t("delivery.step.method"),
       Row::new().child(segmented("deliver-method-choice", segments, Focus::Keyboard)),
     ));
   section = match deliver.method() {
-    MergeMethod::MergeCommit => section.child(read_back("deliver-method-read-back", &ctx.t("delivery.step.mergeCommitReadBack"))),
+    MergeMethod::MergeCommit => section.child(read_back(
+      "deliver-method-read-back",
+      &ctx.t("delivery.step.mergeCommitReadBack"),
+    )),
     MergeMethod::Squash => section.child(control(
       "deliver-squash-message",
       &ctx.t("delivery.step.squashMessage"),
       Column::new()
         .spacing(SpacingSize::Xs)
-        .child(Text::new(&ctx.t("delivery.step.squashTitle")).variant(ExtraTypography::Note.role()).color(PaletteColor::TextPrimary))
+        .child(
+          Text::new(&ctx.t("delivery.step.squashTitle"))
+            .variant(ExtraTypography::Note.role())
+            .color(PaletteColor::TextPrimary),
+        )
         .child(Text::new(&ctx.t("delivery.step.squashBody")).variant(ExtraTypography::Note.role())),
     )),
   };
@@ -200,14 +220,23 @@ fn merge_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Colu
 impl DeliverInspector {
   fn conflicts_section(&self, ctx: &mut Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
     let editing = props.state.get();
-    let section = section("deliver-conflicts", SpacingSize::Xs)
-      .child(section_title("deliver-conflicts-title", &ctx.t("delivery.step.conflicts"), None));
+    let section = section("deliver-conflicts", SpacingSize::Xs).child(section_title(
+      "deliver-conflicts-title",
+      &ctx.t("delivery.step.conflicts"),
+      None,
+    ));
     let Ok(pipeline) = editing.shown().validate() else {
-      return section.child(read_back("deliver-integrator-read-back", &ctx.t("delivery.step.integratorUnknown")));
+      return section.child(read_back(
+        "deliver-integrator-read-back",
+        &ctx.t("delivery.step.integratorUnknown"),
+      ));
     };
     let profiles = integrator_profiles(&pipeline);
     if profiles.is_empty() {
-      return section.child(read_back("deliver-integrator-read-back", &ctx.t("delivery.step.noIntegrator")));
+      return section.child(read_back(
+        "deliver-integrator-read-back",
+        &ctx.t("delivery.step.noIntegrator"),
+      ));
     }
     let name = |profile| {
       editing
@@ -229,17 +258,35 @@ impl DeliverInspector {
         SelectOption::new(choice, label.to_string()).disabled(props.locked)
       })
       .collect();
-    let select = SelectField::new("deliver-integrator", ctx.t("delivery.step.resolveWith"), self.integrator.clone(), options)
-      .leading(Icon::Bot)
-      .render(ctx);
+    let select = SelectField::new(
+      "deliver-integrator",
+      ctx.t("delivery.step.resolveWith"),
+      self.integrator.clone(),
+      options,
+    )
+    .leading(Icon::Bot)
+    .render(ctx);
     section
-      .child(control("deliver-integrator-row", &ctx.t("delivery.step.resolveWith"), select))
-      .child(read_back("deliver-integrator-read-back", &ctx.t("delivery.step.integratorReadBack")))
+      .child(control(
+        "deliver-integrator-row",
+        &ctx.t("delivery.step.resolveWith"),
+        select,
+      ))
+      .child(read_back(
+        "deliver-integrator-read-back",
+        &ctx.t("delivery.step.integratorReadBack"),
+      ))
   }
 }
 
 fn check_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
-  let toggle = Toggle::new("deliver-recheck", ToggleKind::Switch, deliver.recheck(), ctx.t("delivery.step.recheck")).hide_label();
+  let toggle = Toggle::new(
+    "deliver-recheck",
+    ToggleKind::Switch,
+    deliver.recheck(),
+    ctx.t("delivery.step.recheck"),
+  )
+  .hide_label();
   let switch: Element = if deliver.recheck_locked() {
     Row::new()
       .spacing(SpacingSize::Sm)
@@ -268,7 +315,11 @@ fn check_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Colu
     }
   };
   section("deliver-check", SpacingSize::Xs)
-    .child(section_title("deliver-check-title", &ctx.t("delivery.step.check"), None))
+    .child(section_title(
+      "deliver-check-title",
+      &ctx.t("delivery.step.check"),
+      None,
+    ))
     .child(
       Row::new()
         .id("deliver-recheck-row")
@@ -296,7 +347,11 @@ fn check_tools(props: &DeliverProps) -> Option<String> {
     .iter()
     .filter(|step| rechecks(&step.key))
     .filter_map(|step| match step.kind {
-      StepKind::Tool { tool: Some(tool) } => editing.opened.assignables.tool(tool).map(|choice| choice.name.to_string()),
+      StepKind::Tool { tool: Some(tool) } => editing
+        .opened
+        .assignables
+        .tool(tool)
+        .map(|choice| choice.name.to_string()),
       _ => None,
     })
     .collect();

@@ -1,9 +1,9 @@
 //! Where the run's delivery stands, at the top of the task's Summary. The state card (`State card` `IJVXv` in
-//! `ulEuh`, `iEqGW` in `RRk9E`): a 17 glyph, *Delivering into main* with the run's place and since when at its end, what
-//! happens now, the phases of its delivery (`Queue phase` `ED8Ct`), and *Open merge queue* and *Open conversation*;
-//! 16 over and under, 18 at the sides, 12 apart, `surface_raised` in a 10 corner. *Merged into main* (`lxSSL` in
-//! `lvupO`) and why the run left the queue are notices. *Review before merging* heads the review (`E2r4tN` in
-//! `wN5Bz`): the run and how it delivers, and its merge line (`bwHYE`).
+//! `ulEuh`, `iEqGW` in `RRk9E`): a 17 glyph, *Delivering into main* with the run's place and since when at its end,
+//! what happens now, the phases of its delivery (`Queue phase` `ED8Ct`), and *Open merge queue* and *Open
+//! conversation*; 16 over and under, 18 at the sides, 12 apart, `surface_raised` in a 10 corner. *Merged into main*
+//! (`lxSSL` in `lvupO`) and why the run left the queue are notices. *Review before merging* heads the review (`E2r4tN`
+//! in `wN5Bz`): the run and how it delivers, and its merge line (`bwHYE`).
 
 use std::sync::Arc;
 
@@ -69,7 +69,10 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
         .color(PaletteColor::TextMuted)
         .nowrap()
     }));
-  let blocked = matches!(delivery.map(|delivery| &delivery.entry.state), Some(QueueState::Blocked(_)));
+  let blocked = matches!(
+    delivery.map(|delivery| &delivery.entry.state),
+    Some(QueueState::Blocked(_))
+  );
   let glyph = if blocked {
     (Icon::CirclePause, PaletteColor::Warning)
   } else {
@@ -79,10 +82,7 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
     phases::phases(
       ctx,
       "task-delivery",
-      (
-        &delivery.phases(&queue.deliver),
-        phases::Named { base, integrator },
-      ),
+      (&delivery.phases(&queue.deliver), phases::Named { base, integrator }),
     )
   });
   Column::new()
@@ -93,7 +93,10 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .describe("state", delivery.map_or("joining", |delivery| state_name(&delivery.entry.state)))
+    .describe(
+      "state",
+      delivery.map_or("joining", |delivery| state_name(&delivery.entry.state)),
+    )
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -138,7 +141,9 @@ fn words_of(
       ctx.t_args("delivery.task.queuedTitle", [("base", base)]),
       ctx.t("delivery.task.queuedBody"),
     ),
-    QueueState::Integrating { base: revision, files, .. } => {
+    QueueState::Integrating {
+      base: revision, files, ..
+    } => {
       let integrator = integrator.map_or_else(|| ctx.t("delivery.task.theIntegrator"), Arc::from);
       (
         ctx.t_args("delivery.task.integratingTitle", [("base", base)]),
@@ -184,7 +189,10 @@ fn place_line(ctx: &Ctx, delivery: &RunDelivery) -> Arc<str> {
   match delivery.place {
     Some(place) => ctx.t_args(
       "delivery.task.place",
-      [("place", words::place(ctx, place).to_string()), ("since", since.to_string())],
+      [
+        ("place", words::place(ctx, place).to_string()),
+        ("since", since.to_string()),
+      ],
     ),
     None => since,
   }
@@ -242,7 +250,10 @@ pub(super) fn merged(ctx: &Ctx, run: &RunView, (delivery, delivered): (&RunDeliv
   let how = ctx.t_args(how_key, [("time", clock(delivery.entry.since))]);
   let cleared = match (delivered.worktree_removed, delivered.branch_deleted) {
     (true, true) => ctx.t_args("delivery.task.merged.cleared", [("branch", run.run.branch().as_str())]),
-    (true, false) => ctx.t_args("delivery.task.merged.clearedKept", [("branch", run.run.branch().as_str())]),
+    (true, false) => ctx.t_args(
+      "delivery.task.merged.clearedKept",
+      [("branch", run.run.branch().as_str())],
+    ),
     (false, _) => ctx.t("delivery.task.merged.notCleared"),
   };
   Notice::new("task-notice", NoticeTone::Success, title)
@@ -291,7 +302,11 @@ pub(super) fn review_head(ctx: &Ctx, (run, queue): (&RunView, &TaskDelivery), si
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(icon(Icon::GitBranch, IconSize::Base, PaletteColor::TextSecondary))
-    .child(Text::new(run.run.branch().as_str()).variant(DeliveryText::Branch.role()).nowrap())
+    .child(
+      Text::new(run.run.branch().as_str())
+        .variant(DeliveryText::Branch.role())
+        .nowrap(),
+    )
     .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted))
     .child(Text::new(base).variant(DeliveryText::Branch.role()).nowrap())
     .with_children(synced.map(|synced| {

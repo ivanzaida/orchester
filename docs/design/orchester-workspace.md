@@ -1943,7 +1943,7 @@ Drawn 2026-09-30 (ORC-27, Memory 3/3), group `K4KyPj` ("States · Memory", last 
 
 ## Delivery
 
-Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02 / Tasks & runs at x 0 / y 46467, height 5312; the section is now 51779 high). Approved by the user 2026-10-01, not built. Fixture: Kontur, base `main` (illustrative: the base is the project's base branch setting); ORC-128 *Add GitHub authentication* (run #128), ORC-131 *Add switcher keyboard shortcuts* (run #134), ORC-135, ORC-137, ORC-139 and the hashes are illustrative.
+Drawn 2026-10-01 in the old `data/orchester.pen` (group `i2o8ko`), redrawn in `data/orchester2.pen` as the top-level layer `p9aqZc` *Delivery* (components `yHHcU`), which is what is built and verified: `i2o8ko` and its ids (`j8OB3`, `L1SoP`, …) are not in `orchester2.pen`. Approved by the user 2026-10-01; **built in ORC-19 (2026-10-23)**, see [Built](#built-orc-19). Where the `p9aqZc` frames differ from the text below, the frames win; the differences are listed under Built. Fixture: Kontur, base `main`; KON-12 *Add retry to webhook sender* (run #128), KON-21, KON-23 and the hashes are illustrative.
 
 **Why.** A run used to end in *Ready for review* and a person pressed *Merge into main* (02.P). The run started from the base as it was then, main moved meanwhile, so merges conflicted; Check, Review and Verify had run against the old base, not against what lands; and several finished runs were not ordered.
 
@@ -1960,31 +1960,43 @@ Drawn 2026-10-01, group `i2o8ko` ("States · Delivery & merge queue", last in 02
 
 **Where the queue lives.** A sidebar entry *Merge queue* (git-merge) right after Tasks, with the number of runs in the queue as its count (hidden at 0). Not a tab on Tasks: Tasks already has a *Queue* tab for starting runs, and the merge queue is one ordered, project-wide line whose blocked state stops every run in it, not a filter of tasks. Not Pull requests: that screen is GitHub review, and pull request delivery is not available. Every frame in the group uses this sidebar.
 
-**Frames** (x 48 / 1568 / 3088; rows at y 100 / 1148 / 2196 / 3244 / 4292, labels 32 above):
+**Frames** (`data/orchester2.pen`, layer `p9aqZc` *Delivery*; components `yHHcU`: `Queue row` `kcUhy`, `Queue phase` `ED8Ct`, `Conflict file row` `Nanwh`, `Commit row` `wEWkY`, `Delivery check row` `QyqsJ`):
 
 | Frame | Node |
 | --- | --- |
-| Pipeline / Deliver step, Approve to merge (inspector, *Delivers: approve to merge* chip in the toolbar) | `j8OB3` |
-| Pipeline / Deliver step, Auto-merge with squash, re-check locked (0.45, lock and reason) | `jMrlP` |
-| Overview / Needs you: *READY TO MERGE* card (*Review & merge*) and *CONFLICTS NEED YOU* | `Trfj3` |
-| Ready to merge / dialog (720) over the task: run, branch → base, changes (files, +/−), checks incl. the check on the merged result, commits; *Reject*, *Open changes*, primary *Merge into main* | `L1SoP` |
-| Integrate failed / dialog: conflicting files with *Open file*, what Integrate did, the integrator's words; *Reject*, primary *Resolve myself* | `ZTHyA` |
-| Merge queue / delivering now, waiting (with order), today | `u2l38w` |
-| Merge queue / blocked by uncommitted changes in the checkout | `hz1Nz` |
-| Merge queue rows: every state with its actions, and the re-sync when main moved (compact) | `bPm7k` |
-| Merge queue / empty, naming a pipeline without a Deliver step | `crYQv` |
-| Task / Delivering: status *Delivering*, stage *Deliver*, verification rows *Deliver · sync with main*, *Deliver · Check on the merged result* | `rS8mx` |
-| Task / Integrating: stages *Integrate* then *Deliver*, Integrator in *Agents on this run* | `TfSI6` |
-| Task / *Merged into main · 9c41e02 · worktree removed* | `wuHGi` |
-| Activity / Deliver and Integrate executions: joined the queue, sync with conflicts, resolved files, Check, the integrator's review, check superseded, re-sync, merge, clean-up | `HW9mB` |
+| Merge queue: delivering now, waiting (with order), waiting for approval, today | `seRYH` |
+| Merge queue blocked by uncommitted changes in the checkout | `H7OHPT` |
+| Merge queue empty, how each pipeline delivers | `mtrlT` |
+| Queue row states with their actions, and the re-sync when main moved | `vM4TB` |
+| Pipeline editor, Deliver step: Approve to merge | `qukzW` |
+| Pipeline editor, Deliver step: Auto-merge with squash, re-check locked | `OqgbW` |
+| Task · Summary · delivering | `ulEuh` |
+| Task · Summary · integrating | `RRk9E` |
+| Task · Summary · merged | `lvupO` |
+| Task · Ready to merge, in page (Review before merging; the decision above This run) | `wN5Bz` |
+| Task · Integrate failed, in page | `hKct7` |
+| Task · Resolve myself, in page | `fAcWt`, `e7geY3` |
+| Overview · Needs you delivery cards and their Recent activity lines | `K1d1mi` (activity `Urfxj`) |
 
-Reused: sidebar `zo9Py` with nav items `TSJpn`, `u1XBP`, `DeizF`, `ajikA`, `ZGwlv`, `K8ItM`, `tfGRt`, `l3hyb`, `i9rVFu`, `mDnc3`, `N4SlQq`, `mBkeJ`, `zemhy`, `SOW6S`, the dialog layout of `C2CPbs`, the Memory page layout of `Qxdzi`. No new components or variables. Proposed copy namespace: `delivery.*` (`delivery.step.*`, `delivery.queue.*`, `delivery.readyToMerge.*`, `delivery.integrate.*`).
+The 960 frame `MIQ3j` is not built (out of ORC-19). Copy namespace: `delivery.queue.*`, `delivery.step.*`, `delivery.task.*` (app), `overview.needs.*`, `overview.activity.queue.*`, `mergeQueue.*` (workspace).
+
+<a id="built-orc-19"></a>
+**Built (ORC-19, 2026-10-23).** Rules in `orchester_workspace::merge_queue` (records `orchester_core::merge_queue`, store `merge_queue` + `merge_queue_events`); the app's driver (`project/merge_queue.rs`) moves the queue on whenever runs or the queue change, and every 10 s while blocked. Screens: Merge queue (`screens/merge_queue/`), the pipeline editor's Deliver card, chip and inspector (`?panel=deliver`), the task Summary's delivery views (`screens/task/summary/decisions/delivery/`), Needs you cards and Recent activity lines. MCP: `get_run`, `list_runs` and `get_daily_report` report `delivery`; `merge_run` refuses a run the queue delivers (`delivered_by_queue`). QA seeds: `delivery`, `delivery-blocked`, `delivery-empty`. Where it differs from the text above:
+
+- **In page, no dialogs.** Ready to merge, Integrate failed and Resolve myself are views of the task's Summary (`wN5Bz`, `hKct7`, `fAcWt`), as `p9aqZc` draws them; the decision (*Merge into main*, *Open changes*, *Reject*; *Resolve myself*, *Reject*) stands above Run details.
+- **Base branch.** There is no project base-branch setting: a run delivers into the branch it started from (its recorded base branch), and the queue's head names the first queued run's base.
+- **Integrate.** The Integrate step is the run's own agent step whose profile the Deliver step names: the queue returns the run's work to it with the conflicting files (a work return by automation); when the run passed every step again it delivers on. With no such step the conflicts go to the person.
+- **Resolve myself.** It merges the base into the run's worktree for the person (*Continue resolving* after *Back to the decision*); *I've resolved it* checks no conflict marker is left, commits the merge, sends the run back to its Integrate step with the person's resolution (so the steps after it pass again) and puts it back first in the queue, where it syncs with the base as it is then and Check runs on the merged result. *Open file* per conflicting file is not built; *Open folder* and *Open in editor* are.
+- **Check on the merged result** runs again every command tool step of the pinned pipeline except the starter's *Create pull request*, which opens a pull request rather than checks.
+- **Needs you.** Waiting for approval is the *Ready to merge* card; a run out of the queue is *Conflicts need you* or *Delivery stopped* (a failed check, a base that keeps moving: the reason is the card's title, its label stays *Delivery stopped*); a blocked queue is *Delivery blocked*, opening the Merge queue. They raise no OS notification yet. A run the queue still works on, or that has not joined it, waits for no one.
+- **Task header.** The status chip *Delivering* / *Integrating conflicts* and the header's *Open merge queue* are not built; the state card's *Open merge queue* is.
+- **ORC-69 (the Orchestrator merges finished runs on its own).** That switch applies only to runs without a Deliver step: a run whose pipeline delivers is the queue's, and *Approve to merge* still waits for a person (the Orchestrator's run-end message says the queue delivers it).
 
 **Decisions (2026-10-01).**
 
-- **Base branch.** Delivery targets the project's base branch setting; `main` in the frames is fixture data.
+- **Base branch.** Delivery targets the base branch; `main` in the frames is fixture data. Built: the run's own base branch (no project setting exists, see Built).
 - **Approval does not hold the queue.** See above. The frames draw it.
-- **Reordering.** *Move up* and *Move to top* on queued rows. There is no dragging. The frames draw *Move up* only; *Move to top* sits beside it.
+- **Reordering.** *Move up* and *Move to top* on queued rows. There is no dragging.
 - **Re-sync limit.** A run re-syncs at most 3 times in a row because the base moved during its check. After that it leaves the queue and goes to Needs you with the reason *main keeps moving* (the base branch's name).
 - **Resolve myself.** It shows the run's worktree path with *Open folder* and *Open in editor*. When the person presses *I’ve resolved it*, Orchester:
   - checks that no conflict markers are left;
@@ -1992,10 +2004,10 @@ Reused: sidebar `zo9Py` with nav items `TSJpn`, `u1XBP`, `DeizF`, `ajikA`, `ZGwl
   - runs Check again;
   - puts the run back in the queue.
 
-  This view is not drawn yet.
+  Drawn in page in `fAcWt` / `e7geY3`; built as Built says.
 - **Squash message.** The squash commit is titled `ORC-N: <task title>`; its body holds a short summary of the work and the run number.
-- **Pipelines without a Deliver step.** They keep the manual *Merge into <base>* (02.P) on the task page; their runs never join the queue.
-- **Ready to merge checks.** The dialog lists exactly the steps the run's pipeline has, plus the re-check on the merged result, so a pipeline with *Verify* shows it. `L1SoP` draws only *Run checks* and *Review* of the fixture pipeline; the built dialog also lists its other steps.
+- **Pipelines without a Deliver step.** They keep the manual *Merge into <base>* (02.P) on the task page; their runs never join the queue. A run a person removed from the queue is merged that way too.
+- **Ready to merge checks.** The view lists the steps that passed after the work was first committed, plus what the delivery added (sync, Integrate, the check on the merged result, the approval), each a `Delivery check row` `QyqsJ`.
 
 ### When the base branch moves (ORC-54, ORC-65)
 

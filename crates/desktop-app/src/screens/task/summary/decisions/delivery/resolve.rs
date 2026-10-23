@@ -58,12 +58,16 @@ pub(super) fn resolving(
     pending(
       "task-delivery-resolve-markers",
       ctx.t("delivery.task.resolve.markers").to_string(),
-      ctx.t_args("delivery.task.resolve.markersDetail", [("files", listed.as_str())]).to_string(),
+      ctx
+        .t_args("delivery.task.resolve.markersDetail", [("files", listed.as_str())])
+        .to_string(),
     ),
     pending(
       "task-delivery-resolve-merges",
       ctx.t_args("delivery.task.resolve.merges", [("base", base)]).to_string(),
-      ctx.t_args("delivery.task.resolve.mergesDetail", [("base", base)]).to_string(),
+      ctx
+        .t_args("delivery.task.resolve.mergesDetail", [("base", base)])
+        .to_string(),
     ),
     pending(
       "task-delivery-resolve-check",
@@ -148,19 +152,27 @@ fn path_box(ctx: &mut Ctx, worktree: &Path) -> Element {
   let path = plain_path(&worktree.to_string_lossy());
   let clipboard = ctx.use_context::<Clipboard>().unwrap_or_default();
   let copied = path.clone();
-  let copy = IconButton::new("task-delivery-copy-path", Icon::Copy, ctx.t("delivery.task.resolve.copyPath"))
-    .small()
-    .on_click(move || {
-      if !clipboard.copy(&copied) {
-        tracing::warn!("the worktree's path could not be copied");
-      }
-    })
-    .render(ctx);
+  let copy = IconButton::new(
+    "task-delivery-copy-path",
+    Icon::Copy,
+    ctx.t("delivery.task.resolve.copyPath"),
+  )
+  .small()
+  .on_click(move || {
+    if !clipboard.copy(&copied) {
+      tracing::warn!("the worktree's path could not be copied");
+    }
+  })
+  .render(ctx);
   Row::new()
     .id("task-delivery-worktree")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(PATH_HEIGHT))
-    .padding(Padding::new().left(ExtraSpacing::Loose.role()).right(ExtraSpacing::Pair.role()))
+    .padding(
+      Padding::new()
+        .left(ExtraSpacing::Loose.role())
+        .right(ExtraSpacing::Pair.role()),
+    )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceInput)
@@ -187,9 +199,11 @@ fn actions(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>)
     ctx.t("delivery.queue.blocked.openFolder"),
   )
   .icon(Icon::FolderOpen)
-  .on_click(move || opened("open-worktree", folder.clone(), |folder| {
-    orchester_exec::external::open_path(folder)
-  }));
+  .on_click(move || {
+    opened("open-worktree", folder.clone(), |folder| {
+      orchester_exec::external::open_path(folder)
+    })
+  });
   let editor_button = ActionButton::new(
     "task-delivery-open-editor",
     ButtonKind::Secondary,
@@ -206,7 +220,9 @@ fn actions(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>)
           return;
         }
         let (editor, files) = (editor.clone(), files.clone());
-        opened("open-worktree-editor", folder.clone(), move |folder| editor.open(folder, &files));
+        opened("open-worktree-editor", folder.clone(), move |folder| {
+          editor.open(folder, &files)
+        });
       })
     }
     None => editor_button.unavailable(ctx.t("decisions.ready.resolve.noEditor")),

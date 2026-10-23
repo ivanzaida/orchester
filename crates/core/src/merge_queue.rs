@@ -147,18 +147,41 @@ pub struct QueueEntry {
 pub enum QueueEvent {
   Joined,
   /// The base branch at `base` was merged into the run's branch; `files` conflicted (none: it merged cleanly).
-  Synced { base: Revision, files: Vec<String> },
+  Synced {
+    base: Revision,
+    files: Vec<String>,
+  },
   /// The conflicts went to the Integrate step `step`.
-  IntegrateStarted { step: StepKey, files: Vec<String> },
-  CheckStarted { base: Revision },
-  CheckPassed { base: Revision, tool: String },
-  CheckFailed { base: Revision, tool: String },
+  IntegrateStarted {
+    step: StepKey,
+    files: Vec<String>,
+  },
+  CheckStarted {
+    base: Revision,
+  },
+  CheckPassed {
+    base: Revision,
+    tool: String,
+  },
+  CheckFailed {
+    base: Revision,
+    tool: String,
+  },
   /// The base branch moved from `base` to `now` while Check ran: the check no longer matches what would land.
-  CheckSuperseded { base: Revision, now: Revision },
+  CheckSuperseded {
+    base: Revision,
+    now: Revision,
+  },
   Approved,
   Blocked(Blocked),
-  Merged { revision: Revision, kind: MergeKind },
-  CleanedUp { worktree_removed: bool, branch_deleted: bool },
+  Merged {
+    revision: Revision,
+    kind: MergeKind,
+  },
+  CleanedUp {
+    worktree_removed: bool,
+    branch_deleted: bool,
+  },
   Left(Left),
   /// A person took the run out of the queue; it is ready for review again.
   Removed,

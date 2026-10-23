@@ -292,7 +292,12 @@ fn check(ctx: &Ctx, run: &RunView, step: &StepView) -> Element {
 }
 
 /// A section with its title, a figure at its end, and its body.
-pub(in super::super) fn section(ctx: &Ctx, (id, title): (&str, &str), figure: Option<Arc<str>>, body: Element) -> Element {
+pub(in super::super) fn section(
+  ctx: &Ctx,
+  (id, title): (&str, &str),
+  figure: Option<Arc<str>>,
+  body: Element,
+) -> Element {
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)

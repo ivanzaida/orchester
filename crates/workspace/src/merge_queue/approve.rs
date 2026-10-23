@@ -72,7 +72,9 @@ pub fn reject(root: &Path, run: RunId, now: Timestamp) -> Result<(), QueueRefusa
 /// progress there already. Gives the files that conflict.
 pub fn resolve_myself(root: &Path, programs: &Programs, run: RunId) -> Result<Vec<String>, QueueRefusal> {
   let mut db = ProjectDb::open(root)?;
-  let entry = entry_in(&db, run, |state| matches!(state, QueueState::Left(Left::Conflicts { .. })))?;
+  let entry = entry_in(&db, run, |state| {
+    matches!(state, QueueState::Left(Left::Conflicts { .. }))
+  })?;
   let QueueState::Left(Left::Conflicts { files }) = &entry.state else {
     return Err(QueueRefusal::NotThere);
   };
@@ -107,7 +109,9 @@ pub fn resolve_myself(root: &Path, programs: &Programs, run: RunId) -> Result<Ve
 /// for the project's runner: the run joins in again once it passed every step again.
 pub fn resolved(root: &Path, programs: &Programs, run: RunId, now: Timestamp) -> Result<Command, QueueRefusal> {
   let mut db = ProjectDb::open(root)?;
-  let mut entry = entry_in(&db, run, |state| matches!(state, QueueState::Left(Left::Conflicts { .. })))?;
+  let mut entry = entry_in(&db, run, |state| {
+    matches!(state, QueueState::Left(Left::Conflicts { .. }))
+  })?;
   let stored = db.run(run).map_err(run_store_error)?.ok_or(QueueRefusal::NotThere)?;
   let base = stored.base_branch().ok_or(QueueRefusal::NotThere)?.clone();
   let worktree = run_worktree(root, run);
@@ -187,17 +191,14 @@ fn entry_in(db: &ProjectDb, run: RunId, state: impl Fn(&QueueState) -> bool) -> 
 
 fn head(programs: &Programs, worktree: &Path) -> Result<orchester_core::revision::Revision, QueueRefusal> {
   let runner = programs.runner();
-  orchester_core::integration::delivery::head(&runner, Path::new(GIT), worktree)
-    .map_err(|error| refusal(&error.into()))
+  orchester_core::integration::delivery::head(&runner, Path::new(GIT), worktree).map_err(|error| refusal(&error.into()))
 }
 
 /// What a person reads when resolving did not go on.
 fn refusal(error: &ResolveError) -> QueueRefusal {
   QueueRefusal::Resolve(match error {
     ResolveError::MarkersLeft(files) => markers_left(files),
-    ResolveError::Uncommitted(files) => {
-      Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", "))
-    }
+    ResolveError::Uncommitted(files) => Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", ")),
     other => Message::new("mergeQueue.refused.resolve").with("detail", other.to_string()),
   })
 }

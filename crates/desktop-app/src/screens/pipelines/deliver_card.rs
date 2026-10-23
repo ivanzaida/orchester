@@ -79,7 +79,10 @@ pub(super) fn card(ctx: &Ctx, state: &State, (deliver, number): (&DeliverStep, u
         ),
     )
     .child(step_badge(&gate_label, gate))
-    .child(step_badge(&integrator_words(ctx, &editing, deliver), Icon::GitCompareArrows));
+    .child(step_badge(
+      &integrator_words(ctx, &editing, deliver),
+      Icon::GitCompareArrows,
+    ));
   let panels = editing.panels;
   pressable(move || panels.choose(Panel::Deliver))
     .id("pipeline-deliver")
@@ -94,10 +97,14 @@ fn integrator_words(ctx: &Ctx, editing: &Editing, deliver: &DeliverStep) -> std:
     .shown()
     .validate()
     .ok()
-    .and_then(|pipeline| {
-      integrating_step(&pipeline, deliver, |_| true).and_then(|step| step.kind.executor())
-    })
-    .and_then(|profile| editing.opened.assignables.profile(profile).map(|choice| choice.name.clone()));
+    .and_then(|pipeline| integrating_step(&pipeline, deliver, |_| true).and_then(|step| step.kind.executor()))
+    .and_then(|profile| {
+      editing
+        .opened
+        .assignables
+        .profile(profile)
+        .map(|choice| choice.name.clone())
+    });
   match profile {
     Some(name) => ctx.t_args("delivery.step.badgeConflicts", [("profile", name.as_ref())]),
     None => ctx.t("delivery.step.badgeConflictsPerson"),
@@ -115,11 +122,18 @@ pub(super) fn chip(ctx: &Ctx, state: &State) -> Element {
         DeliverMode::ApproveToMerge => ctx.t("delivery.step.chipApprove"),
         DeliverMode::AutoMerge => ctx.t_args(
           "delivery.step.chipAuto",
-          [("method", crate::screens::merge_queue::words::method(ctx, deliver.method()))],
+          [(
+            "method",
+            crate::screens::merge_queue::words::method(ctx, deliver.method()),
+          )],
         ),
       },
     ),
-    None => (Icon::CircleDashed, PaletteColor::TextMuted, ctx.t("delivery.step.chipNone")),
+    None => (
+      Icon::CircleDashed,
+      PaletteColor::TextMuted,
+      ctx.t("delivery.step.chipNone"),
+    ),
   };
   let text_color = if editing.shown().deliver().is_some() {
     PaletteColor::TextPrimary
