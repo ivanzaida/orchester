@@ -120,6 +120,18 @@
     "baseMovedDetail": "When a merge, a commit or a pull moves the branch a run started from, the run's next agent that may write is told to merge it into its worktree, after its turn and never mid-edit. Moves within two minutes are one notice.",
     "baseMovedOn": "On · writing agents merge the moved base early",
     "baseMovedOff": "Off · agents are not told",
+    "baseBranchSection": "Base branch",
+    "baseBranch": "Base branch",
+    "baseBranchDetail": "The branch new runs start from and deliver into: Merge, the merge queue, Local integration, pull requests and base-moved notices follow it. With Checked-out branch, a run takes the branch your checkout has when it starts.",
+    "baseBranchCheckedOut": "Checked-out branch",
+    "baseBranchRemote": "{{tracking}} · creates {{branch}}",
+    "baseBranchGone": "{{branch}} · no longer exists",
+    "baseBranchMissing": "{{branch}} no longer exists in the repository, so new runs are refused. Choose another base branch.",
+    "baseBranchHint": "Kept on this computer only, in a shared project too. A run keeps the branch it started from; a set branch is merged into beside your checkout when the checkout has another branch.",
+    "baseBranchKept": {
+      "one": "1 unfinished run keeps the base branch it started from.",
+      "other": "{{count}} unfinished runs keep the base branch they started from."
+    },
     "auto": "Auto mode",
     "newRuns": "New runs use auto mode",
     "autoDetail": "A separate reviewer model answers the requests the rules leave to you, approving only those that clearly serve the task; the rest still ask you, with its reason. Each run can turn it on or off in its Approvals.",

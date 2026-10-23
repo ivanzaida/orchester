@@ -6,6 +6,7 @@ mod attachments;
 mod auto_mode;
 mod automatic_status;
 mod automation_drafts;
+mod base_branch;
 mod base_notices;
 mod blobs;
 mod chat_decisions;

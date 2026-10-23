@@ -1,11 +1,12 @@
 //! Bringing a finished run's work into the user's checkout and clearing what it left
-//! (`docs/architecture/storage.md`, "Integration"): merging the run's branch into the branch the
-//! checkout had when the run started ([`merge_run`]), and removing the run's worktrees and the
-//! branches whose commits are merged ([`clean_up`]); [`Branches`] tells what became of a succeeded run's work
-//! that Orchester did not merge. Everything runs through the `git` program with a
+//! (`docs/architecture/storage.md`, "Integration"): merging the run's branch into the base branch it
+//! recorded when it started ([`merge_run`]; [`base`] says which branch that is and where the merge lands), and
+//! removing the run's worktrees and the branches whose commits are merged ([`clean_up`]); [`Branches`] tells what
+//! became of a succeeded run's work that Orchester did not merge. Everything runs through the `git` program with a
 //! [`CommandRunner`](crate::command::CommandRunner); none of it stashes, resets or discards uncommitted work a
 //! person did not confirm discarding.
 
+pub mod base;
 mod cleanup;
 pub mod delivery;
 mod drift;

@@ -62,6 +62,9 @@ pub enum PreflightProblem {
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
   NoCommits,
+  /// The project's base branch (Project settings › General) is set to a branch the repository no longer has: no run
+  /// starts until a person chooses another, and none starts from the checkout instead.
+  BaseBranchMissing { branch: super::BranchName },
 }
 
 /// The configuration a task's run would use.

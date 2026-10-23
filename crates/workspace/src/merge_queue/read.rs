@@ -7,6 +7,7 @@ use std::path::Path;
 use orchester_core::{
   id::{ResourceId, RunId, TaskId},
   integration::{
+    base::Landing,
     branch_head,
     delivery::{self, Checkout},
   },
@@ -61,6 +62,9 @@ pub enum CheckoutState {
   /// These files have uncommitted changes (`git status` lines).
   Uncommitted(Vec<String>),
   OtherBranch(Option<String>),
+  /// The checkout has this other branch (`None`: a detached HEAD), and the project's base branch is set: runs land
+  /// beside it, which it does not hold up.
+  Beside(Option<String>),
   InProgress,
   /// Git could not tell.
   Unknown,
@@ -266,8 +270,9 @@ pub fn read(root: &Path, programs: &Programs) -> Result<QueueRead, StoreError> {
       rows.push(row);
     }
   }
-  let base = base_branch(&rows, (root, programs));
-  let base = base.map(|branch| base_state(branch, (root, programs)));
+  let setting = db.base_branch_setting()?;
+  let base = base_branch(&rows, setting.branch(), (root, programs));
+  let base = base.map(|branch| base_state(branch, Landing::of(&setting), (root, programs)));
   let rows = rows
     .into_iter()
     .map(|mut row| {
@@ -383,27 +388,37 @@ fn row(db: &ProjectDb, entry: QueueEntry, place: Option<usize>) -> Result<Option
 }
 
 /// The base branch the queue delivers into: that of the first run in it that names one, else of any run shown, else
-/// the branch the checkout has checked out.
-fn base_branch(rows: &[QueueRow], (root, programs): (&Path, &Programs)) -> Option<BranchName> {
+/// the project's base branch `set`, else the branch the checkout has checked out.
+fn base_branch(
+  rows: &[QueueRow],
+  set: Option<&BranchName>,
+  (root, programs): (&Path, &Programs),
+) -> Option<BranchName> {
   let named = |in_queue: bool| {
     rows
       .iter()
       .filter(|row| row.entry.state.in_queue() == in_queue)
       .find_map(|row| row.base_branch.clone())
   };
-  named(true).or_else(|| named(false)).or_else(|| {
-    orchester_core::integration::checked_out_branch(&programs.runner(), Path::new(GIT), root)
-      .ok()
-      .flatten()
-  })
+  named(true)
+    .or_else(|| named(false))
+    .or_else(|| set.cloned())
+    .or_else(|| {
+      orchester_core::integration::checked_out_branch(&programs.runner(), Path::new(GIT), root)
+        .ok()
+        .flatten()
+    })
 }
 
-fn base_state(branch: BranchName, (root, programs): (&Path, &Programs)) -> BaseState {
+fn base_state(branch: BranchName, landing: Landing, (root, programs): (&Path, &Programs)) -> BaseState {
   let runner = programs.runner();
   let head = branch_head(&runner, Path::new(GIT), (root, &branch)).ok().flatten();
   let checkout = match delivery::checkout(&runner, Path::new(GIT), (root, &branch)) {
     Ok(Checkout::OnBase { uncommitted }) if uncommitted.is_empty() => CheckoutState::Clean,
     Ok(Checkout::OnBase { uncommitted }) => CheckoutState::Uncommitted(uncommitted),
+    Ok(Checkout::OtherBranch(current)) if landing.beside(&branch, current.as_ref()) => {
+      CheckoutState::Beside(current.map(|branch| branch.as_str().to_owned()))
+    }
     Ok(Checkout::OtherBranch(current)) => CheckoutState::OtherBranch(current.map(|branch| branch.as_str().to_owned())),
     Ok(Checkout::InProgress) => CheckoutState::InProgress,
     Err(error) => {

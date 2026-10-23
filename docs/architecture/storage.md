@@ -15,7 +15,7 @@ Date: 2026-09-23. Status: agreed direction for the local (single-user) version; 
 | Secrets | OS keychain only; databases store references |
 | Execution | separate runner process; agents are runner child processes |
 | Agent worktrees | inside the repository, `<repo>/.orchester/worktrees/`; a step running beside other steps of its run has its own, merged back when it passes; a run's worktrees go when it is merged, or when a person removes them after it ended (see [Integration](#integration)) |
-| Integration | a run that succeeded is merged into the branch the user's checkout had when it started, in that checkout, only while it is clean and on that branch; nothing of the user's is stashed, reset or discarded |
+| Integration | a run that succeeded is merged into the base branch it recorded when it started (the project's base branch, or the branch the user's checkout had), in that checkout while it is on that branch, or, for a project whose base branch is set, beside a checkout on another branch without touching it; nothing of the user's is stashed, reset or discarded |
 | Environment | a project adds plain variables (no secrets) to the cleaned environment of every agent CLI and command tool its runs start, passed as written |
 | Closing with active runs | confirmation listing the runs: wait for checkpoints, or quit now |
 | Quit now or crash | next start reports the abnormal end and offers to continue from the last checkpoint |
@@ -273,15 +273,29 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
 ### Integration
 
 A run that succeeded is merged by the desktop, in the user's checkout (the repository folder), into
-the branch that checkout had when the run started: the runner records it with the run (`runs.base_branch`;
-none on a detached HEAD, and none for runs recorded before it was kept, which cannot be merged from
-Orchester). All of it is git through `orchester-exec`, with git's messages in English and no optional
-locks (`orchester_core::integration`).
+its base branch: the runner records it with the run when it starts (`runs.base_branch`; none on a
+detached HEAD, and none for runs recorded before it was kept, which cannot be merged from Orchester).
+That is the project's base branch when one is set (Project settings › General, `project_base_branch`,
+ORC-81), and the run then starts from that branch's tip wherever the checkout is; else the branch the
+checkout had when the run started, at its `HEAD`. A base branch set that no longer exists refuses new
+runs (preflight `base_branch_missing`); nothing falls back to the checkout. Runs already started keep
+the base they recorded. All of it is git through `orchester-exec`, with git's messages in English and
+no optional locks (`orchester_core::integration`).
 
 - **Only a checkout that is ready.** The checkout must be on that branch and have no merge,
   cherry-pick or revert in progress; otherwise the merge is refused with the reason and nothing
   changes. Uncommitted changes and untracked files may be there: nothing is ever stashed, reset or
   discarded, and what the merge does not reach stays as it is.
+- **Beside the checkout (ORC-81).** For a project whose base branch is set, a checkout on another
+  branch (or a detached HEAD) does not refuse the merge: it happens beside the checkout, which is
+  neither switched nor touched (`orchester_core::integration::base::Landing`). The base branch
+  fast-forwards to the run's branch, or the merge (or squash) commit is made in the temporary
+  worktree below; then the branch's ref moves to it with `git update-ref` only while it is still at
+  the commit the merge began from, so a base that moved meanwhile merges nothing. A base branch
+  checked out in any worktree is refused with that worktree's path, since moving it would leave that
+  worktree's files behind; `post-merge` does not run in the checkout. A project that follows the
+  checked-out branch merges only in the checkout, as before. The merge queue lands the same way, and
+  its header says runs land beside the checkout.
 - **Merging.** A fast-forward when the branch did not move since the run started, else a merge commit
   *Merge ORC-12 run #3* with the repository's git identity, made in a temporary worktree
   (`<git common dir>/orchester-merge-<run id>`, removed again on every path; a folder git refuses to
@@ -439,6 +453,7 @@ open at the next start means the previous session crashed.
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
+| `project_base_branch` | Project settings › General › Base branch (ORC-81): at most one row, the branch new runs start from and deliver into; without it they take the branch the checkout has checked out. Kept on this computer only: a shared project does not sync it (see [Integration](#integration)) |
 
 ### Versioned configuration
 

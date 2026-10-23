@@ -1,5 +1,5 @@
-//! Turning a queued task into a started run: preflight, the run's base revision and the branch
-//! the user's checkout has there (which merging the run brings its work into), the run's branch,
+//! Turning a queued task into a started run: preflight, the run's base revision and its base branch (which merging
+//! the run brings its work into: the project's base branch, or the one the user's checkout has), the run's branch,
 //! its record in the database, its worktree and its start. Idempotent by the request's key.
 
 use std::{
@@ -10,7 +10,10 @@ use std::{
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  integration::checked_out_branch,
+  integration::{
+    base::{BaseBranchSetting, RunBaseError, set_branch_tip},
+    checked_out_branch,
+  },
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool, Version},
   revision::Revision,
   run::{
@@ -116,9 +119,7 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
     return Err(Rejection::Preflight { problems });
   }
   let pipeline = pipeline.expect("the preflight rejects a pipeline without a published version");
-  let base = base_revision(root)?;
-  let base_branch = checked_out_branch(&ProcessRunner::new(GIT_TIMEOUT), Path::new("git"), root)
-    .map_err(|error| failed("cannot read the checked-out branch", &error))?;
+  let (base, base_branch) = run_base(&db.base_branch_setting().map_err(store)?, root)?;
   let (project_sources, task_sources) = (
     db.project_sources().map_err(store)?,
     db.task_sources(task_id).map_err(store)?,
@@ -350,6 +351,26 @@ fn origin_push_url(root: &Path) -> Option<String> {
       tracing::warn!(%error, "cannot read the push URL of origin");
       None
     }
+  }
+}
+
+/// Where a new run starts and the branch it delivers into, as the project's base branch `setting` says
+/// (`orchester_core::integration::base`): the checkout's `HEAD` and the branch it has checked out (none on a detached
+/// HEAD), or the tip of the branch set, wherever the checkout is. A branch set that is gone refuses the run.
+fn run_base(setting: &BaseBranchSetting, root: &Path) -> Result<(Revision, Option<BranchName>), Rejection> {
+  let runner = ProcessRunner::new(GIT_TIMEOUT);
+  match setting {
+    BaseBranchSetting::CheckedOut => {
+      let base = base_revision(root)?;
+      let branch = checked_out_branch(&runner, Path::new("git"), root)
+        .map_err(|error| failed("cannot read the checked-out branch", &error))?;
+      Ok((base, branch))
+    }
+    BaseBranchSetting::Branch(branch) => match set_branch_tip(&runner, Path::new("git"), (root, branch)) {
+      Ok(tip) => Ok((tip, Some(branch.clone()))),
+      Err(RunBaseError::Missing(branch)) => Err(preflight_failed(PreflightProblem::BaseBranchMissing { branch })),
+      Err(RunBaseError::Git(error)) => Err(failed("cannot read the base branch", &error)),
+    },
   }
 }
 

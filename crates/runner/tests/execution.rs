@@ -12,8 +12,9 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, InvocationOutcome, OutputStream},
   },
   id::{IdempotencyKey, RunId, TaskId},
+  integration::base::BaseBranchSetting,
   resource::StepKey,
-  run::{InterruptCause, PreflightProblem, RunStatus, StepStatus},
+  run::{BranchName, InterruptCause, PreflightProblem, RunStatus, StepStatus},
   store::{ActivityStore, ConnectionStore, RunStore},
   time::Timestamp,
 };
@@ -232,6 +233,59 @@ async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
   let run = run_to_the_end(detached.repo.path(), detached.task).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(run.base_branch(), None, "a detached HEAD has no branch to merge into");
+}
+
+/// The project's base branch set (ORC-81): a new run starts from that branch's tip while the checkout is on another
+/// branch, records it as its base, and leaves the checkout where it was; a branch set that is gone refuses the run,
+/// naming it, and no run starts from the checkout instead.
+#[tokio::test(flavor = "multi_thread")]
+async fn execution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
+  let on_main = project(&Setup::new("Append one line."));
+  let root = on_main.repo.path();
+  git(root, &["switch", "--quiet", "-c", "staging"]);
+  git(root, &["commit", "--quiet", "--allow-empty", "-m", "staging work"]);
+  git(root, &["switch", "--quiet", "main"]);
+  let staging = BranchName::new("staging").expect("branch");
+  ProjectDb::open(root)
+    .expect("open")
+    .save_base_branch_setting(&BaseBranchSetting::Branch(staging.clone()))
+    .expect("set");
+  let run = run_to_the_end(root, on_main.task).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(run.base_branch(), Some(&staging));
+  assert_eq!(run.base().as_str(), git(root, &["rev-parse", "staging"]));
+  assert_ne!(
+    run.base().as_str(),
+    git(root, &["rev-parse", "main"]),
+    "not the checkout's HEAD"
+  );
+  assert_eq!(
+    git(root, &["symbolic-ref", "--short", "HEAD"]),
+    "main",
+    "the checkout stays on main"
+  );
+
+  let gone = project(&Setup::new("Append one line."));
+  let branch = BranchName::new("gone").expect("branch");
+  ProjectDb::open(gone.repo.path())
+    .expect("open")
+    .save_base_branch_setting(&BaseBranchSetting::Branch(branch.clone()))
+    .expect("set");
+  let (scheduler, _events) = scheduler(gone.repo.path());
+  assert_eq!(
+    scheduler.start_run(IdempotencyKey::generate(), gone.task).await,
+    Err(Rejection::Preflight {
+      problems: vec![PreflightProblem::BaseBranchMissing { branch }]
+    })
+  );
+  assert!(
+    ProjectDb::open(gone.repo.path())
+      .expect("open")
+      .runs_of_task(gone.task)
+      .expect("runs")
+      .is_empty(),
+    "no run was recorded"
+  );
 }
 
 /// Codex refusing the thread stops the step with Codex's reason and code on one line, the secrets of the

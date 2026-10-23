@@ -330,6 +330,9 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::CommandListNotOffered { step: key } => step("runs.preflight.commandListNotOffered", key),
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
+    PreflightProblem::BaseBranchMissing { branch } => {
+      Message::new("runs.preflight.baseBranchMissing").with("branch", branch.to_string())
+    }
   }
 }
 

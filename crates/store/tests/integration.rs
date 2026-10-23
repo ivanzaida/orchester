@@ -7,6 +7,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   integration::{
     MergeKind, RemovalStart, RunMerge,
+    base::BaseBranchSetting,
     local::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase},
   },
   revision::Revision,
@@ -44,6 +45,34 @@ fn integration_base_branch_is_kept_with_the_run() {
   assert_eq!(runs[0].base_branch(), None, "the run started on a detached HEAD");
   assert_eq!(runs[1].id(), second.id());
   assert_eq!(runs[1].base_branch(), Some(&branch("main")));
+}
+
+#[test]
+fn integration_base_branch_setting_is_kept_and_counts_the_runs_that_keep_their_base() {
+  let (repo, mut db, mut run, _) = started_run();
+  assert_eq!(
+    db.base_branch_setting().expect("read"),
+    BaseBranchSetting::CheckedOut,
+    "the checked-out branch without a row"
+  );
+  db.save_base_branch_setting(&BaseBranchSetting::Branch(branch("staging")))
+    .expect("save");
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(
+    reopened.base_branch_setting().expect("read"),
+    BaseBranchSetting::Branch(branch("staging"))
+  );
+  assert_eq!(reopened.runs_keeping_their_base().expect("count"), 1, "the running run");
+  let events = run.cancel(at(40)).expect("cancel");
+  db.append_events(&run, &events).expect("events");
+  assert_eq!(
+    db.runs_keeping_their_base().expect("count"),
+    0,
+    "a cancelled run delivers nothing"
+  );
+  db.save_base_branch_setting(&BaseBranchSetting::CheckedOut)
+    .expect("save");
+  assert_eq!(db.base_branch_setting().expect("read"), BaseBranchSetting::CheckedOut);
 }
 
 #[test]

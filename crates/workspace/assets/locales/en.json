@@ -17,7 +17,10 @@
   },
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
-    "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again."
+    "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
+    "baseBranch": {
+      "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
+    }
   },
   "projects": {
     "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",
@@ -594,6 +597,8 @@
         "leftChanged": "Git stopped part way through the merge, and Orchester couldn’t put back {{files}}: they hold the run’s version now. Restore them yourself with git restore. Everything else is as it was. {{detail}}",
         "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Resolve the conflicts in Local integration, or merge the run’s branch yourself.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
+        "baseMissing": "The base branch {{branch}} no longer exists, so there is nothing to merge into. Nothing was changed.",
+        "checkedOutIn": "{{branch}} is checked out in {{path}}, so Orchester doesn’t move it from beside your checkout. Merge from that worktree, or switch it to another branch, then merge again. Nothing was changed.",
         "branchMoved": "The run’s branch {{branch}} is no longer at {{revision}}, the commit you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
         "refused": "Git didn’t merge, and the merge was undone: {{detail}}",
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
@@ -650,6 +655,7 @@
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
+      "baseBranchMissing": "The project’s base branch {{branch}} no longer exists, so no run starts. Choose another base branch in Project settings › General.",
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
         "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",

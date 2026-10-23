@@ -1,4 +1,5 @@
 //! Project settings in the real headless window: states, autosaves and person-only questions.
+mod base_branch;
 mod domain;
 mod environment;
 mod environment_geometry;
