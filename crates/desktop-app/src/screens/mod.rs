@@ -12,6 +12,7 @@ mod connections;
 mod delivery;
 mod files;
 pub(crate) mod gate;
+mod import;
 mod instructions;
 mod kept;
 pub(crate) mod memory;
@@ -139,5 +140,6 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
+    ProjectPage::Import(tab) => import::screen(ctx, project, *tab),
   }
 }

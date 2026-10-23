@@ -19,7 +19,7 @@ use super::parts;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{PipelinePanel, ProjectPage, Route},
+  routes::{ImportTab, PipelinePanel, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -71,7 +71,8 @@ impl Component for Library {
       )
       .child(
         ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
-          .unavailable(ctx.t("pipelines.planned")),
+          .icon(Icon::Download)
+          .opens(nav.to(Route::Project(id, ProjectPage::Import(ImportTab::Pipelines)))),
       )
       .child(new);
     let page = parts::page()

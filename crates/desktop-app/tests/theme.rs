@@ -3,6 +3,8 @@
 
 #[path = "theme/appearance.rs"]
 mod appearance;
+#[path = "theme/import.rs"]
+mod import;
 #[path = "theme/instructions.rs"]
 mod instructions;
 #[path = "theme/local_integration.rs"]

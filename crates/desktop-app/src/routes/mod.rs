@@ -17,7 +17,8 @@
 //! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
-//! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Secrets, the Skills
+//! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
+//! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). Secrets, the Skills
 //! library, an agent profile, Instructions, a pipeline's editor, Memory and Project settings keep their tab,
 //! filter, item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`],
 //! [`InstructionsView`], [`PipelinePanel`], [`MemoryTab`], [`ProjectSettingsTab`]);
@@ -40,6 +41,7 @@ mod agents;
 mod connections;
 mod error;
 mod files;
+mod import;
 mod instructions;
 mod join;
 mod memory;
@@ -71,6 +73,7 @@ pub use self::{
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
+  import::ImportTab,
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
   memory::MemoryTab,
@@ -97,6 +100,8 @@ const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
 const PULL_REQUESTS: &str = "pull-requests";
+/// Import resources' segment.
+const IMPORT: &str = "import";
 const ORCHESTRATOR: &str = "orchestrator";
 const NEW: &str = "new";
 const EDIT: &str = "edit";

@@ -1,6 +1,6 @@
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
-  import::{Choice, Choices, Content, CopiedResource, Entity, ImportBatch, ImportError, Pick, Plan},
+  import::{Choice, Choices, Content, CopiedResource, Entity, ImportBatch, ImportError, Pick, Plan, Resolved},
   resource::{AllowedSteps, HttpAuth, InstructionScope, StepKind, ToolAction},
   time::Timestamp,
 };
@@ -115,19 +115,41 @@ fn import_batch_keeps_only_the_access_of_copied_pipelines() {
 #[test]
 fn import_batch_records_where_each_copy_came_from() {
   let source = source();
-  let (target, _) = kontur_with_builder();
+  let (target, builder) = kontur_with_builder();
 
   let batch = preview_release(&source, &target);
 
   let provenance = copy_of(&batch, source.pipeline).provenance();
   assert_eq!(provenance.project, source.catalog.project().id());
   assert_eq!(provenance.project_name.as_str(), "Personal website");
+  assert_eq!(provenance.resource_name.as_str(), "Preview release");
   assert_eq!(provenance.version, Some(version(3)));
+  assert_eq!(
+    copy_of(&batch, source.deploy).provenance().resource_name.as_str(),
+    "Deploy preview",
+    "a renamed copy keeps its source's name"
+  );
   assert!(
     batch
       .copies()
       .iter()
       .all(|copy| copy.resource().created_at() == Timestamp::from_unix_millis(9))
+  );
+  assert_eq!(
+    batch.resolved(),
+    [
+      Resolved {
+        source: Entity::Resource(source.builder),
+        source_name: "Builder".to_owned(),
+        target: Some(Entity::Resource(builder)),
+      },
+      Resolved {
+        source: Entity::Secret(source.key),
+        source_name: "PREVIEW_HOST_API_KEY".to_owned(),
+        target: Some(Entity::Secret(target.key)),
+      },
+    ],
+    "what was used of the target's, in plan order"
   );
 }
 
@@ -178,6 +200,15 @@ fn import_batch_leaves_an_unresolved_connection_for_the_draft_to_show() {
     "Kontur has no such connection: the copy shows it as missing"
   );
   assert!(batch.relies_on().is_empty());
+  assert_eq!(
+    batch.resolved(),
+    [Resolved {
+      source: Entity::Connection(source.codex),
+      source_name: "Codex".to_owned(),
+      target: None,
+    }],
+    "recorded as left unresolved"
+  );
 }
 
 #[test]

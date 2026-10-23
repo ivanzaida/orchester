@@ -63,6 +63,13 @@ impl AgentsNav {
   pub fn to(&self, shown: Shown) -> Open {
     self.navigation.to(Route::Project(self.project, shown.page()))
   }
+  /// What opens Import resources on its Agents tab (`G69AHh`).
+  pub fn import(&self) -> Open {
+    self.navigation.to(Route::Project(
+      self.project,
+      ProjectPage::Import(crate::routes::ImportTab::Agents),
+    ))
+  }
   /// The profile a save named, on the tab the editor shows now, in place of the editor it was saved from:
   /// a new profile gets its id.
   pub fn saved(&self, id: ResourceId) {

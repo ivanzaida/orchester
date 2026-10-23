@@ -1236,6 +1236,10 @@
       "sourceOutdated": "{{project}} was last opened with an earlier version of Orchester. Open it once, then import from it.",
       "sourceNewer": "{{project}} was written by a newer version of Orchester.",
       "sourceUnreadable": "{{project}} could not be read. The log has the details.",
+      "sourceRefused": "Orchester may not read {{project}}",
+      "sourceRefusedDetail": "Access to {{folder}} was refused. Check the folder's permissions, then try again.",
+      "chooseAnother": "Choose another project, or try again once {{project}} opens on its own.",
+      "targetUnreadable": "This project could not be read",
       "targetChanged": "This project changed while you chose. Check the mappings, then import again."
     }
   },

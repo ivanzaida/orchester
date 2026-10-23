@@ -108,10 +108,11 @@ fn new_button(ctx: &Ctx, id: &str, listed: &ProjectAgents, nav: &AgentsNav) -> A
     button.opens(nav.to(Shown::New(AgentTab::default())))
   }
 }
-fn import(ctx: &Ctx, id: &str) -> ActionButton {
+/// Import agents, which opens Import resources on its Agents tab.
+fn import(ctx: &Ctx, id: &str, nav: &AgentsNav) -> ActionButton {
   ActionButton::new(id, ButtonKind::Secondary, ctx.t("agents.import"))
     .icon(Icon::Download)
-    .unavailable(ctx.t("agents.importUnavailable"))
+    .opens(nav.import())
 }
 fn header(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Row {
   Row::new()
@@ -132,7 +133,7 @@ fn header(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Row {
     .child(
       Row::new()
         .spacing(SpacingSize::Sm)
-        .child(import(ctx, "agents-import"))
+        .child(import(ctx, "agents-import", nav))
         .child(new_button(ctx, "agents-new", listed, nav)),
     )
 }
@@ -151,7 +152,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
   if has_connection {
     empty = empty
       .action(new_button(ctx, "agents-empty-new", listed, nav))
-      .action(import(ctx, "agents-empty-import"));
+      .action(import(ctx, "agents-empty-import", nav));
   } else {
     let nav = Navigation::of(ctx);
     let id = project.open.project.id();

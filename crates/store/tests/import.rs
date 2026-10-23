@@ -1,6 +1,9 @@
 //! Import resources: another project's database is only read, and the copies are written into
 //! this project in one transaction, once per import.
 
+#[path = "import/record.rs"]
+mod record;
+
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
