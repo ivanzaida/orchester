@@ -106,10 +106,17 @@ impl Component for BaseBranch {
     let control = Column::new()
       .width(Dimension::Px(page::CONTROL_WIDTH))
       .spacing(SpacingSize::Sm);
-    let control = match (&state.data, &state.error) {
-      (Some(read), _) => self.control(ctx, control, (read, read.1 == asked)),
-      (None, Some(error)) => control.child(field_error("settings-base-branch-error", &message_text(ctx, error))),
-      (None, None) => control.child(loading(
+    // A failed re-read shows its error, not the setting read before, which a choice would be compared with; nor does
+    // that setting show again while the row reads once more.
+    let rejected = state.error.as_ref().filter(|_| state.is_rejected());
+    if rejected.is_some() {
+      self.stored.lock().take();
+    }
+    let shown = self.stored.lock().is_some();
+    let control = match (rejected, &state.data) {
+      (Some(error), _) => control.child(field_error("settings-base-branch-error", &message_text(ctx, error))),
+      (None, Some(read)) if shown || read.1 == asked => self.control(ctx, control, (read, read.1 == asked)),
+      (None, _) => control.child(loading(
         "settings-base-branch-loading",
         &ctx.t("project_settings.reading"),
       )),

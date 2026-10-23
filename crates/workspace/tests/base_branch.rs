@@ -2,8 +2,8 @@
 //! repository whose checkout stays on `main` while runs work on `staging`: the setting saved with the count of runs
 //! that keep their base, a remote-tracking choice creating its local branch, a gone branch refused; a run merged into
 //! `staging` beside the checkout, which is neither switched nor touched, and cleared up after; with the default, the
-//! same merge still needs `staging` checked out; moves of `staging` told to its runs; work merged into `staging`
-//! outside Orchester read as merged there; and Run again's base read from the setting.
+//! same merge still needs `staging` checked out; moves of `staging` told to its runs; and work merged into `staging`
+//! outside Orchester read as merged there.
 //! `cargo test -p orchester-workspace --test base_branch base_branch`.
 
 use std::{

@@ -1,7 +1,8 @@
 //! General's *Base branch* row (ORC-81) in the headless window: the checked-out branch by default, the repository's
 //! local and remote-tracking branches offered, a choice saved in the project's database with the count of unfinished
 //! runs that keep their base, a remote-tracking choice creating its local branch, a branch set that is gone shown as
-//! the row's problem, and `get_project` reporting the setting.
+//! the row's problem, a failed re-read shown as its error instead of the setting before, and `get_project` reporting
+//! the setting.
 //! `cargo test -p orchester-app --test project_settings project_settings_base_branch`.
 use std::process::Command;
 
@@ -177,6 +178,39 @@ fn project_settings_base_branch_a_branch_set_that_is_gone_is_the_rows_problem() 
     read["project"]["base_branch"],
     json!({"branch": "main", "missing": false})
   );
+}
+
+#[test]
+fn project_settings_base_branch_a_failed_re_read_shows_its_error_not_the_setting_before() {
+  let mut page = Settings::new(false);
+  repository(&mut page);
+  page.choose(SELECT, "staging");
+  page.until("staging saved", |p| {
+    setting(p) == BaseBranchSetting::Branch(branch("staging"))
+  });
+  page.saved();
+
+  // Another window sets the checked-out branch, and the row's re-read fails: git cannot read the repository.
+  page
+    .db()
+    .save_base_branch_setting(&BaseBranchSetting::CheckedOut)
+    .expect("set");
+  let config = page.repo.join(".git").join("config");
+  let before = std::fs::read_to_string(&config).expect("config");
+  std::fs::write(&config, format!("{before}\n[[[broken\n")).expect("break config");
+  page.outside(Outside::ProjectSettings);
+  page.until("the read error shown", |p| p.exists("settings-base-branch-error"));
+  assert!(!page.exists(SELECT), "no select offers the setting read before");
+
+  std::fs::write(&config, before).expect("mend config");
+  page.outside(Outside::ProjectSettings);
+  page.until("the select back", |p| p.exists(SELECT));
+  assert!(!page.exists("settings-base-branch-error"));
+  assert_eq!(chosen(&mut page), ["Checked-out branch"]);
+  page.choose(SELECT, "staging");
+  page.until("staging saved again", |p| {
+    setting(p) == BaseBranchSetting::Branch(branch("staging"))
+  });
 }
 
 #[test]
