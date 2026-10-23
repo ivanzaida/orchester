@@ -101,7 +101,7 @@ keyring-core = "1"
 # before insertion, clipboard images and files, file drops on elements and runtime-decoded images, unused yet;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.50.0", default-features = false }
+lurq = { version = "0.51.1", default-features = false }
 # The deprecated app retains its existing create/render hook contract until it is replaced.
 lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
 # Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's

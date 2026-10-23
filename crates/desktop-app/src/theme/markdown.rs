@@ -151,6 +151,8 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
       padding: Some(Padding::symmetric(TOOLTIP_SIDES, TOOLTIP_ENDS)),
       ..MarkdownBlockStyle::new()
     },
+    // A code block wider than its column scrolls sideways under the app's own scrollbar.
+    code_block_scrollbar: None,
     ..ThemeMarkdown::default()
   }
 }
