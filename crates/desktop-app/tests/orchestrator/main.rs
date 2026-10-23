@@ -9,6 +9,7 @@
 mod attachments;
 mod changes;
 mod chat;
+mod code_block;
 mod continuation;
 mod decisions;
 mod drafts;
