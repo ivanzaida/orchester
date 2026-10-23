@@ -1,8 +1,8 @@
-//! What changes the text that reaches agents' prompts (ORC-30): publishing an instruction, a profile's role,
-//! responsibilities or role instructions, and loading the repository's own agent files. Automation saves drafts of
-//! them freely, since a draft reaches no prompt; making such a change take effect is a person's decision, as widening
-//! what agents may do is (`crate::app_mcp`'s `person_only`). Otherwise a file an agent read could make it steer every
-//! later agent.
+//! What changes the text that reaches agents' prompts (ORC-30): publishing an instruction or a skill, a profile's
+//! role, responsibilities or role instructions, and loading the repository's own agent files. Automation saves drafts
+//! of them freely, since a draft reaches no prompt; making such a change take effect is a person's decision, as
+//! widening what agents may do is (`crate::app_mcp`'s `person_only`). Otherwise a file an agent read could make it
+//! steer every later agent.
 
 use orchester_core::{id::ResourceId, resource::AgentProfile, store::ResourceStore};
 use orchester_store::{ProjectDb, StoreError};
@@ -12,6 +12,12 @@ use crate::messages::Message;
 /// Publishing an instruction: its text reaches every agent it applies to.
 pub fn instruction() -> Message {
   Message::new("appMcp.prompts.instruction")
+}
+
+/// Publishing a skill: its description reaches the prompts, and its body and reference files the files, of every
+/// agent it applies to.
+pub fn skill() -> Message {
+  Message::new("appMcp.prompts.skill")
 }
 
 /// Turning on the repository's own agent files (AGENTS.md, CLAUDE.md): what the repository says reaches every agent.

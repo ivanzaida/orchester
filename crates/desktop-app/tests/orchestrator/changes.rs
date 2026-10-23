@@ -27,7 +27,7 @@ use super::{
 };
 
 /// The conversation's actions, in order.
-fn actions(screen: &Orchestrator) -> Vec<ChatAction> {
+pub(super) fn actions(screen: &Orchestrator) -> Vec<ChatAction> {
   let db = screen.db();
   let Some(listing) = db.chats().expect("chats").pop() else {
     return Vec::new();
@@ -43,7 +43,7 @@ fn actions(screen: &Orchestrator) -> Vec<ChatAction> {
 }
 
 /// Sends `call` and waits until its turn kept `count` actions and ended.
-fn call(screen: &mut Orchestrator, call: &str, count: usize) {
+pub(super) fn call(screen: &mut Orchestrator, call: &str, count: usize) {
   screen.send(call);
   screen.until("the call's action", |screen| outcomes(screen).len() == count);
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));

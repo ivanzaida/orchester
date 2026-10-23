@@ -29,12 +29,13 @@ person can click.
    What automation may do, *Let the Orchestrator publish drafts*, lets the chat publish directly. Synthetic input
    cannot flip it (the same rule as *Let automation change agent permissions*). Widening what agents may do stays
    behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat. For every
-   other MCP client (ORC-30, `orchester_workspace::prompt_changes`): publishing an instruction, a profile whose role,
-   responsibilities or role instructions changed, and turning the repository's agent files back on change what
-   agents are told, so they are refused `person_only` unless *Let automation change agent permissions* is on; no
-   separate switch, since the design has none and the risk is the same as widening. lurq's synthetic input on the
-   window's Publish (Instructions, Skills, Agents) follows the same switch. Drafts stay free; an instruction draft
-   automation saved is marked *Draft written by automation* in the editor's header until a person saves it.
+   other MCP client (ORC-30, `orchester_workspace::prompt_changes`): publishing an instruction or a skill (ORC-79), a
+   profile whose role, responsibilities or role instructions changed, and turning the repository's agent files back
+   on change what agents are told, so they are refused `person_only` unless *Let automation change agent permissions*
+   is on; no separate switch, since the design has none and the risk is the same as widening. lurq's synthetic input
+   on the window's Publish (Instructions, Skills, Agents) follows the same switch. Drafts stay free; an instruction or
+   skill draft automation saved is marked *Draft written by automation* in the editor's header until a person saves
+   it or it is published.
 4. **Starting runs: both.** By default a start is a proposal card the person starts (as today). When auto mode is on
    for the project, the chat starts the run directly, through the same scheduling checks; the start is kept in the
    conversation as an action. Its neighbours follow the same pattern behind their own switches: answering agents
@@ -268,7 +269,7 @@ project.
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |
 | Agents | `list_profiles`, `get_profile` (existing) | `save_profile_draft` (existing) | `publish_profile` |
 | Instructions | `list_instructions` (existing); `get_instruction` (new: text, versions, where it applies) | `save_instruction_draft` (existing) | `publish_instruction` |
-| Skills | `list_skills`, `get_skill` (new) | `save_skill_draft` (new) | `publish_skill` (new) |
+| Skills | `list_skills`, `get_skill` (existing; ORC-79: `draft_by_automation`, and `get_skill`'s `revision`) | `save_skill_draft` (ORC-79: a new skill under `name`, its slug made unique as the Skills editor makes it, or a skill's draft replaced by id, name or slug; description, body, where it applies (project, `agent_role` with `role`, `pipeline`, `step` with `pipeline` and `step`) and reference files (`path` inside the skill's folder, never absolute or with `.`/`..`, not `SKILL.md`; text `content`, or none to keep the skill's file; at most 100 of at most 1024 KiB), checked by the editor's own rules (`skills::editor`): `invalid_name`, `name_taken`, `scope_unavailable`, `invalid_files`, `unknown_role`; with `expected_revision` refused as `draft_changed` over another save. Always open; the draft is marked as automation's (`draft_by_automation`, the Skills editor's *Draft written by automation*) until a person saves it or it is published) | `publish_skill` (ORC-79: the next version, as Publish; refused for `blank_description`, `blank_body`, `stale_draft`, `no_draft`, `scope_unavailable`, `draft_changed`; for any MCP client `person_only` unless *Let automation change agent permissions* is on, the person applies the chat's proposal, or *Let the Orchestrator publish drafts* is on — the skill's description reaches every prompt and its body and files every agent it applies to; the card names the skill and its version) |
 | Tools | `list_tools`, `get_tool` (existing) | `save_tool_draft` (existing) | `publish_tool` |
 | Secrets | `list_secrets` (new: name, scope, which profiles/tools/connections use it; never a value) | — | — |
 | Connections | `list_connections`, `list_accounts`, `list_models` (existing) | — | — |

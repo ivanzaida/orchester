@@ -211,6 +211,59 @@ fn skills_visual_unpublished_status_and_disabled_upload_keep_actual_draft() {
   assert!(s.entry(id).state.published().is_none());
 }
 
+/// Saves `description` over skill `id`'s draft as `save_skill_draft` does: marked as automation's (ORC-79).
+fn automation_saves(s: &Skills, id: ResourceId, description: &str) {
+  let entry = s.entry(id);
+  let body = Skill::new(
+    description.into(),
+    entry.body.body().to_owned(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("skill");
+  let now = orchester_core::time::Timestamp::now();
+  let saved = editor::save_checked_in(&s.repo, (Some(&entry), &entry.name, &body), now).expect("automation's draft");
+  editor::mark_automation_in(&s.repo, &saved, now).expect("marked");
+}
+
+#[test]
+fn skills_visual_mark_a_draft_automation_wrote_until_a_person_saves_it() {
+  use orchester_app::ui::icon::Icon;
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  automation_saves(&s, id, "Automation's description.");
+  s.go(ProjectPage::Skill(id));
+  s.window.until("the automation mark", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft written by automation · Published v1")
+  });
+  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::Bot.glyph().to_string());
+  s.set("skill-description", "A person's description.");
+  s.settle(id, "A person's description.");
+  s.window.until("the person's draft", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft saved · Published v1")
+  });
+  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::CloudCheck.glyph().to_string());
+  let skills = ProjectSkills::load_in(&s.repo).expect("read");
+  assert!(
+    !skills.by_automation(&s.entry(id)),
+    "a person's save makes the draft theirs"
+  );
+}
+
+#[test]
+fn skills_visual_mark_a_new_skill_automation_wrote() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", false);
+  automation_saves(&s, id, "Automation's description.");
+  s.go(ProjectPage::Skill(id));
+  s.window.until("the automation mark", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft written by automation · Not published")
+  });
+}
+
 fn glyph(s: &mut Skills, id: &str) -> String {
   s.window
     .tree

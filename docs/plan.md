@@ -894,6 +894,30 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-79 · The Orchestrator chat makes and publishes skills: `save_skill_draft` and `publish_skill` · branch
+`orchester/orc-79-run-1` (implemented 2026-10-23; pipeline Check, Review and Verify follow). Spec:
+`docs/design/orchestrator-toolset.md`, decision 3 and the Skills row.
+- **Domain** (`skills::editor`): the editor's writes name the rule that refused them (`Refusal`, `WriteError`;
+  `save_checked_in`, `publish_checked_in`, `SkillForm::checked`; the Messages the window shows are unchanged). Its
+  reference file limits are new and shared by the window and the tools: at most `MAX_FILES` (100) files of at most
+  `MAX_FILE_BYTES` (1 MiB) each, files a skill already has (an import) kept; `files_in` stores files given as text
+  at checked paths (`SkillFilePath`: inside the skill's folder, no absolute, `.`/`..`, drive or `SKILL.md`) and keeps
+  the skill's file at a path given without text. `mark_automation_in` marks a draft the tools saved;
+  `ProjectSkills::by_automation` reads it (the instructions' `automation_drafts` table).
+- **Tools** (`app_mcp/tools/setup/skill_input.rs`): `save_skill_draft` (new skill under `name` or a skill's draft by
+  id, name or slug; fields left out keep their value; `expected_revision` as `save_tool_draft`; always open, marked as
+  automation's) and `publish_skill` (`person_only` as `publish_instruction` per ORC-30, `prompt_changes::skill`;
+  refused `blank_description`, `blank_body`, `stale_draft`, `no_draft`, `scope_unavailable`, `draft_changed`).
+  `list_skills`/`get_skill` gain `draft_by_automation`, `get_skill` its `revision`. The chat's handling of
+  `Publishing::Skill` was already in place; its proposals now also find a skill by its slug.
+- **UI**: the Skills editor's header says *Draft written by automation · Published vN* / *· Not published* with the
+  Bot icon, as the Instructions editor does (ORC-30). No Pencil frame shows either mark.
+- Tests: `cargo test -p orchester-workspace --test skill_tools skill_tools`, `--test skills skills_`, `--test
+  orchestrator_tools orchestrator_tools`, `--test i18n locales_`; `cargo test -p orchester-app --test orchestrator`
+  (`skills::`), `--test skills skills`, `--test mcp_domain domain_reads`, `--test i18n -- locales area every_key`.
+- **Open:** a skill draft an MCP client types into the window's Skills editor is not marked (the Instructions editor
+  marks synthetic input; the Skills editor saves on its own and has no author tracking).
+
 ORC-78 · Modules in shared projects: made, changed and synced through the team server · branch `orchester/orc-78-run-1`
 (implemented 2026-10-22; pipeline Check and Review follow). Spec: `docs/architecture/server.md`, *Modules*, rows 66–71.
 - **Server** (schema 7): `modules` under a revision (names unique per project without regard to case, core's
