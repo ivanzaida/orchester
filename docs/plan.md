@@ -788,6 +788,23 @@ scaled displays in 0.30.4. This workspace uses 0.41.2 (a long text clipped to it
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
 
+**lurq gap (ORC-82): a Markdown code block cannot scroll sideways.** A fenced code block keeps its lines unwrapped (right:
+code stays as written), so a line wider than the message column runs past the block's box and is clipped out of reach:
+no scrollbar, no shift+wheel, no trackpad swipe (seen in the Orchestrator chat; the same `ui::markdown::MarkdownView`
+renders the task Conversation's agent text, plans, Details' brief and decision cards, so every place has it). lurq
+0.50.0 (the newest on crates.io, 2026-10-23) has no way for the app to fix it: `components/markdown/mod.rs`
+`render_code_block` puts `Node::rich_text(..).text_wrap(false)` straight in a `Column` given the theme's
+`code_block_box`, with no scroll container; `ThemeMarkdown`/`MarkdownBlockStyle` have no overflow or scroll field; and
+`MarkdownProps` has a hook for lists (`list_view`) but none for code blocks. Wrapping as a fallback is not possible
+either (the `text_wrap(false)` is hard-coded). Not worked around in the app (no copy of the renderer). Needed in lurq:
+the code block's text inside a horizontal scroll container in its box (the theme's scrollbar on hover/overflow,
+shift+wheel and trackpad horizontal scroll, the vertical wheel passed on to the chat, selection across the scrolled
+text), or a `code_block_view` hook like `list_view`. Repro: `crates/desktop-app/tests/ui_kit/markdown_code_scroll.rs`
+(a 400-wide column; the long line is wider than the column, and a sideways swipe over it does not move it); when lurq
+scrolls code blocks, flip its `gap_` test to assert the line moves by the swipe and the box stays put, then add the
+headless tests ORC-82 asks for (a long-line code block in the Orchestrator chat and in a task Conversation: selection
+and copy, label, column width, vertical scroll and follow-to-end) and a design verification.
+
 ## S · Shared server (self-hosted)
 
 The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
