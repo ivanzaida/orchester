@@ -18,6 +18,7 @@ mod history;
 mod layout;
 mod links;
 mod open_long;
+mod paste;
 mod proposal;
 mod queue;
 mod references;
@@ -30,4 +31,5 @@ mod skills;
 mod start;
 #[path = "../support/mod.rs"]
 mod support;
+mod tall_reply;
 mod waits;

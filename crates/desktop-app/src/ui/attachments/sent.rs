@@ -1,7 +1,8 @@
 //! The files attached to a message in a conversation, a person's in a task's chat or in the Orchestrator chat, under
-//! its words: a chip each, an image with its thumbnail, 6 apart and wrapping. A press on an image or a text file opens
-//! its preview under the chips (the image larger, the text in the code box), with *Open*, which hands the project's
-//! copy to its default program; a press on a PDF opens it there at once. What cannot be opened says so under them.
+//! its words: a chip each, an image with its thumbnail, 6 apart and wrapping, at the message's end as its words are
+//! (`Your message` `mr4lC` aligns everything to its end). A press on an image or a text file opens its preview under
+//! the chips (the image larger, the text in the code box), with *Open*, which hands the project's copy to its default
+//! program; a press on a PDF opens it there at once. What cannot be opened says so under them.
 
 use std::{
   path::{Path, PathBuf},
@@ -18,7 +19,7 @@ use lurq::{
   components::{Column, Row, Text},
   core::Signal,
   images::ImageSource,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::attachment::{Attachment, AttachmentKind};
@@ -138,6 +139,7 @@ impl Component for SentAttachments {
         Row::new()
           .width(Dimension::Pct(100.0))
           .wrap()
+          .justify(Justify::End)
           .spacing(ExtraSpacing::Snug.role())
           .with_children(chips),
       )
