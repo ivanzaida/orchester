@@ -903,7 +903,10 @@ ORC-79 · The Orchestrator chat makes and publishes skills: `save_skill_draft` a
   `MAX_FILE_BYTES` (1 MiB) each, files a skill already has (an import) kept; `files_in` stores files given as text
   at checked paths (`SkillFilePath`: inside the skill's folder, no absolute, `.`/`..`, drive or `SKILL.md`) and keeps
   the skill's file at a path given without text. `mark_automation_in` marks a draft the tools saved;
-  `ProjectSkills::by_automation` reads it (the instructions' `automation_drafts` table).
+  `ProjectSkills::by_automation` reads it (the instructions' `automation_drafts` table). The Skills editor saves
+  through `save_by_in`: edits an MCP client's synthetic input made (or a client's press of Create/Retry) are saved as
+  automation's and marked, as the Instructions editor does, so a client's window save neither goes unmarked nor clears
+  the mark; only a person's save does.
 - **Tools** (`app_mcp/tools/setup/skill_input.rs`): `save_skill_draft` (new skill under `name` or a skill's draft by
   id, name or slug; fields left out keep their value; `expected_revision` as `save_tool_draft`; always open, marked as
   automation's) and `publish_skill` (`person_only` as `publish_instruction` per ORC-30, `prompt_changes::skill`;

@@ -252,7 +252,21 @@ fn publish_refusal(entry: &SkillEntry) -> Option<(Refusal, Message)> {
 }
 /// Save over exactly the entry the editor read; another writer's edits are never overwritten.
 pub fn save_in(root: &Path, before: Option<&SkillEntry>, name: &str, body: &Skill) -> Result<SkillEntry, Message> {
-  save_checked_in(root, (before, name, body), Timestamp::now()).map_err(|error| error.message())
+  save_by_in(root, (before, name, body), false)
+}
+/// [`save_in`] for the Skills editor, which tells who wrote the edits: a draft automation wrote through the window
+/// (`by_automation`) is marked as one saved over MCP is; a person's save leaves the draft unmarked.
+pub fn save_by_in(
+  root: &Path,
+  (before, name, body): (Option<&SkillEntry>, &str, &Skill),
+  by_automation: bool,
+) -> Result<SkillEntry, Message> {
+  let now = Timestamp::now();
+  let saved = save_checked_in(root, (before, name, body), now).map_err(|error| error.message())?;
+  if by_automation {
+    mark_automation_in(root, &saved, now).map_err(|error| error.message())?;
+  }
+  Ok(saved)
 }
 /// [`save_in`] at `now`, the time the draft is saved at, with why it was refused.
 pub fn save_checked_in(

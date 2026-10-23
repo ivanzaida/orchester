@@ -264,6 +264,85 @@ fn skills_visual_mark_a_new_skill_automation_wrote() {
   });
 }
 
+/// Types `value` into `id` as an MCP client's `lurq_set_value` does: lurq delivers it as synthetic input, and the
+/// editor saves it on a later pass, outside that input.
+fn client_sets(s: &mut Skills, id: &str, value: &str) {
+  lurq::app::events::with_synthetic_input(|| {
+    s.window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.as_text_input())
+      .unwrap_or_else(|| panic!("{id} input"))
+      .set_value(value);
+  });
+  s.window.pass();
+}
+
+fn marked(s: &Skills, id: ResourceId) -> bool {
+  ProjectSkills::load_in(&s.repo).expect("read").by_automation(&s.entry(id))
+}
+
+#[test]
+fn skills_visual_mark_a_draft_a_client_saved_through_the_window() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  s.go(ProjectPage::Skill(id));
+  client_sets(&mut s, "skill-description", "A client's description.");
+  s.settle(id, "A client's description.");
+  s.window.until("the automation mark", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft written by automation · Published v1")
+  });
+  assert!(marked(&s, id), "a client's window save is automation's");
+  s.set("skill-description", "A person's description.");
+  s.settle(id, "A person's description.");
+  s.window.until("the person's draft", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft saved · Published v1")
+  });
+  assert!(!marked(&s, id), "the person's next save makes it theirs");
+}
+
+#[test]
+fn skills_visual_a_client_saving_over_an_automation_draft_keeps_the_mark() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", false);
+  automation_saves(&s, id, "Automation's description.");
+  s.go(ProjectPage::Skill(id));
+  s.window.until("the automation mark", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft written by automation · Not published")
+  });
+  client_sets(&mut s, "skill-body", "# Checks\nA client's body.");
+  let root = s.repo.clone();
+  s.window.until("the client's draft saved", move |_| {
+    ProjectSkills::load_in(&root)
+      .expect("read")
+      .entry(id)
+      .is_some_and(|e| e.body.body() == "# Checks\nA client's body.")
+  });
+  s.window.until("the mark stays", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ") == "Draft written by automation · Not published")
+  });
+  assert!(marked(&s, id), "a client's save does not clear the mark");
+}
+
+#[test]
+fn skills_visual_a_skill_a_client_created_through_the_window_is_marked() {
+  let mut s = Skills::new();
+  s.go(ProjectPage::NewSkill);
+  client_sets(&mut s, "skill-name", "client-checks");
+  s.click("skill-create");
+  s.window.until("created skill editor", |w| {
+    matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(_)))
+  });
+  let Route::Project(_, ProjectPage::Skill(id)) = s.window.navigation().route_now() else {
+    panic!("editor route")
+  };
+  assert!(marked(&s, id), "a skill a client named is automation's draft");
+}
+
 fn glyph(s: &mut Skills, id: &str) -> String {
   s.window
     .tree

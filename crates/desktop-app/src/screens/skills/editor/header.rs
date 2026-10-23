@@ -125,6 +125,7 @@ impl Editor {
       let name = self.name.get();
       let submitted = self.submitted.clone();
       let choosing = self.choosing_file.clone();
+      let authorship = self.authorship.clone();
       let button = ActionButton::new("skill-create", ButtonKind::Primary, ctx.t("skills.create"));
       if body.is_err() || busy || self.choosing_file.get() {
         button.disabled()
@@ -141,6 +142,7 @@ impl Editor {
                 before: None,
                 name: name.clone(),
                 body: body.clone(),
+                by_automation: authorship.saving(),
               },
             ));
           }
