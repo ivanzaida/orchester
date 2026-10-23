@@ -1,6 +1,6 @@
 # Orchester — shared server
 
-Date: 2026-10-02, revised 2026-10-15. Status: **agreed direction**. The user's decisions are recorded in
+Date: 2026-10-02, revised 2026-10-15 and 2026-10-22. Status: **agreed direction**. The user's decisions are recorded in
 [Decisions](#decisions). Rows 1–26 were settled on 2026-10-02/03; rows 27–30 (offline-first, offline claims, shared
 progress, shared team configuration) were added by the user on 2026-10-15 and replace or extend the rows marked in the
 table. Rows 31–38 answer the open questions of that revision (2026-10-15, the person's or the coordinator's, as
@@ -11,7 +11,8 @@ person's overall vision, 2026-10-15) win where they differ: email and password s
 the owner's own address holding several projects each at its own address, one connection per server, and every kind
 of tool shared. Row 54 puts the cloud on PostgreSQL; rows 55–61 accept the remaining proposals and set the cloud's
 address, its actix-web backend and its Next.js web front. Rows 62–64 give each team server a web admin, keep the
-desktop to linking and working, and share one web component package. The plan for building
+desktop to linking and working, and share one web component package. Rows 66–71 (ORC-78, 2026-10-22) share
+modules ([Modules](#modules)). The plan for building
 the desktop side in the new app is
 [server-new-app-plan.md](server-new-app-plan.md). Nothing here changes the local (single-user) version in
 `storage.md` except where a section says so.
@@ -41,17 +42,23 @@ the person who owns them.
 | S1c · Certificate, codes, devices, invites, cloud link, projects by slug | Merged | `crates/server`, `crates/api`, `crates/workspace/src/sharing/` |
 | C1a, C1b · Orchester Cloud backend and web front | Merged | `crates/cloud`, `web/cloud`, `web/ui` |
 | SA · Server admin | On branch `claude/server-admin`, not merged | `web/server`, `crates/server/src/http/{admin_proxy,internal,settings,managed}.rs`, `crates/cloud/src/{servers,invites}.rs`, `web/cloud/app/authorize/`, `deploy/server/` |
+| ORC-78 · Modules in shared projects (rows 66–71) | Built 2026-10-22 (schema 7, the `modules` event kind); offline module writes wait for S4 | server: `crates/server/src/sharing/modules.rs`, `http/modules.rs`, `db/modules.sql`; API: `crates/api/src/modules.rs`, `client/modules.rs`; cache: `crates/store/src/project_db/shared_modules.rs`; service: `crates/workspace/src/sharing/project/modules.rs` and `TaskWriter` |
 | S2d, S3, S4, S5 | Not built | this document; [server-new-app-plan.md](server-new-app-plan.md) |
 
 The new app (`crates/desktop-app`) already uses the S2 service where it writes tasks and starts work: its task form
 and task page save through `TaskWriter` (local or shared) and take run claims before work, and it starts the
-connection monitor and the shared projects' sync (`services/mod.rs`). It has none of the sharing screens: Settings ›
+connection monitor and the shared projects' sync (`services/mod.rs`). Its Modules page, the task form's and task
+page's module picker and the domain tools' `create_module`, `update_module` and the module of `create_task` and
+`update_task` write a shared project's modules through `TaskWriter` too (ORC-78). It has none of the sharing screens:
+Settings ›
 Servers says it is not built yet, and there is no Sharing tab, server status item or shared task list. The service
-tests are in `crates/workspace/tests` (`sharing`, `shared_projects`, `joined_projects`, `shared_statuses`, with a
+tests are in `crates/workspace/tests` (`sharing`, `shared_projects`, `joined_projects`, `shared_statuses`,
+`shared_modules`, with a
 real server on loopback in `server_support` and a forwarding port in `sharing_support`); the screens' tests are in
 `crates/desktop/tests/form_keyboard` (`servers`, `sharing`, `joining`).
 
-Not built on the server: `PUT …/run` (S3's server half), claim staleness events, the idempotency key on task changes,
+Not built on the server: `PUT …/run` (S3's server half), claim staleness events, the idempotency key on task changes
+(`change_keys` keeps module creates and changes only),
 every configuration endpoint (S5), and everything of rows 39–47: the generated certificate, codes, invites, device
 joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) does not exist yet.
 
@@ -124,6 +131,12 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 63 | What the desktop keeps | Settings › Orchester (cloud sign-in, connected servers, connecting with the check code), Project settings › Sharing (the link to a server project, the remote mismatch warning, members read-only, *Make local*, and *Manage members and invites*, which opens the server admin in the browser), joining, and the status bar item. Owner setup and member and invite management move to the server admin. **Clarified by the person:** "the desktop app stays the same, all admin actions are done in selfhosted-web". The desktop has no admin action at all (no project creation on a server, no member or role management, no invites, no revoking others' devices, no server settings, no owner setup); where one would be, it shows at most a link that opens the server admin. **Changes 9, 25, 43** | user (2026-10-15) |
 | 64 | Shared web components | The cloud's web front and the server admin share one UI package: a `web/` workspace with `web/ui` (components, design tokens from the Pencil variables, i18n helpers), `web/cloud` and `web/server`; each app has its own locale files and shared components take their words from the app. AGENTS.md's code-quality, i18n and design-token rules apply to all of `web/` ([The web workspace](#the-web-workspace)) | user (2026-10-15) |
 | 65 | Confirming asks for the password | Confirming an email asks for the password chosen at sign-up (`POST /auth/confirm { link_token, password }`), checked against the hash stored on that link, with the same work whether the link exists or not, rate-limited, and one answer for any failure. A repeated unconfirmed sign-up no longer ends earlier links: each link carries its own pending password hash and display name, and confirming one ends the rest. Reason: someone who signs up first with another person's email must not get their own password set when that person clicks a link ([Orchester Cloud](#orchester-cloud)) | user (2026-10-15, after a security review) |
+| 66 | Modules are shared | ORC-48's modules belong to the server project while it is shared, as its tags do: name (unique without regard to case), description, start and target days, open or closed, each under a revision; a task's module is a field of the shared task, changed under the task's revision. The server calls core's `module` rules ([Modules](#modules)). **Extends 4 and 23** | the task's brief (ORC-78, 2026-10-22) |
+| 67 | Who changes modules | Any member creates, changes, closes and reopens a module and moves any task in or out of one, as any member edits any task (row 18); there is no delete, as locally ([Modules](#modules)) | architect (ORC-78, 2026-10-22) |
+| 68 | Module conflicts | A module change replaces its fields as a whole under the module's revision; a newer revision is `409 revision_conflict` with the current module, which the desktop refuses as core's *changed meanwhile* (a module has no field merge). A task's move merges like organization (row 26) ([Modules](#modules)) | architect (ORC-78, 2026-10-22) |
+| 69 | Burndown and progress | Computed on each desktop, not served: core and the workspace already compute them from the tasks, their organization history and the moves, which every member's cache holds; serving them would put a second copy of those rules on the server, and their unit (story points, estimates) and the forecast's throughput are this computer's. The server keeps what they need: every move, with who and when ([Modules](#modules)) | architect (ORC-78, 2026-10-22) |
+| 70 | Modules at Share, Join and Make local | Share and Join upload every local module; one of a name the server project has becomes that module, its id replacing the local one in its tasks and moves; the upload records each uploaded task in a module as a move at the upload's time; earlier moves stay local, as organization history does. Make local keeps the modules, each task's module and the moves ([Modules](#modules)) | architect (ORC-78, 2026-10-22) |
+| 71 | Modules offline | Until S4 builds the outbox, module writes in a shared project fail at once offline, as task writes do; with S4 a create waits in the outbox with the id made on the desktop, a change with its revision (in `conflict` when met by a newer one), and a move in its task's change ([Modules](#modules)). **Under 27** | user (ORC-78, 2026-10-22) |
 
 ## Processes and crates
 
@@ -365,6 +378,60 @@ the desktop shows members and roles read-only. The last owner can be neither
 made a member nor removed (`409 last_owner`). Role changes are audited and send a `members` event. Members and roles
 need the server; they never wait in the outbox.
 
+## Modules
+
+ORC-48's modules (`orchester_core::module`: epics, milestones, sprints that group tasks, with progress and a burndown)
+belong to the server project while it is shared, as its tags do (rows 66–71, ORC-78). Every member sees the same
+modules and which tasks are in them. The server calls core's module rules and adds none of its own.
+
+| Part | Shared as |
+| --- | --- |
+| Module | `Module`: id (made by the desktop that creates it, UUIDv7), `name` (a core `Name`, unique in the project without regard to case), `description` (trimmed), `start` and `target` (local days, `YYYY-MM-DD`, each optional; a target before the start is refused by core's `ModuleDetails::new`), `state` (`open`, `closed`), `revision`, created and updated by and at |
+| A task's module | `module`: a field of `Task`, `TaskContent` and `Changes`, changed under the task's revision like its organization; at most one module per task. Like organization it changes whatever the task's status (a queued task too) |
+| History | Every move of a task into a module, out of one or from one to another: `ModuleChange { sequence, task, from, to, by, actor, at }`, append-only, `actor` `person` or `orchester` as for organization changes. The burndown reads it |
+| Progress, burndown | Not served: each desktop computes them from the cached tasks, their organization history and the moves (row 69) |
+
+- **Who changes them** (row 67). Any member creates a module, changes it and closes or reopens it (closing is
+  `state: closed`); there is no delete, as locally. Any member moves any task in or out of a module (row 18).
+  Admins who are not members cannot, like every task write.
+- **Revisions** (row 68). A change names the module's revision it was made on and replaces its fields as a whole;
+  a mismatch is `409 revision_conflict` with the current module. The desktop then caches the current module and
+  refuses the change as core's `ModuleError::ChangedMeanwhile`, as a local edit over a stale form is refused: a
+  module has no field merge. A task's move that meets a newer task revision is put on the task as it is now and
+  sent again without asking, as organization is (row 26); only the move is sent.
+- **Refusals.** `409 module_exists { module }` (the name is taken, without regard to case), `422 module { reason }`
+  (`target_before_start`; `module_not_found` for a task's module the project does not have), `422 invalid` (a name
+  or a day that is not one), `409 id_taken` (the id is the project's already). The desktop says each as core's
+  `ModuleError` for a local project, so a refusal reads the same in both.
+- **Idempotency.** A module create and a module change carry an idempotency key; the server keeps the first answer
+  per (project, user, key) for 30 days in `change_keys`, as [Idempotency](#idempotency) says, and answers a repeat
+  with it. A move travels in the task change (`PATCH …/tasks/{task}`), whose key comes with S4 (N6a).
+- **Events.** A create, a change and an upload that adds modules send a `modules` event with the project's
+  modules. A move sends the task's `task` event (its snapshot has `module`); the moves themselves are read with
+  `GET …/modules?after=<the last sequence the cache has>`, which S2d's stream does when a `task` event changes a
+  task's module.
+- **Share** (S2b, row 70). The first checkout's link uploads every module of the project (`modules` in
+  `POST …/link`) and each task's `module` in `UploadTask`. An uploaded module keeps its id, or becomes the project's
+  module of its name when the project has one (`mapped` in the answer lists them). The server records each uploaded
+  task in a module as a move into it at the upload's time, by the uploader, so every member's burndown counts it; the
+  moves made before stay on the uploader's computer only, as organization history does ([Uploads](#endpoints)).
+  The desktop takes the server's modules in before it links the project; a local module that became the module of
+  its name takes that module's id in its tasks and its moves.
+- **Join** (S2c, row 70). The import uploads every local module, whatever is ticked, so no module stays only on this
+  computer; a module of a name the server project has becomes that module, as at Share. *Not shared* tasks keep their
+  module (with its server id); *Share task* uploads the task with its module.
+- **Make local** (row 70). The server project's modules become the project's local modules with their ids, every
+  task keeps its module, and the moves the cache holds stay its history; the module revisions are dropped.
+- **Offline** (row 71). Until the outbox is built (S4), a module write in a shared project fails at once while the
+  server cannot be reached, as every task write does today, and nothing is queued. With S4, a module create waits in
+  the outbox (`create_module`, with its id made here, so nothing needs a temporary id and task moves into it wait
+  behind it); a module change waits with the revision it was made on (`change_module`) and, met by a newer one, is in
+  `conflict` for the person; a move waits in its task's `change_task` entry and merges like organization.
+- **What the desktop keeps.** The project database's `modules`, `task_modules` and `module_changes` are the cache:
+  the server's modules with their revision (`modules.revision`, empty for a local project), each cached task's module,
+  and each move the server kept with its sequence there (`module_changes.server_sequence`). They are written only from
+  what the server confirmed; the local writes of modules refuse a shared project.
+
 ## Shared run progress
 
 S3's live run status, extended by row 29. The holder's desktop reports the progress of the task's latest run whenever
@@ -541,8 +608,8 @@ heartbeat loop stays.
 | Field | Content |
 | --- | --- |
 | `sequence` | Order in the project, from 1 |
-| `subject` | What it changes: a task, a tag, a claim, a run's progress, a resource |
-| `operation` | `create_tasks` (an import of tasks that keep their ids), `change_task` (the fields that differ, with `actor`), `create_tag`, `release_claim`, `report_progress`, `publish_version`, `change_resource` |
+| `subject` | What it changes: a task, a tag, a module, a claim, a run's progress, a resource |
+| `operation` | `create_tasks` (an import of tasks that keep their ids), `change_task` (the fields that differ, with `actor`; a task's module is one of them), `create_tag`, `create_module`, `change_module` ([Modules](#modules), row 71), `release_claim`, `report_progress`, `publish_version`, `change_resource` |
 | `base` | The revision (or version) the change was made on |
 | `payload` | The request body without the idempotency key |
 | `key` | Idempotency key, a UUIDv7 made when the entry is recorded; every retry sends the same one |
@@ -651,8 +718,10 @@ renaming, merging or deleting tags, binding references. These need the server an
 - **Events.** The server appends one row to `events` in the transaction of every change and wakes the streams.
   Each stream then reads the events after its cursor from the database, so a slow client misses nothing. Event `id`
   is the event's sequence number.
-- **Kinds.** `task` (the full task snapshot, with organization, claim and progress; also when a claim becomes stale
-  or a stale claim is refreshed), `members`, `tags`, `project` (`{ id, key, name }`), `resources` (new: a resource's
+- **Kinds.** `task` (the full task snapshot, with organization, module, claim and progress; also when a claim becomes
+  stale or a stale claim is refreshed), `members`, `tags`, `project` (`{ id, key, name }`), `modules` (`{ modules:
+  [Module] }` after a module is made or changed, or an upload adds modules; schema 7, [Modules](#modules)),
+  `resources` (new: a resource's
   metadata and latest version number after a create, publish, rename or archive; the body is read with `GET …/versions`),
   `reset` (the cursor is older than the retention, 30 days) and `revoked` (the session or membership ended).
 - **Staleness transitions.** A sweep once a minute marks claims whose last heartbeat is 15 minutes old and sends their
@@ -686,12 +755,18 @@ Project     { id, slug, address, key, name, remote_hint|null, role: "owner"|"mem
 Member      { user: UserRef, role, added_at }
 TaskContent { title, brief, criteria: [string], pipeline: slug|null,
               limits: { budget_tokens, max_duration_ms }|null,
-              ...Organization }
+              ...Organization, module: module id|null }                                     // module: ORC-78
 Organization { workflow: "backlog"|"todo"|"in_progress"|"in_review"|"done"|"canceled",
               priority: "urgent"|"high"|"medium"|"low"|"none",
               tags: [tag id], blocking: [{ task: id, gate: "review"|"merge" }],
               blocked_reason: string|null }      // core's TaskOrganization, field for field
 Tag         { id, name }
+Module      { id, ...ModuleFields, revision, created: { by: UserRef, at }, updated: { by: UserRef, at } } // ORC-78
+ModuleFields { name, description, start: "YYYY-MM-DD"|null, target: "YYYY-MM-DD"|null,
+              state: "open"|"closed" }           // core's ModuleDetails, field for field
+ModuleChange { sequence, task: id, from: module id|null, to: module id|null, by: UserRef,
+              actor: "person"|"orchester", at }  // ORC-78; core's MembershipChange
+UploadModule { id, module: ModuleFields, created_at }                                     // ORC-78
 Task        { id, number, key: "ORC-42", former_key: "KON-12"|null, revision, ...TaskContent,
               status: "draft"|"queued", has_run: bool,
               created: { by: UserRef, at }, updated: { by: UserRef, at },
@@ -707,9 +782,10 @@ RunStatus   { holder: UserRef, number, phase, step: { key, name }|null,         
               pull_request: { number, url, state: "open"|"draft"|"merged"|"closed" }|null,   // API 3
               started_at, phase_since, updated_at }
 Changes     { title?, brief?, criteria?, pipeline?, limits?, status?: "queued",
-              workflow?, priority?, tags?, blocking?, blocked_reason?, actor?: "person"|"orchester" }
+              workflow?, priority?, tags?, blocking?, blocked_reason?, module?: id|null,      // module: ORC-78
+              actor?: "person"|"orchester" }
 UploadTask  { id, number?, former_key?, ...TaskContent, tag_names: [string] instead of tags,
-              status, created_at, has_run: bool, claim: bool }
+              status, created_at, has_run: bool, claim: bool }   // module: one of the upload's or the project's
 Resource    { id, kind: "pipeline"|"agent_profile"|"instruction"|"skill"|"tool", slug, name, archived: bool,
               revision, latest: number|null, created: { by, at }, updated: { by, at } }   // API 3
 Version     { resource, number, body: JSON, hash, references: [Reference],
@@ -756,7 +832,7 @@ changes; the rest is built (S1a, S1b).
 | `GET /projects` | user | | `{ projects: [Project] }` the user is a member of | | `?remote=` removed in 3 (row 49) |
 | `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `404` when there is no such project or the user is not a member of it: one answer for both, so a lookup tells a non-member nothing of the project (its name and owners included) | new in 3 (row 49) |
 | `POST /projects` | admin | `{ idempotency_key, name, slug, key, remote_hint?, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is the project's owner; `tasks` may be empty | `409 slug_taken`, `409 conflict`, `422 invalid` | changed in 3: admins only, by slug; `remote_taken` removed |
-| `POST /projects/{id}/link` | member | `{ idempotency_key, tasks: [UploadTask], remote? }` | `201 { tasks: [Task], dropped_links, cursor }`: the first checkout linked to a project with no tasks keeps its numbers (row 12); later ones are imports with new numbers; sets `remote_hint` when empty | `409 id_taken`, `422 invalid` | new in 3 (row 49) |
+| `POST /projects/{id}/link` | member | `{ idempotency_key, tasks: [UploadTask], remote?, modules?: [UploadModule] }` | `201 { tasks: [Task], dropped_links, cursor, modules, mapped }`: the first checkout linked to a project with no tasks keeps its numbers (row 12); later ones are imports with new numbers; sets `remote_hint` when empty | `409 id_taken`, `422 module`, `422 invalid` | new in 3 (row 49); modules ORC-78 |
 | `GET /projects/{id}` | member | | `{ project }` | `404` | |
 | `PATCH /projects/{id}` | owner | `{ name?, key?, remote_hint? }` | `{ project }`; the slug never changes | `422 invalid` | `remote_hint` in 3 |
 | `GET /projects/{id}/members` | member | | `{ members: [Member] }` | | |
@@ -766,8 +842,8 @@ changes; the rest is built (S1a, S1b).
 | `GET /projects/{id}/tasks` | member | | `{ tasks: [Task], cursor }` | | |
 | `GET /projects/{id}/tasks/{task}` | member | | `{ task }` | `404` | |
 | `POST /projects/{id}/tasks` | member | `{ idempotency_key, tasks: [TaskContent] }` | `201 { tasks: [Task] }`, consecutive numbers; a repeated key returns the first result | `422 invalid` | |
-| `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask] }` | `201 { tasks: [Task], dropped_links }`, new numbers, ids and former keys kept. Also the create of tasks made offline (`former_key: null`) | `409 id_taken`, `409 conflict`, `422 invalid` | used by the outbox in 3 |
-| `PATCH /projects/{id}/tasks/{task}` | member | `{ idempotency_key, revision, changes: Changes }` | `{ task }`; a repeated key returns the first answer | `409 revision_conflict { current: Task }`, `422 not_editable { reason }`, `422 not_queueable { missing }`, `422 organization { reason }`, `422 invalid` | key added in 3 |
+| `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask], modules?: [UploadModule] }` | `201 { tasks: [Task], dropped_links, modules, mapped }`, new numbers, ids and former keys kept. Also the create of tasks made offline (`former_key: null`) | `409 id_taken`, `409 conflict`, `422 module`, `422 invalid` | used by the outbox in 3; modules ORC-78 |
+| `PATCH /projects/{id}/tasks/{task}` | member | `{ idempotency_key, revision, changes: Changes }` | `{ task }`; a repeated key returns the first answer | `409 revision_conflict { current: Task }`, `422 not_editable { reason }`, `422 not_queueable { missing }`, `422 organization { reason }`, `422 module { reason: "module_not_found" }` (ORC-78), `422 invalid` | key added in 3 |
 | `GET /projects/{id}/tasks/{task}/history` | member | | `{ changes: [OrganizationChange] }`, oldest first | `404` | |
 | `POST /projects/{id}/tasks/{task}/claim` | member | `{ kind }` | `{ task }`; also when the caller holds it already | `409 claim_held { claim }`, `409 task_merged` | |
 | `DELETE /projects/{id}/tasks/{task}/claim` | holder | | `{ task }` | `409 not_holder { claim }`, `422 not_editable { reason: "stop_run_first" }` | |
@@ -779,6 +855,9 @@ changes; the rest is built (S1a, S1b).
 | `PATCH /projects/{id}/tags/{tag}` | member | `{ name }` | `{ tag }` | `404`, `409 tag_exists`, `422 invalid` | |
 | `POST /projects/{id}/tags/{tag}/merge` | member | `{ into: tag id }` | `{ tags: [Tag], tasks: [Task] }` | `404`, `409 same_tag` | |
 | `DELETE /projects/{id}/tags/{tag}` | member | | `{ tags: [Tag], tasks: [Task] }` | `404` | |
+| `GET /projects/{id}/modules?after={sequence}` | member | | `{ modules: [Module], changes: [ModuleChange] }`: every module, by when it was made, and the moves after `after` (all without it), oldest first | | ORC-78 |
+| `POST /projects/{id}/modules` | member | `{ idempotency_key, id, module: ModuleFields }` | `201 { module }` at revision 1; a repeated key returns the first answer | `409 module_exists { module }`, `409 id_taken`, `422 module { reason: "target_before_start" }`, `422 invalid` | ORC-78 |
+| `PATCH /projects/{id}/modules/{module}` | member | `{ idempotency_key, revision, module: ModuleFields }` (the fields as a whole) | `{ module }`; the same fields change nothing; a repeated key returns the first answer | `404`, `409 revision_conflict { current: Module }`, `409 module_exists { module }`, `422 module { reason }`, `422 invalid` | ORC-78 |
 | `GET /projects/{id}/resources` | member | | `{ resources: [Resource], cursor }` | | new in 3 (S5) |
 | `GET /projects/{id}/resources/{resource}/versions?after={n}` | member | | `{ versions: [Version] }`, oldest first, at most 64 or 1 MiB (then `next`) | `404` | new in 3 (S5) |
 | `POST /projects/{id}/resources` | member | `{ idempotency_key, id, kind, slug, name, version: { body, references } }` | `201 { resource, version }` (v1) | `409 slug_taken { resource }`, `409 id_taken`, `422 invalid { reason }` | new in 3 (S5) |
@@ -787,7 +866,7 @@ changes; the rest is built (S1a, S1b).
 | `PATCH /projects/{id}/resources/{resource}` | member | `{ idempotency_key, revision, name?, archived? }` | `{ resource }` | `409 revision_conflict { current }`, `422 invalid` | new in 3 (S5) |
 | `PUT /projects/{id}/files/{sha256}` | member | raw bytes (`application/octet-stream`), at most 1 MiB | `201`, or `200` when the server has it; idempotent by its hash | `422 hash_mismatch`, `413 payload_too_large` | new in 3 (S5, row 37) |
 | `GET /projects/{id}/files/{sha256}` | member | | raw bytes | `404` | new in 3 (S5, row 37) |
-| `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403`, `429 rate_limited` | `resources` kind in 3 |
+| `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403`, `429 rate_limited` | `resources` kind in 3; `modules` kind ORC-78 |
 | `GET /admin/users` | admin | | `{ users: [User] }` | | |
 | `DELETE /admin/users/{id}/cloud` | admin | | `{ user }`: the account linked to no cloud identity, audited | `404 not_found` | new in 3 ([Codes](#codes)) |
 | ~~`POST /admin/users`~~ | | | | | removed in 3: accounts come from invites |
@@ -801,6 +880,11 @@ and assigns new ones, and keeps `former_key` (`KON-12`) for everyone to see; a t
 uploader in the same transaction. `has_run` is true when the task has any run on the uploader's computer (coordinator
 decision 2026-10-04, S1b review C3). An upload carries each task's organization with tags by name; links to tasks
 neither uploaded nor on the server are dropped and listed (`dropped_links`). History before the upload stays local.
+A link or an import may carry `modules: [UploadModule]` (ORC-78): each becomes the project's module of its name, or a
+new one with its id and `created_at`; a task's `module` names one of them or one the project has (`422 module {
+reason: "module_not_found" }` otherwise), and each uploaded task in a module is recorded as a move into it at the
+upload's time. The answer adds `modules: [Module]` (the project's, after the upload) and `mapped: [{ from, to }]`
+(the uploaded modules that became another module of the project). `POST /projects` takes no modules.
 
 **Resources.** The server checks a body with core's rules for its kind (the same constructors the desktop uses), and
 refuses a body or references whose ids do not match (`reason: "references"`: every id the body names that is not a shared resource of the project
@@ -1546,11 +1630,13 @@ milliseconds. Rows marked *3* are new or changed for API 3.
 | `projects` | id, key, name, next task number, created by / at, expired event cursor floor; *3*: `slug` (unique, fixed), `remote_hint` (was the unique `remote`) |
 | `project_batches` | user, idempotency key, first response; unique (user, key) |
 | `memberships` | project, user, role, added by / at, membership lifetime id; unique (project, user) |
-| `tasks` | id (kept on upload), project, number (unique per project), former key, content, status, organization fields, revision, has run, created / updated by and at |
+| `tasks` | id (kept on upload), project, number (unique per project), former key, content, status, organization fields, revision, has run, created / updated by and at; schema 7: `module` |
 | `task_batches` | project, idempotency key, user, first response; unique (project, key) |
-| `change_keys` (*3*) | project, user, idempotency key, first answer, at; unique (project, user, key); pruned after 30 days with the events. For task changes, tag creates, resource creates, publishes and resource changes |
+| `change_keys` (*3*) | project, user, idempotency key, first answer, at; unique (project, user, key); pruned after 30 days with the events. For task changes, tag creates, resource creates, publishes and resource changes; built in schema 7 for module creates and changes |
 | `tags`, `task_tags`, `task_links` | as S1b |
 | `organization_changes` | append-only history, as S1b |
+| `modules` (schema 7) | id, project, name, normalized name, description, start and target days, state, revision, created / updated by and at; unique (project, normalized name) |
+| `module_changes` (schema 7) | append-only: sequence, project, task, from module, to module, by, actor, at |
 | `claims` | the current claim per task: id, task (unique), holder, kind, since, last heartbeat, taken over from; *3*: `stale_sent` (the sweep sent its stale event) |
 | `claim_events` | append-only: task, claim, action, by, from, at |
 | `run_status` | per task: holder, run number, phase, step, started at, phase since, updated at; *3*: step key, waiting for, steps (JSON: key, name, result), branch, pull request (number, URL, state) |
@@ -1558,7 +1644,7 @@ milliseconds. Rows marked *3* are new or changed for API 3.
 | `resource_versions` (*3*) | resource, number (unique per resource), body (JSON), hash, based on, published by / at |
 | `files` (*3*) | project, sha256, size, content (zstd); unique (project, sha256): the parts of skill versions |
 | `version_references` (*3*) | version, reference id, kind, name, role |
-| `events` | append-only: sequence, project, kind (*3*: adds `resources`), payload, at; older than 30 days removed |
+| `events` | append-only: sequence, project, kind (*3*: adds `resources`; schema 7: adds `modules`, the table rebuilt with its sequence carried over), payload, at; older than 30 days removed |
 | `audit_events` | append-only: actor, action, target, address, at |
 
 **Numbers.** Task numbers come from `projects.next_task_number`, read and raised in the inserting transaction; version
@@ -1588,6 +1674,7 @@ A project reaches its server through its `sharing` row's `server`, as in S2b.
 | `sharing` (S2b) | at most one row: server, server project, key, role, joined at, event cursor, last synced at, removed at; *3*: the project's address and slug. S4 adds the server time of the last answered heartbeat and the clock offset |
 | `task_claims`, `task_run_status` (S2b) | the cached claim and progress per task; S3 adds the fields of row 29 |
 | `task_organization`, `project_tags`, `organization_changes` (ORC-39) | for a shared project, the cache of the server's organization, tags and history; S4: tags made offline carry a temporary id until confirmed |
+| `modules`, `task_modules`, `module_changes` (ORC-48; ORC-78) | for a shared project, the cache of the server's modules (`modules.revision`, empty for a local project), each task's module and the server's moves (`module_changes.server_sequence`, unique when set; moves made before Share stay without one). A local module that became the server's of its name takes its id, in its moves too: the moves' module columns may be rewritten for that, nothing else of them |
 | `joined_keys` (S2c) | every local task's key before the join, until Make local |
 | `shared_tasks_confirmed` (S4) | per shared task: the revision, content and organization the server last confirmed, the base every waiting change merges on |
 | `outbox` (S4) | the entries of [Entries](#entries) |
@@ -1840,6 +1927,16 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   server reference stays unbound until the person confirms; a widening version waits for *Use v<N> here* while runs
   keep the previous one; two publishes from one base give the second a `version_conflict`; a skill with parts
   round-trips by hash.
+
+**ORC-78 · Modules in shared projects** (rows 66–71). Built 2026-10-22.
+- [x] Server: schema 7 (`modules`, `module_changes`, `tasks.module`, `change_keys`, the `modules` event kind with the
+  event sequence carried over), `GET`/`POST`/`PATCH …/modules` with core's rules, revision conflicts, `422 module`,
+  idempotency keys, and modules in link and import uploads; `crates/server/tests/sharing/modules.rs`.
+- [x] Store and workspace: the module cache, `RemoteTaskStore`'s module writes through `TaskWriter` (the Modules page,
+  the task form's and task page's module picker, the domain tools), sync of modules and moves, Share and Join
+  uploads, Make local; `crates/workspace/tests/shared_modules.rs` on loopback.
+- [ ] With S4: module creates and changes in the outbox (row 71); with S2d: the `modules` event and a `task` event's
+  module applied from the stream.
 
 **Later.** Cloud sign-in by magic link, Google and GitHub (row 48); comments on tasks; notifications; Postgres for
 several server instances.

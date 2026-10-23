@@ -132,7 +132,7 @@ pub fn create(
   )?;
   db::audit(db, Some(user), "project_created", &project.to_string(), None, now)?;
   members::insert(db, project, user, orchester_api::MemberRole::Owner, user, now)?;
-  let tasks = batches::upload(db, project, user, input.tasks, true, now)?;
+  let tasks = batches::upload(db, project, user, (input.tasks, Vec::new()), true, now)?;
   let response = ProjectCreated {
     project: load(db, project, user, base)?,
     tasks: tasks.tasks,
@@ -164,7 +164,7 @@ pub fn link(
     [project.to_string()],
     |row| row.get(0),
   )?;
-  let response = batches::upload(db, project, user, input.tasks, empty, now)?;
+  let response = batches::upload(db, project, user, (input.tasks, input.modules), empty, now)?;
   batches::remember(db, project, input.idempotency_key, user, &response)?;
   if let Some(remote) = remote {
     db.execute(
@@ -184,6 +184,8 @@ fn linked(
     tasks: response.tasks,
     dropped_links: response.dropped_links,
     cursor: events::cursor(db, project)?,
+    modules: response.modules,
+    mapped: response.mapped,
   })
 }
 

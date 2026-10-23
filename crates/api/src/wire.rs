@@ -1,5 +1,6 @@
 //! Wire names preserve core's existing local-storage encoding.
 use orchester_core::{
+  module::ModuleState,
   run::TaskPhase,
   task::{
     TaskStatus,
@@ -7,6 +8,12 @@ use orchester_core::{
   },
 };
 use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "ModuleState", rename_all = "snake_case")]
+pub enum ModuleStateWire {
+  Open,
+  Closed,
+}
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "WorkflowStatus", rename_all = "snake_case")]
 pub enum Workflow {

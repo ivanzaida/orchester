@@ -3,8 +3,10 @@
 //! which pushes the run's branch to the link's remote with git's own credentials, opens the pull request from
 //! that branch into the one the run started from through `gh` (a draft unless the person asks otherwise), then
 //! syncs the pull requests, so the Pull requests list links it to the task and run as it does any branch a run
-//! made. Every function blocks on SQLite, git or `gh`; the UI calls them off the UI thread, and creating runs on
-//! the project's shared operations (`integration_jobs`).
+//! made. Before it pushes, it stops when the branch would carry commits of the local base its remote doesn't have
+//! ([`super::unpushed`]), unless a person read that and creates it anyway; it never pushes the base. Every function
+//! blocks on SQLite, git or `gh`; the UI calls them off the UI thread, and creating runs on the project's shared
+//! operations (`integration_jobs`).
 
 use std::path::Path;
 
@@ -17,6 +19,7 @@ use orchester_core::{
     open_pull_request, task_link, task_pull_request,
   },
   repository::{RemoteName, RepositoryError, RepositoryLink, read_git_dir_remotes},
+  revision::Revision,
   run::{BranchName, Run, RunStatus},
   store::{ConnectionStore, PullRequestStore, RepositoryStore, RunStore, TaskStore},
   time::Timestamp,
@@ -25,7 +28,10 @@ use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use super::{InboxError, github_connection, sync_scope_in};
+use super::{
+  InboxError, github_connection, sync_scope_in,
+  unpushed::{BaseCheck, BaseOnRemote, base_on_remote},
+};
 use crate::{
   messages::{self, Message},
   tasks::detail::run_store_error,
@@ -166,6 +172,15 @@ pub struct Created {
   pub draft: bool,
 }
 
+/// What creating does when the run's branch would carry commits of the local base its remote doesn't have.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnpushedBase {
+  /// Stops before anything is pushed, with [`CreateProblem::BaseNotPushed`].
+  Refuse,
+  /// A person read that the pull request would include them and creates it anyway.
+  Include,
+}
+
 /// Why no pull request was created.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CreateProblem {
@@ -176,6 +191,13 @@ pub enum CreateProblem {
   },
   /// The run is not its task's latest run, or did not succeed.
   NotReady,
+  /// The branch carries `commits` commits it started from (the local `base`'s) that `remote`'s `base` doesn't have,
+  /// which the pull request would include; nothing was pushed. The person pushes them first, or creates it anyway.
+  BaseNotPushed {
+    commits: u64,
+    base: BranchName,
+    remote: RemoteName,
+  },
   /// Git did not push the branch to `remote` on `host`; nothing was asked of GitHub.
   Push {
     failure: PushFailure,
@@ -198,9 +220,14 @@ impl From<StoreError> for CreateProblem {
 }
 
 /// Creates a pull request from run `run`'s branch of the project at `repo_root` with `programs`, a draft when
-/// `draft`, then syncs the pull requests.
-pub fn create_in(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> Result<Created, CreateProblem> {
-  let outcome = open(repo_root, programs, (run, draft));
+/// `draft`, then syncs the pull requests. With `unpushed` [`UnpushedBase::Refuse`], it stops first when the base
+/// has commits its remote lacks that the pull request would include.
+pub fn create_in(
+  repo_root: &Path,
+  programs: &Programs,
+  (run, draft, unpushed): (RunId, bool, UnpushedBase),
+) -> Result<Created, CreateProblem> {
+  let outcome = open(repo_root, programs, (run, draft, unpushed));
   if !matches!(&outcome, Ok(_) | Err(CreateProblem::AlreadyOpen { .. })) {
     return outcome;
   }
@@ -225,7 +252,11 @@ fn stored_open(repo_root: &Path, run: RunId) -> Option<u64> {
   open_for(&db, &link, run.branch()).ok()?
 }
 
-fn open(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> Result<Created, CreateProblem> {
+fn open(
+  repo_root: &Path,
+  programs: &Programs,
+  (run, draft, unpushed): (RunId, bool, UnpushedBase),
+) -> Result<Created, CreateProblem> {
   let mut db = ProjectDb::open(repo_root)?;
   let run = latest_succeeded(&db, run)?;
   let Some(base) = run.base_branch().cloned() else {
@@ -247,6 +278,9 @@ fn open(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> R
     body,
     draft,
   };
+  if unpushed == UnpushedBase::Refuse {
+    refuse_unpushed_base(programs, repo_root, (&link, &new, run.base()))?;
+  }
   let mut connection =
     github_connection(&db, link.connection()).map_err(|error| CreateProblem::Store(error.message()))?;
   let push = Push {
@@ -266,6 +300,35 @@ fn open(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> R
     .outcome
     .map(|pull_request| Created { pull_request, draft })
     .map_err(|failure| problem(failure, &link))
+}
+
+/// [`CreateProblem::BaseNotPushed`] when `new`'s branch carries commits from `start` or the local base that `link`'s
+/// remote lacks.
+fn refuse_unpushed_base(
+  programs: &Programs,
+  repo_root: &Path,
+  (link, new, start): (&RepositoryLink, &NewPullRequest, &Revision),
+) -> Result<(), CreateProblem> {
+  let check = BaseCheck {
+    remote: link.remote(),
+    base: &new.base,
+    head: &new.head,
+    start,
+  };
+  match base_on_remote(programs.git_work(), (Path::new(GIT), repo_root), check) {
+    Ok(BaseOnRemote::Ahead { commits }) => Err(CreateProblem::BaseNotPushed {
+      commits,
+      base: new.base.clone(),
+      remote: link.remote().clone(),
+    }),
+    Ok(BaseOnRemote::InSync | BaseOnRemote::NoUpstream) => Ok(()),
+    // Creating goes on as it did before this check: whether the base is pushed only decides a warning, and the
+    // pull request's own page on GitHub still counts its commits.
+    Err(error) => {
+      tracing::warn!(%error, "cannot tell whether the base branch has commits its remote lacks");
+      Ok(())
+    }
+  }
 }
 
 /// `run` as stored, if it succeeded and is its task's latest run.

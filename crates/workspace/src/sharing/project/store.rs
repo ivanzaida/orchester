@@ -50,8 +50,9 @@ impl RemoteTaskStore {
   }
 
   /// Writes `tasks`, as the server confirmed them, to the cache; `batch` is the key they were
-  /// created under.
+  /// created under. A module they are in that the cache does not have yet is read first.
   pub(super) fn cache(&mut self, tasks: &[SharedTask], batch: Option<IdempotencyKey>) -> Result<(), SharingError> {
+    self.ensure_modules_of(tasks)?;
     let cached = tasks.iter().map(convert::cached).collect::<Result<Vec<_>, _>>()?;
     let batch = batch.map(|batch| batch.to_string());
     self.db.cache_shared_tasks(&cached, batch.as_deref())?;

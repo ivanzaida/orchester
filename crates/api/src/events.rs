@@ -8,6 +8,8 @@ pub enum EventKind {
   Members,
   Tags,
   Project,
+  /// The project's modules after one was made or changed ([`crate::ModulesChanged`]).
+  Modules,
   Reset,
   Revoked,
 }
@@ -22,6 +24,7 @@ impl EventKind {
       Self::Members => "members",
       Self::Tags => "tags",
       Self::Project => "project",
+      Self::Modules => "modules",
       Self::Reset => "reset",
       Self::Revoked => "revoked",
     }
@@ -35,6 +38,7 @@ impl TryFrom<&str> for EventKind {
       "members" => Ok(Self::Members),
       "tags" => Ok(Self::Tags),
       "project" => Ok(Self::Project),
+      "modules" => Ok(Self::Modules),
       "reset" => Ok(Self::Reset),
       "revoked" => Ok(Self::Revoked),
       _ => Err(UnknownEventKind),

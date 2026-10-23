@@ -307,6 +307,10 @@ required-features = ["test-agent"]
 name = "db_unavailable"
 required-features = ["test-agent"]
 
+[[test]]
+name = "db_busy_retry"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

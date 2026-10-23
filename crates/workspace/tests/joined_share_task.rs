@@ -67,6 +67,7 @@ fn upload(server: &TestServer, bohdan: &Person, (task, project): (TaskId, Projec
     tag_names: Vec::new(),
     blocking: Vec::new(),
     blocked_reason: None,
+    module: None,
     status: read.status(),
     created_at: read.created_at().unix_millis(),
     claim: false,
@@ -80,6 +81,7 @@ fn upload(server: &TestServer, bohdan: &Person, (task, project): (TaskId, Projec
   let import = TasksImport {
     idempotency_key: IdempotencyKey::generate(),
     tasks: vec![copy],
+    modules: Vec::new(),
   };
   bohdan
     .block_on(client.import_tasks(&server.device_of("bohdan"), project, &import))

@@ -244,10 +244,18 @@ impl TaskWriter {
     }
   }
 
-  /// A new module. A shared project has none: its tasks change on the server, which has no modules.
+  /// A new module; a shared project's is made on the server.
   pub fn create_module(&mut self, details: ModuleDetails) -> Result<Module, WriteError> {
-    let at = Timestamp::now();
-    self.local()?.change(|db| db.create_module(details, at))
+    match self {
+      Self::Local(local) => {
+        let at = Timestamp::now();
+        local.change(|db| db.create_module(details, at))
+      }
+      Self::Shared(store) => {
+        let created = store.create_module(&details);
+        shared(store, created)
+      }
+    }
   }
 
   /// Replaces the details of module `id`, read as `base`; refused when they changed since.
@@ -257,7 +265,13 @@ impl TaskWriter {
     base: &ModuleDetails,
     details: ModuleDetails,
   ) -> Result<Module, WriteError> {
-    self.local()?.change(|db| db.update_module(id, base, details))
+    match self {
+      Self::Local(local) => local.change(|db| db.update_module(id, base, details)),
+      Self::Shared(store) => {
+        let updated = store.update_module(id, base, &details);
+        shared(store, updated)
+      }
+    }
   }
 
   /// Puts `task` in `module`, or in none, as `actor` asked; whether it moved.
@@ -267,15 +281,15 @@ impl TaskWriter {
     module: Option<ModuleId>,
     actor: ChangeActor,
   ) -> Result<bool, WriteError> {
-    let at = Timestamp::now();
-    self.local()?.change(|db| db.set_task_module(task, module, actor, at))
-  }
-
-  /// Refuses what changes modules in a shared project, which has none, before anything else is changed.
-  pub fn ensure_modules(&self) -> Result<(), WriteError> {
     match self {
-      Self::Local(_) => Ok(()),
-      Self::Shared(_) => Err(WriteError::Store(StoreError::SharedProject)),
+      Self::Local(local) => {
+        let at = Timestamp::now();
+        local.change(|db| db.set_task_module(task, module, actor, at))
+      }
+      Self::Shared(store) => {
+        let moved = store.set_task_module(task, module, actor);
+        shared(store, moved)
+      }
     }
   }
 
@@ -285,14 +299,6 @@ impl TaskWriter {
     match self {
       Self::Local(_) => Ok(()),
       Self::Shared(_) => check_merging(base, edited),
-    }
-  }
-
-  /// The local project's tasks; a shared project's modules are refused.
-  fn local(&mut self) -> Result<&mut LocalTasks, WriteError> {
-    match self {
-      Self::Local(local) => Ok(local),
-      Self::Shared(_) => Err(WriteError::Store(StoreError::SharedProject)),
     }
   }
 }

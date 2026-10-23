@@ -1,9 +1,9 @@
 //! Forward-only migrations of `orchester-server.db`: 1 (S1a accounts), 2 (S1b sharing), 3 (API 3: no passwords,
 //! codes, invites, the cloud link, projects by slug), 4 (the server admin), 5 (two-factor sessions), 6 (email tags of
-//! accounts, against repeated invites).
+//! accounts, against repeated invites), 7 (modules).
 
 use orchester_core::{name::Name, repository::RepositoryIdentity, resource::Slug};
-use rusqlite::{Connection, Transaction, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use crate::{error::ServerError, server_keys::ServerKeys, sharing::projects::RESERVED_SLUGS};
 
@@ -30,7 +30,7 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
     transaction.execute_batch(include_str!("schema.sql"))?;
     1
   };
-  if !(1..=6).contains(&version) {
+  if !(1..=7).contains(&version) {
     return Err(ServerError::Configuration("unsupported server database schema"));
   }
   if version == 1 {
@@ -49,6 +49,9 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
   }
   if version < 6 {
     transaction.execute_batch(include_str!("email_tags.sql"))?;
+  }
+  if version < 7 {
+    modules(&transaction)?;
   }
   ServerKeys::own_id(&transaction)?;
   free_reserved_slugs(&transaction)?;
@@ -71,6 +74,25 @@ fn api3(transaction: &Transaction<'_>, now: i64) -> Result<(), ServerError> {
   projects_by_slug(transaction)?;
   transaction.execute_batch(include_str!("api3.sql"))?;
   ServerKeys::create(transaction)
+}
+
+/// Schema 7. Rebuilding `events` for the `modules` kind would let its sequence start again below the last pruned event,
+/// behind the cursors the desktops hold; the counter is carried over so event ids keep growing.
+fn modules(transaction: &Transaction<'_>) -> Result<(), ServerError> {
+  let counter: Option<i64> = transaction
+    .query_row("SELECT seq FROM sqlite_sequence WHERE name='events'", [], |row| {
+      row.get(0)
+    })
+    .optional()?;
+  transaction.execute_batch(include_str!("modules.sql"))?;
+  if let Some(counter) = counter {
+    transaction.execute("DELETE FROM sqlite_sequence WHERE name='events'", [])?;
+    transaction.execute(
+      "INSERT INTO sqlite_sequence(name,seq) VALUES ('events',MAX(?1,COALESCE((SELECT MAX(sequence) FROM events),0)))",
+      [counter],
+    )?;
+  }
+  Ok(())
 }
 
 /// Projects made under row 10 were identified by their repository; each gets a slug from its repository's name

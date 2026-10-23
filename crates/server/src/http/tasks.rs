@@ -80,7 +80,14 @@ async fn import(
   let response = server
     .write(move |db, now| {
       let current = access::member(db, &auth, project, now)?;
-      batches::import(db, project, current.user.id, input.idempotency_key, input.tasks, now)
+      batches::import(
+        db,
+        project,
+        current.user.id,
+        input.idempotency_key,
+        (input.tasks, input.modules),
+        now,
+      )
     })
     .await?;
   Ok((StatusCode::CREATED, Json(response)))
