@@ -16,7 +16,10 @@ use orchester_core::{
   integration::WORKTREES_DIR,
   permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
   resource::{AgentProfile, ModelId, VersionNumber},
-  run::{PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves, review::Review},
+  run::{
+    PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves,
+    review::{Review, ReviewHold},
+  },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::Task,
 };
@@ -24,6 +27,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
 use super::changes::run_worktree;
+use crate::messages::Message;
 
 /// What made a request ask, as the dialog names it beside its category (`Cv2MG` in `kpuQj`): the
 /// asking profile's setting, at the version the run pinned.
@@ -95,6 +99,33 @@ impl ShownApproval {
     let first = lines.next().unwrap_or_default();
     (first, lines.next().is_some())
   }
+
+  /// Why auto mode left it to the person without a review, in words ([`hold_cause`]); `None` when auto mode
+  /// reviewed it or did not look at it.
+  pub fn hold_cause(&self) -> Option<Message> {
+    match &self.review {
+      Some(Review::Held { hold }) => Some(hold_cause(*hold)),
+      _ => None,
+    }
+  }
+}
+
+/// The hard rule `hold` in plain words, as the approval card and Orchester's MCP reads say why auto mode did not
+/// review a request.
+pub const fn hold_cause(hold: ReviewHold) -> Message {
+  Message::new(match hold {
+    ReviewHold::Secrets => "autoModeHold.secrets",
+    ReviewHold::Unreadable => "autoModeHold.unreadable",
+    ReviewHold::Destructive => "autoModeHold.destructive",
+    ReviewHold::Push => "autoModeHold.push",
+    ReviewHold::ReadOnlyStep => "autoModeHold.readOnlyStep",
+    ReviewHold::NetworkOff => "autoModeHold.networkOff",
+    ReviewHold::OutsideFolders => "autoModeHold.outsideFolders",
+    ReviewHold::PermissionsUnknown => "autoModeHold.permissionsUnknown",
+    ReviewHold::TooLong => "autoModeHold.tooLong",
+    ReviewHold::Escalation => "autoModeHold.escalation",
+    ReviewHold::ProjectProgram => "autoModeHold.projectProgram",
+  })
 }
 
 /// The pending requests of the project at `repo_root`, oldest first, each with its agent's CLI.

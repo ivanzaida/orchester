@@ -1,7 +1,7 @@
 //! Answering on the cards that wait (the seed holds their steps waiting for the person, so they wait without a
-//! runner): a command's card with the request whole and every answer, one answer at a time, and why it did
-//! not go through; a question's options and own answer, *Send answer* and why it waits; the focus, once; an MCP
-//! client's answer, refused until the person lets automation answer.
+//! runner): a command's card with the request whole, why auto mode left it to the person, and every answer, one
+//! answer at a time, and why it did not go through; a question's options and own answer, *Send answer* and why it
+//! waits; the focus, once; an MCP client's answer, refused until the person lets automation answer.
 
 use lurq::app::events::MouseButton;
 use orchester_app::{
@@ -54,6 +54,11 @@ fn card_approval_waiting_shows_the_request_whole_and_every_answer() {
     "the command whole"
   );
   assert_eq!(text(&mut window, &format!("{card}-value-copy")), "Copy");
+  // The seed's auto mode left it to the person by a hard rule: the card says which.
+  assert_eq!(
+    text(&mut window, &format!("{card}-hold-cause")),
+    "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install."
+  );
   let agent = text(&mut window, &format!("{card}-agent"));
   assert!(agent.starts_with("Builder · 03 Implement · Run "), "{agent}");
   assert!(text(&mut window, &format!("{card}-note")).contains("The step needs it to go on."));
@@ -280,6 +285,10 @@ fn card_orchesters_own_read_outside_says_why_it_asks() {
   assert!(
     similar.starts_with("Approve similar in this run Reads and searches outside the worktree in "),
     "{similar}"
+  );
+  assert!(
+    window.tree.get_element_by_id(&format!("{card}-hold-cause")).is_none(),
+    "auto mode did not look at it, so the card says nothing of it"
   );
 }
 
