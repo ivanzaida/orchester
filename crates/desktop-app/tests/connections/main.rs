@@ -1,8 +1,8 @@
 //! Connections in the app's real window on the QA seed's projects (`examples/seed`, the `connections`
 //! scenario): what the list and the inspectors show and their states (`list`), MCP servers added, edited,
-//! turned off and on and removed (`mcp`), a CLI added from the search path (`add_cli`), connections renamed
-//! (`rename`) and what Test connection says (`test_result`). No runner serves the project. Needs `git`, as the
-//! seed does.
+//! turned off and on and removed (`mcp`), a remote server's authorization (`mcp_authorization`), a CLI added
+//! from the search path (`add_cli`), connections renamed (`rename`) and what Test connection says
+//! (`test_result`). No runner serves the project. Needs `git`, as the seed does.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -20,6 +20,7 @@ mod harness;
 mod layout;
 mod list;
 mod mcp;
+mod mcp_authorization;
 mod qa_scenarios;
 mod reads;
 mod rename;

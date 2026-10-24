@@ -2,9 +2,11 @@
 //! dialog's fields as entered and their mapping to and from a server, and saving a server or
 //! turning it on and off. Arguments are one per line and plain variables `NAME=value` lines, as a
 //! command tool's; a variable whose value comes from a project secret is written
-//! `NAME=${secret:SECRET_NAME@environment}`, which names the secret, never its value. The tools that
+//! `NAME=${secret:SECRET_NAME@environment}`, which names the secret, never its value. A remote server's
+//! authorization chooses a project secret, never a value (`authorization`). The tools that
 //! run without asking are one name per line. Saving blocks on SQLite; the UI calls it off the UI thread.
 
+mod authorization;
 mod save;
 mod widening;
 
@@ -22,6 +24,7 @@ use orchester_core::{
 };
 
 pub use self::{
+  authorization::{AuthorizationChoice, AuthorizationText},
   save::{
     McpSaveError, ServerUse, profiles_using, program_problem_message, remove_in, save_in, server_uses, set_enabled_in,
     store_in,
@@ -58,7 +61,7 @@ pub struct McpServerText {
   /// `NAME=value` per line, a secret written `${secret:NAME@environment}`.
   pub variables: String,
   pub url: String,
-  pub bearer: Option<SecretId>,
+  pub authorization: AuthorizationText,
   /// One tool name per line; empty lines are left out.
   pub exempt_tools: String,
 }
@@ -72,9 +75,31 @@ pub struct McpServerErrors {
   pub working_directory: Option<Message>,
   pub variables: Option<Message>,
   pub url: Option<Message>,
-  /// The bearer secret is not one of the project's active secrets.
-  pub bearer: Option<Message>,
+  /// The Basic user name cannot be used.
+  pub username: Option<Message>,
+  /// The custom header's name cannot be used.
+  pub header: Option<Message>,
+  /// The authorization has no secret chosen, or one that is not among the project's active secrets.
+  pub secret: Option<Message>,
   pub exempt_tools: Option<Message>,
+}
+
+impl McpServerErrors {
+  /// Every reason, in the page's field order.
+  pub fn in_order(&self) -> [&Option<Message>; 10] {
+    [
+      &self.name,
+      &self.program,
+      &self.arguments,
+      &self.working_directory,
+      &self.variables,
+      &self.url,
+      &self.username,
+      &self.header,
+      &self.secret,
+      &self.exempt_tools,
+    ]
+  }
 }
 
 /// A server as the dialog saves it.
@@ -97,7 +122,7 @@ impl McpServerText {
       working_directory: String::new(),
       variables: String::new(),
       url: String::new(),
-      bearer: None,
+      authorization: AuthorizationText::default(),
       exempt_tools: String::new(),
     }
   }
@@ -135,7 +160,7 @@ impl McpServerText {
       McpTransport::Http(http) => {
         text.transport = TransportChoice::Http;
         text.url = http.url().as_str().to_owned();
-        text.bearer = http.bearer();
+        text.authorization = AuthorizationText::of(http.authorization());
       }
     }
     text
@@ -200,14 +225,8 @@ impl McpServerText {
 
   fn http(&self, errors: &mut McpServerErrors, secrets: &[Secret]) -> Option<McpTransport> {
     let url = McpUrl::new(&self.url).map_err(|error| errors.url = Some(transport_message(&error)));
-    let active = self
-      .bearer
-      .is_none_or(|bearer| secrets.iter().any(|secret| secret.id() == bearer));
-    if !active {
-      errors.bearer = Some(Message::new("connections.mcp.errors.bearerGone"));
-    }
-    let url = url.ok()?;
-    active.then(|| McpTransport::Http(HttpServer::new(url, self.bearer)))
+    let authorization = self.authorization.authorization(errors, secrets);
+    Some(McpTransport::Http(HttpServer::new(url.ok()?, authorization?)))
   }
 }
 

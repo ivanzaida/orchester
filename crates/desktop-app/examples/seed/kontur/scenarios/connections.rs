@@ -12,8 +12,8 @@ use orchester_core::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, GitHubCheck,
     GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin, ModelCatalog, SignIn,
     mcp::{
-      ExemptTools, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport,
-      McpUrl, StdioServer,
+      ExemptTools, HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpServer, McpServerName,
+      McpServerSelection, McpTransport, McpUrl, StdioServer,
     },
   },
   id::{ConnectionId, SecretId},
@@ -153,7 +153,10 @@ fn mcp_servers(kontur: &mut Kontur, at: Timestamp) -> Result<ConnectionId, SeedE
   postgres.set_enabled(false);
   let url = McpUrl::new("https://mcp.sentry.dev/mcp").map_err(|error| invalid(&error))?;
   let sentry = server(
-    ("sentry", McpTransport::Http(HttpServer::new(url, Some(token.id())))),
+    (
+      "sentry",
+      McpTransport::Http(HttpServer::new(url, McpAuthorization::Bearer { token: token.id() })),
+    ),
     McpEnvironment::default(),
     at,
   )?;

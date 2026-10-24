@@ -208,6 +208,62 @@ fn domain_mcp_server_fields_are_checked_as_the_page_checks_them() {
   assert_eq!(by_id["server"]["name"], "sentry");
 }
 
+/// A remote server's authorization round-trips by scheme, its secret named and never taken by value; another scheme
+/// that sends a secret widens, dropping it narrows.
+#[test]
+fn domain_mcp_server_authorization_takes_each_scheme_by_secret_name() {
+  let (mut served, repo) = served();
+  add_secret(&repo, "SENTRY_TOKEN");
+  served.let_automation_widen(true);
+  let basic = json!({ "scheme": "basic", "username": "deploy", "secret": "SENTRY_TOKEN@development" });
+  let remote = json!({
+    "project": "Kontur", "name": "sentry", "url": "https://mcp.sentry.dev/mcp", "authorization": basic,
+  });
+  let added = served.ok("add_mcp_server", &remote);
+  assert_eq!(added["server"]["transport"]["authorization"], basic);
+  let sentry = |fields: Value| {
+    let mut args = json!({ "project": "Kontur", "server": "sentry" });
+    if let (Value::Object(args), Value::Object(fields)) = (&mut args, fields) {
+      args.extend(fields);
+    }
+    args
+  };
+  let header = json!({ "scheme": "header", "name": "X-API-Key", "secret": "SENTRY_TOKEN@development" });
+  let changed = served.ok("update_mcp_server", &sentry(json!({ "authorization": header })));
+  assert_eq!(changed["server"]["transport"]["authorization"], header);
+  let pasted = json!({ "scheme": "basic_credential", "secret": "SENTRY_TOKEN@development" });
+  served.ok("update_mcp_server", &sentry(json!({ "authorization": pasted })));
+  assert_eq!(listed(&mut served)[0]["transport"]["authorization"], pasted);
+  served.let_automation_widen(false);
+  let bearer = json!({ "scheme": "bearer", "secret": "SENTRY_TOKEN@development" });
+  assert_person_only(&served.refused("update_mcp_server", &sentry(json!({ "authorization": bearer }))));
+  let none = served.ok(
+    "update_mcp_server",
+    &sentry(json!({ "authorization": { "scheme": "none" } })),
+  );
+  assert_eq!(
+    none["server"]["transport"]["authorization"],
+    json!({ "scheme": "none" }),
+    "dropping it narrows"
+  );
+  served.let_automation_widen(true);
+  let by_value = json!({ "authorization": { "scheme": "bearer", "secret": "s3cr3t-value" } });
+  let refused = served.refused("update_mcp_server", &sentry(by_value));
+  assert_eq!(refused["code"], "invalid_server", "{refused}");
+  let reserved =
+    json!({ "authorization": { "scheme": "header", "name": "Host", "secret": "SENTRY_TOKEN@development" } });
+  assert_eq!(
+    served.refused("update_mcp_server", &sentry(reserved))["code"],
+    "invalid_server"
+  );
+  served.ok("add_mcp_server", &pencil());
+  let on_a_program = change(json!({ "authorization": { "scheme": "none" } }));
+  assert_eq!(
+    served.refused("update_mcp_server", &on_a_program)["code"],
+    "field_not_applicable"
+  );
+}
+
 #[test]
 fn domain_mcp_servers_a_profile_chooses_are_not_removed() {
   let (mut served, _) = served();

@@ -9,7 +9,9 @@ use orchester_core::{
     AgentProvider,
     app_server::{AppServerStream, Update},
     app_server_mcp::thread_config,
-    invocation::{ClaudeInvocation, ClaudeMcp, ClaudeMcpConfig, ClaudeSession, CodexMcp, McpLaunch, Platform},
+    invocation::{
+      ClaudeInvocation, ClaudeMcp, ClaudeMcpConfig, ClaudeSession, CodexMcp, HttpAuthorization, McpLaunch, Platform,
+    },
     mcp::{
       ExemptTools, ExemptToolsError, InvocationExemptions, McpServerName, McpToolName, McpToolNameError, McpUrl,
       UnappliedExemption,
@@ -33,7 +35,7 @@ fn server(server: &str, exempt: &str) -> McpLaunch {
   McpLaunch::http(
     name(server),
     McpUrl::new("http://localhost:7/mcp").expect("valid URL"),
-    None,
+    HttpAuthorization::None,
   )
   .with_exempt_tools(tools(exempt))
 }

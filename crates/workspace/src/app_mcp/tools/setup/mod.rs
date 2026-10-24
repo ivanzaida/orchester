@@ -90,7 +90,9 @@ const SPECS: &[Spec] = &[
                   the API provider a CLI runs on: base_url, host, key_secret's name and models), \
                   GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
                   agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
-                  with url and bearer_secret; the values of the url's query left out), environment (each \
+                  with url and authorization: its scheme none, bearer, basic with username, basic_credential or \
+                  header with name, and its secret NAME@environment; the values of the url's query left out), \
+                  environment (each \
                   variable's name and whether it is plain text or a secret, NAME@environment; a plain value is not \
                   listed, nor any secret's value), the tools that run without asking and the roles of the profiles \
                   whose draft or latest published version chooses it. Each connection and server has its link in \
@@ -183,11 +185,13 @@ const SPECS: &[Spec] = &[
                   links followed, outside the project's repository and on this computer, as a command tool's \
                   program; with `args`, `working_directory` inside the worktree or absolute, and `environment`, where \
                   ${secret:NAME@environment} takes the value of an active project secret when an agent starts) or a \
-                  remote `url` it reaches over HTTP (with an optional `bearer_secret` NAME@environment), \
-                  and `exempt_tools`, the server's tools that run without asking for profiles that ask before MCP \
-                  actions. A server runs only for profiles that choose it (save_profile_draft). Refused as \
-                  person_only unless a person turned on Let automation change agent permissions. Returns the \
-                  server as list_connections lists it.",
+                  remote `url` it reaches over HTTP (with an optional `authorization`: scheme bearer, basic with a \
+                  username and the password's secret, basic_credential with a pasted Basic credential's secret, or \
+                  header with a header name and the value's secret; each secret an active project secret \
+                  NAME@environment, never a value), and `exempt_tools`, the server's tools that run without asking \
+                  for profiles that ask before MCP actions. A server runs only for profiles that choose it \
+                  (save_profile_draft). Refused as person_only unless a person turned on Let automation change \
+                  agent permissions. Returns the server as list_connections lists it.",
     schema: schema_for_type::<mcp_servers::AddMcpServer>,
     read_only: false,
   },
@@ -195,9 +199,10 @@ const SPECS: &[Spec] = &[
     name: "update_mcp_server",
     description: "Changes an MCP server's fields, as Edit MCP server does; a field left out keeps its value, and \
                   `program` or `url` switches how it is reached; a field the transport does not have is refused \
-                  (field_not_applicable). Dropping the bearer secret and removing tools that run without asking are \
-                  always taken. A new name (a run's answers approve a server's tools by its name), another program, \
-                  arguments, folder, endpoint or bearer secret, any variable but RUST_LOG, RUST_BACKTRACE, CI, \
+                  (field_not_applicable). Dropping the authorization (scheme none) and removing tools that run \
+                  without asking are always taken. A new name (a run's answers approve a server's tools by its \
+                  name), another program, arguments, folder or endpoint, another authorization that sends a secret \
+                  (another secret, scheme, username or header), any variable but RUST_LOG, RUST_BACKTRACE, CI, \
                   NO_COLOR, FORCE_COLOR, TZ, LANG and the LC_ ones (removals included), a variable that takes a \
                   secret under any name, and a tool added to exempt_tools are refused as person_only unless a person \
                   turned on Let automation change agent permissions, judged by the fields as given before anything \

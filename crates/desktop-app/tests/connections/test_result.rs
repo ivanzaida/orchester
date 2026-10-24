@@ -7,7 +7,10 @@ use orchester_app::{
   ui::icon::Icon,
 };
 use orchester_core::{
-  connection::AgentConnection, connection::AgentProvider, id::ConnectionId, name::Name, store::ConnectionStore,
+  connection::{AgentConnection, AgentProvider},
+  id::ConnectionId,
+  name::Name,
+  store::ConnectionStore,
   time::Timestamp,
 };
 

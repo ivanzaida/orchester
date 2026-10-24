@@ -5,8 +5,8 @@ use std::{collections::BTreeMap, fs};
 
 use orchester_core::{
   connection::mcp::{
-    ExemptTools, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpTransport, McpUrl, StdioServer,
-    WorkingDirectory,
+    BasicUsername, ExemptTools, HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpHeaderName, McpServer,
+    McpServerName, McpTransport, McpUrl, StdioServer, WorkingDirectory,
   },
   id::{ConnectionId, ProjectId, SecretId},
   name::Name,
@@ -69,10 +69,10 @@ fn local(server: &str, token: SecretId) -> McpServer {
   .expect("a valid server")
 }
 
-fn remote(server: &str) -> McpServer {
+fn remote_with(server: &str, authorization: McpAuthorization) -> McpServer {
   let transport = McpTransport::Http(HttpServer::new(
     McpUrl::new("https://mcp.example.dev/v1").expect("valid"),
-    Some(SecretId::generate()),
+    authorization,
   ));
   McpServer::new(
     ConnectionId::generate(),
@@ -82,6 +82,23 @@ fn remote(server: &str) -> McpServer {
     Timestamp::from_unix_millis(2_000),
   )
   .expect("a valid server")
+}
+
+fn remote(server: &str) -> McpServer {
+  remote_with(
+    server,
+    McpAuthorization::Bearer {
+      token: SecretId::generate(),
+    },
+  )
+}
+
+fn settings_of(repo: &TempDir, server: &str) -> String {
+  raw(repo)
+    .query_row("SELECT settings FROM mcp_servers WHERE name = ?1", [server], |row| {
+      row.get(0)
+    })
+    .expect("the server's settings are stored")
 }
 
 #[test]
@@ -96,15 +113,49 @@ fn mcp_servers_are_stored_and_read_back_in_name_order() {
   assert_eq!(db.mcp_servers().unwrap(), vec![files.clone(), knowledge]);
   assert_eq!(db.mcp_server(files.id()).unwrap(), Some(files));
   assert_eq!(db.mcp_server(ConnectionId::generate()).unwrap(), None);
-  let settings: String = raw(&repo)
-    .query_row("SELECT settings FROM mcp_servers WHERE name = 'files'", [], |row| {
-      row.get(0)
-    })
-    .unwrap();
+  let settings = settings_of(&repo, "files");
   assert!(
     settings.contains(&token.to_string()),
     "a secret is stored as its id: {settings}"
   );
+}
+
+#[test]
+fn mcp_servers_keep_a_bearer_server_as_stored_before_and_store_the_other_schemes() {
+  let (repo, mut db) = project_repo();
+  let token = SecretId::generate();
+  let bearer = remote_with("bearer", McpAuthorization::Bearer { token });
+  let password = SecretId::generate();
+  let basic = remote_with(
+    "basic",
+    McpAuthorization::Basic {
+      username: BasicUsername::new("deploy").unwrap(),
+      password,
+    },
+  );
+  let header = remote_with(
+    "header",
+    McpAuthorization::Header {
+      name: McpHeaderName::new("X-API-Key").unwrap(),
+      value: SecretId::generate(),
+    },
+  );
+  for server in [&bearer, &basic, &header] {
+    db.create_mcp_server(server).unwrap();
+  }
+  let stored = settings_of(&repo, "bearer");
+  assert!(
+    stored.contains(&format!(r#""bearer":"{token}""#)) && !stored.contains("authorization"),
+    "a bearer server is stored as before: {stored}"
+  );
+  let stored = settings_of(&repo, "basic");
+  assert!(
+    stored.contains(r#""scheme":"basic""#) && stored.contains("deploy") && stored.contains(&password.to_string()),
+    "{stored}"
+  );
+  drop(db);
+  let db = ProjectDb::open(repo.path()).unwrap();
+  assert_eq!(db.mcp_servers().unwrap(), vec![basic, bearer, header]);
 }
 
 #[test]
@@ -129,7 +180,10 @@ fn mcp_servers_save_their_changes_and_enabled_flag() {
   let (repo, mut db) = project_repo();
   let mut server = local("files", SecretId::generate());
   db.create_mcp_server(&server).unwrap();
-  let transport = McpTransport::Http(HttpServer::new(McpUrl::new("http://localhost:8931/mcp").unwrap(), None));
+  let transport = McpTransport::Http(HttpServer::new(
+    McpUrl::new("http://localhost:8931/mcp").unwrap(),
+    McpAuthorization::None,
+  ));
   server
     .update(name("files-http"), transport, McpEnvironment::default())
     .unwrap();

@@ -254,19 +254,7 @@ fn reason(
   if checked.is_ok() {
     return unchanged.then(|| ctx.t("connections.mcp.dialog.unchanged"));
   }
-  let first = [
-    &errors.name,
-    &errors.program,
-    &errors.arguments,
-    &errors.working_directory,
-    &errors.variables,
-    &errors.url,
-    &errors.bearer,
-    &errors.exempt_tools,
-  ]
-  .into_iter()
-  .flatten()
-  .next()?;
+  let first = errors.in_order().into_iter().flatten().next()?;
   Some(ctx.t_args(
     "connections.dialog.reasons.name",
     [("reason", &*lowercase_first(&message_text(ctx, first)))],
