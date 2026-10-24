@@ -2,8 +2,9 @@
 //! run's worktree named by its id or number. A run's worktree belongs to its agents while the run has not ended (it
 //! works, waits, is paused or interrupted and may go on), so the chat only reads there then (`run_active`). A write
 //! also respects Orchester's own claims (`checkout_reserved`): it holds the project's local-integration lease while it
-//! runs, as local integration and a run's merge do, and is refused while a local integration reserves the checkout or
-//! its Git process has not finished, and in a run's worktree while a resolution of the run's conflicts is recorded.
+//! runs when it changes the working tree or the index, as local integration and a run's merge do, and is refused while
+//! a local integration reserves the checkout or its Git process has not finished, and in a run's worktree while a
+//! resolution of the run's conflicts is recorded or the merge queue holds the run (`run_queued`).
 
 use std::path::{Path, PathBuf};
 
@@ -75,12 +76,20 @@ pub(super) fn again(root: &Path, at: GitPlace) -> Result<Place, ToolError> {
   }
 }
 
-/// Claims the project at `root` for a write at `place`: the local-integration lease, held until the claim is
-/// dropped, once no local integration reserves the checkout and, in a run's worktree, no resolution of the run's
-/// conflicts is recorded; refused (`checkout_reserved`) otherwise. Blocks on SQLite.
-pub(super) fn claim(root: &Path, place: &Place) -> Result<IntegrationLease, ToolError> {
-  let lease = IntegrationLease::acquire(root)
-    .map_err(|_| refused("checkout_reserved", Message::new("orchestrator.git.integrationWorking")))?;
+/// Claims the project at `root` for a write at `place`: refused (`checkout_reserved`) while a local integration
+/// reserves the checkout or its Git process has not finished, and in a run's worktree while a resolution of the run's
+/// conflicts is recorded; refused (`run_queued`) in a run's worktree while the merge queue holds the run, which syncs
+/// and checks there. With `lease`, for a write that changes the working tree or the index, it also takes the
+/// local-integration lease, held until the claim is dropped; a push, fetch or tag only checks. Blocks on SQLite.
+pub(super) fn claim(root: &Path, place: &Place, lease: bool) -> Result<Option<IntegrationLease>, ToolError> {
+  let held = if lease {
+    Some(
+      IntegrationLease::acquire(root)
+        .map_err(|_| refused("checkout_reserved", Message::new("orchestrator.git.integrationWorking")))?,
+    )
+  } else {
+    None
+  };
   let db = ProjectDb::open(root)?;
   for operation in db.local_operations()? {
     let unfinished = db
@@ -93,13 +102,20 @@ pub(super) fn claim(root: &Path, place: &Place) -> Result<IntegrationLease, Tool
       ));
     }
   }
-  if let GitPlace::Run { run, number } = place.at
-    && db.resolution(run)?.is_some()
-  {
+  let GitPlace::Run { run, number } = place.at else {
+    return Ok(held);
+  };
+  if db.resolution(run)?.is_some() {
     return Err(refused(
       "checkout_reserved",
       Message::new("orchestrator.git.resolutionOpen").with("run", number.to_string()),
     ));
   }
-  Ok(lease)
+  if db.merge_queue_entry(run)?.is_some_and(|entry| entry.state.in_queue()) {
+    return Err(refused(
+      "run_queued",
+      Message::new("orchestrator.git.runQueued").with("run", number.to_string()),
+    ));
+  }
+  Ok(held)
 }

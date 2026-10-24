@@ -148,7 +148,13 @@ pub(super) fn log((programs, git): (&Programs, &Git), asked: &Log) -> Result<Val
     args.extend(["--", names::path("path", path)?]);
   }
   let (text, truncated) = git.capped(programs, &args)?;
-  let commits: Vec<Value> = text
+  // A cut output ends in the middle of a commit's record: only the whole records before it are told.
+  let whole = if truncated {
+    text.rsplit_once('\u{1e}').map_or("", |(whole, _)| whole)
+  } else {
+    text.as_str()
+  };
+  let commits: Vec<Value> = whole
     .split('\u{1e}')
     .map(str::trim)
     .filter(|record| !record.is_empty())
@@ -224,8 +230,9 @@ pub(super) fn blame((programs, git): (&Programs, &Git), asked: &Blame) -> Result
   if let Some(lines) = &lines {
     args.extend(["-L", lines]);
   }
+  // blame reads what follows `--end-of-options` as its file, not its revision; `revision` refuses a leading `-`.
   if let Some(rev) = &asked.rev {
-    args.extend(["--end-of-options", revision("rev", rev)?]);
+    args.push(revision("rev", rev)?);
   }
   args.extend(["--", names::path("path", &asked.path)?]);
   answered(git.capped(programs, &args)?)

@@ -342,20 +342,28 @@ which could not be told safe: what the chat is not offered it cannot do. They ru
   the repository's top and inside it, read literally (`GIT_LITERAL_PATHSPECS`). Revisions git only reads (a log's
   range, a diff's ends, a reset's target) follow `--end-of-options`. Anything else is refused `invalid_arguments`
   before git runs.
-- **Orchester's claims come first.** A write and a proposal's *Apply* hold the project's local-integration lease
-  (`.orchester/local-integration.lock`) while they run, as local integration and a run's merge do, and are refused
-  `checkout_reserved` while another holder has it, while a local integration reserves the checkout or its Git process
-  has not finished, and in a run's worktree while a resolution of the run's conflicts is recorded (*Resolve in
-  editor*).
+- **Orchester's claims come first.** A write or a proposal's *Apply* that changes the working tree or the index
+  (commit, branch and switch, pull, merge, revert, and every proposal but a branch's or tag's deletion and a forced
+  push) holds the project's local-integration lease (`.orchester/local-integration.lock`) while it runs, as local
+  integration and a run's merge do, and is refused `checkout_reserved` while another holder has it. A push, a fetch, a
+  tag and those proposals change refs or a remote only: they take no lease and only check the reservations. Every
+  write is refused `checkout_reserved` while a local integration reserves the checkout or its Git process has not
+  finished, and in a run's worktree while a resolution of the run's conflicts is recorded (*Resolve in editor*); and
+  `run_queued` in a run's worktree while the merge queue holds the run, which syncs and checks there. A pull holds the
+  lease across its fetch, so a local integration started meanwhile is refused for up to the 2-minute network timeout
+  and is started again; that is accepted for now, since a pull changes the checkout. Should it matter, the pull splits
+  into a lease-free fetch and a fast-forward merge of `FETCH_HEAD` under the lease.
 - **What can lose work is always a proposal card the person applies**, whatever the switch says, also in a turn nobody
   asked for (`git_propose`): reset (hard, mixed, soft), clean, deleting a branch or a tag (here or on a remote), a
   forced push, discarding changes, a switch that discards them, rebase, aborting a merge. The card shows where it
   runs, the commands, and what it would lose as git lists it (commits no other branch holds, uncommitted changes,
   untracked files a `switch_discarding` overwrites, files a clean deletes); automation's click on *Apply* is refused
   (`person_only`). *Apply* reads it all again and refuses `changed_since_proposed` once anything moved: the refs it
-  stands on, the branch HEAD is on, the list of what it loses, or a fingerprint of the uncommitted work (git's hash of
-  `git diff HEAD --binary` and the untracked files' names), so an edit since the card was read is never discarded
-  unseen. A forced push and a remote branch or tag deletion lease the remote ref the card read
+  stands on, the branch HEAD is on, the list of what it loses, or, for one that discards work (a hard reset,
+  discarding changes, `switch_discarding`, a clean, aborting a merge), a fingerprint of that work: git's raw list of the
+  changes and its hash of each changed or untracked file's contents (for a clean, the files it deletes), so an edit
+  since the card was read is never discarded unseen. A branch's or tag's deletion and a forced push take none and stay
+  valid over an unrelated edit. Work of more than 10,000 files or 256 MB is not proposed (`too_large`). A forced push and a remote branch or tag deletion lease the remote ref the card read
   (`--force-with-lease=<ref>:<value>`); a reset and a rebase go to the commit the card read. A clean never touches
   `.orchester/` (`-e /.orchester/`, also with `ignored`).
 - **No stash.** Orchestrator tasks forbid `git stash`; the chat has none either: stashed work is out of sight and a
@@ -366,16 +374,17 @@ which could not be told safe: what the chat is not offered it cannot do. They ru
   the run's branch); `merge_run` still merges the run's last checkpoint only. (Whether ended runs stay writable is
   still the person's to decide.)
 - **git never waits for a person**: `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, `GIT_EDITOR=:`, no standard
-  input, and ssh in batch mode (`GIT_SSH_COMMAND` with `-o BatchMode=yes` appended to the caller's
-  `GIT_SSH_COMMAND` or the repository's `core.sshCommand`, else `ssh`; a caller's `GIT_SSH` program is left as set and
-  only the timeout stops it). A remote that wants credentials is refused at once `auth_failed`, with a hint to sign in
+  input, and ssh in batch mode: `GIT_SSH_COMMAND` is the caller's `GIT_SSH_COMMAND`, else the caller's `GIT_SSH`
+  program quoted (git still tells its variant by its name), else the repository's `core.sshCommand`, else `ssh`, with
+  `-batch` appended for PuTTY's plink and TortoisePlink and `-o BatchMode=yes` for any other ssh. A remote that wants credentials is refused at once `auth_failed`, with a hint to sign in
   to git in a terminal; a pull, push, fetch or remote proposal is stopped after 2 minutes and a local write, its hooks
   included, after 5 (`timed_out`). Git's settings, author and hooks are the repository's own; credentials in URLs are
   removed from everything the chat or the card shows.
 - **Every write and proposal is kept in the conversation** as an action: a compact card with where it ran, the commands
   that ran and what git said (or why it was refused). Reads are not kept.
 - Refusal codes: `git_not_found`, `not_a_repository`, `write_off`, `person_only`, `report_turn`, `would_lose_work`,
-  `conflict`, `operation_in_progress`, `checkout_reserved`, `git_failed` (git's words), `auth_failed`, `timed_out`,
+  `conflict`, `operation_in_progress`, `checkout_reserved`, `run_queued`, `too_large`, `git_failed` (git's words),
+  `auth_failed`, `timed_out`,
   `run_active`, `author_unknown`, `nothing_to_commit`, `nothing_to_clean`, `nothing_in_progress`, `detached_head`,
   `changed_since_proposed`, and `invalid_arguments` for a name, remote or path refused before git runs.
 

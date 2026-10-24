@@ -201,7 +201,7 @@ pub(super) async fn apply(
 async fn apply_in_folder(services: &Services, root: PathBuf, change: Change) -> Result<Value, ToolError> {
   let programs = services.programs().clone();
   blocking(move || match change {
-    Change::Git(git) => super::git::apply(&programs, &root, &git),
+    Change::Git(git) => super::git::apply(&programs, &root, &git, super::git::Timeouts::STANDARD),
     change => repository::apply(programs.git_work(), &root, &change),
   })
   .await

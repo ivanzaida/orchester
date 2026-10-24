@@ -4,7 +4,7 @@
 //! time. What git said of a failure becomes a refusal with a stable code, its words with any credentials in a URL
 //! removed.
 
-use std::{env, path::Path, time::Duration};
+use std::{path::Path, time::Duration};
 
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
@@ -19,8 +19,6 @@ use crate::{app_mcp::ToolError, messages::Message};
 const GIT: &str = "git";
 /// How long a read of git's whose output is capped may take.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
-/// What makes ssh fail at once instead of asking for a passphrase, a password or whether to trust a host.
-const BATCH: &str = "-o BatchMode=yes";
 /// The most of git's output a tool answers with; the rest is cut and the answer says so.
 pub(super) const MAX_OUTPUT: usize = 60_000;
 /// The most of git's words a card or a refusal keeps.
@@ -112,29 +110,6 @@ pub(super) fn shown(args: &[&str]) -> String {
     }
   }));
   redact_userinfo(&words.join(" "))
-}
-
-/// The ssh command network git runs with in `git`'s repository, with `-o BatchMode=yes` added so ssh never waits for
-/// a passphrase, a password or a host's key: the caller's `GIT_SSH_COMMAND`, else the repository's `core.sshCommand`,
-/// else `ssh`. `None` when the caller set `GIT_SSH`, a program git runs without a shell, which takes no added option:
-/// git then runs it as set, and the network timeout stops it.
-pub(super) fn batch_ssh(git: &Git) -> Result<Option<String>, ToolError> {
-  if let Ok(command) = env::var("GIT_SSH_COMMAND")
-    && !command.trim().is_empty()
-  {
-    return Ok(Some(format!("{} {BATCH}", command.trim())));
-  }
-  if env::var_os("GIT_SSH").is_some() {
-    return Ok(None);
-  }
-  let configured = git.run(&["config", "--get", "core.sshCommand"], None)?;
-  let base = configured.stdout.trim();
-  let base = if configured.success() && !base.is_empty() {
-    base
-  } else {
-    "ssh"
-  };
-  Ok(Some(format!("{base} {BATCH}")))
 }
 
 /// What git wrote of a failure: its error output, or its output when it wrote its reason there; credentials in URLs

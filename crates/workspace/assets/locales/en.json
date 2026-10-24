@@ -2011,7 +2011,9 @@
       "inProgress": "A {{operation}} is in progress in the repository; the person finishes or aborts it first. Nothing was done.",
       "integrationWorking": "Orchester's local integration is working in the project's checkout right now, so git writes nothing there. Nothing was done; try again once it finished.",
       "checkoutReserved": "A local integration holds the project's checkout until it is finished or put back on the Local integration page, so git writes nothing there. Nothing was done.",
-      "resolutionOpen": "Run #{{run}}'s conflicts wait to be resolved in its worktree, so git writes nothing there. Nothing was done."
+      "resolutionOpen": "Run #{{run}}'s conflicts wait to be resolved in its worktree, so git writes nothing there. Nothing was done.",
+      "runQueued": "Run #{{run}} is in the merge queue, which syncs and checks it in its worktree, so git writes nothing there. Nothing was done.",
+      "tooLarge": "The work this would discard is too large to fingerprint (more than {{files}} files or {{megabytes}} MB), so it is not proposed: the card could not tell an edit since from what it showed. Nothing was done."
     }
   },
   "memory": {
