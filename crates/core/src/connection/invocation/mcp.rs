@@ -5,14 +5,15 @@
 //!   mcp_servers.<name>.command=… .args=[…] .cwd=… .env.<VAR>=…` for a program, `-c mcp_servers.<name>.url=…` for an
 //!   HTTP server. A value from a secret never goes into an argument: the variable is set on the Codex process and
 //!   listed in `mcp_servers.<name>.env_vars`, which hands it to the server (Codex starts a server with a few system
-//!   variables, its `env` and its `env_vars` only), and a bearer token goes the same way through
-//!   `bearer_token_env_var`. `shell_environment_policy.exclude` kept a test variable out of an agent shell command in a
-//!   signed-in Codex 0.139 turn (2026-09-29). Because variables pass by name, two servers cannot take one name from
-//!   different secrets, and a secret variable cannot be one the CLI itself needs.
+//!   variables, its `env` and its `env_vars` only), a bearer token goes the same way through `bearer_token_env_var`,
+//!   and another header's value through `env_http_headers = { "<header>" = "<VAR>" }` (Codex 0.137 lists it in `codex
+//!   mcp list --json`, 2026-10-25). `shell_environment_policy.exclude` kept a test variable out of an agent shell
+//!   command in a signed-in Codex 0.139 turn (2026-09-29). Because variables pass by name, two servers cannot take one
+//!   name from different secrets, and a secret variable cannot be one the CLI itself needs.
 //! - **Claude Code**: `--strict-mcp-config --mcp-config <file>`, a JSON file the runner writes for the invocation only
-//!   and removes when the CLI has ended ([`ClaudeMcpConfig`]); secret values are written into it, nowhere else. Claude
-//!   Code ignores a server's `cwd` and starts every server in the worktree, so a server set to start in another folder
-//!   is left out.
+//!   and removes when the CLI has ended ([`ClaudeMcpConfig`]); secret values, a server's `headers` among them, are
+//!   written into it, nowhere else. Claude Code ignores a server's `cwd` and starts every server in the worktree, so a
+//!   server set to start in another folder is left out.
 //!
 //! Values are TOML for Codex (`-c` parses them as TOML): strings are written as basic strings, so they need no
 //! shell, and pass the `.cmd` launcher only when it is npm's Node.js launcher, which is started directly.
@@ -22,7 +23,7 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 use serde::Serialize;
 use zeroize::Zeroizing;
 
-use super::{CodexOrchester, is_agent_variable};
+use super::{CodexOrchester, HttpAuthorization, is_agent_variable};
 use crate::{
   command::SecretVariable,
   connection::mcp::{ExemptTools, InvocationExemptions, McpServerName, McpServerProblem, McpToolName, McpUrl},
@@ -48,7 +49,7 @@ enum Transport {
   },
   Http {
     url: McpUrl,
-    bearer: Option<Arc<SecretValue>>,
+    authorization: HttpAuthorization,
   },
 }
 
@@ -81,10 +82,10 @@ impl McpLaunch {
     }
   }
 
-  pub const fn http(name: McpServerName, url: McpUrl, bearer: Option<Arc<SecretValue>>) -> Self {
+  pub const fn http(name: McpServerName, url: McpUrl, authorization: HttpAuthorization) -> Self {
     Self {
       name,
-      transport: Transport::Http { url, bearer },
+      transport: Transport::Http { url, authorization },
       exempt: ExemptTools::none(),
     }
   }
@@ -100,8 +101,8 @@ impl McpLaunch {
     &self.name
   }
 
-  /// Secret variables the server takes through the CLI's environment, by name; with a bearer
-  /// token under [`bearer_variable`].
+  /// Secret variables the server takes through the CLI's environment, by name; with the bearer token or the
+  /// header's value under [`token_variable`].
   fn secret_variables(&self) -> Vec<(String, &Arc<SecretValue>)> {
     match &self.transport {
       Transport::Stdio { environment, .. } => environment
@@ -111,10 +112,12 @@ impl McpLaunch {
           LaunchValue::Text(_) => None,
         })
         .collect(),
-      Transport::Http { bearer, .. } => bearer
-        .iter()
-        .map(|secret| (bearer_variable(&self.name), secret))
-        .collect(),
+      Transport::Http { authorization, .. } => match authorization {
+        HttpAuthorization::None => Vec::new(),
+        HttpAuthorization::Bearer(secret) | HttpAuthorization::Header { value: secret, .. } => {
+          vec![(token_variable(&self.name), secret)]
+        }
+      },
     }
   }
 }
@@ -122,8 +125,8 @@ impl McpLaunch {
 /// A server left out of an invocation, and why.
 pub type LeftOut = (McpServerName, McpServerProblem);
 
-/// The variable a Codex invocation hands `server`'s bearer token over in.
-pub fn bearer_variable(server: &McpServerName) -> String {
+/// The variable a Codex invocation hands `server`'s bearer token or header value over in.
+pub fn token_variable(server: &McpServerName) -> String {
   format!(
     "ORCHESTER_MCP_TOKEN_{}",
     server.as_str().to_ascii_uppercase().replace('-', "_")
@@ -270,10 +273,18 @@ impl CodexMcp {
           set("env_vars", toml_array(&secret_names));
         }
       }
-      Transport::Http { url, bearer } => {
+      Transport::Http { url, authorization } => {
         set("url", toml_string(url.as_str()));
-        if bearer.is_some() {
-          set("bearer_token_env_var", toml_string(&bearer_variable(&server.name)));
+        let variable = toml_string(&token_variable(&server.name));
+        match authorization {
+          HttpAuthorization::None => {}
+          HttpAuthorization::Bearer(_) => set("bearer_token_env_var", variable),
+          HttpAuthorization::Header { name, .. } => {
+            set(
+              "env_http_headers",
+              format!("{{{}={variable}}}", toml_string(name.as_str())),
+            );
+          }
         }
       }
     }
@@ -314,7 +325,8 @@ impl ClaudeMcpConfig {
       .iter()
       .map(|server| match &server.transport {
         Transport::Http {
-          bearer: Some(token), ..
+          authorization: HttpAuthorization::Bearer(token),
+          ..
         } => Zeroizing::new(format!("Bearer {}", token.expose())),
         _ => Zeroizing::new(String::new()),
       })
@@ -392,11 +404,12 @@ enum ClaudeServer<'a> {
   Http {
     url: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    headers: Option<BTreeMap<&'static str, &'a str>>,
+    headers: Option<BTreeMap<&'a str, &'a str>>,
   },
 }
 
 impl<'a> ClaudeServer<'a> {
+  /// `server`, its bearer token, if it has one, as the header's value `bearer`.
   fn of(server: &'a McpLaunch, bearer: &'a str) -> Self {
     match &server.transport {
       Transport::Stdio {
@@ -418,9 +431,13 @@ impl<'a> ClaudeServer<'a> {
           })
           .collect(),
       },
-      Transport::Http { url, bearer: token } => Self::Http {
+      Transport::Http { url, authorization } => Self::Http {
         url: url.as_str(),
-        headers: token.as_ref().map(|_| BTreeMap::from([("Authorization", bearer)])),
+        headers: match authorization {
+          HttpAuthorization::None => None,
+          HttpAuthorization::Bearer(_) => Some(BTreeMap::from([("Authorization", bearer)])),
+          HttpAuthorization::Header { name, value } => Some(BTreeMap::from([(name.as_str(), value.expose())])),
+        },
       },
     }
   }

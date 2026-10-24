@@ -220,7 +220,11 @@ fn secrets_replacement_serializes_concurrent_mcp_binding_from_second_db() {
       name: "remote".into(),
       transport: TransportChoice::Http,
       url: "https://mcp.example.test".into(),
-      bearer: Some(secret.id()),
+      authorization: AuthorizationText {
+        choice: AuthorizationChoice::Bearer,
+        secret: Some(secret.id()),
+        ..AuthorizationText::default()
+      },
       ..McpServerText::new_server()
     }
     .draft(&[], std::slice::from_ref(secret))

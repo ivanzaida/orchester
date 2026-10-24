@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   connection::mcp::{
-    HttpServer, McpEnvValue, McpEnvironment, McpEnvironmentError, McpServer, McpServerError, McpServerName,
-    McpServerNameError, McpTransport, McpUrl, StdioServer, TransportError, WorkingDirectory,
+    HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpEnvironmentError, McpServer, McpServerError,
+    McpServerName, McpServerNameError, McpTransport, McpUrl, StdioServer, TransportError, WorkingDirectory,
   },
   id::{ConnectionId, SecretId},
   resource::{CommandArg, CommandProgram, VariableName},
@@ -166,7 +166,7 @@ fn mcp_servers_validate_through_their_constructor() {
   let environment = McpEnvironment::new(variables(&[("DOCS_TOKEN", McpEnvValue::Secret(token))])).expect("valid");
   let http = McpTransport::Http(HttpServer::new(
     McpUrl::new("https://mcp.example.dev/").expect("valid"),
-    Some(token),
+    McpAuthorization::Bearer { token },
   ));
   assert_eq!(
     McpServer::new(
@@ -201,7 +201,7 @@ fn mcp_servers_validate_through_their_constructor() {
   assert_eq!(local.secrets(), vec![token]);
   let transport = McpTransport::Http(HttpServer::new(
     McpUrl::new("http://localhost:9/").expect("valid"),
-    None,
+    McpAuthorization::None,
   ));
   assert_eq!(
     local.update(name("files"), transport, local.environment().clone()),

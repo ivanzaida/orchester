@@ -10,7 +10,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::super::http_url::{self, HostError, ZoneId};
+use super::{
+  super::http_url::{self, HostError, ZoneId},
+  authorization::McpAuthorization,
+};
 use crate::{
   id::SecretId,
   resource::{CommandArg, CommandProgram},
@@ -91,25 +94,63 @@ impl StdioServer {
   }
 }
 
-/// A server reached over streamable HTTP, with a project secret as its bearer token if it needs one.
+/// A server reached over streamable HTTP, with what it is sent to let the agent in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "StoredHttp", into = "StoredHttp")]
 pub struct HttpServer {
   url: McpUrl,
-  bearer: Option<SecretId>,
+  authorization: McpAuthorization,
 }
 
 impl HttpServer {
-  pub const fn new(url: McpUrl, bearer: Option<SecretId>) -> Self {
-    Self { url, bearer }
+  pub const fn new(url: McpUrl, authorization: McpAuthorization) -> Self {
+    Self { url, authorization }
   }
 
   pub const fn url(&self) -> &McpUrl {
     &self.url
   }
 
-  /// The secret sent as `Authorization: Bearer <value>`.
-  pub const fn bearer(&self) -> Option<SecretId> {
-    self.bearer
+  pub const fn authorization(&self) -> &McpAuthorization {
+    &self.authorization
+  }
+}
+
+/// An HTTP server as stored. A bearer token stays in `bearer`, where servers kept it before other schemes came, so
+/// rows written before then read back unchanged and a bearer server is written as it always was; every other scheme
+/// is in `authorization`.
+#[derive(Serialize, Deserialize)]
+struct StoredHttp {
+  url: McpUrl,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  bearer: Option<SecretId>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  authorization: Option<McpAuthorization>,
+}
+
+impl From<StoredHttp> for HttpServer {
+  fn from(stored: StoredHttp) -> Self {
+    let authorization = match (stored.authorization, stored.bearer) {
+      (Some(authorization), _) => authorization,
+      (None, Some(token)) => McpAuthorization::Bearer { token },
+      (None, None) => McpAuthorization::None,
+    };
+    Self::new(stored.url, authorization)
+  }
+}
+
+impl From<HttpServer> for StoredHttp {
+  fn from(server: HttpServer) -> Self {
+    let (bearer, authorization) = match server.authorization {
+      McpAuthorization::None => (None, None),
+      McpAuthorization::Bearer { token } => (Some(token), None),
+      other => (None, Some(other)),
+    };
+    Self {
+      url: server.url,
+      bearer,
+      authorization,
+    }
   }
 }
 

@@ -1,11 +1,12 @@
 //! What a change to an MCP server widens: what the agents that get it run, reach or may call without a
 //! person asking. A new server runs a program or reaches an endpoint of automation's choosing; a server's
-//! other program, arguments, folder, endpoint or bearer secret change what runs or where agents connect;
-//! a variable but the harmless ones can change what the program loads or trusts, a removal included; a
-//! tool that runs without asking is one fewer request a person sees; turning a server on gives it back to
-//! the profiles that choose it. A variable that takes a secret's value, under any name, hands the server that
+//! other program, arguments, folder or endpoint change what runs or where agents connect, and another
+//! authorization that sends a secret (another secret, scheme, user name or header) hands the server a secret in a
+//! way a person did not confirm; a variable but the harmless ones can change what the program loads or trusts, a
+//! removal included; a tool that runs without asking is one fewer request a person sees; turning a server on gives it
+//! back to the profiles that choose it. A variable that takes a secret's value, under any name, hands the server that
 //! secret. Renaming widens too: the answers a person gave in a run (*Approve similar*) name a server's tools by
-//! the server's name, so another server renamed onto it would inherit them. Dropping a bearer secret, removing
+//! the server's name, so another server renamed onto it would inherit them. Dropping the authorization, removing
 //! exempt tools and turning a server off narrow. Automation may make these changes only while a person lets it (*Let
 //! automation change agent permissions*); a person's own input in the window may always.
 
@@ -93,8 +94,8 @@ fn transport(stored: &McpTransport, draft: &McpTransport) -> Vec<Message> {
       if stored.url() != draft.url() {
         reasons.push(Message::new("appMcp.widens.mcpEndpoint").with("endpoint", draft.url().as_str().to_owned()));
       }
-      if draft.bearer().is_some() && stored.bearer() != draft.bearer() {
-        reasons.push(Message::new("appMcp.widens.mcpBearer"));
+      if draft.authorization().secret().is_some() && stored.authorization() != draft.authorization() {
+        reasons.push(Message::new("appMcp.widens.mcpAuthorization"));
       }
       reasons
     }

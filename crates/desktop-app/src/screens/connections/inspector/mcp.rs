@@ -1,5 +1,5 @@
 //! An MCP server's inspector (`O6Vo2a`, the states of `XRCed`): with Turn off or Turn on in its header, what
-//! the agent's CLI starts or reaches (program, arguments, folder, or endpoint and bearer secret), its
+//! the agent's CLI starts or reaches (program, arguments, folder, or endpoint and authorization), its
 //! variables with a secret named by its name and environment only, the tools that run without asking, its
 //! tools (which Orchester cannot list, so Refresh tools is unavailable), the profiles that choose it, and in
 //! the footer what it does with Test connection (unavailable for the same reason), Edit connection and
@@ -17,7 +17,9 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::connection::mcp::{HttpServer, McpEnvValue, McpServer, McpTransport, StdioServer};
+use orchester_core::connection::mcp::{
+  HttpServer, McpAuthorization, McpEnvValue, McpServer, McpTransport, StdioServer,
+};
 use orchester_workspace::{connections::mcp::enabling, display};
 
 use super::{Actions, Confirm, Inspecting, Parts, footer, footer_action, header};
@@ -159,12 +161,22 @@ fn stdio_rows(ctx: &Ctx, stdio: &StdioServer) -> Vec<Row> {
 
 /// Where the agent's CLI reaches the server, and with which secret.
 fn http_rows(ctx: &Ctx, http: &HttpServer, inspecting: &Inspecting<'_>) -> Vec<Row> {
-  let authentication = match http.bearer() {
-    Some(secret) => ctx.t_args(
-      "connections.mcp.bearer",
-      [("secret", &*secret_name(ctx, inspecting, secret))],
+  let authorization = http.authorization();
+  let secret = authorization
+    .secret()
+    .map_or_else(Default::default, |id| secret_name(ctx, inspecting, id));
+  let authentication = match authorization {
+    McpAuthorization::None => ctx.t("connections.mcp.noAuthentication"),
+    McpAuthorization::Bearer { .. } => ctx.t_args("connections.mcp.bearer", [("secret", &*secret)]),
+    McpAuthorization::Basic { username, .. } => ctx.t_args(
+      "connections.mcp.basic",
+      [("username", username.as_str()), ("secret", &*secret)],
     ),
-    None => ctx.t("connections.mcp.noAuthentication"),
+    McpAuthorization::BasicCredential { .. } => ctx.t_args("connections.mcp.basicCredential", [("secret", &*secret)]),
+    McpAuthorization::Header { name, .. } => ctx.t_args(
+      "connections.mcp.header",
+      [("header", name.as_str()), ("secret", &*secret)],
+    ),
   };
   vec![
     property(
@@ -194,20 +206,12 @@ fn http_rows(ctx: &Ctx, http: &HttpServer, inspecting: &Inspecting<'_>) -> Vec<R
   ]
 }
 
-/// That a variable or the bearer token takes its value from a secret the project archived or no longer has, so the
+/// That a variable or the authorization takes its value from a secret the project archived or no longer has, so the
 /// runner leaves the server out, and what a person does about it.
 fn secret_missing(ctx: &Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -> Option<Element> {
-  let bearer = match server.transport() {
-    McpTransport::Http(http) => http.bearer(),
-    McpTransport::Stdio(_) => None,
-  };
-  let variables = server.environment().iter().filter_map(|(_, value)| match value {
-    McpEnvValue::Secret(secret) => Some(*secret),
-    McpEnvValue::Text(_) => None,
-  });
-  let missing = bearer
+  let missing = server
+    .secrets()
     .into_iter()
-    .chain(variables)
     .any(|id| !inspecting.listed.secrets.iter().any(|secret| secret.id() == id));
   missing.then(|| {
     Notice::new(

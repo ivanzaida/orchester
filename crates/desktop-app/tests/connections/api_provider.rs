@@ -140,7 +140,7 @@ fn connections_api_provider_is_chosen_in_edit_connection_and_shown_in_the_inspec
 }
 
 /// Chooses the option labelled `label` of select `id`.
-fn choose(seeded: &mut Seeded, id: &str, label: &str) {
+pub(super) fn choose(seeded: &mut Seeded, id: &str, label: &str) {
   let mut select = seeded
     .window
     .tree

@@ -282,7 +282,17 @@
       "startedByCli": "The agent’s CLI, with each agent",
       "reachedByCli": "The agent’s CLI, over HTTP",
       "bearer": "Bearer token from {{secret}}",
+      "basic": "Basic, user {{username}}, password from {{secret}}",
+      "basicCredential": "Basic credential from {{secret}}",
+      "header": "Header {{header}} from {{secret}}",
       "noAuthentication": "None",
+      "authorization": {
+        "none": "None",
+        "bearer": "Bearer token",
+        "basic": "Basic: user name and password",
+        "basicCredential": "Basic: pasted credential",
+        "header": "Custom header"
+      },
       "fromSecret": "From {{secret}}",
       "secretName": "{{name}} ({{environment}})",
       "secretGone": "a secret this project no longer has",
@@ -338,7 +348,24 @@
         "addSecret": "Add a variable from a secret…",
         "noSecrets": "This project has no secrets",
         "urlPlaceholder": "https://mcp.example.dev/mcp",
-        "bearerHint": "None, or a bearer token from a project secret.",
+        "authorizationHint": "What the server is sent with every request. The secret part is always a project secret.",
+        "username": "User name",
+        "usernameHint": "Sent with the password as Basic credentials, encoded when an agent starts.",
+        "header": "Header",
+        "headerHint": "The header's name, e.g. X-API-Key. It is sent with the secret's value.",
+        "chooseSecret": "Choose a secret",
+        "secret": {
+          "bearer": "Token",
+          "basic": "Password",
+          "basicCredential": "Credential",
+          "header": "Value"
+        },
+        "secretHint": {
+          "bearer": "The project secret sent as Authorization: Bearer <token>.",
+          "basic": "The project secret that holds the password.",
+          "basicCredential": "A project secret that holds the credential as pasted: Basic <base64>, or the base64 part alone.",
+          "header": "The project secret sent as the header's value."
+        },
         "approvals": "Approvals",
         "exemptToolsHint": "One tool name per line, as the server names it (get_screenshot). When an agent profile asks before MCP actions, only these tools of this server run without asking; every other tool still asks. List only tools that change nothing.",
         "secretsTitle": "Secret values stay out of arguments and logs",

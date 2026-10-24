@@ -12,8 +12,8 @@ use orchester_core::{
   connection::{
     AgentProvider,
     mcp::{
-      HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerProblem, McpTransport, McpUrl,
-      StdioServer, WorkingDirectory,
+      HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerProblem,
+      McpTransport, McpUrl, StdioServer, WorkingDirectory,
     },
     stream::AgentEvent,
   },
@@ -99,7 +99,7 @@ fn setup(provider: AgentProvider, extra: Vec<McpServer>) -> Setup {
     "knowledge",
     McpTransport::Http(HttpServer::new(
       McpUrl::new("http://127.0.0.1:9/mcp").expect("valid URL"),
-      Some(bearer.id()),
+      McpAuthorization::Bearer { token: bearer.id() },
     )),
     McpEnvironment::default(),
   );

@@ -17,7 +17,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::{
     AgentProvider,
-    invocation::{ClaudeMcpConfig, CodexMcp, LaunchValue, McpLaunch, Platform},
+    invocation::{ClaudeMcpConfig, CodexMcp, HttpAuthorization, LaunchValue, McpLaunch, Platform},
     mcp::{InvocationExemptions, McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
     stream::{AgentEvent, RunnerProblem},
   },
@@ -198,8 +198,8 @@ fn launched(
 ) -> Result<McpLaunch, McpServerProblem> {
   let stdio = match server.transport() {
     McpTransport::Http(http) => {
-      let bearer = http.bearer().map(|secret| secrets.read(secret)).transpose()?;
-      let launch = McpLaunch::http(server.name().clone(), http.url().clone(), bearer);
+      let authorization = HttpAuthorization::read(http.authorization(), |secret| secrets.read(secret))?;
+      let launch = McpLaunch::http(server.name().clone(), http.url().clone(), authorization);
       return Ok(launch.with_exempt_tools(server.exempt_tools().clone()));
     }
     McpTransport::Stdio(stdio) => stdio,
