@@ -4,10 +4,10 @@
 //! server (`mcp_form`), each a page in the Connections tab; adding is a person's action in the window, and
 //! the domain rules are `orchester_workspace::connections`', which the MCP setup tools share.
 //!
-//! Edit connection of an agent CLI connection chooses its account (`edit_agent`). Not built in this app yet, and
-//! visibly unavailable: adding or editing a GitHub connection and changing its account or access, renaming an agent
-//! CLI connection or choosing a program file other than the copies on the search path, native connections (adding,
-//! testing, their models), and listing an MCP server's tools.
+//! Edit connection of an agent CLI connection chooses its account (`edit_agent`); an agent or GitHub connection is
+//! renamed in its inspector's header, an MCP server in its form. Not built in this app yet, and visibly unavailable:
+//! adding or editing a GitHub connection and changing its account or access, choosing a program file other than the
+//! copies on the search path, native connections (adding, testing, their models), and listing an MCP server's tools.
 
 mod account;
 mod add_agent;

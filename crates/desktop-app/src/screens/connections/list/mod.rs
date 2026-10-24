@@ -19,7 +19,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ConnectionId;
+use orchester_core::{id::ConnectionId, time::Timestamp};
 use orchester_workspace::{
   activity::operations, connections::data::ProjectConnections, messages::Message, tasks::outside::Outside,
 };
@@ -27,7 +27,7 @@ use orchester_workspace::{
 use self::header::AddMenu;
 use super::{
   data::{self, Entry},
-  inspector::{self, Actions, Confirm, Inspecting},
+  inspector::{self, Actions, Confirm, Inspecting, Tested},
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
@@ -64,8 +64,9 @@ struct Running(Option<(ConnectionId, Work)>);
 
 impl DevtoolsInspectable for Running {}
 
+/// The last work started, on which connection and when.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct LastOn(Option<ConnectionId>);
+struct LastOn(Option<(ConnectionId, Work, Timestamp)>);
 
 impl DevtoolsInspectable for LastOn {}
 
@@ -276,10 +277,17 @@ impl ConnectionsScreen {
     let state = work.state().get();
     let id = entry.id();
     let running = self.running.get().0.filter(|(on, _)| *on == id).map(|(_, work)| work);
-    let failed = state
-      .error
-      .clone()
-      .filter(|_| state.is_rejected() && running.is_none() && self.last.get().0 == Some(id));
+    let last = self.last.get().0.filter(|(on, ..)| *on == id);
+    let error = state.error.clone().filter(|_| state.is_rejected() && running.is_none());
+    let checked = last.filter(|(_, work, _)| *work == Work::Check);
+    let tested = checked.map(|(_, _, started)| match &error {
+      _ if running.is_some() => Tested::Checking,
+      Some(error) => Tested::Failed(error),
+      // Done, and the connections not read again yet.
+      None if entry.checked_at().is_none_or(|at| at < started) => Tested::Checking,
+      None => Tested::Checked,
+    });
+    let failed = error.as_ref().filter(|_| last.is_some() && checked.is_none());
     let confirming = self
       .asking
       .get()
@@ -290,9 +298,11 @@ impl ConnectionsScreen {
       listed,
       accounts,
       entry,
+      open: &project.open,
       project: project.open.project.name().as_str(),
       running,
-      failed: failed.as_ref(),
+      failed,
+      tested,
       confirming,
       now: Services::of(ctx).clock.now(),
       narrow: super::narrow(ctx),
@@ -327,7 +337,8 @@ impl ConnectionsScreen {
         Work::SetAccount(_) => operations::connection_save(&open, name),
       };
       running.set(Running(Some((id, piece))));
-      last.set(LastOn(Some(id)));
+      // The real clock, as the check's own time is: a check read back older than this is not this one's.
+      last.set(LastOn(Some((id, piece, Timestamp::now()))));
       work.run(Start {
         project: open.project.id(),
         repo_root: open.repo_root.clone(),

@@ -9,7 +9,7 @@
 //! actions.
 
 mod check;
-mod naming;
+pub(super) mod naming;
 
 use std::{path::PathBuf, sync::Arc};
 

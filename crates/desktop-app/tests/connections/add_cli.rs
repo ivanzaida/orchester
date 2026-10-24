@@ -120,7 +120,7 @@ fn value(seeded: &mut Seeded, id: &str) -> String {
 
 /// A stand-in Codex in `folder`.
 #[cfg(windows)]
-fn write_codex(folder: &Path, version: &str) -> PathBuf {
+pub(super) fn write_codex(folder: &Path, version: &str) -> PathBuf {
   let program = folder.join("codex.cmd");
   let script = format!(
     "@echo off\r\nif \"%1\"==\"--version\" (echo codex-cli {version}& exit /b 0)\r\nif \"%1\"==\"login\" (echo Logged in using ChatGPT& exit /b 0)\r\nexit /b 1\r\n"
@@ -131,7 +131,7 @@ fn write_codex(folder: &Path, version: &str) -> PathBuf {
 
 /// A stand-in Codex in `folder`.
 #[cfg(not(windows))]
-fn write_codex(folder: &Path, version: &str) -> PathBuf {
+pub(super) fn write_codex(folder: &Path, version: &str) -> PathBuf {
   use std::os::unix::fs::PermissionsExt;
   let program = folder.join("codex");
   let script = format!(

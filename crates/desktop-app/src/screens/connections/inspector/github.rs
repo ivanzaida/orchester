@@ -2,7 +2,8 @@
 //! it is signed in to and its scopes, when it was checked; the account and repository the project expects
 //! through it; and in the footer what its state means, the `gh` command that fixes it to run in a terminal,
 //! Check again and, for another account, *Use this account*. Orchester never signs in, switches accounts or
-//! sees a token. Editing the connection and changing its account or access are not built in this app yet.
+//! sees a token. Its header renames it; editing the connection otherwise and changing its account or access are not
+//! built in this app yet.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -12,7 +13,10 @@ use lurq::{
 use orchester_core::connection::{GitHubCheckResult, GitHubConnection, GitHubState, REQUIRED_SCOPE};
 use orchester_workspace::display;
 
-use super::{Actions, Inspecting, Parts, check_button, footer, footer_action, header, last_checked, shown};
+use super::{
+  Actions, Inspecting, Parts, check_button, footer, footer_action, last_checked, rename::title_with_rename, result,
+  shown, titled_header,
+};
 use crate::{
   screens::connections::{
     data::github_state,
@@ -38,7 +42,8 @@ pub(super) fn parts(
 ) -> Parts {
   let state = github_state(inspecting.listed, connection);
   let status = shown(inspecting, github_status(&state));
-  let header = header(ctx, (GITHUB_GLYPH, connection.name().as_str()), status, None);
+  let title = title_with_rename(ctx, inspecting, (connection.id(), connection.name().as_str()));
+  let header = titled_header(ctx, (GITHUB_GLYPH, title), status, None);
   let mut body = vec![properties(ctx, connection, &state, inspecting).into()];
   body.extend(used_by_project(ctx, connection, inspecting));
   let command = state.advice().map(|advice| {
@@ -104,7 +109,10 @@ pub(super) fn parts(
       }
     }]);
   }
-  let more = command.into_iter().collect();
+  let more = command
+    .into_iter()
+    .chain(result::github(ctx, connection, &state, inspecting))
+    .collect();
   let reasons = vec![reason_line("connection-edit-reason", &reason).into()];
   let sentence = sentence(ctx, &state, inspecting.project);
   Parts {

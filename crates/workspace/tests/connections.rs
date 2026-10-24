@@ -1,4 +1,4 @@
-//! Saving connections from the add/edit dialogs, deriving "Used by" from agent profiles, and
+//! Saving connections from the add/edit dialogs, renaming them, deriving "Used by" from agent profiles, and
 //! making the project expect the account `gh` uses now.
 
 use std::{fs, path::Path};
@@ -21,7 +21,7 @@ use orchester_store::{ProjectDb, StoreError};
 use orchester_workspace::{
   agents::data::{ProjectAgents, create_profile},
   connections::{
-    data::{ConnectionDraft, ProjectConnections, SaveError, save},
+    data::{ConnectionDraft, ProjectConnections, SaveError, rename_in, save},
     github::{AccountError, GitHubDraft, expect_active_account, save_github},
     probe::found_copy,
   },
@@ -109,6 +109,33 @@ fn editing_a_connection_keeps_its_id_and_rejects_taken_names() {
     save(&mut db, taken, now()),
     Err(SaveError::Store(StoreError::DuplicateConnectionName(_)))
   ));
+}
+
+#[test]
+fn renaming_a_connection_keeps_its_check_and_profiles_and_rejects_taken_names() {
+  let (repo, mut db) = project_db();
+  let claude = save(&mut db, draft(&repo, "Claude", signed_out()), now()).expect("save claude");
+  save(&mut db, draft(&repo, "Claude 2", signed_out()), now()).expect("save the second");
+  let explorer = AgentProfile::new(
+    Name::new("Explorer").expect("valid role"),
+    String::new(),
+    PromptText::new("").expect("valid prompt"),
+    claude,
+    ModelId::new("opus").expect("valid model"),
+    ProviderSettings::default(),
+  );
+  create_profile(&mut db, &explorer, now()).expect("explorer");
+  let name = |name: &str| Name::new(name).expect("valid name");
+  assert!(matches!(
+    rename_in(repo.path(), claude, name("Claude 2")),
+    Err(SaveError::Store(StoreError::DuplicateConnectionName(_)))
+  ));
+  rename_in(repo.path(), claude, name("Claude · Kontur")).expect("renamed");
+  let stored = db.connection(claude).expect("read").expect("exists");
+  assert_eq!(stored.name().as_str(), "Claude · Kontur");
+  assert_eq!(stored.status(), ConnectionStatus::SignInRequired, "its check stays");
+  let listed = ProjectConnections::load(&db).expect("load");
+  assert_eq!(listed.used_by(claude).count(), 1, "its profile still runs on it");
 }
 
 #[test]

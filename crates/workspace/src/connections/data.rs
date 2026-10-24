@@ -345,3 +345,14 @@ pub fn recheck_in(repo_root: &Path, id: ConnectionId) -> Result<(), SaveError> {
   db.save_connection(&connection)?;
   Ok(())
 }
+
+/// Renames agent or GitHub connection `id` of the project at `repo_root`. Refused, as adding one is, when another
+/// connection of the project has the name. Profiles, pipelines and runs name a connection by its id, so they keep
+/// running on it.
+pub fn rename_in(repo_root: &Path, id: ConnectionId, name: Name) -> Result<(), SaveError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  connection.rename(name);
+  db.save_connection(&connection)?;
+  Ok(())
+}
