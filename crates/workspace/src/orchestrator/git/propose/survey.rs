@@ -1,6 +1,6 @@
 //! What a proposal stands on and what it would lose, as git reads it: the commits its refs point at, the branch HEAD is
-//! on and a fingerprint of every uncommitted change and untracked file, read once when the card is made and again
-//! when it is applied.
+//! on and, for one that discards work, a fingerprint of that work ([`super::work`]), read once when the card is made
+//! and again when it is applied.
 
 use std::collections::BTreeSet;
 
@@ -13,6 +13,7 @@ use super::{
     read::in_progress,
   },
   commands::clean_args,
+  work::{Work, fingerprint},
 };
 use crate::{app_mcp::ToolError, messages::Message};
 
@@ -51,6 +52,7 @@ pub(super) fn survey(git: &Git, proposal: &GitProposal) -> Result<Survey, ToolEr
       reading.known("to", to)?;
       let mut loses = commits(git, &["HEAD", "--not", to])?;
       if *mode == ResetMode::Hard {
+        reading.work(&Work::Tracked(&[]))?;
         loses.extend(changes(git, &[])?);
       }
       loses
@@ -59,14 +61,27 @@ pub(super) fn survey(git: &Git, proposal: &GitProposal) -> Result<Survey, ToolEr
       paths,
       directories,
       ignored,
-    } => cleaned(git, &clean_args(paths, *directories, *ignored, true))?,
+    } => {
+      reading.work(&Work::Untracked {
+        paths,
+        ignored: *ignored,
+      })?;
+      cleaned(git, &clean_args(paths, *directories, *ignored, true))?
+    }
     GitProposal::DeleteBranch { branch, remote } => reading.branch_loses(branch, remote.as_deref())?,
     GitProposal::ForcePush { remote, branch } => reading.pushed_over(remote, branch)?,
-    GitProposal::DiscardChanges { paths } => changes(git, paths)?,
+    GitProposal::DiscardChanges { paths } => {
+      reading.work(&Work::Tracked(paths))?;
+      changes(git, paths)?
+    }
     GitProposal::SwitchDiscarding { branch } => {
       reading.known("branch", branch)?;
+      let overwritten = in_the_way(git, branch)?;
+      reading.work(&Work::TrackedAnd {
+        overwritten: &overwritten,
+      })?;
       let mut loses = changes(git, &[])?;
-      loses.extend(in_the_way(git, branch)?);
+      loses.extend(overwritten.iter().map(|path| format!("untracked\t{path}")));
       loses
     }
     GitProposal::Rebase { onto } => {
@@ -82,6 +97,7 @@ pub(super) fn survey(git: &Git, proposal: &GitProposal) -> Result<Survey, ToolEr
       if in_progress(git)? != Some("merge") {
         return Err(refused("nothing_in_progress", Message::new("orchestrator.git.noMerge")));
       }
+      reading.work(&Work::Tracked(&[]))?;
       changes(git, &[])?
     }
   };
@@ -106,15 +122,26 @@ impl<'a> Reading<'a> {
     } else {
       "detached".to_owned()
     };
-    let work = fingerprint(git, !head.is_empty())?;
     Ok(Self {
       git,
-      basis: vec![
-        ("HEAD".to_owned(), head),
-        ("HEAD-ref".to_owned(), on),
-        ("work".to_owned(), work),
-      ],
+      basis: vec![("HEAD".to_owned(), head), ("HEAD-ref".to_owned(), on)],
     })
+  }
+
+  /// Keeps the fingerprint of `work`, which the proposal discards ([`fingerprint`]).
+  fn work(&mut self, work: &Work) -> Result<(), ToolError> {
+    let with_head = !self.at("HEAD").is_empty();
+    let fingerprint = fingerprint(self.git, work, with_head)?;
+    self.basis.push(("work".to_owned(), fingerprint));
+    Ok(())
+  }
+
+  fn at(&self, name: &str) -> &str {
+    self
+      .basis
+      .iter()
+      .find(|(found, _)| found == name)
+      .map_or("", |(_, value)| value.as_str())
   }
 
   /// The commit `rev` stands at, kept as `name`; empty for none.
@@ -175,21 +202,8 @@ impl<'a> Reading<'a> {
   }
 }
 
-/// A fingerprint of the uncommitted work: git's hash of every change to tracked files against HEAD (`with_head`), or
-/// to the index without a commit, and of the untracked files' names. An edit since the card was read changes it.
-fn fingerprint(git: &Git, with_head: bool) -> Result<String, ToolError> {
-  let diff = if with_head {
-    git.ok(&["diff", "HEAD", "--binary", "--no-ext-diff", "--no-textconv"])?
-  } else {
-    git.ok(&["diff", "--cached", "--binary", "--no-ext-diff", "--no-textconv"])?
-  };
-  let untracked = git.ok(&["ls-files", "--others", "--exclude-standard", "-z"])?;
-  let work = format!("{diff}\0{untracked}");
-  Ok(git.ok_with(&["hash-object", "--stdin"], Some(&work))?.trim().to_owned())
-}
-
 /// The untracked files, ignored ones among them, that switching to `branch` with `--discard-changes` would overwrite:
-/// those the branch's tree holds at the same path, as `untracked\t<path>`.
+/// those the branch's tree holds at the same path.
 fn in_the_way(git: &Git, branch: &str) -> Result<Vec<String>, ToolError> {
   let tree: BTreeSet<String> = git
     .ok(&["ls-tree", "-r", "--name-only", "-z", "--end-of-options", branch])?
@@ -207,7 +221,7 @@ fn in_the_way(git: &Git, branch: &str) -> Result<Vec<String>, ToolError> {
       hit.insert(entry.to_owned());
     }
   }
-  Ok(hit.into_iter().map(|path| format!("untracked\t{path}")).collect())
+  Ok(hit.into_iter().collect())
 }
 
 /// The files a dry run of `git clean` lists.

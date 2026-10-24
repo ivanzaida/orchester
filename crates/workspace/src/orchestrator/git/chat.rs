@@ -12,7 +12,7 @@ use orchester_core::orchestrator::{
 use rmcp::model::JsonObject;
 use serde_json::Value;
 
-use super::{Called, Kind, call as call_git, command::refused};
+use super::{Called, Kind, Timeouts, call as call_git, command::refused};
 use crate::{
   app_mcp::{Services, ToolError, Translate, blocking},
   messages::Message,
@@ -83,7 +83,7 @@ async fn run(
   writes: bool,
 ) -> Result<Called, ToolError> {
   let (programs, root, name) = (services.programs().clone(), scope.root.clone(), name.to_owned());
-  blocking(move || call_git(&programs, &root, (&name, &arguments), writes)).await
+  blocking(move || call_git(&programs, &root, (&name, &arguments), (writes, Timeouts::STANDARD))).await
 }
 
 /// Refused for a write in a turn nobody asked for: a day's report's turn changes nothing (`report_turn`), and a turn

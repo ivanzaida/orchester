@@ -5,7 +5,7 @@ const WRITE: &str = "Only while the person turned on Let the Orchestrator write 
   refused (write_off) and you tell the person. Never in a turn Orchester started by itself (person_only). It works in \
   the project's checkout, or with run in that run's worktree once the run ended (run_active while it has not). \
   Refused while local integration holds the checkout or a run's conflicts wait to be resolved (checkout_reserved), \
-  and, but for a commit, while a merge or rebase is in progress (operation_in_progress). Branches, tags and start \
+  in a run's worktree while the merge queue holds the run (run_queued), and, but for a commit, while a merge or rebase is in progress (operation_in_progress). Branches, tags and start \
   points are plain names (no refspec, glob or revision expression), remotes ones the repository lists, paths inside \
   the repository. The conversation shows what ran and what git said; tell the person what you did.";
 
@@ -107,5 +107,5 @@ pub(super) const PROPOSE: &str = "Proposes a git operation that can lose work, a
   shows), discard_changes (paths: uncommitted changes to tracked files), switch_discarding (branch), rebase (onto; a \
   conflict undoes it), delete_tag (tag, remote), abort_merge. The card shows the commands and what would be lost \
   (commits no other branch holds, changes, files); applying it is refused when any of that changed since \
-  (changed_since_proposed). Propose one only when the person asked for that outcome; there is no stash: suggest a \
+  (changed_since_proposed); work too large to fingerprint is not proposed (too_large). Propose one only when the person asked for that outcome; there is no stash: suggest a \
   commit on a branch instead. With run, in that run's worktree once the run ended (run_active while it has not).";

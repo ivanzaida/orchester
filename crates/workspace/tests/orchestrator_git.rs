@@ -7,12 +7,16 @@
 
 #[path = "orchestrator_git/claims.rs"]
 mod claims;
+#[path = "orchestrator_git/followups.rs"]
+mod followups;
 #[path = "orchestrator_git/injection.rs"]
 mod injection;
 #[path = "orchestrator_git/proposals.rs"]
 mod proposals;
 #[path = "orchestrator_git/reads.rs"]
 mod reads;
+#[path = "orchestrator_git/real.rs"]
+mod real;
 #[path = "orchestrator_git/runs.rs"]
 mod runs;
 #[path = "orchestrator_git/scratch.rs"]

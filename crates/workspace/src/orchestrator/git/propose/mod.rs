@@ -9,6 +9,7 @@
 
 mod commands;
 mod survey;
+mod work;
 
 use orchester_core::orchestrator::git::{GitChange, GitOperation, GitPlace, GitProposal, ResetMode};
 use serde_json::Value;
@@ -127,4 +128,13 @@ fn proposal(git: &Git, operation: Operation) -> Result<GitProposal, ToolError> {
     },
     Operation::AbortMerge => GitProposal::AbortMerge,
   })
+}
+
+/// Whether applying `proposal` changes the working tree or the index, so it holds the local-integration lease while it
+/// runs: all but deleting a branch or a tag and a forced push, which change refs or a remote only.
+pub(super) const fn changes_checkout(proposal: &GitProposal) -> bool {
+  !matches!(
+    proposal,
+    GitProposal::DeleteBranch { .. } | GitProposal::DeleteTag { .. } | GitProposal::ForcePush { .. }
+  )
 }

@@ -131,7 +131,54 @@ fn orchestrator_git_reads_refuse_a_folder_that_is_no_repository() {
     &scratch.programs,
     &plain,
     ("git_status", &serde_json::Map::new()),
-    false,
+    (false, orchester_workspace::orchestrator::git::Timeouts::STANDARD),
   );
   assert_eq!(super::scratch::refused(called), "not_a_repository");
+}
+
+#[test]
+fn orchestrator_git_reads_blame_at_a_revision() {
+  let scratch = Scratch::new();
+  scratch.commit("src/lib.rs", "pub fn one() {}\npub fn two() {}\n", "Add one and two");
+  let added = scratch.head("HEAD");
+  scratch.commit("src/lib.rs", "pub fn one() {}\npub fn three() {}\n", "Three");
+  let whole = scratch.read_tool("git_blame", &json!({ "path": "src/lib.rs", "rev": added }));
+  let text = whole["text"].as_str().expect("lines");
+  assert!(text.contains("two()") && !text.contains("three()"), "{text}");
+  let line = scratch.read_tool(
+    "git_blame",
+    &json!({ "path": "src/lib.rs", "rev": "HEAD~1", "start": 2, "end": 2 }),
+  );
+  let text = line["text"].as_str().expect("a line");
+  assert_eq!(text.lines().count(), 1, "{text}");
+  assert!(text.contains("two()"), "{text}");
+}
+
+#[test]
+fn orchestrator_git_reads_a_cut_log_without_a_partial_commit() {
+  let scratch = Scratch::new();
+  let subject = "s".repeat(600);
+  let mut stream = String::new();
+  for mark in 1..=150 {
+    let parent = if mark == 1 {
+      "from refs/heads/main^0\n".to_owned()
+    } else {
+      format!("from :{}\n", mark - 1)
+    };
+    stream.push_str(&format!(
+      "commit refs/heads/main\nmark :{mark}\ncommitter Test Author <author@example.com> 1700000000 +0000\ndata \
+       {len}\n{subject}\n{parent}\n",
+      len = subject.len(),
+    ));
+  }
+  scratch.git_with_input(&["fast-import", "--quiet"], &stream);
+  scratch.git(&["reset", "--hard", "main"]);
+  let log = scratch.read_tool("git_log", &json!({ "limit": 200 }));
+  assert_eq!(log["truncated"], true, "150 commits of 600 bytes pass the cap");
+  let commits = log["commits"].as_array().expect("commits");
+  assert!(!commits.is_empty() && commits.len() < 150, "{}", commits.len());
+  for commit in commits {
+    assert_eq!(commit["subject"], subject.as_str(), "no commit is told half");
+    assert_eq!(commit["commit"].as_str().map(str::len), Some(40));
+  }
 }

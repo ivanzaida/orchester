@@ -21,7 +21,7 @@ use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_store::{ProjectDb, exclude_project_data};
 use orchester_workspace::{
   app_mcp::ToolError,
-  orchestrator::git::{Called, apply, call},
+  orchestrator::git::{Called, Timeouts, apply, call},
 };
 use serde_json::Value;
 use tempfile::TempDir;
@@ -132,6 +132,15 @@ impl Scratch {
     output.stdout.trim().to_owned()
   }
 
+  /// `git <args>` in the repository with `input` on its standard input, which must work.
+  pub fn git_with_input(&self, args: &[&str], input: &str) {
+    let command = Command::new(Path::new("git"), args.iter().copied())
+      .with_current_dir(&self.root())
+      .with_stdin(input.to_owned());
+    let output = self.runner.run(&command).expect("git runs");
+    assert!(output.success(), "git {args:?}: {}", output.stderr);
+  }
+
   pub fn try_git_in(&self, dir: &Path, args: &[&str]) -> CommandOutput {
     self
       .runner
@@ -156,7 +165,12 @@ impl Scratch {
     let Value::Object(arguments) = arguments else {
       panic!("arguments are an object");
     };
-    call(&self.programs, &self.root(), (name, arguments), writes)
+    call(
+      &self.programs,
+      &self.root(),
+      (name, arguments),
+      (writes, Timeouts::STANDARD),
+    )
   }
 
   /// A read's answer.
@@ -193,7 +207,7 @@ impl Scratch {
 
   /// The person applies `change`.
   pub fn apply(&self, change: &GitChange) -> Result<Value, ToolError> {
-    apply(&self.programs, &self.root(), change)
+    apply(&self.programs, &self.root(), change, Timeouts::STANDARD)
   }
 }
 
