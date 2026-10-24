@@ -3,8 +3,11 @@
 /// What every write says of the person's switch and of the run worktrees.
 const WRITE: &str = "Only while the person turned on Let the Orchestrator write with git in Settings; off, it is \
   refused (write_off) and you tell the person. Never in a turn Orchester started by itself (person_only). It works in \
-  the project's checkout, or with run in that run's worktree once the run ended (run_active while it has not). The \
-  conversation shows what ran and what git said; tell the person what you did.";
+  the project's checkout, or with run in that run's worktree once the run ended (run_active while it has not). \
+  Refused while local integration holds the checkout or a run's conflicts wait to be resolved (checkout_reserved), \
+  and, but for a commit, while a merge or rebase is in progress (operation_in_progress). Branches, tags and start \
+  points are plain names (no refspec, glob or revision expression), remotes ones the repository lists, paths inside \
+  the repository. The conversation shows what ran and what git said; tell the person what you did.";
 
 pub(super) const STATUS: &str = "Reads the git state of the project's checkout (or with run, that run's worktree): \
   the branch, its upstream and how far ahead and behind, a merge or rebase in progress, and every changed, staged, \
@@ -55,8 +58,8 @@ pub(super) fn pull() -> String {
   format!(
     "Pulls the branch's upstream (or remote and branch), fast-forward only; when the branches diverged it is refused \
      in git's words. With merge, only when the person asked, it merges; a conflict is undone and refused \
-     (conflict, naming the files) unless keep_conflicts, only when the person asked to resolve it themselves. A \
-     remote that wants credentials is refused at once (auth_failed): git never asks for them here; the person signs \
+     (conflict, naming the files). remote is one the repository lists (git_remotes), never a URL or a folder, and \
+     branch a plain branch name. A remote that wants credentials is refused at once (auth_failed): git never asks for them here; the person signs \
      in to git in a terminal. A pull that takes too long is stopped (timed_out). {WRITE}"
   )
 }
@@ -72,10 +75,9 @@ pub(super) fn push() -> String {
 
 pub(super) fn merge() -> String {
   format!(
-    "Merges branch into the current branch (no_ff for a merge commit always, message for its message). A conflict \
-     is undone and refused (conflict, naming the files) unless keep_conflicts, only when the person asked to resolve \
-     it themselves; git_propose abort_merge then proposes undoing it. Local changes the merge would overwrite are \
-     refused (would_lose_work). {WRITE}"
+    "Merges branch (a branch's name) into the current branch (no_ff for a merge commit always, message for its \
+     message). A conflict is undone and refused (conflict, naming the files): the person resolves such a merge \
+     themselves. Local changes the merge would overwrite are refused (would_lose_work). {WRITE}"
   )
 }
 

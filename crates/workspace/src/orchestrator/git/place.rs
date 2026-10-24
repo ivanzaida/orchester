@@ -1,10 +1,18 @@
-//! Where the chat's git tools run: the project's checkout, or a run's worktree named by its id or number. A run's
-//! worktree belongs to its agents while the run has not ended (it works, waits, is paused or interrupted and may go
-//! on), so the chat only reads there then; a write is refused (`run_active`).
+//! Where the chat's git tools run, and what they must leave alone there. They run in the project's checkout, or in a
+//! run's worktree named by its id or number. A run's worktree belongs to its agents while the run has not ended (it
+//! works, waits, is paused or interrupted and may go on), so the chat only reads there then (`run_active`). A write
+//! also respects Orchester's own claims (`checkout_reserved`): it holds the project's local-integration lease while it
+//! runs, as local integration and a run's merge do, and is refused while a local integration reserves the checkout or
+//! its Git process has not finished, and in a run's worktree while a resolution of the run's conflicts is recorded.
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{orchestrator::git::GitPlace, store::WorktreeStore};
+use orchester_core::{
+  integration::local::{LocalIntegrationStore, LocalProcessStore},
+  orchestrator::git::GitPlace,
+  store::WorktreeStore,
+};
+use orchester_exec::local_git::IntegrationLease;
 use orchester_store::ProjectDb;
 
 use super::command::refused;
@@ -65,4 +73,33 @@ pub(super) fn again(root: &Path, at: GitPlace) -> Result<Place, ToolError> {
     GitPlace::Checkout => resolve(root, None, Use::Write),
     GitPlace::Run { run, .. } => resolve(root, Some(&run.to_string()), Use::Write),
   }
+}
+
+/// Claims the project at `root` for a write at `place`: the local-integration lease, held until the claim is
+/// dropped, once no local integration reserves the checkout and, in a run's worktree, no resolution of the run's
+/// conflicts is recorded; refused (`checkout_reserved`) otherwise. Blocks on SQLite.
+pub(super) fn claim(root: &Path, place: &Place) -> Result<IntegrationLease, ToolError> {
+  let lease = IntegrationLease::acquire(root)
+    .map_err(|_| refused("checkout_reserved", Message::new("orchestrator.git.integrationWorking")))?;
+  let db = ProjectDb::open(root)?;
+  for operation in db.local_operations()? {
+    let unfinished = db
+      .local_process(operation.run())?
+      .is_some_and(|process| !process.finished);
+    if operation.reserves_checkout() || unfinished {
+      return Err(refused(
+        "checkout_reserved",
+        Message::new("orchestrator.git.checkoutReserved"),
+      ));
+    }
+  }
+  if let GitPlace::Run { run, number } = place.at
+    && db.resolution(run)?.is_some()
+  {
+    return Err(refused(
+      "checkout_reserved",
+      Message::new("orchestrator.git.resolutionOpen").with("run", number.to_string()),
+    ));
+  }
+  Ok(lease)
 }

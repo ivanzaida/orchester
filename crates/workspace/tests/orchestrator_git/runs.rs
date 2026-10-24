@@ -10,9 +10,8 @@ use std::{
 };
 
 use orchester_core::{
-  id::{IdempotencyKey, ProjectId},
+  id::IdempotencyKey,
   name::Name,
-  project::{Project, ProjectKey},
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot},
@@ -20,7 +19,7 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, exclude_project_data};
+use orchester_store::ProjectDb;
 use serde_json::json;
 
 use super::scratch::{Scratch, refused};
@@ -74,15 +73,9 @@ fn snapshot(db: &mut ProjectDb) -> RunSnapshot {
 }
 
 /// The scratch repository as a project with a run at work in a worktree of its own on `orc-1-run`.
-fn working_run(scratch: &Scratch) -> Run {
+pub(super) fn working_run(scratch: &Scratch) -> Run {
   let root = scratch.root();
-  let project = Project::new(
-    ProjectId::generate(),
-    ProjectKey::new("ORC").expect("key"),
-    name("Kontur"),
-  );
-  let mut db = ProjectDb::create(&root, project).expect("project");
-  exclude_project_data(&root).expect("the project's data stays out of git");
+  let mut db = ProjectDb::open(&root).expect("the project's data");
   let snapshot = snapshot(&mut db);
   let details = TaskDetails {
     title: name("Work"),
@@ -122,6 +115,18 @@ fn working_run(scratch: &Scratch) -> Run {
     "main",
   ]);
   std::fs::write(worktree.join("agent.txt"), "the agent's work\n").expect("the agent's file");
+  run
+}
+
+/// [`working_run`], whose one step then passed: the run succeeded and waits to be merged.
+pub(super) fn succeeded_run(scratch: &Scratch) -> Run {
+  let mut run = working_run(scratch);
+  let mut db = ProjectDb::open(&scratch.root()).expect("the project's data");
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run.start_step(execution, at(8)).expect("step");
+  db.append_events(&run, &events).expect("events");
+  let events = run.complete_step(execution, at(9)).expect("pass");
+  db.append_events(&run, &events).expect("events");
   run
 }
 

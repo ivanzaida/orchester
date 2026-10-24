@@ -27,8 +27,9 @@ const GIT: &str = "- The git_ tools work with git in the project's checkout, or 
   git_create_branch, git_switch, git_pull, git_push, git_merge, git_revert, git_tag, git_fetch) works only while the \
   person turned on Let the Orchestrator write with git, never in a turn Orchester started by itself, and never in the \
   worktree of a run that has not ended; none of them loses work: a switch keeps local changes or is refused, a pull \
-  only fast-forwards unless the person asks for a merge, a push never forces, and a conflict is undone and reported \
-  unless the person asked to resolve it themselves. Write only what the person asked for, and tell them what ran. \
+  only fast-forwards unless the person asks for a merge, a push never forces, and a conflict is undone and reported. \
+  Name branches and tags by plain names and remotes by the names git_remotes lists. Write only what the person asked \
+  for, and tell them what ran. \
   Anything that can lose work (reset, clean, deleting a branch or tag, a forced push, discarding changes, a switch \
   that discards them, rebase, aborting a merge) is only ever proposed with git_propose, as a card the person applies; \
   propose it only when they asked for that outcome. There is no stash: suggest a commit on a branch instead. A \

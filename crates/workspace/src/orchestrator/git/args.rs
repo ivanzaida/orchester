@@ -148,26 +148,22 @@ pub(super) struct Switch {
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
 pub(super) struct Pull {
-  /// The remote; the branch's upstream when left out.
+  /// A remote the repository lists (git_remotes); the branch's upstream when left out.
   #[serde(default)]
   pub(super) remote: Option<String>,
-  /// The remote's branch, with `remote`.
+  /// The remote's branch, by its plain name, with `remote`.
   #[serde(default)]
   pub(super) branch: Option<String>,
   /// Merge when the branches diverged, instead of only fast-forwarding. Only when the person asked for it.
   #[serde(default)]
   pub(super) merge: bool,
-  /// With `merge`: leave a conflicted merge for the person to resolve instead of undoing it. Only when the person
-  /// asked for it.
-  #[serde(default)]
-  pub(super) keep_conflicts: bool,
 }
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
 pub(super) struct Push {
-  /// The remote; the branch's upstream remote, else `origin`, when left out.
+  /// A remote the repository lists (git_remotes); the branch's upstream remote, else `origin`, when left out.
   #[serde(default)]
   pub(super) remote: Option<String>,
   /// The local branch pushed to the remote's branch of the same name; the current branch when left out.
@@ -182,7 +178,7 @@ pub(super) struct Push {
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
 pub(super) struct Merge {
-  /// The branch or revision merged into the current branch.
+  /// The branch merged into the current branch, by its name (`feature`, `origin/main`).
   pub(super) branch: String,
   /// Always make a merge commit (`--no-ff`).
   #[serde(default)]
@@ -190,9 +186,6 @@ pub(super) struct Merge {
   /// The merge commit's message; git's own when left out.
   #[serde(default)]
   pub(super) message: Option<String>,
-  /// Leave a conflicted merge for the person to resolve instead of undoing it. Only when the person asked for it.
-  #[serde(default)]
-  pub(super) keep_conflicts: bool,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -224,7 +217,7 @@ pub(super) struct Tag {
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
 pub(super) struct Fetch {
-  /// The remote; the branch's upstream remote, else `origin`, when left out.
+  /// A remote the repository lists (git_remotes); the branch's upstream remote, else `origin`, when left out.
   #[serde(default)]
   pub(super) remote: Option<String>,
   /// Every remote.

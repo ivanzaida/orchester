@@ -108,11 +108,25 @@ fn orchestrator_git_merges_cleanly_and_undoes_a_conflict() {
   assert_eq!(scratch.git(&["status", "--porcelain"]), "");
   assert_eq!(scratch.read("README.md"), "main's\n");
 
-  // Kept when the person asked to resolve it themselves.
-  let (result, _) = scratch.write_tool("git_merge", &json!({ "branch": "other", "keep_conflicts": true }));
-  assert_eq!(code(&result.expect_err("a conflict")), "conflict");
+  // A merge the person left at its conflicts: its files are never committed with their markers, and nothing but a
+  // commit runs until they finish it.
+  assert!(
+    !scratch.try_git_in(&scratch.root(), &["merge", "other"]).success(),
+    "the person's merge stops"
+  );
   let status = scratch.read_tool("git_status", &json!({}));
   assert_eq!(status["in_progress"], "merge", "{status}");
+  let (result, change) = scratch.write_tool("git_commit", &json!({ "message": "Markers", "all": true }));
+  assert_eq!(code(&result.expect_err("in conflict")), "conflict");
+  assert!(change.commands.is_empty(), "nothing ran");
+  assert_eq!(scratch.head("HEAD"), head, "no commit of conflict markers");
+  assert_eq!(
+    scratch.git(&["diff", "--name-only", "--diff-filter=U"]),
+    "README.md",
+    "still the person's to resolve"
+  );
+  let (result, _) = scratch.write_tool("git_merge", &json!({ "branch": "feature" }));
+  assert_eq!(code(&result.expect_err("in progress")), "operation_in_progress");
 }
 
 #[test]
@@ -177,5 +191,5 @@ fn orchestrator_git_reverts_tags_and_fetches() {
   assert_eq!(scratch.head("light"), changed);
 
   let told = scratch.wrote("git_fetch", &json!({ "prune": true }));
-  assert_eq!(told["ran"][0], "git fetch --prune origin", "{told}");
+  assert_eq!(told["ran"][0], "git fetch --prune --end-of-options origin", "{told}");
 }

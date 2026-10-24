@@ -4,9 +4,12 @@
 
 use std::{sync::Arc, time::Duration};
 
-use orchester_core::command::CommandRunner;
+use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
+  orchester_tools::OutputKept,
+};
 
-use crate::ProcessRunner;
+use crate::{ProcessRunner, run_capped};
 
 /// A `gh` that does not answer within this time counts as not running, as for connection checks.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -61,6 +64,39 @@ impl Programs {
     } else {
       self.git_work.clone()
     }
+  }
+}
+
+impl Programs {
+  /// Runs `command` within `timeout`, keeping at most `limit` bytes of each of its outputs, their start: real
+  /// processes are read as they write and the rest is only counted ([`run_capped`]), so a huge output is never held;
+  /// the runner [`Programs::with_runner`] was given answers whole and is cut after. The output, and whether some of it
+  /// was left out.
+  pub fn capped(
+    &self,
+    command: &Command,
+    timeout: Duration,
+    limit: usize,
+  ) -> Result<(CommandOutput, bool), CommandError> {
+    if self.processes {
+      let output = run_capped(command, timeout, (limit, OutputKept::Head))?;
+      let kept = CommandOutput {
+        code: output.code,
+        stdout: output.stdout,
+        stderr: output.stderr,
+      };
+      return Ok((kept, output.left_out > 0));
+    }
+    let mut output = self.quick.run(command)?;
+    let cut = output.stdout.len() > limit || output.stderr.len() > limit;
+    for text in [&mut output.stdout, &mut output.stderr] {
+      let end = (0..=limit.min(text.len()))
+        .rev()
+        .find(|end| text.is_char_boundary(*end))
+        .unwrap_or(0);
+      text.truncate(end);
+    }
+    Ok((output, cut))
   }
 }
 

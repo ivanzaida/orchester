@@ -106,3 +106,89 @@ fn orchestrator_git_clean_discard_and_abort_are_proposals() {
   let nothing = scratch.call("git_propose", &json!({ "operation": { "kind": "clean" } }), true);
   assert_eq!(refused(nothing), "nothing_to_clean");
 }
+
+#[test]
+fn orchestrator_git_proposal_is_refused_after_an_edit_of_what_it_discards() {
+  let scratch = Scratch::new();
+  scratch.write("README.md", "first edit\n");
+  let change = scratch.proposed(&json!({ "operation": { "kind": "reset", "to": "HEAD", "mode": "hard" } }));
+  assert_eq!(change.loses, ["M\tREADME.md"]);
+  // The same file, the same list of what it loses, but other words than the card was read with.
+  scratch.write("README.md", "second edit, worth keeping\n");
+  let error = scratch.apply(&change).expect_err("the work changed");
+  assert_eq!(code(&error), "changed_since_proposed");
+  assert_eq!(scratch.read("README.md"), "second edit, worth keeping\n");
+
+  // So does a switch of branch at the same commit.
+  let change = scratch.proposed(&json!({ "operation": { "kind": "reset", "to": "HEAD", "mode": "hard" } }));
+  scratch.git(&["switch", "-c", "elsewhere"]);
+  assert_eq!(
+    code(&scratch.apply(&change).expect_err("HEAD moved")),
+    "changed_since_proposed"
+  );
+}
+
+#[test]
+fn orchestrator_git_remote_tag_deletion_leases_the_tag_the_card_read() {
+  let scratch = Scratch::new();
+  scratch.git(&["tag", "-a", "v1", "-m", "First"]);
+  scratch.git(&["push", "origin", "v1"]);
+  let change = scratch.proposed(&json!({ "operation": { "kind": "delete_tag", "tag": "v1", "remote": "origin" } }));
+  assert!(
+    change.commands[0].starts_with("git push --force-with-lease=refs/tags/v1:"),
+    "{:?}",
+    change.commands
+  );
+  scratch.apply(&change).expect("the person applied it");
+  assert!(
+    scratch.git_in(&scratch.origin(), &["tag"]).is_empty(),
+    "the remote's tag is gone"
+  );
+
+  // The remote's tag moved since the card was read: the lease refuses, and the remote keeps it.
+  scratch.git(&["push", "origin", "v1"]);
+  let change = scratch.proposed(&json!({ "operation": { "kind": "delete_tag", "tag": "v1", "remote": "origin" } }));
+  let other = scratch.dir.path().join("other");
+  let origin = scratch.origin().to_string_lossy().into_owned();
+  scratch.git_in(scratch.dir.path(), &["clone", &origin, "other"]);
+  scratch.git_in(&other, &["tag", "-f", "-a", "v1", "-m", "Moved"]);
+  scratch.git_in(&other, &["push", "--force", "origin", "v1"]);
+  let moved = scratch.git_in(&scratch.origin(), &["rev-parse", "refs/tags/v1"]);
+  let error = scratch.apply(&change).expect_err("the lease is stale");
+  assert_eq!(code(&error), "git_failed");
+  assert_eq!(scratch.git_in(&scratch.origin(), &["rev-parse", "refs/tags/v1"]), moved);
+
+  let unknown = scratch.call(
+    "git_propose",
+    &json!({ "operation": { "kind": "delete_tag", "tag": "nope", "remote": "origin" } }),
+    false,
+  );
+  assert_eq!(refused(unknown), "git_failed");
+}
+
+#[test]
+fn orchestrator_git_switch_discarding_lists_untracked_files_in_the_way() {
+  let scratch = Scratch::new();
+  scratch.git(&["switch", "-c", "feature"]);
+  scratch.commit("notes.txt", "the branch's notes\n", "Notes");
+  scratch.git(&["switch", "main"]);
+  scratch.write("notes.txt", "the person's own notes\n");
+  scratch.write("README.md", "edited\n");
+  let change = scratch.proposed(&json!({ "operation": { "kind": "switch_discarding", "branch": "feature" } }));
+  assert_eq!(change.loses, ["M\tREADME.md", "untracked\tnotes.txt"]);
+}
+
+#[test]
+fn orchestrator_git_clean_never_touches_orchester_data() {
+  let scratch = Scratch::new();
+  scratch.write("build/out.o", "object\n");
+  scratch.write(".gitignore", "build/\n");
+  scratch.git(&["add", ".gitignore"]);
+  scratch.git(&["commit", "-m", "Ignore build"]);
+  let change = scratch.proposed(&json!({ "operation": { "kind": "clean", "directories": true, "ignored": true } }));
+  assert_eq!(change.loses, ["build/"], "never .orchester/");
+  scratch.apply(&change).expect("applied");
+  assert!(!scratch.root().join("build").exists());
+  assert!(scratch.root().join(".orchester").is_dir(), "Orchester's data stays");
+  orchester_store::ProjectDb::open(&scratch.root()).expect("and still opens");
+}

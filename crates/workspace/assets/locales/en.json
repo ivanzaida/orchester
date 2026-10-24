@@ -2002,12 +2002,16 @@
       "nothingToCommit": "There is nothing to commit. Nothing was done.",
       "detached": "HEAD is on no branch, so there is no branch to push. Name the branch.",
       "conflictUndone": "{{command}} stopped at conflicts in {{files}}, so it was undone: the repository is as it was before.",
-      "conflictKept": "{{command}} stopped at conflicts in {{files}}. They are left for the person to resolve, as asked; the merge stays in progress until it is committed or aborted.",
       "conflictNotUndone": "{{command}} stopped at conflicts in {{files}}, and undoing it with {{abort}} failed too: the repository is left in the middle of it. Resolve or abort it in a terminal.",
       "changed": "The repository changed since this was proposed: its branches or what it would lose are not what the card showed. Nothing was done; ask the Orchestrator to propose it again.",
       "noMerge": "No merge is in progress. Nothing was done.",
       "nothingToClean": "There are no untracked files to delete. Nothing was done.",
-      "unknownRevision": "git finds nothing named {{revision}}. Nothing was done."
+      "unknownRevision": "git finds nothing named {{revision}}. Nothing was done.",
+      "unresolved": "Files are still in conflict: {{files}}. Committing them would commit their conflict markers, so nothing was committed. The person resolves and stages them, then the merge can be committed.",
+      "inProgress": "A {{operation}} is in progress in the repository; the person finishes or aborts it first. Nothing was done.",
+      "integrationWorking": "Orchester's local integration is working in the project's checkout right now, so git writes nothing there. Nothing was done; try again once it finished.",
+      "checkoutReserved": "A local integration holds the project's checkout until it is finished or put back on the Local integration page, so git writes nothing there. Nothing was done.",
+      "resolutionOpen": "Run #{{run}}'s conflicts wait to be resolved in its worktree, so git writes nothing there. Nothing was done."
     }
   },
   "memory": {

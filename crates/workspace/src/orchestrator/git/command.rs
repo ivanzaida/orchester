@@ -4,30 +4,40 @@
 //! time. What git said of a failure becomes a refusal with a stable code, its words with any credentials in a URL
 //! removed.
 
-use std::path::Path;
+use std::{env, path::Path, time::Duration};
 
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   diff::git::local_git_command,
   repository::redact_userinfo,
 };
+use orchester_exec::programs::Programs;
 
 use crate::{app_mcp::ToolError, messages::Message};
 
 /// The `git` program, looked up on the `PATH` like the runner does.
 const GIT: &str = "git";
+/// How long a read of git's whose output is capped may take.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// What makes ssh fail at once instead of asking for a passphrase, a password or whether to trust a host.
+const BATCH: &str = "-o BatchMode=yes";
 /// The most of git's output a tool answers with; the rest is cut and the answer says so.
 pub(super) const MAX_OUTPUT: usize = 60_000;
 /// The most of git's words a card or a refusal keeps.
 const MAX_SAID: usize = 2_000;
 
-/// git in one folder, run by `runner`.
+/// git in one folder, run by `runner`; network git with `ssh` as its ssh command.
 pub(super) struct Git<'a> {
   pub(super) runner: &'a dyn CommandRunner,
   pub(super) dir: &'a Path,
+  pub(super) ssh: Option<String>,
 }
 
-impl Git<'_> {
+impl<'a> Git<'a> {
+  pub(super) const fn new(runner: &'a dyn CommandRunner, dir: &'a Path) -> Self {
+    Self { runner, dir, ssh: None }
+  }
+
   /// `git <args>`, with `input` on its standard input.
   pub(super) fn command(&self, args: &[&str], input: Option<&str>) -> Command {
     let settings = ["-c", "color.ui=never", "-c", "core.quotepath=false"];
@@ -37,10 +47,29 @@ impl Git<'_> {
       .with_env("GCM_INTERACTIVE", "never")
       .with_env("GIT_EDITOR", ":")
       .with_env("GIT_SEQUENCE_EDITOR", ":")
-      .with_env("GIT_MERGE_AUTOEDIT", "no");
+      .with_env("GIT_MERGE_AUTOEDIT", "no")
+      // A path the chat names is a path, never a pathspec with magic (`:(top)`, globs).
+      .with_env("GIT_LITERAL_PATHSPECS", "1");
+    let command = match &self.ssh {
+      Some(ssh) => command.with_env("GIT_SSH_COMMAND", ssh),
+      None => command,
+    };
     match input {
       Some(text) => command.with_stdin(text.to_owned()),
       None => command,
+    }
+  }
+
+  /// Runs `git <args>` with `programs`, reading at most [`MAX_OUTPUT`] bytes as git writes; its output and whether
+  /// some was left out, or the refusal of a failure.
+  pub(super) fn capped(&self, programs: &Programs, args: &[&str]) -> Result<(String, bool), ToolError> {
+    let (output, cut) = programs
+      .capped(&self.command(args, None), READ_TIMEOUT, MAX_OUTPUT)
+      .map_err(|error| not_run(&error, args))?;
+    if output.success() {
+      Ok((output.stdout, cut))
+    } else {
+      Err(refusal(&output, args))
     }
   }
 
@@ -85,6 +114,29 @@ pub(super) fn shown(args: &[&str]) -> String {
   redact_userinfo(&words.join(" "))
 }
 
+/// The ssh command network git runs with in `git`'s repository, with `-o BatchMode=yes` added so ssh never waits for
+/// a passphrase, a password or a host's key: the caller's `GIT_SSH_COMMAND`, else the repository's `core.sshCommand`,
+/// else `ssh`. `None` when the caller set `GIT_SSH`, a program git runs without a shell, which takes no added option:
+/// git then runs it as set, and the network timeout stops it.
+pub(super) fn batch_ssh(git: &Git) -> Result<Option<String>, ToolError> {
+  if let Ok(command) = env::var("GIT_SSH_COMMAND")
+    && !command.trim().is_empty()
+  {
+    return Ok(Some(format!("{} {BATCH}", command.trim())));
+  }
+  if env::var_os("GIT_SSH").is_some() {
+    return Ok(None);
+  }
+  let configured = git.run(&["config", "--get", "core.sshCommand"], None)?;
+  let base = configured.stdout.trim();
+  let base = if configured.success() && !base.is_empty() {
+    base
+  } else {
+    "ssh"
+  };
+  Ok(Some(format!("{base} {BATCH}")))
+}
+
 /// What git wrote of a failure: its error output, or its output when it wrote its reason there; credentials in URLs
 /// removed and cut to what a card keeps.
 pub(super) fn said(output: &CommandOutput) -> String {
@@ -100,7 +152,7 @@ pub(super) fn said_of_success(output: &CommandOutput) -> String {
 }
 
 /// `text` cut to at most `max` bytes at a character's start, and whether it was cut.
-pub(super) fn cut(text: &str, max: usize) -> (String, bool) {
+fn cut(text: &str, max: usize) -> (String, bool) {
   if text.len() <= max {
     return (text.to_owned(), false);
   }

@@ -1,7 +1,7 @@
 //! Real git in folders of the tests' own under the worktree's `.tmp/`: git's settings are a file of each test's own
 //! (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, the author named there), git looks for no repository above each test's
-//! folder (`GIT_CEILING_DIRECTORIES`) and goes through no proxy. A repository `kontur` on `main` with one commit,
-//! and a bare `origin` it tracks.
+//! folder (`GIT_CEILING_DIRECTORIES`) and goes through no proxy. A project `kontur` on `main` with one commit, its
+//! `.orchester/` kept out of git, and a bare `origin` it tracks.
 
 use std::{
   fs,
@@ -12,9 +12,13 @@ use std::{
 
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
+  id::ProjectId,
+  name::Name,
   orchestrator::git::GitChange,
+  project::{Project, ProjectKey},
 };
 use orchester_exec::{ProcessRunner, programs::Programs};
+use orchester_store::{ProjectDb, exclude_project_data};
 use orchester_workspace::{
   app_mcp::ToolError,
   orchestrator::git::{Called, apply, call},
@@ -88,6 +92,14 @@ impl Scratch {
     let origin = scratch.origin();
     scratch.git(&["remote", "add", "origin", &origin.to_string_lossy()]);
     scratch.git(&["push", "-u", "origin", "main"]);
+    // Kontur is a project, as every folder the chat works in: its `.orchester/` kept out of git.
+    let project = Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("ORC").expect("key"),
+      Name::new("Kontur").expect("name"),
+    );
+    ProjectDb::create(&scratch.root(), project).expect("the project's data");
+    exclude_project_data(&scratch.root()).expect("the project's data stays out of git");
     scratch
   }
 

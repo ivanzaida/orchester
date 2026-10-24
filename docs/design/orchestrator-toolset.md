@@ -325,37 +325,59 @@ orchestrator::git`, listed in `tools::CHAT_TOOLS`; no client of the app has them
 which could not be told safe: what the chat is not offered it cannot do. They run in the project's checkout, or with
 `run` (a run's id or number) in that run's worktree.
 
-- **Reading is open**, whatever the switches say.
+- **Reading is open**, whatever the switches say. Long output is read only up to its cap (`truncated`).
 - **Writing needs the person's switch** *Let the Orchestrator write with git* (Settings › What automation may do, off
   until a person turns it on, synthetic input and MCP cannot flip it: the same person-only row as decision 5's
   switches; `OrchestratorConsent::WriteGit`). Off, every write is refused `write_off`. Each write loses nothing: a
   switch is made only as git makes it, keeping local changes (else `would_lose_work`); a pull only fast-forwards unless
   the person asks for a merge; a push never forces; a merge, a merging pull or a revert that stops at conflicts is
-  undone (`git merge --abort`, `git revert --abort`) and refused `conflict` naming the files, unless the person asked
-  to keep the conflicts to resolve them (`keep_conflicts`). No write runs in a turn nobody asked for (`person_only`;
-  `report_turn` in a day's report's turn).
+  undone (`git merge --abort`, `git revert --abort`) and refused `conflict` naming the files. The chat never leaves a
+  merge in progress: a conflict the person wants to resolve themselves is theirs to start. Nothing but a commit runs
+  while a merge, rebase, cherry-pick or revert is in progress (`operation_in_progress`), and no commit while a file is
+  in conflict (`conflict`: adding it would commit its markers). No write runs in a turn nobody asked for
+  (`person_only`; `report_turn` in a day's report's turn).
+- **Names are names, never refspecs or addresses.** A branch, tag or start point is a plain name (no `+ : * ? [ ^ ~ \`,
+  `..`, `@{`, leading `-`), checked with `git check-ref-format`; Orchester builds every refspec itself
+  (`refs/heads/<b>:refs/heads/<b>`). A remote is one `git remote` lists, never a URL or a folder. A path is relative to
+  the repository's top and inside it, read literally (`GIT_LITERAL_PATHSPECS`). Revisions git only reads (a log's
+  range, a diff's ends, a reset's target) follow `--end-of-options`. Anything else is refused `invalid_arguments`
+  before git runs.
+- **Orchester's claims come first.** A write and a proposal's *Apply* hold the project's local-integration lease
+  (`.orchester/local-integration.lock`) while they run, as local integration and a run's merge do, and are refused
+  `checkout_reserved` while another holder has it, while a local integration reserves the checkout or its Git process
+  has not finished, and in a run's worktree while a resolution of the run's conflicts is recorded (*Resolve in
+  editor*).
 - **What can lose work is always a proposal card the person applies**, whatever the switch says, also in a turn nobody
   asked for (`git_propose`): reset (hard, mixed, soft), clean, deleting a branch or a tag (here or on a remote), a
   forced push, discarding changes, a switch that discards them, rebase, aborting a merge. The card shows where it
   runs, the commands, and what it would lose as git lists it (commits no other branch holds, uncommitted changes,
-  files); automation's click on *Apply* is refused (`person_only`), and *Apply* reads it all again: refs that moved or
-  a different list of what it loses is refused `changed_since_proposed`. A forced push and a remote deletion lease the
-  remote commit the card read (`--force-with-lease=<branch>:<commit>`), a reset goes to the commit the card read.
+  untracked files a `switch_discarding` overwrites, files a clean deletes); automation's click on *Apply* is refused
+  (`person_only`). *Apply* reads it all again and refuses `changed_since_proposed` once anything moved: the refs it
+  stands on, the branch HEAD is on, the list of what it loses, or a fingerprint of the uncommitted work (git's hash of
+  `git diff HEAD --binary` and the untracked files' names), so an edit since the card was read is never discarded
+  unseen. A forced push and a remote branch or tag deletion lease the remote ref the card read
+  (`--force-with-lease=<ref>:<value>`); a reset and a rebase go to the commit the card read. A clean never touches
+  `.orchester/` (`-e /.orchester/`, also with `ignored`).
 - **No stash.** Orchestrator tasks forbid `git stash`; the chat has none either: stashed work is out of sight and a
   pop can conflict. A switch that would lose changes is refused, and the chat suggests a commit on a branch, or the
   person applies a `switch_discarding` card.
 - **A run's worktree** is its agents' while the run has not ended (working, waiting, paused or interrupted): the chat
   reads there, and a write or proposal there is refused `run_active`. Once the run ended it may write there (e.g. push
-  the run's branch); `merge_run` still merges the run's last checkpoint only.
+  the run's branch); `merge_run` still merges the run's last checkpoint only. (Whether ended runs stay writable is
+  still the person's to decide.)
 - **git never waits for a person**: `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, `GIT_EDITOR=:`, no standard
-  input; a remote that wants credentials is refused at once `auth_failed`, with a hint to sign in to git in a terminal;
-  a pull, push, fetch or remote proposal is stopped after 2 minutes (`timed_out`). Git's settings, author and hooks
-  are the repository's own; credentials in URLs are removed from everything the chat or the card shows.
+  input, and ssh in batch mode (`GIT_SSH_COMMAND` with `-o BatchMode=yes` appended to the caller's
+  `GIT_SSH_COMMAND` or the repository's `core.sshCommand`, else `ssh`; a caller's `GIT_SSH` program is left as set and
+  only the timeout stops it). A remote that wants credentials is refused at once `auth_failed`, with a hint to sign in
+  to git in a terminal; a pull, push, fetch or remote proposal is stopped after 2 minutes and a local write, its hooks
+  included, after 5 (`timed_out`). Git's settings, author and hooks are the repository's own; credentials in URLs are
+  removed from everything the chat or the card shows.
 - **Every write and proposal is kept in the conversation** as an action: a compact card with where it ran, the commands
   that ran and what git said (or why it was refused). Reads are not kept.
 - Refusal codes: `git_not_found`, `not_a_repository`, `write_off`, `person_only`, `report_turn`, `would_lose_work`,
-  `conflict`, `git_failed` (git's words), `auth_failed`, `timed_out`, `run_active`, `author_unknown`,
-  `nothing_to_commit`, `nothing_to_clean`, `nothing_in_progress`, `detached_head`, `changed_since_proposed`.
+  `conflict`, `operation_in_progress`, `checkout_reserved`, `git_failed` (git's words), `auth_failed`, `timed_out`,
+  `run_active`, `author_unknown`, `nothing_to_commit`, `nothing_to_clean`, `nothing_in_progress`, `detached_head`,
+  `changed_since_proposed`, and `invalid_arguments` for a name, remote or path refused before git runs.
 
 | Read (always) | Write (*Let the Orchestrator write with git*) | Proposed (person applies, always) |
 |---|---|---|

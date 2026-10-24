@@ -1,8 +1,9 @@
 //! The chat's git writes, run only while the person's switch *Let the Orchestrator write with git* is on: none of them
 //! loses work. A commit, a new branch, a switch git makes only when it keeps every local change, a pull that only
 //! fast-forwards unless the person asked for a merge, a push that never forces, a merge or revert that a conflict
-//! stops and undoes (unless the person asked to keep the conflicts), a tag and a fetch. Each command run is recorded
-//! ([`Ran`]) so its card shows what ran and what git said.
+//! stops and undoes, a tag and a fetch. Branches, tags and start points are plain names and remotes ones the
+//! repository lists ([`super::names`]); nothing but a commit runs while a merge or rebase is in progress, and no commit
+//! while a file is in conflict. Each command run is recorded ([`Ran`]) so its card shows what ran and what git said.
 
 use serde_json::{Value, json};
 
@@ -10,6 +11,7 @@ use super::{
   args::{Commit, CreateBranch, Fetch, Merge, Pull, Push, Revert, Switch, Tag},
   command::{Git, refusal, refused, said_of_success, shown},
   names::{self, current_branch, revision, upstream_remote},
+  read::in_progress,
 };
 use crate::{app_mcp::ToolError, messages::Message};
 
@@ -59,11 +61,19 @@ impl Ran<'_> {
 }
 
 /// `git_commit`: the named paths, every change, or what is staged, with the message; the author is git's own setting.
+/// Files still in conflict are refused: adding them would commit their conflict markers.
 pub(super) fn commit(ran: &mut Ran, asked: &Commit) -> Result<Value, ToolError> {
   if asked.message.trim().is_empty() {
     return Err(ToolError::InvalidArguments("message: required".to_owned()));
   }
-  let paths = names::paths(&asked.paths)?;
+  let paths = names::paths("paths", &asked.paths)?;
+  let unmerged = conflicted_files(ran.local)?;
+  if !unmerged.is_empty() {
+    return Err(refused(
+      "conflict",
+      Message::new("orchestrator.git.unresolved").with("files", unmerged.join(", ")),
+    ));
+  }
   let changed = if !paths.is_empty() || asked.all {
     let mut args = vec!["status", "--porcelain", "--"];
     args.extend(&paths);
@@ -96,14 +106,15 @@ pub(super) fn commit(ran: &mut Ran, asked: &Commit) -> Result<Value, ToolError> 
 
 /// `git_create_branch`: a new branch at HEAD or `start`, switched to when asked.
 pub(super) fn create_branch(ran: &mut Ran, asked: &CreateBranch) -> Result<Value, ToolError> {
-  let name = names::branch(ran.local, &asked.name)?;
+  let name = names::branch(ran.local, "name", &asked.name)?;
   let mut args = if asked.switch {
+    not_in_progress(ran.local)?;
     vec!["switch", "-c", name]
   } else {
     vec!["branch", name]
   };
   if let Some(start) = &asked.start {
-    args.push(revision("start", start)?);
+    args.push(names::start(ran.local, "start", start)?);
   }
   ran.run(Reach::Local, &args, None)?;
   ran.done()
@@ -111,42 +122,41 @@ pub(super) fn create_branch(ran: &mut Ran, asked: &CreateBranch) -> Result<Value
 
 /// `git_switch`: only as git switches, keeping every local change; one it would overwrite is refused.
 pub(super) fn switch(ran: &mut Ran, asked: &Switch) -> Result<Value, ToolError> {
-  let branch = revision("branch", &asked.branch)?;
+  let branch = names::branch(ran.local, "branch", &asked.branch)?;
+  not_in_progress(ran.local)?;
   ran.run(Reach::Local, &["switch", branch], None)?;
   ran.done()
 }
 
-/// `git_pull`: fast-forward only, unless the person asked for a merge; a merge's conflict is undone unless they asked
-/// to keep it.
+/// `git_pull`: fast-forward only, unless the person asked for a merge; a merge's conflict is undone. The remote is one
+/// the repository lists and the branch a plain name: the refspec is built here, never taken from the chat.
 pub(super) fn pull(ran: &mut Ran, asked: &Pull) -> Result<Value, ToolError> {
+  not_in_progress(ran.local)?;
   let mut args = if asked.merge {
-    vec!["pull", "--no-rebase", "--no-edit"]
+    vec!["pull", "--no-rebase", "--no-edit", "--end-of-options"]
   } else {
-    vec!["pull", "--ff-only"]
+    vec!["pull", "--ff-only", "--end-of-options"]
   };
+  let refspec;
   if let Some(remote) = &asked.remote {
-    args.push(revision("remote", remote)?);
+    args.push(names::remote(ran.local, "remote", remote)?);
     if let Some(branch) = &asked.branch {
-      args.push(revision("branch", branch)?);
+      refspec = format!("refs/heads/{}", names::branch(ran.local, "branch", branch)?);
+      args.push(&refspec);
     }
   } else if asked.branch.is_some() {
     return Err(ToolError::InvalidArguments("branch: needs remote".to_owned()));
   }
   match ran.run(Reach::Network, &args, None) {
     Ok(_) => ran.done(),
-    Err(error) => Err(conflicted(
-      ran,
-      error,
-      (&args, &["merge", "--abort"]),
-      asked.keep_conflicts,
-    )),
+    Err(error) => Err(conflicted(ran, error, (&args, &["merge", "--abort"]))),
   }
 }
 
 /// `git_push`: a branch to the remote's branch of the same name, never forced; a rejection is told in git's words.
 pub(super) fn push(ran: &mut Ran, asked: &Push) -> Result<Value, ToolError> {
   let branch = match &asked.branch {
-    Some(branch) => revision("branch", branch)?.to_owned(),
+    Some(branch) => names::branch(ran.local, "branch", branch)?.to_owned(),
     None => {
       current_branch(ran.local)?.ok_or_else(|| refused("detached_head", Message::new("orchestrator.git.detached")))?
     }
@@ -157,13 +167,14 @@ pub(super) fn push(ran: &mut Ran, asked: &Push) -> Result<Value, ToolError> {
   if asked.set_upstream {
     args.push("-u");
   }
-  args.extend([remote.as_str(), refspec.as_str()]);
+  args.extend(["--end-of-options", remote.as_str(), refspec.as_str()]);
   ran.run(Reach::Network, &args, None)?;
   ran.done()
 }
 
-/// `git_merge`: a branch into the current one; a conflict is undone unless the person asked to keep it.
+/// `git_merge`: a branch into the current one; a conflict is undone.
 pub(super) fn merge(ran: &mut Ran, asked: &Merge) -> Result<Value, ToolError> {
+  not_in_progress(ran.local)?;
   let mut args = vec!["merge", "--no-edit"];
   if asked.no_ff {
     args.push("--no-ff");
@@ -171,20 +182,16 @@ pub(super) fn merge(ran: &mut Ran, asked: &Merge) -> Result<Value, ToolError> {
   if let Some(message) = &asked.message {
     args.extend(["-m", message]);
   }
-  args.extend(["--end-of-options", revision("branch", &asked.branch)?]);
+  args.extend(["--end-of-options", names::branch(ran.local, "branch", &asked.branch)?]);
   match ran.run(Reach::Local, &args, None) {
     Ok(_) => ran.done(),
-    Err(error) => Err(conflicted(
-      ran,
-      error,
-      (&args, &["merge", "--abort"]),
-      asked.keep_conflicts,
-    )),
+    Err(error) => Err(conflicted(ran, error, (&args, &["merge", "--abort"]))),
   }
 }
 
 /// `git_revert`: a new commit that undoes one; a conflict is undone.
 pub(super) fn revert(ran: &mut Ran, asked: &Revert) -> Result<Value, ToolError> {
+  not_in_progress(ran.local)?;
   let mainline = asked.mainline.map(|parent| parent.to_string());
   let mut args = vec!["revert", "--no-edit"];
   if let Some(mainline) = &mainline {
@@ -193,20 +200,20 @@ pub(super) fn revert(ran: &mut Ran, asked: &Revert) -> Result<Value, ToolError> 
   args.extend(["--end-of-options", revision("commit", &asked.commit)?]);
   match ran.run(Reach::Local, &args, None) {
     Ok(_) => ran.done(),
-    Err(error) => Err(conflicted(ran, error, (&args, &["revert", "--abort"]), false)),
+    Err(error) => Err(conflicted(ran, error, (&args, &["revert", "--abort"]))),
   }
 }
 
-/// `git_tag`: a tag at HEAD or a revision, annotated with a message.
+/// `git_tag`: a tag at HEAD or a start point, annotated with a message.
 pub(super) fn tag(ran: &mut Ran, asked: &Tag) -> Result<Value, ToolError> {
-  let name = names::tag(ran.local, &asked.name)?;
+  let name = names::tag(ran.local, "name", &asked.name)?;
   let mut args = vec!["tag"];
   if asked.message.is_some() {
     args.extend(["-a", "-F", "-"]);
   }
   args.push(name);
   if let Some(rev) = &asked.rev {
-    args.push(revision("rev", rev)?);
+    args.push(names::start(ran.local, "rev", rev)?);
   }
   ran.run(Reach::Local, &args, asked.message.as_deref())?;
   ran.done()
@@ -225,41 +232,52 @@ pub(super) fn fetch(ran: &mut Ran, asked: &Fetch) -> Result<Value, ToolError> {
   } else {
     let branch = current_branch(ran.local)?.unwrap_or_default();
     remote = remote_of(ran.local, asked.remote.as_deref(), &branch)?;
-    args.push(&remote);
+    args.extend(["--end-of-options", remote.as_str()]);
   }
   ran.run(Reach::Network, &args, None)?;
   ran.done()
 }
 
-/// The remote named, else `branch`'s upstream remote, else `origin`.
+/// The remote named, else `branch`'s upstream remote, else `origin`: always one the repository lists.
 pub(super) fn remote_of(git: &Git, named: Option<&str>, branch: &str) -> Result<String, ToolError> {
-  if let Some(named) = named {
-    return Ok(revision("remote", named)?.to_owned());
-  }
-  Ok(upstream_remote(git, branch)?.unwrap_or_else(|| ORIGIN.to_owned()))
+  let chosen = match named {
+    Some(named) => named.to_owned(),
+    None => upstream_remote(git, branch)?.unwrap_or_else(|| ORIGIN.to_owned()),
+  };
+  Ok(names::remote(git, "remote", &chosen)?.to_owned())
 }
 
-/// The refusal of a merge, pull or revert that failed as `error`: when it stopped at conflicts, they are undone with
-/// `abort` (unless the person asked to `keep` them) and refused as `conflict`, naming the files; any other failure as
-/// it was.
-pub(super) fn conflicted(ran: &mut Ran, error: ToolError, (args, abort): (&[&str], &[&str]), keep: bool) -> ToolError {
-  let files = match ran.local.ok(&["diff", "--name-only", "--diff-filter=U"]) {
-    Ok(text) => text.lines().map(str::to_owned).collect::<Vec<_>>(),
-    // Conflicts that cannot be read are not told as conflicts: the command's own refusal says what git said.
-    Err(_) => Vec::new(),
-  };
+/// The files git holds in conflict.
+fn conflicted_files(git: &Git) -> Result<Vec<String>, ToolError> {
+  Ok(
+    git
+      .ok(&["diff", "--name-only", "--diff-filter=U"])?
+      .lines()
+      .map(str::to_owned)
+      .collect(),
+  )
+}
+
+/// Refused while a merge, rebase, cherry-pick or revert is in progress: the person finishes or aborts it first.
+pub(super) fn not_in_progress(git: &Git) -> Result<(), ToolError> {
+  match in_progress(git)? {
+    None => Ok(()),
+    Some(operation) => Err(refused(
+      "operation_in_progress",
+      Message::new("orchestrator.git.inProgress").with("operation", operation.to_owned()),
+    )),
+  }
+}
+
+/// The refusal of a merge, pull, revert or rebase that failed as `error`: when it stopped at conflicts, they are
+/// undone with `abort` and refused as `conflict`, naming the files; any other failure as it was.
+pub(super) fn conflicted(ran: &mut Ran, error: ToolError, (args, abort): (&[&str], &[&str])) -> ToolError {
+  // Conflicts that cannot be read are not told as conflicts: the command's own refusal says what git said.
+  let files = conflicted_files(ran.local).unwrap_or_default();
   if files.is_empty() {
     return error;
   }
   let (command, files) = (shown(args), files.join(", "));
-  if keep {
-    return refused(
-      "conflict",
-      Message::new("orchestrator.git.conflictKept")
-        .with("command", command)
-        .with("files", files),
-    );
-  }
   if ran.run(Reach::Local, abort, None).is_err() {
     return refused(
       "conflict",

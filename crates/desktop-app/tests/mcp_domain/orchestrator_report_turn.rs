@@ -25,7 +25,7 @@ use super::{
 
 /// Today's report of the project at `db`, kept to start a turn in a conversation of its own, whose turn thinks now:
 /// the conversation.
-fn report_turn(db: &mut ProjectDb, scope: &ChatScope) -> ChatId {
+pub(super) fn report_turn(db: &mut ProjectDb, scope: &ChatScope) -> ChatId {
   let now = Timestamp::now();
   let built = build_in(&scope.root, Vec::new(), (local_date(now), now)).expect("built");
   let report = DailyReport {

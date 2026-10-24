@@ -5,12 +5,13 @@
 use std::path::Path;
 
 use orchester_core::repository::redact_userinfo;
+use orchester_exec::programs::Programs;
 use serde_json::{Value, json};
 
 use super::{
   args::{Blame, Diff, Log, Nothing, Show},
-  command::{Git, MAX_OUTPUT, cut},
-  names::{paths, revision},
+  command::Git,
+  names::{self, revision},
 };
 use crate::app_mcp::ToolError;
 
@@ -130,7 +131,7 @@ pub(super) fn in_progress(git: &Git) -> Result<Option<&'static str>, ToolError> 
 }
 
 /// `git_log`: commits of a revision or range, or of every branch, newest first, touching a path when it names one.
-pub(super) fn log(git: &Git, asked: &Log) -> Result<Value, ToolError> {
+pub(super) fn log((programs, git): (&Programs, &Git), asked: &Log) -> Result<Value, ToolError> {
   let limit = asked.limit.unwrap_or(LOG_LIMIT).clamp(1, LOG_MAX).to_string();
   let mut args = vec![
     "log",
@@ -144,9 +145,9 @@ pub(super) fn log(git: &Git, asked: &Log) -> Result<Value, ToolError> {
     args.extend(["--end-of-options", revision("range", range)?]);
   }
   if let Some(path) = &asked.path {
-    args.extend(["--", path]);
+    args.extend(["--", names::path("path", path)?]);
   }
-  let text = git.ok(&args)?;
+  let (text, truncated) = git.capped(programs, &args)?;
   let commits: Vec<Value> = text
     .split('\u{1e}')
     .map(str::trim)
@@ -165,11 +166,11 @@ pub(super) fn log(git: &Git, asked: &Log) -> Result<Value, ToolError> {
       })
     })
     .collect();
-  Ok(json!({ "commits": commits }))
+  Ok(json!({ "commits": commits, "truncated": truncated }))
 }
 
 /// `git_diff`: the working tree's, the index's or two revisions' differences, as a patch or as counts.
-pub(super) fn diff(git: &Git, asked: &Diff) -> Result<Value, ToolError> {
+pub(super) fn diff((programs, git): (&Programs, &Git), asked: &Diff) -> Result<Value, ToolError> {
   if asked.to.is_some() && asked.from.is_none() {
     return Err(ToolError::InvalidArguments("to: needs from".to_owned()));
   }
@@ -187,29 +188,32 @@ pub(super) fn diff(git: &Git, asked: &Diff) -> Result<Value, ToolError> {
     }
   }
   args.push("--");
-  args.extend(paths(&asked.paths)?);
-  answered(&git.ok(&args)?)
+  args.extend(names::paths("paths", &asked.paths)?);
+  answered(git.capped(programs, &args)?)
 }
 
 /// `git_show`: a commit with its patch or counts, or a file's text at a revision.
-pub(super) fn show(git: &Git, asked: &Show) -> Result<Value, ToolError> {
+pub(super) fn show((programs, git): (&Programs, &Git), asked: &Show) -> Result<Value, ToolError> {
   let rev = revision("rev", &asked.rev)?;
   let text = match &asked.file {
-    Some(file) => git.ok(&["show", "--end-of-options", &format!("{rev}:{file}")])?,
+    Some(file) => {
+      let at = format!("{rev}:{}", names::path("file", file)?);
+      git.capped(programs, &["show", "--end-of-options", &at])?
+    }
     None => {
       let mut args = vec!["show", "--no-ext-diff", "--format=fuller"];
       if asked.stat {
         args.push("--stat");
       }
       args.extend(["--end-of-options", rev]);
-      git.ok(&args)?
+      git.capped(programs, &args)?
     }
   };
-  answered(&text)
+  answered(text)
 }
 
 /// `git_blame`: who last changed each line of a file, at a revision or in the working tree.
-pub(super) fn blame(git: &Git, asked: &Blame) -> Result<Value, ToolError> {
+pub(super) fn blame((programs, git): (&Programs, &Git), asked: &Blame) -> Result<Value, ToolError> {
   let lines = match (asked.start, asked.end) {
     (Some(start), Some(end)) => Some(format!("{start},{end}")),
     (Some(start), None) => Some(format!("{start},")),
@@ -223,8 +227,8 @@ pub(super) fn blame(git: &Git, asked: &Blame) -> Result<Value, ToolError> {
   if let Some(rev) = &asked.rev {
     args.extend(["--end-of-options", revision("rev", rev)?]);
   }
-  args.extend(["--", &asked.path]);
-  answered(&git.ok(&args)?)
+  args.extend(["--", names::path("path", &asked.path)?]);
+  answered(git.capped(programs, &args)?)
 }
 
 /// `git_branches`: local and remote branches, each with its commit, upstream and how far ahead and behind it is.
@@ -296,8 +300,7 @@ pub(super) fn remotes(git: &Git, _: &Nothing) -> Result<Value, ToolError> {
   Ok(json!({ "remotes": remotes }))
 }
 
-/// git's text as a read answers it: cut when long, saying so.
-fn answered(text: &str) -> Result<Value, ToolError> {
-  let (text, truncated) = cut(text, MAX_OUTPUT);
+/// git's text as a read answers it, and whether it was cut.
+fn answered((text, truncated): (String, bool)) -> Result<Value, ToolError> {
   Ok(json!({ "text": text, "truncated": truncated }))
 }
