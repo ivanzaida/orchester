@@ -6,8 +6,8 @@
 # unstaged or untracked), and every workspace crate that depends on one of them, as a change can break its tests too.
 # A file outside the crates counts for each crate whose sources include it (`include_str!`, `include_bytes!`,
 # `include!`). Files tests read at run time from outside their crate are not mapped. A change to the workspace's
-# Cargo.toml, Cargo.lock, rust-toolchain.toml or .cargo/ counts for every crate. The frozen orchester-desktop
-# (AGENTS.md) is tested only when the branch changes it. Scope `all`: every other crate, to refresh the known failures.
+# Cargo.toml, Cargo.lock, rust-toolchain.toml or .cargo/ counts for every crate. Scope `all`: every crate, to refresh
+# the known failures.
 #
 # The base: the merge base of HEAD with -Base when given, else the newer of its merge bases with `master` and
 # `origin/master` (a run branches off the local `master`, an agent's worktree often off `origin/master`). A pipeline's
@@ -39,7 +39,6 @@ $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $knownFailuresFile = Join-Path $PSScriptRoot "check-tests-known-failures.txt"
 $logParent = Join-Path $repositoryRoot ".tmp/check-tests"
-$frozenPackage = "orchester-desktop"
 $uiPackage = "orchester-app"
 $uiTestThreads = 4
 $wholeWorkspaceFiles = @("Cargo.toml", "Cargo.lock", "rust-toolchain.toml")
@@ -147,16 +146,14 @@ function Select-ChangedPackages($Packages, [string[]] $Files) {
     $wholeWorkspace = @($Files | Where-Object { $wholeWorkspaceFiles -ccontains $_ -or (Test-StartsWith $_ ".cargo/") })
     if ($wholeWorkspace) {
         Write-Output "tests: $($wholeWorkspace -join ', ') changed, which counts for every crate" | Out-Host
-        return @($Packages | Where-Object { $_.Name -cne $frozenPackage -or (Test-PackageChanged $_ $Files) } |
-            ForEach-Object { $_.Name })
+        return @($Packages | ForEach-Object { $_.Name })
     }
     $changed = @($Packages | Where-Object { Test-PackageChanged $_ $Files } | ForEach-Object { $_.Name })
     $selected = [System.Collections.Generic.List[string]]::new()
     $changed | ForEach-Object { $selected.Add($_) }
     do {
         $added = $Packages | Where-Object {
-            $_.Name -cne $frozenPackage -and -not $selected.Contains($_.Name) -and
-                ($_.Dependencies | Where-Object { $selected.Contains($_) })
+            -not $selected.Contains($_.Name) -and ($_.Dependencies | Where-Object { $selected.Contains($_) })
         }
         $added | ForEach-Object { $selected.Add($_.Name) }
     } while ($added)
@@ -408,7 +405,7 @@ Push-Location $repositoryRoot
 try {
     $packages = @(Get-WorkspacePackages)
     if ($Scope -ceq "all") {
-        $selected = @($packages | Where-Object { $_.Name -cne $frozenPackage } | ForEach-Object { $_.Name })
+        $selected = @($packages | ForEach-Object { $_.Name })
     }
     else {
         $baseRevision = Get-BaseRevision

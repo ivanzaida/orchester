@@ -1,14 +1,18 @@
 [package]
+# The package keeps its name, which `cargo -p`, the tests' commands and the projects' pipelines use; its program is
+# `orchester` (`orchester.exe`).
 name = "orchester-app"
-description = "Orchester desktop app, in the orchester2 design; replaces orchester-desktop."
-version.workspace = true
+description = "Orchester desktop app, in the orchester2 design."
+# The app's own version, apart from the workspace's (which the team server reports): bumping it on master releases
+# the app (.github/workflows/app-release.yml, docs/stable-build.md "Releases from CI").
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-default-run = "orchester-app"
+default-run = "orchester"
 
 [[bin]]
-name = "orchester-app"
+name = "orchester"
 path = "src/main.rs"
 
 [lints]

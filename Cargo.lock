@@ -2540,53 +2540,6 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lurq"
-version = "0.42.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b0c9a311d02efd0525ca063da273dd244ed38731e0939729d3dbb4656829572"
-dependencies = [
- "arboard",
- "base64 0.22.1",
- "bytemuck",
- "core-foundation-sys 0.8.7",
- "core-video-sys",
- "cosmic-text",
- "http-body-util",
- "hyper",
- "hyper-util",
- "image",
- "libc",
- "lurq_macros",
- "lyon",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "objc2-metal 0.3.2",
- "parking_lot",
- "paste",
- "pollster",
- "pulldown-cmark",
- "raw-window-handle",
- "redb",
- "rfd",
- "rmcp",
- "serde_json",
- "swash",
- "tiny-skia",
- "tokio",
- "tokio-util",
- "tower-service",
- "tracing",
- "tracing-subscriber",
- "usvg",
- "uuid",
- "wgpu",
- "wgpu-hal",
- "windows 0.62.2",
- "winit",
-]
-
-[[package]]
-name = "lurq"
 version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5408a9cbdda236e36e56a74ce0ed4da6ad18b4e8f68274fb3621fe17ae2b6ee5"
@@ -3348,7 +3301,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-app"
-version = "0.1.3"
+version = "0.2.0"
 dependencies = [
  "axum",
  "block2 0.6.2",
@@ -3357,7 +3310,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
- "lurq 0.51.1",
+ "lurq",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
  "orchester-api",
@@ -3430,39 +3383,6 @@ dependencies = [
  "thiserror 2.0.20",
  "uuid",
  "windows-sys 0.61.2",
- "zeroize",
-]
-
-[[package]]
-name = "orchester-desktop"
-version = "0.1.3"
-dependencies = [
- "axum",
- "chrono",
- "embed-resource",
- "hyper",
- "hyper-util",
- "image",
- "lurq 0.42.0",
- "orchester-api",
- "orchester-core",
- "orchester-exec",
- "orchester-index",
- "orchester-ipc",
- "orchester-server",
- "orchester-store",
- "orchester-workspace",
- "parking_lot",
- "rfd",
- "rmcp",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
  "zeroize",
 ]
 
@@ -3606,8 +3526,7 @@ name = "orchester-workspace"
 version = "0.1.3"
 dependencies = [
  "chrono",
- "lurq 0.42.0",
- "lurq 0.51.1",
+ "lurq",
  "orchester-api",
  "orchester-core",
  "orchester-exec",
@@ -4115,15 +4034,6 @@ dependencies = [
  "bytemuck",
  "font-types 0.12.5",
  "once_cell",
-]
-
-[[package]]
-name = "redb"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb338a6c67830a61bed824b78c2bb034ab1ff401a20616bd7957524f4fdc2f22"
-dependencies = [
- "libc",
 ]
 
 [[package]]

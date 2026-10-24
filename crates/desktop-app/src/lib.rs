@@ -1,12 +1,11 @@
-//! Orchester's desktop app in the orchester2 design (`data/orchester2.pen`, Kontur's design language). It
-//! replaces `orchester-desktop`, which stays as it is until this app takes over its screens.
+//! Orchester's desktop app in the orchester2 design (`data/orchester2.pen`, Kontur's design language), the program
+//! `orchester`. It replaced the deprecated `orchester-desktop` (`crates/desktop`, no longer built).
 //!
 //! The window is a shell (`chrome`, `shell`) around routed screens (`routes`, `screens`), moved around
 //! through tabs with their own histories (`navigation`), styled only through lurq theme roles (`theme`),
 //! worded only through i18n keys (`i18n`), and open to agents through one MCP server (`mcp`). Under it is
-//! `orchester-workspace`, the application layer the deprecated desktop shares: the app starts a session
-//! of it (`startup`) or says why it cannot, puts its services together (`services`), and follows the
-//! projects its tabs show (`project`).
+//! `orchester-workspace`, the application layer: the app starts a session of it (`startup`) or says why it
+//! cannot, puts its services together (`services`), and follows the projects its tabs show (`project`).
 
 pub mod app_log;
 pub mod appearance;

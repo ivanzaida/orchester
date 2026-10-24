@@ -1,5 +1,5 @@
 //! Lists the bundled locale files for `src/i18n.rs`, and embeds the application icon in
-//! `orchester-app.exe` on Windows, where Explorer, a taskbar pin and the Start menu shortcut take a
+//! `orchester.exe` on Windows, where Explorer, a taskbar pin and the Start menu shortcut take a
 //! program's icon from its resources.
 //!
 //! On macOS a program has no embedded icon: it comes from the `.app` bundle (`CFBundleIconFile`; see
@@ -119,7 +119,7 @@ mod icon_resource {
     println!("cargo:rerun-if-changed={ICON}");
     // Required rather than optional: a Windows build without its icon would look like success.
     // The MSVC toolchain installs the Windows SDK, which has the resource compiler.
-    embed_resource::compile_for(RESOURCE_SCRIPT, ["orchester-app"], embed_resource::NONE).manifest_required()?;
+    embed_resource::compile_for(RESOURCE_SCRIPT, ["orchester"], embed_resource::NONE).manifest_required()?;
     Ok(())
   }
 }

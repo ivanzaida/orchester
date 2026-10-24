@@ -1,0 +1,248 @@
+# Releases the Windows app (crates/desktop-app, the program `orchester`) when its version changes on master: builds
+# `orchester.exe` and `orchester-runner.exe`, packs them as a portable zip and as an installer (Inno Setup,
+# tools/installer/orchester.iss), and creates the GitHub Release `app-v<version>` with both and their checksums. See
+# docs/stable-build.md, "Releases from CI".
+#
+# The version is crates/desktop-app/Cargo.toml's own `version`, apart from the workspace's `[workspace.package]`
+# version, which the team server reports (server-release.yml, `server-v*` tags): bumping one never releases the other.
+# A push to master that changes the file releases only when neither the tag nor a release `app-v<version>` exists yet,
+# so other edits of that file, and the same run again, release nothing.
+#
+# The programs and the installer are not signed, so Windows SmartScreen warns about them; no secret is needed. Signing
+# would be one step before packing, with a certificate kept in the repository's secrets. macOS is not built here:
+# tools/package-macos.sh makes Orchester.app on a Mac, for a later job on a macOS runner.
+name: App release
+
+on:
+  push:
+    branches: [master]
+    paths: [crates/desktop-app/Cargo.toml]
+  # A release by hand: run it on master; it releases as a push would. A test of the build: tick `dry_run`, on any
+  # branch; it builds and packs both files, keeps them as the run's artifact for 7 days, and releases nothing.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only build and pack the zip and the installer as the run's artifact, on any ref (nothing is released)
+        type: boolean
+        default: false
+
+# One run at a time, whatever the ref, so two bumps never release at once; a newer run waits for the running one.
+concurrency:
+  group: app-release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      build: ${{ steps.decide.outputs.build }}
+      release: ${{ steps.decide.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: version
+        name: Read the app's version
+        run: |
+          version="$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' crates/desktop-app/Cargo.toml)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error file=crates/desktop-app/Cargo.toml::Its [package] version \"$version\" is not <major>.<minor>.<patch>[-<pre-release>], e.g. 0.2.0 or 0.3.0-rc.1."
+            exit 1
+          fi
+          {
+            echo "version=$version"
+            if [[ "$version" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
+      - id: decide
+        name: Decide whether to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = true ]; then
+            echo "::notice title=Dry run::Builds Orchester $VERSION from $REF as the run's artifact; nothing is released."
+            { echo "build=true"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$REF" != refs/heads/master ]; then
+            echo "::error::A release is made from master only, not from $REF. Tick dry_run to test the build on this ref."
+            exit 1
+          fi
+          tag="app-v$VERSION"
+          # Succeeds when GitHub has the API path, fails when it answers 404; anything else stops the run, so a failed
+          # question never reads as "not released yet".
+          exists() {
+            local output
+            if output="$(gh api "$1" --silent 2>&1)"; then
+              return 0
+            fi
+            if [[ "$output" == *"HTTP 404"* ]]; then
+              return 1
+            fi
+            echo "::error::Could not ask GitHub for $1: $output"
+            exit 1
+          }
+          if exists "repos/$REPO/git/ref/tags/$tag" || exists "repos/$REPO/releases/tags/$tag"; then
+            echo "::notice title=Nothing to release::$tag exists already; bump the version in crates/desktop-app/Cargo.toml to release."
+            { echo "build=false"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Release::Releases Orchester $VERSION as $tag."
+            { echo "build=true"; echo "release=true"; } >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    name: Windows (zip and installer)
+    needs: prepare
+    if: ${{ needs.prepare.outputs.build == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+      # The installed app, as tools/install.ps1 builds it: the MCP server on its fixed address with the token in the
+      # OS secret store, and OS notifications (docs/stable-build.md, "The new app's MCP server").
+      ORCHESTER_APP_INSTALLED_BUILD: "1"
+      # The C runtime linked into the programs, so they start on a Windows without the Visual C++ Redistributable.
+      RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --locked -p orchester-app -p orchester-runner
+      - name: Check the programs need no Visual C++ runtime
+        shell: pwsh
+        run: |
+          foreach ($program in "orchester.exe", "orchester-runner.exe") {
+            $text = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes("target/release/$program"))
+            if ($text.IndexOf("VCRUNTIME140", [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+              Write-Output "::error::target/release/$program imports the Visual C++ runtime; it would not start where that is not installed."
+              exit 1
+            }
+          }
+      - name: Pack the zip and the installer
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = Join-Path $env:RUNNER_TEMP "app-release"
+          $built = (Resolve-Path "target/release").Path
+
+          # The zip holds one folder, Orchester-<version>, with both programs: the app starts the runner from beside
+          # itself, so orchester.exe alone does not work.
+          $folder = Join-Path $out "Orchester-$env:VERSION"
+          New-Item -ItemType Directory -Force -Path $folder | Out-Null
+          foreach ($program in "orchester.exe", "orchester-runner.exe") {
+            Copy-Item -LiteralPath (Join-Path $built $program) -Destination $folder
+          }
+          Copy-Item -LiteralPath "tools/installer/portable-readme.txt" -Destination (Join-Path $folder "README.txt")
+          $zip = "Orchester-$env:VERSION-windows-x64.zip"
+          Compress-Archive -Path $folder -DestinationPath (Join-Path $out $zip)
+
+          # Inno Setup 6, installed only on this runner when its image does not have it.
+          $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc /Qp "/DAppVersion=$env:VERSION" "/DProgramDir=$built" "/O$out" tools/installer/orchester.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = "Orchester-$env:VERSION-setup.exe"
+
+          # `sha256sum -c SHA256SUMS.txt` checks both; Unix line endings, so it reads the names as they are.
+          $sums = foreach ($file in $setup, $zip) {
+            "$((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out $file)).Hash.ToLowerInvariant())  $file"
+          }
+          [System.IO.File]::WriteAllText((Join-Path $out "SHA256SUMS.txt"), (($sums -join "`n") + "`n"))
+          Get-Content (Join-Path $out "SHA256SUMS.txt")
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-windows
+          path: |
+            ${{ runner.temp }}/app-release/Orchester-${{ needs.prepare.outputs.version }}-setup.exe
+            ${{ runner.temp }}/app-release/Orchester-${{ needs.prepare.outputs.version }}-windows-x64.zip
+            ${{ runner.temp }}/app-release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: GitHub Release
+    needs: [prepare, windows]
+    if: ${{ needs.prepare.outputs.release == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-windows
+          path: ${{ runner.temp }}/assets
+      - name: Write the release notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ github.sha }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          setup="Orchester-$VERSION-setup.exe"
+          zip="Orchester-$VERSION-windows-x64.zip"
+          cat > "$RUNNER_TEMP/notes.md" <<NOTES
+          Orchester $VERSION for Windows 10 and 11 (x64), built from [\`${COMMIT:0:12}\`]($REPOSITORY_URL/commit/$COMMIT).
+
+          | File | What it is |
+          | --- | --- |
+          | \`$setup\` | **The installer.** Installs Orchester for your user, without administrator rights, to \`%LOCALAPPDATA%\\Programs\\Orchester\` (another folder can be chosen on the first install; an upgrade keeps it), with the Start menu shortcut *Orchester*, an optional desktop shortcut and an uninstaller (*Settings › Apps*). |
+          | \`$zip\` | **The portable app.** \`orchester.exe\` and \`orchester-runner.exe\` in one folder; keep them together, because the app starts its runner from beside itself (\`orchester.exe\` alone cannot open a project). Unpack it to a folder you can write to, outside *Program Files*, and start \`orchester.exe\`. |
+          | \`SHA256SUMS.txt\` | The SHA-256 checksums of both (\`sha256sum -c SHA256SUMS.txt\`, or \`Get-FileHash\` in PowerShell). |
+
+          ### Your data stays
+
+          The app keeps its database (\`orchester.db\`) and its logs beside its program. Installing a newer version over an older one replaces only the two programs, and uninstalling removes only them: the database and the logs stay in the folder. Close Orchester first; the installer waits until it is closed and never closes it itself.
+
+          **Back up before the first start of a newer version:** copy aside \`orchester.db\` (with \`orchester.db-wal\`, if any) and each project's \`.orchester\\orchester.db\`. A newer version migrates them, and an older one then refuses them.
+
+          This is the installed app: its MCP server listens on the fixed address in *Settings › Automation* (default \`http://127.0.0.1:47821/mcp\`), with the token in Windows Credential Manager.
+
+          ### Not signed
+
+          Neither the programs nor the installer are code-signed, so Windows SmartScreen may show *Windows protected your PC*: choose *More info*, then *Run anyway*. Check the download against \`SHA256SUMS.txt\` first.
+
+          macOS is not built here; on a Mac, \`tools/install-macos.sh\` builds and installs \`Orchester.app\` from the repository.
+          NOTES
+          cat "$RUNNER_TEMP/notes.md"
+      # A run again after this step failed half-way finds its own release: it uploads the files again instead.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag="app-v$VERSION"
+          flags=()
+          [ "$PRERELEASE" = false ] || flags+=(--prerelease)
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" "$RUNNER_TEMP/assets"/* --clobber
+          else
+            gh release create "$tag" --target "$COMMIT" --title "Orchester $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+              "${flags[@]}" "$RUNNER_TEMP/assets"/*
+          fi

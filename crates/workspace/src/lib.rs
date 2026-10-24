@@ -1,8 +1,8 @@
-//! Orchester's local application layer, shared by the desktop apps (`orchester-desktop`, being
-//! replaced, and `orchester-app`): the application session and its projects, the runners' client
-//! side and the session's background activity, project data as screens and automation read and
-//! change it, and the tools of Orchester's own MCP server. Results that a person reads carry
-//! [`messages::Message`] keys of this crate's locale files ([`i18n`]); no UI toolkit is used here.
+//! Orchester's local application layer of the desktop app (`orchester-app`): the application
+//! session and its projects, the runners' client side and the session's background activity,
+//! project data as screens and automation read and change it, and the tools of Orchester's own MCP
+//! server. Results that a person reads carry [`messages::Message`] keys of this crate's locale files
+//! ([`i18n`]); no UI toolkit is used here.
 
 pub mod accounts;
 pub mod activity;
@@ -27,7 +27,7 @@ pub mod files;
 pub mod highlight;
 pub mod i18n;
 pub mod import;
-#[cfg(any(feature = "devtools-inspect", feature = "devtools-inspect-legacy"))]
+#[cfg(feature = "devtools-inspect")]
 mod inspect;
 pub mod instructions;
 pub mod links;

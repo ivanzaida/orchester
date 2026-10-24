@@ -15,17 +15,7 @@ const TOKEN: &str = "stand-in-app-private-token";
 
 pub fn serve(folder: &str) -> Result<(), String> {
   let folder = Path::new(folder);
-  let app = if folder.ends_with("orchester-mcp") {
-    "orchester"
-  } else {
-    "orchester-app"
-  };
-  let listener = publish(folder, app)?;
-  if app == "orchester" {
-    let windows = folder.parent().ok_or("profile")?.join("lurq/mcp");
-    let ui_listener = publish(&windows, app)?;
-    std::thread::spawn(move || accept(&ui_listener, &windows).expect("stand-in UI server"));
-  }
+  let listener = publish(folder, "orchester-app")?;
   println!("ready");
   std::io::stdout().flush().map_err(|_| "flush")?;
   accept(&listener, folder)

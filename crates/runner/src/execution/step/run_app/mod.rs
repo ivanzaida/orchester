@@ -76,29 +76,30 @@ fn run(processes: &RunProcesses, worktree: &Path, call: &AppCall, qa: Option<&St
   };
   // The same boundary as stop_run_process is checked before any discovery file is read or request made.
   let process = processes.app(pid)?;
-  let app = process
+  let program = process
     .executable()
     .file_stem()
     .and_then(|name| name.to_str())
     .ok_or(AppError::AppName)?;
-  let app = match app {
-    name if name.eq_ignore_ascii_case("orchester-app") => "orchester-app",
-    // `tools/qa-app.ps1` names the copy of the new app it starts so; only the step's QA app goes by that name.
-    name if target.is_some() && name.eq_ignore_ascii_case("orchester-app-qa") => "orchester-app",
-    name if name.eq_ignore_ascii_case("orchester") => "orchester",
-    _ => return Err(AppError::AppName),
-  };
+  if !is_app(program, target.is_some()) {
+    return Err(AppError::AppName);
+  }
   let discovery = match &target {
     // Checked again at each call: a link put in its place since the app started is never followed.
-    Some(target) => discovery::read(
-      &discovery::qa_file(&target.discovery)?.ok_or(AppError::Missing)?,
-      pid,
-      app,
-    )?,
-    None => discovery::find(worktree, pid, app, call.tool())?,
+    Some(target) => discovery::read(&discovery::qa_file(&target.discovery)?.ok_or(AppError::Missing)?, pid)?,
+    None => discovery::find(worktree, pid)?,
   };
   let mut result = transport::Client::new(&process, &discovery)?.call(call)?;
   images::save(worktree, &mut result)?;
   // Redact before a result can reach Debug, a relay event, the agent or persistence.
   Ok(ToolResult::from_app(result).redacted(std::slice::from_ref(discovery.token())))
+}
+
+/// Whether `program` (a file name without its extension) is the app: `orchester`, or `orchester-app` as builds before
+/// the program's rename named it. `tools/qa-app.ps1` names the copy it starts `orchester-app-qa`; only the step's QA
+/// app (`qa_app`) goes by that name.
+fn is_app(program: &str, qa_app: bool) -> bool {
+  program.eq_ignore_ascii_case("orchester")
+    || program.eq_ignore_ascii_case("orchester-app")
+    || (qa_app && program.eq_ignore_ascii_case("orchester-app-qa"))
 }

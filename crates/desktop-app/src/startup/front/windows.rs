@@ -20,7 +20,7 @@ use windows_sys::{
 
 use super::Front;
 
-/// What every Orchester program's file name starts with (`orchester.exe`, `orchester-app.exe`).
+/// What every Orchester program's file name starts with (`orchester.exe`, and `orchester-app.exe` of earlier builds).
 const PROGRAM_PREFIX: &str = "orchester";
 /// The title of lurq's DevTools window, a second top-level window of a development build.
 const DEVTOOLS_TITLE: &str = "DevTools";
