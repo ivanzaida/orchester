@@ -26,34 +26,28 @@ Workspace layout:
 - `crates/core` (`orchester-core`): domain model and rules. No UI, windowing, rendering, HTTP, or database client
   dependencies. Persistence, process execution and providers are reached through traits defined here, so the desktop
   app and the future server share the same core.
-- `crates/workspace` (`orchester-workspace`): the local application layer both desktop apps share — the session and
+- `crates/workspace` (`orchester-workspace`): the local application layer of the desktop app — the session and
   projects, the runners' client side, project data as screens and automation read and change it, the domain MCP
   tools, and the words of its `Message`s (`assets/locales/`, loaded under the namespace `workspace`). No UI: lurq is
   only an optional dependency for empty DevTools markers (feature `devtools-inspect`, `src/inspect.rs`).
-- `crates/desktop` (`orchester-desktop`, binary `orchester`): the old lurq UI, deprecated and frozen since
-  2026-10-15. It is never updated again: no fixes, no features, no ports of new logic, no QA, no tests for new work.
-  Read it only to look up code and behaviour. New work never changes `crates/desktop`; if a change elsewhere would
-  stop it from compiling, report that to the person instead of updating it.
-- `crates/desktop-app` (`orchester-app`, binary `orchester-app`): the new lurq app in the `orchester2.pen` design.
+- `crates/desktop` (`orchester-desktop`): the old lurq UI, deprecated and frozen since 2026-10-15, and no longer a
+  workspace member since 2026-10-24: it does not build, and its source stays only to look up code and behaviour. Never
+  change it, build it or port anything to it.
+- `crates/desktop-app` (`orchester-app`, binary `orchester`; `orchester-app` before 2026-10-24): the lurq app in the
+  `orchester2.pen` design.
   Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
   settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP
   server of its own that hosts lurq's window tools and the app's tools. The installed app listens on the fixed
   address set in Settings › Automation (default `http://127.0.0.1:47821/mcp`, token in the OS secret store, no
   discovery file); a debug build writes a per-start discovery file `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`,
   and a QA copy writes it to the folder `ORCHESTER_APP_MCP_DISCOVERY` names (`tools/qa-app.ps1`:
-  `.tmp/qa/<task>/mcp/`); see `docs/stable-build.md`. Run it with `powershell -File tools/run.ps1 app`.
-- `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
-  own directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with
-  `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features devtools`); plain
-  `cargo run -p orchester-desktop` does not build the runner, and the app then shows the runner as unable to start.
-  Every build runs two loopback MCP servers (free port, token in a per-user discovery file; see
-  `docs/stable-build.md`): Orchester's domain server (`%LOCALAPPDATA%\orchester-mcp\<pid>.json`; tasks, runs,
-  approvals, pipelines; the status bar shows its port) for controlling the app, and lurq's UI server
-  (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`) for screenshots and the element tree, which only reads in release builds
-  and also drives the UI in debug builds (design verification).
-  On macOS: `cargo build -p orchester-runner && cargo run -p orchester-desktop` (the new app:
-  `cargo build -p orchester-runner && cargo run -p orchester-app`); `tools/package-macos.sh` builds
-  `Orchester.app` and `Orchester App.app` and `tools/install-macos.sh` installs both (`docs/stable-build.md`).
+  `.tmp/qa/<task>/mcp/`); see `docs/stable-build.md`. Run it with `powershell -File tools/run.ps1`.
+- `crates/runner` (`orchester-runner`): one process per open project, started by the app from the app's own
+  directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with `powershell -File tools/run.ps1`
+  (extra arguments go to `cargo run`, e.g. `--features devtools`); plain `cargo run -p orchester-app` does not build
+  the runner, and the app then shows the runner as unable to start.
+  On macOS: `cargo build -p orchester-runner && cargo run -p orchester-app`; `tools/package-macos.sh` builds
+  `Orchester.app` and `tools/install-macos.sh` installs it (`docs/stable-build.md`).
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
   implementing core's `CommandRunner`. Platform details (hidden console window, process groups and kill, the macOS
   program search path) stay behind `cfg` here.
@@ -109,7 +103,7 @@ Hard requirements:
     synchronous critical sections. Never `std::sync::Mutex` in new code.
 13. Every user-facing string goes through i18n with a key in every shipped locale (exact key and placeholder
     parity), and every color, font, text size, spacing, radius and border comes from a lurq theme role. Design
-    values live only in each app's theme module (`crates/desktop/src/theme/`, `crates/desktop-app/src/theme/`).
+    values live only in the app's theme module (`crates/desktop-app/src/theme/`).
     Exempt from i18n: developer logs, identifiers, raw user data.
 14. Tests live in a `tests/` folder of the crate they cover, not in large inline modules. Every `cargo test` carries
     a name filter (`cargo test -p <crate> --test <binary> <filter>`); batch edits and run the affected tests once per

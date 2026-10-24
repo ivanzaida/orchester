@@ -100,7 +100,7 @@ pub enum OsError {
   #[cfg(windows)]
   #[error("Windows refused: {0}")]
   Windows(#[from] ::windows::core::Error),
-  /// macOS shows notifications only for an app in a bundle (`Orchester App.app`).
+  /// macOS shows notifications only for an app in a bundle (`Orchester.app`).
   #[error("this program does not run from an app bundle, which macOS notifications need")]
   NoAppBundle,
   #[error("the system's notification center is not available")]

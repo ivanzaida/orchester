@@ -1,8 +1,8 @@
-//! Exact-pid discovery in the user's folder or a QA copy's folder under `.tmp/qa/<task>/`. A QA copy of
-//! `orchester-app` writes its file to the folder `ORCHESTER_APP_MCP_DISCOVERY` names, which `tools/qa-app.ps1` sets to
+//! Exact-pid discovery in the user's folder or a QA copy's folder under `.tmp/qa/<task>/`. A QA copy of the app
+//! writes its file to the folder `ORCHESTER_APP_MCP_DISCOVERY` names, which `tools/qa-app.ps1` sets to
 //! `.tmp/qa/<task>/mcp/`; a QA profile, a copy whose user data folder is `.tmp/qa/<task>/profile/`, keeps it in that
-//! folder's `orchester-app-mcp/`, `orchester-mcp/` or `lurq/mcp/`. Only those exact paths are read: agents keep build
-//! output and scratch checkouts in `.tmp/`, so it is never walked.
+//! folder's `orchester-app-mcp/`. Only those exact paths are read: agents keep build output and scratch checkouts in
+//! `.tmp/`, so it is never walked.
 
 use std::{
   fs,
@@ -17,32 +17,29 @@ use super::AppError;
 
 const MAX_DISCOVERY_BYTES: u64 = 16 * 1024;
 pub(super) const MAX_QA_ENTRIES: usize = 1024;
+/// The app's name in its discovery file (`orchester-app`'s `mcp::APP_NAME`).
+const APP: &str = "orchester-app";
+/// The app's discovery folder in a user data folder.
+const FOLDER: &str = "orchester-app-mcp";
 
-pub(super) fn find(worktree: &Path, pid: NonZeroU32, app: &str, tool: &str) -> Result<AppDiscovery, AppError> {
-  let folder = if app == "orchester-app" {
-    "orchester-app-mcp"
-  } else if tool.starts_with("lurq_") {
-    "lurq/mcp"
-  } else {
-    "orchester-mcp"
-  };
+pub(super) fn find(worktree: &Path, pid: NonZeroU32) -> Result<AppDiscovery, AppError> {
   let name = format!("{pid}.json");
   if let Some(user) = user_data() {
-    let path = user.join(folder).join(&name);
+    let path = user.join(FOLDER).join(&name);
     match fs::symlink_metadata(&path) {
-      Ok(_) => return read(&path, pid, app),
+      Ok(_) => return read(&path, pid),
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
       Err(_) => return Err(AppError::ReadDiscovery),
     }
   }
   let root = fs::canonicalize(worktree).map_err(|_| AppError::ReadDiscovery)?;
-  let mut layouts = vec![Path::new("profile").join(folder).join(&name)];
-  if app == "orchester-app" {
-    layouts.push(Path::new("mcp").join(&name));
-  }
+  let layouts = [
+    Path::new("profile").join(FOLDER).join(&name),
+    Path::new("mcp").join(&name),
+  ];
   let matches = qa_files(&root, &layouts)?;
   match matches.as_slice() {
-    [path] => read(path, pid, app),
+    [path] => read(path, pid),
     [] => Err(AppError::Missing),
     _ => Err(AppError::Ambiguous),
   }
@@ -64,7 +61,7 @@ pub(in crate::execution::step) fn user_data() -> Option<PathBuf> {
   None
 }
 
-pub(super) fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscovery, AppError> {
+pub(super) fn read(path: &Path, pid: NonZeroU32) -> Result<AppDiscovery, AppError> {
   let file = fs::File::open(path).map_err(|_| AppError::ReadDiscovery)?;
   let mut bytes = Vec::new();
   file
@@ -74,7 +71,7 @@ pub(super) fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscove
   if bytes.len() as u64 > MAX_DISCOVERY_BYTES {
     return Err(AppError::ReadDiscovery);
   }
-  AppDiscovery::parse(&bytes, pid, app).map_err(AppError::from)
+  AppDiscovery::parse(&bytes, pid, APP).map_err(AppError::from)
 }
 
 /// The files `.tmp/qa/<task>/<layout>` of `root` for every task folder, reading `.tmp/qa/` one level only.

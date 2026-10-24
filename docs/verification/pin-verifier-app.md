@@ -1,6 +1,6 @@
 # Pin a UI verifier's app
 
-Build the desktop (every build includes the embedded MCP server) and runner, then pin both before launching either program. The
+Build the app (`orchester-app`, the program `orchester`; every build includes its MCP server) and runner, then pin both before launching either program. The
 helper creates a unique app directory beneath the run's own scratch directory and prints the
 absolute desktop path. The runner is copied beside it, where the desktop looks for it. The
 verifier must launch the printed path, never `target/debug/orchester` after pinning.
@@ -8,7 +8,7 @@ verifier must launch the printed path, never `target/debug/orchester` after pinn
 Windows, from the run worktree:
 
 ```powershell
-cargo build --locked -p orchester-desktop -p orchester-runner
+cargo build --locked -p orchester-app -p orchester-runner
 if ($LASTEXITCODE -ne 0) { throw 'app build failed' }
 $metadata = cargo metadata --format-version 1 --no-deps
 if ($LASTEXITCODE -ne 0) { throw 'cargo metadata failed' }
@@ -22,7 +22,7 @@ if ($LASTEXITCODE -ne 0) { throw 'app pinning failed' }
 macOS, from the run worktree:
 
 ```sh
-cargo build --locked -p orchester-desktop -p orchester-runner
+cargo build --locked -p orchester-app -p orchester-runner
 if [ "$?" -ne 0 ]; then echo 'app build failed' >&2; exit 1; fi
 target=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')
 mkdir -p .tmp/verification

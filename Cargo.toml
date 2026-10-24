@@ -1,11 +1,12 @@
 [workspace]
 resolver = "3"
+# `crates/desktop`, the deprecated app (frozen since 2026-10-15), is no longer a member: it does not build and its
+# source stays only for looking up code (AGENTS.md).
 members = [
   "crates/agent",
   "crates/api",
   "crates/cloud",
   "crates/core",
-  "crates/desktop",
   "crates/desktop-app",
   "crates/exec",
   "crates/index",
@@ -72,7 +73,7 @@ deadpool-postgres = { version = "0.14", default-features = false, features = ["r
 # time zone); std has no local time.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # Compiles the Windows resource script with the application icon and links it into `orchester.exe`
-# (desktop build script, Windows only). It finds the Windows SDK's resource compiler for the MSVC
+# (`orchester-app`'s build script, Windows only). It finds the Windows SDK's resource compiler for the MSVC
 # toolchain in use, which the build script cannot do in a few lines.
 embed-resource = "3"
 # Decodes the bundled PNG of the window icon. Already compiled with its PNG decoder for lurq's
@@ -102,8 +103,6 @@ keyring-core = "1"
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
 lurq = { version = "0.51.1", default-features = false }
-# The deprecated app retains its existing create/render hook contract until it is replaced.
-lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
 # Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's
 # rustls and ring; SMTP with TLS and authentication is not a few lines of code.
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "ring", "rustls-platform-verifier", "smtp-transport", "tokio1-rustls"] }

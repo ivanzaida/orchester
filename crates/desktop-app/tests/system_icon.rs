@@ -1,4 +1,4 @@
-//! The running app gives Windows its icon: `orchester-app`, started without taking the focus (so the
+//! The running app gives Windows its icon: `orchester`, started without taking the focus (so the
 //! test leaves the person's keyboard alone), soon has the icon embedded in its executable (big: the
 //! 256px frame; small: the system's size) as its window icons (taskbar button, Alt+Tab, thumbnail) and as its window
 //! class's icons, which the taskbar takes when the window does not answer. macOS takes an app's icon from its
@@ -50,7 +50,7 @@ impl Drop for Started {
 #[test]
 fn system_icon_reaches_the_window_and_its_class() {
   let mut app = Started(
-    Command::new(env!("CARGO_BIN_EXE_orchester-app"))
+    Command::new(env!("CARGO_BIN_EXE_orchester"))
       .env("ORCHESTER_APP_MCP_START_WITHOUT_FOCUS", "1")
       // No agent drives the window while the test reads it.
       .env("ORCHESTER_APP_MCP_WINDOW_CONTROL", "off")

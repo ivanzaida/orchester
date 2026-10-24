@@ -1,23 +1,24 @@
 # Installs a release build of Orchester for daily use, apart from the dev build in target/debug
-# that agents rebuild. It builds both desktop apps, the deprecated `orchester` and the new
-# `orchester-app`, and the runner they both start from their own directory, in one build of this
-# checkout into its own target directory, and copies the three programs into the install directory.
-# The two apps share the application database created next to them on first start (one app at a
-# time: the data folder's lock), so they always come from the same build: an older one may refuse
-# or misread data a newer one migrated. The installed apps keep their own project list, apart from
-# the dev build's. See docs/stable-build.md.
-# Every build includes the embedded MCP servers, so agents can drive the installed apps.
+# that agents rebuild. It builds the app (`orchester-app`, the program `orchester.exe`) and the
+# runner it starts from its own directory, in one build of this checkout into its own target
+# directory, and copies both programs into the install directory. The app keeps its application
+# database next to them, created on first start, so the installed app has its own project list,
+# apart from the dev build's. See docs/stable-build.md.
+# Every build includes the app's MCP server, so agents can drive the installed app.
+# Builds before the program's rename installed it as `orchester-app.exe` (beside the deprecated
+# app's `orchester.exe`, which this replaces). An `orchester-app.exe` left in the install directory
+# is from an older build: the script never deletes it, refuses while it runs, and says so.
 #   powershell -File tools/install.ps1 [-InstallDir <dir>] [-BuildDir <dir>] [-ImportDevData]
 #     [-StartMenuShortcut]
 param(
-    # Where orchester.exe, orchester-app.exe, orchester-runner.exe and the application database live.
+    # Where orchester.exe, orchester-runner.exe and the application database live.
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Orchester\app"),
     # Cargo target directory of the release build; outside the repository so agent builds never touch it.
     [string]$BuildDir = (Join-Path $env:LOCALAPPDATA "Orchester\build"),
     # Copies the dev build's application database (target/debug/orchester.db) into the install
     # directory. Refused when the install directory already has one: it is never overwritten.
     [switch]$ImportDevData,
-    # Adds Orchester (the deprecated app) and Orchester App (the new one) to the current user's Start menu.
+    # Adds Orchester to the current user's Start menu.
     [switch]$StartMenuShortcut
 )
 $ErrorActionPreference = "Stop"
@@ -26,14 +27,18 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $InstallDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InstallDir)
 $BuildDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($BuildDir)
 $devDir = Join-Path $repositoryRoot "target\debug"
-$programs = @("orchester.exe", "orchester-app.exe", "orchester-runner.exe")
+$programs = @("orchester.exe", "orchester-runner.exe")
+# The app's program as builds before its rename named it. It starts the runner beside it, so the
+# install is not updated while it runs either.
+$formerProgram = "orchester-app.exe"
+$checkedPrograms = $programs + $formerProgram
 # SQLite runs in WAL mode: after an unclean end, committed changes may still be in the -wal file.
 $databaseFiles = @("orchester.db", "orchester.db-wal")
 
 # Refuses while a program is running from exactly $Directory. Nothing is ever stopped here.
 function Assert-NotRunning([string]$Directory, [string]$What) {
-    $executables = $programs | ForEach-Object { Join-Path $Directory $_ }
-    $names = ($programs | ForEach-Object { "Name = '$_'" }) -join " OR "
+    $executables = $checkedPrograms | ForEach-Object { Join-Path $Directory $_ }
+    $names = ($checkedPrograms | ForEach-Object { "Name = '$_'" }) -join " OR "
     $running = @(Get-CimInstance Win32_Process -Filter $names |
         Where-Object { $_.ExecutablePath -and ($executables -contains $_.ExecutablePath) })
     if ($running.Count -gt 0) {
@@ -77,12 +82,12 @@ if ($ImportDevData) { Assert-CanImportDevData }
 
 Push-Location $repositoryRoot
 try {
-    # One build of all three: the apps share the application database and the runner, so they must match.
+    # One build of both: the app and its runner must match.
     # ORCHESTER_APP_INSTALLED_BUILD makes this orchester-app the installed app: the fixed MCP address and the token
     # in the secret store (docs/stable-build.md). Only this script and package-macos.sh set it.
     $env:ORCHESTER_APP_INSTALLED_BUILD = "1"
     try {
-        cargo build --release --locked --target-dir $BuildDir -p orchester-desktop -p orchester-app -p orchester-runner
+        cargo build --release --locked --target-dir $BuildDir -p orchester-app -p orchester-runner
     }
     finally {
         Remove-Item Env:ORCHESTER_APP_INSTALLED_BUILD
@@ -101,7 +106,7 @@ if ($ImportDevData) { Assert-CanImportDevData }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $hadDatabase = Test-Path -LiteralPath (Join-Path $InstallDir "orchester.db") -PathType Leaf
-# All three are copied beside the installed ones first, then each replaces its own, so a failed copy
+# Both are copied beside the installed ones first, then each replaces its own, so a failed copy
 # changes nothing and a failed replacement says which programs are from which build.
 $replaced = @()
 try {
@@ -138,26 +143,27 @@ if ($ImportDevData) {
 }
 
 $executable = Join-Path $InstallDir "orchester.exe"
-$appExecutable = Join-Path $InstallDir "orchester-app.exe"
+$startMenu = [Environment]::GetFolderPath("Programs")
 if ($StartMenuShortcut) {
-    # Each shortcut takes its program's embedded icon, so it needs no IconLocation.
-    $shortcuts = [ordered]@{ "Orchester.lnk" = $executable; "Orchester App.lnk" = $appExecutable }
-    foreach ($name in $shortcuts.Keys) {
-        $shortcutPath = Join-Path ([Environment]::GetFolderPath("Programs")) $name
-        $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $shortcuts[$name]
-        $shortcut.WorkingDirectory = $InstallDir
-        $shortcut.Save()
-        Write-Output "Start menu shortcut: $shortcutPath"
-    }
+    # The shortcut takes the program's embedded icon, so it needs no IconLocation.
+    $shortcutPath = Join-Path $startMenu "Orchester.lnk"
+    $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $executable
+    $shortcut.WorkingDirectory = $InstallDir
+    $shortcut.Save()
+    Write-Output "Start menu shortcut: $shortcutPath"
 }
 
 Write-Output "Installed Orchester ($commit) to $InstallDir"
-Write-Output "Start the new app with: $appExecutable"
-Write-Output "Start the deprecated app with: $executable"
-Write-Output "One app at a time: both use the application database in $InstallDir."
+Write-Output "Start it with: $executable"
+$formerExecutable = Join-Path $InstallDir $formerProgram
+if (Test-Path -LiteralPath $formerExecutable -PathType Leaf) {
+    Write-Warning ("$formerExecutable is the app from an older build (before its program was renamed to " +
+        "orchester.exe). Do not start it: it would open this install's database with an older build. Delete it " +
+        "yourself, with the Start menu shortcut 'Orchester App' if you made one; this script never deletes it.")
+}
 if ($hadDatabase) {
-    Write-Warning ("Before the first start of this build, with both apps closed, copy aside $InstallDir\orchester.db " +
+    Write-Warning ("Before the first start of this build, with the app closed, copy aside $InstallDir\orchester.db " +
         "(and orchester.db-wal) and each project's .orchester\orchester.db (and its -wal): this build may migrate " +
         "them, and an older build then refuses them. See docs/stable-build.md.")
 }

@@ -9,7 +9,7 @@
 //! in the executable (`build.rs`) at the sizes Windows draws, from the frames of `orchester.ico` fitted
 //! to the pixel grid, so every path shows Orchester's icon.
 //!
-//! On macOS the Dock takes an app's icon from its `.app` bundle (`Orchester App.app`, built by
+//! On macOS the Dock takes an app's icon from its `.app` bundle (`Orchester.app`, built by
 //! `tools/package-macos.sh`), so there is nothing to give it. A build outside a bundle (`cargo run`) has
 //! none: [`install`] says so, and the Dock shows a generic icon.
 

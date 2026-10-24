@@ -8,7 +8,6 @@
 #
 # Remove a line in the change that fixes its test; the check says when a listed test passed. Found on master
 # 04c7f8f3 (2026-10-19, Windows) by `tools/check.ps1 -Tests all`; each was run again alone with its name filter.
-# The orchester-desktop crate is frozen and not listed: its tests run only when a branch changes it.
 
 # Flaky: failed in a whole-binary run under load, passed twice alone with its name filter.
 orchester-app orchestrator links::orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as_they_are # flaky: timed out waiting for the answer

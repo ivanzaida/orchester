@@ -1,25 +1,22 @@
 #!/usr/bin/env bash
-# Builds the two Orchester apps on a Mac from one release build: Orchester.app (the deprecated
-# desktop) and Orchester App.app (the new app), each with the runner, the icon and Info.plist,
-# signed ad hoc. They share the data in ~/Library, so they come from the same build. The apps are
-# not notarized (see docs/stable-build.md, "macOS").
+# Builds Orchester.app on a Mac from a release build: the app (`orchester-app`, the program
+# `orchester`) with the runner, the icon and Info.plist, signed ad hoc. It keeps its data in
+# ~/Library. The app is not notarized (see docs/stable-build.md, "macOS").
 #   tools/package-macos.sh [--universal] [--build-dir <dir>] [--out-dir <dir>] [--no-sign]
 #
 #   --universal   Apple silicon and Intel in one app (needs both rustup targets; see below).
 #   --build-dir   Cargo target directory (default: target/ of this checkout).
-#   --out-dir     Where the two bundles are written (default: <build-dir>/macos).
-#   --no-sign     Leave the bundles unsigned (the linker still signs each program ad hoc on Apple
+#   --out-dir     Where the bundle is written (default: <build-dir>/macos).
+#   --no-sign     Leave the bundle unsigned (the linker still signs each program ad hoc on Apple
 #                 silicon, but the bundle's Info.plist and icon are not sealed).
 #
-# Bundle layout (each app finds the runner beside itself, in Contents/MacOS):
+# Bundle layout (the app finds the runner beside itself, in Contents/MacOS):
 #   Orchester.app/Contents/Info.plist
 #   Orchester.app/Contents/MacOS/orchester
 #   Orchester.app/Contents/MacOS/orchester-runner
 #   Orchester.app/Contents/Resources/orchester.icns
-#   Orchester App.app/Contents/Info.plist
-#   Orchester App.app/Contents/MacOS/orchester-app
-#   Orchester App.app/Contents/MacOS/orchester-runner
-#   Orchester App.app/Contents/Resources/orchester.icns
+# Builds before the program's rename made `Orchester App.app` (the app, as `orchester-app`) and an
+# `Orchester.app` of the deprecated app; this bundle keeps the app's identifier, dev.orchester.app.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -27,7 +24,7 @@ build_dir="$repo/target"
 out_dir=""
 universal=0
 sign=1
-programs="orchester orchester-app orchester-runner"
+programs="orchester orchester-runner"
 
 fail() {
   echo "package-macos: $*" >&2
@@ -40,7 +37,7 @@ while [ $# -gt 0 ]; do
     --no-sign) sign=0 ;;
     --build-dir) [ $# -ge 2 ] || fail "--build-dir needs a directory"; build_dir="$2"; shift ;;
     --out-dir) [ $# -ge 2 ] || fail "--out-dir needs a directory"; out_dir="$2"; shift ;;
-    -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,20p' "$0"; exit 0 ;;
     *) fail "unknown option $1 (see --help)" ;;
   esac
   shift
@@ -51,12 +48,12 @@ done
 version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' "$repo/Cargo.toml")
 [ -n "$version" ] || fail "cannot read the version from [workspace.package] in Cargo.toml"
 
-# cargo build for the host, or for `$1` when given. Every build includes the embedded MCP servers.
+# cargo build for the host, or for `$1` when given. Every build includes the app's MCP server.
 # ORCHESTER_APP_INSTALLED_BUILD makes this orchester-app the installed app: the fixed MCP address and the token in the
 # secret store (docs/stable-build.md). Only this script and tools/install.ps1 set it.
 build() {
   (cd "$repo" && ORCHESTER_APP_INSTALLED_BUILD=1 cargo build --release --locked --target-dir "$build_dir" \
-    -p orchester-desktop -p orchester-app -p orchester-runner ${1:+--target "$1"})
+    -p orchester-app -p orchester-runner ${1:+--target "$1"})
 }
 
 # The built programs, one universal file each with --universal.
@@ -127,7 +124,8 @@ bundle() {
   rm -rf "$staging"
   mkdir -p "$staging/Contents/MacOS" "$staging/Contents/Resources"
   cp "$programs_dir/$program" "$programs_dir/orchester-runner" "$staging/Contents/MacOS/"
-  # Both apps show the same mark: crates/desktop-app/assets/icon/orchester.ico is this icon too.
+  # The icon's sources stay in crates/desktop/assets/icon (tools/app-icon.ps1), which is no longer built;
+  # crates/desktop-app/assets/icon/orchester.ico is this icon too.
   cp "$repo/crates/desktop/assets/icon/orchester.icns" "$staging/Contents/Resources/orchester.icns"
   info_plist "$name" "$program" "$bundle_id" > "$staging/Contents/Info.plist"
   plutil -lint -s "$staging/Contents/Info.plist" || fail "the generated Info.plist of $name.app is invalid"
@@ -145,6 +143,5 @@ bundle() {
   echo "Built $app (version $version$([ "$universal" = 1 ] && echo ", universal"))"
 }
 
-bundle "Orchester" orchester dev.orchester.desktop
-bundle "Orchester App" orchester-app dev.orchester.app
+bundle "Orchester" orchester dev.orchester.app
 rm -rf "$programs_dir"

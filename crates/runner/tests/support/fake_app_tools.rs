@@ -38,13 +38,8 @@ fn start(worktree: &Path, app: &str) -> (App, PathBuf) {
     app.to_owned()
   });
   fs::copy(original, &program).expect("copy");
-  // The new app's QA copy writes where ORCHESTER_APP_MCP_DISCOVERY points (`tools/qa-app.ps1`: `.tmp/qa/<task>/mcp`);
-  // the deprecated desktop's keeps its QA profile's user folder.
-  let discovery = if app == "orchester" {
-    folder.join("profile").join("orchester-mcp")
-  } else {
-    folder.join("mcp")
-  };
+  // A QA copy writes where ORCHESTER_APP_MCP_DISCOVERY points (`tools/qa-app.ps1`: `.tmp/qa/<task>/mcp`).
+  let discovery = folder.join("mcp");
   (start_program(&program, &discovery), discovery)
 }
 
@@ -145,20 +140,17 @@ pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
     calls.lines().collect::<Vec<_>>(),
     ["navigate", "lurq_screenshot", "tool_error", "bad_image", "redirect"]
   );
-  exercise_deprecated(worktree, &mut call);
+  exercise_program_name(worktree, &mut call);
 }
 
-fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> Value) {
-  let (app, domain) = start(worktree, "orchester");
+/// The app's program `orchester` (`orchester-app` before its rename, above) is called the same way; a missing or
+/// doubled discovery file and too many QA task folders are refused.
+fn exercise_program_name(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> Value) {
+  let (app, folder) = start(worktree, "orchester");
   let pid = app.0.id();
-  let windows = domain.parent().expect("profile").join("lurq/mcp");
   let filename = format!("{pid}.json");
-  let domain_file = domain.join(&filename);
-  let discovery = fs::read(&domain_file).expect("domain discovery");
-  let domain_info: Value = serde_json::from_slice(&discovery).expect("domain discovery");
-  let windows_info: Value =
-    serde_json::from_slice(&fs::read(windows.join(&filename)).expect("UI discovery")).expect("UI discovery");
-  assert_ne!(domain_info["port"], windows_info["port"]);
+  let discovery_file = folder.join(&filename);
+  let discovery = fs::read(&discovery_file).expect("discovery");
   let unrelated = worktree.join(".tmp/qa/unrelated");
   fs::create_dir_all(&unrelated).expect("unrelated");
   fs::write(unrelated.join(&filename), "invalid discovery").expect("unrelated discovery");
@@ -167,22 +159,9 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
   let answer = call("call_run_app", &navigate);
   assert_eq!(answer["isError"], false);
   assert_eq!(answer["structuredContent"]["route"], "runs");
-  eprintln!("app-relay: dual-server domain selected");
-  let answer = call(
-    "call_run_app",
-    &json!({"pid":pid,"tool":"lurq_screenshot","arguments":{}}),
-  );
-  assert_eq!(answer["isError"], false);
-  let path = answer["content"][0]["text"]
-    .as_str()
-    .expect("path")
-    .strip_prefix("PNG saved: ")
-    .expect("saved");
-  let image = image::open(worktree.join(path)).expect("PNG");
-  assert_eq!((image.width(), image.height()), (2, 2));
-  eprintln!("app-relay: dual-server UI selected");
+  eprintln!("app-relay: the program orchester called");
 
-  fs::remove_file(&domain_file).expect("remove domain discovery");
+  fs::remove_file(&discovery_file).expect("remove discovery");
   let refused = call("call_run_app", &navigate);
   assert_eq!(refused["isError"], true);
   assert!(
@@ -191,9 +170,9 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
       .expect("error")
       .contains("no MCP discovery")
   );
-  eprintln!("app-relay: missing selected server refused");
-  fs::write(&domain_file, &discovery).expect("restore domain discovery");
-  let duplicate = worktree.join(".tmp/qa/duplicate/profile/orchester-mcp");
+  eprintln!("app-relay: missing discovery refused");
+  fs::write(&discovery_file, &discovery).expect("restore discovery");
+  let duplicate = worktree.join(".tmp/qa/duplicate/mcp");
   fs::create_dir_all(&duplicate).expect("duplicate folder");
   fs::write(duplicate.join(filename), discovery).expect("duplicate discovery");
   let refused = call("call_run_app", &navigate);
@@ -204,7 +183,7 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
       .expect("error")
       .contains("more than one")
   );
-  eprintln!("app-relay: duplicate selected server refused");
+  eprintln!("app-relay: duplicate discovery refused");
 
   // `.tmp/qa/` already holds this test's task folders; these take it past the bound on the folders read.
   for index in 0..1024 {
@@ -219,12 +198,9 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
   eprintln!("app-relay: QA folder bound refused");
 
   assert_eq!(
-    fs::read_to_string(domain.join("calls")).expect("domain calls"),
-    "navigate\n"
-  );
-  assert_eq!(
-    fs::read_to_string(windows.join("calls")).expect("UI calls"),
-    "lurq_screenshot\n"
+    fs::read_to_string(folder.join("calls")).expect("calls"),
+    "navigate
+"
   );
 }
 

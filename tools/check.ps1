@@ -80,9 +80,8 @@ try {
         @{ Rule = "hardcoded user-facing text"; Pattern = '\b(Text|Button)::new\(\s*"|\.(placeholder|with_title|tooltip|label)\(\s*"' },
         @{ Rule = "numeric spacing/radius/border"; Pattern = '\.(padding\w*|spacing|gap|rounded|corner_radius\w*|border\w*)\(\s*-?[0-9]' }
     )
-    $uiRoots = @("desktop", "desktop-app") | ForEach-Object {
-        [System.IO.Path]::Combine($repositoryRoot, "crates", $_, "src")
-    }
+    # crates/desktop, the deprecated app, is no longer built (AGENTS.md); only the app's sources are checked.
+    $uiRoots = @([System.IO.Path]::Combine($repositoryRoot, "crates", "desktop-app", "src"))
     $violations = $uiRoots | ForEach-Object {
         $themeRoot = [System.IO.Path]::Combine($_, "theme")
         Get-ChildItem -Path $_ -Recurse -Filter *.rs -File |

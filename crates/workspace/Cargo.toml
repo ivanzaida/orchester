@@ -17,8 +17,6 @@ test-support = ["orchester-store/test-support"]
 # component props and, with its DevTools, of signal values. Apps cannot implement lurq's trait for
 # these types themselves (orphan rule), so an app that shows them enables this.
 devtools-inspect = ["dep:lurq"]
-# The deprecated app uses the official 0.42 trait, independently of the new app.
-devtools-inspect-legacy = ["dep:lurq_legacy"]
 
 [dependencies]
 # Local wall-clock time of status bar events and the local day of the daily project budget.
@@ -34,7 +32,6 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 # Only for the empty markers of `inspect`, behind `devtools-inspect`; nothing else here uses lurq.
 lurq = { workspace = true, optional = true }
-lurq_legacy = { workspace = true, optional = true }
 parking_lot.workspace = true
 # The tools of Orchester's own MCP server (`app_mcp`): their schemas and results.
 rmcp.workspace = true

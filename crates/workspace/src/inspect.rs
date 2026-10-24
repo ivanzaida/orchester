@@ -1,7 +1,6 @@
-//! Empty `DevtoolsInspectable` markers behind the modern and legacy `devtools-inspect` features.
-//! feature. lurq requires the trait of component props and, with its DevTools, of signal values; an
-//! app cannot implement it for these types itself (orphan rule). This is the only place the crate
-//! uses lurq.
+//! Empty `DevtoolsInspectable` markers behind the `devtools-inspect` feature. lurq requires the trait of component
+//! props and, with its DevTools, of signal values; an app cannot implement it for these types itself (orphan rule).
+//! This is the only place the crate uses lurq.
 
 macro_rules! markers {
   ($inspect:path) => {
@@ -167,7 +166,4 @@ macro_rules! markers {
   };
 }
 
-#[cfg(feature = "devtools-inspect")]
 markers!(lurq::app::component::DevtoolsInspectable);
-#[cfg(feature = "devtools-inspect-legacy")]
-markers!(lurq_legacy::app::component::DevtoolsInspectable);

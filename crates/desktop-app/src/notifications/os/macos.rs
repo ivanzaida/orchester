@@ -1,5 +1,5 @@
 //! macOS notifications through UserNotifications, and the *Needs you* count on the Dock icon. UserNotifications
-//! serves only an app in a bundle with a bundle identifier (`Orchester App.app`, `dev.orchester.app`): for a program
+//! serves only an app in a bundle with a bundle identifier (`Orchester.app`, `dev.orchester.app`): for a program
 //! run outside one (`cargo run`) its notification center raises an exception, so [`start`] refuses that case and the
 //! app shows none, saying so in its log. The first start asks the person for permission; until they allow it the
 //! system drops what is shown, and an ad-hoc signed, not notarized bundle may be refused by the system altogether.
