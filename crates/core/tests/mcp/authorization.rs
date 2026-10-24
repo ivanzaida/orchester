@@ -4,6 +4,7 @@
 use std::convert::Infallible;
 
 use orchester_core::{
+  command::redact_secrets,
   connection::{
     invocation::{ClaudeMcpConfig, CodexMcp, HttpAuthorization},
     mcp::{
@@ -92,6 +93,28 @@ fn mcp_authorization_pasted_basic_credential_is_sent_with_its_scheme_once() {
     assert_eq!(codex(read(&pasted, value)).1, header);
     assert_eq!(claude_headers(read(&pasted, value)), json!({ "Authorization": header }));
   }
+}
+
+/// What a server might repeat of `sent`, as both CLIs' activity shows it: none of `hidden` is left.
+fn assert_redacted(sent: &HttpAuthorization, hidden: &[&str]) {
+  let repeated = format!("401 for {}; got {}", hidden.join(" and "), hidden.join(","));
+  let (config, _) = ClaudeMcpConfig::new(&[remote(sent.clone())]);
+  let (mcp, _) = CodexMcp::new(&[remote(sent.clone())]);
+  for secrets in [config.expect("kept").secrets(), mcp.hidden()] {
+    let shown = redact_secrets(&repeated, secrets);
+    assert!(hidden.iter().all(|value| !shown.contains(value)), "{shown}");
+  }
+  assert_eq!(mcp.secrets().len(), 1, "only the header's value is a variable of Codex");
+}
+
+#[test]
+fn mcp_authorization_basic_activity_hides_the_password_and_the_bare_credential() {
+  assert_redacted(&read(&basic(), PASSWORD), &[PASSWORD, ENCODED]);
+  let pasted = McpAuthorization::BasicCredential {
+    credential: SecretId::generate(),
+  };
+  assert_redacted(&read(&pasted, ENCODED), &[ENCODED]);
+  assert_redacted(&read(&pasted, &format!("Basic {ENCODED}")), &[ENCODED]);
 }
 
 #[test]

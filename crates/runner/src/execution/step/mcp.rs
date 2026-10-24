@@ -46,20 +46,21 @@ pub(in super::super) enum McpSetup {
 }
 
 impl McpSetup {
-  /// The secret values Claude Code's servers take, which its activity must not show; Codex's
-  /// App Server redacts its own.
-  pub(in super::super) fn claude_secrets(&self) -> Vec<SecretVariable> {
+  /// The secret values of the servers that the agent's activity must not show: all of Claude Code's; of Codex's,
+  /// those its App Server does not redact itself (what a header's value is made of), and the rest again.
+  pub(in super::super) fn activity_secrets(&self) -> Vec<SecretVariable> {
     match self {
       Self::Claude(Some(servers)) => servers.secrets.clone(),
-      Self::Claude(None) | Self::Codex(_) => Vec::new(),
+      Self::Codex(mcp) => mcp.hidden().to_vec(),
+      Self::Claude(None) => Vec::new(),
     }
   }
 
   /// The secret values of every server, whichever CLI takes them.
   pub(in super::super) fn secrets(&self) -> Vec<SecretVariable> {
     match self {
-      Self::Codex(mcp) => mcp.secrets().to_vec(),
-      Self::Claude(_) => self.claude_secrets(),
+      Self::Codex(mcp) => mcp.secrets().iter().chain(mcp.hidden()).cloned().collect(),
+      Self::Claude(_) => self.activity_secrets(),
     }
   }
 

@@ -307,7 +307,7 @@ impl RunTask {
     let attached = self
       .attached_to(&continuation.messages)
       .map_err(|error| problem(format!("cannot read the messages' attachments: {error}")))?;
-    let mut secrets = setup.claude_secrets();
+    let mut secrets = setup.activity_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let checks = tools.checks().to_vec();
     secrets.extend(provider_key);

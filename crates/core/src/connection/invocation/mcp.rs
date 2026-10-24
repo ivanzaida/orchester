@@ -120,6 +120,27 @@ impl McpLaunch {
       },
     }
   }
+
+  /// Every secret value of the server, for what the agent's activity must not show: its secret variables and, for an
+  /// HTTP server, also what the header's value is made of (a Basic password, the bare credential), under
+  /// [`token_variable`]. Never handed to a process.
+  fn hidden(&self) -> Vec<SecretVariable> {
+    match &self.transport {
+      Transport::Stdio { .. } => self
+        .secret_variables()
+        .into_iter()
+        .map(|(name, value)| SecretVariable::new(&name, value.clone()))
+        .collect(),
+      Transport::Http { authorization, .. } => {
+        let name = token_variable(&self.name);
+        authorization
+          .hidden()
+          .into_iter()
+          .map(|value| SecretVariable::new(&name, value.clone()))
+          .collect()
+      }
+    }
+  }
 }
 
 /// A server left out of an invocation, and why.
@@ -138,6 +159,8 @@ pub fn token_variable(server: &McpServerName) -> String {
 pub struct CodexMcp {
   args: Vec<String>,
   secrets: Vec<SecretVariable>,
+  /// Every secret value of the servers, to hide; not the process's variables.
+  hidden: Vec<SecretVariable>,
   servers: Vec<McpServerName>,
   exemptions: InvocationExemptions,
   /// Orchester's own server, with the step's Orchester tools.
@@ -155,6 +178,7 @@ impl CodexMcp {
         Ok(new) => {
           mcp.add(server);
           mcp.secrets.extend(new);
+          mcp.hidden.extend(server.hidden());
           mcp.servers.push(server.name.clone());
         }
         Err(problem) => left_out.push((server.name.clone(), problem)),
@@ -210,6 +234,13 @@ impl CodexMcp {
   /// Variables of the Codex process that its servers take their secrets from.
   pub fn secrets(&self) -> &[SecretVariable] {
     &self.secrets
+  }
+
+  /// Every secret value of these servers, for what the agent's activity must not show: Codex's App Server hides the
+  /// values of [`Self::secrets`], not what a header's value is made of (a Basic password, the bare credential).
+  /// Never handed to the process.
+  pub fn hidden(&self) -> &[SecretVariable] {
+    &self.hidden
   }
 
   /// The exact server names supplied by this invocation, for App Server inventory checks.
@@ -298,7 +329,7 @@ pub struct ClaudeMcpConfig {
   contents: Zeroizing<String>,
   servers: Vec<McpServerName>,
   exemptions: InvocationExemptions,
-  /// The secret values in the file, by the variable or header they fill.
+  /// The secret values in the file, by the variable or header they fill, and what a header's value is made of.
   secrets: Vec<SecretVariable>,
 }
 
@@ -342,11 +373,7 @@ impl ClaudeMcpConfig {
       contents: Zeroizing::new(contents),
       servers: kept.iter().map(|server| server.name.clone()).collect(),
       exemptions: exemptions(kept.iter().copied()),
-      secrets: kept
-        .iter()
-        .flat_map(|server| server.secret_variables())
-        .map(|(name, value)| SecretVariable::new(&name, value.clone()))
-        .collect(),
+      secrets: kept.iter().flat_map(|server| server.hidden()).collect(),
     };
     (Some(config), left_out)
   }
@@ -436,7 +463,7 @@ impl<'a> ClaudeServer<'a> {
         headers: match authorization {
           HttpAuthorization::None => None,
           HttpAuthorization::Bearer(_) => Some(BTreeMap::from([("Authorization", bearer)])),
-          HttpAuthorization::Header { name, value } => Some(BTreeMap::from([(name.as_str(), value.expose())])),
+          HttpAuthorization::Header { name, value, .. } => Some(BTreeMap::from([(name.as_str(), value.expose())])),
         },
       },
     }
