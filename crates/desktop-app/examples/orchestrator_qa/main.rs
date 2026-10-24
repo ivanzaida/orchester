@@ -102,10 +102,14 @@ enum State {
   /// The chat's `init_repository` cards (ORC-72, on the pattern of `ExRt1` / `k80K3d`): waiting, applied, dismissed
   /// and refused ([`repository`]).
   Repository,
+  /// A new conversation in which the person lets the Orchestrator write with git (decision 9, no frame of its own yet),
+  /// with `notes/qa.txt` uncommitted in Kontur: `Call git_commit …` commits it, `Call git_propose …` proposes what
+  /// can lose work.
+  Git,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 20] = [
+  const ALL: [(&'static str, Self); 21] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -126,6 +130,7 @@ impl State {
     ("messages-applied", Self::MessagesApplied),
     ("resolve", Self::Resolve),
     ("repository", Self::Repository),
+    ("git", Self::Git),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -161,6 +166,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // A profile draft that widens is proposed while the person lets the Orchestrator publish drafts: its card says so.
     orchester_store::AppDb::open(&prepared.database)?.set_orchestrator_publishes_drafts(true)?;
   }
+  if state == State::Git {
+    // As the person turned it on in Settings; the window's own switch takes only a person's click.
+    orchester_store::AppDb::open(&prepared.database)?.set_orchestrator_writes_git(true)?;
+    let notes = prepared.repo.join("notes");
+    std::fs::create_dir_all(&notes)?;
+    std::fs::write(notes.join("qa.txt"), "Written for the Orchestrator's git QA.\n")?;
+  }
   let runner = if state == State::NoRunner {
     root.path().join("no-runner").join("orchester-runner")
   } else {
@@ -195,7 +207,7 @@ fn route(prepared: &data::Prepared, state: State, chat: Option<ChatId>) -> Route
   }
   let chats = &prepared.conversations;
   let page = match state {
-    State::New | State::NotReady | State::NoRunner => ProjectPage::Orchestrator(OrchestratorChat::New),
+    State::New | State::NotReady | State::NoRunner | State::Git => ProjectPage::Orchestrator(OrchestratorChat::New),
     State::Conversation => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.answered)),
     State::Stopped => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.stopped)),
     State::Failed => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.failed)),

@@ -307,7 +307,8 @@
         "pause": "Only a person pauses a run the Orchestrator proposed to pause: input from automation is refused here.",
         "resume": "Only a person resumes a run the Orchestrator proposed to resume: input from automation is refused here.",
         "release": "Only a person releases new starts the Orchestrator proposed to release: input from automation is refused here.",
-        "repository": "Only a person makes the git repository the Orchestrator proposed: input from automation is refused here."
+        "repository": "Only a person makes the git repository the Orchestrator proposed: input from automation is refused here.",
+        "git": "Only a person runs a git operation the Orchestrator proposed: input from automation is refused here."
       },
       "repository": {
         "waits": "Make {{project}}'s folder a git repository?",
@@ -582,6 +583,39 @@
         "effectApplied": "New starts went on at {{time}}.",
         "effectDismissed": "You dismissed it. New starts stay held.",
         "accept": "Release"
+      },
+      "git": {
+        "waits": "Run {{command}}?",
+        "done": "Ran {{command}}",
+        "dismissed": "{{command}} · dismissed",
+        "refused": "{{command}} · not done",
+        "byYou": "Run by you · {{time}}",
+        "accept": "Apply",
+        "where": "Where",
+        "checkout": "The project's checkout",
+        "runWorktree": "Run #{{run}}'s worktree",
+        "commandsWait": "Runs",
+        "commandsRan": "Ran",
+        "losesLabel": "Would lose",
+        "losesOne": "Applying it loses the work listed above.",
+        "losesCount": "Applying it loses the {{count}} items listed above.",
+        "losesNothingRead": "git lists nothing this would lose now; it still cannot be undone from here.",
+        "effectDone": "git did it and said nothing more.",
+        "effectApplied": "You applied it: git ran the commands above.",
+        "effectDismissed": "You dismissed it. Nothing ran.",
+        "loses": {
+          "resetHard": "Moves the branch back: the commits listed leave it, and uncommitted changes to tracked files are discarded. Nothing has run yet.",
+          "reset": "Moves the branch back: the commits listed leave it; the files keep their contents. Nothing has run yet.",
+          "clean": "Deletes the untracked files listed for good: git never had them. Nothing has run yet.",
+          "deleteBranch": "Deletes the branch: the commits listed are on no other branch and are lost with it. Nothing has run yet.",
+          "deleteRemoteBranch": "Deletes the remote's branch: the commits listed are on no local branch. Nothing has run yet.",
+          "forcePush": "Pushes over what the remote holds: the commits listed leave the remote's branch. Only if the remote still holds what this card read. Nothing has run yet.",
+          "discardChanges": "Discards the uncommitted changes listed, staged and not. Nothing has run yet.",
+          "switchDiscarding": "Switches branch and discards the uncommitted changes listed. Nothing has run yet.",
+          "rebase": "Writes the commits listed anew on top of the other branch; a conflict undoes it. Nothing has run yet.",
+          "deleteTag": "Deletes the tag. Nothing has run yet.",
+          "abortMerge": "Aborts the merge in progress: the changes listed and every resolution made in it are discarded. Nothing has run yet."
+        }
       }
     },
     "end": {

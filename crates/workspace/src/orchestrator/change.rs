@@ -13,7 +13,7 @@ mod answer;
 mod continuation;
 pub(super) mod control;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::{ResourceId, RunId},
@@ -191,12 +191,20 @@ pub(super) async fn apply(
       let (tool, arguments) = tool_arguments(scope, change);
       answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, None)).await
     }
-    // Checked again where it is made: a repository with a commit since is never touched.
-    Change::InitRepository { .. } => {
-      let (programs, change) = (services.programs().clone(), change.change.clone());
-      blocking(move || repository::apply(programs.git_work(), &root, &change)).await
-    }
+    Change::InitRepository { .. } | Change::Git(_) => apply_in_folder(services, root, change.change.clone()).await,
   }
+}
+
+/// Applies `change`, a change of the chat's own tools to the project's folder at `root`, checked again where it is
+/// made: a repository with a commit since is never touched; git's work in a run that went on, or whose refs moved or
+/// work changed since, is refused.
+async fn apply_in_folder(services: &Services, root: PathBuf, change: Change) -> Result<Value, ToolError> {
+  let programs = services.programs().clone();
+  blocking(move || match change {
+    Change::Git(git) => super::git::apply(&programs, &root, &git),
+    change => repository::apply(programs.git_work(), &root, &change),
+  })
+  .await
 }
 
 /// Applies the release `change` of new starts in `scope`, in the group of task `task` (its key) or the whole project.
@@ -238,6 +246,8 @@ pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'s
     Change::Release { task } => return control::release_arguments(scope.project, task.as_deref()),
     // The chat's own tool, carried out by [`repository::apply`]: it acts on the project only.
     Change::InitRepository { .. } => (INIT_REPOSITORY, "project", scope.project.to_string()),
+    // Carried out by [`super::git::apply`] from what the card keeps.
+    Change::Git(_) => (super::git::GIT_PROPOSE, "project", scope.project.to_string()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
@@ -472,6 +482,10 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
         .with("project", subject)
         .with("branch", branch.clone()),
       json!({ "init_repository": &change.change }),
+    ),
+    Change::Git(git) => (
+      Message::new("orchestrator.tools.gitWaits").with("command", git.operation.command().to_owned()),
+      json!({ "git": git }),
     ),
   };
   json!({

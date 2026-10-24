@@ -317,3 +317,46 @@ Orchestrator answer agents* (decision 5).
 Each stream keeps to the files it owns; a change another stream owns goes through the coordinator. Every stream
 follows AGENTS.md, keeps Windows and macOS equivalent, and ends with an independent review and, for visible changes,
 an independent design verification.
+
+## 9. Git in the project's repository (decided by the person on 2026-10-24)
+
+The chat works with git in the project's repository through typed tools of its own (`orchester_workspace::
+orchestrator::git`, listed in `tools::CHAT_TOOLS`; no client of the app has them), never a free-form `git <args>`,
+which could not be told safe: what the chat is not offered it cannot do. They run in the project's checkout, or with
+`run` (a run's id or number) in that run's worktree.
+
+- **Reading is open**, whatever the switches say.
+- **Writing needs the person's switch** *Let the Orchestrator write with git* (Settings › What automation may do, off
+  until a person turns it on, synthetic input and MCP cannot flip it: the same person-only row as decision 5's
+  switches; `OrchestratorConsent::WriteGit`). Off, every write is refused `write_off`. Each write loses nothing: a
+  switch is made only as git makes it, keeping local changes (else `would_lose_work`); a pull only fast-forwards unless
+  the person asks for a merge; a push never forces; a merge, a merging pull or a revert that stops at conflicts is
+  undone (`git merge --abort`, `git revert --abort`) and refused `conflict` naming the files, unless the person asked
+  to keep the conflicts to resolve them (`keep_conflicts`). No write runs in a turn nobody asked for (`person_only`;
+  `report_turn` in a day's report's turn).
+- **What can lose work is always a proposal card the person applies**, whatever the switch says, also in a turn nobody
+  asked for (`git_propose`): reset (hard, mixed, soft), clean, deleting a branch or a tag (here or on a remote), a
+  forced push, discarding changes, a switch that discards them, rebase, aborting a merge. The card shows where it
+  runs, the commands, and what it would lose as git lists it (commits no other branch holds, uncommitted changes,
+  files); automation's click on *Apply* is refused (`person_only`), and *Apply* reads it all again: refs that moved or
+  a different list of what it loses is refused `changed_since_proposed`. A forced push and a remote deletion lease the
+  remote commit the card read (`--force-with-lease=<branch>:<commit>`), a reset goes to the commit the card read.
+- **No stash.** Orchestrator tasks forbid `git stash`; the chat has none either: stashed work is out of sight and a
+  pop can conflict. A switch that would lose changes is refused, and the chat suggests a commit on a branch, or the
+  person applies a `switch_discarding` card.
+- **A run's worktree** is its agents' while the run has not ended (working, waiting, paused or interrupted): the chat
+  reads there, and a write or proposal there is refused `run_active`. Once the run ended it may write there (e.g. push
+  the run's branch); `merge_run` still merges the run's last checkpoint only.
+- **git never waits for a person**: `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, `GIT_EDITOR=:`, no standard
+  input; a remote that wants credentials is refused at once `auth_failed`, with a hint to sign in to git in a terminal;
+  a pull, push, fetch or remote proposal is stopped after 2 minutes (`timed_out`). Git's settings, author and hooks
+  are the repository's own; credentials in URLs are removed from everything the chat or the card shows.
+- **Every write and proposal is kept in the conversation** as an action: a compact card with where it ran, the commands
+  that ran and what git said (or why it was refused). Reads are not kept.
+- Refusal codes: `git_not_found`, `not_a_repository`, `write_off`, `person_only`, `report_turn`, `would_lose_work`,
+  `conflict`, `git_failed` (git's words), `auth_failed`, `timed_out`, `run_active`, `author_unknown`,
+  `nothing_to_commit`, `nothing_to_clean`, `nothing_in_progress`, `detached_head`, `changed_since_proposed`.
+
+| Read (always) | Write (*Let the Orchestrator write with git*) | Proposed (person applies, always) |
+|---|---|---|
+| `git_status` (branch, upstream, ahead/behind, operation in progress, files), `git_log` (range or all, path, limit ≤ 200), `git_diff` (from/to, staged, paths, stat), `git_show` (rev, stat, or a file at rev), `git_branches` (local with upstream ahead/behind, remote), `git_blame` (path, rev, lines), `git_remotes` | `git_commit` (paths, all, or what is staged; message), `git_create_branch` (name, start, switch), `git_switch` (only when it loses nothing), `git_pull` (ff-only; merge on request), `git_push` (no force; set_upstream), `git_merge` (no_ff, message; conflict undone), `git_revert` (mainline; conflict undone), `git_tag` (annotated with a message), `git_fetch` (remote or all, prune) | `git_propose` with `reset`, `clean`, `delete_branch`, `force_push`, `discard_changes`, `switch_discarding`, `rebase`, `delete_tag`, `abort_merge` |

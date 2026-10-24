@@ -1,13 +1,14 @@
 //! A change the Orchestrator's agent proposed that only a person carries out, unless the person's switch lets the chat
 //! carry it out itself (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
 //! run, merging one, answering an agent's question, sending a run's agents a message, continuing a run that waits
-//! for a person's decision, or making the project's folder a git repository (always the person's). It holds what the
+//! for a person's decision, making the project's folder a git repository or a git operation that can lose work
+//! (always the person's); and a git write the chat ran itself, kept so the person sees it. It holds what the
 //! person reads before *Apply* and what *Apply* would change; a draft saved again, a version published meanwhile or a
 //! run with newer work needs a fresh proposal.
 
 use serde::{Deserialize, Serialize};
 
-use super::wait::StopReason;
+use super::{git::GitChange, wait::StopReason};
 use crate::{
   id::{ResourceId, RunId},
   resource::StepKey,
@@ -108,6 +109,9 @@ pub enum Change {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     sensitive: Vec<String>,
   },
+  /// A git write the chat ran itself under *Let the Orchestrator write with git*, kept so the person sees it, or an
+  /// operation that can lose work, which only a person applies ([`super::git`]).
+  Git(Box<GitChange>),
 }
 
 /// What a proposed first commit holds.
@@ -204,10 +208,11 @@ pub enum MessageThen {
 }
 
 impl Change {
-  /// The run it acts on; `None` for a publication, a release of new starts or a repository made.
+  /// The run it acts on; `None` for a publication, a release of new starts, a repository made or git's work, which
+  /// changes no run's course.
   pub const fn run(&self) -> Option<RunId> {
     match self {
-      Self::Publish { .. } | Self::Release { .. } | Self::InitRepository { .. } => None,
+      Self::Publish { .. } | Self::Release { .. } | Self::InitRepository { .. } | Self::Git(_) => None,
       Self::Cancel { run, .. }
       | Self::Merge { run, .. }
       | Self::Answer { run, .. }

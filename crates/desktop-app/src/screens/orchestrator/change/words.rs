@@ -177,6 +177,7 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
     Some(Change::Release { task }) => control(ctx, view, (Control::Release, None, task.as_deref())),
     Some(Change::Continue { number, choice, .. }) => super::continuation::continuation(ctx, view, (*number, choice)),
     Some(Change::InitRepository { branch, exists, .. }) => super::repository::words(ctx, view, (branch, *exists)),
+    Some(Change::Git(git)) => super::git::words(ctx, view, git),
     None => start(ctx, view),
   }
 }

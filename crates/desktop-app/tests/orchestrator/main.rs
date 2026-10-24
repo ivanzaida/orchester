@@ -14,6 +14,7 @@ mod continuation;
 mod decisions;
 mod drafts;
 mod follow;
+mod git;
 mod harness;
 mod history;
 mod layout;
