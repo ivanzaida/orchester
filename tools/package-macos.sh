@@ -45,8 +45,9 @@ done
 [ "$(uname -s)" = "Darwin" ] || fail "this builds a macOS app bundle; run it on a Mac"
 [ -n "$out_dir" ] || out_dir="$build_dir/macos"
 
-version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' "$repo/Cargo.toml")
-[ -n "$version" ] || fail "cannot read the version from [workspace.package] in Cargo.toml"
+# The app's own version (docs/stable-build.md, "Releases from CI").
+version=$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' "$repo/crates/desktop-app/Cargo.toml")
+[ -n "$version" ] || fail "cannot read the version from [package] in crates/desktop-app/Cargo.toml"
 
 # cargo build for the host, or for `$1` when given. Every build includes the app's MCP server.
 # ORCHESTER_APP_INSTALLED_BUILD makes this orchester-app the installed app: the fixed MCP address and the token in the

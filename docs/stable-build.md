@@ -2,7 +2,8 @@
 
 `tools/run.ps1` runs the dev build from `target/debug`, which agents rebuild while they work on
 Orchester. For daily use, install a release build in its own directory instead; agent builds
-never touch it.
+never touch it: build one from the checkout (below), or install a release that CI built (see
+[Releases from CI](#releases-from-ci)).
 
 An install holds the app (the package `orchester-app`, the program `orchester`) and the runner it
 starts from its own folder, both from the same build. The deprecated app (`crates/desktop`,
@@ -32,7 +33,7 @@ powershell -File tools/install.ps1
   `%LOCALAPPDATA%\Orchester\build` (not the repository's `target/`) and copies `orchester.exe`
   and `orchester-runner.exe` into `%LOCALAPPDATA%\Orchester\app`. Fonts, icons and locales are
   compiled into the executables; at runtime they need only the Visual C++ runtime, which the MSVC
-  toolchain has already installed.
+  toolchain has already installed (the programs CI releases have it linked in).
 - To install somewhere else, name the folder, e.g.
   `powershell -File tools/install.ps1 -InstallDir E:\projects\orchester`. An existing install
   there is updated in place: its `orchester.db` stays (see [Data](#data) before the first start of
@@ -77,7 +78,7 @@ tools/install-macos.sh
 - The bundle is the program `Contents/MacOS/orchester`, `Contents/MacOS/orchester-runner` (the
   app starts it from its own folder), `Contents/Resources/orchester.icns` and
   `Contents/Info.plist` (identifier `dev.orchester.app`, the app's as before the rename; version
-  from `Cargo.toml`, high resolution capable, macOS 11 or later). It keeps its
+  from `crates/desktop-app/Cargo.toml`, high resolution capable, macOS 11 or later). It keeps its
   data in the Library folder (see [Data](#data)).
 - As on Windows, it installs what the checkout holds, prints the commit, and refuses while the
   installed app (or `Orchester App.app` of an older build) or one of its runners is running; it
@@ -117,6 +118,60 @@ Your shell's start-up files are not read. A CLI installed elsewhere can be chose
 *Connections*; a tool an agent needs from elsewhere is not found when the app was started from
 Finder (`open` starts it the same way). Starting the program itself from a terminal,
 `~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on.
+
+## Releases from CI
+
+GitHub Actions builds the Windows app and publishes it as a GitHub Release
+(`.github/workflows/app-release.yml`).
+
+**To release**, raise `version` in `[package]` of `crates/desktop-app/Cargo.toml` (the app's own
+version, e.g. `0.2.0` to `0.2.1`; a version with a suffix such as `0.3.0-rc.1` is a pre-release)
+and get that change onto `master`. The push runs the workflow, which releases when neither a tag
+nor a release `app-v<version>` exists yet; any other change to that file, or a run again, releases
+nothing. The workspace's `[workspace.package]` version is the team server's (`server-v*` tags,
+`docs/server-hosting.md`): it never releases the app, and the app's version never releases the
+server. *Run workflow* on `master` releases the same way.
+
+**What it builds**, on a Windows runner: `cargo build --release --locked -p orchester-app -p
+orchester-runner` as the installed app (`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/install.ps1`
+builds it: the MCP server on its fixed address, the token in Credential Manager), with the C
+runtime linked in so the programs start without the Visual C++ Redistributable. The release
+`app-v<version>`, tagged on the pushed commit, has:
+
+- `Orchester-<version>-setup.exe`, the installer (Inno Setup, `tools/installer/orchester.iss`):
+  for the current user, without administrator rights, into `%LOCALAPPDATA%\Programs\Orchester`
+  (another folder can be chosen on the first install; an upgrade keeps it), with the Start menu
+  shortcut *Orchester*, an optional desktop shortcut and an uninstaller. There is no install for
+  all users: the app writes its database beside itself, which *Program Files* does not allow.
+- `Orchester-<version>-windows-x64.zip`, the portable app: a folder `Orchester-<version>` with
+  `orchester.exe`, `orchester-runner.exe` and a `README.txt`. `orchester.exe` is not released on
+  its own: it starts the runner from beside itself and cannot open a project without it.
+- `SHA256SUMS.txt`, the checksums of both.
+
+**Your data on install, upgrade and uninstall.** The app keeps `orchester.db` (with its `-wal`
+and `-shm` files), `orchester.lock`, `orchester.lock.holder` and `logs\` in its install folder.
+The installer writes only the two programs and its uninstaller there: an upgrade replaces the
+programs and leaves the rest, and the uninstaller removes only what it installed (and the app's
+notification registration under `HKCU\Software\Classes\AppUserModelId\Orchester.App`, which the
+app writes again on its next start), so the database, the logs and the folder stay, and it says
+so. The MCP token in Credential Manager stays with them. Back up before the first start of a newer
+version, as for any install (above). While Orchester or one of its runners runs from the install
+folder, the installer and the uninstaller ask you to close it (*Retry*) or stop (*Cancel*); they
+never close it themselves. The installer's folder is not the one `tools/install.ps1` uses; point
+it at an existing install only if that is the one you want to update (see *Installs from before
+the program's rename* above).
+
+**Not signed.** Neither the programs nor the installer carry a code signature, so SmartScreen
+warns (*More info*, then *Run anyway*); no secret is needed. Signing would be one step before
+packing, with a certificate in the repository's secrets.
+
+**Dry run.** *Actions › App release › Run workflow*, on any branch, with *dry_run* ticked: it
+builds and packs both files and keeps them, with the checksums, as the run's artifact for 7 days,
+and releases nothing. Every run costs CI minutes.
+
+macOS is not built by CI yet; `tools/package-macos.sh` makes `Orchester.app` on a Mac and would be
+the base of a later job on a macOS runner (a bundle signed ad hoc is refused by Gatekeeper on other
+Macs, see *Signing* above).
 
 ## Embedded MCP server
 
@@ -249,7 +304,7 @@ which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW
 
 | Started as | Address | Token | Discovery file |
 | --- | --- | --- | --- |
-| The installed app: built by `tools/install.ps1` or `tools/package-macos.sh` (`Orchester.app`) | Fixed, from Settings › Automation; `http://127.0.0.1:47821/mcp` until you change it | Kept in the OS secret store | None |
+| The installed app: built by `tools/install.ps1`, `tools/package-macos.sh` (`Orchester.app`) or the release workflow (Releases from CI) | Fixed, from Settings › Automation; `http://127.0.0.1:47821/mcp` until you change it | Kept in the OS secret store | None |
 | Any other build with `ORCHESTER_APP_MCP_DISCOVERY=<folder>` (QA copies, test harnesses) | A free port on each start | A new one on each start, in memory only | `<folder>/<pid>.json` |
 | Any other build without that variable: debug (`tools/run.ps1 app`), `cargo run --release`, an example | A free port on each start | A new one on each start | `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`, macOS `~/Library/Application Support/orchester-app-mcp/<pid>.json` |
 
@@ -566,7 +621,7 @@ outside a bundle keeps it next to its executable, as on Windows.
   cannot open its database*: "Another Orchester window is using this data folder. Switch to that
   window, or close it and start Orchester again." with the folder. Close the one you are done with, then start the other.
 - **The app and its runner come from one build.** `tools/install.ps1` (and
-  `tools/install-macos.sh`) always installs them together.
+  `tools/install-macos.sh`, the installer and the zip of a release) always installs them together.
   Never copy a program from another build beside them, and do not start an `orchester-app.exe`
   left from before the program's rename (see the top of this page).
 

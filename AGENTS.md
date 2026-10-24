@@ -34,7 +34,8 @@ Workspace layout:
   workspace member since 2026-10-24: it does not build, and its source stays only to look up code and behaviour. Never
   change it, build it or port anything to it.
 - `crates/desktop-app` (`orchester-app`, binary `orchester`; `orchester-app` before 2026-10-24): the lurq app in the
-  `orchester2.pen` design.
+  `orchester2.pen` design. Its own `version` in its `Cargo.toml` is the app's release version: raising it on `master`
+  releases the Windows app (`.github/workflows/app-release.yml`, `docs/stable-build.md` "Releases from CI").
   Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
   settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP
   server of its own that hosts lurq's window tools and the app's tools. The installed app listens on the fixed
