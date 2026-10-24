@@ -145,8 +145,8 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
       | Change::Continue { run, .. }
       | Change::Pause { run, .. }
       | Change::Resume { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
-      // A repository's first commit keeps what its card shows: the folder is checked again when it is applied.
-      Change::Release { .. } | Change::InitRepository { .. } => Ok(None),
+      // A repository's first commit and git's work keep what their cards show: checked again when applied.
+      Change::Release { .. } | Change::InitRepository { .. } | Change::Git(_) => Ok(None),
     },
     (None, Some(run)) => run::read(root, &db, programs, run).map(|found| found.map(Facts::Run)),
     (None, None) => Ok(None),

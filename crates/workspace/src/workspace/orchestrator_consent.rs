@@ -1,8 +1,9 @@
 //! The person's switches over what the Orchestrator chat does itself (`docs/design/orchestrator-toolset.md`,
 //! decisions 3 and 5), in Settings › What automation may do: *Let the Orchestrator publish drafts*, *Let the
 //! Orchestrator answer agents*, *Let the Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its
-//! own* and *Let the Orchestrator continue interrupted runs*. Each is off until a person turns it on in the window, no
-//! tool changes it, and it is off from the moment a person turns it off, whether or not that was saved.
+//! own*, *Let the Orchestrator continue interrupted runs* and *Let the Orchestrator write with git* (decision 9). Each
+//! is off until a person turns it on in the window, no tool changes it, and it is off from the moment a person turns it
+//! off, whether or not that was saved.
 
 use std::sync::Arc;
 
@@ -27,6 +28,9 @@ pub enum OrchestratorConsent {
   /// Its `resume_run` continues a run a crash, the runner going away or *Quit now* interrupted, from its last
   /// checkpoint; with *answer agents* also on, a turn such an end started continues it once.
   ContinueInterrupted,
+  /// Its git tools commit, branch, switch, pull, push, merge, revert, tag and fetch in the project's repository;
+  /// what can lose work stays a proposal either way.
+  WriteGit,
 }
 
 impl OrchestratorConsent {
@@ -37,6 +41,7 @@ impl OrchestratorConsent {
       Self::MergeRuns => db.orchestrator_merges_runs(),
       Self::MergeFinished => db.orchestrator_merges_finished(),
       Self::ContinueInterrupted => db.orchestrator_continues_interrupted(),
+      Self::WriteGit => db.orchestrator_writes_git(),
     }
   }
 
@@ -47,6 +52,7 @@ impl OrchestratorConsent {
       Self::MergeRuns => db.set_orchestrator_merges_runs(allowed),
       Self::MergeFinished => db.set_orchestrator_merges_finished(allowed),
       Self::ContinueInterrupted => db.set_orchestrator_continues_interrupted(allowed),
+      Self::WriteGit => db.set_orchestrator_writes_git(allowed),
     }
   }
 }
@@ -59,6 +65,7 @@ pub(super) struct Consents {
   merge: Arc<Mutex<Consent>>,
   merge_finished: Arc<Mutex<Consent>>,
   continue_interrupted: Arc<Mutex<Consent>>,
+  write_git: Arc<Mutex<Consent>>,
 }
 
 impl Consents {
@@ -69,6 +76,7 @@ impl Consents {
       OrchestratorConsent::MergeRuns => &self.merge,
       OrchestratorConsent::MergeFinished => &self.merge_finished,
       OrchestratorConsent::ContinueInterrupted => &self.continue_interrupted,
+      OrchestratorConsent::WriteGit => &self.write_git,
     }
   }
 }

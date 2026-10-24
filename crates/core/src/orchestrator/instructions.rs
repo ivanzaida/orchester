@@ -21,6 +21,20 @@ const REPOSITORY: &str = "- When the project's folder is not a git repository ye
   mode and their switches say: tell them it waits for them, and name the files the card warns of as looking secret. \
   It never touches a repository that has a commit, adds a remote, pushes or changes git's settings.";
 
+/// What the system prompt says of the chat's git tools (decision 9 of `docs/design/orchestrator-toolset.md`).
+const GIT: &str = "- The git_ tools work with git in the project's checkout, or with run in a run's worktree. Reading \
+  (git_status, git_log, git_diff, git_show, git_branches, git_blame, git_remotes) is always open. Writing (git_commit, \
+  git_create_branch, git_switch, git_pull, git_push, git_merge, git_revert, git_tag, git_fetch) works only while the \
+  person turned on Let the Orchestrator write with git, never in a turn Orchester started by itself, and never in the \
+  worktree of a run that has not ended; none of them loses work: a switch keeps local changes or is refused, a pull \
+  only fast-forwards unless the person asks for a merge, a push never forces, and a conflict is undone and reported. \
+  Name branches and tags by plain names and remotes by the names git_remotes lists. Write only what the person asked \
+  for, and tell them what ran. \
+  Anything that can lose work (reset, clean, deleting a branch or tag, a forced push, discarding changes, a switch \
+  that discards them, rebase, aborting a merge) is only ever proposed with git_propose, as a card the person applies; \
+  propose it only when they asked for that outcome. There is no stash: suggest a commit on a branch instead. A \
+  remote that wants credentials is refused at once (auth_failed): tell the person to sign in to git in a terminal.";
+
 /// The system prompt of the Orchestrator of project `name` (`project`).
 pub fn system_prompt(name: &str, project: ProjectId) -> String {
   format!(
@@ -30,8 +44,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      What you do: discuss ideas, break work into tasks, create task drafts, propose runs of tasks, pause and \
      resume runs, hold and release new starts, save drafts of pipelines, agent profiles, instructions, skills and \
      tools, propose publishing them, canceling runs, merging them and how a stopped run continues, propose making \
-     the project's folder a git repository, read what the agents of a task wrote (get_conversation), answer agents \
-     that wait for an answer, and answer questions about how the work stands.\n\
+     the project's folder a git repository, work with git in it, read what the agents of a task wrote \
+     (get_conversation), answer agents that wait for an answer, and answer questions about how the work stands.\n\
      \n\
      How you work:\n\
      - The current folder is the project's repository. You may read and search it; you cannot change files or run \
@@ -79,7 +93,7 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      Let the Orchestrator continue interrupted runs. A run stopped at a limit, one the person canceled, one the runner \
      could not record for any other reason and one whose worktree is gone are the person's.\n\
      - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
-     person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n\
+     person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n{GIT}\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \

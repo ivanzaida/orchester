@@ -111,6 +111,13 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
+      "writeGit": {
+        "title": "Let the Orchestrator write with git",
+        "description": "Lets the Orchestrator's chat commit, create and switch branches, pull, push, merge, revert, tag and fetch in the project's repository when you ask it to. None of these loses work: a switch keeps your changes or is refused, a pull only fast-forwards unless you ask for a merge, a push never forces, and a conflict is undone. Reset, clean, deleting a branch or tag, a forced push, discarding changes and rebase stay cards you apply, whatever this says. Never in a run's worktree before the run ended. Off: the chat only reads git. Only you can change this, here in the window.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
       "estimatePoints": {
         "title": "Let Orchester estimate story points",
         "description": "Orchester sizes each new task, and a task whose brief or criteria change, in story points (1, 2, 3, 5, 8, 13 or 21) with a short reason, from the brief, the criteria and the project's merged tasks. Each estimate asks auto mode's reviewer model and spends tokens, which count toward the project's daily budget. Points you set are never changed. Only you can change this, here in the window.",

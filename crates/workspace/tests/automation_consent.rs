@@ -192,11 +192,12 @@ fn automation_consent_old_pending_grant_cannot_clear_a_later_human_revocation() 
   );
 }
 
-const ORCHESTRATOR_CONSENTS: [OrchestratorConsent; 4] = [
+const ORCHESTRATOR_CONSENTS: [OrchestratorConsent; 5] = [
   OrchestratorConsent::PublishDrafts,
   OrchestratorConsent::AnswerAgents,
   OrchestratorConsent::MergeRuns,
   OrchestratorConsent::ContinueInterrupted,
+  OrchestratorConsent::WriteGit,
 ];
 
 #[test]

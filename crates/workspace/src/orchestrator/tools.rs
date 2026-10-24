@@ -9,7 +9,8 @@
 //! canceling or deciding how a stopped run goes on), and so does starting a run unless auto mode is on for the project
 //! ([`super::proposal`]). An interrupted run is continued only under the person's switch ([`super::guard`]), and a
 //! finished run is merged in a turn nobody asked for only under the person's switches ([`super::auto_merge`]). The
-//! chat's own `init_repository` is always the person's to apply ([`super::repository`]). What the agent changed, or
+//! chat's own `init_repository` is always the person's to apply ([`super::repository`]); its git tools read always,
+//! write under the person's switch and only propose what can lose work ([`super::git`]). What the agent changed, or
 //! tried to, is kept in its conversation as an action; what it reads of each tool that works otherwise here is
 //! [`super::told`]'s.
 
@@ -34,7 +35,7 @@ use super::{
     self,
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
-  duplicate, guard,
+  duplicate, git, guard,
   keep::{self, HOLD_QUEUE, Named},
   own_project::{in_own_project, own_project_by_id},
   proposal,
@@ -118,8 +119,27 @@ pub const TOOLS: [&str; 60] = [
 ];
 
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
-/// the person applies ([`super::repository`]).
-pub const CHAT_TOOLS: [&str; 1] = [INIT_REPOSITORY];
+/// the person applies ([`super::repository`]), and working with git in it ([`super::git`]).
+pub const CHAT_TOOLS: [&str; 18] = [
+  INIT_REPOSITORY,
+  git::NAMES[0],
+  git::NAMES[1],
+  git::NAMES[2],
+  git::NAMES[3],
+  git::NAMES[4],
+  git::NAMES[5],
+  git::NAMES[6],
+  git::NAMES[7],
+  git::NAMES[8],
+  git::NAMES[9],
+  git::NAMES[10],
+  git::NAMES[11],
+  git::NAMES[12],
+  git::NAMES[13],
+  git::NAMES[14],
+  git::NAMES[15],
+  git::NAMES[16],
+];
 
 /// The tool whose call starts a run, or proposes it.
 pub(super) const RUN_TASK: &str = "run_task";
@@ -150,6 +170,7 @@ pub fn listed() -> Vec<Tool> {
       tool
     })
     .chain([repository::tool()])
+    .chain(git::tools())
     .collect()
 }
 
@@ -174,6 +195,9 @@ pub async fn call(
   name: &str,
   mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
+  if let Some(kind) = git::kind(name) {
+    return git::chat::call((services, translate, runners), scope, (name, kind), arguments).await;
+  }
   let Some(tool) = listed().into_iter().find(|tool| tool.name == name) else {
     return Err(no_tool(name));
   };

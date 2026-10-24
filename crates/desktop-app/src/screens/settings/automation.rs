@@ -4,8 +4,9 @@
 //! the next start, as the hint under it says), *Let automation answer approvals*, *Let automation change agent
 //! permissions*, *Let the Orchestrator publish drafts*, *Let the Orchestrator answer agents*, *Let the Orchestrator
 //! merge runs*, *Let the Orchestrator merge finished runs on its own* (ORC-69; its description says it needs *merge
-//! runs* and *answer agents* too) and *Let the Orchestrator continue interrupted runs* (the same row;
-//! `docs/design/orchestrator-toolset.md`, "Decisions" 3 and 5). Each is an application setting that is off until a
+//! runs* and *answer agents* too), *Let the Orchestrator continue interrupted runs* and *Let the Orchestrator write
+//! with git* (the same row, no design frame of its own yet; `docs/design/orchestrator-toolset.md`, "Decisions" 3, 5
+//! and 9). Each is an application setting that is off until a
 //! person turns it on here (window control: the build's default until then). While *answer approvals* is off, the MCP
 //! server's approval tools refuse (`automation_not_allowed`); while *change agent permissions* is off, its setup tools
 //! refuse whatever would widen what agents may do (`person_only`), including matching window confirmations; while one
@@ -64,7 +65,8 @@ pub enum Consent {
   AnswerApprovals,
   /// *Let automation change agent permissions*.
   ChangePermissions,
-  /// *Let the Orchestrator publish drafts*, *answer agents*, *merge runs* or *continue interrupted runs*.
+  /// *Let the Orchestrator publish drafts*, *answer agents*, *merge runs*, *merge finished runs on its own*,
+  /// *continue interrupted runs* or *write with git*.
   Orchestrator(OrchestratorConsent),
   /// *Let Orchester estimate story points* (ORC-49): off until a person turns it on.
   EstimatePoints,
@@ -93,6 +95,7 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::MergeRuns) => "settings-merge-runs",
       Self::Orchestrator(OrchestratorConsent::MergeFinished) => "settings-merge-finished",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "settings-continue-interrupted",
+      Self::Orchestrator(OrchestratorConsent::WriteGit) => "settings-write-git",
       Self::EstimatePoints => "settings-estimate-points",
     }
   }
@@ -155,6 +158,13 @@ impl Consent {
         not_saved: "settings.automation.continueInterrupted.notSaved",
         blocked: "settings.automation.continueInterrupted.blocked",
       },
+      Self::Orchestrator(OrchestratorConsent::WriteGit) => Words {
+        title: "settings.automation.writeGit.title",
+        description: "settings.automation.writeGit.description",
+        unreadable: "settings.automation.writeGit.unreadable",
+        not_saved: "settings.automation.writeGit.notSaved",
+        blocked: "settings.automation.writeGit.blocked",
+      },
       Self::EstimatePoints => Words {
         title: "settings.automation.estimatePoints.title",
         description: "settings.automation.estimatePoints.description",
@@ -176,6 +186,7 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::MergeRuns) => "Let the Orchestrator merge runs",
       Self::Orchestrator(OrchestratorConsent::MergeFinished) => "Let the Orchestrator merge finished runs on its own",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "Let the Orchestrator continue interrupted runs",
+      Self::Orchestrator(OrchestratorConsent::WriteGit) => "Let the Orchestrator write with git",
       Self::EstimatePoints => "Let Orchester estimate story points",
     }
   }
@@ -226,6 +237,7 @@ pub fn section(ctx: &mut Ctx) -> Element {
       "continue-interrupted",
       Consent::Orchestrator(OrchestratorConsent::ContinueInterrupted),
     ),
+    ("write-git", Consent::Orchestrator(OrchestratorConsent::WriteGit)),
     ("estimate-points", Consent::EstimatePoints),
   ];
   let rows: Vec<Element> = rows

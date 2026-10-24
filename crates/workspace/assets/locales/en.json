@@ -1968,7 +1968,8 @@
         "project": "New starts in {{project}} are held already: there is nothing to hold. Nothing was changed.",
         "group": "New starts of {{task}}'s group are held already: there is nothing to hold. Nothing was changed."
       },
-      "initWaits": "Nothing is made yet: the first commit of {{project}}'s folder on {{branch}} waits for the person, who applies or dismisses it in the conversation. Tell them what the commit holds and which files look as if they hold secrets, if any."
+      "initWaits": "Nothing is made yet: the first commit of {{project}}'s folder on {{branch}} waits for the person, who applies or dismisses it in the conversation. Tell them what the commit holds and which files look as if they hold secrets, if any.",
+      "gitWaits": "Nothing has run yet: {{command}} waits for the person, who applies or dismisses it in the conversation. Tell them what it would lose, as the card lists it."
     },
     "repository": {
       "gitMissing": "git is not installed on this computer, so the project's folder cannot be made a git repository. Install git, then ask again. Nothing was changed.",
@@ -1985,6 +1986,32 @@
       "gitFailed": "{{command}} failed. git said: {{said}}",
       "authorUnknown": "git does not know who the commit's author is, so the first commit was not made. Tell git once in a terminal: git config --global user.name \"Your Name\" and git config --global user.email \"you@example.com\", then ask the Orchestrator to propose it again. git said: {{said}}",
       "stopped": "{{command}} did not finish. Nothing more was done."
+    },
+    "git": {
+      "gitMissing": "git is not installed on this computer, so nothing was done. Install git, then ask again.",
+      "timedOut": "{{command}} took too long and was stopped. A remote that does not answer, or asks for a password, keeps git waiting; check the remote in a terminal.",
+      "gitFailed": "{{command}} failed. git said: {{said}}",
+      "notRepository": "The folder is not a git repository. Nothing was done.",
+      "authFailed": "{{command}} could not sign in to the remote: git never asks for a password or opens a sign-in window here. Sign in to git for this remote once in a terminal (a credential helper, gh auth login, or an SSH key), then ask again. git said: {{said}}",
+      "wouldLoseWork": "{{command}} would overwrite uncommitted work, so git did not do it and nothing was lost. Commit the changes first, or the Orchestrator can propose discarding them for you to apply. git said: {{said}}",
+      "authorUnknown": "git does not know who the commit's author is, so nothing was committed. Tell git once in a terminal: git config --global user.name \"Your Name\" and git config --global user.email \"you@example.com\". git said: {{said}}",
+      "writeOff": "The Orchestrator may not write with git: Let the Orchestrator write with git is off in Settings › What automation may do. Nothing was done; only the person can turn it on, there.",
+      "onItsOwn": "Nobody asked for this in this turn, which Orchester started by itself, so git writes nothing in it. Nothing was done.",
+      "runActive": "Run #{{run}} has not ended: its worktree is its agents' while it works, waits, is paused or interrupted, so git writes nothing there. Nothing was done.",
+      "worktreeGone": "Run #{{run}} has no worktree any more. Nothing was done.",
+      "nothingToCommit": "There is nothing to commit. Nothing was done.",
+      "detached": "HEAD is on no branch, so there is no branch to push. Name the branch.",
+      "conflictUndone": "{{command}} stopped at conflicts in {{files}}, so it was undone: the repository is as it was before.",
+      "conflictNotUndone": "{{command}} stopped at conflicts in {{files}}, and undoing it with {{abort}} failed too: the repository is left in the middle of it. Resolve or abort it in a terminal.",
+      "changed": "The repository changed since this was proposed: its branches or what it would lose are not what the card showed. Nothing was done; ask the Orchestrator to propose it again.",
+      "noMerge": "No merge is in progress. Nothing was done.",
+      "nothingToClean": "There are no untracked files to delete. Nothing was done.",
+      "unknownRevision": "git finds nothing named {{revision}}. Nothing was done.",
+      "unresolved": "Files are still in conflict: {{files}}. Committing them would commit their conflict markers, so nothing was committed. The person resolves and stages them, then the merge can be committed.",
+      "inProgress": "A {{operation}} is in progress in the repository; the person finishes or aborts it first. Nothing was done.",
+      "integrationWorking": "Orchester's local integration is working in the project's checkout right now, so git writes nothing there. Nothing was done; try again once it finished.",
+      "checkoutReserved": "A local integration holds the project's checkout until it is finished or put back on the Local integration page, so git writes nothing there. Nothing was done.",
+      "resolutionOpen": "Run #{{run}}'s conflicts wait to be resolved in its worktree, so git writes nothing there. Nothing was done."
     }
   },
   "memory": {

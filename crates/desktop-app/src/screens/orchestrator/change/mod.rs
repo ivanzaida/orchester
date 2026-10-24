@@ -11,6 +11,7 @@ pub(in crate::screens) mod answer;
 mod continuation;
 mod control;
 mod facts;
+mod git;
 mod repository;
 mod widens;
 mod words;
@@ -125,22 +126,27 @@ impl Component for ChangeCard {
       TagChip::new(format!("{id}-{suffix}"), ctx.t(words)).into()
     });
     let head = card::head(id, (glyph, &title), chip, state);
-    let (facts, diff): (Option<Column>, Option<Element>) =
-      match view.action.change.as_ref().map(|change| &change.change) {
-        // A first commit shows what its proposal keeps, and the `.gitignore` it honours.
-        Some(change @ Change::InitRepository { .. }) => {
-          let root = props.scope.as_ref().map(|scope| scope.root.as_path());
-          let rows = repository::rows(ctx, change, root);
-          (
-            Some(facts::column(ctx, id, rows)),
-            repository::gitignore(ctx, id, (&view, change)),
-          )
-        }
-        _ => (
-          facts::rows(ctx, id, &view, props.project.0),
-          facts::diff(ctx, id, &view).map(Into::into),
-        ),
-      };
+    let (facts, diff): (Option<Column>, Vec<Element>) = match view.action.change.as_ref().map(|change| &change.change) {
+      // A first commit shows what its proposal keeps, and the `.gitignore` it honours.
+      Some(change @ Change::InitRepository { .. }) => {
+        let root = props.scope.as_ref().map(|scope| scope.root.as_path());
+        let rows = repository::rows(ctx, change, root);
+        (
+          Some(facts::column(ctx, id, rows)),
+          repository::gitignore(ctx, id, (&view, change)).into_iter().collect(),
+        )
+      }
+      // Git's work shows where it ran, its commands and, while it waits, what it would lose.
+      Some(Change::Git(git)) => {
+        let root = props.scope.as_ref().map(|scope| scope.root.as_path());
+        let rows = git::rows(ctx, git, root);
+        (Some(facts::column(ctx, id, rows)), git::boxes(ctx, id, (&view, git)))
+      }
+      _ => (
+        facts::rows(ctx, id, &view, props.project.0),
+        facts::diff(ctx, id, &view).map(Into::into).into_iter().collect(),
+      ),
+    };
     let notes = self.notes(ctx, (&props, &view, person_only), (read, &loaded.error));
     // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
     // and the apply refuses anything else than what was shown.
@@ -208,6 +214,9 @@ impl ChangeCard {
     }
     if let Some(change) = view.action.change.as_ref() {
       before.extend(repository::sensitive(ctx, id, (view, &change.change)));
+      if let Change::Git(git) = &change.change {
+        before.extend(git::warning(ctx, id, (view, git)));
+      }
     }
     match (view.phase(), publication) {
       (Phase::Done, Some(of)) => {

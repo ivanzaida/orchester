@@ -214,7 +214,8 @@ fn proposed(change: &Change) -> Option<Proposed> {
     | Change::Pause { .. }
     | Change::Resume { .. }
     | Change::Release { .. }
-    | Change::InitRepository { .. } => None,
+    | Change::InitRepository { .. }
+    | Change::Git(_) => None,
   }
 }
 
