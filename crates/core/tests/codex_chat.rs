@@ -12,7 +12,9 @@ use std::{
 use orchester_core::{
   command::Command,
   connection::{
-    invocation::{CODEX_CHAT_CONFINEMENT, CODEX_ISOLATION, CodexChat, CodexMcp, McpLaunch, Platform},
+    invocation::{
+      CODEX_CHAT_CONFINEMENT, CODEX_ISOLATION, CodexChat, CodexMcp, HttpAuthorization, McpLaunch, Platform,
+    },
     mcp::{McpServerName, McpUrl},
   },
   id::ProjectId,
@@ -27,7 +29,7 @@ fn tools() -> CodexMcp {
   let launch = McpLaunch::http(
     McpServerName::new(SERVER).expect("valid name"),
     McpUrl::new("http://127.0.0.1:9/mcp").expect("valid URL"),
-    Some(Arc::new(SecretValue::new(TOKEN.to_owned()).expect("not blank"))),
+    HttpAuthorization::Bearer(Arc::new(SecretValue::new(TOKEN.to_owned()).expect("not blank"))),
   );
   let (mcp, left_out) = CodexMcp::new(&[launch]);
   assert!(left_out.is_empty(), "{left_out:?}");
