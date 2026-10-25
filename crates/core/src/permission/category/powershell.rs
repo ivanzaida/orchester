@@ -135,10 +135,7 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
 }
 
 fn read(program: &str, args: &[String]) -> Judged {
-  let refused = args.iter().any(|arg| {
-    unread(arg) || parameter(arg).is_some_and(|(name, _)| SETS_VARIABLE.contains(&name.to_lowercase().as_str()))
-  });
-  if refused {
+  if refused(args) {
     return Judged::unknown();
   }
   // The file readers with only the parameters that pick what they read: a known-safe read like `cat` or
@@ -153,6 +150,14 @@ fn read(program: &str, args: &[String]) -> Judged {
   } else {
     Judged::of(Kind::ReadOnly)
   }
+}
+
+/// Whether a reading cmdlet's `args` cannot be read ([`unread`]) or set a variable ([`SETS_VARIABLE`]): a
+/// path on another provider (`env:GH_TOKEN`, `Cert:\…`) could be a credential no placing sees.
+pub(super) fn refused(args: &[String]) -> bool {
+  args.iter().any(|arg| {
+    unread(arg) || parameter(arg).is_some_and(|(name, _)| SETS_VARIABLE.contains(&name.to_lowercase().as_str()))
+  })
 }
 
 /// Reading cmdlets that are known-safe reads with [`KNOWN_READ_PARAMETERS`].

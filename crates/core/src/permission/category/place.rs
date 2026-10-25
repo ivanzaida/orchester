@@ -76,13 +76,15 @@ impl<'a> Placing<'a> {
 
   /// `word`, a file the part reads or a word that may name one: a credential location is noted, a
   /// folder outside the worktree kept. A plain reader reads the dependency sources of a toolchain as it reads
-  /// the worktree ([`toolchains::reads_sources`]); any other part there reaches outside.
+  /// the worktree ([`toolchains::reads_sources`]); any other part there reaches outside. A word that cannot be
+  /// placed could name a credential location: the part no longer only reads ([`CommandPart::only_reads`]).
   pub(super) fn read(&self, part: &mut CommandPart, word: &str) {
     if word.is_empty() || word == "-" {
       return;
     }
     let Some(located) = self.locate(word) else {
       part.at_least(CommandCategory::Unknown);
+      part.only_reads = false;
       return;
     };
     for (path, place) in located {
