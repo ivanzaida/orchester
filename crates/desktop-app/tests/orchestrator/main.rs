@@ -19,6 +19,7 @@ mod harness;
 mod history;
 mod layout;
 mod links;
+mod mcp_servers;
 mod open_long;
 mod paste;
 mod proposal;

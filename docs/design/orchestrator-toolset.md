@@ -6,7 +6,8 @@ continuing interrupted runs behind *Let the Orchestrator continue interrupted ru
 2026-10-20 (ORC-53); runs the runner stopped because the project database stayed busy added to them by the person on
 2026-10-21 (ORC-75); the proposed first commit of a project's folder (decision 8) added on 2026-10-21 (ORC-72);
 merging finished runs on its own behind *Let the Orchestrator merge finished runs on its own* decided by the person on
-2026-10-21 (ORC-69).
+2026-10-21 (ORC-69); the project's MCP servers from the chat (decision 10) added on 2026-10-25 (ORC-89), its narrowing
+rule decided by the person that day.
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -281,6 +282,7 @@ project.
 | Tools | `list_tools`, `get_tool` (existing) | `save_tool_draft` (existing) | `publish_tool` |
 | Secrets | `list_secrets` (new: name, scope, which profiles/tools/connections use it; never a value) | — | — |
 | Connections | `list_connections`, `list_accounts`, `list_models` (existing) | — | — |
+| MCP servers | `list_connections` (existing: the servers with their transport, authorization by secret name, variables by name, exempt tools and the profiles that choose them) | `mcp_set_server_enabled` off, `mcp_remove_server` of a server no profile chooses, `mcp_update_server` that only narrows (ORC-89, the chat's own; made at once only in a turn the person asked for while *Let automation change agent permissions* is on, else a card; decision 10) | `mcp_add_server`, `mcp_update_server` that widens, `mcp_set_server_enabled` on (ORC-89, the chat's own: always a card the person applies, whatever the switches; decision 10) |
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Delivery | `get_delivery` (ORC-50: a project's throughput, cycle and lead time, active time and return rate per step, cumulative flow over its last days, and the 50 % / 85 % delivery dates of its queued tasks and open modules by a Monte Carlo over recent throughput, or *not enough history*; answers "when will module X be done") | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
@@ -289,9 +291,10 @@ project.
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
-widening what agents may do, secret values, project setup (but the proposed first commit of decision 8),
-connections' changes, MCP server changes, environment, worktree removal and `return_to_draft` stay out of the chat's
-tools. Answering agents' questions and sending a run's agents messages are the chat's since ORC-42, behind *Let the
+widening what agents may do (but as a card the person applies: a publication, decision 3, or an MCP server's change,
+decision 10), secret values, project setup (but the proposed first commit of decision 8), connections' changes but
+MCP servers' (decision 10), environment, worktree removal and `return_to_draft` stay out of the chat's tools.
+Answering agents' questions and sending a run's agents messages are the chat's since ORC-42, behind *Let the
 Orchestrator answer agents* (decision 5).
 
 ## Links
@@ -399,3 +402,51 @@ which could not be told safe: what the chat is not offered it cannot do. They ru
 | Read (always) | Write (*Let the Orchestrator write with git*) | Proposed (person applies, always) |
 |---|---|---|
 | `git_status` (branch, upstream, ahead/behind, operation in progress, files), `git_log` (range or all, path, limit ≤ 200), `git_diff` (from/to, staged, paths, stat), `git_show` (rev, stat, or a file at rev), `git_branches` (local with upstream ahead/behind, remote), `git_blame` (path, rev, lines), `git_remotes` | `git_commit` (paths, all, or what is staged; message), `git_create_branch` (name, start, switch), `git_switch` (only when it loses nothing), `git_pull` (ff-only; merge on request), `git_push` (no force; set_upstream), `git_merge` (no_ff, message; conflict undone), `git_revert` (mainline; conflict undone), `git_tag` (annotated with a message), `git_fetch` (remote or all, prune) | `git_propose` with `reset`, `clean`, `delete_branch`, `force_push`, `discard_changes`, `switch_discarding`, `rebase`, `delete_tag`, `abort_merge` |
+
+## 10. The project's MCP servers (ORC-89, 2026-10-25)
+
+A person asked the chat to add the Pencil MCP server to the project and it could only send them to Connections. The
+chat now has tools of its own (`orchester_workspace::orchestrator::mcp_servers`, listed in `tools::CHAT_TOOLS`; no
+client of the app has them; the app's own `add_mcp_server` and the like stay out of the chat's list):
+`mcp_add_server`, `mcp_update_server`, `mcp_set_server_enabled` and `mcp_remove_server`. They take exactly the app's
+tools' arguments (stdio: `program`, `args`, `working_directory`, `environment`; http: `url` and `authorization` with
+the ORC-83 schemes none, bearer, basic, basic_credential and header) and are carried out by those tools, so the same
+fields, rules and refusals hold as in Connections › MCP servers.
+
+- **Read first, as the tool would make it.** Each call is read without storing anything
+  (`orchester_workspace::app_mcp::setup::preview_mcp`): the server as Add / Edit MCP server would save it, what it
+  widens by the tools' own reasons (`connections::mcp::widenings`, `enabling`), the profiles that choose it and a
+  digest of the server as stored now. A stdio program is looked up as saving it would look it up
+  (`tools::program::fixed_program`, which refuses network and device paths by their text before reading anything), so
+  the card names the file it would be; a program that cannot be stored (inside the worktree or the repository, not on
+  this computer) is refused at once; one not found is proposed with a warning, and applying it is refused
+  (`program_not_found`). Unlike the app's tools, which judge a widening by the fields' text before anything reads the
+  disk, the chat's reads the disk for the card: the person decides on what it found.
+- **Adding or widening is always a card the person applies**: a new server, another name, program, arguments,
+  folder or endpoint, another authorization that sends a secret, a variable but the harmless ones, a variable that
+  takes a secret, a tool added to the exempt ones, turning a server on. Whatever *Let automation change agent
+  permissions* and the chat's switches say, in any turn, also a report's. The card (`Change::Mcp`,
+  `orchester_core::orchestrator::mcp`) shows the server as applying leaves it: its name and whether it is on, the
+  program with its arguments and the file it was found as, its folder, or the URL with its query's values left out
+  and what it is sent (scheme, user or header name, and which secret, `NAME@environment`), the variables by their
+  names (a secret one with its secret's name, a plain one without its value), which tool calls run without asking
+  (every other call asks, for profiles that ask before MCP actions), the profiles that choose it; and while it waits a
+  warning that it widens what agents may do, and one for a program not found. Automation's click on its action is
+  refused (`person_only`), as on every card.
+- **Narrowing** (turning a server off, removing one no profile chooses, an edit that drops exempt tools or the
+  authorization) is made at once, through the app's tool, only in a turn the person asked for and while *Let
+  automation change agent permissions* is on (decided by the person on 2026-10-25: no switch of its own); otherwise it
+  is a card too. A server a profile chooses is not removed (`in_use`, naming the profiles); detaching it is a change of
+  the profile (`save_profile_draft`, then `publish_profile`), under the rules it has.
+- **Apply reads it again** and refuses (`changed_since_proposed`) once anything the card shows or stands on differs:
+  the stored server (by its digest), a secret it names, the file the program is found as, the profiles that choose it.
+  Then the app's tool carries it out as the person's decision (`PersonDecision` without a draft): what it widens is
+  what they were shown, and anything else is refused. The card keeps the server by its id, so a rename meanwhile does
+  not make it apply to another one.
+- **Secrets are named, never typed.** The chat names an active project secret `NAME@environment` (`list_secrets`), in
+  an authorization or as `${secret:NAME@environment}` in a variable's value; no tool takes or shows a value. Neither the
+  card nor what the agent is told holds a plain variable's value or an endpoint's query values that a person typed in
+  Connections: the card shows names, and it stands on a digest of the stored server.
+- **Where a program comes from.** The chat suggests a program or URL only from what it read (the project's files, a
+  tool's own documentation, such as the command a desktop app's MCP settings show) and tells the person where it came
+  from; it never guesses a path. Once the server exists, giving it to agents is a change of their profile, as before.

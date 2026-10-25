@@ -178,6 +178,7 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
     Some(Change::Continue { number, choice, .. }) => super::continuation::continuation(ctx, view, (*number, choice)),
     Some(Change::InitRepository { branch, exists, .. }) => super::repository::words(ctx, view, (branch, *exists)),
     Some(Change::Git(git)) => super::git::words(ctx, view, git),
+    Some(Change::Mcp(mcp)) => super::mcp::words(ctx, view, mcp),
     None => start(ctx, view),
   }
 }

@@ -127,8 +127,7 @@ pub(super) async fn apply(
       // Told early, by name; the tool checks the draft and what it widens again where it publishes.
       blocking(move || unchanged_draft(&root, (of, resource), ((saved, version), &widens), subject)).await?;
       let person = services.clone().decided_by_person(PersonDecision {
-        saved,
-        version,
+        draft: Some((saved, version)),
         widens: shown.to_vec(),
       });
       let (tool, arguments) = tool_arguments(scope, change);
@@ -192,6 +191,7 @@ pub(super) async fn apply(
       answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, None)).await
     }
     Change::InitRepository { .. } | Change::Git(_) => apply_in_folder(services, root, change.change.clone()).await,
+    Change::Mcp(ref mcp) => super::mcp_servers::apply((services, translate), mcp).await,
   }
 }
 
@@ -246,8 +246,9 @@ pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'s
     Change::Release { task } => return control::release_arguments(scope.project, task.as_deref()),
     // The chat's own tool, carried out by [`repository::apply`]: it acts on the project only.
     Change::InitRepository { .. } => (INIT_REPOSITORY, "project", scope.project.to_string()),
-    // Carried out by [`super::git::apply`] from what the card keeps.
+    // Carried out by [`super::git::apply`] and [`super::mcp_servers::apply`] from what the card keeps.
     Change::Git(_) => (super::git::GIT_PROPOSE, "project", scope.project.to_string()),
+    Change::Mcp(mcp) => return (mcp.operation.tool(), mcp.arguments.clone()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
@@ -487,6 +488,7 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
       Message::new("orchestrator.tools.gitWaits").with("command", git.operation.command().to_owned()),
       json!({ "git": git }),
     ),
+    Change::Mcp(mcp) => super::mcp_servers::told(mcp),
   };
   json!({
     "done": false,

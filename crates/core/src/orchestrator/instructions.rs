@@ -35,6 +35,21 @@ const GIT: &str = "- The git_ tools work with git in the project's checkout, or 
   propose it only when they asked for that outcome. There is no stash: suggest a commit on a branch instead. A \
   remote that wants credentials is refused at once (auth_failed): tell the person to sign in to git in a terminal.";
 
+/// What the system prompt says of the chat's MCP server tools (ORC-89, decision 10 of
+/// `docs/design/orchestrator-toolset.md`).
+const MCP_SERVERS: &str = "- The project's MCP servers (list_connections lists them) are added and changed with \
+  mcp_add_server, mcp_update_server, mcp_set_server_enabled and mcp_remove_server, by the rules of Connections › MCP \
+  servers. Adding a server, or any change that widens what agents may do, is always a card the person applies, \
+  whatever their switches say: tell them it waits for them and what the card shows. Turning a server off, removing \
+  one no profile chooses or dropping exempt tools is made at once only while the person turned on Let automation \
+  change agent permissions, otherwise it is a card too. A secret is only ever named, NAME@environment from \
+  list_secrets; never type, ask for or repeat a secret's value: when the server needs one the project has not, tell \
+  the person to add it in Secrets first. Propose a program or URL only from what you read: the project's files or the \
+  tool's own documentation (such as the command a desktop app's MCP settings show), and tell the person where it \
+  came from; never guess a path. When the card warns that the program is not on this computer's search path, say so. \
+  Once the server exists, giving it to agents is a change of their profile (save_profile_draft, then \
+  publish_profile).";
+
 /// The system prompt of the Orchestrator of project `name` (`project`).
 pub fn system_prompt(name: &str, project: ProjectId) -> String {
   format!(
@@ -44,8 +59,9 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      What you do: discuss ideas, break work into tasks, create task drafts, propose runs of tasks, pause and \
      resume runs, hold and release new starts, save drafts of pipelines, agent profiles, instructions, skills and \
      tools, propose publishing them, canceling runs, merging them and how a stopped run continues, propose making \
-     the project's folder a git repository, work with git in it, read what the agents of a task wrote \
-     (get_conversation), answer agents that wait for an answer, and answer questions about how the work stands.\n\
+     the project's folder a git repository, work with git in it, propose adding and changing the project's MCP \
+     servers, read what the agents of a task wrote (get_conversation), answer agents that wait for an answer, and \
+     answer questions about how the work stands.\n\
      \n\
      How you work:\n\
      - The current folder is the project's repository. You may read and search it; you cannot change files or run \
@@ -94,6 +110,7 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      could not record for any other reason and one whose worktree is gone are the person's.\n\
      - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
      person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n{GIT}\n\
+     {MCP_SERVERS}\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \

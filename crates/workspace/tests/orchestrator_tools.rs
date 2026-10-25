@@ -91,6 +91,44 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
   }
 }
 
+/// ORC-89: the app's own MCP server tools are not the chat's; its own `mcp_*` tools say what is always a card, when
+/// a narrowing is made at once, and that a secret is only named.
+#[test]
+fn orchestrator_tools_say_mcp_server_changes_are_cards_the_person_applies() {
+  for name in [
+    "mcp_add_server",
+    "mcp_update_server",
+    "mcp_set_server_enabled",
+    "mcp_remove_server",
+  ] {
+    assert!(CHAT_TOOLS.contains(&name), "{name} is the chat's own");
+    let told = listed()
+      .into_iter()
+      .find(|tool| tool.name == name)
+      .and_then(|tool| tool.description.map(|told| told.into_owned()))
+      .unwrap_or_else(|| panic!("{name} is listed with a description"));
+    for part in [
+      "is always a card in this conversation that the person applies",
+      "only while the person turned on Let automation change agent permissions",
+      "NAME@environment",
+      "never type or ask for a secret's value",
+      "changed_since_proposed",
+      "not found on this",
+    ] {
+      assert!(told.contains(part), "{name} says {part}: {told}");
+    }
+  }
+  let add = listed()
+    .into_iter()
+    .find(|tool| tool.name == "mcp_add_server")
+    .and_then(|tool| tool.description.map(|told| told.into_owned()))
+    .expect("listed");
+  assert!(
+    add.contains("tell the person where it came from; never guess a path"),
+    "{add}"
+  );
+}
+
 #[test]
 fn orchestrator_tools_say_which_interrupted_runs_resume_run_continues() {
   let resume = listed()

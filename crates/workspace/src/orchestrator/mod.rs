@@ -1,7 +1,7 @@
 //! The project's Orchestrator chat (`docs/design/orchester-workspace.md`, "Project orchestrator conversation";
 //! `orchester_core::orchestrator`): what it runs on, its conversations, sending a message and stopping the answer,
-//! the domain tools its agent gets, its own tools that make the project's folder a git repository and work with git
-//! in it, the waits of the
+//! the domain tools its agent gets, its own tools that make the project's folder a git repository, work with git
+//! in it and change its MCP servers, the waits of the
 //! project's agents and the ends of its runs it follows, and the project's daily report. The project's runner runs
 //! the agent; the app serves its tools.
 
@@ -14,6 +14,7 @@ pub mod facts;
 pub mod git;
 mod guard;
 mod keep;
+mod mcp_servers;
 mod own_project;
 pub mod proposal;
 pub mod recover;
