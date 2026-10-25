@@ -2,7 +2,8 @@
 //! `mcp__Orchester__edit_file` and `mcp__Orchester__create_file`, Codex as the tools `edit_file` and
 //! `create_file` of the MCP server `Orchester`. A successful call reports the file it changed after its
 //! own end, so first-edit tracking sees it; a failed one, or a tool of another server, reports none.
-//! A change outside the repository is no first edit. The Claude Code lines follow the shapes in
+//! A change outside the repository is no first edit. The same tracking counts the agent's searches of the
+//! code index (ORC-90). The Claude Code lines follow the shapes in
 //! `fixtures/claude/synthetic-tool-use.jsonl`; the Codex lines those of `tests/app_server.rs`.
 
 use std::fs;
@@ -365,4 +366,127 @@ fn codex_stream_reports_no_change_of_a_failed_orchester_edit_or_another_server_t
       .all(|event| matches!(event, AgentEvent::McpToolFinished { .. })),
     "{events:#?}"
   );
+}
+
+fn follow_with_index(events: &[AgentEvent], index_given: bool) -> Option<u64> {
+  let mut tracker = FirstEditTracker::new(index_given);
+  for event in events {
+    tracker.observe(event, Timestamp::from_unix_millis(0), |_| true);
+  }
+  tracker.progress().index_searches
+}
+
+fn codex_command(id: &str, command: &str, status: &str) -> [Value; 2] {
+  let item = json!({"id": id, "type": "commandExecution", "command": command, "cwd": "/repo"});
+  let mut done = item.clone();
+  done["status"] = json!(status);
+  done["aggregatedOutput"] = json!("");
+  [
+    json!({"method": "item/started", "params": {"threadId": "t", "turnId": "turn", "item": item}}),
+    json!({"method": "item/completed", "params": {"threadId": "t", "turnId": "turn", "item": done}}),
+  ]
+}
+
+/// ORC-90: a Codex agent's searches of the code index count, whether through Orchester's index tools or `rg` in the
+/// index folder as the skill shows; a command elsewhere, a declined one, a failed tool call and a tool that does not
+/// read the index do not.
+#[test]
+fn index_searches_of_a_codex_agent_count_its_index_tools_and_commands_in_the_index() {
+  let completed = json!({"status": "completed"});
+  let mut lines = Vec::new();
+  lines.extend(mcp_call(
+    "mcp-1",
+    "Orchester",
+    "find_symbol",
+    &json!({"name": "parse"}),
+    &completed,
+  ));
+  lines.extend(mcp_call(
+    "mcp-2",
+    "Orchester",
+    "search_file",
+    &json!({"term": "parse"}),
+    &completed,
+  ));
+  lines.extend(mcp_call(
+    "mcp-3",
+    "Orchester",
+    "read_file",
+    &json!({"filename": "a.rs"}),
+    &completed,
+  ));
+  lines.extend(mcp_call(
+    "mcp-4",
+    "Orchester",
+    "find_symbol",
+    &json!({"name": "x"}),
+    &json!({"status": "failed"}),
+  ));
+  lines.extend(codex_command(
+    "cmd-1",
+    r#""C:\Program Files\PowerShell\7\pwsh.exe" -Command "rg -n '^parse\t' 'H:\repo\.orchester\index\4d2b8e0\symbols.tsv'""#,
+    "completed",
+  ));
+  lines.extend(codex_command(
+    "cmd-2",
+    r#"pwsh -Command "$IDX = 'H:\repo\.Orchester\Index\4d2b8e0'; rg -n 'x' "$IDX/tree.txt"""#,
+    "failed",
+  ));
+  lines.extend(codex_command("cmd-3", "rg -n 'parse' src", "completed"));
+  lines.extend(codex_command(
+    "cmd-4",
+    "rg -n x /repo/.orchester/index/4d2b8e0/docs.md",
+    "declined",
+  ));
+  let events = codex(&lines);
+  assert_eq!(follow_with_index(&events, true), Some(4), "{events:#?}");
+  assert_eq!(
+    follow_with_index(&events, false),
+    Some(0),
+    "an agent without the index searches none"
+  );
+}
+
+/// A Claude Code agent's index tools and its reads in the index folder count, its sub-agent's too: Claude Code prints
+/// a sub-agent's tool calls in its own stream, marked with the `Task` call they belong to.
+#[test]
+fn index_searches_of_a_claude_agent_count_its_sub_agents_too() {
+  let sub_agent = |line: String| {
+    let mut value: Value = serde_json::from_str(&line).expect("a line");
+    value["parent_tool_use_id"] = json!("toolu_task");
+    value.to_string()
+  };
+  let events = claude(&[
+    tool_use(
+      "msg_1",
+      "toolu_find",
+      "mcp__Orchester__find_symbol",
+      &json!({"name": "Store"}),
+    ),
+    tool_result("toolu_find", "src/store.rs:4 struct Store", false),
+    tool_use(
+      "msg_2",
+      "toolu_task",
+      "Task",
+      &json!({"description": "Explore", "prompt": "find the store"}),
+    ),
+    sub_agent(tool_use(
+      "msg_3",
+      "toolu_read",
+      "Read",
+      &json!({"file_path": "/repo/.orchester/index/4d2b8e0/outline/src/store.rs.md"}),
+    )),
+    sub_agent(tool_result("toolu_read", "- L4-40 struct Store", false)),
+    sub_agent(tool_use(
+      "msg_4",
+      "toolu_list",
+      "mcp__Orchester__list_files",
+      &json!({"path": "src", "pattern": null}),
+    )),
+    sub_agent(tool_result("toolu_list", "src/store.rs", false)),
+    tool_use("msg_5", "toolu_bash", "Bash", &json!({"command": "git status --short"})),
+    tool_result("toolu_bash", "", false),
+    tool_result("toolu_task", "the store is in src/store.rs", false),
+  ]);
+  assert_eq!(follow_with_index(&events, true), Some(3), "{events:#?}");
 }

@@ -19,6 +19,7 @@ mod efficiency;
 mod expensive;
 mod failed;
 mod filters;
+mod index_use;
 mod limits;
 mod limits_chart;
 mod limits_draw;
@@ -99,6 +100,7 @@ pub struct Views {
   pub breakdown_table: bool,
   pub cache_table: bool,
   pub edits_table: bool,
+  pub index_table: bool,
   /// *Most expensive* lists runs instead of tasks.
   pub runs: bool,
   /// *Most expensive* lists every row instead of the first five.

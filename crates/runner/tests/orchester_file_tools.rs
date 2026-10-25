@@ -2,15 +2,16 @@
 //! an edit only after a read in the same invocation and only of the lines it expects, a new file only where none
 //! exists, no change in a read-only step, answers within their cap; the first edit is the first successful
 //! `edit_file`; and, with the code index of the run's base revision, `find_symbol`, a search that lists a name's
-//! definitions first and a listing from the index, a changed file marked. Needs `git`. Run with `cargo test -p
-//! orchester-runner --features test-agent --test orchester_file_tools orchester_file_tools`.
+//! definitions first and a listing from the index, a changed file marked; and each invocation's searches of the index
+//! (ORC-90). Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test orchester_file_tools
+//! orchester_file_tools` (and `index_searches`).
 
 mod support;
 
 use std::fs;
 
 use orchester_core::{
-  code_index::CodeIndexSetting,
+  code_index::{CodeIndexSetting, CodeIndexUse},
   connection::{AgentProvider, stream::AgentEvent},
   diff::LineKind,
   id::{IdempotencyKey, RunId},
@@ -168,10 +169,15 @@ async fn orchester_file_tools_refuse_changes_in_a_read_only_step() {
 
 /// A project whose base revision has `src/lib.rs` with `parse_config` and `ConfigStore`.
 fn with_sources(code_index: CodeIndexSetting) -> TestProject {
-  let project = project(&Setup {
+  sources(&Setup {
     code_index,
     ..Setup::new("Use the index tools.")
-  });
+  })
+}
+
+/// `setup`'s project with the sources of [`with_sources`] at its base revision.
+fn sources(setup: &Setup) -> TestProject {
+  let project = project(setup);
   let root = project.repo.path();
   fs::create_dir_all(root.join("src")).expect("a folder");
   fs::write(
@@ -221,4 +227,82 @@ async fn orchester_file_tools_without_the_code_index_search_as_before() {
   let calls = reported(&db, run.id(), "orchester-call: ");
   assert!(calls[0].starts_with("find_symbol error"), "{calls:#?}");
   assert_eq!(calls[2], "search_file ok: src/lib.rs", "{calls:#?}");
+}
+
+/// What `run`'s one invocation got of the code index and how often it searched it, with whether it changed a file.
+fn index_searches(db: &ProjectDb, run: RunId) -> (Option<CodeIndexUse>, Option<u64>, bool) {
+  let invocation = db.invocations(run).expect("invocations").remove(0);
+  let progress = db.edit_progress(invocation.id).expect("read").expect("recorded");
+  (
+    db.invocation_code_index(invocation.id).expect("read"),
+    progress.index_searches,
+    progress.first_edit.is_some(),
+  )
+}
+
+/// ORC-90: a read-only Codex step in an indexed project that changes no file records its searches of the index:
+/// Orchester's `find_symbol`, an `rg` in the index folder and a command a sub-agent's thread runs through `$IDX`, not
+/// its `rg` over the worktree. Codex's own sub-agents are off for the step.
+#[tokio::test(flavor = "multi_thread")]
+async fn index_searches_of_a_read_only_codex_step_are_recorded() {
+  let project = sources(&Setup {
+    code_index: CodeIndexSetting::On,
+    permissions: Some(permissions(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AnyInWorktree,
+    )),
+    ..Setup::new("Search the code index. Change nothing.")
+  });
+  let (run, db) = finished(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(reported(&db, run.id(), "index-call: "), ["find_symbol completed"]);
+  assert_eq!(
+    reported(&db, run.id(), "index-command: "),
+    ["index-rg", "index-sub-agent", "worktree-rg"]
+  );
+  let (given, searches, edited) = index_searches(&db, run.id());
+  assert!(matches!(given, Some(CodeIndexUse::Given { .. })), "{given:?}");
+  assert_eq!((searches, edited), (Some(3), false));
+  let argv = reported(&db, run.id(), "argv: ").pop().expect("argv");
+  assert!(
+    argv.contains("features.multi_agent=false") && argv.contains("features.multi_agent_v2=false"),
+    "{argv}"
+  );
+}
+
+/// The same step without the code index is told of no index, and its invocation records that it got none and searched
+/// none, so Usage counts it *Without code index*.
+#[tokio::test(flavor = "multi_thread")]
+async fn index_searches_of_a_codex_step_without_the_index_are_none() {
+  let project = sources(&Setup {
+    code_index: CodeIndexSetting::Off,
+    permissions: Some(permissions(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AnyInWorktree,
+    )),
+    ..Setup::new("Search the code index. Change nothing.")
+  });
+  let (run, db) = finished(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let (given, searches, _) = index_searches(&db, run.id());
+  assert_eq!((given, searches), (Some(CodeIndexUse::Off), Some(0)));
+}
+
+/// A Claude Code step's `find_symbol` and its `Task` sub-agent's `Read` of the index's map count as its searches.
+#[tokio::test(flavor = "multi_thread")]
+async fn index_searches_of_a_claude_step_count_its_sub_agent() {
+  let project = sources(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    code_index: CodeIndexSetting::On,
+    ..Setup::new("Search the code index.")
+  });
+  let (run, db) = finished(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(
+    reported(&db, run.id(), "orchester-permission: "),
+    ["find_symbol allow-by-rule"]
+  );
+  let (given, searches, edited) = index_searches(&db, run.id());
+  assert!(matches!(given, Some(CodeIndexUse::Given { .. })), "{given:?}");
+  assert_eq!((searches, edited), (Some(2), true));
 }

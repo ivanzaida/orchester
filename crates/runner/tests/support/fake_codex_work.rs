@@ -22,6 +22,8 @@
 //! - "Report unverified": works as below, but its result says it could not check `Summary 02.B` (no fixture reaches
 //!   it);
 //! - "Change nothing": changes no file and reports no change, then ends with its result;
+//! - "Search the code index": first searches the index the prompt names (`fake_codex_index`), then works as the rest of
+//!   the prompt says;
 //! - "Start the QA app": calls `start_qa_app` (scenario `tasks`, or the one "QA scenario <name>." names), then
 //!   `call_run_app` without a pid (`fake_codex_tools`); with "Then read outside" it then reads `deps-a/notes.txt` of
 //!   the repository, which asks, and calls `call_run_app` again (and with "Then start again" `start_qa_app` again, at
@@ -158,6 +160,9 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   }
   if prompt.contains("Hold the QA app") {
     wait_while_held(&worktree);
+  }
+  if prompt.contains("Search the code index") {
+    super::fake_codex_index::search(session, prompt);
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;

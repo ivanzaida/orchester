@@ -21,6 +21,7 @@ use std::{
 };
 
 use orchester_core::{
+  code_index::CodeIndexUse,
   command::SecretVariable,
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
   conversation::Message,
@@ -30,6 +31,7 @@ use orchester_core::{
   permission::category::CommandScope,
   question::QuestionRequest,
   run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
+  store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
 };
@@ -251,12 +253,18 @@ pub(super) struct Watch {
 }
 
 impl Watch {
+  /// Follows `invocation`, whose searches of the code index count when it got the index, as recorded before it started.
   fn open(root: &Path, invocation: &Invocation) -> Result<Self, StoreError> {
+    let db = ProjectDb::open(root)?;
+    let index_given = matches!(
+      db.invocation_code_index(invocation.id)?,
+      Some(CodeIndexUse::Given { .. })
+    );
     Ok(Self {
-      db: ProjectDb::open(root)?,
+      db,
       invocation: invocation.clone(),
       tracker: InvocationTracker::default(),
-      edits: FirstEditTracker::default(),
+      edits: FirstEditTracker::new(index_given),
       edits_changed: false,
       pending: Vec::new(),
       stop: None,

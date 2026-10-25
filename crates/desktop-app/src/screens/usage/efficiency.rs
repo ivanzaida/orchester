@@ -2,7 +2,8 @@
 //! *Cache share* (`a8dQJu`): the period's share against the period before and one line over the days.
 //! *Tokens before first edit* (`M94B7Y`): the median per invocation that changed a file, with and without
 //! the code index, as single-series bars with their invocation counts; invocations without an edit are left
-//! out and counted. *Failed runs* is [`super::failed`].
+//! out and counted. *Failed runs* is [`super::failed`]. Under them, as wide as one of them, *Code index use*
+//! ([`super::index_use`]), which the design does not draw yet.
 
 use std::sync::Arc;
 
@@ -21,8 +22,8 @@ use orchester_workspace::usage::Dashboard;
 
 use super::{
   Views,
-  card::{Card, footnote, push_down, view_switch},
-  failed,
+  card::{Card, card_row, footnote, push_down, view_switch},
+  failed, index_use,
   line_draw::{CacheLine, Day, LineProps},
   plot::{AxisName, label_every},
   table::{Cell, Density, Width, column, row, table, total_row},
@@ -39,14 +40,20 @@ const BAR_LABEL_LINE: f32 = 16.0;
 const BAR_NOTE_LINE: f32 = 14.0;
 /// Table columns (`tW06R`, `oDlsA`).
 const SHARE_COLUMN: f32 = 88.0;
-const MEDIAN_COLUMN: f32 = 64.0;
-const COUNT_COLUMN: f32 = 84.0;
+pub(super) const MEDIAN_COLUMN: f32 = 64.0;
+pub(super) const COUNT_COLUMN: f32 = 84.0;
 
 pub fn section(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) -> Element {
   let cards = vec![
     cache(ctx, dashboard, views),
     edits(ctx, dashboard, views),
     failed::card(ctx, dashboard),
+  ];
+  // The card keeps the first column's width: the rest of its row stays empty.
+  let index = vec![
+    index_use::card(ctx, dashboard, views),
+    Column::new().into(),
+    Column::new().into(),
   ];
   Column::new()
     .id("usage-efficiency")
@@ -57,7 +64,13 @@ pub fn section(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>)
         .id("usage-efficiency-title")
         .variant(TypographyStyle::Title),
     )
-    .child(super::card::card_row("usage-efficiency-cards", cards))
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Lg)
+        .child(card_row("usage-efficiency-cards", cards))
+        .child(card_row("usage-efficiency-index", index)),
+    )
     .into()
 }
 
@@ -229,10 +242,23 @@ fn edits(ctx: &mut Ctx, dashboard: &Dashboard, views: &Signal<Views>) -> Element
 }
 
 fn edit_bar(ctx: &Ctx, (id, key): (&str, &str), tokens: EditTokens, largest: u64) -> Element {
-  let value = tokens.median.map_or_else(|| ctx.t("usage.unknown"), words::tokens);
-  let width = tokens
-    .median
-    .map_or(0.0, |median| median as f32 / largest as f32 * 100.0);
+  let caption = ctx.t_args(
+    "usage.efficiency.invocations",
+    [("count", tokens.edited.to_string().as_str())],
+  );
+  median_bar(ctx, (id, &ctx.t(key)), (tokens.median, largest), &caption)
+}
+
+/// A group's median as a bar of the largest median of its card (`Bar · With code index` `oVuBm`): its name and the
+/// median over the bar, `caption` under it.
+pub(super) fn median_bar(
+  ctx: &Ctx,
+  (id, name): (&str, &str),
+  (median, largest): (Option<u64>, u64),
+  caption: &str,
+) -> Element {
+  let value = median.map_or_else(|| ctx.t("usage.unknown"), words::tokens);
+  let width = median.map_or(0.0, |median| median as f32 / largest.max(1) as f32 * 100.0);
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -242,7 +268,7 @@ fn edit_bar(ctx: &Ctx, (id, key): (&str, &str), tokens: EditTokens, largest: u64
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(BAR_LABEL_LINE))
         .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description).nowrap())
+        .child(Text::new(name).variant(TypographyStyle::Description).nowrap())
         .child(Spacer::new().flex(1.0))
         .child(
           Text::new(&value)
@@ -257,12 +283,10 @@ fn edit_bar(ctx: &Ctx, (id, key): (&str, &str), tokens: EditTokens, largest: u64
         .height(Dimension::Px(BAR_NOTE_LINE))
         .align_items(Alignment::Center)
         .child(
-          Text::new(&ctx.t_args(
-            "usage.efficiency.invocations",
-            [("count", tokens.edited.to_string().as_str())],
-          ))
-          .variant(TypographyStyle::Caption)
-          .nowrap(),
+          Text::new(caption)
+            .id(format!("{id}-caption"))
+            .variant(TypographyStyle::Caption)
+            .nowrap(),
         ),
     )
     .into()
