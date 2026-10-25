@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
+  app::{ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
   components::{Column, Row},
   core::Signal,
   layout::Alignment,
@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{
   id::IdempotencyKey,
   resource::Deliverable,
-  run::{CompletedBy, RunCompletion},
+  run::{Answerer, CompletedBy, RunCompletion},
 };
 use orchester_workspace::{
   decisions::DecisionKind,
@@ -143,6 +143,7 @@ pub fn flagged(
 pub fn completed(ctx: &Ctx, run: &RunView, completion: &RunCompletion) -> Element {
   let key = match completion.by {
     CompletedBy::Person => "decisions.complete.completedByYou",
+    CompletedBy::Automation => "decisions.complete.completedByAutomation",
     CompletedBy::Orchestrator => "decisions.complete.completedByOrchestrator",
   };
   let body = ctx.t_args(
@@ -163,7 +164,7 @@ pub fn completed(ctx: &Ctx, run: &RunView, completion: &RunCompletion) -> Elemen
 }
 
 /// `button` completing `run` of `task` when pressed, anyway when `gated` (the person's leave for window input); under
-/// way while a completion is.
+/// way while a completion is. A completion by window input is automation's.
 fn pressed(
   button: ActionButton,
   (task, run): (&TaskContext, &RunView),
@@ -182,15 +183,20 @@ fn pressed(
     if action.state().get_untracked().is_pending() {
       return;
     }
-    if let Some((gate, person_only)) = &gate {
-      if answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)).is_none() {
-        tracing::warn!("synthetic input completed a run anyway without consent; not taken");
-        person_only.set(true);
-        return;
+    let by = match &gate {
+      Some((gate, person_only)) => {
+        let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
+          tracing::warn!("synthetic input completed a run anyway without consent; not taken");
+          person_only.set(true);
+          return;
+        };
+        person_only.set(false);
+        by
       }
-      person_only.set(false);
-    }
-    action.run((id, anyway));
+      None if is_synthetic_input() => Answerer::Automation,
+      None => Answerer::Person,
+    };
+    action.run((id, CompletedBy::from(by), anyway));
   })
 }
 

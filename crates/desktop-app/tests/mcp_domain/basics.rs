@@ -29,6 +29,7 @@ fn domain_tools_are_listed_beside_lurqs_and_the_apps_with_their_scopes() {
     "save_pipeline_draft",
     "save_instruction_draft",
     "merge_run",
+    "complete_run",
   ] {
     assert!(named(tool).is_some(), "{tool} is listed");
   }

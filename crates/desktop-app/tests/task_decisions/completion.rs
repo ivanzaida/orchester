@@ -1,11 +1,11 @@
 //! A run that passed every step and committed nothing (ORC-93): when its task delivers a report, its Summary shows the
-//! Ready card with *Complete task* and the run's report, and completing it says who completed the task and when; work
-//! done outside the repository lists the MCP tool calls it made; and where changes were expected the run is flagged,
-//! with *Complete anyway*, *Return to a step* and *Run again*, and no Merge.
+//! Ready card with *Complete task* and the run's report, and completing it says who completed the task and when (a
+//! person, or automation); work done outside the repository lists the MCP tool calls it made; and where changes were
+//! expected the run is flagged, with *Complete anyway*, *Return to a step* and *Run again*, and no Merge.
 
 use orchester_core::{
   resource::Deliverable,
-  run::Run,
+  run::{CompletedBy, Run, RunCompletion},
   store::TaskStore,
   task::organization::{ChangeActor, WorkflowStatus},
   time::Timestamp,
@@ -81,6 +81,24 @@ fn decision_a_report_run_is_completed_from_its_ready_card() {
   assert!(db.run_completion(run.id()).expect("read").is_some());
   let task = db.task(run.task()).expect("read").expect("the task");
   assert_eq!(task.organization().status(), WorkflowStatus::Done);
+}
+
+#[test]
+fn decision_a_run_automation_completed_says_so() {
+  let _checkout = checkout_page();
+  let (mut page, run) = committed_nothing(Some(Deliverable::Report));
+  let completion = RunCompletion {
+    run: run.id(),
+    by: CompletedBy::Automation,
+    completed_at: Timestamp::now(),
+  };
+  ProjectDb::open(&page.repo)
+    .expect("the project database")
+    .save_run_completion(&completion, None)
+    .expect("the run is completed");
+  page.open("ready for review, merges cleanly", "task-notice");
+  assert_eq!(page.text("task-notice-title"), "Task completed");
+  assert!(page.text("task-notice").contains("Automation completed the task"));
 }
 
 #[test]

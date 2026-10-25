@@ -1,11 +1,12 @@
 //! The tools that set a project up as its configuration screens do: the project itself, agent
 //! connections, agent profiles, pipelines, instructions, skills and project settings, and the end of a run's
-//! work (its changes, and merging them). They are listed apart from the tools that drive work
-//! ([`super::listed`]), so only the app that serves them offers them; no tool takes or returns a
-//! secret's value.
+//! work (its changes, and merging them, or completing a run that committed nothing). They are listed apart from
+//! the tools that drive work ([`super::listed`]), so only the app that serves them offers them; no tool takes or
+//! returns a secret's value.
 
 mod accounts;
 mod api_providers;
+mod complete;
 mod connections;
 mod instructions;
 mod mcp_preview;
@@ -411,6 +412,20 @@ const SPECS: &[Spec] = &[
     schema: schema_for_type::<super::runs::InRun>,
     read_only: false,
   },
+  Spec {
+    name: "complete_run",
+    description: "Completes a run that passed every step and committed nothing, its task's latest, as the task \
+                  Summary's Complete task does: there is nothing to merge, so its last step's report is kept as the \
+                  run's Report and its task is Done (get_task's result says what the run delivers and whether it \
+                  committed nothing). A run whose pipeline expects changes is refused as expects_changes unless \
+                  `anyway`, as Complete anyway; completing anyway decides for the person, so it is refused as \
+                  automation_not_allowed unless a person turned on Let automation answer approvals. Refused as \
+                  has_commits for a run with commits to merge (merge_run), already_completed, and \
+                  run_not_completable for a run that did not succeed, is not its task's latest, was merged or \
+                  waits in a merge. The completion is recorded as automation's.",
+    schema: schema_for_type::<complete::CompleteRun>,
+    read_only: false,
+  },
 ];
 
 /// Every setup tool, as `tools/list` answers.
@@ -495,6 +510,7 @@ async fn configure(
     "publish_instruction" => instructions::publish_instruction(services, parse(arguments)?).await,
     "get_changes" => merge::get_changes(services, parse(arguments)?).await,
     "merge_run" => merge::merge_run(services, parse(arguments)?, translate).await,
+    "complete_run" => complete::complete_run(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }

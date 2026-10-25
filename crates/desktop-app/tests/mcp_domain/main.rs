@@ -11,6 +11,7 @@ mod automation_permissions;
 mod base_moved;
 mod basics;
 mod cloud_accounts;
+mod completion;
 mod connections_window;
 mod delivery;
 mod drafts;

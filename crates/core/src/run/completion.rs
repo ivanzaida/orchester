@@ -1,13 +1,13 @@
 //! A run completed without a merge (ORC-93): a run that passed every step and committed nothing, whose result is its
-//! report or work done outside the repository, or one a person completes anyway although its pipeline expected
-//! changes. Completing it sets its task Done, as a merge does, and keeps the last step's report as the run's artifact
+//! report or work done outside the repository, or one completed anyway although its pipeline expected changes.
+//! Completing it sets its task Done, as a merge does, and keeps the last step's report as the run's artifact
 //! *Report* ([`REPORT_ARTIFACT`]).
 
 use std::{fmt, str::FromStr};
 
 use thiserror::Error;
 
-use super::{Plan, Run, StepOutput};
+use super::{Answerer, Plan, Run, StepOutput};
 use crate::{
   id::RunId,
   resource::{Deliverable, StepKey},
@@ -26,19 +26,31 @@ pub const REPORT_ARTIFACT: &str = "Report";
 /// Who completed a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CompletedBy {
-  /// A person, from the task's Summary or through Orchester's MCP server.
+  /// A person, from the task's Summary.
   Person,
+  /// An MCP client: through Orchester's MCP server (`complete_run`), or with window input on the task's Summary.
+  Automation,
   /// The Orchestrator, on its own, as it would merge the run (*Let the Orchestrator merge finished runs on its own*).
   Orchestrator,
 }
 
 impl CompletedBy {
-  pub const ALL: [Self; 2] = [Self::Person, Self::Orchestrator];
+  pub const ALL: [Self; 3] = [Self::Person, Self::Automation, Self::Orchestrator];
 
   pub const fn as_str(self) -> &'static str {
     match self {
       Self::Person => "person",
+      Self::Automation => "automation",
       Self::Orchestrator => "orchestrator",
+    }
+  }
+}
+
+impl From<Answerer> for CompletedBy {
+  fn from(answerer: Answerer) -> Self {
+    match answerer {
+      Answerer::Person => Self::Person,
+      Answerer::Automation => Self::Automation,
     }
   }
 }

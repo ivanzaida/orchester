@@ -43,8 +43,9 @@ pub struct Completing;
 
 impl DevtoolsInspectable for Completing {}
 
-/// Completes a run, anyway when its pipeline expects changes: off the UI thread, then the task is read again.
-pub type CompleteAction = FutureAction<(RunId, bool), Completing, Message>;
+/// Completes a run by whom pressed, anyway when its pipeline expects changes: off the UI thread, then the task is read
+/// again.
+pub type CompleteAction = FutureAction<(RunId, CompletedBy, bool), Completing, Message>;
 
 pub struct CompleteRun {
   /// Window input pressed *Complete anyway* while the person does not let automation decide for them.
@@ -93,7 +94,7 @@ impl Component for CompleteRun {
   }
 }
 
-/// Completes runs of `task`'s project as the person pressed, then reads the project's tasks again.
+/// Completes runs of `task`'s project as pressed, then reads the project's tasks again.
 fn complete_action(ctx: &mut Ctx, task: &TaskContext) -> CompleteAction {
   let services = Services::of(ctx);
   let (root, programs, feed) = (
@@ -101,12 +102,11 @@ fn complete_action(ctx: &mut Ctx, task: &TaskContext) -> CompleteAction {
     services.programs,
     task.project.feed.clone(),
   );
-  ctx.future_action(move |(run, anyway): (RunId, bool)| {
+  ctx.future_action(move |(run, by, anyway): (RunId, CompletedBy, bool)| {
     let (root, programs, feed) = (root.clone(), programs.clone(), feed.clone());
     async move {
       let completed =
-        background::run(move || complete_in((&root, &programs), run, (CompletedBy::Person, anyway), Timestamp::now()))
-          .await?;
+        background::run(move || complete_in((&root, &programs), run, (by, anyway), Timestamp::now())).await?;
       feed.saved();
       completed.map(|_| Completing).inspect_err(|message| {
         tracing::warn!(key = message.key, %run, "the run was not completed");

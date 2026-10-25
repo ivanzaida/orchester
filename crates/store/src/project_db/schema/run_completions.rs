@@ -5,7 +5,7 @@
 pub(super) const MIGRATION: &str = r"
 CREATE TABLE run_completions (
   run_id TEXT PRIMARY KEY REFERENCES runs (id),
-  completed_by TEXT NOT NULL CHECK (completed_by IN ('person', 'orchestrator')),
+  completed_by TEXT NOT NULL CHECK (completed_by IN ('person', 'automation', 'orchestrator')),
   completed_at INTEGER NOT NULL
 ) STRICT;
 

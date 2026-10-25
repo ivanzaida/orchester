@@ -147,12 +147,14 @@ tool calls approved outside Orchester's own tools; completing sets the task Done
 artifact *Report* (`run_completions`, `run_artifacts`); the merge queue skips such runs and the Orchestrator completes
 them by its merge rule when the person lets it merge finished runs. Where changes were expected the run is flagged in
 the Summary and Needs you (*Complete anyway*, *Return to a step*, *Run again*), and the Orchestrator leaves it to the
-person. Design: `docs/design/orchester-workspace.md` › *Runs whose result is not a commit (ORC-93)*. Tests:
+person. `complete_run` completes as the Summary does (`anyway` under the person's consent for automation's
+decisions); a completion through it or by an MCP client's window input is recorded as automation's. Design:
+`docs/design/orchester-workspace.md` › *Runs whose result is not a commit (ORC-93)*. Tests:
 `orchester-core --test pipeline_delivers delivers`, `orchester-core --test run delivers_prompt`, `orchester-core --test
 run again`, `orchester-runner --features test-agent --test instructions instructions_say_what_the_run_delivers`,
 `orchester-workspace --test run_completion completion`, `orchester-workspace --test merge_queue merge_queue`,
 `orchester-app --test task_decisions completion`, `orchester-app --test pipelines pipelines_delivers`, `orchester-app
---test mcp_domain task_organization_delivers`.
+--test mcp_domain task_organization_delivers`, `orchester-app --test mcp_domain completion`.
 **Open:** no Pencil frames exist for these states (built from the Ready card, the warning notice and Starts' option
 cards); the Artifacts tab still says runs keep no artifacts; no notification for *Ready to complete* or *Committed
 nothing*; no form field for a task's own choice (MCP only).
