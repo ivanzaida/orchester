@@ -8,8 +8,10 @@
 //!  --disallowedTools Read(//<denied folder>/**)… Read(//<denied file>)… --permission-mode default --max-turns 30
 //!  (--session-id <new uuid> | --resume <session>)`
 //!
-//! in the project folder, with the person's message as the one stream-json user message on standard input, which is
-//! then closed: the CLI exits once it has answered.
+//! in the project folder, with the person's message as the first stream-json user message on standard input, which
+//! stays open: a message the person sends now (*Send now*) is another user message there, which the CLI takes at its
+//! next tool call and prints back (`--replay-user-messages`). The runner closes the input once the CLI ended its turn,
+//! and the CLI exits once it has answered what it took.
 //!
 //! - Read-only, in the project folder only: the only built-in tools it is offered are `Read`, `Glob` and `Grep`, so it
 //!   has no shell and no edit tool at all. They get no allow rule, since a bare tool name would allow every path the
@@ -140,7 +142,7 @@ impl ClaudeChat<'_> {
       Command::new(self.executable, self.args())
         .with_current_dir(self.folder)
         .with_environment(variables)
-        .with_stdin(first_line(message, attached)?),
+        .with_interactive_input(first_line(message, attached)?),
     )
   }
 }

@@ -66,6 +66,7 @@ macro_rules! markers {
     impl $inspect for crate::modules::data::ModuleSummary {}
     impl $inspect for crate::orchestrator::chat::ChatView {}
     impl $inspect for crate::orchestrator::chat::History {}
+    impl $inspect for crate::orchestrator::queue::WhileAnswering {}
     impl $inspect for crate::orchestrator::send::Outgoing {}
     impl $inspect for crate::orchestrator::send::SendError {}
     impl $inspect for crate::orchestrator::settings::OrchestratorSetup {}

@@ -182,14 +182,15 @@ impl Entry {
   }
 }
 
-/// An agent at work on the run: its profile, its role, the execution it works on and whether its
-/// connection takes a message while its turn runs.
+/// An agent at work on the run: its profile, its role, the execution it works on, whether its
+/// connection takes a message while its turn runs, and whether its turn can be stopped alone (*Stop turn*).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkingAgent {
   pub profile: ResourceId,
   pub agent: Arc<str>,
   pub execution: StepExecutionId,
   pub mid_turn: bool,
+  pub stops_turn: bool,
 }
 
 /// Whom a new message can go to: Orchestrator, or an agent of the run's pipeline.
@@ -306,6 +307,7 @@ fn working_agents(run: &RunView) -> Vec<WorkingAgent> {
         agent,
         execution,
         mid_turn: step.provider.is_some_and(|provider| provider.takes_messages_mid_turn()),
+        stops_turn: step.provider.is_some_and(|provider| provider.stops_turn_alone()),
       });
     }
   }

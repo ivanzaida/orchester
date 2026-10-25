@@ -529,6 +529,22 @@ build that fills the same caches does. A held request says why in plain words, o
 command may write.*): on its approval card, in the task's conversation and in the Needs you panel, and as
 `hold_cause` beside `auto_mode` in `list_approvals` and `get_run`.
 
+**Partly unread reads in a confined step** (ORC-95). A part Orchester could not read to the end holds the request
+as *unreadable* in a step whose network is off or that only reads, but not when its program only reads under any
+option (`ls`, `cat`, `head`, `tail`, `wc`, `grep`, `cut`, `diff`, `stat`, `echo`, PowerShell's `Get-Content`,
+`Get-ChildItem`, `Select-String`, …; `CommandPart::only_reads`) or `xargs` with listed options runs such a program
+(`find src -name '*.rs' | xargs grep -n x`), every path its words name was placed and it redirects into no file.
+Such a part writes nothing and starts nothing whatever Orchester did not read of it (`grep -R`, an `ls` option the
+tables do not list), so the request goes to the reviewer, which sees the whole line and is told how many parts were
+not read; a credential location or a share (`\\host\…`) its words name still holds it, and auto mode never approves
+it by itself. What no word names is the reviewer's to judge: the paths `xargs` takes from its standard input, and
+what a link leads to when an option follows links (`grep -R`, `du -L`). A PowerShell cmdlet given a path on another
+provider (`Get-Content env:GH_TOKEN`, `Get-ChildItem Cert:\`), a comma array or a parameter that sets a variable is
+not among those programs. `sort`, `uniq`, `tree`, `file`, `sed`, `awk`, `find` and `rg` are not either (some option
+of each writes or starts a program), nor `jq` (it reads the environment); a command substitution, a variable that
+is not a literal, `xargs` running any other program, a path that cannot be placed (`~bob`) and a script stay
+unreadable.
+
 **Waiting requests.** The dialog shows one request at a time, oldest first, with *1 of 3 waiting* and ‹ ›.
 *Decide later* (or Esc) closes it and answers nothing: the agent keeps waiting with its active time stopped, the
 request stays in *Needs you* (which counts each waiting request, the dialog open or not), on the task page (*Review
@@ -877,20 +893,32 @@ link to `~/.ssh` reads a credential). A part that writes through the shell (`sed
 into a file (`>`, `>>`, `&>`, `>&file`; `>|`, here-strings and process substitutions are not read), runs in the
 background, reads outside the worktree or a credential, installs or is not read to the end still asks, with
 Approve similar where the existing rules offer it. The step's prompt tells Claude Code and Codex agents how to work
-with the tools they have (*Files and commands*: Claude Code's file tools, the edit tools only in a writing step,
-one bare command per call; Codex's `apply_patch` in a writing step, no `cd`), so they rarely send such lines.
+with the tools they have (*Files and commands*: Claude Code's file tools, the edit tools only in a writing step;
+Codex's `apply_patch` in a writing step, no `cd`), so they rarely send such lines. Every step of either CLI is also
+told how to run commands, whatever its project's instructions (ORC-95, `run::RUN_PLAINLY`): one plain command per
+call, with no `;`, `&&`, `||`, pipes, variables, `$(...)`, redirections or loops; files read and searched with the
+file tools, dependency sources outside the worktree too; never `git stash`; and in a writing step, scratch files
+under `.tmp/` in the worktree (`run::SCRATCH_FILES`). A project instruction that says the same again is accepted:
+the part does not read the project's instructions.
 Reads of the sources Cargo unpacks (`~/.cargo/registry/src`), its git checkouts (`~/.cargo/git/checkouts`) and the
 toolchains' library sources (`~/.rustup/toolchains/*/lib/rustlib/src`), also under `CARGO_HOME` and `RUSTUP_HOME`,
 are read like the worktree by the plain readers only (decided 2026-10-14, narrowed after a security review): a
 known-safe `cat`, `head`, `rg`, `grep -r`, `sed -n`, … there runs on its own, as Orchester's `read_external_file` and
-`search_external_file` do. Any other program reads outside the worktree there, a `cd` there leaves the line outside
-it, and a write or delete there is outside it. A program that loads settings or code from the folder it runs in
-(git, Cargo, package managers, build tools, Python and Node) is Unknown anywhere but the worktree and its writable
-folders, and a reader that follows the links in a folder it walks (`diff -r`, `tree -l`, `du -L`) is Unknown
-everywhere. A `.git` folder in the dependency sources, and the rest of a Cargo or rustup home, stay credential
-locations, and so does any path through a Windows share or a `\\?\`
+`search_external_file` do. So are the packages other managers install (ORC-95): any `node_modules` folder (a
+project's, npm's global one under `AppData/Roaming/npm`, nvm's), Python's `site-packages` and `dist-packages` (also
+`~/.local/lib/python3.x/site-packages`) and Go's module cache `~/go/pkg/mod`, but a `.git` folder or a `.npmrc`,
+`.yarnrc`, `.pypirc`, `.netrc` or `.env…` file in them. Any other program reads outside the worktree there, a `cd`
+there leaves the line outside it, and a write or delete there is outside it. A program that loads settings or code
+from the folder it runs in (git, Cargo, package managers, build tools, Python and Node) is Unknown anywhere but the
+worktree and its writable folders, and a reader that follows the links in a folder it walks (`diff -r`, `tree -l`,
+`du -L`) is Unknown everywhere. A `.git` folder in the dependency sources, and the rest of a Cargo or rustup home,
+stay credential locations, and so does any path through a Windows share or a `\\?\`
 prefix, which can name the home folder under another name. The status an earlier command left (`$?`,
-`${PIPESTATUS[N]}`, PowerShell's `$?` and `$LASTEXITCODE`) is read only as an argument of `echo`.
+`${PIPESTATUS[N]}`, PowerShell's `$?` and `$LASTEXITCODE`) is read only as an argument of `echo`. `~` and `$HOME`
+are the shell's `HOME`; Windows sets none, and Git Bash, which both CLIs run there, then takes it from
+`USERPROFILE`, so where the runner's environment has no `HOME` on Windows they are the profile
+(`CommandScope::in_environment`, ORC-95). Before, every `~` there was unread, which held a fresh project's read-only
+lines in auto mode.
 
 `acceptEdits` would run `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a
 rule (a mode check after the deny, ask and allow rules, both 2.1.89 and 2.1.284), and a

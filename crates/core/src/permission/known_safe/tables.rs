@@ -4,7 +4,8 @@
 
 use super::options::Options;
 
-/// `ls` without `-L` (`--dereference`), which follows links, also those `-R` walks into.
+/// `ls` without `-L` (`--dereference`), which follows links, also those `-R` walks into. The rest only change
+/// how it prints (`--time-style=full-iso`, `-x`).
 const LS: Options = Options {
   long: &[&[
     "all",
@@ -19,8 +20,22 @@ const LS: Options = Options {
     "color",
     "sort",
     "group-directories-first",
+    "time-style",
+    "full-time",
+    "time",
+    "format",
+    "width",
+    "numeric-uid-gid",
+    "no-group",
+    "si",
+    "block-size",
+    "literal",
+    "quoting-style",
+    "indicator-style",
+    "ignore-backups",
+    "kibibytes",
   ]],
-  flags: "1aAcdFghilnoprRsStuU",
+  flags: "1aAcCdFgGhiklmnNopqQrRsStuUvxX",
   valued: "",
 };
 

@@ -29,7 +29,9 @@
       "nowUnavailable": "{{agent}}’s connection takes no message while its turn runs",
       "options": "More ways to send",
       "resume": "The run goes on, and its agent reads it first",
-      "resumeLater": "Waits until you resume the run"
+      "resumeLater": "Waits until you resume the run",
+      "stopTurn": "{{agent}} stops its turn now and reads it as its next instruction; the run goes on",
+      "stopUnavailable": "{{agent}}’s turn can’t be stopped on its own: it runs as a native agent"
     },
     "note": {
       "answerAbove": "{{agent}} waits for your answer above; a message here reaches it after you answer.",
@@ -98,10 +100,12 @@
       "empty": "Write a message to send it.",
       "resume": "Resume and send",
       "runAgain": "Run again with this message",
+      "stopTurn": "Stop turn and send",
       "whenStarts": "Send when the run starts",
       "withoutContinuing": "Send without continuing",
       "withoutResuming": "Send without resuming"
     },
+    "stopFailed": "The turn was not stopped: {{reason}}",
     "undelivered": {
       "afterTurn": "Send after this turn",
       "edit": "Edit in composer",

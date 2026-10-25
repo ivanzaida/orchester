@@ -68,7 +68,7 @@ pub(super) fn start(
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(super::composer::keys(ctx))
+    .child(super::composer::keys(ctx, false))
     .child(Spacer::new().flex(1.0))
     .child(icon(Icon::Layers2, IconSize::Sm, PaletteColor::TextMuted))
     .child(

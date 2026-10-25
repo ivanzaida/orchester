@@ -409,7 +409,9 @@ fn skills_tool(tool: &str) -> String {
 /// People's messages in a new session's task part, under a heading that says why it reads them.
 fn push_task_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
   match delivered.occasion {
-    MessageOccasion::Written | MessageOccasion::AfterTurn => text.push_str("\n# Messages from the person\n"),
+    MessageOccasion::Written | MessageOccasion::AfterTurn | MessageOccasion::TurnStopped => {
+      text.push_str("\n# Messages from the person\n");
+    }
     MessageOccasion::Answer { question } => {
       text.push_str("\n# Your question\n");
       push_block(text, question);
@@ -443,6 +445,10 @@ fn push_recovery(text: &mut String, previous_result: &str) {
   text.push_str("\n## New instructions from the person\n");
 }
 
+/// What a resumed session reads first after a person stopped its turn.
+const TURN_STOPPED_LEAD: &str = "The person stopped your turn before you finished it. Everything you changed so far \
+                                 is committed in the worktree. They wrote to you:\n";
+
 /// What a resumed session reads first when it delivers people's messages: why it reads them now,
 /// the messages, and how to end.
 fn push_resumed_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
@@ -452,6 +458,7 @@ fn push_resumed_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
       text.push_str("\n\nWhile you were stopped, the person wrote to you:\n");
     }
     MessageOccasion::AfterTurn => text.push_str("While you worked on this step, the person wrote to you:\n"),
+    MessageOccasion::TurnStopped => text.push_str(TURN_STOPPED_LEAD),
     MessageOccasion::Answer { question } => {
       text.push_str("You asked the person:\n");
       push_block(text, question);
@@ -467,6 +474,9 @@ fn push_resumed_messages(text: &mut String, delivered: DeliveredMessages<'_>) {
   let close = match delivered.occasion {
     MessageOccasion::Written | MessageOccasion::AfterTurn => {
       "Take their messages into account: answer what they ask, and change your work if they ask you to."
+    }
+    MessageOccasion::TurnStopped => {
+      "Their message is your next instruction: do what it asks first, then go on with the step and finish it."
     }
     MessageOccasion::Answer { .. } | MessageOccasion::Recovery { .. } => "Continue the step with their answer.",
     MessageOccasion::FollowUp => {

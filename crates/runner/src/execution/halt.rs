@@ -61,6 +61,10 @@ impl RunTask {
         ack,
       } => self.answer_question(request, (answers, by), ack),
       Control::DeliverMessages(ack) => self.deliver_messages(ack),
+      Control::StopTurn(ack) => {
+        self.stop_turn(ack);
+        Ok(())
+      }
       Control::Interrupt(cause) => {
         self.pending.interrupt = Some(cause);
         self.stop_agents(Stop::Now(StopCause::Requested));

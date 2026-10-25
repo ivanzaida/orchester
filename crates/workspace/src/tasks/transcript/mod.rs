@@ -61,6 +61,8 @@ pub enum EntryKind {
   },
   /// A native agent's command a person or a rule approved.
   Approval(ApprovalEntry),
+  /// A person stopped the agent's turn (*Stop turn*); its session goes on with their message.
+  TurnStopped,
 }
 
 /// How a call of a tool of MCP server `server` was decided, as the decision marks of the command
@@ -245,6 +247,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
         deny_command(&mut entries, &mut early, stored, (item, command));
       }
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
+      AgentEvent::TurnStopped => entries.push(entry(EntryKind::TurnStopped)),
       AgentEvent::RunnerProblem { problem } => interrupted = push_problem(&mut entries, stored, problem),
       AgentEvent::McpServer { server, problem } => entries.push(entry(EntryKind::McpServer(
         server.as_deref().map(Arc::from),
@@ -262,16 +265,19 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       AgentEvent::ToolCommandFinished { .. } => finish_tool_command(&mut entries, stored),
       AgentEvent::McpToolNotAsked { .. } | AgentEvent::McpToolDeclined { .. } => mcp::not_asked(&mut entries, stored),
       AgentEvent::McpToolFinished { .. } => mcp::mcp_tool_finished(&mut entries, &mut early.told, stored),
-      AgentEvent::McpExemptionNotApplied { server, tool, other } => {
-        entries.push(entry(EntryKind::ExemptionNotApplied {
-          server: server.as_str().into(),
-          tool: tool.as_str().into(),
-          other: other.as_str().into(),
-        }))
-      }
+      AgentEvent::McpExemptionNotApplied { server, tool, other } => entries.push(entry(exemption(server, tool, other))),
     }
   }
   native::approvals_apart(entries)
+}
+
+/// The entry of a tool of `server` listed to run without asking that asks after all, as a tool of `other`.
+fn exemption(server: &str, tool: &str, other: &str) -> EntryKind {
+  EntryKind::ExemptionNotApplied {
+    server: server.into(),
+    tool: tool.into(),
+    other: other.into(),
+  }
 }
 
 /// Adds the entry of runner problem `problem`; the invocation whose request it names as interrupted, if it

@@ -138,6 +138,11 @@ pub async fn stop(runners: &Runners, project: &OpenProject, chat: ChatId) -> Res
 /// the Orchestrator's connection could not read one. A message of attachments only is kept with their names. Blocks
 /// on SQLite.
 pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
+  keep_as_in(root, outgoing, &TurnState::Thinking)
+}
+
+/// [`keep_in`] with its turn as `state`: thinking for a turn of its own now, or waiting for the turn under way.
+pub fn keep_as_in(root: &Path, outgoing: &Outgoing, state: &TurnState) -> Result<(), Message> {
   let attached = &outgoing.attachments;
   let named = names_text(attached.iter().map(NewAttachment::name));
   let words = if outgoing.text.trim().is_empty() && !attached.is_empty() {
@@ -158,7 +163,7 @@ pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
     .chat(outgoing.chat)
     .map_err(|error| messages::store_error(&error))?
     .unwrap_or_else(|| Chat::start(outgoing.chat, &text, now));
-  db.keep_chat_message_with(&chat, (outgoing.message, &text), attached, now)
+  db.keep_chat_message_as(&chat, (outgoing.message, &text), attached, (state, now))
     .map(drop)
     .map_err(|error| messages::store_error(&error))
 }

@@ -4,11 +4,26 @@
 //! `cd` prefix or a chain of commands does not match the allowed commands one by one and waits for a person.
 //! Each CLI is told the tools by the names it sees. Each sentence names only what the step's CLI and permissions have:
 //! a read-only step is not told to edit, nor how to merge its base branch when that moves (ORC-54).
+//!
+//! Every step of either CLI is also told how to run commands ([`RUN_PLAINLY`], ORC-95), so a project works with auto
+//! mode without an instruction of its own: a plain command is one Orchester's command reader reads to the end
+//! ([`crate::permission::category`]), which the allowed commands and auto mode's hard rules can judge. A project
+//! instruction that says the same again is accepted: the part does not read the project's instructions.
 
 use crate::{
   connection::AgentProvider,
   permission::{AgentPermissions, CommandPermission, RepositoryAccess},
 };
+
+/// How every agent CLI is told to run commands, whatever the step's permissions.
+pub const RUN_PLAINLY: &str = "Run each command plainly, so Orchester can read it to the end: one command per call, \
+                               with no `;`, `&&`, `||`, pipes, variables, `$(...)`, redirections or loops. Read and \
+                               search files, dependency sources outside the worktree too, with the file tools instead \
+                               of the shell. Never use `git stash`: its stack is shared by every worktree of the \
+                               repository.";
+
+/// Where a writing step keeps its scratch files.
+pub const SCRATCH_FILES: &str = "Put scratch files under .tmp/ in the worktree, not in the system's temporary folder.";
 
 /// What the agent's CLI and the step's effective permissions give it to work with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,9 +110,8 @@ impl WorkingTools {
     };
     let commands = match self.commands {
       Commands::Listed => {
-        "Commands already run in the task's worktree: never start one with `cd`. Run one command per call, bare, \
-         without `;`, `&&` or variables, so that it matches the allowed commands; other commands wait for a \
-         person's approval."
+        "Commands already run in the task's worktree: never start one with `cd`. A plain command matches the allowed \
+         commands; other commands wait for a person's approval."
       }
       Commands::AskEach => {
         "Commands already run in the task's worktree: never start one with `cd`. Each command waits for a \
@@ -105,8 +119,12 @@ impl WorkingTools {
       }
       Commands::Sandboxed => "Commands already run in the task's worktree: never start one with `cd`.",
     };
-    let merge = if self.edits { super::MERGE_SAFELY } else { "" };
-    [files, commands, merge, self.processes()]
+    let (scratch, merge) = if self.edits {
+      (SCRATCH_FILES, super::MERGE_SAFELY)
+    } else {
+      ("", "")
+    };
+    [files, commands, RUN_PLAINLY, scratch, merge, self.processes()]
       .into_iter()
       .filter(|line| !line.is_empty())
       .collect::<Vec<_>>()

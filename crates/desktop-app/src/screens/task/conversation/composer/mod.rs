@@ -57,6 +57,7 @@ pub(super) use self::undelivered::undelivered;
 use self::{
   controls::{Bar, Sending},
   presses::Target,
+  state::StopTurn,
 };
 use super::{TaskContext, shared::Shared};
 use crate::{
@@ -121,6 +122,26 @@ impl Composing {
       self.project.open.project.id(),
       ProjectPage::task(self.key.clone(), view, self.detail.not_shared()),
     ))
+  }
+
+  /// *Stop turn* of the latest run: the turn of its agent at work stops, and the run goes on; nothing while a stop is
+  /// under way. `None` before the task has a run.
+  pub(super) fn stop_turn(&self) -> Option<Press> {
+    let run = self.detail.run.as_ref()?.id();
+    let (action, project) = (self.state.stop_turn.clone(), self.project.open.clone());
+    Some(Arc::new(move || {
+      if !action.state().get_untracked().is_pending() {
+        action.run(StopTurn {
+          project: project.clone(),
+          run,
+        });
+      }
+    }))
+  }
+
+  /// A stop of the agent's turn is under way.
+  pub(super) fn stopping(&self) -> bool {
+    self.state.stop_turn.state().get().is_pending()
   }
 }
 
@@ -349,7 +370,11 @@ impl Composer {
     };
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let placeholder = words::placeholder(ctx, mode, &props.conversation);
-    let keys = presses::keys(presses, (leave, self.input.clone()), self.menu.clone());
+    let stop = match mode {
+      ComposerMode::Steer(working) if working.stops_turn => props.composing.stop_turn(),
+      _ => None,
+    };
+    let keys = presses::keys(presses, (leave, self.input.clone(), stop), self.menu.clone());
     TextInput::styled(props.composing.state.draft.clone(), resolve(PaletteColor::TextPrimary))
       .placeholder_style(resolve(PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)

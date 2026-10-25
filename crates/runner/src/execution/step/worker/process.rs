@@ -429,6 +429,10 @@ impl Worker {
         task: self.task,
       });
     }
+    // A turn the person stopped shows so in the conversation, after what the agent did until then.
+    if watch.stop == Some(StopCause::TurnStopped) {
+      self.observe(&mut watch, AgentEvent::TurnStopped)?;
+    }
     self.flush(&mut watch)?;
     let reported = watch.tracker.outcome(Some(1));
     let outcome = if watch.stop.is_none()
@@ -440,13 +444,14 @@ impl Worker {
     } else {
       match (
         exit,
-        watch.stop.is_some(),
+        watch.stop,
         self.app_server().is_some_and(AppServerSession::complete),
       ) {
-        (_, false, true) => watch.tracker.outcome(Some(0)),
-        (ProcessExit::Terminated, ..) | (_, true, _) => InvocationOutcome::Terminated,
-        (ProcessExit::Exited { code }, false, _) => watch.tracker.outcome(*code),
-        (ProcessExit::WaitFailed { .. }, false, _) => InvocationOutcome::ExitFailed { code: None },
+        (_, Some(StopCause::TurnStopped), _) => InvocationOutcome::TurnStopped,
+        (_, None, true) => watch.tracker.outcome(Some(0)),
+        (ProcessExit::Terminated, ..) | (_, Some(_), _) => InvocationOutcome::Terminated,
+        (ProcessExit::Exited { code }, None, _) => watch.tracker.outcome(*code),
+        (ProcessExit::WaitFailed { .. }, None, _) => InvocationOutcome::ExitFailed { code: None },
       }
     };
     watch.invocation.ended_at = Some(Timestamp::now());
