@@ -33,6 +33,7 @@ mod messages;
 mod modules;
 mod native;
 mod orchestrator;
+mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_sent;
 mod orchestrator_usage;
@@ -98,6 +99,7 @@ pub use self::{
   estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,

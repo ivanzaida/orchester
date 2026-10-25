@@ -1,24 +1,29 @@
 //! The project's Orchestrator chat (`orchester_core::orchestrator`): the runner answers a person's message the desktop
 //! kept with one turn of the agent CLI, read-only in the project folder, on the connection and model chosen for the
 //! Orchestrator, with the domain tools the desktop serves for the chat. A conversation answers one message at a
-//! time; stopping a turn ends its CLI, and what it did until then stays. A turn still thinking that the runner does
-//! not answer, when a desktop attaches or the person stops it, was cut short (by the runner before it, or a request
-//! whose answer was lost), and is recorded as interrupted.
+//! time; a message sent now while it answers is handed to the turn under way ([`steer`]), and the desktop starts the
+//! turn of a message queued meanwhile once that one ended. Stopping a turn ends its CLI, and what it did until then
+//! stays. A turn still thinking that the runner does not answer, when a desktop attaches or the person stops it, was
+//! cut short (by the runner before it, or a request whose answer was lost), and is recorded as interrupted.
 
 mod claude;
 mod codex;
+mod steer;
 mod turn;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
-  orchestrator::TIME_LIMIT,
+  orchestrator::{Queued, TIME_LIMIT, TurnState},
 };
 use orchester_ipc::{ChatTools, Event, Rejection};
 use orchester_store::{AttachmentOwner, ProjectDb};
 use parking_lot::Mutex;
-use tokio::{sync::oneshot, task::JoinHandle};
+use tokio::{
+  sync::{mpsc, oneshot},
+  task::JoinHandle,
+};
 
 use self::turn::Turn;
 use super::{Scheduler, failed, idle::check_daily_budget};
@@ -36,6 +41,8 @@ struct Running {
   message: ChatMessageId,
   /// Ends the turn's CLI; gone once it was used.
   stop: Option<oneshot::Sender<()>>,
+  /// Hands the turn the messages sent now.
+  steers: mpsc::UnboundedSender<ChatMessageId>,
   task: JoinHandle<()>,
 }
 
@@ -115,15 +122,46 @@ impl Scheduler {
       tools,
       time_limit: self.inner.chats.time_limit(),
     };
-    let task = tokio::spawn(turn.run(stopped));
+    let (steers, steered) = mpsc::unbounded_channel();
+    let task = tokio::spawn(turn.run(stopped, steered));
     running.insert(
       chat,
       Running {
         message,
         stop: Some(stop),
+        steers,
         task,
       },
     );
+    Ok(())
+  }
+
+  /// Hands the person's message `message`, kept as sent now, to the turn under way in its conversation; with none
+  /// under way, or one that ended, it waits for a turn of its own ([`Queued::NotTaken`]). Asking again for a message
+  /// handed over or left so already does nothing.
+  pub fn steer_chat(&self, message: ChatMessageId) -> Result<(), Rejection> {
+    let mut db = self.open()?;
+    let kept = db
+      .chat_turn(message)
+      .map_err(|error| failed("cannot read the chat message", &error))?
+      .ok_or(Rejection::ChatMessageNotFound)?;
+    match kept.turn {
+      TurnState::Steering => {}
+      TurnState::Joined | TurnState::Queued(Queued::NotTaken) => return Ok(()),
+      _ => return Err(Rejection::ChatMessageNotFound),
+    }
+    let chat = kept.chat.id();
+    {
+      let mut running = self.inner.chats.running.lock();
+      running.retain(|_, turn| !turn.task.is_finished());
+      if running.get(&chat).is_some_and(|turn| turn.steers.send(message).is_ok()) {
+        return Ok(());
+      }
+    }
+    tracing::info!(%chat, %message, "no answer is under way to take a message sent now; it waits for a turn of its own");
+    db.change_chat_turn(message, &[TurnState::Steering], &TurnState::Queued(Queued::NotTaken))
+      .map_err(|error| failed("cannot keep the chat message's turn", &error))?;
+    self.inner.notifier.send(Event::ChatChanged { chat });
     Ok(())
   }
 

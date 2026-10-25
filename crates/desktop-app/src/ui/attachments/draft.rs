@@ -112,6 +112,21 @@ impl DraftAttachments {
     self.attached.update(|held| held.0.retain(|file| !sent.contains(file)));
   }
 
+  /// Adds `files`, read already (a queued message's taken back), after those held, as the message's limits allow, and
+  /// says why the rest was refused.
+  pub fn take_back(&self, files: Vec<NewAttachment>) {
+    if files.is_empty() {
+      return;
+    }
+    let mut refused = Vec::new();
+    self
+      .attached
+      .update(|held| refused = attachments::add(&mut held.0, files));
+    self
+      .refused
+      .set(Refusals(refused.iter().map(Refused::message).collect()));
+  }
+
   /// Reads the files at `paths`, which the person picked or dropped, and adds those the message takes.
   pub fn add_files(&self, paths: Vec<PathBuf>) {
     if !paths.is_empty() {

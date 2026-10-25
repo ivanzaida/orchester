@@ -35,9 +35,17 @@
       "send": "Send",
       "sendEmpty": "Write a message or attach a file first.",
       "notReady": "Choose and publish what the Orchestrator runs on in its settings first.",
-      "thinking": "The Orchestrator answers one message at a time.",
+      "afterAnswer": "Send after this answer",
+      "afterAnswerDetail": "Waits until the Orchestrator finishes this answer, then goes as the next message",
+      "now": "Send now",
+      "nowDetail": "The Orchestrator gets it at its next tool call, inside this answer",
+      "stopAndSend": "Stop and send",
+      "stopAndSendDetail": "Stops this answer, then sends it as the next message",
+      "options": "More ways to send",
       "lines": "Enter adds a line ·",
-      "sends": "sends"
+      "sends": "sends",
+      "sendsAfter": "sends after this answer ·",
+      "stops": "stops the answer"
     },
     "keys": {
       "ctrlEnter": "Ctrl Enter",
@@ -58,7 +66,18 @@
     "footer": "Conversations stay in History for {{project}} · each task keeps its own Conversation",
     "delivery": {
       "sending": "Sending…",
-      "delivered": "Delivered · {{time}}"
+      "delivered": "Delivered · {{time}}",
+      "queued": "Queued · sent after this answer",
+      "queuedNext": "Queued · sent next, once this answer stops",
+      "notTaken": "Not taken mid-answer · sent after this answer",
+      "steering": "Sending into this answer…",
+      "joined": "Taken mid-answer · {{time}}"
+    },
+    "queued": {
+      "edit": "Edit",
+      "remove": "Remove",
+      "failed": "The queued message wasn't changed",
+      "dismiss": "Dismiss"
     },
     "thinking": "Orchestrator is thinking",
     "stop": "Stop response",
@@ -297,6 +316,8 @@
     },
     "change": {
       "applying": "Being carried out · {{time}}",
+      "appliedInChat": "Applied by you in the chat · {{time}}",
+      "approvedInChat": "You approved it in the chat: “{{words}}”",
       "personOnly": {
         "publish": "Only a person publishes a draft the Orchestrator proposed: input from automation is refused here.",
         "cancel": "Only a person cancels a run the Orchestrator proposed: input from automation is refused here.",

@@ -20,6 +20,7 @@
 use std::{collections::HashSet, path::Path};
 
 use orchester_core::{
+  connection::stream::InvocationOutcome,
   conversation::{Message as TaskMessage, Sender},
   id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
   orchestrator::{
@@ -332,6 +333,16 @@ fn conversations(db: &ProjectDb) -> Result<Vec<(Chat, Vec<ChatEntry>)>, StoreErr
     .collect()
 }
 
+/// Whether `execution`'s latest invocation ended because a person stopped its turn (*Stop turn*).
+fn stopped_by_person(view: &RunView, execution: StepExecutionId) -> bool {
+  view
+    .invocations
+    .iter()
+    .rev()
+    .find(|invocation| invocation.execution == execution)
+    .is_some_and(|invocation| invocation.outcome == Some(InvocationOutcome::TurnStopped))
+}
+
 /// The latest message `execution`'s agent wrote or was given among `messages`. A step that waits for a message again
 /// once it got one is a new wait, whether or not its agent wrote anything new.
 fn last_exchanged(messages: &[TaskMessage], execution: StepExecutionId) -> Option<&TaskMessage> {
@@ -375,7 +386,8 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
       ));
     }
     for execution in view.run.awaiting_answer() {
-      if choices.iter().any(|asked| asked.request.execution() == execution) {
+      // A step whose turn the person stopped waits for them, not for an answer the Orchestrator could give.
+      if choices.iter().any(|asked| asked.request.execution() == execution) || stopped_by_person(&view, execution) {
         continue;
       }
       let last = last_exchanged(&messages, execution).map_or_else(|| "-".to_owned(), |last| last.id().to_string());

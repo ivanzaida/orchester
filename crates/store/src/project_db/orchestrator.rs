@@ -9,11 +9,12 @@ use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
-    AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure,
-    TurnState, WaitTurn,
+    AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, Queued,
+    TurnFailure, TurnState, WaitTurn,
     instructions::{report_prompt, wait_prompt},
   },
   resource::ModelId,
+  run::Answerer,
   time::Timestamp,
 };
 use rusqlite::{OptionalExtension, Row, params};
@@ -135,55 +136,43 @@ impl ProjectDb {
     message: (ChatMessageId, &MessageBody),
     at: Timestamp,
   ) -> Result<bool, StoreError> {
-    self.keep_chat_message_with(chat, message, &[], at)
+    self.keep_chat_message_with(chat, message, (&[], Answerer::Person), at)
   }
 
   /// [`Self::keep_chat_message`] with `attachments`, whose copies are written before the rows and removed again when
-  /// the message is not kept now; a message kept before keeps the attachments it was kept with.
+  /// the message is not kept now (a message kept before keeps the attachments it was kept with), sent `by` the person
+  /// or by automation driving the window.
   pub fn keep_chat_message_with(
     &mut self,
     chat: &Chat,
-    (message, text): (ChatMessageId, &MessageBody),
-    attachments: &[NewAttachment],
+    message: (ChatMessageId, &MessageBody),
+    sent: (&[NewAttachment], Answerer),
     at: Timestamp,
   ) -> Result<bool, StoreError> {
-    let transaction = self.connection.transaction()?;
-    transaction.execute(
-      "INSERT OR IGNORE INTO orchestrator_chats (id, title, started_at) VALUES (?1, ?2, ?3)",
-      params![chat.id().to_string(), chat.title(), chat.started().unix_millis()],
-    )?;
-    let kept = transaction.execute(
-      "INSERT OR IGNORE INTO orchestrator_entries (chat_id, kind, at, body, message_id, turn)
-       VALUES (?1, 'person', ?2, ?3, ?4, 'thinking')",
-      params![
-        chat.id().to_string(),
-        at.unix_millis(),
-        text.as_str(),
-        message.to_string()
-      ],
-    )?;
-    if kept == 0 {
-      transaction.commit()?;
-      return Ok(false);
-    }
-    let (written, attached) = attachments::write(&self.directory, attachments)?;
-    attachments::insert(&transaction, AttachmentOwner::ChatMessage(message), &attached, at)?;
-    transaction.commit()?;
-    written.keep();
-    Ok(true)
+    self.keep_chat_message_as(chat, message, sent, (&TurnState::Thinking, at))
   }
 
   /// Forgets the person's message `message`, which the runner never took, with its attachments: its draft is kept
   /// by the app, and a conversation it alone started goes with it.
   pub fn forget_chat_message(&mut self, message: ChatMessageId) -> Result<(), StoreError> {
+    self.forget_person(message, &["thinking"]).map(drop)
+  }
+
+  /// Forgets the person's message `message` with its attachments while its turn is one of `turns`, and the
+  /// conversation it alone started; whether it was forgotten.
+  pub(super) fn forget_person(&mut self, message: ChatMessageId, turns: &[&str]) -> Result<bool, StoreError> {
     let transaction = self.connection.transaction()?;
-    let chat: Option<String> = transaction
+    let kept: Option<(String, String)> = transaction
       .query_row(
-        "SELECT chat_id FROM orchestrator_entries WHERE message_id = ?1 AND turn = 'thinking'",
+        "SELECT chat_id, turn FROM orchestrator_entries WHERE message_id = ?1 AND kind = 'person'",
         [message.to_string()],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
       )
       .optional()?;
+    let chat = kept
+      .filter(|(_, turn)| turns.contains(&turn.as_str()))
+      .map(|(chat, _)| chat);
+    let forgotten = chat.is_some();
     let mut copies = Vec::new();
     if let Some(chat) = chat {
       copies = attachments::forget(&transaction, &self.directory, AttachmentOwner::ChatMessage(message))?;
@@ -199,7 +188,7 @@ impl ProjectDb {
     }
     transaction.commit()?;
     attachments::remove_copies(&copies);
-    Ok(())
+    Ok(forgotten)
   }
 
   /// The turn of `message`: its prompt, its conversation and where it stands; `None` when it is not kept.
@@ -253,7 +242,8 @@ impl ProjectDb {
   }
 
   /// Ends every turn still thinking as interrupted, but those of `held`, which a runner answers, and, when `only`
-  /// names a conversation, those of other conversations; returns the conversations it changed.
+  /// names a conversation, those of other conversations; a message handed to a turn no runner answers is left for a
+  /// turn of its own ([`TurnState::Queued`]). Returns the conversations it changed.
   pub fn interrupt_chat_turns(
     &mut self,
     held: &[ChatMessageId],
@@ -261,17 +251,7 @@ impl ProjectDb {
   ) -> Result<Vec<ChatId>, StoreError> {
     let failure = failure_column(&TurnState::Failed(TurnFailure::Interrupted))?;
     let transaction = self.connection.transaction()?;
-    let thinking = {
-      let mut statement =
-        transaction.prepare("SELECT message_id, chat_id FROM orchestrator_entries WHERE turn = 'thinking'")?;
-      statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
-        .map(|row| {
-          let (message, chat) = row?;
-          Ok((parse("chat message id", &message)?, parse("chat id", &chat)?))
-        })
-        .collect::<Result<Vec<(ChatMessageId, ChatId)>, StoreError>>()?
-    };
+    let thinking = entries_in(&transaction, "thinking")?;
     let mut chats = Vec::new();
     for (message, chat) in thinking {
       if held.contains(&message) || only.is_some_and(|only| only != chat) {
@@ -281,6 +261,11 @@ impl ProjectDb {
         "UPDATE orchestrator_entries SET turn = 'failed', failure = ?2 WHERE message_id = ?1 AND turn = 'thinking'",
         params![message.to_string(), failure],
       )?;
+      if !chats.contains(&chat) {
+        chats.push(chat);
+      }
+    }
+    for chat in super::orchestrator_queue::release_unheld_steering(&transaction, held, only)? {
       if !chats.contains(&chat) {
         chats.push(chat);
       }
@@ -378,7 +363,7 @@ impl ProjectDb {
   /// The entries of `chat` in the order they were kept.
   pub fn chat_entries(&self, chat: ChatId) -> Result<Vec<ChatEntry>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT seq, kind, at, body, message_id, turn, failure, model, ended_at FROM orchestrator_entries
+      "SELECT seq, kind, at, body, message_id, turn, failure, model, ended_at, by_automation FROM orchestrator_entries
        WHERE chat_id = ?1 ORDER BY seq",
     )?;
     let rows = statement.query_map([chat.to_string()], |row| {
@@ -392,6 +377,7 @@ impl ProjectDb {
         failure: row.get(6)?,
         model: row.get(7)?,
         ended: row.get(8)?,
+        by_automation: row.get(9)?,
       })
     })?;
     rows.map(|row| row?.into_entry()).collect()
@@ -473,6 +459,7 @@ struct RawEntry {
   failure: Option<String>,
   model: Option<String>,
   ended: Option<i64>,
+  by_automation: bool,
 }
 
 impl RawEntry {
@@ -483,6 +470,11 @@ impl RawEntry {
         text: MessageBody::new(&self.body).map_err(|error| corrupt("chat message", error))?,
         turn: turn_state(&turn, self.failure.as_deref())?,
         ended: self.ended.map(Timestamp::from_unix_millis),
+        sent_by: if self.by_automation {
+          Answerer::Automation
+        } else {
+          Answerer::Person
+        },
       },
       ("reply", _, _, Some(model)) => EntryKind::Reply {
         text: self.body,
@@ -542,11 +534,32 @@ fn turn_state(word: &str, failure: Option<&str>) -> Result<TurnState, StoreError
     ("failed", Some(failure)) => {
       TurnState::Failed(serde_json::from_str(failure).map_err(|error| corrupt("chat turn failure", error))?)
     }
+    ("queued", _) => TurnState::Queued(Queued::AfterAnswer),
+    ("queued_next", _) => TurnState::Queued(Queued::Next),
+    ("not_taken", _) => TurnState::Queued(Queued::NotTaken),
+    ("steering", _) => TurnState::Steering,
+    ("joined", _) => TurnState::Joined,
     (word, _) => return Err(corrupt("chat turn", word)),
   })
 }
 
-fn failure_column(state: &TurnState) -> Result<Option<String>, StoreError> {
+/// The messages and conversations of the entries whose turn is `word`, in the order they were kept.
+pub(super) fn entries_in(
+  connection: &rusqlite::Connection,
+  word: &str,
+) -> Result<Vec<(ChatMessageId, ChatId)>, StoreError> {
+  let mut statement =
+    connection.prepare("SELECT message_id, chat_id FROM orchestrator_entries WHERE turn = ?1 ORDER BY seq")?;
+  statement
+    .query_map([word], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+    .map(|row| {
+      let (message, chat) = row?;
+      Ok((parse("chat message id", &message)?, parse("chat id", &chat)?))
+    })
+    .collect()
+}
+
+pub(super) fn failure_column(state: &TurnState) -> Result<Option<String>, StoreError> {
   match state {
     TurnState::Failed(failure) => serde_json::to_string(failure)
       .map(Some)

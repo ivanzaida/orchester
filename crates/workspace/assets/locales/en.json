@@ -736,6 +736,8 @@
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details.",
       "notAnotherAccount": "Choose a connection of the same CLI that runs on another account and can start now.",
+      "noTurnToStop": "No agent of this run is in a turn now, so there is no turn to stop.",
+      "turnNotStoppable": "This agent’s turn can’t be stopped on its own: it runs as a native agent. Pause stops the run at its next checkpoint instead.",
       "notAcceptable": {
         "notJudged": "The revision this result was for is not recorded, so Orchester cannot tell what work accepting would pass. Run the step again instead.",
         "notBuiltOn": "The step’s work no longer builds on {{revision}}, the revision its result was for. Run the step again instead.",
@@ -1920,6 +1922,9 @@
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
+    "queued": {
+      "started": "Its turn had already started, so the message was left as it is."
+    },
     "proposal": {
       "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again.",
       "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
@@ -2001,6 +2006,17 @@
     },
     "mcp": {
       "changed": "The MCP server {{server}}, a secret it names, its program's file or the profiles that choose it changed since this was proposed. Nothing was changed; ask the Orchestrator to propose it again."
+    },
+    "approval": {
+      "applied": "Applied for the person, as their decision in this conversation: its card says so. Tell them what it did, with its link.",
+      "notPersonsTurn": "Nobody asked you in this turn: Orchester started it by itself. Only the person's own message approves a proposal; nothing was applied. Tell them it waits for them.",
+      "automationInput": "The message of this turn was sent by automation driving the window, not typed by the person: it never approves a proposal. Nothing was applied; the person applies it on its card.",
+      "notPending": "Proposal {{proposal}} does not wait for the person in this conversation, or was made after their message, which so cannot approve it. Nothing was applied: call apply_proposal without proposal to list those that wait.",
+      "clickOnly": {
+        "widens": "This proposal widens what agents may do: only the person's click on Apply on its card applies it. Nothing was applied; tell them to apply it there.",
+        "losesWork": "This git operation can lose work: only the person's click on Apply on its card applies it. Nothing was applied; tell them to apply it there.",
+        "looksSecret": "This first commit adds files that look as if they hold secrets: only the person's click on Apply on its card, where they see them, applies it. Nothing was applied; tell them to apply it there."
+      }
     },
     "repository": {
       "gitMissing": "git is not installed on this computer, so the project's folder cannot be made a git repository. Install git, then ask again. Nothing was changed.",

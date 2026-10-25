@@ -192,7 +192,8 @@ fn subject(view: &View) -> String {
     .unwrap_or_default()
 }
 
-/// The state at the end of the head, the person's apply worded by `by_you`.
+/// The state at the end of the head, the person's apply worded by `by_you`, or as applied in the chat when the person
+/// approved it there.
 pub(super) fn state(ctx: &Ctx, view: &View, by_you: &str) -> State {
   let time = view.time();
   let (glyph, color, key) = match view.phase() {
@@ -201,6 +202,11 @@ pub(super) fn state(ctx: &Ctx, view: &View, by_you: &str) -> State {
       Icon::LoaderCircle,
       PaletteColor::TextSecondary,
       "orchestrator.change.applying",
+    ),
+    Phase::Applied if view.action.approved_in.is_some() => (
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      "orchestrator.change.appliedInChat",
     ),
     Phase::Applied => (Icon::CircleCheck, PaletteColor::Success, by_you),
     Phase::Done => (

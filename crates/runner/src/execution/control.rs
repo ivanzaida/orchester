@@ -41,6 +41,8 @@ pub(super) enum Control {
   },
   /// People's messages were stored; answered at once, delivered at the next boundary.
   DeliverMessages(Ack),
+  /// Stop the turn of the agents at work; answered once the stop is asked.
+  StopTurn(Ack),
   /// The runner stops: end the agent and record the run as interrupted.
   Interrupt(InterruptCause),
 }
@@ -56,6 +58,7 @@ impl Control {
       | Self::KeepPermissions(_, ack)
       | Self::DecidePlan(_, ack)
       | Self::DeliverMessages(ack)
+      | Self::StopTurn(ack)
       | Self::DecideToolApproval { ack, .. }
       | Self::AnswerQuestion { ack, .. } => ack,
       Self::Interrupt(_) => return,

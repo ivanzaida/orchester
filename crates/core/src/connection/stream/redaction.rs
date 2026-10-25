@@ -50,6 +50,7 @@ impl AgentEvent {
       Self::PlanLimits { .. }
       | Self::SessionStarted { .. }
       | Self::TurnStarted
+      | Self::TurnStopped
       | Self::TurnCompleted { .. }
       | Self::McpToolNotAsked { .. }
       | Self::McpExemptionNotApplied { .. } => {}

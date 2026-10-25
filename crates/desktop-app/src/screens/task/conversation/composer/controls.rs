@@ -51,8 +51,13 @@ pub(super) enum Sending {
   Empty,
   /// The message is being sent, or the files given are still being read.
   Busy,
-  /// Pressing sends: the primary way, and the second where the state has one.
-  Ready { primary: Press, second: Option<Press> },
+  /// Pressing sends: the primary way, the second where the state has one, and *Stop turn and send* while an agent
+  /// works whose turn can be stopped alone.
+  Ready {
+    primary: Press,
+    second: Option<Press>,
+    stop: Option<Press>,
+  },
 }
 
 /// What the row shows.
@@ -236,9 +241,14 @@ fn options(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
 }
 
 /// The send menu over the button: the primary way (checked, Enter), then the second (Ctrl/Cmd+Enter), or
-/// the second way unavailable with why.
+/// the second way unavailable with why; while an agent works, then *Stop turn and send*, or it unavailable with why.
 fn send_menu(ctx: &mut Ctx, bar: &Bar<'_>, (first, second): &(Way, Way)) -> Element {
-  let Sending::Ready { primary, second: press } = &bar.sending else {
+  let Sending::Ready {
+    primary,
+    second: press,
+    stop,
+  } = &bar.sending
+  else {
     return Column::new().into();
   };
   let first = item("composer-send-first", first, Some(primary.clone()))
@@ -250,10 +260,13 @@ fn send_menu(ctx: &mut Ctx, bar: &Bar<'_>, (first, second): &(Way, Way)) -> Elem
       .render(ctx, bar.menu),
     _ => item("composer-send-second", second, None).render(ctx, bar.menu),
   };
+  let stopping =
+    words::stop_way(ctx, bar.mode).map(|way| item("composer-send-stop", &way, stop.clone()).render(ctx, bar.menu));
   let panel = menu_panel("composer-send-menu")
     .width(Dimension::Px(MENU_WIDTH))
     .child(first)
-    .child(second);
+    .child(second)
+    .with_children(stopping);
   Popup::new(bar.anchor.clone(), panel)
     .open(bar.menu.clone())
     .placement(Placement::TopEnd)

@@ -1,7 +1,8 @@
 //! The Orchestrator chat's messages (protocol 25): a turn asked for and stopped, the change told, the replies and
-//! refusals, each read back as written; the chat's token never shows in `Debug`.
+//! refusals, each read back as written; the chat's token never shows in `Debug`. A message sent now into the answer
+//! under way, and a stop of an agent's turn (protocol 32), read back the same way.
 
-use orchester_core::id::{ChatId, ChatMessageId};
+use orchester_core::id::{ChatId, ChatMessageId, RunId};
 use orchester_ipc::{
   ChatToken, ChatTools, Command, Event, Rejection, Reply, Request, RequestId,
   frame::{FrameReader, FrameWriter},
@@ -18,14 +19,19 @@ async fn chat_messages_round_trip() {
     url: "http://127.0.0.1:50123/mcp".to_owned(),
     token: ChatToken::new(TOKEN.to_owned()),
   };
-  let requests = [Command::AnswerInChat { message, tools }, Command::StopChat { chat }]
-    .into_iter()
-    .enumerate()
-    .map(|(id, command)| Request {
-      id: RequestId::new(u64::try_from(id).expect("small")),
-      command,
-    })
-    .collect::<Vec<_>>();
+  let requests = [
+    Command::AnswerInChat { message, tools },
+    Command::StopChat { chat },
+    Command::SteerChat { message },
+    Command::StopTurn { run: RunId::generate() },
+  ]
+  .into_iter()
+  .enumerate()
+  .map(|(id, command)| Request {
+    id: RequestId::new(u64::try_from(id).expect("small")),
+    command,
+  })
+  .collect::<Vec<_>>();
   let reply = |reply| Event::Reply {
     id: RequestId::new(9),
     reply,
@@ -34,9 +40,12 @@ async fn chat_messages_round_trip() {
     Event::ChatChanged { chat },
     reply(Reply::ChatAnswering { message }),
     reply(Reply::ChatStopped { chat }),
+    reply(Reply::ChatSteered { message }),
     reply(Reply::Rejected(Rejection::ChatMessageNotFound)),
     reply(Reply::Rejected(Rejection::ChatBusy)),
     reply(Reply::Rejected(Rejection::NoOrchestrator)),
+    reply(Reply::Rejected(Rejection::NoTurnToStop)),
+    reply(Reply::Rejected(Rejection::TurnNotStoppable)),
   ];
   for request in &requests {
     writer.write(request).await.expect("write request");

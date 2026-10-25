@@ -27,8 +27,8 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  id::ProjectId,
-  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange, TurnFailure, TurnState},
+  id::{ChatMessageId, ProjectId},
+  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, Queued, SessionChange, TurnFailure, TurnState},
   time::Timestamp,
 };
 use orchester_workspace::{display, orchestrator::tools::ChatScope};
@@ -38,18 +38,17 @@ use super::{
   failure::{earlier, failure_notice},
   held::{HeldCard, HeldProps},
   proposal::{ProposalProps, StartProposal},
-  turns::{Part, Turn},
+  send::QueuedChange,
+  turns::{Arrival, Part, Turn},
 };
 use crate::{
   theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    attachments,
     button::{ActionButton, ButtonKind},
     chat::{
-      Avatar, agent_text, chat_row, delivery_line,
+      Avatar, agent_text, chat_row,
       follow::{Follow, jump_room},
       names::ProjectNames,
-      person_message,
     },
     icon::{Icon, icon},
     markdown::LinkHandler,
@@ -57,7 +56,7 @@ use crate::{
 };
 
 /// What every turn row needs besides its turn: the project, the connection the Orchestrator runs on, and what the
-/// person can do about the last turn.
+/// person can do about the last turn and the messages that wait for it.
 #[derive(Clone)]
 pub(super) struct TurnEnv {
   pub(super) project: ProjectId,
@@ -72,6 +71,8 @@ pub(super) struct TurnEnv {
   pub(super) stop: Arc<dyn Fn() + Send + Sync>,
   /// Sends the words once more, as a new message.
   pub(super) ask_again: Arc<dyn Fn(Arc<str>) + Send + Sync>,
+  /// Takes a queued message, with its words, back into the composer, or removes it.
+  pub(super) change_queued: Arc<dyn Fn(ChatMessageId, Arc<str>, QueuedChange) + Send + Sync>,
   /// What a press on a link in a reply does.
   pub(super) links: LinkHandler,
   /// The projects' names, for what a link to another project's place says.
@@ -177,7 +178,7 @@ fn arrivals(rows: &[TurnRow]) -> usize {
         .turn
         .state
         .as_ref()
-        .is_some_and(|state| *state != TurnState::Thinking);
+        .is_some_and(|state| state.has_turn() && !state.is_thinking());
       1 + row.turn.answer.len() + usize::from(ended)
     })
     .sum()
@@ -212,10 +213,11 @@ impl Component for TurnView {
         (report, row.turn.at, row.turn.state.is_some()),
         &row.env,
       ),
-      (None, None) => opening_message(ctx, &row, &key),
+      (None, None) => super::delivery::opening_message(ctx, &row, &key),
     };
     let answer = answer(ctx, &row);
-    let end = if row.turn.message.is_some() {
+    // A message that waits has no answer yet, and an answer a message took mid-way ends under that message.
+    let end = if row.turn.message.is_some() && row.turn.arrival != Arrival::Waiting && !row.turn.continued {
       ending(ctx, &row)
     } else {
       Vec::new()
@@ -224,6 +226,7 @@ impl Component for TurnView {
       Column::new()
         .id(format!("orchestrator-turn-{key}"))
         .describe("turn", turn_name(row.turn.state.as_ref()))
+        .describe("arrival", arrival_name(row.turn.arrival))
         .width(Dimension::Pct(100.0))
         .padding_vertical(SpacingSize::Sm)
         .spacing(SpacingSize::Lg)
@@ -233,28 +236,6 @@ impl Component for TurnView {
     )
     .into()
   }
-}
-
-/// The person's message that opens `row`'s turn, keyed `key`, with the files attached to it and where it stands.
-fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
-  let delivery = match row.turn.at {
-    None => delivery_line(
-      "orchestrator-delivery",
-      (Icon::LoaderCircle, PaletteColor::TextMuted),
-      &ctx.t("orchestrator.delivery.sending"),
-    ),
-    Some(at) => delivery_line(
-      "orchestrator-delivery",
-      (Icon::CheckCheck, PaletteColor::Success),
-      &ctx.t_args(
-        "orchestrator.delivery.delivered",
-        [("time", display::clock(at).as_str())],
-      ),
-    ),
-  };
-  let id = format!("orchestrator-message-{key}");
-  let attached = attachments::sent::sent(ctx, &id, &row.env.root, &row.turn.attachments);
-  person_message(ctx, &id, (&row.turn.text, row.turn.at), (attached, Some(delivery))).into()
 }
 
 /// The Orchestrator's answer: its replies and actions, under its name, its model and when it began.
@@ -370,7 +351,8 @@ fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
     return Vec::new();
   };
   match state {
-    TurnState::Answered => Vec::new(),
+    // A message that waits, or one taken by an answer no longer kept, has no ending of its own.
+    TurnState::Answered | TurnState::Queued(_) | TurnState::Steering | TurnState::Joined => Vec::new(),
     TurnState::Thinking if row.last => thinking(ctx, row),
     TurnState::Thinking => Vec::new(),
     TurnState::Stopped => {
@@ -513,5 +495,19 @@ const fn turn_name(state: Option<&TurnState>) -> &'static str {
     Some(TurnState::Answered) => "answered",
     Some(TurnState::Stopped) => "stopped",
     Some(TurnState::Failed(_)) => "failed",
+    Some(TurnState::Queued(Queued::AfterAnswer)) => "queued",
+    Some(TurnState::Queued(Queued::Next)) => "queued-next",
+    Some(TurnState::Queued(Queued::NotTaken)) => "not-taken",
+    Some(TurnState::Steering) => "steering",
+    Some(TurnState::Joined) => "joined",
+  }
+}
+
+/// The name `describe` reports how a row's message reached the answer by, for tests and QA.
+const fn arrival_name(arrival: Arrival) -> &'static str {
+  match arrival {
+    Arrival::Own => "own",
+    Arrival::Joined => "joined",
+    Arrival::Waiting => "waiting",
   }
 }

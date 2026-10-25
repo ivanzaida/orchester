@@ -8,7 +8,8 @@ continuing interrupted runs behind *Let the Orchestrator continue interrupted ru
 merging finished runs on its own behind *Let the Orchestrator merge finished runs on its own* decided by the person on
 2026-10-21 (ORC-69); the Orchestrator on Codex, confined without a shell (decision 10), added on 2026-10-25 (ORC-84);
 the project's MCP servers from the chat (decision 11) added on 2026-10-25 (ORC-89), its narrowing rule decided by the
-person that day.
+person that day; writing while it answers (decision 12) added on 2026-10-25 (ORC-92); approving a proposal in the
+chat's words (decision 13) added on 2026-10-25 (ORC-96; its table of what stays click-only proposed, conservative).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -289,6 +290,7 @@ project.
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
 | Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
 | Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |
+| Proposals | `apply_proposal` without `proposal` lists the proposals that wait (ORC-96, the chat's own) | — | `apply_proposal` with `proposal`: applies a waiting proposal the person's message in the turn approves, as the card's *Apply*, recorded as theirs; never what only a click applies; decision 13 |
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
@@ -524,3 +526,84 @@ fields, rules and refusals hold as in Connections › MCP servers.
 - **Where a program comes from.** The chat suggests a program or URL only from what it read (the project's files, a
   tool's own documentation, such as the command a desktop app's MCP settings show) and tells the person where it came
   from; it never guesses a path. Once the server exists, giving it to agents is a change of their profile, as before.
+
+## 12. Writing while it answers (ORC-92, 2026-10-25)
+
+The chat takes a message while the Orchestrator answers, as Claude Code desktop does; one turn still runs at a time in
+a conversation. While an answer is under way, the composer stays open and its send button becomes a split button:
+
+- **Send after this answer** (Enter, the default): the message is kept at once and shows *Queued · sent after this
+  answer*. When the answer ends (completed, stopped, failed or past its limit), the app starts the queued messages'
+  turns one after another, in the order they were written, before any wait or end turn waiting for the conversation
+  (`orchester-app`'s waits follower, `start_queued`; a wait turn refuses to start while a person's message is queued or
+  being sent). The person may **Edit** a queued message, which takes its words and files back into the composer (after
+  what is written there; the files are read back from the project's copies first, and a copy that cannot be read
+  refuses the edit, leaving the message queued) and removes it, or **Remove** it. Both are refused once its turn
+  started.
+- **Send now**: the message goes into the answer under way. Claude Code takes it as one more stream-json user message
+  on its input (the chat's Claude process now keeps its input open until the first result, then closes it); Codex App
+  Server as `turn/steer` on the turn under way. The agent reads it at its next tool call and answers it in the same
+  answer; the message shows *Taken mid-answer* and starts no turn of its own. When the CLI refuses it, or the answer
+  ends before it is taken, it falls back to after the answer and says so: *Not taken mid-answer · sent after this
+  answer*.
+- **Stop and send**: the answer under way is stopped as *Stop response* stops it (what it said and spent stays), and
+  the message's turn starts next, before messages queued earlier.
+
+Esc in the composer stops the answer, without asking: stopping loses nothing the answer said, and the next message
+continues the same session. Messages are kept in `orchestrator_entries` with the turn states `queued`, `queued_next`,
+`not_taken`, `steering` and `joined` (`orchester_core::orchestrator::{TurnState, Queued}`); a queued message's turn
+moves to the end of the conversation when it starts. *Send now* is IPC protocol 32's `SteerChat`, answered
+`ChatSteered` with whether the turn took it.
+
+## 13. Approving in the chat (ORC-96, 2026-10-25)
+
+The chat proposed returning a run to Design (`continue_run` `return_to`, a card), the person wrote "run it", and the chat
+could only send them to the card's *Apply*. The person had decided, in their own words. Now the chat applies its own
+proposal for them with a tool of its own, `apply_proposal { proposal }` (`orchester_workspace::orchestrator::approval`,
+listed in `tools::CHAT_TOOLS`; no client of the app has it).
+
+- **Only the person's own message approves.** The turn under way must be the one a person's message started: not one a
+  wait, a run's end or a day's report started by itself (`ChatScope::on_its_own`; refused `not_persons_turn`), and not a
+  message automation sent through the window. The composer keeps who sent each message (`EntryKind::Person::sent_by`,
+  `orchestrator_entries.by_automation`): a send pressed by lurq's synthetic input is automation's, and its turn approves
+  nothing (`automation_input`). Auto mode starts no turn, so it approves nothing either. A message sent into the answer
+  under way (*Send now*, section 12) reaches the agent as the person's words too: once the turn took it, the newest such
+  message is the one that approves (the card names it), and the turn approves nothing once automation sent any of them
+  (`automation_input`). One handed over but not taken yet has not reached the agent and approves nothing.
+- **Only what the person could see.** The proposal must still wait in this conversation and have been kept before the
+  person's message (`not_pending` otherwise): a proposal the chat makes in a turn is never applied in that turn, so a
+  card is never skipped. Without `proposal` the tool lists the proposals that wait, each with its number, what it does
+  and whether only a click applies it, and applies nothing.
+- **Exactly as the card's Apply.** It goes through the card's own path (`proposal::accept`, which `proposal::decide`
+  takes too): the proposal is claimed (a second decision is refused), checked again and refused once what it stands on
+  changed (`changed_since_proposed`, `no_checkpoint`, a run that went on, …), carried out as the person's decision
+  (`Answerer::Person`, `PersonDecision`), and settled. It widens nothing: what it is given to widen is empty, so a
+  publication that would widen is refused.
+- **The card says so.** The action keeps the message that approved it (`ChatAction::approved_in`: its id, its entry and
+  its words); the card's state reads *Applied by you in the chat · time* and a note quotes the message ("You approved
+  it in the chat: “run it”"); a start's card says it too. A refused application keeps it as well, so the card shows the
+  person's approval was refused.
+- **Ambiguity is the chat's to resolve, not the tool's.** With several proposals waiting and a message that does not
+  single one out, the chat asks which; a message that also changes the proposal ("run it, but without X") gets a new
+  proposal, never the old one applied. The chat's instructions and the tool's description say so; the tool cannot read
+  the words, so it never picks one itself.
+
+What may be approved in the chat, by kind (`Change::click_only`, and the publication's widening read from the project):
+
+| Proposal | In the chat | Why |
+|---|---|---|
+| A run's start (`run_task`) | yes | the same start the card's *Start* makes, through the scheduling checks |
+| Cancel (`cancel_run`) | yes | the person's decision; nothing is deleted |
+| Merge (`merge_run`) | yes | only the proposed commit; conflicts and the merged result stay on Local integration |
+| Answer, message (`answer_question`, `send_message`, also one that moves a run) | yes | checked again as sent (`sent_as`) |
+| How a stopped run goes on (`continue_run`: `allow_retry`, `return_to`, `resolve_conflicts`) | yes | the case that started it; still refused once the run went on |
+| Pause, resume, release (`pause_run`, `resume_run`, `release_queue`) | yes | checked again; an interrupted run stays under its own rule |
+| Publication of an instruction or a skill, or of a pipeline, profile or tool that widens nothing | yes | the person reads the card's diff before they say so |
+| Publication that widens what agents may do | **click only** | widening agent permissions stays a click |
+| MCP server narrowing (off, removal, dropped exemptions) | yes | it narrows what agents may do |
+| MCP server added, widened or turned on | **click only** | it widens what agents may do |
+| First commit (`init_repository`) without files that look secret | yes | it loses nothing |
+| First commit that adds files that look as if they hold secrets | **click only** | the person decides on the card's warning |
+| Git's work that can lose work (`git_propose`: reset, clean, branch or tag deletion, forced push, discard, rebase, aborting a merge) | **click only** | destructive git stays a click |
+
+Refusal codes: `not_persons_turn`, `automation_input`, `not_pending`, `click_only`, and the card's own refusals.

@@ -8,6 +8,9 @@
 //! - "Call <tool> <JSON arguments>": calls that tool with the token and replies `Tool said: <result text>`;
 //! - "Answer in parts": replies twice, `First part.` and `Second part.`, each as its own message;
 //! - "Keep thinking": writes the start of a reply and what its first response spent, then waits until it is ended;
+//! - "Wait for a message": writes the start of a reply, then waits for a message sent now (`turn/steer`), accepts it,
+//!   reports it as a `userMessage` item and replies `Noted: <message>`, as Codex 0.159.2 takes one; "Refuse a message"
+//!   refuses the steer instead ("steering is not available for this turn") and replies `Noted: <prompt>`;
 //! - "Fail now": the turn fails;
 //! - "Run a command": asks to run `cat secrets.txt`, and runs nothing until it is answered;
 //! - "Ask for tools": asks to call a tool of another MCP server (`pencil`), then one of the chat's own (`orchester`),
@@ -113,7 +116,7 @@ fn server(args: &[String]) -> Option<ChatServer> {
 }
 
 /// Answers the turn whose prompt is `prompt`, in a thread started with `base` as its instructions.
-pub fn answer(session: &Session, (args, base): (&[String], Option<&str>), prompt: &str) -> Step {
+pub fn answer(session: &mut Session, (args, base): (&[String], Option<&str>), prompt: &str) -> Step {
   let server = server(args);
   log(session, (args, base), server.as_ref(), prompt);
   let said = prompt.lines().last().unwrap_or_default();
@@ -139,6 +142,11 @@ pub fn answer(session: &Session, (args, base): (&[String], Option<&str>), prompt
     tool_request(session, OTHER_SERVER, "pencil");
     return Step::Go;
   }
+  if said.contains("Wait for a message") || said.contains("Refuse a message") {
+    message(session, "item_wait", "Waiting for your message.");
+    session.chat_awaits = Some(said.contains("Refuse a message"));
+    return Step::Go;
+  }
   if said.contains("Answer in parts") {
     message(session, "item_first", "First part.");
     message(session, "item_second", "Second part.");
@@ -154,6 +162,30 @@ pub fn answer(session: &Session, (args, base): (&[String], Option<&str>), prompt
     None => format!("Noted: {said}"),
   };
   message(session, "item_chat", &text);
+  complete(session, None);
+  Step::Go
+}
+
+/// A message sent now (`turn/steer` with `id`) to a turn that waits for one: taken and answered, or refused while the
+/// turn answers its prompt; with no turn waiting, "no active turn to steer", as Codex answers it.
+pub fn steered(session: &mut Session, id: &Value, params: &Value) -> Step {
+  let text = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
+  let Some(refuse) = session.chat_awaits.take() else {
+    super::emit(&json!({"id": id, "error": {"code": -32600, "message": "no active turn to steer"}}));
+    return Step::Go;
+  };
+  if refuse {
+    super::emit(&json!({"id": id, "error": {"code": -32600, "message": "steering is not available for this turn"}}));
+    message(session, "item_chat", "Noted: Refuse a message.");
+  } else {
+    super::emit(&json!({"id": id, "result": {"turnId": params["expectedTurnId"]}}));
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "item_steered", "type": "userMessage", "content": [{"type": "text", "text": text, "text_elements": []}]}}),
+    );
+    message(session, "item_chat", &format!("Noted: {text}"));
+  }
   complete(session, None);
   Step::Go
 }

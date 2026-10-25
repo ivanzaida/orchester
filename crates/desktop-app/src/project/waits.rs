@@ -21,6 +21,7 @@ use orchester_workspace::{
   background, base_moved,
   messages::{self, Message},
   orchestrator::{
+    queue,
     send::{self, SendError},
     tools::ChatScope,
     waits::{self, Followed, MergeChecks, SucceededAt, Switches, WaitTurn},
@@ -67,10 +68,12 @@ pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
   });
 }
 
-/// Keeps the project's new waits, and asks the runner for the turn a wait started by itself, if one did; a turn
+/// Starts the turn of a message the person queued while the Orchestrator answered, once its conversation's turn
+/// ended; keeps the project's new waits, and asks the runner for the turn a wait started by itself, if one did. A turn
 /// starts only once the runner attached, since one that attaches ends the turns still thinking as interrupted. The
 /// conversations are told of a change only when there was one: telling them wakes this follower again.
 async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Result<(), Message> {
+  start_queued(services, i18n.clone(), open).await?;
   let switches = {
     let workspace = services.workspace.clone();
     background::run(move || {
@@ -105,7 +108,7 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
     services.changes.record(open.project.id(), Outside::Tasks);
   }
   if let Some(turn) = followed.turn {
-    answer(services, i18n, open, turn).await;
+    answer(services, i18n, open, (turn, true)).await;
   }
   Ok(())
 }
@@ -154,14 +157,39 @@ async fn keep(
   background::run(move || waits::follow_in((&root, project, &programs), &checks, (switches, attached))).await?
 }
 
-/// Serves the tools of `turn` and asks `open`'s runner to answer it; a turn neither takes ends failed.
-async fn answer(services: &Services, i18n: I18n, open: &OpenProject, turn: WaitTurn) {
+/// Starts the turn of the next message the person queued while the Orchestrator answered, once its conversation no
+/// longer answers (`orchester_workspace::orchestrator::queue`); before any wait's turn, and only once the runner
+/// attached.
+async fn start_queued(services: &Services, i18n: I18n, open: &OpenProject) -> Result<(), Message> {
+  let root = open.repo_root.clone();
+  if !background::run(move || queue::next_ready_in(&root)).await?? {
+    return Ok(());
+  }
+  if let Err(error) = services.runners.chat_runner(open).await {
+    tracing::info!(%error, "no runner attached for a queued message's turn; it starts later");
+    return Ok(());
+  }
+  let root = open.repo_root.clone();
+  let started = {
+    let _keeping = KEEPING.lock().await;
+    background::run(move || queue::start_next_in(&root)).await??
+  };
+  if let Some(turn) = started {
+    services.runners.chat_changed(&open.repo_root);
+    answer(services, i18n, open, (turn, false)).await;
+  }
+  Ok(())
+}
+
+/// Serves the tools of `turn`, one Orchester started by itself (`on_its_own`) or a queued message's, and asks `open`'s
+/// runner to answer it; a turn neither takes ends failed.
+async fn answer(services: &Services, i18n: I18n, open: &OpenProject, (turn, on_its_own): (WaitTurn, bool)) {
   let scope = ChatScope {
     project: open.project.id(),
     name: open.project.name().as_str().to_owned(),
     root: open.repo_root.clone(),
     chat: turn.chat,
-    on_its_own: true,
+    on_its_own,
   };
   let tools = match services.chat_tools.serve_turn(services, i18n, (scope, turn.message)) {
     Ok(tools) => tools,

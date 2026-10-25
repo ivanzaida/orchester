@@ -56,7 +56,7 @@ pub use self::{
   native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport, ReturnedWork},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
-  working::WorkingTools,
+  working::{RUN_PLAINLY, SCRATCH_FILES, WorkingTools},
 };
 use super::{
   plan::{PlanVersion, ReviewNote},
@@ -173,6 +173,9 @@ pub enum MessageOccasion<'a> {
   Written,
   /// The agent finished its turn while they came in; its session resumes to read them.
   AfterTurn,
+  /// A person stopped the agent's turn (*Stop turn*): its session resumes with their messages as its next
+  /// instruction.
+  TurnStopped,
   /// They answer `question`, which the agent asked.
   Answer { question: &'a str },
   /// The run had finished and a person asks the agent of the step about its work (Ask agent).

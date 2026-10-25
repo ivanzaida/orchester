@@ -172,6 +172,25 @@ pub(super) fn menu(ctx: &Ctx, mode: &ComposerMode) -> Option<(Way, Way)> {
   }
 }
 
+/// The send menu's last way while an agent works: *Stop turn and send*, which stops its turn so it reads the message
+/// as its next instruction; unavailable with why for an agent whose turn cannot be stopped alone. `None` in any other
+/// mode.
+pub(super) fn stop_way(ctx: &Ctx, mode: &ComposerMode) -> Option<Way> {
+  let ComposerMode::Steer(WorkingAgent { agent, stops_turn, .. }) = mode else {
+    return None;
+  };
+  let detail = if *stops_turn {
+    "composer.menu.stopTurn"
+  } else {
+    "composer.menu.stopUnavailable"
+  };
+  Some(Way {
+    label: ctx.t("composer.send.stopTurn"),
+    detail: ctx.t_args(detail, [("agent", &**agent)]),
+    unavailable: !*stops_turn,
+  })
+}
+
 /// The quiet line under the box (`SpaXX` in `B67XdS`), only where it changes the outcome.
 pub(super) fn note(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Option<Arc<str>> {
   let with_agent = |key: &str, agent: &str| ctx.t_args(key, [("agent", agent)]);

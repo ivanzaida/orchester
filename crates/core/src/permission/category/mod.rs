@@ -30,8 +30,10 @@ mod loops;
 mod native;
 mod network;
 mod network_tables;
+mod only_reads;
 mod options;
 mod packages;
+mod packages_sources;
 mod part;
 mod paths;
 mod place;
@@ -284,6 +286,7 @@ fn classify_part(
   }
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
+  part.only_reads = only_reads::only_reads(&program, args);
   judge_edits(&mut part, &judged, args, placing);
   // `python -` runs what its standard input holds: the agent's code only from a here-document read as
   // written, not from a pipe or a file.

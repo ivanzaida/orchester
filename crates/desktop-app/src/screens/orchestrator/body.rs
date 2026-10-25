@@ -1,13 +1,15 @@
 //! The chat beside History (`Main` in `ZJzV0`, `AJeWg` in `kPs8W`): a new conversation's start, or the conversation
 //! — its turns over the composer, 800 wide at most and 40 in from the panel's sides, the composer 14 over the panel's
-//! foot — or why it cannot be shown. A send that failed shows over the composer (`Send problem` `htsjO`), and so does
-//! what keeps the chat from sending (`notReady`).
+//! foot — or why it cannot be shown. A send that failed shows over the composer (`Send problem` `htsjO`), and so do
+//! an *Edit* or *Remove* of a queued message that changed nothing and what keeps the chat from sending (`notReady`).
+//! While the Orchestrator answers, the composer sends as the person chooses ([`super::send_menu`]), and the messages
+//! that wait for the answer show after it.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::Ctx,
+    ctx::{Ctx, FutureState},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -17,19 +19,22 @@ use lurq::{
 use orchester_core::{
   attachment::{NewAttachment, names_text},
   id::ChatId,
+  orchestrator::{Queued, TurnState},
 };
 use orchester_workspace::{
   messages::Message,
-  orchestrator::{chat::ChatView, send::SendError, settings::Readiness, tools::ChatScope},
+  orchestrator::{chat::ChatView, queue::WhileAnswering, send::SendError, settings::Readiness, tools::ChatScope},
 };
 
 use super::{
   View,
   composer::{ComposerBox, Sending, composer, keys},
   data::{Read, Reads, Shown},
+  send::ChangeQueued,
+  send_menu::Ways,
   start::start,
   timeline::{TurnEnv, TurnRow, list},
-  turns::{Turn, turns},
+  turns::{Arrival, Turn, turns},
 };
 use crate::{
   navigation::Navigation,
@@ -60,20 +65,7 @@ pub(super) fn main(
 ) -> Element {
   let sending = view.send.state().get();
   let thinking = matches!(&reads.shown, Shown::Chat(shown) if shown.thinking());
-  let held = held(ctx, (readiness, thinking));
-  // Files still being read go with the message: it is sent once they are added.
-  let state = if sending.is_pending() || view.attached.reading.get() > 0 {
-    Sending::Busy
-  } else if let Some(why) = held {
-    Sending::Held(why)
-  } else if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() {
-    Sending::Empty {
-      why: ctx.t("orchestrator.composer.sendEmpty"),
-      press: view.send_draft(project, reads.target),
-    }
-  } else {
-    Sending::Ready(view.send_draft(project, reads.target))
-  };
+  let state = sending_state(ctx, view, (project, reads.target), (readiness, thinking));
   let name = project.open.project.name().as_str().to_owned();
   let problem = sending
     .error
@@ -104,6 +96,7 @@ pub(super) fn main(
         start: true,
         sending: &state,
         focused: &view.focused,
+        stop: None,
       };
       let column = composer(ctx, view, &boxed);
       let notice = not_ready.or(problem);
@@ -113,14 +106,17 @@ pub(super) fn main(
       ctx,
       view,
       (project, None, pending.as_deref(), &reads.names),
-      (&state, readiness, [problem, not_ready]),
+      (&state, readiness, [problem, None, not_ready]),
     ),
-    Shown::Chat(shown) => conversation(
-      ctx,
-      view,
-      (project, Some(shown), pending.as_deref(), &reads.names),
-      (&state, readiness, [problem, not_ready]),
-    ),
+    Shown::Chat(shown) => {
+      let queued = queued_problem(ctx, view);
+      conversation(
+        ctx,
+        view,
+        (project, Some(shown), pending.as_deref(), &reads.names),
+        (&state, readiness, [problem, queued, not_ready]),
+      )
+    }
     Shown::Loading => loading(ctx, view),
     Shown::Failed(error) => {
       let runners = Services::of(ctx).runners;
@@ -158,21 +154,67 @@ fn setup_failed(ctx: &mut Ctx, project: &ShownProject, error: &Message) -> Eleme
   .into()
 }
 
-/// Why nothing can be sent now: the Orchestrator has nothing to run on, or it is still answering.
-fn held(ctx: &Ctx, (readiness, thinking): (Option<&Readiness>, bool)) -> Option<Arc<str>> {
-  if !readiness.is_some_and(Readiness::is_ready) {
-    return Some(ctx.t("orchestrator.composer.notReady"));
-  }
-  thinking.then(|| ctx.t("orchestrator.composer.thinking"))
+/// An *Edit* or *Remove* of a queued message that changed nothing: why (its turn had started, or its files could not
+/// be read back), until the person dismisses it or changes a queued message again.
+fn queued_problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
+  let state = view.queued.state();
+  let error = state.get().error?;
+  let dismiss = ActionButton::new(
+    "orchestrator-queued-dismiss",
+    ButtonKind::Secondary,
+    ctx.t("orchestrator.queued.dismiss"),
+  )
+  .on_click(move || state.set(FutureState::idle()));
+  Some(
+    Notice::new(
+      "orchestrator-queued-problem",
+      NoticeTone::Danger,
+      ctx.t("orchestrator.queued.failed"),
+    )
+    .icon(Icon::CircleAlert)
+    .body(message_text(ctx, &error))
+    .action(dismiss)
+    .into(),
+  )
 }
 
-/// The turns of `shown` (none for a new conversation) and the one being sent, over the composer.
-fn conversation(
-  ctx: &mut Ctx,
+/// What sending does now: nothing while the Orchestrator has nothing to run on, busy while a message or its files
+/// are on their way, and otherwise the draft goes to conversation `chat` (a new one when `None`) as a turn of its own,
+/// or, while the Orchestrator answers (`thinking`), after the answer, now or after stopping it.
+fn sending_state(
+  ctx: &Ctx,
   view: &View,
-  (project, shown, pending, names): (&ShownProject, Option<&ChatView>, Option<&str>, &ProjectNames),
-  (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 2]),
-) -> Element {
+  (project, chat): (&ShownProject, Option<ChatId>),
+  (readiness, thinking): (Option<&Readiness>, bool),
+) -> Sending {
+  // Files still being read go with the message: it is sent once they are added.
+  if view.send.state().get().is_pending() || view.attached.reading.get() > 0 {
+    return Sending::Busy;
+  }
+  if !readiness.is_some_and(Readiness::is_ready) {
+    return Sending::Held(ctx.t("orchestrator.composer.notReady"));
+  }
+  let way = |how| view.send_draft(project, (chat, how));
+  if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() {
+    return Sending::Empty {
+      why: ctx.t("orchestrator.composer.sendEmpty"),
+      press: way(thinking.then_some(WhileAnswering::AfterAnswer)),
+      answering: thinking,
+    };
+  }
+  if !thinking {
+    return Sending::Ready(way(None));
+  }
+  Sending::WhileAnswering(Arc::new(Ways {
+    after_answer: way(Some(WhileAnswering::AfterAnswer)),
+    now: way(Some(WhileAnswering::Now)),
+    stop_and_send: way(Some(WhileAnswering::StopAndSend)),
+  }))
+}
+
+/// The turns of `shown` (none for a new conversation), and the message being sent (`pending`) until the conversation
+/// holds it: as a turn of its own, or as it will wait while the Orchestrator answers.
+fn all_turns(view: &View, shown: Option<&ChatView>, pending: Option<&str>) -> Vec<Turn> {
   let mut all = shown
     .map(|shown| turns(&shown.entries, &shown.attachments))
     .unwrap_or_default();
@@ -180,9 +222,26 @@ fn conversation(
   if let Some(text) = pending
     && !all.iter().any(|turn| turn.message.is_some() && turn.message == kept)
   {
-    all.push(Turn::sending(text));
+    let waits = view.how.get().map(|how| match how {
+      WhileAnswering::AfterAnswer => TurnState::Queued(Queued::AfterAnswer),
+      WhileAnswering::Now => TurnState::Steering,
+      WhileAnswering::StopAndSend => TurnState::Queued(Queued::Next),
+    });
+    all.push(Turn::sending(text, waits.unwrap_or(TurnState::Thinking)));
   }
+  all
+}
+
+/// The turns of `shown` (none for a new conversation) and the one being sent, over the composer.
+fn conversation(
+  ctx: &mut Ctx,
+  view: &View,
+  (project, shown, pending, names): (&ShownProject, Option<&ChatView>, Option<&str>, &ProjectNames),
+  (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 3]),
+) -> Element {
+  let all = all_turns(view, shown, pending);
   let chat = shown.map(|shown| shown.chat.id());
+  let answering = shown.is_some_and(ChatView::thinking);
   // Another conversation opens at its own end.
   view
     .follow
@@ -194,8 +253,11 @@ fn conversation(
   let env = Arc::new(env(view, project, (chat, connection), names));
   let can_ask = matches!(state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
   let stopping = view.stop.state().get().is_pending();
-  // The newest turn, which can be stopped or asked again: a wait that started none, kept after it, is no turn.
-  let newest = all.iter().rposition(|turn| turn.state.is_some());
+  // The newest turn, which can be stopped or asked again: a wait that started none, kept after it, is no turn, and
+  // neither is a message that waits for the answer.
+  let newest = all
+    .iter()
+    .rposition(|turn| turn.state.is_some() && turn.arrival != Arrival::Waiting);
   let rows = all
     .into_iter()
     .enumerate()
@@ -212,8 +274,9 @@ fn conversation(
     start: false,
     sending: state,
     focused: &view.focused,
+    stop: (answering && !stopping).then(|| env.stop.clone()),
   };
-  let foot = composer(ctx, view, &boxed).child(keys(ctx));
+  let foot = composer(ctx, view, &boxed).child(keys(ctx, answering));
   // The turns scroll across the whole chat area, so the thumb sits at its right edge; each turn, the notices and
   // the composer keep to the column, centred (`ZJzV0`).
   let below = Column::new()
@@ -304,6 +367,7 @@ fn env(
     chat,
     on_its_own: false,
   });
+  let (queued, root) = (view.queued.clone(), open.repo_root.clone());
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),
@@ -316,6 +380,16 @@ fn env(
       }
     }),
     ask_again,
+    change_queued: Arc::new(move |message, text: Arc<str>, change| {
+      if !queued.state().get_untracked().is_pending() {
+        queued.run(ChangeQueued {
+          root: root.clone(),
+          message,
+          text: text.to_string(),
+          change,
+        });
+      }
+    }),
     links: view.links.clone(),
     names: names.clone(),
   }
@@ -340,6 +414,7 @@ fn loading(ctx: &mut Ctx, view: &View) -> Element {
     start: false,
     sending: &held,
     focused: &view.focused,
+    stop: None,
   };
   let foot = composer(ctx, view, &boxed).opacity(DISABLED_OPACITY);
   frame(
@@ -406,7 +481,7 @@ fn not_ready(ctx: &mut Ctx, project: &ShownProject, readiness: &Readiness) -> El
   .into()
 }
 
-/// A send that failed: why, that the draft is kept, and *Retry*, which sends it again once.
+/// A send that failed: why, that the draft is kept, and *Retry*, which sends it again once, the way it was sent.
 fn send_problem(
   ctx: &mut Ctx,
   view: &View,
@@ -415,7 +490,7 @@ fn send_problem(
   error: &SendError,
 ) -> Element {
   let (SendError::NotSent(why) | SendError::Unconfirmed(why)) = error;
-  let retry = view.send_draft(project, chat);
+  let retry = view.send_draft(project, (chat, view.how.get()));
   let unconfirmed = matches!(error, SendError::Unconfirmed(_));
   let mut row = Row::new()
     .id("orchestrator-send-problem")

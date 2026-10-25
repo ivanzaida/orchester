@@ -10,6 +10,7 @@ use crate::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId, IdempotencyKey, RunId},
   resource::ModelId,
+  run::Answerer,
   time::Timestamp,
 };
 
@@ -134,7 +135,8 @@ pub fn title_of(text: &str) -> String {
   format!("{}…", kept.trim_end())
 }
 
-/// Where the turn a person's message started stands.
+/// Where the turn a person's message started stands, or, for a message written while another turn of its conversation
+/// was under way, how it reaches the agent (`docs/design/orchestrator-toolset.md`, "Writing while it answers").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TurnState {
   /// The agent is working on it.
@@ -144,6 +146,24 @@ pub enum TurnState {
   /// The person stopped the answer; what the agent did until then stays.
   Stopped,
   Failed(TurnFailure),
+  /// It waits for the turn under way in its conversation to end; its own turn starts then, as [`Queued`] orders.
+  Queued(Queued),
+  /// Sent now (*Send now*): handed to the turn under way, which takes it at its next tool call.
+  Steering,
+  /// The turn under way took it: that turn answers it, and it starts none of its own.
+  Joined,
+}
+
+/// Why a person's message waits for the turn under way, which decides when its own turn starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Queued {
+  /// *Send after this answer*: its turn starts once the answer under way ended, after the messages queued before it.
+  AfterAnswer,
+  /// *Stop and send*: the answer under way is stopped, and its turn starts before any other message queued.
+  Next,
+  /// Sent now, but the turn under way did not take it (its CLI refused it, or the answer ended first): its turn starts
+  /// after the answer, as [`Self::AfterAnswer`] does, and the conversation says why.
+  NotTaken,
 }
 
 impl TurnState {
@@ -154,11 +174,27 @@ impl TurnState {
       Self::Answered => "answered",
       Self::Stopped => "stopped",
       Self::Failed(_) => "failed",
+      Self::Queued(Queued::AfterAnswer) => "queued",
+      Self::Queued(Queued::Next) => "queued_next",
+      Self::Queued(Queued::NotTaken) => "not_taken",
+      Self::Steering => "steering",
+      Self::Joined => "joined",
     }
   }
 
   pub const fn is_thinking(&self) -> bool {
     matches!(self, Self::Thinking)
+  }
+
+  /// Whether it still waits for a turn of its own: queued, or handed to the turn under way and not taken yet. Until
+  /// then the person may change or remove a queued message.
+  pub const fn is_waiting(&self) -> bool {
+    matches!(self, Self::Queued(_) | Self::Steering)
+  }
+
+  /// Whether the message started a turn of its own: one that waits, or that the turn under way took, has none.
+  pub const fn has_turn(&self) -> bool {
+    !matches!(self, Self::Queued(_) | Self::Steering | Self::Joined)
   }
 }
 
@@ -218,6 +254,10 @@ pub struct ChatAction {
   /// work behind it any more and is recovered (`orchester_workspace::orchestrator::recover`).
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub claimed: Option<Timestamp>,
+  /// The person decided it by saying so in the chat (ORC-96): the message of theirs that approved it, which the chat
+  /// applied it for, rather than with a click on its card.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub approved_in: Option<ChatApproval>,
 }
 
 impl ChatAction {
@@ -240,8 +280,18 @@ impl ChatAction {
       on_its_own: false,
       settled: None,
       claimed: None,
+      approved_in: None,
     }
   }
+}
+
+/// The person's message in the chat that approved a proposal: its id, its entry in the conversation (`seq`) and its
+/// words as its card quotes them ([`title_of`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatApproval {
+  pub message: ChatMessageId,
+  pub seq: i64,
+  pub words: String,
 }
 
 /// The new starts a hold held: in one reviewed group (its key), or in the whole project; and the keys of the tasks
@@ -296,6 +346,9 @@ pub enum EntryKind {
     turn: TurnState,
     /// When its turn ended; `None` while it thinks, and for one cut short without a runner to say when.
     ended: Option<Timestamp>,
+    /// Who sent it: the person, or automation driving the window (lurq's synthetic input), whose message never
+    /// approves a proposal for the person (ORC-96).
+    sent_by: Answerer,
   },
   Reply {
     text: String,
@@ -327,10 +380,10 @@ pub struct WaitTurn {
 
 impl EntryKind {
   /// The turn this entry started, and where it stands: a person's message's, or a wait's or a report's that started
-  /// one.
+  /// one. A person's message that waits for the turn under way, or that turn took, started none.
   pub fn turn(&self) -> Option<(ChatMessageId, &TurnState)> {
     match self {
-      Self::Person { message, turn, .. } => Some((*message, turn)),
+      Self::Person { message, turn, .. } if turn.has_turn() => Some((*message, turn)),
       Self::Wait {
         turn: Some(started), ..
       }

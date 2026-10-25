@@ -43,7 +43,8 @@ pub(super) struct Target {
 }
 
 /// What sending does in `mode` while something is written or attached and no send is under way: the state's way,
-/// and the second where it has one. Files still being read keep it busy: they go with the message.
+/// the second where it has one, and *Stop turn and send* where it offers it. Files still being read keep it busy:
+/// they go with the message.
 pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&ComposerMode, Recipient)) -> Sending {
   if state.send.state().get().is_pending() || state.in_flight.get() || state.attached.reading.get() > 0 {
     return Sending::Busy;
@@ -57,6 +58,7 @@ pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&Comp
   Sending::Ready {
     primary: press(state, target, (Way::Primary, primary)),
     second: Action::of(mode, Way::Second, to).map(|second| press(state, target, (Way::Second, second))),
+    stop: Action::of(mode, Way::StopTurn, to).map(|stop| press(state, target, (Way::StopTurn, stop))),
   }
 }
 
@@ -104,16 +106,18 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
 }
 
 /// What the field's keys do: Enter sends the state's way, Ctrl/Cmd+Enter the second where there is one,
-/// Shift+Enter adds a line; Esc closes the send menu, then leaves the mode's context. lurq hands a key to every
-/// node that takes keys, so Enter is the field's only while `input`, the field, has the focus: elsewhere it is, say,
-/// a focused link's in the chat.
+/// Shift+Enter adds a line; Esc closes the send menu, then leaves the mode's context, and else, while an agent works
+/// and the field has the focus, stops the agent's turn (*Stop turn*, `stop`) as Esc does in Claude Code, the draft
+/// kept. lurq hands a key to every node that takes keys, so Enter is the field's only while `input`, the field, has
+/// the focus: elsewhere it is, say, a focused link's in the chat; and Esc stops a turn only when nothing open before
+/// the field took it.
 pub(super) fn keys(
   presses: &Sending,
-  (leave, input): (Option<Press>, ElementRef),
+  (leave, input, stop): (Option<Press>, ElementRef, Option<Press>),
   menu: Signal<bool>,
 ) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let (primary, second) = match presses {
-    Sending::Ready { primary, second } => (Some(primary.clone()), second.clone()),
+    Sending::Ready { primary, second, .. } => (Some(primary.clone()), second.clone()),
     Sending::Empty | Sending::Busy => (None, None),
   };
   move |event: KeyboardEvent| {
@@ -123,6 +127,9 @@ pub(super) fn keys(
         event.prevent_default();
       } else if let Some(leave) = &leave {
         leave();
+        event.prevent_default();
+      } else if let Some(stop) = stop.as_ref().filter(|_| input.focused() && !event.default_prevented()) {
+        stop();
         event.prevent_default();
       }
       return;

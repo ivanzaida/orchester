@@ -22,6 +22,7 @@ mod log_path;
 mod message;
 #[cfg(windows)]
 mod pipe_owner;
+mod rejection;
 mod transport;
 mod work;
 
@@ -34,7 +35,8 @@ pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 pub use job::KillOnCloseJob;
 pub use log_path::{runner_log_dir, runner_log_path, utc_date};
 pub use message::{
-  AttachSession, Command, Event, RefusedRun, Rejection, Reply, Request, RequestId, SessionEnd, ShutdownMode, WorkReturn,
+  AttachSession, Command, Event, RefusedRun, Reply, Request, RequestId, SessionEnd, ShutdownMode, WorkReturn,
 };
+pub use rejection::Rejection;
 pub use transport::{ClientStream, Endpoint, ServerStream, server_process_id};
 pub use work::{RunWork, WorkState, WorkSummary};

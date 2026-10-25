@@ -103,7 +103,8 @@ pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
     | EntryKind::NotSignedIn(_)
     | EntryKind::Problem(_)
     | EntryKind::McpServer(..)
-    | EntryKind::ExemptionNotApplied { .. } => None,
+    | EntryKind::ExemptionNotApplied { .. }
+    | EntryKind::TurnStopped => None,
   }
 }
 

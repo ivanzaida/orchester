@@ -141,3 +141,22 @@ fn orchestrator_prompt_proposes_mcp_servers_and_names_secrets_only() {
     }
   }
 }
+
+/// ORC-96: the chat applies a proposal the person's message approves, asks when it does not say which, proposes anew
+/// when the message changes it, and leaves what only a click applies to the card.
+#[test]
+fn orchestrator_prompt_applies_what_the_person_approves_in_the_chat() {
+  for reads in [ProjectReads::FileTools, ProjectReads::GitTools] {
+    let prompt = system_prompt("Kontur", ProjectId::generate(), reads);
+    for rule in [
+      "apply it for them with apply_proposal",
+      "ask which one; never guess",
+      "do not apply the old one: make a new proposal",
+      "never apply it in the turn you made it",
+      "(click_only): tell the person to apply it there",
+      "In a turn Orchester started by itself nothing is approved",
+    ] {
+      assert!(prompt.contains(rule), "{rule}: {prompt}");
+    }
+  }
+}

@@ -101,6 +101,8 @@ pub struct CommandPart {
   pub(super) looks_up: bool,
   /// It may write a tool's cache or a lock file ([`Judged::updates_cache`]).
   pub(super) updates_cache: bool,
+  /// Its program only reads under any option ([`super::only_reads`]), and every path it names was placed.
+  pub(super) only_reads: bool,
 }
 
 impl CommandPart {
@@ -135,6 +137,7 @@ impl CommandPart {
       build_output: None,
       looks_up: judged.looks_up,
       updates_cache: judged.updates_cache,
+      only_reads: false,
     }
   }
 
@@ -215,14 +218,23 @@ impl CommandPart {
 
   /// Whether it writes nothing at all, a tool's own cache outside the worktree included (the person's decision of
   /// 2026-10-23): a read, or a lookup over the network ([`Judged::looks_up`]), that refreshes no cache or lock file,
-  /// redirects into no file and writes nothing outside the worktree.
+  /// redirects into no file and writes nothing outside the worktree. A part not read to the end writes nothing when
+  /// its program only reads ([`Self::only_reads`]).
   pub const fn writes_nothing(&self) -> bool {
     let reads = match self.category {
       CommandCategory::ReadOnly => true,
       CommandCategory::Network => self.looks_up,
+      CommandCategory::Unknown => self.only_reads,
       _ => false,
     };
     reads && !self.updates_cache && !self.writes_output && !self.installs && !self.runs_script && !self.writes_outside()
+  }
+
+  /// Whether it only reads, though Orchester may not have read it to the end (ORC-95): its program reads under any
+  /// option, or `xargs` runs such a program ([`super::only_reads`]), every path it names was placed, and it redirects
+  /// into no file and runs no script.
+  pub const fn only_reads(&self) -> bool {
+    self.only_reads && !self.writes_output && !self.runs_script && !self.writes_outside()
   }
 
   /// Whether it runs a script file of the worktree, whose content Orchester does not read.
