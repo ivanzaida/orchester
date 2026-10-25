@@ -56,7 +56,7 @@ pub use self::{
   native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport, ReturnedWork},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
-  working::WorkingTools,
+  working::{RUN_PLAINLY, SCRATCH_FILES, WorkingTools},
 };
 use super::{
   plan::{PlanVersion, ReviewNote},

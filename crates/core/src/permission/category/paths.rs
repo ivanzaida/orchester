@@ -1,13 +1,14 @@
 //! Where a path a command names lies: in the worktree or a writable folder, in the temporary folder,
-//! in the dependency sources of a toolchain ([`super::toolchains`]), a secret-bearing location of the home
-//! folder, or elsewhere. Paths are resolved against the folder the command runs in, with `~` as the home
-//! folder and links followed as far as they exist.
+//! in the dependency sources of a toolchain ([`super::toolchains`]) or a package manager
+//! ([`super::packages_sources`]), a secret-bearing location of the home folder, or elsewhere. Paths are resolved
+//! against the folder the command runs in, with `~` as the home folder and links followed as far as they exist.
 
 use std::path::{Component, Path, PathBuf, Prefix};
 
 use super::{
   build_output::{CargoEnvironment, variable},
   glob,
+  packages_sources::in_package_sources,
   toolchains::Toolchains,
 };
 use crate::{
@@ -125,10 +126,25 @@ impl CommandScope {
   /// The scope of the host's user: their home folder and the system's temporary folder, for a shell
   /// with the host's `HOME`, `USERPROFILE`, `CARGO_HOME` and `RUSTUP_HOME`, which the agent's CLI inherits.
   pub fn on_host(worktree: &Path, writable: &[PathBuf]) -> Self {
-    let variable = |name: &str| std::env::var_os(name).map(PathBuf::from);
+    Self::in_environment(worktree, writable, &std::env::temp_dir(), |name| {
+      std::env::var_os(name).map(PathBuf::from)
+    })
+  }
+
+  /// [`Self::on_host`] for a host whose environment `variable` reads and whose temporary folder is `temp`.
+  /// Windows sets no `HOME` of its own: Git Bash, the shell both CLIs run there, then takes it from `USERPROFILE`
+  /// as it starts (checked with Git for Windows 2.x, ORC-95), so `~` is the profile.
+  pub fn in_environment(
+    worktree: &Path,
+    writable: &[PathBuf],
+    temp: &Path,
+    variable: impl Fn(&str) -> Option<PathBuf>,
+  ) -> Self {
     let home = variable(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
-    Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
-      .with_shell_homes(variable("HOME").as_deref(), variable("USERPROFILE").as_deref())
+    let profile = variable("USERPROFILE");
+    let shell_home = variable("HOME").or_else(|| if cfg!(windows) { profile.clone() } else { None });
+    Self::new(worktree, writable, home.as_deref(), Some(temp))
+      .with_shell_homes(shell_home.as_deref(), profile.as_deref())
       .with_toolchain_homes(variable("CARGO_HOME").as_deref(), variable("RUSTUP_HOME").as_deref())
   }
 
@@ -263,6 +279,9 @@ impl CommandScope {
       Some(false) => return Place::Secret,
       None => {}
     }
+    if in_package_sources(path, &self.homes) {
+      return Place::Sources;
+    }
     if self.secret(path) {
       return Place::Secret;
     }
@@ -369,7 +388,7 @@ pub(super) enum Place {
   Granted,
   /// The temporary folder.
   Temp,
-  /// The dependency sources of a toolchain: read like the worktree, written like anywhere else.
+  /// The dependency sources of a toolchain or a package manager: read like the worktree, written like anywhere else.
   Sources,
   /// Anywhere else.
   Outside,

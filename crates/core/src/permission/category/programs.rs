@@ -360,6 +360,9 @@ fn judge_words(program: &str, args: &[String]) -> Judged {
     "gh" => gh::judge(args),
     // `env` alone prints every variable, tokens included.
     "env" if args.is_empty() => Judged::of(Kind::ReadOnly).secret(),
+    "rustc" if matches!(args, [only] if matches!(only.as_str(), "--version" | "-V" | "-vV")) => {
+      Judged::of(Kind::ReadOnly)
+    }
     program if known_safe::PROGRAMS.contains(&program) => known_read(program, args),
     program if READS.contains(&program) => plain_read(program, args),
     program if BUILDS.contains(&program) => {

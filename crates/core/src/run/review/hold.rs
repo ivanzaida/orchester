@@ -28,7 +28,10 @@
 //! A part Orchester cannot read to the end (an unknown program or form, a script whose content it does
 //! not read) goes to the reviewer, which is told so ([`unread_parts`]), except in a step whose network is
 //! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides.
-//! Where its output goes is checked all the same. A Codex escalation (a command outside its sandbox)
+//! Where its output goes is checked all the same. A part whose program only reads under any option, or that
+//! `xargs` runs, with every path it names placed and no redirect into a file ([`CommandPart::only_reads`], ORC-95),
+//! is within those limits whatever Orchester did not read of it: it goes to the reviewer there too, which sees the
+//! whole line, and a credential it names still holds it. A Codex escalation (a command outside its sandbox)
 //! always goes to the person. Orchester's `run_check` and `start_qa_app` (a project program outside every
 //! sandbox) and a request too long to be reviewed whole go to the person too; a project rule a person made
 //! for `start_qa_app` answers before auto mode looks ([`crate::run::ProjectRule`]).
@@ -110,7 +113,7 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   };
   let confined = permissions.network() == NetworkAccess::Off || permissions.repository() == RepositoryAccess::ReadOnly;
   let parts = command.parts();
-  if parts.is_empty() || (confined && parts.iter().any(unread)) {
+  if parts.is_empty() || (confined && parts.iter().any(|part| unread(part) && !part.only_reads())) {
     return Some(ReviewHold::Unreadable);
   }
   if (0..parts.len()).any(|at| is_push(&parts[at]) && !reviewable_push(parts, at, &rules.push)) {
