@@ -8,8 +8,8 @@ continuing interrupted runs behind *Let the Orchestrator continue interrupted ru
 merging finished runs on its own behind *Let the Orchestrator merge finished runs on its own* decided by the person on
 2026-10-21 (ORC-69); the Orchestrator on Codex, confined without a shell (decision 10), added on 2026-10-25 (ORC-84);
 the project's MCP servers from the chat (decision 11) added on 2026-10-25 (ORC-89), its narrowing rule decided by the
-person that day; approving a proposal in the chat's words (decision 12) added on 2026-10-25 (ORC-96; its table of what
-stays click-only proposed, conservative).
+person that day; writing while it answers (decision 12) added on 2026-10-25 (ORC-92); approving a proposal in the
+chat's words (decision 13) added on 2026-10-25 (ORC-96; its table of what stays click-only proposed, conservative).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -290,7 +290,7 @@ project.
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
 | Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
 | Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |
-| Proposals | `apply_proposal` without `proposal` lists the proposals that wait (ORC-96, the chat's own) | — | `apply_proposal` with `proposal`: applies a waiting proposal the person's message in the turn approves, as the card's *Apply*, recorded as theirs; never what only a click applies; decision 12 |
+| Proposals | `apply_proposal` without `proposal` lists the proposals that wait (ORC-96, the chat's own) | — | `apply_proposal` with `proposal`: applies a waiting proposal the person's message in the turn approves, as the card's *Apply*, recorded as theirs; never what only a click applies; decision 13 |
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
