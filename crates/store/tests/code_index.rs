@@ -74,8 +74,12 @@ fn edit_progress_of_an_invocation_is_replaced_as_it_grows() {
     .start_invocation(run.id(), execution, &model(), at(10))
     .expect("start");
   assert_eq!(db.edit_progress(invocation.id).expect("read"), None);
-  db.save_edit_progress(invocation.id, &EditProgress::default())
+  db.save_edit_progress(invocation.id, &EditProgress::started())
     .expect("save");
+  assert_eq!(
+    db.edit_progress(invocation.id).expect("read"),
+    Some(EditProgress::started())
+  );
   let edited = EditProgress {
     before: TokenUsage {
       input: 38_000,
@@ -87,7 +91,29 @@ fn edit_progress_of_an_invocation_is_replaced_as_it_grows() {
       path: "src/auth/github.ts".into(),
     }),
     at_most: true,
+    index_searches: Some(7),
   };
   db.save_edit_progress(invocation.id, &edited).expect("save");
   assert_eq!(db.edit_progress(invocation.id).expect("read"), Some(edited));
+}
+
+/// A progress stored before index searches were counted (ORC-90) reads with them unknown.
+#[test]
+fn edit_progress_stored_before_index_searches_reads_them_unknown() {
+  let (repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("start");
+  db.save_edit_progress(invocation.id, &EditProgress::started())
+    .expect("save");
+  rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db"))
+    .expect("raw")
+    .execute(
+      "UPDATE invocation_edit_progress SET body = ?1",
+      [r#"{"schema":1,"body":{"before":{"input":5,"cached_input":0,"output":1},"first_edit":null}}"#],
+    )
+    .expect("an older body");
+  let read = db.edit_progress(invocation.id).expect("read").expect("stored");
+  assert_eq!(read.index_searches, None);
+  assert_eq!(read.before.input, 5);
 }

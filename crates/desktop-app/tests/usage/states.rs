@@ -81,6 +81,55 @@ fn usage_page_reads_every_chart_as_a_table() {
   );
 }
 
+/// The count in front of a caption: `3` of *3 invocations*.
+fn count(text: &str) -> u64 {
+  text
+    .split(' ')
+    .next()
+    .and_then(|count| count.parse().ok())
+    .unwrap_or_else(|| panic!("a count: {text}"))
+}
+
+/// ORC-90: *Code index use* counts every agent invocation by what it did with the index, those that changed no file
+/// too: the seed's indexed Implement searched it 6 times each, its other steps got it and never searched it, and the
+/// runs without the index are apart. Its table has the same groups.
+#[test]
+fn usage_page_shows_code_index_use_of_every_invocation() {
+  let mut page = Seeded::usage("usage", UsageQuery::default());
+  assert_eq!(page.text("usage-index-title"), "Code index use");
+  let searched = page.text("usage-index-searched-caption");
+  let (invocations, searches) = searched
+    .split_once(" invocations · ")
+    .unwrap_or_else(|| panic!("invocations and searches: {searched}"));
+  let invocations: u64 = invocations.parse().expect("a count");
+  assert!(invocations > 0, "{searched}");
+  assert_eq!(searches, format!("{} searches", invocations * 6));
+  assert!(count(&page.text("usage-index-unsearched-caption")) > 0);
+  assert!(count(&page.text("usage-index-without-caption")) > 0);
+  for group in ["searched", "unsearched", "without"] {
+    assert_ne!(page.text(&format!("usage-index-{group}-median")), DASH, "{group}");
+  }
+  let note = page.text("usage-index-footnote");
+  assert!(
+    note.contains(&format!(" {} searches in all", invocations * 6)) && note.contains("changed no file too"),
+    "{note}"
+  );
+  page.click("usage-index-view-table");
+  assert!(page.shows("usage-index-table"));
+  let row = page.text("usage-index-searched-row");
+  assert!(
+    row.starts_with("Searched the index") && row.ends_with(&format!(" {invocations}")),
+    "{row}"
+  );
+  assert!(
+    page
+      .text("usage-index-unsearched-row")
+      .starts_with("Got the index, never searched it")
+  );
+  page.click("usage-index-view-chart");
+  assert!(!page.shows("usage-index-table"));
+}
+
 #[test]
 fn usage_page_shows_dashes_and_what_it_reads_while_it_reads() {
   let mut page = Seeded::prepared("usage", true, |_| {});

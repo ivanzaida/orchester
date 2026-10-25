@@ -10,6 +10,7 @@ pub mod change;
 pub mod chat;
 pub mod git;
 pub mod instructions;
+pub mod mcp;
 pub mod merging;
 pub mod proposal;
 pub mod report;

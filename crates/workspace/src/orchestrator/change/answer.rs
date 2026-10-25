@@ -175,6 +175,7 @@ pub(super) fn words(change: &Change, arguments: &mut JsonObject) {
     | Change::Resume { .. }
     | Change::Release { .. }
     | Change::InitRepository { .. }
-    | Change::Git(_) => {}
+    | Change::Git(_)
+    | Change::Mcp(_) => {}
   }
 }

@@ -15,8 +15,9 @@ fn rust_sources(dir: &Path, out: &mut Vec<(String, String)>) {
   }
 }
 
-/// The public Orchester Cloud lives in the `lurq.dev` domain. The build's default cloud address names that host, not
-/// the UI toolkit (`docs/architecture/server.md`, row 59), so it is allowed once, in the one file that holds it.
+/// The public Orchester Cloud lived in the `lurq.dev` domain until it moved to `orchester.cloud` (2026-10-25). Its
+/// former address names that host, not the UI toolkit (`docs/architecture/server.md`, row 59), so it is allowed once,
+/// in the one file that holds it.
 const PUBLIC_CLOUD: &str = "\"https://orchester-cloud.lurq.dev\"";
 
 #[test]

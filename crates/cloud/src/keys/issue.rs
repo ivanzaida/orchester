@@ -59,7 +59,8 @@ impl Cloud {
   }
 
   /// A five-minute token for one team server, about the device's account, for the use `used` names, signed with the
-  /// newest key the published key set lets sign now.
+  /// newest key the published key set lets sign now and naming the issuer that key set names: a team server holding
+  /// it takes the token even while the cloud moves to another public URL (`docs/cloud-hosting.md`, "Moving the cloud").
   pub(crate) async fn issue_for(
     &self,
     auth: Authenticated,
@@ -70,8 +71,8 @@ impl Cloud {
     let now = self.now();
     let client = self.inner.db.client().await?;
     let subject = self.subject(&client, auth, audience, used).await?;
-    let key = self.signing_key(&client, now).await?;
-    let claims = IdentityClaims::new(subject, seconds(now))?;
+    let (key, issuer) = self.signing_key(&client, now).await?;
+    let claims = IdentityClaims::new(TokenSubject { issuer, ..subject }, seconds(now))?;
     let token = key.sign_token(&claims)?;
     audit(
       &client,
@@ -88,6 +89,7 @@ impl Cloud {
     })
   }
 
+  /// Who the token is about, issued by this cloud's public URL until [`Self::issue_for`] names its key set's issuer.
   async fn subject(
     &self,
     client: &impl GenericClient,
@@ -119,8 +121,9 @@ impl Cloud {
     })
   }
 
-  /// The cloud signs only with a key a team server holding the newest key set would accept now.
-  async fn signing_key(&self, client: &impl GenericClient, now: i64) -> Result<SigningKey, CloudError> {
+  /// The cloud signs only with a key a team server holding the newest key set would accept now; with the issuer that
+  /// key set names.
+  async fn signing_key(&self, client: &impl GenericClient, now: i64) -> Result<(SigningKey, String), CloudError> {
     let compact = self.key_set(client).await?;
     let verified = match VerifiedKeySet::verify(&compact, &self.inner.root, seconds(now)) {
       Ok(verified) => verified,
@@ -148,7 +151,7 @@ impl Cloud {
     if key.kid() != listed.kid {
       return Err(CloudError::StoredData);
     }
-    Ok(key)
+    Ok((key, verified.statement().iss.clone()))
   }
 }
 

@@ -96,12 +96,14 @@ cannot, add `extra_hosts: ["<ORCHESTER_HOST>:<TRAEFIK_ADDRESS>"]` to `server` (T
 
 ## Orchester Cloud (optional)
 
-With `ORCHESTER_ADMIN_CLOUD_URL` set (the default), the admin offers *Link to Orchester Cloud* at the end of the setup
-and in its *Settings*. Then people join with their cloud account and invites go out by email. The browser carries
-everything between the admin and the cloud; the server never connects to the cloud and checks cloud identities
-offline. On the host: `docker compose exec server orchester-server cloud show` (or `cloud off`, `cloud on`,
-`cloud unlink`). Without the cloud, leave `ORCHESTER_ADMIN_CLOUD_URL=` empty: people join with codes, and admins sign
-in with a pairing code from their Orchester or `orchester-server account-code <username>` on the host.
+With `ORCHESTER_ADMIN_CLOUD_URL` set (the default, `https://orchester.cloud`), the admin offers *Link to Orchester
+Cloud* at the end of the setup and in its *Settings*. Then people join with their cloud account and invites go out by
+email. The browser carries everything between the admin and the cloud; the server never connects to the cloud and
+checks cloud identities offline. On the host: `docker compose exec server orchester-server cloud show` (or `cloud off`,
+`cloud on`, `cloud unlink`). Without the cloud, leave `ORCHESTER_ADMIN_CLOUD_URL=` empty: people join with codes, and
+admins sign in with a pairing code from their Orchester or `orchester-server account-code <username>` on the host.
+The cloud's former address, `https://orchester-cloud.lurq.dev`, keeps working for a `.env` that still names it, for
+now; change it to `https://orchester.cloud`. A linked server stays linked.
 
 ## Upgrades
 

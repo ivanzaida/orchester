@@ -145,8 +145,9 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
       | Change::Continue { run, .. }
       | Change::Pause { run, .. }
       | Change::Resume { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
-      // A repository's first commit and git's work keep what their cards show: checked again when applied.
-      Change::Release { .. } | Change::InitRepository { .. } | Change::Git(_) => Ok(None),
+      // A repository's first commit, git's work and an MCP server's change keep what their cards show: checked again
+      // when applied.
+      Change::Release { .. } | Change::InitRepository { .. } | Change::Git(_) | Change::Mcp(_) => Ok(None),
     },
     (None, Some(run)) => run::read(root, &db, programs, run).map(|found| found.map(Facts::Run)),
     (None, None) => Ok(None),

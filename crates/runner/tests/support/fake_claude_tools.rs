@@ -15,6 +15,9 @@ use super::{Fake, fake_claude_rules, fake_permission_prompt::Prompt, fake_skill_
 #[path = "fake_app_tools.rs"]
 mod fake_app_tools;
 
+#[path = "fake_index_prompt.rs"]
+mod fake_index_prompt;
+
 #[path = "fake_process_tools.rs"]
 mod fake_process_tools;
 
@@ -153,6 +156,46 @@ impl Fake {
     for (call, tool, input) in fake_skill_calls::calls(worktree) {
       self.use_tool(args, &mut server, (call, tool, &input));
     }
+    self.finish(worktree, "hello", step)
+  }
+
+  /// "Search the code index" (ORC-90): `find_symbol` through Orchester's tools, then a `Task` sub-agent that reads
+  /// the index's `map.md` with Claude Code's `Read`, its lines marked with the `Task` call as Claude Code marks them;
+  /// then finishes as usual.
+  pub fn search_index(&self, worktree: &Path, (args, opened): (&[String], Option<Prompt>), step: &str) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    self.use_tool(
+      args,
+      &mut server,
+      ("toolu_find", "find_symbol", &json!({"name": "parse_config"})),
+    );
+    let Some(folder) = fake_index_prompt::index_folder(&self.prompt) else {
+      eprintln!("index-call: the prompt names no code index");
+      return ExitCode::from(2);
+    };
+    let task = json!({"type": "tool_use", "id": "toolu_task", "name": "Task",
+      "input": {"description": "Explore", "prompt": "Read the index map"}});
+    self.assistant("msg_task", &task.to_string());
+    let map = Path::new(&folder).join("map.md");
+    let read = json!({"type": "tool_use", "id": "toolu_sub_read", "name": "Read",
+      "input": {"file_path": map.to_string_lossy()}});
+    println!(
+      "{}",
+      json!({"type": "assistant", "parent_tool_use_id": "toolu_task", "session_id": self.session,
+        "message": {"id": "msg_sub_read", "role": "assistant", "type": "message", "content": [read],
+          "usage": {"input_tokens": 10, "output_tokens": 1}}})
+    );
+    println!(
+      "{}",
+      json!({"type": "user", "parent_tool_use_id": "toolu_task", "session_id": self.session,
+        "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_sub_read",
+          "content": "# map", "is_error": false}]}})
+    );
+    eprintln!("index-command: toolu_sub_read");
+    self.tool_result("toolu_task", "the map lists the packages", false);
     self.finish(worktree, "hello", step)
   }
 

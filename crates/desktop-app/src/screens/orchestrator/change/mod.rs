@@ -12,6 +12,7 @@ mod continuation;
 mod control;
 mod facts;
 mod git;
+mod mcp;
 mod repository;
 mod widens;
 mod words;
@@ -142,6 +143,11 @@ impl Component for ChangeCard {
         let rows = git::rows(ctx, git, root);
         (Some(facts::column(ctx, id, rows)), git::boxes(ctx, id, (&view, git)))
       }
+      // An MCP server's change shows the server as applying it leaves it, which its proposal keeps.
+      Some(Change::Mcp(mcp)) => {
+        let rows = mcp::rows(ctx, mcp);
+        (Some(facts::column(ctx, id, rows)), Vec::new())
+      }
       _ => (
         facts::rows(ctx, id, &view, props.project.0),
         facts::diff(ctx, id, &view).map(Into::into).into_iter().collect(),
@@ -214,8 +220,10 @@ impl ChangeCard {
     }
     if let Some(change) = view.action.change.as_ref() {
       before.extend(repository::sensitive(ctx, id, (view, &change.change)));
-      if let Change::Git(git) = &change.change {
-        before.extend(git::warning(ctx, id, (view, git)));
+      match &change.change {
+        Change::Git(git) => before.extend(git::warning(ctx, id, (view, git))),
+        Change::Mcp(mcp) => before.extend(mcp::warnings(ctx, id, (view, mcp))),
+        _ => {}
       }
     }
     match (view.phase(), publication) {
@@ -367,6 +375,7 @@ fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Ro
       task_open(TaskTab::default()).into_iter().chain([queue]).collect()
     }
     Some(Change::Release { .. }) => task_open(TaskTab::default()).into_iter().collect(),
+    Some(Change::Mcp(mcp)) => mcp::opens(ctx, (view, project), mcp),
     // Every other change is to a run of the task, which its Summary shows.
     _ => task_open(TaskTab::Summary).into_iter().collect(),
   }

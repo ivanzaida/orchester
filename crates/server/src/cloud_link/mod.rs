@@ -69,6 +69,9 @@ pub(crate) struct Link {
   key_set: Option<String>,
   key_set_issued_at: Option<i64>,
   key_set_expires_at: Option<i64>,
+  /// The issuer an earlier key set of this root named, before a newer one named another: the cloud's former public URL
+  /// after it moved (`docs/cloud-hosting.md`, "Moving the cloud"). Tokens it issued still verify.
+  former_issuer: Option<String>,
   accepting: bool,
   linked_at: i64,
   linked_by: Option<UserRef>,
@@ -78,20 +81,26 @@ impl Link {
   pub fn load(db: &Connection) -> Result<Option<Self>, ServerError> {
     let row = db
       .query_row(
-        "SELECT root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at,linked_by FROM cloud_link
-          WHERE id=1",
+        "SELECT root_key,key_set,key_set_issued_at,key_set_expires_at,former_issuer,accepting,linked_at,linked_by
+          FROM cloud_link WHERE id=1",
         [],
         |row| {
           Ok((
-            (row.get::<_, String>(0)?, row.get(1)?, row.get(2)?, row.get(3)?),
-            (row.get(4)?, row.get(5)?, row.get::<_, Option<String>>(6)?),
+            (
+              row.get::<_, String>(0)?,
+              row.get(1)?,
+              row.get(2)?,
+              row.get(3)?,
+              row.get(4)?,
+            ),
+            (row.get(5)?, row.get(6)?, row.get::<_, Option<String>>(7)?),
           ))
         },
       )
       .optional()?;
     row
       .map(
-        |((root, key_set, issued, expires), (accepting, linked_at, linked_by))| {
+        |((root, key_set, issued, expires, former_issuer), (accepting, linked_at, linked_by))| {
           let linked_by = linked_by
             .map(|id| id.parse().map_err(|_| ServerError::StoredData))
             .transpose()?
@@ -102,6 +111,7 @@ impl Link {
             key_set,
             key_set_issued_at: issued,
             key_set_expires_at: expires,
+            former_issuer,
             accepting,
             linked_at,
             linked_by,
@@ -151,7 +161,8 @@ impl Link {
       self.offer(db, offered, now)?;
     }
     let set = self.cached(now)?;
-    let claims = Claims::of(set.verify_token(token, &keys.id.to_string(), now).map_err(refusal)?)?;
+    let verified = set.verify_token_also_from(token, &keys.id.to_string(), self.former_issuer.as_deref(), now);
+    let claims = Claims::of(verified.map_err(refusal)?)?;
     db.execute("DELETE FROM used_identity_tokens WHERE expires_at<?1", [now])?;
     let used: bool = db.query_row(
       "SELECT EXISTS(SELECT 1 FROM used_identity_tokens WHERE jti=?1)",
@@ -177,15 +188,24 @@ impl Link {
     self.cache(db, offered, &set)
   }
 
+  /// Caches `set`, newer than the cached one. When it names another issuer than the cached one, the cloud moved to
+  /// another public URL and the cached set's issuer becomes the former one.
   fn cache(&mut self, db: &Connection, text: &str, set: &VerifiedKeySet) -> Result<(), ServerError> {
     let (issued_at, expires_at) = (set.statement().issued_at, set.statement().expires_at);
+    let issuer = &set.statement().iss;
+    let former = self
+      .cached_issuer()
+      .filter(|cached| cached != issuer)
+      .or_else(|| self.former_issuer.clone())
+      .filter(|former| former != issuer);
     db.execute(
-      "UPDATE cloud_link SET key_set=?1,key_set_issued_at=?2,key_set_expires_at=?3 WHERE id=1",
-      params![text, issued_at, expires_at],
+      "UPDATE cloud_link SET key_set=?1,key_set_issued_at=?2,key_set_expires_at=?3,former_issuer=?4 WHERE id=1",
+      params![text, issued_at, expires_at, former],
     )?;
     self.key_set = Some(text.to_owned());
     self.key_set_issued_at = Some(issued_at);
     self.key_set_expires_at = Some(expires_at);
+    self.former_issuer = former;
     Ok(())
   }
 
@@ -196,6 +216,15 @@ impl Link {
       IdentityError::KeySetExpired | IdentityError::NotYetValid => ErrorCode::KeySetStale.into(),
       _ => ServerError::StoredData,
     })
+  }
+
+  /// The issuer the cached key set names, expired or not.
+  fn cached_issuer(&self) -> Option<String> {
+    let (text, issued_at) = (self.key_set.as_deref()?, self.key_set_issued_at?);
+    // Checked as of its own issue: an expired set still says who issued it. One that no longer verifies with the root
+    // (it never does: a new root drops the cached set) names nobody to keep.
+    let set = VerifiedKeySet::verify(text, &self.root_key, issued_at).ok()?;
+    Some(set.statement().iss.clone())
   }
 
   pub fn describe(link: Option<&Self>, keys: &ServerKeys) -> CloudLink {
@@ -231,19 +260,20 @@ pub(crate) fn link(
     "INSERT INTO cloud_link(id,root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at,linked_by)
       VALUES (1,?1,?2,?3,?4,1,?5,?6)
       ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=?2,key_set_issued_at=?3,key_set_expires_at=?4,accepting=1,
-        linked_at=?5,linked_by=?6",
+        linked_at=?5,linked_by=?6,former_issuer=NULL",
     params![root.encoded(), key_set, issued_at, expires_at, now_ms, by.to_string()],
   )?;
   Link::load(db)?.ok_or(ServerError::StoredData)
 }
 
-/// Replaces the pinned root (after a root compromise). The cached key set, signed by the old root, goes with it;
-/// cloud joins wait for a key set the new root signed.
+/// Replaces the pinned root (after a root compromise). The cached key set, signed by the old root, goes with it, and
+/// the issuer it replaced; cloud joins wait for a key set the new root signed.
 pub(crate) fn pin(db: &Connection, root_key: &str, now_ms: i64) -> Result<(), ServerError> {
   let root = PublicKey::parse(root_key).map_err(|_| ErrorCode::Invalid)?;
   db.execute(
     "INSERT INTO cloud_link(id,root_key,accepting,linked_at) VALUES (1,?1,1,?2)
-      ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=NULL,key_set_issued_at=NULL,key_set_expires_at=NULL",
+      ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=NULL,key_set_issued_at=NULL,key_set_expires_at=NULL,
+        former_issuer=NULL",
     params![root.encoded(), now_ms],
   )?;
   Ok(())

@@ -62,6 +62,8 @@ mod fake_codex_cell;
 mod fake_codex_chat;
 #[path = "fake_codex_check.rs"]
 mod fake_codex_check;
+#[path = "fake_codex_index.rs"]
+mod fake_codex_index;
 #[path = "fake_codex_question.rs"]
 mod fake_codex_question;
 #[path = "fake_codex_relay.rs"]

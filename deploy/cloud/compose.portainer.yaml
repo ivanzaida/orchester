@@ -7,6 +7,11 @@
 # web front's forwarded client address by its fixed IP: `${CLOUD_SUBNET_PREFIX}.3` is cloud, `.4` PostgreSQL, `.5`
 # web. Inside the stack the services call each other by aliases that only exist on `backend`, so a container of
 # another stack on the Traefik network that happens to be called `postgres` or `cloud` is never reached instead.
+#
+# Traefik routes two hosts to the same cloud while it moves to its own domain (docs/cloud-hosting.md, "Moving the
+# cloud"): ORCHESTER_CLOUD_HOST (orchester.cloud) and ORCHESTER_CLOUD_FORMER_HOST (orchester-cloud.lurq.dev), which
+# app builds and team servers from before the move still call. Once nobody calls the former host, set it to the same
+# value as ORCHESTER_CLOUD_HOST.
 services:
   postgres:
     image: postgres:18-alpine
@@ -51,7 +56,7 @@ services:
       traefik.enable: 'true'
       traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
       # /api/* goes to the backend, as in Caddyfile.web; the longer rule wins over the web front's Host-only rule.
-      traefik.http.routers.orchester-cloud-api.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester-cloud.lurq.dev}`) && PathPrefix(`/api/`)
+      traefik.http.routers.orchester-cloud-api.rule: (Host(`${ORCHESTER_CLOUD_HOST:-orchester.cloud}`) || Host(`${ORCHESTER_CLOUD_FORMER_HOST:-orchester-cloud.lurq.dev}`)) && PathPrefix(`/api/`)
       traefik.http.routers.orchester-cloud-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.orchester-cloud-api.tls: 'true'
       traefik.http.routers.orchester-cloud-api.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
@@ -63,7 +68,7 @@ services:
       traefik.http.services.orchester-cloud-api.loadbalancer.server.port: '8090'
       # Plain HTTP on the host goes to HTTPS, as Caddy does. Kept here, not on `web`, because Traefik drops the
       # routers of a container that is unhealthy, and the API stays up while the web front is down.
-      traefik.http.routers.orchester-cloud-http.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester-cloud.lurq.dev}`)
+      traefik.http.routers.orchester-cloud-http.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester.cloud}`) || Host(`${ORCHESTER_CLOUD_FORMER_HOST:-orchester-cloud.lurq.dev}`)
       traefik.http.routers.orchester-cloud-http.entrypoints: ${TRAEFIK_HTTP_ENTRYPOINT:-web}
       traefik.http.routers.orchester-cloud-http.middlewares: orchester-cloud-https
       traefik.http.routers.orchester-cloud-http.service: orchester-cloud-api
@@ -86,6 +91,9 @@ services:
     environment:
       # The same public address the cloud puts in its emails and Traefik serves.
       ORCHESTER_CLOUD_PUBLIC_URL: ${ORCHESTER_CLOUD_PUBLIC_URL:?Set ORCHESTER_CLOUD_PUBLIC_URL}
+      # Both hosts Traefik routes here take forms, each with its own host-only cookies; the one that is
+      # ORCHESTER_CLOUD_PUBLIC_URL already counts once.
+      ORCHESTER_CLOUD_EXTRA_ORIGINS: https://${ORCHESTER_CLOUD_HOST:-orchester.cloud},https://${ORCHESTER_CLOUD_FORMER_HOST:-orchester-cloud.lurq.dev}
       ORCHESTER_CLOUD_API_URL: http://orchester-cloud-api:8090
       # Signs the CSRF tokens and seals the session cookie: 32 random bytes in base64, e.g. `openssl rand -base64 32`.
       ORCHESTER_CLOUD_WEB_SECRET: ${ORCHESTER_CLOUD_WEB_SECRET:?Set ORCHESTER_CLOUD_WEB_SECRET}
@@ -101,8 +109,8 @@ services:
     labels:
       traefik.enable: 'true'
       traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
-      # Every other path on the host: sign-up, sign-in, /confirm/{token}, /reset/{token}, the account pages.
-      traefik.http.routers.orchester-cloud-web.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester-cloud.lurq.dev}`)
+      # Every other path on both hosts: sign-up, sign-in, /confirm/{token}, /reset/{token}, the account pages.
+      traefik.http.routers.orchester-cloud-web.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester.cloud}`) || Host(`${ORCHESTER_CLOUD_FORMER_HOST:-orchester-cloud.lurq.dev}`)
       traefik.http.routers.orchester-cloud-web.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.orchester-cloud-web.tls: 'true'
       traefik.http.routers.orchester-cloud-web.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}

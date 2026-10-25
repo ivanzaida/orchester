@@ -8,6 +8,7 @@ import { confirmEmail, inspectLink, me, signIn, signUp } from "@/lib/server/clou
 import { webDevice } from "@/lib/server/device";
 import { t } from "@/lib/i18n";
 import { failureMessage, waitMessage } from "@/lib/server/failures";
+import { seeOther } from "@/lib/server/redirect";
 
 import { ACCOUNT, RIGHT_PASSWORD, startFakeApi } from "../fake-api/server";
 
@@ -143,22 +144,52 @@ describe("failure messages", () => {
 
 describe("configuration", () => {
   const good = {
-    ORCHESTER_CLOUD_PUBLIC_URL: "https://orchester-cloud.lurq.dev/",
+    ORCHESTER_CLOUD_PUBLIC_URL: "https://orchester.cloud/",
     ORCHESTER_CLOUD_API_URL: "http://cloud:8080",
     ORCHESTER_CLOUD_WEB_SECRET: SECRET,
   };
 
   it("comes from the environment", () => {
     const config = readConfig(good);
-    expect(config.publicOrigin).toBe("https://orchester-cloud.lurq.dev");
+    expect(config.publicOrigin).toBe("https://orchester.cloud");
+    expect(config.siteOrigins).toEqual(["https://orchester.cloud"]);
     expect(config.apiBase).toBe("http://cloud:8080/api/v1");
     expect(config.secret).toHaveLength(32);
   });
 
   it("names the variable that is wrong", () => {
-    expect(() => readConfig({ ...good, ORCHESTER_CLOUD_PUBLIC_URL: "http://orchester-cloud.lurq.dev" })).toThrow(ConfigError);
+    expect(() => readConfig({ ...good, ORCHESTER_CLOUD_PUBLIC_URL: "http://orchester.cloud" })).toThrow(ConfigError);
     expect(() => readConfig({ ...good, ORCHESTER_CLOUD_WEB_SECRET: "c2hvcnQ=" })).toThrow(/ORCHESTER_CLOUD_WEB_SECRET/);
     expect(() => readConfig({ ...good, ORCHESTER_CLOUD_API_URL: "" })).toThrow(/ORCHESTER_CLOUD_API_URL/);
+  });
+
+  it("takes forms from the extra origins too while the site moves", () => {
+    const moving = { ...good, ORCHESTER_CLOUD_EXTRA_ORIGINS: " https://orchester-cloud.lurq.dev/ , https://Other.Example:8443,," };
+    expect(readConfig(moving).siteOrigins).toEqual(["https://orchester.cloud", "https://orchester-cloud.lurq.dev", "https://other.example:8443"]);
+    expect(readConfig({ ...good, ORCHESTER_CLOUD_EXTRA_ORIGINS: "" }).siteOrigins).toEqual(["https://orchester.cloud"]);
+    const repeated = { ...good, ORCHESTER_CLOUD_EXTRA_ORIGINS: "https://orchester.cloud,https://old.example,https://old.example" };
+    expect(readConfig(repeated).siteOrigins).toEqual(["https://orchester.cloud", "https://old.example"]);
+    expect(readConfig({ ...good, ORCHESTER_CLOUD_EXTRA_ORIGINS: "http://127.0.0.1:4101" }).siteOrigins).toContain("http://127.0.0.1:4101");
+  });
+
+  it("refuses an extra origin that is not an https origin alone", () => {
+    for (const extra of [
+      "http://orchester-cloud.lurq.dev",
+      "orchester-cloud.lurq.dev",
+      "https://orchester-cloud.lurq.dev/signin",
+      "https://orchester-cloud.lurq.dev/?next=1",
+      "https://someone@orchester-cloud.lurq.dev",
+      "ftp://orchester-cloud.lurq.dev",
+      "https://orchester.cloud, null",
+    ]) {
+      expect(() => readConfig({ ...good, ORCHESTER_CLOUD_EXTRA_ORIGINS: extra }), extra).toThrow(/ORCHESTER_CLOUD_EXTRA_ORIGINS/);
+    }
+  });
+
+  it("sends a visitor on with a relative address, so each stays on the host it came to", () => {
+    const answer = seeOther("/invites/delivered");
+    expect(answer.status).toBe(303);
+    expect(answer.headers.get("location")).toBe("/invites/delivered");
   });
 
   it("refuses a secret that is not strict base64, instead of reading what is left of it", () => {

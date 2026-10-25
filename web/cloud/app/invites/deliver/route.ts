@@ -1,6 +1,6 @@
 import { adminReturn } from "@/lib/authorize";
 import { field } from "@/lib/form";
-import { config } from "@/lib/server/config";
+import { seeOther } from "@/lib/server/redirect";
 import { deliverInvite } from "@/lib/server/registry";
 import { anonymous, keepDelivered } from "@/lib/server/visitor";
 
@@ -21,6 +21,6 @@ export async function POST(request: Request): Promise<Response> {
     const outcome = result === null || result.error.kind === "refused" ? "refused" : "unavailable";
     await keepDelivered({ outcome, back: null });
   }
-  // 303: the browser follows with a GET, never posting the invite a second time.
-  return Response.redirect(`${config().publicOrigin}/invites/delivered`, 303);
+  // On the host the invite was posted to, which holds the cookie just set.
+  return seeOther("/invites/delivered");
 }
