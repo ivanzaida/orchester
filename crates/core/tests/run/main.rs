@@ -6,6 +6,7 @@ mod agent;
 mod base_moved_prompt;
 mod code_index;
 mod conversation;
+mod delivers_prompt;
 mod failed_recovery;
 mod fixture;
 mod follow_up_routing;

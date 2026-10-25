@@ -3,17 +3,19 @@
 //! asked to, with the same rules as *Remove worktree* ([`clean_up`]): a worktree with uncommitted
 //! changes goes only with exactly the changes the person saw. The codebase indexes only removed
 //! worktrees used go with them. An interrupted run whose worktree a person removed no longer holds
-//! its task (ORC-63), and removing a run's own worktree is recorded.
+//! its task (ORC-63), and removing a run's own worktree is recorded. A run that passed every step and committed
+//! nothing although its pipeline expects changes runs again too (ORC-93), as git tells.
 
 use std::path::Path;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  integration::{KeepReason, Leftovers, clean_up_recorded},
-  resource::Pipeline,
-  run::{Run, RunAgainInput, RunStatus, run_again},
+  integration::{Branches, Delivered, KeepReason, Leftovers, RunWork, clean_up_recorded},
+  resource::{Pipeline, WithoutCommits},
+  run::{Run, RunAgainInput, RunStatus, run_again, run_delivers},
   sharing::TaskRevision,
   store::{ActivityStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
+  task::Task,
   time::Timestamp,
 };
 use orchester_exec::ProcessRunner;
@@ -23,6 +25,9 @@ use orchester_store::ProjectDb;
 
 use super::{Scheduler, failed, read_failed};
 use crate::worktree::Worktrees;
+
+/// How long git may take to list the branches when it tells whether a run committed nothing.
+const GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 impl Scheduler {
   /// Starts the next run of `task` after its latest run `after` failed or was cancelled (Run
@@ -67,7 +72,7 @@ impl Scheduler {
       return self.begin(db, task, prepared);
     }
     note_missing_worktrees(&mut db, root, task)?;
-    let previous = check(&db, task, after)?;
+    let previous = check(&db, root, (task, after))?;
     self.admit(&db)?;
     let checked = super::prepare::check_again(&db, root, task)?;
     if revision.is_some_and(|revision| checked.task().revision() != revision) {
@@ -109,8 +114,9 @@ pub(super) fn note_missing_worktrees(db: &mut ProjectDb, root: &Path, task: Task
   Ok(())
 }
 
-/// The run `task` runs again after, `after`, once core's rule allows it.
-pub(super) fn check(db: &ProjectDb, task: TaskId, after: RunId) -> Result<Run, Rejection> {
+/// The run `task` runs again after, `after`, once core's rule allows it; git in the repository at `root` tells whether
+/// `after` committed nothing.
+pub(super) fn check(db: &ProjectDb, root: &Path, (task, after): (TaskId, RunId)) -> Result<Run, Rejection> {
   let store = |error: &dyn std::error::Error| failed("cannot read the project database", error);
   let task = db
     .task(task)
@@ -137,6 +143,7 @@ pub(super) fn check(db: &ProjectDb, task: TaskId, after: RunId) -> Result<Run, R
     .into_iter()
     .map(|(run, _)| run)
     .collect();
+  let latest = runs.last().copied().flatten().filter(|run| run.id() == after);
   let input = RunAgainInput {
     runs: &runs,
     after,
@@ -144,6 +151,7 @@ pub(super) fn check(db: &ProjectDb, task: TaskId, after: RunId) -> Result<Run, R
     pipeline_published,
     limits,
     used_today,
+    committed_nothing: latest.is_some_and(|run| committed_nothing(root, &task, run)),
   };
   run_again(&input).map_err(|block| Rejection::RunAgainBlocked { block })?;
   let previous = runs
@@ -152,6 +160,24 @@ pub(super) fn check(db: &ProjectDb, task: TaskId, after: RunId) -> Result<Run, R
     .flatten()
     .expect("the rule allows running again only after the task's latest run");
   Ok(previous.clone())
+}
+
+/// Whether `run` of `task` passed every step and committed nothing although its pipeline expects changes (ORC-93), as git
+/// in the repository at `root` tells; not when git cannot tell.
+fn committed_nothing(root: &Path, task: &Task, run: &Run) -> bool {
+  if *run.status() != RunStatus::Succeeded || run_delivers(task, run).without_commits() != WithoutCommits::Flagged {
+    return false;
+  }
+  let git = ProcessRunner::new(GIT_TIMEOUT);
+  let delivered =
+    Branches::read(&git, Path::new("git"), root).and_then(|mut branches| branches.delivered(&RunWork::of(run)));
+  match delivered {
+    Ok(delivered) => delivered == Delivered::NothingToMerge,
+    Err(error) => {
+      tracing::warn!(%error, run = %run.id(), "cannot tell whether the run committed nothing; it is not run again so");
+      false
+    }
+  }
 }
 
 /// Removes what `previous` left in the repository at `root`, as the person confirmed it

@@ -234,12 +234,12 @@ impl<'k> Drive<'k> {
     self.pass_with(step, &[(notes.as_str(), note)])
   }
 
-  /// [`Drive::pass`] with `files` as a write step's checkpoint.
+  /// [`Drive::pass`] with `files` as a write step's checkpoint; with none, the step commits nothing.
   pub fn pass_with(&mut self, step: &str, files: &[(&str, String)]) -> Result<&mut Self, SeedError> {
     if !self.open.contains_key(&Self::key(step)) {
       self.begin(step)?;
     }
-    if self.writes(step)? {
+    if self.writes(step)? && !files.is_empty() {
       self.checkpoint(step, files)?;
     }
     let gated = self
@@ -268,17 +268,31 @@ impl<'k> Drive<'k> {
 
   /// Passes every step listed before `step` whose latest execution has not passed.
   pub fn pass_before(&mut self, step: &str) -> Result<&mut Self, SeedError> {
-    self.pass_listed(Some(step))
+    for key in self.unpassed(Some(step)) {
+      self.pass(&key)?;
+    }
+    Ok(self)
   }
 
   /// Passes every step whose latest execution has not passed: the run succeeds.
   pub fn pass_all(&mut self) -> Result<&mut Self, SeedError> {
-    self.pass_listed(None)
+    for key in self.unpassed(None) {
+      self.pass(&key)?;
+    }
+    Ok(self)
   }
 
-  /// Passes the steps listed before `until` (all of them without it) that have not passed, in order.
-  fn pass_listed(&mut self, until: Option<&str>) -> Result<&mut Self, SeedError> {
-    let listed: Vec<String> = self
+  /// [`Drive::pass_all`] committing nothing: the run succeeds with nothing to merge (ORC-93).
+  pub fn pass_all_without_commits(&mut self) -> Result<&mut Self, SeedError> {
+    for key in self.unpassed(None) {
+      self.pass_with(&key, &[])?;
+    }
+    Ok(self)
+  }
+
+  /// The steps listed before `until` (all of them without it) whose latest execution has not passed, in order.
+  fn unpassed(&self, until: Option<&str>) -> Vec<String> {
+    self
       .run
       .snapshot()
       .body()
@@ -286,17 +300,13 @@ impl<'k> Drive<'k> {
       .iter()
       .map(|pinned| pinned.key.as_str().to_owned())
       .take_while(|key| Some(key.as_str()) != until)
-      .collect();
-    for key in listed {
-      let passed = self
-        .run
-        .latest_execution(&Self::key(&key))
-        .is_some_and(|execution| execution.status() == StepStatus::Passed);
-      if !passed {
-        self.pass(&key)?;
-      }
-    }
-    Ok(self)
+      .filter(|key| {
+        !self
+          .run
+          .latest_execution(&Self::key(key))
+          .is_some_and(|execution| execution.status() == StepStatus::Passed)
+      })
+      .collect()
   }
 
   /// Commits the work of `step`, at work, as a checkpoint when it is a write step.

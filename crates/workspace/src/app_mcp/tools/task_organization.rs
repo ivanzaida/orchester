@@ -16,7 +16,7 @@ use serde::Deserialize;
 use super::{
   task_write::write_error,
   tasks::find_task,
-  wire::{Rank, Workflow},
+  wire::{Delivers, Rank, Workflow},
 };
 use crate::{app_mcp::error::ToolError, messages, tasks::writer::TaskWriter};
 
@@ -61,6 +61,8 @@ pub(super) struct Changes<'a> {
   pub tags: Option<&'a [String]>,
   /// *Don't merge automatically* (ORC-69): the Orchestrator never merges the task's runs on its own.
   pub no_automatic_merge: Option<bool>,
+  /// What the task's runs deliver (ORC-93); `Some(None)` follows its pipeline again.
+  pub delivers: Option<Option<Delivers>>,
 }
 
 impl Changes<'_> {
@@ -90,7 +92,15 @@ impl Changes<'_> {
       base.tags().to_vec(),
     )
     .map_err(StoreError::from)?;
-    Ok(organization.with_no_automatic_merge(self.no_automatic_merge.unwrap_or(base.no_automatic_merge())))
+    let delivers = match self.delivers {
+      Some(given) => given.map(Into::into),
+      None => base.delivers(),
+    };
+    Ok(
+      organization
+        .with_no_automatic_merge(self.no_automatic_merge.unwrap_or(base.no_automatic_merge()))
+        .with_delivers(delivers),
+    )
   }
 
   /// `organization` with the tags named, those the project lacks created through `writer`; as it was when no tags

@@ -136,6 +136,27 @@ execution execution_starts_from_the_base_branch_set`, `orchester-workspace --tes
 works in the checkout, so it still needs the base branch checked out there; the Files page's *Base* version still
 reads the checked-out branch.
 
+### D7 · Runs whose result is not a commit (ORC-93) · branch `orchester/orc-93-run-1` (implemented 2026-10-25, waiting for review and design verification)
+
+A pipeline (and a task, for its own runs) says what a run delivers: `changes` (merged; every older pipeline),
+`report`, `outside` (work done through MCP tools) or `changes_or_report` (core `Deliverable`; Pipeline settings ›
+Delivery; `create_pipeline`, `save_pipeline_draft`, `create_task`, `update_task`, `get_pipeline`, `get_task`). Every
+step's prompt says it. A run that passed every step and committed nothing is completed rather than merged when its
+result is its report: the Ready card offers *Complete task*, the Summary shows the report and, for `outside`, the MCP
+tool calls approved outside Orchester's own tools; completing sets the task Done and keeps the report as the run's
+artifact *Report* (`run_completions`, `run_artifacts`); the merge queue skips such runs and the Orchestrator completes
+them by its merge rule when the person lets it merge finished runs. Where changes were expected the run is flagged in
+the Summary and Needs you (*Complete anyway*, *Return to a step*, *Run again*), and the Orchestrator leaves it to the
+person. Design: `docs/design/orchester-workspace.md` › *Runs whose result is not a commit (ORC-93)*. Tests:
+`orchester-core --test pipeline_delivers delivers`, `orchester-core --test run delivers_prompt`, `orchester-core --test
+run again`, `orchester-runner --features test-agent --test instructions instructions_say_what_the_run_delivers`,
+`orchester-workspace --test run_completion completion`, `orchester-workspace --test merge_queue merge_queue`,
+`orchester-app --test task_decisions completion`, `orchester-app --test pipelines pipelines_delivers`, `orchester-app
+--test mcp_domain task_organization_delivers`.
+**Open:** no Pencil frames exist for these states (built from the Ready card, the warning notice and Starts' option
+cards); the Artifacts tab still says runs keep no artifacts; no notification for *Ready to complete* or *Committed
+nothing*; no form field for a task's own choice (MCP only).
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still

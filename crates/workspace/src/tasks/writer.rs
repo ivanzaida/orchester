@@ -372,10 +372,11 @@ fn check_cancel(
   Ok(())
 }
 
-/// A shared project's server does not keep Don't merge automatically: setting it there is refused rather than lost,
-/// so the Orchestrator never merges a task on its own that the person believes opted out.
+/// A shared project's server does not keep Don't merge automatically, nor what a task's runs deliver (ORC-93): setting
+/// them there is refused rather than lost, so the Orchestrator never merges or completes a task on its own that the
+/// person believes opted out or set otherwise.
 fn check_merging(base: &TaskOrganization, edited: &TaskOrganization) -> Result<(), WriteError> {
-  if base.no_automatic_merge() == edited.no_automatic_merge() {
+  if base.no_automatic_merge() == edited.no_automatic_merge() && base.delivers() == edited.delivers() {
     return Ok(());
   }
   Err(WriteError::Store(StoreError::SharedProject))

@@ -25,7 +25,7 @@ use super::{
   modules::find_module,
   task_organization::{Blocker, Changes},
   tasks::find_task,
-  wire::{self, Rank, Workflow},
+  wire::{self, Delivers, Rank, Workflow},
 };
 use crate::{
   app_mcp::{
@@ -99,6 +99,10 @@ pub struct CreateTask {
   /// the person lets it merge finished runs; left out, `false`.
   #[serde(default)]
   pub no_automatic_merge: bool,
+  /// What the task's runs deliver, instead of what its pipeline says: changes, report, outside (work done through MCP
+  /// tools outside the repository) or changes_or_report; left out, as its pipeline says.
+  #[serde(default)]
+  pub delivers: Option<Delivers>,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -152,6 +156,10 @@ pub struct UpdateTask {
   /// the person lets it merge finished runs; `false` lets it again.
   #[serde(default)]
   pub no_automatic_merge: Option<bool>,
+  /// What the task's runs deliver, instead of what its pipeline says: changes, report, outside or changes_or_report;
+  /// `null` follows its pipeline again.
+  #[serde(default, deserialize_with = "wire::present")]
+  pub delivers: Option<Option<Delivers>>,
 }
 
 impl CreateTask {
@@ -163,6 +171,7 @@ impl CreateTask {
       blocked_by: Some(&self.blocked_by),
       tags: Some(&self.tags),
       no_automatic_merge: Some(self.no_automatic_merge),
+      delivers: Some(self.delivers),
     }
   }
 }
@@ -176,6 +185,7 @@ impl UpdateTask {
       blocked_by: self.blocked_by.as_deref(),
       tags: self.tags.as_deref(),
       no_automatic_merge: self.no_automatic_merge,
+      delivers: self.delivers,
     }
   }
 }
@@ -427,6 +437,7 @@ fn saved(task: &Task) -> Value {
     "story_points": wire::story_points(task.estimate()),
     "blocked_reason": task.organization().blocked_reason(),
     "no_automatic_merge": task.organization().no_automatic_merge(),
+    "delivers": task.organization().delivers().map(Delivers::from),
     "module": task.module().map(|module| module.to_string()),
   })
 }

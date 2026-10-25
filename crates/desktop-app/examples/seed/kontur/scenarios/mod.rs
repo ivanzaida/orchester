@@ -9,6 +9,7 @@ mod changes;
 mod connections;
 mod conversation;
 mod decisions;
+mod deliverables;
 mod delivery;
 mod empty;
 mod import;
@@ -71,7 +72,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 35] = [
+pub const ALL: [Scenario; 36] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -87,6 +88,7 @@ pub const ALL: [Scenario; 35] = [
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("decisions", decisions::seed),
+  Scenario::of("deliverables", deliverables::seed),
   Scenario::of("delivery", delivery::seed),
   Scenario::of("delivery-blocked", delivery::blocked),
   Scenario::of("delivery-empty", delivery::empty),

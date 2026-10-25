@@ -150,6 +150,11 @@ pub enum StoreError {
   /// The run works again, or a merge waits in its worktree for a person: it is not merged now.
   #[error("run {0} cannot be merged now: it works again or a merge waits in its worktree")]
   NotMergeable(RunId),
+  #[error("run {0} was completed already")]
+  AlreadyCompleted(RunId),
+  /// The run did not succeed, works again, was merged, or a later run of its task exists: it is not completed.
+  #[error("run {0} cannot be completed: it is not its task's latest run that passed every step and was not merged")]
+  NotCompletable(RunId),
   #[error("run {0} does not exist")]
   RunNotFound(RunId),
   #[error("memory {0} does not exist")]

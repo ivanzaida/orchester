@@ -6,7 +6,8 @@
 use std::collections::BTreeSet;
 
 use super::{
-  DeliverStep, Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind, unassigned,
+  DeliverStep, Deliverable, Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind,
+  unassigned,
 };
 use crate::{name::Name, permission::StepPermissions, resource::prompt::PromptText};
 
@@ -44,6 +45,8 @@ pub struct PipelineEdit {
   steps: Vec<Step>,
   /// The Deliver step the edited pipeline ends in, if any.
   deliver: Option<DeliverStep>,
+  /// What the edited pipeline's runs deliver.
+  delivers: Deliverable,
 }
 
 impl PipelineEdit {
@@ -52,18 +55,21 @@ impl PipelineEdit {
       description: pipeline.description().to_owned(),
       sources: pipeline.sources().clone(),
       deliver: pipeline.deliver().cloned(),
+      delivers: pipeline.delivers(),
       steps: pipeline.into_steps(),
     }
   }
 
   /// Steps given whole, valid or not, as automation sends a draft's steps: [`Self::problems`] says
-  /// which rules they break. Without a Deliver step until [`Self::set_deliver`] gives one.
+  /// which rules they break. Without a Deliver step until [`Self::set_deliver`] gives one, and delivering changes until
+  /// [`Self::set_delivers`] says otherwise.
   pub fn from_steps(description: &str, sources: PipelineSources, steps: Vec<Step>) -> Self {
     Self {
       description: description.to_owned(),
       sources,
       steps,
       deliver: None,
+      delivers: Deliverable::default(),
     }
   }
 
@@ -92,6 +98,15 @@ impl PipelineEdit {
   /// Ends the edited pipeline in `deliver`, or in no Deliver step.
   pub fn set_deliver(&mut self, deliver: Option<DeliverStep>) {
     self.deliver = deliver;
+  }
+
+  /// What the edited pipeline's runs deliver.
+  pub const fn delivers(&self) -> Deliverable {
+    self.delivers
+  }
+
+  pub const fn set_delivers(&mut self, delivers: Deliverable) {
+    self.delivers = delivers;
   }
 
   /// Steps in the order the user arranged them.
@@ -187,7 +202,8 @@ impl PipelineEdit {
     let sources = self.sources.clone().of_steps(&self.steps);
     let pipeline = Pipeline::new(self.steps.clone())?
       .with_description(self.description.clone())
-      .with_deliver(self.deliver.clone());
+      .with_deliver(self.deliver.clone())
+      .with_delivers(self.delivers);
     Ok(
       pipeline
         .with_sources(sources)

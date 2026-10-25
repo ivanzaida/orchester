@@ -129,6 +129,22 @@
       "notePlaceholder": "What should {{agent}} change?",
       "returnWithNote": "Return to {{step}} with note"
     },
+    "complete": {
+      "title": "Ready to complete",
+      "reportBody": "Every step of the run passed. Its result is its report below: it committed nothing, so there is nothing to merge.",
+      "outsideBody": "Every step of the run passed. Its work was done outside the repository: its report and the MCP tool calls that changed something are below. It committed nothing, so there is nothing to merge.",
+      "complete": "Complete task",
+      "flaggedTitle": "This run committed nothing, but its pipeline expects changes",
+      "flaggedBody": "Every step passed, yet nothing was committed on {{branch}}. Complete the task anyway, return the work to a step with a note for its agent, or run the task again.",
+      "anyway": "Complete anyway",
+      "returnToStep": "Return to a step",
+      "returnUnavailable": "The run's work can't go back to one of its steps now; Run details says why.",
+      "runAgain": "Run again",
+      "personOnly": "Completing a run anyway is your decision: window input from automation takes it only while you let automation answer approvals.",
+      "completedTitle": "Task completed",
+      "completedByYou": "You completed the task at {{time}}. Run #{{run}} committed nothing; its report is kept as the run's Report.",
+      "completedByOrchestrator": "The Orchestrator completed the task at {{time}}, as it would merge a finished run. Run #{{run}} committed nothing; its report is kept as the run's Report."
+    },
     "ready": {
       "title": "Ready for your review",
       "body": "Every step of the run passed. Its changes wait for your review.",

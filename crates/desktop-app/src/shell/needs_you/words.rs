@@ -26,6 +26,8 @@ pub(super) fn kind(ctx: &Ctx, item: &NeedItem) -> (Icon, Arc<str>) {
     NeedKind::Interrupted | NeedKind::DeliveryBlocked => Icon::CirclePause,
     NeedKind::StoppedAtLimit => Icon::Gauge,
     NeedKind::ReadyToMerge => Icon::GitMerge,
+    NeedKind::ReadyToComplete => Icon::FileText,
+    NeedKind::CommittedNothing => Icon::TriangleAlert,
     NeedKind::Conflicts => Icon::GitCompareArrows,
     NeedKind::DeliveryStopped => Icon::GitBranch,
     NeedKind::Memory => Icon::Brain,
@@ -94,6 +96,8 @@ pub(super) fn place(ctx: &Ctx, item: &WaitingItem) -> Option<Arc<str>> {
     | WaitingKind::Interrupted { .. }
     | WaitingKind::StoppedAtLimit { .. }
     | WaitingKind::ReadyToMerge
+    | WaitingKind::ReadyToComplete
+    | WaitingKind::CommittedNothing
     | WaitingKind::DeliveryLeft(_)
     | WaitingKind::DeliveryBlocked { .. }
     | WaitingKind::Memory { .. } => None,

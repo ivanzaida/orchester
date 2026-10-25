@@ -242,6 +242,8 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
 mod async_failures;
 #[path = "pipelines/base_moves.rs"]
 mod base_moves;
+#[path = "pipelines/delivers.rs"]
+mod delivers;
 #[path = "pipelines/history_safety.rs"]
 mod history_safety;
 #[path = "pipelines/layout.rs"]

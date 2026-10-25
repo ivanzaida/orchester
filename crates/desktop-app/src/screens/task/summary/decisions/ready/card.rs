@@ -52,15 +52,30 @@ pub(super) const FILE_ROW_HEIGHT: f32 = 30.0;
 /// The Ready card of a run that is not merged.
 pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> Element {
   let (actions, reasons) = actions(ctx, task, run, (pull, false));
+  frame(
+    (ctx.t("decisions.ready.title"), ctx.t("decisions.ready.body")),
+    actions,
+    reasons,
+  )
+}
+
+/// The Ready card's frame (`hyzq2`): its title and what it means beside the check, then its `actions` and why those
+/// that cannot be used are unavailable (`reasons`). A run that committed nothing and is completed rather than merged
+/// shows it too (ORC-93).
+pub(in super::super) fn frame((title, body): (Arc<str>, Arc<str>), actions: Element, reasons: Vec<Element>) -> Element {
   let text = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Fine.role())
     .child(
-      Text::new(&ctx.t("decisions.ready.title"))
+      Text::new(&title)
         .id("task-notice-title")
         .variant(DecisionText::ReadyTitle.role()),
     )
-    .child(Text::new(&ctx.t("decisions.ready.body")).variant(ExtraTypography::Lead.role()));
+    .child(
+      Text::new(&body)
+        .id("task-notice-body")
+        .variant(ExtraTypography::Lead.role()),
+    );
   Column::new()
     .id("task-notice")
     .width(Dimension::Pct(100.0))

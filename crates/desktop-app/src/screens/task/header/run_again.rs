@@ -21,6 +21,7 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::{Leftovers, WORKTREES_DIR},
+  resource::WithoutCommits,
   run::{RunAgainBlock, can_run_again_after},
   sharing::TaskRevision,
   task::TaskLimits,
@@ -35,6 +36,7 @@ use orchester_workspace::{
   runner::Runners,
   sharing::Servers,
   tasks::{
+    delivery::Delivery,
     detail::{RunView, TaskDetail},
     integration::file_list,
     run_again::{NextRun, RunAgainCheck, block_message, request_messages},
@@ -84,7 +86,7 @@ pub fn check(
   let after = detail
     .run
     .as_ref()
-    .filter(|run| can_run_again_after(&run.run, run.worktree_removed.is_some()))
+    .filter(|run| can_run_again_after(&run.run, run.worktree_removed.is_some()) || committed_nothing(detail))
     .map(RunView::id);
   let deps = (root, detail.task.id(), after, again);
   let load = ctx.future(deps, move |(root, task, after, _)| {
@@ -113,6 +115,16 @@ pub fn check(
     (_, Some(error)) => Some(Err(error)),
     _ => None,
   }
+}
+
+/// Whether the latest run of `detail` passed every step and committed nothing although its pipeline expects changes,
+/// and was not completed anyway (ORC-93): it runs again as a failed run does.
+pub fn committed_nothing(detail: &TaskDetail) -> bool {
+  detail.delivery == Delivery::NothingToMerge
+    && detail
+      .result
+      .as_ref()
+      .is_some_and(|result| result.without_commits() == WithoutCommits::Flagged && result.completion.is_none())
 }
 
 /// What one confirmation asks the runner.

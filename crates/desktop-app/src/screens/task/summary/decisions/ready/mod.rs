@@ -38,6 +38,7 @@ use orchester_workspace::{
   },
 };
 
+pub(super) use self::card::frame;
 use self::{
   pull_request::PullRequestRead,
   resolve::{Asking, Offer, StepChoice},

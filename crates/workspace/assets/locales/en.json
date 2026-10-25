@@ -241,6 +241,8 @@
         "stoppedAtLimit": "Stopped at limit",
         "interrupted": "Interrupted",
         "readyToMerge": "Ready to merge",
+        "readyToComplete": "Ready to complete",
+        "committedNothing": "Committed nothing",
         "conflicts": "Conflicts need you",
         "deliveryStopped": "Delivery stopped",
         "deliveryBlocked": "Delivery blocked",
@@ -263,6 +265,8 @@
         "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
         "interrupted": "Run #{{run}} was interrupted",
         "readyToMerge": "{{task}} is ready to merge: every step passed",
+        "readyToComplete": "Run #{{run}} passed every step; its result is its report",
+        "committedNothing": "Run #{{run}} committed nothing, but its pipeline expects changes",
         "conflicts": "Integrate couldn't resolve {{files}}.",
         "checkFailed": "Check on the merged result failed: {{tool}}; the run left the queue.",
         "keepsMoving": "{{base}} moved during each of {{count}} checks; the run left the queue.",
@@ -284,6 +288,7 @@
         "decide": "Decide",
         "raiseLimit": "Raise the limit",
         "reviewMerge": "Review & merge",
+        "reviewComplete": "Review & complete",
         "openTask": "Open task",
         "openConflicts": "Open conflicts",
         "openMergeQueue": "Open merge queue",
@@ -418,7 +423,8 @@
       "interrupted": "Last checkpoint {{checkpoint}}",
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
-      "nothingToMerge": "Nothing to merge: the run committed nothing",
+      "reportReady": "Every step passed: its report waits to be completed",
+      "committedNothing": "Committed nothing, but its pipeline expects changes",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
       "cancelled": "Run canceled"
@@ -598,6 +604,14 @@
         "secrets": "Only a person can approve this request: it reads a credential location. Automation may deny it.",
         "installs": "Only a person can approve this request: it installs software or packages. Automation may deny it.",
         "network": "Only a person can approve this request: it reaches the network. Automation may deny it."
+      }
+    },
+    "complete": {
+      "failure": {
+        "notCompletable": "Only the task's latest run that passed every step and was not merged can be completed.",
+        "alreadyCompleted": "This run was completed already.",
+        "hasCommits": "This run committed work to its branch: merge it instead of completing the task.",
+        "expectsChanges": "This run's pipeline expects changes: complete it anyway only as the person's choice."
       }
     },
     "merge": {
@@ -1232,7 +1246,13 @@
       "budget": "{{step}} · step budget {{from}} → {{to}} tokens",
       "deliverAdded": "Deliver · added: runs that pass every step join the merge queue",
       "deliverRemoved": "Deliver · removed: runs end in Ready for review and you merge them from the task",
-      "deliverChanged": "Deliver · mode, merge method, integrator or re-check changed"
+      "deliverChanged": "Deliver · mode, merge method, integrator or re-check changed",
+      "delivers": {
+        "changes": "Pipeline · runs now deliver repository changes",
+        "report": "Pipeline · runs now deliver a report",
+        "outside": "Pipeline · runs now deliver work outside the repository",
+        "changesOrReport": "Pipeline · runs now deliver changes or a report"
+      }
     },
     "starter": {
       "research": {

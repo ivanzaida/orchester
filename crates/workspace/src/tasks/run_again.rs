@@ -1,5 +1,6 @@
 //! Run again (ORC-16 `zM693`, `R5y5x`, `iE8eQ`) as the task page shows it: whether the task whose
-//! latest run failed, was cancelled or was interrupted and lost its worktree (ORC-63) can run again now, by core's rule
+//! latest run failed, was cancelled or was interrupted and lost its worktree (ORC-63), or passed every step committing
+//! nothing its pipeline expected (ORC-93), can run again now, by core's rule
 //! ([`orchester_core::run::run_again`]), and what its next run would use, for the confirmation.
 //! The runner checks the rule again when it is asked. Blocks on SQLite and git; the UI calls it
 //! off the UI thread.
@@ -14,9 +15,9 @@ use orchester_core::{
     base::{BaseBranchSetting, set_branch_tip},
     checked_out_branch,
   },
-  resource::{Pipeline, VersionNumber},
+  resource::{Pipeline, VersionNumber, WithoutCommits},
   revision::Revision,
-  run::{BranchName, Run, RunAgainBlock, RunAgainInput, RunNumber, run_again},
+  run::{BranchName, Run, RunAgainBlock, RunAgainInput, RunNumber, RunStatus, run_again, run_delivers},
   store::{ActivityStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
   task::TaskLimits,
   time::Timestamp,
@@ -26,7 +27,12 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{changes::GIT, detail::run_store_error, run::start_messages};
+use super::{
+  changes::GIT,
+  delivery::{self, Delivery},
+  detail::run_store_error,
+  run::start_messages,
+};
 use crate::{messages::Message, runner::RunRequestError};
 
 /// Where the next run starts from: the project's base branch at its tip, or the branch the user's checkout has, if
@@ -81,6 +87,13 @@ impl RunAgainCheck {
       .into_iter()
       .map(|(run, _)| run)
       .collect();
+    // A run that committed nothing its pipeline expected runs again too (ORC-93), as git tells.
+    let committed_nothing = runs.last().copied().flatten().is_some_and(|run| {
+      run.id() == after
+        && *run.status() == RunStatus::Succeeded
+        && run_delivers(&task, run).without_commits() == WithoutCommits::Flagged
+        && delivery::of_run(programs, repo_root, run) == Delivery::NothingToMerge
+    });
     let input = RunAgainInput {
       runs: &runs,
       after,
@@ -88,6 +101,7 @@ impl RunAgainCheck {
       pipeline_published: latest.is_some(),
       limits: db.project_limits()?,
       used_today: db.tokens_used_since(Timestamp::now().local_day_start())?,
+      committed_nothing,
     };
     // A run that has not ended says so first; a blocked task then says what blocks it before the
     // pipeline or the day's budget.

@@ -3,8 +3,9 @@
 //! bar, a tab's mark): a tool request waiting for a decision (also one whose task cannot be read), a question
 //! with suggested answers, each step of a run waiting on a plan or on an agent's question, a decision after a
 //! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged
-//! (not once its task is Done or Canceled, its work reached its base branch without Orchester, or it committed
-//! nothing to merge, `tasks::delivery`), a run
+//! (not once its task is Done or Canceled, or its work reached its base branch without Orchester), one that
+//! committed nothing and waits to be completed or, as its pipeline expects changes, for the person's decision
+//! (`tasks::delivery`, ORC-93), a run
 //! recorded interrupted, and the project's memory records waiting for approval, together one item. A run
 //! that reads interrupted only because no runner looks after it is none: a runner records it once one does.
 //! A merge that stopped at conflicts is known only to the session that tried it, so it is not counted here.
@@ -21,6 +22,7 @@ use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
   merge_queue::{Blocked, Left, QueueState},
   question::{Answer, AskedQuestions, QuestionState},
+  resource::WithoutCommits,
   run::{Answerer, DecidedBy, RunNumber, TaskPhase, ToolApprovalDecision},
   task::{Task, organization::WorkflowStatus},
   time::Timestamp,
@@ -97,6 +99,12 @@ pub enum WaitingKind {
   /// A run whose every step passed: its work waits for review and to be merged; for a run the merge queue delivers,
   /// for the person's approval after Check passed on the merged result.
   ReadyToMerge,
+  /// A run whose every step passed and that committed nothing, whose result is its report or work done outside the
+  /// repository: it waits to be completed (ORC-93).
+  ReadyToComplete,
+  /// A run whose every step passed and that committed nothing although its pipeline expects changes: it waits for the
+  /// person to complete it anyway, return it to a step or run the task again (ORC-93).
+  CommittedNothing,
   /// A run that left the merge queue without being merged and waits for the person: conflicts its Integrate step
   /// could not resolve, a failed check on the merged result, a base that kept moving.
   DeliveryLeft(Left),
@@ -124,6 +132,8 @@ impl WaitingKind {
       | Self::Interrupted { .. }
       | Self::StoppedAtLimit { .. }
       | Self::ReadyToMerge
+      | Self::ReadyToComplete
+      | Self::CommittedNothing
       | Self::DeliveryLeft(_)
       | Self::DeliveryBlocked { .. }
       | Self::Memory { .. } => None,
@@ -316,7 +326,9 @@ impl ProjectTasks {
         },
         latest.updated_at,
       )),
-      TaskPhase::Succeeded if !latest.nothing_to_merge && !settled_by_person(task) => self.merge_wait(latest),
+      TaskPhase::Succeeded if settled_by_person(task) => None,
+      TaskPhase::Succeeded if latest.nothing_to_merge => Some((nothing_to_merge_wait(latest), latest.updated_at)),
+      TaskPhase::Succeeded => self.merge_wait(latest),
       _ => None,
     };
     let before = items.len();
@@ -398,6 +410,15 @@ fn settled_by_person(task: &Task) -> bool {
     task.organization().status(),
     WorkflowStatus::Done | WorkflowStatus::Canceled
   )
+}
+
+/// What `latest`, which passed every step and committed nothing, waits for: to be completed, or, as its pipeline
+/// expects changes, the person's decision (ORC-93).
+const fn nothing_to_merge_wait(latest: &LatestRun) -> WaitingKind {
+  match latest.deliverable.without_commits() {
+    WithoutCommits::Completes => WaitingKind::ReadyToComplete,
+    WithoutCommits::Flagged => WaitingKind::CommittedNothing,
+  }
 }
 
 /// What answering an item in place reads: its task with its latest run, and that run's requests. The card it

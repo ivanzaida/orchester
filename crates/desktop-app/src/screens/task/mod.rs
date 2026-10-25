@@ -246,6 +246,10 @@ pub struct PageState {
   pub details_scroll: ScrollState,
   /// *Share task*'s question is open over the Summary of a task kept *Not shared*.
   pub share: Signal<bool>,
+  /// Run again's confirmation under the header, which the Summary of a run that committed nothing opens too (ORC-93),
+  /// and its switch that removes the worktrees of the run before, off each time it opens.
+  pub run_again: Signal<header::run_again::Confirming>,
+  pub run_again_remove: Signal<bool>,
 }
 
 impl PageState {
@@ -297,6 +301,8 @@ impl Component for TaskFrame {
         requirements: ctx.signal(None),
         details_scroll: ScrollState::new(),
         share: ctx.signal(false),
+        run_again: ctx.signal(header::run_again::Confirming::default()),
+        run_again_remove: ctx.signal(false),
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),

@@ -50,7 +50,41 @@ fn input<'a>(runs: &'a [Option<&'a Run>], after: RunId) -> RunAgainInput<'a> {
     pipeline_published: true,
     limits: ProjectLimits::DEFAULT,
     used_today: TokensUsed::ZERO,
+    committed_nothing: false,
   }
+}
+
+#[test]
+fn run_again_follows_a_run_that_committed_nothing_its_pipeline_expected() {
+  let mut logged = Logged::started();
+  logged.through_plan();
+  for step in ["implement", "checks", "review", "pr"] {
+    logged.pass(step);
+  }
+  let succeeded = logged.run;
+  let runs = [Some(&succeeded)];
+  assert_eq!(
+    run_again(&input(&runs, succeeded.id())),
+    Err(RunAgainBlock::NotEnded),
+    "a run that passed every step with work to merge is merged, not run again"
+  );
+  let flagged = RunAgainInput {
+    committed_nothing: true,
+    ..input(&runs, succeeded.id())
+  };
+  assert_eq!(run_again(&flagged), Ok(succeeded.id()));
+  let running = run(132).run;
+  let still_running = [Some(&running)];
+  assert_eq!(
+    run_again(&RunAgainInput {
+      committed_nothing: true,
+      ..input(&still_running, running.id())
+    }),
+    Err(RunAgainBlock::RunActive {
+      number: running.number()
+    }),
+    "only a run that passed every step"
+  );
 }
 
 #[test]

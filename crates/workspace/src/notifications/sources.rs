@@ -122,8 +122,13 @@ fn waiting(project: &Project, tasks: &ProjectTasks, item: &WaitingItem) -> Optio
   let run = item.run.map_or_else(String::new, |(run, _)| run.to_string());
   let step = item.step.as_ref().map_or("", |step| &step.name);
   let (kind, key) = match &item.kind {
-    // What the merge queue waits for shows in Needs you and on its screen; it raises no notification yet.
-    WaitingKind::Memory { .. } | WaitingKind::DeliveryLeft(_) | WaitingKind::DeliveryBlocked { .. } => return None,
+    // What the merge queue waits for, and a run that committed nothing (ORC-93), show in Needs you and on their
+    // screens; they raise no notification yet.
+    WaitingKind::Memory { .. }
+    | WaitingKind::DeliveryLeft(_)
+    | WaitingKind::DeliveryBlocked { .. }
+    | WaitingKind::ReadyToComplete
+    | WaitingKind::CommittedNothing => return None,
     WaitingKind::Approval(shown) => (
       Kind::Approval {
         command: shown.approval.command,

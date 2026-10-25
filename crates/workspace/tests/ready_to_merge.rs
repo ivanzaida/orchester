@@ -213,7 +213,10 @@ fn ready_to_merge_a_run_that_committed_nothing_is_neither_ready_nor_merged() {
     "main holds its tip, which is where it started: that is no merge"
   );
   let rows = list::rows(&tasks.tasks, &tasks, TaskTab::All);
-  assert_eq!(rows[0].detail.key, "tasks.progress.nothingToMerge");
+  assert_eq!(
+    rows[0].detail.key, "tasks.progress.committedNothing",
+    "its pipeline expects changes: the row says it committed nothing"
+  );
   assert!(rows[0].nothing_to_merge);
   let page = TaskDetail::load_settled(fixture.repo.path(), review, &programs).expect("the task reads");
   assert_eq!(

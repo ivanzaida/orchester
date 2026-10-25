@@ -186,6 +186,7 @@ fn seed_names_every_scenario_once() {
       "changes",
       "cards",
       "decisions",
+      "deliverables",
       "delivery",
       "delivery-blocked",
       "delivery-empty",
@@ -375,6 +376,32 @@ fn seed_task_states_leaves_one_task_in_each_state() {
   let states: Vec<&str> = seed.seeded.tasks.iter().map(|task| task.state).collect();
   assert_eq!(states[0], "draft, ready to queue");
   assert_eq!(states[16], "latest run unreadable");
+}
+
+#[test]
+fn seed_deliverables_leaves_runs_that_committed_nothing() {
+  let seed = Seed::of("deliverables");
+  let db = seed.db();
+  let states: Vec<&str> = seed.seeded.tasks.iter().map(|task| task.state).collect();
+  assert_eq!(
+    states,
+    [
+      "report run ready to complete",
+      "outside run ready to complete",
+      "committed nothing, changes expected",
+      "report run completed"
+    ]
+  );
+  for (index, task) in seed.seeded.tasks.iter().enumerate() {
+    let run = latest(&db, &task.key).expect("a run").expect("readable");
+    assert_eq!(phase(&db, &task.key), Some(TaskPhase::Succeeded), "{}", task.state);
+    assert!(run.last_checkpoint().is_none(), "{} committed nothing", task.state);
+    assert_eq!(db.run_completion(run.id()).expect("read").is_some(), index == 3);
+  }
+  let outside = latest(&db, &seed.seeded.tasks[1].key)
+    .expect("a run")
+    .expect("readable");
+  assert_eq!(db.decided_tool_approvals(outside.id()).expect("approvals").len(), 1);
 }
 
 #[test]

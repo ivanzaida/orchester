@@ -290,7 +290,8 @@ const SPECS: &[Spec] = &[
     description: "One pipeline as its editor shows it (its draft if it has one, otherwise its latest version): \
                   description and steps (key, name, agent profile or tool, runs after, approval gate, failure route \
                   with retries, step budget, repository access, model override and narrowed permissions, \
-                  instructions), where it stands, the problems that keep it from being published, and the published \
+                  instructions), what its runs deliver (`delivers`: changes, report, outside or changes_or_report), \
+                  where it stands, the problems that keep it from being published, and the published \
                   profiles and tools its steps can use, and its link in the app (its editor).",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: true,
@@ -302,7 +303,10 @@ const SPECS: &[Spec] = &[
                   pull request; steps get the published profiles and tools named Explorer, Planner, Builder, \
                   Reviewer, Run test suite and Create pull request where exactly one has the name), empty, or copy \
                   (`copy_of` names a pipeline whose draft or latest version is copied). The name must give a slug no \
-                  other pipeline has.",
+                  other pipeline has. `delivers` says what its runs deliver: changes (repository changes, merged; the \
+                  default), report (the last step's report; a run that committed nothing is completed instead of \
+                  merged), outside (work done through MCP tools outside the repository: the report and the tool calls \
+                  that changed something) or changes_or_report.",
     schema: schema_for_type::<pipelines::CreatePipeline>,
     read_only: false,
   },
@@ -326,7 +330,9 @@ const SPECS: &[Spec] = &[
                   automation change agent permissions, these are refused as person_only: dropping an approval \
                   gate, or asking about tool calls, that the latest published version (before the first: the \
                   draft) has, a step removed with it included; and a step that calls a tool neither the draft nor \
-                  the latest version calls under its key, since it runs a program on this computer.",
+                  the latest version calls under its key, since it runs a program on this computer. `delivers` \
+                  changes what its runs deliver (changes, report, outside or changes_or_report); left out, it stays \
+                  as it is.",
     schema: schema_for_type::<pipeline_steps::SavePipelineDraft>,
     read_only: false,
   },

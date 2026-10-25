@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::across,
-  wire::{self, Rank, Workflow, task_link},
+  wire::{self, Delivers, Rank, Workflow, task_link},
   worktree::worktree_state,
 };
 use crate::{
@@ -29,6 +29,7 @@ use crate::{
   tasks::{
     browse::{self, PipelineFilter, Query, TaskSort},
     data::ProjectTasks,
+    delivery::Delivery,
     detail::TaskDetail,
     history::RunRecord,
     list::{PipelineLabel, TaskTab},
@@ -209,6 +210,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "blocked_reason": task.organization().blocked_reason(),
     "blocked_by": &detail.blocked_by,
     "no_automatic_merge": task.organization().no_automatic_merge(),
+    "delivers": task.organization().delivers().map(Delivers::from),
     "pipeline": {
       "id": task.details().pipeline.map(|id| id.to_string()),
       "shown": translate.text(&pipeline.message()),
@@ -219,9 +221,42 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
       "time_limit_minutes": task.details().limits.max_duration().map(whole_minutes),
     },
     "phase": wire::phase(detail.phase()),
+    "result": result_json(&detail),
     "runs": runs,
     "link": link,
   }))
+}
+
+/// What the latest run that passed every step delivers and what it left beyond a merge (ORC-93): whether it committed
+/// nothing, its completion, its report and the MCP tool calls it was let make outside the repository; `null` for any
+/// other latest run.
+fn result_json(detail: &TaskDetail) -> Value {
+  let Some(result) = &detail.result else {
+    return Value::Null;
+  };
+  let outside: Vec<Value> = result
+    .outside
+    .iter()
+    .map(|change| {
+      json!({
+        "server": &*change.server,
+        "tool": &*change.tool,
+        "target": change.target.as_deref(),
+        "at": wire::time(change.at),
+        "approved_by": change.by.map(|by| by.as_str()),
+      })
+    })
+    .collect();
+  json!({
+    "delivers": Delivers::from(result.delivers),
+    "committed_nothing": detail.delivery == Delivery::NothingToMerge,
+    "completed": result.completion.as_ref().map(|completion| json!({
+      "by": completion.by.as_str(),
+      "at": wire::time(completion.completed_at),
+    })),
+    "report": result.report.as_ref().map(|report| &*report.text),
+    "outside_changes": outside,
+  })
 }
 
 /// The task of project database `db` named by its key, ignoring case, or its id.

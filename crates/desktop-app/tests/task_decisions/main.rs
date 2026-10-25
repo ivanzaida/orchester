@@ -8,6 +8,7 @@
 //! not exist): each decision the runner carries out comes back refused, in so many words. Needs `git`.
 
 mod accounts;
+mod completion;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   id::StepExecutionId,
+  resource::WithoutCommits,
   run::{PauseReason, RunFailure, RunLimit, RunStatus, RunnerFailure, Stuck},
   task::TaskStatus,
   tokens::compact_tokens,
@@ -424,6 +425,37 @@ const fn waiting_words(stuck: &Stuck) -> (Icon, &'static str) {
   }
 }
 
+/// The tone, icon, title and explanation of a run that passed every step and committed nothing (ORC-93): completed,
+/// flagged as its pipeline expects changes, or ready to be completed.
+fn nothing_to_merge(detail: &TaskDetail) -> (NoticeTone, Icon, (&'static str, &'static str)) {
+  let result = detail.result.as_ref();
+  if result.is_some_and(|result| result.completion.is_some()) {
+    return (
+      NoticeTone::Success,
+      Icon::CircleCheck,
+      ("summary.notice.completedTitle", "summary.notice.completedBody"),
+    );
+  }
+  if result.is_some_and(|result| result.without_commits() == WithoutCommits::Flagged) {
+    return (
+      NoticeTone::Warning,
+      Icon::TriangleAlert,
+      (
+        "summary.notice.committedNothingTitle",
+        "summary.notice.committedNothingBody",
+      ),
+    );
+  }
+  (
+    NoticeTone::Success,
+    Icon::CircleCheck,
+    (
+      "summary.notice.nothingToMergeTitle",
+      "summary.notice.nothingToMergeBody",
+    ),
+  )
+}
+
 fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
   let (step, agent) = step_words(ctx, run.current_step());
   let branch = run.run.branch().as_str();
@@ -452,14 +484,10 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
           ),
         ),
       ),
-      Delivery::NothingToMerge => Said::new(
-        NoticeTone::Success,
-        Icon::CircleCheck,
-        text(
-          "summary.notice.nothingToMergeTitle",
-          "summary.notice.nothingToMergeBody",
-        ),
-      ),
+      Delivery::NothingToMerge => {
+        let (tone, icon, (title, body)) = nothing_to_merge(detail);
+        Said::new(tone, icon, text(title, body))
+      }
       Delivery::Waiting => Said::new(
         NoticeTone::Success,
         Icon::CircleCheck,

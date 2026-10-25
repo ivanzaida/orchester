@@ -393,6 +393,7 @@ fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() 
   let checks = MergeChecks {
     quiet: HashSet::from([(run.id(), run.last_sequence().get())]),
     waiting: HashSet::new(),
+    nothing: HashSet::new(),
   };
   let followed = follow_in(
     (fixture.repo.path(), project(&fixture), &Programs::processes()),

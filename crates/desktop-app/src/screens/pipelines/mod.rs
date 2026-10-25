@@ -3,6 +3,7 @@ mod canvas;
 mod command_picker;
 mod deliver;
 mod deliver_card;
+mod delivers;
 mod dependencies;
 mod editor;
 mod graph_routes;

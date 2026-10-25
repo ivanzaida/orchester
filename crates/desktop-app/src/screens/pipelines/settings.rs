@@ -375,7 +375,8 @@ fn draft_strip(ctx: &Ctx, state: &State, locked: bool) -> Element {
     .child(if locked { action.disabled() } else { action })
     .into()
 }
-/// The sections still planned, and Sources (`Q10UQ`) among them in the design's order.
+/// The sections still planned, and Sources (`Q10UQ`) and Delivery (`EYko8`, what a run delivers) among them in the
+/// design's order.
 fn proposals(
   ctx: &mut Ctx,
   sections: &super::settings_nav::Sections,
@@ -393,13 +394,13 @@ fn proposals(
     let section = Column::new()
       .width(Dimension::Pct(100.0))
       .ref_element(sections.target(key));
-    form = form.child(if key == "pipelines.sources" {
-      section.child(super::sources::settings_section(ctx, state, locked))
-    } else {
-      section
+    form = form.child(match key {
+      "pipelines.sources" => section.child(super::sources::settings_section(ctx, state, locked)),
+      "pipelines.delivery" => section.child(super::delivers::settings_section(ctx, state, locked)),
+      _ => section
         .spacing(SpacingSize::Md)
         .child(parts::section(ctx, key))
-        .child(parts::note(&ctx.t("pipelines.proposal")))
+        .child(parts::note(&ctx.t("pipelines.proposal"))),
     });
   }
   form = form.child(

@@ -38,6 +38,10 @@ pub enum NeedKind {
   Interrupted,
   /// A run whose every step passed: its work waits to be reviewed and merged.
   ReadyToMerge,
+  /// A run whose every step passed and committed nothing, whose result is its report: it waits to be completed.
+  ReadyToComplete,
+  /// A run whose every step passed and committed nothing although its pipeline expects changes.
+  CommittedNothing,
   /// A run out of the merge queue with conflicts its Integrate step could not resolve.
   Conflicts,
   /// A run out of the merge queue for another reason: a failed check on the merged result, a base that kept
@@ -61,6 +65,8 @@ impl NeedKind {
       Self::StoppedAtLimit => "overview.needs.kind.stoppedAtLimit",
       Self::Interrupted => "overview.needs.kind.interrupted",
       Self::ReadyToMerge => "overview.needs.kind.readyToMerge",
+      Self::ReadyToComplete => "overview.needs.kind.readyToComplete",
+      Self::CommittedNothing => "overview.needs.kind.committedNothing",
       Self::Conflicts => "overview.needs.kind.conflicts",
       Self::DeliveryStopped => "overview.needs.kind.deliveryStopped",
       Self::DeliveryBlocked => "overview.needs.kind.deliveryBlocked",
@@ -74,10 +80,11 @@ impl NeedKind {
       Self::Approval => "overview.needs.action.review",
       Self::Question => "overview.needs.action.answer",
       Self::PlanReview => "overview.needs.action.reviewPlan",
-      Self::Decision => "overview.needs.action.decide",
+      Self::Decision | Self::CommittedNothing => "overview.needs.action.decide",
       Self::Input | Self::Interrupted | Self::DeliveryStopped => "overview.needs.action.openTask",
       Self::StoppedAtLimit => "overview.needs.action.raiseLimit",
       Self::ReadyToMerge => "overview.needs.action.reviewMerge",
+      Self::ReadyToComplete => "overview.needs.action.reviewComplete",
       Self::Conflicts => "overview.needs.action.openConflicts",
       Self::DeliveryBlocked => "overview.needs.action.openMergeQueue",
       Self::Memory => "overview.needs.action.reviewRecords",
@@ -202,6 +209,8 @@ impl NeedItem {
       NeedKind::Approval
       | NeedKind::Interrupted
       | NeedKind::ReadyToMerge
+      | NeedKind::ReadyToComplete
+      | NeedKind::CommittedNothing
       | NeedKind::Conflicts
       | NeedKind::DeliveryStopped
       | NeedKind::Memory => Decided::Summary(None),
@@ -305,6 +314,8 @@ fn words(tasks: &ProjectTasks, item: &WaitingItem) -> (NeedKind, Message) {
         item.task.as_ref().map(|task| task.key.to_string()).unwrap_or_default(),
       ),
     ),
+    WaitingKind::ReadyToComplete => (NeedKind::ReadyToComplete, run("overview.needs.title.readyToComplete")),
+    WaitingKind::CommittedNothing => (NeedKind::CommittedNothing, run("overview.needs.title.committedNothing")),
     WaitingKind::DeliveryLeft(left) => delivery_left(left, number),
     WaitingKind::DeliveryBlocked { blocked, .. } => (
       NeedKind::DeliveryBlocked,

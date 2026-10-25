@@ -98,7 +98,7 @@ pub fn advance(root: &Path, programs: &Programs) -> Result<Advance, Message> {
 
 fn step(root: &Path, programs: &Programs) -> Result<Advance, StoreError> {
   let mut db = ProjectDb::open(root)?;
-  if join(&mut db, Timestamp::now())? {
+  if join(&mut db, (root, programs), Timestamp::now())? {
     return Ok(Advance::Changed);
   }
   let Some((entry, run)) = next(&db)? else {

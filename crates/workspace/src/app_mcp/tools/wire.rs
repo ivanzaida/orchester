@@ -4,6 +4,7 @@ use orchester_core::{
   attachment::Attachment,
   id::ProjectId,
   project::TaskKey,
+  resource::Deliverable,
   run::{InterruptCause, RunStatus, RunnerFailure, StepStatus, TaskPhase},
   task::{
     TaskStatus,
@@ -93,6 +94,39 @@ impl From<Priority> for Rank {
   }
 }
 
+/// What a run delivers (ORC-93): repository changes, which are merged; the last step's report; work done through MCP
+/// tools outside the repository; or changes when the run made any, else its report.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum Delivers {
+  Changes,
+  Report,
+  Outside,
+  ChangesOrReport,
+}
+
+impl From<Delivers> for Deliverable {
+  fn from(delivers: Delivers) -> Self {
+    match delivers {
+      Delivers::Changes => Self::Changes,
+      Delivers::Report => Self::Report,
+      Delivers::Outside => Self::Outside,
+      Delivers::ChangesOrReport => Self::ChangesOrReport,
+    }
+  }
+}
+
+impl From<Deliverable> for Delivers {
+  fn from(delivers: Deliverable) -> Self {
+    match delivers {
+      Deliverable::Changes => Self::Changes,
+      Deliverable::Report => Self::Report,
+      Deliverable::Outside => Self::Outside,
+      Deliverable::ChangesOrReport => Self::ChangesOrReport,
+    }
+  }
+}
 /// Whether the task is a draft or was submitted ([`TaskStatus`]); a task whose run ended stays
 /// `queued`, so where it stands is its `phase` and its `workflow_status`.
 pub const fn submission(status: TaskStatus) -> &'static str {
@@ -223,6 +257,12 @@ pub fn nullable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<u64
 /// clears it (`Some(None)`), a text sets it.
 pub fn clearable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Option<String>>, D::Error> {
   Option::<String>::deserialize(deserializer).map(Some)
+}
+
+/// An optional argument as given (with `#[serde(default)]` for one left out, `None`): `null` clears it
+/// (`Some(None)`), a value sets it.
+pub fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(deserializer: D) -> Result<Option<Option<T>>, D::Error> {
+  Option::<T>::deserialize(deserializer).map(Some)
 }
 
 /// A limit argument as a form's field holds it: empty for no limit.

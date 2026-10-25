@@ -6,7 +6,10 @@ use orchester_core::{
   id::{ProjectId, ResourceId},
   name::Name,
   permission::{StepCommands, StepNetwork},
-  resource::{Pipeline, PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind, Version},
+  resource::{
+    Deliverable, Draft, Pipeline, PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind,
+    Version,
+  },
   store::ResourceStore,
   time::Timestamp,
 };
@@ -16,7 +19,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  super::{Translate, pipeline_copy::create_error},
+  super::{Translate, pipeline_copy::create_error, wire::Delivers},
   widening,
 };
 use crate::{
@@ -65,6 +68,9 @@ pub struct CreatePipeline {
   pub from: Start,
   /// With `copy`: the pipeline to copy, by its id or name.
   pub copy_of: Option<String>,
+  /// What its runs deliver: changes (repository changes, merged), report (the last step's report), outside (work done
+  /// through MCP tools outside the repository) or changes_or_report; left out, changes (a copy: as its source).
+  pub delivers: Option<Delivers>,
 }
 
 pub async fn get_pipeline(services: &Services, args: InPipeline, translate: &Translate) -> Result<Value, ToolError> {
@@ -118,11 +124,29 @@ pub async fn create_pipeline(
       }
     }
     .map_err(|error| create_error(&error))?;
+    if let Some(delivers) = args.delivers {
+      set_delivers(&mut db, (id, &args.name), delivers.into())?;
+    }
     services.changes.record(open.project.id(), Outside::Pipelines);
     Ok((open.project.id(), opened(&db, id, &args.name)?))
   })
   .await?;
   Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
+}
+
+/// The draft of the new pipeline `id` (`named`), its runs delivering `delivers`.
+fn set_delivers(db: &mut ProjectDb, (id, named): (ResourceId, &str), delivers: Deliverable) -> Result<(), ToolError> {
+  let current = opened(db, id, named)?;
+  if current.body.delivers() == delivers {
+    return Ok(());
+  }
+  let draft = Draft::new(
+    current.body.clone().with_delivers(delivers),
+    current.based_on,
+    Timestamp::now(),
+  );
+  db.save_draft_matching(id, &current.body, current.latest.as_ref().map(|v| v.number), &draft)?;
+  Ok(())
 }
 
 pub async fn publish_pipeline(
@@ -260,6 +284,7 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     "published_version": opened.latest.as_ref().map(|latest| latest.number.get()),
     "steps": steps,
     "deliver": deliver,
+    "delivers": Delivers::from(opened.body.delivers()),
     "problems": problems,
     "assignable": assignable_json(&opened.assignables),
     "link": Link::Pipeline(project, opened.id).path(),

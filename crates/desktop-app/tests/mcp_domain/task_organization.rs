@@ -261,6 +261,49 @@ fn task_organization_no_automatic_merge_is_set_read_kept_and_cleared() {
   assert_eq!(last_actor(&repo, &opted), ChangeActor::Orchester);
 }
 
+/// What a task's runs deliver (ORC-93): `create_task` sets it, `get_task` reads it, `update_task` keeps it when left
+/// out and follows the pipeline again with `null`; `create_pipeline` and `save_pipeline_draft` set a pipeline's.
+#[test]
+fn task_organization_delivers_is_set_read_kept_and_cleared() {
+  use orchester_core::resource::Deliverable;
+
+  let (mut served, repo) = served();
+  let created = served.ok(
+    "create_task",
+    &json!({ "project": "Kontur", "title": "Investigate the crash", "delivers": "report" }),
+  );
+  assert_eq!(created["task"]["delivers"], "report", "{created}");
+  let key = created["task"]["key"].as_str().expect("a key").to_owned();
+  assert_eq!(stored(&repo, &key).organization().delivers(), Some(Deliverable::Report));
+  let read = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+  assert_eq!(read["delivers"], "report", "{read}");
+  served.ok("update_task", &update(&key, json!({ "title": "Investigate it" })));
+  assert_eq!(
+    stored(&repo, &key).organization().delivers(),
+    Some(Deliverable::Report),
+    "left out, it stays"
+  );
+  served.ok("update_task", &update(&key, json!({ "delivers": "outside" })));
+  assert_eq!(
+    stored(&repo, &key).organization().delivers(),
+    Some(Deliverable::Outside)
+  );
+  let cleared = served.ok("update_task", &update(&key, json!({ "delivers": null })));
+  assert_eq!(cleared["task"]["delivers"], Value::Null, "{cleared}");
+  assert_eq!(stored(&repo, &key).organization().delivers(), None);
+
+  let pipeline = served.ok(
+    "create_pipeline",
+    &json!({ "project": "Kontur", "name": "Investigation", "from": "empty", "delivers": "report" }),
+  );
+  assert_eq!(pipeline["pipeline"]["delivers"], "report", "{pipeline}");
+  let saved = served.ok(
+    "save_pipeline_draft",
+    &json!({ "project": "Kontur", "pipeline": "Investigation", "steps": [], "delivers": "changes_or_report" }),
+  );
+  assert_eq!(saved["pipeline"]["delivers"], "changes_or_report", "{saved}");
+}
+
 #[test]
 fn task_organization_list_tasks_tells_what_is_blocked() {
   let (mut served, _repo) = served();

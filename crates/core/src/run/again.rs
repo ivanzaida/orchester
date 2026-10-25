@@ -4,7 +4,8 @@
 //! limits. The run that ended keeps its record, branch and (unless a person removes it) worktree.
 //! A task has one active run at a time, and new runs wait while today's budget is used. An
 //! interrupted run whose worktree a person removed stays interrupted in its record, but it can
-//! never continue, so it no longer holds its task (ORC-63): the task runs again after it.
+//! never continue, so it no longer holds its task (ORC-63): the task runs again after it. So does a
+//! run that passed every step and committed nothing although its pipeline expects changes (ORC-93).
 
 use serde::{Deserialize, Serialize};
 
@@ -51,6 +52,9 @@ pub struct RunAgainInput<'a> {
   pub limits: ProjectLimits,
   /// Tokens the project's runs counted today.
   pub used_today: TokensUsed,
+  /// `after` passed every step and committed nothing, as git tells, although its pipeline expects changes (ORC-93):
+  /// it is run again as one that failed is.
+  pub committed_nothing: bool,
 }
 
 /// Whether the task can run again after `input.after`; `Ok` with the run it runs again after.
@@ -68,9 +72,9 @@ pub fn run_again(input: &RunAgainInput<'_>) -> Result<RunId, RunAgainBlock> {
     return Err(RunAgainBlock::RunActive { number });
   }
   let latest = input.runs.last().copied().flatten();
-  let ended = latest
-    .filter(|run| run.id() == input.after)
-    .is_some_and(|run| can_run_again_after(run, removed(run)));
+  let ended = latest.filter(|run| run.id() == input.after).is_some_and(|run| {
+    can_run_again_after(run, removed(run)) || (input.committed_nothing && *run.status() == RunStatus::Succeeded)
+  });
   if !ended {
     return Err(RunAgainBlock::NotEnded);
   }

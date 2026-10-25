@@ -1,7 +1,8 @@
 //! Ready for review with Merge into main: merging beside the person's uncommitted work (also past a local
 //! integration paused at its review), refused at a dirty path the run changes and at a conflict with Local
 //! integration offered, unavailable without a branch to merge into, merged; and what git tells of the work without
-//! Orchester: merged by a person, or nothing to merge, and current external Git evidence in place of Ready.
+//! Orchester: merged by a person, and current external Git evidence in place of Ready. A run with nothing to merge is
+//! [`super::completion`]'s.
 
 use std::{fs, process};
 
@@ -274,18 +275,6 @@ fn decision_ready_work_merged_with_git_reads_merged_without_a_merge_action() {
   assert_eq!(page.text("task-notice-title"), "Merged");
   assert!(page.text("task-notice").contains("merged without Orchester"));
   assert!(!page.has("task-merge"), "nothing waits to be merged");
-}
-
-#[test]
-fn decision_a_run_that_committed_nothing_has_nothing_to_merge() {
-  let _checkout = checkout_page();
-  let mut page = Page::seeded("decisions");
-  let run = latest_run(&page, "ready for review, merges cleanly");
-  let branch = format!("refs/heads/{}", run.branch());
-  git(&page, &["update-ref", &branch, run.base().as_str()]);
-  page.open("ready for review, merges cleanly", "task-notice");
-  assert_eq!(page.text("task-notice-title"), "Nothing to merge");
-  assert!(!page.has("task-merge"), "there is no work to merge");
 }
 
 #[test]

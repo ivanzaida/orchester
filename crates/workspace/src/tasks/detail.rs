@@ -270,6 +270,9 @@ pub struct TaskDetail {
   /// What became of the latest run's work when it passed every step and Orchester did not merge it, as git
   /// tells it ([`Self::load_settled`]); `Waiting` as far as [`Self::load_in`] knows.
   pub delivery: Delivery,
+  /// For a latest run that passed every step: what it delivers, its completion, its report and the tool calls it made
+  /// outside the repository (ORC-93, [`super::completion`]).
+  pub result: Option<super::completion::RunResult>,
   /// The task's conversation, oldest first.
   pub messages: Vec<Message>,
   /// The files people attached to its messages, by message, in the order they were attached.
@@ -392,8 +395,15 @@ impl TaskDetail {
       None => super::first_agent::first_agent(&db, &task)?,
       Some(_) => None,
     };
+    let run = latest.map(|run| run_view(&db, run)).transpose()?;
+    let result = run
+      .as_ref()
+      .filter(|view| *view.run.status() == RunStatus::Succeeded)
+      .map(|view| super::completion::RunResult::read(&db, &task, &view.run, (&view.outputs, &view.plans)))
+      .transpose()?;
     Ok(Self {
-      run: latest.map(|run| run_view(&db, run)).transpose()?,
+      run,
+      result,
       first_agent,
       run_task,
       merge,
@@ -417,6 +427,7 @@ impl TaskDetail {
       merge: None,
       queue: None,
       delivery: Delivery::Waiting,
+      result: None,
       messages,
       attachments,
       latest_unreadable: None,

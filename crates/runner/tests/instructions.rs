@@ -13,9 +13,12 @@ use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   id::{IdempotencyKey, ResourceId},
   name::Name,
-  resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, StepKey},
+  resource::{
+    AgentTargets, Deliverable, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, StepKey,
+  },
   run::{PromptPart, PromptSource, RunStatus, StepFailure, StepStatus, Stuck},
   store::{ActivityStore, ResourceStore},
+  task::organization::ChangeActor,
   time::Timestamp,
 };
 use orchester_ipc::AttachSession;
@@ -310,4 +313,28 @@ async fn instructions_run_revision_at_resume_is_the_commit_the_agent_made_withou
 async fn instructions_run_revision_at_resume_is_the_base_while_nothing_moved_the_branch() {
   let (prompt, base) = resumed_prompt(|_| {}).await;
   assert!(prompt.contains(&format!("Compare {base}.")), "{prompt}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn instructions_say_what_the_run_delivers_as_its_task_says_it() {
+  let project = project(&Setup::new("Find the cause of the crash."));
+  let root = project.repo.path();
+  ProjectDb::open(root)
+    .expect("open")
+    .update_task_organization(project.task, ChangeActor::Person, Timestamp::now(), |value| {
+      value.with_delivers(Some(Deliverable::Report))
+    })
+    .expect("the task delivers a report");
+  let (scheduler, mut events) = scheduler(root);
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
+  let prompt = prompts(&ProjectDb::open(root).expect("open"), run);
+  assert!(
+    prompt.contains("This run delivers a report, not repository changes"),
+    "{prompt}"
+  );
+  assert!(!prompt.contains("This run delivers repository changes"), "{prompt}");
 }

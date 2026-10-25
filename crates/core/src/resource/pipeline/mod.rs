@@ -18,6 +18,7 @@ mod base_moves;
 mod budget;
 mod changes;
 mod deliver;
+mod delivers;
 mod edit;
 mod sources;
 mod starter;
@@ -27,6 +28,7 @@ pub use self::{
   base_moves::{takes_base_moves, takes_base_moves_by_default},
   changes::{DeliverChange, PipelineChange, StepChange, changes},
   deliver::{DeliverMode, DeliverStep, MergeMethod},
+  delivers::{Deliverable, UnknownDeliverable, WithoutCommits},
   edit::{EditProblem, PipelineEdit},
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
@@ -169,6 +171,9 @@ pub struct Pipeline {
   /// from the task, have none.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   deliver: Option<DeliverStep>,
+  /// What its runs deliver; versions saved before this existed deliver changes.
+  #[serde(default, skip_serializing_if = "Deliverable::is_changes")]
+  delivers: Deliverable,
 }
 
 #[derive(Deserialize)]
@@ -180,6 +185,8 @@ struct PipelineFields {
   steps: Vec<Step>,
   #[serde(default)]
   deliver: Option<DeliverStep>,
+  #[serde(default)]
+  delivers: Deliverable,
 }
 
 /// Why a stored pipeline body is not a pipeline.
@@ -199,6 +206,7 @@ impl TryFrom<PipelineFields> for Pipeline {
       Self::new(fields.steps)?
         .with_description(fields.description)
         .with_deliver(fields.deliver)
+        .with_delivers(fields.delivers)
         .with_sources(fields.sources)?,
     )
   }
@@ -215,6 +223,7 @@ impl Pipeline {
       sources: PipelineSources::default(),
       steps,
       deliver: None,
+      delivers: Deliverable::default(),
     })
   }
 
@@ -228,6 +237,13 @@ impl Pipeline {
   #[must_use]
   pub fn with_deliver(mut self, deliver: Option<DeliverStep>) -> Self {
     self.deliver = deliver;
+    self
+  }
+
+  /// This pipeline's runs delivering `delivers`.
+  #[must_use]
+  pub const fn with_delivers(mut self, delivers: Deliverable) -> Self {
+    self.delivers = delivers;
     self
   }
 
@@ -252,6 +268,11 @@ impl Pipeline {
   /// The Deliver step the pipeline ends in: its runs join the project's merge queue once every step passed.
   pub const fn deliver(&self) -> Option<&DeliverStep> {
     self.deliver.as_ref()
+  }
+
+  /// What the pipeline's runs deliver, unless their task says otherwise ([`Deliverable::for_task`]).
+  pub const fn delivers(&self) -> Deliverable {
+    self.delivers
   }
 
   /// Steps in the order the user arranged them.

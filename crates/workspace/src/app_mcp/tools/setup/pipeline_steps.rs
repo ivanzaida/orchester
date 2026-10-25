@@ -49,6 +49,9 @@ pub struct SavePipelineDraft {
   pub pipeline: String,
   /// What the pipeline is for; left out, it stays as it is.
   pub description: Option<String>,
+  /// What its runs deliver: changes (repository changes, merged), report (the last step's report), outside (work done
+  /// through MCP tools outside the repository) or changes_or_report; left out, it stays as it is.
+  pub delivers: Option<super::super::wire::Delivers>,
   /// Every step, in the order the editor shows them.
   pub steps: Vec<StepInput>,
 }
@@ -137,6 +140,7 @@ pub async fn save_pipeline_draft(
     // editor sets.
     let mut edit = PipelineEdit::from_steps(&description, current.body.sources().clone(), steps);
     edit.set_deliver(current.body.deliver().cloned());
+    edit.set_delivers(args.delivers.map_or_else(|| current.body.delivers(), Into::into));
     // The editor keeps no draft whose steps break a rule; steps without a profile or tool only wait to
     // be published.
     let broken: Vec<Message> = edit

@@ -281,6 +281,10 @@ impl Resolved<'_> {
         id: pipeline_id,
         name: pipeline_name,
         version: pipeline.number(),
+        delivers: orchester_core::resource::Deliverable::for_task(
+          self.task.task.organization().delivers(),
+          pipeline.body().delivers(),
+        ),
       },
       step: self.step,
       profile: ProfileInfo {

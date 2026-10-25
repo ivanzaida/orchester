@@ -6,8 +6,8 @@ use std::{collections::HashMap, sync::Arc};
 use orchester_core::{
   id::{ResourceId, TaskId},
   integration::RunMerge,
-  resource::VersionNumber,
-  run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
+  resource::{Deliverable, VersionNumber, WithoutCommits},
+  run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase, run_delivers},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
@@ -124,6 +124,8 @@ pub struct LatestRun {
   /// Its pipeline ends in a Deliver step: once every step passed, the project's merge queue delivers it
   /// (`crate::merge_queue`), not the person.
   pub delivers: bool,
+  /// What it delivers (ORC-93): with [`Self::nothing_to_merge`], whether it is completed or flagged.
+  pub deliverable: Deliverable,
 }
 
 impl LatestRun {
@@ -170,6 +172,7 @@ impl LatestRun {
       step: CurrentStep::of(run),
       lost_runner: false,
       delivers: run.snapshot().body().deliver().is_some(),
+      deliverable: run_delivers(task, run),
     }
   }
 
@@ -202,7 +205,10 @@ impl LatestRun {
       TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
       TaskPhase::Interrupted => with_checkpoint("tasks.progress.interrupted", "tasks.progress.interruptedNoCheckpoint"),
-      TaskPhase::Succeeded if self.nothing_to_merge => Message::new("tasks.progress.nothingToMerge"),
+      TaskPhase::Succeeded if self.nothing_to_merge => match self.deliverable.without_commits() {
+        WithoutCommits::Completes => Message::new("tasks.progress.reportReady"),
+        WithoutCommits::Flagged => Message::new("tasks.progress.committedNothing"),
+      },
       TaskPhase::Succeeded => Message::new("tasks.progress.succeeded"),
       TaskPhase::Merged => {
         Message::new("tasks.progress.merged").with("branch", self.merged_into.as_deref().unwrap_or_default().to_owned())

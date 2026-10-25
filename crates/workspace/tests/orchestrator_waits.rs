@@ -325,7 +325,8 @@ fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
     Followed {
       kept: true,
       turn: None,
-      pending: true
+      pending: true,
+      completed: false,
     },
     "the wait is kept and its turn waits for the runner"
   );

@@ -33,6 +33,8 @@ pub(super) fn key_of(project: ProjectId, item: &WaitingItem) -> Arc<str> {
     WaitingKind::Interrupted { .. } => "interrupted",
     WaitingKind::StoppedAtLimit { .. } => "limit",
     WaitingKind::ReadyToMerge => "merge",
+    WaitingKind::ReadyToComplete => "complete",
+    WaitingKind::CommittedNothing => "committed-nothing",
     WaitingKind::DeliveryLeft(_) => "delivery",
     WaitingKind::Approval(_) | WaitingKind::Choice(_) => "card",
   };

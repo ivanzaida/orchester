@@ -1,13 +1,15 @@
 //! The decisions a task's Summary waits for, in place of its usual sections (`Task page` `iwrwB`): the
 //! plan review with its pinned decision bar (`ciGbZ`, [`plan`]), raising the limit a run stopped at
-//! (`oTzJZ`, [`limit`]), the decision after a step used up its retries (`DVuXu`, [`retries`]), and Ready
-//! for review with Merge into main and the merge's states (`F2LtFn`, `kxMAN`, [`ready`]). Each keeps the
+//! (`oTzJZ`, [`limit`]), the decision after a step used up its retries (`DVuXu`, [`retries`]), Ready
+//! for review with Merge into main and the merge's states (`F2LtFn`, `kxMAN`, [`ready`]), and for a run that
+//! committed nothing *Complete task*, or the warning that changes were expected ([`completion`], ORC-93). Each keeps the
 //! Summary's frame: where the task stands, the run's stages ([`stages`]) in place of its step rows, the
 //! decision, and *This run* beside them. A run stopped by the project's daily budget has nothing to
 //! decide here: it goes on with Resume run in the header once the day has room. A run that ended may still
 //! go back to one of its steps: that card stands above *Run details* ([`return_ended`]).
 
 mod action;
+mod completion;
 mod delivery;
 mod limit;
 mod plan;
@@ -80,10 +82,13 @@ pub fn decisions(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
       let key = format!("decision-retries-{id}-{}", run.run.last_sequence().get());
       Some(ctx.mount_keyed::<retries::RetryDecision>(&key, props.clone()))
     }
-    // Work git finds merged without Orchester, or a run that committed nothing, waits for no merge: the notice
-    // says which.
+    // Work git finds merged without Orchester waits for no merge: the notice says so.
     RunStatus::Succeeded if props.detail.delivery == Delivery::Waiting => {
       Some(ctx.mount_keyed::<ready::ReadyForReview>(&format!("decision-ready-{id}"), props.clone()))
+    }
+    // A run that committed nothing is completed rather than merged, or flagged when changes were expected (ORC-93).
+    RunStatus::Succeeded if completion::shown(props) => {
+      Some(ctx.mount_keyed::<completion::CompleteRun>(&format!("decision-complete-{id}"), props.clone()))
     }
     _ => None,
   }

@@ -67,6 +67,8 @@ pub(crate) struct Prompt {
   profile_id: ResourceId,
   profile: AgentProfile,
   step: Step,
+  /// What the run delivers; changes unless a test says otherwise.
+  pub(crate) delivers: orchester_core::resource::Deliverable,
 }
 
 impl Prompt {
@@ -79,6 +81,7 @@ impl Prompt {
       profile_id: ResourceId::generate(),
       profile,
       step,
+      delivers: orchester_core::resource::Deliverable::Changes,
     }
   }
 
@@ -100,6 +103,7 @@ impl Prompt {
         id: self.pipeline,
         name: "Feature delivery",
         version: number(3),
+        delivers: self.delivers,
       },
       step: &self.step,
       profile: ProfileInfo {

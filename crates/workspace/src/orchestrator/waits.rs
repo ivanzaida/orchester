@@ -12,7 +12,8 @@
 //! interrupted runs* on too, the turn of an interrupted run's end continues the run, unless it was interrupted again
 //! soon; with *Let the Orchestrator merge finished runs on its own* and *merge runs* on too, the turn of a run's
 //! success merges the run when the chat's rule lets it ([`super::auto_merge`]), one such turn at a time in the order
-//! the runs ended. A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry
+//! the runs ended; a run that committed nothing and whose result is its report is completed by the same rule, without a
+//! turn (ORC-93). A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry
 //! first. The app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns
 //! [`follow_in`] gives, with the chat's tools served for them.
 
@@ -26,7 +27,7 @@ use orchester_core::{
     wait::{dealt_with, raised_by_own},
   },
   question::AskedQuestions,
-  run::Plan,
+  run::{CompletedBy, Plan},
   store::{ConversationStore, RunStore, TaskStore, WorktreeStore},
   task::Task,
   time::Timestamp,
@@ -36,7 +37,7 @@ use orchester_store::{KeptWait, ProjectDb, StoreError};
 
 pub use super::run_ends::{MergeChecks, SucceededAt};
 use super::{
-  auto_merge::merging_in,
+  auto_merge::{completes_in, merging_in},
   run_ends::{Reading, current_ends, merge_checks},
   settings::OrchestratorSetup,
 };
@@ -45,6 +46,7 @@ use crate::{
   messages::{self, Message},
   tasks::{
     changes::run_worktree,
+    completion,
     detail::{RunView, run_store_error, run_view},
   },
 };
@@ -58,12 +60,14 @@ pub struct WaitTurn {
 
 /// What following the waits did: whether it kept a new wait, the turn a wait started by itself, if one did, and
 /// whether a wait would start its turn now but the project's runner has not attached yet. The conversations changed
-/// only when `kept` or `turn` is so.
+/// only when `kept` or `turn` is so. `completed`: the Orchestrator completed a run that committed nothing on its own
+/// (ORC-93), so the project's tasks changed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Followed {
   pub kept: bool,
   pub turn: Option<WaitTurn>,
   pub pending: bool,
+  pub completed: bool,
 }
 
 /// The person's switches the follower reads, as they are now.
@@ -143,8 +147,10 @@ fn follow(reading: &Reading, (switches, ready): (Switches, bool), attached: bool
   })?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
+  let completed = switches.answers && switches.merges && complete_on_its_own(&db, reading)?;
   let followed = Followed {
     kept,
+    completed,
     ..Followed::default()
   };
   if !ready {
@@ -163,6 +169,29 @@ fn follow(reading: &Reading, (switches, ready): (Switches, bool), attached: bool
   }
   let turn = start(&mut db, &next)?;
   Ok(Followed { turn, ..followed })
+}
+
+/// Completes, as the Orchestrator would merge them, the runs git found with nothing to merge (`reading.checks`) whose
+/// result is their report and that the chat's rule would merge ([`completes_in`], ORC-93); whether it completed any.
+/// A completion that is refused leaves the run to the person, as a merge that fails does.
+fn complete_on_its_own(db: &ProjectDb, reading: &Reading) -> Result<bool, StoreError> {
+  let mut completed = false;
+  for &(run, _) in &reading.checks.nothing {
+    if !completes_in(db, run)? {
+      continue;
+    }
+    let done = completion::complete_in(
+      (reading.root, reading.programs),
+      run,
+      (CompletedBy::Orchestrator, false),
+      Timestamp::now(),
+    );
+    match done {
+      Ok(_) => completed = true,
+      Err(message) => tracing::warn!(%run, key = message.key, "the Orchestrator did not complete the run"),
+    }
+  }
+  Ok(completed)
 }
 
 /// Keeps each of the `new` waits in the conversation that last dealt with its task ([`dealt_with`]), else in the

@@ -15,7 +15,7 @@ use orchester_core::{
   run::{
     AssembledPrompt, BaseMoved, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
     PinnedVersion, PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext,
-    StepOutput,
+    StepOutput, run_delivers,
   },
   store::{ActivityStore, ResourceStore, RunStore},
 };
@@ -54,7 +54,6 @@ impl RunTask {
       working,
     } = parts;
     let (event, checked_out) = injection(continuation, worktree);
-    let pipeline = self.run.snapshot().pipeline();
     let pipeline_name = self.pipeline_name()?;
     let outputs = self
       .db
@@ -85,11 +84,7 @@ impl RunTask {
         attempt: self.attempt_number(execution),
         checked_out: checked_out.as_ref(),
       }),
-      pipeline: PipelineInfo {
-        id: pipeline.resource,
-        name: &pipeline_name,
-        version: pipeline.number,
-      },
+      pipeline: self.pipeline_info(&pipeline_name),
       step,
       profile,
       instructions: &sources,
@@ -145,6 +140,17 @@ impl RunTask {
       .iter()
       .find(|attempt| attempt.execution(execution).is_some())
       .map(|attempt| attempt.number())
+  }
+
+  /// The pipeline version the run pinned, named `name`, and what the run delivers, as prompts name them.
+  fn pipeline_info<'a>(&self, name: &'a str) -> PipelineInfo<'a> {
+    let pinned = self.run.snapshot().pipeline();
+    PipelineInfo {
+      id: pinned.resource,
+      name,
+      version: pinned.number,
+      delivers: run_delivers(&self.task, &self.run),
+    }
   }
 
   /// The name of the run's pipeline, as prompts name it.

@@ -121,6 +121,7 @@ pub fn change_row(ctx: &Ctx, change: &orchester_core::resource::PipelineChange) 
   let glyph = match change {
     PipelineChange::Description => Icon::FilePen,
     PipelineChange::Deliver(_) => Icon::GitMerge,
+    PipelineChange::Delivers { .. } => Icon::FileText,
     PipelineChange::Step { change, .. } => match change {
       StepChange::Added => Icon::Plus,
       StepChange::Removed => Icon::Minus,

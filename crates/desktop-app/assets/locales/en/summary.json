@@ -60,8 +60,12 @@
       "mergedTitle": "Merged",
       "mergedBody": "The run's work on {{branch}} was merged.",
       "mergedOutsideBody": "The run's work on {{branch}} is in {{into}}: it was merged without Orchester.",
-      "nothingToMergeTitle": "Nothing to merge",
-      "nothingToMergeBody": "Every step of the run passed. It committed nothing on {{branch}}, so there is no work to merge.",
+      "nothingToMergeTitle": "Ready to complete",
+      "nothingToMergeBody": "Every step of the run passed. Its result is its report: it committed nothing on {{branch}}, so there is nothing to merge.",
+      "completedTitle": "Task completed",
+      "completedBody": "Every step of the run passed and its report is kept as the run's Report. It committed nothing on {{branch}}.",
+      "committedNothingTitle": "This run committed nothing, but its pipeline expects changes",
+      "committedNothingBody": "Every step passed, yet nothing was committed on {{branch}}. Complete the task anyway, return the work to a step with a note, or run the task again.",
       "retriesTitle": "{{step}} still fails after its retries",
       "brokeAgainTitle": "{{step}} broke again after its restart",
       "unverifiedTitle": "Unverified: {{step}} could not check everything",
@@ -206,6 +210,22 @@
     },
     "thisTask": {
       "title": "This task"
+    },
+    "report": {
+      "title": "Report",
+      "from": "From {{step}}",
+      "none": "No step of the run reported anything."
+    },
+    "outside": {
+      "title": "Changes outside the repository",
+      "none": "The run was let make no MCP tool call outside Orchester's own tools.",
+      "call": "{{server}} · {{tool}}",
+      "byYou": "approved by you · {{time}}",
+      "byRule": "approved by a rule · {{time}}",
+      "automatically": "approved automatically · {{time}}",
+      "byAutomation": "approved by automation · {{time}}",
+      "byReviewer": "approved by auto mode's reviewer · {{time}}",
+      "approved": "approved · {{time}}"
     },
     "empty": {
       "title": "No runs yet",

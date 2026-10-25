@@ -6,14 +6,16 @@
 //! unfinished task blocks it; and new starts are not held for its reviewed group or the whole project. `merge_run`'s
 //! own rules (the main checkout needs no local integration) hold on top, and a run the chat's own doing led to starts
 //! no turn at all (`raised_by_own`). The turn merges only the run whose success started it, once per end
-//! ([`merge_as`]); anything else in such a turn is proposed, as before.
+//! ([`merge_as`]); anything else in such a turn is proposed, as before. A run that committed nothing and whose result
+//! is its report is completed by the same rule, with no turn (ORC-93, [`completes_in`]).
 
 use orchester_core::{
   id::RunId,
   orchestrator::{
     ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, MergeLeft, Merging, RunEnd, WaitKind, change::Change,
   },
-  run::{Run, RunStatus, attempt_starts},
+  resource::WithoutCommits,
+  run::{Run, RunStatus, attempt_starts, run_delivers},
   store::{RunStore, TaskStore},
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -30,14 +32,38 @@ use crate::{
 /// Whether the turn of run `run`'s success merges the run on its own, or why it is left to the person. Blocks on
 /// SQLite.
 pub fn merging_in(db: &ProjectDb, run: RunId) -> Result<Merging, StoreError> {
-  Ok(match left(db, run)? {
+  Ok(match left(db, run, Merge::Branch)? {
     Some(why) => Merging::Left { why },
     None => Merging::Merges,
   })
 }
 
-/// Why `run` is left to the person; `None` when the chat merges it on its own.
-fn left(db: &ProjectDb, run: RunId) -> Result<Option<MergeLeft>, StoreError> {
+/// Whether the Orchestrator completes run `run` on its own, as it would merge it (ORC-93): `run` committed nothing (the
+/// caller asked git), its result is its report or work done outside the repository, it was not completed yet, and the
+/// chat's rule would merge it. The merge queue, which never delivers a run with nothing to merge, does not hold it, and
+/// a run whose pipeline expects changes is always left to the person. Blocks on SQLite.
+pub fn completes_in(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
+  let Some(found) = db.run(run).map_err(run_store_error)? else {
+    return Ok(false);
+  };
+  let Some(task) = db.task(found.task())? else {
+    return Ok(false);
+  };
+  if run_delivers(&task, &found).without_commits() != WithoutCommits::Completes || db.run_completion(run)?.is_some() {
+    return Ok(false);
+  }
+  Ok(left(db, run, Merge::Completion)?.is_none())
+}
+
+/// What the rule is asked about: a merge of the run's branch, which the merge queue may hold, or a completion.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Merge {
+  Branch,
+  Completion,
+}
+
+/// Why `run` is left to the person; `None` when the chat merges (or completes) it on its own.
+fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, StoreError> {
   let Some(run) = db.run(run).map_err(run_store_error)? else {
     return Ok(Some(MergeLeft::NotReady));
   };
@@ -47,7 +73,7 @@ fn left(db: &ProjectDb, run: RunId) -> Result<Option<MergeLeft>, StoreError> {
   if !latest_succeeded(db, &run)? {
     return Ok(Some(MergeLeft::NotReady));
   }
-  if crate::merge_queue::delivered_by_queue(db, &run)? {
+  if merge == Merge::Branch && crate::merge_queue::delivered_by_queue(db, &run)? {
     return Ok(Some(MergeLeft::DeliveredByQueue));
   }
   let organization = task.organization();
@@ -132,7 +158,7 @@ pub(super) async fn merge_as(
     if !started_to_merge(&db.chat_entries(chat)?, run.id()) {
       return Ok(MergeAs::Propose);
     }
-    match left(&db, run.id())? {
+    match left(&db, run.id(), Merge::Branch)? {
       None => Ok(MergeAs::OnItsOwn),
       Some(why) => Err(ToolError::refused(
         "left_to_person",

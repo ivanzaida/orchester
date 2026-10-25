@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::{
   id::{RunId, TagId, TaskId},
   name::Name,
+  resource::Deliverable,
   time::Timestamp,
 };
 
@@ -93,6 +94,8 @@ pub struct TaskOrganization {
   /// *Don't merge automatically* (ORC-69): the Orchestrator never merges a run of the task on its own; the turn a
   /// run's success starts only tells the person.
   no_automatic_merge: bool,
+  /// What the task's runs deliver when the task says it (ORC-93); `None` follows its pipeline.
+  delivers: Option<Deliverable>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -104,6 +107,8 @@ struct StoredOrganization {
   tags: Vec<TagId>,
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   no_automatic_merge: bool,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  delivers: Option<Deliverable>,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -151,6 +156,7 @@ impl TaskOrganization {
         .collect(),
       tags,
       no_automatic_merge: false,
+      delivers: None,
     })
   }
 
@@ -172,6 +178,10 @@ impl TaskOrganization {
   /// Whether the task says *Don't merge automatically*: the Orchestrator never merges its runs on its own.
   pub const fn no_automatic_merge(&self) -> bool {
     self.no_automatic_merge
+  }
+  /// What the task says its runs deliver; `None` follows its pipeline ([`Deliverable::for_task`]).
+  pub const fn delivers(&self) -> Option<Deliverable> {
+    self.delivers
   }
 
   pub fn check_tags(&self, known: &std::collections::HashSet<TagId>) -> Result<(), OrganizationError> {
@@ -198,6 +208,11 @@ impl TaskOrganization {
   #[must_use]
   pub const fn with_no_automatic_merge(mut self, no_automatic_merge: bool) -> Self {
     self.no_automatic_merge = no_automatic_merge;
+    self
+  }
+  #[must_use]
+  pub const fn with_delivers(mut self, delivers: Option<Deliverable>) -> Self {
+    self.delivers = delivers;
     self
   }
 
@@ -279,6 +294,7 @@ impl TaskOrganization {
         &base.no_automatic_merge,
         &current.no_automatic_merge,
       ),
+      delivers: pick(&self.delivers, &base.delivers, &current.delivers),
     }
     .with_tags(current.clone().remove_tags(&removed_tags).add_tags(&added_tags).tags)
   }
@@ -305,7 +321,8 @@ impl TryFrom<StoredOrganization> for TaskOrganization {
         value.dependencies,
         value.tags,
       )?
-      .with_no_automatic_merge(value.no_automatic_merge),
+      .with_no_automatic_merge(value.no_automatic_merge)
+      .with_delivers(value.delivers),
     )
   }
 }
@@ -319,6 +336,7 @@ impl From<TaskOrganization> for StoredOrganization {
       dependencies: value.dependencies,
       tags: value.tags,
       no_automatic_merge: value.no_automatic_merge,
+      delivers: value.delivers,
     }
   }
 }

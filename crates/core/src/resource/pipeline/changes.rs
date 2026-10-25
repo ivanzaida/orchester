@@ -2,7 +2,7 @@
 //! confirmation: added, removed and edited steps, with before and after values where they are
 //! short enough to show.
 
-use super::{Pipeline, Step, StepKey, StepKind};
+use super::{Deliverable, Pipeline, Step, StepKey, StepKind};
 use crate::{name::Name, tokens::TokenBudget};
 
 /// One difference between two versions of a pipeline.
@@ -16,6 +16,11 @@ pub enum PipelineChange {
   },
   /// The Deliver step was added, removed or set differently.
   Deliver(DeliverChange),
+  /// Its runs deliver something else.
+  Delivers {
+    from: Deliverable,
+    to: Deliverable,
+  },
 }
 
 /// How the Deliver step changed.
@@ -57,9 +62,16 @@ pub enum StepChange {
 }
 
 /// Changes from `from` to `to`: the description, then edited and added steps in the order of
-/// `to`, then removed steps in the order of `from`, then the Deliver step, which always comes last.
+/// `to`, then removed steps in the order of `from`, then what its runs deliver and the Deliver step, which always come
+/// last.
 pub fn changes(from: &Pipeline, to: &Pipeline) -> Vec<PipelineChange> {
   let mut changes = steps_changes(from, to);
+  if from.delivers() != to.delivers() {
+    changes.push(PipelineChange::Delivers {
+      from: from.delivers(),
+      to: to.delivers(),
+    });
+  }
   let deliver = match (from.deliver(), to.deliver()) {
     (None, Some(_)) => Some(DeliverChange::Added),
     (Some(_), None) => Some(DeliverChange::Removed),

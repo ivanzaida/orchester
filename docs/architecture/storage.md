@@ -517,6 +517,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | --- | --- |
 | `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it; waiting for a person, with the step whose retries ran out or that broke again), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force (`NULL` for no limit), tokens used, pause requested |
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
+| `run_completions` | a run that succeeded and committed nothing, completed instead of merged (ORC-93): who completed it (a person or the Orchestrator) and when; it sets the task Done as a merge does — desktop-written, once per run |
 | `run_worktree_removals` | when a run's own worktree was removed (*Remove worktree*, a merge, Run again), once per run — written by the desktop or the runner, whichever removed it |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step; `NULL` lifted the step's budget |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
@@ -529,6 +530,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `run_events` | run, sequence, time, kind, payload — append-only |
 | `evidence` | run, revision, kind (criteria, tests, review, browser), result, blob |
 | `artifacts` | run, name, blob |
+| `run_artifacts` | run, name, step, text, created — the texts a run keeps by name; today a completed run's last step's report, *Report* (ORC-93) |
 | `invocations` | run, step execution, number, kind (agent, command), model (empty for a command), CLI session id, started / ended, input / cached input / output tokens, outcome — one row per agent CLI launch or command tool run |
 | `agent_events` | run, sequence, step execution, invocation, time, kind, payload — the agent transcript, append-only. Payloads hold what the agent wrote and ran, including file content: an agent CLI's call of Orchester's `edit_file` keeps the edits' old and new text, and `write_file` up to the first 200 lines of the content it wrote (each line up to 1,000 characters). Only the values of the project's registered secrets are redacted, as whole texts before the lines are cut; anything else, such as an unregistered `.env` file the agent writes, is stored as written |
 | `invocation_prompts` | invocation, injection event (start for a new session, resume for a continued one) and the source of each part of its prompt in order (profile version, instruction versions, pipeline step, task) — written once before the CLI starts |

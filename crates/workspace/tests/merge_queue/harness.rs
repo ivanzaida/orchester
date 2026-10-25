@@ -169,6 +169,23 @@ impl Repo {
   /// A run of `task` on `pipeline` from `main`'s head on `branch`, in a worktree of its own, that committed `text` to
   /// `file` and passed both steps at `finished`.
   pub fn succeeded(&mut self, (task, pipeline): (&Task, &str), branch: &str, edit: (&str, &str), finished: i64) -> Run {
+    let mut run = self.in_worktree((task, pipeline), branch, finished);
+    let worktree = self.worktree(&run);
+    fs::write(worktree.join(edit.0), edit.1).expect("edit");
+    git(&worktree, &["commit", "-am", &format!("{}: Implement", task.key())]);
+    self.pass_both(&mut run, finished);
+    run
+  }
+
+  /// [`Self::succeeded`] for a run that committed nothing: its branch is where `main` was when it started (ORC-93).
+  pub fn succeeded_without_commits(&mut self, (task, pipeline): (&Task, &str), branch: &str, finished: i64) -> Run {
+    let mut run = self.in_worktree((task, pipeline), branch, finished);
+    self.pass_both(&mut run, finished);
+    run
+  }
+
+  /// A run of `task` on `pipeline` from `main`'s head on `branch`, started before `finished` in a worktree of its own.
+  fn in_worktree(&mut self, (task, pipeline): (&Task, &str), branch: &str, finished: i64) -> Run {
     let base = git(self.root(), &["rev-parse", "main"]);
     let mut run = self
       .db
@@ -194,9 +211,6 @@ impl Repo {
       self.root(),
       &["worktree", "add", "-b", branch, worktree.to_str().expect("path")],
     );
-    fs::write(worktree.join(edit.0), edit.1).expect("edit");
-    git(&worktree, &["commit", "-am", &format!("{}: Implement", task.key())]);
-    self.pass_both(&mut run, finished);
     run
   }
 

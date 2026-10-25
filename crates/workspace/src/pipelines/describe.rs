@@ -1,7 +1,7 @@
 //! What the pipeline screens say about a step, a version or a change, as messages.
 
 use orchester_core::{
-  resource::{DeliverChange, PipelineChange, RepositoryAccess, Step, StepChange, StepKind},
+  resource::{DeliverChange, Deliverable, PipelineChange, RepositoryAccess, Step, StepChange, StepKind},
   tokens::compact_tokens,
 };
 
@@ -123,6 +123,7 @@ pub fn change(change: &PipelineChange) -> Message {
     PipelineChange::Deliver(DeliverChange::Added) => return Message::new("pipelines.changes.deliverAdded"),
     PipelineChange::Deliver(DeliverChange::Removed) => return Message::new("pipelines.changes.deliverRemoved"),
     PipelineChange::Deliver(DeliverChange::Changed) => return Message::new("pipelines.changes.deliverChanged"),
+    PipelineChange::Delivers { to, .. } => return Message::new(delivers_change_key(*to)),
   };
   let about = |key: &'static str| Message::new(key).with("step", name.as_str().to_owned());
   match change {
@@ -150,4 +151,14 @@ pub fn change(change: &PipelineChange) -> Message {
 /// A step budget in the compact form (`400k`); the message adds "tokens".
 fn budget_text(budget: Option<orchester_core::tokens::TokenBudget>) -> String {
   budget.map_or_else(|| "—".to_owned(), |budget| compact_tokens(budget.get()))
+}
+
+/// "Runs now deliver a report": the change to what the pipeline's runs deliver, by what they deliver now.
+const fn delivers_change_key(to: Deliverable) -> &'static str {
+  match to {
+    Deliverable::Changes => "pipelines.changes.delivers.changes",
+    Deliverable::Report => "pipelines.changes.delivers.report",
+    Deliverable::Outside => "pipelines.changes.delivers.outside",
+    Deliverable::ChangesOrReport => "pipelines.changes.delivers.changesOrReport",
+  }
 }

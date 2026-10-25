@@ -67,7 +67,7 @@ use crate::{
   id::ResourceId,
   memory::RecalledMemory,
   project::Project,
-  resource::{AgentProfile, InjectionEvent, Instruction, Step, Variable, VersionNumber},
+  resource::{AgentProfile, Deliverable, InjectionEvent, Instruction, Step, Variable, VersionNumber},
   revision::Revision,
   task::Task,
 };
@@ -78,12 +78,14 @@ pub enum PromptAssemblyError {
   UnavailableVariable { variable: Variable, section: PromptSource },
 }
 
-/// The pipeline a run executes, as prompts name it.
+/// The pipeline a run executes, as prompts name it, and what the run delivers: the task's own choice, else the
+/// pipeline's ([`crate::resource::Deliverable::for_task`]).
 #[derive(Clone, Copy, Debug)]
 pub struct PipelineInfo<'a> {
   pub id: ResourceId,
   pub name: &'a str,
   pub version: VersionNumber,
+  pub delivers: Deliverable,
 }
 
 /// The published agent profile version that runs the step.

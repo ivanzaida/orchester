@@ -49,11 +49,13 @@ pub(super) struct Reading<'a> {
 
 /// What git told of the project's runs that succeeded and that Orchester did not merge: those whose work it holds
 /// merged outside Orchester, or that have nothing to merge (`quiet`), are never told as ready to merge; the others
-/// wait to be merged.
+/// wait to be merged. Those with nothing to merge are also in `nothing`, which the Orchestrator may complete
+/// (ORC-93).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MergeChecks {
   pub quiet: HashSet<SucceededAt>,
   pub waiting: HashSet<SucceededAt>,
+  pub nothing: HashSet<SucceededAt>,
 }
 
 /// A run that succeeded, by the sequence of the event it succeeded with: a run that succeeds again after a follow-up
@@ -85,6 +87,9 @@ pub(super) fn merge_checks(
   let works: Vec<RunWork> = runs.iter().map(|(run, _)| RunWork::of(run)).collect();
   let mut checks = MergeChecks::default();
   for ((_, at), found) in runs.iter().zip(delivery::deliveries(programs, root, &works)) {
+    if found == Delivery::NothingToMerge {
+      checks.nothing.insert(*at);
+    }
     let set = match found {
       Delivery::Waiting => &mut checks.waiting,
       Delivery::MergedOutside(_) | Delivery::NothingToMerge => &mut checks.quiet,

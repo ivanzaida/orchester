@@ -10,7 +10,7 @@ pub(super) mod controls;
 mod module;
 mod notices;
 mod refusal;
-mod run_again;
+pub(super) mod run_again;
 mod run_line;
 
 use std::sync::Arc;
@@ -55,7 +55,7 @@ impl lurq::app::component::DevtoolsInspectable for HeaderProps {}
 
 pub struct TaskHeader {
   refusals: Refusals,
-  /// Run again's confirmation.
+  /// Run again's confirmation, the page's: the Summary of a run that committed nothing opens it too.
   confirming: Signal<Confirming>,
   /// Its switch that removes the worktrees of the run before, off each time it opens.
   remove: Signal<bool>,
@@ -65,10 +65,11 @@ impl Component for TaskHeader {
   type Props = HeaderProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let state = super::PageState::of(ctx);
     Self {
       refusals: Refusals::new(ctx),
-      confirming: ctx.signal(Confirming::default()),
-      remove: ctx.signal(false),
+      confirming: state.run_again,
+      remove: state.run_again_remove,
     }
   }
 

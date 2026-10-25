@@ -26,6 +26,7 @@ use orchester_workspace::{
     waits::{self, Followed, MergeChecks, SucceededAt, Switches, WaitTurn},
   },
   runner::Runners,
+  tasks::outside::Outside,
   workspace::{OpenProject, OrchestratorConsent},
 };
 
@@ -98,6 +99,10 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
   }
   if followed.kept || followed.turn.is_some() {
     services.runners.chat_changed(&open.repo_root);
+  }
+  // The Orchestrator completed a run that committed nothing (ORC-93): its task is Done now.
+  if followed.completed {
+    services.changes.record(open.project.id(), Outside::Tasks);
   }
   if let Some(turn) = followed.turn {
     answer(services, i18n, open, turn).await;

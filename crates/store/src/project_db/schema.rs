@@ -52,6 +52,7 @@ mod recovery;
 mod returned_after_end;
 mod reviewer_accounts;
 mod reviewer_usage;
+mod run_completions;
 mod run_rebases;
 mod run_resolutions;
 mod runner_failures;

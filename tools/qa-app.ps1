@@ -35,7 +35,7 @@ param(
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "changes", "cards", "decisions", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "pull-request-feedback", "sources", "usage", "usage-empty", "usage-bare", "import")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "changes", "cards", "decisions", "deliverables", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "pull-request-feedback", "sources", "usage", "usage-empty", "usage-bare", "import")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,

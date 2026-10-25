@@ -173,6 +173,18 @@
       "loadFailedBody": "{{reason}} Nothing was changed. Sources can be added once the project's are read, since one the project already lists is not added again."
     },
     "delivery": "Delivery",
+    "delivers": {
+      "label": "What a run delivers",
+      "help": "What a run that passes every step leaves. A run that commits nothing is completed when its result is a report, and waits for you when changes were expected. A task may say otherwise for its own runs.",
+      "changes": "Repository changes",
+      "changesHelp": "Its commits are merged into the base branch.",
+      "report": "A report",
+      "reportHelp": "Its last step's report is the result; no repository changes are expected.",
+      "outside": "Work outside the repository",
+      "outsideHelp": "Done through MCP tools, e.g. a design or tickets: its report and the tool calls that changed something.",
+      "changesOrReport": "Changes or a report",
+      "changesOrReportHelp": "Its commits are merged when it makes any; otherwise its report is the result."
+    },
     "who": "Who can use it",
     "archive": "Archive or delete",
     "proposal": "These settings are planned and are not available in this version.",

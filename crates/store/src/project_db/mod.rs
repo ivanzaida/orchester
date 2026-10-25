@@ -12,6 +12,7 @@ mod blobs;
 mod chat_decisions;
 mod checks;
 mod code_index;
+mod completions;
 mod connections;
 mod consistent;
 mod environment;

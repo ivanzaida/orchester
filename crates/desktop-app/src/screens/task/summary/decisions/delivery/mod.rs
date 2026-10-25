@@ -43,7 +43,7 @@ use orchester_workspace::{
   display::short_revision,
   merge_queue::{self, QueueRefusal, TaskDelivery},
   messages::Message,
-  tasks::{detail::RunView, run::control_message},
+  tasks::{delivery::Delivery, detail::RunView, run::control_message},
 };
 
 use self::rows::Stage;
@@ -60,6 +60,7 @@ const LOOK: Duration = Duration::from_secs(2);
 
 /// Whether the Summary of `task` is its latest run's delivery: the run's pipeline ends in a Deliver step, it passed
 /// every step (or works again on its conflicts in its Integrate step) and a person did not take it out of the queue.
+/// A run that committed nothing never joins the queue (ORC-93): its Summary is that of a run with nothing to merge.
 pub fn shown(task: &TaskContext) -> bool {
   let detail = &task.detail;
   let (Some(run), Some(queue)) = (detail.run.as_ref(), detail.queue.as_ref()) else {
@@ -74,7 +75,7 @@ pub fn shown(task: &TaskContext) -> bool {
       RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::WaitingForPerson(_)
     ),
     Some(_) => *status == RunStatus::Succeeded,
-    None => *status == RunStatus::Succeeded && detail.merge.is_none(),
+    None => *status == RunStatus::Succeeded && detail.merge.is_none() && detail.delivery != Delivery::NothingToMerge,
   }
 }
 

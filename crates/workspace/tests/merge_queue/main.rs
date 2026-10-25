@@ -122,7 +122,8 @@ fn merge_queue_moves_waiting_runs_up_and_to_the_top_and_removes_them() {
     })
     .collect();
   let mut db = ProjectDb::open(repo.root()).expect("open");
-  assert!(merge_queue::join(&mut db, at(1_000)).expect("joined"));
+  let programs = repo.programs();
+  assert!(merge_queue::join(&mut db, (repo.root(), &programs), at(1_000)).expect("joined"));
   let order = |repo: &Repo| -> Vec<u32> {
     merge_queue::read(repo.root(), &repo.programs())
       .expect("read")
@@ -149,7 +150,7 @@ fn merge_queue_moves_waiting_runs_up_and_to_the_top_and_removes_them() {
     "a removed run is not shown and does not join again"
   );
   let mut db = ProjectDb::open(repo.root()).expect("open");
-  assert!(!merge_queue::join(&mut db, at(1_002)).expect("joined"));
+  assert!(!merge_queue::join(&mut db, (repo.root(), &programs), at(1_002)).expect("joined"));
 }
 
 #[test]
@@ -414,4 +415,29 @@ fn merge_queue_leaves_out_runs_whose_pipeline_has_no_deliver_step_and_takes_a_fa
     repo.state(&failing)
   );
   assert!(!repo.main_holds(&tip), "nothing of the run reached main");
+}
+
+#[test]
+fn merge_queue_skips_a_run_that_committed_nothing() {
+  let mut repo = Repo::new();
+  let (report, change) = (repo.task("Investigate the crash"), repo.task("Fix the crash"));
+  let nothing = repo.succeeded_without_commits((&report, "auto"), "orchester/orc-1-run-1", 100);
+  let fixed = repo.succeeded(
+    (&change, "auto"),
+    "orchester/orc-2-run-1",
+    ("shared.txt", "fixed\n"),
+    200,
+  );
+  repo.drive();
+  let db = ProjectDb::open(repo.root()).expect("open");
+  assert_eq!(
+    db.merge_queue_entry(nothing.id()).expect("entry"),
+    None,
+    "a run with nothing to merge never joins: it is completed, or it waits for the person"
+  );
+  assert!(
+    matches!(repo.state(&fixed), QueueState::Merged(_)),
+    "{:?}",
+    repo.state(&fixed)
+  );
 }

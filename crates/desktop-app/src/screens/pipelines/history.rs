@@ -167,7 +167,8 @@ fn comparison_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
       .filter_map(|change| match change {
         orchester_core::resource::PipelineChange::Step { key, .. } => Some(key.as_str()),
         orchester_core::resource::PipelineChange::Deliver(_) => Some(DELIVER_KEY),
-        orchester_core::resource::PipelineChange::Description => None,
+        orchester_core::resource::PipelineChange::Description
+        | orchester_core::resource::PipelineChange::Delivers { .. } => None,
       })
       .collect::<std::collections::BTreeSet<_>>()
       .len()

@@ -41,6 +41,8 @@ fn kinds(items: &[WaitingItem]) -> Vec<&'static str> {
       WaitingKind::Interrupted { .. } => "interrupted",
       WaitingKind::StoppedAtLimit { .. } => "limit",
       WaitingKind::ReadyToMerge => "merge",
+      WaitingKind::ReadyToComplete => "complete",
+      WaitingKind::CommittedNothing => "committed nothing",
       WaitingKind::DeliveryLeft(_) => "delivery",
       WaitingKind::DeliveryBlocked { .. } => "blocked",
       WaitingKind::Memory { .. } => "memory",

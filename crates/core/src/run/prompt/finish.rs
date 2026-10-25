@@ -1,6 +1,9 @@
-//! The *When you finish* part of a prompt: how the agent hands its result in and what each outcome means.
+//! The *When you finish* part of a prompt: how the agent hands its result in, what each outcome means, and what the
+//! run delivers (ORC-93), so an investigation writes a report rather than inventing commits, and work done through
+//! MCP tools is reported where it was done.
 
 use super::{PromptInput, ResultDelivery, composition::push_block};
+use crate::resource::Deliverable;
 
 /// How an agent CLI hands in its result: its last message.
 const RESULT_AS_MESSAGE: &str = "End with exactly one JSON object containing `outcome` and `summary`, for example \
@@ -61,16 +64,42 @@ const GATED_RESULT_INSTRUCTIONS: &str = "A person reviews your summary before th
                                          it the complete result of this step (for a plan, the whole plan), in \
                                          Markdown.";
 
-/// How to hand the result in, what makes a result, and for a gated step that a person reviews it.
+/// How to hand the result in, what makes a result, what the run delivers, and for a gated step that a person reviews
+/// it.
 pub(super) fn push_result(text: &mut String, input: &PromptInput<'_>, delivery: ResultDelivery) {
   let how = match delivery {
     ResultDelivery::Message => RESULT_AS_MESSAGE,
     ResultDelivery::Tool => RESULT_AS_TOOL,
   };
   push_block(text, &format!("{how}\n{RESULT_INSTRUCTIONS}"));
+  push_block(text, delivers_line(input.pipeline.delivers));
   push_later_steps(text, input);
   if input.step.approval_gate {
     push_block(text, GATED_RESULT_INSTRUCTIONS);
+  }
+}
+
+/// What the run delivers, in the words every step's prompt says it.
+const fn delivers_line(delivers: Deliverable) -> &'static str {
+  match delivers {
+    Deliverable::Changes => {
+      "This run delivers repository changes: its commits are merged into the base branch once every step passed. A \
+       run that commits nothing waits for the person."
+    }
+    Deliverable::Report => {
+      "This run delivers a report, not repository changes: do not make commits to have something to show. The last \
+       step's summary is the run's result and is kept as its report, so make it complete and readable on its own."
+    }
+    Deliverable::Outside => {
+      "This run delivers work done outside the repository through MCP tools (a design, tickets, data in a service), \
+       not repository changes. Say in your summary what you changed and where: the server, the tool and what it \
+       changed, so the person can find it. The last step's summary is kept as the run's report, beside the record of \
+       the tool calls that changed something."
+    }
+    Deliverable::ChangesOrReport => {
+      "This run delivers repository changes when the task needs them, else a report. Commit only changes the task \
+       needs; when it needs none, the last step's summary is the run's result and is kept as its report."
+    }
   }
 }
 
