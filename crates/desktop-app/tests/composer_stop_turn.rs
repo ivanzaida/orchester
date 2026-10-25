@@ -21,9 +21,9 @@ use orchester_app::{
   ui::icon::Icon,
 };
 use orchester_core::{
-  connection::stream::InvocationOutcome,
+  connection::stream::{AgentEvent, InvocationOutcome},
   project::TaskKey,
-  run::RunStatus,
+  run::{Run, RunStatus},
   store::{ActivityStore, RunStore, TaskStore},
   time::Timestamp,
 };
@@ -112,8 +112,14 @@ fn working() -> (Window, std::path::PathBuf, TaskKey) {
       .is_some_and(|glyph| glyph != Icon::Lock.glyph().to_string())
   });
   click(&mut window, "task-run");
-  wait(&mut window, "the agent at work", |window| {
-    window.texts("task-pause-run").is_some()
+  // The agent's session has begun its first turn: a turn stopped before it has no session to go on in, and a new one
+  // of this task's brief keeps working.
+  wait(&mut window, "the agent's first turn", |_| {
+    latest_run(&repo, &key).is_some_and(|run| {
+      let db = ProjectDb::open(&repo).expect("open");
+      let activity = db.activity(run.id(), 0).expect("activity");
+      activity.iter().any(|entry| entry.event == AgentEvent::TurnStarted)
+    })
   });
   window.navigation().go(page(TaskView::of(TaskTab::Conversation)));
   wait(&mut window, "Stop turn on the working line", |window| {
@@ -122,8 +128,8 @@ fn working() -> (Window, std::path::PathBuf, TaskKey) {
   (window, repo, key)
 }
 
-/// The outcomes of the task's latest run's invocations, and its status.
-fn latest(repo: &std::path::Path, key: &TaskKey) -> (Vec<Option<InvocationOutcome>>, RunStatus) {
+/// The task's latest run, once it has one.
+fn latest_run(repo: &std::path::Path, key: &TaskKey) -> Option<Run> {
   let db = ProjectDb::open(repo).expect("open");
   let task = db
     .tasks()
@@ -131,13 +137,17 @@ fn latest(repo: &std::path::Path, key: &TaskKey) -> (Vec<Option<InvocationOutcom
     .into_iter()
     .find(|task| task.key() == key)
     .expect("the task");
-  let run = db
-    .runs_of_task(task.id())
+  db.runs_of_task(task.id())
     .expect("runs")
     .pop()
-    .expect("a run")
-    .expect("readable");
-  let outcomes = db
+    .map(|run| run.expect("readable"))
+}
+
+/// The outcomes of the task's latest run's invocations, and its status.
+fn latest(repo: &std::path::Path, key: &TaskKey) -> (Vec<Option<InvocationOutcome>>, RunStatus) {
+  let run = latest_run(repo, key).expect("a run");
+  let outcomes = ProjectDb::open(repo)
+    .expect("open")
     .invocations(run.id())
     .expect("invocations")
     .into_iter()
