@@ -1,14 +1,16 @@
 # Deploying Orchester Cloud
 
 How to run Orchester Cloud (the backend `crates/cloud` and its web front `web/cloud`) with Docker at
-`orchester-cloud.lurq.dev`. What the service is, its configuration and how it keeps its keys are in
-[docs/cloud-hosting.md](../../docs/cloud-hosting.md); its API is in [docs/cloud-api.md](../../docs/cloud-api.md).
+`orchester.cloud`. Until 2026-10-25 it ran at `orchester-cloud.lurq.dev`, which keeps answering while app builds
+and team servers from before the move still call it ([Moving to another domain](#moving-to-another-domain)). What
+the service is, its configuration and how it keeps its keys are in [docs/cloud-hosting.md](../../docs/cloud-hosting.md);
+its API is in [docs/cloud-api.md](../../docs/cloud-api.md).
 
-**On a host whose ingress is Traefik, managed with Portainer** (the server of `orchester-cloud.lurq.dev`), follow
+**On a host whose ingress is Traefik, managed with Portainer** (the server of `orchester.cloud`), follow
 [PORTAINER.md](PORTAINER.md) instead: `compose.portainer.yaml` runs the images GitHub Actions builds
 (`.github/workflows/cloud-images.yml`) behind that Traefik, and the workflow redeploys the stack. The Caddy compose
-files below remain for hosts without Traefik; the sections on the SMTP relay, backups, upgrades and logs apply to
-both.
+files below remain for hosts without Traefik; the sections on the SMTP relay, backups, upgrades, logs and moving to
+another domain apply to both.
 
 ## What runs
 
@@ -38,8 +40,9 @@ The backend runs as one instance. Its rate-limit counters are in memory, so do n
 ## The host, DNS and TLS
 
 - A Linux host with Docker Engine and the compose plugin, reachable from the internet on TCP 80 and 443, and UDP 443 for HTTP/3.
-- DNS: an `A` record `orchester-cloud.lurq.dev` → the host's IPv4 address, and an `AAAA` record if the host has
-  public IPv6. Set them before the first start.
+- DNS: an `A` record `orchester.cloud` → the host's IPv4 address, and an `AAAA` record if the host has public IPv6.
+  Set them before the first start. Keep the records of `orchester-cloud.lurq.dev` pointing at the same host while it
+  still answers ([Moving to another domain](#moving-to-another-domain)).
 - TLS: Caddy takes the site address from `ORCHESTER_CLOUD_PUBLIC_URL` and gets a public certificate for that host
   by ACME on its first start, and renews it. It needs ports 80 and 443 for that. It redirects plain HTTP to HTTPS,
   and `Caddyfile.web` sends `Strict-Transport-Security: max-age=31536000`. The certificates and Caddy's ACME account
@@ -50,7 +53,7 @@ The backend runs as one instance. Its rate-limit counters are in memory, so do n
 Put the values into `deploy/cloud/.env`, beside the compose files, readable only by the operator. Never commit it.
 
 ```sh
-ORCHESTER_CLOUD_PUBLIC_URL=https://orchester-cloud.lurq.dev
+ORCHESTER_CLOUD_PUBLIC_URL=https://orchester.cloud
 POSTGRES_PASSWORD=<openssl rand -hex 24>
 ORCHESTER_CLOUD_SMTP_URL=smtps://<user>:<password>@<relay host>:465
 ORCHESTER_CLOUD_SMTP_FROM=Orchester <no-reply@lurq.dev>
@@ -60,7 +63,8 @@ ORCHESTER_CLOUD_WEB_SECRET=<openssl rand -base64 32>
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `ORCHESTER_CLOUD_PUBLIC_URL` | cloud, web, Caddy | The public address, without a trailing `/`. Email links start with it, identity tokens name it as issuer, the web front accepts forms only from it, and Caddy serves and certifies its host |
+| `ORCHESTER_CLOUD_PUBLIC_URL` | cloud, web, Caddy | The public address, without a trailing `/`. Email links start with it, identity tokens name it as issuer, the web front accepts forms from it (and from `ORCHESTER_CLOUD_EXTRA_ORIGINS`), and Caddy serves and certifies its host |
+| `ORCHESTER_CLOUD_EXTRA_ORIGINS` | web | Optional. Other origins the web front takes forms from, comma-separated `https://host[:port]` without a path, while the site answers on two domains ([Moving to another domain](#moving-to-another-domain)). Each origin keeps its own host-only cookies, so a browser signed in on one is not signed in on the other. Empty or unset: only `ORCHESTER_CLOUD_PUBLIC_URL` |
 | `POSTGRES_PASSWORD` | PostgreSQL, cloud | The database password. Compose puts it into the backend's connection URL as it is, so use only URL-safe characters (the hex above). PostgreSQL reads it only when it creates the `postgres_data` volume; changing it later needs `ALTER USER` as well |
 | `ORCHESTER_CLOUD_SMTP_URL` | cloud | The SMTP relay: `smtps://user:pass@host:465` (TLS) or `smtp://user:pass@host:587?tls=required` (STARTTLS required). URL-encode the user and password |
 | `ORCHESTER_CLOUD_SMTP_FROM` | cloud | The sender of every email |
@@ -98,8 +102,8 @@ email's purpose only, never its address.
    when it starts, makes its root key on the very first start, and publishes its first key set before it listens;
    from then on it rotates its signing keys and signs key sets itself ([docs/cloud-hosting.md](../../docs/cloud-hosting.md),
    "Keys"). `dc logs cloud` names the root key (`root key ready root_public_key=… root_fingerprint=…`).
-3. Check it: `https://orchester-cloud.lurq.dev/signup` shows the sign-up page,
-   `https://orchester-cloud.lurq.dev/api/v1/keys` answers `200`, and a sign-up gets its email.
+3. Check it: `https://orchester.cloud/signup` shows the sign-up page, `https://orchester.cloud/api/v1/keys`
+   answers `200`, and a sign-up gets its email.
 
 ## Backups
 
@@ -153,3 +157,26 @@ not automatic: dump, start the new major version on a new volume, and restore.
 `dc logs cloud` has one record per request: method, route template, status, account id and duration. It never has
 emails, passwords, tokens or links. The web front logs only its start and its errors, and Caddy only its own
 events.
+
+## Moving to another domain
+
+The cloud moved from `orchester-cloud.lurq.dev` to `orchester.cloud` on 2026-10-25. Both names point at the same
+host and the same stack, so accounts, devices, links and keys stay as they are; app builds, team servers and admins
+from before the move have the former address built in or stored, and keep calling it until they are updated. The
+whole order, with when to release the app and when to change `ORCHESTER_CLOUD_PUBLIC_URL`, is in
+[docs/cloud-hosting.md](../../docs/cloud-hosting.md), "Moving the cloud". For the deployment itself:
+
+- **The API on both hosts.** Every host the proxy routes to the stack reaches the same backend. On Traefik,
+  `compose.portainer.yaml` routes `ORCHESTER_CLOUD_HOST` (`orchester.cloud`) and `ORCHESTER_CLOUD_FORMER_HOST`
+  (`orchester-cloud.lurq.dev`) and gets a certificate for each ([PORTAINER.md](PORTAINER.md)). On Caddy, add the other
+  host to the site address of `Caddyfile.web`, e.g. `{$ORCHESTER_CLOUD_PUBLIC_URL}, https://orchester-cloud.lurq.dev {`.
+- **The web pages on both hosts.** The web front takes forms only from its own origins: `ORCHESTER_CLOUD_PUBLIC_URL`
+  and `ORCHESTER_CLOUD_EXTRA_ORIGINS`. `compose.portainer.yaml` sets the extra origins to both routed hosts itself; with
+  Caddy, set `ORCHESTER_CLOUD_EXTRA_ORIGINS=https://orchester-cloud.lurq.dev` (or, while the public URL is still the
+  former one, `https://orchester.cloud`). A visitor stays on the host they came to: the site's redirects are relative,
+  and its cookies are `__Host-` cookies of that host alone, so a sign-in on one host is not one on the other.
+- **`ORCHESTER_CLOUD_PUBLIC_URL`** decides what the emails link to and which issuer the identity tokens and key sets
+  name. Change it only in the order "Moving the cloud" gives; the backend signs a key set naming the new URL as it
+  starts, and team servers that are up to date take tokens of the former issuer as well.
+- **Dropping the former host** comes last, once nobody calls it: remove it from the proxy (on Traefik, set
+  `ORCHESTER_CLOUD_FORMER_HOST` to the same value as `ORCHESTER_CLOUD_HOST`) and from `ORCHESTER_CLOUD_EXTRA_ORIGINS`.

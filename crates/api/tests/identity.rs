@@ -41,9 +41,13 @@ fn key_set(root: &RootKey, keys: Vec<ListedKey>, issued_at: i64) -> VerifiedKeyS
 }
 
 fn token(key: &SigningKey, audience: &str, now: i64) -> String {
+  token_from(ISSUER, key, audience, now)
+}
+
+fn token_from(issuer: &str, key: &SigningKey, audience: &str, now: i64) -> String {
   let claims = IdentityClaims::new(
     TokenSubject {
-      issuer: ISSUER.into(),
+      issuer: issuer.into(),
       audience: audience.into(),
       account: CloudAccountId::generate(),
       email: "ada@example.test".into(),
@@ -105,6 +109,36 @@ fn identity_token_for_another_server_is_refused() {
   assert_eq!(
     set.verify_token(&token(&key, SERVER, NOW), "0199f0a0-0000-7000-8000-000000000002", NOW),
     Err(IdentityError::WrongAudience)
+  );
+}
+
+#[test]
+fn identity_token_of_another_issuer_is_refused_unless_it_is_the_former_one() {
+  let root = root();
+  let key = signing_key();
+  let set = key_set(&root, vec![listed(&key, NOW - DAY)], NOW);
+  let former = "https://cloud-before.example.test";
+  let moved = token_from(former, &key, SERVER, NOW);
+  assert_eq!(set.verify_token(&moved, SERVER, NOW), Err(IdentityError::WrongIssuer));
+  let claims = set
+    .verify_token_also_from(&moved, SERVER, Some(former), NOW)
+    .expect("the former issuer's token")
+    .claims;
+  assert_eq!(claims.iss, former);
+  assert!(
+    set
+      .verify_token_also_from(&token(&key, SERVER, NOW), SERVER, Some(former), NOW)
+      .is_ok(),
+    "the key set's own issuer still verifies"
+  );
+  assert_eq!(
+    set.verify_token_also_from(
+      &token_from("https://elsewhere.example.test", &key, SERVER, NOW),
+      SERVER,
+      Some(former),
+      NOW
+    ),
+    Err(IdentityError::WrongIssuer)
   );
 }
 

@@ -163,7 +163,7 @@ pub(crate) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
   column.into()
 }
 
-/// The build's own cloud, as its host names it: `orchester-cloud.lurq.dev`.
+/// The build's own cloud, as its host names it: `orchester.cloud`.
 pub(crate) fn default_host() -> String {
   ServerAddress::parse(orchester_workspace::sharing::cloud::BUILD_ADDRESS).map_or_else(
     |_| orchester_workspace::sharing::cloud::BUILD_ADDRESS.to_owned(),

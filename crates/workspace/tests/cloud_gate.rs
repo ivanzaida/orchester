@@ -24,7 +24,10 @@ use orchester_workspace::{
   secrets::Vault,
   sharing::{
     Servers,
-    cloud::{Cloud, CloudError, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait},
+    cloud::{
+      BUILD_ADDRESS, Cloud, CloudError, PUBLIC_ADDRESS, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn,
+      keep_checking, retry_wait,
+    },
   },
 };
 use server_support::TestServer;
@@ -111,6 +114,57 @@ fn cloud_gate_stays_open_while_the_cloud_cannot_be_reached() {
   desktop.block_on(desktop.cloud.check_sign_in()).expect("checked");
   assert_eq!(desktop.cloud.reach(), Reach::Reached);
   assert!(desktop.cloud.is_signed_in());
+}
+
+/// The public cloud's address before it moved (2026-10-25).
+const FORMER_PUBLIC: &str = "https://orchester-cloud.lurq.dev";
+
+#[test]
+fn cloud_gate_builds_use_the_public_cloud_at_its_own_domain() {
+  if option_env!("ORCHESTER_CLOUD_URL").is_none() {
+    assert_eq!(BUILD_ADDRESS, "https://orchester.cloud");
+  }
+  assert_eq!(PUBLIC_ADDRESS, "https://orchester.cloud");
+}
+
+#[test]
+fn cloud_gate_keeps_a_sign_in_at_the_former_public_address_and_moves_it() {
+  let cloud = AccountCloud::start();
+  let desktop = Desktop::signed_in(&cloud);
+  let stayed = restarted(&desktop);
+  assert_eq!(
+    stayed.address().expect("address").address.as_str(),
+    cloud.url(),
+    "a test cloud stays"
+  );
+  assert_eq!(
+    stayed.account().expect("account").expect("signed in").cloud_address,
+    cloud.url()
+  );
+
+  desktop.move_account_to(FORMER_PUBLIC);
+  desktop.store_cloud_address(&format!("{FORMER_PUBLIC}/"));
+  let token = desktop.vault.read(&desktop.device_key()).expect("the token");
+  let moved = restarted(&desktop);
+  assert!(moved.is_signed_in(), "the sign-in holds across the move");
+  let account = moved.account().expect("account").expect("still signed in");
+  assert_eq!(account.cloud_address, PUBLIC_ADDRESS);
+  assert_eq!(account.email, EMAIL);
+  let address = moved.address().expect("address");
+  assert_eq!(
+    address.default,
+    BUILD_ADDRESS == PUBLIC_ADDRESS,
+    "the public cloud is the build's own again"
+  );
+  assert_eq!(address.address.as_str(), PUBLIC_ADDRESS);
+  assert_eq!(
+    desktop
+      .vault
+      .read(&desktop.device_key())
+      .expect("the token stays")
+      .expose(),
+    token.expose()
+  );
 }
 
 #[test]

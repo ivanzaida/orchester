@@ -65,11 +65,16 @@ is safe: [docs/server-hosting.md](../../docs/server-hosting.md), "The server adm
 
 ## Orchester Cloud (optional)
 
-With `ORCHESTER_ADMIN_CLOUD_URL` set (the default, `https://orchester-cloud.lurq.dev`), the admin offers *Link to
+With `ORCHESTER_ADMIN_CLOUD_URL` set (the default, `https://orchester.cloud`), the admin offers *Link to
 Orchester Cloud* at the end of the setup and in its *Settings*. Linking ties the server to its owner's Orchester Cloud
 account: people then join with their cloud account, and invites go out by email (sent from an admin sign-in through
 the cloud with two-factor authentication, accepted by a person with it). The browser carries everything
 between the admin and the cloud; the server itself never connects to the cloud and verifies cloud identities offline.
+The cloud ran at `https://orchester-cloud.lurq.dev` until 2026-10-25: a `.env` that still names it keeps working while
+that address answers; change it to `https://orchester.cloud` and restart the admin (`docker compose up -d admin`).
+A server linked before the move stays linked and needs nothing else: it pinned the cloud's root key, not its address,
+and from this release it takes identity tokens of both the cloud's former and new address
+([docs/cloud-hosting.md](../../docs/cloud-hosting.md), "Moving the cloud").
 The owner controls the link on the host at any time:
 
 ```sh

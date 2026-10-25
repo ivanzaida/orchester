@@ -85,6 +85,33 @@ pub async fn identity_token_verifies_with_the_published_key_set() {
   cloud.finish().await;
 }
 
+/// The cloud moves to another public URL (`docs/cloud-hosting.md`, "Moving the cloud"): a replica started with the new
+/// URL signs a key set naming it at once, and a replica still on the former URL issues tokens naming the issuer of
+/// that newest key set, so a team server holding it takes them.
+pub async fn identity_tokens_name_the_issuer_of_the_newest_key_set() {
+  let cloud = TestCloud::start().await;
+  let email = "moving@example.test";
+  cloud.register(email).await;
+  let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
+  let device = signed.token.expose();
+  let moved = "https://moved.example.test";
+  let replica = cloud.replica_at(moved).await;
+  let set = key_set(&cloud).await;
+  assert_eq!(
+    set.statement().iss,
+    moved,
+    "the moved replica signed a key set at its start"
+  );
+  let token = identity_token(&cloud, device).await;
+  let claims = set
+    .verify_token(&token, SERVER, seconds(&cloud))
+    .expect("the token verifies with the newest key set")
+    .claims;
+  assert_eq!(claims.iss, moved);
+  drop(replica);
+  cloud.finish().await;
+}
+
 pub async fn identity_key_sets_are_signed_weekly_and_renewed_after_a_stop() {
   let cloud = TestCloud::start().await;
   let email = "weekly@example.test";
