@@ -21,11 +21,12 @@
 //! People's messages are written by the desktop; delivery states and agents' messages by the
 //! runner (`docs/architecture/storage.md`, "Write ownership").
 
-use std::fmt;
+mod body;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub use self::body::MessageBody;
 use crate::{
   id::{ChatId, InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
   orchestrator::FromOrchestrator,
@@ -33,11 +34,6 @@ use crate::{
   run::{EventSequence, Run, StepStatus, WaitReason},
   time::Timestamp,
 };
-
-/// The text of a message: never blank, without the whitespace around it.
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub struct MessageBody(String);
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
 pub enum MessageError {
@@ -55,40 +51,6 @@ pub enum MessageError {
   WithoutRun,
   #[error("only a message that was not delivered is sent again")]
   NotUndelivered,
-}
-
-impl MessageBody {
-  pub fn new(text: &str) -> Result<Self, MessageError> {
-    let text = text.trim();
-    if text.is_empty() {
-      return Err(MessageError::Blank);
-    }
-    Ok(Self(text.to_owned()))
-  }
-
-  pub fn as_str(&self) -> &str {
-    &self.0
-  }
-}
-
-impl fmt::Debug for MessageBody {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    fmt::Debug::fmt(&self.0, f)
-  }
-}
-
-impl TryFrom<String> for MessageBody {
-  type Error = MessageError;
-
-  fn try_from(text: String) -> Result<Self, Self::Error> {
-    Self::new(&text)
-  }
-}
-
-impl From<MessageBody> for String {
-  fn from(body: MessageBody) -> Self {
-    body.0
-  }
 }
 
 /// Whom a person's message is for.
