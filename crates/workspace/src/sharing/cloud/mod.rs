@@ -13,6 +13,7 @@ mod claiming;
 mod error;
 mod gate;
 mod invites;
+mod moved;
 mod seen;
 mod signing_in;
 mod two_factor;
@@ -48,11 +49,17 @@ pub use self::{
 use super::Servers;
 use crate::{background, secrets::Vault, workspace::Workspace};
 
-/// Where Orchester Cloud runs for this build: `ORCHESTER_CLOUD_URL` at build time, or the public cloud
-/// (`docs/architecture/server.md`, row 59).
+/// The public Orchester Cloud (`docs/architecture/server.md`, row 59).
+pub const PUBLIC_ADDRESS: &str = "https://orchester.cloud";
+
+/// The public cloud's address until 2026-10-25, which still answers while people update (`docs/cloud-hosting.md`,
+/// "Moving the cloud"): what this computer stored with it moves to [`PUBLIC_ADDRESS`] at the start ([`moved`]).
+const FORMER_PUBLIC_ADDRESS: &str = "https://orchester-cloud.lurq.dev";
+
+/// Where Orchester Cloud runs for this build: `ORCHESTER_CLOUD_URL` at build time, or the public cloud.
 pub const BUILD_ADDRESS: &str = match option_env!("ORCHESTER_CLOUD_URL") {
   Some(address) => address,
-  None => "https://orchester-cloud.lurq.dev",
+  None => PUBLIC_ADDRESS,
 };
 
 /// The cloud's address this computer uses, and whether it is the build's own.
@@ -134,8 +141,10 @@ impl PartialEq for Cloud {
 }
 
 impl Cloud {
-  /// The cloud account of `workspace`'s session, signed in or not as its application database says. Blocking.
+  /// The cloud account of `workspace`'s session, signed in or not as its application database says, with what it
+  /// stored at the public cloud's former address moved to its new one. Blocking.
   pub fn new(workspace: Workspace, vault: Vault, servers: Servers) -> Self {
+    moved::move_from_former_address(&workspace);
     let sign_in = stored_sign_in(&workspace);
     Self {
       inner: Arc::new(Inner {

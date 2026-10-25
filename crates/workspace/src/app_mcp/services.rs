@@ -36,21 +36,20 @@ pub struct Services {
   pub(super) jobs: ProjectJobs,
   /// What `get_pull_request` read of pull requests outside the synced lists in the last 30 s.
   pub(super) pull_request_reads: RecentReads,
-  /// A person decided the publication the tools are called for (they applied a proposal of the Orchestrator chat):
-  /// what it widens is theirs to decide, as in the window, not *Let automation change agent permissions*, but only
-  /// for the draft they decided on and what they were shown it widens.
+  /// A person decided the publication, or the MCP server's change, the tools are called for (they applied a proposal
+  /// of the Orchestrator chat): what it widens is theirs to decide, as in the window, not *Let automation change agent
+  /// permissions*, but only for the draft they decided on and what they were shown it widens.
   pub(super) person: Option<Arc<PersonDecision>>,
   /// The Orchestrator chat publishes under the person's *Let the Orchestrator publish drafts*, which covers what a
   /// publication changes in agents' prompts (`docs/design/orchestrator-toolset.md`, decision 3), never what it widens.
   pub(super) chat_publishes: bool,
 }
 
-/// What a person decided to publish: the draft saved at `saved`, as version `version`, widening what agents may do
-/// by `widens` (what their card showed).
+/// What a person decided: to publish the draft saved at `saved`, as version `version` (`draft`; `None` for a change
+/// that publishes nothing, an MCP server's), widening what agents may do by `widens` (what their card showed).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PersonDecision {
-  pub saved: Timestamp,
-  pub version: u32,
+  pub draft: Option<(Timestamp, u32)>,
   pub widens: Vec<Message>,
 }
 
@@ -101,7 +100,8 @@ impl Services {
 
   /// Refused unless no person decided the call, or the draft of `resource` is the one they decided on: saved when
   /// they saw it, over the version before theirs. A tool reads it after the body it publishes, which it publishes
-  /// only while that body is unchanged, so a draft saved in between is not published as the person's decision.
+  /// only while that body is unchanged, so a draft saved in between is not published as the person's decision. A
+  /// person who decided something else than a publication decided no draft.
   pub(super) fn draft_decided<B: ResourceBody>(&self, db: &ProjectDb, resource: ResourceId) -> Result<(), ToolError> {
     let Some(person) = &self.person else {
       return Ok(());
@@ -110,10 +110,10 @@ impl Services {
     let latest = db
       .latest_version::<B>(resource)?
       .map_or(0, |version| version.number().get());
-    if saved == Some(person.saved) && latest + 1 == person.version {
-      return Ok(());
+    match person.draft {
+      Some((decided, version)) if saved == Some(decided) && latest + 1 == version => Ok(()),
+      _ => Err(changed_since_decided()),
     }
-    Err(changed_since_decided())
   }
 
   /// Refused unless no person decided the call, or `widens` is what they were shown it widens.

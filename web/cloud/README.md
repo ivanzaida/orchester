@@ -16,7 +16,8 @@ From the environment only:
 
 | Variable | Meaning |
 | --- | --- |
-| `ORCHESTER_CLOUD_PUBLIC_URL` | Where people reach the site, e.g. `https://orchester-cloud.lurq.dev`. Forms must come from this origin. Plain `http` only on a loopback address |
+| `ORCHESTER_CLOUD_PUBLIC_URL` | Where people reach the site, e.g. `https://orchester.cloud`. Forms must come from this origin or one of `ORCHESTER_CLOUD_EXTRA_ORIGINS`. Plain `http` only on a loopback address |
+| `ORCHESTER_CLOUD_EXTRA_ORIGINS` | Optional: other origins the site also answers at and takes forms from, comma-separated, each `https://host[:port]` with no path (plain `http` only on a loopback address); unset or empty for none. For the time the site answers on two domains, e.g. `https://orchester-cloud.lurq.dev` beside `https://orchester.cloud` (`deploy/cloud/README.md`, "Moving to another domain"). The cookies stay host-only (`__Host-`), so each origin has its own sign-in, and the site's redirects are relative, so a visitor stays on the host they came to |
 | `ORCHESTER_CLOUD_API_URL` | The API on the compose network, e.g. `http://cloud:8090` (`/api/v1` is added) |
 | `ORCHESTER_CLOUD_WEB_SECRET` | 32 or more random bytes in base64: signs the CSRF tokens and seals the session cookie |
 
@@ -40,7 +41,8 @@ ORCHESTER_CLOUD_PUBLIC_URL=http://localhost:4100 ORCHESTER_CLOUD_API_URL=http://
   npx next start -H 127.0.0.1 -p 4100
 ```
 
-Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER_CLOUD_PUBLIC_URL`).
+Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER_CLOUD_PUBLIC_URL`, or add
+`ORCHESTER_CLOUD_EXTRA_ORIGINS=http://127.0.0.1:4100` to take forms there too).
 
 ## The fake API's states
 

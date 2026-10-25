@@ -73,6 +73,11 @@ impl TestCloud {
   /// A key set issued at `issued_at` (seconds) that lists `keys`, each signing for 30 days from the day before
   /// `issued_at` and listed 60 more, signed by `root`.
   pub fn key_set_by(root: &Key, keys: &[&Key], issued_at: i64) -> String {
+    Self::key_set_named(root, keys, ISSUER, issued_at)
+  }
+
+  /// [`Self::key_set_by`], naming `issuer`: the cloud at another public URL.
+  pub fn key_set_named(root: &Key, keys: &[&Key], issuer: &str, issued_at: i64) -> String {
     let listed = keys
       .iter()
       .map(|key| ListedKey {
@@ -83,7 +88,7 @@ impl TestCloud {
         listed_until: issued_at + 89 * DAY,
       })
       .collect();
-    let statement = KeySetStatement::new(ISSUER.into(), listed, issued_at);
+    let statement = KeySetStatement::new(issuer.into(), listed, issued_at);
     RootKey::new(&root.private)
       .expect("root key")
       .sign_key_set(&statement, issued_at)
@@ -92,6 +97,19 @@ impl TestCloud {
 
   pub fn key_set(&self, issued_at: i64) -> String {
     Self::key_set_by(&self.root, &[&self.signing], issued_at)
+  }
+
+  /// [`Self::token`], naming `issuer`: the cloud at another public URL.
+  pub fn token_issued_by(&self, issuer: &str, identity: &Identity<'_>, iat: i64) -> String {
+    let mut claims = Self::claims(identity, (None, identity.invite.is_some()), iat);
+    claims.iss = issuer.into();
+    self
+      .signing
+      .signing()
+      .sign_token(&claims)
+      .expect("token")
+      .expose()
+      .to_owned()
   }
 
   /// An identity token signed by `key`, issued at `iat` (seconds), valid five minutes. One that accepts an invite says

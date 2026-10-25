@@ -8,9 +8,14 @@ mod accounts;
 mod api_providers;
 mod connections;
 mod instructions;
+mod mcp_preview;
 mod mcp_servers;
 mod merge;
-pub(crate) use self::merge::merge_proposed;
+pub(crate) use self::{
+  mcp_preview::preview as preview_mcp,
+  mcp_servers::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer},
+  merge::merge_proposed,
+};
 mod pipeline_steps;
 mod pipelines;
 mod profile_input;

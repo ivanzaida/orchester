@@ -140,8 +140,8 @@ inviter's browser does; apps and cloud sign-ins to the admin carry newer key set
 title says what failed: *can't reach* (the cloud's name does not resolve, no route, or a redirect), *doesn't trust
 Orchester Cloud's certificate*, *refused the connection*, or *didn't answer in time* (8 seconds). The admin's log
 (`docker compose logs admin`) has one line each time, with the address it called and the error's code and words, never
-the invite: `orchester-admin: cannot reach Orchester Cloud at https://orchester-cloud.lurq.dev: unreachable (EAI_AGAIN:
-getaddrinfo EAI_AGAIN orchester-cloud.lurq.dev)`. What to do:
+the invite: `orchester-admin: cannot reach Orchester Cloud at https://orchester.cloud: unreachable (EAI_AGAIN:
+getaddrinfo EAI_AGAIN orchester.cloud)`. What to do:
 
 - **`compose.traefik.yaml`: by design.** Its admin is only on the stack's internal network, which has no route out and
   no outside DNS (`EAI_AGAIN` or `ENOTFOUND` in the log), so the browser carries every invite. To let the admin send
@@ -165,11 +165,18 @@ getaddrinfo EAI_AGAIN orchester-cloud.lurq.dev)`. What to do:
 - **`refused` or `timeout`**: a firewall on the host or the network drops or rejects outgoing HTTPS; allow port 443 to
   the cloud's address from the admin's container.
 - **`unreachable` on the other compose files**: check the host's DNS from the container
-  (`docker compose exec admin node -e "fetch('https://orchester-cloud.lurq.dev/api/v1/server').then(r => console.log(r.status), e => console.log(e.cause ?? e))"`),
+  (`docker compose exec admin node -e "fetch('https://orchester.cloud/api/v1/server').then(r => console.log(r.status), e => console.log(e.cause ?? e))"`),
   and that `ORCHESTER_ADMIN_CLOUD_URL` is the cloud's public address.
 
 Neither the server nor the cloud needs a change for this; a changed compose file takes effect with
 `docker compose up -d`.
+
+**The cloud's address moved** from `https://orchester-cloud.lurq.dev` to `https://orchester.cloud` (2026-10-25). A
+`.env` that still names the former address keeps working while it answers; set `ORCHESTER_ADMIN_CLOUD_URL` to the new
+one and `docker compose up -d admin`. Nothing else changes for a linked server: it pinned the cloud's root key, and
+from this release it takes identity tokens naming either address as their issuer (it keeps the issuer of the key set
+it held before a newer one named another; schema 8). The order of the whole move is in
+[cloud-hosting.md](cloud-hosting.md), "Moving the cloud".
 
 ## Projects
 

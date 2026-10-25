@@ -3,7 +3,7 @@
 # It listens on loopback only; the team server forwards every path outside /api to it (admin_url) and the admin
 # calls the server's private API listener (admin_api_listen). Put the secret in /etc/orchester/admin.env:
 #   ORCHESTER_ADMIN_SECRET=<openssl rand -base64 32>
-#   ORCHESTER_ADMIN_CLOUD_URL=https://orchester-cloud.lurq.dev   (leave it out on an air-gapped network)
+#   ORCHESTER_ADMIN_CLOUD_URL=https://orchester.cloud   (leave it out on an air-gapped network)
 # then: systemctl enable --now orchester-admin
 [Unit]
 Description=Orchester team server admin

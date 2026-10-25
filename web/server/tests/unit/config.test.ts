@@ -10,7 +10,7 @@ const SECRET = Buffer.alloc(32, 9).toString("base64");
 const good = {
   ORCHESTER_ADMIN_SERVER_URL: "http://127.0.0.1:8741/",
   ORCHESTER_ADMIN_SECRET: SECRET,
-  ORCHESTER_ADMIN_CLOUD_URL: "https://orchester-cloud.lurq.dev/",
+  ORCHESTER_ADMIN_CLOUD_URL: "https://orchester.cloud/",
 };
 
 describe("configuration", () => {
@@ -18,7 +18,12 @@ describe("configuration", () => {
     const config = readConfig(good);
     expect(config.apiBase).toBe("http://127.0.0.1:8741/api/v1");
     expect(config.secret).toHaveLength(32);
-    expect(config.cloudOrigin).toBe("https://orchester-cloud.lurq.dev");
+    expect(config.cloudOrigin).toBe("https://orchester.cloud");
+  });
+
+  it("keeps the cloud's former address where an existing deployment still names it", () => {
+    const former = { ...good, ORCHESTER_ADMIN_CLOUD_URL: "https://orchester-cloud.lurq.dev" };
+    expect(readConfig(former).cloudOrigin).toBe("https://orchester-cloud.lurq.dev");
   });
 
   it("has no cloud when none is set, and says so instead of failing", () => {
@@ -29,7 +34,7 @@ describe("configuration", () => {
   it("names the variable that is wrong", () => {
     expect(() => readConfig({ ...good, ORCHESTER_ADMIN_SERVER_URL: "" })).toThrow(/ORCHESTER_ADMIN_SERVER_URL/);
     expect(() => readConfig({ ...good, ORCHESTER_ADMIN_SECRET: "c2hvcnQ=" })).toThrow(/ORCHESTER_ADMIN_SECRET/);
-    expect(() => readConfig({ ...good, ORCHESTER_ADMIN_CLOUD_URL: "http://orchester-cloud.lurq.dev" })).toThrow(ConfigError);
+    expect(() => readConfig({ ...good, ORCHESTER_ADMIN_CLOUD_URL: "http://orchester.cloud" })).toThrow(ConfigError);
     expect(() => readConfig({ ...good, ORCHESTER_ADMIN_CLOUD_URL: "ftp://x" })).toThrow(/ORCHESTER_ADMIN_CLOUD_URL/);
   });
 

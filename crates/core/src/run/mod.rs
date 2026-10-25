@@ -14,6 +14,7 @@ mod error;
 mod event;
 mod first_edit;
 mod follow_up;
+mod index_search;
 mod invocation;
 mod not_started;
 mod number;
@@ -55,6 +56,7 @@ pub use self::{
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
   first_edit::{EditProgress, FirstEdit, FirstEditTracker},
+  index_search::searches_code_index,
   invocation::{
     ActivityEntry, Invocation, InvocationEngine, InvocationKind, InvocationTiming, active_time, execution_tokens,
   },

@@ -261,7 +261,7 @@ fn server_json(listed: &ProjectConnections, server: &McpServer) -> Value {
 }
 
 /// `url` with each query value replaced by `…`, its names kept, and a fragment's text left out.
-fn without_query_values(url: &str) -> String {
+pub(super) fn without_query_values(url: &str) -> String {
   let Some((base, query)) = url.split_once('?') else {
     return url.to_owned();
   };
@@ -286,7 +286,7 @@ fn server_result(repo_root: &Path, id: ConnectionId) -> Result<Value, ToolError>
 }
 
 /// The project's server named by `named`: its id, or else its name (a name never reads as an id).
-fn server_named(db: &ProjectDb, named: &str) -> Result<McpServer, ToolError> {
+pub(super) fn server_named(db: &ProjectDb, named: &str) -> Result<McpServer, ToolError> {
   let servers = db.mcp_servers()?;
   let by_id = servers.iter().position(|server| server.id().to_string() == named);
   let by_name = || servers.iter().position(|server| server.name().as_str() == named);
@@ -297,7 +297,11 @@ fn server_named(db: &ProjectDb, named: &str) -> Result<McpServer, ToolError> {
 }
 
 /// `text` with the `fields` given put in, as a person would type them into the page.
-fn filled(mut text: McpServerText, fields: ServerFields, secrets: &[Secret]) -> Result<McpServerText, ToolError> {
+pub(super) fn filled(
+  mut text: McpServerText,
+  fields: ServerFields,
+  secrets: &[Secret],
+) -> Result<McpServerText, ToolError> {
   applies(&text, &fields)?;
   match (&fields.program, &fields.url) {
     (Some(_), Some(_)) => return Err(refused("invalid_transport", "appMcp.errors.mcpProgramAndUrl")),
@@ -338,7 +342,7 @@ fn filled(mut text: McpServerText, fields: ServerFields, secrets: &[Secret]) -> 
 }
 
 /// The server `text` describes, checked as the page checks it; its name not another server's.
-fn checked(
+pub(super) fn checked(
   text: &McpServerText,
   db: &ProjectDb,
   stored: Option<&McpServer>,
@@ -460,7 +464,7 @@ fn allowance(services: &Services, reasons: Vec<Message>) -> Result<Allowed, Tool
   })
 }
 
-fn save_refusal(error: &McpSaveError) -> ToolError {
+pub(super) fn save_refusal(error: &McpSaveError) -> ToolError {
   let code = match error {
     McpSaveError::Program(problem) => match problem {
       ProgramProblem::InWorktree => "program_in_worktree",

@@ -344,18 +344,21 @@ fn first_edit_of_an_execution_adds_up_its_invocations_until_the_edit() {
     at: Timestamp::from_unix_millis(5),
     path: "src/a.rs".into(),
   };
-  let parts = [
+  let mut parts = [
     EditProgress {
       before: usage(100, 10, 1),
+      index_searches: Some(3),
       ..EditProgress::default()
     },
     EditProgress {
       before: usage(40, 0, 2),
       first_edit: Some(edit.clone()),
       at_most: true,
+      index_searches: Some(0),
     },
     EditProgress {
       before: usage(7, 0, 3),
+      index_searches: Some(2),
       ..EditProgress::default()
     },
   ];
@@ -363,7 +366,18 @@ fn first_edit_of_an_execution_adds_up_its_invocations_until_the_edit() {
   assert_eq!(execution.before, usage(140, 10, 3));
   assert_eq!(execution.first_edit, Some(edit));
   assert!(execution.at_most);
+  assert_eq!(
+    execution.index_searches,
+    Some(5),
+    "every invocation's searches, after the edit too"
+  );
   assert_eq!(EditProgress::of_execution(&parts[..1]).first_edit, None);
+  parts[2].index_searches = None;
+  assert_eq!(
+    EditProgress::of_execution(&parts).index_searches,
+    None,
+    "an invocation recorded before searches were counted"
+  );
 }
 
 #[test]

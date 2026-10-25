@@ -52,10 +52,13 @@ export async function formToken(): Promise<string> {
   return token;
 }
 
-/** Whether a posted form came from this site's own page for this visitor. */
+/**
+ * Whether a posted form came from this site's own page for this visitor, on any of the site's origins: the CSRF token
+ * binds the cookies of the host the form was posted to, which are that host's alone.
+ */
 export async function formIsGenuine(form: FormData): Promise<boolean> {
   const origin = (await headers()).get("origin");
-  return originMatches(origin, config().publicOrigin) && tokenMatches(key("csrf"), await csrfCookies(), form.get(CSRF_FIELD));
+  return originMatches(origin, config().siteOrigins) && tokenMatches(key("csrf"), await csrfCookies(), form.get(CSRF_FIELD));
 }
 
 /**

@@ -99,7 +99,7 @@ N8: one slice per phase from N4 on
   key sets, Ed25519 through `ring`). Storage on PostgreSQL (row 54): `tokio-postgres` with a `deadpool-postgres`
   pool and `tokio-postgres-rustls`, forward-only SQL migrations under an advisory lock. New dependencies `lettre`
   (SMTP), `actix-web` and those three, each stated in the commit. Every address and credential comes from the
-  environment (row 59: `ORCHESTER_CLOUD_PUBLIC_URL`, for now `https://orchester-cloud.lurq.dev`, the database, the
+  environment (row 59: `ORCHESTER_CLOUD_PUBLIC_URL`, `https://orchester.cloud` since the move of 2026-10-25, the database, the
   SMTP relay, the key-encryption key); nothing is hard-coded. `deploy/cloud/compose.yaml` with Caddy, the backend and
   an optional PostgreSQL. Magic link, Google and GitHub are a later phase (C2), not v1.
 - **Files.** `crates/cloud/src/{main,config,http,accounts,devices,keys,servers,invites,email}.rs`, `db/` (pool,

@@ -121,3 +121,23 @@ fn orchestrator_links_only_with_the_links_its_tools_returned() {
     "it writes how several things stand as labelled links: {prompt}"
   );
 }
+
+/// ORC-89: the chat adds and changes MCP servers only as the person applies what widens, names secrets only, and says
+/// where a program it suggests came from.
+#[test]
+fn orchestrator_prompt_proposes_mcp_servers_and_names_secrets_only() {
+  for reads in [ProjectReads::FileTools, ProjectReads::GitTools] {
+    let prompt = system_prompt("Kontur", ProjectId::generate(), reads);
+    for rule in [
+      "mcp_add_server, mcp_update_server, mcp_set_server_enabled and mcp_remove_server",
+      "is always a card the person applies, whatever their switches say",
+      "only while the person turned on Let automation change agent permissions",
+      "never type, ask for or repeat a secret's value",
+      "tell the person where it came from; never guess a path",
+      "not on this computer's search path",
+      "save_profile_draft, then publish_profile",
+    ] {
+      assert!(prompt.contains(rule), "{rule}: {prompt}");
+    }
+  }
+}

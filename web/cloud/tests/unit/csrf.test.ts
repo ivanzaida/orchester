@@ -71,14 +71,30 @@ describe("pre-session cookie", () => {
 });
 
 describe("origin", () => {
+  const site = ["https://orchester.cloud"];
+  const moving = ["https://orchester.cloud", "https://orchester-cloud.lurq.dev"];
+
   it("must be exactly the public origin", () => {
-    expect(originMatches("https://orchester-cloud.lurq.dev", "https://orchester-cloud.lurq.dev")).toBe(true);
-    expect(originMatches("https://evil.example", "https://orchester-cloud.lurq.dev")).toBe(false);
-    expect(originMatches("http://orchester-cloud.lurq.dev", "https://orchester-cloud.lurq.dev")).toBe(false);
-    expect(originMatches("null", "https://orchester-cloud.lurq.dev")).toBe(false);
+    expect(originMatches("https://orchester.cloud", site)).toBe(true);
+    expect(originMatches("https://evil.example", site)).toBe(false);
+    expect(originMatches("http://orchester.cloud", site)).toBe(false);
+    expect(originMatches("https://orchester.cloud:8443", site)).toBe(false);
+    expect(originMatches("https://www.orchester.cloud", site)).toBe(false);
+    expect(originMatches("null", site)).toBe(false);
+    expect(originMatches("https://orchester-cloud.lurq.dev", site)).toBe(false);
+  });
+
+  it("may be one of the extra origins while the site moves", () => {
+    expect(originMatches("https://orchester.cloud", moving)).toBe(true);
+    expect(originMatches("https://orchester-cloud.lurq.dev", moving)).toBe(true);
+    expect(originMatches("http://orchester-cloud.lurq.dev", moving)).toBe(false);
+    expect(originMatches("https://orchester-cloud.lurq.dev.evil.example", moving)).toBe(false);
+    expect(originMatches("https://evil.example", moving)).toBe(false);
+    expect(originMatches("null", moving)).toBe(false);
   });
 
   it("is refused when the browser sent none", () => {
-    expect(originMatches(null, "https://orchester-cloud.lurq.dev")).toBe(false);
+    expect(originMatches(null, site)).toBe(false);
+    expect(originMatches(null, moving)).toBe(false);
   });
 });

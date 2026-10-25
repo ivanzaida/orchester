@@ -36,7 +36,10 @@ export function tokenMatches(key: Buffer, cookies: CsrfCookies, submitted: unkno
   return expected !== null && typeof submitted === "string" && sameText(expected, submitted);
 }
 
-/** A missing `Origin` is refused too: every browser that can send this form sends one with a `POST`. */
-export function originMatches(origin: string | null, publicOrigin: string): boolean {
-  return origin !== null && origin === publicOrigin;
+/**
+ * Whether `origin` is one of the site's own: its public origin, or another it answers at while it moves to another
+ * domain. A missing `Origin` is refused too: every browser that can send this form sends one with a `POST`.
+ */
+export function originMatches(origin: string | null, siteOrigins: readonly string[]): boolean {
+  return origin !== null && siteOrigins.includes(origin);
 }
