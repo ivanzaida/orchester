@@ -242,6 +242,9 @@ impl Session {
       Some("turn/start") => return self.turn(&message["id"], params),
       Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None if message["id"] == fake_codex_cell::COMMAND => return fake_codex_cell::command_answered(self, message),
+      None if fake_codex_chat::is_chat(&self.args) && fake_codex_chat::is_answer(message) => {
+        return fake_codex_chat::answered(self, message);
+      }
       None => return fake_app_server::answered(self, message),
       Some(other) => {
         eprintln!("unexpected request: {other}");

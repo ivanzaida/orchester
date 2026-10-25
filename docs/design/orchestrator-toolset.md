@@ -414,25 +414,38 @@ permission profiles with read denials could not be shown to hold on Windows (the
 That is why Codex was held back (2026-10-14).
 
 **How it is confined: the risk is removed at its source, not fenced by the sandbox.** Codex is given no tool of its
-own that reads, runs or fetches anything, through configuration overrides of Codex 0.159.2 (`codex features list`):
+own that reads, runs or fetches anything, through configuration overrides of Codex 0.159.2 (`CODEX_CHAT_CONFINEMENT`;
+each but `unified_exec` shows off in `codex features list` with them):
 
-- `features.shell_tool=false` and `features.unified_exec=false`: no shell (`shell`, `shell_command`,
-  `exec_command`, `write_stdin`). With no command, there is nothing the sandbox would have to keep from `CODEX_HOME`,
+- `features.shell_tool=false`: no shell (`shell`, `shell_command`, `exec_command`, `write_stdin`). This switch alone
+  carries it: `features.unified_exec=false` is passed too, for a version that reads it, but 0.159.2's
+  `codex features list` still shows `unified_exec` on with it; the live check below saw none of the shell tools
+  offered and each call refused. With no command, there is nothing the sandbox would have to keep from `CODEX_HOME`,
   other repositories or the runner's files, and nothing the person's execpolicy rules, which only ever match a shell
-  command, could run.
+  command, could run. Should Codex still ask to run a command, the runner ends the turn failed, never approving it,
+  as it does for a step that leaves no command to a person (`crates/runner/tests/chat_codex.rs`).
 - `features.view_image=false`: no image read from a path (it reads outside any sandbox); `web_search="disabled"`,
-  `features.hooks=false` (the user's own hook commands on the agent's events), `features.goals`, `memories`,
-  `browser_use`, `computer_use` and `image_generation` off; sub-agents (`multi_agent`, `multi_agent_v2`), plugins,
-  apps, `notify` and the permission-request tools off as for every Codex step (`CODEX_SUB_AGENTS_OFF`,
-  `CODEX_ISOLATION`); the user's own MCP servers turned off for
-  the thread by name; the folder's `.codex` and `AGENTS.md` left out (the folder is marked untrusted,
-  `project_doc_max_bytes=0`).
+  `features.hooks=false` (the user's own hook commands on the agent's events), `features.skill_mcp_dependency_install`
+  (a skill bringing an MCP server into the thread), `features.goals`, `memories`, `browser_use`, `computer_use` and
+  `image_generation` off; sub-agents (`multi_agent`, `multi_agent_v2`), plugins, apps, `notify` and the
+  permission-request tools off as for every Codex step (`CODEX_SUB_AGENTS_OFF`, `CODEX_ISOLATION`); the user's own MCP
+  servers turned off for the thread by name.
+- The repository's own agent files are left out, as the Claude Code Orchestrator (`--setting-sources ""`) loads none:
+  the folder is marked untrusted (its `.codex` configuration does not load), `project_doc_max_bytes=0` keeps
+  `AGENTS.md` out, and every skill of `.agents/skills` and `.codex/skills`, which Codex loads even from an untrusted
+  folder, is disabled by its paths (`skills.config`). The runner finds them with the search a step without its agent
+  files uses (`RepositorySkills`), and starts no turn when that search could miss one (a link out of the folder, an
+  unreadable folder, a search past its bounds), saying why. A skill committed to the project therefore never reaches
+  the Orchestrator's context.
 - What stays is `apply_patch` and `request_user_input`, which Codex 0.159.2 always offers. `apply_patch` cannot
   write: the thread is `read-only` with nothing writable, and the approval policy leaves nothing beyond the sandbox to
   a person (`sandbox_approval`, `rules`, `request_permissions` and `skill_approval` off), so Codex's own approval check
   refuses every patch before any sandbox runs. A question of Codex's gets no answers.
 - The chat's domain tools (`orchester`) are its only MCP server, their token only in the process environment. Codex
-  asks before each MCP call (`mcp_elicitations`): a call of `orchester` is approved, any other declined.
+  asks before each MCP call (`mcp_elicitations`): a call of `orchester` is approved, any other declined (shown with
+  the fake Codex in `crates/runner/tests/chat_codex.rs`).
+- On a connection that runs on an API provider, App Server starts with the provider's overrides and key as a step's
+  does (`OnProvider`); the confinement is the same.
 - The system prompt is App Server's `baseInstructions`, in place of Codex's own shell-oriented instructions, on every
   turn, a resumed thread's too. It says the agent has no tool that reads files and reads the repository through the
   git tools (`instructions::ProjectReads::GitTools`).

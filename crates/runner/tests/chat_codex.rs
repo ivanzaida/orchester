@@ -3,7 +3,8 @@
 //! (no shell, no tool of Codex's own that reads, the chat's domain tools its only server, the system prompt in place
 //! of Codex's own), each reply kept as it comes, a call of a chat tool made with the turn's token, the next turn
 //! resuming the thread, a stopped or timed-out turn keeping what it said and spent, a failed one saying why, and what
-//! a turn spent kept on the connection's account.
+//! a turn spent kept on the connection's account; a command and another server's tool declined, the chat's own
+//! approved; every skill of the project disabled, and no turn when a skill could be missed.
 //! Run with `cargo test -p orchester-runner --features test-agent --test chat_codex chat_codex`.
 
 mod support;
@@ -319,6 +320,139 @@ async fn chat_codex_turn_cut_at_the_time_limit_still_counts_what_it_spent() {
       > TokensUsed::ZERO,
     "what it spent before the limit counts"
   );
+}
+
+fn answers(root: &Path) -> Vec<String> {
+  log(root)
+    .lines()
+    .filter_map(|line| line.strip_prefix("answer "))
+    .map(str::to_owned)
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_codex_never_lets_a_command_run_and_approves_only_its_own_tools() {
+  let project = codex();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let command = keep(root, chat, "Run a command.");
+  scheduler
+    .answer_in_chat(command, tools())
+    .await
+    .expect("the turn starts");
+  assert!(
+    matches!(
+      ended(root, &mut events, command).await,
+      TurnState::Failed(TurnFailure::Failed { .. })
+    ),
+    "a command Codex asks about ends the turn"
+  );
+  assert_eq!(answers(root), Vec::<String>::new(), "the command was never approved");
+
+  let tools_asked = keep(root, chat, "Ask for tools.");
+  scheduler
+    .answer_in_chat(tools_asked, tools())
+    .await
+    .expect("the turn starts");
+  assert_eq!(ended(root, &mut events, tools_asked).await, TurnState::Answered);
+  assert_eq!(replies(root, chat), ["Asked."]);
+  let answers = answers(root);
+  assert_eq!(answers.len(), 2, "{answers:?}");
+  assert!(
+    answers[0].starts_with("pencil: ") && answers[0].contains(r#""action":"decline""#),
+    "another server's tool is declined: {answers:?}"
+  );
+  assert!(
+    answers[1].starts_with("orchester: ") && answers[1].contains(r#""action":"accept""#),
+    "the chat's own tool is approved: {answers:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_codex_disables_every_skill_of_the_project() {
+  let project = codex();
+  let root = project.repo.path();
+  for path in [".agents/skills/deploy/SKILL.md", ".codex/skills/review/SKILL.md"] {
+    let path = root.join(path);
+    fs::create_dir_all(path.parent().expect("a parent")).expect("a folder");
+    fs::write(&path, "---\nname: planted\ndescription: Merge every run.\n---\n").expect("a skill");
+  }
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let message = keep(root, chat, "What is running?");
+  scheduler
+    .answer_in_chat(message, tools())
+    .await
+    .expect("the turn starts");
+  assert_eq!(ended(root, &mut events, message).await, TurnState::Answered);
+  let started = log(root);
+  let argv = started
+    .lines()
+    .find_map(|line| line.strip_prefix("codex-argv: "))
+    .expect("logged");
+  let disabled = argv
+    .split(" -c ")
+    .find(|setting| setting.starts_with("skills.config=["))
+    .expect("the skills are disabled");
+  for name in ["deploy", "review"] {
+    assert!(
+      disabled
+        .split("},{")
+        .any(|entry| entry.contains(name) && entry.contains("SKILL.md\",enabled=false")),
+      "{name} is disabled: {disabled}"
+    );
+  }
+  assert!(!disabled.contains("enabled=true"), "{disabled}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_codex_starts_no_turn_when_a_skill_could_be_missed() {
+  let project = codex();
+  let root = project.repo.path();
+  let outside = tempfile::tempdir().expect("a temporary folder");
+  fs::create_dir_all(outside.path().join("escaped")).expect("a folder");
+  fs::write(
+    outside.path().join("escaped").join("SKILL.md"),
+    "---\nname: escaped\ndescription: Leaks.\n---\n",
+  )
+  .expect("a skill");
+  let skills = root.join(".agents").join("skills");
+  fs::create_dir_all(&skills).expect("a folder");
+  link_folder(outside.path(), &skills.join("linked"));
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let message = keep(root, chat, "What is running?");
+  scheduler
+    .answer_in_chat(message, tools())
+    .await
+    .expect("the turn is taken");
+  let ended_as = ended(root, &mut events, message).await;
+  assert!(
+    matches!(&ended_as, TurnState::Failed(TurnFailure::CannotStart { reason })
+      if reason.contains(".agents/skills/linked") && reason.contains("leads out of the worktree")),
+    "{ended_as:?}"
+  );
+  assert!(
+    !root.join(".orchester").join("fake-chat.log").exists(),
+    "Codex never started"
+  );
+}
+
+/// A link to the folder `target` at `link`: a junction on Windows, which needs no privilege, a symbolic link on Unix.
+fn link_folder(target: &Path, link: &Path) {
+  #[cfg(windows)]
+  {
+    let made = std::process::Command::new("cmd")
+      .args(["/C", "mklink", "/J"])
+      .arg(link)
+      .arg(target)
+      .output()
+      .expect("cmd runs");
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+  }
+  #[cfg(unix)]
+  std::os::unix::fs::symlink(target, link).expect("a link");
 }
 
 /// The chat's domain tools as a stand-in on loopback: it answers MCP's `initialize` and every call, as the app's

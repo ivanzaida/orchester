@@ -9,6 +9,9 @@
 //! - "Answer in parts": replies twice, `First part.` and `Second part.`, each as its own message;
 //! - "Keep thinking": writes the start of a reply and what its first response spent, then waits until it is ended;
 //! - "Fail now": the turn fails;
+//! - "Run a command": asks to run `cat secrets.txt`, and runs nothing until it is answered;
+//! - "Ask for tools": asks to call a tool of another MCP server (`pencil`), then one of the chat's own (`orchester`),
+//!   logging each answer (`answer <what>: <result>`), then replies `Asked.`;
 //! - anything else: replies `Noted: <message>`.
 //!
 //! Each turn reports usage and completes, as Codex does; App Server then waits for the runner to end it.
@@ -17,18 +20,80 @@
 
 use std::{fs, io::Write, path::Path};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
-use super::{Session, Step, complete, fake_codex_work::message, notify};
+use super::{Session, Step, complete, fake_codex_work::message, notify, request};
 use crate::fake_chat_mcp::ChatServer;
 
 /// The override that names the chat's server.
 const URL: &str = "mcp_servers.orchester.url=";
 const BEARER: &str = "mcp_servers.orchester.bearer_token_env_var=";
+/// The ids of the requests: the command, the other server's call, the chat's own.
+const COMMAND: u64 = 910;
+const OTHER_SERVER: u64 = 911;
+const OWN_SERVER: u64 = 912;
 
 /// Whether `args` start a turn of the Orchestrator chat.
 pub fn is_chat(args: &[String]) -> bool {
   args.iter().any(|arg| arg.starts_with(URL))
+}
+
+/// Whether `answer` answers one of the chat's requests.
+pub fn is_answer(answer: &Value) -> bool {
+  answer["id"]
+    .as_u64()
+    .is_some_and(|id| (COMMAND..=OWN_SERVER).contains(&id))
+}
+
+/// Logs `answer` and asks the next request, or ends the turn after the last.
+pub fn answered(session: &Session, answer: &Value) -> Step {
+  let id = answer["id"].as_u64().unwrap_or_default();
+  let what = match id {
+    COMMAND => "command",
+    OTHER_SERVER => "pencil",
+    _ => "orchester",
+  };
+  append_log(session, &[format!("answer {what}: {}", answer["result"])]);
+  if id == OTHER_SERVER {
+    tool_request(session, OWN_SERVER, "orchester");
+  } else {
+    message(session, "item_chat", "Asked.");
+    complete(session, None);
+  }
+  Step::Go
+}
+
+/// Asks to run a command, as Codex asks before one.
+fn command_request(session: &Session) {
+  notify(
+    session,
+    "item/started",
+    json!({"item": {"id": "chat-command", "type": "commandExecution", "command": "cat secrets.txt"}}),
+  );
+  let cwd = session.cwd.to_string_lossy().into_owned();
+  request(
+    session,
+    COMMAND,
+    "item/commandExecution/requestApproval",
+    json!({"itemId": "chat-command", "command": "cat secrets.txt", "cwd": cwd,
+      "availableDecisions": ["accept", "decline"]}),
+  );
+}
+
+/// Calls a tool of `server` and asks about it, as Codex 0.159.2 asks before an MCP call.
+fn tool_request(session: &Session, id: u64, server: &str) {
+  notify(
+    session,
+    "item/started",
+    json!({"item": {"id": format!("chat-mcp-{id}"), "type": "mcpToolCall", "server": server, "tool": "write",
+      "arguments": {}}}),
+  );
+  request(
+    session,
+    id,
+    "mcpServer/elicitation/request",
+    json!({"serverName": server, "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
+  );
 }
 
 /// The value of override `key` in `args`, its TOML quotes taken off.
@@ -65,6 +130,14 @@ pub fn answer(session: &Session, (args, base): (&[String], Option<&str>), prompt
       json!({"tokenUsage": {"last": usage, "total": usage}}),
     );
     super::fake_codex_work::wait_to_be_ended();
+  }
+  if said.contains("Run a command") {
+    command_request(session);
+    return Step::Go;
+  }
+  if said.contains("Ask for tools") {
+    tool_request(session, OTHER_SERVER, "pencil");
+    return Step::Go;
   }
   if said.contains("Answer in parts") {
     message(session, "item_first", "First part.");
@@ -107,6 +180,11 @@ fn log(session: &Session, (args, base): (&[String], Option<&str>), server: Optio
       lines.push("mcp-token: present".to_owned());
     }
   }
+  append_log(session, &lines);
+}
+
+/// Appends `lines` to `<cwd>/.orchester/fake-chat.log`.
+fn append_log(session: &Session, lines: &[String]) {
   let folder = Path::new(&session.cwd).join(".orchester");
   let written = fs::create_dir_all(&folder).and_then(|()| {
     let mut file = fs::OpenOptions::new()

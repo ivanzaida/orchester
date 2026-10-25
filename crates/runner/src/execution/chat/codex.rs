@@ -3,7 +3,8 @@
 //! (`orchester_core::connection::invocation::CodexChat`): no shell, no tool of Codex's own that reads, runs or fetches
 //! anything, the `read-only` sandbox and no command left to a person, so it reads nothing but what the chat's domain
 //! tools give it and changes nothing. Those tools are its only MCP server (the user's own are turned off for the
-//! thread), their token in the process environment only. The system prompt is the thread's `baseInstructions`, in
+//! thread), their token in the process environment only. Every skill of the project folder is found as for a step and
+//! disabled, and a search that could miss one starts no turn. The system prompt is the thread's `baseInstructions`, in
 //! place of Codex's own, on every turn; the thread is resumed on the next one. Codex asks before an MCP call: a call
 //! of the chat's own tools is approved, as Claude Code's `--allowedTools mcp__orchester` allows them, any other
 //! declined; a question of Codex's gets no answers. Once the turn is over the runner ends App Server, which otherwise
@@ -13,6 +14,7 @@
 use std::collections::BTreeSet;
 
 use orchester_core::{
+  agent_files::skills::RepositorySkills,
   command::Command,
   connection::{
     AgentProvider,
@@ -69,11 +71,21 @@ impl Turn {
         model: self.settings.model(),
         key,
       });
+    // Codex loads the folder's skills even from an untrusted folder: each is disabled, and a search that could miss
+    // one starts no turn, as for a step without its agent files.
+    let skills = RepositorySkills::find(&self.root)
+      .map_err(|error| {
+        cannot(format!(
+          "the project's skills cannot all be found to keep them from the Orchestrator: {error}"
+        ))
+      })?
+      .codex_paths();
     let command = CodexChat {
       executable: &prepared.executable,
       folder: &self.root,
       platform: Platform::current(),
       mcp: &mcp,
+      skills: &skills,
     }
     .command(std::env::vars_os(), &prepared.environment)
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::CodexCli))

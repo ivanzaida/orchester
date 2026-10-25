@@ -35,6 +35,11 @@ const URL: &str = "https://api.deepseek.com/anthropic";
 /// [`MODEL`] typed for it; the key is in the keychain when `in_keychain`, else only the secret's record is in the
 /// project.
 fn on_provider(in_keychain: bool) -> TestProject {
+  on_provider_of(AgentProvider::ClaudeCodeCli, in_keychain)
+}
+
+/// As [`on_provider`], on a connection of `cli`.
+fn on_provider_of(cli: AgentProvider, in_keychain: bool) -> TestProject {
   let secret = Secret::new(
     SecretId::generate(),
     NewSecret {
@@ -51,7 +56,7 @@ fn on_provider(in_keychain: bool) -> TestProject {
     Vec::new()
   };
   let project = project(&Setup {
-    provider: AgentProvider::ClaudeCodeCli,
+    provider: cli,
     secrets,
     ..Setup::new("Not used by the chat.")
   });
@@ -176,6 +181,29 @@ async fn chat_api_provider_turn_runs_on_the_providers_url_model_and_key() {
   assert!(
     logged(&started, "argv: ").is_some_and(|argv| argv.contains(&format!("--model {MODEL}"))),
     "{started}"
+  );
+  assert!(!started.contains(KEY), "the key is on no command line: {started}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_api_provider_codex_turn_runs_on_the_providers_url_and_key() {
+  let project = on_provider_of(AgentProvider::CodexCli, true);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let chat = ChatId::generate();
+  let state = answered(&project, &mut events, &scheduler, (chat, "What is running?")).await;
+  assert_eq!(state, TurnState::Answered);
+  assert_eq!(replies(root, chat), ["Noted: What is running?"]);
+  let started = log(root);
+  let argv = logged(&started, "codex-argv: ").expect("logged");
+  assert!(argv.contains(r#"model_provider="orchester""#), "{argv}");
+  assert!(
+    argv.contains(&format!(r#"base_url="{URL}""#)) && argv.contains(r#"env_key="ORCHESTER_PROVIDER_API_KEY""#),
+    "{argv}"
+  );
+  assert!(
+    argv.contains(" -c features.shell_tool=false "),
+    "still confined: {argv}"
   );
   assert!(!started.contains(KEY), "the key is on no command line: {started}");
 }

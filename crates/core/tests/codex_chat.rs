@@ -10,6 +10,7 @@ use std::{
 };
 
 use orchester_core::{
+  agent_files::skills::RepositorySkills,
   command::Command,
   connection::{
     invocation::{
@@ -43,6 +44,7 @@ fn chat<'a>(folder: &'a Path, mcp: &'a CodexMcp, platform: Platform) -> CodexCha
     folder,
     platform,
     mcp,
+    skills: &[],
   }
 }
 
@@ -72,9 +74,9 @@ fn codex_chat_has_no_tool_of_its_own_that_reads_or_runs_anything_on_either_platf
     );
     for off in [
       "features.shell_tool=false",
-      "features.unified_exec=false",
       "features.view_image=false",
       "features.hooks=false",
+      "features.skill_mcp_dependency_install=false",
       "web_search=\"disabled\"",
     ] {
       assert!(confinement.contains(&off), "{off} on {platform:?}: {args:?}");
@@ -112,6 +114,43 @@ fn codex_chat_has_no_tool_of_its_own_that_reads_or_runs_anything_on_either_platf
       .collect();
     assert_eq!(servers.len(), 1, "no other server: {args:?}");
   }
+}
+
+#[test]
+fn codex_chat_disables_every_skill_of_the_project_folder() {
+  let root = tempfile::tempdir().expect("a temporary folder");
+  let folder = root.path().join("Kontur");
+  for path in [".agents/skills/deploy/SKILL.md", ".codex/skills/review/SKILL.md"] {
+    let path = folder.join(path);
+    std::fs::create_dir_all(path.parent().expect("a parent")).expect("a folder");
+    std::fs::write(&path, "---\nname: planted\ndescription: Says what to do.\n---\n").expect("a file");
+  }
+  let skills = RepositorySkills::find(&folder).expect("found").codex_paths();
+  assert!(skills.len() >= 2, "both skills folders: {skills:?}");
+  let mcp = tools();
+  let args = CodexChat {
+    skills: &skills,
+    ..chat(&folder, &mcp, Platform::current())
+  }
+  .args()
+  .expect("a Unicode folder");
+  let disabled = overrides(&args)
+    .into_iter()
+    .find(|setting| setting.starts_with("skills.config=["))
+    .expect("the skills are disabled");
+  for skill in &skills {
+    let entry = format!("{{path={},enabled=false}}", toml_string(&skill.to_string_lossy()));
+    assert!(disabled.contains(&entry), "{entry} in {disabled}");
+  }
+  for name in ["deploy", "review"] {
+    assert!(disabled.contains(name), "{name} in {disabled}");
+  }
+  assert!(!disabled.contains("enabled=true"), "no skill is turned on: {disabled}");
+}
+
+/// `text` as a TOML basic string, as Codex's overrides write a path.
+fn toml_string(text: &str) -> String {
+  format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 #[test]

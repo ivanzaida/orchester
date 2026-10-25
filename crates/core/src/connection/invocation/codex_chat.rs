@@ -3,7 +3,8 @@
 //! Codex's own that reads, runs or fetches anything turned off ([`CONFINEMENT`]):
 //!
 //! `codex app-server --stdio <isolation> -c projects={<folder>={trust_level="untrusted"}} [-c windows.sandbox=elevated]
-//!  -c sandbox_workspace_write.writable_roots=[] -c project_doc_max_bytes=0 <confinement> <the chat's MCP server>`
+//!  -c sandbox_workspace_write.writable_roots=[] -c project_doc_max_bytes=0 [-c skills.config=[…]]`
+//! `<the chat's MCP server> <confinement>`, every skill of the folder in `skills.config` with `enabled=false`.
 //!
 //! The confinement does not rest on Codex's sandbox, whose `read-only` mode keeps writes out but not reads: Codex is
 //! given no shell at all, so neither its sign-in in `CODEX_HOME`, nor other repositories, nor the runner's private
@@ -18,11 +19,17 @@
 //!
 //! - Its only MCP server is the chat's domain tools (`orchester`), their bearer token in the process environment only
 //!   ([`super::CodexMcp`]); the user's own servers, plugins and apps are turned off as for a step.
-//! - The repository's own `AGENTS.md` and `.codex` folder are left out, as for a step without its agent files.
+//! - The repository's own `AGENTS.md`, `.codex` configuration and skills are left out, as for a step without its agent
+//!   files: the folder is untrusted, `project_doc_max_bytes=0` keeps `AGENTS.md` out, and every skill of its
+//!   `.agents/skills` and `.codex/skills`, which Codex loads even from an untrusted folder, is disabled by its paths
+//!   ([`CodexChat::skills`]). The runner finds them as for a step and starts no turn when that search could miss one.
 //! - The system prompt is App Server's `baseInstructions`, in place of Codex's own, on every turn: the runner gives it
 //!   with the thread's start or resume (`orchester-runner`'s `chat::codex`).
 
-use std::{ffi::OsString, path::Path};
+use std::{
+  ffi::OsString,
+  path::{Path, PathBuf},
+};
 
 use super::{CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform};
 use crate::{
@@ -32,16 +39,21 @@ use crate::{
 };
 
 /// The overrides that leave Codex no tool of its own that reads files, runs a program, looks at an image, searches the
-/// web or works beside the turn, each a feature or setting of Codex 0.159.2 (`codex features list`). `shell_tool`
-/// and `unified_exec` are its shells (`shell`, `shell_command`, `exec_command`, `write_stdin`); `view_image` reads an
-/// image file outside any sandbox; `hooks` run the user's own commands on the agent's events; the rest offer tools the
-/// chat has no use for. Sub-agents are off for every Codex invocation already ([`super::CODEX_SUB_AGENTS_OFF`]). A
-/// turned-off tool is not offered to the model, and a call of it is refused.
-pub const CONFINEMENT: [&str; 10] = [
+/// web or works beside the turn, each a feature or setting of Codex 0.159.2. `shell_tool=false` is what takes its
+/// shells away (`shell`, `shell_command`, `exec_command`, `write_stdin`): `codex features list` shows it off, and the
+/// probe above saw none of them offered and each call refused. `unified_exec=false` is kept for a version that reads
+/// it, but 0.159.2's `codex features list` still shows `unified_exec` on with it, so nothing rests on it. `view_image`
+/// reads an image file outside any sandbox; `hooks` run the user's own commands on the agent's events;
+/// `skill_mcp_dependency_install` would let a skill bring an MCP server into the thread; the rest offer tools the chat
+/// has no use for. Each of these but `unified_exec` shows off in `codex features list` with the overrides. Sub-agents
+/// are off for every Codex invocation already ([`super::CODEX_SUB_AGENTS_OFF`]). A turned-off tool is not offered to
+/// the model, and a call of it is refused.
+pub const CONFINEMENT: [&str; 11] = [
   "features.shell_tool=false",
   "features.unified_exec=false",
   "features.view_image=false",
   "features.hooks=false",
+  "features.skill_mcp_dependency_install=false",
   "features.goals=false",
   "features.memories=false",
   "features.browser_use=false",
@@ -59,6 +71,10 @@ pub struct CodexChat<'a> {
   pub platform: Platform,
   /// The chat's domain tools.
   pub mcp: &'a CodexMcp,
+  /// Every skill of the project folder, each to be disabled: the paths of
+  /// [`RepositorySkills::codex_paths`](crate::agent_files::skills::RepositorySkills::codex_paths). Codex loads a
+  /// folder's skills even when the folder is untrusted, and the chat loads none.
+  pub skills: &'a [PathBuf],
 }
 
 impl CodexChat<'_> {
@@ -91,7 +107,7 @@ impl CodexChat<'_> {
       worktree: self.folder,
       platform: self.platform,
       mcp: Some(self.mcp),
-      agent_files: CodexAgentFiles::LeftOut { skills: &[] },
+      agent_files: CodexAgentFiles::LeftOut { skills: self.skills },
     }
   }
 }
