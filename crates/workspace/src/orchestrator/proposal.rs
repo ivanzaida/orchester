@@ -7,7 +7,12 @@
 //! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
 //! reaches [`decide`].
 
-use orchester_core::{id::RunId, orchestrator::ActionOutcome, time::Timestamp};
+use orchester_core::{
+  id::RunId,
+  orchestrator::{ActionOutcome, ChatApproval},
+  run::Answerer,
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -77,9 +82,27 @@ pub async fn decide(
     runners.chat_changed(&scope.root);
     return dismissed.map(drop).ok_or_else(taken);
   };
-  let claimed = background::run(move || ProjectDb::open(&root)?.claim_chat_action((chat, seq), Timestamp::now()))
-    .await?
-    .map_err(|error| store_error(&error))?;
+  accept((services, translate, runners), scope, seq, (&widens, None))
+    .await
+    .map(drop)
+}
+
+/// Starts or applies the proposal `seq` of `scope`'s conversation as the person's decision, which they were shown to
+/// widen what agents may do by `widens`, made with a click on its card or, `approved_in` their message, in the chat
+/// (ORC-96). What carrying it out answered, or why it was refused, as the proposal now shows; an error when it no
+/// longer waits for a person or its outcome could not be kept.
+pub(super) async fn accept(
+  (services, translate, runners): (&Services, &Translate, &Runners),
+  scope: &ChatScope,
+  seq: i64,
+  (widens, approved_in): (&[Message], Option<ChatApproval>),
+) -> Result<Result<Value, ToolError>, Message> {
+  let (root, chat) = (scope.root.clone(), scope.chat);
+  let claimed = background::run(move || {
+    ProjectDb::open(&root)?.claim_chat_action_approved((chat, seq), approved_in, Timestamp::now())
+  })
+  .await?
+  .map_err(|error| store_error(&error))?;
   let Some(action) = claimed else {
     return Err(taken());
   };
@@ -91,14 +114,7 @@ pub async fn decide(
       ActionOutcome::Done,
     ),
     (_, ActionOutcome::Waits, Some(proposed)) => (
-      change::apply(
-        (services, translate),
-        scope,
-        &proposed,
-        &widens,
-        orchester_core::run::Answerer::Person,
-      )
-      .await,
+      change::apply((services, translate), scope, &proposed, widens, Answerer::Person).await,
       ActionOutcome::Applied,
     ),
     _ => (
@@ -107,9 +123,9 @@ pub async fn decide(
     ),
   };
   // A message that ran the task again keeps the run it started, which the chat's own doing then names.
-  let (outcome, started) = match carried {
-    Ok(told) => (applied, started_run(&told)),
-    Err(error) => (refusal(&error, translate), None),
+  let (outcome, started) = match &carried {
+    Ok(told) => (applied, started_run(told)),
+    Err(error) => (refusal(error, translate), None),
   };
   let root = scope.root.clone();
   background::run(move || {
@@ -118,7 +134,7 @@ pub async fn decide(
   .await?
   .map_err(|error| store_error(&error))?;
   runners.chat_changed(&scope.root);
-  Ok(())
+  Ok(carried)
 }
 
 /// The run `send_message` told it ran the task again with (`started_run`); `None` for any other result.

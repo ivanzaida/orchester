@@ -10,6 +10,7 @@
 use orchester_core::{
   attachment::NewAttachment,
   id::{ChatId, ChatMessageId, ProjectId},
+  run::Answerer,
 };
 use orchester_workspace::orchestrator::send::Outgoing;
 
@@ -63,21 +64,23 @@ pub(super) fn set_attachments(project: ProjectId, of: Conversation, attachments:
   DRAFTS.change((project, of), |draft| attachments.clone_into(&mut draft.attachments));
 }
 
-/// The message the draft of `of` goes as: the one it was last sent as when its words and files did not change
-/// since, so that one is kept once, or a new one to `chat`.
+/// The message the draft of `of` goes as, sent by `sent_by`: the one it was last sent as when its words and files did
+/// not change since, so that one is kept once, or a new one to `chat`.
 pub(super) fn sending(
   project: ProjectId,
   of: Conversation,
   (chat, text, attachments): (ChatId, String, Vec<NewAttachment>),
+  sent_by: Answerer,
 ) -> Outgoing {
   DRAFTS.change((project, of), |draft| {
     let outgoing = match draft.sent.take() {
-      Some(sent) if sent.text == text && sent.attachments == attachments => sent,
+      Some(sent) if sent.text == text && sent.attachments == attachments => Outgoing { sent_by, ..sent },
       _ => Outgoing {
         chat,
         message: ChatMessageId::generate(),
         text,
         attachments,
+        sent_by,
       },
     };
     draft.sent = Some(outgoing.clone());

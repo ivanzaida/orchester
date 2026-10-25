@@ -11,6 +11,7 @@ use orchester_core::{
   conversation::{Message, MessageBody, Recipient},
   id::{ChatId, ChatMessageId, IdempotencyKey},
   orchestrator::Chat,
+  run::Answerer,
   store::ConversationStore,
 };
 use orchester_store::{AttachmentOwner, attachment_file};
@@ -88,13 +89,23 @@ fn a_chat_message_keeps_its_files_and_forgets_them_with_it() {
   let started = Chat::start(chat, &body("shot.png"), at(10));
   let files = [file("shot.png", png())];
   assert!(
-    db.keep_chat_message_with(&started, (message, &body("shot.png")), &files, at(10))
-      .expect("kept")
+    db.keep_chat_message_with(
+      &started,
+      (message, &body("shot.png")),
+      (&files, Answerer::Person),
+      at(10)
+    )
+    .expect("kept")
   );
   // Kept before, it keeps the files it was kept with.
   assert!(
     !db
-      .keep_chat_message_with(&started, (message, &body("shot.png")), &files, at(20))
+      .keep_chat_message_with(
+        &started,
+        (message, &body("shot.png")),
+        (&files, Answerer::Person),
+        at(20)
+      )
       .expect("again")
   );
   let kept = db.chat_attachments(chat).expect("read");
@@ -119,13 +130,18 @@ fn the_same_draft_file_sent_again_keeps_both_messages_copies() {
   let started = Chat::start(chat, &body("Look"), at(10));
   let files = [file("shot.png", png())];
   assert!(
-    db.keep_chat_message_with(&started, (first, &body("Look")), &files, at(10))
+    db.keep_chat_message_with(&started, (first, &body("Look")), (&files, Answerer::Person), at(10))
       .expect("first")
   );
   // The first send came back lost but stays stored; the person edits the words and sends the same files again.
   assert!(
-    db.keep_chat_message_with(&started, (second, &body("Look here")), &files, at(20))
-      .expect("second")
+    db.keep_chat_message_with(
+      &started,
+      (second, &body("Look here")),
+      (&files, Answerer::Person),
+      at(20)
+    )
+    .expect("second")
   );
   let kept = db.chat_attachments(chat).expect("read");
   let (one, two) = (&kept[&first][0], &kept[&second][0]);

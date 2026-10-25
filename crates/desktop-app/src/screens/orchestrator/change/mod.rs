@@ -247,6 +247,7 @@ impl ChangeCard {
       )),
       _ => {}
     }
+    after.extend(card::approved_in_chat(ctx, id, view.action));
     // Automation's refused click is told while the card waits; once it was decided, the note is gone.
     if self.refused.get() && view.phase() == Phase::Waits {
       after.push(card::note(

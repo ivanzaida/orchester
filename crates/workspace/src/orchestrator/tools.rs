@@ -29,6 +29,7 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
+  approval::{self, APPLY_PROPOSAL},
   auto_merge::{self, MergeAs},
   blocked,
   change::{
@@ -120,10 +121,12 @@ pub const TOOLS: [&str; 60] = [
 ];
 
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
-/// the person applies ([`super::repository`]), working with git in it ([`super::git`]), and changing the project's
-/// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]).
-pub const CHAT_TOOLS: [&str; 22] = [
+/// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
+/// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), and applying a proposal the
+/// person approved in their own words ([`super::approval`]).
+pub const CHAT_TOOLS: [&str; 23] = [
   INIT_REPOSITORY,
+  APPLY_PROPOSAL,
   git::NAMES[0],
   git::NAMES[1],
   git::NAMES[2],
@@ -175,7 +178,7 @@ pub fn listed() -> Vec<Tool> {
       }
       tool
     })
-    .chain([repository::tool()])
+    .chain([repository::tool(), approval::tool()])
     .chain(git::tools())
     .chain(mcp_servers::tools())
     .collect()
@@ -195,7 +198,7 @@ pub struct ChatScope {
 }
 
 /// Calls the chat's tool `name` with `arguments` in `scope`; a change it made, proposed or refused is kept in the
-/// conversation, and `runners` tell the chat it changed.
+/// conversation (a proposal it applied for the person, on its card), and `runners` tell the chat it changed.
 pub async fn call(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
@@ -207,6 +210,9 @@ pub async fn call(
   }
   if mcp_servers::is_tool(name) {
     return mcp_servers::call((services, translate, runners), scope, name, arguments).await;
+  }
+  if name == APPLY_PROPOSAL {
+    return approval::call((services, translate, runners), scope, arguments).await;
   }
   let Some(tool) = listed().into_iter().find(|tool| tool.name == name) else {
     return Err(no_tool(name));

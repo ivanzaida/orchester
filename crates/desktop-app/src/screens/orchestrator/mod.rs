@@ -35,7 +35,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::KeyboardEvent,
+    events::{KeyboardEvent, is_synthetic_input},
   },
   components::{Column, Row},
   core::{ElementRef, Signal},
@@ -43,6 +43,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{ChatId, ChatMessageId, ProjectId},
+  run::Answerer,
   time::Timestamp,
 };
 use orchester_workspace::{display, orchestrator::send::Outgoing};
@@ -317,7 +318,7 @@ impl View {
         return;
       }
       let to = chat.unwrap_or_else(ChatId::generate);
-      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments));
+      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments), sender());
       view.outgoing.set(Some(outgoing.clone()));
       view.follow.follow_again();
       view.send.run(Sending {
@@ -344,10 +345,21 @@ impl View {
           message: ChatMessageId::generate(),
           text: text.to_string(),
           attachments: Vec::new(),
+          sent_by: sender(),
         },
         from_draft: false,
       });
     })
+  }
+}
+
+/// Who sends the message the press under way sends: automation driving the window (lurq's synthetic input), whose
+/// message never approves a proposal for the person, or the person.
+fn sender() -> Answerer {
+  if is_synthetic_input() {
+    Answerer::Automation
+  } else {
+    Answerer::Person
   }
 }
 

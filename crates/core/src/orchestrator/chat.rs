@@ -10,6 +10,7 @@ use crate::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId, IdempotencyKey, RunId},
   resource::ModelId,
+  run::Answerer,
   time::Timestamp,
 };
 
@@ -218,6 +219,10 @@ pub struct ChatAction {
   /// work behind it any more and is recovered (`orchester_workspace::orchestrator::recover`).
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub claimed: Option<Timestamp>,
+  /// The person decided it by saying so in the chat (ORC-96): the message of theirs that approved it, which the chat
+  /// applied it for, rather than with a click on its card.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub approved_in: Option<ChatApproval>,
 }
 
 impl ChatAction {
@@ -240,8 +245,18 @@ impl ChatAction {
       on_its_own: false,
       settled: None,
       claimed: None,
+      approved_in: None,
     }
   }
+}
+
+/// The person's message in the chat that approved a proposal: its id, its entry in the conversation (`seq`) and its
+/// words as its card quotes them ([`title_of`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatApproval {
+  pub message: ChatMessageId,
+  pub seq: i64,
+  pub words: String,
 }
 
 /// The new starts a hold held: in one reviewed group (its key), or in the whole project; and the keys of the tasks
@@ -296,6 +311,9 @@ pub enum EntryKind {
     turn: TurnState,
     /// When its turn ended; `None` while it thinks, and for one cut short without a runner to say when.
     ended: Option<Timestamp>,
+    /// Who sent it: the person, or automation driving the window (lurq's synthetic input), whose message never
+    /// approves a proposal for the person (ORC-96).
+    sent_by: Answerer,
   },
   Reply {
     text: String,

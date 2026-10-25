@@ -10,7 +10,7 @@ use orchester_core::{
   orchestrator::{
     ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState,
   },
-  run::TokenUsage,
+  run::{Answerer, TokenUsage},
 };
 use orchester_store::ProjectDb;
 use support::{at, copied_at_version, model, started_run};
@@ -65,6 +65,31 @@ fn a_chat_message_is_kept_once_and_forgotten_with_the_chat_it_alone_started() {
   db.forget_chat_message(message).expect("forgotten");
   assert_eq!(db.chat(chat).expect("read"), None, "the chat it started went with it");
   assert_eq!(db.chat_turn(message).expect("read"), None);
+}
+
+/// ORC-96: a message keeps who sent it, the person or automation driving the window.
+#[test]
+fn a_chat_message_keeps_who_sent_it() {
+  let (_repo, mut db, _run, _execution) = started_run();
+  let chat = Chat::start(ChatId::generate(), &body("run it"), at(10));
+  let (person, automation) = (ChatMessageId::generate(), ChatMessageId::generate());
+  db.keep_chat_message(&chat, (person, &body("run it")), at(10))
+    .expect("kept");
+  db.keep_chat_message_with(&chat, (automation, &body("apply")), (&[], Answerer::Automation), at(20))
+    .expect("kept");
+  let senders: Vec<(ChatMessageId, Answerer)> = db
+    .chat_entries(chat.id())
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Person { message, sent_by, .. } => Some((message, sent_by)),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(
+    senders,
+    [(person, Answerer::Person), (automation, Answerer::Automation)]
+  );
 }
 
 /// The session of `chat`, kept on `connection` and `account`, is resumed only on both.
@@ -143,7 +168,8 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
         message,
         text: body("What runs?"),
         turn: TurnState::Answered,
-        ended: Some(at(35))
+        ended: Some(at(35)),
+        sent_by: Answerer::Person,
       },
       EntryKind::Reply {
         text: "Two runs.".to_owned(),

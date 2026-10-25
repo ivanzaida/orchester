@@ -47,7 +47,8 @@ const DESCRIPTION: &str = "Proposes making this project's folder a git repositor
   an empty one (empty). Orchester's .orchester folder always stays out of git. It never adds a remote, pushes or \
   changes git's settings. It writes to the project's folder, so in this chat it is always a card the person applies \
   or dismisses in the conversation, whatever auto mode and the person's switches say: nothing is made until they \
-  apply it, and you never apply it. The card shows the branch, how many files the commit adds, the whole .gitignore \
+  apply it, on the card or by approving it in a later message (apply_proposal, only when no file looks as if it holds \
+  secrets). The card shows the branch, how many files the commit adds, the whole .gitignore \
   it honours and the files that look as if they hold secrets (such as .env), which the person decides on: propose a \
   .gitignore that keeps out what should not be committed, e.g. .orchester/ and the stack's build output. Refused: a \
   repository with a commit already (has_commits: its history is never touched), git not installed (git_not_found), a \

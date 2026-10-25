@@ -17,6 +17,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_core::orchestrator::ChatAction;
 use orchester_workspace::{
   messages::{self, Message},
   orchestrator::{
@@ -99,6 +100,21 @@ pub(super) fn head(id: &str, (glyph, title): (Icon, &str), chip: Option<Element>
 /// A note of card `id` (`{id}-{suffix}`): `text` in `color` beside its icon in the same color.
 pub(super) fn note(id: &str, suffix: &str, (glyph, color): (Icon, PaletteColor), text: &str) -> Row {
   crate::ui::tinted_note::tinted_note(format!("{id}-{suffix}"), (glyph, color), text)
+}
+
+/// The note of card `id` that the person approved its proposal in the chat, quoting the message that did
+/// (`{id}-in-chat`, ORC-96); `None` for one decided otherwise.
+pub(super) fn approved_in_chat(ctx: &Ctx, id: &str, action: &ChatAction) -> Option<Row> {
+  let approval = action.approved_in.as_ref()?;
+  Some(note(
+    id,
+    "in-chat",
+    (Icon::MessageSquare, PaletteColor::TextMuted),
+    &ctx.t_args(
+      "orchestrator.change.approvedInChat",
+      [("words", approval.words.as_str())],
+    ),
+  ))
 }
 
 /// A decision to take on a proposal.

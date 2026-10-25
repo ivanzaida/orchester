@@ -194,6 +194,7 @@ pub(super) fn card(
         .width(Dimension::Pct(100.0))
     }))
     .with_children(checked)
+    .with_children(super::card::approved_in_chat(ctx, id, action))
     .with_children(links)
     .into()
 }
@@ -231,11 +232,19 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
   let task = action.task.as_deref().unwrap_or_default();
   let args = [("task", task), ("tool", action.tool.as_str())];
   let time = display::clock(at);
+  // A start the person approved in the chat says so, as of when it was started (ORC-96).
+  let confirmed = match action.approved_in {
+    Some(_) => ctx.t_args(
+      "orchestrator.change.appliedInChat",
+      [("time", display::clock(action.settled.unwrap_or(at)).as_str())],
+    ),
+    None => ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
+  };
   let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
     ActionOutcome::Done | ActionOutcome::Applied => (
       ctx.t_args(words.done, args),
       words.glyph,
-      ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
+      confirmed,
       Icon::CircleCheck,
       PaletteColor::Success,
       words.effect.map(|key| ctx.t(key)),

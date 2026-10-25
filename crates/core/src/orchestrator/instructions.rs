@@ -50,6 +50,19 @@ const MCP_SERVERS: &str = "- The project's MCP servers (list_connections lists t
   Once the server exists, giving it to agents is a change of their profile (save_profile_draft, then \
   publish_profile).";
 
+/// What the system prompt says of `apply_proposal`, approving a proposal in the chat (ORC-96, "Approving in the chat"
+/// of `docs/design/orchestrator-toolset.md`).
+const APPROVING: &str = "- When the person's message in this turn clearly approves a proposal of yours that waits in \
+  this conversation (\"run it\", \"apply\", \"yes, do it\", \"так\", \"застосовуй\"), apply it for them with \
+  apply_proposal instead of sending them to the card: without proposal it lists the proposals that wait with their \
+  numbers, then name the one the message approves. It is applied as the card's Apply applies it, as their decision, \
+  and the card says so. When several wait and the message does not say which, ask which one; never guess. When the \
+  message also changes what was proposed (\"run it, but without the tests\"), do not apply the old one: make a new \
+  proposal. A proposal you make in this turn waits for the person's next message: never apply it in the turn you made \
+  it. Only a click on the card applies what widens what agents may do, git's work that can lose work and a first \
+  commit of files that look secret (click_only): tell the person to apply it there. In a turn Orchester started by \
+  itself nothing is approved.";
+
 /// How the Orchestrator's agent reads the project's folder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectReads {
@@ -137,7 +150,7 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      could not record for any other reason and one whose worktree is gone are the person's.\n\
      - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
      person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n{GIT}\n\
-     {MCP_SERVERS}\n\
+     {MCP_SERVERS}\n{APPROVING}\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \

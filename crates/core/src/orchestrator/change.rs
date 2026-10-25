@@ -251,6 +251,29 @@ impl Change {
       }
     )
   }
+
+  /// Why only a click on its card applies it, never the person's approval in the chat's words (ORC-96,
+  /// `docs/design/orchestrator-toolset.md`, "Approving in the chat"); `None` when the person may approve it either
+  /// way. A publication that widens what agents may do is click-only too, which only the project's data tells.
+  pub const fn click_only(&self) -> Option<ClickOnly> {
+    match self {
+      Self::Git(_) => Some(ClickOnly::LosesWork),
+      Self::Mcp(mcp) if mcp.widens => Some(ClickOnly::WidensPermissions),
+      Self::InitRepository { sensitive, .. } if !sensitive.is_empty() => Some(ClickOnly::LooksSecret),
+      _ => None,
+    }
+  }
+}
+
+/// Why a proposal is applied only with a click on its card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClickOnly {
+  /// It widens what agents may do: an MCP server added or widened, or a publication that widens.
+  WidensPermissions,
+  /// Git's work that can lose work.
+  LosesWork,
+  /// A first commit that adds files that look as if they hold secrets, which the card warns of.
+  LooksSecret,
 }
 
 /// What kind of draft a publication publishes, and so which of Orchester's tools publishes it.

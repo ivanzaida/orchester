@@ -12,6 +12,7 @@ use orchester_core::{
     instructions::{ProjectReads, system_prompt, wait_prompt},
     wait::{dealt_with, raised_by_own},
   },
+  run::Answerer,
   time::Timestamp,
 };
 
@@ -131,6 +132,7 @@ fn person(text: &str) -> EntryKind {
     text: MessageBody::new(text).expect("text"),
     turn: TurnState::Answered,
     ended: None,
+    sent_by: Answerer::Person,
   }
 }
 

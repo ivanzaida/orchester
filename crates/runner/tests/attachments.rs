@@ -15,7 +15,7 @@ use orchester_core::{
   id::{ChatId, ChatMessageId, IdempotencyKey},
   orchestrator::{Chat, OrchestratorSettings, TurnState},
   resource::ModelId,
-  run::RunStatus,
+  run::{Answerer, RunStatus},
   store::ConnectionStore,
   time::Timestamp,
 };
@@ -112,7 +112,8 @@ async fn attachments_reach_the_orchestrator_chat() {
   let (chat, message) = (ChatId::generate(), ChatMessageId::generate());
   let body = MessageBody::new("What is in this screenshot?").expect("text");
   let started = Chat::start(chat, &body, Timestamp::now());
-  db.keep_chat_message_with(&started, (message, &body), &[file("shot.png", png())], Timestamp::now())
+  let files = [file("shot.png", png())];
+  db.keep_chat_message_with(&started, (message, &body), (&files, Answerer::Person), Timestamp::now())
     .expect("kept");
   let (scheduler, mut events) = scheduler(root);
   let tools = ChatTools {

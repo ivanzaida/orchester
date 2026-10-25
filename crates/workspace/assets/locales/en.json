@@ -1982,6 +1982,17 @@
     "mcp": {
       "changed": "The MCP server {{server}}, a secret it names, its program's file or the profiles that choose it changed since this was proposed. Nothing was changed; ask the Orchestrator to propose it again."
     },
+    "approval": {
+      "applied": "Applied for the person, as their decision in this conversation: its card says so. Tell them what it did, with its link.",
+      "notPersonsTurn": "Nobody asked you in this turn: Orchester started it by itself. Only the person's own message approves a proposal; nothing was applied. Tell them it waits for them.",
+      "automationInput": "The message of this turn was sent by automation driving the window, not typed by the person: it never approves a proposal. Nothing was applied; the person applies it on its card.",
+      "notPending": "Proposal {{proposal}} does not wait for the person in this conversation, or was made after their message, which so cannot approve it. Nothing was applied: call apply_proposal without proposal to list those that wait.",
+      "clickOnly": {
+        "widens": "This proposal widens what agents may do: only the person's click on Apply on its card applies it. Nothing was applied; tell them to apply it there.",
+        "losesWork": "This git operation can lose work: only the person's click on Apply on its card applies it. Nothing was applied; tell them to apply it there.",
+        "looksSecret": "This first commit adds files that look as if they hold secrets: only the person's click on Apply on its card, where they see them, applies it. Nothing was applied; tell them to apply it there."
+      }
+    },
     "repository": {
       "gitMissing": "git is not installed on this computer, so the project's folder cannot be made a git repository. Install git, then ask again. Nothing was changed.",
       "notWritable": "Orchester cannot write to the project's folder, so no repository was made there.",

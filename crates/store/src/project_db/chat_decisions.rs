@@ -6,7 +6,7 @@
 
 use orchester_core::{
   id::{ChatId, RunId},
-  orchestrator::{ActionOutcome, ChatAction},
+  orchestrator::{ActionOutcome, ChatAction, ChatApproval},
   time::Timestamp,
 };
 use rusqlite::{OptionalExtension, params};
@@ -81,8 +81,20 @@ impl ProjectDb {
     (chat, seq): (ChatId, i64),
     at: Timestamp,
   ) -> Result<Option<ChatAction>, StoreError> {
+    self.claim_chat_action_approved((chat, seq), None, at)
+  }
+
+  /// [`Self::claim_chat_action`] for the person's decision `approved_in` their message in the chat, when they said so
+  /// there rather than clicking the card (ORC-96): the action keeps it.
+  pub fn claim_chat_action_approved(
+    &mut self,
+    (chat, seq): (ChatId, i64),
+    approved_in: Option<ChatApproval>,
+    at: Timestamp,
+  ) -> Result<Option<ChatAction>, StoreError> {
     self.replace_chat_action((chat, seq), ChatAction::waits, |found| ChatAction {
       claimed: Some(at),
+      approved_in,
       ..found
     })
   }

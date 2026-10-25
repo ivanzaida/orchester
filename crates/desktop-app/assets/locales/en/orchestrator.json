@@ -297,6 +297,8 @@
     },
     "change": {
       "applying": "Being carried out · {{time}}",
+      "appliedInChat": "Applied by you in the chat · {{time}}",
+      "approvedInChat": "You approved it in the chat: “{{words}}”",
       "personOnly": {
         "publish": "Only a person publishes a draft the Orchestrator proposed: input from automation is refused here.",
         "cancel": "Only a person cancels a run the Orchestrator proposed: input from automation is refused here.",

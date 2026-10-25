@@ -11,6 +11,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, TurnFailure, TurnState},
+  run::Answerer,
   time::Timestamp,
 };
 use orchester_ipc::{ChatTools, Rejection};
@@ -25,13 +26,15 @@ use crate::{
 };
 
 /// A message the person sends: the conversation it goes to (a new one gets its id here too), its own id, given once
-/// for the draft, its text and the files the person attached.
+/// for the draft, its text, the files the person attached, and who sent it: the person, or automation driving the
+/// window, whose message never approves a proposal for the person.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing {
   pub chat: ChatId,
   pub message: ChatMessageId,
   pub text: String,
   pub attachments: Vec<NewAttachment>,
+  pub sent_by: Answerer,
 }
 
 /// Why a message did not reach the Orchester's agent.
@@ -158,7 +161,7 @@ pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
     .chat(outgoing.chat)
     .map_err(|error| messages::store_error(&error))?
     .unwrap_or_else(|| Chat::start(outgoing.chat, &text, now));
-  db.keep_chat_message_with(&chat, (outgoing.message, &text), attached, now)
+  db.keep_chat_message_with(&chat, (outgoing.message, &text), (attached, outgoing.sent_by), now)
     .map(drop)
     .map_err(|error| messages::store_error(&error))
 }

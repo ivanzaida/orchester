@@ -146,6 +146,7 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         text,
         turn,
         ended,
+        ..
       } => {
         let attachments: Arc<[Attachment]> = attached
           .get(message)
