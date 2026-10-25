@@ -1,8 +1,9 @@
 //! One row of the task table (`Task list row` `XEQuo`): the task's key, its title with its first two tags
-//! and how many more, its pipeline and priority, its workflow status over its run's status, and what it
-//! needs or where it stands. A press opens the task on its Details. The task a Create just added is tinted and
-//! carries the New badge (`Row · KON-37` in `t3oAOi`). Selection is not built yet (D4), so the row has no
-//! checkbox.
+//! and how many more, its pipeline and priority, its workflow status over its run's status, what it
+//! needs or where it stands, and its *More actions* menu, which closes, reopens or deletes it (`task_close`,
+//! ORC-91, no frame yet; a task kept *Not shared* is read-only and has none). A press elsewhere opens the task on
+//! its Details. The task a Create just added is tinted and carries the New badge (`Row · KON-37` in `t3oAOi`).
+//! Selection is not built yet (D4), so the row has no checkbox.
 
 use std::sync::Arc;
 
@@ -30,6 +31,7 @@ use super::{readiness, table};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskView},
+  screens::task_close::{self, Closer, MenuPlace, Subject},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     chip::{BadgeTone, TagChip, badge},
@@ -50,17 +52,24 @@ pub(super) struct RowProps {
   pub row: TaskRow,
   /// The task a Create just added.
   pub highlighted: bool,
+  /// The project is shared: its team server keeps its tasks.
+  pub shared: bool,
 }
 
 impl DevtoolsInspectable for RowProps {}
 
-pub(super) struct TaskListRow;
+pub(super) struct TaskListRow {
+  /// Where its *More actions* menu is open.
+  menu: MenuPlace,
+}
 
 impl Component for TaskListRow {
   type Props = RowProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      menu: MenuPlace::new(ctx),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -78,6 +87,7 @@ impl Component for TaskListRow {
     };
     let open = Route::Project(props.project, page);
     let pipeline = pipeline_label(ctx, &row.pipeline);
+    let more = more_cell(ctx, &props, &self.menu);
     let line = TableRow::new(format!("task-row-{key}"))
       .cell(
         table::KEY,
@@ -97,9 +107,26 @@ impl Component for TaskListRow {
       )
       .cell(table::WORKFLOW, workflow_cell(ctx, row))
       .cell(table::READINESS, readiness_cell(ctx, row))
+      .cell(table::MORE, more)
       .opens(navigation.to(open));
     if props.highlighted { line.highlighted() } else { line }
   }
+}
+
+/// The row's *More actions* menu, open at `menu`; none for a task kept *Not shared*, which is read-only.
+fn more_cell(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
+  let row = &props.row;
+  if row.not_shared {
+    return Element::new();
+  }
+  let subject = Subject {
+    id: row.id,
+    key: row.key.clone(),
+    status: row.organization.status(),
+    shared: props.shared,
+  };
+  let closer = Closer::of(ctx);
+  task_close::more_menu(ctx, (&closer, menu), &subject, &format!("task-more-{}", row.key))
 }
 
 /// The title, cut to its room, then *was KON-12* for a task that joined with another key (`Xr4Wb`), its story

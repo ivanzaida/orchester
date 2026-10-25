@@ -7,7 +7,7 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use super::ProjectDb;
 use crate::{
@@ -62,6 +62,29 @@ impl ProjectDb {
     let transaction = self.connection.transaction()?;
     let before = load(&transaction, task)?;
     let value = update(before.clone());
+    validate(&transaction, task, &value)?;
+    write(&transaction, task, &value, actor, at)?;
+    transaction.commit()?;
+    Ok(value != before)
+  }
+
+  /// Sets `task` to the closed `status` (Done or Canceled) as `actor`'s change, in one transaction with the check
+  /// that no run of it has not ended: a run that started since the person confirmed is named
+  /// ([`OrganizationError::StopRunFirst`]) instead of left running under a closed task. Whether that changed it.
+  pub fn close_task_organization(
+    &mut self,
+    task: TaskId,
+    status: WorkflowStatus,
+    (actor, at): (ChangeActor, Timestamp),
+  ) -> Result<bool, StoreError> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if let Some(run) = active_run(&transaction, task)? {
+      return Err(OrganizationError::StopRunFirst(run).into());
+    }
+    let before = load(&transaction, task)?;
+    let value = before.clone().with_status(status);
     validate(&transaction, task, &value)?;
     write(&transaction, task, &value, actor, at)?;
     transaction.commit()?;
@@ -202,7 +225,7 @@ fn ensure_task(connection: &Connection, task: TaskId) -> Result<(), StoreError> 
 
 /// The latest run of `task` that has not ended. An interrupted run whose worktree was removed never
 /// continues, so it counts as ended (ORC-63).
-fn active_run(connection: &Connection, task: TaskId) -> Result<Option<RunId>, StoreError> {
+pub(super) fn active_run(connection: &Connection, task: TaskId) -> Result<Option<RunId>, StoreError> {
   let id: Option<String> = connection
     .query_row(
       "SELECT id FROM runs WHERE task_id = ?1 AND status NOT IN ('succeeded', 'failed', 'cancelled') \

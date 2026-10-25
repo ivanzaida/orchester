@@ -24,15 +24,16 @@ use crate::{
 };
 
 /// The columns' widths (`FjOYw`): ID 52, the task the room left, Pipeline 128, Priority 80, Workflow / run
-/// 168, Dependency / readiness 188.
+/// 168, Dependency / readiness 188, and the row's *More actions* button (ORC-91, no frame yet), a 28 icon button.
 pub(super) const KEY: ColumnWidth = ColumnWidth::Fixed(52.0);
 pub(super) const TASK: ColumnWidth = ColumnWidth::Fill;
 pub(super) const PIPELINE: ColumnWidth = ColumnWidth::Fixed(128.0);
 pub(super) const PRIORITY: ColumnWidth = ColumnWidth::Fixed(80.0);
 pub(super) const WORKFLOW: ColumnWidth = ColumnWidth::Fixed(168.0);
 pub(super) const READINESS: ColumnWidth = ColumnWidth::Fixed(188.0);
+pub(super) const MORE: ColumnWidth = ColumnWidth::Fixed(28.0);
 
-/// The table's header, with the columns' headings.
+/// The table's header, with the columns' headings; the menu's column has none.
 pub(super) fn header(ctx: &Ctx) -> Row {
   let headings = [
     (KEY, "tasks.columns.key"),
@@ -46,6 +47,7 @@ pub(super) fn header(ctx: &Ctx) -> Row {
   let columns: Vec<(ColumnWidth, Option<&str>)> = headings
     .iter()
     .map(|(width, heading)| (*width, Some(&**heading)))
+    .chain([(MORE, None)])
     .collect();
   table_header("tasks-table-header", &columns, true)
 }
@@ -61,6 +63,8 @@ pub(super) struct Rows<'a> {
   /// The list's key, new for another tab, search, pipeline or sort: a list keeps its top row in place
   /// while its rows change, which a new list must not.
   pub list_key: String,
+  /// The project is shared: its team server keeps its tasks.
+  pub shared: bool,
 }
 
 /// The header over the rows, scrolled where `shown.scroll` says.
@@ -70,7 +74,7 @@ pub(super) fn table(ctx: &mut Ctx, shown: &Rows<'_>) -> Element {
     .highlight
     .filter(|key| shown.rows.iter().any(|row| &*row.key == *key))
     .map(Arc::from);
-  let project = shown.project;
+  let (project, shared) = (shown.project, shown.shared);
   let rows = VirtualizedList::new_shared(ctx, shown.rows.clone())
     .list_key(shown.list_key.clone())
     .with_scroll_state(shown.scroll.clone())
@@ -83,6 +87,7 @@ pub(super) fn table(ctx: &mut Ctx, shown: &Rows<'_>) -> Element {
         project,
         row: row.clone(),
         highlighted: highlight.as_deref() == Some(&*row.key),
+        shared,
       },
     );
   Column::new()

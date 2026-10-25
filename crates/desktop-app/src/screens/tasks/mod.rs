@@ -54,6 +54,7 @@ use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
   routes::{TaskList, TaskListTab},
+  screens::task_close::{self, Closer},
   theme::{ExtraSpacing, TasksSpacing},
   ui::table::ROW_HEIGHT,
 };
@@ -83,13 +84,16 @@ struct TasksScreen {
   /// Where the rows are scrolled to, and what they were last placed for ([`TasksScreen::place`]).
   scroll: ScrollState,
   placed: Mutex<Option<Placed>>,
+  /// Closing, reopening and deleting tasks from their rows' menus, asked in place over the rows.
+  closer: Closer,
 }
 
 impl Component for TasksScreen {
   type Props = TasksProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let typed = ctx.props::<TasksProps>().list.search().unwrap_or_default().to_owned();
+    let props = ctx.props::<TasksProps>().clone();
+    let typed = props.list.search().unwrap_or_default().to_owned();
     let search = ctx.signal(typed);
     let navigation = Navigation::of(ctx);
     ctx.watch(&search, move |text: &String| query::follow_search(&navigation, text));
@@ -103,10 +107,12 @@ impl Component for TasksScreen {
       view: ListView::default(),
       scroll: ScrollState::new(),
       placed: Mutex::new(None),
+      closer: Closer::new(ctx, (props.project.open, props.project.feed), None),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    ctx.provide(self.closer.clone());
     let TasksProps { project, list } = ctx.props::<TasksProps>().clone();
     // The path's search wins: Back, Clear and automation change it too.
     let routed = list.search().unwrap_or_default();
@@ -193,7 +199,8 @@ impl TasksScreen {
       .child(query::query(ctx, &self.choices, Some(tasks)))
       .with_children(not_shared::filters(ctx, (id, list), shown.source.not_shared.len()))
       .with_children(kept)
-      .with_children(states::outside_tasks(ctx, list.tab(), tasks));
+      .with_children(states::outside_tasks(ctx, list.tab(), tasks))
+      .with_children(task_close::panel(ctx, &self.closer, "tasks-close"));
     if rows.is_empty() {
       // Rows that come back are placed afresh, at their top.
       *self.placed.lock() = None;
@@ -229,6 +236,7 @@ impl TasksScreen {
       highlight: highlight.as_deref(),
       scroll: self.scroll.clone(),
       list_key,
+      shared: shown.shared.is_some(),
     };
     page
       .child(table::table(ctx, &shown))

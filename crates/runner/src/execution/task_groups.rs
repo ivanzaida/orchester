@@ -9,7 +9,6 @@ use orchester_core::{
   id::{IdempotencyKey, TaskId},
   run::{Run, RunStatus},
   store::{RunStore, WorktreeStore},
-  task::organization::WorkflowStatus,
   task_group::{GroupHold, QueueHolds, TaskGroup},
   tokens::TokensUsed,
 };
@@ -121,7 +120,7 @@ fn first_runs(db: &ProjectDb, group: &TaskGroup) -> Result<Vec<Option<Run>>, Rej
 /// A group as its scheduling sees it, with the first run of each of its tasks.
 type Scheduled = (TaskGroup, Vec<Option<Run>>);
 
-/// The group as its scheduling sees it: without its Canceled tasks that never started
+/// The group as its scheduling sees it: without its closed (Done or Canceled) tasks that never started
 /// ([`TaskGroup::skipping`]), with the first runs of the others in order; `None` when every task
 /// is skipped, which finishes the group.
 fn scheduled(db: &ProjectDb, group: &TaskGroup) -> Result<Option<Scheduled>, Rejection> {
@@ -134,7 +133,7 @@ fn scheduled(db: &ProjectDb, group: &TaskGroup) -> Result<Option<Scheduled>, Rej
         .task_organization(*task)
         .map_err(|error| super::failed("cannot read a task's status", &error))?
         .status()
-        == WorkflowStatus::Canceled
+        .is_closed()
     {
       skipped.push(*task);
     }
@@ -269,7 +268,7 @@ impl Scheduler {
         hold: GroupHold::SessionEnded,
       });
     }
-    // A Canceled task is not started by its group.
+    // A closed (Done or Canceled) task is not started by its group.
     let canceled = Rejection::TaskGroupWaiting {
       hold: GroupHold::Canceled,
     };
