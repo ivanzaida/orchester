@@ -20,7 +20,9 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
-  connections::mcp::{McpServerText, TransportChoice, save_in, secret_reference, set_enabled_in},
+  connections::mcp::{
+    AuthorizationChoice, AuthorizationText, McpServerText, TransportChoice, save_in, secret_reference, set_enabled_in,
+  },
   secrets::data::{ProjectSecrets, SecretUseKind, UseCounts},
 };
 use tempfile::TempDir;
@@ -90,7 +92,11 @@ fn mcp_variable_and_bearer_references_appear_once_per_server() {
     name: "remote".to_owned(),
     transport: TransportChoice::Http,
     url: "https://mcp.example.test".to_owned(),
-    bearer: Some(bearer.id()),
+    authorization: AuthorizationText {
+      choice: AuthorizationChoice::Bearer,
+      secret: Some(bearer.id()),
+      ..AuthorizationText::default()
+    },
     ..McpServerText::new_server()
   };
   let remote_id = save_in(
@@ -333,7 +339,11 @@ fn secrets_replacement_checks_current_bindings_before_touching_the_vault() {
     name: "remote".into(),
     transport: TransportChoice::Http,
     url: "https://mcp.example.test".into(),
-    bearer: Some(active.id()),
+    authorization: AuthorizationText {
+      choice: AuthorizationChoice::Bearer,
+      secret: Some(active.id()),
+      ..AuthorizationText::default()
+    },
     ..McpServerText::new_server()
   };
   save_in(

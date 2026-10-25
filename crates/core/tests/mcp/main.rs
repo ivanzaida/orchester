@@ -2,6 +2,7 @@
 //! and that a secret value reaches the CLI only through its environment or its private
 //! configuration file. Run with `cargo test -p orchester-core --test mcp mcp`.
 
+mod authorization;
 mod exempt;
 mod invocation;
 mod server;

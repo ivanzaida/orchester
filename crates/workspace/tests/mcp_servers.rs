@@ -7,8 +7,8 @@ use std::fs;
 
 use orchester_core::{
   connection::mcp::{
-    ExemptTools, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport,
-    McpUrl,
+    ExemptTools, HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpServer, McpServerName,
+    McpServerSelection, McpTransport, McpUrl,
   },
   id::{ConnectionId, ProjectId, SecretId},
   name::Name,
@@ -23,8 +23,8 @@ use orchester_workspace::{
   connections::{
     data::ProjectConnections,
     mcp::{
-      Allowed, McpSaveError, McpServerText, TransportChoice, enabling, parse_variables, remove_in, save_in,
-      secret_reference, set_enabled_in, store_in, widenings,
+      Allowed, AuthorizationChoice, AuthorizationText, McpSaveError, McpServerText, TransportChoice, enabling,
+      parse_variables, remove_in, save_in, secret_reference, set_enabled_in, store_in, widenings,
     },
   },
   pipelines::data::Assignables,
@@ -236,7 +236,7 @@ fn remote(name: &str, exempt: &str, enabled: bool) -> McpServer {
     McpServerName::new(name).expect("valid"),
     McpTransport::Http(HttpServer::new(
       McpUrl::new("http://localhost:7/mcp").expect("valid"),
-      None,
+      McpAuthorization::None,
     )),
     McpEnvironment::default(),
     Timestamp::from_unix_millis(1),
@@ -403,7 +403,7 @@ fn mcp_widenings_name_what_a_change_lets_agents_do() {
   assert!(enabling(&off, false).is_empty() && enabling(&stored, true).is_empty());
 }
 
-/// Only the project's active secrets can be named, by name or by id; a bearer secret too.
+/// Only the project's active secrets can be named, by name or by id; an authorization's secret too.
 #[test]
 fn mcp_dialog_names_only_the_projects_active_secrets() {
   let token = secret("DOCS_TOKEN", Environment::Staging);
@@ -425,7 +425,11 @@ fn mcp_dialog_names_only_the_projects_active_secrets() {
   let remote = McpServerText {
     transport: TransportChoice::Http,
     url: "https://mcp.example.dev/mcp".to_owned(),
-    bearer: Some(SecretId::generate()),
+    authorization: AuthorizationText {
+      choice: AuthorizationChoice::Bearer,
+      secret: Some(SecretId::generate()),
+      ..AuthorizationText::default()
+    },
     ..McpServerText::new_server()
   };
   let errors = McpServerText {
@@ -435,8 +439,8 @@ fn mcp_dialog_names_only_the_projects_active_secrets() {
   .draft(&[], &secrets)
   .expect_err("an archived bearer secret");
   assert_eq!(
-    errors.bearer.map(|message| message.key),
-    Some("connections.mcp.errors.bearerGone")
+    errors.secret.map(|message| message.key),
+    Some("connections.mcp.errors.secretGone")
   );
 }
 

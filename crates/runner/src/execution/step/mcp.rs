@@ -17,7 +17,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::{
     AgentProvider,
-    invocation::{ClaudeMcpConfig, CodexMcp, LaunchValue, McpLaunch, Platform},
+    invocation::{ClaudeMcpConfig, CodexMcp, HttpAuthorization, LaunchValue, McpLaunch, Platform},
     mcp::{InvocationExemptions, McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
     stream::{AgentEvent, RunnerProblem},
   },
@@ -46,20 +46,21 @@ pub(in super::super) enum McpSetup {
 }
 
 impl McpSetup {
-  /// The secret values Claude Code's servers take, which its activity must not show; Codex's
-  /// App Server redacts its own.
-  pub(in super::super) fn claude_secrets(&self) -> Vec<SecretVariable> {
+  /// The secret values of the servers that the agent's activity must not show: all of Claude Code's; of Codex's,
+  /// those its App Server does not redact itself (what a header's value is made of), and the rest again.
+  pub(in super::super) fn activity_secrets(&self) -> Vec<SecretVariable> {
     match self {
       Self::Claude(Some(servers)) => servers.secrets.clone(),
-      Self::Claude(None) | Self::Codex(_) => Vec::new(),
+      Self::Codex(mcp) => mcp.hidden().to_vec(),
+      Self::Claude(None) => Vec::new(),
     }
   }
 
   /// The secret values of every server, whichever CLI takes them.
   pub(in super::super) fn secrets(&self) -> Vec<SecretVariable> {
     match self {
-      Self::Codex(mcp) => mcp.secrets().to_vec(),
-      Self::Claude(_) => self.claude_secrets(),
+      Self::Codex(mcp) => mcp.secrets().iter().chain(mcp.hidden()).cloned().collect(),
+      Self::Claude(_) => self.activity_secrets(),
     }
   }
 
@@ -198,8 +199,8 @@ fn launched(
 ) -> Result<McpLaunch, McpServerProblem> {
   let stdio = match server.transport() {
     McpTransport::Http(http) => {
-      let bearer = http.bearer().map(|secret| secrets.read(secret)).transpose()?;
-      let launch = McpLaunch::http(server.name().clone(), http.url().clone(), bearer);
+      let authorization = HttpAuthorization::read(http.authorization(), |secret| secrets.read(secret))?;
+      let launch = McpLaunch::http(server.name().clone(), http.url().clone(), authorization);
       return Ok(launch.with_exempt_tools(server.exempt_tools().clone()));
     }
     McpTransport::Stdio(stdio) => stdio,
