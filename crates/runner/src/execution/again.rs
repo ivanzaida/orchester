@@ -162,8 +162,8 @@ pub(super) fn check(db: &ProjectDb, root: &Path, (task, after): (TaskId, RunId))
   Ok(previous.clone())
 }
 
-/// Whether `run` of `task` passed every step and committed nothing although its pipeline expects changes (ORC-93), as git
-/// in the repository at `root` tells; not when git cannot tell.
+/// Whether `run` of `task` passed every step and committed nothing although its pipeline expects changes (ORC-93), as
+/// git in the repository at `root` tells; not when git cannot tell.
 fn committed_nothing(root: &Path, task: &Task, run: &Run) -> bool {
   if *run.status() != RunStatus::Succeeded || run_delivers(task, run).without_commits() != WithoutCommits::Flagged {
     return false;

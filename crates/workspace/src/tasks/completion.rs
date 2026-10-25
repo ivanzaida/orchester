@@ -1,7 +1,8 @@
 //! A run that passed every step and committed nothing (ORC-93), as its task's Summary, Needs you and automation read
-//! it: what the run delivers, whether it was completed and by whom, its report, and for work done outside the repository
-//! the MCP tool calls that changed something. A run whose result is its report is completed (its task Done) instead of
-//! merged; one whose pipeline expects changes is flagged and waits for the person, who may complete it anyway.
+//! it: what the run delivers, whether it was completed and by whom, its report, and for work done outside the
+//! repository the MCP tool calls that changed something. A run whose result is its report is completed (its task Done)
+//! instead of merged; one whose pipeline expects changes is flagged and waits for the person, who may complete it
+//! anyway.
 
 use std::{path::Path, sync::Arc};
 

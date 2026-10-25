@@ -1,7 +1,7 @@
 //! The Summary of a task whose latest run passed every step and committed nothing (ORC-93), in place of Ready for
 //! review: there is nothing to merge. A run whose result is its report, or work done outside the repository, shows the
-//! Ready card with *Complete task* ([`card::ready`]); one whose pipeline expects changes is flagged, *This run committed
-//! nothing, but its pipeline expects changes*, with *Complete anyway*, *Return to a step* and *Run again*
+//! Ready card with *Complete task* ([`card::ready`]); one whose pipeline expects changes is flagged, *This run
+//! committed nothing, but its pipeline expects changes*, with *Complete anyway*, *Return to a step* and *Run again*
 //! ([`card::flagged`]); a completed run says who completed it and when ([`card::completed`]). Under the card the run's
 //! report, the MCP tool calls of work done outside the repository ([`report`]), its stages and *Runs of this task*;
 //! beside them *Run details*. The design has no frames of its own for these states: they follow the Ready card

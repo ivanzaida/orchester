@@ -2,8 +2,8 @@
 //! plan review with its pinned decision bar (`ciGbZ`, [`plan`]), raising the limit a run stopped at
 //! (`oTzJZ`, [`limit`]), the decision after a step used up its retries (`DVuXu`, [`retries`]), Ready
 //! for review with Merge into main and the merge's states (`F2LtFn`, `kxMAN`, [`ready`]), and for a run that
-//! committed nothing *Complete task*, or the warning that changes were expected ([`completion`], ORC-93). Each keeps the
-//! Summary's frame: where the task stands, the run's stages ([`stages`]) in place of its step rows, the
+//! committed nothing *Complete task*, or the warning that changes were expected ([`completion`], ORC-93). Each keeps
+//! the Summary's frame: where the task stands, the run's stages ([`stages`]) in place of its step rows, the
 //! decision, and *This run* beside them. A run stopped by the project's daily budget has nothing to
 //! decide here: it goes on with Resume run in the header once the day has room. A run that ended may still
 //! go back to one of its steps: that card stands above *Run details* ([`return_ended`]).

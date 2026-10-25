@@ -1,7 +1,7 @@
 //! What a pipeline's runs deliver (ORC-93), in Pipeline settings › Delivery: repository changes, a report, work done
 //! outside the repository through MCP tools, or changes or a report, one option card each as *Starts* chooses its
-//! trigger (`Section · Starts` `lLbSl` in `x4IIjM`; the design has no frame of this field yet). Choosing one changes the
-//! draft, which the editor saves; the published version keeps what it delivers until the next one is published.
+//! trigger (`Section · Starts` `lLbSl` in `x4IIjM`; the design has no frame of this field yet). Choosing one changes
+//! the draft, which the editor saves; the published version keeps what it delivers until the next one is published.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
