@@ -11,7 +11,7 @@ use orchester_core::{
   command::Command,
   connection::{
     AgentProvider, ConnectionAccount,
-    invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, McpLaunch, on_account},
+    invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, HttpAuthorization, McpLaunch, on_account},
     mcp::{McpServerName, McpUrl},
     stream::ClaudeStream,
   },
@@ -131,7 +131,7 @@ impl Turn {
     let url = McpUrl::new(&self.tools.url).map_err(|_| cannot("the tools' address is not valid".to_owned()))?;
     let token = SecretValue::new(self.tools.token.expose().to_owned())
       .map_err(|_| cannot("the tools' token is blank".to_owned()))?;
-    Ok(McpLaunch::http(name, url, Some(Arc::new(token))))
+    Ok(McpLaunch::http(name, url, HttpAuthorization::Bearer(Arc::new(token))))
   }
 
   /// Runs the CLI, keeping what it reports, until it ends or `stop` ends it.

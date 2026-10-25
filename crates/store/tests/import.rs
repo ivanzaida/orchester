@@ -14,7 +14,9 @@ use std::{
 use orchester_core::{
   connection::{
     AgentEndpoint, AgentProvider, Connection, ConnectionKind,
-    mcp::{HttpServer, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl},
+    mcp::{
+      HttpServer, McpAuthorization, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl,
+    },
   },
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
   import::{Catalog, Choice, Choices, Entity, ImportBatch, Pick, Plan},
@@ -68,7 +70,7 @@ fn mcp(db: &mut ProjectDb, label: &str) -> ConnectionId {
     McpServerName::new(label).expect("valid server name"),
     McpTransport::Http(HttpServer::new(
       McpUrl::new("https://mcp.example.test/v1").expect("valid URL"),
-      None,
+      McpAuthorization::None,
     )),
     McpEnvironment::default(),
     at(1),
@@ -123,7 +125,7 @@ fn import_profile_uses_the_target_mcp_server() {
     McpServerName::new("gone-docs").expect("name"),
     McpTransport::Http(HttpServer::new(
       McpUrl::new("https://mcp.example.test/v1").expect("URL"),
-      None,
+      McpAuthorization::None,
     )),
     McpEnvironment::default(),
     at(1),

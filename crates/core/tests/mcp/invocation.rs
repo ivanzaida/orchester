@@ -6,7 +6,7 @@ use orchester_core::{
     AgentProvider,
     invocation::{
       ClaudeInvocation, ClaudeMcp, ClaudeMcpConfig, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp,
-      LaunchValue, McpLaunch, Platform,
+      HttpAuthorization, LaunchValue, McpLaunch, Platform,
     },
     mcp::{McpServerName, McpServerProblem, McpUrl},
   },
@@ -19,7 +19,7 @@ use uuid::Uuid;
 const TOKEN: &str = "s3cr3t-docs-token";
 const BEARER: &str = "s3cr3t-bearer";
 
-fn secret(value: &str) -> Arc<SecretValue> {
+pub(super) fn secret(value: &str) -> Arc<SecretValue> {
   Arc::new(SecretValue::new(value.to_owned()).expect("not blank"))
 }
 
@@ -47,15 +47,15 @@ fn files(token: &Arc<SecretValue>) -> McpLaunch {
   )
 }
 
-fn remote(bearer: Option<Arc<SecretValue>>) -> McpLaunch {
+pub(super) fn remote(authorization: HttpAuthorization) -> McpLaunch {
   McpLaunch::http(
     name("project-knowledge"),
     McpUrl::new("https://mcp.example.dev/v1").expect("valid URL"),
-    bearer,
+    authorization,
   )
 }
 
-fn codex_command(mcp: &CodexMcp) -> Command {
+pub(super) fn codex_command(mcp: &CodexMcp) -> Command {
   CodexInvocation {
     executable: Path::new("/bin/codex"),
     repository: Path::new("/repo"),
@@ -73,7 +73,7 @@ fn codex_command(mcp: &CodexMcp) -> Command {
 
 /// Nothing a person or a log could read holds the secret values: arguments, the command's `Debug`
 /// output and its plain variables.
-fn assert_hidden(command: &Command, values: &[&str]) {
+pub(super) fn assert_hidden(command: &Command, values: &[&str]) {
   let shown = format!("{command:?}");
   for value in values {
     assert!(
@@ -89,7 +89,7 @@ fn assert_hidden(command: &Command, values: &[&str]) {
 #[test]
 fn mcp_codex_gets_servers_as_configuration_overrides_without_secret_values() {
   let (token, bearer) = (secret(TOKEN), secret(BEARER));
-  let (mcp, left_out) = CodexMcp::new(&[files(&token), remote(Some(bearer))]);
+  let (mcp, left_out) = CodexMcp::new(&[files(&token), remote(HttpAuthorization::Bearer(bearer))]);
   assert!(left_out.is_empty(), "{left_out:?}");
   let expected: Vec<String> = [
     "-c",
@@ -208,7 +208,7 @@ fn mcp_claude_gets_a_private_config_file_and_allows_only_the_servers_tools() {
     Some("/repo/worktree/tools".to_owned()),
     Vec::new(),
   );
-  let (config, left_out) = ClaudeMcpConfig::new(&[files(&token), remote(Some(bearer)), in_folder]);
+  let (config, left_out) = ClaudeMcpConfig::new(&[files(&token), remote(HttpAuthorization::Bearer(bearer)), in_folder]);
   let config = config.expect("two servers are left");
   assert_eq!(
     left_out,

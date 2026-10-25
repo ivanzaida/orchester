@@ -184,7 +184,7 @@ impl RunTask {
       .and_then(|command| on_account(command, cli.account, AgentProvider::CodexCli))
       .map(|command| on_provider(command, cli.provider, AgentProvider::CodexCli))
       .map_err(|error| problem(error.to_string()))?;
-    let mut secrets = mcp.secrets().to_vec();
+    let mut secrets: Vec<_> = mcp.secrets().iter().chain(mcp.hidden()).cloned().collect();
     secrets.extend(cli.provider.map(|on| on.key_variable(AgentProvider::CodexCli)));
     let schema = (cli.resume.is_none()).then(|| {
       serde_json::from_str(orchester_core::run::STEP_RESULT_SCHEMA)

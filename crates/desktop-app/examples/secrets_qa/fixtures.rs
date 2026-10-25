@@ -14,7 +14,9 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
-  connections::mcp::{McpServerText, TransportChoice, save_in, secret_reference},
+  connections::mcp::{
+    AuthorizationChoice, AuthorizationText, McpServerText, TransportChoice, save_in, secret_reference,
+  },
   project_setup::NewProject,
   workspace::{OpenProject, Workspace},
 };
@@ -103,7 +105,11 @@ fn references(db: &mut ProjectDb, repo: &Path, secrets: &[Secret]) -> Result<(),
     name: "sentry".into(),
     transport: TransportChoice::Http,
     url: "https://mcp.example.test/sentry".into(),
-    bearer: Some(secrets[1].id()),
+    authorization: AuthorizationText {
+      choice: AuthorizationChoice::Bearer,
+      secret: Some(secrets[1].id()),
+      ..AuthorizationText::default()
+    },
     ..McpServerText::new_server()
   };
   save_in(

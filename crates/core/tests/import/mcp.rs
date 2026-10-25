@@ -1,5 +1,7 @@
 use orchester_core::{
-  connection::mcp::{HttpServer, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl},
+  connection::mcp::{
+    HttpServer, McpAuthorization, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl,
+  },
   id::{ConnectionId, IdempotencyKey, ResourceId},
   import::{Catalog, Choice, Choices, Content, Entity, Pick, Plan, Problem},
   time::Timestamp,
@@ -13,7 +15,7 @@ fn server(name: &str) -> McpServer {
     McpServerName::new(name).expect("valid server name"),
     McpTransport::Http(HttpServer::new(
       McpUrl::new("https://mcp.example.test/v1").expect("valid URL"),
-      None,
+      McpAuthorization::None,
     )),
     McpEnvironment::default(),
     Timestamp::from_unix_millis(1),
