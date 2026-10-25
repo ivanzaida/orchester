@@ -159,6 +159,7 @@
       "passed": "Test passed",
       "attention": "Test found a problem",
       "failed": "Test failed",
+      "unread": "Test ran, but its result could not be read",
       "verified": "{{program}} {{version}} answers and is signed in. Models listed: {{models}}.",
       "verifiedProvider": "{{program}} {{version}} answers. It runs on the API provider, so its own sign-in is not used.",
       "signedOut": "{{program}} {{version}} answers, but it is not signed in.",

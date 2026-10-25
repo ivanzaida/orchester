@@ -33,6 +33,7 @@ pub(super) fn agent(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspec
   let said = match inspecting.tested? {
     Tested::Checking => checking(ctx, "connections.result.checkingCli", &program),
     Tested::Failed(error) => failed(ctx, error),
+    Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
       let status = connection.status_with(&inspecting.listed.secrets);
@@ -64,6 +65,7 @@ pub(super) fn github(
   let said = match inspecting.tested? {
     Tested::Checking => checking(ctx, "connections.result.checkingGh", ""),
     Tested::Failed(error) => failed(ctx, error),
+    Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
       let shown = github_status(state);
@@ -114,6 +116,14 @@ fn failed(ctx: &Ctx, error: &Message) -> Said {
     heading: ctx.t("connections.result.failed"),
     detail: message_text(ctx, error),
     at: None,
+  }
+}
+
+/// A check that ran, whose result reading the connections again could not show for `error`.
+fn unread(ctx: &Ctx, error: &Message) -> Said {
+  Said {
+    heading: ctx.t("connections.result.unread"),
+    ..failed(ctx, error)
   }
 }
 

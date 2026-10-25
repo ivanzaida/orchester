@@ -144,7 +144,9 @@ impl Component for ConnectionsScreen {
     if counts[0] == 0 && view.tab() == ConnectionsTab::All {
       return page.child(no_connections(ctx, &project));
     }
-    page.child(self.body(ctx, (&project, view), (&listed, &accounts), &work))
+    // Set only while the latest reading failed: `listed` is then an earlier one.
+    let unread = loaded.error.as_ref();
+    page.child(self.body(ctx, (&project, view), (&listed, &accounts), (&work, unread)))
   }
 }
 
@@ -186,13 +188,14 @@ impl ConnectionsScreen {
     )
   }
 
-  /// The tab's connections and the inspector of the chosen one, or why the tab lists none.
+  /// The tab's connections and the inspector of the chosen one, or why the tab lists none. `unread` is why the
+  /// latest reading of the connections failed, while `listed` is an earlier one.
   fn body(
     &self,
     ctx: &mut Ctx,
     (project, view): (&ShownProject, ConnectionsView),
     (listed, accounts): (&ProjectConnections, &Accounts),
-    work: &WorkAction,
+    (work, unread): (&WorkAction, Option<&Message>),
   ) -> Element {
     let entries = data::entries(listed, view.tab());
     let Some(first) = entries.first().copied() else {
@@ -230,7 +233,7 @@ impl ConnectionsScreen {
           .min_height(Dimension::Px(0.0)),
       )
       .child(ownership(ctx, project));
-    let inspector = self.inspector(ctx, project, (listed, accounts), chosen, work);
+    let inspector = self.inspector(ctx, project, (listed, accounts), chosen, (work, unread));
     Row::new()
       .id("connections-body")
       .width(Dimension::Pct(100.0))
@@ -272,7 +275,7 @@ impl ConnectionsScreen {
     project: &ShownProject,
     (listed, accounts): (&ProjectConnections, &Accounts),
     entry: Entry<'_>,
-    work: &WorkAction,
+    (work, unread): (&WorkAction, Option<&Message>),
   ) -> Element {
     let state = work.state().get();
     let id = entry.id();
@@ -280,12 +283,14 @@ impl ConnectionsScreen {
     let last = self.last.get().0.filter(|(on, ..)| *on == id);
     let error = state.error.clone().filter(|_| state.is_rejected() && running.is_none());
     let checked = last.filter(|(_, work, _)| *work == Work::Check);
-    let tested = checked.map(|(_, _, started)| match &error {
+    let tested = checked.map(|(_, _, started)| match (&error, unread) {
       _ if running.is_some() => Tested::Checking,
-      Some(error) => Tested::Failed(error),
-      // Done, and the connections not read again yet.
-      None if entry.checked_at().is_none_or(|at| at < started) => Tested::Checking,
-      None => Tested::Checked,
+      (Some(error), _) => Tested::Failed(error),
+      // Done, and the connections not read again yet: still reading them, or reading them failed.
+      (None, unread) if entry.checked_at().is_none_or(|at| at < started) => {
+        unread.map_or(Tested::Checking, Tested::Unread)
+      }
+      (None, _) => Tested::Checked,
     });
     let failed = error.as_ref().filter(|_| last.is_some() && checked.is_none());
     let confirming = self

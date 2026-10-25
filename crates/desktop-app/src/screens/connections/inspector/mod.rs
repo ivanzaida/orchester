@@ -72,6 +72,8 @@ pub(super) enum Tested<'a> {
   Checked,
   /// It could not run, or what it found could not be stored.
   Failed(&'a Message),
+  /// It ran and stored what it found, but reading the connections again failed for this reason.
+  Unread(&'a Message),
 }
 
 /// What the inspector shows about the work on its connection.

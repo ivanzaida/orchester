@@ -334,25 +334,20 @@ pub fn save_in(repo_root: &Path, draft: ConnectionDraft) -> Result<ConnectionId,
 }
 
 /// Checks a stored connection's CLI again and stores the result, whatever it is. A native
-/// connection is not checked in this version.
+/// connection is not checked in this version. Only the check is stored: the CLI may take long, and a rename saved
+/// meanwhile stays.
 pub fn recheck_in(repo_root: &Path, id: ConnectionId) -> Result<(), SaveError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  let connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
   let check = probe::recheck(&connection).ok_or(SaveError::NativeNotAvailable)?;
-  connection
-    .record_check(check)
-    .expect("the check was made for the connection's own kind");
-  db.save_connection(&connection)?;
+  db.record_connection_check(id, check)?;
   Ok(())
 }
 
 /// Renames agent or GitHub connection `id` of the project at `repo_root`. Refused, as adding one is, when another
 /// connection of the project has the name. Profiles, pipelines and runs name a connection by its id, so they keep
-/// running on it.
-pub fn rename_in(repo_root: &Path, id: ConnectionId, name: Name) -> Result<(), SaveError> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
-  connection.rename(name);
-  db.save_connection(&connection)?;
+/// running on it. Only the name is stored, so a check finished meanwhile keeps its result.
+pub fn rename_in(repo_root: &Path, id: ConnectionId, name: &Name) -> Result<(), SaveError> {
+  ProjectDb::open(repo_root)?.rename_connection(id, name)?;
   Ok(())
 }

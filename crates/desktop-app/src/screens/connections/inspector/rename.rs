@@ -63,6 +63,7 @@ pub(super) fn title_with_rename(
       connection: id,
       name: name.to_owned(),
       taken: Arc::new(taken),
+      busy: inspecting.running.is_some(),
     },
   )
 }
@@ -74,6 +75,8 @@ pub(super) struct RenameProps {
   name: String,
   /// The names of the project's other agent and GitHub connections.
   taken: Arc<Vec<String>>,
+  /// Other work runs on the connection (a check, a change of account): the name is not edited until it ends.
+  busy: bool,
 }
 
 impl DevtoolsInspectable for RenameProps {}
@@ -114,13 +117,17 @@ impl Component for Rename {
       return self.editor(ctx, &props);
     }
     let (editing, draft, name) = (self.editing.clone(), self.draft.clone(), props.name.clone());
-    let rename = IconButton::new("connection-rename", Icon::Pencil, ctx.t("connections.rename.action"))
-      .compact()
-      .on_click(move || {
+    let rename = IconButton::new("connection-rename", Icon::Pencil, ctx.t("connections.rename.action")).compact();
+    // Faded while other work runs on the connection, as Test connection is.
+    let rename = if props.busy {
+      rename
+    } else {
+      rename.on_click(move || {
         draft.set(name.clone());
         editing.set(true);
       })
-      .render(ctx);
+    };
+    let rename = rename.render(ctx);
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
@@ -158,7 +165,7 @@ impl Rename {
     let unchanged = draft.trim() == props.name;
     let save = match Name::new(&draft) {
       _ if state.is_pending() => save.loading(),
-      Ok(name) if problem.is_none() && !unchanged => {
+      Ok(name) if problem.is_none() && !unchanged && !props.busy => {
         let (action, tried, open, id) = (
           self.save.clone(),
           self.tried.clone(),
@@ -207,7 +214,7 @@ fn save_action(ctx: &mut Ctx) -> RenameAction {
       let (project, repo_root) = (open.project.id(), open.repo_root.clone());
       let rename = async move {
         background::run(move || {
-          rename_in(&repo_root, id, name).map_err(|error| {
+          rename_in(&repo_root, id, &name).map_err(|error| {
             tracing::error!(%error, "cannot rename the connection");
             error.message()
           })

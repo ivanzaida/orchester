@@ -1,6 +1,9 @@
 //! Test connection says in place what it does and what it found (GitHub issue 55): pressed, the inspector shows that
 //! it is checking and how long the CLI has to answer, the button busy; then whether the test passed, what it found
 //! and when, which stays until the next check; or that it failed and why, the footer's sentence saying what to do.
+//! The connection is not renamed while it runs, and a result that cannot be stored or read back says why.
+
+use std::path::Path;
 
 use orchester_app::{
   routes::{ConnectionsTab, ConnectionsView, ProjectPage},
@@ -14,7 +17,10 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::{add_cli::write_codex, harness::Seeded};
+use super::{
+  add_cli::{write_codex, write_slow_codex},
+  harness::Seeded,
+};
 
 /// A Codex connection named `name` whose program is `program`, never checked, in the inspector.
 fn inspect(seeded: &mut Seeded, name: &str, program: std::path::PathBuf) -> ConnectionId {
@@ -100,5 +106,74 @@ fn connections_test_that_fails_says_why_and_stays() {
     seeded.text("connection-test-result-heading"),
     "Test failed",
     "the result stays until the next check"
+  );
+}
+
+/// Presses Test connection on a slow stand-in Codex named `name`, and waits until the check asks it its version.
+fn test_slowly(seeded: &mut Seeded, folder: &Path, name: &str) -> ConnectionId {
+  let asked = folder.join("asked");
+  let id = inspect(seeded, name, write_slow_codex(folder, &asked));
+  seeded.click("connection-test");
+  seeded.until("the check to ask the CLI", |_| asked.exists());
+  id
+}
+
+/// Damages the stored settings of the connections `rows` picks, by their id and `?1` = `id`.
+fn damage(seeded: &Seeded, rows: &str, id: ConnectionId) {
+  let damaged = rusqlite::Connection::open(seeded.repo.join(".orchester").join("orchester.db"))
+    .expect("the project's database")
+    .execute(
+      &format!("UPDATE connections SET settings = 'damaged' WHERE {rows}"),
+      [id.to_string()],
+    )
+    .expect("damaged");
+  assert!(damaged > 0, "a connection is damaged");
+}
+
+#[test]
+fn connections_rename_waits_while_a_test_runs() {
+  let mut seeded = Seeded::new("connections");
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  test_slowly(&mut seeded, folder.path(), "Codex · slow");
+  seeded.click("connection-rename");
+  assert!(
+    !seeded.exists("connection-rename-name"),
+    "the name is not edited while the check runs"
+  );
+  seeded.until("the test to pass", |seeded| {
+    seeded.text("connection-test-result-heading") == "Test passed"
+  });
+  seeded.click("connection-rename");
+  seeded.until("the name field", |seeded| seeded.exists("connection-rename-name"));
+}
+
+#[test]
+fn connections_test_whose_result_cannot_be_stored_says_why() {
+  let mut seeded = Seeded::new("connections");
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  let id = test_slowly(&mut seeded, folder.path(), "Codex · damaged");
+  damage(&seeded, "id = ?1", id);
+  seeded.until("the test to fail", |seeded| {
+    seeded.text("connection-test-result-heading") == "Test failed"
+  });
+  assert!(
+    !seeded.text("connection-test-result-detail").is_empty(),
+    "why it failed is said"
+  );
+  assert!(!seeded.exists("connection-test-result-time"), "nothing was stored");
+}
+
+#[test]
+fn connections_test_whose_result_cannot_be_read_again_says_so() {
+  let mut seeded = Seeded::new("connections");
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  let id = test_slowly(&mut seeded, folder.path(), "Codex · unread");
+  damage(&seeded, "id <> ?1 AND kind = 'agent_provider'", id);
+  seeded.until("the reading to fail", |seeded| {
+    seeded.text("connection-test-result-heading") == "Test ran, but its result could not be read"
+  });
+  assert!(
+    !seeded.text("connection-test-result-detail").is_empty(),
+    "why it could not be read is said"
   );
 }

@@ -66,7 +66,7 @@ impl ConnectionStore for ProjectDb {
   fn create_connection(&mut self, connection: &Connection) -> Result<(), StoreError> {
     let columns = Columns::of(connection)?;
     let transaction = self.connection.transaction()?;
-    ensure_name_free(&transaction, connection)?;
+    ensure_name_free(&transaction, connection.name(), connection.id())?;
     transaction.execute(
       "INSERT INTO connections \
        (id, kind, provider, name, settings, status, checked_at, last_check, created_at, api_provider) \
@@ -90,7 +90,7 @@ impl ConnectionStore for ProjectDb {
 
   fn save_connection(&mut self, connection: &Connection) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
-    ensure_name_free(&transaction, connection)?;
+    ensure_name_free(&transaction, connection.name(), connection.id())?;
     let stored = load(&transaction, "WHERE id = ?1", [connection.id().to_string()])?
       .pop()
       .ok_or(StoreError::ConnectionNotFound(connection.id()))?;
@@ -110,6 +110,44 @@ impl ConnectionStore for ProjectDb {
         columns.checked_at,
         columns.last_check,
         columns.api_provider
+      ],
+    )?;
+    transaction.commit()?;
+    Ok(())
+  }
+
+  fn rename_connection(&mut self, id: ConnectionId, name: &Name) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    ensure_name_free(&transaction, name, id)?;
+    let renamed = transaction.execute(
+      "UPDATE connections SET name = ?2 WHERE id = ?1",
+      params![id.to_string(), name.as_str()],
+    )?;
+    if renamed == 0 {
+      return Err(StoreError::ConnectionNotFound(id));
+    }
+    transaction.commit()?;
+    Ok(())
+  }
+
+  fn record_connection_check(&mut self, id: ConnectionId, check: LastCheck) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    let mut stored = load(&transaction, "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .ok_or(StoreError::ConnectionNotFound(id))?;
+    // A connection keeps its kind, so a check made for it fits the stored row; one that does not
+    // was made for another connection.
+    stored
+      .record_check(check)
+      .map_err(|error| corrupt("connection check", error))?;
+    let columns = Columns::of(&stored)?;
+    transaction.execute(
+      "UPDATE connections SET status = ?2, checked_at = ?3, last_check = ?4 WHERE id = ?1",
+      params![
+        id.to_string(),
+        stored.status().as_str(),
+        columns.checked_at,
+        columns.last_check
       ],
     )?;
     transaction.commit()?;
@@ -146,19 +184,17 @@ impl ConnectionStore for ProjectDb {
   }
 }
 
-/// Fails if another connection already has this connection's name.
-fn ensure_name_free(sqlite: &Sqlite, connection: &Connection) -> Result<(), StoreError> {
+/// Fails if a connection other than `id` already has `name`.
+fn ensure_name_free(sqlite: &Sqlite, name: &Name, id: ConnectionId) -> Result<(), StoreError> {
   let taken: Option<String> = sqlite
     .query_row(
       "SELECT id FROM connections WHERE name = ?1 AND id <> ?2",
-      params![connection.name().as_str(), connection.id().to_string()],
+      params![name.as_str(), id.to_string()],
       |row| row.get(0),
     )
     .optional()?;
   match taken {
-    Some(_) => Err(StoreError::DuplicateConnectionName(
-      connection.name().as_str().to_owned(),
-    )),
+    Some(_) => Err(StoreError::DuplicateConnectionName(name.as_str().to_owned())),
     None => Ok(()),
   }
 }
