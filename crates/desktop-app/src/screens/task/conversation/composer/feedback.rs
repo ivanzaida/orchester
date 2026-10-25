@@ -31,8 +31,9 @@ use crate::{
   },
 };
 
-/// Why the last send did not go through, with *Try again*; or why the runner did not take a stored
-/// message, while it still waits and the run's state is the one it was sent in (`mode`).
+/// Why the last send did not go through, with *Try again*; why the agent's turn was not stopped (*Stop turn*); or why
+/// the runner did not take a stored message, while it still waits and the run's state is the one it was sent in
+/// (`mode`).
 pub(super) fn line(
   ctx: &mut Ctx,
   state: &ComposerState,
@@ -42,6 +43,11 @@ pub(super) fn line(
   let sent = state.send.state().get();
   if sent.is_pending() {
     return None;
+  }
+  let stop = state.stop_turn.state().get();
+  if let Some(error) = stop.error.as_ref().filter(|_| stop.is_rejected()) {
+    let text = ctx.t_args("composer.stopFailed", [("reason", &*message_text(ctx, error))]);
+    return Some(field_error("composer-stop-failed", &text).into());
   }
   let (rejected, fulfilled) = (sent.is_rejected(), sent.is_fulfilled());
   if let Some(error) = sent.error.filter(|_| rejected) {

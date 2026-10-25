@@ -527,7 +527,35 @@ fields, rules and refusals hold as in Connections › MCP servers.
   tool's own documentation, such as the command a desktop app's MCP settings show) and tells the person where it came
   from; it never guesses a path. Once the server exists, giving it to agents is a change of their profile, as before.
 
-## 12. Approving in the chat (ORC-96, 2026-10-25)
+## 12. Writing while it answers (ORC-92, 2026-10-25)
+
+The chat takes a message while the Orchestrator answers, as Claude Code desktop does; one turn still runs at a time in
+a conversation. While an answer is under way, the composer stays open and its send button becomes a split button:
+
+- **Send after this answer** (Enter, the default): the message is kept at once and shows *Queued · sent after this
+  answer*. When the answer ends (completed, stopped, failed or past its limit), the app starts the queued messages'
+  turns one after another, in the order they were written, before any wait or end turn waiting for the conversation
+  (`orchester-app`'s waits follower, `start_queued`; a wait turn refuses to start while a person's message is queued or
+  being sent). The person may **Edit** a queued message, which takes its words and files back into the composer (after
+  what is written there; the files are read back from the project's copies first, and a copy that cannot be read
+  refuses the edit, leaving the message queued) and removes it, or **Remove** it. Both are refused once its turn
+  started.
+- **Send now**: the message goes into the answer under way. Claude Code takes it as one more stream-json user message
+  on its input (the chat's Claude process now keeps its input open until the first result, then closes it); Codex App
+  Server as `turn/steer` on the turn under way. The agent reads it at its next tool call and answers it in the same
+  answer; the message shows *Taken mid-answer* and starts no turn of its own. When the CLI refuses it, or the answer
+  ends before it is taken, it falls back to after the answer and says so: *Not taken mid-answer · sent after this
+  answer*.
+- **Stop and send**: the answer under way is stopped as *Stop response* stops it (what it said and spent stays), and
+  the message's turn starts next, before messages queued earlier.
+
+Esc in the composer stops the answer, without asking: stopping loses nothing the answer said, and the next message
+continues the same session. Messages are kept in `orchestrator_entries` with the turn states `queued`, `queued_next`,
+`not_taken`, `steering` and `joined` (`orchester_core::orchestrator::{TurnState, Queued}`); a queued message's turn
+moves to the end of the conversation when it starts. *Send now* is IPC protocol 32's `SteerChat`, answered
+`ChatSteered` with whether the turn took it.
+
+## 13. Approving in the chat (ORC-96, 2026-10-25)
 
 The chat proposed returning a run to Design (`continue_run` `return_to`, a card), the person wrote "run it", and the chat
 could only send them to the card's *Apply*. The person had decided, in their own words. Now the chat applies its own

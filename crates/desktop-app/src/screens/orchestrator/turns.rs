@@ -1,7 +1,9 @@
 //! A conversation as turns: each message a person sent, what the Orchestrator answered it with (its replies and
 //! the actions it took, in the order they were kept) and how the turn ended; and each wait of an agent of the
 //! project and each daily report, with the turn it started by itself, if it started one. What is kept while a turn
-//! runs belongs to that turn, even when a wait kept meanwhile shows under it.
+//! runs belongs to that turn, even when a wait kept meanwhile shows under it. A message the answer under way took
+//! (*Send now*) goes on with that answer: what the answer said after it shows under it, and so does how the answer
+//! ended. The messages that wait for the answer to end, queued or handed to it, show after every turn, in order.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -41,6 +43,17 @@ impl Part {
   }
 }
 
+/// How a person's message reached the answer under way, when it was written while the Orchestrator answered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Arrival {
+  /// It started a turn of its own, or opens a wait's or a report's row.
+  Own,
+  /// The answer under way took it (*Send now*): the row goes on with that answer.
+  Joined,
+  /// It waits for the answer to end, queued or handed to it: its [`Turn::state`] says which.
+  Waiting,
+}
+
 /// One message and its answer, or one wait of an agent or one daily report and the answer of the turn it started, if
 /// any.
 #[derive(Clone, Debug, PartialEq)]
@@ -61,14 +74,24 @@ pub(super) struct Turn {
   pub(super) at: Option<Timestamp>,
   /// When its turn ended, when the runner said.
   pub(super) ended: Option<Timestamp>,
-  /// Where its turn stands; `None` for a wait or a report that started no turn.
+  /// Where its turn stands; `None` for a wait or a report that started no turn. A message the answer under way took
+  /// stands as that answer does; one that waits, as it waits.
   pub(super) state: Option<TurnState>,
+  pub(super) arrival: Arrival,
+  /// A message the answer under way took follows it: that answer goes on, and ends, under that message.
+  pub(super) continued: bool,
   pub(super) answer: Vec<Part>,
 }
 
 impl Turn {
-  /// A message being sent, which the conversation does not hold yet.
-  pub(super) fn sending(text: &str) -> Self {
+  /// A message being sent, which the conversation does not hold yet: one that starts a turn of its own (`state`
+  /// thinking), or one written while the Orchestrator answers, as it will wait.
+  pub(super) fn sending(text: &str, state: TurnState) -> Self {
+    let arrival = if state.has_turn() {
+      Arrival::Own
+    } else {
+      Arrival::Waiting
+    };
     Self {
       message: None,
       text: Arc::from(text),
@@ -78,7 +101,9 @@ impl Turn {
       seq: None,
       at: None,
       ended: None,
-      state: Some(TurnState::Thinking),
+      state: Some(state),
+      arrival,
+      continued: false,
       answer: Vec::new(),
     }
   }
@@ -87,6 +112,12 @@ impl Turn {
   /// person's to send again.
   pub(super) const fn on_its_own(&self) -> bool {
     self.wait.is_some() || self.report.is_some()
+  }
+
+  /// Whether what the Orchestrator says next belongs to this row: one with a turn of its own, or a message the answer
+  /// under way took.
+  fn takes_parts(&self) -> bool {
+    self.arrival == Arrival::Joined || (self.arrival == Arrival::Own && self.state.is_some())
   }
 
   /// The row of `entry`, which opens with a wait or a report (the caller sets which), and the turn it started, if any.
@@ -101,6 +132,8 @@ impl Turn {
       at: Some(entry.at),
       ended: turn.and_then(|turn| turn.ended),
       state: turn.map(|turn| turn.state.clone()),
+      arrival: Arrival::Own,
+      continued: false,
       answer: Vec::new(),
     }
   }
@@ -134,11 +167,12 @@ impl Turn {
   }
 }
 
-/// The turns of `entries`, with the files attached to the person's messages (`attached`), oldest first. What comes
-/// before the first message or wait belongs to no turn and is left out; a reply, action or event belongs to the newest
-/// row with a turn.
+/// The turns of `entries`, with the files attached to the person's messages (`attached`), oldest first, and after them
+/// the messages that wait for the answer to end. What comes before the first message or wait belongs to no turn and
+/// is left out; a reply, action or event belongs to the newest row that takes it.
 pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Vec<Attachment>>) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
+  let mut waiting: Vec<Turn> = Vec::new();
   for entry in entries {
     let part = match &entry.kind {
       EntryKind::Person {
@@ -148,27 +182,12 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         ended,
         ..
       } => {
-        let attachments: Arc<[Attachment]> = attached
-          .get(message)
-          .map_or_else(|| Arc::from([]), |files| files.as_slice().into());
-        // A message of attachments only was kept with their names: it shows by its files alone.
-        let words = if is_names_only(text.as_str(), &attachments) {
-          ""
+        let row = person(entry, (*message, text.as_str(), turn), *ended, attached);
+        if row.arrival == Arrival::Waiting {
+          waiting.push(row);
         } else {
-          text.as_str()
-        };
-        turns.push(Turn {
-          message: Some(*message),
-          text: Arc::from(words),
-          attachments,
-          wait: None,
-          report: None,
-          seq: Some(entry.seq),
-          at: Some(entry.at),
-          ended: *ended,
-          state: Some(turn.clone()),
-          answer: Vec::new(),
-        });
+          turns.push(row);
+        }
         continue;
       }
       EntryKind::Wait { wait, turn } => {
@@ -200,9 +219,66 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         at: entry.at,
       },
     };
-    if let Some(turn) = turns.iter_mut().rev().find(|turn| turn.state.is_some()) {
+    if let Some(turn) = turns.iter_mut().rev().find(|turn| turn.takes_parts()) {
       turn.answer.push(part);
     }
   }
+  join_answers(&mut turns);
+  turns.extend(waiting);
   turns
+}
+
+/// The row of the person's message `message`, kept as `entry`, whose turn stands at `turn` and ended at `ended`.
+fn person(
+  entry: &ChatEntry,
+  (message, text, turn): (ChatMessageId, &str, &TurnState),
+  ended: Option<Timestamp>,
+  attached: &BTreeMap<ChatMessageId, Vec<Attachment>>,
+) -> Turn {
+  let attachments: Arc<[Attachment]> = attached
+    .get(&message)
+    .map_or_else(|| Arc::from([]), |files| files.as_slice().into());
+  // A message of attachments only was kept with their names: it shows by its files alone.
+  let words = if is_names_only(text, &attachments) { "" } else { text };
+  let arrival = match turn {
+    TurnState::Joined => Arrival::Joined,
+    _ if turn.is_waiting() => Arrival::Waiting,
+    _ => Arrival::Own,
+  };
+  Turn {
+    message: Some(message),
+    text: Arc::from(words),
+    attachments,
+    wait: None,
+    report: None,
+    seq: Some(entry.seq),
+    at: Some(entry.at),
+    ended,
+    state: Some(turn.clone()),
+    arrival,
+    continued: false,
+    answer: Vec::new(),
+  }
+}
+
+/// A message the answer under way took stands as that answer does, and the row before it goes on under it.
+fn join_answers(turns: &mut [Turn]) {
+  let mut answering: Option<(Option<TurnState>, Option<Timestamp>)> = None;
+  for index in 0..turns.len() {
+    match turns[index].arrival {
+      Arrival::Joined => {
+        if let Some((state, ended)) = answering.clone() {
+          turns[index].state = state;
+          turns[index].ended = ended;
+        }
+        if let Some(before) = turns[..index].iter_mut().rev().find(|turn| turn.takes_parts()) {
+          before.continued = true;
+        }
+      }
+      Arrival::Own if turns[index].state.is_some() => {
+        answering = Some((turns[index].state.clone(), turns[index].ended));
+      }
+      Arrival::Own | Arrival::Waiting => {}
+    }
+  }
 }

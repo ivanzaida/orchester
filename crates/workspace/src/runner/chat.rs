@@ -55,6 +55,22 @@ impl Runners {
     }
   }
 
+  /// Asks `project`'s runner to hand the person's message `message`, kept as sent now, to the answer under way in its
+  /// conversation. `Ok` once it is handed over or left for a turn of its own.
+  pub async fn steer_chat(&self, project: &OpenProject, message: ChatMessageId) -> Result<(), RunRequestError> {
+    match self
+      .ask(Some(project.repo_root.as_path()), Command::SteerChat { message })
+      .await?
+    {
+      Reply::ChatSteered { .. } => Ok(()),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+      other => {
+        tracing::error!(?other, "unexpected reply to SteerChat");
+        Err(RunRequestError::Request(RequestError::Lost))
+      }
+    }
+  }
+
   /// Changes whenever a conversation of project `root`'s Orchestrator chat changed.
   pub fn chats_of(&self, root: &Path) -> watch::Receiver<u64> {
     self.inner.shared.counters(root).chats.subscribe()

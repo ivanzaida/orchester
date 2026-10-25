@@ -1,22 +1,27 @@
 //! The working line, the chat's last row while an agent works (`Working line` `js05b`): the turning 13
 //! `loader-circle` and who is working and how long ago the last entry arrived, 11.5 `text_muted`, 6 apart. The
-//! time is real, kept current by its own one-second interval, so only this line renders every second.
+//! time is real, kept current by its own one-second interval, so only this line renders every second. At its end,
+//! while an agent of the run works in a turn, *Stop turn* (ORC-92), as the Orchestrator's working line ends in *Stop
+//! response* (`Thinking` `PR7nz`): the agent's turn stops, its work is committed, and it goes on with the person's
+//! next message; the run is not paused. For an agent whose turn cannot be stopped alone it is unavailable, with why.
 
 use std::{sync::Arc, time::Duration};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::PaletteColor},
-  components::{Row, Text},
+  components::{Row, Spacer, Text},
   core::Signal,
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
 use orchester_workspace::display;
 
+use super::super::{composer::Composing, shared::Shared};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
   },
@@ -32,6 +37,8 @@ pub(in super::super) struct Working {
   pub(in super::super) last: Option<Timestamp>,
   /// The agent waits for the person instead of working.
   pub(in super::super) waits: Option<Wait>,
+  /// While agents work in a turn: whether each one's turn can be stopped alone (*Stop turn*).
+  pub(in super::super) stops: Option<bool>,
 }
 
 /// What an agent waits for, since its request: an answer (a question, a tool request) or a decision on its
@@ -80,8 +87,36 @@ impl Component for WorkingLine {
       (None, Some(agent)) => ctx.t_args("conversation.workingStarted", [("agent", agent)]),
       (None, None) => ctx.t("conversation.workingStartedUnnamed"),
     };
-    line(Icon::LoaderCircle, &text)
+    let stop = working.stops.and_then(|stoppable| stop_turn(ctx, stoppable));
+    match stop {
+      Some(stop) => line(Icon::LoaderCircle, &text)
+        .width(Dimension::Pct(100.0))
+        .child(Spacer::new().flex(1.0))
+        .child(stop),
+      None => line(Icon::LoaderCircle, &text),
+    }
   }
+}
+
+/// *Stop turn*, loading while the stop is on its way; unavailable, with why, when the turn cannot be stopped alone.
+/// `None` where no composer acts on the run.
+fn stop_turn(ctx: &mut Ctx, stoppable: bool) -> Option<Element> {
+  let composing = Shared::<Composing>::of(ctx)?;
+  let button = ActionButton::new(
+    "conversation-stop-turn",
+    ButtonKind::Ghost,
+    ctx.t("conversation.stopTurn"),
+  )
+  .icon(Icon::Square);
+  let button = if !stoppable {
+    button.unavailable(ctx.t("conversation.stopTurnUnavailable"))
+  } else if composing.stopping() {
+    button.loading()
+  } else {
+    let stop = composing.stop_turn()?;
+    button.on_click(move || stop())
+  };
+  Some(button.into())
 }
 
 /// *Builder waits for your answer · since 16:44, its active time stopped* (under `Approval card · waiting` in

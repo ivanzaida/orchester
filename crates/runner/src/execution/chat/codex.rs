@@ -23,7 +23,7 @@ use orchester_core::{
     mcp::InvocationExemptions,
     stream::AgentEvent,
   },
-  id::AgentAccountId,
+  id::{AgentAccountId, ChatMessageId},
   orchestrator::{
     TurnFailure, TurnState,
     instructions::{ProjectReads, SERVER, system_prompt},
@@ -32,9 +32,12 @@ use orchester_core::{
   resource::RepositoryAccess,
   run::TokenUsage,
 };
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
-use super::turn::{Prepared, Seen, Turn, cannot};
+use super::{
+  steer::Steering,
+  turn::{Prepared, Seen, Turn, cannot},
+};
 use crate::{
   execution::step::app_server::{AppServerFailure, AppServerSession, AppServerSetup},
   supervisor::{ProcessEvent, ProcessExit, Supervised},
@@ -48,9 +51,13 @@ struct Started {
 }
 
 impl Turn {
-  pub(super) async fn run_codex(&self, prepared: Prepared, stop: oneshot::Receiver<()>) -> TurnState {
+  pub(super) async fn run_codex(
+    &self,
+    prepared: Prepared,
+    (stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
+  ) -> TurnState {
     match self.start_codex(prepared) {
-      Ok(started) => self.drive_codex(started, stop).await,
+      Ok(started) => self.drive_codex(started, (stop, steers)).await,
       Err(failure) => TurnState::Failed(failure),
     }
   }
@@ -127,8 +134,13 @@ impl Turn {
     })
   }
 
-  /// Runs App Server, keeping what it reports, until the turn is over or `stop` ends it.
-  async fn drive_codex(&self, started: Started, mut stop: oneshot::Receiver<()>) -> TurnState {
+  /// Runs App Server, keeping what it reports and giving its turn the messages sent now that `steers` hands over, until
+  /// the turn is over or `stop` ends it.
+  async fn drive_codex(
+    &self,
+    started: Started,
+    (mut stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
+  ) -> TurnState {
     let mut process = match Supervised::start(&started.command) {
       Ok(process) => process,
       Err(error) => return TurnState::Failed(cannot(error.to_string())),
@@ -138,6 +150,7 @@ impl Turn {
       return TurnState::Failed(cannot(format!("cannot initialize Codex App Server: {error}")));
     }
     let mut seen = Seen::default();
+    let mut steering = Steering::default();
     let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);
     loop {
@@ -147,7 +160,10 @@ impl Turn {
           Some(ProcessEvent::Output { .. }) if seen.stopped || seen.timed_out.is_some() => {}
           Some(ProcessEvent::Output { stream, line }) => {
             let over = match session.receive(stream, &line, &process).await {
-              Ok(updates) => self.codex_updates(updates, (&process, started.account), &mut seen).await,
+              Ok(updates) => {
+                self.steer_answered(&mut steering, session.take_steer_answers());
+                self.codex_updates(updates, (&process, started.account), (&mut seen, &mut steering)).await
+              }
               Err(failure) => {
                 seen.failure.get_or_insert(match failure {
                   AppServerFailure::NotSignedIn(_) => TurnFailure::NotSignedIn,
@@ -164,6 +180,9 @@ impl Turn {
           Some(ProcessEvent::Exited(exit)) => return seen.ended(&exit),
           None => return seen.ended(&ProcessExit::WaitFailed { reason: "the CLI's output ended".to_owned() }),
         },
+        Some(message) = steers.recv(), if !seen.stopped && !seen.finished && seen.timed_out.is_none() => {
+          self.steer_codex((&session, &process), &mut steering, message).await;
+        }
         stopped = &mut stop, if !seen.stopped && !seen.finished => {
           if stopped.is_ok() {
             seen.stopped = true;
@@ -188,12 +207,12 @@ impl Turn {
     }
   }
 
-  /// Keeps and answers what App Server said; whether the turn is over.
+  /// Keeps and answers what App Server said, and notes the messages sent now its turn took; whether the turn is over.
   async fn codex_updates(
     &self,
     updates: Vec<Update>,
     (process, account): (&Supervised, AgentAccountId),
-    seen: &mut Seen,
+    (seen, steering): (&mut Seen, &mut Steering),
   ) -> bool {
     let mut over = false;
     for update in updates {
@@ -205,7 +224,10 @@ impl Turn {
         Update::Approval(request) => Some(request.response(request.server == SERVER)),
         Update::Declined(response) | Update::QuestionRefused { response, .. } => Some(response),
         Update::Question(pending) => Some(pending.response(&[])),
-        Update::InputTaken(_) => None,
+        Update::InputTaken(text) => {
+          self.took(steering, &text);
+          None
+        }
         Update::TurnEnded { .. } => {
           over = true;
           None

@@ -186,6 +186,8 @@ pub struct Session {
   /// The turn waits for a message sent now (`turn/steer`): its prompt, whether it has an output
   /// schema, and whether the steer is refused.
   pub awaits_message: Option<fake_codex_work::AwaitsMessage>,
+  /// A turn of the Orchestrator chat waits for a message sent now: whether it refuses it (`fake_codex_chat`).
+  pub chat_awaits: Option<bool>,
   /// The thread's `baseInstructions`, which replace Codex's own.
   base_instructions: Option<String>,
 }
@@ -214,6 +216,7 @@ impl Session {
       approved_tools: BTreeSet::new(),
       approvals: None,
       awaits_message: None,
+      chat_awaits: None,
       base_instructions: None,
     }
   }
@@ -242,6 +245,9 @@ impl Session {
         }
       }
       Some("turn/start") => return self.turn(&message["id"], params),
+      Some("turn/steer") if fake_codex_chat::is_chat(&self.args) => {
+        return fake_codex_chat::steered(self, &message["id"], params);
+      }
       Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None if message["id"] == fake_codex_cell::COMMAND => return fake_codex_cell::command_answered(self, message),
       None if fake_codex_chat::is_chat(&self.args) && fake_codex_chat::is_answer(message) => {
@@ -454,7 +460,8 @@ impl Session {
     }
     emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": self.turn}}}));
     if fake_codex_chat::is_chat(&self.args) {
-      return fake_codex_chat::answer(self, (&self.args, self.base_instructions.as_deref()), &prompt);
+      let (args, base) = (self.args.clone(), self.base_instructions.clone());
+      return fake_codex_chat::answer(self, (&args, base.as_deref()), &prompt);
     }
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)

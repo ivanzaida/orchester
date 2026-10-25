@@ -26,7 +26,7 @@ use orchester_core::{
 };
 use orchester_ipc::{ChatTools, Event};
 use orchester_store::ProjectDb;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use super::super::connection_check;
 use crate::{notify::Notifier, supervisor::ProcessExit};
@@ -66,17 +66,22 @@ pub(super) struct Prepared {
 }
 
 impl Turn {
-  /// Runs the turn to its end, or until `stop` says so, and records how it ended.
-  pub(super) async fn run(self, stop: oneshot::Receiver<()>) {
+  /// Runs the turn to its end, or until `stop` says so, giving it the messages sent now that `steers` hands over,
+  /// and records how it ended; what it had of them and did not take is left for turns of their own.
+  pub(super) async fn run(self, stop: oneshot::Receiver<()>, mut steers: mpsc::UnboundedReceiver<ChatMessageId>) {
     let state = match self.prepare() {
-      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => self.run_codex(prepared, stop).await,
-      Ok(prepared) => self.run_claude(prepared, stop).await,
+      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => {
+        self.run_codex(prepared, (stop, &mut steers)).await
+      }
+      Ok(prepared) => self.run_claude(prepared, (stop, &mut steers)).await,
       Err(failure) => TurnState::Failed(failure),
     };
     if let TurnState::Failed(TurnFailure::CannotStart { reason }) = &state {
       tracing::warn!(chat = %self.chat.id(), %reason, "a turn of the Orchestrator chat could not start");
     }
     self.record(|db| db.end_chat_turn(self.message, &state, Timestamp::now()).map(drop));
+    steers.close();
+    self.release_steering();
   }
 
   /// What the turn starts from, or why it cannot start. A session the turn cannot resume, on another connection or
@@ -168,7 +173,7 @@ impl Turn {
   }
 
   /// Applies `change` to the project's database; a change that cannot be kept is logged, and the turn goes on.
-  fn record(&self, change: impl FnOnce(&mut ProjectDb) -> Result<(), orchester_store::StoreError>) {
+  pub(super) fn record(&self, change: impl FnOnce(&mut ProjectDb) -> Result<(), orchester_store::StoreError>) {
     let kept = ProjectDb::open(&self.root).and_then(|mut db| change(&mut db));
     if let Err(error) = kept {
       tracing::error!(chat = %self.chat.id(), %error, "cannot keep what a chat turn did");

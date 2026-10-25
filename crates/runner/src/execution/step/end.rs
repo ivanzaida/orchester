@@ -54,6 +54,8 @@ impl RunTask {
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
       // No tool decision was sent: save the session's work without completing its step.
       Some(StopCause::Paused) => self.save(execution, &active, "saved while awaiting a tool decision"),
+      // The execution stays open and continues its session with the person's message.
+      Some(StopCause::TurnStopped) => self.turn_stopped(execution, &active),
       // The execution stays open and continues with the run's new permissions.
       Some(StopCause::Permissions) => {
         self.restart_for_permissions(execution, &active)?;

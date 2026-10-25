@@ -17,16 +17,19 @@ use orchester_core::{
     mcp::{McpServerName, McpUrl},
     stream::ClaudeStream,
   },
-  id::AgentAccountId,
+  id::{AgentAccountId, ChatMessageId},
   orchestrator::{
     TurnFailure, TurnState,
     instructions::{ProjectReads, SERVER, system_prompt},
   },
   secret::SecretValue,
 };
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
-use super::turn::{Prepared, Seen, Turn, cannot};
+use super::{
+  steer::Steering,
+  turn::{Prepared, Seen, Turn, cannot},
+};
 use crate::{
   private_file::{self, PrivateFile},
   supervisor::{ProcessEvent, ProcessExit, Supervised},
@@ -75,9 +78,13 @@ fn denied(account: &ConnectionAccount) -> (Vec<PathBuf>, Vec<PathBuf>) {
 }
 
 impl Turn {
-  pub(super) async fn run_claude(&self, prepared: Prepared, stop: oneshot::Receiver<()>) -> TurnState {
+  pub(super) async fn run_claude(
+    &self,
+    prepared: Prepared,
+    (stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
+  ) -> TurnState {
     match self.start_claude(&prepared) {
-      Ok(started) => self.drive_claude(started, stop).await,
+      Ok(started) => self.drive_claude(started, (stop, steers)).await,
       Err(failure) => TurnState::Failed(failure),
     }
   }
@@ -155,14 +162,20 @@ impl Turn {
     Ok(McpLaunch::http(name, url, HttpAuthorization::Bearer(Arc::new(token))))
   }
 
-  /// Runs the CLI, keeping what it reports, until it ends or `stop` ends it.
-  async fn drive_claude(&self, started: Started, mut stop: oneshot::Receiver<()>) -> TurnState {
+  /// Runs the CLI, keeping what it reports and giving it the messages sent now that `steers` hands over, until it ends
+  /// or `stop` ends it. Once it ended its turn its input closes: it exits once it has answered what it took.
+  async fn drive_claude(
+    &self,
+    started: Started,
+    (mut stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
+  ) -> TurnState {
     let mut process = match Supervised::start(&started.command) {
       Ok(process) => process,
       Err(error) => return TurnState::Failed(cannot(error.to_string())),
     };
     let mut seen = Seen::default();
     let mut stream = ClaudeStream::chat();
+    let mut steering = Steering::default();
     let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);
     loop {
@@ -173,10 +186,19 @@ impl Turn {
               event.redact(&|text| redact_secrets(text, &started.secrets));
               self.keep(event, started.account, &mut seen);
             }
+            for taken in stream.take_replayed() {
+              self.took(&mut steering, &taken);
+            }
+            if stream.results() > 0 {
+              process.close_input();
+            }
           }
           Some(ProcessEvent::Exited(exit)) => return seen.ended(&exit),
           None => return seen.ended(&ProcessExit::WaitFailed { reason: "the CLI's output ended".to_owned() }),
         },
+        Some(message) = steers.recv(), if !seen.stopped && seen.timed_out.is_none() => {
+          self.steer_claude(&process, &mut steering, message).await;
+        }
         stopped = &mut stop, if !seen.stopped => {
           if stopped.is_ok() {
             seen.stopped = true;

@@ -140,11 +140,17 @@ fn approver(entries: &[ChatEntry]) -> Result<ChatApproval, ToolError> {
 }
 
 /// The proposals among `entries` that wait for the person and were there when they wrote `approval`'s message: one
-/// proposed after it was never shown to them.
+/// proposed after it was never shown to them. A queued message moves to the end of its conversation when its turn
+/// starts, so a proposal kept while it waited comes before it too; when it was kept tells them apart.
 fn pending(entries: &[ChatEntry], approval: &ChatApproval) -> Vec<(i64, ChatAction)> {
+  let written = entries
+    .iter()
+    .find(|entry| entry.seq == approval.seq)
+    .map(|entry| entry.at);
   entries
     .iter()
     .take_while(|entry| entry.seq < approval.seq)
+    .filter(|entry| written.is_some_and(|written| entry.at <= written))
     .filter_map(|entry| match &entry.kind {
       EntryKind::Action(action) if action.waits() => Some((entry.seq, action.clone())),
       _ => None,

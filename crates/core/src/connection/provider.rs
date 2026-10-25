@@ -84,4 +84,10 @@ impl AgentProvider {
   pub const fn takes_messages_mid_turn(self) -> bool {
     matches!(self, Self::CodexCli | Self::ClaudeCodeCli)
   }
+
+  /// Whether a person can stop an agent's turn on the provider alone (*Stop turn*), its session going on with their
+  /// message: the runner ends an agent CLI and resumes its session. A native agent's loop is not stopped so.
+  pub const fn stops_turn_alone(self) -> bool {
+    matches!(self, Self::CodexCli | Self::ClaudeCodeCli)
+  }
 }

@@ -396,6 +396,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
       | Rejection::NotAcceptable { .. }
+      | Rejection::NoTurnToStop
+      | Rejection::TurnNotStoppable
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -514,6 +516,8 @@ pub fn control_message(error: &RunRequestError) -> Message {
     }
     RunRequestError::Rejected(Rejection::InvalidAnswer { error }) => super::question::answer_error(error),
     RunRequestError::Rejected(Rejection::NotAcceptable { why }) => not_acceptable(why),
+    RunRequestError::Rejected(Rejection::NoTurnToStop) => Message::new("runs.control.noTurnToStop"),
+    RunRequestError::Rejected(Rejection::TurnNotStoppable) => Message::new("runs.control.turnNotStoppable"),
     // Unfinished blocking tasks keep the run from going on; the task page names them.
     RunRequestError::Rejected(Rejection::RunAgainBlocked {
       block: orchester_core::run::RunAgainBlock::TaskBlocked,

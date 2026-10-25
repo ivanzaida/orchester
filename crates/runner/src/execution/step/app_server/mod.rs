@@ -41,7 +41,7 @@ use crate::supervisor::Supervised;
 /// Characters kept of Codex's reason for refusing a request.
 const REASON_CHARS: usize = 300;
 /// How the ids of the runner's `turn/steer` requests start; the rest names the message.
-pub(super) const STEER_REQUEST: &str = "steer-";
+pub(in crate::execution) const STEER_REQUEST: &str = "steer-";
 /// How the id of a `turn/steer` request that carries a denial's message starts; the rest names the declined request.
 pub(super) const DENIAL_STEER: &str = "steer-denial-";
 

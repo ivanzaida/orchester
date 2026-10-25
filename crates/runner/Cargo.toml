@@ -89,6 +89,14 @@ name = "chat_api_provider"
 required-features = ["test-agent"]
 
 [[test]]
+name = "chat_while_answering"
+required-features = ["test-agent"]
+
+[[test]]
+name = "turn_stop"
+required-features = ["test-agent"]
+
+[[test]]
 name = "attachments"
 required-features = ["test-agent"]
 

@@ -43,6 +43,7 @@ mod stuck;
 mod task_groups;
 mod tool;
 mod tool_approval;
+mod turn_stop;
 mod work;
 mod workspace;
 

@@ -1,8 +1,8 @@
 //! Approving the Orchestrator's proposal in the chat (ORC-96): in the turn the person's own message started, the
 //! chat's `apply_proposal` applies a proposal that waited when they wrote, as the card's *Apply* does, and the card
 //! keeps the message that approved it; a turn Orchester started by itself, a message automation sent, a proposal made
-//! after the message, one only a click applies and one that changed since are refused and apply nothing; without a
-//! proposal it lists those that wait.
+//! after the message (also while it was queued), one only a click applies and one that changed since are refused and
+//! apply nothing; without a proposal it lists those that wait.
 
 use std::{fs, sync::Arc};
 
@@ -10,7 +10,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{ChatMessageId, ProjectId},
   name::Name,
-  orchestrator::{ActionOutcome, Chat, ChatAction, EntryKind, TurnState},
+  orchestrator::{ActionOutcome, Chat, ChatAction, EntryKind, Queued, TurnState},
   project::{Project, ProjectKey},
   run::Answerer,
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
@@ -295,6 +295,33 @@ fn chat_approval_is_refused_for_a_proposal_made_after_the_persons_message() {
   assert_eq!(code(&refused), "not_pending");
   assert!(desktop.pencil_on());
   assert!(desktop.action(seq).waits());
+}
+
+#[test]
+fn chat_approval_is_refused_for_a_proposal_made_while_the_persons_message_was_queued() {
+  let desktop = Desktop::new();
+  let asked = desktop.says("Turn pencil off", Answerer::Person);
+  // Written while the answer was under way, so it waits for its turn (ORC-92), before the card was made.
+  let mut db = desktop.db();
+  let chat = db.chat(desktop.scope.chat).expect("read").expect("the chat");
+  let written = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 1_000);
+  let body = MessageBody::new("run it").expect("text");
+  let queued = (&TurnState::Queued(Queued::AfterAnswer), written);
+  db.keep_chat_message_as(
+    &chat,
+    (ChatMessageId::generate(), &body),
+    (&[], Answerer::Person),
+    queued,
+  )
+  .expect("queued");
+  let seq = desktop.propose_turning_off();
+  db.end_chat_turn(asked, &TurnState::Answered, Timestamp::now())
+    .expect("ended");
+  // Its turn starts now and moves to the conversation's end, after the card.
+  assert!(db.start_queued_chat_turn().expect("started").is_some());
+  let refused = desktop.apply(&desktop.scope, seq).expect_err("the person never saw it");
+  assert_eq!(code(&refused), "not_pending");
+  assert!(desktop.pencil_on() && desktop.action(seq).waits());
 }
 
 #[test]

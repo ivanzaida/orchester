@@ -335,6 +335,11 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
     Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
+    Command::SteerChat { message } => match scheduler.steer_chat(message) {
+      Ok(()) => Reply::ChatSteered { message },
+      Err(rejection) => Reply::Rejected(rejection),
+    },
+    Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::EstimateTask { task } => {
       return later.reply(async move {
         match handle.estimate_task(task).await {

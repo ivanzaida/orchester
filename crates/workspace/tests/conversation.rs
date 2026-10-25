@@ -160,6 +160,10 @@ fn conversation_an_agent_works_while_its_cli_turn_runs() {
     !working[0].mid_turn,
     "a profile whose connection is gone takes no message mid-turn"
   );
+  assert!(
+    !working[0].stops_turn,
+    "nor is its turn stopped alone: no CLI is known to resume its session"
+  );
 
   let events = run.wait_step(execution, WaitReason::Approval, at(22)).expect("waits");
   fixture.record(&run, &events);

@@ -22,6 +22,7 @@ use orchester_core::{
   run::{Answerer, PlanVersion},
   sharing::TaskRevision,
 };
+use orchester_ipc::Command;
 use orchester_workspace::{
   background,
   decisions::DecisionKind,
@@ -114,6 +115,17 @@ impl lurq::app::component::DevtoolsInspectable for Refused {}
 
 pub(super) type AfterTurnAction = FutureAction<AfterTurn, (MessageId, Sent), Refused>;
 
+/// *Stop turn* (ORC-92): the turn of the agent at work in run `run` of `project` stops; the run goes on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct StopTurn {
+  pub(super) project: OpenProject,
+  pub(super) run: RunId,
+}
+
+impl lurq::app::component::DevtoolsInspectable for StopTurn {}
+
+pub(super) type StopTurnAction = FutureAction<StopTurn, (), Message>;
+
 /// The refused messages put back into the composer.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct Handled(pub(super) Vec<MessageId>);
@@ -141,6 +153,7 @@ pub struct ComposerState {
   feed: ProjectFeed,
   pub(super) send: SendAction,
   pub(super) after_turn: AfterTurnAction,
+  pub(super) stop_turn: StopTurnAction,
   pub(super) gate: Option<InputGate>,
 }
 
@@ -161,6 +174,7 @@ impl ComposerState {
       feed: project.feed.clone(),
       send,
       after_turn,
+      stop_turn: stop_turn_action(ctx),
       gate: ctx.use_context(),
     };
     let navigation = Navigation::of(ctx);
@@ -431,6 +445,9 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
   );
   // On the task as the page showed it: Run again refuses one changed since.
   let sent = follow_seen(runner, &stored, (then, Some(request.revision))).await;
+  if request.way == Way::StopTurn {
+    stop_for_message(&services, &request.project, run).await;
+  }
   Ok(Outcome::Message {
     id,
     sent,
@@ -462,6 +479,36 @@ async fn send_plan_changes(
     })?;
   kept::stored(request.task, request.key, (&request.text, &[]));
   Ok(Outcome::PlanChanges { text: request.text })
+}
+
+/// *Stop turn and send*: once the message waits for the turn of the agent at work, that turn stops, so the agent reads
+/// it as its next instruction. A turn that ended meanwhile was not stopped: the agent reads the message at its end
+/// all the same.
+async fn stop_for_message(services: &Services, project: &OpenProject, run: RunId) {
+  if let Err(error) = services
+    .runners
+    .control_run_in(project, Command::StopTurn { run })
+    .await
+  {
+    tracing::info!(%error, "the agent's turn was not stopped; it reads the message once its turn ends");
+  }
+}
+
+fn stop_turn_action(ctx: &mut Ctx) -> StopTurnAction {
+  let services = Services::of(ctx);
+  ctx.future_action(move |request: StopTurn| {
+    let services = services.clone();
+    async move {
+      services
+        .runners
+        .control_run_in(&request.project, Command::StopTurn { run: request.run })
+        .await
+        .map_err(|error| {
+          tracing::warn!(%error, "the runner did not stop the agent's turn");
+          orchester_workspace::tasks::run::control_message(&error)
+        })
+    }
+  })
 }
 
 fn after_turn_action(ctx: &mut Ctx) -> AfterTurnAction {

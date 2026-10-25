@@ -28,5 +28,6 @@ pub use project_db::{
   AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, CachedClaim, CachedModule, CachedModuleChange,
   CachedRunStatus, CachedTask, ChatListing, ChatTurn, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport,
   KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResolutionStart, ResourceUpdate, ReturnedTask, RunBranch,
-  SharedMember, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus, attachment_file, exclude_project_data,
+  SharedMember, SharedPerson, SharedTaskInfo, SharingLink, StartedQueued, UnsentStatus, attachment_file,
+  exclude_project_data,
 };
