@@ -54,7 +54,9 @@ pub struct SendMessage {
   pub text: String,
   /// While an agent works whose connection takes a message mid-turn: `now` (it gets the message at
   /// its next tool call) or `after_turn` (when its turn ends; the default). In every other state the
-  /// run's state decides when, as in the app.
+  /// run's state decides when, as in the app. Automation's message sent `now` that the agent's CLI does
+  /// not take mid-turn is queued for when its turn ends (the conversation shows it `queued`); a
+  /// person's is kept for them to send after the turn (`not_delivered`).
   #[serde(default)]
   pub timing: Option<SendTiming>,
 }

@@ -8,6 +8,7 @@
 //! from project secrets, the tools that run without asking ([`ExemptTools`]), and an enabled flag. Its id is a
 //! [`ConnectionId`]: the Connections screen lists servers beside the other connections.
 
+mod authorization;
 mod environment;
 mod exempt;
 mod name;
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  authorization::{BasicUsername, McpAuthorization, McpAuthorizationError, McpHeaderName},
   environment::{McpEnvValue, McpEnvironment, McpEnvironmentError},
   exempt::{ExemptTools, ExemptToolsError, InvocationExemptions, McpToolName, McpToolNameError, UnappliedExemption},
   name::{McpServerName, McpServerNameError},
@@ -146,10 +148,10 @@ impl McpServer {
     Ok(())
   }
 
-  /// The project secrets the server uses: its bearer token or its variables' values, each once.
+  /// The project secrets the server uses: the one its authorization sends or its variables' values, each once.
   pub fn secrets(&self) -> Vec<SecretId> {
     match &self.transport {
-      McpTransport::Http(http) => http.bearer().into_iter().collect(),
+      McpTransport::Http(http) => http.authorization().secret().into_iter().collect(),
       McpTransport::Stdio(_) => self.environment.secrets().collect(),
     }
   }

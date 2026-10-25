@@ -5,6 +5,7 @@
 mod chat;
 mod claude;
 mod codex;
+mod http_authorization;
 pub mod mcp;
 mod orchester;
 mod provider;
@@ -17,7 +18,11 @@ use std::{
 pub use self::{
   chat::ClaudeChat,
   claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, first_line, input_line, result_schema},
-  codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
+  codex::{
+    CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION, SUB_AGENTS_OFF as CODEX_SUB_AGENTS_OFF,
+    SUB_AGENTS_PROMPT as CODEX_SUB_AGENTS_PROMPT,
+  },
+  http_authorization::HttpAuthorization,
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
   orchester::CodexOrchester,
   provider::{

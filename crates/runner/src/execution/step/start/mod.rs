@@ -307,7 +307,7 @@ impl RunTask {
     let attached = self
       .attached_to(&continuation.messages)
       .map_err(|error| problem(format!("cannot read the messages' attachments: {error}")))?;
-    let mut secrets = setup.claude_secrets();
+    let mut secrets = setup.activity_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let checks = tools.checks().to_vec();
     secrets.extend(provider_key);
@@ -371,7 +371,7 @@ fn cli_launch(
 
 /// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:
 /// a Claude Code agent through its permission prompt's relay (`prompted`, which every Claude Code step has), which
-/// also serves it `ask_question`, and every Codex agent.
+/// also serves it `ask_question`, and every Codex agent, which is also told that its sub-agents are off.
 fn told_of_tools(
   prompt: String,
   tools: &ToolHost,
@@ -379,7 +379,11 @@ fn told_of_tools(
 ) -> String {
   let codex = matches!(setup, McpSetup::Codex(_));
   if continuation.session.is_none() && codex {
-    format!("{prompt}\n\n{}", tools.tools().prompt_paragraph(false))
+    format!(
+      "{prompt}\n\n{} {}",
+      tools.tools().prompt_paragraph(false),
+      orchester_core::connection::invocation::CODEX_SUB_AGENTS_PROMPT
+    )
   } else if continuation.session.is_none() && prompted {
     format!(
       "{prompt}\n\n{} {}",

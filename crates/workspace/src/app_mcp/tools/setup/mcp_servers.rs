@@ -1,18 +1,18 @@
 //! `add_mcp_server`, `update_mcp_server`, `remove_mcp_server` and `set_mcp_server_enabled`: the project's MCP
 //! servers as Connections › MCP servers adds, edits, turns on or off and removes them, through the same
 //! fields and rules (`connections::mcp`). What widens what agents may do (`connections::mcp::widenings`: a new
-//! server, a new name, another program, arguments, folder, endpoint or bearer secret, a variable but the harmless
-//! ones, a variable that takes a secret, a tool that runs without asking, turning a server on) is refused as
-//! `person_only` unless a person lets automation change agent permissions, judged by the fields' text before
-//! anything reads the disk; removing, turning off and dropping exempt tools are always taken. A program is stored
-//! as the fixed file it is, outside the repository, as a command tool's (`tools::program`). A secret is named,
-//! never its value, and only the project's active secrets can be named.
+//! server, a new name, another program, arguments, folder or endpoint, another authorization that sends a secret, a
+//! variable but the harmless ones, a variable that takes a secret, a tool that runs without asking, turning a server
+//! on) is refused as `person_only` unless a person lets automation change agent permissions, judged by the fields'
+//! text before anything reads the disk; removing, turning off and dropping exempt tools are always taken. A program
+//! is stored as the fixed file it is, outside the repository, as a command tool's (`tools::program`). A secret is
+//! named, never its value, and only the project's active secrets can be named.
 
 use std::path::Path;
 
 use orchester_core::{
-  connection::mcp::{McpEnvValue, McpServer, McpServerName, McpTransport},
-  id::{ConnectionId, ProjectId},
+  connection::mcp::{McpAuthorization, McpEnvValue, McpServer, McpServerName, McpTransport},
+  id::{ConnectionId, ProjectId, SecretId},
   secret::Secret,
   store::{McpServerStore, SecretStore},
 };
@@ -29,7 +29,10 @@ use crate::{
   },
   connections::{
     data::ProjectConnections,
-    mcp::{self, Allowed, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice, enabling, widenings},
+    mcp::{
+      self, Allowed, AuthorizationChoice, AuthorizationText, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice,
+      enabling, widenings,
+    },
   },
   links::Link,
   messages::Message,
@@ -46,6 +49,25 @@ pub struct Variable {
   /// The value as written; `${secret:NAME@environment}` takes the value of the project secret NAME of that
   /// environment when an agent starts.
   pub value: String,
+}
+
+/// What a remote server is sent with every request. Each `secret` is an active project secret named
+/// `NAME@environment`, whose value is read when an agent starts; no tool takes a secret's value.
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "scheme", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub enum Authorization {
+  /// Nothing.
+  None,
+  /// `Authorization: Bearer <the secret's value>`.
+  Bearer { secret: String },
+  /// `Authorization: Basic <base64 of username:password>`, the password the secret's value.
+  Basic { username: String, secret: String },
+  /// `Authorization: Basic <credential>`, the secret's value a Basic credential pasted whole: its base64 part, or
+  /// the header's whole value starting with `Basic `.
+  BasicCredential { secret: String },
+  /// `<name>: <the secret's value>`, for a server that takes another header or scheme (`X-API-Key`).
+  Header { name: String, secret: String },
 }
 
 /// The fields of a server, as Add MCP server and Edit MCP server have them.
@@ -66,8 +88,8 @@ pub struct ServerFields {
   pub environment: Option<Vec<Variable>>,
   /// A remote server the agent's CLI reaches over HTTP: its http:// or https:// URL. Not with `program`.
   pub url: Option<String>,
-  /// A remote server's bearer token: the project secret `NAME@environment`; an empty string sends none.
-  pub bearer_secret: Option<String>,
+  /// What a remote server is sent to let the agent in; scheme none sends nothing.
+  pub authorization: Option<Authorization>,
   /// Tools of the server that run without asking, as the server names them, for profiles that ask
   /// before MCP actions.
   pub exempt_tools: Option<Vec<String>>,
@@ -211,7 +233,7 @@ fn server_json(listed: &ProjectConnections, server: &McpServer) -> Value {
     McpTransport::Http(http) => json!({
       "kind": "http",
       "url": without_query_values(http.url().as_str()),
-      "bearer_secret": http.bearer().and_then(secret_named),
+      "authorization": authorization_json(http.authorization(), secret_named),
     }),
   };
   let environment: Vec<Value> = server
@@ -306,8 +328,8 @@ fn filled(mut text: McpServerText, fields: ServerFields, secrets: &[Secret]) -> 
   if let Some(url) = fields.url {
     text.url = url;
   }
-  if let Some(bearer) = fields.bearer_secret {
-    text.bearer = bearer_secret(&bearer, secrets)?;
+  if let Some(authorization) = fields.authorization {
+    text.authorization = authorization_text(authorization, secrets)?;
   }
   if let Some(tools) = fields.exempt_tools {
     text.exempt_tools = lines(&tools, "appMcp.errors.mcpExemptTool")?;
@@ -333,19 +355,7 @@ fn checked(
       Some(name) if name.key == NAME_TAKEN => "name_taken",
       _ => "invalid_server",
     };
-    let reasons: Vec<Message> = [
-      errors.name,
-      errors.program,
-      errors.arguments,
-      errors.working_directory,
-      errors.variables,
-      errors.url,
-      errors.bearer,
-      errors.exempt_tools,
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    let reasons: Vec<Message> = errors.in_order().into_iter().flatten().cloned().collect();
     ToolError::refused(code, reasons)
   })
 }
@@ -364,21 +374,54 @@ fn lines(values: &[String], invalid: &'static str) -> Result<String, ToolError> 
   Ok(values.join("\n"))
 }
 
-/// The secret `NAME@environment` names, or none for an empty name.
-fn bearer_secret(named: &str, secrets: &[Secret]) -> Result<Option<orchester_core::id::SecretId>, ToolError> {
-  if named.trim().is_empty() {
-    return Ok(None);
-  }
+/// The authorization fields `authorization` fills in, its secret named as `secrets` has it.
+fn authorization_text(authorization: Authorization, secrets: &[Secret]) -> Result<AuthorizationText, ToolError> {
+  let (choice, secret, username, header) = match authorization {
+    Authorization::None => return Ok(AuthorizationText::default()),
+    Authorization::Bearer { secret } => (AuthorizationChoice::Bearer, secret, String::new(), String::new()),
+    Authorization::Basic { username, secret } => (AuthorizationChoice::Basic, secret, username, String::new()),
+    Authorization::BasicCredential { secret } => (
+      AuthorizationChoice::BasicCredential,
+      secret,
+      String::new(),
+      String::new(),
+    ),
+    Authorization::Header { name, secret } => (AuthorizationChoice::Header, secret, String::new(), name),
+  };
+  Ok(AuthorizationText {
+    choice,
+    secret: Some(secret_named_by(&secret, secrets)?),
+    username,
+    header,
+  })
+}
+
+/// The active secret `NAME@environment` names.
+fn secret_named_by(named: &str, secrets: &[Secret]) -> Result<SecretId, ToolError> {
   secrets
     .iter()
     .find(|secret| format!("{}@{}", secret.name(), secret.environment().as_str()) == named.trim())
-    .map(|secret| Some(secret.id()))
+    .map(Secret::id)
     .ok_or_else(|| {
       ToolError::refused(
         "invalid_server",
         vec![Message::new("connections.mcp.errors.unknownSecret").with("secret", named.to_owned())],
       )
     })
+}
+
+/// `authorization` as `list_connections` shows it: its scheme, the user name or header name, and its secret named.
+fn authorization_json(authorization: &McpAuthorization, secret_named: impl Fn(SecretId) -> Option<String>) -> Value {
+  let secret = authorization.secret().and_then(secret_named);
+  match authorization {
+    McpAuthorization::None => json!({ "scheme": "none" }),
+    McpAuthorization::Bearer { .. } => json!({ "scheme": "bearer", "secret": secret }),
+    McpAuthorization::Basic { username, .. } => {
+      json!({ "scheme": "basic", "username": username.as_str(), "secret": secret })
+    }
+    McpAuthorization::BasicCredential { .. } => json!({ "scheme": "basic_credential", "secret": secret }),
+    McpAuthorization::Header { name, .. } => json!({ "scheme": "header", "name": name.as_str(), "secret": secret }),
+  }
 }
 
 /// Refuses a field the server's transport (after `fields` chose it) does not have, rather than dropping it.
@@ -389,7 +432,7 @@ fn applies(text: &McpServerText, fields: &ServerFields) -> Result<(), ToolError>
     (None, None) => text.transport,
   };
   let misplaced = match transport {
-    TransportChoice::Stdio => vec![("bearer_secret", fields.bearer_secret.is_some())],
+    TransportChoice::Stdio => vec![("authorization", fields.authorization.is_some())],
     TransportChoice::Http => vec![
       ("args", fields.args.is_some()),
       ("working_directory", fields.working_directory.is_some()),

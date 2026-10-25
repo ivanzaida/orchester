@@ -183,6 +183,11 @@ impl AppServerSession {
     matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.is_some()
   }
 
+  /// The id of the turn Codex started last, which a `turn/steer` expects.
+  pub fn turn(&self) -> Option<&str> {
+    self.turn.as_deref()
+  }
+
   /// Whether Codex's MCP inventory was checked: Codex has started every server of the thread and of the
   /// inventory.
   pub fn servers_checked(&self) -> bool {
@@ -265,7 +270,7 @@ impl AppServerSession {
       .and_then(Value::as_str)
       .filter(|id| id.starts_with(STEER_REQUEST))
     {
-      let refused = value.get("error").map(|error| self.reason(error));
+      let refused = value.get("error").map(|error| self.steer_refusal(error));
       self.steer_answers.push(SteerAnswer {
         id: id.to_owned(),
         refused,
@@ -437,6 +442,19 @@ impl AppServerSession {
       .and_then(Value::as_str)
       .unwrap_or("no reason given");
     self.one_line(message)
+  }
+
+  /// Why Codex refused a `turn/steer`: its reason ([`Self::reason`]), with the error code and the details it gives
+  /// (`data`, such as the kind of a turn that cannot be steered), so the log tells the turn's state.
+  fn steer_refusal(&self, error: &Value) -> String {
+    let mut refusal = self.reason(error);
+    if let Some(code) = error.get("code").and_then(Value::as_i64) {
+      refusal.push_str(&format!(" (code {code})"));
+    }
+    if let Some(data) = error.get("data").filter(|data| !data.is_null()) {
+      refusal.push_str(&format!(" {}", self.one_line(&data.to_string())));
+    }
+    refusal
   }
 
   /// `text`, its secrets redacted, on one line, cut to [`REASON_CHARS`].

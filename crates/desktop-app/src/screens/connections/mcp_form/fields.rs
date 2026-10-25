@@ -1,21 +1,22 @@
 //! The fields of Add / Edit MCP server as signals the page types into, and its sections (`Section · Server`,
 //! `Program`, `Approvals` in `M20DGB`): the name and type, who starts or reaches the server (fixed: the
 //! agent's CLI), a program's command, folder, arguments and variables, or a remote server's endpoint and
-//! bearer secret, and the tools that run without asking. A variable can take its value from a project
+//! authorization (`remote`), and the tools that run without asking. A variable can take its value from a project
 //! secret: *Add a variable from a secret…* appends `NAME=${secret:NAME@environment}` (`euVYY`).
+
+mod remote;
 
 use lurq::{
   app::{
-    component::DevtoolsInspectable,
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, SelectOption, Spacer, Text},
+  components::{Column, Placement, Popup, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::SecretId, secret::Secret};
+use orchester_core::secret::Secret;
 use orchester_workspace::{
   connections::{
     data::ProjectConnections,
@@ -24,11 +25,12 @@ use orchester_workspace::{
   messages::Message,
 };
 
+use self::remote::AuthorizationFields;
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, SelectField},
+    field::FieldInput,
     form_section::{Label, Place, section, stacked_row},
     icon::{Icon, icon},
     menu::{MenuItem, menu_panel},
@@ -37,12 +39,6 @@ use crate::{
     option_card::OptionCard,
   },
 };
-
-/// The Authentication select's choice: a bearer token from a project secret, or none.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Bearer(Option<SecretId>);
-
-impl DevtoolsInspectable for Bearer {}
 
 /// The secrets menu's width (`Add a variable from a secret… · menu` in `euVYY`).
 const SECRETS_MENU_WIDTH: f32 = 300.0;
@@ -57,7 +53,7 @@ pub(super) struct Fields {
   folder: Signal<String>,
   variables: Signal<String>,
   url: Signal<String>,
-  bearer: Signal<Bearer>,
+  authorization: AuthorizationFields,
   exempt_tools: Signal<String>,
   /// The secrets menu of Variables.
   secrets_open: Signal<bool>,
@@ -75,7 +71,7 @@ impl Fields {
       folder: ctx.signal(text.working_directory.clone()),
       variables: ctx.signal(text.variables.clone()),
       url: ctx.signal(text.url.clone()),
-      bearer: ctx.signal(Bearer(text.bearer)),
+      authorization: AuthorizationFields::new(ctx, &text.authorization),
       exempt_tools: ctx.signal(text.exempt_tools.clone()),
       secrets_open: ctx.signal(false),
       secrets_anchor: ctx.element_ref(),
@@ -92,7 +88,7 @@ impl Fields {
       working_directory: self.folder.get(),
       variables: self.variables.get(),
       url: self.url.get(),
-      bearer: self.bearer.get().0,
+      authorization: self.authorization.text(),
       exempt_tools: self.exempt_tools.get(),
     }
   }
@@ -112,6 +108,11 @@ impl Fields {
         .filter(|_| tried || !value.get_untracked().trim().is_empty())
         .map(|error| message_text(ctx, error))
     };
+    let secret = errors
+      .secret
+      .as_ref()
+      .filter(|_| self.authorization.secret_shown(tried))
+      .map(|error| message_text(ctx, error));
     let errors = Shown {
       name: shown(&self.name, &errors.name),
       program: shown(&self.program, &errors.program),
@@ -119,6 +120,9 @@ impl Fields {
       folder: shown(&self.folder, &errors.working_directory),
       variables: shown(&self.variables, &errors.variables),
       url: shown(&self.url, &errors.url),
+      username: shown(self.authorization.username(), &errors.username),
+      header: shown(self.authorization.header(), &errors.header),
+      secret,
       exempt_tools: shown(&self.exempt_tools, &errors.exempt_tools),
     };
     let reach = match self.transport.get() {
@@ -351,62 +355,6 @@ impl Fields {
     Row::new().flex_shrink(0.0).child(button).child(popup).into()
   }
 
-  fn remote_section(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Element {
-    let url = input(
-      ctx,
-      ("connection-mcp-url", "connections.mcp.property.endpoint"),
-      &self.url,
-      errors.url.clone(),
-    )
-    .placeholder(ctx.t("connections.mcp.dialog.urlPlaceholder"))
-    .mono()
-    .render(ctx);
-    let mut options = vec![SelectOption::new(
-      Bearer(None),
-      ctx.t("connections.mcp.noAuthentication").to_string(),
-    )];
-    options.extend(secrets.iter().map(|secret| {
-      let name = ctx.t_args(
-        "connections.mcp.secretName",
-        [
-          ("name", secret.name().as_str()),
-          ("environment", secret.environment().as_str()),
-        ],
-      );
-      SelectOption::new(
-        Bearer(Some(secret.id())),
-        ctx.t_args("connections.mcp.bearer", [("secret", &*name)]).to_string(),
-      )
-    }));
-    let bearer = SelectField::new(
-      "connection-mcp-bearer",
-      ctx.t("connections.property.authentication"),
-      self.bearer.clone(),
-      options,
-    )
-    .render(ctx);
-    let rows = vec![
-      stacked_row(
-        Label::new("connection-mcp-url", ctx.t("connections.mcp.property.endpoint")),
-        url,
-        Place::Within,
-      ),
-      stacked_row(
-        Label::new("connection-mcp-bearer", ctx.t("connections.property.authentication"))
-          .description(ctx.t("connections.mcp.dialog.bearerHint")),
-        bearer,
-        Place::Last,
-      ),
-    ];
-    section(
-      "connection-mcp-remote-section",
-      &ctx.t("connections.mcp.typeHttp"),
-      None,
-      rows,
-    )
-    .into()
-  }
-
   fn approvals_section(&self, ctx: &mut Ctx, errors: &Shown) -> Element {
     let tools = input(
       ctx,
@@ -441,6 +389,9 @@ struct Shown {
   folder: Option<std::sync::Arc<str>>,
   variables: Option<std::sync::Arc<str>>,
   url: Option<std::sync::Arc<str>>,
+  username: Option<std::sync::Arc<str>>,
+  header: Option<std::sync::Arc<str>>,
+  secret: Option<std::sync::Arc<str>>,
   exempt_tools: Option<std::sync::Arc<str>>,
 }
 

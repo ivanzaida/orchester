@@ -437,7 +437,8 @@ its first version or a version that does any of these, and a pipeline step that 
 draft nor the latest published version calls it under that key; and the project's
 MCP servers (`add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`): adding one, renaming one (the
 answers a person gave in a run, *Approve similar*, name a server's tools by its name), giving one another program,
-arguments, starting folder, endpoint or bearer secret, changing any of its variables but the harmless ones above
+arguments, starting folder or endpoint, another authorization that sends a secret (another secret, scheme, Basic
+user name or header), changing any of its variables but the harmless ones above
 (removals included), giving any variable a secret's value whatever its name, adding a tool that runs without
 asking, and turning one on. These are judged by the fields as given, before anything reads the disk, so a refused
 program on a share is never contacted. A server's program, from the window or a tool, is stored as the fixed file
@@ -446,7 +447,7 @@ lies inside the project's repository, is relative to the worktree, or names anot
 (`\\server\share`, `\\?\UNC\…`, `\\.\…`, a drive mapped to a share, or a link that leads there), by its text
 before it is read. Only the project's active secrets can be named (`NAME@environment`), never their values;
 `list_connections` names a variable and whether it is plain text or a secret, but leaves out plain values and the
-values of an endpoint's query, where a person may have pasted a token. Dropping a server's bearer secret or exempt
+values of an endpoint's query, where a person may have pasted a token. Dropping a server's authorization or exempt
 tools, turning it off and removing it (`remove_mcp_server`; refused as `in_use` while a profile's draft or latest
 published version chooses it, checked and removed in one transaction) are narrowing. In the window, a save or Turn
 on that widens asks in place. With the permission opt-in on, authenticated clients with independently granted
