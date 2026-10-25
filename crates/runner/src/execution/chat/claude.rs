@@ -1,5 +1,7 @@
 //! A turn on Claude Code (`ClaudeChat`): the system prompt and the MCP configuration, the latter with the turn's
-//! token in it, in private files that live as long as the CLI; its stream-json output kept as it comes.
+//! token in it, in private files that live as long as the CLI; its stream-json output kept as it comes. On a
+//! connection's API provider the CLI starts with the provider's variables as a step's does ([`OnProvider`]), and
+//! what the turn keeps of its output has the key redacted.
 
 use std::{
   path::{Path, PathBuf},
@@ -8,10 +10,10 @@ use std::{
 
 use orchester_core::{
   account::AccountCli,
-  command::Command,
+  command::{Command, SecretVariable, redact_secrets},
   connection::{
     AgentProvider, ConnectionAccount,
-    invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, McpLaunch, on_account},
+    invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, McpLaunch, OnProvider, on_account},
     mcp::{McpServerName, McpUrl},
     stream::ClaudeStream,
   },
@@ -30,10 +32,12 @@ use crate::{
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
 
-/// The CLI's command and the files it reads, which must outlive it, and the account it runs on.
+/// The CLI's command and the files it reads, which must outlive it, the account it runs on and the secrets kept out
+/// of what the turn keeps: the API provider's key.
 struct Started {
   command: Command,
   account: AgentAccountId,
+  secrets: Vec<SecretVariable>,
   _files: [PrivateFile; 2],
 }
 
@@ -94,6 +98,15 @@ impl Turn {
     )
     .map_err(|error| cannot(format!("cannot write the MCP configuration: {error}")))?;
     let (denied, denied_files) = denied(prepared.connection.account());
+    let on_provider = prepared
+      .connection
+      .api_provider()
+      .zip(prepared.key.clone())
+      .map(|(provider, key)| OnProvider {
+        provider,
+        model: self.settings.model(),
+        key,
+      });
     let command = ClaudeChat {
       executable: &prepared.executable,
       model: self.settings.model().as_str(),
@@ -111,10 +124,18 @@ impl Turn {
       &prepared.environment,
     )
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
+    .map(|command| match &on_provider {
+      Some(on) => on.apply(command, AgentProvider::ClaudeCodeCli),
+      None => command,
+    })
     .map_err(|error| cannot(error.to_string()))?;
     Ok(Started {
       command,
       account: prepared.account,
+      secrets: on_provider
+        .iter()
+        .map(|on| on.key_variable(AgentProvider::ClaudeCodeCli))
+        .collect(),
       _files: [prompt, mcp],
     })
   }
@@ -148,7 +169,8 @@ impl Turn {
       tokio::select! {
         event = process.next() => match event {
           Some(ProcessEvent::Output { stream: from, line }) => {
-            for event in stream.parse(from, &line) {
+            for mut event in stream.parse(from, &line) {
+              event.redact(&|text| redact_secrets(text, &started.secrets));
               self.keep(event, started.account, &mut seen);
             }
           }

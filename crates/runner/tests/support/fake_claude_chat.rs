@@ -1,12 +1,16 @@
 //! `orchester-fake-claude` as a turn of the Orchestrator chat: started with `--system-prompt-file` and an
 //! `--mcp-config` of the chat's domain tools. It appends how it was started to `.orchester/fake-chat.log` in its
 //! working directory (`argv: `, `system-prompt: ` with the file's first line, `mcp-url: `, and `mcp-token: present`
-//! when the configuration carries a bearer token), then answers by the message:
+//! when the configuration carries a bearer token; on an API provider `provider: ` with the base URL and the models of
+//! its aliases and subagents, `provider key: present` when `ANTHROPIC_AUTH_TOKEN` is set, and `anthropic-env: ` with
+//! the names of every `ANTHROPIC_*` variable), then answers by the message:
 //!
 //! - "Call <tool> <JSON arguments>": calls that tool of the configured server over streamable HTTP with the bearer
 //!   token and replies with what it answered (`Tool said: <result text>`);
 //! - "Keep thinking": writes the start of a reply and waits until it is ended;
 //! - "Fail now": ends with an error result and exit code 1;
+//! - "Say the key": replies with the provider's key, and "Fail with the key" prints it on standard error and exits with
+//!   1: the runner must keep it out of what the chat keeps;
 //! - anything else: replies `Noted: <message>`.
 //!
 //! Each answer ends with a result that reports usage, as Claude Code does.
@@ -20,6 +24,8 @@ use serde_json::{Value, json};
 use crate::fake_chat_mcp::ChatServer;
 
 const USAGE: &str = r#"{"input_tokens":12,"output_tokens":27}"#;
+/// The variable Claude Code reads an API provider's key from.
+const KEY_VARIABLE: &str = "ANTHROPIC_AUTH_TOKEN";
 
 /// Whether `args` start a turn of the Orchestrator chat.
 pub fn is_chat(args: &[String]) -> bool {
@@ -43,6 +49,17 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
   if message.contains("Fail now") {
     result(session, true, "Something broke on the provider's side.");
     return ExitCode::from(1);
+  }
+  let key = std::env::var(KEY_VARIABLE).unwrap_or_default();
+  if message.contains("Fail with the key") {
+    eprintln!("the provider refused the key {key}");
+    return ExitCode::from(1);
+  }
+  if message.contains("Say the key") {
+    let text = format!("The key is {key}.");
+    reply(session, "msg_key", &text);
+    result(session, false, &text);
+    return ExitCode::SUCCESS;
   }
   let text = match message.strip_prefix("Call ") {
     Some(call) => match server.as_ref().map(|server| server.call(call)) {
@@ -115,6 +132,7 @@ fn log(args: &[String], server: Option<&ChatServer>) {
       lines.push("mcp-token: present".to_owned());
     }
   }
+  lines.extend(provider());
   let folder = Path::new(".orchester");
   let written = fs::create_dir_all(folder).and_then(|()| {
     let mut file = fs::OpenOptions::new()
@@ -126,4 +144,28 @@ fn log(args: &[String], server: Option<&ChatServer>) {
   if let Err(error) = written {
     eprintln!("cannot write the chat log: {error}");
   }
+}
+
+/// The log lines of the API provider the fake was started on, if any: never the key itself.
+fn provider() -> Vec<String> {
+  let Ok(url) = std::env::var("ANTHROPIC_BASE_URL") else {
+    return Vec::new();
+  };
+  let models = [
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+  ]
+  .map(|name| std::env::var(name).unwrap_or_default());
+  let mut names: Vec<String> = std::env::vars()
+    .map(|(name, _)| name)
+    .filter(|name| name.to_ascii_uppercase().starts_with("ANTHROPIC_"))
+    .collect();
+  names.sort();
+  let mut lines = vec![format!("provider: {url} {}", models.join(" "))];
+  if std::env::var_os(KEY_VARIABLE).is_some() {
+    lines.push("provider key: present".to_owned());
+  }
+  lines.push(format!("anthropic-env: {}", names.join(",")));
+  lines
 }
