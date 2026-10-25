@@ -142,6 +142,8 @@
       "stopped": "stopped",
       "timedOut": "timed out",
       "timedOutTook": "timed out · {{took}}",
+      "turnStopped": "Turn stopped by you",
+      "turnStoppedDetail": "Its work so far is committed. It goes on in the same session with your message as its next instruction; until you write, it waits for you.",
       "unfinished": "no end recorded",
       "unparsed": {
         "one": "1 unparsed line",
@@ -416,6 +418,8 @@
       "waiting": "Waiting for you"
     },
     "stepLabel": "{{number}} {{step}}",
+    "stopTurn": "Stop turn",
+    "stopTurnUnavailable": "This agent’s turn can’t be stopped on its own: it runs as a native agent. Pause stops the run at its next checkpoint.",
     "toolMeta": "tool · {{time}}",
     "unreadable": "Nothing this run did can be shown until its record can be read. Summary lists the task’s runs.",
     "waitsAnswer": "{{agent}} waits for your answer · since {{since}}, its active time stopped",

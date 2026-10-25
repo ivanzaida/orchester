@@ -191,6 +191,21 @@ fn transcript_shows_a_cli_that_is_not_signed_in_as_a_failure() {
 }
 
 #[test]
+fn transcript_shows_a_turn_the_person_stopped_as_its_own_entry_not_a_failure() {
+  let activity = stored(vec![
+    AgentEvent::TurnStarted,
+    AgentEvent::Message {
+      text: "Renaming the dialog.".into(),
+    },
+    AgentEvent::TurnStopped,
+  ]);
+  let entries = entries(&activity);
+  assert_eq!(entries.len(), 2);
+  assert_eq!(entries[1].kind, EntryKind::TurnStopped);
+  assert!(!entries[1].is_failure(), "a person's stop is no failure");
+}
+
+#[test]
 fn transcript_joins_a_tool_steps_command_and_keeps_how_it_ended() {
   let activity = stored(vec![
     AgentEvent::ToolCommandStarted {

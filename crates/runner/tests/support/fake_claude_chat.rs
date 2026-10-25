@@ -7,7 +7,10 @@
 //!
 //! - "Call <tool> <JSON arguments>": calls that tool of the configured server over streamable HTTP with the bearer
 //!   token and replies with what it answered (`Tool said: <result text>`);
-//! - "Keep thinking": writes the start of a reply and waits until it is ended;
+//! - "Keep thinking": writes the start of a reply and waits until it is ended, reading nothing more of its input;
+//! - "Wait for a message": writes the start of a reply, then waits until a message sent now arrives on its input
+//!   (`fake_claude_input`), prints it back as it takes it and replies `Noted: <message>`, as Claude Code takes a
+//!   message after the tool call that runs;
 //! - "Fail now": ends with an error result and exit code 1;
 //! - "Say the key": replies with the provider's key, and "Fail with the key" prints it on standard error and exits with
 //!   1: the runner must keep it out of what the chat keeps;
@@ -26,6 +29,8 @@ use crate::fake_chat_mcp::ChatServer;
 const USAGE: &str = r#"{"input_tokens":12,"output_tokens":27}"#;
 /// The variable Claude Code reads an API provider's key from.
 const KEY_VARIABLE: &str = "ANTHROPIC_AUTH_TOKEN";
+/// How long "Wait for a message" waits for one.
+const MESSAGE_WAIT: Duration = Duration::from_secs(60);
 
 /// Whether `args` start a turn of the Orchestrator chat.
 pub fn is_chat(args: &[String]) -> bool {
@@ -45,6 +50,9 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
     loop {
       thread::sleep(Duration::from_secs(1));
     }
+  }
+  if message.contains("Wait for a message") {
+    return take_a_message(session);
   }
   if message.contains("Fail now") {
     result(session, true, "Something broke on the provider's side.");
@@ -70,6 +78,26 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
     None => format!("Noted: {message}"),
   };
   reply(session, "msg_answer", &text);
+  result(session, false, &text);
+  ExitCode::SUCCESS
+}
+
+/// "Wait for a message": the start of a reply, then the first message sent now, taken and answered.
+fn take_a_message(session: &str) -> ExitCode {
+  reply(session, "msg_wait", "Waiting for your message.");
+  let waited = std::time::Instant::now();
+  let taken = loop {
+    if let Some(taken) = crate::fake_claude_input::next(Duration::from_millis(50)) {
+      break taken;
+    }
+    if waited.elapsed() > MESSAGE_WAIT {
+      result(session, true, "No message came.");
+      return ExitCode::from(1);
+    }
+  };
+  replay(session, &taken);
+  let text = format!("Noted: {taken}");
+  reply(session, "msg_noted", &text);
   result(session, false, &text);
   ExitCode::SUCCESS
 }

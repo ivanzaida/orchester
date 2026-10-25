@@ -284,10 +284,14 @@ fn working_line(
       plan: matches!(item.kind, ItemKind::Plan(_)),
     });
   let works = conversation.state == PanelState::Live && !asking && run.run.status() == &RunStatus::Running;
+  // An agent works in a turn: *Stop turn* ends it, if every agent at work runs where a turn can be stopped alone.
+  let stops = (works && waits.is_none() && !conversation.working.is_empty() && !run.run.pause_requested())
+    .then(|| conversation.working.iter().all(|working| working.stops_turn));
   (waits.is_some() || works).then(|| timeline::Working {
     agent,
     last: entries.last().map(|entry| entry.at),
     waits,
+    stops,
   })
 }
 

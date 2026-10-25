@@ -722,6 +722,8 @@
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details.",
       "notAnotherAccount": "Choose a connection of the same CLI that runs on another account and can start now.",
+      "noTurnToStop": "No agent of this run is in a turn now, so there is no turn to stop.",
+      "turnNotStoppable": "This agent’s turn can’t be stopped on its own: it runs as a native agent. Pause stops the run at its next checkpoint instead.",
       "notAcceptable": {
         "notJudged": "The revision this result was for is not recorded, so Orchester cannot tell what work accepting would pass. Run the step again instead.",
         "notBuiltOn": "The step’s work no longer builds on {{revision}}, the revision its result was for. Run the step again instead.",

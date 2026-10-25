@@ -217,6 +217,16 @@ impl ComposerMode {
       _ => None,
     }
   }
+
+  /// What *Stop turn and send* does, where the mode offers it: the message waits for the turn of the agent at work,
+  /// which the person stops, so the agent reads it as its next instruction. An agent whose turn cannot be stopped
+  /// alone (a native agent's) offers none.
+  pub const fn then_stopping(&self) -> Option<Then> {
+    match self {
+      Self::Steer(working) if working.stops_turn => Some(Then::Deliver),
+      _ => None,
+    }
+  }
 }
 
 impl Then {

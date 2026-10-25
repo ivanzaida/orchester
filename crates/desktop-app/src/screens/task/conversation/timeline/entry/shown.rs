@@ -144,6 +144,12 @@ pub(super) fn shown(ctx: &Ctx, entry: &Entry, works: bool) -> Shown {
     EntryKind::ToolCommand(command) => tool_command(ctx, command, works),
     EntryKind::McpTool(call) => mcp::call(ctx, call, works),
     EntryKind::ExemptionNotApplied { server, tool, other } => mcp::exemption_not_applied(ctx, (server, tool, other)),
+    EntryKind::TurnStopped => plain(
+      Icon::Square,
+      ctx.t("conversation.entry.turnStopped"),
+      "".into(),
+      Some(ctx.t("conversation.entry.turnStoppedDetail")),
+    ),
   }
 }
 

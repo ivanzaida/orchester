@@ -101,6 +101,9 @@ pub enum AgentEvent {
   TurnFailed {
     message: String,
   },
+  /// A person stopped the agent's turn (*Stop turn*): the runner ended its CLI, and its session continues with their
+  /// next message.
+  TurnStopped,
   /// The CLI's permissions denied a tool call (`command`, as [`AgentEvent::CommandStarted`] names
   /// it); the agent was told and went on without it.
   PermissionDenied {
@@ -342,6 +345,7 @@ impl AgentEvent {
       Self::TurnCompleted { .. } => "turn_completed",
       Self::Error { .. } => "error",
       Self::TurnFailed { .. } => "turn_failed",
+      Self::TurnStopped => "turn_stopped",
       Self::PermissionDenied { .. } => "permission_denied",
       Self::NativeCall { .. } => "native_call",
       Self::NotSignedIn { .. } => "not_signed_in",
@@ -377,6 +381,9 @@ pub enum InvocationOutcome {
   NoResult,
   /// The runner stopped the CLI.
   Terminated,
+  /// A person stopped the agent's turn (*Stop turn*): the runner ended the CLI, its work is committed, and its session
+  /// continues with their next message.
+  TurnStopped,
   /// The CLI was not started; a [`RunnerProblem`] says why.
   NotStarted,
   /// A command tool's program did not finish within the tool's timeout; it was ended.

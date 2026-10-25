@@ -69,6 +69,9 @@ pub(in super::super) enum StopCause {
   Permissions,
   /// A pause checkpoints a session waiting for an unexecuted tool decision.
   Paused,
+  /// A person stopped the agent's turn (*Stop turn*): its work is committed and its step goes on in the same session
+  /// with their message.
+  TurnStopped,
 }
 
 /// What the run tells an agent.

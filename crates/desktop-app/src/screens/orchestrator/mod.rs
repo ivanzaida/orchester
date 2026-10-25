@@ -13,6 +13,7 @@ pub(in crate::screens) mod card;
 pub(in crate::screens) mod change;
 mod composer;
 pub(in crate::screens) mod data;
+mod delivery;
 mod draft;
 mod failure;
 mod header;
@@ -23,6 +24,7 @@ mod proposal;
 mod report;
 mod run_end;
 mod send;
+mod send_menu;
 mod settings;
 mod start;
 mod timeline;
@@ -45,13 +47,16 @@ use orchester_core::{
   id::{ChatId, ChatMessageId, ProjectId},
   time::Timestamp,
 };
-use orchester_workspace::{display, orchestrator::send::Outgoing};
+use orchester_workspace::{
+  display,
+  orchestrator::{queue::WhileAnswering, send::Outgoing},
+};
 
 use self::{
   data::Shown,
   draft::Conversation,
   header::{Head, Named},
-  send::{SendAction, Sending, Sent, StopAction},
+  send::{QueuedAction, SendAction, Sending, Sent, StopAction},
 };
 use crate::{
   navigation::Navigation,
@@ -94,8 +99,10 @@ struct View {
   attached: DraftAttachments,
   /// Whose draft `draft` holds; `None` until the screen knows which conversation it shows.
   of: Signal<Option<Conversation>>,
-  /// The draft's message this screen sends, shown in the conversation until it is kept.
+  /// The draft's message this screen sends, shown in the conversation until it is kept, and how it goes while the
+  /// Orchestrator answers.
   outgoing: Signal<Option<Outgoing>>,
+  how: Signal<Option<WhileAnswering>>,
   history: Signal<bool>,
   search: Signal<String>,
   /// Set to put the focus in the message field.
@@ -103,8 +110,13 @@ struct View {
   /// The message field has the focus.
   focused: Signal<bool>,
   input: ElementRef,
+  /// The send menu over the send button is open while the Orchestrator answers, and its chevron.
+  menu: Signal<bool>,
+  menu_anchor: ElementRef,
   send: SendAction,
   stop: StopAction,
+  /// Takes a queued message's words back into the composer, or removes it.
+  queued: QueuedAction,
   /// What a press on a link in a reply does; made once, so a reply is laid out again only when it changes.
   links: LinkHandler,
   /// The turns open at their end and follow it; another conversation opens at its own end.
@@ -124,16 +136,31 @@ impl Component for OrchestratorScreen {
       attached: DraftAttachments::new(ctx, Vec::new()),
       of: ctx.signal(None),
       outgoing: ctx.signal(None),
+      how: ctx.signal(None),
       history: ctx.signal(false),
       search: ctx.signal(String::new()),
       focus: ctx.signal(false),
       focused: ctx.signal(false),
       input: ElementRef::new(),
+      menu: ctx.signal(false),
+      menu_anchor: ElementRef::new(),
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
+      queued: send::queued_action(ctx),
       links: chat::links(ctx),
       follow: Follow::new(ctx),
     };
+    let taken = view.clone();
+    ctx.watch(&view.queued.state(), move |state| {
+      if let Some(words) = state
+        .data
+        .as_ref()
+        .filter(|_| state.is_fulfilled())
+        .and_then(|changed| changed.words.as_deref())
+      {
+        taken.take_back(words);
+      }
+    });
     let project = ctx.props::<Props>().project.open.project.id();
     let of = view.of.clone();
     ctx.watch(&view.draft, move |text| {
@@ -303,9 +330,14 @@ impl View {
   }
 
   /// Sends the draft with its files, as the message it was last sent as when neither changed since, to conversation
-  /// `chat` (a new one when `None`); nothing while files are still being read.
-  /// The chat goes to its end and follows it again (`ui::chat::follow`).
-  fn send_draft(&self, project: &ShownProject, chat: Option<ChatId>) -> Arc<dyn Fn() + Send + Sync> {
+  /// `chat` (a new one when `None`), as a turn of its own or, while the Orchestrator answers, `how` the person chose;
+  /// nothing while files are still being read. The send menu closes, and the chat goes to its end and follows it again
+  /// (`ui::chat::follow`).
+  fn send_draft(
+    &self,
+    project: &ShownProject,
+    (chat, how): (Option<ChatId>, Option<WhileAnswering>),
+  ) -> Arc<dyn Fn() + Send + Sync> {
     let (view, project) = (self.clone(), project.open.clone());
     let from = Conversation::from(chat);
     Arc::new(move || {
@@ -316,14 +348,17 @@ impl View {
       {
         return;
       }
+      view.menu.set(false);
       let to = chat.unwrap_or_else(ChatId::generate);
       let outgoing = draft::sending(project.project.id(), from, (to, text, attachments));
       view.outgoing.set(Some(outgoing.clone()));
+      view.how.set(how);
       view.follow.follow_again();
       view.send.run(Sending {
         project: project.clone(),
         outgoing,
         from_draft: true,
+        how,
       });
     })
   }
@@ -331,13 +366,14 @@ impl View {
   /// Sends words once more to conversation `chat`, as a new message without files; the draft stays as it is. The
   /// chat goes to its end and follows it again.
   fn ask_again(&self, project: &ShownProject, chat: ChatId) -> Arc<dyn Fn(Arc<str>) + Send + Sync> {
-    let (send, follow, project) = (self.send.clone(), self.follow.clone(), project.open.clone());
+    let (view, project) = (self.clone(), project.open.clone());
     Arc::new(move |text: Arc<str>| {
-      if send.state().get_untracked().is_pending() {
+      if view.send.state().get_untracked().is_pending() {
         return;
       }
-      follow.follow_again();
-      send.run(Sending {
+      view.how.set(None);
+      view.follow.follow_again();
+      view.send.run(Sending {
         project: project.clone(),
         outgoing: Outgoing {
           chat,
@@ -346,8 +382,21 @@ impl View {
           attachments: Vec::new(),
         },
         from_draft: false,
+        how: None,
       });
     })
+  }
+
+  /// `words`, a queued message's taken back, go into the composer after what is written there, with the focus there.
+  fn take_back(&self, words: &str) {
+    let draft = self.draft.get_untracked();
+    let text = if draft.trim().is_empty() {
+      words.to_owned()
+    } else {
+      format!("{}\n\n{words}", draft.trim_end())
+    };
+    self.draft.set(text);
+    self.focus.set(true);
   }
 }
 

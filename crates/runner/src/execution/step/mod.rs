@@ -89,6 +89,8 @@ pub(super) enum Occasion {
   Written,
   /// Its agent finished its turn while they came in.
   AfterTurn,
+  /// A person stopped its agent's turn (*Stop turn*): they are its next instruction.
+  TurnStopped,
   /// They answer the question its agent asked.
   Answer(String),
   /// A follow-up of a run that succeeded.
@@ -101,7 +103,7 @@ impl Occasion {
   /// How the messages an invocation started for this occasion reach its agent.
   const fn arrival(&self) -> Arrival {
     match self {
-      Self::AfterTurn => Arrival::TurnEnd,
+      Self::AfterTurn | Self::TurnStopped => Arrival::TurnEnd,
       Self::Written | Self::Answer(_) | Self::FollowUp | Self::Recovery(_) => Arrival::Prompt,
     }
   }
@@ -110,6 +112,7 @@ impl Occasion {
     match self {
       Self::Written => MessageOccasion::Written,
       Self::AfterTurn => MessageOccasion::AfterTurn,
+      Self::TurnStopped => MessageOccasion::TurnStopped,
       Self::Answer(question) => MessageOccasion::Answer { question },
       Self::FollowUp => MessageOccasion::FollowUp,
       Self::Recovery(previous_result) => MessageOccasion::Recovery { previous_result },
@@ -125,6 +128,8 @@ pub(super) struct Active {
   pub(super) questions: Option<mpsc::UnboundedSender<question::QuestionAnswer>>,
   /// Where people's messages sent now go to the agent; `None` for a command tool.
   pub(super) steers: Option<mpsc::UnboundedSender<Vec<Message>>>,
+  /// An agent CLI's turn, which *Stop turn* ends and its session continues; not a command tool's or a native agent's.
+  pub(super) turn_stoppable: bool,
   pub(super) workspace: Workspace,
   /// The invocation as it started, for reporting problems around it.
   pub(super) invocation: Invocation,
@@ -152,6 +157,7 @@ impl Active {
       approvals: None,
       questions: None,
       steers: None,
+      turn_stoppable: false,
       workspace,
       invocation,
       budget: None,
@@ -440,6 +446,7 @@ impl RunTask {
         approvals: interactive.then_some(approvals),
         questions: asks_in_turn.then_some(questions),
         steers: takes_steers.then_some(steers),
+        turn_stoppable: asks_in_turn,
         workspace,
         invocation,
         budget,
@@ -501,12 +508,12 @@ impl RunTask {
     let question = latest_question(&conversation, execution)
       .filter(|question| started.is_none_or(|started| question.created_at() >= started))
       .map(|question| question.body().as_str().to_owned());
-    let completed =
-      last.as_ref().and_then(|invocation| invocation.outcome.as_ref()) == Some(&InvocationOutcome::Completed);
-    let occasion = match question {
-      Some(question) => Occasion::Answer(question),
-      None if completed => Occasion::AfterTurn,
-      None => Occasion::Written,
+    let ended = last.as_ref().and_then(|invocation| invocation.outcome.as_ref());
+    let occasion = match (question, ended) {
+      (Some(question), _) => Occasion::Answer(question),
+      (None, Some(InvocationOutcome::Completed)) => Occasion::AfterTurn,
+      (None, Some(InvocationOutcome::TurnStopped)) => Occasion::TurnStopped,
+      (None, _) => Occasion::Written,
     };
     Ok(Continuation {
       last_started: started,

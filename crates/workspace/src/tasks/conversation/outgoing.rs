@@ -37,11 +37,13 @@ use crate::{
 
 /// Which of the mode's ways of sending: its own (Enter, the send button), or the second it offers
 /// (Ctrl/Cmd+Enter, the send menu): *Send after this turn* while an agent works, *Send without resuming*
-/// while the run is paused or interrupted.
+/// while the run is paused or interrupted; or, while an agent works whose turn can be stopped alone, *Stop turn and
+/// send* (the send menu): its turn stops and it reads the message as its next instruction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Way {
   Primary,
   Second,
+  StopTurn,
 }
 
 /// What a mode answers or changes, which its context line names and the person can leave.
@@ -83,6 +85,8 @@ pub enum Action {
   RaiseLimit,
   /// Starts the task's next run.
   RunAgain,
+  /// Stops the turn of the agent at work, which reads the message as its next instruction (*Stop turn and send*).
+  StopTurnAndSend,
 }
 
 impl Action {
@@ -101,10 +105,15 @@ impl Action {
     let then = match way {
       Way::Primary => mode.then(),
       Way::Second => mode.then_later(),
+      Way::StopTurn => mode.then_stopping(),
     };
     let action = match (mode, way) {
       (ComposerMode::PlanChanges { version, .. }, Way::Primary) => return Some(Self::PlanChanges(*version)),
       (ComposerMode::Steer(working), Way::Primary) if working.mid_turn => Self::SendNow,
+      (ComposerMode::Steer(_), Way::StopTurn) => {
+        then?;
+        Self::StopTurnAndSend
+      }
       (ComposerMode::Answer { question, .. }, Way::Primary) => Self::Answer(*question),
       (ComposerMode::FollowUp, Way::Primary) => Self::FollowUp,
       (ComposerMode::Continue, Way::Primary) => Self::Continue,
@@ -313,10 +322,11 @@ fn store_as(
   let then = match way {
     Way::Primary => prepared.mode.then(),
     Way::Second => prepared.mode.then_later(),
+    Way::StopTurn => prepared.mode.then_stopping(),
   };
   let then = match (then, way) {
     (Some(then), _) => then,
-    (None, Way::Second) => return Err(OutgoingError::NoSecondWay),
+    (None, Way::Second | Way::StopTurn) => return Err(OutgoingError::NoSecondWay),
     (None, Way::Primary) => return Err(OutgoingError::Closed(prepared.conversation.state)),
   };
   let timing = match Action::of(&prepared.mode, way, prepared.recipient) {

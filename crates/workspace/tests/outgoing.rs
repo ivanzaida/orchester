@@ -239,3 +239,38 @@ fn outgoing_messages_that_reach_a_waiting_step_require_question_consent() {
   prepared.recipient = Recipient::Orchestrator;
   assert_eq!(prepared.decision_kind(Way::Primary), Some(DecisionKind::Question));
 }
+
+#[test]
+fn outgoing_stop_turn_and_send_is_offered_only_for_an_agent_whose_turn_stops_alone() {
+  use std::sync::Arc;
+
+  use orchester_core::id::{ResourceId, StepExecutionId};
+  use orchester_workspace::tasks::conversation::WorkingAgent;
+
+  let working = |stops_turn| {
+    ComposerMode::Steer(WorkingAgent {
+      profile: ResourceId::generate(),
+      agent: Arc::from("Builder"),
+      execution: StepExecutionId::generate(),
+      mid_turn: true,
+      stops_turn,
+    })
+  };
+  let to = Recipient::Orchestrator;
+  let stoppable = working(true);
+  assert_eq!(stoppable.then_stopping(), Some(Then::Deliver));
+  assert_eq!(Action::of(&stoppable, Way::StopTurn, to), Some(Action::StopTurnAndSend));
+  assert_eq!(Action::of(&stoppable, Way::Primary, to), Some(Action::SendNow));
+  let native = working(false);
+  assert_eq!(native.then_stopping(), None);
+  assert_eq!(
+    Action::of(&native, Way::StopTurn, to),
+    None,
+    "a native agent's turn does not stop alone"
+  );
+  assert_eq!(
+    Action::of(&ComposerMode::FollowUp, Way::StopTurn, to),
+    None,
+    "no agent works"
+  );
+}

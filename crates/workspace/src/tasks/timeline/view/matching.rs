@@ -64,6 +64,6 @@ pub(super) fn entry_matches(entry: &Entry, needle: &str) -> bool {
     EntryKind::McpServer(server, _) => server.as_deref().is_some_and(found),
     EntryKind::ExemptionNotApplied { server, tool, .. } => found(server) || found(tool),
     EntryKind::Approval(approval) => found(&approval.command),
-    EntryKind::Usage(_) | EntryKind::Problem(_) => false,
+    EntryKind::Usage(_) | EntryKind::Problem(_) | EntryKind::TurnStopped => false,
   }
 }
