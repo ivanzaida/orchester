@@ -6,6 +6,7 @@
 //! whose answer was lost), and is recorded as interrupted.
 
 mod claude;
+mod codex;
 mod turn;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};

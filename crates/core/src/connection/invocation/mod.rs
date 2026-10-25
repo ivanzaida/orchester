@@ -5,6 +5,7 @@
 mod chat;
 mod claude;
 mod codex;
+mod codex_chat;
 mod http_authorization;
 pub mod mcp;
 mod orchester;
@@ -22,6 +23,7 @@ pub use self::{
     CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION, SUB_AGENTS_OFF as CODEX_SUB_AGENTS_OFF,
     SUB_AGENTS_PROMPT as CODEX_SUB_AGENTS_PROMPT,
   },
+  codex_chat::{CONFINEMENT as CODEX_CHAT_CONFINEMENT, CodexChat},
   http_authorization::HttpAuthorization,
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
   orchester::CodexOrchester,

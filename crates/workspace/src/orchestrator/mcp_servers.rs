@@ -1,4 +1,4 @@
-//! The Orchestrator chat's MCP server tools (ORC-89, `docs/design/orchestrator-toolset.md`, decision 10): adding a
+//! The Orchestrator chat's MCP server tools (ORC-89, `docs/design/orchestrator-toolset.md`, decision 11): adding a
 //! server to the chat's project, changing one, turning one on or off and removing one, through the same fields, rules
 //! and refusals as Orchester's own `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled` and
 //! `remove_mcp_server` (Connections › MCP servers). Each call is read first as the tool would make it

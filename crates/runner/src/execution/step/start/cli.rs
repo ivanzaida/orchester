@@ -210,6 +210,7 @@ impl RunTask {
         output_schema: schema,
         secrets,
         model_provider: cli.provider.map(|_| CODEX_PROVIDER_ID.to_owned()),
+        base_instructions: None,
       },
     ))
   }

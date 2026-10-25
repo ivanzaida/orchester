@@ -20,7 +20,7 @@ use orchester_core::{
   id::AgentAccountId,
   orchestrator::{
     TurnFailure, TurnState,
-    instructions::{SERVER, system_prompt},
+    instructions::{ProjectReads, SERVER, system_prompt},
   },
   secret::SecretValue,
 };
@@ -88,7 +88,7 @@ impl Turn {
     let prompt = PrivateFile::write(
       self.project,
       &format!("chat-prompt-{name}.md"),
-      &system_prompt(&prepared.project_name, self.project),
+      &system_prompt(&prepared.project_name, self.project, ProjectReads::FileTools),
     )
     .map_err(|error| cannot(format!("cannot write the system prompt: {error}")))?;
     let mcp = PrivateFile::write(

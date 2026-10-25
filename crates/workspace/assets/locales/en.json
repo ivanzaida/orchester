@@ -1884,8 +1884,7 @@
   "orchestrator": {
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
-      "cliOnly": "The Orchestrator runs on Claude Code connections.",
-      "codexHeldBack": "Not for the Orchestrator yet: Codex's sandbox can't be shown to keep the agent's reads in the project folder, away from your sign-in and other projects' tokens."
+      "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
     },
     "send": {
       "blank": "Write a message first.",

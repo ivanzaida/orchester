@@ -2,8 +2,9 @@
 //! Codex agents; started with `exec`, it is auto mode's reviewer instead (`fake_codex_review`). It speaks the part of
 //! the JSON-RPC protocol the runner uses (`initialize`, `account/read`, `config/read`, `thread/start` or
 //! `thread/resume`, `mcpServerStatus/list`, `turn/start`) and answers the way Codex 0.159 did in the probes
-//! (`.tmp/agent-runtime/`), without a model. What a turn does depends on its prompt (`fake_codex_work`); the requests a
-//! person decides are in `fake_app_server`.
+//! (`.tmp/agent-runtime/`), without a model. What a turn does depends on its prompt (`fake_codex_work`), or, started
+//! with the Orchestrator chat's server, on the person's message (`fake_codex_chat`); the requests a person decides are
+//! in `fake_app_server`.
 //!
 //! On standard error it reports what it was given: its arguments (`argv: `), the names of its
 //! environment variables, its `PATH`, `BUILD_DIR`, its process id and its MCP servers
@@ -53,8 +54,12 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_chat_mcp.rs"]
+mod fake_chat_mcp;
 #[path = "fake_codex_cell.rs"]
 mod fake_codex_cell;
+#[path = "fake_codex_chat.rs"]
+mod fake_codex_chat;
 #[path = "fake_codex_check.rs"]
 mod fake_codex_check;
 #[path = "fake_codex_question.rs"]
@@ -179,6 +184,8 @@ pub struct Session {
   /// The turn waits for a message sent now (`turn/steer`): its prompt, whether it has an output
   /// schema, and whether the steer is refused.
   pub awaits_message: Option<fake_codex_work::AwaitsMessage>,
+  /// The thread's `baseInstructions`, which replace Codex's own.
+  base_instructions: Option<String>,
 }
 
 impl Session {
@@ -205,6 +212,7 @@ impl Session {
       approved_tools: BTreeSet::new(),
       approvals: None,
       awaits_message: None,
+      base_instructions: None,
     }
   }
 
@@ -234,6 +242,9 @@ impl Session {
       Some("turn/start") => return self.turn(&message["id"], params),
       Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None if message["id"] == fake_codex_cell::COMMAND => return fake_codex_cell::command_answered(self, message),
+      None if fake_codex_chat::is_chat(&self.args) && fake_codex_chat::is_answer(message) => {
+        return fake_codex_chat::answered(self, message);
+      }
       None => return fake_app_server::answered(self, message),
       Some(other) => {
         eprintln!("unexpected request: {other}");
@@ -270,6 +281,7 @@ impl Session {
     self.approved_tools = approved_tools(&self.args);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";
+    self.base_instructions = params["baseInstructions"].as_str().map(str::to_owned);
     self.thread = params["threadId"].as_str().unwrap_or("fake-thread-1").to_owned();
     let network = self
       .args
@@ -439,6 +451,9 @@ impl Session {
       emit(&json!({"id": id, "result": {"turn": {"id": self.turn}}}));
     }
     emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": self.turn}}}));
+    if fake_codex_chat::is_chat(&self.args) {
+      return fake_codex_chat::answer(self, (&self.args, self.base_instructions.as_deref()), &prompt);
+    }
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)
   }

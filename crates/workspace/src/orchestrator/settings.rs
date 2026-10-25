@@ -8,7 +8,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
   id::ConnectionId,
-  orchestrator::{OrchestratorSettings, codex_held_back, runs_orchestrator},
+  orchestrator::{OrchestratorSettings, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
@@ -221,9 +221,5 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
 /// Why the Orchestrator cannot run on `connection`: not on a provider it does not run on. A connection on an API
 /// provider runs it on the provider's key and host, as a step does (`docs/design/api-providers.md`).
 fn unavailable(connection: &AgentConnection) -> Option<Message> {
-  let provider = connection.provider();
-  if codex_held_back(provider) {
-    return Some(Message::new("orchestrator.settings.codexHeldBack"));
-  }
-  (!runs_orchestrator(provider)).then(|| Message::new("orchestrator.settings.cliOnly"))
+  (!runs_orchestrator(connection.provider())).then(|| Message::new("orchestrator.settings.cliOnly"))
 }

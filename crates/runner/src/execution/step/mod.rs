@@ -5,7 +5,7 @@
 
 mod accepted;
 mod answer;
-mod app_server;
+pub(super) mod app_server;
 mod approval;
 mod base_notice;
 mod checks;

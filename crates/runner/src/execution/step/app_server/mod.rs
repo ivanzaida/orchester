@@ -15,23 +15,17 @@
 //! message sent now joins the running turn with `turn/steer` ([`AppServerSession::steer`]); Codex
 //! answers at once and gives it to the model after the tool call that runs (`super::worker::steer`).
 
-use std::{
-  collections::BTreeSet,
-  io,
-  path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, io, path::Path};
 
 use orchester_core::{
-  attachment::input::{AttachedFile, codex_items},
-  command::{SecretVariable, redact_secrets},
+  attachment::input::codex_items,
+  command::redact_secrets,
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
     app_server_config::{refuse_taken_names, refuse_taken_provider, repository_settings},
     app_server_mcp::{refuse_user_hooks, servers_to_turn_off, thread_config},
-    mcp::InvocationExemptions,
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
-  permission::NetworkAccess,
   resource::RepositoryAccess,
 };
 use serde_json::{Value, json};
@@ -40,6 +34,8 @@ use thiserror::Error;
 use super::stderr::StderrLog;
 
 mod checks;
+mod setup;
+pub(in crate::execution) use self::setup::AppServerSetup;
 use crate::supervisor::Supervised;
 
 /// Characters kept of Codex's reason for refusing a request.
@@ -50,14 +46,14 @@ pub(super) const STEER_REQUEST: &str = "steer-";
 pub(super) const DENIAL_STEER: &str = "steer-denial-";
 
 /// Codex's answer to a `turn/steer` request.
-pub(super) struct SteerAnswer {
+pub(in crate::execution) struct SteerAnswer {
   pub id: String,
   /// Codex's reason when it did not add the message to the turn.
   pub refused: Option<String>,
 }
 
 #[derive(Debug, Error)]
-pub(super) enum AppServerFailure {
+pub(in crate::execution) enum AppServerFailure {
   #[error("{0}")]
   Protocol(String),
   #[error("{0}")]
@@ -67,42 +63,6 @@ pub(super) enum AppServerFailure {
 impl From<String> for AppServerFailure {
   fn from(message: String) -> Self {
     Self::Protocol(message)
-  }
-}
-
-pub(super) struct AppServerSetup {
-  pub prompt: String,
-  /// The files people attached to the messages the prompt delivers, given with it.
-  pub attached: Vec<AttachedFile>,
-  pub model: String,
-  pub effort: Option<String>,
-  pub worktree: PathBuf,
-  pub access: RepositoryAccess,
-  /// Commands an execpolicy rule asks about reach a person (*Ask before running commands*).
-  pub command_approvals: bool,
-  /// Commands that need more than the sandbox reach a person.
-  pub sandbox_approvals: bool,
-  pub tool_approvals: bool,
-  pub network: NetworkAccess,
-  pub writable_roots: Vec<PathBuf>,
-  pub resume: Option<String>,
-  pub expected_servers: BTreeSet<String>,
-  /// The MCP tools that run without asking: empty unless the step asks before MCP actions.
-  pub exemptions: InvocationExemptions,
-  pub output_schema: Option<Value>,
-  pub secrets: Vec<SecretVariable>,
-  /// The model provider the thread runs on when the connection runs on an API provider
-  /// (`docs/design/api-providers.md`): then Codex needs no sign-in of its own.
-  pub model_provider: Option<String>,
-}
-
-impl AppServerSetup {
-  fn runtime_roots(&self) -> BTreeSet<PathBuf> {
-    let mut roots = BTreeSet::from([self.worktree.clone()]);
-    if self.access == RepositoryAccess::Write {
-      roots.extend(self.writable_roots.iter().cloned());
-    }
-    roots
   }
 }
 
@@ -118,7 +78,7 @@ enum Phase {
   Complete,
 }
 
-pub(super) struct AppServerSession {
+pub(in crate::execution) struct AppServerSession {
   setup: AppServerSetup,
   phase: Phase,
   thread: Option<String>,
@@ -176,6 +136,11 @@ impl AppServerSession {
 
   pub fn complete(&self) -> bool {
     self.phase == Phase::Complete
+  }
+
+  /// What the running turn spent so far, as Codex reported it; Codex gives it with the turn's end otherwise.
+  pub const fn usage_so_far(&self) -> orchester_core::run::TokenUsage {
+    self.stream.usage_so_far()
   }
 
   /// Whether a turn runs that a message can join.
@@ -511,6 +476,9 @@ impl AppServerSession {
     };
     if let Some(provider) = &self.setup.model_provider {
       params["modelProvider"] = json!(provider);
+    }
+    if let Some(instructions) = &self.setup.base_instructions {
+      params["baseInstructions"] = json!(instructions);
     }
     let method = if self.setup.resume.is_some() {
       "thread/resume"

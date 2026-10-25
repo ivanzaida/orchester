@@ -1,6 +1,7 @@
 //! The Orchestrator chat's turns, end to end against `orchester-fake-claude` (`tests/support/fake_claude_chat.rs`):
 //! a message the desktop kept is answered by Claude Code started read-only in the project folder with only the
-//! chat's domain tools, the next turn resumes its session, a turn can be stopped, and how a turn fails is kept.
+//! chat's domain tools, the next turn resumes its session, a turn can be stopped, and how a turn fails is kept. The
+//! turns on Codex are in `chat_codex.rs`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test chat`.
 
 mod support;
@@ -413,41 +414,6 @@ async fn chat_tokens_count_toward_the_daily_budget_and_a_used_one_refuses_a_turn
       .turn
       .is_thinking(),
     "no turn ran: the desktop forgets the message"
-  );
-}
-
-fn codex() -> TestProject {
-  let project = project(&Setup {
-    provider: AgentProvider::CodexCli,
-    ..Setup::new("Not used by the chat.")
-  });
-  let mut db = ProjectDb::open(project.repo.path()).expect("open");
-  let connection = db.connections().expect("connections")[0].id();
-  let model = ModelId::new("gpt-5.5").expect("model");
-  db.publish_orchestrator(&OrchestratorSettings::new(connection, model, None), Timestamp::now())
-    .expect("settings");
-  project
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn chat_on_codex_is_held_back_until_its_reads_can_be_confined() {
-  let project = codex();
-  let root = project.repo.path();
-  let (scheduler, mut events) = scheduler(root);
-  let chat = ChatId::generate();
-  let message = keep(root, chat, "What is running?");
-  scheduler
-    .answer_in_chat(message, tools())
-    .await
-    .expect("the turn is taken");
-  assert_eq!(
-    ended(root, &mut events, message).await,
-    TurnState::Failed(TurnFailure::ConnectionGone),
-    "a Codex connection does not run the Orchestrator"
-  );
-  assert!(
-    !root.join(".orchester").join("fake-chat.log").exists(),
-    "Codex was never started"
   );
 }
 

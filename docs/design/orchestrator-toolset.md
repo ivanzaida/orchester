@@ -6,8 +6,9 @@ continuing interrupted runs behind *Let the Orchestrator continue interrupted ru
 2026-10-20 (ORC-53); runs the runner stopped because the project database stayed busy added to them by the person on
 2026-10-21 (ORC-75); the proposed first commit of a project's folder (decision 8) added on 2026-10-21 (ORC-72);
 merging finished runs on its own behind *Let the Orchestrator merge finished runs on its own* decided by the person on
-2026-10-21 (ORC-69); the project's MCP servers from the chat (decision 10) added on 2026-10-25 (ORC-89), its narrowing
-rule decided by the person that day.
+2026-10-21 (ORC-69); the Orchestrator on Codex, confined without a shell (decision 10), added on 2026-10-25 (ORC-84);
+the project's MCP servers from the chat (decision 11) added on 2026-10-25 (ORC-89), its narrowing rule decided by the
+person that day.
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -16,13 +17,13 @@ refused or carried out exactly as for that client. This document widens that par
 everything a person can see in Orchester, change what is safe to change, propose the rest, and answer with links the
 person can click.
 
-Every turn of the chat (a person's message, a wait's or a daily report's turn) runs Claude Code on the connection
-chosen in Orchestrator settings › Profile. A connection that runs on an API provider can be chosen (ORC-87,
-`docs/design/api-providers.md`): the runner then starts each turn's CLI with the provider's base URL, the chosen model
-and the key from the project secret, as a step on that connection starts (`OnProvider`), never on the CLI's own
-sign-in. The key is a secret variable of the CLI's process only: it is in no prompt, MCP configuration, command line,
-log or tool answer, and what the turn keeps of the CLI's output is redacted. A key the keychain does not give keeps
-the turn from starting, with the secret's name.
+Every turn of the chat (a person's message, a wait's or a daily report's turn) runs Claude Code or Codex (decision 10)
+on the connection chosen in Orchestrator settings › Profile. A connection that runs on an API provider can be chosen
+(ORC-87, `docs/design/api-providers.md`): the runner then starts each turn's CLI with the provider's base URL, the
+chosen model and the key from the project secret, as a step on that connection starts (`OnProvider`), never on the
+CLI's own sign-in. The key is a secret variable of the CLI's process only: it is in no prompt, MCP configuration,
+command line, log or tool answer, and what the turn keeps of the CLI's output is redacted. A key the keychain does not
+give keeps the turn from starting, with the secret's name.
 
 ## Decisions
 
@@ -282,7 +283,7 @@ project.
 | Tools | `list_tools`, `get_tool` (existing) | `save_tool_draft` (existing) | `publish_tool` |
 | Secrets | `list_secrets` (new: name, scope, which profiles/tools/connections use it; never a value) | — | — |
 | Connections | `list_connections`, `list_accounts`, `list_models` (existing) | — | — |
-| MCP servers | `list_connections` (existing: the servers with their transport, authorization by secret name, variables by name, exempt tools and the profiles that choose them) | `mcp_set_server_enabled` off, `mcp_remove_server` of a server no profile chooses, `mcp_update_server` that only narrows (ORC-89, the chat's own; made at once only in a turn the person asked for while *Let automation change agent permissions* is on, else a card; decision 10) | `mcp_add_server`, `mcp_update_server` that widens, `mcp_set_server_enabled` on (ORC-89, the chat's own: always a card the person applies, whatever the switches; decision 10) |
+| MCP servers | `list_connections` (existing: the servers with their transport, authorization by secret name, variables by name, exempt tools and the profiles that choose them) | `mcp_set_server_enabled` off, `mcp_remove_server` of a server no profile chooses, `mcp_update_server` that only narrows (ORC-89, the chat's own; made at once only in a turn the person asked for while *Let automation change agent permissions* is on, else a card; decision 11) | `mcp_add_server`, `mcp_update_server` that widens, `mcp_set_server_enabled` on (ORC-89, the chat's own: always a card the person applies, whatever the switches; decision 11) |
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Delivery | `get_delivery` (ORC-50: a project's throughput, cycle and lead time, active time and return rate per step, cumulative flow over its last days, and the 50 % / 85 % delivery dates of its queued tasks and open modules by a Monte Carlo over recent throughput, or *not enough history*; answers "when will module X be done") | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
@@ -292,8 +293,8 @@ project.
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
 widening what agents may do (but as a card the person applies: a publication, decision 3, or an MCP server's change,
-decision 10), secret values, project setup (but the proposed first commit of decision 8), connections' changes but
-MCP servers' (decision 10), environment, worktree removal and `return_to_draft` stay out of the chat's tools.
+decision 11), secret values, project setup (but the proposed first commit of decision 8), connections' changes but
+MCP servers' (decision 11), environment, worktree removal and `return_to_draft` stay out of the chat's tools.
 Answering agents' questions and sending a run's agents messages are the chat's since ORC-42, behind *Let the
 Orchestrator answer agents* (decision 5).
 
@@ -403,7 +404,80 @@ which could not be told safe: what the chat is not offered it cannot do. They ru
 |---|---|---|
 | `git_status` (branch, upstream, ahead/behind, operation in progress, files), `git_log` (range or all, path, limit ≤ 200), `git_diff` (from/to, staged, paths, stat), `git_show` (rev, stat, or a file at rev), `git_branches` (local with upstream ahead/behind, remote), `git_blame` (path, rev, lines), `git_remotes` | `git_commit` (paths, all, or what is staged; message), `git_create_branch` (name, start, switch), `git_switch` (only when it loses nothing), `git_pull` (ff-only; merge on request), `git_push` (no force; set_upstream), `git_merge` (no_ff, message; conflict undone), `git_revert` (mainline; conflict undone), `git_tag` (annotated with a message), `git_fetch` (remote or all, prune) | `git_propose` with `reset`, `clean`, `delete_branch`, `force_push`, `discard_changes`, `switch_discarding`, `rebase`, `delete_tag`, `abort_merge` |
 
-## 10. The project's MCP servers (ORC-89, 2026-10-25)
+## 10. The Orchestrator on Codex, confined (ORC-84, 2026-10-25)
+
+The Orchestrator runs on a Codex connection as on Claude Code: the person picks it, its model and its effort in
+Orchestrator settings › Profile, and each message is one turn of Codex App Server in the project folder, started by
+the project's runner (`orchester_core::connection::invocation::CodexChat`, `orchester-runner`'s `chat::codex`). It is
+at least as confined as the Claude Code Orchestrator: it has Orchester's chat tools and nothing else.
+
+**Why not Codex's sandbox.** Its `read-only` mode keeps writes out, not reads: a shell command in it could read
+`CODEX_HOME` (the sign-in), other repositories and the runner's private files with other turns' tokens, and the
+person's own execpolicy `allow` rules run matching commands outside the sandbox. Codex 0.159.2's filesystem
+permission profiles with read denials could not be shown to hold on Windows (they need the elevated sandbox) or macOS.
+That is why Codex was held back (2026-10-14).
+
+**How it is confined: the risk is removed at its source, not fenced by the sandbox.** Codex is given no tool of its
+own that reads, runs or fetches anything, through configuration overrides of Codex 0.159.2 (`CODEX_CHAT_CONFINEMENT`;
+each but `unified_exec` shows off in `codex features list` with them):
+
+- `features.shell_tool=false`: no shell (`shell`, `shell_command`, `exec_command`, `write_stdin`). This switch alone
+  carries it: `features.unified_exec=false` is passed too, for a version that reads it, but 0.159.2's
+  `codex features list` still shows `unified_exec` on with it; the live check below saw none of the shell tools
+  offered and each call refused. With no command, there is nothing the sandbox would have to keep from `CODEX_HOME`,
+  other repositories or the runner's files, and nothing the person's execpolicy rules, which only ever match a shell
+  command, could run. Should Codex still ask to run a command, the runner ends the turn failed, never approving it,
+  as it does for a step that leaves no command to a person (`crates/runner/tests/chat_codex.rs`).
+- `features.view_image=false`: no image read from a path (it reads outside any sandbox); `web_search="disabled"`,
+  `features.hooks=false` (the user's own hook commands on the agent's events), `features.skill_mcp_dependency_install`
+  (a skill bringing an MCP server into the thread), `features.goals`, `memories`, `browser_use`, `computer_use` and
+  `image_generation` off; sub-agents (`multi_agent`, `multi_agent_v2`), plugins, apps, `notify` and the
+  permission-request tools off as for every Codex step (`CODEX_SUB_AGENTS_OFF`, `CODEX_ISOLATION`); the user's own MCP
+  servers turned off for the thread by name.
+- The repository's own agent files are left out, as the Claude Code Orchestrator (`--setting-sources ""`) loads none:
+  the folder is marked untrusted (its `.codex` configuration does not load), `project_doc_max_bytes=0` keeps
+  `AGENTS.md` out, and every skill of `.agents/skills` and `.codex/skills`, which Codex loads even from an untrusted
+  folder, is disabled by its paths (`skills.config`). The runner finds them with the search a step without its agent
+  files uses (`RepositorySkills`), and starts no turn when that search could miss one (a link out of the folder, an
+  unreadable folder, a search past its bounds), saying why. A skill committed to the project therefore never reaches
+  the Orchestrator's context.
+- What stays is `apply_patch` and `request_user_input`, which Codex 0.159.2 always offers. `apply_patch` cannot
+  write: the thread is `read-only` with nothing writable, and the approval policy leaves nothing beyond the sandbox to
+  a person (`sandbox_approval`, `rules`, `request_permissions` and `skill_approval` off), so Codex's own approval check
+  refuses every patch before any sandbox runs. A question of Codex's gets no answers.
+- The chat's domain tools (`orchester`) are its only MCP server, their token only in the process environment. Codex
+  asks before each MCP call (`mcp_elicitations`): a call of `orchester` is approved, any other declined (shown with
+  the fake Codex in `crates/runner/tests/chat_codex.rs`).
+- On a connection that runs on an API provider, App Server starts with the provider's overrides and key as a step's
+  does (`OnProvider`); the confinement is the same.
+- The system prompt is App Server's `baseInstructions`, in place of Codex's own shell-oriented instructions, on every
+  turn, a resumed thread's too. It says the agent has no tool that reads files and reads the repository through the
+  git tools (`instructions::ProjectReads::GitTools`).
+
+**Why this holds on Windows and macOS.** Which tools Codex offers is decided by these switches in Codex itself,
+before any operating-system sandbox, the same on both: nothing here rests on a sandbox mechanism that differs between
+them. Checked with Codex 0.159.2 on Windows against a stand-in of the model's API that records the tools Codex offers
+and makes the calls a model would (2026-10-25): App Server offered only `request_user_input` and `apply_patch`; a call
+of `exec_command`, `shell` or `shell_command` was answered `unsupported call` and ran nothing, even with
+`danger-full-access`; `apply_patch` was refused "writing is blocked by read-only sandbox; rejected by user approval
+settings"; `baseInstructions` replaced Codex's instructions on a new and a resumed thread. Not run on a Mac: the same
+switches and checks are platform-independent in Codex, and the overrides are the same on both
+(`crates/core/tests/codex_chat.rs`); `windows.sandbox=elevated` is added on Windows only, as for steps.
+
+**What it can read, then.** The Claude Code Orchestrator reads and searches the project folder with `Read`, `Glob`
+and `Grep`; the Codex one reads the repository through the git tools only (`git_status` for changed and untracked
+files, `git_diff` for uncommitted changes, `git_show` for a file at a revision or what a folder holds). It does not
+read an untracked file's contents. File-reading tools of the chat's own would close that gap; they are not part of
+this decision.
+
+**The rest is as on Claude Code.** Replies are kept as each message completes; *Stop response* ends App Server, and
+what the turn said and spent until then stays; the 10-minute limit ends it the same way; the thread is resumed on the
+next turn while the connection and account stay (else a new one, which the conversation says); waits, ends of runs,
+the daily report's turn and auto mode start Codex turns as Claude Code ones. What a turn spent counts toward the daily
+budget and is kept with the account the turn ran on (`orchestrator_usage.account_id`). App Server has no
+`--max-turns`: an answer is bounded by its time only.
+
+## 11. The project's MCP servers (ORC-89, 2026-10-25)
 
 A person asked the chat to add the Pencil MCP server to the project and it could only send them to Connections. The
 chat now has tools of its own (`orchester_workspace::orchestrator::mcp_servers`, listed in `tools::CHAT_TOOLS`; no

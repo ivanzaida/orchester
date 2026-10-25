@@ -11,7 +11,7 @@ use orchester_core::{
     ActionOutcome, AgentWait, ChatAction, ChatEntry, Continuing, EntryKind, MergeLeft, Merging, RunEnd, StopReason,
     WaitKind,
     change::{Change, ContinueChoice, MessageThen, ProposedChange, StepName},
-    instructions::{system_prompt, wait_prompt},
+    instructions::{ProjectReads, system_prompt, wait_prompt},
     wait::raised_by_own,
   },
   run::RunLimit,
@@ -363,7 +363,7 @@ fn orchestrator_run_end_prompt_of_contention_tells_the_person_and_continues_noth
 
 #[test]
 fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
-  let prompt = system_prompt("Kontur", ProjectId::generate());
+  let prompt = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   for rule in [
     "how a stopped run continues",
     "continue_run proposes how a run that waits for a decision goes on: allow_retry",
@@ -431,7 +431,7 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
     "{}",
     wait_prompt(&opted_out)
   );
-  let system = system_prompt("Kontur", ProjectId::generate());
+  let system = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   assert!(
     system
       .contains("with one exception: when the person turned on Let the Orchestrator merge finished runs on its own"),

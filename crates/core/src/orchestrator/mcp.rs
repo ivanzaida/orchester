@@ -1,5 +1,5 @@
 //! What the Orchestrator chat proposes, or did itself, to the project's MCP servers (ORC-89, `docs/design/
-//! orchestrator-toolset.md`, decision 10): adding one, changing its settings, turning it on or off, and removing one no
+//! orchestrator-toolset.md`, decision 11): adding one, changing its settings, turning it on or off, and removing one no
 //! agent profile chooses, by the same rules as Connections › MCP servers. Adding or widening a server widens what
 //! agents may do, so it is only ever a card a person applies; a change that only narrows runs at once while the
 //! person lets automation change agent permissions. The card shows the server as applying leaves it, a secret by its

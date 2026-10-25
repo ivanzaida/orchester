@@ -1,4 +1,4 @@
-//! The card of the chat's change to an MCP server (ORC-89, decision 10 of `docs/design/orchestrator-toolset.md`), on
+//! The card of the chat's change to an MCP server (ORC-89, decision 11 of `docs/design/orchestrator-toolset.md`), on
 //! the proposal cards' pattern (`ExRt1`, `k80K3d`; no frame of its own in the design): its head; the server as
 //! applying leaves it (its name and whether it is on, the program with its arguments and folder or the URL and what it
 //! is sent, a secret by its name, the variables by their names, which tool calls run without asking, the profiles that

@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   connection::invocation::{ClaudeChat, ClaudeSession},
   id::ProjectId,
-  orchestrator::{MAX_TURNS, instructions::system_prompt},
+  orchestrator::{
+    MAX_TURNS,
+    instructions::{ProjectReads, system_prompt},
+  },
 };
 
 use super::SESSION;
@@ -93,7 +96,7 @@ fn orchestrator_chat_denies_unix_folders_and_skips_what_it_cannot_name() {
 
 #[test]
 fn orchestrator_links_only_with_the_links_its_tools_returned() {
-  let prompt = system_prompt("Kontur", ProjectId::generate());
+  let prompt = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   assert!(
     prompt.contains("[KON-12](orchester:/project/<id>/tasks/KON-12)"),
     "it shows how a `link` becomes an `orchester:` link: {prompt}"
@@ -123,16 +126,18 @@ fn orchestrator_links_only_with_the_links_its_tools_returned() {
 /// where a program it suggests came from.
 #[test]
 fn orchestrator_prompt_proposes_mcp_servers_and_names_secrets_only() {
-  let prompt = system_prompt("Kontur", ProjectId::generate());
-  for rule in [
-    "mcp_add_server, mcp_update_server, mcp_set_server_enabled and mcp_remove_server",
-    "is always a card the person applies, whatever their switches say",
-    "only while the person turned on Let automation change agent permissions",
-    "never type, ask for or repeat a secret's value",
-    "tell the person where it came from; never guess a path",
-    "not on this computer's search path",
-    "save_profile_draft, then publish_profile",
-  ] {
-    assert!(prompt.contains(rule), "{rule}: {prompt}");
+  for reads in [ProjectReads::FileTools, ProjectReads::GitTools] {
+    let prompt = system_prompt("Kontur", ProjectId::generate(), reads);
+    for rule in [
+      "mcp_add_server, mcp_update_server, mcp_set_server_enabled and mcp_remove_server",
+      "is always a card the person applies, whatever their switches say",
+      "only while the person turned on Let automation change agent permissions",
+      "never type, ask for or repeat a secret's value",
+      "tell the person where it came from; never guess a path",
+      "not on this computer's search path",
+      "save_profile_draft, then publish_profile",
+    ] {
+      assert!(prompt.contains(rule), "{rule}: {prompt}");
+    }
   }
 }

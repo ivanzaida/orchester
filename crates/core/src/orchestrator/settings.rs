@@ -3,21 +3,11 @@
 
 use crate::{connection::AgentProvider, id::ConnectionId, resource::ModelId};
 
-/// Whether the Orchestrator can run on a connection of `provider`: Claude Code only. A native connection has no CLI to
-/// start. Codex is held back ([`codex_held_back`]) although the runner can drive it.
+/// Whether the Orchestrator can run on a connection of `provider`: Claude Code, or Codex through its App Server with
+/// no tool of its own that reads or runs anything (`crate::connection::invocation::CodexChat`). A native connection has
+/// no CLI to start.
 pub const fn runs_orchestrator(provider: AgentProvider) -> bool {
-  matches!(provider, AgentProvider::ClaudeCodeCli)
-}
-
-/// Whether a Codex connection is refused as the Orchestrator's CLI. Its `read-only` sandbox keeps writes out, not
-/// reads: the agent's sandboxed shell could read `CODEX_HOME` (its sign-in), other repositories and the runner's
-/// private files with live tokens, and the user's own execpolicy `allow` rules run matching commands outside the
-/// sandbox without asking. Codex 0.159.2 has filesystem permission profiles with read denials, but they could not be
-/// shown to work on Windows (they need the elevated sandbox) or macOS, so the Orchestrator does not run unconfined on
-/// Codex. The runner has no Codex turn; the one written before the hold (driving App Server as steps do) is in the
-/// branch's history for when they can be.
-pub const fn codex_held_back(provider: AgentProvider) -> bool {
-  matches!(provider, AgentProvider::CodexCli)
+  matches!(provider, AgentProvider::ClaudeCodeCli | AgentProvider::CodexCli)
 }
 
 /// The connection, model and reasoning effort the Orchestrator's next turn starts with.

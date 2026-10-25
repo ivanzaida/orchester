@@ -9,7 +9,7 @@ use orchester_core::{
   orchestrator::{
     ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TurnState, WaitKind,
     change::{Change, ProposedChange},
-    instructions::{system_prompt, wait_prompt},
+    instructions::{ProjectReads, system_prompt, wait_prompt},
     wait::{dealt_with, raised_by_own},
   },
   time::Timestamp,
@@ -231,7 +231,7 @@ fn orchestrator_wait_prompt_names_the_wait_and_the_rules() {
 
 #[test]
 fn orchestrator_system_prompt_answers_only_what_follows_plainly_and_merges_only_what_was_asked() {
-  let prompt = system_prompt("Kontur", ProjectId::generate());
+  let prompt = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   for rule in [
     "get_conversation",
     "only when the answer follows plainly from the task's brief and criteria, the project's docs and AGENTS.md, or \

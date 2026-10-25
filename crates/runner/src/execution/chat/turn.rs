@@ -1,6 +1,7 @@
 //! One turn of the Orchestrator chat: the agent CLI the Orchestrator runs on, started for the person's message
-//! (Claude Code, [`super::claude`]), on the connection's API provider when it has one, its output kept as it comes
-//! (the session, each reply, what it spent), and how the turn ended.
+//! (Claude Code, [`super::claude`]; Codex App Server, [`super::codex`]), on the connection's API provider when it has
+//! one, its output kept as it comes (the session, each reply, what it spent on the connection's account), and how the
+//! turn ended.
 
 use std::{
   path::{Path, PathBuf},
@@ -11,7 +12,7 @@ use std::{
 use orchester_core::{
   attachment::input::AttachedFile,
   connection::{
-    AccountStartProblem, AgentConnection, ConnectionError,
+    AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
     invocation::Platform,
     stream::{AgentEvent, OutputStream},
   },
@@ -68,6 +69,7 @@ impl Turn {
   /// Runs the turn to its end, or until `stop` says so, and records how it ended.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>) {
     let state = match self.prepare() {
+      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => self.run_codex(prepared, stop).await,
       Ok(prepared) => self.run_claude(prepared, stop).await,
       Err(failure) => TurnState::Failed(failure),
     };
@@ -151,7 +153,7 @@ impl Turn {
       AgentEvent::TurnCompleted { usage } => {
         seen.answered = true;
         let turn = (self.chat.id(), self.message);
-        self.record(|db| db.record_chat_usage(turn, usage, Timestamp::now()));
+        self.record(|db| db.record_chat_usage(turn, (account, usage), Timestamp::now()));
       }
       AgentEvent::NotSignedIn { .. } => seen.failure = Some(TurnFailure::NotSignedIn),
       AgentEvent::TurnFailed { message } | AgentEvent::Error { message } => {
@@ -185,6 +187,8 @@ pub(super) const fn cannot(reason: String) -> TurnFailure {
 pub(super) struct Seen {
   pub(super) answered: bool,
   pub(super) stopped: bool,
+  /// The runner ended the CLI once its turn was over: Codex App Server waits for more otherwise.
+  pub(super) finished: bool,
   pub(super) failure: Option<TurnFailure>,
   /// The last line of standard error.
   pub(super) stderr: Option<String>,
@@ -203,6 +207,15 @@ impl Seen {
     }
     if let Some(failure) = self.failure {
       return TurnState::Failed(failure);
+    }
+    if self.finished {
+      return if self.answered {
+        TurnState::Answered
+      } else {
+        TurnState::Failed(TurnFailure::Failed {
+          reason: "the turn ended before it answered".to_owned(),
+        })
+      };
     }
     match exit {
       ProcessExit::Exited { code: Some(0) } if self.answered => TurnState::Answered,
