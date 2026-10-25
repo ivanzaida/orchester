@@ -34,12 +34,15 @@ pub fn panel(ctx: &mut Ctx, closer: &Closer, id: &str) -> Option<Element> {
   }
 }
 
-/// Why the last close or reopen did not happen, until the next request.
+/// Why the last close or reopen did not happen, naming its task (the Tasks list shows it over every row), until the
+/// next request.
 fn failure(ctx: &Ctx, closer: &Closer, id: &str) -> Option<Element> {
   let state = closer.action.state().get();
   let pending = state.is_pending();
   let failed = state.error.filter(|_| !pending)?;
-  Some(field_error(&format!("{id}-error"), &message_text(ctx, &failed.message)).into())
+  let reason = message_text(ctx, &failed.message);
+  let text = ctx.t_args("task_close.failed", [("task", &*failed.key), ("reason", &*reason)]);
+  Some(field_error(&format!("{id}-error"), &text).into())
 }
 
 /// The run of `task` has not ended: stop it and close the task, or keep it running.

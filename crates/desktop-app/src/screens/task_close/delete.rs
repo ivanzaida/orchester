@@ -278,8 +278,8 @@ fn buttons(ctx: &Ctx, closer: &Closer, subject: &Subject, (id, deletable, pendin
   } else if !deletable {
     delete.disabled()
   } else {
-    let (closer, task) = (closer.clone(), subject.id);
-    delete.on_click(move || closer.delete(task))
+    let (closer, subject) = (closer.clone(), subject.clone());
+    delete.on_click(move || closer.delete(subject.clone()))
   };
   actions(format!("{id}-actions"), [cancel.into(), delete.into()])
 }

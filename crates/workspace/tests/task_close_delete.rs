@@ -246,10 +246,22 @@ impl Repo {
   }
 
   fn close(&self, task: TaskId, closing: Closing, stop: Stop) -> Result<(), StopRefused> {
+    self.close_by(task, (closing, stop), ChangeActor::Person)
+  }
+
+  fn close_by(&self, task: TaskId, (closing, stop): (Closing, Stop), actor: ChangeActor) -> Result<(), StopRefused> {
     let (open, runners, servers) = (self.open(), self.runners(), self.servers());
     self
       .runtime
-      .block_on(close_in(&open, (&runners, &servers), task, (closing, stop)))
+      .block_on(close_in(&open, (&runners, &servers), task, (closing, stop, actor)))
+  }
+
+  fn last_actor(&self, task: TaskId) -> ChangeActor {
+    let history = ProjectDb::open(self.root())
+      .expect("open")
+      .task_organization_history(task)
+      .expect("history");
+    history.last().expect("a change").actor
   }
 
   fn branch_exists(&self, run: &Run) -> bool {
@@ -359,13 +371,9 @@ fn task_close_sets_canceled_or_done_after_a_failed_run_and_reopens() {
     .close(task.id(), Closing::Canceled, Stop::Unconfirmed)
     .expect("a failed run stops nothing");
   assert_eq!(repo.status(task.id()), WorkflowStatus::Canceled);
-  let history = ProjectDb::open(repo.root())
-    .expect("open")
-    .task_organization_history(task.id())
-    .expect("history");
-  assert_eq!(history.last().expect("a change").actor, ChangeActor::Person);
+  assert_eq!(repo.last_actor(task.id()), ChangeActor::Person);
 
-  reopen_in(repo.root(), &repo.servers(), task.id()).expect("reopened");
+  reopen_in(repo.root(), &repo.servers(), task.id(), ChangeActor::Person).expect("reopened");
   assert_eq!(
     repo.status(task.id()),
     WorkflowStatus::Backlog,
@@ -376,6 +384,17 @@ fn task_close_sets_canceled_or_done_after_a_failed_run_and_reopens() {
     .close(task.id(), Closing::Done, Stop::Unconfirmed)
     .expect("closed as Done");
   assert_eq!(repo.status(task.id()), WorkflowStatus::Done);
+
+  // A press from an MCP client's input is automation's, as update_task's changes are.
+  reopen_in(repo.root(), &repo.servers(), task.id(), ChangeActor::Orchester).expect("reopened");
+  assert_eq!(repo.last_actor(task.id()), ChangeActor::Orchester);
+  let closed = repo.close_by(
+    task.id(),
+    (Closing::Canceled, Stop::Unconfirmed),
+    ChangeActor::Orchester,
+  );
+  assert_eq!(closed, Ok(()));
+  assert_eq!(repo.last_actor(task.id()), ChangeActor::Orchester);
 }
 
 #[test]
@@ -387,6 +406,13 @@ fn task_close_asks_to_stop_a_run_that_has_not_ended() {
   for closing in [Closing::Done, Closing::Canceled] {
     let refused = repo.close(task.id(), closing, Stop::Unconfirmed);
     assert_eq!(refused, Err(StopRefused::Unconfirmed(run.id())), "{closing:?}");
+    // The store checks again as it writes: a run that started after the stop is named, not left running.
+    let mut db = ProjectDb::open(repo.root()).expect("open");
+    let written = db.close_task_organization(task.id(), closing.status(), (ChangeActor::Person, at(20)));
+    assert!(
+      matches!(written, Err(StoreError::Organization(_))),
+      "{closing:?}: {written:?}"
+    );
   }
   let other = repo.close(task.id(), Closing::Canceled, Stop::Confirmed(None));
   assert_eq!(other, Err(StopRefused::StartedSince(run.id())));

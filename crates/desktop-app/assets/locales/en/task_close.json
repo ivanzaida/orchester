@@ -1,5 +1,6 @@
 {
   "task_close": {
+    "failed": "{{task}} was not changed. {{reason}}",
     "menu": {
       "label": "More actions for {{task}}",
       "done": "Mark as done",

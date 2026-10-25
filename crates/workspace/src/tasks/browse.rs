@@ -6,7 +6,7 @@ use orchester_core::{
   run::TaskPhase,
   task::{
     Task,
-    organization::{self, TaskFilter, WorkflowStatus},
+    organization::{self, TaskFilter},
   },
   task_group::GroupHold,
 };
@@ -102,10 +102,8 @@ pub fn rows_in(
       if data.blocking.get(&row.id).is_some_and(|by| !by.is_empty()) {
         return row;
       }
-      // A Canceled task its group will not start says so rather than how the group waits.
-      if row.phase == Some(TaskPhase::Queued)
-        && row.organization.status() == WorkflowStatus::Canceled
-        && data.grouped.contains(&row.id)
+      // A closed task its group will not start says so rather than how the group waits.
+      if row.phase == Some(TaskPhase::Queued) && row.organization.status().is_closed() && data.grouped.contains(&row.id)
       {
         row.detail = hold_row_message(&GroupHold::Canceled);
         row.readiness = ReadinessKind::Held(GroupHold::Canceled);

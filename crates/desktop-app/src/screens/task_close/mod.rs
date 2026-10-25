@@ -24,7 +24,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, TaskId},
-  task::organization::WorkflowStatus,
+  task::organization::{ChangeActor, WorkflowStatus},
 };
 use orchester_workspace::{
   background,
@@ -84,32 +84,43 @@ impl DevtoolsInspectable for Asked {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
   Close(Subject, Closing, Stop),
-  Reopen(TaskId),
+  Reopen(Subject),
   /// Delete the task, with its unmerged work when `true`.
-  Delete(TaskId, bool),
+  Delete(Subject, bool),
 }
 
 impl DevtoolsInspectable for Request {}
 
 impl Request {
-  const fn task(&self) -> TaskId {
+  const fn subject(&self) -> &Subject {
     match self {
-      Self::Close(subject, ..) => subject.id,
-      Self::Reopen(task) | Self::Delete(task, _) => *task,
+      Self::Close(subject, ..) | Self::Reopen(subject) | Self::Delete(subject, _) => subject,
     }
   }
 }
+
+/// A request and who made it: a press from an MCP client's synthetic input is automation's, and the task's history
+/// says so, as `update_task`'s changes do.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Asking {
+  request: Request,
+  actor: ChangeActor,
+}
+
+impl DevtoolsInspectable for Asking {}
 
 /// What the person asked last did not happen, and why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failed {
   pub task: TaskId,
+  /// The task's key, for an error shown away from its row.
+  pub key: Arc<str>,
   pub message: Message,
 }
 
 impl DevtoolsInspectable for Failed {}
 
-type Action = FutureAction<Request, Request, Failed>;
+type Action = FutureAction<Asking, Request, Failed>;
 
 /// A screen's closing and deleting of its project's tasks: what waits in place, the request under way and how the
 /// last one ended. The screen makes it once and provides it to its parts.
@@ -153,12 +164,17 @@ impl Closer {
       .expect("the screen provides its closer before mounting its rows")
   }
 
-  /// Asks for `request`, unless one is under way.
+  /// Asks for `request`, unless one is under way; a press from an MCP client's synthetic input is automation's.
   fn run(&self, request: Request) {
     if self.action.state().get_untracked().is_pending() {
       return;
     }
-    self.action.run(request);
+    let actor = if is_synthetic_input() {
+      ChangeActor::Orchester
+    } else {
+      ChangeActor::Person
+    };
+    self.action.run(Asking { request, actor });
   }
 
   /// Opens the delete confirmation of `subject` in place, its choice off.
@@ -168,15 +184,15 @@ impl Closer {
     self.asked.set(Asked::Delete(subject));
   }
 
-  /// Deletes `task`, a person's press only.
-  fn delete(&self, task: TaskId) {
+  /// Deletes `subject`, a person's press only.
+  fn delete(&self, subject: Subject) {
     if is_synthetic_input() {
       tracing::warn!("synthetic input asked to delete a task; not taken");
       self.person_only.set(true);
       return;
     }
     self.person_only.set(false);
-    self.run(Request::Delete(task, self.unmerged.get_untracked()));
+    self.run(Request::Delete(subject, self.unmerged.get_untracked()));
   }
 
   /// The *More actions* menu of `subject`, its rows' ids starting with `id`, closed by a choice through `open`.
@@ -198,7 +214,7 @@ impl Closer {
         item(
           "reopen",
           (ctx.t("task_close.menu.reopen"), Icon::RotateCcw),
-          Request::Reopen(subject.id),
+          Request::Reopen(subject.clone()),
         ),
         item("cancel", cancel, close(Closing::Canceled)),
       ],
@@ -206,7 +222,7 @@ impl Closer {
         item(
           "reopen",
           (ctx.t("task_close.menu.reopen"), Icon::RotateCcw),
-          Request::Reopen(subject.id),
+          Request::Reopen(subject.clone()),
         ),
         item("done", done, close(Closing::Done)),
       ],
@@ -242,7 +258,7 @@ impl Closer {
 /// the confirmation that stops it; a request that did not happen says why.
 fn action(ctx: &mut Ctx, (project, feed): (OpenProject, ProjectFeed), asked: Signal<Asked>) -> Action {
   let services = Services::of(ctx);
-  ctx.future_action(move |request: Request| {
+  ctx.future_action(move |Asking { request, actor }: Asking| {
     let (project, feed, asked, services) = (project.clone(), feed.clone(), asked.clone(), services.clone());
     async move {
       let root = project.repo_root.clone();
@@ -252,20 +268,20 @@ fn action(ctx: &mut Ctx, (project, feed): (OpenProject, ProjectFeed), asked: Sig
             &project,
             (&services.runners, &services.servers),
             subject.id,
-            (closing, stop),
+            (closing, stop, actor),
           )
           .await;
           after_close(&asked, (subject, closing), closed)
         }
-        Request::Reopen(task) => {
+        Request::Reopen(subject) => {
           let servers = services.servers.clone();
-          background::run(move || reopen_in(&root, &servers, task).map_err(|error| error.message()))
+          background::run(move || reopen_in(&root, &servers, subject.id, actor).map_err(|error| error.message()))
             .await
             .and_then(|reopened| reopened)
         }
-        Request::Delete(task, unmerged) => {
+        Request::Delete(subject, unmerged) => {
           let programs = services.programs.clone();
-          let deleted = background::run(move || delete_in(&root, &programs, task, unmerged))
+          let deleted = background::run(move || delete_in(&root, &programs, subject.id, unmerged))
             .await
             .and_then(|deleted| deleted);
           if deleted.is_ok() {
@@ -275,9 +291,13 @@ fn action(ctx: &mut Ctx, (project, feed): (OpenProject, ProjectFeed), asked: Sig
         }
       };
       feed.saved();
-      done.map(|()| request.clone()).map_err(|message| Failed {
-        task: request.task(),
-        message,
+      done.map(|()| request.clone()).map_err(|message| {
+        let subject = request.subject();
+        Failed {
+          task: subject.id,
+          key: subject.key.clone(),
+          message,
+        }
       })
     }
   })

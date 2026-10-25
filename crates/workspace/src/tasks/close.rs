@@ -11,7 +11,7 @@ use orchester_core::{
   store::TaskStore,
   task::{
     TaskStatus,
-    organization::{OrganizationError, WorkflowStatus},
+    organization::{ChangeActor, OrganizationError, WorkflowStatus},
   },
 };
 use orchester_store::StoreError;
@@ -38,19 +38,20 @@ impl Closing {
   }
 }
 
-/// Sets `task` of `project` to `closing`'s status, its run stopped first when `stop` confirmed that very run. A task
-/// whose run has not ended is refused with that run, for the confirmation to name ([`StopRefused::Unconfirmed`]).
+/// Sets `task` of `project` to `closing`'s status as `actor`'s change, its run stopped first when `stop` confirmed
+/// that very run. A task whose run has not ended, also one that started after the stop, is refused with that run,
+/// for the confirmation to name ([`StopRefused::Unconfirmed`]).
 pub async fn close_in(
   project: &OpenProject,
   (runners, servers): (&Runners, &Servers),
   task: TaskId,
-  (closing, stop): (Closing, Stop),
+  (closing, stop, actor): (Closing, Stop, ChangeActor),
 ) -> Result<(), StopRefused> {
   stop_named_run_in(project, task, stop, runners).await?;
   let (root, servers) = (project.repo_root.clone(), servers.clone());
   let saved = background::run(move || {
     let mut writer = TaskWriter::open(&root, &servers)?;
-    writer.update_organization(task, |value| value.with_status(closing.status()))
+    writer.close(task, closing.status(), actor)
   })
   .await
   .map_err(StopRefused::Failed)?;
@@ -61,16 +62,16 @@ pub async fn close_in(
   })
 }
 
-/// Reopens `task` of the project at `repo_root`: back to Backlog while it is a draft, to Todo once it was submitted.
-/// A task that is not closed stays as it is.
-pub fn reopen_in(repo_root: &Path, servers: &Servers, task: TaskId) -> Result<(), WriteError> {
+/// Reopens `task` of the project at `repo_root` as `actor`'s change: back to Backlog while it is a draft, to Todo
+/// once it was submitted. A task that is not closed stays as it is.
+pub fn reopen_in(repo_root: &Path, servers: &Servers, task: TaskId, actor: ChangeActor) -> Result<(), WriteError> {
   let mut writer = TaskWriter::open(repo_root, servers)?;
   let found = writer.db().task(task)?.ok_or(StoreError::TaskNotFound(task))?;
   let reopened = match found.status() {
     TaskStatus::Draft => WorkflowStatus::Backlog,
     TaskStatus::Queued => WorkflowStatus::Todo,
   };
-  writer.update_organization(task, |value| {
+  writer.update_organization_by(task, actor, |value| {
     if value.status().is_closed() {
       value.with_status(reopened)
     } else {
