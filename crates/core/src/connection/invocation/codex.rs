@@ -1,7 +1,8 @@
 //! How an agent step starts the Codex CLI: always as a bidirectional App Server, so that a request
 //! for a person's decision can reach "Needs you" (`docs/interactive-tool-approvals.md`):
 //!
-//! `codex app-server --stdio <isolation> -c projects={<worktree>={trust_level="untrusted"},<repository>=…}
+//! `codex app-server --stdio <isolation> <sub-agents off>
+//!  -c projects={<worktree>={trust_level="untrusted"},<repository>=…}
 //!  [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
 //!  -c sandbox_workspace_write.writable_roots=[<worktree>, <folders>] [-c project_doc_max_bytes=0
 //!  [-c skills.config=[<skills>]]] [<MCP servers>]`
@@ -37,7 +38,7 @@
 //!   environment only.
 //! - Orchester's own tools ([`crate::orchester_tools`]) come from an MCP server of the same overrides,
 //!   `mcp_servers.Orchester`: the runner's relay ([`super::CodexOrchester`]), its token in the process environment
-//!   only.
+//!   only. Codex's own sub-agents are turned off ([`SUB_AGENTS_OFF`]): they would not get these tools.
 //! - Repository agent files ([`crate::agent_files`]): while the project has them off, `AGENTS.md` is left out with
 //!   `project_doc_max_bytes=0` and each skill of `<worktree>/.agents/skills` is disabled by the path of its `SKILL.md`
 //!   (`{path="…",enabled=false}`), on new and resumed sessions alike.
@@ -71,6 +72,16 @@ pub const ISOLATION: [&str; 5] = [
   "features.exec_permission_approvals=false",
   "features.request_permissions_tool=false",
 ];
+
+/// Codex's own sub-agents (`multi_agent`, on by default in 0.159.2, and `multi_agent_v2`), turned off for a step:
+/// a sub-agent's tool list had none of the step's MCP tools, Orchester's included (`tools.mcp__Orchester__read_skill
+/// is not a function`, issue #56), so the step's own agent does the work with them. `codex features list` with these
+/// overrides shows both off (0.159.2, 2026-10-25). The step's prompt says so ([`SUB_AGENTS_PROMPT`]).
+pub const SUB_AGENTS_OFF: [&str; 2] = ["features.multi_agent=false", "features.multi_agent_v2=false"];
+
+/// What a Codex step's prompt says about its sub-agents being off ([`SUB_AGENTS_OFF`]).
+pub const SUB_AGENTS_PROMPT: &str = "Codex's sub-agents are turned off for this step, because they would not get \
+  Orchester's tools: do the work yourself, with the tools above.";
 
 /// Everything that decides how one Codex App Server process starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,7 +117,7 @@ impl CodexInvocation<'_> {
   pub fn args(&self) -> Result<Vec<String>, InvocationError> {
     unicode_folders(self.writable_roots)?;
     let mut args = vec!["app-server".to_owned(), "--stdio".to_owned()];
-    for setting in ISOLATION {
+    for setting in ISOLATION.into_iter().chain(SUB_AGENTS_OFF) {
       args.extend(["-c".to_owned(), setting.to_owned()]);
     }
     args.extend(["-c".to_owned(), self.untrusted_projects()]);

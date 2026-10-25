@@ -112,9 +112,10 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     .find_map(|line| line.strip_prefix("argv: "))
     .expect("argv reported");
   // What the user's own Codex setup would add is turned off first: notify, plugins, apps and the
-  // permission requests that could stay granted.
+  // permission requests that could stay granted; then Codex's sub-agents, which would not get the step's tools.
   let isolation = "app-server --stdio -c notify=[] -c features.plugins=false -c features.apps=false -c \
-                   features.exec_permission_approvals=false -c features.request_permissions_tool=false ";
+                   features.exec_permission_approvals=false -c features.request_permissions_tool=false -c \
+                   features.multi_agent=false -c features.multi_agent_v2=false ";
   // The profile has network off, which Codex cannot enforce on Windows: network stays on there.
   let expected = if cfg!(windows) {
     "-c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=["
@@ -139,6 +140,12 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     "{environment}"
   );
   assert!(stderr.contains(&"prompt: # Your role: Builder"), "{stderr:?}");
+  // After its Orchester tools, the agent is told that its sub-agents are off, so it does the work with them itself.
+  assert!(
+    stderr.iter().any(|line| line.starts_with("prompt| Use the shell")
+      && line.ends_with(orchester_core::connection::invocation::CODEX_SUB_AGENTS_PROMPT)),
+    "{stderr:?}"
+  );
   assert!(entries.contains(&AgentEvent::Message {
     text: "Appending the line.".into()
   }));

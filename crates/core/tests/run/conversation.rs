@@ -6,8 +6,8 @@
 
 use orchester_core::{
   conversation::{
-    AgentMessage, Arrival, Delivery, Message, MessageBody, MessageError, Recipient, Sender, Timing, Undelivered,
-    follow_up_step, latest_question,
+    AgentMessage, Arrival, Delivery, Message, MessageBody, MessageError, NotTaken, Recipient, Sender, Timing,
+    Undelivered, follow_up_step, latest_question,
   },
   id::{InvocationId, ResourceId, RunId, StepExecutionId, TaskId},
   resource::InjectionEvent,
@@ -190,6 +190,43 @@ fn conversation_a_message_the_cli_did_not_take_is_kept_and_sent_after_the_turn()
   message.send_after_turn().expect("sent after the turn");
   assert_eq!(message.timing(), Timing::AfterTurn);
   assert!(message.reaches(run, builder) && !message.steers(run, builder));
+}
+
+/// Issue #56: what the CLI did not take is kept for a person to decide on, but automation's message, which nobody is
+/// there to send again, is queued for the turn's end at once.
+#[test]
+fn conversation_automations_message_the_cli_did_not_take_is_sent_after_the_turn() {
+  let run = RunId::generate();
+  let builder = ResourceId::generate();
+  let execution = StepExecutionId::generate();
+  let sent_now = |by_automation: bool| {
+    let message = from_person(None, Recipient::Agent(builder), "Continue.")
+      .sent(Timing::Now)
+      .expect("a person's message");
+    if by_automation {
+      message.sent_by_automation().expect("on the person's side")
+    } else {
+      message
+    }
+  };
+  let mut person = sent_now(false);
+  assert_eq!(
+    person.not_taken(run, execution, at(41), Undelivered::Refused),
+    Ok(NotTaken::Kept)
+  );
+  assert!(matches!(person.delivery(), Some(Delivery::NotDelivered { .. })));
+  let mut automation = sent_now(true);
+  assert_eq!(
+    automation.not_taken(run, execution, at(41), Undelivered::Refused),
+    Ok(NotTaken::AfterTurn)
+  );
+  assert_eq!(automation.delivery(), Some(Delivery::Queued));
+  assert_eq!(automation.timing(), Timing::AfterTurn);
+  assert_eq!(automation.run(), Some(run));
+  assert!(
+    automation.reaches(run, builder) && !automation.steers(run, builder),
+    "read at the turn's end, not steered again"
+  );
 }
 
 #[test]

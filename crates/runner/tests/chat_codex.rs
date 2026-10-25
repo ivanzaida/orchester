@@ -173,6 +173,7 @@ async fn chat_codex_answers_confined_with_only_its_tools_and_resumes_its_thread(
     " -c features.unified_exec=false ",
     " -c features.view_image=false ",
     " -c features.multi_agent=false ",
+    " -c features.multi_agent_v2=false ",
     " -c features.hooks=false ",
     " -c sandbox_workspace_write.writable_roots=[] ",
     " -c project_doc_max_bytes=0 ",

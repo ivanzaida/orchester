@@ -15,23 +15,17 @@
 //! message sent now joins the running turn with `turn/steer` ([`AppServerSession::steer`]); Codex
 //! answers at once and gives it to the model after the tool call that runs (`super::worker::steer`).
 
-use std::{
-  collections::BTreeSet,
-  io,
-  path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, io, path::Path};
 
 use orchester_core::{
-  attachment::input::{AttachedFile, codex_items},
-  command::{SecretVariable, redact_secrets},
+  attachment::input::codex_items,
+  command::redact_secrets,
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
     app_server_config::{refuse_taken_names, refuse_taken_provider, repository_settings},
     app_server_mcp::{refuse_user_hooks, servers_to_turn_off, thread_config},
-    mcp::InvocationExemptions,
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
-  permission::NetworkAccess,
   resource::RepositoryAccess,
 };
 use serde_json::{Value, json};
@@ -40,6 +34,8 @@ use thiserror::Error;
 use super::stderr::StderrLog;
 
 mod checks;
+mod setup;
+pub(in crate::execution) use self::setup::AppServerSetup;
 use crate::supervisor::Supervised;
 
 /// Characters kept of Codex's reason for refusing a request.
@@ -67,45 +63,6 @@ pub(in crate::execution) enum AppServerFailure {
 impl From<String> for AppServerFailure {
   fn from(message: String) -> Self {
     Self::Protocol(message)
-  }
-}
-
-pub(in crate::execution) struct AppServerSetup {
-  pub prompt: String,
-  /// The files people attached to the messages the prompt delivers, given with it.
-  pub attached: Vec<AttachedFile>,
-  pub model: String,
-  pub effort: Option<String>,
-  pub worktree: PathBuf,
-  pub access: RepositoryAccess,
-  /// Commands an execpolicy rule asks about reach a person (*Ask before running commands*).
-  pub command_approvals: bool,
-  /// Commands that need more than the sandbox reach a person.
-  pub sandbox_approvals: bool,
-  pub tool_approvals: bool,
-  pub network: NetworkAccess,
-  pub writable_roots: Vec<PathBuf>,
-  pub resume: Option<String>,
-  pub expected_servers: BTreeSet<String>,
-  /// The MCP tools that run without asking: empty unless the step asks before MCP actions.
-  pub exemptions: InvocationExemptions,
-  pub output_schema: Option<Value>,
-  pub secrets: Vec<SecretVariable>,
-  /// The model provider the thread runs on when the connection runs on an API provider
-  /// (`docs/design/api-providers.md`): then Codex needs no sign-in of its own.
-  pub model_provider: Option<String>,
-  /// Instructions in place of Codex's own, given with the thread's start and resume (`baseInstructions`): the
-  /// Orchestrator chat's system prompt; `None` for a step, which keeps Codex's.
-  pub base_instructions: Option<String>,
-}
-
-impl AppServerSetup {
-  fn runtime_roots(&self) -> BTreeSet<PathBuf> {
-    let mut roots = BTreeSet::from([self.worktree.clone()]);
-    if self.access == RepositoryAccess::Write {
-      roots.extend(self.writable_roots.iter().cloned());
-    }
-    roots
   }
 }
 
@@ -191,6 +148,11 @@ impl AppServerSession {
     matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.is_some()
   }
 
+  /// The id of the turn Codex started last, which a `turn/steer` expects.
+  pub fn turn(&self) -> Option<&str> {
+    self.turn.as_deref()
+  }
+
   /// Whether Codex's MCP inventory was checked: Codex has started every server of the thread and of the
   /// inventory.
   pub fn servers_checked(&self) -> bool {
@@ -273,7 +235,7 @@ impl AppServerSession {
       .and_then(Value::as_str)
       .filter(|id| id.starts_with(STEER_REQUEST))
     {
-      let refused = value.get("error").map(|error| self.reason(error));
+      let refused = value.get("error").map(|error| self.steer_refusal(error));
       self.steer_answers.push(SteerAnswer {
         id: id.to_owned(),
         refused,
@@ -445,6 +407,19 @@ impl AppServerSession {
       .and_then(Value::as_str)
       .unwrap_or("no reason given");
     self.one_line(message)
+  }
+
+  /// Why Codex refused a `turn/steer`: its reason ([`Self::reason`]), with the error code and the details it gives
+  /// (`data`, such as the kind of a turn that cannot be steered), so the log tells the turn's state.
+  fn steer_refusal(&self, error: &Value) -> String {
+    let mut refusal = self.reason(error);
+    if let Some(code) = error.get("code").and_then(Value::as_i64) {
+      refusal.push_str(&format!(" (code {code})"));
+    }
+    if let Some(data) = error.get("data").filter(|data| !data.is_null()) {
+      refusal.push_str(&format!(" {}", self.one_line(&data.to_string())));
+    }
+    refusal
   }
 
   /// `text`, its secrets redacted, on one line, cut to [`REASON_CHARS`].

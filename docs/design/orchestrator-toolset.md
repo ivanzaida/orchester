@@ -413,9 +413,10 @@ own that reads, runs or fetches anything, through configuration overrides of Cod
   other repositories or the runner's files, and nothing the person's execpolicy rules, which only ever match a shell
   command, could run.
 - `features.view_image=false`: no image read from a path (it reads outside any sandbox); `web_search="disabled"`,
-  `features.multi_agent=false`, `features.hooks=false` (the user's own hook commands on the agent's events),
-  `features.goals`, `memories`, `browser_use`, `computer_use` and `image_generation` off; plugins, apps, `notify`
-  and the permission-request tools off as for a step (`CODEX_ISOLATION`); the user's own MCP servers turned off for
+  `features.hooks=false` (the user's own hook commands on the agent's events), `features.goals`, `memories`,
+  `browser_use`, `computer_use` and `image_generation` off; sub-agents (`multi_agent`, `multi_agent_v2`), plugins,
+  apps, `notify` and the permission-request tools off as for every Codex step (`CODEX_SUB_AGENTS_OFF`,
+  `CODEX_ISOLATION`); the user's own MCP servers turned off for
   the thread by name; the folder's `.codex` and `AGENTS.md` left out (the folder is marked untrusted,
   `project_doc_max_bytes=0`).
 - What stays is `apply_patch` and `request_user_input`, which Codex 0.159.2 always offers. `apply_patch` cannot

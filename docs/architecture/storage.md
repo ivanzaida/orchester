@@ -193,7 +193,10 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
   continued session takes; `'prompt'` for one a new invocation started with). One the CLI refuses
   (`undelivered_reason = 'refused'`) or that cannot be written to it within five seconds
   (`'unwritable'`) is *not delivered*: it is kept, goes no further, and is queued again only when the
-  person chooses *Send after this turn* (the desktop's write; `timing` then becomes `'after_turn'`). If
+  person chooses *Send after this turn* (the desktop's write; `timing` then becomes `'after_turn'`).
+  Automation's message (`by_automation`), which nobody is there to send again, is queued for the turn's
+  end at once instead, by the runner's same write (ORC-86); the runner logs Codex's reason, error code and
+  details, and the turn it expected. If
   the CLI takes one late after all, it is delivered then. Codex keeps a message it accepted (`turn/steer`
   answered with the turn): it gives it to the model at its next sampling or, when the turn finishes
   first, records it into the thread before `turn/completed` (Codex's `on_task_finished`). Such a message

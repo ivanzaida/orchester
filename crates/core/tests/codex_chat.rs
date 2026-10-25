@@ -13,7 +13,8 @@ use orchester_core::{
   command::Command,
   connection::{
     invocation::{
-      CODEX_CHAT_CONFINEMENT, CODEX_ISOLATION, CodexChat, CodexMcp, HttpAuthorization, McpLaunch, Platform,
+      CODEX_CHAT_CONFINEMENT, CODEX_ISOLATION, CODEX_SUB_AGENTS_OFF, CodexChat, CodexMcp, HttpAuthorization, McpLaunch,
+      Platform,
     },
     mcp::{McpServerName, McpUrl},
   },
@@ -73,13 +74,12 @@ fn codex_chat_has_no_tool_of_its_own_that_reads_or_runs_anything_on_either_platf
       "features.shell_tool=false",
       "features.unified_exec=false",
       "features.view_image=false",
-      "features.multi_agent=false",
       "features.hooks=false",
       "web_search=\"disabled\"",
     ] {
       assert!(confinement.contains(&off), "{off} on {platform:?}: {args:?}");
     }
-    for setting in CODEX_ISOLATION {
+    for setting in CODEX_ISOLATION.into_iter().chain(CODEX_SUB_AGENTS_OFF) {
       assert!(overrides.contains(&setting), "{setting} on {platform:?}: {args:?}");
     }
     assert!(

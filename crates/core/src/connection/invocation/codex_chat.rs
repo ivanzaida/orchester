@@ -34,14 +34,13 @@ use crate::{
 /// The overrides that leave Codex no tool of its own that reads files, runs a program, looks at an image, searches the
 /// web or works beside the turn, each a feature or setting of Codex 0.159.2 (`codex features list`). `shell_tool`
 /// and `unified_exec` are its shells (`shell`, `shell_command`, `exec_command`, `write_stdin`); `view_image` reads an
-/// image file outside any sandbox; `multi_agent` would start other agents; `hooks` run the user's own commands on
-/// the agent's events; the rest offer tools the chat has no use for. A turned-off tool is not offered to the model,
-/// and a call of it is refused.
-pub const CONFINEMENT: [&str; 11] = [
+/// image file outside any sandbox; `hooks` run the user's own commands on the agent's events; the rest offer tools the
+/// chat has no use for. Sub-agents are off for every Codex invocation already ([`super::CODEX_SUB_AGENTS_OFF`]). A
+/// turned-off tool is not offered to the model, and a call of it is refused.
+pub const CONFINEMENT: [&str; 10] = [
   "features.shell_tool=false",
   "features.unified_exec=false",
   "features.view_image=false",
-  "features.multi_agent=false",
   "features.hooks=false",
   "features.goals=false",
   "features.memories=false",
