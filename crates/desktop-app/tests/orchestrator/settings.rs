@@ -1,8 +1,9 @@
 //! Orchestrator settings (`Xir64`): what the Orchestrator runs on is versioned as agent profiles are. The first
 //! version is published from the form; after that a change is saved as a draft and published as the next version,
-//! which the chat answers on. A connection it cannot run on is listed, not publishable; a model the list doesn't have
-//! is typed under *Other model id…*, and with no connection at all the select has nothing to open; with none it can
-//! run on, each one's whole reason is under the select; the tabs not built say why.
+//! which the chat answers on. A Codex connection is offered with its own models and efforts as Claude Code's is; a
+//! connection it cannot run on (a native agent's) is listed, not publishable; a model the list doesn't have is typed
+//! under *Other model id…*, and with no connection at all the select has nothing to open; with none it can run on,
+//! each one's whole reason is under the select; the tabs not built say why.
 
 use orchester_core::{orchestrator::OrchestratorSettings, resource::ModelId};
 
@@ -130,8 +131,41 @@ fn orchestrator_settings_take_a_model_the_list_does_not_have() {
 }
 
 #[test]
+fn orchestrator_settings_offer_codex_with_its_own_models_and_efforts() {
+  let mut screen = Orchestrator::new(Setup::NotChosen);
+  screen.settings();
+  screen.until("the connections", |screen| {
+    screen.options("orchestrator-connection") == ["Claude · Kontur", "Codex · Kontur"]
+  });
+  screen.click("orchestrator-connection");
+  screen.click("orchestrator-connection-option-1");
+  screen.until("Codex's models", |screen| {
+    screen
+      .options("orchestrator-model")
+      .starts_with(&["gpt-5.5".to_owned(), "gpt-5.5-mini".to_owned()])
+  });
+  assert_eq!(
+    screen.options("orchestrator-effort"),
+    ["CLI default", "Low", "Medium", "High", "Extra high"],
+    "the efforts the chosen model lists"
+  );
+  screen.choose("orchestrator-effort", "Medium");
+  screen.until("Publish v1", |screen| {
+    screen.text("orchestrator-settings-publish") == "Publish v1"
+  });
+  screen.click("orchestrator-settings-publish");
+  screen.until("v1", |screen| kept(screen).0.is_some());
+  let codex = OrchestratorSettings::new(screen.codex, model("gpt-5.5"), Some("medium".to_owned()));
+  assert_eq!(kept(&screen), (Some((1, codex)), None));
+  screen.until("its state", |screen| {
+    screen
+      .text("orchestrator-settings-summary")
+      .contains("Codex · Kontur · gpt-5.5")
+  });
+}
+
+#[test]
 fn orchestrator_settings_connection_select_opens_only_with_connections_to_list() {
-  // Connections it cannot run on are listed with why (Codex is held back), so the menu opens on them.
   let mut screen = Orchestrator::new(Setup::NotChosen);
   screen.settings();
   screen.until("the connections", |screen| {
@@ -156,18 +190,18 @@ fn orchestrator_settings_connection_select_opens_only_with_connections_to_list()
 #[test]
 fn orchestrator_settings_say_whole_why_no_connection_can_run_it() {
   // The menu cuts an option's detail to one line; with none usable, the whole reason is under the select, wrapped.
-  let mut screen = Orchestrator::new(Setup::CodexOnly);
+  let mut screen = Orchestrator::new(Setup::NativeOnly);
   screen.settings();
   screen.until("the reason", |screen| screen.exists("orchestrator-connection-why-0"));
   let why = screen.text("orchestrator-connection-why-0");
   assert!(
-    why.starts_with("Codex · Kontur: Not for the Orchestrator yet:"),
+    why.starts_with("Anthropic API · Kontur: The Orchestrator runs on Claude Code and Codex connections"),
     "{why}"
   );
-  assert!(why.ends_with("other projects' tokens."), "{why}");
+  assert!(why.ends_with("choose another one."), "{why}");
   let line = screen.bounds("orchestrator-connection-label").height;
   assert!(screen.bounds("orchestrator-connection-why-0").height > line * 1.5);
-  // With a connection it can run on, the menu alone says why the others can't.
+  // With a connection it can run on, nothing is under the select.
   let mut screen = Orchestrator::new(Setup::NotChosen);
   screen.settings();
   screen.until("the connections", |screen| {

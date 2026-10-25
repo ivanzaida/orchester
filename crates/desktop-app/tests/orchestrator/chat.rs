@@ -288,15 +288,29 @@ fn orchestrator_names_a_cli_that_is_not_signed_in_and_where_to_fix_it() {
 }
 
 #[test]
-fn orchestrator_on_codex_is_held_back_with_why() {
+fn orchestrator_on_codex_acts_through_the_same_tools_confined() {
   let mut screen = Orchestrator::new(Setup::Codex);
   screen.go(OrchestratorChat::New);
-  screen.until("the reason", |screen| {
+  assert!(screen.text("orchestrator-runs-on").contains("Codex · Kontur"));
+  screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
+  screen.until("the created task's card", |screen| {
     screen
-      .text("orchestrator-not-ready")
-      .contains("Codex's sandbox can't be shown to keep the agent's reads in the project folder")
+      .text("orchestrator-conversation")
+      .contains("Created KON-1 as a draft")
   });
-  assert!(!screen.exists("orchestrator-thinking"));
+  assert_eq!(screen.db().tasks().expect("tasks").remove(0).key().to_string(), "KON-1");
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent ran");
+  assert!(log.contains("codex-argv: app-server --stdio"), "{log}");
+  assert!(
+    log.contains(" -c features.shell_tool=false ") && log.contains(" -c features.unified_exec=false "),
+    "no shell: {log}"
+  );
+  assert!(log.contains("mcp-token: present"), "{log}");
+  assert!(
+    log.contains("system-prompt: You are the Orchestrator of the project \"Kontur\""),
+    "{log}"
+  );
 }
 
 #[test]

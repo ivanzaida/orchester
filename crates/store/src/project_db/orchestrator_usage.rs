@@ -1,8 +1,9 @@
-//! What the Orchestrator chat's turns spent (`orchestrator_usage`): one record per usage its CLI reported, written by
-//! the runner and counted toward the project's daily budget with the runs' turns. The chat takes no agent slot.
+//! What the Orchestrator chat's turns spent (`orchestrator_usage`): one record per usage its CLI reported, with the
+//! account the turn ran on, written by the runner and counted toward the project's daily budget with the runs' turns.
+//! The chat takes no agent slot.
 
 use orchester_core::{
-  id::{ChatId, ChatMessageId},
+  id::{AgentAccountId, ChatId, ChatMessageId},
   run::TokenUsage,
   time::Timestamp,
   tokens::TokensUsed,
@@ -12,20 +13,20 @@ use rusqlite::{Connection, params};
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{corrupt, tokens_column},
+  rows::{corrupt, parse, tokens_column},
 };
 
 impl ProjectDb {
-  /// Keeps `usage`, which the turn answering `message` of `chat` reported at `at`.
+  /// Keeps `usage`, which the turn answering `message` of `chat` on `account` reported at `at`.
   pub fn record_chat_usage(
     &mut self,
     (chat, message): (ChatId, ChatMessageId),
-    usage: TokenUsage,
+    (account, usage): (AgentAccountId, TokenUsage),
     at: Timestamp,
   ) -> Result<(), StoreError> {
     self.connection.execute(
-      "INSERT INTO orchestrator_usage (chat_id, message_id, at, input_tokens, cached_input_tokens, output_tokens) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      "INSERT INTO orchestrator_usage (chat_id, message_id, at, input_tokens, cached_input_tokens, output_tokens, \
+       account_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
       params![
         chat.to_string(),
         message.to_string(),
@@ -33,6 +34,7 @@ impl ProjectDb {
         tokens_column("chat tokens", usage.input)?,
         tokens_column("chat tokens", usage.cached_input)?,
         tokens_column("chat tokens", usage.output)?,
+        account.to_string(),
       ],
     )?;
     Ok(())
@@ -41,6 +43,35 @@ impl ProjectDb {
   /// What the turn answering `message` spent, counted as the daily budget counts it.
   pub fn chat_turn_tokens(&self, message: ChatMessageId) -> Result<TokensUsed, StoreError> {
     counted(&self.connection, "WHERE message_id = ?1", &message.to_string())
+  }
+
+  /// What the turn answering `message` reported it spent, record by record, each with the account it ran on; `None`
+  /// for usage recorded before the account was kept.
+  pub fn chat_turn_usage(
+    &self,
+    message: ChatMessageId,
+  ) -> Result<Vec<(Option<AgentAccountId>, TokenUsage)>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT account_id, input_tokens, cached_input_tokens, output_tokens FROM orchestrator_usage \
+       WHERE message_id = ?1 ORDER BY id",
+    )?;
+    let rows = statement
+      .query_map([message.to_string()], |row| {
+        Ok((
+          row.get::<_, Option<String>>(0)?,
+          [row.get::<_, i64>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?],
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(account, tokens)| {
+        let account = account
+          .map(|account| parse::<AgentAccountId>("account id", &account))
+          .transpose()?;
+        Ok((account, usage(tokens)?))
+      })
+      .collect()
   }
 }
 

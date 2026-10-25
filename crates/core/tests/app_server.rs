@@ -187,6 +187,8 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
       method: "item/permissions/requestApproval".to_owned()
     })
   );
+  let turn = json!({"method":"turn/started","params":{"threadId":"thread-2","turn":{"id":"turn-3"}}});
+  stream.parse(&turn.to_string()).expect("turn notification");
   let usage = json!({"method":"thread/tokenUsage/updated","params":{"threadId":"thread-2","turnId":"turn-3",
     "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":20,"outputTokens":30,"reasoningOutputTokens":10,"totalTokens":130},
       "total":{"inputTokens":100,"cachedInputTokens":20,"outputTokens":30,"reasoningOutputTokens":10,"totalTokens":130}}
@@ -217,6 +219,37 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
         completed: true
       }
     ]
+  ));
+}
+
+/// Codex 0.159.2 (probe 2026-10-25): a resumed thread repeats its previous turn's usage before the next turn starts.
+#[test]
+fn a_resumed_threads_earlier_usage_counts_nothing_and_the_running_turn_counts_as_it_goes() {
+  let mut stream = AppServerStream::default();
+  let earlier = json!({"method":"thread/tokenUsage/updated","params":{"threadId":"thread-1","turnId":"turn-1",
+    "tokenUsage":{"last":{"inputTokens":10,"cachedInputTokens":0,"outputTokens":2,"totalTokens":12},
+      "total":{"inputTokens":10,"cachedInputTokens":0,"outputTokens":2,"totalTokens":12}}
+  }});
+  stream.parse(&earlier.to_string()).expect("usage");
+  assert_eq!(stream.usage_so_far(), TokenUsage::default());
+  let turn = json!({"method":"turn/started","params":{"threadId":"thread-1","turn":{"id":"turn-2"}}});
+  stream.parse(&turn.to_string()).expect("turn notification");
+  let response = json!({"method":"thread/tokenUsage/updated","params":{"threadId":"thread-1","turnId":"turn-2",
+    "tokenUsage":{"last":{"inputTokens":10,"cachedInputTokens":0,"outputTokens":2,"totalTokens":12},
+      "total":{"inputTokens":20,"cachedInputTokens":0,"outputTokens":4,"totalTokens":24}}
+  }});
+  stream.parse(&response.to_string()).expect("usage");
+  let spent = TokenUsage {
+    input: 10,
+    cached_input: 0,
+    output: 2,
+  };
+  assert_eq!(stream.usage_so_far(), spent, "what the running turn spent so far");
+  let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-2","items":[],"status":"completed"}}});
+  let updates = stream.parse(&ended.to_string()).expect("turn");
+  assert!(matches!(
+    updates.first(),
+    Some(Update::Activity(AgentEvent::TurnCompleted { usage })) if *usage == spent
   ));
 }
 

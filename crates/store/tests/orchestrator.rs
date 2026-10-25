@@ -1,5 +1,6 @@
 //! The Orchestrator chat's records: its settings, a person's message kept once under its id and forgotten when the
-//! runner never took it, how its turn ends (once), the session, replies and actions in order, and History's list.
+//! runner never took it, how its turn ends (once), the session, replies and actions in order, History's list, and what
+//! a turn spent on which account.
 
 mod support;
 
@@ -9,9 +10,10 @@ use orchester_core::{
   orchestrator::{
     ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState,
   },
+  run::TokenUsage,
 };
 use orchester_store::ProjectDb;
-use support::{at, model, started_run};
+use support::{at, copied_at_version, model, started_run};
 
 fn body(text: &str) -> MessageBody {
   MessageBody::new(text).expect("text")
@@ -294,4 +296,55 @@ fn a_proposal_is_claimed_by_one_decision_and_settled_by_it_alone() {
       .expect("finish again")
       .is_none()
   );
+}
+
+#[test]
+fn chat_usage_is_kept_on_the_account_its_turn_ran_on_and_usage_from_before_stays_on_no_account() {
+  let (repo, mut db, _run, _execution) = started_run();
+  let (chat, message) = (ChatId::generate(), ChatMessageId::generate());
+  let started = Chat::start(chat, &body("What is running?"), at(10));
+  db.keep_chat_message(&started, (message, &body("What is running?")), at(10))
+    .expect("kept");
+  let account = AgentAccountId::generate();
+  let spent = TokenUsage {
+    input: 200,
+    cached_input: 50,
+    output: 7,
+  };
+  db.record_chat_usage((chat, message), (account, spent), at(20))
+    .expect("recorded");
+  assert_eq!(db.chat_turn_usage(message).expect("read"), [(Some(account), spent)]);
+  assert_eq!(db.chat_turn_tokens(message).expect("read"), spent.counted_tokens());
+  drop(db);
+  let current = repo.path().join(".orchester/orchester.db");
+  let old = copied_at_version(&current, version_before_chat_accounts(schema_version(&current)));
+  let upgraded = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(
+    upgraded.chat_turn_usage(message).expect("read"),
+    [(None, spent)],
+    "usage recorded before the account was kept is not given one"
+  );
+}
+
+fn schema_version(path: &std::path::Path) -> u32 {
+  rusqlite::Connection::open(path)
+    .expect("open")
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version")
+}
+
+/// The newest schema whose chat usage has no account.
+fn version_before_chat_accounts(latest: u32) -> u32 {
+  (1..latest)
+    .rev()
+    .find(|&version| {
+      let repo = tempfile::tempdir().expect("temporary directory");
+      let old = ProjectDb::create_at_version(repo.path(), version).expect("an old database");
+      !old
+        .prepare("SELECT 1 FROM pragma_table_info('orchestrator_usage') WHERE name = 'account_id'")
+        .expect("schema")
+        .exists([])
+        .expect("schema")
+    })
+    .expect("a schema before the chat's account")
 }

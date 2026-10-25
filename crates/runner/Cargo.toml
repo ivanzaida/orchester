@@ -81,6 +81,10 @@ name = "chat"
 required-features = ["test-agent"]
 
 [[test]]
+name = "chat_codex"
+required-features = ["test-agent"]
+
+[[test]]
 name = "attachments"
 required-features = ["test-agent"]
 

@@ -8,7 +8,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
   id::ConnectionId,
-  orchestrator::{OrchestratorSettings, codex_held_back, runs_orchestrator},
+  orchestrator::{OrchestratorSettings, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
@@ -224,9 +224,5 @@ fn unavailable(connection: &AgentConnection) -> Option<Message> {
   if connection.api_provider().is_some() {
     return Some(Message::new("orchestrator.settings.apiProvider"));
   }
-  let provider = connection.provider();
-  if codex_held_back(provider) {
-    return Some(Message::new("orchestrator.settings.codexHeldBack"));
-  }
-  (!runs_orchestrator(provider)).then(|| Message::new("orchestrator.settings.cliOnly"))
+  (!runs_orchestrator(connection.provider())).then(|| Message::new("orchestrator.settings.cliOnly"))
 }

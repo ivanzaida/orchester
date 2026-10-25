@@ -1,6 +1,5 @@
-//! Kontur in a git repository of its own, with a Claude Code connection to `orchester-fake-claude` (and a Codex one
-//! the Orchestrator cannot run on), its runner the real one built with the fake CLIs, and the window on its
-//! Orchestrator.
+//! Kontur in a git repository of its own, with a Claude Code connection to `orchester-fake-claude` and a Codex one to
+//! `orchester-fake-codex`, its runner the real one built with the fake CLIs, and the window on its Orchestrator.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -13,9 +12,7 @@ use std::{
 use lurq::app::events::MouseButton;
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
 use orchester_core::{
-  connection::{
-    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
-  },
+  connection::AgentProvider,
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
   name::Name,
   orchestrator::OrchestratorSettings,
@@ -34,7 +31,10 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::workspace::OrchestratorConsent;
 
-use super::support::{Data, Window, add_project, runner_programs::programs, stand_ins::StandIns};
+use super::{
+  connections,
+  support::{Data, Window, add_project, runner_programs::programs, stand_ins::StandIns},
+};
 
 pub fn git(repo: &Path, args: &[&str]) {
   let output = Command::new("git")
@@ -61,8 +61,8 @@ pub enum Setup {
   NotChosen,
   /// The project has no connection at all, so nothing is chosen either.
   NoConnection,
-  /// Only the Codex connection, which the Orchestrator does not run on: nothing is chosen.
-  CodexOnly,
+  /// Only a native agent connection, which the Orchestrator does not run on: nothing is chosen.
+  NativeOnly,
   /// Chosen, but the project's runner cannot start: its program does not exist.
   NoRunner,
 }
@@ -74,6 +74,7 @@ pub struct Orchestrator {
   pub window: Window,
   pub root: PathBuf,
   pub claude: ConnectionId,
+  pub codex: ConnectionId,
 }
 
 impl Orchestrator {
@@ -112,7 +113,7 @@ impl Orchestrator {
     git(&repo, &["commit", "--quiet", "-m", "initial"]);
     let runner = match setup {
       Setup::NoRunner => data.dir.path().join("no-runner").join("orchester-runner"),
-      Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly => runner,
+      Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection | Setup::NativeOnly => runner,
     };
     let launch = data.launch_with(runner);
     let launch = match git_programs {
@@ -126,19 +127,7 @@ impl Orchestrator {
       &repo,
     );
     let mut db = ProjectDb::open(&open.repo_root).expect("database");
-    let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", fake);
-    let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", fake_codex);
-    if !matches!(setup, Setup::NoConnection | Setup::CodexOnly) {
-      db.create_connection(&claude).expect("Claude Code connection");
-    }
-    if setup != Setup::NoConnection {
-      db.create_connection(&codex).expect("Codex connection");
-    }
-    if !matches!(setup, Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly) {
-      let on = if setup == Setup::Codex { codex.id() } else { claude.id() };
-      let settings = OrchestratorSettings::new(on, ModelId::new("haiku").expect("model"), None);
-      db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
-    }
+    let (claude, codex) = connect(&mut db, setup, (fake.as_path(), fake_codex.as_path()));
     let (window, stand_ins) = if stand_ins {
       let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
       (window, Some(stand_ins))
@@ -149,7 +138,8 @@ impl Orchestrator {
       project,
       window,
       root: open.repo_root,
-      claude: claude.id(),
+      claude,
+      codex,
     };
     (screen, stand_ins)
   }
@@ -562,26 +552,30 @@ fn named(value: &str) -> Name {
   Name::new(value).expect("name")
 }
 
-/// A checked connection of `provider` named `name` to the fake CLI at `program`, listing `haiku` and `opus`.
-fn connection(provider: AgentProvider, name: &str, program: &Path) -> AgentConnection {
-  let mut connection = AgentConnection::new(
-    ConnectionId::generate(),
-    Name::new(name).expect("name"),
-    provider,
-    program.to_path_buf(),
-    Timestamp::now(),
-  )
-  .expect("absolute program");
-  let model = |id: &str| CatalogModel::new(ModelId::new(id).expect("model"), vec!["low".into(), "high".into()]);
-  connection
-    .record_check(ConnectionCheck {
-      at: Timestamp::now(),
-      result: CheckResult::Available {
-        version: "2.1.89".into(),
-        sign_in: SignIn::SignedIn,
-        catalog: ModelCatalog::new(CatalogSource::Provider, vec![model("haiku"), model("opus")]),
-      },
-    })
-    .expect("check");
-  connection
+/// The project's connections as `setup` has them, to the fake CLIs `fake` (Claude Code) and `fake_codex`, and what the
+/// Orchestrator runs on: the Claude Code connection's id and the Codex one's.
+fn connect(db: &mut ProjectDb, setup: Setup, (fake, fake_codex): (&Path, &Path)) -> (ConnectionId, ConnectionId) {
+  let claude = connections::cli(AgentProvider::ClaudeCodeCli, "Claude · Kontur", fake);
+  let codex = connections::cli(AgentProvider::CodexCli, "Codex · Kontur", fake_codex);
+  match setup {
+    Setup::NoConnection => {}
+    Setup::NativeOnly => {
+      let native = connections::native("Anthropic API · Kontur");
+      db.create_connection(&native).expect("native connection");
+    }
+    Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoRunner => {
+      db.create_connection(&claude).expect("Claude Code connection");
+      db.create_connection(&codex).expect("Codex connection");
+    }
+  }
+  let published = match setup {
+    Setup::Codex => Some((codex.id(), "gpt-5.5")),
+    Setup::Ready | Setup::NoRunner => Some((claude.id(), "haiku")),
+    Setup::NotChosen | Setup::NoConnection | Setup::NativeOnly => None,
+  };
+  if let Some((on, model)) = published {
+    let settings = OrchestratorSettings::new(on, ModelId::new(model).expect("model"), None);
+    db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
+  }
+  (claude.id(), codex.id())
 }

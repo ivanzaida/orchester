@@ -6,7 +6,7 @@ continuing interrupted runs behind *Let the Orchestrator continue interrupted ru
 2026-10-20 (ORC-53); runs the runner stopped because the project database stayed busy added to them by the person on
 2026-10-21 (ORC-75); the proposed first commit of a project's folder (decision 8) added on 2026-10-21 (ORC-72);
 merging finished runs on its own behind *Let the Orchestrator merge finished runs on its own* decided by the person on
-2026-10-21 (ORC-69).
+2026-10-21 (ORC-69); the Orchestrator on Codex, confined without a shell (decision 10), added on 2026-10-25 (ORC-84).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -391,3 +391,62 @@ which could not be told safe: what the chat is not offered it cannot do. They ru
 | Read (always) | Write (*Let the Orchestrator write with git*) | Proposed (person applies, always) |
 |---|---|---|
 | `git_status` (branch, upstream, ahead/behind, operation in progress, files), `git_log` (range or all, path, limit ≤ 200), `git_diff` (from/to, staged, paths, stat), `git_show` (rev, stat, or a file at rev), `git_branches` (local with upstream ahead/behind, remote), `git_blame` (path, rev, lines), `git_remotes` | `git_commit` (paths, all, or what is staged; message), `git_create_branch` (name, start, switch), `git_switch` (only when it loses nothing), `git_pull` (ff-only; merge on request), `git_push` (no force; set_upstream), `git_merge` (no_ff, message; conflict undone), `git_revert` (mainline; conflict undone), `git_tag` (annotated with a message), `git_fetch` (remote or all, prune) | `git_propose` with `reset`, `clean`, `delete_branch`, `force_push`, `discard_changes`, `switch_discarding`, `rebase`, `delete_tag`, `abort_merge` |
+
+## 10. The Orchestrator on Codex, confined (ORC-84, 2026-10-25)
+
+The Orchestrator runs on a Codex connection as on Claude Code: the person picks it, its model and its effort in
+Orchestrator settings › Profile, and each message is one turn of Codex App Server in the project folder, started by
+the project's runner (`orchester_core::connection::invocation::CodexChat`, `orchester-runner`'s `chat::codex`). It is
+at least as confined as the Claude Code Orchestrator: it has Orchester's chat tools and nothing else.
+
+**Why not Codex's sandbox.** Its `read-only` mode keeps writes out, not reads: a shell command in it could read
+`CODEX_HOME` (the sign-in), other repositories and the runner's private files with other turns' tokens, and the
+person's own execpolicy `allow` rules run matching commands outside the sandbox. Codex 0.159.2's filesystem
+permission profiles with read denials could not be shown to hold on Windows (they need the elevated sandbox) or macOS.
+That is why Codex was held back (2026-10-14).
+
+**How it is confined: the risk is removed at its source, not fenced by the sandbox.** Codex is given no tool of its
+own that reads, runs or fetches anything, through configuration overrides of Codex 0.159.2 (`codex features list`):
+
+- `features.shell_tool=false` and `features.unified_exec=false`: no shell (`shell`, `shell_command`,
+  `exec_command`, `write_stdin`). With no command, there is nothing the sandbox would have to keep from `CODEX_HOME`,
+  other repositories or the runner's files, and nothing the person's execpolicy rules, which only ever match a shell
+  command, could run.
+- `features.view_image=false`: no image read from a path (it reads outside any sandbox); `web_search="disabled"`,
+  `features.multi_agent=false`, `features.hooks=false` (the user's own hook commands on the agent's events),
+  `features.goals`, `memories`, `browser_use`, `computer_use` and `image_generation` off; plugins, apps, `notify`
+  and the permission-request tools off as for a step (`CODEX_ISOLATION`); the user's own MCP servers turned off for
+  the thread by name; the folder's `.codex` and `AGENTS.md` left out (the folder is marked untrusted,
+  `project_doc_max_bytes=0`).
+- What stays is `apply_patch` and `request_user_input`, which Codex 0.159.2 always offers. `apply_patch` cannot
+  write: the thread is `read-only` with nothing writable, and the approval policy leaves nothing beyond the sandbox to
+  a person (`sandbox_approval`, `rules`, `request_permissions` and `skill_approval` off), so Codex's own approval check
+  refuses every patch before any sandbox runs. A question of Codex's gets no answers.
+- The chat's domain tools (`orchester`) are its only MCP server, their token only in the process environment. Codex
+  asks before each MCP call (`mcp_elicitations`): a call of `orchester` is approved, any other declined.
+- The system prompt is App Server's `baseInstructions`, in place of Codex's own shell-oriented instructions, on every
+  turn, a resumed thread's too. It says the agent has no tool that reads files and reads the repository through the
+  git tools (`instructions::ProjectReads::GitTools`).
+
+**Why this holds on Windows and macOS.** Which tools Codex offers is decided by these switches in Codex itself,
+before any operating-system sandbox, the same on both: nothing here rests on a sandbox mechanism that differs between
+them. Checked with Codex 0.159.2 on Windows against a stand-in of the model's API that records the tools Codex offers
+and makes the calls a model would (2026-10-25): App Server offered only `request_user_input` and `apply_patch`; a call
+of `exec_command`, `shell` or `shell_command` was answered `unsupported call` and ran nothing, even with
+`danger-full-access`; `apply_patch` was refused "writing is blocked by read-only sandbox; rejected by user approval
+settings"; `baseInstructions` replaced Codex's instructions on a new and a resumed thread. Not run on a Mac: the same
+switches and checks are platform-independent in Codex, and the overrides are the same on both
+(`crates/core/tests/codex_chat.rs`); `windows.sandbox=elevated` is added on Windows only, as for steps.
+
+**What it can read, then.** The Claude Code Orchestrator reads and searches the project folder with `Read`, `Glob`
+and `Grep`; the Codex one reads the repository through the git tools only (`git_status` for changed and untracked
+files, `git_diff` for uncommitted changes, `git_show` for a file at a revision or what a folder holds). It does not
+read an untracked file's contents. File-reading tools of the chat's own would close that gap; they are not part of
+this decision.
+
+**The rest is as on Claude Code.** Replies are kept as each message completes; *Stop response* ends App Server, and
+what the turn said and spent until then stays; the 10-minute limit ends it the same way; the thread is resumed on the
+next turn while the connection and account stay (else a new one, which the conversation says); waits, ends of runs,
+the daily report's turn and auto mode start Codex turns as Claude Code ones. What a turn spent counts toward the daily
+budget and is kept with the account the turn ran on (`orchestrator_usage.account_id`). App Server has no
+`--max-turns`: an answer is bounded by its time only.

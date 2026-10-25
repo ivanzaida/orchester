@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   connection::invocation::{ClaudeChat, ClaudeSession},
   id::ProjectId,
-  orchestrator::{MAX_TURNS, instructions::system_prompt},
+  orchestrator::{
+    MAX_TURNS,
+    instructions::{ProjectReads, system_prompt},
+  },
 };
 
 use super::SESSION;
@@ -93,7 +96,7 @@ fn orchestrator_chat_denies_unix_folders_and_skips_what_it_cannot_name() {
 
 #[test]
 fn orchestrator_links_only_with_the_links_its_tools_returned() {
-  let prompt = system_prompt("Kontur", ProjectId::generate());
+  let prompt = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   assert!(
     prompt.contains("[KON-12](orchester:/project/<id>/tasks/KON-12)"),
     "it shows how a `link` becomes an `orchester:` link: {prompt}"

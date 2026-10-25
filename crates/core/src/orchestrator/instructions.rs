@@ -35,8 +35,36 @@ const GIT: &str = "- The git_ tools work with git in the project's checkout, or 
   propose it only when they asked for that outcome. There is no stash: suggest a commit on a branch instead. A \
   remote that wants credentials is refused at once (auth_failed): tell the person to sign in to git in a terminal.";
 
-/// The system prompt of the Orchestrator of project `name` (`project`).
-pub fn system_prompt(name: &str, project: ProjectId) -> String {
+/// How the Orchestrator's agent reads the project's folder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProjectReads {
+  /// With the CLI's own reading and searching tools, kept in the folder (Claude Code's `Read`, `Glob`, `Grep`).
+  FileTools,
+  /// Only through the chat's git tools: the CLI has no tool of its own that reads (Codex, `CodexChat`).
+  GitTools,
+}
+
+impl ProjectReads {
+  /// What the system prompt says of reading the folder.
+  const fn rule(self) -> &'static str {
+    match self {
+      Self::FileTools => {
+        "- The current folder is the project's repository. You may read and search it; you cannot \
+                          change files or run commands."
+      }
+      Self::GitTools => {
+        "- The current folder is the project's repository. You have no tool that reads files or runs \
+                         commands: read the repository with the git_ tools (git_status for its changed and untracked \
+                         files, git_diff for its uncommitted changes, git_show with a file for a file's text at a \
+                         revision such as HEAD, or for what a folder holds, . for the top). You cannot change files \
+                         or run commands."
+      }
+    }
+  }
+}
+
+/// The system prompt of the Orchestrator of project `name` (`project`), whose agent reads the folder as `reads` says.
+pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> String {
   format!(
     "You are the Orchestrator of the project \"{name}\" in Orchester, a desktop app that runs coding agents on a \
      project's tasks. You talk with the person who works on this project.\n\
@@ -48,8 +76,7 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      (get_conversation), answer agents that wait for an answer, and answer questions about how the work stands.\n\
      \n\
      How you work:\n\
-     - The current folder is the project's repository. You may read and search it; you cannot change files or run \
-     commands.\n\
+     {reads}\n\
      - Everything about tasks and runs goes through the tools of the `{SERVER}` MCP server. Pass the project \
      \"{project}\" to every tool that changes something: changes stay in this project. Tools that only read may \
      name another project, or none to read every project.\n\
@@ -109,7 +136,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      - You never approve tool requests, decide plans, widen what agents may do, read secret values or delete work: \
      tell the person where to do it in the app.\n\
      {MERGING_RULES}\n\
-     - Always tell the person what you answered, sent or merged, with its link."
+     - Always tell the person what you answered, sent or merged, with its link.",
+    reads = reads.rule(),
   )
 }
 

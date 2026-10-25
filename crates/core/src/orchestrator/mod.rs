@@ -27,12 +27,13 @@ pub use self::{
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
   sent::{FromOrchestrator, SentWay},
-  settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},
+  settings::{OrchestratorSettings, runs_orchestrator},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
 };
 
-/// The agentic turns one answer may take at most (`--max-turns`): reading, searching and calling tools, each a
-/// turn. No setting: an answer that needs more is asked again in parts.
+/// The agentic turns one answer on Claude Code may take at most (`--max-turns`): reading, searching and calling tools,
+/// each a turn. No setting: an answer that needs more is asked again in parts. Codex App Server has no such limit; its
+/// answer is bounded by [`TIME_LIMIT`] alone.
 pub const MAX_TURNS: u32 = 30;
 
 /// How long one answer may run at most; the runner ends its CLI then. No setting either.

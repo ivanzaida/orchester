@@ -50,14 +50,14 @@ pub(super) const STEER_REQUEST: &str = "steer-";
 pub(super) const DENIAL_STEER: &str = "steer-denial-";
 
 /// Codex's answer to a `turn/steer` request.
-pub(super) struct SteerAnswer {
+pub(in crate::execution) struct SteerAnswer {
   pub id: String,
   /// Codex's reason when it did not add the message to the turn.
   pub refused: Option<String>,
 }
 
 #[derive(Debug, Error)]
-pub(super) enum AppServerFailure {
+pub(in crate::execution) enum AppServerFailure {
   #[error("{0}")]
   Protocol(String),
   #[error("{0}")]
@@ -70,7 +70,7 @@ impl From<String> for AppServerFailure {
   }
 }
 
-pub(super) struct AppServerSetup {
+pub(in crate::execution) struct AppServerSetup {
   pub prompt: String,
   /// The files people attached to the messages the prompt delivers, given with it.
   pub attached: Vec<AttachedFile>,
@@ -94,6 +94,9 @@ pub(super) struct AppServerSetup {
   /// The model provider the thread runs on when the connection runs on an API provider
   /// (`docs/design/api-providers.md`): then Codex needs no sign-in of its own.
   pub model_provider: Option<String>,
+  /// Instructions in place of Codex's own, given with the thread's start and resume (`baseInstructions`): the
+  /// Orchestrator chat's system prompt; `None` for a step, which keeps Codex's.
+  pub base_instructions: Option<String>,
 }
 
 impl AppServerSetup {
@@ -118,7 +121,7 @@ enum Phase {
   Complete,
 }
 
-pub(super) struct AppServerSession {
+pub(in crate::execution) struct AppServerSession {
   setup: AppServerSetup,
   phase: Phase,
   thread: Option<String>,
@@ -176,6 +179,11 @@ impl AppServerSession {
 
   pub fn complete(&self) -> bool {
     self.phase == Phase::Complete
+  }
+
+  /// What the running turn spent so far, as Codex reported it; Codex gives it with the turn's end otherwise.
+  pub const fn usage_so_far(&self) -> orchester_core::run::TokenUsage {
+    self.stream.usage_so_far()
   }
 
   /// Whether a turn runs that a message can join.
@@ -493,6 +501,9 @@ impl AppServerSession {
     };
     if let Some(provider) = &self.setup.model_provider {
       params["modelProvider"] = json!(provider);
+    }
+    if let Some(instructions) = &self.setup.base_instructions {
+      params["baseInstructions"] = json!(instructions);
     }
     let method = if self.setup.resume.is_some() {
       "thread/resume"

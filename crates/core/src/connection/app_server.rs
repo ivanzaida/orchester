@@ -167,6 +167,9 @@ pub struct AppServerStream {
   /// The thread's total at the latest usage notification. Codex repeats a notification unchanged
   /// (when its rate limits change), so `last` counts only when the total moved.
   total: Option<TokenUsage>,
+  /// A turn started and has not completed. A resumed thread first repeats its previous turn's usage, before a turn
+  /// starts: that sets the total and counts nothing.
+  in_turn: bool,
   /// The MCP tools that run without asking, in a step that asks before MCP actions.
   exemptions: InvocationExemptions,
   /// The runner's requests about calls of Orchester's tools that have not started yet.
@@ -379,7 +382,10 @@ impl AppServerStream {
         .and_then(super::plan_limits::codex_limits)
         .map(|limits| vec![Update::Activity(AgentEvent::PlanLimits { limits })])
         .unwrap_or_default(),
-      "turn/started" => vec![Update::Activity(AgentEvent::TurnStarted)],
+      "turn/started" => {
+        self.in_turn = true;
+        vec![Update::Activity(AgentEvent::TurnStarted)]
+      }
       "item/started" => self.item_started(params),
       "item/completed" => self.item_completed(params),
       "thread/tokenUsage/updated" => {
@@ -450,14 +456,22 @@ impl AppServerStream {
     };
     let total = usage(total);
     if self.total != Some(total) {
-      self.usage += usage(last);
+      if self.in_turn {
+        self.usage += usage(last);
+      }
       self.total = Some(total);
     }
+  }
+
+  /// What the running turn spent so far: the model responses Codex reported before the turn ended.
+  pub const fn usage_so_far(&self) -> TokenUsage {
+    self.usage
   }
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
     // A request whose call Codex never started (the turn was cancelled) must not mark a later call.
     self.asked_own.clear();
+    self.in_turn = false;
     let turn = params.get("turn").unwrap_or(&Value::Null);
     let status = turn.get("status").and_then(Value::as_str);
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];
