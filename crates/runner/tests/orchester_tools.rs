@@ -3,8 +3,8 @@
 //! the worktree runs only once approved: through Claude Code's permission prompt, or asked about by the runner when
 //! the call arrives (every Codex call, and a call a CLI ran unasked), whether or not the step asks before MCP actions;
 //! the approval names the folder the call reads in, and Approve similar covers later reads and searches there; a path
-//! the tools never reach is refused before anybody is asked. Needs `git`. Run with `cargo test -p orchester-runner
-//! --features test-agent --test orchester_tools orchester_tools`.
+//! the tools never reach is refused before anybody is asked. Either CLI's prompt says how to run commands (ORC-95).
+//! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test orchester_tools orchester_tools`.
 
 mod support;
 
@@ -19,7 +19,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   orchester_tools::OutputKept,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{Answerer, ApprovalAnswer, DenialNote, PendingToolApproval, Run, RunStatus},
+  run::{Answerer, ApprovalAnswer, DenialNote, PendingToolApproval, RUN_PLAINLY, Run, RunStatus},
   source::SourcePath,
 };
 use orchester_exec::run_capped;
@@ -183,6 +183,10 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
       .any(|line| line.contains("mcp__Orchester__read_external_file")),
     "the prompt points the agent at the tools"
   );
+  assert!(
+    told.iter().any(|line| line == RUN_PLAINLY),
+    "Orchester tells how to run commands without a project instruction (ORC-95): {told:#?}"
+  );
 }
 
 /// Codex gets Orchester's server in its configuration, with its token only in its environment, and every
@@ -244,6 +248,11 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
   assert!(!approved.contains("git_status"), "{approved}");
   let thread = threads(&db, id).pop().expect("a thread");
   assert!(thread["config"].get("mcp_servers").is_none(), "{thread}");
+  let told = reported(&db, id, "prompt| ");
+  assert!(
+    told.iter().any(|line| line == RUN_PLAINLY),
+    "Orchester tells how to run commands without a project instruction (ORC-95): {told:#?}"
+  );
 }
 
 fn source(folder: &Path) -> SourcePath {
