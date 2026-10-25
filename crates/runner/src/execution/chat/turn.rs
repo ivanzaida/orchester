@@ -1,9 +1,10 @@
 //! One turn of the Orchestrator chat: the agent CLI the Orchestrator runs on, started for the person's message
-//! (Claude Code, [`super::claude`]), its output kept as it comes (the session,
-//! each reply, what it spent), and how the turn ended.
+//! (Claude Code, [`super::claude`]), on the connection's API provider when it has one, its output kept as it comes
+//! (the session, each reply, what it spent), and how the turn ended.
 
 use std::{
   path::{Path, PathBuf},
+  sync::Arc,
   time::Duration,
 };
 
@@ -18,6 +19,7 @@ use orchester_core::{
   id::{AgentAccountId, ChatMessageId, ProjectId},
   orchestrator::{Chat, ChatEvent, OrchestratorSettings, TurnFailure, TurnState, runs_orchestrator},
   resource::CommandEnvironment,
+  secret::{SecretValue, SecretVault},
   store::{ConnectionStore, SettingsStore},
   time::Timestamp,
 };
@@ -25,6 +27,7 @@ use orchester_ipc::{ChatTools, Event};
 use orchester_store::ProjectDb;
 use tokio::sync::oneshot;
 
+use super::super::connection_check;
 use crate::{notify::Notifier, supervisor::ProcessExit};
 
 /// Characters of the CLI's standard error kept as the reason of a turn that failed without saying why.
@@ -35,6 +38,8 @@ pub(super) struct Turn {
   pub(super) root: PathBuf,
   pub(super) project: ProjectId,
   pub(super) notifier: Notifier,
+  /// Where the key of the connection's API provider is read from.
+  pub(super) vault: Arc<dyn SecretVault>,
   pub(super) chat: Chat,
   pub(super) message: ChatMessageId,
   pub(super) text: MessageBody,
@@ -46,12 +51,14 @@ pub(super) struct Turn {
   pub(super) time_limit: Duration,
 }
 
-/// What either CLI starts from: the connection, its program and account, the session the turn resumes and the
-/// project's environment.
+/// What either CLI starts from: the connection, its program and account, the key of its API provider, the session
+/// the turn resumes and the project's environment.
 pub(super) struct Prepared {
   pub(super) connection: AgentConnection,
   pub(super) executable: PathBuf,
   pub(super) account: AgentAccountId,
+  /// The API provider's key, read from the keychain for this turn; `None` on the CLI's own sign-in.
+  pub(super) key: Option<Arc<SecretValue>>,
   pub(super) resumed: Option<String>,
   pub(super) environment: CommandEnvironment,
   pub(super) project_name: String,
@@ -84,9 +91,8 @@ impl Turn {
       other => cannot(format!("cannot read the Orchestrator's connection: {other}")),
     })?;
     let provider = connection.provider();
-    // Not one the Orchestrator runs on, as the settings say; nor is a connection on an API provider, whose key a
-    // chat turn is not started with.
-    if !runs_orchestrator(provider) || connection.api_provider().is_some() {
+    // Not one the Orchestrator runs on, as the settings say.
+    if !runs_orchestrator(provider) {
       return Err(TurnFailure::ConnectionGone);
     }
     if let Some(problem) = connection
@@ -103,6 +109,13 @@ impl Turn {
       .account()
       .id(provider)
       .ok_or(TurnFailure::Account(AccountStartProblem::NoAccount))?;
+    // A key secret that is archived, gone or not given by the keychain keeps the turn from starting, as it keeps a
+    // step's agent; the reason names the secret, never its value.
+    let key = connection
+      .api_provider()
+      .map(|on| connection_check::api_key(&db, self.vault.as_ref(), on.key()))
+      .transpose()
+      .map_err(cannot)?;
     let resumed = self
       .chat
       .resumes_on(self.settings.connection(), account)
@@ -118,6 +131,7 @@ impl Turn {
       connection,
       executable,
       account,
+      key,
       resumed,
       environment,
       project_name: db.project().name().as_str().to_owned(),
