@@ -63,6 +63,7 @@ impl Fixture {
       home.join(".ssh/id_rsa"),
       home.join("AppData/Roaming/npm/node_modules/typescript/lib/tsc.js"),
       home.join("AppData/Roaming/npm/node_modules/.npmrc"),
+      home.join("AppData/Roaming/npm/node_modules/.yarnrc.yml"),
       home.join(".local/lib/python3.12/site-packages/requests/api.py"),
       home.join("go/pkg/mod/github.com/spf13/cobra@v1.8.0/command.go"),
     ] {
@@ -232,6 +233,35 @@ fn kontur_credential_reads_stay_held() {
   }
 }
 
+/// A reading cmdlet given a path on another provider, a comma array or a parameter that sets a variable is no read
+/// Orchester can place: it stays held, in PowerShell's names and its aliases.
+#[test]
+fn kontur_powershell_provider_reads_stay_held() {
+  let fixture = Fixture::new();
+  for line in [
+    "pwsh -NoProfile -Command 'Get-Content env:GH_TOKEN'",
+    "pwsh -NoProfile -Command 'cat env:GH_TOKEN'",
+    "pwsh -NoProfile -Command 'Get-ChildItem env:'",
+    "pwsh -NoProfile -Command 'ls Variable:'",
+    r"pwsh -NoProfile -Command 'Get-ChildItem Cert:\CurrentUser\My'",
+    "pwsh -NoProfile -Command 'Select-String token -Path Env:PATH'",
+    "pwsh -NoProfile -Command 'Get-Content src/lib.rs,env:GH_TOKEN'",
+    "pwsh -NoProfile -Command 'Get-Content src/lib.rs -OutVariable PATH'",
+  ] {
+    let hold = fixture.hold(line);
+    assert!(
+      matches!(hold, Some(ReviewHold::Unreadable | ReviewHold::Secrets)),
+      "`{line}` stays held: {hold:?} {:#?}",
+      fixture.command(line).parts()
+    );
+  }
+  assert_eq!(
+    fixture.hold("pwsh -NoProfile -Command 'Get-Content src/lib.rs'"),
+    None,
+    "a file in the worktree is read"
+  );
+}
+
 /// The packages npm, Python and Go install are read like Cargo's dependency sources, also among the home folder's
 /// credential locations.
 #[test]
@@ -265,10 +295,14 @@ fn kontur_package_sources_are_safe_reads() {
       "{package}"
     );
   }
-  assert!(
-    !fixture
-      .scope
-      .in_dependency_sources(&fixture.home.join("AppData/Roaming/npm/node_modules/.npmrc"))
-  );
+  for token in [
+    "AppData/Roaming/npm/node_modules/.npmrc",
+    "AppData/Roaming/npm/node_modules/.yarnrc.yml",
+  ] {
+    assert!(
+      !fixture.scope.in_dependency_sources(&fixture.home.join(token)),
+      "{token}"
+    );
+  }
   assert!(!fixture.scope.in_dependency_sources(&fixture.home.join(".ssh/id_rsa")));
 }

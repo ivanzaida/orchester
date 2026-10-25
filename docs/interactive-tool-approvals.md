@@ -534,12 +534,15 @@ as *unreadable* in a step whose network is off or that only reads, but not when 
 option (`ls`, `cat`, `head`, `tail`, `wc`, `grep`, `cut`, `diff`, `stat`, `echo`, PowerShell's `Get-Content`,
 `Get-ChildItem`, `Select-String`, …; `CommandPart::only_reads`) or `xargs` with listed options runs such a program
 (`find src -name '*.rs' | xargs grep -n x`), every path its words name was placed and it redirects into no file.
-Such a part writes nothing and reaches no network whatever Orchester did not read of it (`grep -R`, an `ls` option
-the tables do not list), so the request goes to the reviewer, which sees the whole line and is told how many parts
-were not read; a credential location it names still holds it as *secrets*, and auto mode never approves it by
-itself. `sort`, `uniq`, `tree`, `file`, `sed`, `awk`, `find` and `rg` are not among those programs (some option of
-each writes or starts a program), nor `jq` (it reads the environment); a command substitution, a variable that is
-not a literal, `xargs` running any other program, a path that cannot be placed (`~bob`) and a script stay
+Such a part writes nothing and starts nothing whatever Orchester did not read of it (`grep -R`, an `ls` option the
+tables do not list), so the request goes to the reviewer, which sees the whole line and is told how many parts were
+not read; a credential location or a share (`\\host\…`) its words name still holds it, and auto mode never approves
+it by itself. What no word names is the reviewer's to judge: the paths `xargs` takes from its standard input, and
+what a link leads to when an option follows links (`grep -R`, `du -L`). A PowerShell cmdlet given a path on another
+provider (`Get-Content env:GH_TOKEN`, `Get-ChildItem Cert:\`), a comma array or a parameter that sets a variable is
+not among those programs. `sort`, `uniq`, `tree`, `file`, `sed`, `awk`, `find` and `rg` are not either (some option
+of each writes or starts a program), nor `jq` (it reads the environment); a command substitution, a variable that
+is not a literal, `xargs` running any other program, a path that cannot be placed (`~bob`) and a script stay
 unreadable.
 
 **Waiting requests.** The dialog shows one request at a time, oldest first, with *1 of 3 waiting* and ‹ ›.

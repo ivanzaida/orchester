@@ -3,8 +3,8 @@
 //! `site-packages` and `dist-packages`, and Go's module cache (`<home>/go/pkg/mod`). It is code published for everyone,
 //! also where it lies among the home folder's credential locations (`AppData/Roaming/npm/node_modules`,
 //! `.local/lib/python3.12/site-packages`, `.nvm/versions/node/*/lib/node_modules`). A `.git` folder in it, and a file
-//! that may keep a registry's token (`.npmrc`, `.yarnrc`, `.pypirc`, `.netrc`, `.env…`), are not. Paths are matched
-//! resolved, so a link in it that leads elsewhere is placed where it leads.
+//! that may keep a registry's token (`.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.pypirc`, `.netrc`, `.env…`), are not.
+//! Paths are matched resolved, so a link in it that leads elsewhere is placed where it leads.
 
 use std::path::{Path, PathBuf};
 
@@ -13,7 +13,7 @@ const PACKAGE_FOLDERS: [&str; 3] = ["node_modules", "site-packages", "dist-packa
 /// Go's module cache in a home folder.
 const GO_MODULES: [&str; 3] = ["go", "pkg", "mod"];
 /// Names in a package folder that may hold a token or name a program.
-const KEPT_OUT: [&str; 5] = [".git", ".npmrc", ".yarnrc", ".pypirc", ".netrc"];
+const KEPT_OUT: [&str; 6] = [".git", ".npmrc", ".yarnrc", ".yarnrc.yml", ".pypirc", ".netrc"];
 
 /// Whether `path` (resolved) lies in a package folder, or in Go's module cache of one of `homes`, and in nothing
 /// [`KEPT_OUT`] there.
