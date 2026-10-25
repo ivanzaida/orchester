@@ -8,6 +8,7 @@ use lurq::app::ctx::{Ctx, FutureHandle, FutureState};
 use orchester_core::{
   connection::{AgentConnection, GitHubConnection, GitHubState, mcp::McpServer},
   id::ConnectionId,
+  time::Timestamp,
 };
 use orchester_workspace::{
   background,
@@ -73,6 +74,15 @@ impl<'a> Entry<'a> {
       Self::Agent(_) => ConnectionsTab::AgentProviders,
       Self::GitHub(_) => ConnectionsTab::GitHub,
       Self::Mcp(_) => ConnectionsTab::McpServers,
+    }
+  }
+
+  /// When its program was last checked; an MCP server is never checked.
+  pub(super) fn checked_at(self) -> Option<Timestamp> {
+    match self {
+      Self::Agent(connection) => connection.last_check().map(|check| check.at),
+      Self::GitHub(connection) => connection.last_check().map(|check| check.at),
+      Self::Mcp(_) => None,
     }
   }
 }

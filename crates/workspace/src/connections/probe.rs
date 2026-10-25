@@ -19,7 +19,7 @@ use orchester_core::{
 use orchester_exec::ProcessRunner;
 
 /// A CLI that does not answer a status command within this time is reported as not running.
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNNER: ProcessRunner = ProcessRunner::new(COMMAND_TIMEOUT);
 
 /// Checks the agent CLI at `executable` on its Default account now; `None` for a native provider, which has no CLI.

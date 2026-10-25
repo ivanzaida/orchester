@@ -17,7 +17,7 @@ use orchester_core::{
 use super::{
   Actions, Inspecting, Parts,
   agent::{models, properties},
-  check_button, footer, footer_action,
+  check_button, footer, footer_action, result,
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
@@ -75,13 +75,14 @@ pub(super) fn parts(
     (ConnectionStatus::NotRecognized, _) => ctx.t("connections.detail.notRecognized"),
     _ => ctx.t("connections.detail.couldNotRun"),
   };
+  let tested = result::agent(ctx, connection, inspecting).into_iter().collect();
   Parts {
     header,
     body,
     footer: Some(footer(
       ctx,
       inspecting,
-      (&sentence, Vec::new()),
+      (&sentence, tested),
       (vec![buttons], Vec::new()),
     )),
   }
