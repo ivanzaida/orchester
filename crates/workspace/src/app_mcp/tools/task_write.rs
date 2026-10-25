@@ -11,7 +11,7 @@ use orchester_core::{
   task::{
     Task, TaskDetails,
     estimate::{StoryPoints, check_automation},
-    organization::{ChangeActor, TaskOrganization},
+    organization::{ChangeActor, TaskOrganization, WorkflowStatus},
   },
   time::Timestamp,
   tokens::TokenBudget,
@@ -344,6 +344,16 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let base = task.organization().clone();
   let changes = args.changes();
   let edited = changes.apply(&db, &base)?;
+  // Closing waits for the task's run to stop, as the app asks a person first; the store refuses Canceled itself.
+  if edited.status() == WorkflowStatus::Done
+    && base.status() != WorkflowStatus::Done
+    && db.active_task_run(task.id())?.is_some()
+  {
+    return Err(ToolError::refused(
+      "stop_run_first",
+      vec![Message::new("tasks.close.stopRunFirst")],
+    ));
+  }
   drop(db);
   let current = task.details();
   let pipeline = match args.pipeline.as_deref() {

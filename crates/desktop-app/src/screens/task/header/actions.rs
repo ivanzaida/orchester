@@ -37,8 +37,8 @@ use crate::{
   },
 };
 
-/// The row with `controls` after the task's own actions ([`task_actions`]).
-pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> Element {
+/// The row with `controls` after the task's own actions ([`task_actions`]), and `more`, its *More actions* menu, last.
+pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>, more: Option<Element>) -> Element {
   let mut reasons: Vec<Reason> = Vec::new();
   let mut actions = task_actions(ctx, props);
   for control in controls {
@@ -52,6 +52,7 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> 
       reasons.push(reason);
     }
   }
+  actions.extend(more);
   // A run that cannot be read says why on its Summary; the line would say it twice.
   let line = (!reasons.is_empty() && props.task.detail.latest_unreadable.is_none()).then(|| {
     let shorts: Vec<&str> = reasons.iter().map(|reason| &*reason.short).collect();

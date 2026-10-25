@@ -202,7 +202,7 @@ fn ensure_task(connection: &Connection, task: TaskId) -> Result<(), StoreError> 
 
 /// The latest run of `task` that has not ended. An interrupted run whose worktree was removed never
 /// continues, so it counts as ended (ORC-63).
-fn active_run(connection: &Connection, task: TaskId) -> Result<Option<RunId>, StoreError> {
+pub(super) fn active_run(connection: &Connection, task: TaskId) -> Result<Option<RunId>, StoreError> {
   let id: Option<String> = connection
     .query_row(
       "SELECT id FROM runs WHERE task_id = ?1 AND status NOT IN ('succeeded', 'failed', 'cancelled') \

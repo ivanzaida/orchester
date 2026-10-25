@@ -137,6 +137,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::detail::TaskDetail {}
     impl $inspect for crate::tasks::integration::IntegrationProblem {}
     impl $inspect for crate::tasks::integration::LeftBehind {}
+    impl $inspect for crate::tasks::delete::DeletionPreview {}
     impl $inspect for crate::tasks::integration::Merged {}
     impl $inspect for crate::tasks::integration_jobs::JobState {}
     impl $inspect for crate::tasks::integration_jobs::ProjectJobState {}

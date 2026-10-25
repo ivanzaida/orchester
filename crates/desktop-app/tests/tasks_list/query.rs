@@ -154,6 +154,7 @@ fn choose(seeded: &mut Seeded, id: &str, label: &str) {
     .unwrap_or_else(|| panic!("{id} offers {label}: {:?}", select.labels()));
   select.commit(index);
   seeded.window.pass();
+  seeded.until("the rows laid out", Seeded::rows_laid_out);
 }
 
 #[test]

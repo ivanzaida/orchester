@@ -503,7 +503,7 @@ fn clear(
 
 /// Removes the codebase indexes that only removed worktrees used. The worktrees are gone either way;
 /// an index left behind goes with the next removal.
-fn prune_indexes(repo_root: &Path) {
+pub(super) fn prune_indexes(repo_root: &Path) {
   if let Err(error) = CodebaseIndexes::new(repo_root).prune() {
     tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
   }

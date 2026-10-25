@@ -210,6 +210,29 @@ pub fn clean_up(
   run: &Run,
   confirmed: Option<&Leftovers>,
 ) -> Result<Cleanup, CleanupError> {
+  clear(runner, (git, repo), run, Discard::Seen(confirmed))
+}
+
+/// Removes every worktree of `run`, which ended, uncommitted changes and all, and deletes every branch of it, merged
+/// or not: what a person who deletes the run's task chose to lose with it (ORC-91). Commits merged elsewhere stay
+/// on the branches they were merged into. Errors and refusals come as [`clean_up`]'s do.
+pub fn clean_up_all(runner: &impl CommandRunner, git: &Path, repo: &Path, run: &Run) -> Result<Cleanup, CleanupError> {
+  clear(runner, (git, repo), run, Discard::Everything)
+}
+
+/// What a clean-up may lose: the uncommitted changes a person saw and nothing unmerged, or everything the run left.
+#[derive(Clone, Copy)]
+enum Discard<'a> {
+  Seen(Option<&'a Leftovers>),
+  Everything,
+}
+
+fn clear(
+  runner: &impl CommandRunner,
+  (git, repo): (&Path, &Path),
+  run: &Run,
+  discard: Discard<'_>,
+) -> Result<Cleanup, CleanupError> {
   if run.status().has_live_work() {
     return Err(CleanupError::LiveWork);
   }
@@ -220,14 +243,15 @@ pub fn clean_up(
     git.stdout(&["worktree", "prune"])?;
   }
   for worktree in current.worktrees {
-    remove(&git, worktree, confirmed, &mut cleanup);
+    remove(&git, worktree, discard, &mut cleanup);
   }
+  let unmerged_too = matches!(discard, Discard::Everything);
   for branch in current.branches {
     let kept = cleanup
       .kept_worktrees
       .iter()
       .any(|(worktree, _)| worktree.branch.as_ref() == Some(&branch.name));
-    let reason = match (branch.merged, kept) {
+    let reason = match (branch.merged || unmerged_too, kept) {
       (false, _) => Some(KeepReason::NotMerged),
       (true, true) => Some(KeepReason::InKeptWorktree),
       (true, false) => match git.output(&["branch", "--quiet", "-D", branch.name.as_str()]) {
@@ -243,22 +267,20 @@ pub fn clean_up(
   Ok(cleanup)
 }
 
-fn remove<R: CommandRunner>(
-  git: &Git<'_, R>,
-  worktree: LeftWorktree,
-  confirmed: Option<&Leftovers>,
-  cleanup: &mut Cleanup,
-) {
+fn remove<R: CommandRunner>(git: &Git<'_, R>, worktree: LeftWorktree, discard: Discard<'_>, cleanup: &mut Cleanup) {
   if worktree.missing {
     cleanup.removed.push(worktree);
     return;
   }
+  let agreed = match discard {
+    Discard::Everything => true,
+    Discard::Seen(confirmed) => confirmed.is_some_and(|confirmed| {
+      confirmed.worktrees.iter().any(|seen| {
+        seen.path == worktree.path && seen.uncommitted == worktree.uncommitted && seen.listing == worktree.listing
+      })
+    }),
+  };
   let discard = worktree.loses_files();
-  let agreed = confirmed.is_some_and(|confirmed| {
-    confirmed.worktrees.iter().any(|seen| {
-      seen.path == worktree.path && seen.uncommitted == worktree.uncommitted && seen.listing == worktree.listing
-    })
-  });
   if discard && !agreed {
     let files = worktree.uncommitted.clone();
     cleanup.kept_worktrees.push((worktree, KeepReason::Uncommitted(files)));

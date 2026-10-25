@@ -480,6 +480,14 @@
       "confirmRequired": "Confirm stopping the active run before canceling this task.",
       "startedSince": "A run started after the confirmation opened. It was not stopped and the task was not canceled."
     },
+    "close": {
+      "stopRunFirst": "A run of this task has not ended. Stop it before closing the task."
+    },
+    "delete": {
+      "stopRunFirst": "A run of this task has not ended. Stop it before deleting the task.",
+      "shared": "This project's tasks are kept on its team server, which does not delete tasks. Close the task instead: set it to Done or Canceled.",
+      "branchNotDeleted": "Git did not delete the branch {{branch}}: {{detail}}. The task was not deleted; try again."
+    },
     "tags": {
       "duplicate": "A tag with that name already exists, ignoring case.",
       "stale": "This tag no longer exists. Reload the project tag list.",

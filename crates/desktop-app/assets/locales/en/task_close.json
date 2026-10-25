@@ -1,0 +1,63 @@
+{
+  "task_close": {
+    "menu": {
+      "label": "More actions for {{task}}",
+      "done": "Mark as done",
+      "cancel": "Cancel task",
+      "reopen": "Reopen task",
+      "delete": "Delete task…",
+      "deleteShared": "This project's tasks are kept on its team server, which does not delete tasks. Close the task instead.",
+      "busy": "Wait until the change under way is done."
+    },
+    "stop": {
+      "title": "Stop the run of {{task}}?",
+      "done": "{{task}} has a run that has not ended. Confirming stops that run and marks {{task}} as Done. Its work stays on its branch.",
+      "canceled": "{{task}} has a run that has not ended. Confirming stops that run and sets {{task}} to Canceled. Its work stays on its branch.",
+      "keep": "Keep it running",
+      "confirmDone": "Stop run and mark as done",
+      "confirmCanceled": "Stop run and cancel task"
+    },
+    "delete": {
+      "title": "Delete {{task}}?",
+      "reading": "Reading what goes with the task…",
+      "runs": {
+        "none": "{{task}} has no runs; its conversation and artifacts go with it.",
+        "one": "{{task}} goes with its run and the run's history (steps, transcripts, plans, approvals and usage), its conversation and artifacts.",
+        "other": "{{task}} goes with its {{count}} runs and their history (steps, transcripts, plans, approvals and usage), its conversation and artifacts."
+      },
+      "memories": {
+        "one": "Its memory record goes too.",
+        "other": "Its {{count}} memory records go too."
+      },
+      "projectMemories": {
+        "one": "1 project memory record its agents wrote goes too.",
+        "other": "{{count}} project memory records its agents wrote go too."
+      },
+      "projectRules": {
+        "one": "1 project approval rule approved in its runs goes too: later runs ask again.",
+        "other": "{{count}} project approval rules approved in its runs go too: later runs ask again."
+      },
+      "blocking": {
+        "one": "1 task it blocks is no longer linked to it.",
+        "other": "{{count}} tasks it blocks are no longer linked to it."
+      },
+      "final": "This can't be undone.",
+      "git": "The worktrees its runs left are removed and their merged branches deleted. Merged work stays in your git history.",
+      "unmerged": {
+        "title": "Also remove work that is not merged",
+        "worktrees": {
+          "one": "1 worktree holds uncommitted changes.",
+          "other": "{{count}} worktrees hold uncommitted changes."
+        },
+        "branches": {
+          "one": "1 branch has commits that are not merged.",
+          "other": "{{count}} branches have commits that are not merged."
+        },
+        "kept": "Left unticked, they stay in the repository."
+      },
+      "personOnly": "Only a person deletes a task: input from an MCP client is not taken here.",
+      "cancel": "Cancel",
+      "confirm": "Delete task"
+    }
+  }
+}

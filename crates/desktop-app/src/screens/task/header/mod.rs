@@ -1,6 +1,7 @@
 //! The task page's header (`Task header` `x8Dmfa` in `lUXff`): the breadcrumb, the title with its
-//! actions (`actions`), the status and run line, the task's module (`module`, ORC-48, no frame yet), the frame's
-//! notices, Run again's and the latest run's
+//! actions (`actions`) and its *More actions* menu that closes, reopens or deletes the task (`task_close`, ORC-91,
+//! no frame yet), the status and run line, the task's module (`module`, ORC-48, no frame yet), the frame's
+//! notices, Run again's, closing's and deleting's and the latest run's
 //! *Remove worktree* confirmations in place, and the page tabs (`Page tabs` `L9OIIZ`; Artifacts and Memory last,
 //! `ogMzT` in `a0PLO`). It is the same component on every tab, so a request under way or an open
 //! confirmation stays as the tabs switch.
@@ -35,6 +36,7 @@ use super::{
 use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
+  screens::task_close::{self, Closer, MenuPlace, Subject},
   services::Services,
   theme::ExtraSpacing,
   ui::{
@@ -59,16 +61,24 @@ pub struct TaskHeader {
   confirming: Signal<Confirming>,
   /// Its switch that removes the worktrees of the run before, off each time it opens.
   remove: Signal<bool>,
+  /// Closing, reopening and deleting the task; a deleted task's page goes to the Tasks list.
+  closer: Closer,
+  /// Where the *More actions* menu is open.
+  menu: MenuPlace,
 }
 
 impl Component for TaskHeader {
   type Props = HeaderProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let project = ctx.props::<HeaderProps>().task.project.clone();
+    let tasks = Route::Project(project.open.project.id(), ProjectPage::Tasks(TaskList::default()));
     Self {
       refusals: Refusals::new(ctx),
       confirming: ctx.signal(Confirming::default()),
       remove: ctx.signal(false),
+      closer: Closer::new(ctx, (project.open, project.feed), Some(tasks)),
+      menu: MenuPlace::new(ctx),
     }
   }
 
@@ -117,7 +127,8 @@ impl Component for TaskHeader {
     if kept {
       shown.clear();
     }
-    let title_row = actions::title_row(ctx, &props, shown);
+    let more = (!kept).then(|| self.more(ctx, &props.task));
+    let title_row = actions::title_row(ctx, &props, shown, more);
     let confirmation = check
       .as_ref()
       .and_then(|check| check.as_ref().ok())
@@ -138,6 +149,7 @@ impl Component for TaskHeader {
       .with_children(module::field(ctx, &props.task))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
       .with_children(confirmation)
+      .with_children(task_close::panel(ctx, &self.closer, "task-close"))
       .with_children(removal(ctx, &props))
       .child(
         Column::new()
@@ -178,6 +190,18 @@ impl TaskHeader {
         busy,
       },
     ))
+  }
+
+  /// The *More actions* menu of the task the page shows.
+  fn more(&self, ctx: &mut Ctx, task: &TaskContext) -> Element {
+    let detail = &task.detail;
+    let subject = Subject {
+      id: detail.task.id(),
+      key: Arc::from(detail.task.key().to_string()),
+      status: detail.task.organization().status(),
+      shared: detail.shared.is_some(),
+    };
+    task_close::more_menu(ctx, (&self.closer, &self.menu), &subject, "task-more")
   }
 }
 
