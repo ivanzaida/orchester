@@ -10,7 +10,8 @@
 //! "Conversation (merged with Activity)") is given to the agent while its turn runs, after the tool
 //! call it is running ([`Arrival::MidTurn`]); a turn that ends first takes it at its end
 //! ([`Arrival::TurnEnd`]). One the agent's CLI could not take is not delivered
-//! ([`Delivery::NotDelivered`]) and is kept: the person may send it after the turn instead.
+//! ([`Delivery::NotDelivered`]) and is kept: the person may send it after the turn instead. Automation's
+//! is sent after the turn at once ([`Message::not_taken`]), since nobody is there to choose.
 //!
 //! An agent writes back in two ways: the reply that ends the turn a message was delivered in, and a
 //! question — a step result that asks the person before the step can go on
@@ -131,6 +132,15 @@ pub enum Undelivered {
   Refused,
   /// It could not be written to the CLI, or the CLI did not read it in time.
   Unwritable,
+}
+
+/// What became of a message sent now that the agent's CLI did not take ([`Message::not_taken`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotTaken {
+  /// A person's: kept, not delivered, for the person to send after the turn or edit.
+  Kept,
+  /// Automation's: queued for when the agent's turn ends, as *Send after this turn* queues it.
+  AfterTurn,
 }
 
 /// Where a person's message stands: queued → delivered → acknowledged, or not delivered.
@@ -500,6 +510,24 @@ impl Message {
     *delivery = Delivery::NotDelivered { execution, at, reason };
     self.run = Some(run);
     Ok(())
+  }
+
+  /// Sent now to `execution`'s agent of `run`, its CLI did not take it at `at`, for `reason`. A person's is kept, not
+  /// delivered ([`Self::not_delivered`]), for the person to choose what follows; automation's, which nobody is there
+  /// to send again, is queued for when the agent's turn ends instead, as *Send after this turn* queues it.
+  pub fn not_taken(
+    &mut self,
+    run: RunId,
+    execution: StepExecutionId,
+    at: Timestamp,
+    reason: Undelivered,
+  ) -> Result<NotTaken, MessageError> {
+    self.not_delivered(run, execution, at, reason)?;
+    if !self.by_automation {
+      return Ok(NotTaken::Kept);
+    }
+    self.send_after_turn()?;
+    Ok(NotTaken::AfterTurn)
   }
 
   /// A message that was not delivered, queued again for when its agent's turn ends: the person

@@ -25,7 +25,7 @@ use std::{io, time::Duration};
 use orchester_core::{
   attachment::input::{AttachedFile, claude_content, codex_items, taken_text, user_line},
   connection::app_server::PendingApproval,
-  conversation::{Arrival, Delivery, Message, Undelivered},
+  conversation::{Arrival, Delivery, Message, NotTaken, Undelivered},
   id::MessageId,
   store::ConversationStore,
   time::Timestamp,
@@ -247,7 +247,11 @@ impl Worker {
         tracing::info!(message = %id, "the turn ended before the message; it is read at its end");
         continue;
       }
-      tracing::warn!(message = %id, %reason, "Codex did not add the message to its turn");
+      // Codex 0.159.2 also refuses a review or compaction turn, a turn other than `expectedTurnId`, and input that is
+      // empty or too large; its reason and the turn as the runner saw it tell which.
+      let turn = self.app_server().and_then(AppServerSession::turn);
+      let tools_running = self.app_server().is_some_and(AppServerSession::has_active_tools);
+      tracing::warn!(message = %id, %reason, ?turn, tools_running, "Codex did not add the message to its turn");
       self.not_delivered(watch, sent.message.id(), Undelivered::Refused)?;
     }
     Ok(())
@@ -266,7 +270,8 @@ impl Worker {
     let (run, execution, invocation) = (watch.invocation.run, watch.invocation.execution, watch.invocation.id);
     self.record(watch, sent.message.id(), |message| {
       message.deliver(run, (execution, invocation), Timestamp::now(), arrival)
-    })
+    })?;
+    Ok(())
   }
 
   /// Codex's turn ended and kept the messages it accepted but did not show it took: they are
@@ -282,20 +287,27 @@ impl Worker {
     Ok(())
   }
 
+  /// The CLI did not take message `id` for `reason`: a person's is kept, not delivered; automation's waits for the
+  /// turn's end ([`Message::not_taken`]), where the step reads it as it reads any message queued meanwhile.
   fn not_delivered(&self, watch: &mut Watch, id: MessageId, reason: Undelivered) -> Result<(), StoreError> {
     let (run, execution) = (watch.invocation.run, watch.invocation.execution);
-    self.record(watch, id, |message| {
-      message.not_delivered(run, execution, Timestamp::now(), reason)
-    })
+    let became = self.record(watch, id, |message| {
+      message.not_taken(run, execution, Timestamp::now(), reason)
+    })?;
+    if became == Some(NotTaken::AfterTurn) {
+      tracing::info!(message = %id, ?reason, "automation's message the CLI did not take is sent after the turn");
+    }
+    Ok(())
   }
 
-  /// Changes message `id` as stored, while it is not delivered, and announces the run's change.
-  fn record(
+  /// Changes message `id` as stored, while it is not delivered, and announces the run's change; what `change` said,
+  /// once the change is stored.
+  fn record<T>(
     &self,
     watch: &mut Watch,
     id: MessageId,
-    change: impl FnOnce(&mut Message) -> Result<(), orchester_core::conversation::MessageError>,
-  ) -> Result<(), StoreError> {
+    change: impl FnOnce(&mut Message) -> Result<T, orchester_core::conversation::MessageError>,
+  ) -> Result<Option<T>, StoreError> {
     let stored = watch
       .db
       .messages(self.task)?
@@ -309,24 +321,27 @@ impl Worker {
     };
     let Some(before) = stored.filter(pending) else {
       tracing::debug!(message = %id, "the message was delivered already");
-      return Ok(());
+      return Ok(None);
     };
     let mut message = before.clone();
-    if let Err(error) = change(&mut message) {
-      tracing::warn!(message = %id, %error, "the message's delivery does not change");
-      return Ok(());
-    }
+    let changed = match change(&mut message) {
+      Ok(changed) => changed,
+      Err(error) => {
+        tracing::warn!(message = %id, %error, "the message's delivery does not change");
+        return Ok(None);
+      }
+    };
     // The person may send it after the turn meanwhile; whoever writes first wins, and the other
     // change is left out.
     if !watch.db.change_delivery(&before, &message)? {
       tracing::info!(message = %id, "the message changed meanwhile; its delivery is left as it is");
-      return Ok(());
+      return Ok(None);
     }
     self.notifier.send(Event::RunChanged {
       run: watch.invocation.run,
       task: self.task,
     });
-    Ok(())
+    Ok(Some(changed))
   }
 }
 

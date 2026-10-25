@@ -4,8 +4,9 @@
 //! running (delivered mid-turn, in the same invocation); one whose turn ended first is delivered at
 //! the end of the turn (Codex: the session continues to read it, or, when Codex had accepted it, it
 //! kept it as the turn ended and it is delivered once; Claude Code: its next turn); one
-//! Codex refuses, or that Claude Code does not read, is not delivered and goes no further; a message
-//! sent after the turn stays queued while the agent works and is delivered when its turn ends.
+//! Codex refuses, or that Claude Code does not read, is not delivered and goes no further, unless automation
+//! sent it: then it is sent after the turn; a message sent after the turn stays queued while the agent works
+//! and is delivered when its turn ends.
 //! Needs `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test send_now send_`. The live
 //! checks on the real CLIs are ignored: they run with `-- --ignored` and the CLI's program in
@@ -291,6 +292,62 @@ async fn send_now_codex_refused_is_not_delivered_and_goes_no_further() {
     delivery(root, project.task),
     Some(Delivery::NotDelivered { .. })
   ));
+}
+
+/// Issue #56: automation's message sent now that Codex refuses to add to the running turn is not left for a
+/// person to send again: it is queued for the turn's end (the conversation and `get_conversation` show it
+/// queued, never not delivered), and the session continues to read it as the turn ends.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_now_codex_refused_from_automation_is_sent_after_the_turn() {
+  let project = with(AgentProvider::CodexCli, "Refuse a message.");
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started(&project).await;
+  let message = Message::from_person(
+    project.task,
+    Some(id),
+    Recipient::Orchestrator,
+    MessageBody::new("Continue with the research.").expect("a message"),
+    Timestamp::now(),
+  )
+  .sent(Timing::Now)
+  .and_then(Message::sent_by_automation)
+  .expect("a message on the person's side");
+  ProjectDb::open(root)
+    .expect("open")
+    .send_message(IdempotencyKey::generate(), &message)
+    .expect("stored");
+  scheduler.deliver_messages(id).await.expect("taken");
+  let run = wait_for(root, &mut events, id, ended).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(
+    invocations(root, id),
+    2,
+    "the session continued to read it after the turn"
+  );
+  let stored = ProjectDb::open(root)
+    .expect("open")
+    .messages(project.task)
+    .expect("messages");
+  let sent = stored
+    .iter()
+    .find(|stored| stored.id() == message.id())
+    .expect("the message");
+  assert_eq!(
+    sent.timing(),
+    Timing::AfterTurn,
+    "queued for the turn's end, as Send after this turn"
+  );
+  assert!(
+    matches!(
+      sent.delivery(),
+      Some(Delivery::Acknowledged {
+        arrival: Arrival::TurnEnd,
+        ..
+      })
+    ),
+    "{:?}",
+    sent.delivery()
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]

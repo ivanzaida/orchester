@@ -11,7 +11,10 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentProvider, compare_versions,
-    invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform, agent_environment, is_agent_variable},
+    invocation::{
+      CODEX_ISOLATION, CODEX_SUB_AGENTS_OFF, CodexAgentFiles, CodexInvocation, Platform, agent_environment,
+      is_agent_variable,
+    },
     rank_installed,
   },
   permission::NetworkAccess,
@@ -34,12 +37,13 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
   }
 }
 
-/// The arguments after the isolation overrides and the untrusted projects, which every invocation
-/// starts with.
+/// The arguments after the isolation overrides, the sub-agents turned off and the untrusted projects, which every
+/// invocation starts with.
 fn args(invocation: &CodexInvocation<'_>) -> Vec<String> {
   let args = invocation.args().expect("unicode paths");
   let isolation: Vec<String> = CODEX_ISOLATION
     .iter()
+    .chain(&CODEX_SUB_AGENTS_OFF)
     .flat_map(|setting| ["-c".to_owned(), (*setting).to_owned()])
     .collect();
   assert_eq!(args[2..2 + isolation.len()], isolation, "{args:?}");
@@ -115,6 +119,23 @@ fn invocation_turns_off_what_the_users_codex_setup_would_add() {
       args.windows(2).any(|pair| pair == ["-c", setting]),
       "{setting}: {args:?}"
     );
+  }
+}
+
+/// Issue #56: a Codex sub-agent had none of the step's MCP tools, Orchester's included, so every step turns Codex's
+/// sub-agents off, read-only or writing, on every platform.
+#[test]
+fn invocation_turns_codex_sub_agents_off() {
+  for access in [RepositoryAccess::ReadOnly, RepositoryAccess::Write] {
+    for platform in [Platform::Windows, Platform::MacOs] {
+      let args = invocation(access, platform).args().expect("unicode paths");
+      for setting in ["features.multi_agent=false", "features.multi_agent_v2=false"] {
+        assert!(
+          args.windows(2).any(|pair| pair == ["-c", setting]),
+          "{setting}: {args:?}"
+        );
+      }
+    }
   }
 }
 
