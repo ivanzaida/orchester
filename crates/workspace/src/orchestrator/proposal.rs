@@ -147,6 +147,6 @@ fn started_run(told: &Value) -> Option<RunId> {
 }
 
 /// The proposal no longer waits: another decision took it, or it was settled.
-fn taken() -> Message {
+pub(super) fn taken() -> Message {
   Message::new("orchestrator.proposal.taken")
 }

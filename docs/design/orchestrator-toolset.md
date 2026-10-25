@@ -566,7 +566,10 @@ listed in `tools::CHAT_TOOLS`; no client of the app has it).
   wait, a run's end or a day's report started by itself (`ChatScope::on_its_own`; refused `not_persons_turn`), and not a
   message automation sent through the window. The composer keeps who sent each message (`EntryKind::Person::sent_by`,
   `orchestrator_entries.by_automation`): a send pressed by lurq's synthetic input is automation's, and its turn approves
-  nothing (`automation_input`). Auto mode starts no turn, so it approves nothing either.
+  nothing (`automation_input`). Auto mode starts no turn, so it approves nothing either. A message sent into the answer
+  under way (*Send now*, section 12) reaches the agent as the person's words too: once the turn took it, the newest such
+  message is the one that approves (the card names it), and the turn approves nothing once automation sent any of them
+  (`automation_input`). One handed over but not taken yet has not reached the agent and approves nothing.
 - **Only what the person could see.** The proposal must still wait in this conversation and have been kept before the
   person's message (`not_pending` otherwise): a proposal the chat makes in a turn is never applied in that turn, so a
   card is never skipped. Without `proposal` the tool lists the proposals that wait, each with its number, what it does

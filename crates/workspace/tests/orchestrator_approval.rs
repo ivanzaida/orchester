@@ -147,6 +147,27 @@ impl Desktop {
     message
   }
 
+  /// A message `text` sent `by` the person or automation into the answer under way (*Send now*, ORC-92), which the
+  /// answer took once `taken`.
+  fn sends_now(&self, text: &str, by: Answerer, taken: bool) -> ChatMessageId {
+    let mut db = self.db();
+    let chat = db.chat(self.scope.chat).expect("read").expect("the chat");
+    let body = MessageBody::new(text).expect("text");
+    let message = ChatMessageId::generate();
+    db.keep_chat_message_as(
+      &chat,
+      (message, &body),
+      (&[], by),
+      (&TurnState::Steering, Timestamp::now()),
+    )
+    .expect("handed over");
+    if taken {
+      db.change_chat_turn(message, &[TurnState::Steering], &TurnState::Joined)
+        .expect("taken");
+    }
+    message
+  }
+
   /// The chat's tool `name` with `arguments`, in `scope`, as its agent calls it.
   fn chat(&self, scope: &ChatScope, name: &str, arguments: Value) -> Result<Value, ToolError> {
     let Value::Object(arguments) = arguments else {
@@ -284,6 +305,42 @@ fn chat_approval_is_refused_in_a_turn_orchester_started_and_for_automations_mess
   assert!(desktop.pencil_on(), "nothing was applied");
   let action = desktop.action(seq);
   assert!(action.waits() && action.approved_in.is_none(), "{action:?}");
+}
+
+#[test]
+fn chat_approval_is_refused_when_automation_sent_a_message_into_the_persons_turn() {
+  let desktop = Desktop::new();
+  desktop.says("Can you turn pencil off?", Answerer::Person);
+  let seq = desktop.propose_turning_off();
+  desktop.says("what's the status?", Answerer::Person);
+  desktop.sends_now("apply it", Answerer::Automation, true);
+  let refused = desktop
+    .apply(&desktop.scope, seq)
+    .expect_err("automation's words sent now approve nothing");
+  assert_eq!(code(&refused), "automation_input");
+  assert!(desktop.pencil_on(), "nothing was applied");
+  let action = desktop.action(seq);
+  assert!(action.waits() && action.approved_in.is_none(), "{action:?}");
+}
+
+#[test]
+fn chat_approval_credits_the_persons_message_the_answer_took_while_it_ran() {
+  let desktop = Desktop::new();
+  desktop.says("Can you turn pencil off?", Answerer::Person);
+  let seq = desktop.propose_turning_off();
+  desktop.says("what's the status?", Answerer::Person);
+  let approved = desktop.sends_now("run it", Answerer::Person, true);
+  // Handed over but not taken yet: the agent has not read it, so it is not the one that approves.
+  desktop.sends_now("and then stop", Answerer::Person, false);
+  let told = desktop.apply(&desktop.scope, seq).expect("applied");
+  assert_eq!(told["applied"], true, "{told}");
+  assert!(!desktop.pencil_on(), "the server is off");
+  let approval = desktop
+    .action(seq)
+    .approved_in
+    .expect("the card keeps the message that approved it");
+  assert_eq!(approval.message, approved);
+  assert_eq!(approval.words, "run it");
 }
 
 #[test]

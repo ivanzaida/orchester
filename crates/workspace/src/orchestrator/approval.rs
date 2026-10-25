@@ -11,7 +11,7 @@
 
 use orchester_core::{
   orchestrator::{
-    ActionOutcome, ChatAction, ChatApproval, ChatEntry, EntryKind,
+    ActionOutcome, ChatAction, ChatApproval, ChatEntry, EntryKind, TurnState,
     change::{ClickOnly, ProposedChange},
     chat::title_of,
   },
@@ -104,7 +104,14 @@ pub(super) async fn call(
   }
   let carried = proposal::accept((services, translate, runners), scope, seq, (&[], Some(approval)))
     .await
-    .map_err(|message| ToolError::refused("not_pending", vec![message]))??;
+    .map_err(|message| {
+      let code = if message.key == proposal::taken().key {
+        "not_pending"
+      } else {
+        "project_data"
+      };
+      ToolError::refused(code, vec![message])
+    })??;
   Ok(json!({
     "applied": true,
     "proposal": seq,
@@ -113,28 +120,56 @@ pub(super) async fn call(
   }))
 }
 
-/// The person's message that started the turn under way among a conversation's `entries`: refused when no person's
-/// message did (a wait, a run's end or a day's report started it by itself) or automation sent it.
+/// The person's message among a conversation's `entries` that approves in the turn under way: the newest the turn took
+/// while it answered (*Send now*), or else the one that started it. Refused when no person's message started the turn
+/// (a wait, a run's end or a day's report started it by itself), or when automation sent the message that started it
+/// or any message handed to it since, since the agent reads them all alike as the person's words.
 fn approver(entries: &[ChatEntry]) -> Result<ChatApproval, ToolError> {
-  let thinking = entries
+  let Some(start) = entries
+    .iter()
+    .rposition(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()))
+  else {
+    return Err(refused("not_persons_turn", "orchestrator.approval.notPersonsTurn"));
+  };
+  if !matches!(entries[start].kind, EntryKind::Person { .. }) {
+    return Err(refused("not_persons_turn", "orchestrator.approval.notPersonsTurn"));
+  }
+  let handed = entries[start + 1..].iter().filter(|entry| {
+    matches!(
+      &entry.kind,
+      EntryKind::Person {
+        turn: TurnState::Steering | TurnState::Joined,
+        ..
+      }
+    )
+  });
+  let in_turn: Vec<&ChatEntry> = std::iter::once(&entries[start]).chain(handed).collect();
+  if in_turn
+    .iter()
+    .any(|entry| matches!(&entry.kind, EntryKind::Person { sent_by, .. } if *sent_by != Answerer::Person))
+  {
+    return Err(refused("automation_input", "orchestrator.approval.automationInput"));
+  }
+  // A message still handed over has not reached the agent yet, so it cannot be the one it acts on.
+  let approving = in_turn
     .iter()
     .rev()
-    .find(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()));
-  match thinking.map(|entry| (entry.seq, &entry.kind)) {
-    Some((
-      seq,
-      EntryKind::Person {
-        message,
-        text,
-        sent_by: Answerer::Person,
-        ..
-      },
-    )) => Ok(ChatApproval {
+    .find(|entry| {
+      !matches!(
+        &entry.kind,
+        EntryKind::Person {
+          turn: TurnState::Steering,
+          ..
+        }
+      )
+    })
+    .unwrap_or(&in_turn[0]);
+  match &approving.kind {
+    EntryKind::Person { message, text, .. } => Ok(ChatApproval {
       message: *message,
-      seq,
+      seq: approving.seq,
       words: title_of(text.as_str()),
     }),
-    Some((_, EntryKind::Person { .. })) => Err(refused("automation_input", "orchestrator.approval.automationInput")),
     _ => Err(refused("not_persons_turn", "orchestrator.approval.notPersonsTurn")),
   }
 }
