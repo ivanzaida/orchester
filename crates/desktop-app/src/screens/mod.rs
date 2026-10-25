@@ -28,6 +28,7 @@ mod secrets;
 mod settings;
 mod skills;
 pub(crate) mod task;
+mod task_close;
 mod task_form;
 mod tasks;
 mod tools;

@@ -270,11 +270,12 @@ impl Latest {
   }
 }
 
-/// How many tasks wait in the queue for their run to start (the status bar's Queued count).
+/// How many tasks wait in the queue for their run to start (the status bar's Queued count); a closed task waits for
+/// nothing.
 pub fn queued(tasks: &[Task], phases: &Phases) -> usize {
   tasks
     .iter()
-    .filter(|task| phase_of(task, phases) == Some(TaskPhase::Queued))
+    .filter(|task| !task.organization().status().is_closed() && phase_of(task, phases) == Some(TaskPhase::Queued))
     .count()
 }
 

@@ -27,7 +27,7 @@ use thiserror::Error;
 pub use self::{
   cleanup::{
     Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, WORKTREES_DIR,
-    WorktreeOwner, clean_up, leftovers, leftovers_of, parse_worktree_list,
+    WorktreeOwner, clean_up, clean_up_all, leftovers, leftovers_of, parse_worktree_list,
   },
   drift::{Drift, MAX_LANDED, branch_head, commit_subject, drift},
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},

@@ -88,6 +88,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::TaskNotSelectable { problem, .. } => crate::tasks::group::problem_message(problem),
     StoreError::PipelineNotPublished(_) => Message::new("runs.preflight.pipelineNotPublished"),
     StoreError::TaskNotHeld(_) => Message::new("tasks.bulk.notHeld"),
+    StoreError::TaskRunActive(_) => Message::new("tasks.delete.stopRunFirst"),
     StoreError::SharedTask(_) | StoreError::SharedProject => Message::new("sharing.errors.serverOnly"),
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared => Message::new("sharing.errors.notShared"),

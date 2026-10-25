@@ -55,7 +55,8 @@ impl Seeded {
     Self::tasks_in(scenario, list, TALL.1)
   }
 
-  /// [`Seeded::tasks`] in a window `height` high, the design's 900 showing 13 rows.
+  /// [`Seeded::tasks`] in a window `height` high, the design's 900 showing 13 rows. The list may lay its rows out
+  /// over more than one pass: it waits until every row it holds is laid out.
   pub fn tasks_in(scenario: &str, list: TaskList, height: u32) -> Self {
     let mut seeded = Self::new(scenario);
     seeded.window.tree.resize(TALL.0, height);
@@ -65,7 +66,26 @@ impl Seeded {
         .texts("tasks-tab-all-label")
         .is_some_and(|label| !label.concat().ends_with('—'))
     });
+    seeded.until("the rows laid out", Self::rows_laid_out);
     seeded
+  }
+
+  /// Whether every row the list holds is laid out.
+  pub fn rows_laid_out(&mut self) -> bool {
+    let mut ids = Vec::new();
+    if let Some(root) = self.window.tree.root() {
+      collect_ids(root, "task-key-", &mut ids);
+    }
+    ids.iter().all(|id| self.laid_out(id))
+  }
+
+  /// Whether `id` is shown and laid out: an element can be there a pass before it has its place.
+  pub fn laid_out(&mut self, id: &str) -> bool {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .is_some_and(|element| element.bounds().is_some())
   }
 
   pub fn go(&mut self, list: TaskList) {

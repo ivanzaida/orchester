@@ -70,6 +70,7 @@ mod sources;
 mod step_outputs;
 mod step_progress;
 mod tags;
+mod task_deletion;
 mod task_effort;
 mod task_groups;
 mod task_snapshots;
@@ -111,6 +112,7 @@ pub use self::{
   shared_modules::{CachedModule, CachedModuleChange},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,
+  task_deletion::TaskDeletionFacts,
 };
 use crate::{
   StoreError, git_exclude, migrate,

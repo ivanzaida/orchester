@@ -15,7 +15,7 @@ use orchester_core::{
   store::TaskStore,
   task::{
     Task, TaskDetails, TaskUpdate,
-    organization::{ChangeActor, Tag, TaskOrganization},
+    organization::{ChangeActor, OrganizationError, Tag, TaskOrganization, WorkflowStatus},
   },
   time::Timestamp,
 };
@@ -189,16 +189,41 @@ impl TaskWriter {
     task: TaskId,
     update: impl FnOnce(TaskOrganization) -> TaskOrganization,
   ) -> Result<bool, WriteError> {
+    self.update_organization_by(task, ChangeActor::Person, update)
+  }
+
+  /// [`Self::update_organization`], the change recorded as `actor`'s.
+  pub fn update_organization_by(
+    &mut self,
+    task: TaskId,
+    actor: ChangeActor,
+    update: impl FnOnce(TaskOrganization) -> TaskOrganization,
+  ) -> Result<bool, WriteError> {
     match self {
-      Self::Local(local) => {
-        local.change(|db| db.update_task_organization(task, ChangeActor::Person, Timestamp::now(), update))
-      }
+      Self::Local(local) => local.change(|db| db.update_task_organization(task, actor, Timestamp::now(), update)),
       Self::Shared(store) => {
         let base = store.db().task_organization(task)?;
         let edited = update(base.clone());
         check_merging(&base, &edited)?;
         check_cancel(store.db(), task, &base, &edited)?;
-        let changed = store.change_organization(task, (&base, &edited), ChangeActor::Person);
+        let changed = store.change_organization(task, (&base, &edited), actor);
+        shared(store, changed)
+      }
+    }
+  }
+
+  /// Sets `task` to the closed `status` as `actor`'s change, refused while a run of it has not ended
+  /// ([`OrganizationError::StopRunFirst`]); a local task checks and writes in one transaction. Whether it changed it.
+  pub fn close(&mut self, task: TaskId, status: WorkflowStatus, actor: ChangeActor) -> Result<bool, WriteError> {
+    match self {
+      Self::Local(local) => local.change(|db| db.close_task_organization(task, status, (actor, Timestamp::now()))),
+      Self::Shared(store) => {
+        if let Some(run) = store.db().active_task_run(task)? {
+          return Err(StoreError::from(OrganizationError::StopRunFirst(run)).into());
+        }
+        let base = store.db().task_organization(task)?;
+        let edited = base.clone().with_status(status);
+        let changed = store.change_organization(task, (&base, &edited), actor);
         shared(store, changed)
       }
     }

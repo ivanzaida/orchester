@@ -98,6 +98,9 @@ pub enum StoreError {
   /// nothing was changed.
   #[error("task {0} is not held by its group")]
   TaskNotHeld(TaskId),
+  /// The task's run has not ended: it is stopped before the task is deleted. Nothing was deleted.
+  #[error("run {0} of the task has not ended")]
+  TaskRunActive(RunId),
   #[error("resource {0} does not exist")]
   ResourceNotFound(ResourceId),
   #[error("resource {resource} is a {found:?}, not a {expected:?}")]

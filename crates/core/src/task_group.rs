@@ -35,7 +35,8 @@ pub enum GroupHold {
   Blocked {
     by: Vec<TaskId>,
   },
-  /// The task is Canceled: its group never starts it and goes on with the others.
+  /// The task is closed (Canceled, or Done by hand before it started): its group never starts it and goes on with
+  /// the others.
   Canceled,
   /// A person held new starts in the whole project ([`QueueHolds`]); running runs go on.
   QueueHeld,

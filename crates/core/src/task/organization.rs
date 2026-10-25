@@ -45,6 +45,11 @@ impl WorkflowStatus {
   pub fn can_change(self, run_not_ended: bool) -> bool {
     self != Self::Canceled || !run_not_ended
   }
+
+  /// Done or Canceled: a person closed the task, or a merge finished it, until it is reopened.
+  pub const fn is_closed(self) -> bool {
+    matches!(self, Self::Done | Self::Canceled)
+  }
 }
 
 /// Ordering is for task lists only, never runner scheduling.
@@ -225,6 +230,13 @@ impl TaskOrganization {
   pub fn remove_tags(self, tags: &[TagId]) -> Self {
     let assigned = self.tags.iter().copied().filter(|id| !tags.contains(id)).collect();
     self.with_tags(assigned)
+  }
+
+  /// Without its link to `task`, e.g. once `task` was deleted: nothing blocks it on that task any more.
+  #[must_use]
+  pub fn without_blocking(mut self, task: TaskId) -> Self {
+    self.dependencies.retain(|link| link.task != task);
+    self
   }
 
   pub fn check_dependencies(
