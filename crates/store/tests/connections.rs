@@ -4,7 +4,7 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, BaseUrl, CatalogModel, CatalogSource, CheckResult,
     ConnectionCheck, ConnectionStatus, Effort, EndpointPreset, GitHubCheck, GitHubCheckResult, GitHubConnection,
-    GitHubHost, GitHubLogin, ModelCatalog, ModelSource, NativeModel, NativeModels, SignIn,
+    GitHubHost, GitHubLogin, LastCheck, ModelCatalog, ModelSource, NativeModel, NativeModels, SignIn,
   },
   id::{ConnectionId, ProjectId, SecretId},
   name::Name,
@@ -106,6 +106,47 @@ fn connection_names_are_unique_and_listed_in_order() {
   assert!(matches!(
     db.save_connection(&renamed),
     Err(StoreError::DuplicateConnectionName(_))
+  ));
+}
+
+#[test]
+fn renaming_and_recording_a_check_each_keep_what_the_other_stored() {
+  let (repo, mut db) = project_repo();
+  let codex = connection(&repo, "Codex", AgentProvider::CodexCli);
+  let claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);
+  db.create_connection(&codex).expect("create codex");
+  db.create_connection(&claude).expect("create claude");
+
+  db.rename_connection(codex.id(), &Name::new("Codex · Kontur").expect("valid name"))
+    .expect("renamed");
+  db.record_connection_check(codex.id(), LastCheck::Agent(available()))
+    .expect("checked");
+  let stored = db.connection(codex.id()).expect("read").expect("exists");
+  assert_eq!(stored.name().as_str(), "Codex · Kontur", "the check keeps the name");
+  assert_eq!(stored.status(), ConnectionStatus::Connected);
+  assert_eq!(stored.version(), Some("0.139.0"));
+
+  db.rename_connection(codex.id(), &Name::new("Codex · main").expect("valid name"))
+    .expect("renamed again");
+  let stored = db.connection(codex.id()).expect("read").expect("exists");
+  assert_eq!(
+    stored.status(),
+    ConnectionStatus::Connected,
+    "the rename keeps the check"
+  );
+
+  assert!(matches!(
+    db.rename_connection(codex.id(), claude.name()),
+    Err(StoreError::DuplicateConnectionName(name)) if name == "Claude"
+  ));
+  let gone = ConnectionId::generate();
+  assert!(matches!(
+    db.rename_connection(gone, &Name::new("Gone").expect("valid name")),
+    Err(StoreError::ConnectionNotFound(id)) if id == gone
+  ));
+  assert!(matches!(
+    db.record_connection_check(gone, LastCheck::Agent(available())),
+    Err(StoreError::ConnectionNotFound(id)) if id == gone
   ));
 }
 

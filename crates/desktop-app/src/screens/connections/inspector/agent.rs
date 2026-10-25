@@ -19,7 +19,10 @@ use orchester_core::connection::{
 use orchester_exec::launch::{Launch, Via};
 use orchester_workspace::{connections::data::sign_in_command, display};
 
-use super::{Actions, Inspecting, Parts, check_button, footer, footer_action, header, last_checked, shown, used_by};
+use super::{
+  Actions, Inspecting, Parts, check_button, footer, footer_action, last_checked, rename::title_with_rename, result,
+  shown, titled_header, used_by,
+};
 use crate::{
   screens::connections::words::{agent_glyph, checked_version, connection_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography},
@@ -50,12 +53,8 @@ pub(super) fn parts(
     inspecting,
     connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
   );
-  let header = header(
-    ctx,
-    (agent_glyph(connection.provider()), connection.name().as_str()),
-    status,
-    None,
-  );
+  let title = title_with_rename(ctx, inspecting, (connection.id(), connection.name().as_str()));
+  let header = titled_header(ctx, (agent_glyph(connection.provider()), title), status, None);
   let uses: Vec<String> = inspecting
     .listed
     .used_by(connection.id())
@@ -98,7 +97,8 @@ fn cli(
   let account = inspecting
     .accounts
     .of_connection(connection.account(), connection.provider());
-  // Edit connection chooses the connection's account (`M42rM`); its name and program are not edited here yet.
+  // Edit connection chooses the connection's account (`M42rM`); its program is not edited here, and the header renames
+  // it.
   let (edit, id) = (actions.edit.clone(), connection.id());
   let edit = footer_action(
     inspecting,
@@ -106,6 +106,8 @@ fn cli(
     Icon::Pencil,
   )
   .opens(edit(id));
+  // Refresh models checks the connection in every state: what it found shows above the actions.
+  let tested: Vec<Element> = result::agent(ctx, connection, inspecting).into_iter().collect();
   // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
   // chooses one.
   if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
@@ -116,7 +118,7 @@ fn cli(
       footer: Some(footer(
         ctx,
         inspecting,
-        (&sentence, Vec::new()),
+        (&sentence, tested),
         (vec![vec![edit.into()]], Vec::new()),
       )),
     };
@@ -132,7 +134,7 @@ fn cli(
       footer: Some(footer(
         ctx,
         inspecting,
-        (&sentence, Vec::new()),
+        (&sentence, tested),
         (vec![buttons], Vec::new()),
       )),
     };
@@ -157,7 +159,7 @@ fn cli(
     .into(),
     edit.into(),
   ];
-  let more = command.into_iter().collect();
+  let more = command.into_iter().chain(tested).collect();
   let reasons = Vec::new();
   let sentence = ctx.t(detail_key(status, connection.provider()));
   Parts {

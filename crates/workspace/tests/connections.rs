@@ -1,4 +1,4 @@
-//! Saving connections from the add/edit dialogs, deriving "Used by" from agent profiles, and
+//! Saving connections from the add/edit dialogs, renaming them, deriving "Used by" from agent profiles, and
 //! making the project expect the account `gh` uses now.
 
 use std::{fs, path::Path};
@@ -21,7 +21,7 @@ use orchester_store::{ProjectDb, StoreError};
 use orchester_workspace::{
   agents::data::{ProjectAgents, create_profile},
   connections::{
-    data::{ConnectionDraft, ProjectConnections, SaveError, save},
+    data::{ConnectionDraft, ProjectConnections, SaveError, recheck_in, rename_in, save},
     github::{AccountError, GitHubDraft, expect_active_account, save_github},
     probe::found_copy,
   },
@@ -109,6 +109,89 @@ fn editing_a_connection_keeps_its_id_and_rejects_taken_names() {
     save(&mut db, taken, now()),
     Err(SaveError::Store(StoreError::DuplicateConnectionName(_)))
   ));
+}
+
+#[test]
+fn renaming_a_connection_keeps_its_check_and_profiles_and_rejects_taken_names() {
+  let (repo, mut db) = project_db();
+  let claude = save(&mut db, draft(&repo, "Claude", signed_out()), now()).expect("save claude");
+  save(&mut db, draft(&repo, "Claude 2", signed_out()), now()).expect("save the second");
+  let explorer = AgentProfile::new(
+    Name::new("Explorer").expect("valid role"),
+    String::new(),
+    PromptText::new("").expect("valid prompt"),
+    claude,
+    ModelId::new("opus").expect("valid model"),
+    ProviderSettings::default(),
+  );
+  create_profile(&mut db, &explorer, now()).expect("explorer");
+  let name = |name: &str| Name::new(name).expect("valid name");
+  assert!(matches!(
+    rename_in(repo.path(), claude, &name("Claude 2")),
+    Err(SaveError::Store(StoreError::DuplicateConnectionName(_)))
+  ));
+  rename_in(repo.path(), claude, &name("Claude · Kontur")).expect("renamed");
+  let stored = db.connection(claude).expect("read").expect("exists");
+  assert_eq!(stored.name().as_str(), "Claude · Kontur");
+  assert_eq!(stored.status(), ConnectionStatus::SignInRequired, "its check stays");
+  let listed = ProjectConnections::load(&db).expect("load");
+  assert_eq!(listed.used_by(claude).count(), 1, "its profile still runs on it");
+}
+
+#[test]
+fn renaming_a_connection_while_its_check_runs_keeps_the_new_name_and_the_check() {
+  let (repo, mut db) = project_db();
+  let asked = repo.path().join("asked");
+  let slow = ConnectionDraft {
+    provider: AgentProvider::CodexCli,
+    executable: write_slow_codex(repo.path(), &asked),
+    ..draft(&repo, "Codex · Kontur", signed_out())
+  };
+  let id = save(&mut db, slow, now()).expect("saved");
+  let root = repo.path().to_owned();
+  let check = std::thread::spawn(move || recheck_in(&root, id));
+  while !asked.exists() && !check.is_finished() {
+    std::thread::sleep(std::time::Duration::from_millis(20));
+  }
+  assert!(asked.exists(), "the check asks the CLI");
+
+  rename_in(repo.path(), id, &Name::new("Codex · main").expect("valid name")).expect("renamed while it checks");
+  check.join().expect("the check ends").expect("checked");
+
+  let stored = db.connection(id).expect("read").expect("exists");
+  assert_eq!(stored.name().as_str(), "Codex · main", "the check keeps the new name");
+  assert_eq!(
+    stored.version(),
+    Some("999.0.0"),
+    "the rename keeps what the check found"
+  );
+  assert_eq!(stored.status(), ConnectionStatus::Connected);
+}
+
+/// A stand-in Codex in `folder` that creates `asked` when asked its version, then takes two seconds to answer.
+#[cfg(windows)]
+fn write_slow_codex(folder: &Path, asked: &Path) -> std::path::PathBuf {
+  let program = folder.join("codex.cmd");
+  let asked = asked.display();
+  let script = format!(
+    "@echo off\r\nif \"%1\"==\"--version\" (echo.>\"{asked}\"& ping -n 3 127.0.0.1 >nul& echo codex-cli 999.0.0& exit /b 0)\r\nif \"%1\"==\"login\" (echo Logged in using ChatGPT& exit /b 0)\r\nexit /b 1\r\n"
+  );
+  fs::write(&program, script).expect("the stand-in is written");
+  program
+}
+
+/// A stand-in Codex in `folder` that creates `asked` when asked its version, then takes two seconds to answer.
+#[cfg(not(windows))]
+fn write_slow_codex(folder: &Path, asked: &Path) -> std::path::PathBuf {
+  use std::os::unix::fs::PermissionsExt;
+  let program = folder.join("codex");
+  let asked = asked.display();
+  let script = format!(
+    "#!/bin/sh\ncase \"$1\" in\n  --version) touch \"{asked}\"; sleep 2; echo \"codex-cli 999.0.0\" ;;\n  login) echo \"Logged in using ChatGPT\" ;;\n  *) exit 1 ;;\nesac\n"
+  );
+  fs::write(&program, script).expect("the stand-in is written");
+  fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("the stand-in runs");
+  program
 }
 
 #[test]

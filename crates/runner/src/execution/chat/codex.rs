@@ -7,7 +7,8 @@
 //! place of Codex's own, on every turn; the thread is resumed on the next one. Codex asks before an MCP call: a call
 //! of the chat's own tools is approved, as Claude Code's `--allowedTools mcp__orchester` allows them, any other
 //! declined; a question of Codex's gets no answers. Once the turn is over the runner ends App Server, which otherwise
-//! waits for more. A stopped or timed-out turn keeps what Codex reported it spent so far.
+//! waits for more. A stopped or timed-out turn keeps what Codex reported it spent so far. On the connection's API
+//! provider App Server starts with the provider's overrides and key as a step's does ([`OnProvider`]).
 
 use std::collections::BTreeSet;
 
@@ -16,7 +17,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     app_server::Update,
-    invocation::{CodexChat, CodexMcp, Platform, on_account},
+    invocation::{CODEX_PROVIDER_ID, CodexChat, CodexMcp, OnProvider, Platform, on_account},
     mcp::InvocationExemptions,
     stream::AgentEvent,
   },
@@ -58,6 +59,16 @@ impl Turn {
     if !left_out.is_empty() {
       return Err(cannot("the tools' server was left out".to_owned()));
     }
+    // On the connection's API provider App Server starts with the provider's overrides and key, as a step's does.
+    let on_provider = prepared
+      .connection
+      .api_provider()
+      .zip(prepared.key.clone())
+      .map(|(provider, key)| OnProvider {
+        provider,
+        model: self.settings.model(),
+        key,
+      });
     let command = CodexChat {
       executable: &prepared.executable,
       folder: &self.root,
@@ -66,7 +77,13 @@ impl Turn {
     }
     .command(std::env::vars_os(), &prepared.environment)
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::CodexCli))
+    .map(|command| match &on_provider {
+      Some(on) => on.apply(command, AgentProvider::CodexCli),
+      None => command,
+    })
     .map_err(|error| cannot(error.to_string()))?;
+    let mut secrets = mcp.secrets().to_vec();
+    secrets.extend(on_provider.as_ref().map(|on| on.key_variable(AgentProvider::CodexCli)));
     let setup = AppServerSetup {
       prompt: self.text.as_str().to_owned(),
       attached: self.attached.clone(),
@@ -83,8 +100,8 @@ impl Turn {
       expected_servers: BTreeSet::from([SERVER.to_owned()]),
       exemptions: InvocationExemptions::default(),
       output_schema: None,
-      secrets: mcp.secrets().to_vec(),
-      model_provider: None,
+      secrets,
+      model_provider: on_provider.as_ref().map(|_| CODEX_PROVIDER_ID.to_owned()),
       base_instructions: Some(system_prompt(
         &prepared.project_name,
         self.project,

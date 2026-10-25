@@ -120,7 +120,7 @@ fn value(seeded: &mut Seeded, id: &str) -> String {
 
 /// A stand-in Codex in `folder`.
 #[cfg(windows)]
-fn write_codex(folder: &Path, version: &str) -> PathBuf {
+pub(super) fn write_codex(folder: &Path, version: &str) -> PathBuf {
   let program = folder.join("codex.cmd");
   let script = format!(
     "@echo off\r\nif \"%1\"==\"--version\" (echo codex-cli {version}& exit /b 0)\r\nif \"%1\"==\"login\" (echo Logged in using ChatGPT& exit /b 0)\r\nexit /b 1\r\n"
@@ -131,11 +131,37 @@ fn write_codex(folder: &Path, version: &str) -> PathBuf {
 
 /// A stand-in Codex in `folder`.
 #[cfg(not(windows))]
-fn write_codex(folder: &Path, version: &str) -> PathBuf {
+pub(super) fn write_codex(folder: &Path, version: &str) -> PathBuf {
   use std::os::unix::fs::PermissionsExt;
   let program = folder.join("codex");
   let script = format!(
     "#!/bin/sh\ncase \"$1\" in\n  --version) echo \"codex-cli {version}\" ;;\n  login) echo \"Logged in using ChatGPT\" ;;\n  *) exit 1 ;;\nesac\n"
+  );
+  std::fs::write(&program, script).expect("the stand-in is written");
+  std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("the stand-in runs");
+  program
+}
+
+/// A stand-in Codex 999.0.0 in `folder` that creates `asked` when asked its version, then takes two seconds to answer.
+#[cfg(windows)]
+pub(super) fn write_slow_codex(folder: &Path, asked: &Path) -> PathBuf {
+  let program = folder.join("codex.cmd");
+  let asked = asked.display();
+  let script = format!(
+    "@echo off\r\nif \"%1\"==\"--version\" (echo.>\"{asked}\"& ping -n 3 127.0.0.1 >nul& echo codex-cli 999.0.0& exit /b 0)\r\nif \"%1\"==\"login\" (echo Logged in using ChatGPT& exit /b 0)\r\nexit /b 1\r\n"
+  );
+  std::fs::write(&program, script).expect("the stand-in is written");
+  program
+}
+
+/// A stand-in Codex 999.0.0 in `folder` that creates `asked` when asked its version, then takes two seconds to answer.
+#[cfg(not(windows))]
+pub(super) fn write_slow_codex(folder: &Path, asked: &Path) -> PathBuf {
+  use std::os::unix::fs::PermissionsExt;
+  let program = folder.join("codex");
+  let asked = asked.display();
+  let script = format!(
+    "#!/bin/sh\ncase \"$1\" in\n  --version) touch \"{asked}\"; sleep 2; echo \"codex-cli 999.0.0\" ;;\n  login) echo \"Logged in using ChatGPT\" ;;\n  *) exit 1 ;;\nesac\n"
   );
   std::fs::write(&program, script).expect("the stand-in is written");
   std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("the stand-in runs");

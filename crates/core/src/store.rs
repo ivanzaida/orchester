@@ -11,7 +11,7 @@ use crate::{
   blob::ContentHash,
   code_index::{CodeIndexSetting, CodeIndexUse},
   connection::{
-    Connection,
+    Connection, LastCheck,
     mcp::{McpServer, UnreadableMcpServer},
     stream::AgentEvent,
   },
@@ -230,6 +230,14 @@ pub trait ConnectionStore {
   /// Stores the current name, executable and last check of an existing connection. Model
   /// requirements stored meanwhile are kept: they are merged with the connection's, never dropped.
   fn save_connection(&mut self, connection: &Connection) -> Result<(), Self::Error>;
+
+  /// Gives the stored connection `id` the name `name`, in one transaction that changes nothing else of it: a check
+  /// running meanwhile keeps its result, and storing that result keeps the name. Names are unique within the project.
+  fn rename_connection(&mut self, id: ConnectionId, name: &Name) -> Result<(), Self::Error>;
+
+  /// Records `check` as the last check of the stored connection `id`, in one transaction that changes nothing else
+  /// of it: a check of a CLI takes long, and the person may rename the connection meanwhile.
+  fn record_connection_check(&mut self, id: ConnectionId, check: LastCheck) -> Result<(), Self::Error>;
 
   /// Records on the stored agent CLI connection `id` that `model` needs version `required` of the
   /// CLI or newer ([`crate::connection::AgentConnection::record_model_requirement`]), in one

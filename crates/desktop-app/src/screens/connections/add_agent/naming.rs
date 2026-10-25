@@ -74,10 +74,20 @@ fn taken_names(listed: &ProjectConnections) -> impl Iterator<Item = &str> {
 
 /// Why `name` cannot be the connection's name.
 pub(super) fn name_problem(ctx: &Ctx, listed: &ProjectConnections, name: &str) -> Option<Arc<str>> {
+  problem_among(ctx, taken_names(listed), name)
+}
+
+/// Why `name` cannot be a connection's name while the project's other agent and GitHub connections have the names
+/// `taken`: the rule of adding one, and of renaming one.
+pub(in crate::screens::connections) fn problem_among<'a>(
+  ctx: &Ctx,
+  mut taken: impl Iterator<Item = &'a str>,
+  name: &str,
+) -> Option<Arc<str>> {
   if let Err(error) = Name::new(name) {
     return Some(message_text(ctx, &messages::name_error(&error)));
   }
-  taken_names(listed)
+  taken
     .any(|taken| taken == name.trim())
     .then(|| ctx.t("connections.dialog.nameTaken"))
 }

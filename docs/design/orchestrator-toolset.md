@@ -15,6 +15,14 @@ refused or carried out exactly as for that client. This document widens that par
 everything a person can see in Orchester, change what is safe to change, propose the rest, and answer with links the
 person can click.
 
+Every turn of the chat (a person's message, a wait's or a daily report's turn) runs Claude Code or Codex (decision 10)
+on the connection chosen in Orchestrator settings › Profile. A connection that runs on an API provider can be chosen
+(ORC-87, `docs/design/api-providers.md`): the runner then starts each turn's CLI with the provider's base URL, the
+chosen model and the key from the project secret, as a step on that connection starts (`OnProvider`), never on the
+CLI's own sign-in. The key is a secret variable of the CLI's process only: it is in no prompt, MCP configuration,
+command line, log or tool answer, and what the turn keeps of the CLI's output is redacted. A key the keychain does not
+give keeps the turn from starting, with the secret's name.
+
 ## Decisions
 
 1. **Reading is open.** The Orchestrator reads everything in every project the app knows: tasks, runs, changes,

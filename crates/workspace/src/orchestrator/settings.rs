@@ -218,11 +218,8 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
   saved.map_err(|error| messages::store_error(&error))
 }
 
-/// Why the Orchestrator cannot run on `connection`: not on an API provider, whose key the chat's turns are not
-/// started with (`docs/design/api-providers.md`), nor on a provider it does not run on.
+/// Why the Orchestrator cannot run on `connection`: not on a provider it does not run on. A connection on an API
+/// provider runs it on the provider's key and host, as a step does (`docs/design/api-providers.md`).
 fn unavailable(connection: &AgentConnection) -> Option<Message> {
-  if connection.api_provider().is_some() {
-    return Some(Message::new("orchestrator.settings.apiProvider"));
-  }
   (!runs_orchestrator(connection.provider())).then(|| Message::new("orchestrator.settings.cliOnly"))
 }

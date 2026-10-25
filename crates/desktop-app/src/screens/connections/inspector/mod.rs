@@ -2,12 +2,15 @@
 //! (`Connection inspector header` `GOSxB`: a 32 glyph tile, its name in 14/600 and its status, with an action
 //! at the end for an MCP server), its details in a body that scrolls, and a footer pinned under them that says
 //! what its status means and holds its actions. Each kind fills it: an agent provider (`agent`), GitHub
-//! (`github`), an MCP server (`mcp`).
+//! (`github`), an MCP server (`mcp`). An agent or GitHub connection is renamed in its header (`rename`), and a
+//! check pressed here says how it goes and what it found above the actions (`result`).
 
 mod agent;
 mod github;
 mod mcp;
 mod provider;
+mod rename;
+mod result;
 
 use std::sync::Arc;
 
@@ -21,7 +24,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ConnectionId, time::Timestamp};
-use orchester_workspace::{connections::data::ProjectConnections, display, messages::Message};
+use orchester_workspace::{connections::data::ProjectConnections, display, messages::Message, workspace::OpenProject};
 
 use super::{
   data::Entry,
@@ -59,17 +62,34 @@ pub(super) enum Confirm {
 
 impl lurq::app::component::DevtoolsInspectable for Confirm {}
 
+/// Where the check last pressed in this screen on the inspected connection (Test connection, Refresh models, Check
+/// again) stands.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Tested<'a> {
+  /// It runs, or what it stored is not read back yet.
+  Checking,
+  /// It ran: the connection's last check is what it found.
+  Checked,
+  /// It could not run, or what it found could not be stored.
+  Failed(&'a Message),
+  /// It ran and stored what it found, but reading the connections again failed for this reason.
+  Unread(&'a Message),
+}
+
 /// What the inspector shows about the work on its connection.
 pub(super) struct Inspecting<'a> {
   pub listed: &'a ProjectConnections,
   /// The person's agent accounts, which a CLI connection runs on one of.
   pub accounts: &'a crate::services::accounts::Accounts,
   pub entry: Entry<'a>,
+  pub open: &'a OpenProject,
   pub project: &'a str,
   /// The work running on the connection now.
   pub running: Option<Work>,
-  /// Why the last work on the connection failed.
+  /// Why the last work other than a check on the connection failed.
   pub failed: Option<&'a Message>,
+  /// The check pressed on the connection in this screen, if one was.
+  pub tested: Option<Tested<'a>>,
   pub confirming: Option<Confirm>,
   pub now: Timestamp,
   /// The window is narrow: the inspector is narrower and its footer's actions have no icons.
@@ -133,6 +153,18 @@ pub(super) struct Parts {
 
 /// The header: the glyph tile, the name and the status, and `action` at the end, if any.
 fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<Element>) -> Element {
+  titled_header(ctx, (glyph, title(name).into()), status, action)
+}
+
+/// The connection's name as the header shows it.
+fn title(name: &str) -> Text {
+  Text::new(name)
+    .id("connection-inspector-title")
+    .variant(ConnectionsText::InspectorTitle.role())
+}
+
+/// The header with `title` in place of the name, e.g. the name with its rename (`rename`).
+fn titled_header(ctx: &Ctx, (glyph, title): (Icon, Element), status: Shown, action: Option<Element>) -> Element {
   let tile = Row::new()
     .width(Dimension::Px(GLYPH_TILE))
     .height(Dimension::Px(GLYPH_TILE))
@@ -147,11 +179,7 @@ fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Fine.role())
-    .child(
-      Text::new(name)
-        .id("connection-inspector-title")
-        .variant(ConnectionsText::InspectorTitle.role()),
-    )
+    .child(title)
     .child(status_line(
       ctx,
       "connection-inspector-status",

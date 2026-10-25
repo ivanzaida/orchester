@@ -1884,8 +1884,7 @@
   "orchestrator": {
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
-      "cliOnly": "The Orchestrator runs on Claude Code and Codex connections, with the CLI's own sign-in. This one runs a native agent on an API key; choose another one.",
-      "apiProvider": "The Orchestrator runs on a CLI’s own sign-in. This connection runs on an API provider; choose another one."
+      "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
     },
     "send": {
       "blank": "Write a message first.",

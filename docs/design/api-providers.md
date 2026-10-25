@@ -45,9 +45,14 @@ CLI configured for the provider.
   - `plan_account()` is `None`: the runner records no plan-limit readings and keeps no account waits for it.
   - `key()` (on `Connection`) names the key secret of a native connection or a provider; the secrets' *Used by* and
     *needs a person to replace* rules use it.
-- The Orchestrator chat and auto mode's reviewer start their CLI on its own sign-in; a connection on a provider is
-  not offered there (`orchestrator.settings.apiProvider`, `reviewer_kind` = `None`) rather than run on the wrong
-  credentials.
+- The Orchestrator chat runs on a Claude Code connection on a provider as a step does (ORC-87): Orchestrator settings
+  › Profile offers it, its model chosen from the provider's typed models or typed under *Other model id…*, and every
+  turn (a person's message, a wait's or a daily report's turn) starts the CLI with the provider's variables
+  (`OnProvider`, below), the key read from the keychain for that turn; a key secret that is archived, gone or not
+  given keeps the turn from starting, named. What the turn keeps of the CLI's output (replies, failure reasons) has
+  the key redacted. The chat's usage counts toward the project's daily budget as before; it has no plan account.
+  Auto mode's reviewer still starts its CLI on its own sign-in; a connection on a provider is not offered there
+  (`reviewer_kind` = `None`) rather than run on the wrong credentials.
 - Store: project database migration 73, `api_providers` (after master's `run_rebases`, 71, and `creation_snapshots`, 72), adds the table
   `invocation_providers` (the base URL and key secret each invocation on a provider started on) and
   `connections.api_provider TEXT` (NULL, or
@@ -131,7 +136,9 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
 - **Sessions**: a session continues only on what it was made on (`SessionOrigin`): the account (as before) and the
   provider's base URL and key secret, recorded per invocation in `invocation_providers`.
   Another host or key, a provider where there was none, or none where there was one, starts a new session. A resumed
-  Codex thread is checked for its `modelProvider` like a new one.
+  Codex thread is checked for its `modelProvider` like a new one. The Orchestrator chat keeps its session by connection
+  and account only (`ChatSession`): a conversation continues its session after the connection's base URL or key
+  changed (its transcript is in the CLI's folder, and the next turn sends it to the new host).
 - **Orchester's tools' answers** leave out the provider key as well as the MCP servers' secrets.
 
 ## Domain MCP tools and the person gate
@@ -166,8 +173,10 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
   models (no Refresh), and the footer sentence for Connected or Key missing (Edit first then). The list row reads
   *<CLI> <version> · <host>*.
 - Agent profiles (`NNYyh`, `kGBHZ`): the connection menu names the host; the model menu lists the provider's models;
-  the effort is an optional text field (*Provider default* when empty). The Orchestrator's and auto mode's reviewer's
-  menus list provider connections, unavailable, with why.
+  the effort is an optional text field (*Provider default* when empty). Orchestrator settings › Profile lists a
+  Claude Code connection on a provider like any other it runs on, its model select the provider's models (and *Other
+  model id…*); its effort select offers the CLI default only, since the provider's models list no efforts. Auto
+  mode's reviewer's menu lists provider connections, unavailable, with why.
 - QA: the seed scenario `api-providers` (Claude · DeepSeek, Codex · DeepSeek, Claude · Gateway not checked, Claude ·
   Old gateway with an archived key, profile Researcher on Codex · DeepSeek).
 

@@ -279,9 +279,30 @@ fn menu_row(seeded: &mut Seeded, menu: &str, label: &str) -> (String, String) {
   panic!("{menu} lists {label}")
 }
 
+/// The labels of select `id`'s options.
+fn labels(seeded: &mut Seeded, id: &str) -> Vec<String> {
+  seeded
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .map(|select| select.labels().iter().map(ToString::to_string).collect())
+    .unwrap_or_default()
+}
+
+/// The Orchestrator runs on a connection on an API provider, with a model typed for the provider: it is offered with
+/// no reason against it, its typed models are the model's choices, and v1 is published on it.
 #[test]
-fn connections_api_provider_is_listed_unavailable_with_its_whole_reason_for_the_orchestrator_and_the_reviewer() {
+fn connections_api_provider_runs_the_orchestrator_with_a_typed_model() {
   let mut seeded = Seeded::new("api-providers");
+  let deepseek = seeded
+    .db()
+    .connections()
+    .expect("connections read")
+    .into_iter()
+    .find(|connection| connection.name().as_str() == "Claude · DeepSeek")
+    .expect("the seeded connection")
+    .id();
   seeded.go(ProjectPage::OrchestratorSettings);
   seeded.until("the Orchestrator's settings", |seeded| {
     seeded.exists("orchestrator-connection")
@@ -290,10 +311,32 @@ fn connections_api_provider_is_listed_unavailable_with_its_whole_reason_for_the_
   let (option, words) = menu_row(&mut seeded, "orchestrator-connection", "Claude · DeepSeek");
   assert!(seeded.exists(&format!("{option}-icon")), "the agent glyph leads it");
   assert!(
-    words.ends_with("This connection runs on an API provider; choose another one."),
-    "the whole reason, not cut: {words}"
+    !words.contains("API provider"),
+    "offered, with no reason against it: {words}"
   );
+  seeded.click(&option);
+  seeded.until("the models typed for the provider", |seeded| {
+    labels(seeded, "orchestrator-model").starts_with(&["deepseek-v4-flash".to_owned(), "deepseek-v4-pro".to_owned()])
+  });
+  choose(&mut seeded, "orchestrator-model", "deepseek-v4-pro");
+  seeded.until("Publish v1", |seeded| {
+    seeded.text("orchestrator-settings-publish") == "Publish v1"
+  });
+  seeded.click("orchestrator-settings-publish");
+  seeded.until("v1 on the provider's connection", |seeded| {
+    seeded
+      .db()
+      .orchestrator_published()
+      .expect("published")
+      .is_some_and(|(_, settings)| settings.connection() == deepseek && settings.model().as_str() == "deepseek-v4-pro")
+  });
+}
 
+/// Auto mode's reviewer still starts its CLI on its own sign-in, so it lists a connection on an API provider
+/// unavailable, with its whole reason.
+#[test]
+fn connections_api_provider_is_listed_unavailable_with_its_whole_reason_for_the_reviewer() {
+  let mut seeded = Seeded::new("api-providers");
   seeded.go(ProjectPage::Settings(Default::default()));
   seeded.until("the reviewer", |seeded| seeded.exists("settings-reviewer-connection"));
   seeded.click("settings-reviewer-connection");

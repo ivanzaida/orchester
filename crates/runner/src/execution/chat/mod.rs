@@ -9,7 +9,7 @@ mod claude;
 mod codex;
 mod turn;
 
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
@@ -106,6 +106,7 @@ impl Scheduler {
       root: self.inner.project_root.clone(),
       project: db.project().id(),
       notifier: self.inner.notifier.clone(),
+      vault: Arc::clone(&self.inner.vault),
       chat: kept.chat,
       message,
       text: kept.text,
