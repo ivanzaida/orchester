@@ -75,7 +75,9 @@
     },
     "queued": {
       "edit": "Edit",
-      "remove": "Remove"
+      "remove": "Remove",
+      "failed": "The queued message wasn't changed",
+      "dismiss": "Dismiss"
     },
     "thinking": "Orchestrator is thinking",
     "stop": "Stop response",

@@ -534,8 +534,10 @@ a conversation. While an answer is under way, the composer stays open and its se
   answer*. When the answer ends (completed, stopped, failed or past its limit), the app starts the queued messages'
   turns one after another, in the order they were written, before any wait or end turn waiting for the conversation
   (`orchester-app`'s waits follower, `start_queued`; a wait turn refuses to start while a person's message is queued or
-  being sent). The person may **Edit** a queued message, which takes its words back into the composer (after what is
-  written there) and removes it, or **Remove** it. Both are refused once its turn started.
+  being sent). The person may **Edit** a queued message, which takes its words and files back into the composer (after
+  what is written there; the files are read back from the project's copies first, and a copy that cannot be read
+  refuses the edit, leaving the message queued) and removes it, or **Remove** it. Both are refused once its turn
+  started.
 - **Send now**: the message goes into the answer under way. Claude Code takes it as one more stream-json user message
   on its input (the chat's Claude process now keeps its input open until the first result, then closes it); Codex App
   Server as `turn/steer` on the turn under way. The agent reads it at its next tool call and answers it in the same

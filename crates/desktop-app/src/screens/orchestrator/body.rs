@@ -1,14 +1,15 @@
 //! The chat beside History (`Main` in `ZJzV0`, `AJeWg` in `kPs8W`): a new conversation's start, or the conversation
 //! — its turns over the composer, 800 wide at most and 40 in from the panel's sides, the composer 14 over the panel's
-//! foot — or why it cannot be shown. A send that failed shows over the composer (`Send problem` `htsjO`), and so does
-//! what keeps the chat from sending (`notReady`). While the Orchestrator answers, the composer sends as the person
-//! chooses ([`super::send_menu`]), and the messages that wait for the answer show after it.
+//! foot — or why it cannot be shown. A send that failed shows over the composer (`Send problem` `htsjO`), and so do
+//! an *Edit* or *Remove* of a queued message that changed nothing and what keeps the chat from sending (`notReady`).
+//! While the Orchestrator answers, the composer sends as the person chooses ([`super::send_menu`]), and the messages
+//! that wait for the answer show after it.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::Ctx,
+    ctx::{Ctx, FutureState},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -105,14 +106,17 @@ pub(super) fn main(
       ctx,
       view,
       (project, None, pending.as_deref(), &reads.names),
-      (&state, readiness, [problem, not_ready]),
+      (&state, readiness, [problem, None, not_ready]),
     ),
-    Shown::Chat(shown) => conversation(
-      ctx,
-      view,
-      (project, Some(shown), pending.as_deref(), &reads.names),
-      (&state, readiness, [problem, not_ready]),
-    ),
+    Shown::Chat(shown) => {
+      let queued = queued_problem(ctx, view);
+      conversation(
+        ctx,
+        view,
+        (project, Some(shown), pending.as_deref(), &reads.names),
+        (&state, readiness, [problem, queued, not_ready]),
+      )
+    }
     Shown::Loading => loading(ctx, view),
     Shown::Failed(error) => {
       let runners = Services::of(ctx).runners;
@@ -148,6 +152,30 @@ fn setup_failed(ctx: &mut Ctx, project: &ShownProject, error: &Message) -> Eleme
   .body(message_text(ctx, error))
   .action(retry)
   .into()
+}
+
+/// An *Edit* or *Remove* of a queued message that changed nothing: why (its turn had started, or its files could not
+/// be read back), until the person dismisses it or changes a queued message again.
+fn queued_problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
+  let state = view.queued.state();
+  let error = state.get().error?;
+  let dismiss = ActionButton::new(
+    "orchestrator-queued-dismiss",
+    ButtonKind::Secondary,
+    ctx.t("orchestrator.queued.dismiss"),
+  )
+  .on_click(move || state.set(FutureState::idle()));
+  Some(
+    Notice::new(
+      "orchestrator-queued-problem",
+      NoticeTone::Danger,
+      ctx.t("orchestrator.queued.failed"),
+    )
+    .icon(Icon::CircleAlert)
+    .body(message_text(ctx, &error))
+    .action(dismiss)
+    .into(),
+  )
 }
 
 /// What sending does now: nothing while the Orchestrator has nothing to run on, busy while a message or its files
@@ -209,7 +237,7 @@ fn conversation(
   ctx: &mut Ctx,
   view: &View,
   (project, shown, pending, names): (&ShownProject, Option<&ChatView>, Option<&str>, &ProjectNames),
-  (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 2]),
+  (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 3]),
 ) -> Element {
   let all = all_turns(view, shown, pending);
   let chat = shown.map(|shown| shown.chat.id());

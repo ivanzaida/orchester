@@ -49,7 +49,10 @@ use orchester_core::{
 };
 use orchester_workspace::{
   display,
-  orchestrator::{queue::WhileAnswering, send::Outgoing},
+  orchestrator::{
+    queue::{TakenBack, WhileAnswering},
+    send::Outgoing,
+  },
 };
 
 use self::{
@@ -150,15 +153,15 @@ impl Component for OrchestratorScreen {
       links: chat::links(ctx),
       follow: Follow::new(ctx),
     };
-    let taken = view.clone();
+    let taker = view.clone();
     ctx.watch(&view.queued.state(), move |state| {
-      if let Some(words) = state
+      if let Some(taken) = state
         .data
         .as_ref()
         .filter(|_| state.is_fulfilled())
-        .and_then(|changed| changed.words.as_deref())
+        .and_then(|changed| changed.taken.as_ref())
       {
-        taken.take_back(words);
+        taker.take_back(taken);
       }
     });
     let project = ctx.props::<Props>().project.open.project.id();
@@ -387,15 +390,21 @@ impl View {
     })
   }
 
-  /// `words`, a queued message's taken back, go into the composer after what is written there, with the focus there.
-  fn take_back(&self, words: &str) {
-    let draft = self.draft.get_untracked();
+  /// A queued message taken back: its words go into the composer after what is written there, its files after the
+  /// draft's, with the focus there.
+  fn take_back(&self, taken: &TakenBack) {
+    let (draft, words) = (self.draft.get_untracked(), taken.words.as_str());
     let text = if draft.trim().is_empty() {
       words.to_owned()
+    } else if words.trim().is_empty() {
+      draft
     } else {
       format!("{}\n\n{words}", draft.trim_end())
     };
-    self.draft.set(text);
+    if self.draft.get_untracked() != text {
+      self.draft.set(text);
+    }
+    self.attached.take_back(taken.attachments.clone());
     self.focus.set(true);
   }
 }

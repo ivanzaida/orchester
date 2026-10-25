@@ -16,7 +16,7 @@ use orchester_workspace::{
   background,
   messages::Message,
   orchestrator::{
-    queue::{self, WhileAnswering},
+    queue::{self, TakenBack, WhileAnswering},
     send::{self, Outgoing, SendError},
     tools::ChatScope,
   },
@@ -65,11 +65,11 @@ pub(super) struct ChangeQueued {
 
 impl DevtoolsInspectable for ChangeQueued {}
 
-/// What a change of a queued message did: the words to take back into the composer, when it was an edit of one that
-/// still waited.
+/// What a change of a queued message did: the words and files to take back into the composer, when it was an edit of
+/// one that still waited.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct Changed {
-  pub(super) words: Option<String>,
+  pub(super) taken: Option<TakenBack>,
 }
 
 impl DevtoolsInspectable for Changed {}
@@ -136,18 +136,30 @@ pub(super) fn stop_action(ctx: &mut Ctx) -> StopAction {
   })
 }
 
-/// Rewords or removes a queued message: an edit removes it and gives its words back to the composer, so it is never
-/// sent as well; a message whose turn started meanwhile stays as it is.
+/// Rewords or removes a queued message: an edit removes it and gives its words and files back to the composer, so it
+/// is never sent as well; a message whose turn started meanwhile stays as it is, and the person is told so.
 pub(super) fn queued_action(ctx: &mut Ctx) -> QueuedAction {
   let runners = Services::of(ctx).runners;
   ctx.future_action(move |change: ChangeQueued| {
     let runners = runners.clone();
     async move {
-      let (root, message) = (change.root.clone(), change.message);
-      let removed = background::run(move || queue::remove_in(&root, message)).await??;
-      runners.chat_changed(&change.root);
-      let words = (removed && change.change == QueuedChange::Edit).then_some(change.text);
-      Ok(Changed { words })
+      let ChangeQueued {
+        root,
+        message,
+        text,
+        change,
+      } = change;
+      let at = root.clone();
+      let changed = match change {
+        QueuedChange::Edit => background::run(move || queue::take_back_in(&at, message, &text))
+          .await??
+          .map(|taken| Changed { taken: Some(taken) }),
+        QueuedChange::Remove => background::run(move || queue::remove_in(&at, message))
+          .await??
+          .then(Changed::default),
+      };
+      runners.chat_changed(&root);
+      changed.ok_or_else(queue::already_started)
     }
   })
 }

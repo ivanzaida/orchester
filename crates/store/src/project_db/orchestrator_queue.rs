@@ -3,7 +3,7 @@
 //! ([`TurnState::Queued`]), or is handed to it ([`TurnState::Steering`]) and taken by it ([`TurnState::Joined`]). A
 //! queued message gets its turn once no turn of its conversation thinks and none holds a message sent now; it moves to
 //! the end of its conversation then, so the answer under way keeps what it said before. Until then the person may
-//! remove it (the app's *Edit* takes its words back into the composer).
+//! remove it (the app's *Edit* reads its files back first, and takes them and its words into the composer).
 
 use orchester_core::{
   attachment::NewAttachment,

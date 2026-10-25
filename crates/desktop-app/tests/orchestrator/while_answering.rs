@@ -5,7 +5,10 @@
 
 use orchester_core::orchestrator::{EntryKind, TurnState};
 
-use super::harness::{Orchestrator, Setup};
+use super::{
+  harness::{Orchestrator, Setup},
+  paste::paste_long_text,
+};
 
 /// Starts a conversation whose answer runs until it is stopped, or until a message sent now arrives (`waits`).
 fn answering(waits: bool) -> Orchestrator {
@@ -128,6 +131,58 @@ fn orchestrator_while_answering_takes_back_or_removes_a_queued_message() {
   screen.click(&format!("orchestrator-queued-remove-{again}"));
   screen.until("removed", |screen| turns(screen).len() == 1);
   assert!(screen.exists("orchestrator-stop"), "the answer went on");
+}
+
+/// The review's case: *Edit* on a queued message of files only takes its files back into the composer, without their
+/// names as words, and sending it again keeps the file with the new message.
+#[test]
+fn orchestrator_while_answering_takes_back_a_queued_message_with_its_files() {
+  let mut screen = answering(false);
+  paste_long_text(&mut screen);
+  screen.key(("Enter", "Enter"), true);
+  screen.until("the message queued", |screen| turns(screen).len() == 2);
+  let chat = screen.db().chats().expect("chats").remove(0).chat.id();
+  let (message, attached) = screen
+    .db()
+    .chat_attachments(chat)
+    .expect("attachments")
+    .into_iter()
+    .next()
+    .expect("the queued message's file");
+  assert_eq!(attached.len(), 1);
+  screen.until("its actions", |screen| {
+    screen.exists(&format!("orchestrator-queued-edit-{message}"))
+  });
+  screen.click(&format!("orchestrator-queued-edit-{message}"));
+  screen.until("its file back in the composer", |screen| {
+    turns(screen).len() == 1
+      && screen
+        .text("orchestrator-composer-attachments")
+        .contains("Pasted text.txt")
+  });
+  assert!(
+    !screen.text("orchestrator-input").contains("Pasted text.txt"),
+    "no names as words: {}",
+    screen.text("orchestrator-input")
+  );
+  assert!(
+    screen.db().chat_attachments(chat).expect("attachments").is_empty(),
+    "the removed message keeps no file"
+  );
+  write(&mut screen, "Read this first.");
+  screen.key(("Enter", "Enter"), true);
+  screen.until("queued again with its file", |screen| {
+    turns(screen).len() == 2 && !screen.db().chat_attachments(chat).expect("attachments").is_empty()
+  });
+  let db = screen.db();
+  let (_, again) = db
+    .chat_attachments(chat)
+    .expect("attachments")
+    .into_iter()
+    .next()
+    .expect("the file");
+  assert_eq!(again[0].name().as_str(), "Pasted text.txt");
+  assert!(db.attachment_path(&again[0]).is_file(), "the copy is kept");
 }
 
 #[test]

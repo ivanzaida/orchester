@@ -4,21 +4,23 @@
 //! at its next tool call; *Stop and send* keeps it to go next and stops the answer. A queued message gets its own turn
 //! once its conversation's turn ended, in order, a *Stop and send* one first: the app's follower starts it
 //! ([`start_next_in`]) as it starts the turn of an agent's wait. Until then the person may remove it, or take its words
-//! back into the composer.
+//! and files back into the composer ([`take_back_in`]).
 
 use std::path::Path;
 
 use orchester_core::{
+  attachment::{Attachment, NewAttachment, input::AttachedFile, is_names_only},
   id::ChatMessageId,
   orchestrator::{Queued, TurnState},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{AttachmentOwner, ProjectDb, StoreError};
 
 use super::{
   send::{Outgoing, SendError, keep_as_in},
   waits::WaitTurn,
 };
 use crate::{
+  attachments::copy_unreadable,
   background,
   messages::{self, Message},
   runner::{RequestError, RunRequestError, Runners},
@@ -131,4 +133,52 @@ pub fn remove_in(root: &Path, message: ChatMessageId) -> Result<bool, Message> {
   ProjectDb::open(root)
     .and_then(|mut db| db.remove_queued_chat_message(message))
     .map_err(|error| messages::store_error(&error))
+}
+
+/// Why an *Edit* or *Remove* of a queued message changed nothing: its turn had started meanwhile.
+pub const fn already_started() -> Message {
+  Message::new("orchestrator.queued.started")
+}
+
+/// A queued message taken back into the composer to be reworded: its words, none for a message of files only, and its
+/// files as a draft holds them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TakenBack {
+  pub words: String,
+  pub attachments: Vec<NewAttachment>,
+}
+
+/// Takes the queued message `message` of the project at `root`, which says `text`, back to be reworded: its files are
+/// read from the project's copies, then it is removed with them, so it is never sent as well. `None` when its turn
+/// started meanwhile; refused, leaving it queued, when a copy cannot be read. Blocks on SQLite and the file system.
+pub fn take_back_in(root: &Path, message: ChatMessageId, text: &str) -> Result<Option<TakenBack>, Message> {
+  let store = |error: StoreError| messages::store_error(&error);
+  let mut db = ProjectDb::open(root).map_err(store)?;
+  let files = db
+    .attached_files(AttachmentOwner::ChatMessage(message))
+    .map_err(store)?;
+  let attachments = files.iter().map(read_back).collect::<Result<Vec<_>, _>>()?;
+  if !db.remove_queued_chat_message(message).map_err(store)? {
+    return Ok(None);
+  }
+  let kept: Vec<Attachment> = files.into_iter().map(|file| file.attachment).collect();
+  let words = if is_names_only(text, &kept) {
+    String::new()
+  } else {
+    text.to_owned()
+  };
+  Ok(Some(TakenBack { words, attachments }))
+}
+
+/// The project's copy of a queued message's file, as a draft holds it again.
+fn read_back(file: &AttachedFile) -> Result<NewAttachment, Message> {
+  let name = file.attachment.name();
+  let content = file.read().map_err(|error| {
+    tracing::warn!(%error, path = %file.path.display(), "a queued message's file cannot be read back");
+    copy_unreadable(name.as_str())
+  })?;
+  NewAttachment::new(name.clone(), content).map_err(|refusal| {
+    tracing::warn!(?refusal, "a queued message's file is no longer taken");
+    copy_unreadable(name.as_str())
+  })
 }

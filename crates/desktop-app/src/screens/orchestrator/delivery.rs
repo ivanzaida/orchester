@@ -3,8 +3,8 @@
 //! queued after the answer, or next once it stops; handed to the answer and on its way; taken by the answer and when;
 //! or not taken by the answer, so it goes after it. The design draws no queued message for the chat: these lines are
 //! the delivery line's (`check-check` in `success` once it reached the Orchestrator, a `clock` in `text_muted` while it
-//! waits), and a queued message offers *Edit*, which takes its words back into the composer, and *Remove*, as the
-//! task's composer offers *Edit in composer* under a message its agent did not take.
+//! waits), and a queued message offers *Edit*, which takes its words and files back into the composer, and *Remove*,
+//! as the task's composer offers *Edit in composer* under a message its agent did not take.
 
 use lurq::{
   app::{
