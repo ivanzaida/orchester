@@ -68,6 +68,7 @@ const TESTS: &[(&str, Test)] = tests![
   ended::tokens_of_a_deleted_account_say_so_until_they_would_have_ended,
   ended::tokens_ended_before_the_account_was_deleted_say_nothing,
   identity::identity_token_verifies_with_the_published_key_set,
+  identity::identity_tokens_name_the_issuer_of_the_newest_key_set,
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
   identity::identity_key_sets_are_signed_weekly_and_renewed_after_a_stop,
   identity::identity_keys_leave_no_gap_after_a_stop,

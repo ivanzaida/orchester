@@ -245,6 +245,47 @@ async fn s1c_key_sets_rotate_expire_and_arrive_with_a_joining_app() {
   server.finish().await;
 }
 
+#[tokio::test]
+async fn s1c_tokens_keep_verifying_when_the_cloud_moves_to_another_url() {
+  const MOVED: &str = "https://moved.cloud.test";
+  let (server, admin, cloud, audience) = linked().await;
+  let invite = email_invite(
+    &server,
+    &admin.token,
+    json!({"kind":"server","delivery":"cloud","email":"bob@example.com"}),
+  )
+  .await;
+  let invite_id = invite.invite.id.to_string();
+  // Until an app brings a key set that names the moved cloud, its issuer is not the cached set's.
+  let early = cloud.token_issued_by(MOVED, &bob(&audience, Some(&invite_id)), server.seconds());
+  refused(
+    &cloud_join(&server, &early, None).await,
+    401,
+    ErrorCode::InvalidIdentity,
+  );
+  let moved = TestCloud::key_set_named(&cloud.root, &[&cloud.signing], MOVED, server.seconds() + 60);
+  let joined = cloud_join(&server, &early, Some(&moved)).await;
+  assert_eq!(joined.status, 201);
+  let former: Option<String> = server
+    .database()
+    .query_row("SELECT former_issuer FROM cloud_link WHERE id=1", [], |row| row.get(0))
+    .expect("the link");
+  assert_eq!(former.as_deref(), Some(crate::support::cloud::ISSUER));
+  // A token issued just before the move still verifies, after the moved cloud's next key set too.
+  let before = cloud.token(&bob(&audience, None), server.seconds());
+  assert_eq!(cloud_join(&server, &before, None).await.status, 201);
+  let weekly = TestCloud::key_set_named(&cloud.root, &[&cloud.signing], MOVED, server.seconds() + 120);
+  let still = cloud.token(&bob(&audience, None), server.seconds());
+  assert_eq!(cloud_join(&server, &still, Some(&weekly)).await.status, 201);
+  let elsewhere = cloud.token_issued_by("https://elsewhere.test", &bob(&audience, None), server.seconds());
+  refused(
+    &cloud_join(&server, &elsewhere, None).await,
+    401,
+    ErrorCode::InvalidIdentity,
+  );
+  server.finish().await;
+}
+
 /// Bob, invited by email, joined through the cloud.
 pub(crate) async fn bob_joined(server: &TestServer, admin: &Joined, cloud: &TestCloud, audience: &str) -> Joined {
   let body = json!({"kind":"server","delivery":"cloud","email":"bob@example.com"});

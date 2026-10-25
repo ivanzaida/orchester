@@ -40,7 +40,7 @@ services:
       ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}
       # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.
       # Set it empty on an air-gapped network: the admin then offers codes only.
-      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}
+      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester.cloud}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 30s

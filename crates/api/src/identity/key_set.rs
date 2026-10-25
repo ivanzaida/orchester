@@ -114,6 +114,19 @@ impl VerifiedKeySet {
 
   /// Verifies an identity token for the team server `audience` at `now` (seconds since the Unix epoch).
   pub fn verify_token(&self, token: &str, audience: &str, now: i64) -> Result<VerifiedToken, IdentityError> {
+    self.verify_token_also_from(token, audience, None, now)
+  }
+
+  /// [`Self::verify_token`], also taking a token issued by `former`: the issuer an earlier key set of the same root
+  /// named, before the cloud moved to another public URL (`docs/cloud-hosting.md`, "Moving the cloud"). The newest key
+  /// set names the cloud's new URL while tokens issued just before the move still name the former one.
+  pub fn verify_token_also_from(
+    &self,
+    token: &str,
+    audience: &str,
+    former: Option<&str>,
+    now: i64,
+  ) -> Result<VerifiedToken, IdentityError> {
     if now >= self.statement.expires_at {
       return Err(IdentityError::KeySetExpired);
     }
@@ -126,7 +139,7 @@ impl VerifiedKeySet {
       .ok_or(IdentityError::UnknownKey)?;
     key.verify(&compact.signing_input, &compact.signature)?;
     let claims: IdentityClaims = jws::parse(&compact.payload)?;
-    if claims.iss != self.statement.iss {
+    if claims.iss != self.statement.iss && former != Some(claims.iss.as_str()) {
       return Err(IdentityError::WrongIssuer);
     }
     if claims.aud != audience {

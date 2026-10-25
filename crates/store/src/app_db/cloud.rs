@@ -37,7 +37,7 @@ pub struct StoredCloudAccount {
   /// How the cloud lists this computer among the account's devices.
   pub device_name: String,
   pub signed_in_at: Timestamp,
-  /// The cloud's address at sign-in, e.g. `https://orchester-cloud.lurq.dev`.
+  /// The cloud's address at sign-in, e.g. `https://orchester.cloud`.
   pub cloud_address: String,
 }
 

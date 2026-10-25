@@ -19,7 +19,9 @@ Two kinds of client call it:
 
 ## Conventions
 
-- Base path `<public URL>/api/v1`, for example `https://orchester-cloud.lurq.dev/api/v1`. JSON bodies in UTF-8.
+- Base path `<public URL>/api/v1`, for example `https://orchester.cloud/api/v1` (during the move also
+  `https://orchester-cloud.lurq.dev/api/v1`, the same service: [cloud-hosting.md](cloud-hosting.md), "Moving the
+  cloud"). JSON bodies in UTF-8.
   Requests are limited to 1 MiB and must arrive within 10 seconds.
 - Unknown request fields are refused (`400 bad_request`).
 - Endpoints marked *device* need `Authorization: Bearer <device token>`. A device token is `orcc_` followed by 64

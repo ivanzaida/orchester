@@ -96,6 +96,12 @@ impl Desktop {
     account.cloud_address = address.to_owned();
     db.set_cloud_account(Some(&account)).expect("moved");
   }
+
+  /// Stores `address` as Settings › Orchester › Advanced names the cloud, as an earlier version left it.
+  pub fn store_cloud_address(&self, address: &str) {
+    let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
+    db.set_cloud_address(Some(address)).expect("stored");
+  }
 }
 
 /// A team server with Alice as its admin, linked to `cloud`; returns it and its id, the identity tokens' audience.

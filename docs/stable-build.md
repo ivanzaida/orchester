@@ -148,6 +148,13 @@ runtime linked in so the programs start without the Visual C++ Redistributable. 
   its own: it starts the runner from beside itself and cannot open a project without it.
 - `SHA256SUMS.txt`, the checksums of both.
 
+**Its Orchester Cloud** is `https://orchester.cloud`, built in (`BUILD_ADDRESS` in
+`crates/workspace/src/sharing/cloud/mod.rs`; `ORCHESTER_CLOUD_URL` at build time names another, as
+for a test cloud). Releases before the cloud's move (2026-10-25) have
+`https://orchester-cloud.lurq.dev` built in, which keeps answering while they are in use; a newer
+release moves what an install stored with that address to the new one at its first start and stays
+signed in. When to release in the move: [cloud-hosting.md](cloud-hosting.md), "Moving the cloud".
+
 **Your data on install, upgrade and uninstall.** The app keeps `orchester.db` (with its `-wal`
 and `-shm` files), `orchester.lock`, `orchester.lock.holder` and `logs\` in its install folder.
 The installer writes only the two programs and its uninstaller there: an upgrade replaces the

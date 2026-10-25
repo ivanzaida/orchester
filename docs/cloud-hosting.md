@@ -22,7 +22,8 @@ The binary also builds and runs on Windows and macOS.
 Every setting comes from the environment as `ORCHESTER_CLOUD_<KEY>`. A TOML file (`--config cloud.toml`, or
 `cloud.toml` in the working directory) may give values, and the environment wins over it
 ([deploy/cloud/cloud.example.toml](../deploy/cloud/cloud.example.toml)). Nothing is hard-coded: the person's
-deployment sets `ORCHESTER_CLOUD_PUBLIC_URL=https://orchester-cloud.lurq.dev` in its environment.
+deployment sets `ORCHESTER_CLOUD_PUBLIC_URL` in its environment, `https://orchester.cloud` once the move to that
+domain is through ([Moving the cloud](#moving-the-cloud)); until then it stays `https://orchester-cloud.lurq.dev`.
 
 | Key | Required | Meaning |
 | --- | --- | --- |
@@ -112,8 +113,61 @@ nothing to run by hand:
 
 The cloud keeps this schedule at its start, before it listens, and every minute while it serves, under the same
 lock, so each step happens once however many replicas run. It signs tokens only with a key the newest unexpired key
-set lists. A cloud stopped for more than 30 days answers `POST /identity-tokens` with `503 keys_unavailable` only
-until its next start, which signs a fresh key set.
+set lists, and a token names the issuer that key set names: a replica started with another `PUBLIC_URL` signs a key
+set naming it at its start, and from then on every replica's tokens name it too. A cloud stopped for more than 30
+days answers `POST /identity-tokens` with `503 keys_unavailable` only until its next start, which signs a fresh key
+set.
+
+## Moving the cloud
+
+The public cloud moved from `https://orchester-cloud.lurq.dev` to `https://orchester.cloud` (2026-10-25). Both names
+point at the same host and the same stack, so the database, the root key, accounts, devices and links stay as they
+are; only the name changes. App builds, team servers and admins from before the move have the former address built in
+or stored, so it keeps answering until they are updated.
+
+What depends on the name:
+
+| What | Where it comes from | During the move |
+| --- | --- | --- |
+| The API (apps, team servers' invites) | The address each caller has | Answers on both hosts |
+| The web pages (sign-up, sign-in, *Forgot password*, account, `/authorize` for team server admins) | The address the app or admin opens | Take forms on both hosts: `PUBLIC_URL` and the web front's `ORCHESTER_CLOUD_EXTRA_ORIGINS` ([deploy/cloud/README.md](../deploy/cloud/README.md), "Moving to another domain"). Each host has its own host-only cookies, so a browser signs in on each separately |
+| Email links | `PUBLIC_URL` | The former host until `PUBLIC_URL` changes; links already sent keep working, as the former host answers |
+| The issuer (`iss`) of key sets and identity tokens | `PUBLIC_URL` | A key set naming the new URL is signed at the first start with it. Tokens name the issuer of the newest key set. A team server that caches a key set naming another issuer than the one it held keeps that one as the *former issuer* and takes tokens naming either |
+| The name in authenticator apps | `PUBLIC_URL`'s host | Entries made before keep their name and their codes |
+| Desktop apps | `https://orchester.cloud` built in from the release after the move; earlier builds have the former address | At its first start a new build moves what it stored with the former address (the signed-in account's address and the advanced setting) to the new one; the sign-in, its device token and its team servers stay |
+| Team server admins | `ORCHESTER_ADMIN_CLOUD_URL`; `https://orchester.cloud` by default from the release after the move | An admin that names the former address keeps working; change it to the new one whenever convenient |
+
+The order:
+
+1. **DNS** (done): `orchester.cloud` → the same host, DNS only, beside the records of `orchester-cloud.lurq.dev`.
+2. **The stack on both hosts.** Deploy the cloud and web images of the release with this move, and update the
+   stack's compose file to [deploy/cloud/compose.portainer.yaml](../deploy/cloud/compose.portainer.yaml) of that
+   release: paste it into the stack's *Editor* (the automatic deploys send the stack's own compose file back
+   unchanged, so they do not pick up new labels). Traefik then routes both hosts, with a certificate for each, and the
+   web front takes forms on both. Keep `ORCHESTER_CLOUD_PUBLIC_URL=https://orchester-cloud.lurq.dev`. Check both
+   hosts as [deploy/cloud/PORTAINER.md](../deploy/cloud/PORTAINER.md), step 8, says: `/api/v1/keys` answers `200`
+   and a sign-in on the page works on each.
+3. **Team servers.** Update the team servers you run to the server image of that release (`docker compose pull` and
+   `up -d`); it migrates its database (schema 8: the cloud's former issuer). Their `ORCHESTER_ADMIN_CLOUD_URL` may
+   stay at the former address, or change to `https://orchester.cloud` now: the web front takes the admin's
+   `/authorize` on both hosts since step 2. Servers that are not updated keep working too; the update only covers an
+   identity token issued in the minutes before step 5 and used after it.
+4. **Release the app.** Raise the app's version (`docs/stable-build.md`, "Releases from CI") once step 2 is live:
+   updated apps call `https://orchester.cloud` and move their stored address there at their first start, signed in as
+   they were.
+5. **Change `PUBLIC_URL`.** Set `ORCHESTER_CLOUD_PUBLIC_URL=https://orchester.cloud` in the stack (the cloud and the
+   web front read the same variable) and redeploy. The cloud signs a key set naming the new URL before it listens;
+   apps and admins carry it to the team servers with their next sign-in or join, and the servers take tokens of both
+   issuers. Emails link to the new host from then on. Nothing needs to wait between steps 4 and 5: either order works,
+   as both hosts answer.
+6. **Drop the former host last**, once no app build and no team server admin calls it any more (old app builds
+   have it built in; an admin's `ORCHESTER_ADMIN_CLOUD_URL` may still name it): stop routing it (set
+   `ORCHESTER_CLOUD_FORMER_HOST` to the value of `ORCHESTER_CLOUD_HOST`), which also takes it out of the web front's
+   origins, then remove its DNS records. Team servers never call the cloud, so they are not affected; their admins'
+   browser sign-ins are, if `ORCHESTER_ADMIN_CLOUD_URL` still names the former host.
+
+What stays on `lurq.dev`: the sender of the cloud's emails (`SMTP_FROM`, `no-reply@lurq.dev`, with its SPF and DKIM
+records in `lurq.dev`'s DNS), Portainer (`portainer.lurq.dev`) and the person's own team server (`orc.lurq.dev`).
 
 ### Losing the key-encryption key
 

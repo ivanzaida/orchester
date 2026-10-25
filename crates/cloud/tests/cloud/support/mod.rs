@@ -76,6 +76,7 @@ pub struct TestCloud {
   pub clock: Arc<TestClock>,
   pub mail: Arc<RecordingMailer>,
   pub database: String,
+  key_encryption_key: String,
   address: SocketAddr,
   stop: Option<oneshot::Sender<()>>,
   task: Option<JoinHandle<Result<(), CloudError>>>,
@@ -122,7 +123,8 @@ impl TestCloud {
   async fn open(trusted_proxies: Vec<TrustedProxy>, mailer: Arc<dyn Mailer>, mail: Arc<RecordingMailer>) -> Self {
     let database = postgres().create_database().await;
     let clock = Arc::new(TestClock(AtomicI64::new(1_791_000_000_000)));
-    let config = config(&database, &key_encryption_key(), trusted_proxies);
+    let key_encryption_key = key_encryption_key();
+    let config = config(&database, &key_encryption_key, trusted_proxies);
     let cloud = Cloud::open(config, clock.clone(), mailer)
       .await
       .expect("open the cloud");
@@ -138,10 +140,21 @@ impl TestCloud {
       clock,
       mail,
       database,
+      key_encryption_key,
       address,
       stop: Some(stop),
       task: Some(task),
     }
+  }
+
+  /// Another replica of this cloud, on its database and clock, started with the public URL `public_url`: the cloud
+  /// moving to another address while this replica still serves.
+  pub async fn replica_at(&self, public_url: &str) -> Cloud {
+    let mut config = config(&self.database, &self.key_encryption_key, Vec::new());
+    public_url.clone_into(&mut config.public_url);
+    Cloud::open(config, self.clock.clone(), Arc::new(RecordingMailer::default()))
+      .await
+      .expect("open the replica")
   }
 
   /// The root key the cloud made at its start, as its database holds it.
