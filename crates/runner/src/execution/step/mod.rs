@@ -291,7 +291,7 @@ impl RunTask {
     self.record_reached(invocation.id, &start)?;
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
-    self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
+    self.db.save_edit_progress(invocation.id, &EditProgress::started())?;
     self.db.save_injected_memory(invocation.id, &start.memory)?;
     self.report_unreadable_memory(&invocation)?;
     self.record_left_out(&invocation, std::mem::take(&mut start.left_out))?;

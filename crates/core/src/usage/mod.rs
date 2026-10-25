@@ -13,6 +13,7 @@ mod expensive;
 mod facts;
 mod filter;
 mod grouped;
+mod index_use;
 pub mod limits;
 mod period;
 mod report;
@@ -26,6 +27,7 @@ pub use self::{
   facts::{IndexGiven, InvocationFacts, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts},
   filter::{FilterOptions, UsageFilter, toggle},
   grouped::{GroupBy, GroupKey, GroupRow, Grouped, Named, grouped},
+  index_use::{IndexGroup, IndexUse},
   period::{Bucket, DayRange, DayRangeError, Grouping, HOURLY_DAYS, Period, bucket_of, day_start, local_date},
   report::{Summary, UsageQuery, UsageReport},
   series::{Measure, SeriesBar},

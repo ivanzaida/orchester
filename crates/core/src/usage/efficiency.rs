@@ -1,10 +1,10 @@
 //! *Efficiency*: the cache share per day, the tokens agents used before their first edit with and
-//! without the code index, and the runs that failed.
+//! without the code index, what every agent invocation did with the index ([`IndexUse`]), and the runs that failed.
 
 use chrono::NaiveDate;
 
 use super::{
-  IndexGiven, RunCost, Summary,
+  IndexGiven, IndexUse, RunCost, Summary,
   facts::InvocationFacts,
   period::{DayRange, Grouping, bucket_of},
   report::Within,
@@ -39,6 +39,7 @@ pub struct Efficiency {
   pub cache_by_day: Vec<(NaiveDate, Option<u64>)>,
   pub with_index: EditTokens,
   pub without_index: EditTokens,
+  pub index_use: IndexUse,
   pub failed: FailedRuns,
 }
 
@@ -51,6 +52,7 @@ impl Efficiency {
       cache_by_day: cache_by_day(within, range),
       with_index: edit_tokens(within, IndexGiven::Yes),
       without_index: edit_tokens(within, IndexGiven::No),
+      index_use: IndexUse::of(within),
       failed: FailedRuns {
         runs: summary.failed,
         of_runs: summary.runs,
@@ -106,7 +108,7 @@ fn edit_tokens(within: &Within<'_>, given: IndexGiven) -> EditTokens {
 }
 
 /// The middle value, or the mean of the two middle ones rounded down.
-fn median(values: &mut [u64]) -> Option<u64> {
+pub(super) fn median(values: &mut [u64]) -> Option<u64> {
   if values.is_empty() {
     return None;
   }

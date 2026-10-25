@@ -92,6 +92,7 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
       path: "src/lib.rs".into(),
     }),
     at_most: false,
+    index_searches: Some(3),
   };
   db.save_edit_progress(invocation.id, &progress).expect("progress");
   let account = orchester_core::id::AgentAccountId::generate();

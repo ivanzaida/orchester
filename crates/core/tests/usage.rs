@@ -396,6 +396,7 @@ fn usage_efficiency_has_the_cache_share_per_day_edit_tokens_by_index_and_failed_
       path: "src/lib.rs".into(),
     }),
     at_most: false,
+    index_searches: None,
   };
   kontur.facts.invocations[0].edit = Some(edited(9_000));
   kontur.facts.invocations[0].index = IndexGiven::Yes;
@@ -419,6 +420,65 @@ fn usage_efficiency_has_the_cache_share_per_day_edit_tokens_by_index_and_failed_
   assert_eq!((efficiency.failed.runs, efficiency.failed.of_runs), (1, 2));
   assert_eq!((efficiency.failed.spent, efficiency.failed.of_spent), (7_000, 23_000));
   assert_eq!(efficiency.failed.largest.map(|run| run.key), Some("ORC-2".into()));
+}
+
+/// ORC-90: *Code index use* counts every agent invocation that ended, those that changed no file too, by what it did
+/// with the index; one recorded before its searches were counted is left out.
+#[test]
+fn usage_index_use_counts_read_only_invocations_by_their_index_searches() {
+  let mut kontur = kontur();
+  let read_only = |searches: Option<u64>| EditProgress {
+    before: usage(1_000, 0, 0),
+    index_searches: searches,
+    ..EditProgress::default()
+  };
+  // The Codex run searched the index 4 times and changed no file; the Claude run got it and never searched it.
+  kontur.facts.invocations[0].edit = Some(read_only(Some(4)));
+  kontur.facts.invocations[0].index = IndexGiven::Yes;
+  kontur.facts.invocations[1].edit = Some(read_only(Some(0)));
+  kontur.facts.invocations[1].index = IndexGiven::Yes;
+  let mut without = kontur.facts.invocations[1].clone();
+  without.id = InvocationId::generate();
+  without.index = IndexGiven::No;
+  let mut unknown = without.clone();
+  unknown.id = InvocationId::generate();
+  unknown.edit = Some(read_only(None));
+  let mut running = without.clone();
+  running.id = InvocationId::generate();
+  running.ended_at = None;
+  kontur
+    .facts
+    .turns
+    .push(turn(&without, on(29, 15), usage(3_000, 0, 500)));
+  kontur.facts.invocations.extend([without, unknown, running]);
+  let efficiency = report(&[kontur], Grouping::Day, &UsageFilter::default()).efficiency;
+  let index = efficiency.index_use;
+  assert_eq!(
+    (
+      index.searched.invocations,
+      index.searched.median,
+      index.searched.searches
+    ),
+    (1, Some(16_000), 4)
+  );
+  assert_eq!(
+    (
+      index.not_searched.invocations,
+      index.not_searched.median,
+      index.not_searched.searches
+    ),
+    (1, Some(7_000), 0)
+  );
+  assert_eq!(
+    (index.without_index.invocations, index.without_index.median),
+    (1, Some(3_500)),
+    "the invocation recorded before searches were counted and the running one are left out"
+  );
+  assert_eq!(
+    (efficiency.with_index.edited, efficiency.with_index.without_edit),
+    (0, 2),
+    "Tokens before first edit leaves the read-only invocations out"
+  );
 }
 
 fn weekly(at: Timestamp, percent: f64, resets: Timestamp) -> LimitSnapshot {

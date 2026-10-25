@@ -225,7 +225,7 @@ fn runs(kontur: &mut Kontur, rows: Vec<&Row>, extras: Extras) -> Result<(), Seed
 
 /// What the run's agents used before their first edit: Implement edits, with the code index on Feature
 /// delivery (after reading a third of what it read) and without it on Quick fix (two thirds); the other
-/// steps change no file.
+/// steps change no file. With the index, Implement searched it 6 times and the other steps never did.
 fn first_edits(kontur: &mut Kontur, run: &Run, indexed: bool) -> Result<(), SeedError> {
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("a valid step key"))
@@ -258,6 +258,7 @@ fn first_edits(kontur: &mut Kontur, run: &Run, indexed: bool) -> Result<(), Seed
         path: "src/lib.rs".to_owned(),
       }),
       at_most: false,
+      index_searches: Some(if indexed && edits { 6 } else { 0 }),
     };
     kontur.db.save_edit_progress(invocation.id, &progress)?;
   }
