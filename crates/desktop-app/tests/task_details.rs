@@ -17,7 +17,10 @@ mod support;
 
 use std::{collections::HashMap, num::NonZeroU32, path::PathBuf};
 
-use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::{
+  routes::{ProjectPage, Route, TaskTab, TaskView},
+  ui::markdown::plain::plain_text,
+};
 use orchester_core::{
   id::{ProjectId, ServerId, UserId},
   run::TaskPhase,
@@ -172,8 +175,8 @@ impl Page {
   }
 }
 
-/// The Details show `details` whole: its title, its description and each criterion, numbered, and nothing else
-/// in the criteria list.
+/// The Details show `details` whole: its title, its description and each criterion, numbered and read as
+/// Markdown, and nothing else in the criteria list.
 fn assert_shows(page: &mut Page, details: &TaskDetails, what: &str) {
   assert_eq!(page.text("task-details-title-text"), details.title.as_str(), "{what}");
   let description = page.text("task-details-description-text");
@@ -189,12 +192,25 @@ fn assert_shows(page: &mut Page, details: &TaskDetails, what: &str) {
     "{what}"
   );
   let mut expected = Vec::new();
+  let mut shown = Vec::new();
   for (number, criterion) in (1..).zip(&details.acceptance_criteria) {
-    expected.push(format!("{number:02}"));
-    expected.push(criterion.clone());
+    expected.push(format!("{number:02} {}", plain_text(criterion)));
+    let row = format!("task-details-criterion-{number}");
+    let words = page
+      .window
+      .texts(&format!("{row}-text"))
+      .expect("the criterion")
+      .concat();
+    shown.push(format!("{} {words}", page.text(&format!("{row}-number"))));
   }
   if count > 0 {
-    let shown = page.window.texts("task-details-criteria-list").expect("the criteria");
+    let squeezed = |text: String| text.split_whitespace().collect::<String>();
+    let list = page.window.texts("task-details-criteria-list").expect("the criteria");
+    assert_eq!(
+      squeezed(list.concat()),
+      squeezed(shown.concat()),
+      "{what}: nothing else in the list"
+    );
     assert_eq!(shown, expected, "{what}: every criterion, unscored");
   }
 }
@@ -221,6 +237,9 @@ fn details_show_every_requirement_in_each_state_without_results() {
         !shown.contains(result),
         "{state}: no result is said of a criterion: {shown}"
       );
+    }
+    for markup in ["**", "`", "]("] {
+      assert!(!shown.contains(markup), "{state}: Markdown is rendered: {shown}");
     }
     assert_eq!(
       page.text("task-details-provenance"),

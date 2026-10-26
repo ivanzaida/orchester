@@ -20,11 +20,7 @@ const STATES: [(&str, &str, Shape); 19] = [
     "Send invoice emails in the customer's language.",
     Shape::Queued,
   ),
-  (
-    "Add retry to webhook sender",
-    "Retry failed webhook deliveries with backoff and jitter.",
-    Shape::Running("implement"),
-  ),
+  ("Add retry to webhook sender", MARKDOWN_BRIEF, RUNNING),
   (
     "Paginate the events API",
     "Page the events endpoint with a cursor.",
@@ -106,6 +102,15 @@ const STATES: [(&str, &str, Shape); 19] = [
 const DAILY_BUDGET: Shape = Shape::AtLimit("implement", RunLimit::DailyBudget);
 const CRITERIA: [&str; 2] = ["The change is covered by tests.", "Nothing changes for existing users."];
 
+/// The running task asks in Markdown, as a person writes a brief: the Summary and Details render it.
+const RUNNING: Shape = Shape::Running("implement");
+const MARKDOWN_BRIEF: &str = "Retry failed webhook deliveries with **backoff and jitter**.\n\n- Keep every attempt in \
+                              the endpoint's `delivery log`.\n- Follow the [retry guide](https://example.com/retries).";
+const MARKDOWN_CRITERIA: [&str; 2] = [
+  "Deliveries that fail retry with **full jitter**.",
+  "`Retry-After` is honored, capped at 60 s.",
+];
+
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   for (index, (title, brief, shape)) in STATES.into_iter().enumerate() {
@@ -118,10 +123,10 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
       kontur.ago(hours)
     };
     let created = Timestamp::from_unix_millis(started.unix_millis() - 30 * 60_000);
-    let (criteria, pipeline): (&[&str], _) = if shape == Shape::Draft {
-      (&[], None)
-    } else {
-      (&CRITERIA, Some(&catalogue.feature_delivery))
+    let (criteria, pipeline): (&[&str], _) = match shape {
+      Shape::Draft => (&[], None),
+      RUNNING => (&MARKDOWN_CRITERIA, Some(&catalogue.feature_delivery)),
+      _ => (&CRITERIA, Some(&catalogue.feature_delivery)),
     };
     let mut task = kontur.task((title, brief, criteria), pipeline, created)?;
     shapes::apply(kontur, &mut task, pipeline, shape, started)?;

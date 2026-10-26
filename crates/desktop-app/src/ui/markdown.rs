@@ -17,7 +17,7 @@ use lurq::{
     events::MouseEvent,
     theme::{FormTextRole, PaletteColor, TypographyStyle},
   },
-  components::{Markdown, MarkdownLink, MarkdownProps},
+  components::{Column, Markdown, MarkdownLink, MarkdownProps},
   node::{Element, dimension::Dimension},
 };
 
@@ -135,6 +135,11 @@ impl Component for MarkdownHost {
     if let Some(markdown) = spacing {
       props = props.theme(markdown);
     }
-    Markdown::mount(ctx, props).id(view.id.to_string())
+    // The id is on a column of its own: lurq lays out the Markdown again by itself when the window's
+    // breakpoint changes, and the root it renders then would not carry an id given to it here.
+    Column::new()
+      .id(view.id.to_string())
+      .width(Dimension::Pct(100.0))
+      .child(Markdown::mount(ctx, props))
   }
 }

@@ -2,8 +2,8 @@
 //! (`Requirements version selector` `UkPgL`, a `Field/select` 280 wide) of the versions the task kept, where
 //! the version shown comes from (`Snapshot provenance` `FKZ6U`), that the creation version was not recorded
 //! when an older task shows another in its place (`Creation snapshot unavailable notice` `NeEwF` in
-//! `R3Wkvd`), then the task's title, its description as Markdown and every acceptance criterion, numbered,
-//! with their count. Everything is shown whole: the column scrolls.
+//! `R3Wkvd`), then the task's title, its description as Markdown and every acceptance criterion as Markdown,
+//! numbered, with their count. Everything is shown whole: the column scrolls.
 
 use std::sync::Arc;
 
@@ -29,7 +29,7 @@ use crate::{
   ui::{
     chat::links,
     field::{SelectField, field},
-    markdown::MarkdownView,
+    markdown::{LinkHandler, MarkdownView},
   },
 };
 
@@ -198,23 +198,31 @@ fn description(ctx: &mut Ctx, details: &TaskDetails) -> Element {
 }
 
 /// Every criterion, numbered, each over a hairline (`All acceptance criteria · unscored` `W7XXTD`).
-fn criteria(ctx: &Ctx, details: &TaskDetails) -> Element {
+fn criteria(ctx: &mut Ctx, details: &TaskDetails) -> Element {
   let criteria = &details.acceptance_criteria;
   let heading = ctx.t_args("details.criteria", [("count", criteria.len().to_string())]);
   let list: Element = if criteria.is_empty() {
     muted("task-details-criteria-none", &ctx.t("details.noCriteria"))
   } else {
+    let on_link = links(ctx);
+    let rows: Vec<Element> = (1..)
+      .zip(criteria)
+      .map(|(number, text)| criterion(ctx, number, text, &on_link))
+      .collect();
     Column::new()
       .id("task-details-criteria-list")
       .width(Dimension::Pct(100.0))
-      .with_children((1..).zip(criteria).map(|(number, text)| criterion(number, text)))
+      .with_children(rows)
       .into()
   };
   section("task-details-criteria", &heading, SpacingSize::Sm, list)
 }
 
-/// "01" and the criterion's words (`Acceptance criterion 1` `ZT2hO`).
-fn criterion(number: usize, text: &str) -> Element {
+/// "01" and the criterion's words, as Markdown (`Acceptance criterion 1` `ZT2hO`).
+fn criterion(ctx: &mut Ctx, number: usize, text: &str, on_link: &LinkHandler) -> Element {
+  let text = MarkdownView::new(format!("task-details-criterion-{number}-text"), text, on_link.clone())
+    .style(TaskText::DetailsBody.role(), PaletteColor::TextPrimary)
+    .render(ctx);
   Row::new()
     .id(format!("task-details-criterion-{number}"))
     .width(Dimension::Pct(100.0))
@@ -228,14 +236,7 @@ fn criterion(number: usize, text: &str) -> Element {
         .variant(ExtraTypography::MonoNote.role())
         .nowrap(),
     )
-    .child(
-      Text::new(text)
-        .id(format!("task-details-criterion-{number}-text"))
-        .variant(TaskText::DetailsBody.role())
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .selectable(true),
-    )
+    .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text))
     .into()
 }
 
