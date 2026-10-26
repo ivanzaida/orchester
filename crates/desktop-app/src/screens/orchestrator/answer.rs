@@ -53,7 +53,7 @@ pub(super) fn nested(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   Some(quoted(&format!("orchestrator-answer-{key}"), parts(ctx, row)))
 }
 
-/// The answer's parts, 10 apart; event lines in a row are one list.
+/// The answer's parts, 10 apart; event lines in a row are one list, whose lines say no time.
 fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
   let key = row.turn.key();
   let mut shown: Vec<Element> = Vec::new();
@@ -63,15 +63,22 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
     1 => shown.append(lines),
     _ => shown.push(list(&format!("orchestrator-actions-{key}-{index}"), std::mem::take(lines))),
   };
-  for (index, part) in row.turn.answer.iter().enumerate() {
+  let answer = &row.turn.answer;
+  let line_at = |index: usize| {
+    answer
+      .get(index)
+      .is_some_and(|part| matches!(part, Part::Action { action, .. } if is_line(row, action)))
+  };
+  for (index, part) in answer.iter().enumerate() {
     let id = format!("orchestrator-action-{key}-{index}");
     match part {
       Part::Action { action, at, seq } if is_line(row, action) => {
-        lines.push(action_element(ctx, row, &id, (action, *at, *seq)));
+        let listed = index.checked_sub(1).is_some_and(line_at) || line_at(index + 1);
+        lines.push(action_element(ctx, row, &id, (action, *at, *seq), listed));
       }
       Part::Action { action, at, seq } => {
         flush(&mut shown, &mut lines, index);
-        shown.push(action_element(ctx, row, &id, (action, *at, *seq)));
+        shown.push(action_element(ctx, row, &id, (action, *at, *seq), false));
       }
       Part::Reply { text: said, .. } => {
         flush(&mut shown, &mut lines, index);
@@ -117,8 +124,15 @@ fn is_line(row: &TurnRow, action: &ChatAction) -> bool {
   }
 }
 
-/// The line or card of `action`, taken at `at` as entry `seq` of the conversation; `id` names it.
-fn action_element(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&ChatAction, Timestamp, i64)) -> Element {
+/// The line or card of `action`, taken at `at` as entry `seq` of the conversation, its line without its time when
+/// `listed` in the answer's list; `id` names it.
+fn action_element(
+  ctx: &mut Ctx,
+  row: &TurnRow,
+  id: &str,
+  (action, at, seq): (&ChatAction, Timestamp, i64),
+  listed: bool,
+) -> Element {
   let id = id.to_owned();
   if action.change.is_some() || action.auto_mode {
     return ctx.mount_keyed::<ChangeCard>(
@@ -130,6 +144,7 @@ fn action_element(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&C
         seq,
         action: action.clone(),
         at,
+        listed,
       },
     );
   }
@@ -160,6 +175,6 @@ fn action_element(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&C
         at,
       },
     ),
-    _ => super::action::line(ctx, &id, (action, at), row.env.project),
+    _ => super::action::line(ctx, &id, (action, at, listed), row.env.project),
   }
 }

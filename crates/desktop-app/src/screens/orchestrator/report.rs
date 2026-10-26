@@ -111,7 +111,7 @@ fn head(ctx: &Ctx, props: &ReportProps, open: &Signal<bool>) -> Element {
   let id = props.id.as_str();
   let report = &props.report;
   let shown = open.get();
-  let title = ctx.t_args("orchestrator.report.title", [("day", day_label(report))]);
+  let title = ctx.t_args("orchestrator.report.title", [("day", super::day(ctx, report.day))]);
   let total = |suffix: &str, (figure, color): (String, PaletteColor), words: Arc<str>| {
     Row::new()
       .id(format!("{id}-{suffix}"))
@@ -221,11 +221,12 @@ fn delivered(ctx: &Ctx, report: &DailyReport, at: Timestamp) -> Arc<str> {
   } else {
     ctx.t_args(
       "orchestrator.report.deliveredOn",
-      [("day", on.format("%Y-%m-%d").to_string()), ("time", time)],
+      [("day", super::day(ctx, on).to_string()), ("time", time)],
     )
   }
 }
 
+/// The report's day as tools read it (`2026-10-26`).
 fn day_label(report: &DailyReport) -> String {
   report.day.format("%Y-%m-%d").to_string()
 }

@@ -11,8 +11,12 @@
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{component::Component, ctx::Ctx},
-  components::{Column, Stack, VirtualizedList},
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
+  components::{Column, Stack, Text, VirtualizedList},
   layout::{
     StackAlignment,
     scrollbar::{ScrollBarPlacement, ScrollBarStyle},
@@ -99,13 +103,15 @@ impl PartialEq for TurnRow {
 
 impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 
-/// A row of the list: a turn, a digest of waits for the person, or the room under the last one while *Jump to
-/// latest* floats over the chat's foot, so the turn can scroll clear of it.
+/// A row of the list: a turn, a digest of waits for the person, a note under the last turn, or the room under the
+/// last one while *Jump to latest* floats over the chat's foot, so the turn can scroll clear of it.
 #[derive(Clone, PartialEq)]
 enum Line {
   /// A turn; `first` is the list's first row, which keeps the chat's top room over it.
   Turn { row: TurnRow, first: bool },
   Digest { digest: DigestProps, first: bool },
+  /// Words under the last turn in 12 `text_muted` (`Note` `JHr2a` in `02 Not set up` `Wd5CL`).
+  Note(Arc<str>),
   JumpRoom,
 }
 
@@ -116,19 +122,21 @@ impl Line {
     match self {
       Self::Turn { row, .. } => row.turn.key(),
       Self::Digest { digest, .. } => digest.id.clone(),
+      Self::Note(_) => "orchestrator-note".to_owned(),
       Self::JumpRoom => "orchestrator-jump-room".to_owned(),
     }
   }
 }
 
-/// The list of `rows`, as `follow` follows it (`ui::chat::follow`): it opens at the very end of the newest turn and
-/// keeps it in view as turns come and replies grow, until the person scrolls up; then *Jump to latest* floats over
-/// its foot.
-pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>) -> Element {
+/// The list of `rows`, as `follow` follows it (`ui::chat::follow`), with `note` under the last turn: it opens at the
+/// very end of the newest turn and keeps it in view as turns come and replies grow, until the person scrolls up; then
+/// *Jump to latest* floats over its foot.
+pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>, note: Option<Arc<str>>) -> Element {
   let arrived = arrivals(&rows);
   let reveal = follow.follow(rows.len(), arrived, None);
   let following = follow.following.get();
   let mut lines = gathered(rows);
+  lines.extend(note.map(Line::Note));
   if !following {
     lines.push(Line::JumpRoom);
   }
@@ -242,6 +250,16 @@ impl Component for TurnView {
         let mounted = ctx.mount_keyed::<Digest>(&key, digest);
         room(Column::new().width(Dimension::Pct(100.0)).child(mounted), first)
       }
+      Line::Note(words) => room(
+        Column::new().width(Dimension::Pct(100.0)).child(
+          Text::new(&words)
+            .id("orchestrator-not-ready")
+            .variant(TypographyStyle::Description)
+            .color(PaletteColor::TextMuted)
+            .width(Dimension::Pct(100.0)),
+        ),
+        false,
+      ),
       Line::JumpRoom => jump_room(),
     }
   }

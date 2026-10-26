@@ -330,18 +330,14 @@ fn conversation(
     (project, ctx.t("orchestrator.composer.placeholder")),
     stop,
   );
-  let readable = foot.not_set_up().then(|| {
-    Text::new(&ctx.t("orchestrator.composer.readable"))
-      .id("orchestrator-not-ready")
-      .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
-      .width(Dimension::Pct(100.0))
-  });
+  // Until it is set up, the chat says under its last turn that it stays readable (`02 Not set up` `Wd5CL`).
+  let readable = foot
+    .not_set_up()
+    .then(|| ctx.t("orchestrator.composer.readable"));
   let below = Column::new()
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(COLUMN_WIDTH))
     .spacing(SpacingSize::Sm)
-    .with_children(readable)
     .with_children(notices.into_iter().flatten())
     .child(boxed);
   // The turns scroll across the whole chat area, so the thumb sits at its right edge; each turn, the notices and
@@ -361,7 +357,7 @@ fn conversation(
             .id("orchestrator-scroll")
             .width(Dimension::Pct(100.0))
             .height(Dimension::Pct(100.0))
-            .child(list(ctx, &view.follow, rows)),
+            .child(list(ctx, &view.follow, rows, readable)),
         ),
     )
     .child(composer_area(below))

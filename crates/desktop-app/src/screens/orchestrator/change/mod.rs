@@ -72,6 +72,8 @@ pub(super) struct ChangeProps {
   pub(super) seq: i64,
   pub(super) action: ChatAction,
   pub(super) at: Timestamp,
+  /// Its line is one of a list in its answer, which says no time (`Actions` `J0N1u`).
+  pub(super) listed: bool,
 }
 
 impl DevtoolsInspectable for ChangeProps {}
@@ -126,7 +128,7 @@ impl Component for ChangeCard {
     let deciding = view.phase() == Phase::Waits && words.accept.is_some() && words.settled.is_none();
     if !deciding {
       let failed = self.decide.state().get().error.or_else(|| loaded.error.clone());
-      return folded::line(ctx, (&props.id, &view), &words, (opens, failed));
+      return folded::line(ctx, (&props.id, &view, props.listed), &words, (opens, failed));
     }
     self.decision(ctx, (&props, &view), words, (read, &loaded.error, opens))
   }

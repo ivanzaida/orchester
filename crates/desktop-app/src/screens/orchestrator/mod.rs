@@ -430,7 +430,17 @@ fn sender() -> Answerer {
 
 /// The local date of `at` as History and the header say it (*Oct 8*).
 pub(super) fn date(ctx: &Ctx, at: Timestamp) -> Arc<str> {
-  let (month, day) = display::month_day(at);
+  month_day(ctx, display::month_day(at))
+}
+
+/// The calendar day `day` as History and the header say a date (*Oct 8*).
+pub(super) fn day(ctx: &Ctx, day: chrono::NaiveDate) -> Arc<str> {
+  use chrono::Datelike;
+  month_day(ctx, (day.month0() as usize, day.day()))
+}
+
+/// The `month` (a [`display::MONTH_KEYS`] index) and `day` of a date, as *Oct 8*.
+fn month_day(ctx: &Ctx, (month, day): (usize, u32)) -> Arc<str> {
   let month = ctx.t_ns(orchester_workspace::i18n::NAMESPACE, display::MONTH_KEYS[month]);
   ctx.t_args(
     "orchestrator.date",

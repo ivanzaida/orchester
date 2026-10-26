@@ -39,7 +39,8 @@ fn orchestrator_report_shows_its_day_its_parts_and_their_links() {
   screen.go(OrchestratorChat::Latest);
   let card = format!("orchestrator-report-wait-{seq}");
   screen.until("the report's line", |screen| screen.exists(&card));
-  let day = report.day.format("%Y-%m-%d").to_string();
+  // As History says a date (*Oct 26*).
+  let day = report.day.format("%b %-d").to_string();
   let line = screen.text(&card);
   assert!(
     line.contains(&format!("Daily report · {day}")) && line.contains("merged") && line.contains("tokens"),

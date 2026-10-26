@@ -62,12 +62,18 @@ fn words(tool: &str) -> (&'static str, &'static str) {
   }
 }
 
-/// The line of `action`, taken at `at` in project `project`; `id` names it.
-pub(super) fn line(ctx: &mut Ctx, id: &str, (action, at): (&ChatAction, Timestamp), project: ProjectId) -> Element {
+/// The line of `action`, taken at `at` in project `project`, without its time when `listed` in its answer's list
+/// (`Actions` `J0N1u`); `id` names it.
+pub(super) fn line(
+  ctx: &mut Ctx,
+  id: &str,
+  (action, at, listed): (&ChatAction, Timestamp, bool),
+  project: ProjectId,
+) -> Element {
   let (done, refused) = words(&action.tool);
   let task = action.task.as_deref().unwrap_or_default();
   let args = [("task", task), ("tool", action.tool.as_str())];
-  let time = display::clock(action.settled.unwrap_or(at));
+  let time = (!listed).then(|| display::clock(action.settled.unwrap_or(at)));
   let navigation = Navigation::of(ctx);
   let open = task_route(project, task).map(|route| LineLink {
     label: ctx.t("orchestrator.line.open"),
@@ -93,7 +99,7 @@ pub(super) fn line(ctx: &mut Ctx, id: &str, (action, at): (&ChatAction, Timestam
       });
       return Line::new(id, (Icon::Ban, Tone::Danger), ctx.t_args(refused, args))
         .outcome("refused")
-        .time(Some(time))
+        .time(time)
         .link(queue.or(open))
         .detail(Some(Arc::from(reason.as_str())))
         .render(ctx);
@@ -120,7 +126,7 @@ pub(super) fn line(ctx: &mut Ctx, id: &str, (action, at): (&ChatAction, Timestam
   };
   line
     .outcome(outcome_name(&action.outcome))
-    .time(Some(time))
+    .time(time)
     .link(open)
     .render(ctx)
 }

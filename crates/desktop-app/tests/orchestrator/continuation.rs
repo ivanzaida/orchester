@@ -98,10 +98,18 @@ fn orchestrator_resolve_card_note_reads_as_one_paragraph() {
     .take_while(|entry| !matches!(entry.kind, EntryKind::Person { .. }))
     .count();
   let turn = proposal_card(&screen);
-  let card = format!("{}-{}", turn.trim_end_matches("-0"), parts - 1);
+  let prefix = turn.trim_end_matches("-0").to_owned();
+  // The card is the answer's part that asks to resolve; a run's end may land among the parts before it.
+  let mut card = String::new();
+  screen.until("the card's facts", |screen| {
+    card = (0..=parts)
+      .map(|index| format!("{prefix}-{index}"))
+      .find(|id| screen.exists(&format!("{id}-details")))
+      .unwrap_or_default();
+    !card.is_empty()
+  });
   // Run, Choice, Conflicting files, then the Note behind *Show details*.
   let note = format!("{card}-fact-3");
-  screen.until("the card's facts", |screen| screen.exists(&format!("{card}-details")));
   assert!(!screen.exists(&note), "three facts show, the rest wait behind Show details");
   screen.click(&format!("{card}-details"));
   screen.until("the resolution's note", |screen| screen.exists(&note));

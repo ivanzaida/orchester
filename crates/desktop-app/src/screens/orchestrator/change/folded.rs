@@ -17,11 +17,11 @@ use crate::{
   ui::{icon::Icon, message::message_text, pressable::Press},
 };
 
-/// The line of `view`, named `id`, with what `words` say; `opens` gives its link, and `failed` why reading or
-/// deciding it failed, said on hover.
+/// The line of `view`, named `id`, with what `words` say, without its time when `listed` in its answer's list; `opens`
+/// gives its link, and `failed` why reading or deciding it failed, said on hover.
 pub(super) fn line(
   ctx: &mut Ctx,
-  (id, view): (&str, &View),
+  (id, view, listed): (&str, &View, bool),
   words: &Words,
   (opens, failed): (Vec<Opens>, Option<Message>),
 ) -> Element {
@@ -66,7 +66,7 @@ pub(super) fn line(
     .outcome(view.phase().name())
     .target(target)
     .chip(chip)
-    .time(Some(view.time()))
+    .time((!listed).then(|| view.time()))
     .link(link)
     .detail(detail)
     .render(ctx)

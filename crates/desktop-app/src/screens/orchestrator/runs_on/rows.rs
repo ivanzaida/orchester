@@ -3,7 +3,8 @@
 //! providers the 12 lucide cloud, and 11/500 `text_muted`):
 //! *Claude Code · your sign-ins*, *Codex · your sign-ins*, then *API providers · pay per token*. A row is 45 high,
 //! radius 6, 6 by 8 inside, 10 apart: its name (12.5/500) over who is signed in and the plan (11.5 `text_muted`; a
-//! limit reached and until when in `warning`), then 88 wide the plan's 5-hour use (Geist Mono 10.5) over a 4 meter, and
+//! limit reached and until when in `warning`; the connection while who is unknown), then at least 88 wide the plan's
+//! 5-hour use (Geist Mono 10.5) over a 4 meter, and
 //! a check on the chosen one on the `hover` fill. An account that is not signed in is faded, says to sign in in
 //! Connections and cannot be chosen. An API provider's row says its CLI and host, the tokens its agents spent today
 //! and *no plan limit*; its key's secret is its tooltip.
@@ -209,7 +210,9 @@ fn sign_in_row(
         "orchestrator.runsOn.who",
         [("email", email.as_str()), ("plan", &plan_name(plan))],
       ),
-      None => email.as_str().into(),
+      None if !email.is_empty() => email.as_str().into(),
+      // Who is signed in is not known yet: the connection tells two accounts of one name apart.
+      None => row.connection.name.clone(),
     },
   };
   let used = reading.and_then(|reading| {
@@ -295,9 +298,10 @@ fn plan_column(ctx: &Ctx, id: &str, (used, reached): (Option<f64>, bool)) -> Ele
   };
   // A share of at most a hundred: whole ones are what the meter shows.
   let share = if reached { 100 } else { used.map_or(0, |used| used.round() as u64) };
+  // As wide as its words when they are longer, so none is cut.
   Column::new()
     .id(format!("{id}-plan"))
-    .width(Dimension::Px(PLAN_WIDTH))
+    .min_width(Dimension::Px(PLAN_WIDTH))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Fine.role())
     .child(
