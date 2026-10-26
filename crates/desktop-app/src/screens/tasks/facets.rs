@@ -1,9 +1,9 @@
 //! The list's Filter (`Filter` and `Filter menu` `G4mD2U` in `02 Filtered` `MwxZG`): a ghost button that opens a 260
-//! wide menu, `surface_raised` in a `border_strong` stroke, lifted by the `lg` shadow, with a search over its options and
-//! one group per facet the workspace filters by in memory (`browse::Facets`): Pipeline, Priority, and Module and Tag
-//! where the project has any. Each option has a checkbox; a task is kept when it has any chosen value of every facet
-//! that has one. While something is chosen the button reads `Filter · 2` on `accent_muted`, and each chosen value is a
-//! removable chip under the views (`Applied filters` `kmQsW`), ended by *Clear*.
+//! wide menu, `surface_raised` in a `border_strong` stroke, lifted by the `lg` shadow, with a search over its options
+//! and one group per facet the workspace filters by in memory (`browse::Facets`): Pipeline, Priority, and Module and
+//! Tag where the project has any. Each option has a checkbox; a task is kept when it has any chosen value of every
+//! facet that has one. While something is chosen the button reads `Filter · 2` on `accent_muted`, and each chosen value
+//! is a removable chip under the views (`Applied filters` `kmQsW`), ended by *Clear*.
 
 use std::sync::Arc;
 

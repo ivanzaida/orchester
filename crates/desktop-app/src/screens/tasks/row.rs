@@ -1,9 +1,9 @@
 //! One line of the list (`KON-12` `r0eIJ` in `Tasks · redesign` `Lw1Gb`): 40 high, 8 at its sides, its cells 12 apart,
-//! radius 6, the `hover` fill under the pointer. The status icon in its tone, the key (mono 11.5 `text_muted`, 52 wide),
-//! the title in 13/500 with its tags as plain words in 11.5 `text_muted`, the one state phrase in its tone, the
-//! pipeline (12 `text_muted`, 150 wide, at its end), the priority's icon and the task's age (mono 11 `text_muted`). Under
-//! the pointer the pipeline gives way to the row's actions: a task something of waits for shows its one action first
-//! (Review, Answer, Review plan…, opening where it is decided), then every task but a *Not shared* one its *More
+//! radius 6, the `hover` fill under the pointer. The status icon in its tone, the key (mono 11.5 `text_muted`, 52
+//! wide), the title in 13/500 with its tags as plain words in 11.5 `text_muted`, the one state phrase in its tone, the
+//! pipeline (12 `text_muted`, 150 wide, at its end), the priority's icon and the task's age (mono 11 `text_muted`).
+//! Under the pointer the pipeline gives way to the row's actions: a task something of waits for shows its one action
+//! first (Review, Answer, Review plan…, opening where it is decided), then every task but a *Not shared* one its *More
 //! actions* menu (`task_close`). A press elsewhere opens the task on its Details. The task a Create just added is
 //! tinted and carries the New badge. A group's header line is drawn here too ([`super::list::group_line`]).
 

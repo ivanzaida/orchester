@@ -1,9 +1,9 @@
 //! A row's status icon and its one state phrase (`Status` and `State` in `KON-12` `r0eIJ`), both in the tone it calls
 //! for. A task something of waits for the person says what, its oldest wait first, in `warning` (Approve
-//! `cargo add rand`, Answer a question, Review plan v1, Stopped at its token limit), or in `success` for work that waits
-//! to be merged or completed. The others say where they stand in the workspace's words for them (`row.detail`): a run
-//! at work by its step (`02 Plan`) in `text_secondary`, a failed one at which step in `danger`, one that cannot be read
-//! in `danger`, what waits in the queue or is ready to start in `text_muted`, what is held as its group holds it.
+//! `cargo add rand`, Answer a question, Review plan v1, Stopped at its token limit), or in `success` for work that
+//! waits to be merged or completed. The others say where they stand in the workspace's words for them (`row.detail`): a
+//! run at work by its step (`02 Plan`) in `text_secondary`, a failed one at which step in `danger`, one that cannot be
+//! read in `danger`, what waits in the queue or is ready to start in `text_muted`, what is held as its group holds it.
 
 use std::sync::Arc;
 
