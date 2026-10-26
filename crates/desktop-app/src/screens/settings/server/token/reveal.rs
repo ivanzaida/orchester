@@ -5,11 +5,11 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{background, messages::Message};
 use parking_lot::Mutex;
@@ -20,19 +20,17 @@ use crate::{
     AppMcp, BearerToken, ServerState,
     input_gate::{InputGate, TokenShown},
   },
-  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsText},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
   },
 };
 
 /// How long the token shows before it hides again.
 const SHOWN_FOR: u32 = 30;
-/// The masked value's height (`DShSq`).
-const MASK_HEIGHT: f32 = 32.0;
 
 /// The token while it shows, with the mark that keeps clients from reading the window; once it is hidden, that mark
 /// until a render no longer draws the token, so clients never read a window that still shows it.
@@ -101,44 +99,28 @@ pub(super) fn ready(ctx: &mut Ctx, props: &Props, again: u32) -> Read {
   }
 }
 
-/// The token masked, or shown as sensitive text while a person reads it.
+/// The token masked, or shown as sensitive text while a person reads it, in Geist Mono 12 `text_secondary` (`Text`
+/// `n0m69`, shown `n7PkZH` in `shpsk`); a token longer than its room ends in an ellipsis.
 pub(super) fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
-  let (text, glyph) = match shown {
-    Some(token) => (
-      Text::new(token.expose())
-        .sensitive()
-        .variant(ExtraTypography::PropertyMono.role()),
-      Icon::Eye,
-    ),
-    None => (
-      // The masked value of a secret (`Masked value` `DShSq`), as Secrets shows one.
-      Text::new(&ctx.t("settings.automation.server.token.mask")).variant(SecretsText::Mask.role()),
-      Icon::LockKeyhole,
-    ),
+  let text = match shown {
+    Some(token) => Text::new(token.expose()).sensitive(),
+    None => Text::new(&ctx.t("settings.automation.server.token.mask")),
   };
-  // Both grow from no width at all, so the field takes the room the buttons leave whatever it shows; a token longer
-  // than the field ends in an ellipsis.
   Row::new()
     .id("settings-mcp-token-value")
-    .width(Dimension::Px(0.0))
-    .flex(1.0)
-    .height(Dimension::Px(MASK_HEIGHT))
-    .clip()
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .padding_right(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
     .child(
       text
         .id("settings-mcp-token-text")
-        .width(Dimension::Px(0.0))
-        .flex(1.0)
+        .variant(ExtraTypography::PropertyMono.role())
+        .color(PaletteColor::TextSecondary)
+        .min_width(Dimension::Px(0.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
     .into()
 }
 

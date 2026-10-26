@@ -5,6 +5,7 @@
 
 pub mod add_slot;
 pub mod add_source;
+pub mod agent_mark;
 pub mod attachments;
 pub mod avatar;
 pub mod breadcrumb;
@@ -52,6 +53,8 @@ pub mod prompt_source;
 pub mod reference_file;
 pub mod resolved_source;
 pub mod rule_item;
+pub mod setting_notice;
+pub mod setting_rows;
 pub mod settings_page;
 pub mod skill_row;
 pub mod source_box;

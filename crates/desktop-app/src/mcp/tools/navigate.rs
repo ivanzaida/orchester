@@ -24,7 +24,8 @@ use crate::{
 
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
-  other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
+  other argument; settings takes `tab` only (automation, general, notifications, accounts, orchester for Orchester \
+  Cloud, connect for Connect a server); every other screen takes `project`, the project's id (a UUID, as app_state \
   reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
   after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
@@ -50,8 +51,9 @@ pub fn tool(link: WindowLink) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, accounts, orchester, connect; \
-     overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}; import_resources {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, notifications, accounts, \
+     orchester (Orchester Cloud), connect (Connect a server); overview {}; tasks {}; task {}; connections {}; \
+     pull_requests {}; memory {}; import_resources {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
@@ -360,12 +362,21 @@ fn tab<T: Default>(
   })
 }
 
-/// Settings at its `tab`: automation (the default), general, accounts, orchester, or connect (*Connect a server*).
+/// Settings at its `tab`: automation (the default), general, notifications, accounts, orchester (Orchester Cloud), or
+/// connect (*Connect a server*).
 fn settings(args: &Map<String, Value>) -> Result<Route, ToolError> {
-  const TABS: [&str; 5] = ["automation", "general", "accounts", "orchester", "connect"];
+  const TABS: [&str; 6] = [
+    "automation",
+    "general",
+    "notifications",
+    "accounts",
+    "orchester",
+    "connect",
+  ];
   match string(args, "tab")? {
     None | Some("automation") => Ok(Route::Settings),
     Some("general") => Ok(Route::General),
+    Some("notifications") => Ok(Route::Notifications),
     Some("accounts") => Ok(Route::Accounts(AccountsView::default())),
     Some("orchester") => Ok(Route::Orchester(OrchesterView::default())),
     Some("connect") => Ok(Route::Orchester(OrchesterView::connect())),

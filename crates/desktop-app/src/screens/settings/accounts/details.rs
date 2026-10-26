@@ -1,259 +1,191 @@
-//! The shown account (`Account details` `vP6kR` in `t098v`): a header with its glyph, name and state, what it is
-//! (CLI, email, plan) and *Check again*, *Rename* and *Remove*; the tabs *Account* and *Used by*; and the open tab's
-//! body. *Rename* turns the name into a field in the header (`yEJPZ`); *Remove* asks in place over *Used by*
-//! (`HzJSR`).
+//! An account's page (`03b · Account` `xN1Jy`): the crumb back to Accounts; the head with the CLI maker's mark, the
+//! account's name and state, *Check again* and *…* (*Rename*, *Sign in (again) in a terminal*, *Remove*); what its
+//! state means and how to fix it under the head (`state`); *Remove …?* asked in place there (`remove`); its sign-in
+//! facts (`facts`), its plan limits (`limits`) and what uses it (`used_by`). *Rename* turns the name into a field in
+//! the head with *Save* and *Cancel* (`Rename` `GWyCi` in `poD7g`). Default can't be removed: its *Remove* says why.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  },
-  components::{Column, Row, ScrollVertical, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  app::ctx::Ctx,
+  components::{Column, Row},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
-use orchester_core::{account::AgentAccount, name::Name};
-use orchester_workspace::accounts::AccountUses;
+use orchester_core::{
+  account::{AccountState, AgentAccount},
+  connection::invocation::Platform,
+  name::Name,
+};
+use orchester_workspace::{accounts::AccountUses, display};
 
 use super::{
-  Parts, Work, facts,
+  Parts, Work, facts, limits,
   list::state_line,
-  remove, used_by,
-  words::{cli_key, name, plan, t, ta},
+  remove, state, used_by,
+  words::{Shown, cli_key, name, t, ta},
   work::Change,
 };
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
-  theme::{AccountsSpacing, AccountsText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::IconSize,
   ui::{
+    agent_mark::{AgentMark, agent_mark},
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
-    icon::{Icon, icon},
+    icon::Icon,
+    icon_button::IconButton,
+    menu::{MenuItem, menu_at_end, menu_panel},
     message::message_text,
-    tabs::{PageTab, page_tabs},
-    unavailable::reason_line,
+    setting_rows::{group_note, head_tile},
   },
 };
 
-/// The header's glyph tile (`kGUGy`).
-const GLYPH_TILE: f32 = 32.0;
-/// The name field while renaming (`yEJPZ`).
-const NAME_FIELD_WIDTH: f32 = 252.0;
+/// The name's field while renaming (`Field` `j7t2Ea` in `poD7g`).
+const NAME_FIELD_WIDTH: f32 = 240.0;
 
-/// The details of the shown account, or nothing when there is none.
-pub(super) fn panel(ctx: &mut Ctx, parts: &Parts, work: &Work, uses: Option<&AccountUses>) -> Element {
+/// The page of the account the route names.
+pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, uses: Option<&AccountUses>) -> Column {
+  let navigation = Navigation::of(ctx);
+  let pane = super::super::frame::pane("account-page").child(super::super::frame::crumb(
+    "account-crumb",
+    &t(ctx, "settings.tabs.accounts"),
+    navigation.to(Route::Accounts(AccountsView::default())),
+  ));
   let Some(account) = parts.selected.and_then(|id| parts.account(id)) else {
-    return Column::new().into();
+    return pane;
   };
-  let tab = match parts.view.panel {
-    AccountsPanel::UsedBy | AccountsPanel::Remove => AccountsPanel::UsedBy,
-    _ => AccountsPanel::Account,
-  };
-  let body = match tab {
-    AccountsPanel::UsedBy => used_by_body(ctx, parts, work, account, uses),
-    _ => facts::body(ctx, parts, work, account),
-  };
-  frame("account-details")
-    .child(header(ctx, parts, work, account))
-    .child(tabs(ctx, account, tab, uses))
-    .child(
-      ScrollVertical::new(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::all(AccountsSpacing::Panel.role()))
-          .spacing(AccountsSpacing::Parts.role())
-          .child(body),
-      )
-      .id("account-details-scroll")
-      .flex(1.0),
-    )
-    .into()
-}
-
-/// The right panel's card (`vP6kR`).
-pub(super) fn frame(id: &str) -> Column {
-  Column::new()
-    .id(id.to_owned())
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip()
-}
-
-/// The panel's glyph tile (`kGUGy`).
-pub(super) fn glyph(glyph: Icon) -> Row {
-  Row::new()
-    .width(Dimension::Px(GLYPH_TILE))
-    .height(Dimension::Px(GLYPH_TILE))
-    .flex_shrink(0.0)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Sm)
-    .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary))
-}
-
-/// The header's row (`jCbMF`), with the hairline under it.
-pub(super) fn header_row(id: &str) -> Row {
-  header_line(id).border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-}
-
-/// The header's row without its hairline, for a header with a line under it.
-fn header_line(id: &str) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(AccountsSpacing::Panel.role(), SpacingSize::Lg))
-    .spacing(AccountsSpacing::Cell.role())
-    .align_items(Alignment::Start)
-}
-
-/// The header: the name and the actions, or while renaming only the name's field with *Save* and *Cancel*
-/// (`yEJPZ`). Default's *Remove* is locked, and why shows in place under the actions.
-fn header(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
-  if parts.view.panel == AccountsPanel::Rename {
-    return header_row("account-header")
-      .child(glyph(Icon::User))
-      .child(rename_field(ctx, work, account))
-      .into();
-  }
-  let (title, actions) = (title(ctx, parts, account), actions(ctx, parts, work, account));
-  let line = if account.is_default() {
-    header_line("account-header")
+  let shown = parts.shown(account);
+  let head = if parts.view.panel == AccountsPanel::Rename {
+    rename_head(ctx, work, account)
   } else {
-    header_row("account-header")
+    head(ctx, parts, work, account)
   };
-  let row = line.child(glyph(Icon::User)).child(title).child(actions);
-  if !account.is_default() {
-    return row.into();
-  }
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .child(row)
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .left(AccountsSpacing::Panel.role())
-            .right(AccountsSpacing::Panel.role())
-            .bottom(SpacingSize::Md),
-        )
-        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(reason_line(
-          "account-remove-default",
-          &remove::default_reason(ctx, account),
-        )),
-    )
-    .into()
+  let question = (parts.view.panel == AccountsPanel::Remove && !account.is_default())
+    .then(|| remove::confirmation(ctx, parts, work, account, uses));
+  let limits = (shown != Shown::State(AccountState::Unsupported)).then(|| limits::group(ctx, work, account));
+  pane
+    .child(head)
+    .with_children(state::notice(ctx, (parts, work), account, shown))
+    .with_children(question)
+    .child(facts::group(ctx, account))
+    .with_children(limits)
+    .child(used_by::group(ctx, uses))
 }
 
-/// The name with the state after it, and what the account is under them (`apjWO`).
-fn title(ctx: &Ctx, parts: &Parts, account: &AgentAccount) -> Element {
-  let identity = account.last_check().and_then(|check| check.known_identity());
-  let facts: Vec<String> = std::iter::once(t(ctx, cli_key(account.cli())))
-    .chain(identity.and_then(|identity| identity.email.clone()))
-    .chain(
-      identity
-        .and_then(|identity| identity.plan.as_deref())
-        .map(|plan_name| ta(ctx, "accounts.details.planFact", [("plan", plan(plan_name))])),
-    )
-    .collect();
-  let separator = t(ctx, "accounts.details.factSeparator");
-  let mut line = Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center);
-  for (index, fact) in facts.iter().enumerate() {
-    if index > 0 {
-      line = line.child(Text::new(&separator).variant(ExtraTypography::Note.role()));
-    }
-    line = line.child(Text::new(fact).variant(ExtraTypography::Note.role()).nowrap());
-  }
-  Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Xs)
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&name(ctx, account))
-            .id("account-title")
-            .variant(AccountsText::Title.role())
-            .nowrap(),
-        )
-        .child(state_line(ctx, "account-title-state", parts.shown(account))),
-    )
-    .child(line.id("account-facts"))
-    .into()
+/// The account as its page heads it: *Claude Code · Work*.
+fn title(ctx: &Ctx, account: &AgentAccount) -> String {
+  ta(
+    ctx,
+    "accounts.details.title",
+    [("cli", t(ctx, cli_key(account.cli()))), ("name", name(ctx, account))],
+  )
 }
 
-fn actions(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
+/// The mark's tile at the head (`Tile` `KG1Td`).
+fn tile(ctx: &Ctx, account: &AgentAccount) -> Element {
+  head_tile(agent_mark(ctx, AgentMark::of_cli(account.cli()), IconSize::Lg.size())).into()
+}
+
+/// The head: the title, the state with when it was last checked, *Check again* and *…*.
+fn head(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
+  let shown = parts.shown(account);
+  let checked = account.last_check().map(|check| display::clock(check.at));
+  let state = state_line(ctx, "account-title-state", shown);
+  let line = match checked {
+    Some(time) if matches!(shown, Shown::State(_)) => Row::new()
+      .spacing(crate::theme::ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(state)
+      .child(
+        lurq::components::Text::new(&ta(ctx, "accounts.details.checkedAt", [("time", time)]))
+          .id("account-checked-at")
+          .variant(lurq::app::theme::TypographyStyle::Description)
+          .nowrap(),
+      )
+      .into(),
+    _ => state,
+  };
+  let check = super::state::check_again(
+    ctx,
+    (parts, work),
+    account.id(),
+    ("account-check-again", ButtonKind::Secondary),
+  );
+  let more = more(ctx, parts, work, account);
+  let tile = tile(ctx, account);
+  super::super::frame::head(
+    "account-head",
+    Some(tile),
+    (&title(ctx, account), Some(line)),
+    vec![check.into(), more],
+  )
+  .into()
+}
+
+/// *…* and its menu: *Rename*, the sign-in, and *Remove*, which Default can't do and says why.
+fn more(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
+  let (open, anchor) = work.more.clone();
+  let toggle = open.clone();
+  let button = IconButton::new("account-more", Icon::Ellipsis, t(ctx, "accounts.actions.more"))
+    .element(anchor.clone())
+    .on_click(move || toggle.update(|open| *open = !*open));
+  let shown = open.get();
+  let button = if shown { button.active() } else { button }.render(ctx);
+  let menu = shown.then(|| {
+    let items = menu_items(ctx, parts, work, account);
+    let panel = items
+      .into_iter()
+      .fold(menu_panel("account-more-menu"), |panel, item| panel.child(item.render(ctx, &open)));
+    menu_at_end(anchor, open.clone(), panel)
+  });
+  Row::new().child(button).with_children(menu).into()
+}
+
+fn menu_items(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Vec<MenuItem> {
   let navigation = Navigation::of(ctx);
   let id = account.id();
-  let check = super::state::check_again(ctx, parts, work, id, "account-check-again");
   let to = |panel: AccountsPanel| {
     let navigation = navigation.clone();
     move || navigation.go(Route::Accounts(AccountsView::of(id, panel)))
   };
-  let rename = ActionButton::new("account-rename", ButtonKind::Ghost, t(ctx, "accounts.actions.rename"))
-    .icon(Icon::Pencil)
-    .on_click(to(AccountsPanel::Rename));
-  // Pressed while its question is open (`HzJSR`).
-  let remove_kind = if parts.view.panel == AccountsPanel::Remove {
-    ButtonKind::Secondary
-  } else {
-    ButtonKind::Ghost
-  };
-  let remove = ActionButton::new("account-remove", remove_kind, t(ctx, "accounts.actions.remove")).icon(Icon::Trash2);
-  // Why Default can't be removed shows under the actions.
+  let rename = MenuItem::new("account-rename", t(ctx, "accounts.actions.rename"), to(AccountsPanel::Rename))
+    .icon(Icon::Pencil);
   let remove = if account.is_default() {
-    remove.disabled()
+    MenuItem::unavailable(
+      "account-remove",
+      t(ctx, "accounts.actions.remove"),
+      remove::default_reason(ctx, account),
+    )
   } else {
-    remove.on_click(to(AccountsPanel::Remove))
-  };
-  Row::new()
-    .flex_shrink(0.0)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(check)
-    .child(rename)
-    .child(remove)
-    .into()
+    MenuItem::new("account-remove", t(ctx, "accounts.actions.remove"), to(AccountsPanel::Remove))
+  }
+  .icon(Icon::Trash2);
+  std::iter::once(rename)
+    .chain(super::state::sign_in_item(ctx, parts, work, account))
+    .chain(std::iter::once(remove))
+    .collect()
 }
 
-/// The name as a field, *Save* and *Cancel*, and what renaming changes (`yEJPZ`).
-fn rename_field(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
+/// The head while renaming: the name as a field with *Save* and *Cancel*, and what renaming changes under it.
+fn rename_head(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
   if work.rename.get().is_empty() {
     work.rename.set(name(ctx, account));
   }
   let navigation = Navigation::of(ctx);
   let id = account.id();
-  let typed = work.rename.get();
-  let valid = Name::new(&typed).ok();
-  let save = {
-    let change = work.change.clone();
-    let save = ActionButton::new(
-      "account-rename-save",
-      ButtonKind::Primary,
-      t(ctx, "accounts.rename.save"),
-    )
-    .icon(Icon::Check);
-    match valid {
-      Some(name) => save.on_click(move || change.run(Change::Rename(id, name.clone()))),
-      None => save.disabled(),
-    }
-  };
+  let valid = Name::new(&work.rename.get()).ok();
+  let save = ActionButton::new(
+    "account-rename-save",
+    ButtonKind::Primary,
+    t(ctx, "accounts.rename.save"),
+  );
   let save = if work.change.state().get().is_pending() {
     save.loading()
+  } else if let Some(name) = valid {
+    let change = work.change.clone();
+    save.on_click(move || change.run(Change::Rename(id, name.clone())))
   } else {
-    save
+    save.disabled()
   };
   let cancel = {
     let rename = work.rename.clone();
@@ -270,78 +202,34 @@ fn rename_field(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
   let error = work
     .change_error()
     .map(|error| field_error("account-rename-error", &message_text(ctx, &error)));
+  let field = FieldInput::new(
+    "account-rename-field",
+    t(ctx, "accounts.actions.rename"),
+    work.rename.clone(),
+  )
+  .width(Dimension::Px(NAME_FIELD_WIDTH))
+  .render(ctx);
+  let tile = tile(ctx, account);
   Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Sm)
+    .id("account-head")
+    .width(Dimension::Pct(100.0))
+    .spacing(lurq::app::theme::SpacingSize::Sm)
     .child(
       Row::new()
-        .spacing(SpacingSize::Sm)
+        .width(Dimension::Pct(100.0))
+        .spacing(lurq::app::theme::SpacingSize::Md)
         .align_items(Alignment::Center)
-        .child(
-          FieldInput::new(
-            "account-rename-field",
-            t(ctx, "accounts.actions.rename"),
-            work.rename.clone(),
-          )
-          .width(Dimension::Px(NAME_FIELD_WIDTH))
-          .render(ctx),
-        )
+        .child(tile)
+        .child(field)
         .child(save)
         .child(cancel),
     )
     .with_children(error)
-    .child(
-      Text::new(&t(ctx, "accounts.rename.note"))
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0)),
-    )
+    .child(group_note("account-rename-note", &t(ctx, "accounts.rename.note")))
     .into()
 }
 
-fn tabs(ctx: &mut Ctx, account: &AgentAccount, tab: AccountsPanel, uses: Option<&AccountUses>) -> Element {
-  let navigation = Navigation::of(ctx);
-  let id = account.id();
-  let to = |panel: AccountsPanel| {
-    let navigation = navigation.clone();
-    move || navigation.go(Route::Accounts(AccountsView::of(id, panel)))
-  };
-  let used = uses.map_or(0, |uses| uses.connections.len());
-  let tabs = [
-    PageTab::new(
-      "account-tab-account",
-      t(ctx, "accounts.details.account"),
-      tab == AccountsPanel::Account,
-      to(AccountsPanel::Account),
-    ),
-    PageTab::new(
-      "account-tab-used-by",
-      ta(ctx, "accounts.details.usedBy", [("count", used.to_string())]),
-      tab == AccountsPanel::UsedBy,
-      to(AccountsPanel::UsedBy),
-    ),
-  ];
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::horizontal(AccountsSpacing::Panel.role()))
-    .child(page_tabs(ctx, "account-tabs", tabs))
-    .into()
-}
-
-/// *Used by*, with *Remove …?* over it while the person removes the account.
-fn used_by_body(
-  ctx: &mut Ctx,
-  parts: &Parts,
-  work: &Work,
-  account: &AgentAccount,
-  uses: Option<&AccountUses>,
-) -> Element {
-  let confirm =
-    (parts.view.panel == AccountsPanel::Remove).then(|| remove::confirmation(ctx, parts, work, account, uses));
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(AccountsSpacing::Parts.role())
-    .with_children(confirm)
-    .child(used_by::list(ctx, uses))
-    .into()
+/// Whether the account is signed in now, as its CLI said.
+pub(super) fn signed_in(account: &AgentAccount) -> bool {
+  account.state(Platform::current()) == AccountState::SignedIn
 }

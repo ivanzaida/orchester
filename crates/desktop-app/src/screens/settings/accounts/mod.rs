@@ -1,11 +1,14 @@
-//! Settings › Accounts (`docs/design/agent-accounts.md`, layer `hgOl2`): the person's agent CLI accounts on this
-//! computer, listed by CLI, with the shown one's details beside them, or *Add account* in place, never in a dialog.
+//! Settings › Accounts (`03 · Accounts` `t8i6m` in the new `orchester.pen`, `docs/design/agent-accounts.md`; its
+//! states on `poD7g`): the person's agent CLI accounts on this computer, grouped by CLI (`list`). An account opens its
+//! page under the tab (`03b · Account` `xN1Jy`, `details`), and *Add account* its own (`03c · Add account` `XAm8i`,
+//! `add`), then the CLI's sign-in (`sign_in`); each has its crumb back to the list, and nothing asks in a dialog.
 //! Every account is checked when the tab opens. Adding, renaming, removing and signing in are a person's: while the
 //! tab is mounted, the app's MCP server refuses window input (`mcp::input_gate`).
 
 mod add;
 mod details;
 mod facts;
+mod limits;
 mod list;
 mod remove;
 mod sign_in;
@@ -21,10 +24,8 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::Row,
-  core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  core::{ElementRef, Signal},
+  node::Element,
 };
 use orchester_core::{
   account::{AccountState, AgentAccount},
@@ -35,12 +36,12 @@ use orchester_core::{
 use orchester_workspace::{accounts::AccountUses, background, messages::Message};
 
 use self::work::{ChangeAction, Changed, CheckAction, SignInAction};
+use super::frame;
 use crate::{
   mcp::input_gate::{Guarded, InputGate, Protected},
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
   services::Services,
-  theme::AccountsSpacing,
 };
 
 #[derive(Clone)]
@@ -89,7 +90,7 @@ enum PlanCheck {
 struct Parts {
   pub accounts: Arc<Vec<AgentAccount>>,
   pub view: AccountsView,
-  /// The account the details show: the one the route names, else the first.
+  /// The account whose page shows: the one the route names, while it is listed.
   pub selected: Option<AgentAccountId>,
   /// The accounts whose check runs now.
   pub checking: Vec<AgentAccountId>,
@@ -130,6 +131,8 @@ struct Work {
   pub draft: add::Draft,
   pub rename: Signal<String>,
   pub removal: remove::Choice,
+  /// The account page's *…* menu: whether it is open, and the button it opens at.
+  pub more: (Signal<bool>, ElementRef),
 }
 
 impl Work {
@@ -218,6 +221,7 @@ impl Component for AccountsTab {
       draft: add::Draft::new(ctx),
       rename: ctx.signal(String::new()),
       removal: remove::Choice::new(ctx),
+      more: (ctx.signal(false), ElementRef::default()),
     };
     follow(ctx, &work);
     Self {
@@ -239,16 +243,11 @@ impl Component for AccountsTab {
         .collect();
       self.work.check_again(checked);
     }
+    // The account whose page shows: the one the route names, while it is listed.
     let selected = props
       .view
       .account
-      .filter(|id| props.accounts.iter().any(|account| account.id() == *id))
-      .or_else(|| {
-        // An account the person added before the CLIs' own Default ones, as the list shows them.
-        let mut accounts: Vec<&AgentAccount> = props.accounts.iter().collect();
-        accounts.sort_by_key(|account| (account.cli().as_str(), account.is_default()));
-        accounts.first().map(|account| account.id())
-      });
+      .filter(|id| props.accounts.iter().any(|account| account.id() == *id));
     let check = self.work.check.state().get();
     let sign_in = self.work.sign_in.state().get();
     let parts = Parts {
@@ -266,21 +265,16 @@ impl Component for AccountsTab {
         .flatten(),
     };
     let uses = uses(ctx, selected, props.revision.get());
-    let adding = (props.view.panel == AccountsPanel::Add).then(|| self.work.draft.adding());
-    let panel = match props.view.panel {
-      AccountsPanel::Add => add::panel(ctx, &self.work),
-      AccountsPanel::SignIn => sign_in::panel(ctx, &parts, &self.work),
-      _ => details::panel(ctx, &parts, &self.work, uses.as_ref()),
+    let (scroll, pane) = match (props.view.panel, selected) {
+      (AccountsPanel::Add, _) => ("settings-accounts-add-scroll", add::page(ctx, &self.work)),
+      (AccountsPanel::SignIn, Some(_)) => ("settings-accounts-sign-in-scroll", sign_in::page(ctx, &parts, &self.work)),
+      (_, Some(_)) => (
+        "settings-account-scroll",
+        details::page(ctx, &parts, &self.work, uses.as_ref()),
+      ),
+      (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts)),
     };
-    Row::new()
-      .id("accounts-body")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .align_items(Alignment::Start)
-      .spacing(AccountsSpacing::Columns.role())
-      .child(list::column(ctx, &parts, adding.as_ref()))
-      .child(panel)
+    frame::column(scroll, pane)
   }
 }
 

@@ -1,12 +1,13 @@
-//! *Orchester MCP server* in Settings › Automation (`lye6f`; its states `eTrCO`, the token `eM8tB`, *Connect an
-//! agent* `NzOSY`): for the installed app, whether agents may connect, the fixed address and its port, the access
-//! token with Show, Copy and Rotate, the commands that register Orchester in Claude Code and Codex, and the agents
-//! connected since the app started (kept in memory only). A QA copy or a development build says instead that it
-//! takes a new port on each start and where its discovery file is.
+//! *Orchester MCP server* in Settings › Automation (`Orchester MCP server` `kgrfZ` in `04 · Automation` of the new
+//! `orchester.pen`; its states on the sheet `shpsk`): for the installed app, whether agents may connect, the fixed
+//! address with Copy and the port field it opens, the access token with Show, Copy and Rotate, the commands that
+//! register Orchester in Claude Code and Codex, and the agents connected since the app started (kept in memory only).
+//! A QA copy or a development build says instead that it takes a new port on each start and where its discovery file
+//! is, and its group's heading names which it is.
 //!
-//! Every control here is a person's: while the section is mounted the app's MCP server refuses window input
-//! (`Guarded::McpServer`), and a change synthetic input brings is not taken and the row says so. The changes run
-//! off the UI thread; what came of them arrives in the server's status.
+//! Every control here is a person's: while the group is mounted the app's MCP server refuses window input
+//! (`Guarded::McpServer`), and a change synthetic input brings is not taken and the row says so. The changes run off
+//! the UI thread; what came of them arrives in the server's status.
 
 mod address;
 mod connect;
@@ -20,11 +21,10 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::PaletteColor,
+    theme::{PaletteColor, TypographyStyle},
   },
-  components::{Row, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  components::Text,
+  node::Element,
 };
 use orchester_core::app_mcp::McpPort;
 use orchester_workspace::{background, messages::Message};
@@ -35,17 +35,17 @@ use crate::{
     input_gate::{Guarded, InputGate, Protected},
   },
   shell::status_bar::{from_scratch, mcp_status},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    form_section::{Label, Place, section, side_row},
-    icon::{Icon, icon},
-    inspector::note,
+    icon::Icon,
+    notice::NoticeTone,
+    setting_notice::{SettingNotice, status_line},
+    setting_rows::{SettingGroup, SettingRow, status},
   },
 };
 
-/// The section; it reads the window's server from the context.
+/// The group; it reads the window's server from the context.
 pub struct ServerSection {
-  /// While the section is mounted, the MCP server refuses window input.
+  /// While the group is mounted, the MCP server refuses window input.
   _protected: Protected,
 }
 
@@ -70,7 +70,7 @@ impl Component for ServerSection {
     match &status.kind {
       McpKind::Installation => installation(ctx, &status, server),
       McpKind::Qa { folder, .. } => {
-        // From the worktree's `.tmp` on, as the status bar names it (`eTrCO`).
+        // From the worktree's `.tmp` on, as the status bar names it.
         let folder = from_scratch(folder);
         let note = ctx.t_args("settings.automation.server.copy.qaNote", [("folder", folder)]);
         let keys = (
@@ -99,71 +99,63 @@ impl Component for ServerSection {
   }
 }
 
+/// The group's heading, with which build it is at its end.
+fn group(ctx: &Ctx, meta: &str) -> SettingGroup {
+  SettingGroup::new("settings-mcp", ctx.t("settings.automation.server.section")).end(
+    Text::new(&ctx.t(meta))
+      .id("settings-mcp-meta")
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .nowrap(),
+  )
+}
+
 /// The installed app's rows.
 fn installation(ctx: &mut Ctx, status: &McpStatus, server: Option<AppMcp>) -> Element {
   let port = status.port.and_then(|port| NonZeroU16::new(port.get()));
   // The commands carry the token: while it cannot be read, Connect an agent says so instead.
   let commands = port.filter(|_| !matches!(status.server, ServerState::TokenUnreadable { .. }));
-  let mut rows = vec![ctx.mount_keyed::<enabled::EnabledRow>(
+  let enabled = ctx.mount_keyed::<enabled::EnabledRow>(
     "settings-mcp-enabled",
     enabled::Props {
       server: server.clone(),
       state: status.server.clone(),
     },
-  )];
-  rows.push(ctx.mount_keyed::<address::AddressRow>(
+  );
+  let address = ctx.mount_keyed::<address::AddressRow>(
     "settings-mcp-address",
     address::Props {
       server: server.clone(),
       state: status.server.clone(),
       port: status.port,
     },
-  ));
-  rows.push(ctx.mount_keyed::<token::TokenRow>(
+  );
+  let token = ctx.mount_keyed::<token::TokenRow>(
     "settings-mcp-token",
     token::Props {
       server: server.clone(),
       state: status.server.clone(),
     },
-  ));
-  rows
-    .push(ctx.mount_keyed::<connect::ConnectBlock>("settings-mcp-connect", connect::Props { server, port: commands }));
-  rows.push(connected::connected(ctx, status));
-  section(
-    "settings-mcp",
-    &ctx.t("settings.automation.server.section"),
-    Some(&ctx.t("settings.automation.server.meta.installation")),
-    rows,
-  )
-  .into()
+  );
+  let connect = ctx.mount_keyed::<connect::ConnectBlock>("settings-mcp-connect", connect::Props { server, port: commands });
+  let connected = connected::connected(ctx, status);
+  group(ctx, "settings.automation.server.meta.installation")
+    .rows([enabled, address, token, connect, connected])
+    .into()
 }
 
-/// A QA copy's or a development build's section: where it listens this time, and where its discovery file is.
+/// A QA copy's or a development build's group: where it listens this time, and where its discovery file is.
 fn copy_section(ctx: &mut Ctx, status: &McpStatus, (meta, says): (&str, &str), file: &str) -> Element {
   let state = match &status.server {
     ServerState::Listening { port } => listening_on(ctx, *port),
     _ => state_label(ctx, &status.server),
   };
-  let server = side_row(
-    Label::new("settings-mcp-server", ctx.t("settings.automation.server.copy.title")).description(ctx.t(says)),
-    state,
-    Place::Within,
-    false,
-  );
-  section(
-    "settings-mcp",
-    &ctx.t("settings.automation.server.section"),
-    Some(&ctx.t(meta)),
-    vec![
-      server,
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding_vertical(ExtraSpacing::Loose.role())
-        .child(note("settings-mcp-discovery", Icon::FlaskConical, file))
-        .into(),
-    ],
-  )
-  .into()
+  let server = SettingRow::new("settings-mcp-server", ctx.t("settings.automation.server.copy.title"))
+    .hint(ctx.t(says))
+    .control(state)
+    .below(status_line("settings-mcp-discovery", Icon::FlaskConical, file))
+    .render(ctx);
+  group(ctx, meta).row(server).into()
 }
 
 /// *● Listening on 127.0.0.1:53122*.
@@ -172,23 +164,24 @@ fn listening_on(ctx: &Ctx, port: NonZeroU16) -> Element {
     "settings.automation.server.copy.listening",
     [("address", socket(port).to_string())],
   );
-  dotted(
+  status(
     "settings-mcp-state",
-    PaletteColor::Success,
-    Text::new(&words)
-      .variant(ExtraTypography::MonoKey.role())
-      .color(PaletteColor::TextPrimary),
+    (PaletteColor::Success, PaletteColor::Success),
+    &words,
   )
+  .into()
 }
 
-/// The server's state beside the switch: *● Listening*, *● Port 47821 taken*, *● Off*, *● Not running*.
+/// The server's state: *● Listening*, *● Port 47821 taken*, *● Off*, *● Not running*.
 fn state_label(ctx: &Ctx, state: &ServerState) -> Element {
-  let (color, words) = match state {
+  let (dot, color, words) = match state {
     ServerState::Listening { .. } => (
+      PaletteColor::Success,
       PaletteColor::Success,
       ctx.t("settings.automation.server.state.listening"),
     ),
     ServerState::PortTaken { port, how } => (
+      PaletteColor::Danger,
       PaletteColor::Danger,
       ctx.t_args(
         how.pick(
@@ -198,46 +191,23 @@ fn state_label(ctx: &Ctx, state: &ServerState) -> Element {
         [("port", port.get().to_string())],
       ),
     ),
-    ServerState::Off => (PaletteColor::TextMuted, ctx.t("settings.automation.server.state.off")),
+    ServerState::Off => (
+      PaletteColor::TextMuted,
+      PaletteColor::TextMuted,
+      ctx.t("settings.automation.server.state.off"),
+    ),
     ServerState::TokenUnreadable { .. } | ServerState::Unavailable => (
+      PaletteColor::Danger,
       PaletteColor::Danger,
       ctx.t("settings.automation.server.state.notRunning"),
     ),
   };
-  dotted(
-    "settings-mcp-state",
-    color,
-    Text::new(&words).variant(ExtraTypography::Prose.role()),
-  )
+  status("settings-mcp-state", (dot, color), &words).into()
 }
 
-/// `words` after a 6px dot in `color`.
-fn dotted(id: &str, color: PaletteColor, words: Text) -> Element {
-  Row::new()
-    .id(id.to_owned())
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(crate::shell::status_bar::dot(color))
-    .child(words.nowrap())
-    .into()
-}
-
-/// A line that says what came of a change: its icon and words in `color` (`text_muted` for a note).
-fn outcome(id: &str, glyph: Icon, color: PaletteColor, text: &str) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, color.clone()).flex_shrink(0.0))
-    .child(
-      Text::new(text)
-        .id(format!("{id}-text"))
-        .variant(ExtraTypography::Note.role())
-        .color(color)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
+/// What came of a change that went through, as a success notice (`Notice · success` `grux3` in `shpsk`).
+fn outcome(id: &str, text: &str) -> Element {
+  SettingNotice::new(id, NoticeTone::Success).body(text).into()
 }
 
 /// A change of the server, run off the UI thread; what came of it shows in the server's status, a failure here.

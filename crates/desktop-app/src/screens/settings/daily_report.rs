@@ -1,19 +1,16 @@
-//! *Daily report from the Orchestrator* (ORC-47) under *What automation may do*: a switch row (`Form row` `XaNIz`) that
-//! is off until a person turns it on, and while it is on, the time of day the report comes at, in the quiet hours'
-//! time select (`super::notifications`). No design frame draws it yet. The setting is read once when the section
-//! opens and saved off the UI thread at each change; until it is read the switch stays as it is, and a setting that
-//! cannot be read or was not saved says why under the row.
+//! *Daily report* (ORC-47, `Daily report` `Uqsxx` in `02 · Notifications`): *Daily report from the Orchestrator* with
+//! its switch, off until a person turns it on, and while it is on, *Deliver at* with the time of day the report comes
+//! at, in the quiet hours' time select (`super::notifications`). The setting is read once when the group opens and
+//! saved off the UI thread at each change; until it is read the switch stays as it is, and a setting that cannot be
+//! read or was not saved says why under the row.
 
 use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction, FutureState},
-    theme::SpacingSize,
   },
-  components::{Column, Row, Text},
   core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::orchestrator::ReportTime;
 use orchester_workspace::{
@@ -22,16 +19,15 @@ use orchester_workspace::{
 };
 
 use super::{
-  automation::row,
   notifications::{TIME_WIDTH, clock, minute, show, time_options},
   save_state::{Outcome, SaveState},
 };
 use crate::{
   services::Services,
-  theme::ExtraSpacing,
   ui::{
     field::{SelectField, field_error},
     message::message_text,
+    setting_rows::{SettingGroup, SettingRow},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -96,17 +92,18 @@ impl Component for DailyReportSection {
     }
     .map(|(key, reason)| {
       let reason = message_text(ctx, reason);
-      Column::new().padding_bottom(SpacingSize::Sm).child(field_error(
-        &format!("{ID}-error"),
-        &ctx.t_args(key, [("reason", &*reason)]),
-      ))
+      field_error(&format!("{ID}-error"), &ctx.t_args(key, [("reason", &*reason)])).into()
     });
-    Column::new()
-      .id(format!("{ID}-section"))
-      .width(Dimension::Pct(100.0))
-      .child(row(ID, (&title, &description), switch))
-      .with_children(on.then(|| self.time_row(ctx)))
-      .with_children(problem)
+    let report = SettingRow::new(ID, title)
+      .hint(ctx.t("settings.dailyReport.hint"))
+      .info(description)
+      .control(switch)
+      .below_all(problem)
+      .render(ctx);
+    let at = on.then(|| self.time_row(ctx));
+    SettingGroup::new(format!("{ID}-section"), ctx.t("settings.dailyReport.group"))
+      .row(report)
+      .rows(at)
   }
 }
 
@@ -139,8 +136,8 @@ impl DailyReportSection {
     }
   }
 
-  /// *Deliver at* and the time's select.
-  fn time_row(&self, ctx: &Ctx) -> Element {
+  /// *Deliver at* and the time's select (`At` `DKuim`).
+  fn time_row(&self, ctx: &mut Ctx) -> Element {
     let select = SelectField::new(
       format!("{ID}-time"),
       ctx.t("settings.dailyReport.time"),
@@ -149,16 +146,9 @@ impl DailyReportSection {
     )
     .width(Dimension::Px(TIME_WIDTH))
     .render(ctx);
-    Row::new()
-      .id(format!("{ID}-at"))
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::vertical(SpacingSize::Md))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(Text::new(&ctx.t("settings.dailyReport.at")))
-      .child(select)
-      .padding_bottom(ExtraSpacing::Snug.role())
-      .into()
+    SettingRow::new(format!("{ID}-at"), ctx.t("settings.dailyReport.at"))
+      .control(select)
+      .render(ctx)
   }
 }
 

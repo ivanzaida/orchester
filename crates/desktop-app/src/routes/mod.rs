@@ -2,8 +2,8 @@
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
 //! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
-//! `/settings` the app's settings (`?tab=general`, `accounts` or `orchester`; Automation without one). A project's
-//! screens start at
+//! `/settings` the app's settings (`?tab=general`, `notifications`, `accounts` or `orchester` for Orchester Cloud;
+//! Automation without one). A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
@@ -109,9 +109,11 @@ const EDIT: &str = "edit";
 const TAB: &str = "tab";
 /// Settings' General tab.
 const GENERAL: &str = "general";
+/// Settings' Notifications tab.
+const NOTIFICATIONS: &str = "notifications";
 /// Settings' Accounts tab.
 const ACCOUNTS: &str = "accounts";
-/// Settings' Orchester tab.
+/// Settings' Orchester Cloud tab, by the id it kept from when it was named Orchester.
 const ORCHESTER: &str = "orchester";
 /// The invite landing under Settings › Orchester.
 const INVITE: &str = "invite";
@@ -168,11 +170,13 @@ pub enum Route {
   AddProject(Option<RouteFolder>),
   /// Settings › Automation, where Settings opens.
   Settings,
-  /// Settings › General (`hUaXB`): the theme, the plan limits' warning threshold and this computer.
+  /// Settings › General (`l838Ty`): the theme, the plan limits' warning threshold and this computer.
   General,
-  /// Settings › Accounts, with the account it shows and its panel.
+  /// Settings › Notifications (`fQTFi`): what notifies, how, quiet hours and the daily report.
+  Notifications,
+  /// Settings › Accounts, the list or the page of the account it shows with its panel.
   Accounts(AccountsView),
-  /// Settings › Orchester, with the account or server it shows, or *Connect a server*.
+  /// Settings › Orchester Cloud, or the page of the team server it shows, or *Connect a server*.
   Orchester(OrchesterView),
   /// The invite landing (`xeFRB`): which local checkout to link to the project an invite was to.
   Invite(JoinTarget),
@@ -202,7 +206,12 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
-      Self::Settings | Self::General | Self::Accounts(_) | Self::Orchester(_) | Self::Invite(_) => Screen::Settings,
+      Self::Settings
+      | Self::General
+      | Self::Notifications
+      | Self::Accounts(_)
+      | Self::Orchester(_)
+      | Self::Invite(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
@@ -221,6 +230,7 @@ impl Route {
       | Self::AddProject(_)
       | Self::Settings
       | Self::General
+      | Self::Notifications
       | Self::Accounts(_)
       | Self::Orchester(_)
       | Self::Invite(_) => None,
@@ -247,6 +257,7 @@ impl Route {
       ),
       Self::Settings => format!("/{SETTINGS}"),
       Self::General => with_query(format!("/{SETTINGS}"), &[(TAB, Some(GENERAL))]),
+      Self::Notifications => with_query(format!("/{SETTINGS}"), &[(TAB, Some(NOTIFICATIONS))]),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Orchester(view) => view.path(format!("/{SETTINGS}"), (TAB, ORCHESTER)),
       Self::Invite(target) => {
@@ -295,11 +306,13 @@ impl Route {
 }
 
 impl Route {
-  /// Settings at the tab its query names: Automation, General, Accounts with the account it shows, or Orchester.
+  /// Settings at the tab its query names: Automation, General, Notifications, Accounts with the account it shows, or
+  /// Orchester Cloud.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
       None => Ok(Self::Settings),
       Some(GENERAL) => Ok(Self::General),
+      Some(NOTIFICATIONS) => Ok(Self::Notifications),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
       Some(ORCHESTER) => OrchesterView::take(params).map(Self::Orchester),
       Some(other) => Err(RouteError::InvalidParam {

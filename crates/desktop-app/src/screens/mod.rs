@@ -58,6 +58,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::AddProject(folder)) => add_project::screen(ctx, folder.map(|folder| folder.path())),
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General),
+    Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
     Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),

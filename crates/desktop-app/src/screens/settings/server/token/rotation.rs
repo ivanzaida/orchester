@@ -1,26 +1,26 @@
-//! *Rotate the token?* in place under the row, and what came of it: the new token in use, or the secret store's
-//! refusal with *Try again*.
+//! *Rotate the token?* asked in place under the row (`Rotate` `HyIPf` in `shpsk`), and what came of it: the new token in
+//! use, or the secret store's refusal with *Try again*. And the token the server cannot read (`Token unreadable`
+//! `w9yATo`): what the store said, that the server is off until it can, *Try again* and *Rotate token*.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
+use orchester_workspace::messages::Message;
 
-use super::{Change, STORE_KEY, TokenRow, outcome, refused};
+use super::{Change, Props, STORE_KEY, TokenRow, outcome, refused};
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  mcp::ServerState,
+  theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
-    card::{CardSurface, card},
     field::field_error,
     icon::Icon,
-    inspector::note,
     message::message_text,
+    notice::NoticeTone,
+    setting_notice::SettingNotice,
   },
 };
 
@@ -37,21 +37,16 @@ impl TokenRow {
     }
     match &state.error {
       Some(reason) => lines.push(self.refused_line(ctx, rotate, reason, state.is_pending())),
-      None if state.is_fulfilled() => lines.push(
-        outcome(
-          "settings-mcp-token-rotated",
-          Icon::CircleCheck,
-          PaletteColor::Success,
-          &ctx.t("settings.automation.server.token.rotated"),
-        )
-        .into(),
-      ),
+      None if state.is_fulfilled() => lines.push(outcome(
+        "settings-mcp-token-rotated",
+        &ctx.t("settings.automation.server.token.rotated"),
+      )),
       None => {}
     }
     lines
   }
 
-  /// *Rotate the token?* in place under the row.
+  /// *Rotate the token?* in place under the row: what rotating does, *Rotate token* and *Keep current token*.
   fn confirmation(&self, ctx: &Ctx, rotate: Change<()>, pending: bool) -> Element {
     let store = ctx.t(STORE_KEY);
     let (confirming, blocked, reveal, left, rotated) = (
@@ -63,7 +58,7 @@ impl TokenRow {
     );
     let mut confirm = ActionButton::new(
       "settings-mcp-token-rotate-confirm",
-      ButtonKind::Danger,
+      ButtonKind::Primary,
       ctx.t("settings.automation.server.token.rotateConfirm.confirm"),
     )
     .icon(Icon::RefreshCw);
@@ -82,49 +77,32 @@ impl TokenRow {
       })
     };
     let keep = self.confirming.clone();
-    card("settings-mcp-token-rotate-question", CardSurface::Decision)
-      .background(PaletteColor::SurfaceRaised)
-      .rounded(ExtraRadius::Tile.role())
-      .padding(SpacingSize::Lg)
-      .spacing(ExtraSpacing::Loose.role())
-      .child(
-        Text::new(&ctx.t("settings.automation.server.token.rotateConfirm.title"))
-          .variant(ExtraTypography::Strong.role()),
-      )
-      .child(note(
-        "settings-mcp-token-rotate-agents",
-        Icon::Unplug,
-        &ctx.t("settings.automation.server.token.rotateConfirm.agents"),
-      ))
-      .child(note(
-        "settings-mcp-token-rotate-sessions",
-        Icon::Unlink,
-        &ctx.t_args(
+    SettingNotice::new("settings-mcp-token-rotate-question", NoticeTone::Warning)
+      .title(ctx.t("settings.automation.server.token.rotateConfirm.title"))
+      .body(ctx.t("settings.automation.server.token.rotateConfirm.agents"))
+      .part(
+        Text::new(&ctx.t_args(
           "settings.automation.server.token.rotateConfirm.sessions",
           [("store", &*store)],
-        ),
-      ))
-      .child(
-        Row::new().spacing(SpacingSize::Sm).child(confirm).child(
-          ActionButton::new(
-            "settings-mcp-token-rotate-keep",
-            ButtonKind::Secondary,
-            ctx.t("settings.automation.server.token.rotateConfirm.cancel"),
-          )
-          .on_click(move || keep.set(false)),
-        ),
+        ))
+        .id("settings-mcp-token-rotate-sessions")
+        .variant(ExtraTypography::Prose.role())
+        .width(Dimension::Pct(100.0)),
+      )
+      .action(confirm)
+      .action(
+        ActionButton::new(
+          "settings-mcp-token-rotate-keep",
+          ButtonKind::Ghost,
+          ctx.t("settings.automation.server.token.rotateConfirm.cancel"),
+        )
+        .on_click(move || keep.set(false)),
       )
       .into()
   }
 
   /// That the secret store refused the new token, with *Try again*, which waits while a rotation runs.
-  fn refused_line(
-    &self,
-    ctx: &Ctx,
-    rotate: &Change<()>,
-    reason: &orchester_workspace::messages::Message,
-    pending: bool,
-  ) -> Element {
+  fn refused_line(&self, ctx: &Ctx, rotate: &Change<()>, reason: &Message, pending: bool) -> Element {
     let store = ctx.t(STORE_KEY);
     let reason = message_text(ctx, reason);
     let mut again = ActionButton::new(
@@ -159,5 +137,52 @@ impl TokenRow {
       )
       .child(again)
       .into()
+  }
+
+  /// While the server cannot read the token: what the secret store said, that the server is off until it can, *Try
+  /// again* and *Rotate token*.
+  pub(super) fn unreadable(&self, ctx: &Ctx, props: &Props, again: Change<()>, rotate: &Change<()>) -> Option<Element> {
+    let ServerState::TokenUnreadable { reason } = &props.state else {
+      return None;
+    };
+    let store = ctx.t(STORE_KEY);
+    let reason = message_text(ctx, reason);
+    let mut try_again = ActionButton::new(
+      "settings-mcp-unreadable-again",
+      ButtonKind::Secondary,
+      ctx.t("settings.automation.server.token.tryAgain"),
+    )
+    .icon(Icon::RefreshCw);
+    if props.server.is_none() || again.state().get().is_pending() {
+      try_again = try_again.disabled();
+    } else {
+      let blocked = self.blocked.clone();
+      try_again = try_again.on_click(move || {
+        if !refused(&blocked) {
+          again.run(());
+        }
+      });
+    }
+    let rotate_button = ActionButton::new(
+      "settings-mcp-unreadable-rotate",
+      ButtonKind::Ghost,
+      ctx.t("settings.automation.server.token.rotate"),
+    );
+    let rotate_button = if props.server.is_some() && !self.confirming.get() && !rotate.state().get().is_pending() {
+      rotate_button.on_click(self.ask_rotate())
+    } else {
+      rotate_button.disabled()
+    };
+    Some(
+      SettingNotice::new("settings-mcp-unreadable", NoticeTone::Danger)
+        .title(ctx.t_args("settings.automation.server.token.unreadable", [("store", &*store)]))
+        .body(ctx.t_args(
+          "settings.automation.server.token.unreadableBody",
+          [("reason", &*reason)],
+        ))
+        .action(try_again)
+        .action(rotate_button)
+        .into(),
+    )
   }
 }

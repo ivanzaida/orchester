@@ -273,6 +273,8 @@ pub enum SegmentFace {
   Text(Arc<str>),
   /// A glyph; the label names it for tools.
   Icon(Icon, Arc<str>),
+  /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
+  Labelled(Icon, Arc<str>),
 }
 
 pub struct Segment {
@@ -323,17 +325,28 @@ impl Segment {
     } else {
       (PaletteColor::TextMuted, PaletteColor::TextMuted)
     };
+    let typography = if self.chosen {
+      TypographyStyle::Label
+    } else {
+      TypographyStyle::Description
+    };
     button = match self.face {
       SegmentFace::Text(label) => {
-        let typography = if self.chosen {
-          TypographyStyle::Label
-        } else {
-          TypographyStyle::Description
-        };
         let button = button
           .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .describe("a11y_name", label.clone())
+          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
+        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
+      }
+      SegmentFace::Labelled(face, label) => {
+        let button = button
+          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
+          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .describe("a11y_name", label.clone())
+          .child(icon(face, IconSize::Base, glyph))
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
       }

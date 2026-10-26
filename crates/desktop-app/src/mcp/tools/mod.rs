@@ -77,6 +77,9 @@ pub fn route_json(route: &Route) -> Value {
     Route::General => {
       params.insert("tab".to_owned(), json!("general"));
     }
+    Route::Notifications => {
+      params.insert("tab".to_owned(), json!("notifications"));
+    }
     Route::AllProjects
     | Route::AddProject(_)
     | Route::Settings

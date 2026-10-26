@@ -1,18 +1,22 @@
 {
   "settings": {
     "notifications": {
-      "section": "Notifications",
+      "when": "Notify me when",
+      "how": "How",
       "silent": "This build shows no notifications: only the installed app does, or a build started with {{variable}}=1. The counts on the app's icon still update.",
       "needsYou": {
         "title": "Needs you",
+        "hint": "An agent or a plan waits for your answer or decision",
         "description": "An agent waits for your approval, an answer or a message, or a plan or a run waits for your decision."
       },
       "stopped": {
         "title": "Stopped",
+        "hint": "A run stops at a limit or is interrupted, a runner goes offline",
         "description": "A run stopped at a limit or was interrupted, a project's runner is offline, or a merge stopped."
       },
       "finished": {
         "title": "Finished and info",
+        "hint": "A run is ready to merge, merged or failed",
         "description": "A run is ready to merge, was merged or failed, a plan limit reached 90% or was reset, or the Orchestrator proposes something."
       },
       "sound": {
@@ -21,6 +25,7 @@
       },
       "quiet": {
         "title": "Quiet hours",
+        "hint": "No notifications between these times",
         "description": "No notifications between these times each day. The count on the app's icon still updates.",
         "from": "From",
         "to": "to",
@@ -31,7 +36,9 @@
       "notSaved": "Your notification settings were not saved: {{reason}}"
     },
     "dailyReport": {
+      "group": "Daily report",
       "title": "Daily report from the Orchestrator",
+      "hint": "What was done and what waits, in each project's Orchestrator chat",
       "description": "Each day at this time, every open project's Orchestrator conversation gets a report of what was done that day: merges, runs, what waits for you, what the Orchestrator did and the day's tokens. A day without activity gets none; a report missed while the app was closed comes at its next start. With Let the Orchestrator answer agents on, the Orchestrator adds a summary that only proposes.",
       "at": "Deliver at",
       "time": "Daily report time",
@@ -39,14 +46,19 @@
       "notSaved": "Your daily report setting was not saved: {{reason}}"
     },
     "automation": {
-      "section": "What automation may do",
+      "window": "The window",
+      "approvals": "Approvals and permissions",
+      "orchestratorMay": "The Orchestrator may",
+      "onlyYou": "Only you, here in the window",
       "lookAtWindow": {
         "title": "Look at the window",
+        "hint": "Screenshots, the element tree, the app's log and state",
         "description": "Screenshots, the element tree, the app's log and state. Every client with the token may.",
         "always": "Always on"
       },
       "windowControl": {
         "title": "Agents can control this window",
+        "hint": "Click, type, resize, change pages · applies from the next start · only you can change this",
         "description": "Click and type in this window, resize it, change pages and the theme. Turn it on to let an agent test Orchester.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Window control could not be kept: {{reason}} This run keeps what it started with.",
@@ -62,6 +74,7 @@
       },
       "answerApprovals": {
         "title": "Let automation answer approvals",
+        "hint": "Approve once or deny; wider answers stay yours",
         "description": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
         "on": "Each answer reads approved by automation or denied by automation in the run, with the client's name.",
         "unreadable": "This setting can't be read: {{reason}}",
@@ -70,6 +83,7 @@
       },
       "changePermissions": {
         "title": "Let automation change agent permissions",
+        "hint": "Widen write access, network, commands, MCP servers",
         "description": "Lets tools connected to Orchester widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs and environment variables. Applies to setup tools and permission confirmations in the window; automatic approvals also need Let automation answer approvals. Secret replacement and stale-version decisions stay yours. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -77,6 +91,8 @@
       },
       "publishDrafts": {
         "title": "Let the Orchestrator publish drafts",
+        "label": "Publish drafts",
+        "hint": "Pipelines, profiles, instructions, skills and tools it drafts",
         "description": "Lets the Orchestrator's chat publish the pipelines, agent profiles, instructions, skills and tools it drafts, without your click. Off: it proposes each publish as a card you apply. A draft that widens what agents may do still needs Let automation change agent permissions. Only you can change this, here in the window.",
         "on": "The chat publishes without asking in every project and keeps each publish as an action in its conversation. A draft that widens what agents may do is still proposed while Let automation change agent permissions is off.",
         "unreadable": "This setting can't be read: {{reason}}",
@@ -85,6 +101,8 @@
       },
       "answerAgents": {
         "title": "Let the Orchestrator answer agents",
+        "label": "Answer agents",
+        "hint": "Answer their questions and message them without your click",
         "description": "Lets the Orchestrator's chat answer agents' questions and send messages to a run's agents without your click, and start a turn by itself when an agent asks or waits for a message. Off: it proposes each answer as a card you apply, and tells you when an agent waits. Approvals and plan decisions stay yours. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -92,6 +110,8 @@
       },
       "mergeRuns": {
         "title": "Let the Orchestrator merge runs",
+        "label": "Merge runs",
+        "hint": "When you ask it in the chat",
         "description": "Lets the Orchestrator's chat merge a run you asked it to merge, without your click: only a task's latest run that succeeded, and only when the main checkout needs no local integration. Off: it proposes each merge as a card you apply. Conflicts and approving a merged result stay yours, on the Local integration page. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -99,6 +119,8 @@
       },
       "mergeFinished": {
         "title": "Let the Orchestrator merge finished runs on its own",
+        "label": "Merge finished runs on its own",
+        "hint": "Without asking, when every step passed",
         "description": "When a task's run succeeds, the Orchestrator's chat merges it without your click: only the task's latest run whose every step passed (a step you accepted as it was counts, one automation accepted does not), never a task marked Blocked or blocked by unfinished tasks, while new starts are held, or for a task that says Don't merge automatically, and only when the main checkout needs no local integration. It tries each run once, one at a time in the order they finished; conflicts it proposes to send back to an agent, anything else it leaves to you. Needs Let the Orchestrator merge runs and Let the Orchestrator answer agents on too. Off: it tells you a run is ready and the merge stays yours. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -106,6 +128,8 @@
       },
       "continueInterrupted": {
         "title": "Let the Orchestrator continue interrupted runs",
+        "label": "Continue interrupted runs",
+        "hint": "From their last checkpoint",
         "description": "Lets the Orchestrator's chat continue a run that a crash, the runner going away or quitting the app interrupted, from its last checkpoint, without your Continue. With Let the Orchestrator answer agents also on, it continues such a run once when it is interrupted, but leaves one interrupted again within 10 minutes to you. Off: continuing stays yours, on the task's Summary. Runs stopped at a limit, runs you canceled and runs whose worktree is gone stay yours. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -113,6 +137,8 @@
       },
       "writeGit": {
         "title": "Let the Orchestrator write with git",
+        "label": "Write with git",
+        "hint": "Commit, branch, pull and push when you ask it to",
         "description": "Lets the Orchestrator's chat commit, create and switch branches, pull, push, merge, revert, tag and fetch in the project's repository when you ask it to. None of these loses work: a switch keeps your changes or is refused, a pull only fast-forwards unless you ask for a merge, a push never forces, and a conflict is undone. Reset, clean, deleting a branch or tag, a forced push, discarding changes and rebase stay cards you apply, whatever this says. Never in a run's worktree before the run ended. Off: the chat only reads git. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -120,6 +146,7 @@
       },
       "estimatePoints": {
         "title": "Let Orchester estimate story points",
+        "hint": "Sizes new tasks in story points; each estimate spends tokens",
         "description": "Orchester sizes each new task, and a task whose brief or criteria change, in story points (1, 2, 3, 5, 8, 13 or 21) with a short reason, from the brief, the criteria and the project's merged tasks. Each estimate asks auto mode's reviewer model and spends tokens, which count toward the project's daily budget. Points you set are never changed. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
@@ -134,7 +161,9 @@
         },
         "enabled": {
           "title": "Let agents connect to Orchester",
-          "description": "Agents and tools on this computer reach Orchester at a fixed address, each with the access token. What they may do is set below, in What automation may do. Off: nothing listens.",
+          "hint": "Off: nothing listens",
+          "hintOff": "Agents you registered can't reach Orchester until you turn this on",
+          "description": "Agents and tools on this computer reach Orchester at a fixed address, each with the access token. What they may do is set below. Off: nothing listens.",
           "off": "Agents and tools on this computer reach Orchester at a fixed address, each with the access token. Off: nothing listens; agents you registered can't reach Orchester until you turn this on."
         },
         "state": {
@@ -146,11 +175,12 @@
         },
         "address": {
           "title": "Address",
+          "hintListening": "Listening · agents registered with it reach this app",
+          "hintFixed": "Fixed, so an agent you register once keeps connecting after Orchester restarts.",
           "description": "Fixed, so an agent you register once keeps connecting after Orchester restarts. If the port is taken, Orchester says so here and doesn't move to another one.",
           "off": "Nothing listens while the server is off. The address and the token stay as they are.",
           "none": "No address while the server is not running.",
-          "copy": "Copy",
-          "dash": "—"
+          "copy": "Copy"
         },
         "port": {
           "label": "Port",
@@ -163,6 +193,9 @@
         },
         "token": {
           "title": "Access token",
+          "keptWindows": "Kept in Windows Credential Manager",
+          "keptMacos": "Kept in your login keychain",
+          "rotateShort": "Rotate",
           "whereWindows": "Kept in Windows Credential Manager, never in a file. Agents send it with every request. Only you can show, copy or rotate it, here in the window.",
           "whereMacos": "Kept in your login keychain, never in a file. Agents send it with every request. Only you can show, copy or rotate it, here in the window.",
           "mask": "•••• •••• •••• •••• •••• •••• •••• ••••",
@@ -206,7 +239,9 @@
       },
       "connect": {
         "title": "Connect an agent",
+        "hint": "Registers Orchester in the agent's CLI",
         "description": "Register Orchester once in your agent's configuration. The agent then has Orchester's tools in every session, as mcp__orchester__…: no process id, no file to read.",
+        "copyCommand": "Copy command",
         "tab": {
           "claude": "Claude Code",
           "codex": "Codex"
@@ -268,6 +303,7 @@
       },
       "threshold": {
         "title": "Warning threshold",
+        "hint": "Usage marks an account's plan in warning from this share",
         "description": "The share of a 5-hour or weekly window at which plan limits count as nearly used. Limits belong to your accounts, so one value serves every project.",
         "unit": "%",
         "invalid": "Use a whole percentage from 1 to 100.",
@@ -278,7 +314,8 @@
         "title": "Version",
         "release": "Orchester {{version}}, release build.",
         "development": "Orchester {{version}}, development build.",
-        "value": "v{{version}}"
+        "releaseValue": "v{{version}} · release",
+        "developmentValue": "v{{version}} · development"
       },
       "data": {
         "title": "Application data",
@@ -296,13 +333,14 @@
       "saving": "Saving…",
       "failed": "A change was not saved"
     },
-    "sub": "Orchester on this computer, in every project. Each change is saved as you make it.",
+    "sub": "Orchester on this computer, in every project",
     "connectServer": "Connect a server",
     "tabs": {
       "general": "General",
+      "notifications": "Notifications",
       "automation": "Automation",
       "accounts": "Accounts",
-      "orchester": "Orchester"
+      "orchester": "Orchester Cloud"
     }
   }
 }
