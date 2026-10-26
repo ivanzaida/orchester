@@ -43,8 +43,8 @@ use crate::{
 /// The name's field while renaming (`Field` `j7t2Ea` in `poD7g`).
 const NAME_FIELD_WIDTH: f32 = 240.0;
 
-/// The page of the account the route names.
-pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, uses: Option<&AccountUses>) -> Column {
+/// The page of the account the route names; `uses` is what uses it and whether that is still being read.
+pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, (uses, reading): (Option<&AccountUses>, bool)) -> Column {
   let navigation = Navigation::of(ctx);
   let pane = super::super::frame::pane("account-page").child(super::super::frame::crumb(
     "account-crumb",
@@ -61,7 +61,7 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, uses: Option<&Acco
     head(ctx, parts, work, account)
   };
   let question = (parts.view.panel == AccountsPanel::Remove && !account.is_default())
-    .then(|| remove::confirmation(ctx, parts, work, account, uses));
+    .then(|| remove::confirmation(ctx, (parts, work), account, (uses, reading)));
   // The sign-in in place says where the account stands while it shows; the state's notice would say it twice.
   let state = if sign_in::follows(parts, work, account) {
     Some(sign_in::panel(ctx, (parts, work), account, false))

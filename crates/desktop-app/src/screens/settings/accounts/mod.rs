@@ -264,7 +264,7 @@ impl Component for AccountsTab {
         .then(|| self.work.opened.get().0.map(|(account, _)| account))
         .flatten(),
     };
-    let uses = uses(ctx, selected, props.revision.get());
+    let (uses, reading) = uses(ctx, selected, props.revision.get());
     let (scroll, pane) = match (props.view.panel, selected) {
       (AccountsPanel::Add, _) => ("settings-accounts-add-scroll", add::page(ctx, &self.work)),
       (AccountsPanel::SignIn, Some(_)) => (
@@ -273,7 +273,7 @@ impl Component for AccountsTab {
       ),
       (_, Some(_)) => (
         "settings-account-scroll",
-        details::page(ctx, &parts, &self.work, uses.as_ref()),
+        details::page(ctx, &parts, &self.work, (uses.as_ref(), reading)),
       ),
       (_, None) => ("settings-accounts-scroll", list::page(ctx, &parts)),
     };
@@ -281,10 +281,10 @@ impl Component for AccountsTab {
   }
 }
 
-/// What uses the shown account, read again after every change.
-fn uses(ctx: &mut Ctx, account: Option<AgentAccountId>, revision: u64) -> Option<AccountUses> {
+/// What uses the shown account, read again after every change, and whether that read is still running.
+fn uses(ctx: &mut Ctx, account: Option<AgentAccountId>, revision: u64) -> (Option<AccountUses>, bool) {
   let workspace = Services::of(ctx).workspace;
-  ctx
+  let state = ctx
     .future((account, revision), move |(account, _)| {
       let workspace = workspace.clone();
       async move {
@@ -298,9 +298,9 @@ fn uses(ctx: &mut Ctx, account: Option<AgentAccountId>, revision: u64) -> Option
       }
     })
     .state()
-    .get()
-    .data
-    .flatten()
+    .get();
+  let reading = state.is_pending();
+  (state.data.flatten(), reading)
 }
 
 /// After a change the accounts are read again and the tab shows what it changed; a new account in a folder

@@ -21,7 +21,6 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  icon_button::IconButton,
   pressable::opening,
   tooltip::Tooltip,
 };
@@ -377,29 +376,6 @@ pub fn mono_value(id: &str, text: &str) -> Text {
     .nowrap()
     .min_width(Dimension::Px(0.0))
     .text_overflow(TextOverflow::Elipsis)
-}
-
-/// A path with Copy after it, 8 apart (`Value` `KpzaD`); Copy, named `label`, runs `copy`.
-pub fn copied_value(
-  ctx: &mut Ctx,
-  id: &str,
-  (text, label): (&str, &str),
-  copy: impl Fn() + Send + Sync + 'static,
-) -> Element {
-  Row::new()
-    .id(format!("{id}-value"))
-    .flex_shrink(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(mono_value(id, text))
-    .child(
-      IconButton::new(format!("{id}-copy"), Icon::Copy, label)
-        .small()
-        .on_click(copy)
-        .render(ctx),
-    )
-    .into()
 }
 
 /// A state as a 6 dot and its words in 12 (`Status` `i0iw5`): the words in `color`, `text_secondary` unless the state

@@ -21,6 +21,7 @@ pub mod code_editor;
 pub mod command_row;
 pub mod command_trigger;
 pub mod composer;
+pub mod copied_value;
 pub mod detail_row;
 pub mod enforcement_row;
 pub mod field;

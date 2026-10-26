@@ -28,13 +28,13 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
+    copied_value::CopiedValue,
     field::{FieldInput, field, field_error},
     icon::Icon,
-    icon_button::IconButton,
     message::message_text,
     notice::NoticeTone,
     setting_notice::SettingNotice,
-    setting_rows::{SettingRow, mono_value},
+    setting_rows::SettingRow,
   },
 };
 
@@ -150,24 +150,23 @@ impl AddressRow {
       .render(ctx)
   }
 
-  /// The address with Copy, which only a listening server's has, and *Port* while the field is closed.
+  /// The address with Copy, which only a listening server's has, and *Port* while the field is closed. Copy says for a
+  /// moment that it copied the full address, or that it could not.
   fn address(&self, ctx: &mut Ctx, port: NonZeroU16, listening: bool) -> Element {
     let url = endpoint(port);
-    let copy = IconButton::new(
-      format!("{ID}-value-copy"),
-      Icon::Copy,
+    let value = CopiedValue::new(
+      format!("{ID}-value"),
+      socket(port).to_string(),
       ctx.t("settings.automation.server.address.copy"),
-    )
-    .small();
-    let copy = if listening {
-      copy.on_click(move || {
-        if !copy_to_clipboard(&url) {
+      move || {
+        let done = copy_to_clipboard(&url);
+        if !done {
           tracing::warn!("the MCP server's address could not be put on the clipboard");
         }
-      })
-    } else {
-      copy
-    };
+        done
+      },
+    );
+    let value = if listening { value } else { value.unavailable() };
     let edit = (listening && !self.editing.get()).then(|| {
       let editing = self.editing.clone();
       ActionButton::new(
@@ -182,8 +181,7 @@ impl AddressRow {
       .id(format!("{ID}-value-box"))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(mono_value(&format!("{ID}-value"), &socket(port).to_string()))
-      .child(copy.render(ctx))
+      .child(value.render(ctx))
       .with_children(edit)
       .into()
   }

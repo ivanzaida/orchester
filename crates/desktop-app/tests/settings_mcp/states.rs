@@ -195,3 +195,17 @@ fn settings_mcp_address_copy_is_unavailable_while_nothing_listens() {
   );
   drop(holder);
 }
+
+#[test]
+fn settings_mcp_address_copy_says_what_came_of_it() {
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", Shown::listening);
+  assert!(shown.texts("settings-mcp-address-value-copied").is_none());
+  shown.click("settings-mcp-address-value-copy");
+  // Copy says it for a moment, as the command row's Copy did: copied, or that the clipboard refused it.
+  assert!(
+    shown.says("settings-mcp-address-value-copied", "Copied")
+      || shown.says("settings-mcp-address-value-copied", "Couldn't copy"),
+    "Copy says what came of it"
+  );
+}

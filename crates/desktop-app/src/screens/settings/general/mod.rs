@@ -23,7 +23,10 @@ use orchester_workspace::{app_paths, background};
 use super::frame;
 use crate::{
   services::Services,
-  ui::setting_rows::{HintTone, SettingGroup, SettingRow, copied_value, value},
+  ui::{
+    copied_value::CopiedValue,
+    setting_rows::{HintTone, SettingGroup, SettingRow, value},
+  },
 };
 
 /// The tab, scrolling under the header.
@@ -137,12 +140,14 @@ fn place(ctx: &mut Ctx, keys: &PlaceKeys, path: Option<Option<&PathBuf>>) -> Ele
     Some(Some(path)) => {
       let shown = path.display().to_string();
       let copied = shown.clone();
-      let label = ctx.t("common.copy");
-      let copy = copied_value(ctx, &format!("{}-path", keys.id), (&shown, &label), move || {
-        if !copy_to_clipboard(&copied) {
+      let copy = CopiedValue::new(format!("{}-path", keys.id), shown, ctx.t("common.copy"), move || {
+        let done = copy_to_clipboard(&copied);
+        if !done {
           tracing::warn!("a path of this computer could not be put on the clipboard");
         }
-      });
+        done
+      })
+      .render(ctx);
       row.control(copy)
     }
     Some(None) => row.toned_hint(ctx.t(keys.unknown), HintTone::Danger),

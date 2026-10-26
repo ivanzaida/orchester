@@ -85,12 +85,13 @@ pub(super) fn default_reason(ctx: &Ctx, account: &AgentAccount) -> String {
   )
 }
 
+/// The question, or why the account can't be removed; while what uses it is still being read, *Remove …* waits, so
+/// the question is never answered on connections it has not read.
 pub(super) fn confirmation(
   ctx: &mut Ctx,
-  parts: &Parts,
-  work: &Work,
+  (parts, work): (&Parts, &Work),
   account: &AgentAccount,
-  uses: Option<&AccountUses>,
+  (uses, reading): (Option<&AccountUses>, bool),
 ) -> Element {
   let shown = name(ctx, account);
   let others: Vec<&AgentAccount> = parts
@@ -154,6 +155,7 @@ pub(super) fn confirmation(
     panel = panel.part(field_error("account-remove-error", &message_text(ctx, &error)));
   }
   let confirm = confirm(ctx, work, account, &shown);
+  let confirm = if reading { confirm.disabled() } else { confirm };
   let keep = keep(ctx, work, account.id());
   panel.actions([confirm.into(), keep.into()]).into()
 }

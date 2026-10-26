@@ -1,5 +1,6 @@
-//! Settings › Accounts (`docs/design/agent-accounts.md`, layer `hgOl2`): which account it shows and what its right
-//! panel holds, so each state has an address (`/settings?tab=accounts&account=…&panel=used_by`).
+//! Settings › Accounts (`docs/design/agent-accounts.md`; `03 · Accounts` `t8i6m` in the new `orchester.pen`): the
+//! list, or the account page it opens and what that page asks, so each state has an address
+//! (`/settings?tab=accounts&account=…&panel=remove`).
 
 use orchester_core::id::AgentAccountId;
 
@@ -11,21 +12,21 @@ use super::{
 const ACCOUNT: &str = "account";
 const PANEL: &str = "panel";
 
-/// What the right panel of Settings › Accounts holds.
+/// What Settings › Accounts shows over the list, or for the account it opens.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum AccountsPanel {
-  /// The account's details, its *Account* tab (`t098v`).
+  /// The account's page with its crumb back to the list (`03b · Account` `xN1Jy`); without an account, the list.
   #[default]
   Account,
-  /// Its *Used by* tab (`HzJSR`).
+  /// The account's page, as [`Self::Account`]: its *Used by* group is on the page now. Kept so older links open.
   UsedBy,
-  /// *Add account*, step 1: CLI, name and folder (`IOyJl`).
+  /// *Add account*, step 1: CLI, name and folder (`03c · Add account` `XAm8i`).
   Add,
-  /// Step 2 of *Add account* for the account it shows: sign in with the CLI's own login (`ohqHW`).
+  /// Step 2 of *Add account* for the account it shows: sign in with the CLI's own login.
   SignIn,
-  /// *Remove …?* in place, over its *Used by* tab (`HzJSR`).
+  /// *Remove …?* in place on the account's page (`poD7g`).
   Remove,
-  /// The name as a field in the header (`yEJPZ`).
+  /// The name as a field in the page's head (`poD7g`).
   Rename,
 }
 
