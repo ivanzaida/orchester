@@ -108,7 +108,10 @@ impl Component for HeldCard {
       "orchestrator.held.tip",
       [
         ("effect", &*effect),
-        ("checked", &*ctx.t_args("orchestrator.held.checked", [("project", name)])),
+        (
+          "checked",
+          &*ctx.t_args("orchestrator.held.checked", [("project", name)]),
+        ),
       ],
     );
     let line = Row::new()

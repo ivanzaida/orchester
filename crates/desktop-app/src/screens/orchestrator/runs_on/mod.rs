@@ -145,7 +145,12 @@ impl Component for RunsOnPicker {
     let chip = self.chip(ctx, &props, Some(&label));
     Row::new()
       .child(chip)
-      .child(popover(self.anchor.clone(), props.open.clone(), PopoverSide::Above, panel))
+      .child(popover(
+        self.anchor.clone(),
+        props.open.clone(),
+        PopoverSide::Above,
+        panel,
+      ))
       .into()
   }
 }
@@ -309,10 +314,13 @@ fn provider_uses(ctx: &mut Ctx, props: &RunsOnProps) -> Vec<ProviderUse> {
     .setup
     .iter()
     .flat_map(|setup| {
-      setup.connections().into_iter().filter_map(|choice| match setup.runs_on(choice.id) {
-        Some(RunsOn::ApiProvider { base_url, key }) => Some((choice.id, base_url, key)),
-        _ => None,
-      })
+      setup
+        .connections()
+        .into_iter()
+        .filter_map(|choice| match setup.runs_on(choice.id) {
+          Some(RunsOn::ApiProvider { base_url, key }) => Some((choice.id, base_url, key)),
+          _ => None,
+        })
     })
     .collect();
   let root = props.root.clone();

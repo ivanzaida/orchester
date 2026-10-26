@@ -16,7 +16,12 @@ fn same(a: f32, b: f32) -> bool {
 #[test]
 fn orchestrator_header_is_one_line_over_a_760_column_and_history_opens_on_the_right() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  kept(&screen, "Plan the GitHub app permissions", Timestamp::now(), "Auth first.");
+  kept(
+    &screen,
+    "Plan the GitHub app permissions",
+    Timestamp::now(),
+    "Auth first.",
+  );
   screen.go(OrchestratorChat::Latest);
   screen.until("the conversation", |screen| {
     screen.text("orchestrator-conversation").contains("Auth first.")

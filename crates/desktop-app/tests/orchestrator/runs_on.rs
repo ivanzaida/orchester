@@ -16,7 +16,10 @@ fn orchestrator_picker_lists_sign_ins_and_api_providers_and_publishes_the_choice
   let mut screen = Orchestrator::new(Setup::Ready);
   let program = std::env::current_exe().expect("a program");
   let deepseek = connections::api_provider("DeepSeek", &program);
-  screen.db().create_connection(&deepseek).expect("the API provider's connection");
+  screen
+    .db()
+    .create_connection(&deepseek)
+    .expect("the API provider's connection");
   screen.go(OrchestratorChat::New);
   screen.click("orchestrator-runs-on-chip");
   screen.until("the picker", |screen| screen.exists("orchestrator-runs-on-menu"));
@@ -43,7 +46,9 @@ fn orchestrator_picker_lists_sign_ins_and_api_providers_and_publishes_the_choice
   assert!(!screen.exists("orchestrator-runs-on-publish"), "nothing changed yet");
 
   screen.press(&format!("orchestrator-runs-on-{}", deepseek.id()));
-  screen.until("the provider chosen", |screen| screen.exists("orchestrator-runs-on-sent-to"));
+  screen.until("the provider chosen", |screen| {
+    screen.exists("orchestrator-runs-on-sent-to")
+  });
   assert!(screen.text("orchestrator-runs-on-sent-to").contains("api.deepseek.com"));
   assert_eq!(screen.text("orchestrator-runs-on-model-value"), "deepseek-v4-pro");
   assert!(
@@ -51,17 +56,17 @@ fn orchestrator_picker_lists_sign_ins_and_api_providers_and_publishes_the_choice
     "a provider that lists no efforts has no effort row"
   );
   assert_eq!(
-    screen.db().orchestrator_published().expect("read").map(|(version, _)| version),
+    screen
+      .db()
+      .orchestrator_published()
+      .expect("read")
+      .map(|(version, _)| version),
     Some(1),
     "choosing alone changes nothing"
   );
   assert_eq!(screen.text("orchestrator-runs-on-publish"), "Publish v2");
   screen.click("orchestrator-runs-on-publish");
-  let chosen = OrchestratorSettings::new(
-    deepseek.id(),
-    ModelId::new("deepseek-v4-pro").expect("model"),
-    None,
-  );
+  let chosen = OrchestratorSettings::new(deepseek.id(), ModelId::new("deepseek-v4-pro").expect("model"), None);
   screen.until("the next version", |screen| {
     screen.db().orchestrator_published().expect("read") == Some((2, chosen.clone()))
   });

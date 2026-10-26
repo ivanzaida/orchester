@@ -74,7 +74,10 @@ fn answered(db: &mut ProjectDb, (chat, seq): (ChatId, i64), (number, outcome): (
   assert!(db.start_wait_turn((chat, seq), message).expect("started"));
   db.add_chat_reply(
     chat,
-    ("Chose Decisions inside the new layout.", &ModelId::new("haiku").expect("model")),
+    (
+      "Chose Decisions inside the new layout.",
+      &ModelId::new("haiku").expect("model"),
+    ),
     Timestamp::now(),
   )
   .expect("reply");
@@ -165,11 +168,11 @@ fn orchestrator_waits_for_the_person_gather_into_a_digest_that_counts_them() {
   for seq in seqs {
     let item = format!("orchestrator-digest-item-wait-{seq}");
     assert!(screen.exists(&item), "one line per wait");
+    assert!((screen.bounds(&item).height - 34.0).abs() < 0.5, "each 34 high");
     assert!(
-      (screen.bounds(&item).height - 34.0).abs() < 0.5,
-      "each 34 high"
+      !screen.exists(&format!("orchestrator-wait-wait-{seq}")),
+      "not a line of its own"
     );
-    assert!(!screen.exists(&format!("orchestrator-wait-wait-{seq}")), "not a line of its own");
   }
   screen.click(&format!("{digest}-head"));
   screen.until("the digest folded", |screen| {
@@ -213,7 +216,10 @@ fn orchestrator_refused_action_is_a_danger_line_whose_reason_opens_under_it() {
     (screen.bounds(&card).height - 32.0).abs() < 0.5,
     "an event line, not a card"
   );
-  assert!(!screen.exists(&format!("{card}-reason")), "its reason waits to be opened");
+  assert!(
+    !screen.exists(&format!("{card}-reason")),
+    "its reason waits to be opened"
+  );
   screen.click(&format!("{card}-line"));
   screen.until("the reason", |screen| {
     screen
@@ -235,7 +241,10 @@ fn orchestrator_decided_proposal_folds_into_its_line() {
   let (chat, waiting) = with_action(&screen, "Release?", &release(ActionOutcome::Waits));
   screen.go(chat);
   screen.until("the decision card", |screen| screen.exists(&format!("{waiting}-start")));
-  assert_eq!(screen.text(&format!("{waiting}-title")), "Let the project's new starts go on?");
+  assert_eq!(
+    screen.text(&format!("{waiting}-title")),
+    "Let the project's new starts go on?"
+  );
   assert!(screen.text(&format!("{waiting}-state")).starts_with("Waits for you · "));
   assert_eq!(screen.text(&format!("{waiting}-person")), "Only you can apply");
   assert!(screen.exists(&format!("{waiting}-dismiss")));
@@ -243,7 +252,10 @@ fn orchestrator_decided_proposal_folds_into_its_line() {
   let (chat, applied) = with_action(&screen, "Released?", &release(ActionOutcome::Applied));
   screen.go(chat);
   screen.until("the folded line", |screen| screen.exists(&applied));
-  assert_eq!(screen.text(&format!("{applied}-title")), "Released the project's new starts");
+  assert_eq!(
+    screen.text(&format!("{applied}-title")),
+    "Released the project's new starts"
+  );
   assert_eq!(screen.text(&format!("{applied}-target")), "by you");
   assert!(!screen.exists(&format!("{applied}-start")), "nothing is left to decide");
   assert!(

@@ -64,7 +64,11 @@ pub(super) fn select(
     .background(PaletteColor::SurfaceInput)
     .border(Border::inside(
       BorderSize::Sm,
-      if shown { PaletteColor::BorderFocus } else { PaletteColor::Border },
+      if shown {
+        PaletteColor::BorderFocus
+      } else {
+        PaletteColor::Border
+      },
     ))
     .child(
       Text::new(&words)
@@ -147,7 +151,12 @@ fn menu(
   Column::new()
     .id(format!("{id}-menu"))
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().left(SpacingSize::Sm).right(SpacingSize::Sm).bottom(SpacingSize::Xs))
+    .padding(
+      Padding::new()
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .bottom(SpacingSize::Xs),
+    )
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))

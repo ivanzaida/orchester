@@ -33,10 +33,7 @@ pub(super) fn line(
     (None, None) => None,
   };
   let target = match (task, by) {
-    (Some(task), Some(by)) => Some(ctx.t_args(
-      "orchestrator.line.targetBy",
-      [("target", task), ("by", &*by)],
-    )),
+    (Some(task), Some(by)) => Some(ctx.t_args("orchestrator.line.targetBy", [("target", task), ("by", &*by)])),
     (Some(task), None) => Some(task.into()),
     (None, by) => by,
   };

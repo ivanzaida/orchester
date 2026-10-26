@@ -316,7 +316,9 @@ the agent logged: {agent}"
   /// sent before is done with: the field shows its placeholder again.
   pub fn send(&mut self, text: &str) {
     self.until("the composer to be free", |screen| {
-      screen.text("orchestrator-input").starts_with("Message the Orchestrator")
+      screen
+        .text("orchestrator-input")
+        .starts_with("Message the Orchestrator")
     });
     self.set("orchestrator-input", text);
     self.click("orchestrator-input");

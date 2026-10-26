@@ -267,7 +267,10 @@ fn row(ctx: &mut Ctx, line: &Line) -> Row {
       .flex_shrink(1.0)
       .min_width(Dimension::Px(0.0))
   });
-  let chip = line.chip.clone().map(|chip| chip_element(ctx, &format!("{id}-chip"), &chip));
+  let chip = line
+    .chip
+    .clone()
+    .map(|chip| chip_element(ctx, &format!("{id}-chip"), &chip));
   let time = line.time.as_ref().map(|time| {
     Text::new(time)
       .id(format!("{id}-time"))

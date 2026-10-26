@@ -55,12 +55,8 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, (project, chat): (&ShownProject
     Named::Chat(chat) => Some(started(ctx, chat.started())),
   };
   let history = view.history.clone();
-  let mut toggle = IconButton::new(
-    "orchestrator-history",
-    Icon::PanelRight,
-    ctx.t("orchestrator.history"),
-  )
-  .on_click(move || history.update(|open| *open = !*open));
+  let mut toggle = IconButton::new("orchestrator-history", Icon::PanelRight, ctx.t("orchestrator.history"))
+    .on_click(move || history.update(|open| *open = !*open));
   if view.history.get() {
     toggle = toggle.active();
   }
@@ -98,7 +94,8 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, (project, chat): (&ShownProject
 
 /// *New*: nothing to leave while the conversation shown is a new one.
 fn new_conversation(ctx: &mut Ctx, project: &ShownProject, chat: Named<'_>) -> ActionButton {
-  let button = ActionButton::new("orchestrator-new", ButtonKind::Ghost, ctx.t("orchestrator.new")).icon(Icon::SquarePen);
+  let button =
+    ActionButton::new("orchestrator-new", ButtonKind::Ghost, ctx.t("orchestrator.new")).icon(Icon::SquarePen);
   match chat {
     Named::Opening(_) | Named::Chat(_) => {
       let navigation = Navigation::of(ctx);

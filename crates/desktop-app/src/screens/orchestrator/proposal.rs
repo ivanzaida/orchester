@@ -97,12 +97,10 @@ impl Component for StartProposal {
         .time(Some(time))
         .render(ctx);
     }
-    let refused = self.refused.get().then(|| {
-      person_only(
-        format!("{id}-person-only"),
-        &ctx.t("orchestrator.proposal.personOnly"),
-      )
-    });
+    let refused = self
+      .refused
+      .get()
+      .then(|| person_only(format!("{id}-person-only"), &ctx.t("orchestrator.proposal.personOnly")));
     let failed = state.error.as_ref().map(|error| {
       tinted_note(
         format!("{id}-error"),

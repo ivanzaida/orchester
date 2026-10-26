@@ -67,7 +67,14 @@ pub(super) struct ReportProps {
 impl PartialEq for ReportProps {
   fn eq(&self, other: &Self) -> bool {
     (&self.id, &self.report, self.at, self.turned, self.project, &self.names)
-      == (&other.id, &other.report, other.at, other.turned, other.project, &other.names)
+      == (
+        &other.id,
+        &other.report,
+        other.at,
+        other.turned,
+        other.project,
+        &other.names,
+      )
   }
 }
 
@@ -117,7 +124,12 @@ fn head(ctx: &Ctx, props: &ReportProps, open: &Signal<bool>) -> Element {
       .id(format!("{id}-{suffix}"))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
-      .child(Text::new(&figure).variant(ExtraTypography::MonoKey.role()).color(color).nowrap())
+      .child(
+        Text::new(&figure)
+          .variant(ExtraTypography::MonoKey.role())
+          .color(color)
+          .nowrap(),
+      )
       .child(
         Text::new(&words)
           .variant(TypographyStyle::Description)

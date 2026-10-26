@@ -108,8 +108,14 @@ impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 #[derive(Clone, PartialEq)]
 enum Line {
   /// A turn; `first` is the list's first row, which keeps the chat's top room over it.
-  Turn { row: TurnRow, first: bool },
-  Digest { digest: DigestProps, first: bool },
+  Turn {
+    row: TurnRow,
+    first: bool,
+  },
+  Digest {
+    digest: DigestProps,
+    first: bool,
+  },
   /// Words under the last turn in 12 `text_muted` (`Note` `JHr2a` in `02 Not set up` `Wd5CL`).
   Note(Arc<str>),
   JumpRoom,

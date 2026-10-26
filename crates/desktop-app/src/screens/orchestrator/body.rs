@@ -43,7 +43,9 @@ use crate::{
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText},
+  theme::{
+    DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText,
+  },
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -92,10 +94,20 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
       let boxed = foot.composer(ctx, view, project, ctx.t("orchestrator.composer.placeholder"));
       start(ctx, view, (boxed, unread.or(problem)))
     }
-    Shown::New => conversation(ctx, view, (project, None, pending.as_deref()), (&foot, [problem, None, unread])),
+    Shown::New => conversation(
+      ctx,
+      view,
+      (project, None, pending.as_deref()),
+      (&foot, [problem, None, unread]),
+    ),
     Shown::Chat(shown) => {
       let queued = queued_problem(ctx, view);
-      conversation(ctx, view, (project, Some(shown), pending.as_deref()), (&foot, [problem, queued, unread]))
+      conversation(
+        ctx,
+        view,
+        (project, Some(shown), pending.as_deref()),
+        (&foot, [problem, queued, unread]),
+      )
     }
     Shown::Loading => loading(ctx, view, project, reads),
     Shown::Failed(error) => {
@@ -324,16 +336,9 @@ fn conversation(
     })
     .collect();
   let stop = (answering && !stopping).then(|| env.stop.clone());
-  let boxed = foot.composer_with(
-    ctx,
-    view,
-    (project, ctx.t("orchestrator.composer.placeholder")),
-    stop,
-  );
+  let boxed = foot.composer_with(ctx, view, (project, ctx.t("orchestrator.composer.placeholder")), stop);
   // Until it is set up, the chat says under its last turn that it stays readable (`02 Not set up` `Wd5CL`).
-  let readable = foot
-    .not_set_up()
-    .then(|| ctx.t("orchestrator.composer.readable"));
+  let readable = foot.not_set_up().then(|| ctx.t("orchestrator.composer.readable"));
   let below = Column::new()
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(COLUMN_WIDTH))

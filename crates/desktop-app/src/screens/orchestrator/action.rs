@@ -113,11 +113,17 @@ pub(super) fn line(
         [("task", task), ("pipeline", start.pipeline.as_str())],
       ),
     )
-    .chip(Some(Chip::new(ctx.t("orchestrator.wait.status.waits"), ChipTone::Warning))),
+    .chip(Some(Chip::new(
+      ctx.t("orchestrator.wait.status.waits"),
+      ChipTone::Warning,
+    ))),
     // A change waits with its own card (`super::change`); this is a waiting action without it.
     ActionOutcome::Waits => Line::new(id, (Icon::Hourglass, Tone::Warning), ctx.t_args(done, args))
       .target(target)
-      .chip(Some(Chip::new(ctx.t("orchestrator.wait.status.waits"), ChipTone::Warning))),
+      .chip(Some(Chip::new(
+        ctx.t("orchestrator.wait.status.waits"),
+        ChipTone::Warning,
+      ))),
     ActionOutcome::Dismissed => Line::new(
       id,
       (Icon::X, Tone::Muted),

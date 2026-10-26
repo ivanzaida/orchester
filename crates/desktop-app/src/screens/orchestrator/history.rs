@@ -246,7 +246,10 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
     .id(format!("orchestrator-history-{id}"))
     .describe("current", current.to_string())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::TextArea.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Loose.role(),
+      ExtraSpacing::TextArea.role(),
+    ))
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()));
   let row = if current {

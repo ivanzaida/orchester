@@ -131,7 +131,11 @@ fn orchestrator_run_end_lands_in_the_conversation_that_started_the_run() {
   let card = format!("orchestrator-wait-wait-{seq}");
   screen.until("its line", |screen| screen.exists(&card));
   let shown = screen.text(&card);
-  for part in ["Ready to merge".to_owned(), format!("{key} · #1"), "Review ↗".to_owned()] {
+  for part in [
+    "Ready to merge".to_owned(),
+    format!("{key} · #1"),
+    "Review ↗".to_owned(),
+  ] {
     assert!(shown.contains(&part), "{part} in {shown}");
   }
   // What happens with it is said once the line is opened.

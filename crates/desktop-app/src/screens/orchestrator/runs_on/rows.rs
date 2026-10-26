@@ -126,7 +126,11 @@ pub(super) fn groups(
     if !rows.is_empty() {
       // The CLI's maker's mark (`Mark` `PDVXx`, `FW7qZ`).
       let mark = agent_mark(ctx, provider, IconSize::Sm);
-      parts.push(heading(ctx, &format!("orchestrator-runs-on-{}", key_suffix(provider)), (mark, key)));
+      parts.push(heading(
+        ctx,
+        &format!("orchestrator-runs-on-{}", key_suffix(provider)),
+        (mark, key),
+      ));
       parts.extend(rows);
     }
   }
@@ -141,7 +145,10 @@ pub(super) fn groups(
     parts.push(heading(
       ctx,
       "orchestrator-runs-on-providers",
-      (icon(Icon::Cloud, IconSize::Sm, PaletteColor::TextMuted).into(), "orchestrator.runsOn.providers"),
+      (
+        icon(Icon::Cloud, IconSize::Sm, PaletteColor::TextMuted).into(),
+        "orchestrator.runsOn.providers",
+      ),
     ));
     parts.extend(providers);
   }
@@ -182,7 +189,10 @@ fn sign_in_row(
   (chosen, choose): (Option<ConnectionId>, &Arc<dyn Fn(ConnectionId) + Send + Sync>),
 ) -> Element {
   let account = sources.account(&row.runs_on, row.connection.provider);
-  let name: Arc<str> = account.map_or_else(|| row.connection.name.clone(), |account| account_name(ctx, account).into());
+  let name: Arc<str> = account.map_or_else(
+    || row.connection.name.clone(),
+    |account| account_name(ctx, account).into(),
+  );
   let signed_in = account.is_some_and(|account| {
     matches!(
       account.state(Platform::current()),
@@ -223,7 +233,11 @@ fn sign_in_row(
       .find(|window| window.minutes() == FIVE_HOURS && !window.expired(now))
       .and_then(|window| window.percent())
   });
-  let plan = plan_column(ctx, &format!("orchestrator-runs-on-{}", row.connection.id), (used, reached));
+  let plan = plan_column(
+    ctx,
+    &format!("orchestrator-runs-on-{}", row.connection.id),
+    (used, reached),
+  );
   let id = row.connection.id;
   let row = frame(id, (&name, who, reached), Some(plan), Some(chosen == Some(id)));
   let choose = choose.clone();
@@ -246,7 +260,10 @@ fn provider_row(
   let used = sources.uses.iter().find(|used| used.connection == id);
   let who = ctx.t_args(
     "orchestrator.runsOn.providerWho",
-    [("cli", &*cli_name(ctx, row.connection.provider)), ("host", base_url.host())],
+    [
+      ("cli", &*cli_name(ctx, row.connection.provider)),
+      ("host", base_url.host()),
+    ],
   );
   let tokens = used.map_or(0, |used| used.tokens);
   let usage = Column::new()
@@ -287,7 +304,11 @@ fn provider_row(
 /// A plan's 5-hour use: `42% of 5h` over its meter, or *limit reached* in `warning`; `id` names it.
 fn plan_column(ctx: &Ctx, id: &str, (used, reached): (Option<f64>, bool)) -> Element {
   let (words, tone, color) = if reached {
-    (ctx.t("orchestrator.runsOn.limitReached"), MeterTone::Reached, PaletteColor::Warning)
+    (
+      ctx.t("orchestrator.runsOn.limitReached"),
+      MeterTone::Reached,
+      PaletteColor::Warning,
+    )
   } else {
     let percent = used.map(|used| used.round() as u64);
     let words = percent.map_or_else(
@@ -297,7 +318,11 @@ fn plan_column(ctx: &Ctx, id: &str, (used, reached): (Option<f64>, bool)) -> Ele
     (words, MeterTone::Plain, PaletteColor::TextMuted)
   };
   // A share of at most a hundred: whole ones are what the meter shows.
-  let share = if reached { 100 } else { used.map_or(0, |used| used.round() as u64) };
+  let share = if reached {
+    100
+  } else {
+    used.map_or(0, |used| used.round() as u64)
+  };
   // As wide as its words when they are longer, so none is cut.
   Column::new()
     .id(format!("{id}-plan"))
@@ -318,7 +343,12 @@ fn plan_column(ctx: &Ctx, id: &str, (used, reached): (Option<f64>, bool)) -> Ele
 
 /// A row's frame: its name over `who` (in `warning` when `warns`), `aside` at its end and the check when `chosen` says
 /// so; `None` for a row that cannot be chosen.
-fn frame(id: ConnectionId, (name, who, warns): (&str, Arc<str>, bool), aside: Option<Element>, chosen: Option<bool>) -> Row {
+fn frame(
+  id: ConnectionId,
+  (name, who, warns): (&str, Arc<str>, bool),
+  aside: Option<Element>,
+  chosen: Option<bool>,
+) -> Row {
   let who = Text::new(&who)
     .variant(ExtraTypography::Note.role())
     .nowrap()

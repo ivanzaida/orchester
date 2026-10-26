@@ -91,7 +91,13 @@ fn body(text: &str) -> Result<MessageBody, SeedError> {
 }
 
 /// A turn of `chat` the person started with `text` at `at`, answered with `parts`, and ended as `end` a minute later.
-fn turn(kontur: &mut Kontur, chat: &Chat, (text, at): (&str, Timestamp), parts: Vec<Part>, end: &TurnState) -> Result<(), SeedError> {
+fn turn(
+  kontur: &mut Kontur,
+  chat: &Chat,
+  (text, at): (&str, Timestamp),
+  parts: Vec<Part>,
+  end: &TurnState,
+) -> Result<(), SeedError> {
   let message = ChatMessageId::generate();
   let said = body(text)?;
   kontur.db.keep_chat_message(chat, (message, &said), at)?;
@@ -163,7 +169,12 @@ fn keep_wait(kontur: &mut Kontur, chat: &Chat, wait: &AgentWait, at: Timestamp) 
 }
 
 /// The turn wait `seq` of `chat` started by itself at `at`, answered with `parts`.
-fn wait_turn(kontur: &mut Kontur, (chat, seq): (ChatId, i64), at: Timestamp, parts: Vec<Part>) -> Result<(), SeedError> {
+fn wait_turn(
+  kontur: &mut Kontur,
+  (chat, seq): (ChatId, i64),
+  at: Timestamp,
+  parts: Vec<Part>,
+) -> Result<(), SeedError> {
   let message = ChatMessageId::generate();
   kontur.db.start_wait_turn((chat, seq), message)?;
   answer(kontur, chat, at, parts)?;
@@ -198,9 +209,21 @@ fn away(kontur: &mut Kontur) -> Result<(), SeedError> {
   let start = kontur.ago(40);
   let chat = Chat::named(ChatId::generate(), "Plan the webhook retry work", start);
   for (index, (kind, task, agent)) in [
-    (WaitKind::Question, ("KON-12", "Add retry to webhook sender", 3), Some("Builder")),
-    (WaitKind::Plan, ("KON-16", "Delivery log on endpoint page", 2), Some("Planner")),
-    (WaitKind::Message, ("KON-13", "Batch webhook deliveries", 2), Some("Reviewer")),
+    (
+      WaitKind::Question,
+      ("KON-12", "Add retry to webhook sender", 3),
+      Some("Builder"),
+    ),
+    (
+      WaitKind::Plan,
+      ("KON-16", "Delivery log on endpoint page", 2),
+      Some("Planner"),
+    ),
+    (
+      WaitKind::Message,
+      ("KON-13", "Batch webhook deliveries", 2),
+      Some("Reviewer"),
+    ),
   ]
   .into_iter()
   .enumerate()
@@ -211,14 +234,25 @@ fn away(kontur: &mut Kontur) -> Result<(), SeedError> {
   turn(
     kontur,
     &chat,
-    ("Split the retry work into tasks we can review, and start what can run.", kontur.ago(12)),
+    (
+      "Split the retry work into tasks we can review, and start what can run.",
+      kontur.ago(12),
+    ),
     vec![
       Part::Reply(
         "I split the retry work into two tasks and started the one whose pipeline is ready. **KON-19** can't start yet: \
          it waits for KON-18 to merge.",
       ),
-      act(ChatAction::new("create_task", Some("KON-21".to_owned()), ActionOutcome::Done)),
-      act(ChatAction::new("create_task", Some("KON-22".to_owned()), ActionOutcome::Done)),
+      act(ChatAction::new(
+        "create_task",
+        Some("KON-21".to_owned()),
+        ActionOutcome::Done,
+      )),
+      act(ChatAction::new(
+        "create_task",
+        Some("KON-22".to_owned()),
+        ActionOutcome::Done,
+      )),
       act(refused_start()),
       act(change(
         "answer_agent",
@@ -241,7 +275,11 @@ fn every_card(kontur: &mut Kontur) -> Result<(), SeedError> {
     ("Draft the delivery log tasks and start KON-19.", start),
     vec![
       Part::Reply("I drafted the delivery log tasks. KON-19 can't start yet."),
-      act(ChatAction::new("create_task", Some("KON-16".to_owned()), ActionOutcome::Done)),
+      act(ChatAction::new(
+        "create_task",
+        Some("KON-16".to_owned()),
+        ActionOutcome::Done,
+      )),
       act(refused_start()),
     ],
     &TurnState::Answered,
@@ -254,7 +292,9 @@ fn every_card(kontur: &mut Kontur) -> Result<(), SeedError> {
     kontur,
     &chat,
     ("Plan the release notes.", later(at, 14 * 60)),
-    vec![Part::Reply("I'm reading the merged tasks of the week. So far: KON-4, KON-11")],
+    vec![Part::Reply(
+      "I'm reading the merged tasks of the week. So far: KON-4, KON-11",
+    )],
     &TurnState::Stopped,
   )?;
   turn(
@@ -283,13 +323,23 @@ fn waits(kontur: &mut Kontur, chat: &Chat, at: Timestamp) -> Result<(), SeedErro
   keep_wait(
     kontur,
     chat,
-    &wait(WaitKind::Ended(RunEnd::Succeeded), ("KON-4", "Show the signed-in account", 1), None, false),
+    &wait(
+      WaitKind::Ended(RunEnd::Succeeded),
+      ("KON-4", "Show the signed-in account", 1),
+      None,
+      false,
+    ),
     at,
   )?;
   let answered = keep_wait(
     kontur,
     chat,
-    &wait(WaitKind::Question, ("KON-12", "Add retry to webhook sender", 2), Some("Builder"), true),
+    &wait(
+      WaitKind::Question,
+      ("KON-12", "Add retry to webhook sender", 2),
+      Some("Builder"),
+      true,
+    ),
     later(at, 60),
   )?;
   wait_turn(
@@ -309,7 +359,12 @@ fn waits(kontur: &mut Kontur, chat: &Chat, at: Timestamp) -> Result<(), SeedErro
   let plan = keep_wait(
     kontur,
     chat,
-    &wait(WaitKind::Plan, ("KON-16", "Delivery log on endpoint page", 1), Some("Planner"), true),
+    &wait(
+      WaitKind::Plan,
+      ("KON-16", "Delivery log on endpoint page", 1),
+      Some("Planner"),
+      true,
+    ),
     later(at, 120),
   )?;
   wait_turn(

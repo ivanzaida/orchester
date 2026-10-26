@@ -122,6 +122,9 @@ fn orchestrator_publishes_a_skill_itself_once_the_person_lets_it() {
         .text(&format!("{card}-title"))
         .contains("Published Release notes v1")
   });
-  assert!(!screen.exists(&format!("{card}-target")), "done by the Orchestrator, not by the person");
+  assert!(
+    !screen.exists(&format!("{card}-target")),
+    "done by the Orchestrator, not by the person"
+  );
   assert!(!screen.exists(&format!("{card}-start")), "nothing is left to decide");
 }

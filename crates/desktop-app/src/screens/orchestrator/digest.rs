@@ -83,11 +83,7 @@ impl Component for Digest {
     let open = self.open.get();
     let head = head(ctx, &props, &self.open);
     let items: Vec<Element> = if open {
-      props
-        .waits
-        .iter()
-        .map(|waited| item(ctx, &props, waited))
-        .collect()
+      props.waits.iter().map(|waited| item(ctx, &props, waited)).collect()
     } else {
       Vec::new()
     };

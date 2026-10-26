@@ -60,7 +60,11 @@ pub(super) fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
     }
     TurnState::Failed(TurnFailure::Interrupted) => {
       let again = ask_again(ctx, row);
-      vec![divider("orchestrator-interrupted", &ctx.t("orchestrator.interrupted"), again)]
+      vec![divider(
+        "orchestrator-interrupted",
+        &ctx.t("orchestrator.interrupted"),
+        again,
+      )]
     }
     TurnState::Failed(failure) if row.last && !row.turn.on_its_own() => vec![failure_line(ctx, row, failure)],
     TurnState::Failed(failure) => vec![divider("orchestrator-failed", &earlier(ctx, failure), None)],

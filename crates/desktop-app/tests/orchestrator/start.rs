@@ -17,7 +17,10 @@ fn orchestrator_new_conversation_starts_with_suggestions_that_fill_the_prompt() 
     runs_on.starts_with("Claude Code · ") && runs_on.ends_with(" · haiku"),
     "{runs_on}"
   );
-  assert!(screen.text("orchestrator-keys").ends_with(" Enter"), "the keys that send, in the bar");
+  assert!(
+    screen.text("orchestrator-keys").ends_with(" Enter"),
+    "the keys that send, in the bar"
+  );
   assert!(
     !screen.exists("orchestrator-footer") && !screen.exists("orchestrator-under-composer"),
     "no keys line and no footer under the composer"
@@ -71,10 +74,7 @@ fn orchestrator_without_a_connection_says_so_in_the_composer() {
     "Plan the webhook work.",
     "the draft stays"
   );
-  assert_eq!(
-    screen.text("orchestrator-open-settings"),
-    "Set up the Orchestrator"
-  );
+  assert_eq!(screen.text("orchestrator-open-settings"), "Set up the Orchestrator");
   screen.click("orchestrator-open-settings");
   screen.until("its settings", |screen| screen.exists("orchestrator-settings-form"));
 }

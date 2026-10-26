@@ -88,13 +88,17 @@ impl Pending {
   }
 
   fn show(&self, settings: Option<&OrchestratorSettings>) {
-    let connection = settings.map(|settings| settings.connection().to_string()).unwrap_or_default();
+    let connection = settings
+      .map(|settings| settings.connection().to_string())
+      .unwrap_or_default();
     if self.connection.get_untracked() != connection {
       self.connection.set(connection);
     }
-    self
-      .model
-      .set(settings.map(|settings| settings.model().as_str().to_owned()).unwrap_or_default());
+    self.model.set(
+      settings
+        .map(|settings| settings.model().as_str().to_owned())
+        .unwrap_or_default(),
+    );
     self.effort.set(
       settings
         .and_then(OrchestratorSettings::effort)
@@ -165,7 +169,10 @@ impl Pending {
       (&self.model, &self.model_open),
       (models, ExtraTypography::PropertyMono.role()),
     );
-    let efforts = current.as_ref().map(|model| setup.efforts(connection, model)).unwrap_or_default();
+    let efforts = current
+      .as_ref()
+      .map(|model| setup.efforts(connection, model))
+      .unwrap_or_default();
     let efforts = if efforts.is_empty() {
       setup.any_efforts(connection)
     } else {

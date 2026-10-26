@@ -110,7 +110,10 @@ fn orchestrator_resolve_card_note_reads_as_one_paragraph() {
   });
   // Run, Choice, Conflicting files, then the Note behind *Show details*.
   let note = format!("{card}-fact-3");
-  assert!(!screen.exists(&note), "three facts show, the rest wait behind Show details");
+  assert!(
+    !screen.exists(&note),
+    "three facts show, the rest wait behind Show details"
+  );
   screen.click(&format!("{card}-details"));
   screen.until("the resolution's note", |screen| screen.exists(&note));
 

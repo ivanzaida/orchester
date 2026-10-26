@@ -61,7 +61,10 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
   let flush = |shown: &mut Vec<Element>, lines: &mut Vec<Element>, index: usize| match lines.len() {
     0 => {}
     1 => shown.append(lines),
-    _ => shown.push(list(&format!("orchestrator-actions-{key}-{index}"), std::mem::take(lines))),
+    _ => shown.push(list(
+      &format!("orchestrator-actions-{key}-{index}"),
+      std::mem::take(lines),
+    )),
   };
   let answer = &row.turn.answer;
   let line_at = |index: usize| {
