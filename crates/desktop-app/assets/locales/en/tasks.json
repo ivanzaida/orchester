@@ -1,39 +1,60 @@
 {
   "tasks": {
     "title": "Tasks",
-    "description": "Workflow status describes your work. Run labels describe the agent.",
     "newTask": "New task",
     "createMultiple": "Create multiple",
+    "createMultipleReason": "Creating several tasks at once is planned.",
+    "more": "More actions",
     "queue": {
       "hold": "Hold new starts",
-      "held": "New starts held",
+      "releaseAll": "Release new starts",
+      "onHold": "New starts on hold",
       "release": "Release",
+      "changing": "Changing new starts…",
       "groupHeld": "New starts held · {{tasks}}",
       "groupMore": "{{first}} and {{more}} more",
       "failed": "Not changed: {{reason}}"
     },
-    "createMultipleReason": "Creating several tasks at once is planned.",
-    "tabs": {
-      "all": "All",
-      "needsYou": "Needs you",
+    "views": {
+      "active": "Active",
       "backlog": "Backlog",
-      "todo": "Todo",
-      "inProgress": "In progress",
-      "inReview": "In review",
       "done": "Done",
+      "all": "All",
       "unknownCount": "—"
     },
-    "query": {
-      "search": "Search",
-      "searchPlaceholder": "Search title, key or brief",
-      "clearSearch": "Clear search",
+    "groups": {
+      "needsYou": "Needs you",
+      "running": "Running",
+      "queued": "Queued",
+      "ready": "Ready to start",
+      "stopped": "Stopped",
+      "finished": "Finished",
+      "toggle": "Show or hide {{group}}"
+    },
+    "search": {
+      "label": "Search",
+      "placeholder": "Search tasks",
+      "clear": "Clear search",
+      "keys": "/"
+    },
+    "filter": {
+      "button": "Filter",
+      "applied": "Filter · {{count}}",
+      "search": "Filter by…",
       "pipeline": "Pipeline",
-      "allPipelines": "All pipelines",
+      "noPipeline": "No pipeline",
+      "priority": "Priority",
       "module": "Module",
-      "allModules": "All modules",
       "noModule": "No module",
+      "tag": "Tag",
+      "noMatch": "No filter matches “{{query}}”",
+      "remove": "Remove {{facet}} {{value}}",
+      "clear": "Clear"
+    },
+    "display": {
+      "button": "Display",
       "sort": "Sort",
-      "sortNote": "Sorting never changes the run queue."
+      "note": "Sorting never changes the run queue."
     },
     "sort": {
       "manual": "Manual order",
@@ -42,13 +63,31 @@
       "status": "Workflow status",
       "priority": "Priority"
     },
-    "columns": {
-      "key": "ID",
-      "task": "TASK / TAGS",
-      "pipeline": "PIPELINE",
-      "priority": "PRIORITY",
-      "workflow": "WORKFLOW / RUN",
-      "readiness": "DEPENDENCY / READINESS"
+    "state": {
+      "approveCommand": "Approve {{command}}",
+      "approveTool": "Approve {{tool}}",
+      "answer": "Answer a question",
+      "answerMany": "Answer {{count}} questions",
+      "reviewPlan": "Review plan v{{version}}",
+      "afterRetries": "Stopped after retries",
+      "input": "Waiting for you",
+      "limit": "Stopped at its limit",
+      "tokenLimit": "Stopped at its token limit",
+      "dailyBudget": "Stopped at the daily budget",
+      "interrupted": "Interrupted",
+      "readyToMerge": "Ready to merge",
+      "readyToComplete": "Ready to complete",
+      "committedNothing": "Committed nothing",
+      "conflicts": "Merge conflicts",
+      "deliveryStopped": "Delivery stopped",
+      "failedAt": "Failed at {{number}} {{step}}",
+      "unreadable": "Latest run unreadable"
+    },
+    "age": {
+      "now": "now",
+      "minutes": "{{count}}m",
+      "hours": "{{count}}h",
+      "days": "{{count}}d"
     },
     "pipelineVersion": "{{name}} v{{version}}",
     "runStep": "{{number}} {{step}}",
@@ -59,7 +98,6 @@
     },
     "listSeparator": ", ",
     "newBadge": "New",
-    "blocked": "Blocked",
     "loading": "Reading {{project}}'s tasks…",
     "loadError": {
       "title": "Tasks cannot be read",
@@ -67,22 +105,23 @@
     },
     "empty": {
       "title": "No tasks yet",
-      "detail": "Describe what agents should build as a task. Drafts can be saved before every detail is known."
+      "detail": "A task is a piece of work a pipeline carries from brief to merge, in its own worktree.",
+      "import": "Import resources"
     },
     "noMatches": {
-      "title": "No tasks in this tab match the search or pipeline filter.",
-      "inTab": {
-        "one": "{{tab}} has {{count}} task. Search looks at titles, keys and briefs.",
-        "other": "{{tab}} has {{count}} tasks. Search looks at titles, keys and briefs."
+      "title": "No tasks in this view match the search or filters.",
+      "inView": {
+        "one": "{{view}} has {{count}} task. Search looks at titles, keys and briefs.",
+        "other": "{{view}} has {{count}} tasks. Search looks at titles, keys and briefs."
       },
-      "clear": "Clear search and filter"
+      "clear": "Clear search and filters"
     },
-    "emptyTab": {
-      "title": "No tasks in this tab.",
-      "detail": "A task shows here once its workflow status is {{tab}}."
-    },
-    "emptyNeedsYou": {
-      "detail": "A task shows here while its run waits for an answer, an approval or a decision."
+    "emptyView": {
+      "title": "No tasks in this view.",
+      "active": "A task shows here once it is Todo, In progress or In review, or waits for you.",
+      "backlog": "A task shows here while its workflow status is Backlog.",
+      "done": "A task shows here once it is Done or Canceled.",
+      "all": "A task shows here once it is created."
     },
     "outsideTasks": {
       "body": "This list shows tasks only. The Needs you panel lists everything that waits for you.",
@@ -123,15 +162,6 @@
       },
       "body": "{{keys}} weren't ticked on {{day}}. They keep their key, runs, conversations and memory here, read-only and out of the shared list. Share task on a task's page uploads it to {{server}} with the next {{key}} number.",
       "and": " and ",
-      "footer": {
-        "one": "1 Not shared task · on this computer only",
-        "other": "{{count}} Not shared tasks · on this computer only"
-      },
-      "footerOf": "{{count}} of {{total}} Not shared tasks",
-      "foundByFormer": {
-        "one": "{{count}} task · found by its key before joining",
-        "other": "{{count}} tasks · found by their keys before joining"
-      },
       "noShared": "No shared task has {{search}}",
       "foundOne": "{{key}} {{title}} stayed on this computer as Not shared.",
       "foundMany": "{{count}} tasks that match stayed on this computer as Not shared.",

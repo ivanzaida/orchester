@@ -8,7 +8,7 @@
 
 use lurq::app::events::with_synthetic_input;
 use orchester_api::SharedProject;
-use orchester_app::routes::{ProjectPage, Route, TaskList, TaskTab, TaskView};
+use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
 use orchester_core::{
   resource::ResourceKind,
   store::{ResourceStore, TaskStore},
@@ -210,25 +210,27 @@ fn shared_project_a_not_shared_task_is_shared_later_from_its_page() {
 
   // The list: the Not shared filter, former keys and the search by them.
   let project = crate::support::project_id();
+  let all = || TaskList::new(TaskListTab::All);
   harness::go(
     &mut window,
-    Route::Project(project, ProjectPage::Tasks(TaskList::default())),
+    Route::Project(project, ProjectPage::Tasks(all())),
     "tasks-not-shared",
   );
   assert_eq!(window.text("tasks-not-shared"), "Not shared · 1");
   assert_eq!(window.text("task-former-key-KTR-3"), "was KON-2");
   harness::go(
     &mut window,
-    Route::Project(project, ProjectPage::Tasks(TaskList::default().with_search("KON-2"))),
+    Route::Project(project, ProjectPage::Tasks(all().with_search("KON-2"))),
     "task-row-KTR-3",
   );
   assert_eq!(
-    window.text("tasks-footer-text"),
-    "1 task · found by its key before joining"
+    window.text("task-former-key-KTR-3"),
+    "was KON-2",
+    "found by its key before joining, which its row says"
   );
   harness::go(
     &mut window,
-    Route::Project(project, ProjectPage::Tasks(TaskList::default().with_search("KON-1"))),
+    Route::Project(project, ProjectPage::Tasks(all().with_search("KON-1"))),
     "tasks-only-not-shared",
   );
   press(&mut window, "tasks-show-not-shared");

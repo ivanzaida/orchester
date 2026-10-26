@@ -4,15 +4,19 @@
 use std::path::PathBuf;
 
 use lurq::{app::events::MouseButton, core::ElementRect, node::element::ElementRef};
-use orchester_app::routes::{ProjectPage, Route, TaskList};
+use orchester_app::{
+  project::TasksState,
+  routes::{ProjectPage, Route, TaskList},
+};
 use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_workspace::tasks::data::ProjectTasks;
 
 use crate::{
   kontur::{self, SeedRequest, scenarios},
   support::{Data, Window},
 };
 
-/// Room for the header, the query and all 24 rows with the count under them.
+/// Room for the header, the views and all 24 rows of All with its six groups' headers.
 const TALL: (u32, u32) = (1440, 1700);
 
 pub struct Seeded {
@@ -55,19 +59,66 @@ impl Seeded {
     Self::tasks_in(scenario, list, TALL.1)
   }
 
-  /// [`Seeded::tasks`] in a window `height` high, the design's 900 showing 13 rows. The list may lay its rows out
-  /// over more than one pass: it waits until every row it holds is laid out.
+  /// [`Seeded::tasks`] in a window `height` high, the design's 900. The list may lay its rows out over more than one
+  /// pass: it waits until every row it holds is laid out.
   pub fn tasks_in(scenario: &str, list: TaskList, height: u32) -> Self {
     let mut seeded = Self::new(scenario);
     seeded.window.tree.resize(TALL.0, height);
     seeded.go(list);
     seeded.window.until("the tasks", |window| {
       window
-        .texts("tasks-tab-all-label")
-        .is_some_and(|label| !label.concat().ends_with('—'))
+        .texts("tasks-view-all-count")
+        .is_some_and(|count| count.concat() != "—")
     });
     seeded.until("the rows laid out", Self::rows_laid_out);
     seeded
+  }
+
+  /// The view `view`'s label and count, as `Active 18`.
+  pub fn view(&mut self, view: &str) -> String {
+    self.text(&format!("tasks-view-{view}"))
+  }
+
+  /// The keys of the rows under each group's header, top to bottom, by the group's name (`needs_you`, `running`…).
+  pub fn groups(&mut self) -> Vec<(String, Vec<String>)> {
+    let mut ids = Vec::new();
+    if let Some(root) = self.window.tree.root() {
+      collect_ids(root, "tasks-group-", &mut ids);
+      collect_ids(root, "task-key-", &mut ids);
+    }
+    let mut placed: Vec<(f32, String)> = ids
+      .into_iter()
+      .filter(|id| id.starts_with("task-key-") || !id.trim_start_matches("tasks-group-").contains('-'))
+      .filter_map(|id| Some((self.window.tree.get_element_by_id_mut(&id)?.bounds()?.y, id)))
+      .collect();
+    placed.sort_by(|left, right| left.0.total_cmp(&right.0));
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    for (_, id) in placed {
+      if let Some(group) = id.strip_prefix("tasks-group-") {
+        groups.push((group.to_owned(), Vec::new()));
+      } else if let Some(last) = groups.last_mut() {
+        last.1.push(id.trim_start_matches("task-key-").to_owned());
+      }
+    }
+    groups
+  }
+
+  /// The pointer moves onto the middle of `id`.
+  pub fn hover(&mut self, id: &str) {
+    let bounds = self.bounds(id);
+    self
+      .window
+      .tree
+      .mouse_move(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    self.window.pass();
+  }
+
+  /// The project's tasks as the list shows them: no runner serves the seeded project, so as they stand without one.
+  pub fn shown_tasks(&self) -> ProjectTasks {
+    match self.window.projects().feed(self.project).tasks.get() {
+      TasksState::Ready(tasks) => tasks.without_runner(),
+      TasksState::Loading | TasksState::Failed(_) => panic!("the tasks are read"),
+    }
   }
 
   /// Whether every row the list holds is laid out.
@@ -162,20 +213,20 @@ impl Seeded {
       .unwrap_or_else(|| panic!("{id} is laid out"))
   }
 
-  /// Whether the row of `key` is laid out whole inside the table's room under its header.
+  /// Whether the row of `key` is laid out whole inside the list's room.
   pub fn in_view(&mut self, key: &str) -> bool {
     let id = format!("task-row-{key}");
     let Some(row) = self.window.tree.get_element_by_id_mut(&id).and_then(|row| row.bounds()) else {
       return false;
     };
-    let (table, header) = (self.bounds("tasks-table"), self.bounds("tasks-table-header"));
-    row.y >= header.y + header.height - 0.5 && row.y + row.height <= table.y + table.height + 0.5
+    let list = self.bounds("tasks-list");
+    row.y >= list.y - 0.5 && row.y + row.height <= list.y + list.height + 0.5
   }
 
   /// Scrolls the rows far down with the wheel.
   pub fn scroll_down(&mut self) {
-    let table = self.bounds("tasks-table");
-    let (x, y) = (table.x + table.width / 2.0, table.y + table.height / 2.0);
+    let list = self.bounds("tasks-list");
+    let (x, y) = (list.x + list.width / 2.0, list.y + list.height / 2.0);
     self
       .window
       .tree

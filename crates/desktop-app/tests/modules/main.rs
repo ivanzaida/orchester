@@ -16,7 +16,7 @@ mod kontur;
 mod support;
 
 use harness::{Seeded, details, module_with};
-use orchester_app::routes::{ProjectPage, Route, TaskList, TaskView};
+use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab, TaskView};
 use orchester_core::{
   module::{ModuleDetails, ModuleState},
   name::Name,
@@ -195,20 +195,25 @@ fn modules_tasks_filter_keeps_the_tasks_of_a_module_or_of_none() {
   });
   let mut inside = picked.expect("the module's tasks");
   inside.sort();
-  seeded.open(ProjectPage::Tasks(TaskList::default()), "tasks-module-filter");
-  seeded.until("the tasks", |seeded| rows_of_tasks(seeded).len() == 24);
+  seeded.open(ProjectPage::Tasks(TaskList::new(TaskListTab::All)), "tasks-filter");
+  let all = |count: usize| move |seeded: &mut Seeded| seeded.text("tasks-view-all") == format!("All {count}");
+  seeded.until("the tasks", all(24));
+  seeded.click("tasks-filter");
+  seeded.until("the filter menu", |seeded| seeded.shows("tasks-filter-module"));
   assert_eq!(
-    seeded.options("tasks-module-filter"),
-    ["All modules", "No module", "Checkout"]
+    [0, 1].map(|index| seeded.text(&format!("tasks-filter-module-{index}"))),
+    ["Checkout", "No module"],
+    "the Filter offers the project's modules and none"
   );
-  seeded.choose("tasks-module-filter", "Checkout");
+  seeded.click("tasks-filter-module-0");
+  seeded.until("the module's tasks", all(inside.len()));
   assert_eq!(rows_of_tasks(&mut seeded), inside);
-  seeded.choose("tasks-module-filter", "No module");
-  let outside = rows_of_tasks(&mut seeded);
-  assert_eq!(outside.len(), 22);
-  assert!(outside.iter().all(|key| !inside.contains(key)));
-  seeded.choose("tasks-module-filter", "All modules");
-  assert_eq!(rows_of_tasks(&mut seeded).len(), 24);
+  seeded.click("tasks-filter-module-0");
+  seeded.click("tasks-filter-module-1");
+  seeded.until("the tasks in no module", all(22));
+  assert!(rows_of_tasks(&mut seeded).iter().all(|key| !inside.contains(key)));
+  seeded.click("tasks-filter-module-1");
+  seeded.until("every task again", all(24));
 }
 
 /// The keys of the Tasks list's rows, sorted.

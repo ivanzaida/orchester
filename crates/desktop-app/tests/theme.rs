@@ -185,6 +185,37 @@ fn agents_page_spacing_matches_the_design() {
 }
 
 #[test]
+fn tasks_spacing_matches_the_redesign() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  for (role, value, why) in [
+    (
+      theme::TasksSpacing::Page,
+      40.0,
+      "the Modules pages keep 40 at each side (fW8Mg)",
+    ),
+    (
+      theme::TasksSpacing::Sides,
+      28.0,
+      "the Tasks list keeps 28 at each side (klsF6)",
+    ),
+    (theme::TasksSpacing::Stack, 14.0, "its parts are 14 apart (klsF6)"),
+    (
+      theme::TasksSpacing::GroupTop,
+      10.0,
+      "a group's header is 10 over its line (Sv7dZ)",
+    ),
+    (
+      theme::TasksSpacing::EmptyLift,
+      80.0,
+      "the empty project's words sit 80 over the middle (GQZ6J)",
+    ),
+  ] {
+    assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{why}");
+  }
+}
+
+#[test]
 fn spacing_radii_and_borders_follow_the_design() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
