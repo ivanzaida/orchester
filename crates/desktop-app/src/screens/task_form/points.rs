@@ -1,29 +1,29 @@
-//! The Story points section (ORC-49; no design frame yet, built like the Limits section `WpoKn` with the pipeline
-//! select `ZIliW`): *Automatic*, Orchester's estimate, or a person's 1, 2, 3, 5, 8, 13 or 21, which automation never
-//! changes. Under it, while the task has Orchester's estimate, its points and why.
+//! The Points chip (ORC-49; `Points` `qbkXj`): *Automatic*, Orchester's estimate, or a person's 1, 2, 3, 5, 8, 13 or
+//! 21, which automation never changes, chosen in a menu with a check on the chosen one. Under the choices, while the
+//! task has Orchester's estimate, its points and why. Automatic is the empty chip (*Points · Auto*); a person's points
+//! read as a set chip.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
-  components::{Column, SelectOption, Text},
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Column, Text},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::task::estimate::{EstimateSource, StoryEstimate, StoryPoints};
 
-use super::state::View;
+use super::{
+  chips::{ChipState, Look, PropertyChip},
+  state::View,
+};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography},
-  ui::{
-    field::{FieldInput, SelectField},
-    form_section::{Label, Place, section, side_row},
-    icon::Icon,
-  },
+  ui::{filter::filter_menu_panel, icon::Icon, menu::MenuItem},
 };
 
-/// The select's width, as the pipeline select's (`Control` `ZIliW`).
-const SELECT_WIDTH: f32 = 240.0;
+/// The menu's width.
+const MENU_WIDTH: f32 = 260.0;
 
 /// The person's story points; `None`: Automatic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,54 +40,60 @@ pub fn points_text(ctx: &Ctx, points: StoryPoints) -> Arc<str> {
   }
 }
 
-pub fn points_section(ctx: &mut Ctx, view: &View, pick: &Signal<Points>) -> Element {
-  let label = Label::new("task-form-points", ctx.t("task_form.fields.points.label"))
-    .description(ctx.t("task_form.fields.points.description"));
-  let name = ctx.t("task_form.fields.points.label");
-  let shown = |ctx: &Ctx, points: Points| match points.0 {
-    Some(points) => points_text(ctx, points),
-    None => ctx.t("task_form.fields.points.automatic"),
+pub fn points_chip(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<Points>) -> Element {
+  let (look, value) = match view.values.points {
+    Some(points) => (Look::Set, points_text(ctx, points)),
+    None => (Look::Empty, ctx.t("task_form.fields.points.auto")),
   };
-  let control = if view.locked() {
-    FieldInput::new(
-      "task-form-points-input",
-      name,
-      Signal::new(shown(ctx, Points(view.values.points)).to_string()),
-    )
-    .locked()
-    .trailing(Icon::Lock)
-    .render(ctx)
-  } else {
-    let options = std::iter::once(Points(None))
-      .chain(StoryPoints::all().map(|points| Points(Some(points))))
-      .map(|points| SelectOption::new(points, shown(ctx, points)))
-      .collect();
-    SelectField::new("task-form-points-input", name, pick.clone(), options)
-      .width(Dimension::Px(SELECT_WIDTH))
-      .render(ctx)
-  };
+  let panel = state.is_open().then(|| menu(ctx, view, state, pick));
+  PropertyChip::new(
+    "task-form-points",
+    Icon::Hash,
+    (ctx.t("task_form.fields.points.label"), value),
+    look,
+  )
+  .locked(view.locked())
+  .render(state, panel)
+}
+
+fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<Points>) -> Element {
+  let chosen = view.values.points;
+  let rows: Vec<Element> = std::iter::once(None)
+    .chain(StoryPoints::all().map(Some))
+    .map(|points| {
+      let label = points.map_or_else(
+        || ctx.t("task_form.fields.points.automatic"),
+        |points| points_text(ctx, points),
+      );
+      let id = points.map_or_else(|| "auto".to_owned(), |points| points.get().to_string());
+      let pick = pick.clone();
+      let item = MenuItem::new(format!("task-form-points-{id}"), label, move || {
+        pick.set(Points(points))
+      })
+      .in_form()
+      .chosen(points == chosen);
+      let item = if points.is_none() {
+        item.detail(ctx.t("task_form.fields.points.automaticDetail"))
+      } else {
+        item
+      };
+      item.render(ctx, &state.open)
+    })
+    .collect();
   let estimate = view
     .subject
     .task()
     .and_then(|task| task.estimate())
-    .filter(|estimate| estimate.source() == EstimateSource::Automation && view.values.points.is_none())
+    .filter(|estimate| estimate.source() == EstimateSource::Automation && chosen.is_none())
     .map(|estimate| estimated(ctx, estimate));
-  let control = Column::new()
-    .width(Dimension::Px(SELECT_WIDTH))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(control)
-    .with_children(estimate);
-  section(
-    "task-form-points-section",
-    &ctx.t("task_form.sections.points"),
-    None,
-    vec![side_row(label, Element::from(control), Place::Last, false)],
-  )
-  .into()
+  filter_menu_panel("task-form-points-menu", MENU_WIDTH)
+    .with_children(rows)
+    .with_children(estimate)
+    .into()
 }
 
-/// Orchester's estimate and its reason, under the select.
-fn estimated(ctx: &Ctx, estimate: &StoryEstimate) -> Text {
+/// Orchester's estimate and its reason, under the choices.
+fn estimated(ctx: &Ctx, estimate: &StoryEstimate) -> Column {
   let points = points_text(ctx, estimate.points()).to_string();
   let words = match estimate.reason() {
     Some(reason) => ctx.t_args(
@@ -96,8 +102,13 @@ fn estimated(ctx: &Ctx, estimate: &StoryEstimate) -> Text {
     ),
     None => ctx.t_args("task_form.fields.points.estimated", [("points", points.as_str())]),
   };
-  Text::new(&words)
-    .id("task-form-points-estimate")
-    .variant(ExtraTypography::Note.role())
+  Column::new()
     .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
+    .child(
+      Text::new(&words)
+        .id("task-form-points-estimate")
+        .variant(ExtraTypography::Note.role())
+        .width(Dimension::Pct(100.0)),
+    )
 }

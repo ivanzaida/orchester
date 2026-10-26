@@ -4,10 +4,11 @@
 
 use orchester_core::{
   id::ResourceId,
+  resource::Deliverable,
   task::{
     Task, TaskDetails,
     estimate::{EstimateSource, StoryPoints},
-    organization::TaskOrganization,
+    organization::{Priority, TaskOrganization},
   },
   tokens::grouped,
 };
@@ -28,13 +29,17 @@ pub struct Values {
   pub points: Option<StoryPoints>,
   /// *Don't merge automatically* (ORC-69), a part of the task's organization.
   pub no_automatic_merge: bool,
+  /// The task's priority, a part of its organization; no priority by default.
+  pub priority: Priority,
+  /// What the task's runs deliver (ORC-93), a part of its organization; `None`: as its pipeline says.
+  pub delivers: Option<Deliverable>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Values {}
 
 impl Values {
-  /// The fields of stored details, its budget grouped with `separator`, without points of a person and with *Don't
-  /// merge automatically* off.
+  /// The fields of stored details, its budget grouped with `separator`, without points of a person, with *Don't merge
+  /// automatically* off, no priority and what the pipeline delivers.
   pub fn of_details(details: &TaskDetails, separator: &str) -> Self {
     Self {
       title: details.title.as_str().to_owned(),
@@ -47,30 +52,47 @@ impl Values {
         .map(|budget| grouped(budget.get(), separator))
         .unwrap_or_default(),
       time_limit: minutes_text(details.limits.max_duration()),
-      points: None,
-      no_automatic_merge: false,
+      ..Self::default()
     }
   }
 
-  /// The fields of a stored task, with the story points a person set, if any, and its *Don't merge automatically*.
+  /// The fields of a stored task, with the story points a person set, if any, and its organization's *Don't merge
+  /// automatically*, priority and what its runs deliver.
   pub fn of_task(task: &Task, separator: &str) -> Self {
+    let organization = task.organization();
     Self {
       points: person_points(task),
-      no_automatic_merge: task.organization().no_automatic_merge(),
+      no_automatic_merge: organization.no_automatic_merge(),
+      priority: organization.priority(),
+      delivers: organization.delivers(),
       ..Self::of_details(task.details(), separator)
     }
   }
 
   /// The organization a save stores, given the one the edits were made on (`base`, as these values were filled from
-  /// `base_values`) and the one stored now (`current`): *Don't merge automatically* as the person set it, or as it is
-  /// stored now when they left it as it was.
+  /// `base_values`) and the one stored now (`current`): *Don't merge automatically*, the priority and what the runs
+  /// deliver as the person set them, or as they are stored now where the person left them as they were.
   pub fn organization(&self, base_values: &Self, current: &TaskOrganization) -> TaskOrganization {
     let flag = if self.no_automatic_merge == base_values.no_automatic_merge {
       current.no_automatic_merge()
     } else {
       self.no_automatic_merge
     };
-    current.clone().with_no_automatic_merge(flag)
+    let priority = if self.priority == base_values.priority {
+      current.priority()
+    } else {
+      self.priority
+    };
+    let delivers = if self.delivers == base_values.delivers {
+      current.delivers()
+    } else {
+      self.delivers
+    };
+    current
+      .clone()
+      .with_no_automatic_merge(flag)
+      .with_priority(priority)
+      .with_delivers(delivers)
   }
 
   /// The values as the workspace checks them. Limits are optional and have no maximum (the person's
@@ -106,6 +128,8 @@ impl Values {
       time_limit: self.time_limit.trim().to_owned(),
       points: self.points,
       no_automatic_merge: self.no_automatic_merge,
+      priority: self.priority,
+      delivers: self.delivers,
     }
   }
 
