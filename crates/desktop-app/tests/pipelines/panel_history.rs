@@ -87,7 +87,11 @@ fn pipelines_a_steps_pages_are_places_of_their_own() {
     other => panic!("the added step is chosen: {other:?}"),
   };
   editor.click("step-open-permissions");
-  at(&editor, id, PipelineView::StepPage(added.clone(), StepPage::Permissions));
+  at(
+    &editor,
+    id,
+    PipelineView::StepPage(added.clone(), StepPage::Permissions),
+  );
   assert!(editor.text("step-page-back").contains("01 New step"));
   assert!(editor.exists("step-ask-tools"));
   editor.click("step-page-back");

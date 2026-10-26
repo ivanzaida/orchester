@@ -75,7 +75,11 @@ fn pipelines_empty_library_entries_select_the_requested_start_on_the_creation_pa
         .text("pipelines-empty")
         .contains("Nothing runs until you publish it")
     );
-    assert!(editor.text("pipeline-empty-starter").contains("6 steps · 2 approval gates"));
+    assert!(
+      editor
+        .text("pipeline-empty-starter")
+        .contains("6 steps · 2 approval gates")
+    );
     editor.click(action);
     editor.until("new pipeline page", |e| e.exists("pipeline-name"));
     let route = editor.window.navigation().route_now();
@@ -215,7 +219,10 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
       .unwrap()
       .is_some_and(|d| d.body().description() == "Changed description")
   });
-  assert!(editor.exists("pipeline-settings-draft"), "the changed row says it changed in the draft");
+  assert!(
+    editor.exists("pipeline-settings-draft"),
+    "the changed row says it changed in the draft"
+  );
   assert!(
     editor
       .text("pipeline-settings-change-strip")
@@ -238,7 +245,10 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
       .is_some_and(|d| d.body().description() == "Only in the draft")
   });
   assert_eq!(editor.text("pipeline-on-start-value"), "On task start");
-  assert!(!editor.exists("pipeline-settings-nav-starts"), "the planned sections are gone");
+  assert!(
+    !editor.exists("pipeline-settings-nav-starts"),
+    "the planned sections are gone"
+  );
   editor.click("pipeline-tab-steps");
   editor.click("pipeline-history");
   editor.until("version", |e| e.exists("pipeline-version-1"));

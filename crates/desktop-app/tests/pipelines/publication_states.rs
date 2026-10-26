@@ -317,6 +317,10 @@ fn pipelines_publication_problem_links_flow_onto_another_line() {
     );
     assert!(rect.y + rect.height <= strip.y + strip.height, "{link}: {rect:?}");
     editor.click(&link);
-    assert!(editor.text("step-executor-row-hint").contains("Choose a profile before publishing"));
+    assert!(
+      editor
+        .text("step-executor-row-hint")
+        .contains("Choose a profile before publishing")
+    );
   }
 }

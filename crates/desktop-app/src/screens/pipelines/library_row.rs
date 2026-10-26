@@ -93,9 +93,13 @@ impl LibraryRow {
     let entry = &props.entry;
     let id = format!("pipeline-row-menu-{}", entry.id);
     let open = self.open.clone();
-    let button = IconButton::new(id.clone(), Icon::Ellipsis, ctx.t_args("pipelines.rowMenu", [("name", &*entry.name)]))
-      .element(self.anchor.clone())
-      .on_click(move || open.update(|open| *open = !*open));
+    let button = IconButton::new(
+      id.clone(),
+      Icon::Ellipsis,
+      ctx.t_args("pipelines.rowMenu", [("name", &*entry.name)]),
+    )
+    .element(self.anchor.clone())
+    .on_click(move || open.update(|open| *open = !*open));
     let shown = self.open.get();
     let button = if shown { button.active() } else { button }.render(ctx);
     let menu = shown.then(|| {
@@ -167,7 +171,13 @@ fn chain(ctx: &Ctx, entry: &LibraryEntry) -> Arc<str> {
   entry
     .stages
     .iter()
-    .map(|stage| stage.iter().map(|name| name.as_ref()).collect::<Vec<_>>().join(&parallel))
+    .map(|stage| {
+      stage
+        .iter()
+        .map(|name| name.as_ref())
+        .collect::<Vec<_>>()
+        .join(&parallel)
+    })
     .collect::<Vec<_>>()
     .join(&then)
     .into()
@@ -196,7 +206,10 @@ fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
   let meta = match entry.last_published {
     Some(at) => ctx.t_args(
       "pipelines.rowMeta",
-      [("tasks", tasks.to_string()), ("age", super::library::age(ctx, at).to_string())],
+      [
+        ("tasks", tasks.to_string()),
+        ("age", super::library::age(ctx, at).to_string()),
+      ],
     ),
     None => tasks,
   };

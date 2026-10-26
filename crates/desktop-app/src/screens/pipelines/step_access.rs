@@ -2,12 +2,7 @@
 //! for an agent's step its repository access (*Read-only* / *Can write*, which only a profile that can write
 //! offers), *Merge the base branch when it moves* for a step that can write, and its Sources and Permissions, each
 //! on a page of its own. A tool step keeps only the approval.
-use lurq::{
-  app::ctx::Ctx,
-  components::Row,
-  layout::Alignment,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, layout::Alignment, node::Element};
 use orchester_core::{
   permission::StepCommands,
   resource::{RepositoryAccess, Step, StepKind, takes_base_moves, takes_base_moves_by_default},
@@ -45,7 +40,12 @@ pub fn group(ctx: &mut Ctx, props: &Props) -> Element {
   }
   group
     .row(page_row(ctx, props, StepPage::Sources, sources_hint(ctx, props)))
-    .row(page_row(ctx, props, StepPage::Permissions, permissions_hint(ctx, props)))
+    .row(page_row(
+      ctx,
+      props,
+      StepPage::Permissions,
+      permissions_hint(ctx, props),
+    ))
     .into()
 }
 
@@ -66,9 +66,15 @@ fn switch(
 
 fn gate(ctx: &Ctx, props: &Props) -> GroupRow {
   let (edit, key) = (props.state.clone(), props.step.key.clone());
-  switch(ctx, props, ("step-gate", "pipelines.gate"), props.step.approval_gate, move |on| {
-    edit.update(|s| s.change(&key, |step| step.approval_gate = on));
-  })
+  switch(
+    ctx,
+    props,
+    ("step-gate", "pipelines.gate"),
+    props.step.approval_gate,
+    move |on| {
+      edit.update(|s| s.change(&key, |step| step.approval_gate = on));
+    },
+  )
 }
 
 /// *Read-only* / *Can write*; *Can write* answers only when the step's profile can write or the step does already.
@@ -80,7 +86,11 @@ fn access(
   let row = GroupRow::new("step-access", ctx.t("pipelines.access"));
   let write = repository == RepositoryAccess::Write;
   if props.viewing {
-    return row.value(&ctx.t(if write { "pipelines.canWrite" } else { "pipelines.readOnly" }));
+    return row.value(&ctx.t(if write {
+      "pipelines.canWrite"
+    } else {
+      "pipelines.readOnly"
+    }));
   }
   let editing = props.state.get();
   let choice = profile.and_then(|id| editing.opened.assignables.profile(id));
@@ -139,7 +149,11 @@ fn base_moves(ctx: &mut Ctx, props: &Props) -> GroupRow {
   let info = Row::new()
     .id("step-base-moves-note")
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Sm, lurq::app::theme::PaletteColor::TextMuted));
+    .child(icon(
+      Icon::Info,
+      IconSize::Sm,
+      lurq::app::theme::PaletteColor::TextMuted,
+    ));
   row.tag(Tooltip::new("step-base-moves-hint", ctx.t("pipelines.baseMovesHint")).wrap(ctx, info))
 }
 

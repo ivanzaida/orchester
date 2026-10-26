@@ -60,11 +60,14 @@ impl Component for Commands {
       ScrollVertical::new(command_rows(&props.state, &props.step, choice, props.locked))
         .max_height(Dimension::Px(260.0)),
     );
-    Column::new().width(Dimension::Px(super::step_fields::FIELD_WIDTH)).child(trigger).child(popover(
-      self.anchor.clone(),
-      self.open.clone(),
-      PopoverSide::Below,
-      menu,
-    ))
+    Column::new()
+      .width(Dimension::Px(super::step_fields::FIELD_WIDTH))
+      .child(trigger)
+      .child(popover(
+        self.anchor.clone(),
+        self.open.clone(),
+        PopoverSide::Below,
+        menu,
+      ))
   }
 }

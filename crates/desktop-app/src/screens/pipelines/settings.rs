@@ -67,7 +67,12 @@ impl Component for Settings {
       ),
       locked: ctx.create_ref(props.locked),
     };
-    super::summary::follow_identity(ctx, &props.state, (&settings.name, &settings.description), &settings.locked);
+    super::summary::follow_identity(
+      ctx,
+      &props.state,
+      (&settings.name, &settings.description),
+      &settings.locked,
+    );
     settings
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -84,7 +89,11 @@ impl Component for Settings {
       .child(general)
       .child(runs(ctx))
       .child(super::sources::settings_section(ctx, &props.state, props.locked))
-      .child(super::delivers::section(ctx, &props.state, (props.locked, changed.delivers)))
+      .child(super::delivers::section(
+        ctx,
+        &props.state,
+        (props.locked, changed.delivers),
+      ))
       .child(deliver_step(ctx, &editing))
   }
 }
@@ -114,8 +123,8 @@ fn next(editing: &Editing) -> String {
 
 impl Settings {
   fn general(&self, ctx: &mut Ctx, props: &SummaryProps, editing: &Editing, changed: bool) -> RowGroup {
-    let mut name =
-      FieldInput::new("pipeline-settings-name", ctx.t("pipelines.name"), self.name.clone()).width(Dimension::Px(FIELD_WIDTH));
+    let mut name = FieldInput::new("pipeline-settings-name", ctx.t("pipelines.name"), self.name.clone())
+      .width(Dimension::Px(FIELD_WIDTH));
     if props.locked {
       name = name.locked();
     }
@@ -129,7 +138,12 @@ impl Settings {
       self.description.clone(),
     )
     .width(Dimension::Px(FIELD_WIDTH));
-    let description = if props.locked { description.locked() } else { description }.render(ctx);
+    let description = if props.locked {
+      description.locked()
+    } else {
+      description
+    }
+    .render(ctx);
     let mut description_row = GroupRow::new("pipeline-settings-description-row", ctx.t("pipelines.description"))
       .hint(ctx.t("pipelines.descriptionHelp"))
       .end(description);
@@ -157,7 +171,10 @@ impl Settings {
 pub(super) fn draft_tag(ctx: &Ctx, editing: &Editing) -> Row {
   Row::new()
     .id("pipeline-settings-draft")
-    .padding(Padding::symmetric(SpacingSize::Sm, crate::theme::ExtraSpacing::Tight.role()))
+    .padding(Padding::symmetric(
+      SpacingSize::Sm,
+      crate::theme::ExtraSpacing::Tight.role(),
+    ))
     .rounded(crate::theme::ExtraRadius::Full.role())
     .background(PaletteColor::InfoMuted)
     .child(
@@ -170,15 +187,17 @@ pub(super) fn draft_tag(ctx: &Ctx, editing: &Editing) -> Row {
 fn runs(ctx: &Ctx) -> RowGroup {
   RowGroup::new("pipeline-settings-runs", ctx.t("pipelines.runsTitle"))
     .row(GroupRow::new("pipeline-on-start", ctx.t("pipelines.starts")).value(&ctx.t("pipelines.onTaskStart")))
-    .row(GroupRow::new("pipeline-settings-failure", ctx.t("pipelines.stopped")).value(&ctx.t("pipelines.stoppedSummary")))
+    .row(
+      GroupRow::new("pipeline-settings-failure", ctx.t("pipelines.stopped")).value(&ctx.t("pipelines.stoppedSummary")),
+    )
 }
 
 /// The Deliver step, which opens on the Steps tab.
 fn deliver_step(ctx: &Ctx, editing: &Editing) -> RowGroup {
-  let hint = editing
-    .shown()
-    .deliver()
-    .map_or_else(|| ctx.t("pipelines.noDeliverChip"), |deliver| super::deliver::executor_words(ctx, deliver));
+  let hint = editing.shown().deliver().map_or_else(
+    || ctx.t("pipelines.noDeliverChip"),
+    |deliver| super::deliver::executor_words(ctx, deliver),
+  );
   let views = editing.views.clone();
   RowGroup::new("pipeline-settings-deliver", ctx.t("pipelines.deliverStep")).row(
     GroupRow::new("pipeline-settings-deliver-row", ctx.t("delivery.step.title"))
@@ -191,17 +210,21 @@ fn deliver_step(ctx: &Ctx, editing: &Editing) -> RowGroup {
 fn strip(ctx: &Ctx, state: &State, (count, locked): (usize, bool)) -> Element {
   let editing = state.get();
   let undo = state.clone();
-  let action = ActionButton::new("pipeline-settings-undo", ButtonKind::Secondary, ctx.t("pipelines.undoChange"))
-    .icon(Icon::Undo2)
-    .on_click(move || {
-      undo.update(|s| {
-        if let Some(latest) = s.opened.latest.clone() {
-          s.edit.set_description(latest.body.description());
-          s.edit.set_delivers(latest.body.delivers());
-          s.epoch += 1;
-        }
-      })
-    });
+  let action = ActionButton::new(
+    "pipeline-settings-undo",
+    ButtonKind::Secondary,
+    ctx.t("pipelines.undoChange"),
+  )
+  .icon(Icon::Undo2)
+  .on_click(move || {
+    undo.update(|s| {
+      if let Some(latest) = s.opened.latest.clone() {
+        s.edit.set_description(latest.body.description());
+        s.edit.set_delivers(latest.body.delivers());
+        s.epoch += 1;
+      }
+    })
+  });
   let title = if count == 1 {
     ctx.t_args("pipelines.settingsChangeCount", [("version", next(&editing))])
   } else {

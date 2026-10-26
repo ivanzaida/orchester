@@ -110,7 +110,9 @@ fn changed_profile() -> (Editor, ResourceId) {
       })
   });
   executor(&mut editor, "Profile B");
-  editor.until("Profile B cannot keep A's narrowing", |e| e.exists("step-executor-error"));
+  editor.until("Profile B cannot keep A's narrowing", |e| {
+    e.exists("step-executor-error")
+  });
   (editor, id)
 }
 
@@ -283,8 +285,15 @@ fn pipelines_permissions_turning_ask_off_asks_before_saving_with_its_reason() {
   editor.click("pipeline-save");
   editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
   assert!(editor.gated(), "only a person answers it");
-  assert!(editor.text("pipeline-save-question").contains("Saving needs your approval"));
-  assert!(editor.exists("step-ask-tools"), "the question sits beside the Permissions page");
+  assert!(
+    editor
+      .text("pipeline-save-question")
+      .contains("Saving needs your approval")
+  );
+  assert!(
+    editor.exists("step-ask-tools"),
+    "the question sits beside the Permissions page"
+  );
   editor.click("pipeline-save-question-keep");
   assert!(!editor.exists("pipeline-save-question"));
   editor.click("pipeline-save");

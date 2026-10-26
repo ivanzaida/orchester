@@ -144,7 +144,12 @@ fn heading(ctx: &Ctx, props: &DeliverProps, number: Option<usize>) -> Row {
 }
 
 /// A radio row of the Mode group.
-fn mode_row(ctx: &Ctx, props: &DeliverProps, (id, title, body): (&str, &str, &str), (mode, chosen): (DeliverMode, bool)) -> GroupRow {
+fn mode_row(
+  ctx: &Ctx,
+  props: &DeliverProps,
+  (id, title, body): (&str, &str, &str),
+  (mode, chosen): (DeliverMode, bool),
+) -> GroupRow {
   let (state, locked) = (props.state.clone(), props.locked);
   let row = GroupRow::new(id, ctx.t(title))
     .leading(radio_mark(chosen))
@@ -161,8 +166,15 @@ fn mode_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGrou
     .row(mode_row(
       ctx,
       props,
-      ("deliver-mode-approve", "delivery.step.approve", "delivery.step.approveBody"),
-      (DeliverMode::ApproveToMerge, deliver.mode() == DeliverMode::ApproveToMerge),
+      (
+        "deliver-mode-approve",
+        "delivery.step.approve",
+        "delivery.step.approveBody",
+      ),
+      (
+        DeliverMode::ApproveToMerge,
+        deliver.mode() == DeliverMode::ApproveToMerge,
+      ),
     ))
     .row(mode_row(
       ctx,
@@ -181,16 +193,25 @@ fn mode_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGrou
 
 fn merge_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGroup {
   let segments = [
-    (MergeMethod::MergeCommit, "deliver-merge-commit", "delivery.step.mergeCommit"),
+    (
+      MergeMethod::MergeCommit,
+      "deliver-merge-commit",
+      "delivery.step.mergeCommit",
+    ),
     (MergeMethod::Squash, "deliver-squash", "delivery.step.squash"),
   ]
   .map(|(method, id, label)| {
     let (state, locked) = (props.state.clone(), props.locked);
-    Segment::new(id, SegmentFace::Text(ctx.t(label)), deliver.method() == method, move || {
-      if !locked {
-        edit(&state, |deliver| deliver.with_method(method));
-      }
-    })
+    Segment::new(
+      id,
+      SegmentFace::Text(ctx.t(label)),
+      deliver.method() == method,
+      move || {
+        if !locked {
+          edit(&state, |deliver| deliver.with_method(method));
+        }
+      },
+    )
   });
   let hint = match deliver.method() {
     MergeMethod::MergeCommit => ctx.t("delivery.step.mergeCommitReadBack"),

@@ -25,17 +25,28 @@ fn pipelines_flow_shows_steps_in_order_parallel_ones_together_and_their_routes()
   editor.open(id);
   editor.click("pipeline-use-starter");
   editor.until("starter steps", |e| e.exists("pipeline-step-implement"));
-  let order = ["pipeline-start", "pipeline-step-research", "pipeline-step-plan", "pipeline-step-implement"];
+  let order = [
+    "pipeline-start",
+    "pipeline-step-research",
+    "pipeline-step-plan",
+    "pipeline-step-implement",
+  ];
   for pair in order.windows(2) {
     assert!(top(&mut editor, pair[0]) < top(&mut editor, pair[1]), "{pair:?}");
   }
-  let (checks, review) = (top(&mut editor, "pipeline-step-run-checks"), top(&mut editor, "pipeline-step-review"));
+  let (checks, review) = (
+    top(&mut editor, "pipeline-step-run-checks"),
+    top(&mut editor, "pipeline-step-review"),
+  );
   assert!(checks > top(&mut editor, "pipeline-step-implement"));
   assert!(review > checks, "parallel steps stack in their bracket");
   let bracket = editor.text("pipeline-parallel");
   assert!(bracket.contains("RUN IN PARALLEL"));
   assert!(bracket.contains("Run checks") && bracket.contains("Review"));
-  assert!(!bracket.contains("Implement ·"), "only the level's own steps are in the bracket");
+  assert!(
+    !bracket.contains("Implement ·"),
+    "only the level's own steps are in the bracket"
+  );
   assert_eq!(
     editor.text("pipeline-failure-route-review"),
     "Changes requested → 03 Implement"
@@ -53,7 +64,10 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
   let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
-  assert!(editor.exists("pipeline-deliver-chip"), "no Deliver step says where runs end");
+  assert!(
+    editor.exists("pipeline-deliver-chip"),
+    "no Deliver step says where runs end"
+  );
   assert!(
     editor
       .text("pipeline-deliver-chip")
@@ -65,15 +79,20 @@ fn pipelines_flow_without_deliver_step_offers_to_add_one() {
   editor.click("deliver-add");
   editor.until("the Deliver step is shown", |e| e.exists("pipeline-deliver"));
   assert!(!editor.exists("pipeline-deliver-chip"));
-  assert!(editor.text("pipeline-deliver").starts_with("02"), "Deliver is numbered last");
+  assert!(
+    editor.text("pipeline-deliver").starts_with("02"),
+    "Deliver is numbered last"
+  );
   assert!(editor.exists("deliver-mode-approve"));
   assert!(editor.text("deliver-mode-pull-request").contains("Coming later"));
   editor.click("deliver-mode-auto");
   editor.until("the Deliver step saved", |e| {
-    e.db()
-      .draft::<Pipeline>(id)
-      .unwrap()
-      .is_some_and(|draft| draft.body().deliver().is_some_and(|deliver| deliver != &DeliverStep::default()))
+    e.db().draft::<Pipeline>(id).unwrap().is_some_and(|draft| {
+      draft
+        .body()
+        .deliver()
+        .is_some_and(|deliver| deliver != &DeliverStep::default())
+    })
   });
 }
 
@@ -82,7 +101,10 @@ fn pipelines_publish_waits_while_changes_are_unsaved() {
   let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
-  assert!(editor.exists("pipeline-header-history"), "a published pipeline with no draft offers its history");
+  assert!(
+    editor.exists("pipeline-header-history"),
+    "a published pipeline with no draft offers its history"
+  );
   editor.click("pipeline-step-step");
   editor.click("step-gate");
   assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
@@ -96,11 +118,19 @@ fn pipelines_publish_waits_while_changes_are_unsaved() {
   editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
   editor.click("pipeline-save-question-confirm");
   editor.until("draft saved", |e| e.db().draft::<Pipeline>(id).unwrap().is_some());
-  editor.until("save status", |e| e.text("pipeline-save-status") == "Draft saved · Published v1");
+  editor.until("save status", |e| {
+    e.text("pipeline-save-status") == "Draft saved · Published v1"
+  });
   editor.click("pipeline-publish");
-  assert!(editor.exists("pipeline-publish-review"), "a saved draft can be reviewed");
+  assert!(
+    editor.exists("pipeline-publish-review"),
+    "a saved draft can be reviewed"
+  );
   assert!(editor.text("pipeline-publish-review").contains("1 change since v1"));
-  assert!(editor.exists("pipeline-step-changed-step"), "the review tags the changed step on the flow");
+  assert!(
+    editor.exists("pipeline-step-changed-step"),
+    "the review tags the changed step on the flow"
+  );
 }
 
 #[test]
@@ -124,6 +154,9 @@ fn pipelines_viewed_version_reads_each_step_and_restores_at_once_without_a_draft
     !editor.exists("pipeline-restore-question"),
     "with no draft, nothing is replaced, so nothing is asked"
   );
-  assert!(!editor.exists("pipeline-viewing-banner"), "the restored version is the draft now");
+  assert!(
+    !editor.exists("pipeline-viewing-banner"),
+    "the restored version is the draft now"
+  );
   assert!(editor.exists("pipeline-add-step"));
 }

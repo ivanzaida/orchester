@@ -37,11 +37,16 @@ pub fn step(ctx: &Ctx, editing: &Editing, (step, index): (&Step, usize)) -> Elem
       step.kind,
       StepKind::Agent { profile: None, .. } | StepKind::Tool { tool: None }
     );
-  let changed = reference(editing).is_some_and(|before| before.steps().iter().find(|s| s.key == step.key) != Some(step));
+  let changed =
+    reference(editing).is_some_and(|before| before.steps().iter().find(|s| s.key == step.key) != Some(step));
   let executor = Text::new(&message_text(ctx, &executor_line(step, &editing.opened.assignables)))
     .id(format!("pipeline-step-executor-{}", step.key))
     .variant(TypographyStyle::Description)
-    .color(if invalid { PaletteColor::Danger } else { PaletteColor::TextSecondary })
+    .color(if invalid {
+      PaletteColor::Danger
+    } else {
+      PaletteColor::TextSecondary
+    })
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
     .min_width(Dimension::Px(0.0));
@@ -107,7 +112,13 @@ fn title(ctx: &Ctx, step: &Step, (invalid, changed): (bool, bool)) -> Row {
         .text_overflow(TextOverflow::Elipsis)
         .min_width(Dimension::Px(0.0)),
     )
-    .with_children(changed.then(|| tag(&format!("pipeline-step-changed-{}", step.key), &ctx.t("pipelines.changed"), true)))
+    .with_children(changed.then(|| {
+      tag(
+        &format!("pipeline-step-changed-{}", step.key),
+        &ctx.t("pipelines.changed"),
+        true,
+      )
+    }))
     .with_children(invalid.then(|| icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger)))
 }
 
@@ -132,7 +143,11 @@ fn line(id: &str, words: &str, warning: bool) -> Text {
   Text::new(words)
     .id(id.to_owned())
     .variant(TypographyStyle::Description)
-    .color(if warning { PaletteColor::Warning } else { PaletteColor::TextMuted })
+    .color(if warning {
+      PaletteColor::Warning
+    } else {
+      PaletteColor::TextMuted
+    })
 }
 
 /// A card's frame: 9 over and under, 12 at its sides, its number 10 before its words, in a `border` outline,
@@ -146,7 +161,11 @@ fn card(button: Button, (number, chosen): (usize, bool), text: Column) -> Elemen
     .rounded(RadiusSize::Md)
     .border_inside(
       BorderSize::Sm,
-      if chosen { PaletteColor::BorderFocus } else { PaletteColor::Border },
+      if chosen {
+        PaletteColor::BorderFocus
+      } else {
+        PaletteColor::Border
+      },
     )
     .describe("chosen", if chosen { "true" } else { "false" });
   let button = if chosen {
@@ -167,7 +186,10 @@ pub fn deliver(ctx: &Ctx, editing: &Editing) -> Element {
   let Some(deliver) = shown.deliver() else {
     return pressable(move || views.choose(View::Deliver))
       .id("pipeline-deliver-chip")
-      .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Pair.role()))
+      .padding(Padding::symmetric(
+        ExtraSpacing::Loose.role(),
+        ExtraSpacing::Pair.role(),
+      ))
       .spacing(ExtraSpacing::Snug.role())
       .rounded(ExtraRadius::Full.role())
       .border_inside(BorderSize::Sm, PaletteColor::Border)
@@ -223,7 +245,13 @@ fn deliver_outcome(ctx: &Ctx, editing: &Editing, deliver: &DeliverStep) -> (Arc<
     .validate()
     .ok()
     .and_then(|pipeline| integrating_step(&pipeline, deliver, |_| true).and_then(|step| step.kind.executor()))
-    .and_then(|profile| editing.opened.assignables.profile(profile).map(|choice| choice.name.clone()));
+    .and_then(|profile| {
+      editing
+        .opened
+        .assignables
+        .profile(profile)
+        .map(|choice| choice.name.clone())
+    });
   let conflicts = match profile {
     Some(name) => ctx.t_args("delivery.step.badgeConflicts", [("profile", name.as_ref())]),
     None => ctx.t("delivery.step.badgeConflictsPerson"),

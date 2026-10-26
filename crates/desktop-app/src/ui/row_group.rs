@@ -256,7 +256,9 @@ impl GroupRow {
 
   /// A press opens a page: the row ends in a chevron (`VXz2i`).
   pub fn opens_page(mut self, press: Press) -> Self {
-    self.end.push(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted).into());
+    self
+      .end
+      .push(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted).into());
     self.press = Some(press);
     self
   }
@@ -277,7 +279,11 @@ impl GroupRow {
         ExtraTypography::Strong.role()
       })
       .min_width(Dimension::Px(0.0));
-    let label = if muted { label.color(PaletteColor::TextMuted) } else { label };
+    let label = if muted {
+      label.color(PaletteColor::TextMuted)
+    } else {
+      label
+    };
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)

@@ -165,14 +165,11 @@ fn empty(ctx: &Ctx, state: &State, busy: bool) -> Column {
         s.epoch += 1;
       })
     });
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .child(first)
-    .child(
-      Row::new()
-        .padding(Padding::new().top(SpacingSize::Sm))
-        .child(if readonly { use_starter.disabled() } else { use_starter }),
-    )
+  Column::new().width(Dimension::Pct(100.0)).child(first).child(
+    Row::new()
+      .padding(Padding::new().top(SpacingSize::Sm))
+      .child(if readonly { use_starter.disabled() } else { use_starter }),
+  )
 }
 
 /// *Add step*: a new step after the chosen one, or at the end, which is then chosen.

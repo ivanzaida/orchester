@@ -77,7 +77,11 @@ impl Component for Viewed {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
       .child(banner(ctx, &props.state, version.as_ref(), busy))
-      .with_children(editing.restore_requested.then(|| super::restore::question(ctx, &props.state, busy)))
+      .with_children(
+        editing
+          .restore_requested
+          .then(|| super::restore::question(ctx, &props.state, busy)),
+      )
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -92,7 +96,9 @@ impl Component for Viewed {
 /// The banner over the viewed flow (`Viewing` `Ykw38`).
 fn banner(ctx: &Ctx, state: &State, version: Option<&PublishedVersion>, writing: bool) -> Row {
   let editing = state.get();
-  let number = editing.viewing_version.map_or_else(String::new, |v| v.get().to_string());
+  let number = editing
+    .viewing_version
+    .map_or_else(String::new, |v| v.get().to_string());
   let meta = if editing.comparing {
     comparison(ctx, &editing)
   } else {
@@ -263,7 +269,11 @@ fn changes_column(ctx: &Ctx, editing: &Editing, version: &PublishedVersion) -> E
     None => group = group.lead(ctx.t("pipelines.firstVersion")),
     Some(listed) => {
       for (index, change) in listed.changes.iter().enumerate() {
-        group = group.row(parts::change_row(ctx, &format!("pipeline-version-change-{index}"), change));
+        group = group.row(parts::change_row(
+          ctx,
+          &format!("pipeline-version-change-{index}"),
+          change,
+        ));
       }
     }
   }
@@ -281,7 +291,10 @@ fn changes_column(ctx: &Ctx, editing: &Editing, version: &PublishedVersion) -> E
     column = column.child(RowGroup::new("pipeline-comparison-changes", comparison_title(ctx, editing)).rows(rows));
   }
   if editing.unsaved() {
-    column = column.child(note("pipeline-compare-unavailable", &ctx.t("pipelines.compareUnavailable")));
+    column = column.child(note(
+      "pipeline-compare-unavailable",
+      &ctx.t("pipelines.compareUnavailable"),
+    ));
   } else if no_comparison_draft(editing) {
     let next = next_version(&editing.opened).map_or_else(String::new, |v| v.get().to_string());
     column = column.child(note(

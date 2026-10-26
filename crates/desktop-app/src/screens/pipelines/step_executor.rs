@@ -138,7 +138,12 @@ fn runs_on(ctx: &mut Ctx, props: &Props) -> Option<std::sync::Arc<str>> {
   };
   let accounts = crate::services::accounts::listed(ctx);
   let editing = props.state.get();
-  let profile = editing.opened.assignables.profiles.iter().find(|profile| profile.id == id)?;
+  let profile = editing
+    .opened
+    .assignables
+    .profiles
+    .iter()
+    .find(|profile| profile.id == id)?;
   let connection = profile.agent.as_ref()?;
   let account = accounts.of_connection(connection.account(), connection.provider())?;
   let account = account.name().map_or_else(

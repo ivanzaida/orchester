@@ -222,7 +222,10 @@ fn add(ctx: &mut Ctx, props: &Props, (place, failure): Adding, (id, layout, word
   match failure {
     Some(failure) => failure,
     None => ctx.mount_keyed::<AddSource>(
-      &format!("{id}-{}", props.step.as_ref().map_or("pipeline", |(key, _)| key.as_str())),
+      &format!(
+        "{id}-{}",
+        props.step.as_ref().map_or("pipeline", |(key, _)| key.as_str())
+      ),
       AddSourceProps {
         id: id.into(),
         place,
@@ -254,7 +257,11 @@ fn settings(ctx: &mut Ctx, props: &Props, project: &[Listed], adding: Adding) ->
     ctx,
     props,
     adding,
-    ("pipeline-sources-add", Layout::Picker, "pipelines.sourcesSection.addFolder"),
+    (
+      "pipeline-sources-add",
+      Layout::Picker,
+      "pipelines.sourcesSection.addFolder",
+    ),
   ));
   if let Some(read_back) = drafted::steps_read_back(&edit) {
     group = group.after(
@@ -306,8 +313,16 @@ fn step(ctx: &mut Ctx, props: &Props, (key, back): (&StepKey, &str), project: &[
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(lurq::app::theme::SpacingSize::Lg)
-    .child(parts::sub_head("step-sources-title", back, &ctx.t("pipelines.sources"), meta.as_deref()))
-    .child(parts::lead("step-sources-detail", &ctx.t("pipelines.sourcesSection.stepDetail")))
+    .child(parts::sub_head(
+      "step-sources-title",
+      back,
+      &ctx.t("pipelines.sources"),
+      meta.as_deref(),
+    ))
+    .child(parts::lead(
+      "step-sources-detail",
+      &ctx.t("pipelines.sourcesSection.stepDetail"),
+    ))
     .child(mine)
     .with_children(inherited(ctx, project, &pipeline))
     .child(note("step-sources-tasks", &ctx.t("pipelines.sourcesSection.tasksToo")))

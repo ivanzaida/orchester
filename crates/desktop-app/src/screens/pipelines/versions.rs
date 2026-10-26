@@ -62,7 +62,9 @@ impl Component for Versions {
     match loaded.data.filter(|_| loaded.error.is_none()) {
       Some(history) => {
         if editing.has_draft() {
-          pane = pane.child(RowGroup::new("pipeline-versions-draft", ctx.t("pipelines.draftLabel")).row(draft_row(ctx, &props.state)));
+          pane = pane.child(
+            RowGroup::new("pipeline-versions-draft", ctx.t("pipelines.draftLabel")).row(draft_row(ctx, &props.state)),
+          );
         }
         pane = pane.child(published(ctx, &props.state, &history));
       }
@@ -76,8 +78,12 @@ impl Component for Versions {
       pane = pane
         .child(field_error("pipeline-history-error", &message_text(ctx, &error)))
         .child(
-          ActionButton::new("pipeline-history-retry", ButtonKind::Secondary, ctx.t("pipelines.reload"))
-            .on_click(move || retry.update(|n| *n += 1)),
+          ActionButton::new(
+            "pipeline-history-retry",
+            ButtonKind::Secondary,
+            ctx.t("pipelines.reload"),
+          )
+          .on_click(move || retry.update(|n| *n += 1)),
         );
     }
     pane.child(note("pipeline-versions-pinned", &ctx.t("pipelines.pinnedHint")))
@@ -93,7 +99,13 @@ pub fn read(
 ) -> lurq::app::ctx::FutureState<VersionHistory, messages::Message> {
   ctx
     .future(
-      (project.open.repo_root.clone(), editing.opened.id, editing.epoch, editing.opened.latest.as_ref().map(|v| v.number), retry),
+      (
+        project.open.repo_root.clone(),
+        editing.opened.id,
+        editing.epoch,
+        editing.opened.latest.as_ref().map(|v| v.number),
+        retry,
+      ),
       |(root, id, ..)| async move {
         background::run(move || VersionHistory::load_in(&root, id).map_err(|e| messages::store_error(&e))).await?
       },
@@ -104,12 +116,17 @@ pub fn read(
 
 fn published(ctx: &Ctx, state: &State, history: &VersionHistory) -> RowGroup {
   let versions = history.versions();
-  let group = RowGroup::new("pipeline-versions-published", ctx.t("pipelines.groups.published")).count(versions.len().to_string());
+  let group =
+    RowGroup::new("pipeline-versions-published", ctx.t("pipelines.groups.published")).count(versions.len().to_string());
   if versions.is_empty() {
     return group.lead(ctx.t("pipelines.historyEmpty"));
   }
   let latest = history.latest().map(|v| v.number);
-  group.rows(versions.iter().map(|version| version_row(ctx, state, version, latest == Some(version.number))))
+  group.rows(
+    versions
+      .iter()
+      .map(|version| version_row(ctx, state, version, latest == Some(version.number))),
+  )
 }
 
 fn version_row(ctx: &Ctx, state: &State, version: &PublishedVersion, latest: bool) -> GroupRow {
@@ -118,7 +135,12 @@ fn version_row(ctx: &Ctx, state: &State, version: &PublishedVersion, latest: boo
     format!("pipeline-version-{}", number.get()),
     ctx.t_args("pipelines.version", [("version", number.get().to_string())]),
   )
-  .hint(meta(ctx, version, "pipelines.historyMeta", "pipelines.historyFirstMeta"));
+  .hint(meta(
+    ctx,
+    version,
+    "pipelines.historyMeta",
+    "pipelines.historyFirstMeta",
+  ));
   let row = if latest {
     row.tag(tag("pipeline-latest-badge", &ctx.t("pipelines.latest"), false))
   } else {
@@ -145,8 +167,14 @@ pub fn meta(ctx: &Ctx, version: &PublishedVersion, key: &str, first: &str) -> st
     if version.changes.is_none() { first } else { key },
     [
       ("age", super::library::age(ctx, version.published_at).to_string()),
-      ("changes", counted(ctx, changes, ("pipelines.changeOne", "pipelines.changesCount"))),
-      ("runs", counted(ctx, version.runs.len(), ("pipelines.runOne", "pipelines.runsCount"))),
+      (
+        "changes",
+        counted(ctx, changes, ("pipelines.changeOne", "pipelines.changesCount")),
+      ),
+      (
+        "runs",
+        counted(ctx, version.runs.len(), ("pipelines.runOne", "pipelines.runsCount")),
+      ),
     ],
   )
 }
@@ -170,7 +198,15 @@ fn draft_row(ctx: &Ctx, state: &State) -> GroupRow {
       "pipelines.draftRowHint",
       [
         ("draft", super::summary::draft(ctx, &editing).to_string()),
-        ("saved", ctx.t_args("pipelines.draftSavedAt", [("age", super::library::age(ctx, at).to_string())]).to_string()),
+        (
+          "saved",
+          ctx
+            .t_args(
+              "pipelines.draftSavedAt",
+              [("age", super::library::age(ctx, at).to_string())],
+            )
+            .to_string(),
+        ),
       ],
     ),
     None => super::summary::draft(ctx, &editing),

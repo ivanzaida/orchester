@@ -74,9 +74,13 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
       .id("pipeline-problem-strip")
       .width(Dimension::Pct(100.0))
       .child(
-        Notice::new("pipeline-publish-problem", NoticeTone::Danger, ctx.t("pipelines.publishBlocked"))
-          .stacked()
-          .part(links),
+        Notice::new(
+          "pipeline-publish-problem",
+          NoticeTone::Danger,
+          ctx.t("pipelines.publishBlocked"),
+        )
+        .stacked()
+        .part(links),
       )
       .into(),
   )
@@ -109,7 +113,11 @@ pub fn review(ctx: &Ctx, editing: &Editing) -> Column {
   let views = editing.views.clone();
   let head = parts::sub_head(
     "pipeline-publish-title",
-    parts::back_link("pipeline-publish-back", &ctx.t("pipelines.steps"), Press::run(move || views.close())),
+    parts::back_link(
+      "pipeline-publish-back",
+      &ctx.t("pipelines.steps"),
+      Press::run(move || views.close()),
+    ),
     &ctx.t("pipelines.publishHeading"),
     Some(&ctx.t_args(
       "pipelines.publishName",
@@ -148,7 +156,10 @@ fn versions(ctx: &Ctx, editing: &Editing, (current, next): (&str, &str)) -> RowG
   let after = editing.opened.draft_saved_at.map_or_else(
     || format!("{next} · {}", ctx.t("pipelines.unsaved")),
     |at| {
-      let saved = ctx.t_args("pipelines.draftSavedAt", [("age", super::library::age(ctx, at).to_string())]);
+      let saved = ctx.t_args(
+        "pipelines.draftSavedAt",
+        [("age", super::library::age(ctx, at).to_string())],
+      );
       format!("{next} · {saved}")
     },
   );
@@ -174,14 +185,12 @@ fn changes(ctx: &Ctx, editing: &Editing, current: &str) -> RowGroup {
     [("count", changes.len().to_string()), ("version", current.to_owned())],
   );
   let tagged = crate::ui::row_group::note("pipeline-changes-tagged", &ctx.t("pipelines.taggedOnCanvas"));
-  RowGroup::new("pipeline-changes-title", title)
-    .end(tagged)
-    .rows(
-      changes
-        .iter()
-        .enumerate()
-        .map(|(index, change)| parts::change_row(ctx, &format!("pipeline-change-{index}"), change)),
-    )
+  RowGroup::new("pipeline-changes-title", title).end(tagged).rows(
+    changes
+      .iter()
+      .enumerate()
+      .map(|(index, change)| parts::change_row(ctx, &format!("pipeline-change-{index}"), change)),
+  )
 }
 
 pub fn with_success(ctx: &mut Ctx, state: &State, content: Element) -> Element {

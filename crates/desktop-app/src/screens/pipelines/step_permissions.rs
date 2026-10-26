@@ -34,7 +34,8 @@ pub fn page(ctx: &mut Ctx, props: &Props) -> Vec<Element> {
   let Some(choice) = editing.opened.assignables.profile(profile).cloned() else {
     return vec![note("step-narrow-note", &ctx.t("pipelines.narrowHint")).into()];
   };
-  let picker = ctx.mount_keyed::<super::command_picker::Commands>(&format!("step-commands-{}", props.step.key), props.clone());
+  let picker =
+    ctx.mount_keyed::<super::command_picker::Commands>(&format!("step-commands-{}", props.step.key), props.clone());
   let commands = RowGroup::new("step-commands", ctx.t("pipelines.commands"))
     .lead(inheritance(ctx, &choice))
     .row(GroupRow::new("step-command-summary", ctx.t("pipelines.commands")).end(picker));
@@ -120,7 +121,13 @@ fn network(ctx: &mut Ctx, props: &Props, choice: &ProfileChoice) -> Element {
     choice.clone(),
     list.clone(),
   );
-  let network = Toggle::new("step-network-off", ToggleKind::Switch, off, ctx.t("pipelines.networkOff")).hide_label();
+  let network = Toggle::new(
+    "step-network-off",
+    ToggleKind::Switch,
+    off,
+    ctx.t("pipelines.networkOff"),
+  )
+  .hide_label();
   let network = if !props.locked && can_block {
     network.on_change(move |off| apply(&edit, &key, &picked, (only.as_deref(), off, ask)))
   } else {

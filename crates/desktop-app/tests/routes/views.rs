@@ -74,11 +74,7 @@ pub(super) fn view_routes() -> Vec<Route> {
     PipelineView::Publish,
   ] {
     if view != PipelineView::Publish {
-      all.push(at(ProjectPage::PipelineVersion(
-        id,
-        VersionNumber::FIRST,
-        view.clone(),
-      )));
+      all.push(at(ProjectPage::PipelineVersion(id, VersionNumber::FIRST, view.clone())));
     }
     all.push(at(ProjectPage::Pipeline(id, view)));
   }
@@ -213,7 +209,10 @@ fn pipeline_tabs_and_step_pages_have_their_documented_paths() {
   };
   for (view, path) in [
     (PipelineView::Steps, format!("{pipeline}?version=2")),
-    (PipelineView::Step(review()), format!("{pipeline}?version=2&step=review")),
+    (
+      PipelineView::Step(review()),
+      format!("{pipeline}?version=2&step=review"),
+    ),
     (PipelineView::Versions, format!("{pipeline}?version=2&panel=versions")),
   ] {
     assert_eq!(viewed(view).path(), path);
@@ -241,7 +240,10 @@ fn a_pipelines_history_link_opens_its_versions_tab() {
       PipelineView::Versions
     ))
   );
-  assert!(Route::parse(&format!("{pipeline}?page=sources")).is_err(), "a page names its step");
+  assert!(
+    Route::parse(&format!("{pipeline}?page=sources")).is_err(),
+    "a page names its step"
+  );
   assert!(Route::parse(&format!("{pipeline}?step=review&page=nothing")).is_err());
 }
 

@@ -130,7 +130,10 @@ impl Component for Editor {
     let head = super::header::header(
       ctx,
       &self.state,
-      (writes.save_button(ctx, &editing, busy), writes.publish_button(ctx, &editing, busy)),
+      (
+        writes.save_button(ctx, &editing, busy),
+        writes.publish_button(ctx, &editing, busy),
+      ),
       busy,
     );
     let notices = self.notices(ctx, &props, (&writes, writing));
@@ -140,9 +143,7 @@ impl Component for Editor {
       .spacing(SpacingSize::Lg)
       .with_children(notices)
       .child(content);
-    let page = parts::page()
-      .child(head)
-      .child(parts::body("pipeline-body", body));
+    let page = parts::page().child(head).child(parts::body("pipeline-body", body));
     self.with_publication_notice(ctx, page.into())
   }
 }
@@ -158,9 +159,18 @@ impl Editor {
       .as_ref()
       .filter(|imported| imported.shows_result(editing.opened.latest.is_some()))
     {
-      notices.push(crate::screens::import::imported::strip(ctx, props.project.open.project.id(), imported));
+      notices.push(crate::screens::import::imported::strip(
+        ctx,
+        props.project.open.project.id(),
+        imported,
+      ));
     }
-    notices.extend(super::leaving::question(ctx, &self.leave, writing, editing.name.as_str()));
+    notices.extend(super::leaving::question(
+      ctx,
+      &self.leave,
+      writing,
+      editing.name.as_str(),
+    ));
     if self.confirm_save.get() {
       notices.push(writes.save_question(ctx));
     }

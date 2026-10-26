@@ -46,7 +46,10 @@ pub fn group(ctx: &mut Ctx, (start, copy): (&Signal<Begin>, &Signal<String>), co
         };
         SelectOption::new(
           p.id.to_string(),
-          ctx.t_args("pipelines.copyOption", [("name", p.name.to_string()), ("version", version)]),
+          ctx.t_args(
+            "pipelines.copyOption",
+            [("name", p.name.to_string()), ("version", version)],
+          ),
         )
       })
       .collect(),

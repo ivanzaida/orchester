@@ -48,7 +48,11 @@ impl Views {
   /// *Cancel*, a removed step and a publish done: back to the summary of what is shown, the draft's or the
   /// version's, leaving no entry for the place closed.
   pub fn close(&self) {
-    let view = if self.viewed().is_some() { View::Versions } else { View::Steps };
+    let view = if self.viewed().is_some() {
+      View::Versions
+    } else {
+      View::Steps
+    };
     self.navigation.close_panel(self.route(view, self.viewed()));
   }
   /// *Back to editing* and a restore done: back to the draft's steps, leaving no entry for the version.

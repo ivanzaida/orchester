@@ -18,13 +18,16 @@ use crate::ui::{
 pub fn section(ctx: &Ctx, state: &State, (locked, changed): (bool, bool)) -> Element {
   let editing = state.get();
   let shown = editing.shown().delivers();
-  let mut group = RowGroup::new("pipeline-settings-delivery", ctx.t("pipelines.delivery")).lead(ctx.t("pipelines.delivers.help"));
+  let mut group =
+    RowGroup::new("pipeline-settings-delivery", ctx.t("pipelines.delivery")).lead(ctx.t("pipelines.delivers.help"));
   if changed {
     group = group.end(super::settings::draft_tag(ctx, &editing).id("pipeline-delivers-changed"));
   }
   Deliverable::ALL
     .into_iter()
-    .fold(group, |group, delivers| group.row(row(ctx, state, (delivers, shown), locked)))
+    .fold(group, |group, delivers| {
+      group.row(row(ctx, state, (delivers, shown), locked))
+    })
     .into()
 }
 
@@ -38,7 +41,9 @@ fn row(ctx: &Ctx, state: &State, (delivers, shown): (Deliverable, Deliverable), 
     return row;
   }
   let state = state.clone();
-  row.press(Press::run(move || state.update(|editing| editing.edit.set_delivers(delivers))))
+  row.press(Press::run(move || {
+    state.update(|editing| editing.edit.set_delivers(delivers))
+  }))
 }
 
 /// The title and explanation of `delivers`.

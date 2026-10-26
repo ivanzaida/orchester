@@ -116,11 +116,7 @@ fn populated(ctx: &mut Ctx, shown: &ShownProject, entries: &[LibraryEntry]) -> l
         )
       })
       .collect();
-    pane = pane.child(
-      RowGroup::new(id, ctx.t(title))
-        .count(rows.len().to_string())
-        .rows(rows),
-    );
+    pane = pane.child(RowGroup::new(id, ctx.t(title)).count(rows.len().to_string()).rows(rows));
   }
   let count = ctx.t_args(
     "pipelines.count",

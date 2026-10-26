@@ -113,7 +113,11 @@ impl Fields {
     let row = GroupRow::new(format!("{id}-row"), title.clone());
     if props.viewing {
       let shown = value.get();
-      let shown = if shown.is_empty() { ctx.t("pipelines.noLimit").to_string() } else { shown };
+      let shown = if shown.is_empty() {
+        ctx.t("pipelines.noLimit").to_string()
+      } else {
+        shown
+      };
       return row.value(&shown);
     }
     let mut field = FieldInput::new(id, title, value).width(Dimension::Px(FIELD_WIDTH));
@@ -151,7 +155,9 @@ impl Fields {
           .iter()
           .enumerate()
           .filter(|(_, s)| s.key != props.step.key)
-          .map(|(index, s)| SelectOption::new(RouteChoice(Some(s.key.clone())), format!("{:02} {}", index + 1, s.name))),
+          .map(|(index, s)| {
+            SelectOption::new(RouteChoice(Some(s.key.clone())), format!("{:02} {}", index + 1, s.name))
+          }),
       );
       let select = SelectField::new(
         "step-failure",
@@ -162,12 +168,26 @@ impl Fields {
       .width(Dimension::Px(FIELD_WIDTH));
       failure.end(select.render(ctx))
     };
-    let mut group = RowGroup::new("step-flow", ctx.t("pipelines.flow")).row(after).row(failure);
+    let mut group = RowGroup::new("step-flow", ctx.t("pipelines.flow"))
+      .row(after)
+      .row(failure);
     if props.step.on_failure.is_some() {
-      group = group.row(Self::text(ctx, props, "step-retries", "pipelines.retries", self.retries.clone()));
+      group = group.row(Self::text(
+        ctx,
+        props,
+        "step-retries",
+        "pipelines.retries",
+        self.retries.clone(),
+      ));
     }
     group
-      .row(Self::text(ctx, props, "step-budget", "pipelines.budget", self.budget.clone()))
+      .row(Self::text(
+        ctx,
+        props,
+        "step-budget",
+        "pipelines.budget",
+        self.budget.clone(),
+      ))
       .row(GroupRow::new("step-stopped", ctx.t("pipelines.stopped")).value(&ctx.t("pipelines.stoppedSummary")))
       .into()
   }

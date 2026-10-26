@@ -27,7 +27,10 @@ fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
   editor.click("pipeline-publish");
   assert!(editor.text("screen-pipelines").contains("Add a step before publishing"));
   assert!(!editor.exists("pipeline-publish-confirm"));
-  assert!(editor.exists("pipeline-use-starter"), "an empty draft offers its starter steps");
+  assert!(
+    editor.exists("pipeline-use-starter"),
+    "an empty draft offers its starter steps"
+  );
   editor.click("pipeline-parent");
   editor.until("library row", |e| e.exists(&format!("pipeline-row-{id}")));
   assert!(editor.text(&format!("pipeline-row-{id}")).contains("Draft"));
@@ -142,7 +145,11 @@ fn pipelines_slug_collision_and_stale_editor_keep_the_existing_draft() {
   editor.click("pipeline-create");
   editor.until("collision", |e| e.exists("pipeline-open-existing"));
   assert!(editor.text("pipeline-slug-hint").contains("Already used by Checks"));
-  assert!(editor.text("screen-pipelines").contains("Choose a name with a free slug."));
+  assert!(
+    editor
+      .text("screen-pipelines")
+      .contains("Choose a name with a free slug.")
+  );
   editor.open(id);
   editor.set("pipeline-description", "Local");
   let mut edit = PipelineEdit::new(editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().clone());
@@ -228,7 +235,10 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
   editor.click("pipeline-version-1");
   assert!(editor.text("screen-pipelines").contains("Viewing v1"));
   editor.click("pipeline-step-step");
-  assert!(!editor.exists("step-gate"), "a viewed version reads its approval, never switches it");
+  assert!(
+    !editor.exists("step-gate"),
+    "a viewed version reads its approval, never switches it"
+  );
   assert_eq!(editor.text("step-gate-row-value"), "On");
   assert!(!editor.exists("pipeline-save"), "a viewed version has nothing to save");
   editor.click("pipeline-back-draft");

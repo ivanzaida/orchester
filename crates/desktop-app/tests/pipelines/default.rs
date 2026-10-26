@@ -32,9 +32,9 @@ fn pipelines_default_is_made_from_the_row_menu_and_new_task_chooses_it() {
     .window
     .navigation()
     .go(Route::Project(project_id(), ProjectPage::NewTask));
-  editor.window.until("New task", |w| {
-    w.tree.get_element_by_id("task-form-pipeline").is_some()
-  });
+  editor
+    .window
+    .until("New task", |w| w.tree.get_element_by_id("task-form-pipeline").is_some());
   editor.window.until("the default chosen", |w| {
     w.texts("task-form-pipeline")
       .is_some_and(|texts| texts.join(" ").contains("Delivery"))
@@ -54,12 +54,18 @@ fn pipelines_duplicate_opens_new_pipeline_copying_the_row() {
     editor.window.navigation().route_now(),
     Route::Project(project_id(), ProjectPage::CopyPipeline(id))
   );
-  editor.until("the row's pipeline chosen to copy", |e| e.text("pipeline-copy").contains("Delivery"));
+  editor.until("the row's pipeline chosen to copy", |e| {
+    e.text("pipeline-copy").contains("Delivery")
+  });
   editor.set("pipeline-name", "Delivery copy");
   editor.click("pipeline-create");
   editor.until("the copy opened", |e| e.exists("pipeline-step-step"));
   let copy = editor.selected();
   assert_ne!(copy, id);
   let body = editor.db().draft::<Pipeline>(copy).unwrap().unwrap().body().clone();
-  assert_eq!(body.steps()[0].name.as_str(), "Check", "draft v1 is the published version's copy");
+  assert_eq!(
+    body.steps()[0].name.as_str(),
+    "Check",
+    "draft v1 is the published version's copy"
+  );
 }

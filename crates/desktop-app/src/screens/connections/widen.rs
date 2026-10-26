@@ -176,8 +176,7 @@ impl WidenConfirm {
     } else {
       props.on_keep.clone()
     };
-    let keep =
-      ActionButton::new(format!("{}-keep", props.id), keep_kind, props.keep.clone()).on_click(move || keep());
+    let keep = ActionButton::new(format!("{}-keep", props.id), keep_kind, props.keep.clone()).on_click(move || keep());
     let confirm = ActionButton::new(
       format!("{}-confirm", props.id),
       ButtonKind::Primary,

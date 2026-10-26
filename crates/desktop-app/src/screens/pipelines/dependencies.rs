@@ -72,7 +72,11 @@ impl Component for Dependencies {
 }
 
 /// The steps `step` runs after, by number and name, or *On task start* when it runs first.
-pub fn label(ctx: &Ctx, shown: &orchester_core::resource::PipelineEdit, step: &orchester_core::resource::Step) -> String {
+pub fn label(
+  ctx: &Ctx,
+  shown: &orchester_core::resource::PipelineEdit,
+  step: &orchester_core::resource::Step,
+) -> String {
   let names: Vec<_> = shown
     .steps()
     .iter()

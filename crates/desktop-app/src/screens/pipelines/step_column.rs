@@ -205,14 +205,18 @@ impl StepColumn {
         views.close();
       });
     let keep = self.removing.clone();
-    Notice::new("step-remove-question", NoticeTone::Warning, ctx.t("pipelines.removeTitle"))
-      .stacked()
-      .body(ctx.t("pipelines.removeHint"))
-      .action(if props.locked { confirm.disabled() } else { confirm })
-      .action(
-        ActionButton::new("step-keep", ButtonKind::Ghost, ctx.t("pipelines.keep")).on_click(move || keep.set(false)),
-      )
-      .into()
+    Notice::new(
+      "step-remove-question",
+      NoticeTone::Warning,
+      ctx.t("pipelines.removeTitle"),
+    )
+    .stacked()
+    .body(ctx.t("pipelines.removeHint"))
+    .action(if props.locked { confirm.disabled() } else { confirm })
+    .action(
+      ActionButton::new("step-keep", ButtonKind::Ghost, ctx.t("pipelines.keep")).on_click(move || keep.set(false)),
+    )
+    .into()
   }
 }
 

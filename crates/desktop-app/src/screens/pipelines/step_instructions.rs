@@ -69,7 +69,12 @@ impl Component for Instructions {
     if locked {
       field = field.locked();
     }
-    if let Some(error) = props.state.get().errors.get(&format!("{}:step-instructions", props.step.key)) {
+    if let Some(error) = props
+      .state
+      .get()
+      .errors
+      .get(&format!("{}:step-instructions", props.step.key))
+    {
       field = field.error(message_text(ctx, error));
     }
     field.render(ctx)

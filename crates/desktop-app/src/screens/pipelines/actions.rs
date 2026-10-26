@@ -52,11 +52,13 @@ impl Writes {
         }
         writes.save(current, body, Allowed::default());
       });
-    Some(if busy || !editing.errors.is_empty() || editing.edit.validate().is_err() {
-      save.disabled()
-    } else {
-      save
-    })
+    Some(
+      if busy || !editing.errors.is_empty() || editing.edit.validate().is_err() {
+        save.disabled()
+      } else {
+        save
+      },
+    )
   }
 
   fn save(&self, current: Editing, body: orchester_core::resource::Pipeline, allowed: Allowed) {
@@ -73,9 +75,13 @@ impl Writes {
   pub fn publish_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> ActionButton {
     let views = editing.views.clone();
     if editing.opened.latest.is_some() && editing.opened.draft_saved_at.is_none() && !editing.dirty() {
-      return ActionButton::new("pipeline-header-history", ButtonKind::Secondary, ctx.t("pipelines.history"))
-        .icon(Icon::History)
-        .on_click(move || views.tab(View::Versions));
+      return ActionButton::new(
+        "pipeline-header-history",
+        ButtonKind::Secondary,
+        ctx.t("pipelines.history"),
+      )
+      .icon(Icon::History)
+      .on_click(move || views.tab(View::Versions));
     }
     let next = next_version(&editing.opened)
       .map(|v| v.get().to_string())
@@ -153,7 +159,9 @@ impl Writes {
       )
       .icon(Icon::ArrowUp)
       .on_click(move || writes.publish(before.clone(), Allowed::default()));
-      return review.child(super::publication::footer(ctx, &self.state, publish)).into();
+      return review
+        .child(super::publication::footer(ctx, &self.state, publish))
+        .into();
     }
     let words = reasons.iter().map(|m| message_text(ctx, m)).collect();
     let (writes, keep) = (self.clone(), editing.views);

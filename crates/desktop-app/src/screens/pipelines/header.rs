@@ -5,7 +5,10 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::{PaletteColor, SpacingSize}},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
   components::{Row, Text},
   layout::Alignment,
   node::Element,
@@ -28,7 +31,12 @@ use crate::{
 };
 
 /// The header of `state`'s page; `busy` while a write runs, a question holds the page or a version is read.
-pub fn header(ctx: &mut Ctx, state: &State, (save, publish): (Option<ActionButton>, ActionButton), busy: bool) -> Element {
+pub fn header(
+  ctx: &mut Ctx,
+  state: &State,
+  (save, publish): (Option<ActionButton>, ActionButton),
+  busy: bool,
+) -> Element {
   let editing = state.get();
   let nav = Navigation::of(ctx);
   let back = parts::back_link(
@@ -135,7 +143,11 @@ fn version_line(ctx: &Ctx, editing: &Editing) -> Row {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Base, color))
-    .child(Text::new(&status).id("pipeline-version-status").variant(PipelinesText::Status.role()))
+    .child(
+      Text::new(&status)
+        .id("pipeline-version-status")
+        .variant(PipelinesText::Status.role()),
+    )
     .child(
       Text::new(&detail)
         .id("pipeline-version-detail")
@@ -167,7 +179,12 @@ fn tabs(ctx: &mut Ctx, editing: &Editing) -> Element {
         tab == Tab::Steps,
         open(View::Steps),
       ),
-      PageTab::new("pipeline-settings", ctx.t("pipelines.settingsTab"), tab == Tab::Settings, open(View::Settings)),
+      PageTab::new(
+        "pipeline-settings",
+        ctx.t("pipelines.settingsTab"),
+        tab == Tab::Settings,
+        open(View::Settings),
+      ),
       PageTab::new(
         "pipeline-history",
         counted(ctx, &ctx.t("pipelines.versions"), versions),

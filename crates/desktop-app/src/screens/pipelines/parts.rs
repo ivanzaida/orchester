@@ -120,11 +120,7 @@ pub fn sub_head(id: &str, back: Element, title: &str, meta: Option<&str>) -> Col
             .id(format!("{id}-text"))
             .variant(TypographyStyle::Title),
         )
-        .with_children(meta.map(|meta| {
-          Text::new(meta)
-            .id(format!("{id}-meta"))
-            .variant(GroupText::Hint.role())
-        })),
+        .with_children(meta.map(|meta| Text::new(meta).id(format!("{id}-meta")).variant(GroupText::Hint.role()))),
     )
 }
 
