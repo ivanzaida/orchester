@@ -56,7 +56,7 @@ use super::placeholder::centered;
 use crate::{
   navigation::{Navigation, link::Open},
   project::{ShownProject, TasksState},
-  routes::{ProjectPage, Route, Screen, TaskList, TaskView},
+  routes::{ProjectPage, Route, Screen, TaskList, TaskListTab, TaskView},
   ui::{
     icon::Icon,
     message::message_text,
@@ -173,11 +173,11 @@ impl Nav {
   }
 
   /// The Tasks list with `highlight`, the task Create just added, in the form's place so Back does not return to a
-  /// form that was used.
+  /// form that was used. It opens on All, the one view sure to hold a new task whatever its status: a draft is in
+  /// Backlog, which Active, the list's default, leaves out.
   pub fn tasks(&self, highlight: TaskKey) {
-    self
-      .navigation
-      .replace(self.route(ProjectPage::Tasks(TaskList::default().with_highlight(highlight))));
+    let list = TaskList::new(TaskListTab::All).with_highlight(highlight);
+    self.navigation.replace(self.route(ProjectPage::Tasks(list)));
   }
 
   /// What opens the Tasks list where a press asks (`navigation::link`).

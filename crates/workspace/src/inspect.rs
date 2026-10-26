@@ -125,6 +125,7 @@ macro_rules! markers {
     impl $inspect for crate::sources::project::Removed {}
     impl $inspect for crate::skills::repository::RepositoryScan {}
     impl $inspect for crate::skills::editor::EditorData {}
+    impl $inspect for crate::tasks::browse::Facets {}
     impl $inspect for crate::tasks::browse::PipelineFilter {}
     impl $inspect for crate::tasks::browse::Selection {}
     impl $inspect for crate::tasks::browse::TaskSort {}
@@ -160,6 +161,8 @@ macro_rules! markers {
     impl $inspect for crate::tasks::timeline::load::Loaded {}
     impl $inspect for crate::tasks::timeline::load::Requests {}
     impl $inspect for crate::tasks::usage::ProjectUsage {}
+    impl $inspect for crate::tasks::views::Group {}
+    impl $inspect for crate::tasks::views::ListView {}
     impl $inspect for crate::tools::data::ProjectTools {}
     impl $inspect for crate::tools::data::ToolChange {}
     impl $inspect for crate::workspace::ListedData {}

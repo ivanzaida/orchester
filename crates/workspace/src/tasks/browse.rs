@@ -2,11 +2,11 @@
 use std::collections::BTreeSet;
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  id::{ModuleId, ResourceId, TagId, TaskId},
   run::TaskPhase,
   task::{
     Task,
-    organization::{self, TaskFilter},
+    organization::{self, Priority, TaskFilter},
   },
   task_group::GroupHold,
 };
@@ -75,16 +75,68 @@ pub fn rows_in(
   (query, module): (Query<'_>, ModuleFilter),
   sort: TaskSort,
 ) -> Vec<TaskRow> {
-  let text = query.text.trim().to_lowercase();
+  let keeps = |task: &Task| {
+    (query.pipeline.0.is_none() || task.details().pipeline == query.pipeline.0)
+      && module.keeps(task)
+      && query.organization.includes(task.organization())
+  };
+  rows_where(data, tab, (query.text, query.separator), sort, keeps)
+}
+
+/// What the Tasks list's Filter menu narrows it to (ORC-99): for each facet the values chosen, any of which a task
+/// has; a facet with none chosen keeps every task. `None` among the pipelines or the modules is a task without one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Facets {
+  pub pipelines: Vec<Option<ResourceId>>,
+  pub modules: Vec<Option<ModuleId>>,
+  pub priorities: Vec<Priority>,
+  pub tags: Vec<TagId>,
+}
+
+impl Facets {
+  /// How many values are chosen, over every facet.
+  pub fn count(&self) -> usize {
+    self.pipelines.len() + self.modules.len() + self.priorities.len() + self.tags.len()
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.count() == 0
+  }
+
+  fn keeps(&self, task: &Task, organization: &TaskFilter) -> bool {
+    (self.pipelines.is_empty() || self.pipelines.contains(&task.details().pipeline))
+      && (self.modules.is_empty() || self.modules.contains(&task.module()))
+      && organization.includes(task.organization())
+  }
+}
+
+/// Every task the search `text` finds among those `facets` keep, as rows ordered by `sort` (ORC-99): the Tasks list
+/// splits them into its views ([`super::views`]). `separator` joins the keys of a row's blocking tasks.
+pub fn faceted(data: &ProjectTasks, (text, separator): (&str, &str), facets: &Facets, sort: TaskSort) -> Vec<TaskRow> {
+  let organization = TaskFilter {
+    priorities: facets.priorities.clone(),
+    tags: facets.tags.clone(),
+    ..TaskFilter::default()
+  };
+  rows_where(data, TaskTab::All, (text, separator), sort, |task| {
+    facets.keeps(task, &organization)
+  })
+}
+
+/// The rows of `tab` the search `text` finds among the tasks `keeps` keeps, ordered by `sort`, each saying what blocks
+/// it or how its group waits.
+fn rows_where(
+  data: &ProjectTasks,
+  tab: TaskTab,
+  (text, separator): (&str, &str),
+  sort: TaskSort,
+  keeps: impl Fn(&Task) -> bool,
+) -> Vec<TaskRow> {
+  let text = text.trim().to_lowercase();
   let mut tasks: Vec<_> = data
     .tasks
     .iter()
-    .filter(|task| {
-      (query.pipeline.0.is_none() || task.details().pipeline == query.pipeline.0)
-        && module.keeps(task)
-        && query.organization.includes(task.organization())
-        && matches_text(task, data.former_keys.get(&task.id()), &text)
-    })
+    .filter(|task| keeps(task) && matches_text(task, data.former_keys.get(&task.id()), &text))
     .cloned()
     .collect();
   match sort {
@@ -97,7 +149,7 @@ pub fn rows_in(
   list::rows(&tasks, data, tab)
     .into_iter()
     .map(|row| {
-      let mut row = data.decorate_row(row, query.separator);
+      let mut row = data.decorate_row(row, separator);
       // A blocked task says what blocks it rather than how its group waits.
       if data.blocking.get(&row.id).is_some_and(|by| !by.is_empty()) {
         return row;
