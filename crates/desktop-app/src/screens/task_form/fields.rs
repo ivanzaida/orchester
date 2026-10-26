@@ -1,13 +1,17 @@
-//! The form's fields as signals the sections type into, read together as [`Values`]; the task's module beside
-//! them, which is not one of the task's details: it is saved after them and is no part of a version's conflict.
+//! The form's fields as signals the composer types into and its chips set, read together as [`Values`]; the task's
+//! module beside them, which is not one of the task's details: it is saved after them and is no part of a version's
+//! conflict.
 
 use lurq::{app::ctx::Ctx, core::Signal};
+use orchester_core::task::organization::Priority;
 use orchester_workspace::modules::ModuleChoice;
 
 use super::{
   criteria::{Criterion, texts},
+  delivers::DeliversPick,
   plan::Pick,
   points::Points,
+  priority::PriorityPick,
   values::Values,
 };
 
@@ -21,6 +25,8 @@ pub struct Fields {
   pub time_limit: Signal<String>,
   pub points: Signal<Points>,
   pub no_automatic_merge: Signal<bool>,
+  pub priority: Signal<PriorityPick>,
+  pub delivers: Signal<DeliversPick>,
   pub module: Signal<ModuleChoice>,
 }
 
@@ -35,6 +41,8 @@ impl Fields {
       time_limit: ctx.signal(String::new()),
       points: ctx.signal(Points(None)),
       no_automatic_merge: ctx.signal(false),
+      priority: ctx.signal(PriorityPick(Priority::None)),
+      delivers: ctx.signal(DeliversPick(None)),
       module: ctx.signal(ModuleChoice::default()),
     }
   }
@@ -50,6 +58,8 @@ impl Fields {
       time_limit: self.time_limit.get(),
       points: self.points.get().0,
       no_automatic_merge: self.no_automatic_merge.get(),
+      priority: self.priority.get().0,
+      delivers: self.delivers.get().0,
     }
   }
 
@@ -68,6 +78,8 @@ impl Fields {
       time_limit: self.time_limit.get_untracked(),
       points: self.points.get_untracked().0,
       no_automatic_merge: self.no_automatic_merge.get_untracked(),
+      priority: self.priority.get_untracked().0,
+      delivers: self.delivers.get_untracked().0,
     }
   }
 
@@ -80,5 +92,7 @@ impl Fields {
     self.time_limit.set(values.time_limit.clone());
     self.points.set(Points(values.points));
     self.no_automatic_merge.set(values.no_automatic_merge);
+    self.priority.set(PriorityPick(values.priority));
+    self.delivers.set(DeliversPick(values.delivers));
   }
 }
