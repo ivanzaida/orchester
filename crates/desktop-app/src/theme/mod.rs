@@ -93,7 +93,7 @@ pub use self::{
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText},
-  tasks::TasksSpacing,
+  tasks::{TasksSpacing, list_scrollbar},
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
 };

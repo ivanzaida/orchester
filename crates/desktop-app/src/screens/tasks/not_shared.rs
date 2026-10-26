@@ -1,7 +1,8 @@
 //! The tasks kept *Not shared* when the project joined (`A7PKfL`, `T1ahf8`): out of the shared list, behind the *Not
-//! shared · 2* filter on the query's second line, which shows only while there are any. With it on, the list holds
-//! them alone, read-only, under a notice that says why they stayed; its tabs count them and every filter applies to
-//! them. A search that finds only a *Not shared* task says so and offers *Show Not shared tasks*, the search kept.
+//! shared · 2* filter at the start of the applied filters' line, which shows only while there are any. With it on, the
+//! list holds them alone, read-only, under a notice that says why they stayed; its views count them and every filter
+//! applies to them. A search that finds only a *Not shared* task says so and offers *Show Not shared tasks*, the search
+//! kept.
 
 use std::sync::Arc;
 
@@ -10,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -35,8 +36,8 @@ use crate::{
   },
 };
 
-/// The query's second line (`Query line 2` in `Xr4Wb`) with the *Not shared* filter; `None` without such tasks.
-pub(super) fn filters(ctx: &mut Ctx, (project, list): (ProjectId, &TaskList), count: usize) -> Option<Element> {
+/// The *Not shared* filter (`Not shared · 2` in `Xr4Wb`); `None` without such tasks.
+pub(super) fn filter(ctx: &mut Ctx, (project, list): (ProjectId, &TaskList), count: usize) -> Option<Element> {
   if count == 0 {
     return None;
   }
@@ -51,16 +52,7 @@ pub(super) fn filters(ctx: &mut Ctx, (project, list): (ProjectId, &TaskList), co
       navigation.replace(Route::Project(project, ProjectPage::Tasks(list)));
     },
   );
-  Some(
-    Row::new()
-      .id("tasks-query-filters")
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(toggle)
-      .child(Spacer::new().flex(1.0))
-      .into(),
-  )
+  Some(toggle.into())
 }
 
 /// *2 tasks stayed on this computer when Kontur joined KTR* over the *Not shared* rows (`Notice` in `A7PKfL`).
@@ -144,31 +136,26 @@ pub(super) fn only_not_shared(ctx: &mut Ctx, (project, list): (ProjectId, &TaskL
   )
   .on_click(move || navigation.replace(Route::Project(project, ProjectPage::Tasks(shown.clone()))));
   Column::new()
+    .id("tasks-only-not-shared")
     .width(Dimension::Pct(100.0))
-    .child(super::table::header(ctx))
+    .padding(Padding::vertical(ExtraSpacing::Loading.role()))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
     .child(
-      Column::new()
-        .id("tasks-only-not-shared")
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::vertical(ExtraSpacing::Loading.role()))
-        .spacing(SpacingSize::Sm)
+      Text::new(&ctx.t_args("tasks.notShared.noShared", [("search", search)]))
+        .id("tasks-only-not-shared-title")
+        .variant(ExtraTypography::Strong.role()),
+    )
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Xs)
         .align_items(Alignment::Center)
         .child(
-          Text::new(&ctx.t_args("tasks.notShared.noShared", [("search", search)]))
-            .id("tasks-only-not-shared-title")
-            .variant(ExtraTypography::Strong.role()),
+          Text::new(&detail)
+            .id("tasks-only-not-shared-detail")
+            .variant(TypographyStyle::Description),
         )
-        .child(
-          Row::new()
-            .spacing(SpacingSize::Xs)
-            .align_items(Alignment::Center)
-            .child(
-              Text::new(&detail)
-                .id("tasks-only-not-shared-detail")
-                .variant(TypographyStyle::Description),
-            )
-            .child(show),
-        ),
+        .child(show),
     )
     .into()
 }

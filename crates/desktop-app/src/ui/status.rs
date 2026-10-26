@@ -328,16 +328,21 @@ pub const fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteCo
   }
 }
 
-/// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
-pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
-  let (glyph, tone) = match status {
+/// A workflow status's icon and its color.
+pub const fn workflow_look(status: WorkflowStatus) -> (Icon, PaletteColor) {
+  match status {
     WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::TextMuted),
     WorkflowStatus::Todo => (Icon::Circle, PaletteColor::TextSecondary),
     WorkflowStatus::InProgress => (Icon::CircleDotDashed, PaletteColor::TextSecondary),
     WorkflowStatus::InReview => (Icon::Eye, PaletteColor::TextSecondary),
     WorkflowStatus::Done => (Icon::CircleCheck, PaletteColor::Success),
     WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted),
-  };
+  }
+}
+
+/// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
+pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
+  let (glyph, tone) = workflow_look(status);
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Pair.role())

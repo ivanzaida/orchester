@@ -91,7 +91,7 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
     at(ProjectPage::KeptTask(key("KON-12"), TaskView::Conversation)),
     at(ProjectPage::Tasks(
-      TaskList::new(TaskListTab::InReview)
+      TaskList::new(TaskListTab::Done)
         .with_search("  spaced  ")
         .with_highlight(key("KON-13")),
     )),
@@ -170,11 +170,11 @@ fn paths_are_the_documented_ones() {
     (at(ProjectPage::Tasks(TaskList::default())), format!("{root}/tasks")),
     (
       at(ProjectPage::Tasks(
-        TaskList::new(TaskListTab::InProgress)
+        TaskList::new(TaskListTab::Backlog)
           .with_search("retry jitter")
           .with_highlight(key("KON-13")),
       )),
-      format!("{root}/tasks?tab=in_progress&q=retry%20jitter&highlight=KON-13"),
+      format!("{root}/tasks?tab=backlog&q=retry%20jitter&highlight=KON-13"),
     ),
     (at(ProjectPage::NewTask), format!("{root}/tasks/new")),
     (
@@ -458,7 +458,8 @@ fn screens_open_on_their_first_tab() {
   );
   assert_eq!(
     ProjectPage::of(Screen::Tasks),
-    Some(ProjectPage::Tasks(TaskList::new(TaskListTab::All)))
+    Some(ProjectPage::Tasks(TaskList::new(TaskListTab::Active))),
+    "the Tasks list opens on Active"
   );
   assert_eq!(ProjectPage::of(Screen::NewTask), Some(ProjectPage::NewTask));
   for screen in [Screen::AllProjects, Screen::Settings, Screen::Task, Screen::EditTask] {
