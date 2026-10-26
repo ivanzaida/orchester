@@ -202,7 +202,10 @@ fn orchester_design_connect_steps_are_rows_of_a_box_with_cancel_at_its_end() {
     "orchester-connect-step-username",
   ] {
     let step = bounds(id);
-    assert!((step.width - steps.width).abs() < 0.5, "{id} spans the box: {step:?} {steps:?}");
+    assert!(
+      (step.width - steps.width).abs() < 0.5,
+      "{id} spans the box: {step:?} {steps:?}"
+    );
     assert!(step.y + 0.5 >= bottom, "{id} follows the step above: {step:?}");
     bottom = step.y + step.height;
   }
