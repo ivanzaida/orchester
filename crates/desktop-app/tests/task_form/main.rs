@@ -1,10 +1,12 @@
 //! New task and Edit task (`screens::task_form`) headless at 1440 × 900 on seeded Kontur projects whose
-//! runner never starts: what each action needs is said in the design's words; the limits read back and
-//! refuse only what is not a number, with no maximum; Create saves a draft and highlights it in Tasks;
-//! Create & run without a runner leaves the task queued with Retry run, which never makes a second task or
-//! run; Edit task saves only a change, discards in place, keeps unsaved changes when left, and offers no
-//! Create & run for a task that ran. Needs `git` (the seed).
+//! runner never starts: the action bar names the one thing the next action needs in the design's words; the
+//! limits read back and refuse only what is not a number, with no maximum; Create saves a draft and highlights
+//! it in Tasks; Create & run without a runner leaves the task queued with Retry run, which never makes a second
+//! task or run; Edit task saves only a change, discards in place, keeps unsaved changes when left, and offers no
+//! Create & run for a task that ran; the chips save what the task's runs deliver and its priority (`chips.rs`).
+//! Needs `git` (the seed).
 
+mod chips;
 mod conflicts;
 mod harness;
 #[allow(
@@ -20,46 +22,48 @@ mod support;
 mod versions;
 
 use harness::Form;
+use lurq::app::events::MouseButton;
 use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
   store::{RunStore, TaskStore},
   task::TaskStatus,
 };
 
-const RUN_REASON_EMPTY: &str =
-  "Run unavailable: add a task title, describe the outcome, add an acceptance criterion and choose a pipeline.";
+const REASON_EMPTY: &str = "To create, add a title. To run, also the outcome, one criterion and a pipeline.";
+pub const READY: &str = "Ready to run · the run starts as soon as an agent slot is free.";
 
 #[test]
 fn form_new_task_says_what_each_action_needs() {
   let mut form = Form::seeded("live");
   form.new_task();
   assert_eq!(form.status(), "Not saved yet");
-  assert_eq!(form.text("task-form-title"), "What would you like to build?");
-  assert_eq!(
-    form.reasons(),
-    vec![
-      "Create unavailable: add a task title.".to_owned(),
-      RUN_REASON_EMPTY.to_owned()
-    ]
-  );
+  for gone in ["task-form-description", "task-form-project", "task-form-context-reason"] {
+    assert!(!form.exists(gone), "{gone} left the form");
+  }
+  assert_eq!(form.reasons(), vec![REASON_EMPTY.to_owned()]);
+  assert_eq!(form.text("task-form-pipeline-value"), "Choose");
   assert!(
-    form.exists("task-form-no-plan"),
-    "the plan's place says to choose a pipeline"
+    !form.exists("task-form-plan"),
+    "no plan line before a pipeline is chosen"
   );
   form.set("task-form-title-input", "Add a delivery log");
   form.choose_pipeline("Quick fix v1");
   // Limits are optional: a budget without a time limit, or neither, holds nothing back.
-  let without_limits = vec!["Run unavailable: describe the outcome and add an acceptance criterion.".to_owned()];
+  let without_limits = vec!["To run, describe the outcome and add one criterion.".to_owned()];
   assert_eq!(form.reasons(), without_limits);
-  form.set("task-form-budget-input", "5000");
+  form.limits("5000", "");
   assert_eq!(form.reasons(), without_limits);
-  assert!(form.exists("task-form-plan"), "the chosen pipeline's plan shows");
+  assert_eq!(form.text("task-form-limits-value"), "5k tokens");
+  assert!(form.exists("task-form-plan"), "the chosen pipeline's plan line shows");
+  assert_eq!(form.text("task-form-pipeline-value"), "Quick fix v1");
 }
 
 #[test]
 fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   let mut form = Form::seeded("live");
   form.new_task();
+  assert_eq!(form.text("task-form-limits-value"), "No limit");
+  form.open("task-form-limits");
   assert_eq!(
     form.text("task-form-budget-input-read-back"),
     "No limit · the run uses what it needs"
@@ -71,7 +75,7 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   // A budget set at once reads grouped once the field is left.
   form.set("task-form-budget-input", "1400000");
   focus(&mut form, "task-form-budget-input");
-  focus(&mut form, "task-form-title-input");
+  focus(&mut form, "task-form-time-limit-input");
   assert_eq!(form.value("task-form-budget-input"), "1,400,000");
   form.set("task-form-time-limit-input", "1");
   assert_eq!(
@@ -82,6 +86,7 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
     form.text("task-form-time-limit-input-read-back"),
     "= 1 minute of active agent time"
   );
+  assert_eq!(form.text("task-form-limits-value"), "1.4M · 1 min");
   // No maximum: a budget far above any project's old maximum is a budget.
   form.set("task-form-budget-input", "50,000,000,000");
   assert_eq!(
@@ -110,10 +115,12 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
     form.text("task-form-time-limit-input-note"),
     "Enter whole minutes, such as 30."
   );
+  assert_eq!(form.text("task-form-limits-value"), "Not valid");
   form.set("task-form-title-input", "Add a delivery log");
-  assert_eq!(
-    form.reasons()[0],
-    "Create unavailable: fix the run budget and fix the time limit."
+  assert!(
+    form.reasons()[0].starts_with("To create, fix the run budget and fix the time limit."),
+    "{:?}",
+    form.reasons()
   );
 }
 
@@ -149,7 +156,7 @@ fn form_create_and_run_without_a_runner_queues_once_and_retries_the_same_run() {
   let mut form = Form::seeded("live");
   form.new_task();
   form.fill("Add a delivery log", "Quick fix v1");
-  assert!(form.reasons().is_empty(), "nothing is missing: {:?}", form.reasons());
+  assert_eq!(form.reasons(), vec![READY.to_owned()]);
   form.click("task-form-run");
   form.window.until("the run's refusal", |window| {
     window
@@ -157,7 +164,7 @@ fn form_create_and_run_without_a_runner_queues_once_and_retries_the_same_run() {
       .is_some_and(|status| status.join("") == "Queued · run not started")
   });
   assert_eq!(
-    form.text("task-form-description"),
+    form.text("task-form-queued-note-text"),
     "Saved as KON-7. The fields stay locked while its run waits to start."
   );
   assert_eq!(
@@ -171,11 +178,14 @@ fn form_create_and_run_without_a_runner_queues_once_and_retries_the_same_run() {
   form.click("task-form-retry");
   form.window.until("the retry's refusal", |window| {
     window
-      .texts("task-form-reasons")
-      .is_some_and(|reasons| !reasons.is_empty())
+      .texts("task-form-status-label")
+      .is_some_and(|status| status.join("") == "Queued · run not started")
       && window.tree.get_element_by_id("task-form-retry").is_some()
   });
-  assert_eq!(form.status(), "Queued · run not started");
+  assert_eq!(
+    form.reasons(),
+    vec!["The runner is not connected. Try again once it is online.".to_owned()]
+  );
   assert_eq!(form.db().tasks().expect("tasks").len(), tasks, "no second task");
   assert!(
     form.db().runs_of_task(queued.id()).expect("runs").is_empty(),
@@ -187,16 +197,16 @@ fn form_create_and_run_without_a_runner_queues_once_and_retries_the_same_run() {
 fn form_save_changes_only_after_a_change() {
   let mut form = Form::seeded("live");
   form.edit("KON-1");
-  assert_eq!(form.text("task-form-title"), "Edit task");
   assert_eq!(form.status(), "Draft saved locally");
+  assert_eq!(form.text("task-form-crumbs-1"), "KON-1");
   assert_eq!(
     form.reasons(),
-    vec!["Save changes unavailable: nothing has changed.".to_owned()]
+    vec![READY.to_owned()],
+    "nothing to save: the draft can run"
   );
   assert!(form.exists("task-form-run"), "a draft can still Create & run");
   form.set("task-form-title-input", "A new title for KON-1");
   assert_eq!(form.status(), "Unsaved changes");
-  assert!(form.reasons().is_empty());
   form.click("task-form-save");
   form.window.until("the change is saved", |window| {
     window
@@ -249,6 +259,10 @@ fn form_leaving_with_unsaved_changes_keeps_them() {
     "{}",
     form.status()
   );
+  assert!(
+    form.text("task-form-kept-note-text").starts_with("Your changes from "),
+    "the note says where they came from"
+  );
   assert_ne!(
     form.task("KON-1").expect("KON-1").details().title.as_str(),
     "Kept on this computer",
@@ -262,21 +276,27 @@ fn form_a_task_that_ran_has_no_create_and_run() {
   form.edit("KON-12");
   assert!(!form.exists("task-form-run"));
   assert_eq!(
-    form.text("task-form-bar-note"),
-    "Create & run is not offered: this task already has a run."
+    form.text("task-form-ran-note-text"),
+    "KON-12 already ran. Changes apply to future runs; its runs keep the brief they started with."
   );
   assert_eq!(form.status(), "Saved");
+  assert_eq!(
+    form.reasons(),
+    vec!["Nothing to save: no field has changed.".to_owned()]
+  );
+  let keys = if cfg!(target_os = "macos") { "⌘ S" } else { "Ctrl S" };
+  assert_eq!(form.text("task-form-shortcut"), keys);
 }
 
 #[test]
 fn form_without_published_pipelines_still_creates_a_draft() {
   let mut form = Form::bare();
   form.new_task();
-  assert_eq!(
-    form.value("task-form-pipeline-input"),
-    "No published pipelines in this project"
-  );
-  assert!(form.exists("task-form-open-pipelines"));
+  assert_eq!(form.text("task-form-pipeline-value"), "None published");
+  form.open("task-form-pipeline");
+  assert!(form.exists("task-form-pipeline-none"));
+  assert!(form.exists("task-form-manage-pipelines"));
+  form.click("task-form-pipeline");
   form.set("task-form-title-input", "Draft without a pipeline");
   let reasons = form.reasons();
   assert_eq!(reasons.len(), 1, "{reasons:?}");
@@ -322,6 +342,42 @@ fn form_criteria_move_with_the_keyboard() {
     !form.exists("task-form-criterion-3-input"),
     "Backspace removes an empty one"
   );
+}
+
+/// A criterion row is 8 over and under one line (`cScHP`, 33 high): its ×, a 24 square, shows on it without
+/// making it taller, and a press where the pointer sees it removes it.
+#[test]
+fn form_criteria_rows_keep_their_height_with_the_remove_button() {
+  let mut form = Form::seeded("live");
+  form.new_task();
+  form.click("task-form-add-criterion");
+  form.set("task-form-criterion-1-input", "First");
+  form.click("task-form-add-criterion");
+  form.set("task-form-criterion-2-input", "Second");
+  let row = form.bounds("task-form-criterion-1");
+  let remove = form.bounds("task-form-criterion-1-remove");
+  assert!(row.height < remove.height + 16.0, "the row is {} high", row.height);
+  assert!(
+    remove.height > 0.0 && remove.y >= row.y && remove.y + remove.height <= row.y + row.height,
+    "the × sits on its row: {remove:?} in {row:?}"
+  );
+  let input = form.bounds("task-form-criterion-1-input");
+  assert!(
+    input.x + input.width <= remove.x,
+    "the text stops before the ×: {input:?}, {remove:?}"
+  );
+  let (x, y) = (remove.x + remove.width / 2.0, remove.y + remove.height / 2.0);
+  let tree = &mut form.window.tree;
+  tree.mouse_move(x, y);
+  tree.mouse_down(x, y, MouseButton::Left);
+  tree.mouse_up(x, y, MouseButton::Left);
+  form.window.pass();
+  assert_eq!(
+    form.value("task-form-criterion-1-input"),
+    "Second",
+    "a press on the × removes its criterion"
+  );
+  assert!(!form.exists("task-form-criterion-2"), "one criterion is left");
 }
 
 fn focus(form: &mut Form, id: &str) {

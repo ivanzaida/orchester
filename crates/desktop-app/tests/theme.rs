@@ -15,6 +15,8 @@ mod orchester;
 mod orchestrator;
 #[path = "theme/skills.rs"]
 mod skills;
+#[path = "theme/task_form.rs"]
+mod task_form;
 
 use lurq::{
   app::{

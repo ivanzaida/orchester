@@ -253,10 +253,15 @@ fn modules_the_task_form_saves_the_chosen_module() {
   let module = picked.expect("the module");
   seeded.open(
     ProjectPage::EditTask("KON-1".parse().expect("a key")),
-    "task-form-module-input",
+    "task-form-module",
   );
-  assert_eq!(seeded.options("task-form-module-input"), ["No module", "Checkout"]);
-  seeded.choose("task-form-module-input", "Checkout");
+  assert_eq!(seeded.text("task-form-module-value"), "None");
+  seeded.click("task-form-module");
+  seeded.until("the module menu", |seeded| seeded.shows("task-form-module-menu"));
+  assert_eq!(seeded.text("task-form-module-0"), "No module");
+  assert_eq!(seeded.text("task-form-module-1"), "Checkout");
+  seeded.click("task-form-module-1");
+  assert_eq!(seeded.text("task-form-module-value"), "Checkout");
   seeded.click("task-form-save");
   seeded.until("the save", |seeded| seeded.task("KON-1").module() == Some(module));
 }
