@@ -61,15 +61,7 @@ pub(super) fn notice(
   };
   let titled = |tone| SettingNotice::new(ID, tone).title(t(ctx, look(shown).key));
   let notice = match state {
-    AccountState::SignedIn => {
-      let other = same_sign_in(account, &parts.accounts)?;
-      let email = account.email().map(str::to_owned).unwrap_or_default();
-      SettingNotice::new(ID, NoticeTone::Warning).body(ta(
-        ctx,
-        "accounts.state.same",
-        [("email", email), ("account", name(ctx, other))],
-      ))
-    }
+    AccountState::SignedIn => SettingNotice::new(ID, NoticeTone::Warning).body(same(ctx, parts, account)?),
     AccountState::NotSignedIn => {
       let body = ta(
         ctx,
@@ -97,18 +89,7 @@ pub(super) fn notice(
       "accounts.state.cliMissing",
       [("program", program), ("account", shown_name)],
     )),
-    AccountState::Unknown => {
-      let version = account
-        .last_check()
-        .and_then(|check| check.program())
-        .map(|checked| checked.version.clone())
-        .unwrap_or_default();
-      titled(NoticeTone::Warning).body(ta(
-        ctx,
-        "accounts.state.unknown",
-        [("program", program), ("version", version), ("account", shown_name)],
-      ))
-    }
+    AccountState::Unknown => titled(NoticeTone::Warning).body(unknown(ctx, account, (program, shown_name))),
     AccountState::FolderMissing => {
       let body = ta(
         ctx,
@@ -146,6 +127,31 @@ fn expired(ctx: &Ctx, account: &AgentAccount, (program, shown): (String, String)
       [("program", program), ("account", shown)],
     ),
   }
+}
+
+/// A signed-in account that shares its sign-in with another; `None` when no other account does.
+fn same(ctx: &Ctx, parts: &Parts, account: &AgentAccount) -> Option<String> {
+  let other = same_sign_in(account, &parts.accounts)?;
+  let email = account.email().map(str::to_owned).unwrap_or_default();
+  Some(ta(
+    ctx,
+    "accounts.state.same",
+    [("email", email), ("account", name(ctx, other))],
+  ))
+}
+
+/// A state the CLI reported that Orchester can't read, with the CLI's version from the last check.
+fn unknown(ctx: &Ctx, account: &AgentAccount, (program, shown): (String, String)) -> String {
+  let version = account
+    .last_check()
+    .and_then(|check| check.program())
+    .map(|checked| checked.version.clone())
+    .unwrap_or_default();
+  ta(
+    ctx,
+    "accounts.state.unknown",
+    [("program", program), ("version", version), ("account", shown)],
+  )
 }
 
 /// An account not signed in or whose sign-in expired: the sign-in and *Check again*, and, never signed in, the login
