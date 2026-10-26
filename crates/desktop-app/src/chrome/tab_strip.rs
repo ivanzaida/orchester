@@ -2,8 +2,9 @@
 //! is the folders icon alone (`All projects tab` `TvmmP`, `Tab/home`); every other tab shows its screen's
 //! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key — after its project's name once the
 //! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. A tab of a
-//! project where something waits for the person ends in an amber hand (`Tab/attention` `iJNwr`), one with
-//! an unresolved failure (runner offline, tasks unread) in a red alert; the mark's tooltip says which. The
+//! project where something waits for the person ends in an amber hand and how many wait (`Tab/attention`
+//! `iJNwr`, the count as `ruG7r`), one with an unresolved failure (runner offline, tasks unread) in a red alert;
+//! the mark's tooltip says which. The
 //! active tab is filled with `hover` and has a close button; a middle click
 //! closes any tab that can be closed.
 //! The OS window title is the active tab's label and the app's name. A tab whose task form holds edits
@@ -30,8 +31,8 @@ use lurq::{
 };
 
 use super::{
-  tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MARK_WIDTH, MIN_DRAG_WIDTH, Slot},
-  tab_label::{attention, close_button, has_attention, label, tab_icon, unsaved},
+  tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MIN_DRAG_WIDTH, Slot},
+  tab_label::{attention, close_button, label, mark_width, tab_icon, unsaved},
   tab_list::{TabList, TabListProps},
   tab_measure::{ActiveKey, ActiveWidth, ListHold},
 };
@@ -187,8 +188,7 @@ impl TabStrip {
 /// The room a tab's unsaved dot and its mark take.
 fn marks(projects: &Projects, tab: &Tab) -> f32 {
   let dot = if unsaved(projects, tab.route()) { DOT_WIDTH } else { 0.0 };
-  let mark = if has_attention(projects, tab) { MARK_WIDTH } else { 0.0 };
-  dot + mark
+  dot + mark_width(projects, tab)
 }
 
 /// How `tabs` share `room`, each as wide as what it shows; the active tab as wide as it was `measured`
@@ -271,7 +271,7 @@ fn tab_button(
       .background(PaletteColor::TextSecondary)
       .into()
   });
-  let marks = dirty.as_ref().map_or(0.0, |_| DOT_WIDTH) + attention.as_ref().map_or(0.0, |_| MARK_WIDTH);
+  let marks = marks(projects, tab);
   let widest = Slot::Labelled(marks).width(fit.label_width(), active);
   // The active tab keeps its width, which the strip measures; while tabs hide, the inactive ones are
   // exactly as wide as `tab_fit` counts them (120 and their marks, `Tab 2 · Kontur · Overview` in `oHEGQ`).

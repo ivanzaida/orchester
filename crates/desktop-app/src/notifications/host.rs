@@ -259,8 +259,9 @@ impl NotificationsHost {
     }
   }
 
-  /// Opens the place of a clicked notification: in the tab that shows it, else in a new tab, pointing at its
-  /// decision card; and brings the window to the front.
+  /// Opens the place of a clicked notification as an item (`Navigation::open_item`): in the tab that shows it or
+  /// its project, else in a new tab, never in place of another project's tab, pointing at its decision card; and
+  /// brings the window to the front.
   fn open(&self, navigation: &Navigation, path: &str) {
     let route = match Route::parse(path) {
       Ok(route) => route,
@@ -276,17 +277,9 @@ impl NotificationsHost {
       .iter()
       .find(|(shown, _)| shown == path)
       .map(|(_, target)| target.clone());
-    let tabs = navigation.tabs_now();
-    let at = match tabs.tabs().iter().find(|tab| *tab.route() == route) {
-      Some(tab) => {
-        navigation.select(tab.id());
-        OpenIn::ActiveTab
-      }
-      None => OpenIn::NewTab,
-    };
     match target.as_ref().and_then(pointed) {
-      Some(card) => navigation.open_to_card(&route, at, card),
-      None => navigation.open(route, at),
+      Some(card) => navigation.open_to_card(&route, OpenIn::ActiveTab, card),
+      None => navigation.open_item(route, OpenIn::ActiveTab),
     }
     #[cfg(windows)]
     if crate::startup::front::bring_own_to_front() == crate::startup::front::Front::NoAnswer {

@@ -1,6 +1,7 @@
 //! Tab labels and what needs the person: a tab names its project and page, and a tab of a project where
-//! something waits ends in an amber hand; the title bar's pill counts what waits in every project the tabs
-//! show, 0 included. The project is the QA seed's `tasks` scenario (6 need you). Needs `git`.
+//! something waits ends in an amber hand and how many wait; the title bar's pill counts what waits in every
+//! project the tabs show, 0 included, the active tab's first in its tooltip. The project is the QA seed's `tasks`
+//! scenario (6 need you). Needs `git`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -52,7 +53,12 @@ fn seeded_window(atlas: Option<ProjectId>) -> Window {
 #[test]
 fn tab_labels_mark_a_project_that_needs_you() {
   let mut window = seeded_window(None);
-  assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · Overview".to_owned()]));
+  assert_eq!(
+    window.texts("tab-1"),
+    Some(vec!["Kontur · Overview".to_owned(), "6".to_owned()]),
+    "the label, then the ✋ and its count"
+  );
+  assert_eq!(window.text("tab-1-attention-count"), "6");
   assert_eq!(
     tooltip(&mut window, "tab-1-attention"),
     "Kontur · 6 need you",
@@ -84,7 +90,10 @@ fn tab_labels_name_a_pull_request_by_its_number() {
     .navigation()
     .go(Route::Project(project, ProjectPage::PullRequest(number, None)));
   window.pass();
-  assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · #142".to_owned()]));
+  assert_eq!(
+    window.texts("tab-1"),
+    Some(vec!["Kontur · #142".to_owned(), "6".to_owned()])
+  );
 }
 
 #[test]
@@ -162,8 +171,20 @@ fn tab_labels_pill_sums_every_open_project_and_splits_it_in_its_tooltip() {
   window.until("Atlas's tasks to be read", |window| {
     window.texts("tab-2").is_some_and(|texts| texts == ["Atlas · Overview"])
       && window.texts("tab-2-attention").is_some()
+      && window
+        .projects()
+        .feed(atlas)
+        .tasks
+        .with(|tasks| tasks.ready().is_some())
   });
   assert_eq!(window.texts("needs-you-pill"), Some(vec!["6 need you".to_owned()]));
+  assert_eq!(
+    tooltip(&mut window, "needs-you-pill"),
+    "Atlas 0 · Kontur 6",
+    "the active tab's project first"
+  );
+  navigation.select(navigation.tabs_now().tabs()[0].id());
+  window.pass();
   assert_eq!(tooltip(&mut window, "needs-you-pill"), "Kontur 6 · Atlas 0");
 }
 

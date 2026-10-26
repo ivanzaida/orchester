@@ -26,6 +26,10 @@ pub const TAB_MIN_WIDTH: f32 = LABEL_MIN_WIDTH + INACTIVE_CHROME_WIDTH;
 /// What a tab's unsaved dot (6) and its mark (11) add with the gap before each.
 pub const DOT_WIDTH: f32 = 6.0 + 6.0;
 pub const MARK_WIDTH: f32 = 11.0 + 6.0;
+/// What a tab's ✋ count adds before its digits: the gap before it, the 12 hand and the 4 after it, as the Needs you
+/// panel's count of a project draws them (`Count` `ruG7r` in `o3xekF`); a digit in Inter 11.5 medium is about 0.62 em.
+const BADGE_CHROME_WIDTH: f32 = 6.0 + 12.0 + 4.0;
+const BADGE_DIGIT_WIDTH: f32 = 11.5 * 0.62;
 /// The tab list button around its count (`Tab list button` `Dq1Mf`): 8 before the count, 4 after it, the
 /// 12 chevron and 6 after that; a digit of the count in Geist Mono 11 is 0.6 em.
 const BUTTON_CHROME_WIDTH: f32 = 8.0 + 4.0 + 12.0 + 6.0;
@@ -105,6 +109,11 @@ pub fn room(window_width: f32, trailing: f32) -> f32 {
 /// The tab list button's width with a count of `count` hidden tabs.
 pub fn button_width(count: usize) -> f32 {
   BUTTON_CHROME_WIDTH + digits(count) as f32 * COUNT_DIGIT_WIDTH
+}
+
+/// What a tab's ✋ count of `count` things waiting adds to it.
+pub fn badge_width(count: usize) -> f32 {
+  BADGE_CHROME_WIDTH + digits(count) as f32 * BADGE_DIGIT_WIDTH
 }
 
 /// How tabs shaped as `slots`, the one at `active` active, share `room`.

@@ -110,7 +110,7 @@ pub fn dispatch(
       }
     }
     BarAction::RestartRunner => services.runners.restart(),
-    BarAction::Go(route, at) => navigation.open(route, at),
+    BarAction::Go(route, at) => navigation.open_item(route, at),
     BarAction::Resolve(id) => services.activity.resolve(id),
     BarAction::ReviewInterrupted(project) => services.recovery.review(project, true),
     BarAction::ReadAgain => {

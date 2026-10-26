@@ -1,6 +1,12 @@
 //! The window's tabs (`docs/design/orchester-workspace.md`, "Tabs" › "Model"): each tab is an
 //! independent place with its own Back/Forward history. A new tab opens All projects; closing the last
 //! tab opens All projects in a fresh one, and the only tab cannot close while it shows All projects.
+//!
+//! An item of a project a person opens (what waits in Needs you, a notification's place, a chat's link) keeps each
+//! project in its own tab ([`TabSet::open_item`]): another project's item never takes the active tab's place. The
+//! tab it opens in remembers the tab it came from at the entry it arrived at, and Back on that entry returns to that
+//! tab, once, as Back within a tab returns to the place before; Forward stays within the tab. The link goes when
+//! Back has used it, when the entry leaves the tab's history, or when the tab it came from closed.
 
 use std::fmt;
 
@@ -30,6 +36,14 @@ impl fmt::Display for TabId {
   }
 }
 
+/// How a tab was reached from another one by an item of its project: the entry it arrived at, and the tab Back on
+/// that entry returns to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Arrival {
+  at: usize,
+  from: TabId,
+}
+
 /// One tab: the places it has been, where in them it is, and the project it was in last.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tab {
@@ -38,6 +52,7 @@ pub struct Tab {
   at: usize,
   /// The project of the last place the tab showed in one, kept while it shows places outside projects.
   last_project: Option<ProjectId>,
+  arrival: Option<Arrival>,
 }
 
 impl Tab {
@@ -47,6 +62,7 @@ impl Tab {
       last_project: route.project(),
       history: vec![route],
       at: 0,
+      arrival: None,
     }
   }
 
@@ -89,9 +105,12 @@ impl Tab {
       return false;
     }
     self.history.truncate(self.at + 1);
+    if self.arrival.is_some_and(|arrival| arrival.at > self.at) {
+      self.arrival = None;
+    }
     self.history.push(route);
     if self.history.len() > HISTORY_LIMIT {
-      self.history.remove(0);
+      self.remove(0);
     }
     self.at = self.history.len() - 1;
     self.arrived()
@@ -115,11 +134,34 @@ impl Tab {
       return false;
     }
     if self.at > 0 && self.history[self.at - 1] == route {
-      self.history.remove(self.at);
+      self.remove(self.at);
       self.at -= 1;
       return self.arrived();
     }
     self.replace(route)
+  }
+
+  /// Drops the entry at `index`, and the tab it was reached from with it when it was the entry it arrived at.
+  fn remove(&mut self, index: usize) {
+    self.history.remove(index);
+    self.arrival = match self.arrival {
+      Some(arrival) if arrival.at == index => None,
+      Some(Arrival { at, from }) if at > index => Some(Arrival { at: at - 1, from }),
+      kept => kept,
+    };
+  }
+
+  /// Remembers that the tab arrived at its current entry from the tab `from`.
+  fn arrive_from(&mut self, from: TabId) {
+    self.arrival = Some(Arrival { at: self.at, from });
+  }
+
+  /// The tab Back returns to from the current entry, when the tab arrived at it from another one.
+  fn came_from(&self) -> Option<TabId> {
+    self
+      .arrival
+      .filter(|arrival| arrival.at == self.at)
+      .map(|arrival| arrival.from)
   }
 
   fn back(&mut self) -> bool {
@@ -200,12 +242,62 @@ impl TabSet {
     self.tabs[self.active].close_panel(route)
   }
 
+  /// Goes back in the active tab, or, on the entry it arrived at from another tab that is still open, to that tab
+  /// ([`open_item`](Self::open_item)), which shows what it showed; `false` when there is nowhere to go back to.
   pub fn back(&mut self) -> bool {
+    if let Some(index) = self.came_from() {
+      self.tabs[self.active].arrival = None;
+      self.active = index;
+      return true;
+    }
     self.tabs[self.active].back()
+  }
+
+  /// Whether [`back`](Self::back) goes somewhere.
+  pub fn can_back(&self) -> bool {
+    self.came_from().is_some() || self.active().can_back()
   }
 
   pub fn forward(&mut self) -> bool {
     self.tabs[self.active].forward()
+  }
+
+  /// Goes to `route`, an item a person opens, keeping each project in its own tab: in the active tab when it shows
+  /// the item's project (on the app's Settings, the one it was in last); else in a tab of that project, the one at
+  /// the item first, which becomes active; else in the active tab when it shows no project, and in a new tab right of
+  /// it otherwise. A tab it switches to remembers the tab it came from for Back. `false` when the active tab is
+  /// there already.
+  pub fn open_item(&mut self, route: Route) -> bool {
+    let Some(project) = route.project() else {
+      return self.go(route);
+    };
+    let here = self.active().sidebar_project();
+    if here == Some(project) {
+      return self.go(route);
+    }
+    let from = self.active().id();
+    let tab = self
+      .tabs
+      .iter()
+      .position(|tab| *tab.route() == route)
+      .or_else(|| self.tabs.iter().position(|tab| tab.sidebar_project() == Some(project)));
+    match tab {
+      Some(index) => {
+        self.active = index;
+        self.tabs[index].go(route);
+      }
+      None if here.is_none() => return self.go(route),
+      None => {
+        self.open_at(route, true);
+      }
+    }
+    self.tabs[self.active].arrive_from(from);
+    true
+  }
+
+  /// The index of the open tab Back on the active tab's entry returns to, if any.
+  fn came_from(&self) -> Option<usize> {
+    self.active().came_from().and_then(|from| self.position(from))
   }
 
   /// Opens a tab at All projects right of the active one and activates it.

@@ -1,18 +1,21 @@
 //! What a tab shows in the strip and in the tab list alike: its label, the mark of a project that needs
 //! the person or has an unresolved failure, whether its task form holds edits that are not saved, and
-//! its close button.
+//! its close button. A project that waits for the person marks each of its tabs, the active one too, with a
+//! ✋ and how many wait, the count of its Needs you, as the Needs you panel counts a project (`Count` `ruG7r` in
+//! `o3xekF`; the design's tab mark `Tab/attention` `iJNwr` draws the hand without its count).
 
 use lurq::{
   app::{
     ctx::Ctx,
     events::MouseEvent,
-    theme::{PaletteColor, RadiusSize},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
-  components::Button,
+  components::{Button, Row, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style},
 };
 
+use super::tab_fit::{MARK_WIDTH, badge_width};
 use crate::{
   navigation::{
     Navigation,
@@ -21,7 +24,7 @@ use crate::{
   project::Projects,
   routes::{ProjectPage, Route},
   shell::needs_you::{self, Attention, count_words},
-  theme::{ExtraColor, IconSize},
+  theme::{ExtraColor, IconSize, NeedsYouText},
   ui::{
     icon::{Icon, file_icon, icon, screen_icon},
     pressable::in_title_bar,
@@ -29,8 +32,8 @@ use crate::{
   },
 };
 
-/// The mark of a tab whose project needs the person (an amber hand, *Kontur · 2 need you*) or has an
-/// unresolved failure (a red alert, *Kontur · runner offline*), with what it means in its tooltip; `id`
+/// The mark of a tab whose project needs the person (an amber hand and how many wait, *Kontur · 2 need you*) or
+/// has an unresolved failure (a red alert, *Kontur · runner offline*), with what it means in its tooltip; `id`
 /// is the mark's element id.
 pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> Option<Element> {
   let project = tab.route().project()?;
@@ -55,16 +58,44 @@ pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> O
     "shell.tabs.attention",
     [("project", name.as_str()), ("waiting", what.as_str())],
   );
-  let marker = icon(glyph, IconSize::Xs, color).id(id.clone()).describe("state", state);
+  let marker: Element = match mark {
+    Attention::Waiting(count) => Row::new()
+      .id(id.clone())
+      .describe("state", state)
+      .describe("count", count.to_string())
+      .flex_shrink(0.0)
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(icon(glyph, IconSize::Sm, color))
+      .child(
+        Text::new(&count.to_string())
+          .id(format!("{id}-count"))
+          .variant(NeedsYouText::Tally.role())
+          .nowrap(),
+      )
+      .into(),
+    Attention::RunnerOffline | Attention::TasksUnread => icon(glyph, IconSize::Xs, color)
+      .id(id.clone())
+      .describe("state", state)
+      .into(),
+  };
   Some(Tooltip::new(id, text).wrap(ctx, marker))
 }
 
-/// Whether `tab` ends in a mark ([`attention`]).
-pub fn has_attention(projects: &Projects, tab: &Tab) -> bool {
-  tab
+/// The room `tab`'s mark ([`attention`]) takes, with the gap before it; none without one.
+pub fn mark_width(projects: &Projects, tab: &Tab) -> f32 {
+  let Some(project) = tab
     .route()
     .project()
-    .is_some_and(|project| needs_you::attention(projects, project).is_some() && projects.name(project).is_some())
+    .filter(|project| projects.name(*project).is_some())
+  else {
+    return 0.0;
+  };
+  match needs_you::attention(projects, project) {
+    Some(Attention::Waiting(count)) => badge_width(count),
+    Some(Attention::RunnerOffline | Attention::TasksUnread) => MARK_WIDTH,
+    None => 0.0,
+  }
 }
 
 /// Whether the task form `route` shows holds edits that are not saved.

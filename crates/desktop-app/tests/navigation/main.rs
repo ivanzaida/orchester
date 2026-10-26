@@ -3,6 +3,7 @@
 //! right moves.
 
 mod history;
+mod items;
 mod list;
 mod strip;
 #[path = "../support/mod.rs"]
