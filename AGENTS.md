@@ -125,11 +125,12 @@ Hard requirements:
 
 Stable build:
 
-- The user runs an installed release build for daily use (`tools/install.ps1`, `docs/stable-build.md`), installed in
-  `E:\projects\orchester\` (it holds its own `orchester.db`; the script's default `%LOCALAPPDATA%\Orchester\` is
-  no longer used). Never write to, build into or delete from that install, never stop or kill its processes, and run
-  `tools/install.ps1` only when asked, into `.tmp/` unless told otherwise (the user's install:
-  `-InstallDir E:\projects\orchester`). Stop only Orchester processes you started yourself, by their pid.
+- The user runs an installed release build for daily use, installed in `E:\Orchester\` from the CI release's
+  installer since 2026-10-26 (app 0.3.0; it holds its own `orchester.db` beside `orchester.exe`). The former install
+  in `E:\projects\orchester\` is a leftover the user keeps as a backup. Never write to, build into or delete from
+  either, and never stop or kill their processes. The user updates the install with a release's installer; run
+  `tools/install.ps1` (`docs/stable-build.md`) only when asked, into `.tmp/` unless told otherwise. Stop only
+  Orchester processes you started yourself, by their pid.
 
 Scratch files:
 

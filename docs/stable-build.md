@@ -35,7 +35,7 @@ powershell -File tools/install.ps1
   compiled into the executables; at runtime they need only the Visual C++ runtime, which the MSVC
   toolchain has already installed (the programs CI releases have it linked in).
 - To install somewhere else, name the folder, e.g.
-  `powershell -File tools/install.ps1 -InstallDir E:\projects\orchester`. An existing install
+  `powershell -File tools/install.ps1 -InstallDir E:\Orchester`. An existing install
   there is updated in place: its `orchester.db` stays (see [Data](#data) before the first start of
   a newer build).
 - It installs what the checkout holds, uncommitted changes included, and prints the commit.

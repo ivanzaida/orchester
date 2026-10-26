@@ -28,7 +28,7 @@
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
-# only cargo's target folder: never the user's install (E:\projects\orchester), the user's discovery
+# only cargo's target folder: never the user's install (E:\Orchester, formerly E:\projects\orchester), the user's discovery
 # folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
 param(
     [Parameter(Mandatory = $true)][string]$Name,
@@ -71,14 +71,16 @@ $repo = Join-Path $qa "repo-$Scenario"
 $mcp = Join-Path $qa "mcp"
 
 # Only .tmp/qa/<task>/ of this checkout, and never inside the user's install.
-$install = [System.IO.Path]::GetFullPath("E:\projects\orchester")
+$installs = @("E:\Orchester", "E:\projects\orchester") | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
 foreach ($path in @($qa, $bin, $repo, $mcp)) {
     $full = [System.IO.Path]::GetFullPath($path)
     if (-not $full.StartsWith($qaRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "refusing ${full}: QA data stays under $qaRoot"
     }
-    if ($full.StartsWith($install, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "refusing ${full}: it is inside the user's install"
+    foreach ($install in $installs) {
+        if ($full.StartsWith($install, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "refusing ${full}: it is inside the user's install"
+        }
     }
 }
 

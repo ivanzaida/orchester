@@ -977,7 +977,8 @@ Two separate things, often shown side by side (*In progress · Needs you*):
 
 ## 8. Rules
 
-- Never touch the installed Orchester at `E:\projects\orchester` or its processes.
+- Never touch the installed Orchester at `E:\Orchester` (or the former install at `E:\projects\orchester`) or its
+  processes.
 - Do not change Orchester's source, its design files or this brief.
 - Scratch files (scripts, dumps, renders) go in `.tmp/kontur-design/` inside `H:\projects\orchester`.
 - Commit nothing unless the user asks.

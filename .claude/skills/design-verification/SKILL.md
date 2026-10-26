@@ -121,7 +121,7 @@ port and a new token on each start, in `<pid>.json` there; never the installed a
 It prints the seed's report — `project <id>` (the id `navigate` takes), the repository, and each
 task's key, title and state — then `pid <pid>`, `mcp <folder>` and `discovery <path>`, and returns
 while the app runs. It writes nothing outside `.tmp/qa/` (never
-the user's install `E:\projects\orchester` or a real repository), replaces `.tmp/qa/<task>/` on
+the user's install `E:\Orchester`, the former one `E:\projects\orchester`, or a real repository), replaces `.tmp/qa/<task>/` on
 every start, and refuses to start while programs from `.tmp/qa/<task>/bin/` still run. The app's
 console output is in `.tmp/qa/<task>/app.log` and `app.err.log`. `-FakeAgents` builds the
 runner's `test-agent` programs, copies `orchester-fake-codex` and `orchester-fake-claude`, and

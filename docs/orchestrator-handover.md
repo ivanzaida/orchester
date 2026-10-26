@@ -148,8 +148,9 @@ the older decisions and task snapshots below are historical when superseded by a
 - **Do not answer approval cards in bulk or by script.** A script that auto-approved one QA client was refused as
   unsafe. Approve single requests only when the person asked you to, or when they already approved exactly that kind
   of request. Leave commands that run agent-written code outside the sandbox to the person unless they say otherwise.
-- **The installed app** in `E:\projects\orchester` is the person's own. Never write to it, build into it or stop its
-  processes. `tools/install.ps1 -InstallDir 'E:/projects/orchester'` runs only when asked. Use forward slashes:
+- **The installed app** in `E:\Orchester` (from a release's installer; the former install in `E:\projects\orchester`
+  is kept as a backup) is the person's own. Never write to either, build into them or stop their processes.
+  `tools/install.ps1 -InstallDir 'E:/Orchester'` runs only when asked. Use forward slashes:
   backslashes once mangled the path into `E:\projectsorchester`. Back up `orchester.db` together with its `-wal` and
   `-shm` files first.
 - **Widening agent permissions over MCP** needs the person-only switch *Let automation change agent permissions* in the
