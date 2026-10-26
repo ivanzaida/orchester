@@ -100,9 +100,10 @@ keyring-core = "1"
 # (the chat scrolls away from a long reply), selection from the painted layout;
 # 0.49: a synthetic paste shortcut (an MCP client's Ctrl+V) no longer reads the person's clipboard; a paste event
 # before insertion, clipboard images and files, file drops on elements and runtime-decoded images, unused yet;
+# 0.51.2: what the mounting code puts on a component's root (`.id(..)`, a Draggable's handlers) survives its own render;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.51.1", default-features = false }
+lurq = { version = "0.51.2", default-features = false }
 # Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's
 # rustls and ring; SMTP with TLS and authentication is not a few lines of code.
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "ring", "rustls-platform-verifier", "smtp-transport", "tokio1-rustls"] }
