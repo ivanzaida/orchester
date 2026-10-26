@@ -15,7 +15,7 @@ fn project_settings_review_default_model_selection_persists_the_effective_review
       .is_some_and(|choice| choice.model.as_str() == "sonnet")
   });
   page.saved();
-  assert!(page.text("settings-reviewer-readback").contains("sonnet"));
+  assert!(page.reviewer_model().contains("sonnet"));
   page.choose("settings-reviewer-effort", "high");
   page.until("reviewer effort", |p| {
     p.db()
@@ -25,9 +25,9 @@ fn project_settings_review_default_model_selection_persists_the_effective_review
       .is_some_and(|choice| choice.effort.as_deref() == Some("high"))
   });
   page.saved();
-  page.tab("limits", "settings-default-budget");
-  page.tab("general", "settings-reviewer-model");
-  assert!(page.text("settings-reviewer-readback").contains("sonnet"));
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-reviewer-model");
+  assert!(page.reviewer_model().contains("sonnet"));
 }
 
 #[test]
@@ -102,9 +102,9 @@ fn project_settings_review_reselecting_a_reviewer_after_keep_asks_again_and_save
   page.window.pass();
   page.click("settings-auto-question-confirm");
   page.saved();
-  // Remount General from storage so its readback is settled before the cancelled edit.
-  page.tab("limits", "settings-default-budget");
-  page.tab("general", "settings-reviewer-model");
+  // Remount Runs from storage so its reviewer is settled before the cancelled edit.
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-reviewer-model");
   let original = page.db().auto_mode_settings().expect("settings");
   assert!(original.new_runs);
   assert!(
@@ -127,7 +127,7 @@ fn project_settings_review_reselecting_a_reviewer_after_keep_asks_again_and_save
   assert!(!page.exists("settings-auto-question"));
   assert!(!page.window.link.input_gate().protecting());
   assert_eq!(page.text("project-settings-save-status"), "All changes saved");
-  assert!(page.text("settings-reviewer-readback").to_lowercase().contains("haiku"));
+  assert!(page.reviewer_model().contains("haiku"));
   assert_eq!(page.db().auto_mode_settings().expect("kept"), original);
 
   page.choose("settings-reviewer-model", "sonnet");
@@ -152,8 +152,8 @@ fn project_settings_review_reselecting_a_reviewer_after_keep_asks_again_and_save
   page.saved();
   assert!(!page.exists("settings-auto-question"));
   assert!(!page.window.link.input_gate().protecting());
-  assert!(page.text("settings-reviewer-readback").contains("sonnet"));
-  page.tab("limits", "settings-default-budget");
-  page.tab("general", "settings-reviewer-model");
-  assert!(page.text("settings-reviewer-readback").contains("sonnet"));
+  assert!(page.reviewer_model().contains("sonnet"));
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-reviewer-model");
+  assert!(page.reviewer_model().contains("sonnet"));
 }

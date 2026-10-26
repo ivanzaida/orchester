@@ -17,7 +17,7 @@ use lurq::{
 use orchester_workspace::tasks::outside::Outside;
 
 use super::{
-  TabProps, page,
+  SectionStatuses, TabProps, page,
   work::{self, Read},
 };
 use crate::theme::ExtraSpacing;
@@ -26,12 +26,15 @@ pub(super) struct Runs {
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
   own: work::OwnSaves,
+  /// Auto mode's, the limits' and the environment's save statuses.
+  sections: SectionStatuses,
 }
 
 impl Component for Runs {
   type Props = TabProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let page = ctx.props::<TabProps>().status.clone();
     Self {
       stored: ctx.signal(None),
       revision: ctx.signal(0),
@@ -44,6 +47,7 @@ impl Component for Runs {
           Outside::ProjectSettings,
         ],
       ),
+      sections: SectionStatuses::new(ctx, 3, &page),
     }
   }
 
@@ -58,7 +62,7 @@ impl Component for Runs {
     let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
       "settings-auto-mode",
       auto_mode::Props {
-        tab: props.clone(),
+        tab: self.sections.props(&props, 0),
         settings: read.0,
         parent_read: self.stored.clone(),
         refresh: self.revision.clone(),
@@ -66,8 +70,9 @@ impl Component for Runs {
       },
     );
     let estimates = ctx.mount_keyed::<estimates::Estimates>("project-settings-estimates", props.clone());
-    let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", props.clone());
-    let environment = ctx.mount_keyed::<environment::Environment>("project-settings-environment", props);
+    let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", self.sections.props(&props, 1));
+    let environment =
+      ctx.mount_keyed::<environment::Environment>("project-settings-environment", self.sections.props(&props, 2));
     page::scroll(
       Column::new()
         .width(Dimension::Pct(100.0))

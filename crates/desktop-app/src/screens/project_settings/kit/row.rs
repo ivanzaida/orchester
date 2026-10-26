@@ -12,7 +12,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
@@ -224,10 +224,13 @@ impl SettingRow {
   }
 }
 
-/// A read-only value at a row's end (`Value` `RWwEb`).
+/// A read-only value at a row's end (`Value` `RWwEb`), cut with an ellipsis past a control's width so a long path or
+/// address leaves the row its label and hint.
 pub(crate) fn value(id: &str, words: &str) -> Text {
   Text::new(words)
     .id(id.to_owned())
     .variant(ProjectSettingsText::Value.role())
     .nowrap()
+    .max_width(Dimension::Px(crate::screens::project_settings::page::CONTROL_WIDTH))
+    .text_overflow(TextOverflow::Elipsis)
 }

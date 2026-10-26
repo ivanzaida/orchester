@@ -7,7 +7,11 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Column, Row},
+  node::{Element, dimension::Dimension},
+};
 use orchester_core::connection::{
   AgentConnection, AgentProvider, ApiEndpoint, CatalogSource, ConnectionAccount, ConnectionStatus, EndpointPreset,
 };
@@ -161,10 +165,15 @@ fn what_to_do(
   if let Some(account) = account.filter(|_| status == ConnectionStatus::SignInRequired) {
     let words = signed_out_sentence(ctx, account);
     let open = open_in_settings(ctx, account);
+    // The sentence wraps at the column's width, whatever the account's name; *Open … in Settings* under it.
     return vec![
-      SettingRow::new("connection-inspector-sentence", words)
-        .control(open)
-        .render(ctx),
+      Column::new()
+        .id("connection-inspector-sentence-row")
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .child(sentence("connection-inspector-sentence", &words, sentence_tone(shown)))
+        .child(Row::new().child(open))
+        .into(),
     ];
   }
   if matches!(status, ConnectionStatus::Connected | ConnectionStatus::NotChecked) {

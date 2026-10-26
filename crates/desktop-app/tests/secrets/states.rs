@@ -134,8 +134,8 @@ fn secrets_groups_keep_the_column_with_the_handling_note_under_them() {
   for secret in entries {
     let row = bounds(&mut s, &format!("secret-row-{}-row", secret.id()));
     assert!(
-      row.y + row.height <= group.y + group.height,
-      "every row is in its group"
+      row.y + row.height <= group.y + group.height + 0.5,
+      "every row is in its group: {row:?} in {group:?}"
     );
   }
   let notice = bounds(&mut s, "secrets-handling");

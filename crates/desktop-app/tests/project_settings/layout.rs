@@ -1,16 +1,16 @@
-//! Project settings and Settings share one page (`ui::settings_page`): on every tab of both, at 1440 × 900 and 960
-//! wide, the title, the tabs and a tab's form start at the same place with the same width.
-use orchester_app::routes::{AccountsView, OrchesterView, ProjectPage, ProjectSettingsTab, Route};
+//! Project settings' page (`Project settings · redesign` `XGtkg`): on each of its six tabs, Connections and Secrets
+//! included, at 1440 × 900 and 960 wide, the title, the tabs and the tab's column start at the same place.
+use orchester_app::routes::{ProjectPage, ProjectSettingsTab, Route};
 
 use super::harness::Settings;
 use crate::support::project_id;
 
-/// Where the page puts its title, its tabs and, on a tab with one, its form: x, y and width.
+/// Where the page puts its title, its tabs and its column: x, y and width.
 #[derive(Debug)]
 struct Placed {
   title: (f32, f32),
   tabs: (f32, f32, f32),
-  form: Option<(f32, f32)>,
+  column: (f32, f32),
 }
 
 fn bounds(page: &mut Settings, id: &str) -> (f32, f32, f32) {
@@ -23,18 +23,18 @@ fn bounds(page: &mut Settings, id: &str) -> (f32, f32, f32) {
   (bounds.x, bounds.y, bounds.width)
 }
 
-/// The page `route` shows, once its tabs `tabs` (and its form, if `form`) are laid out.
-fn placed(page: &mut Settings, route: Route, tabs: &str, form: bool) -> Placed {
-  page.window.navigation().go(route);
-  page.until("the page", |s| s.exists(tabs) && (!form || s.exists("settings-form")));
+/// The tab `page_of` shows, once its column is laid out.
+fn placed(page: &mut Settings, page_of: ProjectPage) -> Placed {
+  page.window.navigation().go(Route::Project(project_id(), page_of));
+  page.until("the page", |s| {
+    s.exists("project-settings-tabs") && s.exists("settings-form")
+  });
   let title = bounds(page, "settings-title");
+  let column = bounds(page, "settings-form");
   Placed {
     title: (title.0, title.1),
-    tabs: bounds(page, tabs),
-    form: form.then(|| {
-      let form = bounds(page, "settings-form");
-      (form.0, form.2)
-    }),
+    tabs: bounds(page, "project-settings-tabs"),
+    column: (column.0, column.2),
   }
 }
 
@@ -43,30 +43,20 @@ fn same(a: f32, b: f32) -> bool {
 }
 
 #[test]
-fn project_settings_lines_up_with_settings_on_every_tab() {
+fn project_settings_tabs_line_up_on_every_tab() {
   let mut page = Settings::new(false);
   for (width, height) in [(1440, 900), (960, 900)] {
     page.window.tree.resize(width, height);
     page.window.pass();
-    let settings = [
-      (Route::Settings, true),
-      (Route::Accounts(AccountsView::default()), false),
-      (Route::Orchester(OrchesterView::default()), false),
-    ];
-    let mut pages: Vec<(String, Placed)> = settings
+    let mut pages: Vec<ProjectPage> = ProjectSettingsTab::ALL.map(ProjectPage::Settings).to_vec();
+    pages.push(ProjectPage::Connections(Default::default()));
+    pages.push(ProjectPage::Secrets(Default::default()));
+    let placed: Vec<(String, Placed)> = pages
       .into_iter()
-      .map(|(route, form)| (format!("{route:?}"), placed(&mut page, route, "settings-tabs", form)))
+      .map(|shown| (format!("{shown:?}"), placed(&mut page, shown)))
       .collect();
-    pages.extend(ProjectSettingsTab::ALL.map(|tab| {
-      let route = Route::Project(project_id(), ProjectPage::Settings(tab));
-      (
-        format!("{tab:?}"),
-        placed(&mut page, route, "project-settings-tabs", true),
-      )
-    }));
-    let (_, first) = &pages[0];
-    let form = first.form.expect("Automation has a form");
-    for (name, placed) in &pages {
+    let (_, first) = &placed[0];
+    for (name, placed) in &placed {
       let at = format!("{name} at {width} wide: {placed:?} against {first:?}");
       assert!(
         same(placed.title.0, first.title.0) && same(placed.title.1, first.title.1),
@@ -80,10 +70,10 @@ fn project_settings_lines_up_with_settings_on_every_tab() {
         same(placed.title.0, placed.tabs.0),
         "the title over the tabs' start, {at}"
       );
-      if let Some(placed) = placed.form {
-        assert!(same(placed.0, form.0) && same(placed.1, form.1), "form, {at}");
-        assert!(same(placed.0, first.tabs.0), "the form under the tabs' start, {at}");
-      }
+      assert!(
+        same(placed.column.0, first.column.0) && same(placed.column.1, first.column.1),
+        "column, {at}"
+      );
     }
   }
 }

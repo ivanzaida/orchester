@@ -122,7 +122,7 @@ fn the_sidebar_on_settings_shows_the_project_the_tab_was_in_last() {
   navigation.go(Route::Settings);
   window.pass();
   assert_eq!(now(&window).nav_screen(), Screen::Settings, "Settings is selected");
-  for screen in ["overview", "tasks", "secrets", "project_settings"] {
+  for screen in ["overview", "tasks", "tools", "project_settings"] {
     assert!(
       window.texts(&format!("nav-{screen}")).is_some(),
       "nav-{screen} stays on Settings"

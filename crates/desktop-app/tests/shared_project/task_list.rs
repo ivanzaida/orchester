@@ -26,7 +26,7 @@ fn shared_project_task_list_says_where_it_lives_and_when_it_is_read_only() {
   assert_eq!(window.text("tasks-shared-role"), "You're a member · ivan");
   assert!(window.tree.get_element_by_id("tasks-not-member").is_none());
   press(&mut window, "tasks-shared-settings");
-  shows(&mut window, "sharing-members-intro-text");
+  shows(&mut window, "sharing-members-count");
 
   // Removed in the server admin: the app learns it at its next read.
   server.remove_member(&kontur, "ivan");
@@ -55,8 +55,12 @@ fn shared_project_task_list_says_where_it_lives_and_when_it_is_read_only() {
     window.tree.get_element_by_id("sharing-leave").is_none(),
     "nothing to leave"
   );
-  shows(&mut window, "sharing-member-ivan-you");
-  assert!(window.text("sharing-member-ivan-you").starts_with("· you, until "));
-  shows(&mut window, "sharing-members-come-back");
+  shows(&mut window, "sharing-member-ivan-hint");
+  assert!(
+    window.text("sharing-member-ivan-hint").contains("· you, until "),
+    "{}",
+    window.text("sharing-member-ivan-hint")
+  );
+  shows(&mut window, "sharing-members-come-back-row");
   no_admin_endpoint(&recorder);
 }

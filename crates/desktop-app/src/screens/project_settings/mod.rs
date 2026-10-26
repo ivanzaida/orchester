@@ -164,6 +164,51 @@ pub(super) enum Status {
   Failed,
 }
 impl DevtoolsInspectable for Status {}
+
+impl Status {
+  /// How much the status needs the person: a failure first, then a field to fix, a change not saved, a save running.
+  const fn weight(&self) -> u8 {
+    match self {
+      Self::Saved => 0,
+      Self::Saving => 1,
+      Self::Unsaved => 2,
+      Self::Invalid => 3,
+      Self::Failed => 4,
+    }
+  }
+}
+
+/// The save statuses of a tab's sections, each saying its own, so one section's *Saved* never hides another's
+/// unfinished edit; the page says the one that most needs the person.
+#[derive(Clone)]
+pub(super) struct SectionStatuses(Vec<Signal<Status>>);
+
+impl SectionStatuses {
+  /// `count` sections whose statuses say the page's `page`.
+  pub(super) fn new(ctx: &mut Ctx, count: usize, page: &Signal<Status>) -> Self {
+    let sections: Vec<Signal<Status>> = (0..count).map(|_| ctx.signal(Status::Saved)).collect();
+    for section in &sections {
+      let (all, page) = (sections.clone(), page.clone());
+      ctx.watch(section, move |_| {
+        let worst = all
+          .iter()
+          .map(|status| status.get_untracked())
+          .max_by_key(Status::weight)
+          .unwrap_or(Status::Saved);
+        page.set(worst);
+      });
+    }
+    Self(sections)
+  }
+
+  /// `props` for section `index`, which says its status in its own signal.
+  pub(super) fn props(&self, props: &TabProps, index: usize) -> TabProps {
+    TabProps {
+      status: self.0[index].clone(),
+      ..props.clone()
+    }
+  }
+}
 struct SettingsScreen {
   status: Signal<Status>,
   link_page: Signal<sharing::LinkPage>,

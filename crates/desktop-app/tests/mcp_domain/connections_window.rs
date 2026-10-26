@@ -49,7 +49,16 @@ impl Served {
       .to_owned()
   }
 
+  /// A client's click on element `id`, scrolled into view first as a client does: a page's actions end its column.
+  /// While a question keeps a client's input out, the scroll is refused like the click.
   pub(super) fn click_by_client(&mut self, id: &str) -> Result<Value, Value> {
+    let reference = self.reference(id);
+    if self
+      .call("lurq_interact", &json!({ "action": "scroll_to", "ref": reference }))
+      .is_ok()
+    {
+      self.pass();
+    }
     let reference = self.reference(id);
     self.call("lurq_interact", &json!({ "action": "click", "ref": reference }))
   }

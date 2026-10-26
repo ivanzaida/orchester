@@ -15,17 +15,15 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
   let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
   link_kontur(&window);
 
-  open_sharing(&mut window, "sharing-member-ivan");
-  shows(&mut window, "sharing-member-alice");
+  // A row per member (`R370H0`); who the list is and whom to ask is in the summary's (i).
+  open_sharing(&mut window, "sharing-member-ivan-row");
+  shows(&mut window, "sharing-member-alice-row");
   assert_eq!(window.text("sharing-member-ivan-role"), "Member");
   assert_eq!(window.text("sharing-member-alice-role"), "Owner");
-  assert_eq!(window.text("sharing-member-ivan-you"), "· you");
-  assert!(window.tree.get_element_by_id("sharing-member-alice-you").is_none());
-  assert!(
-    window
-      .text("sharing-members-intro-text")
-      .contains("To add someone, ask an owner: Alice Moreau."),
-  );
+  assert!(window.text("sharing-member-ivan-hint").ends_with("· you"));
+  assert!(!window.text("sharing-member-alice-hint").contains("you"));
+  assert_eq!(window.text("sharing-members-count"), "2");
+  assert!(window.tree.get_element_by_id("sharing-members-info").is_some());
   assert!(
     window.tree.get_element_by_id("sharing-members-manage").is_none(),
     "a member manages nothing"
@@ -38,11 +36,6 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
   press(&mut window, "sharing-members-manage");
   let links = window.launch.services().expect("services").links.recorded();
   assert_eq!(links, [format!("{}/admin/projects/kontur", recorder.url())]);
-  assert!(
-    window
-      .text("sharing-members-manage-note")
-      .contains("/admin/projects/kontur")
-  );
 
   // The server goes away: the members stay as last read, and Manage waits for it.
   recorder.go_down();
@@ -54,16 +47,10 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
     .retry_now(super::entry(&window).stored.id);
   window.until("the members as last read", |window| {
     window
-      .texts("sharing-members-intro-text")
-      .is_some_and(|texts| texts.join(" ").contains("when Kontur team was last reached"))
+      .texts("sharing-members-hint")
+      .is_some_and(|texts| texts.join(" ").contains(" · as of "))
   });
-  shows(&mut window, "sharing-member-alice");
-  assert!(
-    window
-      .text("project-settings-sharing-members-note")
-      .contains(" · as of "),
-    "the count says when the list was read"
-  );
+  shows(&mut window, "sharing-member-alice-row");
   assert_eq!(
     window.text("sharing-leave-unavailable"),
     "Kontur team can't be reached now; Leave works when it's back."

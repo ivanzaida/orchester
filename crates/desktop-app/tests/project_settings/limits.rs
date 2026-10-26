@@ -12,9 +12,10 @@ use super::harness::Settings;
 fn project_settings_limits_show_no_limit_and_save_all_fields_without_a_maximum() {
   let mut page = Settings::new(false);
   page.tab("limits", "settings-default-budget");
+  // A limit that is not set leaves its box empty under the No limit placeholder, with nothing read back.
   assert_eq!(page.value("settings-default-budget"), "");
-  assert!(page.text("settings-default-budget-read-back").contains("No limit"));
-  assert!(page.text("settings-time-limit-read-back").contains("No limit"));
+  assert!(!page.exists("settings-default-budget-read-back"));
+  assert!(!page.exists("settings-time-limit-read-back"));
   page.set("settings-default-budget", "900000000");
   page.leave();
   page.saved();
@@ -31,7 +32,7 @@ fn project_settings_limits_show_no_limit_and_save_all_fields_without_a_maximum()
   page.leave();
   page.saved();
   assert_eq!(page.db().project_limits().expect("limits").daily_budget_limit(), None);
-  assert!(page.text("settings-daily-budget-read-back").contains("No limit"));
+  assert!(!page.exists("settings-daily-budget-read-back"), "its box says No limit");
   page.set("settings-time-limit", "1200");
   page.leave();
   page.saved();
@@ -107,7 +108,11 @@ fn project_settings_limits_qa_apps_at_once_saves_like_agents_and_rejects_bad_val
   let mut page = Settings::new(false);
   page.tab("limits", "settings-default-budget");
   assert_eq!(page.value("settings-qa-slots"), "2");
-  assert_eq!(page.text("settings-qa-slots-read-back"), "1 to 16 · default 2");
+  assert_eq!(page.text("settings-qa-hint"), "1 to 16");
+  assert!(
+    !page.exists("settings-qa-slots-read-back"),
+    "a count reads nothing back"
+  );
   assert!(page.text("settings-qa-row").contains("QA apps at once"));
   page.set("settings-qa-slots", "3");
   page.leave();

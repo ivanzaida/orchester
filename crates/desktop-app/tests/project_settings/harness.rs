@@ -166,6 +166,16 @@ impl Settings {
       s.text("project-settings-save-status") == "All changes saved"
     });
   }
+  /// The reviewer's model as auto mode stores it; empty while none is chosen. The page says it in its (i).
+  pub fn reviewer_model(&self) -> String {
+    self
+      .db()
+      .auto_mode_settings()
+      .expect("auto mode")
+      .reviewer
+      .map(|choice| choice.model.as_str().to_owned())
+      .unwrap_or_default()
+  }
   pub fn outside(&self, change: orchester_workspace::tasks::outside::Outside) {
     self
       .window

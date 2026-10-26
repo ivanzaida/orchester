@@ -18,7 +18,7 @@ use super::{Section, Shown, Status};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::Route,
+  routes::{Route, Screen},
   theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
     icon::{Icon, icon},
@@ -80,7 +80,7 @@ pub fn settings(
     )
     .with_children(save);
   Column::new()
-    .id("screen-project_settings")
+    .id(format!("screen-{}", root_screen(shown).name()))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .child(header)
@@ -101,6 +101,16 @@ const fn at_root(shown: Shown) -> bool {
     Shown::Connections(view) => view.selected().is_none(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
     Shown::Rules | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
+  }
+}
+
+/// The screen the page's root is named by: Secrets and Connections keep their own, the pages under Connections name
+/// theirs inside.
+const fn root_screen(shown: Shown) -> Screen {
+  match shown {
+    Shown::Secrets(_) => Screen::Secrets,
+    Shown::Connections(_) => Screen::Connections,
+    _ => Screen::ProjectSettings,
   }
 }
 

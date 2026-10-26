@@ -277,7 +277,8 @@ impl SecretForm {
         &ctx.t("secrets.form.open"),
         move || {
           cancel();
-          view.reveal(id, environment);
+          // The existing secret's page, in New secret's place.
+          view.saved(id, environment);
         },
       )
       .into();

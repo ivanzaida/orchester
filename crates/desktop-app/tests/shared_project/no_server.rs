@@ -56,10 +56,10 @@ fn shared_project_without_its_server_says_so_and_waits_for_it() {
   linked_without_server(&window, UserId::generate(), None);
   open_sharing(&mut window, "sharing-discovery-write");
 
-  assert_eq!(window.text("sharing-shared"), format!("Shared on {HOST}"));
-  assert_eq!(
-    window.text("sharing-address-state-text"),
-    format!("{HOST} · no longer in Settings › Orchester")
+  let address = window.text("sharing-address-hint");
+  assert!(
+    address.ends_with(&format!("{HOST} · no longer in Settings › Orchester")),
+    "{address}"
   );
   let page = window.text("project-settings-sharing");
   assert!(!page.contains("a server no longer"), "{page}");
@@ -80,16 +80,15 @@ fn shared_project_without_its_server_says_so_and_waits_for_it() {
     window.text("sharing-leave-unavailable"),
     format!("Leave works once this computer is signed in to {HOST} again.")
   );
-  assert!(!window.text("sharing-leave-row-description").contains("stays connected"));
+  assert!(!window.text("sharing-leave-row-hint").contains("stays connected"));
   window.press("sharing-leave");
   window.pass();
   assert!(window.tree.get_element_by_id("sharing-leave-question").is_none());
 
-  shows(&mut window, "sharing-member-ivan");
+  shows(&mut window, "sharing-member-ivan-row");
+  assert_eq!(window.text("sharing-members-count"), "2");
   assert!(
-    window
-      .text("project-settings-sharing-members-note")
-      .contains("2 members · as of "),
+    window.text("sharing-members-hint").contains(" · as of "),
     "a list not read now says when it was"
   );
 }
@@ -99,10 +98,10 @@ fn shared_project_members_name_the_person_once_signed_out_and_removed() {
   let mut window = harness::window(Some(KONTUR_REMOTE));
   let me = UserId::generate();
   linked_without_server(&window, me, Some(Timestamp::now()));
-  open_sharing(&mut window, "sharing-member-ivan");
+  open_sharing(&mut window, "sharing-member-ivan-row");
   assert!(
-    window.text("sharing-member-ivan-you").starts_with("· you, until "),
+    window.text("sharing-member-ivan-hint").contains("· you, until "),
     "the list knows which member the person was"
   );
-  assert!(window.tree.get_element_by_id("sharing-member-alice-you").is_none());
+  assert!(!window.text("sharing-member-alice-hint").contains("you"));
 }
