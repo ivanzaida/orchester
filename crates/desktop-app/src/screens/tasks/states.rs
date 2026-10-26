@@ -7,6 +7,8 @@
 //! be, a notice names what waits and is no task's, which the list cannot show, and opens the Needs you panel that lists
 //! it.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -35,6 +37,7 @@ use crate::{
     message::message_text,
     notice::{Notice, NoticeTone},
     state::{load_error, loading},
+    unavailable::reason_at_end,
   },
 };
 
@@ -44,12 +47,18 @@ const EMPTY_TILE: f32 = 40.0;
 const EMPTY_COLUMN: f32 = 420.0;
 const NO_ROWS_TILE: f32 = 36.0;
 
-/// The project has no task yet: New task, or Import resources from another project.
-pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId) -> Element {
+/// The project has no task yet: New task, or Import resources from another project. New task is locked for
+/// `read_only`'s reason, said under the actions, once the person is no longer a member of the shared list.
+pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId, read_only: Option<Arc<str>>) -> Element {
   let navigation = Navigation::of(ctx);
   let import = ActionButton::new("tasks-empty-import", ButtonKind::Secondary, ctx.t("tasks.empty.import"))
     .icon(Icon::Download)
     .opens(navigation.to(Route::Project(project, ProjectPage::Import(ImportTab::All))));
+  let new = new_task(ctx, "tasks-empty-new-task", project, &navigation);
+  let new = match read_only.clone() {
+    Some(reason) => new.unavailable(reason),
+    None => new,
+  };
   let words = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
@@ -76,9 +85,10 @@ pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId) -> Element {
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(new_task(ctx, "tasks-empty-new-task", project, &navigation))
+        .child(new)
         .child(import),
-    );
+    )
+    .with_children(read_only.map(|reason| reason_at_end("tasks-empty-new-task-reason", &reason)));
   Column::new()
     .id("tasks-empty")
     .width(Dimension::Pct(100.0))

@@ -155,6 +155,42 @@ fn tasks_filter_narrows_the_rows_by_pipeline_and_priority_and_its_chips_let_them
   assert_eq!(seeded.text("tasks-filter"), "Filter");
 }
 
+#[test]
+fn tasks_filter_lets_a_chosen_tag_go_once_the_project_drops_it() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  seeded.click("tasks-filter");
+  seeded.until("the filter menu", |seeded| seeded.laid_out("tasks-filter-menu"));
+  // The menu's search brings the tag, under the options' fold, into view.
+  seeded
+    .window
+    .tree
+    .get_element_by_id_mut("tasks-filter-search")
+    .and_then(|element| element.as_text_input())
+    .expect("the menu's search")
+    .set_value("webhooks");
+  seeded.until("the tag found", |seeded| seeded.laid_out("tasks-filter-tag-0"));
+  let webhooks = option(&mut seeded, "tag", "webhooks");
+  seeded.click(&webhooks);
+  seeded.until("the rows laid out", Seeded::rows_laid_out);
+  assert_eq!(seeded.text("tasks-filter"), "Filter · 1");
+  let keys = seeded.keys();
+  assert!(keys.len() < 24, "only the webhooks tasks: {keys:?}");
+  let mut db = orchester_store::ProjectDb::open(&seeded.repo).expect("the project database opens");
+  let tag = db
+    .project_tags()
+    .expect("tags")
+    .into_iter()
+    .find(|tag| tag.name().as_str() == "webhooks")
+    .expect("the webhooks tag");
+  db.delete_project_tag(tag.id(), orchester_core::time::Timestamp::now())
+    .expect("the tag is deleted");
+  seeded.window.projects().feed(seeded.project).saved();
+  // A value no chip could let go no longer filters, nor counts.
+  seeded.until("every row", |seeded| seeded.keys().len() == 24);
+  assert_eq!(seeded.text("tasks-filter"), "Filter");
+  assert!(!seeded.shows("tasks-filters"), "no chip once nothing is chosen");
+}
+
 /// The id of the option of `facet` saying `words` in the open Filter menu.
 fn option(seeded: &mut Seeded, facet: &str, words: &str) -> String {
   (0..32)

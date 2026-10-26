@@ -76,8 +76,14 @@ struct Holding {
 
 impl DevtoolsInspectable for Holding {}
 
+/// Whether any of the list's mounts (the menu, the chip, the groups) is changing a hold, so the others wait too; the
+/// screen provides it.
+#[derive(Clone)]
+pub(super) struct Changing(pub Signal<bool>);
+
 pub(super) struct QueueControls {
   hold: FutureAction<Holding, (), Message>,
+  changing: Signal<bool>,
   /// The header's menu, while it is open, and its button.
   open: Signal<bool>,
   anchor: ElementRef,
@@ -89,6 +95,11 @@ impl Component for QueueControls {
   fn create(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let project = ctx.props::<QueueProps>().project;
+    let changing = ctx
+      .use_context::<Changing>()
+      .expect("the Tasks list provides whether a hold is changing")
+      .0;
+    let shared = changing.clone();
     let hold = ctx.future_action(
       move |Holding {
               root,
@@ -96,19 +107,26 @@ impl Component for QueueControls {
               held,
               actor,
             }: Holding| {
-        let changes = services.changes.clone();
+        let (changes, changing) = (services.changes.clone(), shared.clone());
         async move {
-          let kept = background::run(move || hold_in(&root, (scope, actor), held)).await?;
-          // Automation driving the window does not release a person's hold; that says so, as a store error does.
-          kept.map_err(HoldRefused::message)?;
-          // The list reads the holds again, as after any change to its tasks.
-          changes.record(project, Outside::Tasks);
-          Ok(())
+          changing.set(true);
+          let kept: Result<(), Message> = async move {
+            let kept = background::run(move || hold_in(&root, (scope, actor), held)).await?;
+            // Automation driving the window does not release a person's hold; that says so, as a store error does.
+            kept.map_err(HoldRefused::message)?;
+            // The list reads the holds again, as after any change to its tasks.
+            changes.record(project, Outside::Tasks);
+            Ok(())
+          }
+          .await;
+          changing.set(false);
+          kept
         }
       },
     );
     Self {
       hold,
+      changing,
       open: ctx.signal(false),
       anchor: ElementRef::default(),
     }
@@ -117,7 +135,7 @@ impl Component for QueueControls {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<QueueProps>().clone();
     let state = self.hold.state().get();
-    let pending = state.is_pending();
+    let pending = state.is_pending() || self.changing.get();
     let press = |scope: HoldScope, held: bool| {
       let (hold, root) = (self.hold.clone(), props.root.clone());
       move || {

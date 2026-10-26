@@ -136,6 +136,18 @@ impl Options {
     }
     Self(facets)
   }
+
+  /// `chosen` without the values the menu no longer offers (a pipeline, module or tag the project dropped), which
+  /// would filter with no chip to let them go.
+  pub(super) fn offered(&self, chosen: &Facets) -> Facets {
+    let mut kept = Facets::default();
+    for (value, _) in self.0.iter().flat_map(|facet| &facet.values) {
+      if value.chosen(chosen) {
+        value.toggle(&mut kept);
+      }
+    }
+    kept
+  }
 }
 
 fn facet((name, glyph, key): (&'static str, Icon, &'static str), values: Vec<(Value, Arc<str>)>) -> Facet {

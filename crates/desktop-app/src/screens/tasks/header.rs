@@ -145,9 +145,13 @@ fn controls(
   vec![filter, display, more, new.into()]
 }
 
-/// The header of a project without tasks: its title alone.
-pub(super) fn title_only(ctx: &Ctx) -> Row {
-  title_row(ctx)
+/// The header of a project without tasks: its title alone, with a linked project's line under it.
+pub(super) fn title_only(ctx: &mut Ctx, project: ProjectId, shared: Option<&Shared>) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Xs)
+    .child(title_row(ctx))
+    .with_children(shared.map(|shared| shared::line(ctx, project, shared)))
 }
 
 /// The row with the title at its start.

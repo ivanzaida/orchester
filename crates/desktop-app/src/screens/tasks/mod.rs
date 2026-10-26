@@ -92,6 +92,8 @@ struct TasksScreen {
   folded: Signal<Folded>,
   /// `/` asked for the search: the next render focuses it.
   focus_search: Signal<bool>,
+  /// A hold on new starts is being changed ([`queue::Changing`]).
+  changing: Signal<bool>,
   cache: ListCache,
   /// Where the rows are scrolled to, and what they were last placed for ([`TasksScreen::place`]).
   scroll: ScrollState,
@@ -118,6 +120,7 @@ impl Component for TasksScreen {
       },
       folded: ctx.signal(Folded::default()),
       focus_search: ctx.signal(false),
+      changing: ctx.signal(false),
       cache: ListCache::default(),
       scroll: ScrollState::new(),
       placed: Mutex::new(None),
@@ -128,6 +131,7 @@ impl Component for TasksScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(self.closer.clone());
     ctx.provide(Folding(self.folded.clone()));
+    ctx.provide(queue::Changing(self.changing.clone()));
     let TasksProps { project, list } = ctx.props::<TasksProps>().clone();
     // The path's search wins: Back, Clear and automation change it too.
     let routed = list.search().unwrap_or_default();
@@ -166,10 +170,13 @@ impl Component for TasksScreen {
     };
     let not_member = not_member.map(inset);
     match project.feed.tasks.get() {
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => page
-        .child(inset(header::title_only(ctx)))
-        .with_children(not_member)
-        .child(inset(states::empty_project(ctx, id)).flex(1.0)),
+      TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => {
+        let read_only = shared.as_ref().and_then(|shared| shared.read_only(ctx));
+        page
+          .child(inset(header::title_only(ctx, id, shared.as_ref())))
+          .with_children(not_member)
+          .child(inset(states::empty_project(ctx, id, read_only)).flex(1.0))
+      }
       TasksState::Ready(source) => {
         // The filter is gone once no task is Not shared: the list is the shared one again.
         let not_shared = list.not_shared() && !source.not_shared.is_empty();
@@ -181,6 +188,11 @@ impl Component for TasksScreen {
           not_shared,
         };
         let options = Arc::new(Options::of(ctx, &source));
+        let chosen = self.choices.facets.get_untracked();
+        let offered = options.offered(&chosen);
+        if offered.count() != chosen.count() {
+          self.choices.facets.set(offered);
+        }
         let page = page.child(header(ctx, Some(options.clone()), queue(&project)));
         self.list(ctx, page.with_children(not_member), &shown, &options)
       }
