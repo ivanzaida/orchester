@@ -2,7 +2,7 @@
 //! and one for another server's project reads and sends nothing (M1). A task kept *Not shared* has an address of its
 //! own: with the same key on both sides, its page is its own and the server's task with that key is left alone (M2).
 
-use orchester_app::routes::{JoinTarget, ProjectPage, Route, TaskList, TaskTab, TaskView};
+use orchester_app::routes::{JoinTarget, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
 use orchester_store::ProjectDb;
 use serde_json::json;
 
@@ -112,7 +112,10 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
   let kept = |view| Route::Project(project, ProjectPage::KeptTask("KON-2".parse().expect("key"), view));
   harness::go(
     &mut window,
-    Route::Project(project, ProjectPage::Tasks(TaskList::default().with_not_shared(true))),
+    Route::Project(
+      project,
+      ProjectPage::Tasks(TaskList::new(TaskListTab::All).with_not_shared(true)),
+    ),
     "task-row-KON-2",
   );
   press(&mut window, "task-row-KON-2");

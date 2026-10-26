@@ -3,6 +3,8 @@ mod browse;
 #[path = "tasks/pipelines.rs"]
 mod pipelines;
 mod support;
+#[path = "tasks/views.rs"]
+mod views;
 
 use std::{fs, sync::Arc, time::Duration};
 

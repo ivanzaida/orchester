@@ -139,9 +139,9 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       json!({ "project": PROJECT, "tab": "needs_you" }),
     ),
     (
-      json!({ "route": "tasks", "project": PROJECT, "tab": "in_review", "q": "retry & jitter", "highlight": "KON-13" }),
-      format!("{root}/tasks?tab=in_review&q=retry%20%26%20jitter&highlight=KON-13"),
-      json!({ "project": PROJECT, "tab": "in_review", "q": "retry & jitter", "highlight": "KON-13" }),
+      json!({ "route": "tasks", "project": PROJECT, "tab": "done", "q": "retry & jitter", "highlight": "KON-13" }),
+      format!("{root}/tasks?tab=done&q=retry%20%26%20jitter&highlight=KON-13"),
+      json!({ "project": PROJECT, "tab": "done", "q": "retry & jitter", "highlight": "KON-13" }),
     ),
     (
       json!({ "route": "new_task", "project": PROJECT }),
@@ -295,6 +295,20 @@ fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
     json!(["running", "needs_you", "queued", "failed"]),
     "the screen's own tabs"
   );
+  // The Tasks list's views replaced its workflow tabs (ORC-99): their names are refused, with no alias.
+  for old in ["needs_you", "todo", "in_progress", "in_review"] {
+    let refused = navigate(
+      &navigation,
+      &json!({ "route": "tasks", "project": PROJECT, "tab": old }),
+    )
+    .expect_err("an old tab is refused");
+    assert_eq!(refused.code(), "unknown_tab", "{old}");
+    assert_eq!(
+      refused.to_json()["known"],
+      json!(["active", "backlog", "done", "all"]),
+      "{old}"
+    );
+  }
   let message = |args: Value| navigate(&navigation, &args).expect_err("a refusal").to_string();
   assert!(
     message(json!({ "route": "overview", "project": "a/b" })).starts_with("`project`: `a/b` is not a project id"),

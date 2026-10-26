@@ -59,4 +59,5 @@ pub mod transcript;
 pub mod unreadable;
 mod unverified;
 pub mod usage;
+pub mod views;
 pub mod writer;
