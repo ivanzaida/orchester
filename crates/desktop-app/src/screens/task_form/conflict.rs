@@ -86,7 +86,7 @@ pub const fn field_key(field: ContentField) -> &'static str {
     ContentField::Brief => "task_form.fields.brief.label",
     ContentField::Criteria => "task_form.fields.criteria.label",
     ContentField::Pipeline => "task_form.fields.pipeline.label",
-    ContentField::Limits => "task_form.sections.limits",
+    ContentField::Limits => "task_form.fields.limits.label",
   }
 }
 

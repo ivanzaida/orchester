@@ -1,127 +1,95 @@
-//! The Brief section (`Section · Brief` `uuAN4`): the project the task goes to, its title, the outcome it
-//! describes and its acceptance criteria (`criteria`).
+//! The title and the outcome, typed on the page without boxes (`Title field` `klxTy`, `Outcome field` `KNpPG`): the
+//! title in 24/600 with *Task title* muted while it is empty, which has the focus on a new task; the outcome in 14 at
+//! 1.6 `text_secondary` with its placeholder, growing with its lines. A title the workspace refuses says why under it;
+//! while the form is locked neither takes input.
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    events::TextInputEvent,
+    theme::{FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
-  core::Signal,
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension},
+  components::{Column, TextInput},
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::workspace::OpenProject;
 
-use super::{
-  criteria::{Criterion, criteria_row},
-  state::View,
-};
+use super::state::View;
 use crate::{
-  theme::{ExtraTypography, TaskFormRadius, TaskFormText},
-  ui::{
-    avatar::initials,
-    field::FieldInput,
-    form_section::{Label, Place, section, side_row, stacked_row},
-    message::message_text,
-    tooltip::Truncated,
-  },
+  theme::{ExtraSpacing, TaskFormText},
+  ui::{field::field_error, message::message_text},
 };
 
-/// The project's tile (`Avatar` `cBsT5`), and the most room its name and folder take beside the row's
-/// label: a longer folder is cut, whole in its tooltip.
-const PROJECT_TILE: f32 = 20.0;
-const PROJECT_MAX_WIDTH: f32 = 420.0;
+/// The most lines the outcome grows to before its lines scroll.
+const OUTCOME_MAX_LINES: usize = 40;
 
-/// The fields the section types into.
+/// The inputs the composer types into, and where the title is, to give it the focus.
 pub struct BriefFields<'a> {
   pub title: &'a Signal<String>,
   pub brief: &'a Signal<String>,
-  pub criteria: &'a Signal<Vec<Criterion>>,
+  pub title_input: &'a ElementRef,
 }
 
-pub fn brief(ctx: &mut Ctx, view: &View, project: &OpenProject, fields: &BriefFields<'_>) -> Element {
-  let note = view.queued().then(|| ctx.t("task_form.queued.lockedMeta"));
-  let rows = vec![
-    project_row(ctx, project),
-    title_row(ctx, view, fields.title),
-    outcome_row(ctx, view, fields.brief),
-    criteria_row(ctx, view, fields.criteria),
-  ];
-  section(
-    "task-form-brief",
-    &ctx.t("task_form.sections.brief"),
-    note.as_deref(),
-    rows,
-  )
-  .into()
+/// `typography` resolved in `color`, as a text input draws it.
+fn text_style(ctx: &Ctx, typography: TypographyStyle, color: PaletteColor) -> lurq::layout::text_style::TextStyle {
+  let theme = ctx.theme();
+  FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette())
 }
 
-/// The project new tasks go to: its initial, name and folder.
-fn project_row(ctx: &mut Ctx, project: &OpenProject) -> Element {
-  let name = project.project.name().as_str();
-  let tile = Row::new()
-    .width(Dimension::Px(PROJECT_TILE))
-    .height(Dimension::Px(PROJECT_TILE))
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .rounded(TaskFormRadius::ProjectTile.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&initials(name)).variant(TaskFormText::ProjectInitial.role()));
-  let folder = Truncated::new(
-    "task-form-project-folder",
-    project.repo_root.display().to_string(),
-    ExtraTypography::MonoNote.role(),
-  )
-  .render(ctx);
-  let control = Row::new()
-    .id("task-form-project")
-    .max_width(Dimension::Px(PROJECT_MAX_WIDTH))
-    .flex_shrink(1.0)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(tile.flex_shrink(0.0))
-    .child(Text::new(name).variant(TypographyStyle::Label).nowrap())
-    .child(Row::new().flex(1.0).flex_shrink(1.0).child(folder));
-  let label = Label::new("task-form-project", ctx.t("task_form.project.label"))
-    .description(ctx.t("task_form.project.description"));
-  side_row(label, control, Place::Within, false)
+/// `input` that takes no input while the form is `locked`.
+fn locking(input: TextInput, locked: bool) -> TextInput {
+  if locked {
+    input
+      .on_input(|event: TextInputEvent| event.prevent_default())
+      .focusable(false)
+  } else {
+    input
+  }
 }
 
-fn title_row(ctx: &mut Ctx, view: &View, title: &Signal<String>) -> Element {
+pub fn title(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
+  let role = TaskFormText::Title.role();
   let name = ctx.t("task_form.fields.title.label");
-  let mut input = FieldInput::new("task-form-title-input", name.clone(), title.clone())
-    .placeholder(ctx.t("task_form.fields.title.placeholder"));
-  // An empty title is said under the actions it holds back; a title the field refuses, here.
-  if let Some(error) = view
+  let input = TextInput::styled(fields.title.clone(), text_style(ctx, role, PaletteColor::TextPrimary))
+    .placeholder_style(text_style(ctx, role, PaletteColor::TextMuted))
+    .placeholder(&ctx.t("task_form.fields.title.placeholder"))
+    .id("task-form-title-input")
+    .describe("a11y_name", name)
+    .width(Dimension::Pct(100.0))
+    .caret_color(PaletteColor::TextPrimary)
+    .ref_element(fields.title_input.clone());
+  // An empty title is said in the action bar; a title the workspace refuses, here.
+  let error = view
     .title_error
     .as_ref()
     .filter(|_| !view.values.title.trim().is_empty())
-  {
-    input = input.error(message_text(ctx, error));
-  }
-  if view.locked() {
-    input = input.locked();
-  }
-  stacked_row(
-    Label::new("task-form-title-field", name),
-    input.render(ctx),
-    Place::Within,
-  )
+    .map(|error| field_error("task-form-title-error", &message_text(ctx, error)));
+  Column::new()
+    .id("task-form-title-field")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::vertical(SpacingSize::Xs))
+    .spacing(ExtraSpacing::Snug.role())
+    .child(locking(input, view.locked()))
+    .with_children(error)
+    .into()
 }
 
-fn outcome_row(ctx: &mut Ctx, view: &View, brief: &Signal<String>) -> Element {
+pub fn outcome(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
+  let role = TaskFormText::Outcome.role();
   let name = ctx.t("task_form.fields.brief.label");
-  let mut input = FieldInput::new("task-form-brief-input", name.clone(), brief.clone())
-    .text_area()
-    .placeholder(ctx.t("task_form.fields.brief.placeholder"));
-  if view.locked() {
-    input = input.locked();
-  }
-  stacked_row(
-    Label::new("task-form-brief-field", name),
-    input.render(ctx),
-    Place::Within,
-  )
+  let input = TextInput::styled(fields.brief.clone(), text_style(ctx, role, PaletteColor::TextSecondary))
+    .placeholder_style(text_style(ctx, role, PaletteColor::TextMuted))
+    .placeholder(&ctx.t("task_form.fields.brief.placeholder"))
+    .id("task-form-brief-input")
+    .describe("a11y_name", name)
+    .textarea()
+    .rows(1, OUTCOME_MAX_LINES)
+    .width(Dimension::Pct(100.0))
+    .caret_color(PaletteColor::TextPrimary);
+  Column::new()
+    .id("task-form-brief-field")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().bottom(SpacingSize::Sm))
+    .child(locking(input, view.locked()))
+    .into()
 }

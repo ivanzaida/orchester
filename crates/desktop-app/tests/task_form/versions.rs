@@ -183,9 +183,10 @@ fn form_backspace_removes_the_only_criterion() {
   tree.key_up("Backspace".to_owned(), "Backspace".to_owned(), false, false, false);
   form.window.pass();
   assert!(!form.exists("task-form-criterion-1"));
+  assert!(!form.exists("task-form-criteria-count"), "no count without criteria");
   assert_eq!(
-    form.text("task-form-criteria-description"),
-    "Reviewers check the result against each one."
+    form.text("task-form-criteria-hint"),
+    "· reviewers check the result against each one"
   );
 }
 

@@ -1,8 +1,11 @@
-//! Context › Sources of New task and Edit task (`Sources block` `zcFQJ` in `WLL0c`): the task's own sources with
-//! *Add source*, then what it gets from the project and from the pipeline version it runs, read-only, and how many a
-//! run starts with. A new task keeps its sources on the form until Create stores them with it; a stored task's are
-//! saved as they change. Adding one is asked in place first (`connections::widen`); the rules are
-//! `orchester_workspace::sources::task`.
+//! The Sources chip (`Sources` `K39411`) and its popover (`Sources popover` `B56QE` in `03` `jsySh`): the chip counts
+//! the sources a run of the task starts with; the popover says what sources are, adds one (path, choose folder, Add),
+//! then lists the task's own, removable, and what it gets from the project and from the pipeline version it runs,
+//! read-only, and how many a run starts with. A new task keeps its sources on the form until Create stores them with
+//! it; a stored task's are saved as they change. Adding one is asked in place first (`connections::widen`); the rules
+//! are `orchester_workspace::sources::task`.
+
+mod groups;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -10,11 +13,10 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::SpacingSize,
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Text},
   core::Signal,
-  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -28,27 +30,29 @@ use orchester_workspace::{
   sources::{
     check::Kind,
     listed::{Listed, inspect_all},
-    task::{self, FromPipeline, Inherited},
+    task::{self, Inherited},
   },
 };
 
+use self::groups::{group, inherited, subhead, summary};
+use super::chips::{ChipState, Look, PropertyChip};
 use crate::{
   mcp::input_gate::Guarded,
-  navigation::Navigation,
-  routes::{PipelinePanel, ProjectPage, ProjectSettingsTab, Route},
   screens::connections::widen::{WidenConfirm, WidenProps},
-  theme::{ExtraSpacing, ExtraTypography, SourcesSpacing},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     add_source::{AddSource, AddSourceProps, Asked, Layout},
     field::field_error,
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
-    pressable::opening,
+    popover::popover_panel,
     source_row::SourceRow,
     state::load_error,
-    unavailable::reason_line,
   },
 };
+
+/// The popover's width (`Sources popover` `B56QE`).
+const WIDTH: f32 = 420.0;
 
 /// A new task's sources on the form, until Create stores them with it. Wrapped so a signal can hold them, as
 /// `Asked` is.
@@ -92,7 +96,7 @@ impl PartialEq for SourcesProps {
 
 impl DevtoolsInspectable for SourcesProps {}
 
-/// What the section shows: the task's own sources and what it inherits, as they are on disk now.
+/// What the popover shows: the task's own sources and what it inherits, as they are on disk now.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Read {
   own: Vec<Listed>,
@@ -124,6 +128,7 @@ pub struct TaskSources {
   /// How often *Try again* was pressed after reading failed.
   retried: Signal<u64>,
   asking: Signal<Option<Asked>>,
+  chip: ChipState,
 }
 
 impl Component for TaskSources {
@@ -146,6 +151,7 @@ impl Component for TaskSources {
       revision: ctx.signal(0),
       retried: ctx.signal(0),
       asking: ctx.signal(None),
+      chip: ChipState::new(ctx),
     };
     let (revision, asking) = (sources.revision.clone(), sources.asking.clone());
     ctx.watch(&sources.save.state(), move |state| {
@@ -160,66 +166,23 @@ impl Component for TaskSources {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SourcesProps>().clone();
     let read = self.read(ctx, &props);
-    let busy = props.locked || self.save.state().get().is_pending();
-    let mut block = Column::new()
-      .id("task-form-sources")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::new().top(SourcesSpacing::Section.role()))
-      .spacing(ExtraSpacing::Loose.role())
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Xs)
-          .child(Text::new(&ctx.t("task_form.sources.label")).variant(ExtraTypography::Strong.role()))
-          .child(
-            Text::new(&ctx.t("task_form.sources.description"))
-              .id("task-form-sources-description")
-              .variant(ExtraTypography::Prose.role())
-              .width(Dimension::Pct(100.0)),
-          ),
-      );
-    if let Some(error) = read.error.clone().filter(|_| read.is_rejected()) {
-      return block.child(self.load_failed(ctx, &error));
-    }
-    let Some(read) = read.data.filter(|read| read.retried == self.retried.get()) else {
-      return block;
-    };
-    let own: Vec<SourcePath> = read.own.iter().map(|listed| listed.path.clone()).collect();
-    let place = task::place(&props.repo_root, &props.project_name, &read.inherited, &own);
-    block = block
-      .child(subhead(
-        ctx,
-        "task-form-sources-own",
-        "task_form.sources.thisTask",
-        own.len(),
-        None,
-      ))
-      .with_children(self.own_rows(ctx, &props, &read.own, busy));
-    if let Some(Asked(path)) = self.asking.get() {
-      block = block.child(self.question(ctx, &props, &path));
-    }
-    if let Some(error) = self.save.state().get().error {
-      block = block.child(field_error("task-form-sources-error", &message_text(ctx, &error)));
-    }
-    let ask = self.asking.clone();
-    block = block.child(ctx.mount_keyed::<AddSource>(
-      "task-form-sources-add",
-      AddSourceProps {
-        id: "task-form-sources-add".into(),
-        place: Some(place),
-        layout: Layout::Line,
-        add: ctx.t("task_form.sources.add"),
-        locked: busy || self.asking.get().is_some(),
-        on_add: Arc::new(move |path| ask.set(Some(Asked(path)))),
-      },
-    ));
-    block = inherited(ctx, &props, &read.inherited, block);
-    block
-      .child(summary(ctx, task::run_count(&read.inherited, &own)))
-      .child(reason_line(
-        "task-form-context-reason",
-        &ctx.t("task_form.fields.context.reason"),
-      ))
+    let shown = read.data.clone().filter(|read| read.retried == self.retried.get());
+    let count = shown.as_ref().map(|read| {
+      let own: Vec<SourcePath> = read.own.iter().map(|listed| listed.path.clone()).collect();
+      task::run_count(&read.inherited, &own)
+    });
+    let value = count.map_or_else(|| ctx.t("task_form.sources.unread"), |count| count.to_string().into());
+    let panel = self
+      .chip
+      .is_open()
+      .then(|| self.panel(ctx, &props, &read, shown.as_ref()));
+    PropertyChip::new(
+      "task-form-sources",
+      Icon::FolderSearch,
+      (ctx.t("task_form.sources.label"), value),
+      Look::Empty,
+    )
+    .render(&self.chip, panel)
   }
 }
 
@@ -254,6 +217,81 @@ impl TaskSources {
       })
       .state()
       .get()
+  }
+
+  /// The popover: what sources are, then what reading them found.
+  fn panel(
+    &self,
+    ctx: &mut Ctx,
+    props: &SourcesProps,
+    read: &FutureState<Read, Message>,
+    shown: Option<&Read>,
+  ) -> Element {
+    let panel = popover_panel("task-form-sources-popover", WIDTH)
+      .padding(
+        Padding::new()
+          .top(SpacingSize::Md)
+          .bottom(ExtraSpacing::Loose.role())
+          .left(SpacingSize::Md)
+          .right(SpacingSize::Md),
+      )
+      .spacing(ExtraSpacing::Loose.role())
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(ExtraSpacing::Fine.role())
+          .child(Text::new(&ctx.t("task_form.sources.label")).variant(ExtraTypography::FormSection.role()))
+          .child(
+            Text::new(&ctx.t("task_form.sources.description"))
+              .id("task-form-sources-description")
+              .variant(ExtraTypography::Prose.role())
+              .width(Dimension::Pct(100.0)),
+          ),
+      );
+    if let Some(error) = read.error.clone().filter(|_| read.is_rejected()) {
+      return panel.child(self.load_failed(ctx, &error)).into();
+    }
+    let Some(read) = shown else {
+      return panel.into();
+    };
+    self.sources(ctx, props, read, panel).into()
+  }
+
+  /// The add row, the groups and the summary, once the sources are read.
+  fn sources(&self, ctx: &mut Ctx, props: &SourcesProps, read: &Read, panel: Column) -> Column {
+    let busy = props.locked || self.save.state().get().is_pending();
+    let own: Vec<SourcePath> = read.own.iter().map(|listed| listed.path.clone()).collect();
+    let place = task::place(&props.repo_root, &props.project_name, &read.inherited, &own);
+    let ask = self.asking.clone();
+    let mut panel = panel.child(ctx.mount_keyed::<AddSource>(
+      "task-form-sources-add",
+      AddSourceProps {
+        id: "task-form-sources-add".into(),
+        place: Some(place),
+        layout: Layout::Line,
+        add: ctx.t("task_form.sources.add"),
+        locked: busy || self.asking.get().is_some(),
+        on_add: Arc::new(move |path| ask.set(Some(Asked(path)))),
+      },
+    ));
+    if let Some(Asked(path)) = self.asking.get() {
+      panel = panel.child(self.question(ctx, props, &path));
+    }
+    if let Some(error) = self.save.state().get().error {
+      panel = panel.child(field_error("task-form-sources-error", &message_text(ctx, &error)));
+    }
+    let head = subhead(
+      ctx,
+      "task-form-sources-own",
+      "task_form.sources.thisTask",
+      own.len(),
+      None,
+    );
+    let own_group = group(head).with_children(self.own_rows(ctx, props, &read.own, busy));
+    panel
+      .child(own_group)
+      .with_children(inherited(ctx, props, &read.inherited))
+      .child(summary(ctx, task::run_count(&read.inherited, &own)))
   }
 
   /// Reading the sources failed: why, and *Try again*. Nothing can be added or removed until they are read.
@@ -355,151 +393,7 @@ impl TaskSources {
   }
 }
 
-/// A list's heading: its name, how many it holds, and where it is changed.
-fn subhead(ctx: &Ctx, id: &str, key: &str, count: usize, link: Option<Element>) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&ctx.t(key))
-        .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary),
-    )
-    .child(
-      Text::new(&ctx.t_args("task_form.sources.count", [("count", count.to_string())]))
-        .id(format!("{id}-count"))
-        .variant(TypographyStyle::Caption),
-    )
-    .child(Spacer::new().flex(1.0))
-    .with_children(link)
-}
-
-/// A link at a heading's end (`Link · Edit in Project settings` `QcwW7`): 12 `text_secondary` and an `arrow-up-right`.
-fn link(ctx: &mut Ctx, id: &str, key: &str, route: Route) -> Element {
-  let open = Navigation::of(ctx).to(route);
-  opening(open)
-    .id(id.to_owned())
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Xs)
-        .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description))
-        .child(icon(
-          Icon::ArrowUpRight,
-          crate::theme::IconSize::Sm,
-          PaletteColor::TextSecondary,
-        )),
-    )
-    .into()
-}
-
-/// What the task gets from the project and from its pipeline, read-only.
-fn inherited(ctx: &mut Ctx, props: &SourcesProps, inherited: &Inherited, mut block: Column) -> Column {
-  let settings = Route::Project(props.project, ProjectPage::Settings(ProjectSettingsTab::Sources));
-  let edit = link(
-    ctx,
-    "task-form-sources-settings",
-    "task_form.sources.editInSettings",
-    settings,
-  );
-  block = block.child(subhead(
-    ctx,
-    "task-form-sources-project",
-    "task_form.sources.fromProject",
-    inherited.project.len(),
-    Some(edit),
-  ));
-  for (index, listed) in inherited.project.iter().enumerate() {
-    let origin = props.project_name.to_string();
-    block = block.child(locked_row(
-      ctx,
-      &format!("task-form-project-source-{index}"),
-      listed,
-      &origin,
-    ));
-  }
-  let Some((pipeline, _)) = props.pipeline.filter(|_| !inherited.pipeline.is_empty()) else {
-    return block;
-  };
-  let route = Route::Project(props.project, ProjectPage::Pipeline(pipeline, PipelinePanel::Pipeline));
-  let view = link(
-    ctx,
-    "task-form-sources-pipeline-link",
-    "task_form.sources.viewPipeline",
-    route,
-  );
-  block = block.child(subhead(
-    ctx,
-    "task-form-sources-pipeline",
-    "task_form.sources.fromPipeline",
-    inherited.pipeline.len(),
-    Some(view),
-  ));
-  for (index, from) in inherited.pipeline.iter().enumerate() {
-    let origin = pipeline_origin(ctx, from);
-    block = block.child(locked_row(
-      ctx,
-      &format!("task-form-pipeline-source-{index}"),
-      &from.listed,
-      &origin,
-    ));
-  }
-  block
-}
-
-fn pipeline_origin(ctx: &Ctx, from: &FromPipeline) -> String {
-  message_text(ctx, &from.origin()).to_string()
-}
-
-/// A source listed elsewhere: where, and a lock in place of the cross.
-fn locked_row(ctx: &mut Ctx, id: &str, listed: &Listed, origin: &str) -> Element {
-  let meta = match listed.kind {
-    Some(Kind::Folder) => ctx.t_args("task_form.sources.folderOf", [("origin", origin)]),
-    Some(Kind::File) => ctx.t_args("task_form.sources.fileOf", [("origin", origin)]),
-    None => ctx.t_args("task_form.sources.goneOf", [("origin", origin)]),
-  };
-  let mut row = SourceRow::new(id, listed.path.as_str(), listed.kind, meta)
-    .status(listed.state)
-    .locked();
-  if let Some(problem) = listed.problem() {
-    row = row.note(message_text(ctx, &problem));
-  }
-  row.render(ctx)
-}
-
-/// How many sources a run of the task starts with (`Summary` `dvmIE`).
-fn summary(ctx: &Ctx, count: usize) -> Row {
-  let words = match count {
-    0 => ctx.t("task_form.sources.summaryNone"),
-    1 => ctx.t("task_form.sources.summaryOne"),
-    count => ctx.t_args("task_form.sources.summary", [("count", count.to_string())]),
-  };
-  Row::new()
-    .id("task-form-sources-summary")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Xs))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
-    .child(icon(Icon::Info, crate::theme::IconSize::Sm, PaletteColor::TextMuted))
-    .child(
-      Text::new(&words)
-        .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextMuted)
-        .flex(1.0),
-    )
-}
-
-/// The Context section: the task's sources, and that links and notes are not available yet.
-pub fn context_section(ctx: &mut Ctx, props: SourcesProps) -> Element {
-  let block = ctx.mount_keyed::<TaskSources>("task-form-sources", props);
-  crate::ui::form_section::section(
-    "task-form-context-section",
-    &ctx.t("task_form.sections.context"),
-    None,
-    vec![block],
-  )
-  .into()
+/// The Sources chip and its popover.
+pub fn sources_chip(ctx: &mut Ctx, props: SourcesProps) -> Element {
+  ctx.mount_keyed::<TaskSources>("task-form-sources-chip", props)
 }

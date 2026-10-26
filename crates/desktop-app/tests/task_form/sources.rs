@@ -1,5 +1,6 @@
-//! Context › Sources (`zcFQJ`): what a task gets from the project and its pipeline, read-only; a new task keeps the
-//! sources a person confirmed in place until Create stores them with it; a stored task's are saved as they change.
+//! The Sources chip's popover (`Sources popover` `B56QE`): what a task gets from the project and its pipeline,
+//! read-only; a new task keeps the sources a person confirmed in place until Create stores them with it; a stored
+//! task's are saved as they change; the chip counts what a run starts with.
 
 use std::path::Path;
 
@@ -9,6 +10,7 @@ use orchester_core::source::SourcePath;
 use crate::harness::Form;
 
 const PATH: &str = "task-form-sources-add-path";
+const CHIP: &str = "task-form-sources";
 
 fn source(path: &Path) -> SourcePath {
   SourcePath::new(&path.to_string_lossy()).expect("an absolute path")
@@ -22,25 +24,15 @@ fn spec() -> (tempfile::TempDir, std::path::PathBuf) {
   (folder, spec)
 }
 
-/// Chooses the published pipeline whose label starts with `name`.
+/// Chooses the published pipeline whose title starts with `name`, then opens the Sources popover again.
 fn choose(form: &mut Form, name: &str) {
-  let mut select = form
-    .window
-    .tree
-    .get_element_by_id_mut("task-form-pipeline-input")
-    .and_then(|element| element.as_select())
-    .expect("the pipeline select");
-  let index = select
-    .labels()
-    .iter()
-    .position(|option| option.starts_with(name))
-    .unwrap_or_else(|| panic!("an option for {name}"));
-  select.commit(index);
-  form.window.pass();
+  form.choose_pipeline(name);
+  form.open(CHIP);
 }
 
-/// Adds `path` through the in-place question, as a person does, once the section has read what the task inherits.
+/// Adds `path` through the in-place question, as a person does, once the popover has read what the task inherits.
 fn add(form: &mut Form, path: &Path) {
+  form.open(CHIP);
   form.window.until("the sources read", |window| {
     window.tree.get_element_by_id(PATH).is_some()
   });
@@ -68,6 +60,7 @@ fn add(form: &mut Form, path: &Path) {
 fn form_sources_a_new_task_keeps_them_until_create_stores_them() {
   let mut form = Form::seeded("sources");
   form.new_task();
+  form.open(CHIP);
   form.window.until("the project's sources", |window| {
     window.tree.get_element_by_id("task-form-project-source-2").is_some()
   });
@@ -93,6 +86,7 @@ fn form_sources_a_new_task_keeps_them_until_create_stores_them() {
   assert!(!form.window.link.input_gate().protecting());
   assert_eq!(form.text("task-form-source-0-meta"), "File · this task");
   assert!(form.text("task-form-sources-summary").contains("starts with 6 sources"));
+  assert_eq!(form.text("task-form-sources-value"), "6", "the chip counts them");
   form.set("task-form-title-input", "Add a delivery log");
   form.click("task-form-create");
   form.window.until("Tasks opens", |window| {
@@ -174,6 +168,7 @@ fn form_sources_a_stored_task_saves_them_as_they_change() {
   let mut form = Form::seeded("sources");
   let task = form.task("KON-1").expect("the seeded draft").id();
   form.edit("KON-1");
+  form.open(CHIP);
   form.window.until("the task's own source", |window| {
     window.tree.get_element_by_id("task-form-source-0").is_some()
   });
@@ -211,6 +206,7 @@ fn form_sources_a_failed_read_says_why_with_try_again_never_the_list_read_before
   let mut form = Form::seeded("sources");
   let task = form.task("KON-1").expect("the seeded draft").id();
   form.edit("KON-1");
+  form.open(CHIP);
   form.window.until("the task's own source", |window| {
     window.tree.get_element_by_id("task-form-source-0").is_some()
   });
