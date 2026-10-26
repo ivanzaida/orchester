@@ -327,7 +327,7 @@ impl Link {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Md)
-      .child(icon(glyph, IconSize::Base, color.clone()))
+      .child(icon(glyph, IconSize::Base, color))
       .child(
         Text::new(&words)
           .id("sharing-remote-text")

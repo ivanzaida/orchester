@@ -163,7 +163,7 @@ fn project_settings_base_branch_a_branch_set_that_is_gone_is_the_rows_problem() 
     .save_base_branch_setting(&BaseBranchSetting::Branch(branch("gone")))
     .expect("set");
   page.outside(Outside::ProjectSettings);
-  page.until("the problem shown", |p| missing(p));
+  page.until("the problem shown", missing);
   assert_eq!(
     page.text(HINT),
     "gone no longer exists · new runs are refused until you choose another"

@@ -234,41 +234,49 @@ fn connection_group(
       None,
     ),
   ];
-  if let Some(link) = inspecting.listed.link_of(connection.id()) {
-    let repo = link.repo();
-    let repository = ctx.t_args(
-      "connections.github.repositoryFrom",
-      [
-        (
-          "repository",
-          ctx
-            .t_args(
-              "connections.github.repositoryName",
-              [("owner", repo.owner()), ("name", repo.name())],
-            )
-            .to_string(),
-        ),
-        ("remote", link.remote().as_str().to_owned()),
-      ],
-    );
-    rows.push(row(
+  rows.extend(link_rows(ctx, connection, inspecting));
+  Group::new("connection-properties", ctx.t("connections.connectionGroup"))
+    .rows(rows)
+    .into()
+}
+
+/// The account and repository the project expects through the connection, when a repository is linked to it.
+fn link_rows(ctx: &mut Ctx, connection: &GitHubConnection, inspecting: &Inspecting<'_>) -> Vec<Element> {
+  let Some(link) = inspecting.listed.link_of(connection.id()) else {
+    return Vec::new();
+  };
+  let repo = link.repo();
+  let repository = ctx.t_args(
+    "connections.github.repositoryFrom",
+    [
+      (
+        "repository",
+        ctx
+          .t_args(
+            "connections.github.repositoryName",
+            [("owner", repo.owner()), ("name", repo.name())],
+          )
+          .to_string(),
+      ),
+      ("remote", link.remote().as_str().to_owned()),
+    ],
+  );
+  vec![
+    row(
       ctx,
       "connection-expected-account",
       ("connections.github.expectedAccount", link.expected_login().as_str()),
       Tone::Secondary,
       None,
-    ));
-    rows.push(row(
+    ),
+    row(
       ctx,
       "connection-repository",
       ("connections.github.repository", &repository),
       Tone::Secondary,
       Some(&ctx.t("connections.github.toolsUnavailable")),
-    ));
-  }
-  Group::new("connection-properties", ctx.t("connections.connectionGroup"))
-    .rows(rows)
-    .into()
+    ),
+  ]
 }
 
 /// A row with its value at the end in `tone`, and what it leaves out in its hint.

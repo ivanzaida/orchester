@@ -200,7 +200,7 @@ pub(crate) fn back(id: &str, (parent, here): (&str, Option<&str>), open: Open) -
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(Text::new("/").variant(ProjectSettingsText::Hint.role()))
+      .child(Text::new(crate::ui::breadcrumb::SLASH).variant(ProjectSettingsText::Hint.role()))
       .child(
         Text::new(here)
           .id(format!("{id}-here"))

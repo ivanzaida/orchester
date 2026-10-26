@@ -42,13 +42,16 @@ use crate::{
 /// What a server's switch and question do, for the server they are about.
 pub(super) type ListAsks = Arc<dyn Fn(ConnectionId) -> Asks + Send + Sync>;
 
+/// The server whose work is running and the server a question is asked about, if any.
+pub(super) type ServerStates = (Option<(ConnectionId, Work)>, Option<(ConnectionId, Confirm)>);
+
 /// The three groups, a question asked about an MCP server under its group.
 pub(super) fn groups(
   ctx: &mut Ctx,
   project: &ShownProject,
   listed: &ProjectConnections,
   (accounts, asks): (&Accounts, &ListAsks),
-  (running, asking): (Option<(ConnectionId, Work)>, Option<(ConnectionId, Confirm)>),
+  (running, asking): ServerStates,
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
@@ -222,7 +225,7 @@ fn mcp_group(
   ctx: &mut Ctx,
   listed: &ProjectConnections,
   (asks, open, add): (&ListAsks, &impl Fn(ConnectionId) -> Open, Open),
-  (running, asking): (Option<(ConnectionId, Work)>, Option<(ConnectionId, Confirm)>),
+  (running, asking): ServerStates,
 ) -> Element {
   let mut group = Group::new("connections-mcp", ctx.t("connections.groups.mcpServers")).end(add_button(
     ctx,

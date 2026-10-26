@@ -71,23 +71,7 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
       cli_row(ctx, cli, on_path, (add(NewConnection::AgentProvider), recheck))
     })
     .collect();
-  rows.push(
-    SettingRow::new("connections-way-api", ctx.t("connections.empty.apiProvider"))
-      .item()
-      .lead(tile(ctx, Icon::Cloud))
-      .hint(ctx.t("connections.empty.apiProviderDetail"))
-      .control(
-        ActionButton::new(
-          "connections-way-api-add",
-          ButtonKind::Secondary,
-          ctx.t("connections.groups.add"),
-        )
-        .icon(Icon::Plus)
-        .opens(add(NewConnection::AgentProvider)),
-      )
-      .render(ctx),
-  );
-  let reason = reason_line("connections-add-reason", &ctx.t("connections.github.addUnavailable"));
+  rows.push(api_row(ctx, add(NewConnection::AgentProvider)));
   Column::new()
     .id("connections-empty")
     .width(Dimension::Pct(100.0))
@@ -98,38 +82,63 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
       Some(&ctx.t("connections.empty.lead")),
     ))
     .child(Group::new("connections-agents", ctx.t("connections.groups.agentProviders")).rows(rows))
-    .child(
-      Group::new("connections-github", ctx.t("connections.groups.github")).row(
-        EmptyRow::new(
-          "connections-github-empty",
-          Icon::GitPullRequest,
-          ctx.t("connections.github.emptyTitle"),
-          ctx.t("connections.github.emptyShort"),
-        )
-        .action(reason),
-      ),
-    )
-    .child(
-      Group::new("connections-mcp", ctx.t("connections.groups.mcpServers")).row(
-        EmptyRow::new(
-          "connections-mcp-empty",
-          Icon::Server,
-          ctx.t("connections.mcp.emptyTitle"),
-          ctx.t("connections.mcp.emptyDetailShort"),
-        )
-        .action(
-          ActionButton::new(
-            "connections-mcp-empty-add",
-            ButtonKind::Ghost,
-            ctx.t("connections.groups.add"),
-          )
-          .icon(Icon::Plus)
-          .compact()
-          .opens(add(NewConnection::McpServer)),
-        ),
-      ),
-    )
+    .child(github_group(ctx))
+    .child(mcp_group(ctx, add(NewConnection::McpServer)))
     .into()
+}
+
+/// A CLI on an API provider, with its Add.
+fn api_row(ctx: &mut Ctx, add: Open) -> Element {
+  SettingRow::new("connections-way-api", ctx.t("connections.empty.apiProvider"))
+    .item()
+    .lead(tile(ctx, Icon::Cloud))
+    .hint(ctx.t("connections.empty.apiProviderDetail"))
+    .control(
+      ActionButton::new(
+        "connections-way-api-add",
+        ButtonKind::Secondary,
+        ctx.t("connections.groups.add"),
+      )
+      .icon(Icon::Plus)
+      .opens(add),
+    )
+    .render(ctx)
+}
+
+/// GitHub not linked, unavailable with why.
+fn github_group(ctx: &Ctx) -> Group {
+  let reason = reason_line("connections-add-reason", &ctx.t("connections.github.addUnavailable"));
+  Group::new("connections-github", ctx.t("connections.groups.github")).row(
+    EmptyRow::new(
+      "connections-github-empty",
+      Icon::GitPullRequest,
+      ctx.t("connections.github.emptyTitle"),
+      ctx.t("connections.github.emptyShort"),
+    )
+    .action(reason),
+  )
+}
+
+/// No MCP server yet, with its Add.
+fn mcp_group(ctx: &Ctx, add: Open) -> Group {
+  Group::new("connections-mcp", ctx.t("connections.groups.mcpServers")).row(
+    EmptyRow::new(
+      "connections-mcp-empty",
+      Icon::Server,
+      ctx.t("connections.mcp.emptyTitle"),
+      ctx.t("connections.mcp.emptyDetailShort"),
+    )
+    .action(
+      ActionButton::new(
+        "connections-mcp-empty-add",
+        ButtonKind::Ghost,
+        ctx.t("connections.groups.add"),
+      )
+      .icon(Icon::Plus)
+      .compact()
+      .opens(add),
+    ),
+  )
 }
 
 /// A CLI as found, its maker's mark leading: Add when a copy is on the search path, Check again when none is, nothing

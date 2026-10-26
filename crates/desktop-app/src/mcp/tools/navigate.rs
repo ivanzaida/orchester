@@ -127,16 +127,7 @@ pub fn navigate(navigation: &Navigation, args: &Value) -> Result<Value, ToolErro
 fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
   let name = string(args, "route")?.ok_or(ToolError::Missing { param: "route" })?;
   let screen = Screen::from_name(name).ok_or_else(|| ToolError::UnknownRoute { name: name.to_owned() })?;
-  let takes = params(screen);
-  if let Some(param) = args
-    .keys()
-    .find(|key| *key != "route" && !takes.contains(&key.as_str()))
-  {
-    return Err(ToolError::UnexpectedParam {
-      of: screen.name(),
-      param: param.clone(),
-    });
-  }
+  only_params(screen, args)?;
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
@@ -155,10 +146,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Modules => module_page(args)?,
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => pull_requests_page(args)?,
-    Screen::Usage => match string(args, "project")? {
-      Some(_) => usage_page(args)?,
-      None => return usage_everywhere(args),
-    },
+    Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
@@ -174,6 +162,29 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::ImportResources => return import_route(args),
   };
   Ok(Route::Project(project(args)?, page))
+}
+
+/// Usage of the project `project` names, or everywhere when it is left out.
+fn usage_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
+  match string(args, "project")? {
+    Some(_) => Ok(Route::Project(project(args)?, usage_page(args)?)),
+    None => usage_everywhere(args),
+  }
+}
+
+/// Refuses a parameter besides `route` that `screen` does not take.
+fn only_params(screen: Screen, args: &Map<String, Value>) -> Result<(), ToolError> {
+  let takes = params(screen);
+  match args
+    .keys()
+    .find(|key| *key != "route" && !takes.contains(&key.as_str()))
+  {
+    Some(param) => Err(ToolError::UnexpectedParam {
+      of: screen.name(),
+      param: param.clone(),
+    }),
+    None => Ok(()),
+  }
 }
 
 /// Import resources of `project` on the kind tab `tab` names, or All.
