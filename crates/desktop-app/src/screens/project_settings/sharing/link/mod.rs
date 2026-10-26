@@ -13,6 +13,8 @@ mod not_member;
 mod parts;
 mod rows;
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -30,6 +32,7 @@ use orchester_core::{
 use orchester_workspace::sharing::{
   ProjectAddress, RemoteMatch, ServerEntry, ServerProject, Servers, SharingError,
   project::{
+    discovery::ProjectDiscovery,
     first_link::{LinkKind, LinkPlan},
     link::{LinkProblem, LinkTarget},
   },
@@ -45,7 +48,10 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{JoinTarget, ProjectPage, Route},
-  screens::settings::orchester::{PersonOnly, Said, sharing_said},
+  screens::{
+    project_settings::kit::{back, page_head},
+    settings::orchester::{PersonOnly, Said, sharing_said},
+  },
   services::Services,
   theme::ExtraSpacing,
 };
@@ -180,6 +186,8 @@ pub(super) struct Link {
   resolve: FutureAction<Choice, Target, Problem>,
   /// Linking contacts the server: it is a person's (review 1, M1).
   person: PersonOnly,
+  /// *Share…* opened the page that links the project (`04c Share` `JeXKt`).
+  sharing: Signal<bool>,
 }
 
 impl Component for Link {
@@ -218,23 +226,47 @@ impl Component for Link {
       asking,
       resolve,
       person: PersonOnly::new(ctx),
+      // A discovery file that names a project or a server opens the page that offers it.
+      sharing: ctx.signal(matches!(
+        props.facts.discovery,
+        ProjectDiscovery::Project(_) | ProjectDiscovery::ServerOnly(_)
+      )),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    if !self.sharing.get() {
+      let sharing = self.sharing.clone();
+      return Column::new()
+        .id("project-settings-sharing")
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Roomy.role())
+        .with_children(super::make_local::made(
+          ctx,
+          &props.made_local,
+          props.project.open.project.name().as_str(),
+        ))
+        .child(parts::local(ctx, &props, move || sharing.set(true)));
+    }
     let listed = self.listed(ctx, &props);
+    let sharing = self.sharing.clone();
+    let name = props.project.open.project.name().as_str();
     Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Roomy.role())
-      .with_children(super::make_local::made(
-        ctx,
-        &props.made_local,
-        props.project.open.project.name().as_str(),
+      .child(back(
+        "sharing-share-crumb",
+        (&ctx.t("project_settings.sharing"), None),
+        Arc::new(move |_| sharing.set(false)),
       ))
-      .child(parts::task_list(ctx, &props))
-      .child(self.link_section(ctx, &props, listed.as_ref()))
+      .child(page_head(
+        "sharing-share-head",
+        &ctx.t_args("sharing.share.title", [("project", name)]),
+        Some(&ctx.t("sharing.share.lead")),
+      ))
+      .with_children(self.link_section(ctx, &props, listed.as_ref()))
       .child(parts::admin_note(ctx, self.chosen_entry(&props)))
       .child(parts::sends(ctx))
   }

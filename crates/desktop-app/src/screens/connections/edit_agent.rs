@@ -11,9 +11,8 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::PaletteColor,
   },
-  components::Column,
+  components::Text,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -45,12 +44,12 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsView, ProjectPage, Route, Screen},
+  screens::project_settings::kit::{self, Group, form_row, value},
   services::{Services, accounts::listed},
+  theme::{ExtraTypography, ProjectSettingsText},
   ui::{
-    breadcrumb::Crumb,
     button::{ActionButton, ButtonKind},
-    icon::Icon,
-    inspector::{self, PropertyValue, property},
+    form_section::Label,
   },
 };
 
@@ -86,7 +85,7 @@ impl Component for EditConnection {
     let back = move |id: ConnectionId| {
       navigation.go(Route::Project(
         project,
-        ProjectPage::Connections(ConnectionsView::default().with_selected(id)),
+        ProjectPage::Connections(ConnectionsView::of(id)),
       ));
     };
     let after_work = back.clone();
@@ -114,10 +113,11 @@ impl Component for EditConnection {
     let props = ctx.props::<EditProps>().clone();
     let listed = data::load(ctx, props.project.open.repo_root.clone(), 0).data;
     let Some(listed) = listed else {
-      return Column::new()
-        .id(format!("screen-{}", Screen::EditConnection.name()))
-        .width(Dimension::Pct(100.0))
-        .into();
+      return kit::scroll(
+        lurq::components::Column::new()
+          .id(format!("screen-{}", Screen::EditConnection.name()))
+          .width(Dimension::Pct(100.0)),
+      );
     };
     let Some(connection) = listed
       .connections
@@ -167,36 +167,34 @@ impl EditConnection {
       Some(current) => !self.provider.holds(current),
     };
     let changed = account_changed || provider_changed;
-    let rows = Column::new()
-      .id("connection-edit-properties")
-      .width(Dimension::Pct(100.0))
-      .child(property(
-        "connection-edit-name",
-        &ctx.t("connections.dialog.name"),
-        connection.name().as_str(),
-        PropertyValue::Plain,
-      ))
-      .child(property(
-        "connection-edit-program",
-        &ctx.t("connections.property.programFile"),
-        &connection
-          .executable()
-          .map(|path| path.display().to_string())
-          .unwrap_or_default(),
-        PropertyValue::Mono,
-      ));
-    let mut sections = vec![
-      rows.into(),
-      inspector::note(
-        "connection-account-note",
-        Icon::Info,
-        &ctx.t("connections.account.changeNote"),
-      )
-      .into(),
+    let program = connection
+      .executable()
+      .map(|path| path.display().to_string())
+      .unwrap_or_default();
+    let mut rows = vec![
+      form_row(
+        Label::new("connection-edit-name", ctx.t("connections.dialog.name")),
+        value("connection-edit-name-value", connection.name().as_str()),
+      ),
+      form_row(
+        Label::new("connection-edit-program", ctx.t("connections.property.programFile")),
+        value("connection-edit-program-value", &program).variant(ExtraTypography::PropertyMono.role()),
+      ),
     ];
     if !self.provider.on() {
-      sections.push(account::add_row(ctx, &accounts, provider, &self.chosen));
+      rows.push(account::add_row(ctx, &accounts, provider, &self.chosen));
     }
+    let mut sections = vec![
+      Group::new("connection-edit-properties", ctx.t("connections.dialog.connection"))
+        .rows(rows)
+        .after(
+          Text::new(&ctx.t("connections.account.changeNote"))
+            .id("connection-account-note")
+            .variant(ProjectSettingsText::Hint.role())
+            .width(Dimension::Pct(100.0)),
+        )
+        .into(),
+    ];
     sections.push(self.provider.section(ctx, provider, known));
     if let Some(current) = connection.api_provider().filter(|_| !self.provider.on()) {
       let secret = known
@@ -207,7 +205,7 @@ impl EditConnection {
         .map(|secret| secret.name().as_str());
       sections.push(off_provider_notice(ctx, connection.name().as_str(), provider, secret));
     }
-    let head = self.head(ctx, props, connection, changed);
+    let head = self.head(ctx, props, connection);
     let bar = if connection.api_provider().is_some() || self.provider.on() {
       self.provider_bar(ctx, props, connection, (wanted.filter(|_| provider_changed), known))
     } else {
@@ -216,40 +214,20 @@ impl EditConnection {
     page(ctx, Screen::EditConnection, head, sections, bar)
   }
 
-  fn head(&self, ctx: &mut Ctx, props: &EditProps, connection: &AgentConnection, changed: bool) -> Head {
+  fn head(&self, ctx: &mut Ctx, props: &EditProps, connection: &AgentConnection) -> Head {
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
-    let title = ctx.t_args(
-      "connections.editAgent.title",
-      [("connection", connection.name().as_str())],
-    );
-    let status = if changed {
-      (
-        Icon::CircleDashed,
-        PaletteColor::TextMuted,
-        ctx.t("connections.dialog.notSaved"),
-      )
-    } else {
-      (
-        Icon::CircleCheck,
-        PaletteColor::Success,
-        ctx.t("connections.editAgent.saved"),
-      )
-    };
     Head {
-      crumbs: vec![
-        Crumb::to(
-          ctx.t("connections.title"),
-          navigation.to(Route::Project(
-            project,
-            ProjectPage::Connections(ConnectionsView::default()),
-          )),
-        ),
-        Crumb::here(title.clone()),
-      ],
-      title,
-      description: ctx.t("connections.editAgent.description"),
-      status,
+      back: navigation.to(Route::Project(
+        project,
+        ProjectPage::Connections(ConnectionsView::of(connection.id())),
+      )),
+      here: ctx.t("connections.edit"),
+      title: ctx.t_args(
+        "connections.editAgent.title",
+        [("connection", connection.name().as_str())],
+      ),
+      description: Some(ctx.t("connections.editAgent.description")),
     }
   }
 
@@ -265,7 +243,7 @@ impl EditConnection {
     .on_click(move || {
       navigation.go(Route::Project(
         project,
-        ProjectPage::Connections(ConnectionsView::default().with_selected(id)),
+        ProjectPage::Connections(ConnectionsView::of(id)),
       ));
     });
     let save = ActionButton::new(
@@ -324,7 +302,7 @@ impl EditConnection {
     .on_click(move || {
       navigation.go(Route::Project(
         project,
-        ProjectPage::Connections(ConnectionsView::default().with_selected(id)),
+        ProjectPage::Connections(ConnectionsView::of(id)),
       ));
     });
     let save = ActionButton::new(

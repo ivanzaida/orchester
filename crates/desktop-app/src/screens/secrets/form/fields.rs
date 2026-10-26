@@ -1,10 +1,13 @@
-//! Fields and footer of the inline credential editor, including name-check and write-failure states.
+//! The fields and actions of New secret and Replace value: New secret is a page under Secrets with the crumb back to it,
+//! its fields a group of rows (name, kind, value, project, environment); Replace value is asked in place on the
+//! secret's page, its new value in a box with the secret's uses. Each says what was found of the name and why it cannot
+//! be saved yet, and a write that failed.
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, SelectOption, Spacer, Text},
+  components::{Column, Row, SelectOption, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -13,74 +16,72 @@ use orchester_workspace::secrets::{data::ReplacementPermission, form::NameCheck}
 
 use super::{Props, SecretForm};
 use crate::{
-  screens::secrets::{
-    inspector,
-    state::{EnvironmentChoice, KindChoice},
-    words, work,
+  screens::{
+    project_settings::kit::{Group, back, form_actions, form_row, page_head},
+    secrets::{
+      state::{EnvironmentChoice, KindChoice},
+      words, work,
+    },
   },
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
+  theme::{ExtraSpacing, ExtraTypography, SECRETS_PENDING_OPACITY, SettingsText},
   ui::{
-    avatar::{credential_avatar, credential_project_avatar},
+    avatar::credential_project_avatar,
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, SelectField, field, field_error},
+    field::{FieldInput, SelectField, field_error},
+    form_section::Label,
     icon::Icon,
-    icon_button::IconButton,
     message::message_text,
     notice::{handling_notice, handling_notice_action},
-    unavailable::reason_line,
   },
 };
 
-pub(super) fn new_header(
-  ctx: &mut Ctx,
-  props: &Props,
-  cancel: std::sync::Arc<dyn Fn() + Send + Sync>,
-  pending: bool,
-) -> Element {
-  let mut close = IconButton::new("secret-form-close", Icon::X, ctx.t("secrets.cancel"))
-    .inspector()
-    .in_form();
-  if !pending {
-    close = close.on_click(move || cancel());
-  }
-  Row::new()
+/// New secret's page: the crumb back to Secrets, its head, its fields and its actions.
+pub(super) fn new_page(ctx: &Ctx, props: &Props, body: Element, footer: Element) -> Element {
+  Column::new()
+    .id("secret-form")
     .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .left(SpacingSize::Lg)
-        .right(ExtraSpacing::Loose.role())
-        .top(SecretsSpacing::Body.role())
-        .bottom(SecretsSpacing::Body.role()),
-    )
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(credential_avatar("secret-form-tile", Icon::KeyRound, true))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(ExtraSpacing::Tight.role())
-        .child(Text::new(&ctx.t("secrets.form.title")).variant(SecretsText::InspectorTitle.role()))
-        .child(
-          Text::new(&ctx.t_args(
-            "secrets.form.subtitle",
-            [("project", props.project.open.project.name().as_str())],
-          ))
-          .variant(TypographyStyle::Description),
-        ),
-    )
-    .child(close.render(ctx))
+    .spacing(ExtraSpacing::Roomy.role())
+    .child(back(
+      "secret-form-crumb",
+      (&ctx.t("project_settings.secrets"), Some(&ctx.t("secrets.form.title"))),
+      props.view.list(),
+    ))
+    .child(page_head(
+      "secret-form-head",
+      &ctx.t("secrets.form.title"),
+      Some(&ctx.t_args(
+        "secrets.form.subtitle",
+        [("project", props.project.open.project.name().as_str())],
+      )),
+    ))
+    .child(body)
+    .child(footer)
     .into()
 }
+
+/// Replace value in place: its box on the secret's page (`yTCmk`).
+pub(super) fn replace_box(_ctx: &Ctx, body: Element, footer: Element) -> Element {
+  Column::new()
+    .id("secret-form")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+    .spacing(SpacingSize::Md)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .child(body)
+    .child(footer)
+    .into()
+}
+
 fn project_row(ctx: &Ctx, props: &Props) -> Row {
   let name = props.project.open.project.name().as_str();
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ControlHeight::Md.value()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(credential_project_avatar("secret-project-avatar", name))
-    .child(Text::new(name).variant(TypographyStyle::Label))
+    .child(Text::new(name).variant(ExtraTypography::Strong.role()))
     .child(
       Text::new(&ctx.t("secrets.form.projectNote"))
         .variant(ExtraTypography::Note.role())
@@ -90,43 +91,57 @@ fn project_row(ctx: &Ctx, props: &Props) -> Row {
 
 impl SecretForm {
   pub(super) fn fields(&self, ctx: &mut Ctx, props: &Props, check: &NameCheck, pending: bool) -> Element {
-    let mut body = Column::new()
+    let value = self.value_row(ctx, props, check, pending);
+    let Some(secret) = &props.secret else {
+      let rows = vec![
+        self.name_field(ctx, props, check, pending),
+        self.kind_field(ctx, pending),
+        value,
+        form_row(
+          Label::new("secret-project-field", ctx.t("secrets.project")),
+          project_row(ctx, props),
+        ),
+        self.environment_field(ctx, pending),
+      ];
+      return Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(Group::new("secret-form-fields", ctx.t("secrets.form.fields")).rows(rows))
+        .child(self.notice(ctx, props, check))
+        .into();
+    };
+    Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
-      .spacing(SecretsSpacing::Body.role());
-    if let Some(secret) = &props.secret {
-      body = body.child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Xs)
-          .child(Text::new(&ctx.t("secrets.rotation.title")).variant(ExtraTypography::Strong.role()))
-          .child(
-            Text::new(&ctx.t_args(
-              "secrets.rotation.subtitle",
-              [
-                ("name", secret.name().as_str()),
-                ("project", props.project.open.project.name().as_str()),
-                ("environment", &ctx.t(words::environment_key(secret.environment()))),
-              ],
-            ))
-            .variant(ExtraTypography::Prose.role()),
-          ),
-      );
-    } else {
-      body = body
-        .child(self.name_field(ctx, props, check, pending))
-        .child(self.kind_field(ctx, pending));
-    }
-    let mut value = FieldInput::new("secret-value", ctx.t("secrets.form.value"), self.value.clone()).masked();
-    if pending {
-      value = value.locked();
-    }
+      .spacing(SpacingSize::Sm)
+      .child(Text::new(&ctx.t("secrets.rotation.title")).variant(SettingsText::SectionTitle.role()))
+      .child(
+        Text::new(&ctx.t_args(
+          "secrets.rotation.subtitle",
+          [
+            ("name", secret.name().as_str()),
+            ("project", props.project.open.project.name().as_str()),
+            ("environment", &ctx.t(words::environment_key(secret.environment()))),
+          ],
+        ))
+        .variant(ExtraTypography::Prose.role())
+        .width(Dimension::Pct(100.0)),
+      )
+      .child(value)
+      .child(self.notice(ctx, props, check))
+      .into()
+  }
+
+  fn value_row(&self, ctx: &mut Ctx, props: &Props, check: &NameCheck, pending: bool) -> Element {
     let replacing = props.secret.is_some();
     let label = ctx.t(if replacing {
       "secrets.rotation.value"
     } else {
       "secrets.form.value"
     });
+    let mut value = FieldInput::new("secret-value", label.clone(), self.value.clone()).masked();
+    if pending {
+      value = value.locked();
+    }
     let hint = ctx.t(if replacing {
       "secrets.rotation.hint"
     } else if matches!(check, NameCheck::Taken(_)) {
@@ -134,33 +149,18 @@ impl SecretForm {
     } else {
       "secrets.form.valueHint"
     });
-    body = body.child(
-      field("secret-value-field", Some(&label), value.render(ctx), None)
-        .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
-        .child(
-          Text::new(&hint)
-            .id("secret-value-field-hint")
-            .variant(SecretsText::ValueHint.role()),
-        ),
-    );
-    if !replacing {
-      body = body
-        .child(
-          field(
-            "secret-project-field",
-            Some(&ctx.t("secrets.project")),
-            project_row(ctx, props),
-            None,
-          )
-          .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 }),
-        )
-        .child(self.environment_field(ctx, pending));
-    }
-    body = body.child(self.notice(ctx, props, check));
-    if let Some(secret) = &props.secret {
-      body = body.child(inspector::uses(ctx, &props.project, &props.listed, secret));
-    }
-    body.into()
+    let field = Column::new()
+      .width(Dimension::Pct(100.0))
+      .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+      .spacing(ExtraSpacing::Snug.role())
+      .child(value.render(ctx))
+      .child(
+        Text::new(&hint)
+          .id("secret-value-field-hint")
+          .variant(ExtraTypography::Note.role())
+          .width(Dimension::Pct(100.0)),
+      );
+    form_row(Label::new("secret-value-field", label), field)
   }
 
   fn name_field(&self, ctx: &mut Ctx, props: &Props, check: &NameCheck, pending: bool) -> Element {
@@ -187,20 +187,18 @@ impl SecretForm {
     if hint.is_some() {
       input = input.invalid();
     }
-    field(
-      "secret-name-field",
-      Some(&ctx.t("secrets.form.name")),
-      input.render(ctx),
-      None,
-    )
-    .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
-    .with_children(hint.map(|hint| {
-      Text::new(&hint)
-        .id("secret-name-field-hint")
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::Danger)
-    }))
-    .into()
+    let field = Column::new()
+      .width(Dimension::Pct(100.0))
+      .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+      .spacing(ExtraSpacing::Snug.role())
+      .child(input.render(ctx))
+      .with_children(hint.map(|hint| {
+        Text::new(&hint)
+          .id("secret-name-field-hint")
+          .variant(ExtraTypography::Note.role())
+          .color(PaletteColor::Danger)
+      }));
+    form_row(Label::new("secret-name-field", ctx.t("secrets.form.name")), field)
   }
 
   fn kind_field(&self, ctx: &mut Ctx, pending: bool) -> Element {
@@ -220,9 +218,7 @@ impl SecretForm {
     } else {
       SelectField::new("secret-kind", label.clone(), self.kind.clone(), options).render(ctx)
     };
-    field("secret-kind-field", Some(&label), control, None)
-      .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
-      .into()
+    form_row(Label::new("secret-kind-field", label), control)
   }
 
   fn environment_field(&self, ctx: &mut Ctx, pending: bool) -> Element {
@@ -259,9 +255,7 @@ impl SecretForm {
       )
       .render(ctx)
     };
-    field("secret-form-environment-field", Some(&label), control, None)
-      .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
-      .into()
+    form_row(Label::new("secret-form-environment-field", label), control)
   }
 
   fn notice(&self, ctx: &Ctx, props: &Props, check: &NameCheck) -> Element {
@@ -328,38 +322,33 @@ impl SecretForm {
       save = save.loading();
     }
     let cancel = self.cancel(props);
-    let cancel = ActionButton::new("secret-cancel", ButtonKind::Secondary, ctx.t("secrets.cancel"))
+    let cancel = ActionButton::new("secret-cancel", ButtonKind::Ghost, ctx.t("secrets.cancel"))
       .in_form()
       .on_click(move || cancel());
-    let mut footer = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Loose.role()))
-      .spacing(ExtraSpacing::Snug.role())
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border));
-    if let Some(error) = &state.error {
-      footer = footer.child(field_error("secret-save-error", &message_text(ctx, error)));
-    }
-    footer = footer.child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .child(Spacer::new().flex(1.0))
-        .child(if pending { cancel.disabled() } else { cancel })
-        .child(
-          Row::new()
-            .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
-            .child(save),
-        ),
-    );
-    if submit.is_none() && !pending {
-      footer = footer.child(
+    let cancel = if pending { cancel.disabled() } else { cancel };
+    let reason = (submit.is_none() && !pending).then(|| self.reason(ctx, check, replacing));
+    let actions = form_actions(
+      "secret-form-actions",
+      vec![
+        cancel.into(),
         Row::new()
-          .width(Dimension::Pct(100.0))
-          .child(Spacer::new().flex(1.0))
-          .child(reason_line("secret-save-reason", &self.reason(ctx, check, replacing)).width(Dimension::Auto)),
-      );
-    }
-    footer.into()
+          .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+          .child(save)
+          .into(),
+      ],
+      reason.as_deref(),
+    );
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .with_children(
+        state
+          .error
+          .as_ref()
+          .map(|error| field_error("secret-save-error", &message_text(ctx, error))),
+      )
+      .child(actions)
+      .into()
   }
 
   fn reason(&self, ctx: &Ctx, check: &NameCheck, replacing: bool) -> std::sync::Arc<str> {

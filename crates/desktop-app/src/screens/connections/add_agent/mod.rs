@@ -21,7 +21,7 @@ use lurq::{
   },
   components::{Column, Row, Text},
   core::Signal,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   connection::{AgentProvider, ConnectionAccount, ConnectionCheck},
@@ -53,17 +53,17 @@ use crate::{
   mcp::input_gate::InputGate,
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
+  routes::{ConnectionsView, ProjectPage, Route, Screen},
+  screens::project_settings::kit::{Group, form_group, form_row},
   services::{
     Services,
     accounts::{self, Accounts},
   },
   theme::ExtraTypography,
   ui::{
-    breadcrumb::Crumb,
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    form_section::{Label, Place, section, stacked_row},
+    form_section::Label,
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
@@ -142,7 +142,7 @@ impl Component for AddAgent {
     let changes = Services::of(ctx).changes;
     ctx.watch(&save.state(), move |state| {
       if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
-        let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
+        let view = ConnectionsView::of(id);
         navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
         // After the form leaves: every screen that shows the project's connections reads them again, the
         // status bar's accounts too.
@@ -180,7 +180,7 @@ impl Component for AddAgent {
     });
     let runs_on = self.provider.runs_on(&known, account);
     let bar = self.bar(ctx, &props, (&save, program, &state, runs_on), reason.as_deref());
-    let head = head(ctx, &props, &save.state().get());
+    let head = head(ctx, &props);
     page(ctx, Screen::NewConnection, head, sections, bar)
   }
 }
@@ -313,58 +313,42 @@ impl AddAgent {
         false => card.into(),
       }
     };
-    let pair = |left: Element, right: Element| {
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Md)
-        .child(Column::new().flex(1.0).child(left))
-        .child(Column::new().flex(1.0).child(right))
-    };
-    let cards = Column::new()
+    // The kinds side by side (`Cards` `Q4AgH`), the native ones locked with why.
+    let kinds = [
+      (
+        AgentProvider::ClaudeCodeCli,
+        ("connection-kind-claude", Icon::Terminal, "connections.kind.claudeDetail"),
+      ),
+      (
+        AgentProvider::CodexCli,
+        ("connection-kind-codex", Icon::Terminal, "connections.kind.codexDetail"),
+      ),
+      (
+        AgentProvider::AnthropicApi,
+        ("connection-kind-anthropic", Icon::Cpu, "connections.kind.anthropicDetail"),
+      ),
+      (
+        AgentProvider::OpenAiApi,
+        ("connection-kind-openai", Icon::Cpu, "connections.kind.openaiDetail"),
+      ),
+    ];
+    let cards = Row::new()
       .id("connection-kinds")
       .width(Dimension::Pct(100.0))
-      .padding(Padding::new().top(crate::theme::ExtraSpacing::Inset.role()))
-      .spacing(SpacingSize::Md)
-      .child(pair(
-        card(
-          AgentProvider::CodexCli,
-          ("connection-kind-codex", Icon::Terminal, "connections.kind.codexDetail"),
-        ),
-        card(
-          AgentProvider::ClaudeCodeCli,
-          (
-            "connection-kind-claude",
-            Icon::Terminal,
-            "connections.kind.claudeDetail",
-          ),
-        ),
-      ))
-      .child(pair(
-        card(
-          AgentProvider::AnthropicApi,
-          (
-            "connection-kind-anthropic",
-            Icon::Cpu,
-            "connections.kind.anthropicDetail",
-          ),
-        ),
-        card(
-          AgentProvider::OpenAiApi,
-          ("connection-kind-openai", Icon::Cpu, "connections.kind.openaiDetail"),
-        ),
-      ))
-      .child(
+      .spacing(SpacingSize::Sm)
+      .with_children(
+        kinds
+          .into_iter()
+          .map(|(provider, shown)| Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(card(provider, shown))),
+      );
+    Group::new("connection-kind-section", ctx.t("connections.kind.label"))
+      .after(cards)
+      .after(
         Text::new(&ctx.t("connections.kind.nativeHint"))
           .variant(ExtraTypography::Prose.role())
           .color(PaletteColor::TextMuted),
-      );
-    section(
-      "connection-kind-section",
-      &ctx.t("connections.kind.label"),
-      None,
-      vec![cards.into()],
-    )
-    .into()
+      )
+      .into()
   }
 
   fn connection_section(
@@ -380,10 +364,9 @@ impl AddAgent {
     if let Some(error) = &name_error {
       input = input.error(error.clone());
     }
-    let name = stacked_row(
+    let name = form_row(
       Label::new("connection-name", ctx.t("connections.dialog.name")).description(ctx.t("connections.dialog.nameHint")),
       input.render(ctx),
-      Place::Within,
     );
     let program = program_row(ctx, provider, (found, &self.program));
     let mut rows = vec![name, program];
@@ -392,13 +375,7 @@ impl AddAgent {
       rows.push(super::account::add_row(ctx, accounts, provider, &self.account));
     }
     rows.push(check_row(ctx, (provider, self.provider.on()), state, &self.recheck));
-    section(
-      "connection-section",
-      &ctx.t("connections.dialog.connection"),
-      None,
-      rows,
-    )
-    .into()
+    form_group("connection-section", &ctx.t("connections.dialog.connection"), None, rows)
   }
 }
 
@@ -445,39 +422,20 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   )
 }
 
-fn head(ctx: &mut Ctx, props: &AddAgentProps, saving: &FutureState<Saved, Message>) -> Head {
+fn head(ctx: &mut Ctx, props: &AddAgentProps) -> Head {
   let navigation = Navigation::of(ctx);
   let project = props.project.open.project.id();
-  let status = if saving.is_pending() {
-    (
-      Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
-      ctx.t("connections.dialog.saving"),
-    )
-  } else {
-    (
-      Icon::CircleDashed,
-      PaletteColor::TextMuted,
-      ctx.t("connections.dialog.notSaved"),
-    )
-  };
   Head {
-    crumbs: vec![
-      Crumb::to(
-        ctx.t("connections.title"),
-        navigation.to(Route::Project(
-          project,
-          ProjectPage::Connections(ConnectionsView::default()),
-        )),
-      ),
-      Crumb::here(ctx.t("connections.dialog.addTitle")),
-    ],
+    back: navigation.to(Route::Project(
+      project,
+      ProjectPage::Connections(ConnectionsView::default()),
+    )),
+    here: ctx.t("connections.dialog.addCrumb"),
     title: ctx.t("connections.dialog.addTitle"),
-    description: ctx.t_args(
+    description: Some(ctx.t_args(
       "connections.dialog.description",
       [("project", props.project.open.project.name().as_str())],
-    ),
-    status,
+    )),
   }
 }
 

@@ -1,8 +1,8 @@
-//! *Discovery file* of a linked project (`Row · Discovery file` in `L5o9Xy`): whether `orchester.toml` at the
-//! repository root names the project's address, when it was written and whether it is committed. Without one,
-//! *Write orchester.toml* writes it, which only a person does: colleagues who open the checkout are offered the
-//! address, so it is written only on the server that reported it, and the button is unavailable with why while this
-//! computer can't check that (`Manage` in `q8DIyg`). A file that names anything else is left as it is.
+//! *Discovery file* of a linked project (`Discovery file` `r5LUQz` in `04b Sharing · shared` `TnUGj`): whether
+//! `orchester.toml` at the repository root names the project's address, when it was written and whether it is
+//! committed. Without one, *Write orchester.toml* writes it, which only a person does: colleagues who open the checkout
+//! are offered the address, so it is written only on the server that reported it, and the button is unavailable with
+//! why while this computer can't check that (`Manage` in `q8DIyg`). A file that names anything else is left as it is.
 //! Orchester never commits it.
 
 use std::sync::Arc;
@@ -11,11 +11,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::SpacingSize,
   },
-  components::{Column, Row},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_api::client::ServerAddress;
 use orchester_workspace::{
@@ -29,13 +27,12 @@ use orchester_workspace::{
 use crate::{
   project::ShownProject,
   screens::{
-    project_settings::page::{self, CONTROL_WIDTH},
+    project_settings::kit::{Group, SettingRow},
     settings::orchester::{PersonOnly, Said, day_of, shown_address},
   },
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    form_section::{Label, Place, side_row},
     icon::Icon,
     unavailable::reason_line,
   },
@@ -101,43 +98,39 @@ impl Component for DiscoveryRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let local = props.project.open.project.name().as_str().to_owned();
-    let mut control = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(SpacingSize::Xs);
-    control = match &props.discovery {
-      None => control.child(page::note(
-        "sharing-discovery-no-address",
-        &ctx.t("sharing.discovery.noAddress"),
-      )),
+    let row = SettingRow::new("sharing-discovery", discovery::FILE)
+      .mono_label()
+      .info(ctx.t_args("sharing.discovery.description", [("local", local.as_str())]));
+    let row = match &props.discovery {
+      None => row.hint(ctx.t("sharing.discovery.noAddress")),
       Some(found) => match found.state {
-        DiscoveryState::Names => written(ctx, control, found),
-        DiscoveryState::Other => control.child(page::icon_note(
-          "sharing-discovery-other",
-          Icon::FileText,
-          &ctx.t("sharing.discovery.other"),
-        )),
-        DiscoveryState::Absent => self.absent(ctx, control, &props),
+        DiscoveryState::Names => row.hint(written(ctx, found)),
+        DiscoveryState::Other => row.hint(ctx.t("sharing.discovery.other")),
+        DiscoveryState::Absent => {
+          let row = row.hint(ctx.t("sharing.discovery.absent"));
+          self.absent(ctx, row, &props)
+        }
       },
     };
     let state = self.write.state().get();
-    if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
-      control = control.child(field_error("sharing-discovery-error", &reason.text(ctx)));
-    }
-    side_row(
-      Label::new("sharing-discovery", ctx.t("sharing.discovery.label"))
-        .description(ctx.t_args("sharing.discovery.description", [("local", local.as_str())])),
-      control,
-      Place::Last,
-      true,
-    )
+    let error = state
+      .error
+      .clone()
+      .filter(|_| !state.is_pending())
+      .map(|reason| field_error("sharing-discovery-error", &reason.text(ctx)).into());
+    let row = row.under_all(error);
+    Group::new("project-settings-sharing-discovery", ctx.t("sharing.discovery.label"))
+      .row(row.render(ctx))
   }
 }
 
 impl DiscoveryRow {
   /// No file yet: *Write orchester.toml*, unavailable with why while the address cannot be checked against the
   /// project's server, or is not on it.
-  fn absent(&self, ctx: &Ctx, control: Column, props: &Props) -> Column {
-    let button = ActionButton::new(WRITE, ButtonKind::Secondary, ctx.t("sharing.discovery.write")).icon(Icon::FileText);
+  fn absent(&self, ctx: &mut Ctx, row: SettingRow, props: &Props) -> SettingRow {
+    let button = ActionButton::new(WRITE, ButtonKind::Secondary, ctx.t("sharing.discovery.write"))
+      .icon(Icon::FileText)
+      .in_form();
     let (button, reason) = match writable(ctx, props) {
       Err(reason) => (button.unavailable(reason.clone()), Some(reason)),
       Ok(_) if self.write.state().get().is_pending() => (button.loading(), None),
@@ -151,14 +144,12 @@ impl DiscoveryRow {
         (button, None)
       }
     };
-    control
-      .child(page::note(
-        "sharing-discovery-absent",
-        &ctx.t("sharing.discovery.absent"),
-      ))
-      .child(Row::new().child(button))
-      .with_children(reason.map(|reason| reason_line("sharing-discovery-unavailable", &reason)))
-      .with_children(self.person.reason(ctx, WRITE))
+    let reasons: Vec<Element> = reason
+      .map(|reason| reason_line("sharing-discovery-unavailable", &reason).into())
+      .into_iter()
+      .chain(self.person.reason(ctx, WRITE))
+      .collect();
+    row.control(button).under_all(reasons)
   }
 }
 
@@ -186,8 +177,8 @@ fn writable(ctx: &Ctx, props: &Props) -> Result<String, Arc<str>> {
   }
 }
 
-/// `orchester.toml · written Oct 2` and whether it is committed.
-fn written(ctx: &Ctx, control: Column, found: &LinkedDiscovery) -> Column {
+/// `Written Oct 2 · committed Oct 3`.
+fn written(ctx: &Ctx, found: &LinkedDiscovery) -> String {
   let file = found.written_at.map_or_else(
     || ctx.t("sharing.discovery.file").to_string(),
     |at| {
@@ -202,11 +193,10 @@ fn written(ctx: &Ctx, control: Column, found: &LinkedDiscovery) -> Column {
     (Some(false), _) => ctx.t("sharing.discovery.notCommitted"),
     (None, _) => ctx.t("sharing.discovery.commitUnknown"),
   };
-  control
-    .child(page::icon_note("sharing-discovery-file", Icon::FileText, &file))
-    .child(page::icon_note(
-      "sharing-discovery-committed",
-      Icon::GitCommitHorizontal,
-      &committed,
-    ))
+  ctx
+    .t_args(
+      "sharing.discovery.state",
+      [("file", file), ("committed", committed.to_string())],
+    )
+    .to_string()
 }

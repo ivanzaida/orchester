@@ -1,13 +1,18 @@
-//! Inline metadata, Used by links and archive confirmation (DrLE6, K2epbr).
+//! A secret's page (`06b` `famwr`): the crumb back to Secrets; its head with its kind's tile, its name, its environment,
+//! how many use it and when its value was set, Replace value and the … menu (Archive); *Replace value* asked in place
+//! under the head (`form`); *Details* (project, environment, kind, value and when it was last rotated), *Used by* (each
+//! tool and MCP server, as links), *Recent access* (which Orchester does not record yet, and says so), and *Archive …?*
+//! asked in place under them (`Archive · question` `fw0eT`). An archived secret says so, and offers neither.
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::PaletteColor,
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::{Column, Row, Text},
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::secret::Secret;
 use orchester_workspace::{
@@ -16,27 +21,26 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::{state::View, words, work};
+use super::{form, state::View, words, work};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, SecretsPanel},
+  routes::{ConnectionsView, ProjectPage, Route, SecretsPanel},
+  screens::project_settings::kit::{EmptyRow, Group, SettingRow, back, entity_head, question, value},
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsSpacing, SecretsText},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
   ui::{
-    avatar::credential_avatar,
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    inspector,
+    icon_button::IconButton,
+    menu::{MenuItem, menu_at_end, menu_panel},
     message::message_text,
-    notice::handling_notice,
-    tooltip::Truncated,
   },
 };
-pub(super) const WIDTH: f32 = 360.0;
-/// Masked value DShSq.
-const MASK_HEIGHT: f32 = 32.0;
+
+/// The … menu's width.
+const MENU_WIDTH: f32 = 200.0;
 
 #[derive(Clone)]
 pub(super) struct Props {
@@ -44,19 +48,22 @@ pub(super) struct Props {
   pub listed: ProjectSecrets,
   pub secret: Secret,
   pub view: View,
-  pub archive: bool,
+  /// Replace value or Archive asked on the page, or neither.
+  pub panel: SecretsPanel,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
     self.project == other.project
       && self.listed == other.listed
       && self.secret == other.secret
-      && self.archive == other.archive
+      && self.panel == other.panel
   }
 }
 impl DevtoolsInspectable for Props {}
 pub(super) struct Inspector {
   action: work::Action,
+  /// The … menu and its button.
+  more: (Signal<bool>, ElementRef),
 }
 impl Component for Inspector {
   type Props = Props;
@@ -76,119 +83,148 @@ impl Component for Inspector {
         }
       }
     });
-    Self { action }
+    Self {
+      action,
+      more: (ctx.signal(false), ctx.element_ref()),
+    }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let action = self.action.clone();
-    let body = Column::new()
+    let crumb = back(
+      "secret-crumb",
+      (&ctx.t("project_settings.secrets"), None),
+      props.view.list(),
+    );
+    let head = self.head(ctx, &props);
+    let replacing = (props.panel == SecretsPanel::Replace && !props.secret.is_archived()).then(|| {
+      ctx.mount_keyed::<form::SecretForm>(
+        &format!("secret-replace-{}", props.secret.id()),
+        form::Props {
+          project: props.project.clone(),
+          listed: props.listed.clone(),
+          secret: Some(props.secret.clone()),
+          view: props.view.clone(),
+        },
+      )
+    });
+    let archive = (props.panel == SecretsPanel::Archive && !props.secret.is_archived()).then(|| self.archive(ctx, &props));
+    Column::new()
+      .id("secret-inspector")
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
-      .spacing(SecretsSpacing::Body.role())
-      .child(metadata(ctx, &props.project, &props.secret, !props.archive))
+      .spacing(ExtraSpacing::Roomy.role())
+      .child(crumb)
+      .child(head)
+      .with_children(replacing)
+      .child(details(ctx, &props.project, &props.secret))
       .child(uses(ctx, &props.project, &props.listed, &props.secret))
-      .with_children((!props.archive).then(|| {
-        inspector::section("secret-recent", ExtraSpacing::Snug.role())
-          .padding(Padding::new().top(SecretsSpacing::Body.role()))
-          .child(inspector::section_title(
-            "secret-recent-title",
-            &ctx.t("secrets.recent"),
-            None,
-          ))
-          .child(inspector::note(
-            "secret-recent-note",
-            Icon::Lock,
-            &ctx.t("secrets.recentHint"),
-          ))
-      }));
-    frame(
-      header(ctx, &props.secret),
-      body.into(),
-      self.footer(ctx, &props, &action),
-    )
+      .child(recent(ctx))
+      .with_children(archive)
   }
 }
 impl Inspector {
-  fn footer(&self, ctx: &mut Ctx, props: &Props, action: &work::Action) -> Element {
-    let state = action.state().get();
-    let mut footer = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Loose.role()))
-      .spacing(SpacingSize::Sm)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border));
-    if props.secret.is_archived() {
-      return footer
-        .child(inspector::note(
-          "secret-archived",
-          Icon::Archive,
-          &ctx.t("secrets.archivedHint"),
-        ))
-        .into();
+  /// The head: the kind's tile, the name over what it is, Replace value and the … menu.
+  fn head(&self, ctx: &mut Ctx, props: &Props) -> Element {
+    let secret = &props.secret;
+    let counts = props.listed.use_counts(secret.id());
+    let set = words::date(ctx, secret.rotated_at().unwrap_or(secret.created_at()));
+    let meta = if secret.is_archived() {
+      ctx.t_args(
+        "secrets.metaArchived",
+        [("environment", ctx.t(words::environment_key(secret.environment())))],
+      )
+    } else {
+      ctx.t_args(
+        "secrets.meta",
+        [
+          ("environment", ctx.t(words::environment_key(secret.environment()))),
+          ("uses", words::uses(ctx, counts)),
+          ("date", set),
+        ],
+      )
+    };
+    let title = Text::new(secret.name().as_str())
+      .id("secret-inspector-name")
+      .variant(ProjectSettingsText::PageTitle.role());
+    let meta = Text::new(&meta)
+      .id("secret-inspector-meta")
+      .variant(ProjectSettingsText::Hint.role());
+    let mut actions = Vec::new();
+    if !secret.is_archived() {
+      let (view, id) = (props.view.clone(), secret.id());
+      let pending = self.action.state().get().is_pending();
+      let replace = ActionButton::new("secret-replace", ButtonKind::Secondary, ctx.t("secrets.replace")).icon(Icon::RefreshCw);
+      let replace = if pending || props.panel == SecretsPanel::Replace {
+        replace.disabled()
+      } else {
+        replace.on_click(move || view.open(SecretsPanel::Replace, Some(id)))
+      };
+      actions.push(replace.into());
+      actions.push(self.more(ctx, props, pending));
     }
-    if props.archive {
-      let title = ctx.t_args("secrets.archiving.title", [("name", props.secret.name().as_str())]);
-      let explanation = ctx.t_args(
-        "secrets.archiving.explanation",
-        [("project", props.project.open.project.name().as_str())],
-      );
-      footer = footer
-        .background(PaletteColor::SurfaceRaised)
-        .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
-        .spacing(ExtraSpacing::Loose.role())
-        .child(
-          Row::new()
-            .spacing(SpacingSize::Sm)
-            .align_items(Alignment::Center)
-            .child(icon(Icon::Archive, IconSize::Md, PaletteColor::Danger))
-            .child(Text::new(&title).variant(SecretsText::ConfirmTitle.role())),
-        )
-        .child(Text::new(&explanation).variant(ExtraTypography::Prose.role()))
-        .child(handling_notice(
-          "secret-archive-impact",
-          Icon::Unlink,
-          &words::archive_impact(ctx, props.listed.use_counts(props.secret.id())),
-        ));
+    entity_head(
+      "secret-inspector-header",
+      (words::glyph(secret.kind()), title.into()),
+      meta.into(),
+      actions,
+    )
+  }
+
+  /// The … menu: Archive, asked in place.
+  fn more(&self, ctx: &mut Ctx, props: &Props, pending: bool) -> Element {
+    let (open, anchor) = self.more.clone();
+    let toggle = open.clone();
+    let button = IconButton::new("secret-more", Icon::Ellipsis, ctx.t("secrets.more"))
+      .element(anchor.clone())
+      .on_click(move || toggle.update(|open| *open = !*open))
+      .render(ctx);
+    let archive = if pending {
+      MenuItem::unavailable("secret-archive", ctx.t("secrets.archive"), ctx.t("secrets.archiving.running"))
+    } else {
+      let (view, id) = (props.view.clone(), props.secret.id());
+      MenuItem::new("secret-archive", ctx.t("secrets.archive"), move || {
+        view.open(SecretsPanel::Archive, Some(id));
+      })
     }
-    if let Some(error) = &state.error {
-      footer = footer.child(field_error("secret-archive-error", &message_text(ctx, error)));
-    }
-    footer
-      .child(self.buttons(ctx, props, action, state.is_pending()))
+    .icon(Icon::Archive);
+    let panel = menu_panel("secret-more-menu")
+      .width(Dimension::Px(MENU_WIDTH))
+      .child(archive.render(ctx, &open));
+    Row::new()
+      .child(button)
+      .child(menu_at_end(anchor, open, panel))
       .into()
   }
-  fn buttons(&self, ctx: &mut Ctx, props: &Props, action: &work::Action, pending: bool) -> Row {
-    let (view, id) = (props.view.clone(), props.secret.id());
-    let left = if props.archive {
-      ActionButton::new("secret-archive-cancel", ButtonKind::Secondary, ctx.t("secrets.cancel"))
-        .on_click(move || view.close_panel())
-    } else {
-      ActionButton::new("secret-replace", ButtonKind::Secondary, ctx.t("secrets.replace"))
-        .icon(Icon::RefreshCw)
-        .on_click(move || view.open(SecretsPanel::Replace, Some(id)))
-    };
-    let right = ActionButton::new(
-      "secret-archive",
-      if props.archive {
-        ButtonKind::Danger
-      } else {
-        ButtonKind::DangerGhost
-      },
-      ctx.t(if pending {
+
+  /// *Archive …?* in place: what it does to what uses the secret, Archive and Keep it.
+  fn archive(&self, ctx: &mut Ctx, props: &Props) -> Element {
+    let state = self.action.state().get();
+    let title = ctx.t_args("secrets.archiving.title", [("name", props.secret.name().as_str())]);
+    let impact = words::archive_impact(ctx, props.listed.use_counts(props.secret.id()));
+    let explanation = ctx.t_args(
+      "secrets.archiving.explanation",
+      [("project", props.project.open.project.name().as_str())],
+    );
+    let go = ActionButton::new(
+      "secret-archive-confirm",
+      ButtonKind::Danger,
+      ctx.t(if state.is_pending() {
         "secrets.archiving.running"
       } else {
         "secrets.archive"
       }),
     )
     .icon(Icon::Archive);
-    let right = if props.archive {
+    let go = if state.is_pending() {
+      go.loading()
+    } else {
       let (action, open, id, vault) = (
-        action.clone(),
+        self.action.clone(),
         props.project.open.clone(),
         props.secret.id(),
         Services::of(ctx).vault,
       );
       let name = props.secret.name().as_str().to_owned();
-      right.on_click(move || {
+      go.on_click(move || {
         if action.state().get().is_pending() {
           return;
         }
@@ -198,180 +234,132 @@ impl Inspector {
           write: work::Write::Archive(id),
           value: None,
           spec: operations::secret_archive(&open, &name),
-        })
+        });
       })
-    } else {
-      let (view, id) = (props.view.clone(), props.secret.id());
-      right.on_click(move || view.open(SecretsPanel::Archive, Some(id)))
     };
-    let row = Row::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
-    let row = if props.archive {
-      row.child(Spacer::new().flex(1.0))
-    } else {
-      row
-    };
-    let row = row.child(if pending { left.disabled() } else { left });
-    let row = if props.archive {
-      row
-    } else {
-      row.child(Spacer::new().flex(1.0))
-    };
-    row.child(if pending { right.loading() } else { right })
+    let view = props.view.clone();
+    let keep = ActionButton::new("secret-archive-cancel", ButtonKind::Ghost, ctx.t("secrets.keepIt"))
+      .on_click(move || view.close_panel());
+    let keep = if state.is_pending() { keep.disabled() } else { keep };
+    let mut asked = question("secret-archive-question", &title, &[impact, explanation], vec![go.into(), keep.into()]);
+    if let Some(error) = &state.error {
+      asked = asked.child(field_error("secret-archive-error", &message_text(ctx, error)));
+    }
+    asked.into()
   }
 }
-pub(super) fn frame(header: Element, body: Element, footer: Element) -> Element {
-  Column::new()
-    .id("secret-inspector")
-    .width(Dimension::Px(WIDTH))
-    .height(Dimension::Pct(100.0))
-    .flex_shrink(0.0)
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip()
-    .child(header)
-    .child(
-      ScrollVertical::new(body)
-        .id("secret-inspector-scroll")
-        .width(Dimension::Pct(100.0))
-        .flex(1.0),
-    )
-    .child(footer)
-    .into()
-}
-pub(super) fn header(ctx: &mut Ctx, secret: &Secret) -> Element {
-  let tile = credential_avatar("secret-inspector-tile", words::glyph(secret.kind()), true);
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(tile)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(ExtraSpacing::Tight.role())
-        .child(Text::new(&ctx.t(words::kind_key(secret.kind()))).variant(SecretsText::InspectorTitle.role()))
-        .child(
-          Truncated::new(
-            "secret-inspector-name",
-            secret.name().as_str(),
-            SecretsText::InspectorName.role(),
-          )
-          .mono()
-          .render(ctx),
-        ),
-    )
-    .into()
-}
-fn metadata(ctx: &Ctx, project: &ShownProject, secret: &Secret, show_hint: bool) -> Element {
-  let date = match secret.rotated_at() {
+
+/// *Details* (`NLrZH`): the project, the environment, the kind, the value as its mask, and when it was last rotated.
+fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
+  let rotated = match secret.rotated_at() {
     Some(at) => words::date(ctx, at),
     None => ctx.t_args(
       "secrets.neverRotated",
       [("date", words::date(ctx, secret.created_at()))],
     ),
   };
-  let value = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(MASK_HEIGHT))
-    .align_items(Alignment::Center)
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(
-      Text::new(&ctx.t("secrets.mask"))
-        .variant(SecretsText::Mask.role())
-        .flex(1.0),
-    )
-    .child(icon(Icon::LockKeyhole, IconSize::Base, PaletteColor::TextMuted));
-  let value = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(Text::new(&ctx.t("secrets.value")).variant(TypographyStyle::FieldLabel))
-    .with_children((!secret.is_archived()).then_some(value))
-    .with_children(show_hint.then(|| {
-      Text::new(&ctx.t(if secret.is_archived() {
-        "secrets.archivedHint"
-      } else {
-        "secrets.valueHint"
-      }))
-      .variant(SecretsText::ValueHint.role())
-    }));
-  let properties = Column::new()
-    .width(Dimension::Pct(100.0))
-    .child(inspector::property(
-      "secret-project",
-      &ctx.t("secrets.project"),
-      project.open.project.name().as_str(),
-      inspector::PropertyValue::Plain,
-    ))
-    .child(inspector::property(
+  let mut rows = vec![
+    detail(ctx, "secret-project", ("secrets.project", project.open.project.name().as_str())),
+    detail(
+      ctx,
       "secret-environment",
-      &ctx.t("secrets.environment"),
-      &ctx.t(words::environment_key(secret.environment())),
-      inspector::PropertyValue::Plain,
-    ))
-    .child(inspector::property(
-      "secret-rotated",
-      &ctx.t("secrets.rotated"),
-      &date,
-      inspector::PropertyValue::Plain,
-    ));
-  let mut body = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SecretsSpacing::Body.role())
-    .child(value)
-    .child(properties);
+      ("secrets.environment", &ctx.t(words::environment_key(secret.environment()))),
+    ),
+    detail(ctx, "secret-kind", ("secrets.kind", &ctx.t(words::kind_key(secret.kind())))),
+  ];
   if secret.is_archived() {
-    body = body.child(Text::new(&ctx.t("secrets.archived")).variant(TypographyStyle::Label));
+    rows.push(
+      SettingRow::new("secret-value", ctx.t("secrets.value"))
+        .hint(ctx.t("secrets.archivedHint"))
+        .control(value("secret-archived", &ctx.t("secrets.archived")))
+        .render(ctx),
+    );
+  } else {
+    let mask = Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .child(
+        Text::new(&ctx.t("secrets.mask"))
+          .id("secret-mask")
+          .variant(ExtraTypography::Note.role()),
+      )
+      .child(icon(Icon::LockKeyhole, IconSize::Sm, PaletteColor::TextMuted));
+    rows.push(
+      SettingRow::new("secret-value", ctx.t("secrets.value"))
+        .info(ctx.t("secrets.valueHint"))
+        .control(mask)
+        .render(ctx),
+    );
   }
-  body.into()
+  rows.push(detail(ctx, "secret-rotated", ("secrets.rotated", &rotated)));
+  Group::new("secret-details", ctx.t("secrets.details"))
+    .rows(rows)
+    .into()
 }
+
+fn detail(ctx: &mut Ctx, id: &str, (key, shown): (&str, &str)) -> Element {
+  SettingRow::new(id.to_owned(), ctx.t(key))
+    .control(value(&format!("{id}-value"), shown))
+    .render(ctx)
+}
+
+/// *Used by* (`WtpzX`): each tool and MCP server that takes the secret, opening it; or that none does.
 pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecrets, secret: &Secret) -> Element {
   let counts = listed.use_counts(secret.id());
-  let title = if counts.total() == 0 {
-    ctx.t("secrets.uses.noneHeading")
-  } else {
-    ctx.t_args(
-      "secrets.uses.heading",
-      [("uses", words::uses(ctx, counts).to_uppercase())],
-    )
-  };
-  let mut section = inspector::section("secret-uses", SpacingSize::Sm)
-    .padding(Padding::new().top(SecretsSpacing::Body.role()))
-    .child(Text::new(&title).variant(SecretsText::ColumnHeading.role()));
-  let navigation = Navigation::of(ctx);
-  for used in listed.used_by(secret.id()) {
-    let (glyph, label, page) = match used.kind {
-      SecretUseKind::Tool(_) => (Icon::Wrench, used.name.clone(), ProjectPage::Tools),
-      SecretUseKind::McpServer(id) => (
-        Icon::Server,
-        ctx.t_args("secrets.uses.mcp", [("name", used.name.clone())]),
-        ProjectPage::Connections(ConnectionsView::new(ConnectionsTab::McpServers).with_selected(id)),
-      ),
-    };
-    section = section.child(inspector::used_by_link(
-      &format!("secret-use-{:?}", used.kind),
-      glyph,
-      &label,
-      Some(navigation.to(Route::Project(project.open.project.id(), page))),
-    ));
-  }
   let key = match (counts.tools, counts.mcp_servers) {
     (0, 0) => "secrets.uses.empty",
     (0, _) => "secrets.uses.serverBindings",
     (_, 0) => "secrets.uses.toolBindings",
     _ => "secrets.uses.bindings",
   };
-  section
-    .child(inspector::note(
-      "secret-use-note",
-      Icon::Info,
-      &ctx.t_args(key, [("project", project.open.project.name().as_str())]),
+  let note = ctx.t_args(key, [("project", project.open.project.name().as_str())]);
+  let navigation = Navigation::of(ctx);
+  let rows: Vec<Element> = listed
+    .used_by(secret.id())
+    .map(|used| {
+      let (glyph, what, page) = match used.kind {
+        SecretUseKind::Tool(_) => (Icon::Wrench, ctx.t("secrets.uses.toolKind"), ProjectPage::Tools),
+        SecretUseKind::McpServer(id) => (
+          Icon::Server,
+          ctx.t("secrets.uses.serverKind"),
+          ProjectPage::Connections(ConnectionsView::of(id)),
+        ),
+      };
+      SettingRow::new(format!("secret-use-{:?}", used.kind), used.name.clone())
+        .item()
+        .lead(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+        .control(value(&format!("secret-use-{:?}-kind", used.kind), &what))
+        .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted))
+        .opens(navigation.to(Route::Project(project.open.project.id(), page)))
+        .render(ctx)
+    })
+    .collect();
+  let group = Group::new("secret-uses", ctx.t("secrets.usedBy"));
+  let group = if rows.is_empty() {
+    group.row(EmptyRow::new(
+      "secret-use-none",
+      Icon::Unlink,
+      ctx.t("secrets.uses.noneHeading"),
+      note,
+    ))
+  } else {
+    group.rows(rows).after(
+      Text::new(&note)
+        .id("secret-use-note")
+        .variant(ProjectSettingsText::Hint.role())
+        .width(Dimension::Pct(100.0)),
+    )
+  };
+  group.into()
+}
+
+/// *Recent access* (`O5DCl`): Orchester does not record which run read a secret yet, and says so.
+fn recent(ctx: &Ctx) -> Element {
+  Group::new("secret-recent", ctx.t("secrets.recent"))
+    .row(EmptyRow::new(
+      "secret-recent-note",
+      Icon::ScrollText,
+      ctx.t("secrets.usageTitle"),
+      ctx.t("secrets.recentHint"),
     ))
     .into()
 }

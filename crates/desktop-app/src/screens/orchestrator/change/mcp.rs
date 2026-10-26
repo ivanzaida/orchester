@@ -250,7 +250,7 @@ pub(super) fn opens(ctx: &Ctx, (view, project): (&View, ProjectId), mcp: &McpCha
     return Vec::new();
   }
   let connections = match mcp.id {
-    Some(id) => ConnectionsView::default().with_selected(id),
+    Some(id) => ConnectionsView::of(id),
     None => ConnectionsView::default(),
   };
   let route = Route::Project(project, ProjectPage::Connections(connections));

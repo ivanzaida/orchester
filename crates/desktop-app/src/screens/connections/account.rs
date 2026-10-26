@@ -233,15 +233,14 @@ pub(super) fn add_row(ctx: &mut Ctx, accounts: &Accounts, provider: AgentProvide
       name: ctx.t("connections.account.label"),
       choices: choices(ctx, accounts, &readings, provider),
       current,
-      width: super::page::FORM_WIDTH,
+      width: super::page::CONTROL_WIDTH,
       on_choose: Arc::new(move |chosen| setter.set(chosen)),
     },
   );
-  crate::ui::form_section::stacked_row(
+  crate::screens::project_settings::kit::form_row(
     crate::ui::form_section::Label::new("connection-account", ctx.t("connections.account.label"))
       .description(ctx.t("connections.account.description")),
     picker,
-    crate::ui::form_section::Place::Within,
   )
 }
 
@@ -257,10 +256,10 @@ pub(super) fn chosen_account<'a>(
     .or_else(|| accounts.of_provider(provider).find(|account| account.is_default()))
 }
 
-/// The *Account* row of a CLI connection's inspector (`M42rM`): the account and who is signed in, or what keeps runs
-/// from starting on it, as a link that opens it in Settings › Accounts; and *Plan limits*, its windows' use as its
-/// CLI last reported it. Choosing another account is Edit connection's.
-pub(super) fn inspector_rows(
+/// The *Account* row of a CLI connection's page (`Account` `mgczX` in `05b`, `M42rM`): the account's name with an arrow
+/// that opens it in Settings › Accounts, and in the row's hint who is signed in or what keeps runs from starting on
+/// it, with its windows' use as its CLI last reported it. Choosing another account is Edit connection's.
+pub(super) fn account_row(
   ctx: &mut Ctx,
   accounts: &Accounts,
   connection: &orchester_core::connection::AgentConnection,
@@ -269,66 +268,47 @@ pub(super) fn inspector_rows(
   let readings = crate::services::plan_limits::account_readings(ctx);
   let account = accounts.of_connection(connection.account(), provider);
   let shown = match account {
-    Some(account) => {
-      let detail = short_state(ctx, account).or_else(|| account.email().map(str::to_owned));
-      match detail {
-        Some(detail) => ctx
-          .t_args(
-            "connections.account.linkValue",
-            [("account", name(ctx, account)), ("detail", detail)],
-          )
-          .to_string(),
-        None => name(ctx, account),
-      }
-    }
+    Some(account) => name(ctx, account),
     None => named(ctx, accounts, connection.account(), provider).unwrap_or_default(),
+  };
+  let detail = account.and_then(|account| short_state(ctx, account).or_else(|| account.email().map(str::to_owned)));
+  let limits = account
+    .and_then(|account| readings.of_account(account.id()))
+    .map(|reading| window_use(ctx, reading))
+    .filter(|words| !words.is_empty());
+  let hint = match (detail, limits) {
+    (Some(detail), Some(limits)) => Some(
+      ctx
+        .t_args("connections.account.withLimits", [("detail", detail), ("limits", limits)])
+        .to_string(),
+    ),
+    (detail, limits) => detail.or(limits),
   };
   let navigation = Navigation::of(ctx);
   let view = account.map_or_else(AccountsView::default, |account| {
     AccountsView::of(account.id(), crate::routes::AccountsPanel::Account)
   });
-  // The words wrap within the row; the arrow stays at their end.
   let link = crate::ui::pressable::opening(navigation.to(Route::Accounts(view)))
     .id("connection-account-link")
-    .flex(1.0)
-    .min_width(lurq::node::dimension::Dimension::Px(0.0))
     .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .align_items(lurq::layout::Alignment::Start)
-    .child(
-      lurq::components::Text::new(&shown)
-        .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(lurq::app::theme::PaletteColor::TextPrimary)
-        .flex_shrink(1.0)
-        .min_width(lurq::node::dimension::Dimension::Px(0.0)),
-    )
-    .child(
-      crate::ui::icon::icon(
-        Icon::ArrowUpRight,
-        crate::theme::IconSize::Sm,
-        lurq::app::theme::PaletteColor::TextSecondary,
-      )
-      .flex_shrink(0.0),
-    );
-  let limits = account
-    .and_then(|account| readings.of_account(account.id()))
-    .map(|reading| window_use(ctx, reading))
-    .filter(|words| !words.is_empty());
-  lurq::components::Column::new()
-    .width(lurq::node::dimension::Dimension::Pct(100.0))
-    .child(crate::ui::inspector::property_of(
-      "connection-account-row",
-      &ctx.t("connections.account.label"),
-      link,
-    ))
-    .with_children(limits.map(|words| {
-      crate::ui::inspector::property(
-        "connection-plan-limits",
-        &ctx.t("connections.account.planLimits"),
-        &words,
-        crate::ui::inspector::PropertyValue::Plain,
-      )
-    }))
-    .into()
+    .align_items(lurq::layout::Alignment::Center)
+    .child(crate::screens::project_settings::kit::value("connection-account-name", &shown))
+    .child(crate::ui::icon::icon(
+      Icon::ArrowUpRight,
+      crate::theme::IconSize::Md,
+      lurq::app::theme::PaletteColor::TextMuted,
+    ));
+  let row = crate::screens::project_settings::kit::SettingRow::new(
+    "connection-account-row",
+    ctx.t("connections.account.label"),
+  )
+  .info(ctx.t("connections.account.description"))
+  .control(link);
+  match hint {
+    Some(hint) => row.hint(hint),
+    None => row,
+  }
+  .render(ctx)
 }
 
 /// The windows of `reading` that have not reset, and how much of each is used: "5-hour 12% · weekly 41%".

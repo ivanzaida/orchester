@@ -1,4 +1,6 @@
-//! Auto mode's reviewer and the input-locked, in-place person-only question, and the project's approval rules.
+//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch and reviewer, saved as they change, with the input-locked,
+//! person-only question asked in place under the group before a change that widens what the reviewer approves, and the
+//! project's approval rules.
 mod controls;
 mod feedback;
 mod rules;
@@ -11,7 +13,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::Column,
+  components::Row,
   core::Signal,
   node::Element,
 };
@@ -22,7 +24,7 @@ use super::super::{
   Status, TabProps,
   work::{self, Change, Save},
 };
-use crate::screens::connections::widen::{WidenConfirm, WidenProps};
+use crate::screens::connections::widen::{WidenConfirm, WidenLook, WidenProps};
 
 #[derive(Clone)]
 pub struct Props {
@@ -107,13 +109,20 @@ impl Component for AutoMode {
       self.commit(&props, &save);
     }
     let settings = self.stored.get().0;
-    let mut content = Column::new()
-      .spacing(SpacingSize::Md)
-      .child(controls::section(ctx, self, &props, &settings, &save))
-      .with_children(self.failed.get().then(|| work::error(ctx, &save)).flatten())
-      .with_children(self.failed.get().then(|| self.retry(ctx, &props, &save)))
-      .with_children(outside.then(|| self.reload(ctx, &props)));
-    // A neighboring General save must not label this unfinished reviewer as saved.
+    let mut group = controls::group(ctx, self, &props, &settings, &save);
+    if self.failed.get() {
+      group = group.after(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(lurq::layout::Alignment::Center)
+          .with_children(work::error(ctx, &save))
+          .child(self.retry(ctx, &props, &save)),
+      );
+    }
+    if outside {
+      group = group.after(self.reload(ctx, &props));
+    }
+    // A neighboring save must not label this unfinished reviewer as saved.
     props.tab.status.get();
     if save.state().get().is_pending() {
       props.tab.status.set(Status::Saving);
@@ -123,9 +132,9 @@ impl Component for AutoMode {
       props.tab.status.set(Status::Failed);
     }
     if let Some(asked) = self.asking.get().0 {
-      content = content.child(self.question(ctx, &props, &save, asked));
+      group = group.after(self.question(ctx, &props, &save, asked));
     }
-    content
+    Element::from(group)
   }
 }
 impl AutoMode {
@@ -263,7 +272,7 @@ impl AutoMode {
       "settings-auto-confirm",
       WidenProps {
         id: "settings-auto-question".into(),
-        card: false,
+        look: WidenLook::Box,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::ApprovalWidening,
         title: ctx.t("project_settings.confirmAuto"),

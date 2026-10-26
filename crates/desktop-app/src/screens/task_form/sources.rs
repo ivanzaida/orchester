@@ -36,7 +36,7 @@ use crate::{
   mcp::input_gate::Guarded,
   navigation::Navigation,
   routes::{PipelinePanel, ProjectPage, ProjectSettingsTab, Route},
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   theme::{ExtraSpacing, ExtraTypography, SourcesSpacing},
   ui::{
     add_source::{AddSource, AddSourceProps, Asked, Layout},
@@ -328,7 +328,7 @@ impl TaskSources {
       "task-form-sources-confirm",
       WidenProps {
         id: "task-form-sources-question".into(),
-        card: false,
+        look: WidenLook::Band,
         affirming: false,
         automation: Guarded::PermissionWidening,
         title: ctx.t("task_form.sources.question"),
@@ -398,7 +398,7 @@ fn link(ctx: &mut Ctx, id: &str, key: &str, route: Route) -> Element {
 
 /// What the task gets from the project and from its pipeline, read-only.
 fn inherited(ctx: &mut Ctx, props: &SourcesProps, inherited: &Inherited, mut block: Column) -> Column {
-  let settings = Route::Project(props.project, ProjectPage::Settings(ProjectSettingsTab::Sources));
+  let settings = Route::Project(props.project, ProjectPage::Settings(ProjectSettingsTab::Context));
   let edit = link(
     ctx,
     "task-form-sources-settings",

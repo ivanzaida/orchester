@@ -1,9 +1,10 @@
-//! A linked project's Sharing (`L5o9Xy`, *Removed from the project* in `N9NFio`): where its task list lives, its
-//! address with the server's state, its repository and discovery file ([`discovery`]), its members read-only
-//! ([`super::members`]), and *Leave or make local*. *Make local* asks in place ([`super::make_local`]); *Leave* asks
-//! in place and keeps a local copy of the tasks and this computer's connection to the server; it is done on the server,
-//! so it is unavailable, with why, while this computer is not signed in there or it can't be reached. Once the person
-//! is no longer a member, the page says so instead of offering *Leave* and the members, and *Make local* stays.
+//! A linked project's Sharing (`04b Sharing · shared` `TnUGj`, *Removed from the project* in `N9NFio`): *Team server*
+//! with its address, the person's role and the repository ([`rows`]), its members read-only ([`super::members`]),
+//! *What a shared project can't do yet*, its discovery file ([`discovery`]), and *Leave*. *Make local* asks in place
+//! ([`super::make_local`]); *Leave* asks in place and keeps a local copy of the tasks and this computer's connection to
+//! the server; it is done on the server, so it is unavailable, with why, while this computer is not signed in there or
+//! it can't be reached. Once the person is no longer a member, the page says so instead of offering *Leave*, and *Make
+//! local* stays.
 
 use std::sync::Arc;
 
@@ -11,9 +12,8 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::SpacingSize,
   },
-  components::{Column, Row},
+  components::Column,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -32,15 +32,13 @@ use super::{Facts, make_local, members};
 use crate::{
   project::ShownProject,
   screens::{
-    project_settings::page::{self, CONTROL_WIDTH},
+    project_settings::kit::{Group, SettingRow, question, value},
     settings::orchester::{PersonOnly, Said, sharing_said},
   },
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
-    callout::{Callout, CalloutTone},
     field::field_error,
-    form_section::{Label, Place, section, side_row},
     icon::Icon,
     unavailable::reason_line,
   },
@@ -77,6 +75,9 @@ pub(super) struct Linked {
 
 /// *Leave*, which only a person presses.
 const LEAVE: &str = "sharing-leave-confirm";
+
+/// What a shared project's server refuses rather than loses (`check_merging` in `orchester_workspace::tasks::writer`).
+const REFUSED: usize = 2;
 
 impl Component for Linked {
   type Props = Props;
@@ -136,7 +137,6 @@ impl Component for Linked {
       .linked_server()
       .map_or_else(|| missing_server(ctx, link), |entry| entry.stored.name.clone());
     let name = props.project.open.project.name().as_str().to_owned();
-    let role = role_words(ctx, link.role);
     let entry = props.facts.linked_server();
     let hint = shown_hint(ctx, (&props, link, entry), &name);
     // The server project's name as the server answered; this project's own until it has (`Kontur` in both, in the
@@ -145,26 +145,18 @@ impl Component for Linked {
       Some(Ok(hint)) => hint.name().to_owned(),
       _ => name.clone(),
     };
-    let state = match link.removed_at {
-      Some(_) => removed::state(ctx, link, &shared),
-      None => shared_state(ctx, link, (&server, &role)),
+    let role = match link.removed_at {
+      Some(_) => removed::role_row(ctx, link, &shared),
+      None => {
+        let words = role_words(ctx, link.role);
+        rows::role_row(ctx, link, &words)
+      }
     };
-    let task_list = side_row(
-      Label::new("sharing-task-list", ctx.t("sharing.link.taskList")).description(ctx.t_args(
-        "sharing.linked.taskListDescription",
-        [
-          ("local", name.as_str()),
-          ("project", shared.as_str()),
-          ("server", server.as_str()),
-        ],
-      )),
-      state,
-      Place::Within,
-      true,
-    );
-    let address_row = rows::address_row(ctx, link, (entry, &server));
-    let repository_row = rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server));
-    let discovery_row = ctx.mount_keyed::<discovery::DiscoveryRow>(
+    let team = Group::new("project-settings-sharing-team", ctx.t("sharing.team.title"))
+      .row(rows::address_row(ctx, link, (entry, &server)))
+      .row(role)
+      .row(rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server)));
+    let discovery = ctx.mount_keyed::<discovery::DiscoveryRow>(
       "sharing-discovery-row",
       discovery::Props {
         project: props.project.clone(),
@@ -197,15 +189,12 @@ impl Component for Linked {
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
       .with_children(joined_note)
       .with_children(notice)
-      .child(section(
-        "project-settings-sharing-task-list",
-        &ctx.t("sharing.link.taskList"),
-        None,
-        vec![task_list, address_row, repository_row, discovery_row],
-      ))
+      .child(team)
+      .child(members_group(ctx, &props, &shared, &server))
+      .child(refused(ctx))
+      .child(discovery)
       .with_children(keys)
-      .child(members_section(ctx, &props, &shared, &server))
-      .child(self.leave_section(ctx, &props, (&shared, &server), link.key.as_str()))
+      .child(self.leave_group(ctx, &props, (&shared, &server), link.key.as_str()))
   }
 }
 
@@ -225,9 +214,9 @@ impl Linked {
     (note, keys)
   }
 
-  /// *Leave or make local*: *Make local* and *Leave Kontur*, each asked in place.
-  /// `shared` is the server project's name.
-  fn leave_section(&self, ctx: &mut Ctx, props: &Props, (shared, server): (&str, &str), key: &str) -> Element {
+  /// *Leave* (`Leave` `JTiac`): *Leave the project* and *Make this project local*, each asked in place. `shared` is
+  /// the server project's name.
+  fn leave_group(&self, ctx: &mut Ctx, props: &Props, (shared, server): (&str, &str), key: &str) -> Element {
     let make_local = ctx.mount_keyed::<make_local::MakeLocal>(
       "sharing-make-local-component",
       make_local::Props {
@@ -241,44 +230,31 @@ impl Linked {
     );
     let removed = props.facts.link.as_ref().is_some_and(|link| link.removed_at.is_some());
     if removed {
-      return section(
+      return Group::new(
         "project-settings-sharing-leave",
-        &ctx.t("sharing.linked.makeLocalSection"),
-        None,
-        vec![make_local],
+        ctx.t("sharing.linked.makeLocalSection"),
       )
+      .row(make_local)
       .into();
     }
+    let leave = self.leave_row(ctx, props, (shared, server));
+    Group::new("project-settings-sharing-leave", ctx.t("sharing.linked.leaveSection"))
+      .row(leave)
+      .row(make_local)
+      .into()
+  }
+
+  /// *Leave the project* with *Leave*, unavailable with why while the server can't do it, and its question in place.
+  fn leave_row(&self, ctx: &mut Ctx, props: &Props, (shared, server): (&str, &str)) -> Element {
     let state = self.leave.state().get();
-    let mut control = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(SpacingSize::Sm);
     let entry = props.facts.linked_server();
     let unavailable = leave_unavailable(ctx, entry, server);
-    let button =
-      ActionButton::new("sharing-leave", ButtonKind::Ghost, ctx.t("sharing.linked.leaveButton")).icon(Icon::LogOut);
-    match &unavailable {
-      Some(reason) => {
-        control = control
-          .child(Row::new().child(button.unavailable(reason.clone())))
-          .child(reason_line("sharing-leave-unavailable", reason));
-      }
-      None if self.asking.get() => control = control.child(self.question(ctx, (shared, server), state.is_pending())),
-      None => {
-        let asking = self.asking.clone();
-        control = control.child(Row::new().child(button.on_click(move || asking.set(true))));
-      }
-    }
-    control = control.with_children(self.person.reason(ctx, LEAVE));
-    if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
-      control = control.child(field_error("sharing-leave-error", &reason.text(ctx)));
-    }
-    let leave = side_row(
-      Label::new(
-        "sharing-leave-row",
-        ctx.t_args("sharing.linked.leave", [("project", shared)]),
-      )
-      .description(ctx.t_args(
+    let button = ActionButton::new("sharing-leave", ButtonKind::Secondary, ctx.t("sharing.linked.leaveButton"))
+      .icon(Icon::LogOut)
+      .in_form();
+    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.linked.leave"))
+      .hint(ctx.t("sharing.linked.leaveHint"))
+      .info(ctx.t_args(
         // Without the server in the list, this computer is not connected to it for anything else either.
         if entry.is_some() {
           "sharing.linked.leaveDescription"
@@ -286,18 +262,26 @@ impl Linked {
           "sharing.linked.leaveDescriptionNoServer"
         },
         [("server", server)],
-      )),
-      control,
-      Place::Last,
-      true,
-    );
-    section(
-      "project-settings-sharing-leave",
-      &ctx.t("sharing.linked.leaveSection"),
-      None,
-      vec![make_local, leave],
-    )
-    .into()
+      ));
+    let row = match &unavailable {
+      Some(reason) => row
+        .control(button.unavailable(reason.clone()))
+        .under(reason_line("sharing-leave-unavailable", reason)),
+      None if self.asking.get() => row.under(self.question(ctx, (shared, server), state.is_pending())),
+      None => {
+        let asking = self.asking.clone();
+        row.control(button.on_click(move || asking.set(true)))
+      }
+    };
+    let error = state
+      .error
+      .clone()
+      .filter(|_| !state.is_pending())
+      .map(|reason| field_error("sharing-leave-error", &reason.text(ctx)).into());
+    row
+      .under_all(self.person.reason(ctx, LEAVE))
+      .under_all(error)
+      .render(ctx)
   }
 
   /// *Leave Kontur?* in place.
@@ -315,24 +299,33 @@ impl Linked {
       })
     };
     let keep = self.asking.clone();
-    Callout::new(
-      "sharing-leave-question",
-      CalloutTone::Warning,
-      ctx.t_args("sharing.linked.leaveQuestion", [("project", name)]),
+    let keep = ActionButton::new(
+      "sharing-leave-keep",
+      ButtonKind::Ghost,
+      ctx.t("sharing.linked.leaveKeep"),
     )
-    .icon(Icon::LogOut)
-    .body(ctx.t_args("sharing.linked.leaveBody", [("project", name), ("server", server)]))
-    .action(confirm)
-    .action(
-      ActionButton::new(
-        "sharing-leave-keep",
-        ButtonKind::Secondary,
-        ctx.t("sharing.linked.leaveKeep"),
-      )
-      .on_click(move || keep.set(false)),
+    .on_click(move || keep.set(false));
+    question(
+      "sharing-leave-question",
+      &ctx.t_args("sharing.linked.leaveQuestion", [("project", name)]),
+      &[ctx.t_args("sharing.linked.leaveBody", [("project", name), ("server", server)])],
+      vec![confirm.into(), keep.into()],
     )
     .into()
   }
+}
+
+/// *What a shared project can't do yet* (`CkP8s`): the task fields its server refuses rather than loses, *Delivers* and
+/// *Don't merge automatically*.
+fn refused(ctx: &mut Ctx) -> Element {
+  let row = SettingRow::new("sharing-refused", ctx.t("sharing.team.refusedFields"))
+    .hint(ctx.t("sharing.team.refusedFieldsHint"))
+    .info(ctx.t("sharing.team.refusedFieldsInfo"))
+    .control(value("sharing-refused-count", &REFUSED.to_string()))
+    .render(ctx);
+  Group::new("project-settings-sharing-refused", ctx.t("sharing.team.refused"))
+    .row(row)
+    .into()
 }
 
 /// The person's role there, as the page says it.
@@ -345,35 +338,8 @@ fn role_words(ctx: &Ctx, role: Option<MemberRole>) -> String {
   .to_string()
 }
 
-/// *Shared on Kontur team* with the key, when it was linked and the person's role there.
-fn shared_state(ctx: &Ctx, link: &orchester_store::SharingLink, (server, role): (&str, &str)) -> Column {
-  Column::new()
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .spacing(crate::theme::ExtraSpacing::Hair.role())
-    .child(page::icon_note(
-      "sharing-shared",
-      Icon::Cloud,
-      &ctx.t_args("sharing.linked.sharedOn", [("server", server)]),
-    ))
-    .child(page::note(
-      "sharing-shared-detail",
-      &ctx.t_args(
-        "sharing.linked.detail",
-        [
-          ("key", link.key.as_str().to_owned()),
-          ("day", crate::screens::settings::orchester::day_of(ctx, link.joined_at)),
-          ("role", role.to_owned()),
-          (
-            "synced",
-            crate::screens::settings::orchester::moment(ctx, link.last_synced_at),
-          ),
-        ],
-      ),
-    ))
-}
-
 /// *Members*, read-only, with who the person is there.
-fn members_section(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Element {
+fn members_group(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Element {
   let link = props.facts.link.as_ref();
   let entry = props.facts.linked_server();
   let account = entry.and_then(|entry| entry.stored.account.as_ref());

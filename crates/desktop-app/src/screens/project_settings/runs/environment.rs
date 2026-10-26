@@ -1,4 +1,7 @@
-//! Environment (O8o0l, ryH1J): save on leave, validation and person-only in-place confirmation.
+//! Environment (`Environment` `tDY4o` in `02 · Runs`): how many variables the project adds for its agents and command
+//! tools, the first names in the row's hint, and Edit, which opens today's editor under the row: the variables as
+//! `NAME=value` lines saved as a person leaves them, validated in place, a widening change asked in place under the
+//! group (person-only), and a change made outside the screen said there with Reload.
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -20,13 +23,16 @@ use orchester_workspace::{
   tools::form::{environment_text, parse_environment},
 };
 
-use super::{Status, TabProps, page};
+use super::super::{
+  Status, TabProps,
+  kit::{Group, SettingRow, value},
+};
 use crate::{
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
+  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, field, field_error},
-    form_section::section,
+    field::{FieldInput, field_error},
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
@@ -34,8 +40,10 @@ use crate::{
   },
 };
 
-/// Area uSWRr/IBFli in O8o0l, at the 720px form width.
+/// The editor's height (`uSWRr`/`IBFli` in `O8o0l`).
 const ENVIRONMENT_HEIGHT: f32 = 132.0;
+/// How many names the row's hint shows before it counts the rest.
+const HINT_NAMES: usize = 2;
 
 #[derive(Clone, Eq)]
 struct Stored(CommandEnvironment, u64);
@@ -64,6 +72,8 @@ pub(super) struct Environment {
   asking: Signal<Asking>,
   revision: Signal<u64>,
   reloading: Signal<bool>,
+  /// The editor is open under the row.
+  editing: Signal<bool>,
 }
 impl Component for Environment {
   type Props = TabProps;
@@ -75,6 +85,7 @@ impl Component for Environment {
       asking: ctx.signal(Asking(None)),
       revision: ctx.signal(0),
       reloading: ctx.signal(false),
+      editing: ctx.signal(false),
     };
     let save = tab.save.clone();
     let (after, status, feed) = (
@@ -105,18 +116,16 @@ impl Component for Environment {
     let state = self.read(ctx, &props);
     self.finish_reload(&state, &save);
     if self.stored.get_untracked().is_none() && state.is_pending() {
-      return page::scroll(self.pending(ctx, &state));
+      return self.pending(ctx, &state);
     }
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(self.pending(ctx, &state));
+      return self.pending(ctx, &state);
     };
     if self.stored.get_untracked().is_none() {
       self.fill(read.clone());
     }
-    let changed = self
-      .stored
-      .get()
-      .is_some_and(|s| parse_environment(&self.text.get()).as_ref() != Ok(&s.0));
+    let parsed = parse_environment(&self.text.get());
+    let changed = self.stored.get().is_some_and(|s| parsed.as_ref() != Ok(&s.0));
     let asking = self.asking.get().0;
     let outside =
       !state.is_pending() && self.stored.get().is_some_and(|s| s != read) && !save.state().get().is_pending();
@@ -131,12 +140,39 @@ impl Component for Environment {
     {
       save.state().set(FutureState::idle());
     }
+    self.status(&props, &save, &state, (parsed.is_err(), changed));
+    // An editor with a change, a mistake or a question in it stays open.
+    let open = self.editing.get() || changed || parsed.is_err() || asking.is_some();
+    let row = self.row(ctx, &props, &save, open);
+    let mut group = Group::new("settings-environment-section", ctx.t("project_settings.environment")).row(row);
+    if let Some(error) = save.state().get().error {
+      group = group.after(field_error("settings-environment-save-error", &message_text(ctx, &error)));
+    }
+    if let Some(error) = &state.error {
+      group = group.after(self.read_error(ctx, &save, error));
+    } else if self.reloading.get() || (outside && changed) {
+      group = group.after(self.outside(ctx, &save));
+    }
+    if let Some(request) = asking {
+      group = group.after(self.question(ctx, &props, &save, request));
+    }
+    group.into()
+  }
+}
+impl Environment {
+  fn status(
+    &self,
+    props: &TabProps,
+    save: &Save,
+    state: &FutureState<Stored, Message>,
+    (invalid, changed): (bool, bool),
+  ) {
     if self.reloading.get() {
       props.status.set(Status::Saving);
     } else if state.error.is_some() {
       props.status.set(Status::Failed);
     } else if !save.state().get().is_pending() && save.state().get().error.is_none() {
-      props.status.set(if parse_environment(&self.text.get()).is_err() {
+      props.status.set(if invalid {
         Status::Invalid
       } else if changed {
         Status::Unsaved
@@ -144,43 +180,7 @@ impl Component for Environment {
         Status::Saved
       });
     }
-    let fields = self.fields(ctx, &props, &save, asking.is_some());
-    let mut content = Column::new()
-      .spacing(crate::theme::ExtraSpacing::Roomy.role())
-      .child(
-        section(
-          "settings-environment-section",
-          &ctx.t("project_settings.environmentHeading"),
-          None,
-          vec![
-            page::explanation(
-              "settings-environment-description",
-              &ctx.t("project_settings.environmentDetail"),
-            ),
-            fields,
-          ],
-        )
-        .spacing(crate::theme::ExtraSpacing::Inset.role()),
-      )
-      .with_children(
-        save
-          .state()
-          .get()
-          .error
-          .map(|e| field_error("settings-environment-save-error", &message_text(ctx, &e))),
-      )
-      .with_children(match &state.error {
-        Some(error) => Some(self.read_error(ctx, &save, error)),
-        None => (self.reloading.get() || (outside && changed)).then(|| self.outside(ctx, &save)),
-      })
-      .child(page::review_notice(ctx, true));
-    if let Some(request) = asking {
-      content = content.child(self.question(ctx, &props, &save, request));
-    }
-    page::scroll(content)
   }
-}
-impl Environment {
   fn finish_reload(&self, state: &FutureState<Stored, Message>, save: &Save) {
     if !self.reloading.get() || state.is_pending() {
       return;
@@ -223,10 +223,53 @@ impl Environment {
           move || revision.update(|r| *r += 1),
         )
       }
-      None => loading("settings-loading", &ctx.t("project_settings.reading")).into(),
+      None => loading("settings-environment-loading", &ctx.t("project_settings.reading")).into(),
     }
   }
-  fn fields(&self, ctx: &mut Ctx, props: &TabProps, save: &Save, asking: bool) -> Element {
+  /// The row: the variables' count and Edit, and while open the editor under it.
+  fn row(&self, ctx: &mut Ctx, props: &TabProps, save: &Save, open: bool) -> Element {
+    let names: Vec<String> = parse_environment(&self.text.get())
+      .map(|variables| variables.iter().map(|(name, _)| name.to_string()).collect())
+      .unwrap_or_default();
+    let count = names.len();
+    let hint = match count {
+      0 => ctx.t("project_settings.environmentHintNone"),
+      count if count <= HINT_NAMES => ctx.t_args("project_settings.environmentHint", [("names", names.join(", "))]),
+      count => ctx.t_args(
+        "project_settings.environmentHintMore",
+        [
+          ("names", names[..HINT_NAMES].join(", ")),
+          ("more", (count - HINT_NAMES).to_string()),
+        ],
+      ),
+    };
+    let editing = self.editing.clone();
+    let edit = ActionButton::new(
+      "settings-environment-edit",
+      ButtonKind::Secondary,
+      ctx.t(if open {
+        "project_settings.doneEditing"
+      } else {
+        "project_settings.edit"
+      }),
+    )
+    .icon(if open { Icon::Check } else { Icon::Pencil })
+    .in_form()
+    .on_click(move || editing.update(|editing| *editing = !*editing));
+    let row = SettingRow::new("settings-environment-variables-row", ctx.t("project_settings.variablesLabel"))
+      .info(ctx.t("project_settings.environmentInfo"))
+      .hint(hint)
+      .control(value(
+        "settings-variable-count",
+        &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
+      ))
+      .control(edit);
+    if !open {
+      return row.render(ctx);
+    }
+    row.under(self.editor(ctx, props, save)).render(ctx)
+  }
+  fn editor(&self, ctx: &mut Ctx, props: &TabProps, save: &Save) -> Element {
     let commit = self.commit(props, save);
     let mut input = FieldInput::new(
       "settings-environment-variables",
@@ -237,30 +280,19 @@ impl Environment {
     .area_height(ENVIRONMENT_HEIGHT)
     .mono()
     .text_style(crate::theme::ExtraTypography::MonoArea.role())
+    .width(Dimension::Pct(100.0))
     .on_leave(move || commit());
-    if asking || self.reloading.get() || save.state().get().is_pending() {
+    if self.asking.get().0.is_some() || self.reloading.get() || save.state().get().is_pending() {
       input = input.locked();
     }
     if let Err(error) = parse_environment(&self.text.get()) {
       input = input.error(message_text(ctx, &error));
     }
-    let variables = input.render(ctx);
-    let count = parse_environment(&self.text.get())
-      .map(|v| v.iter().count())
-      .unwrap_or(0);
     Column::new()
-      .spacing(crate::theme::ExtraSpacing::Snug.role())
-      .child(field(
-        "settings-environment",
-        Some(&ctx.t("project_settings.variables")),
-        variables,
-        None,
-      ))
-      .child(page::icon_note(
-        "settings-variable-count",
-        Icon::List,
-        &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
-      ))
+      .id("settings-environment")
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(input.render(ctx))
       .child(helper(ctx, props))
       .into()
   }
@@ -311,7 +343,7 @@ impl Environment {
       "settings-environment-confirm",
       WidenProps {
         id: "settings-environment-question".into(),
-        card: false,
+        look: WidenLook::Box,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("project_settings.confirmEnvironment"),
@@ -366,14 +398,15 @@ impl Environment {
     })
   }
 }
+/// That the variables are plain text, with Open Secrets for keys and tokens.
 fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);
   let project = props.project.open.project.id();
   Row::new()
     .id("settings-environment-helper")
     .width(Dimension::Pct(100.0))
-    .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
     .child(crate::ui::icon::icon(
       Icon::Eye,
       crate::theme::IconSize::Sm,

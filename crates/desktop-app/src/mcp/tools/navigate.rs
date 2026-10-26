@@ -16,9 +16,9 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, InstructionsView,
-    MemoryTab, NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route,
-    Screen, SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
+    AccountsView, ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, InstructionsView, MemoryTab,
+    NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route, Screen,
+    SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
@@ -26,9 +26,13 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
   reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
-  after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
-  `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
+  after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; project_settings \
+  `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \
+  run). Connections and Secrets are tabs of Project settings with routes of their own: connections takes `selected` \
+  (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
+  provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
+  account); each opens Project settings on that tab or page. tools takes tool (a tool id, or new), and its editor \
+  tab; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
@@ -38,6 +42,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
+
+/// Project settings' tabs as navigate names them: its own, then the two with routes of their own.
+const SETTINGS_TABS: [&str; 6] = ["general", "runs", "context", "connections", "secrets", "sharing"];
 
 pub fn tool(link: WindowLink) -> McpTool {
   McpTool::new("navigate")
@@ -51,11 +58,11 @@ fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, general, accounts, orchester, connect; \
-     overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}; import_resources {}.",
+     overview {}; tasks {}; task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
-    ConnectionsTab::ALL.map(ConnectionsTab::name).join(", "),
+    SETTINGS_TABS.join(", "),
     PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
     MemoryTab::ALL.map(MemoryTab::name).join(", "),
     ImportTab::ALL.map(ImportTab::name).join(", "),
@@ -75,9 +82,9 @@ fn schema() -> Value {
         "type": "string",
         "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out). files: the path of the file to show (the tree alone when left out).",
       },
-      "selected": { "type": "string", "description": "connections: the id of the connection its inspector shows." },
-      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds." },
-      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account." },
+      "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings › Connections opens." },
+      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings › Connections." },
+      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings › Connections." },
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
@@ -90,8 +97,8 @@ fn schema() -> Value {
       },
       "view": {
         "type": "string",
-        "enum": ["usage", "delivery"],
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it.",
+        "enum": ["usage", "delivery", "rules"],
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. project_settings with tab runs: rules, the page Approved for every run.",
       },
       "period": {
         "type": "string",
@@ -162,7 +169,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Connections => ProjectPage::Connections(connections_view(args)?),
     Screen::NewConnection => ProjectPage::NewConnection(new_connection(args)?),
     Screen::EditConnection => ProjectPage::EditConnection(connection(args, "connection")?),
-    Screen::ProjectSettings => ProjectPage::Settings(ProjectSettingsTab::default()),
+    Screen::ProjectSettings => project_settings_page(args)?,
     Screen::Files => ProjectPage::Files(files_view(args)?),
     Screen::ImportResources => return import_route(args),
   };
@@ -185,7 +192,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],
-    Screen::Connections => &["project", "tab", "selected"],
+    Screen::Connections => &["project", "selected"],
     Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
@@ -196,14 +203,14 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::EditConnection => &["project", "connection"],
     Screen::Usage => &["project", "query", "view", "period"],
     Screen::Modules => &["project", "module"],
+    Screen::ProjectSettings => &["project", "tab", "view"],
     Screen::NewTask
     | Screen::MergeQueue
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
     | Screen::Secrets
-    | Screen::OrchestratorSettings
-    | Screen::ProjectSettings => &["project"],
+    | Screen::OrchestratorSettings => &["project"],
   }
 }
 
@@ -415,17 +422,40 @@ fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolErro
   })
 }
 
+/// Project settings › Connections, or the page of the connection `selected` names.
 fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {
-  let tab = tab(
-    args,
-    ConnectionsTab::from_name,
-    &ConnectionsTab::ALL.map(ConnectionsTab::name),
-  )?;
-  let view = ConnectionsView::new(tab);
   if args.contains_key("selected") {
-    return Ok(view.with_selected(connection(args, "selected")?));
+    return Ok(ConnectionsView::of(connection(args, "selected")?));
   }
-  Ok(view)
+  Ok(ConnectionsView::default())
+}
+
+/// Project settings on the tab `tab` names: one of its own, or Connections or Secrets, whose routes are their own;
+/// with tab runs and `view` rules, *Approved for every run*.
+fn project_settings_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let rules = match string(args, "view")? {
+    None => false,
+    Some("rules") => true,
+    Some(other) => {
+      return Err(ToolError::InvalidParam {
+        param: "view",
+        reason: format!("`{other}` is not rules, the only page of Project settings' Runs"),
+      });
+    }
+  };
+  let page = match string(args, "tab")? {
+    Some("connections") => ProjectPage::Connections(ConnectionsView::default()),
+    Some("secrets") => ProjectPage::Secrets(SecretsView::default()),
+    _ => ProjectPage::Settings(tab(args, ProjectSettingsTab::from_name, &SETTINGS_TABS)?),
+  };
+  match page {
+    ProjectPage::Settings(ProjectSettingsTab::Runs) if rules => Ok(ProjectPage::ProjectRules),
+    page if !rules => Ok(page),
+    _ => Err(ToolError::InvalidParam {
+      param: "view",
+      reason: "rules is a page of the runs tab".to_owned(),
+    }),
+  }
 }
 
 /// What `kind` adds, an agent provider when left out.

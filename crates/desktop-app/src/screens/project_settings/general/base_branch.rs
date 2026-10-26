@@ -1,7 +1,7 @@
-//! *Base branch* (ORC-81, no frame of its own): the branch new runs start from and deliver into, a select of the
-//! repository's branches laid out as Project settings' other select rows (the select [`page::CONTROL_WIDTH`] wide,
-//! its hint under it), with the field error line when the branch set is gone and a note of the runs that keep their
-//! base after a change. A choice saves at once, as the tab's switches do; the rules are the workspace's
+//! *Base branch* (ORC-81; `Base branch` `skl0n` in `01 · General`, gone in `01b` `HX2AS`): the branch new runs start
+//! from and deliver into, a select of the repository's branches at the row's end. A branch set that no longer exists
+//! says so in the row's hint, in `danger`; a save that failed, and the runs that keep their base after a change, say
+//! so under the row. A choice saves at once, as the tab's switches do; the rules are the workspace's
 //! (`orchester_workspace::project_settings::base_branch_in`, `save_base_branch_in`).
 use std::{path::PathBuf, sync::Arc};
 
@@ -9,9 +9,8 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::SpacingSize,
   },
-  components::{Column, SelectOption},
+  components::SelectOption,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -24,12 +23,15 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::super::{Status, TabProps, page};
+use super::super::{
+  Status, TabProps,
+  kit::{SettingRow, Tone},
+  page,
+};
 use crate::{
   services::Services,
   ui::{
     field::{SelectField, field_error},
-    form_section::Place,
     icon::Icon,
     message::message_text,
     state::loading,
@@ -41,6 +43,8 @@ use crate::{
 const CHECKED_OUT: &str = "";
 const LOCAL: &str = "local:";
 const REMOTE: &str = "remote:";
+/// The select's width (`Select` `FZgxm`).
+const SELECT_WIDTH: f32 = 200.0;
 
 /// A read of the setting and the branches, with the row's revision and the project's count of settings changes it
 /// was asked at.
@@ -103,9 +107,8 @@ impl Component for BaseBranch {
       })
       .state()
       .get();
-    let control = Column::new()
-      .width(Dimension::Px(page::CONTROL_WIDTH))
-      .spacing(SpacingSize::Sm);
+    let row = SettingRow::new("settings-base-branch-setting", ctx.t("project_settings.baseBranch"))
+      .info(ctx.t("project_settings.baseBranchInfo"));
     // A failed re-read shows its error, not the setting read before, which a choice would be compared with; nor does
     // that setting show again while the row reads once more.
     let rejected = state.error.as_ref().filter(|_| state.is_rejected());
@@ -113,21 +116,15 @@ impl Component for BaseBranch {
       self.stored.lock().take();
     }
     let shown = self.stored.lock().is_some();
-    let control = match (rejected, &state.data) {
-      (Some(error), _) => control.child(field_error("settings-base-branch-error", &message_text(ctx, error))),
-      (None, Some(read)) if shown || read.1 == asked => self.control(ctx, control, (read, read.1 == asked)),
-      (None, _) => control.child(loading(
+    let row = match (rejected, &state.data) {
+      (Some(error), _) => row.under(field_error("settings-base-branch-error", &message_text(ctx, error))),
+      (None, Some(read)) if shown || read.1 == asked => self.control(ctx, row, (read, read.1 == asked)),
+      (None, _) => row.under(loading(
         "settings-base-branch-loading",
         &ctx.t("project_settings.reading"),
       )),
     };
-    page::row(
-      ctx,
-      "settings-base-branch-setting",
-      ("project_settings.baseBranch", "project_settings.baseBranchDetail"),
-      control.into(),
-      Place::Last,
-    )
+    row.render(ctx)
   }
 }
 
@@ -183,7 +180,7 @@ impl BaseBranch {
 
   /// The select over `read`, which sets its value unless a save runs: the first read, a `fresh` one (the one the row
   /// asked for last), or an older one that reads the setting a save just stored.
-  fn control(&self, ctx: &mut Ctx, control: Column, (Read(read, _), fresh): (&Read, bool)) -> Column {
+  fn control(&self, ctx: &mut Ctx, row: SettingRow, (Read(read, _), fresh): (&Read, bool)) -> SettingRow {
     let pending = self.save.state().get().is_pending();
     let mut stored = self.stored.lock();
     let takes = match stored.as_ref() {
@@ -204,29 +201,26 @@ impl BaseBranch {
       self.value.clone(),
       options(ctx, read),
     )
-    .width(Dimension::Px(page::CONTROL_WIDTH));
+    .width(Dimension::Px(SELECT_WIDTH));
     let select = if missing.is_some() { select.invalid() } else { select };
     let select = if pending { select.locked() } else { select };
     let save = self.save.state().get();
-    control
-      .child(select.render(ctx))
-      .with_children(missing.map(|branch| {
-        field_error(
-          "settings-base-branch-missing",
-          &ctx.t_args("project_settings.baseBranchMissing", [("branch", branch.as_str())]),
-        )
-      }))
-      .with_children(
+    let row = match missing {
+      Some(branch) => row.toned(
+        ctx.t_args("project_settings.baseBranchGoneHint", [("branch", branch.as_str())]),
+        Tone::Danger,
+      ),
+      None => row.hint(ctx.t("project_settings.baseBranchShortHint")),
+    };
+    row
+      .control(select.render(ctx))
+      .under_all(
         save
           .error
           .as_ref()
-          .map(|error| field_error("settings-base-branch-save-error", &message_text(ctx, error))),
+          .map(|error| field_error("settings-base-branch-save-error", &message_text(ctx, error)).into()),
       )
-      .with_children(save.data.as_ref().and_then(|Saved(saved)| kept_note(ctx, saved.kept)))
-      .child(page::note(
-        "settings-base-branch-hint",
-        &ctx.t("project_settings.baseBranchHint"),
-      ))
+      .under_all(save.data.as_ref().and_then(|Saved(saved)| kept_note(ctx, saved.kept)))
   }
 }
 

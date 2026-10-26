@@ -21,12 +21,13 @@ use orchester_workspace::connections::{api_provider::base_url, data::ProjectConn
 
 use super::{KeyChoice, OnProvider, ProviderForm, active, name_problem};
 use crate::{
+  screens::project_settings::kit::{form_group, form_row},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::TagChip,
     field::{FieldInput, SelectField, field, field_error},
-    form_section::{Label, Place, section, stacked_row},
+    form_section::Label,
     icon::Icon,
     list_entry,
     message::message_text,
@@ -36,22 +37,28 @@ use crate::{
 };
 
 impl ProviderForm {
-  /// The section: the two choices, and the provider's fields while it is chosen.
+  /// The group: what the CLI runs on, and the provider's fields while it is chosen; where the provider sends what it
+  /// gets under the group.
   pub(in super::super) fn section(&self, ctx: &mut Ctx, cli: AgentProvider, listed: &ProjectConnections) -> Element {
     let mut rows = vec![self.choices(ctx, cli)];
+    let mut notice = None;
     if self.on() {
       rows.push(self.url_row(ctx, cli));
       rows.push(self.key_row(ctx, listed));
       rows.push(self.models_row(ctx));
-      rows.push(self.notice(ctx));
+      notice = Some(self.notice(ctx));
     }
-    section(
-      "connection-provider-section",
-      &ctx.t("connections.apiProvider.label"),
-      None,
-      rows,
-    )
-    .into()
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Md)
+      .child(form_group(
+        "connection-provider-section",
+        &ctx.t("connections.apiProvider.label"),
+        None,
+        rows,
+      ))
+      .with_children(notice)
+      .into()
   }
 
   /// What comes after saving a connection on a provider (`virfc`).
@@ -63,6 +70,7 @@ impl ProviderForm {
       .into()
   }
 
+  /// *Runs on* (`KcPFk`): its own sign-in, or an API provider, one over the other.
   fn choices(&self, ctx: &Ctx, cli: AgentProvider) -> Element {
     let card = |id: &str, glyph: Icon, (title, detail): (&str, Arc<str>), provider: bool| -> Element {
       let on = self.on.clone();
@@ -94,15 +102,13 @@ impl ProviderForm {
       ("connections.apiProvider.api", ctx.t(detail)),
       true,
     );
-    Row::new()
+    let cards = Column::new()
       .id("connection-runs-on")
       .width(Dimension::Pct(100.0))
-      // 32 from the cards to Base URL's label (`virfc`): this and the row's own 16.
-      .padding(Padding::new().top(ExtraSpacing::Inset.role()).bottom(SpacingSize::Md))
-      .spacing(SpacingSize::Md)
-      .child(Column::new().flex(1.0).child(sign_in))
-      .child(Column::new().flex(1.0).child(provider))
-      .into()
+      .spacing(SpacingSize::Sm)
+      .child(sign_in)
+      .child(provider);
+    form_row(Label::new("connection-runs-on-field", ctx.t("connections.runsOn")), cards)
   }
 
   fn url_row(&self, ctx: &mut Ctx, cli: AgentProvider) -> Element {
@@ -128,10 +134,9 @@ impl ProviderForm {
     {
       url = url.error(message_text(ctx, &problem));
     }
-    stacked_row(
+    form_row(
       Label::new("connection-provider-url", ctx.t("connections.apiProvider.url")).description(ctx.t(interface)),
       url.render(ctx),
-      Place::Within,
     )
   }
 
@@ -188,11 +193,10 @@ impl ProviderForm {
         field_error("connection-provider-key-error", &text)
       }))
       .with_children(self.new_secret_fields(ctx, &listed.secrets));
-    stacked_row(
+    form_row(
       Label::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
         .description(ctx.t("connections.apiProvider.keyHint")),
       control,
-      Place::Within,
     )
   }
 
@@ -298,11 +302,10 @@ impl ProviderForm {
       .with_children(
         problem.map(|problem| field_error("connection-provider-model-error", &message_text(ctx, &problem.message))),
       );
-    stacked_row(
+    form_row(
       Label::new("connection-provider-models", ctx.t("connections.apiProvider.models"))
         .description(ctx.t("connections.apiProvider.modelsHint")),
       control,
-      Place::Last,
     )
   }
 

@@ -1,0 +1,233 @@
+//! A row of a group (`Name` `Pt6ry`, `GitHub repository` `AuIZJ`): its label in 13/500, an (i) whose tooltip holds
+//! what the row's one hint line leaves out (`Info` `FQ9Hq`), at most one hint line in 12, `text_muted` or in its tone
+//! (`TxE4t` `success`, `mQbP1` `warning`, `Q2wBe` `danger`), and its control at the end, 16 apart; 11 over and under,
+//! 14 at its sides. What a state adds under the row (an error, an editor, a question) runs the row's width under it.
+//! A row of an item (a connection, a secret, `InVOF`, `JElwG`) is 10 over and under with its parts 12 apart, starts
+//! with its tile or glyph, and opens the item when it is pressed, the `hover` fill under the pointer.
+
+use std::sync::Arc;
+
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Text},
+  layout::Alignment,
+  node::{Element, Style, dimension::Dimension, padding::Padding},
+};
+
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText},
+  ui::{
+    icon::{Icon, icon},
+    pressable::opening,
+    tooltip::Tooltip,
+  },
+};
+
+/// The tone a row's hint line is said in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Tone {
+  Muted,
+  Secondary,
+  Success,
+  Warning,
+  Danger,
+}
+
+impl Tone {
+  pub(crate) const fn color(self) -> PaletteColor {
+    match self {
+      Self::Muted => PaletteColor::TextMuted,
+      Self::Secondary => PaletteColor::TextSecondary,
+      Self::Success => PaletteColor::Success,
+      Self::Warning => PaletteColor::Warning,
+      Self::Danger => PaletteColor::Danger,
+    }
+  }
+}
+
+pub(crate) struct SettingRow {
+  id: Arc<str>,
+  label: Arc<str>,
+  label_style: TypographyStyle,
+  label_color: Option<PaletteColor>,
+  info: Option<Arc<str>>,
+  hint: Option<(Arc<str>, Tone)>,
+  lead: Option<Element>,
+  controls: Vec<Element>,
+  under: Vec<Element>,
+  open: Option<Open>,
+  item: bool,
+}
+
+impl SettingRow {
+  /// The row `id` (its frame `<id>-row`, its label `<id>-label`, its hint `<id>-hint`) labelled `label`.
+  pub(crate) fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+    Self {
+      id: id.into(),
+      label: label.into(),
+      label_style: ExtraTypography::Strong.role(),
+      label_color: None,
+      info: None,
+      hint: None,
+      lead: None,
+      controls: Vec::new(),
+      under: Vec::new(),
+      open: None,
+      item: false,
+    }
+  }
+
+  /// A row of an item: 10 over and under, its parts 12 apart.
+  pub(crate) fn item(mut self) -> Self {
+    self.item = true;
+    self
+  }
+
+  /// The label is an identifier (a secret's name): in Geist Mono 12.5/500.
+  pub(crate) fn mono_label(mut self) -> Self {
+    self.label_style = ProjectSettingsText::MonoLabel.role();
+    self
+  }
+
+  /// The label in 12.5/500, as a source's path is (`wD1ye`).
+  pub(crate) fn small_label(mut self) -> Self {
+    self.label_style = ExtraTypography::OptionTitle.role();
+    self
+  }
+
+  /// The label in `color`, e.g. a quiet empty row's title.
+  pub(crate) fn label_color(mut self, color: PaletteColor) -> Self {
+    self.label_color = Some(color);
+    self
+  }
+
+  /// What the hint line leaves out, in the (i) after the label.
+  pub(crate) fn info(mut self, info: impl Into<Arc<str>>) -> Self {
+    self.info = Some(info.into());
+    self
+  }
+
+  /// The hint line, `text_muted`.
+  pub(crate) fn hint(self, hint: impl Into<Arc<str>>) -> Self {
+    self.toned(hint, Tone::Muted)
+  }
+
+  /// The hint line in `tone`.
+  pub(crate) fn toned(mut self, hint: impl Into<Arc<str>>, tone: Tone) -> Self {
+    self.hint = Some((hint.into(), tone));
+    self
+  }
+
+  /// What starts the row: an item's tile or glyph.
+  pub(crate) fn lead(mut self, lead: impl Into<Element>) -> Self {
+    self.lead = Some(lead.into());
+    self
+  }
+
+  /// A control at the row's end; several sit 8 apart.
+  pub(crate) fn control(mut self, control: impl Into<Element>) -> Self {
+    self.controls.push(control.into());
+    self
+  }
+
+  pub(crate) fn controls(mut self, controls: impl IntoIterator<Item = Element>) -> Self {
+    self.controls.extend(controls);
+    self
+  }
+
+  /// What a state adds under the row, the row's width.
+  pub(crate) fn under(mut self, under: impl Into<Element>) -> Self {
+    self.under.push(under.into());
+    self
+  }
+
+  pub(crate) fn under_all(mut self, under: impl IntoIterator<Item = Element>) -> Self {
+    self.under.extend(under);
+    self
+  }
+
+  /// A press on the row opens its item with `open` by a browser's rules (`navigation::link`).
+  pub(crate) fn opens(mut self, open: Open) -> Self {
+    self.open = Some(open);
+    self
+  }
+
+  pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
+    let id = self.id;
+    let label = Text::new(&self.label)
+      .id(format!("{id}-label"))
+      .variant(self.label_style);
+    let label = match self.label_color {
+      Some(color) => label.color(color),
+      None => label,
+    };
+    let info = self.info.map(|info| {
+      let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
+      Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
+    });
+    let hint = self.hint.map(|(hint, tone)| {
+      Text::new(&hint)
+        .id(format!("{id}-hint"))
+        .variant(ProjectSettingsText::Hint.role())
+        .color(tone.color())
+        .width(Dimension::Pct(100.0))
+    });
+    let words = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(
+        Row::new()
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .child(label)
+          .with_children(info),
+      )
+      .with_children(hint);
+    let line = Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(if self.item { SpacingSize::Md } else { SpacingSize::Lg })
+      .align_items(Alignment::Center)
+      .with_children(self.lead)
+      .child(words)
+      .with_children((!self.controls.is_empty()).then(|| {
+        Row::new()
+          .flex_shrink(0.0)
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .with_children(self.controls)
+      }));
+    let over = if self.item {
+      ExtraSpacing::Loose.role()
+    } else {
+      ProjectSettingsSpacing::RowY.role()
+    };
+    let frame = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(ProjectSettingsSpacing::RowX.role(), over))
+      .spacing(SpacingSize::Sm)
+      .child(line)
+      .with_children(self.under);
+    match self.open {
+      Some(open) => opening(open)
+        .id(format!("{id}-row"))
+        .width(Dimension::Pct(100.0))
+        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+        .child(frame)
+        .into(),
+      None => frame.id(format!("{id}-row")).into(),
+    }
+  }
+}
+
+/// A read-only value at a row's end (`Value` `RWwEb`).
+pub(crate) fn value(id: &str, words: &str) -> Text {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(ProjectSettingsText::Value.role())
+    .nowrap()
+}

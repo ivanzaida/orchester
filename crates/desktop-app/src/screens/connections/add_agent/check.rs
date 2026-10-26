@@ -21,13 +21,13 @@ use orchester_workspace::{connections::data::sign_in_command, messages::Message}
 
 use super::{Copies, Found};
 use crate::{
-  screens::connections::words::provider_key,
+  screens::{connections::words::provider_key, project_settings::kit::form_row},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     code_box::CodeBox,
     field::{FieldInput, SelectField},
-    form_section::{Label, Place, stacked_row},
+    form_section::Label,
     icon::{Icon, icon},
     message::message_text,
     unavailable::reason_line,
@@ -156,11 +156,7 @@ pub(super) fn program_row(
     )
     .child(reason_line("connection-choose-file-reason", &choose_reason));
   let description = ctx.t_args("connections.dialog.programHint", [("program", program)]);
-  stacked_row(
-    Label::new("connection-program", label).description(description),
-    control,
-    Place::Within,
-  )
+  form_row(Label::new("connection-program", label).description(description), control)
 }
 
 /// The check row, and the sign-in command under it while the CLI is not signed in. On an API provider (`on_provider`)
@@ -245,11 +241,7 @@ pub(super) fn check_row(
     .spacing(SpacingSize::Sm)
     .child(row)
     .with_children(command);
-  stacked_row(
-    Label::new("connection-check", ctx.t("connections.dialog.check")),
-    control,
-    Place::Last,
-  )
+  form_row(Label::new("connection-check", ctx.t("connections.dialog.check")), control)
 }
 
 /// The check row's icon, its color, word and sentence.

@@ -12,16 +12,18 @@
 //! its tab and read without one as its Summary, and `/project/<id>/tasks/<key>/edit` is Edit task.
 //! Modules is `/project/<id>/modules` and a module's page `/project/<id>/modules/<module id>`. The Delivery view
 //! beside Usage is `/project/<id>/usage/delivery` (`?period=` 30d, 90d or 365d).
-//! Connections is `/project/<id>/connections` (`?tab=`, `?selected=` the connection its inspector shows), Add
-//! connection `/project/<id>/connections/new` (`?kind=mcp_server` adds an MCP server) and
-//! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
+//! Project settings is `/project/<id>/settings` (`?tab=runs`, [`ProjectSettingsTab`];
+//! `?tab=runs&view=rules` its page *Approved for every run*). Its Connections tab is `/project/<id>/connections`
+//! (`?selected=` the connection whose page shows), Add provider `/project/<id>/connections/new`
+//! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP server or
+//! an agent CLI connection's account; its Secrets tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer is
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
 //! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
-//! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). Secrets, the Skills
-//! library, an agent profile, Instructions, a pipeline's editor, Memory and Project settings keep their tab,
-//! filter, item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`],
-//! [`InstructionsView`], [`PipelinePanel`], [`MemoryTab`], [`ProjectSettingsTab`]);
+//! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). The Skills
+//! library, an agent profile, Instructions, a pipeline's editor and Memory keep their tab,
+//! filter, item and panel in the query too ([`SkillsFilter`], [`AgentTab`],
+//! [`InstructionsView`], [`PipelinePanel`], [`MemoryTab`]);
 //! `/project/<id>/settings?tab=sharing&ask=make-local` opens Sharing with *Make local*'s question. A tab, source
 //! or kind left out of the query is the one the screen opens on.
 //!
@@ -70,7 +72,7 @@ use self::query::{Params, with_query};
 pub use self::{
   accounts::{AccountsPanel, AccountsView},
   agents::AgentTab,
-  connections::{ConnectionsTab, ConnectionsView, NewConnection},
+  connections::{ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
   import::ImportTab,
@@ -84,7 +86,7 @@ pub use self::{
   pipeline::PipelinePanel,
   project_settings::ProjectSettingsTab,
   screen::Screen,
-  secrets::{SecretsPanel, SecretsTab, SecretsView},
+  secrets::{SecretsPanel, SecretsView},
   skills::SkillsFilter,
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},
@@ -227,11 +229,14 @@ impl Route {
     }
   }
 
-  /// The screen the sidebar shows as selected: a task and its forms belong to Tasks.
+  /// The screen the sidebar shows as selected: a task and its forms belong to Tasks, Connections and Secrets with
+  /// their pages to Project settings, whose tabs they are.
   pub const fn nav_screen(&self) -> Screen {
     match self.screen() {
       Screen::Task | Screen::NewTask | Screen::EditTask => Screen::Tasks,
-      Screen::NewConnection | Screen::EditConnection => Screen::Connections,
+      Screen::Connections | Screen::NewConnection | Screen::EditConnection | Screen::Secrets => {
+        Screen::ProjectSettings
+      }
       Screen::OrchestratorSettings => Screen::Orchestrator,
       screen => screen,
     }

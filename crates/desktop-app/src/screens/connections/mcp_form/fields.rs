@@ -1,6 +1,6 @@
-//! The fields of Add / Edit MCP server as signals the page types into, and its sections (`Section · Server`,
-//! `Program`, `Approvals` in `M20DGB`): the name and type, who starts or reaches the server (fixed: the
-//! agent's CLI), a program's command, folder, arguments and variables, or a remote server's endpoint and
+//! The fields of Add / Edit MCP server as signals the page types into, and its groups (`Server` `YiaYW`, `Approvals`
+//! `yg3Oz` in `11 · Add MCP server`): the name, what it runs as (a program here or a remote server, which the agent's
+//! CLI starts or reaches), a program's command, folder, arguments and variables, or a remote server's endpoint and
 //! authorization (`remote`), and the tools that run without asking. A variable can take its value from a project
 //! secret: *Add a variable from a secret…* appends `NAME=${secret:NAME@environment}` (`euVYY`).
 
@@ -9,12 +9,11 @@ mod remote;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Placement, Popup, Row, Spacer, Text},
+  components::{Column, Placement, Popup, Row, Text},
   core::{ElementRef, Signal},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::secret::Secret;
 use orchester_workspace::{
@@ -27,16 +26,18 @@ use orchester_workspace::{
 
 use self::remote::AuthorizationFields;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  screens::project_settings::kit::{form_group, form_row},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    form_section::{Label, Place, section, stacked_row},
-    icon::{Icon, icon},
+    form_section::Label,
+    icon::Icon,
     menu::{MenuItem, menu_panel},
     message::message_text,
     notice::{Notice, NoticeTone},
-    option_card::OptionCard,
+    pressable::Focus,
+    tabs::{Segment, SegmentFace, segmented},
   },
 };
 
@@ -93,8 +94,8 @@ impl Fields {
     }
   }
 
-  /// The page's sections; an error shows under a field that holds something, and under every field once a
-  /// save was `tried`.
+  /// The page's groups; an error shows under a field that holds something, and under every field once a save was
+  /// `tried`.
   pub(super) fn sections(
     &self,
     ctx: &mut Ctx,
@@ -125,19 +126,20 @@ impl Fields {
       secret,
       exempt_tools: shown(&self.exempt_tools, &errors.exempt_tools),
     };
-    let reach = match self.transport.get() {
-      TransportChoice::Stdio => self.program_section(ctx, &errors, &listed.secrets),
-      TransportChoice::Http => self.remote_section(ctx, &errors, &listed.secrets),
-    };
+    let mut rows = self.server_rows(ctx, &errors);
+    rows.extend(match self.transport.get() {
+      TransportChoice::Stdio => self.program_rows(ctx, &errors, &listed.secrets),
+      TransportChoice::Http => self.remote_rows(ctx, &errors, &listed.secrets),
+    });
     vec![
-      self.server_section(ctx, &errors),
-      reach,
+      form_group("connection-mcp-server", &ctx.t("connections.mcp.dialog.server"), None, rows),
       self.approvals_section(ctx, &errors),
       closing(ctx, project),
     ]
   }
 
-  fn server_section(&self, ctx: &mut Ctx, errors: &Shown) -> Element {
+  /// The name, and what the server runs as (`Runs as` `HQZg7`), which the agent's CLI starts or reaches.
+  fn server_rows(&self, ctx: &mut Ctx, errors: &Shown) -> Vec<Element> {
     let name = input(
       ctx,
       ("connection-mcp-name", "connections.mcp.dialog.name"),
@@ -147,68 +149,57 @@ impl Fields {
     .placeholder(ctx.t("connections.mcp.dialog.namePlaceholder"))
     .mono()
     .render(ctx);
-    let name = stacked_row(
+    let name = form_row(
       Label::new("connection-mcp-name", ctx.t("connections.mcp.dialog.name"))
         .description(ctx.t("connections.mcp.dialog.nameHint")),
       name,
-      Place::Within,
     );
     let chosen = self.transport.get();
-    let card = |choice: TransportChoice, (id, glyph, title, detail): (&str, Icon, &str, &str)| -> Element {
+    let segment = |choice: TransportChoice, (id, key): (&str, &str)| {
       let transport = self.transport.clone();
-      Column::new()
-        .flex(1.0)
-        .child(OptionCard::new(
-          id.to_owned(),
-          (glyph, ctx.t(title)),
-          ctx.t(detail),
-          chosen == choice,
-          move || {
-            transport.set(choice);
-          },
-        ))
-        .into()
+      Segment::new(
+        id.to_owned(),
+        SegmentFace::Text(ctx.t(key)),
+        chosen == choice,
+        move || transport.set(choice),
+      )
     };
-    let kinds = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .child(card(
-        TransportChoice::Stdio,
-        (
-          "connection-mcp-stdio",
-          Icon::Terminal,
-          "connections.mcp.typeStdio",
-          "connections.mcp.dialog.stdioDetail",
+    let kinds = segmented(
+      "connection-mcp-type-choice",
+      [
+        segment(
+          TransportChoice::Stdio,
+          ("connection-mcp-stdio", "connections.mcp.dialog.programHere"),
         ),
-      ))
-      .child(card(
-        TransportChoice::Http,
-        (
-          "connection-mcp-http",
-          Icon::Globe,
-          "connections.mcp.typeHttp",
-          "connections.mcp.dialog.httpDetail",
+        segment(
+          TransportChoice::Http,
+          ("connection-mcp-http", "connections.mcp.dialog.remoteServer"),
         ),
-      ));
-    let kind = stacked_row(
-      Label::new("connection-mcp-type", ctx.t("connections.mcp.property.type")),
-      kinds,
-      Place::Within,
+      ],
+      Focus::Keyboard,
     );
-    let (label, value) = match chosen {
-      TransportChoice::Stdio => ("connections.mcp.property.startedBy", "connections.mcp.startedByCli"),
-      TransportChoice::Http => ("connections.mcp.property.reachedBy", "connections.mcp.reachedByCli"),
+    let (by, detail) = match chosen {
+      TransportChoice::Stdio => ("connections.mcp.startedByCli", "connections.mcp.dialog.stdioDetail"),
+      TransportChoice::Http => ("connections.mcp.reachedByCli", "connections.mcp.dialog.httpDetail"),
     };
-    section(
-      "connection-mcp-server",
-      &ctx.t("connections.mcp.dialog.server"),
-      None,
-      vec![name, kind, fixed_row(ctx, label, value)],
-    )
-    .into()
+    let kind = form_row(
+      Label::new("connection-mcp-type", ctx.t("connections.mcp.runsAs")).description(ctx.t(by)),
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .child(kinds)
+        .child(
+          Text::new(&ctx.t(detail))
+            .id("connection-mcp-type-detail")
+            .variant(ExtraTypography::Note.role())
+            .width(Dimension::Pct(100.0)),
+        ),
+    );
+    vec![name, kind]
   }
 
-  fn program_section(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Element {
+  /// A program's command, its folder, its arguments and its variables.
+  fn program_rows(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Vec<Element> {
     let program = input(
       ctx,
       ("connection-mcp-program", "connections.mcp.property.program"),
@@ -236,34 +227,24 @@ impl Fields {
     .text_area()
     .mono()
     .render(ctx);
-    let rows = vec![
-      stacked_row(
+    vec![
+      form_row(
         Label::new("connection-mcp-program", ctx.t("connections.mcp.property.program"))
           .description(ctx.t("connections.mcp.dialog.programHint")),
         program,
-        Place::Within,
       ),
-      stacked_row(
-        Label::new("connection-mcp-folder", ctx.t("connections.mcp.property.folder"))
-          .description(ctx.t("connections.mcp.dialog.folderHint")),
-        folder,
-        Place::Within,
-      ),
-      stacked_row(
+      form_row(
         Label::new("connection-mcp-arguments", ctx.t("connections.mcp.property.arguments"))
           .description(ctx.t("connections.mcp.dialog.argumentsHint")),
         arguments,
-        Place::Within,
+      ),
+      form_row(
+        Label::new("connection-mcp-folder", ctx.t("connections.mcp.property.folder"))
+          .description(ctx.t("connections.mcp.dialog.folderHint")),
+        folder,
       ),
       self.variables_row(ctx, errors, secrets),
-    ];
-    section(
-      "connection-mcp-program-section",
-      &ctx.t("connections.mcp.property.program"),
-      None,
-      rows,
-    )
-    .into()
+    ]
   }
 
   fn variables_row(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Element {
@@ -277,26 +258,15 @@ impl Fields {
     .mono()
     .render(ctx);
     let add = self.add_secret(ctx, secrets);
-    let under = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Start)
-      .child(
-        Text::new(&ctx.t("connections.mcp.dialog.variablesHint"))
-          .variant(ExtraTypography::Note.role())
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0)),
-      )
-      .child(add);
     let control = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .child(area)
-      .child(under);
-    stacked_row(
-      Label::new("connection-mcp-variables", ctx.t("connections.mcp.variables")),
+      .child(Row::new().child(add));
+    form_row(
+      Label::new("connection-mcp-variables", ctx.t("connections.mcp.variables"))
+        .description(ctx.t("connections.mcp.dialog.variablesHint")),
       control,
-      Place::Last,
     )
   }
 
@@ -305,7 +275,8 @@ impl Fields {
     let label = ctx.t("connections.mcp.dialog.addSecret");
     if secrets.is_empty() {
       return crate::ui::unavailable::with_reason(
-        ActionButton::new("connection-mcp-add-secret", ButtonKind::Secondary, label)
+        ActionButton::new("connection-mcp-add-secret", ButtonKind::Ghost, label)
+          .compact()
           .unavailable(ctx.t("connections.mcp.dialog.noSecrets")),
         "connection-mcp-add-secret-reason",
         &ctx.t("connections.mcp.dialog.noSecrets"),
@@ -313,8 +284,9 @@ impl Fields {
       .into();
     }
     let open = self.secrets_open.clone();
-    let button = ActionButton::new("connection-mcp-add-secret", ButtonKind::Secondary, label)
+    let button = ActionButton::new("connection-mcp-add-secret", ButtonKind::Ghost, label)
       .icon(Icon::KeyRound)
+      .compact()
       .element_ref(self.secrets_anchor.clone())
       .on_click(move || open.update(|open| *open = !*open));
     let rows: Vec<Element> = secrets
@@ -347,10 +319,10 @@ impl Fields {
     let panel = menu_panel("connection-mcp-secrets")
       .width(Dimension::Px(SECRETS_MENU_WIDTH))
       .with_children(rows);
-    // Under the button, its end at the button's end (`euVYY`).
+    // Under the button, from its start.
     let popup = Popup::new(self.secrets_anchor.clone(), panel)
       .open(self.secrets_open.clone())
-      .placement(Placement::BottomEnd)
+      .placement(Placement::BottomStart)
       .offset(0.0, ExtraSpacing::Snug.value());
     Row::new().flex_shrink(0.0).child(button).child(popup).into()
   }
@@ -365,19 +337,17 @@ impl Fields {
     .text_area()
     .mono()
     .render(ctx);
-    let row = stacked_row(
+    let row = form_row(
       Label::new("connection-mcp-exempt-tools", ctx.t("connections.mcp.exemptTools"))
         .description(ctx.t("connections.mcp.dialog.exemptToolsHint")),
       tools,
-      Place::Last,
     );
-    section(
+    form_group(
       "connection-mcp-approvals",
       &ctx.t("connections.mcp.dialog.approvals"),
       None,
       vec![row],
     )
-    .into()
   }
 }
 
@@ -404,23 +374,7 @@ fn input(ctx: &Ctx, (id, key): (&str, &str), value: &Signal<String>, error: Opti
   }
 }
 
-/// A fixed choice: who starts or reaches the server (`Started by` with its lock in `M20DGB`).
-fn fixed_row(ctx: &Ctx, label: &str, value: &str) -> Element {
-  Row::new()
-    .id("connection-mcp-started-by")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(SpacingSize::Md))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t(label)).variant(ExtraTypography::Strong.role()))
-    .child(Spacer::new().flex(1.0))
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
-    .child(Text::new(&ctx.t(value)).variant(TypographyStyle::Description).nowrap())
-    .into()
-}
-
-/// Where secret values go, and what comes after saving.
+/// Where secret values go (`Widens` `tXVIh`), and what comes after saving.
 fn closing(ctx: &Ctx, project: &str) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))

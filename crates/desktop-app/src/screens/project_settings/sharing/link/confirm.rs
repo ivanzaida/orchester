@@ -13,15 +13,11 @@ use super::{Asking, Choice, Link, Listed, Picked, Problem, Props, Target};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  screens::{
-    project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::Said,
-  },
+  screens::{project_settings::kit::form_actions, settings::orchester::Said},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
     field::field_error,
-    form_section::{Label, Place, side_row},
     icon::Icon,
   },
 };
@@ -30,36 +26,35 @@ use crate::{
 const LINK: &str = "sharing-link-button";
 
 impl Link {
-  /// *Link to Kontur…* and, once pressed, the questions in place and what came of them.
+  /// *Cancel* and *Link to Kontur…* at the page's end (`Actions` in `JeXKt`) and, once pressed, the questions in place
+  /// and what came of them.
   pub(super) fn link_row(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
     let resolving = self.resolve.state().get();
     let target = resolving
       .data
       .clone()
       .filter(|_| resolving.is_fulfilled() && self.asking.get() != Asking::Nothing);
-    let mut control = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
+    let mut column = Column::new()
+      .id("sharing-link")
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm);
-    control = match (self.asking.get(), &target) {
-      (Asking::Mismatch, Some(target)) => control.child(self.mismatch(ctx, target, props)),
-      _ => control.child(self.link_button(ctx, self.choice(props, listed), resolving.is_pending())),
+    column = match (self.asking.get(), &target) {
+      (Asking::Mismatch, Some(target)) => column.child(self.mismatch(ctx, target, props)),
+      _ => {
+        let sharing = self.sharing.clone();
+        let cancel = ActionButton::new("sharing-share-cancel", ButtonKind::Ghost, ctx.t("sharing.share.cancel"))
+          .on_click(move || sharing.set(false));
+        let link = self.link_button(ctx, self.choice(props, listed), resolving.is_pending());
+        let hint = ctx.t("sharing.link.hint");
+        column.child(form_actions("sharing-link-actions", vec![cancel.into(), link], Some(&hint)))
+      }
     };
-    control = control.with_children(self.person.reason(ctx, LINK));
+    column = column.with_children(self.person.reason(ctx, LINK));
     let problem = resolving.error.clone().filter(|_| !resolving.is_pending());
     if let Some(problem) = problem {
-      control = control.with_children(problem_part(ctx, &problem));
+      column = column.with_children(problem_part(ctx, &problem));
     }
-    control = control.child(page::icon_note(
-      "sharing-link-hint",
-      Icon::Info,
-      &ctx.t("sharing.link.hint"),
-    ));
-    side_row(
-      Label::new("sharing-link", ctx.t("sharing.link.link")),
-      control,
-      Place::Last,
-      true,
-    )
+    column.into()
   }
 
   /// What the person chose: an address typed or taken, else the project picked in the list.
@@ -77,7 +72,7 @@ impl Link {
       Some(Choice::Listed(listed)) => ctx.t_args("sharing.link.linkTo", [("project", listed.1.name.as_str())]),
       _ => ctx.t("sharing.link.linkAddress"),
     };
-    let button = ActionButton::new(LINK, ButtonKind::Secondary, label).icon(Icon::Link);
+    let button = ActionButton::new(LINK, ButtonKind::Primary, label).icon(Icon::Link);
     let button = match choice {
       _ if pending => button.loading(),
       Some(choice) => {

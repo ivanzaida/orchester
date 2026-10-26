@@ -11,7 +11,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
-    theme::PaletteColor,
   },
   core::Signal,
   node::Element,
@@ -35,17 +34,15 @@ use super::fields::Fields;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
+  routes::{ConnectionsView, ProjectPage, Route, Screen},
   screens::connections::{
     data::Saved,
-    page::{Head, action_bar, page, question_bar},
-    widen::{WidenConfirm, WidenProps},
+    page::{Head, action_bar, page},
+    widen::{WidenConfirm, WidenLook, WidenProps},
   },
   services::Services,
   ui::{
-    breadcrumb::Crumb,
     button::{ActionButton, ButtonKind},
-    icon::Icon,
     message::message_text,
   },
 };
@@ -99,7 +96,7 @@ impl Component for McpEditor {
     let changes = Services::of(ctx).changes;
     ctx.watch(&save.state(), move |state| {
       if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
-        let view = ConnectionsView::new(ConnectionsTab::McpServers).with_selected(id);
+        let view = ConnectionsView::of(id);
         navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
         // After the form leaves: every screen that shows the project's connections reads them again, the
         // status bar's accounts too.
@@ -134,7 +131,7 @@ impl Component for McpEditor {
     );
     let reason = reason(ctx, (&checked, &errors), unchanged, &save.state().get());
     let bar = self.bar(ctx, &props, (&save, checked.ok()), reason.as_deref());
-    let head = head(ctx, &props, unchanged, &save.state().get());
+    let head = head(ctx, &props);
     page(ctx, screen, head, sections, bar)
   }
 }
@@ -160,10 +157,9 @@ impl McpEditor {
     }
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
-    let back = ConnectionsView::new(ConnectionsTab::McpServers);
     let back = match props.stored.as_ref() {
-      Some(server) => back.with_selected(server.id()),
-      None => back,
+      Some(server) => ConnectionsView::of(server.id()),
+      None => ConnectionsView::default(),
     };
     let cancel = ActionButton::new("connection-cancel", ButtonKind::Secondary, ctx.t("connections.cancel"))
       .on_click(move || navigation.go(Route::Project(project, ProjectPage::Connections(back))));
@@ -197,7 +193,7 @@ impl McpEditor {
     let (fields, start) = (self.fields.clone(), start.clone());
     let (listed, stored) = (props.listed.clone(), props.stored.clone());
     let question = WidenProps {
-      card: false,
+      look: WidenLook::Box,
       affirming: false,
       automation: crate::mcp::input_gate::Guarded::PermissionWidening,
       id: "connection-confirm-save".into(),
@@ -224,7 +220,7 @@ impl McpEditor {
       }),
       on_keep: Arc::new(move || keep.set(false)),
     };
-    question_bar(ctx.mount_keyed::<WidenConfirm>("connection-confirm-save", question))
+    ctx.mount_keyed::<WidenConfirm>("connection-confirm-save", question)
   }
 }
 
@@ -276,64 +272,30 @@ fn lowercase_first(text: &str) -> String {
     .map_or_else(String::new, |first| first.to_lowercase().chain(chars).collect())
 }
 
-fn head(ctx: &mut Ctx, props: &EditorProps, unchanged: bool, saving: &FutureState<Saved, Message>) -> Head {
+/// The head: *Add MCP server*, or *Edit* of the server shown, whose page the crumb leads back to.
+fn head(ctx: &mut Ctx, props: &EditorProps) -> Head {
   let navigation = Navigation::of(ctx);
   let project = props.project.open.project.id();
-  let to = move |view: ConnectionsView| navigation.to(Route::Project(project, ProjectPage::Connections(view)));
-  let mut crumbs = vec![
-    Crumb::to(ctx.t("connections.title"), to(ConnectionsView::default())),
-    Crumb::to(
-      ctx.t("connections.tabs.mcpServers"),
-      to(ConnectionsView::new(ConnectionsTab::McpServers)),
+  let (back, here, title) = match props.stored.as_ref() {
+    Some(server) => (
+      ConnectionsView::of(server.id()),
+      ctx.t_args("connections.mcp.dialog.editHere", [("name", server.name().as_str())]),
+      ctx.t("connections.mcp.dialog.editTitle"),
     ),
-  ];
-  let (title, status) = match props.stored.as_ref() {
-    Some(server) => {
-      let view = ConnectionsView::new(ConnectionsTab::McpServers).with_selected(server.id());
-      crumbs.push(Crumb::to(server.name().as_str(), to(view)));
-      crumbs.push(Crumb::here(ctx.t("connections.mcp.dialog.editCrumb")));
-      let status = if unchanged {
-        (
-          Icon::Check,
-          PaletteColor::TextMuted,
-          ctx.t("connections.mcp.dialog.noChanges"),
-        )
-      } else {
-        (
-          Icon::CircleDot,
-          PaletteColor::TextSecondary,
-          ctx.t("connections.mcp.dialog.unsaved"),
-        )
-      };
-      (ctx.t("connections.mcp.dialog.editTitle"), status)
-    }
-    None => {
-      crumbs.push(Crumb::here(ctx.t("connections.mcp.dialog.addTitle")));
-      let status = (
-        Icon::CircleDashed,
-        PaletteColor::TextMuted,
-        ctx.t("connections.dialog.notSaved"),
-      );
-      (ctx.t("connections.mcp.dialog.addTitle"), status)
-    }
-  };
-  let status = if saving.is_pending() {
-    (
-      Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
-      ctx.t("connections.dialog.saving"),
-    )
-  } else {
-    status
+    None => (
+      ConnectionsView::default(),
+      ctx.t("connections.mcp.dialog.addCrumb"),
+      ctx.t("connections.mcp.dialog.addTitle"),
+    ),
   };
   Head {
-    crumbs,
+    back: navigation.to(Route::Project(project, ProjectPage::Connections(back))),
+    here,
     title,
-    description: ctx.t_args(
+    description: Some(ctx.t_args(
       "connections.mcp.dialog.description",
       [("project", props.project.open.project.name().as_str())],
-    ),
-    status,
+    )),
   }
 }
 
