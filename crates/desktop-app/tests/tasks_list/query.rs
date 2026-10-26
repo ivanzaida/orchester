@@ -1,4 +1,4 @@
-//! The workflow tabs with their counts, the search, the pipeline filter and the sorts.
+//! The views with their counts, the search, the Filter with its chips, and the sorts in Display.
 
 use orchester_app::routes::{TaskList, TaskListTab};
 
@@ -9,39 +9,32 @@ fn search(text: &str) -> TaskList {
 }
 
 #[test]
-fn tasks_tabs_count_each_workflow_status_and_canceled_only_under_all() {
+fn tasks_views_count_active_backlog_done_and_all_each_task_once() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
-  let labels: Vec<String> = TaskListTab::ALL
-    .into_iter()
-    .map(|tab| seeded.text(&format!("tasks-tab-{}-label", tab.name())))
-    .collect();
   assert_eq!(
-    labels,
-    [
-      "All 24",
-      "Needs you 6",
-      "Backlog 3",
-      "Todo 8",
-      "In progress 8",
-      "In review 2",
-      "Done 2"
-    ],
-    "Needs you counts the tasks it lists: here every one of the pill's 6 is a task's"
+    ["active", "backlog", "done", "all"].map(|view| seeded.view(view)),
+    ["Active 18", "Backlog 3", "Done 3", "All 24"],
+    "Active is Todo, In progress and In review; Done holds Done and Canceled"
   );
-  assert_eq!(seeded.keys().len(), 24, "All holds every task, the Canceled one too");
-  let canceled = "Retry Slack notifications";
-  seeded.go(search(canceled));
-  assert_eq!(seeded.keys(), ["KON-7"]);
-  for tab in TaskListTab::ALL.into_iter().skip(1) {
-    seeded.go(TaskList::new(tab).with_search(canceled));
-    assert!(seeded.keys().is_empty(), "{tab:?} leaves the Canceled task out");
-    assert!(seeded.shows("tasks-no-rows"), "{tab:?}");
+  let mut every = Vec::new();
+  for tab in [TaskListTab::Active, TaskListTab::Backlog, TaskListTab::Done] {
+    seeded.go(TaskList::new(tab));
+    seeded.until("the rows laid out", Seeded::rows_laid_out);
+    every.extend(seeded.keys());
   }
+  every.sort();
+  let mut all = (1..=24).map(|number| format!("KON-{number}")).collect::<Vec<_>>();
+  all.sort();
+  assert_eq!(every, all, "each task is in one of Active, Backlog and Done");
+  seeded.go(search("Retry Slack notifications"));
+  assert_eq!(seeded.keys(), ["KON-7"], "All holds the Canceled task too");
+  assert_eq!(seeded.view("done"), "Done 1", "the counts follow the search");
+  assert_eq!(seeded.view("active"), "Active 0");
 }
 
 #[test]
 fn tasks_search_finds_the_title_key_brief_and_former_key() {
-  let mut seeded = Seeded::tasks("tasks", TaskList::default());
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
   for (text, keys) in [
     ("webhook sender", vec!["KON-12"]),
     ("kon-24", vec!["KON-24"]),
@@ -50,11 +43,6 @@ fn tasks_search_finds_the_title_key_brief_and_former_key() {
     seeded.go(search(text));
     assert_eq!(seeded.keys(), keys, "{text}");
   }
-  assert!(
-    seeded.text("tasks-footer").starts_with("1 task matches"),
-    "{}",
-    seeded.text("tasks-footer")
-  );
   let changed = rusqlite::Connection::open(seeded.repo.join(".orchester").join("orchester.db"))
     .expect("the project database opens")
     .execute("UPDATE tasks SET former_key = 'ATL-7' WHERE number = 9", [])
@@ -76,7 +64,10 @@ fn tasks_typing_a_search_takes_the_entry_s_place_and_back_leaves_the_list() {
     .expect("the search is a text input")
     .set_value("HubSpot");
   seeded.window.pass();
-  assert_eq!(seeded.window.navigation().route_now(), seeded.route(search("HubSpot")));
+  assert_eq!(
+    seeded.window.navigation().route_now(),
+    seeded.route(TaskList::default().with_search("HubSpot"))
+  );
   assert_eq!(seeded.keys(), ["KON-13"]);
   seeded.window.navigation().back();
   seeded.window.pass();
@@ -90,70 +81,88 @@ fn tasks_typing_a_search_takes_the_entry_s_place_and_back_leaves_the_list() {
 }
 
 #[test]
-fn tasks_pipeline_filter_narrows_the_rows_and_sorts_order_them() {
+fn tasks_slash_reaches_the_search() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
-  assert_eq!(seeded.keys().first().map(String::as_str), Some("KON-1"), "manual order");
-  choose(&mut seeded, "tasks-sort", "Newest first");
-  let newest = seeded.keys();
-  assert_eq!(
-    (newest.first().map(String::as_str), newest.last().map(String::as_str)),
-    (Some("KON-24"), Some("KON-1"))
-  );
-  choose(&mut seeded, "tasks-sort", "Title");
-  assert_eq!(
-    seeded.keys().first().map(String::as_str),
-    Some("KON-12"),
-    "Add retry to webhook sender"
-  );
-  choose(&mut seeded, "tasks-sort", "Workflow status");
-  let by_status = seeded.keys();
-  let mut backlog = by_status[..3].to_vec();
-  backlog.sort();
-  assert_eq!(backlog, ["KON-22", "KON-3", "KON-4"], "Backlog first: {by_status:?}");
-  assert_eq!(
-    by_status.last().map(String::as_str),
-    Some("KON-7"),
-    "Canceled last: {by_status:?}"
-  );
-  choose(&mut seeded, "tasks-sort", "Priority");
-  let by_priority = seeded.keys();
-  let group = |range: std::ops::Range<usize>| {
-    let mut keys = by_priority[range].to_vec();
-    keys.sort();
-    keys
-  };
-  assert_eq!(
-    group(0..4),
-    ["KON-10", "KON-12", "KON-18", "KON-5"],
-    "High first: {by_priority:?}"
-  );
-  assert_eq!(group(22..24), ["KON-22", "KON-4"], "No priority last: {by_priority:?}");
-  choose(&mut seeded, "tasks-pipeline-filter", "Quick fix");
+  assert_eq!(seeded.text("tasks-search-keys"), "/", "the key cap says how");
+  seeded
+    .window
+    .tree
+    .key_down("/".to_owned(), "Slash".to_owned(), false, false, false);
+  seeded.until("the search focused", |seeded| {
+    seeded.window.tree.focused_element().and_then(|element| element.id()) == Some("tasks-search")
+  });
+}
+
+#[test]
+fn tasks_filter_narrows_the_rows_by_pipeline_and_priority_and_its_chips_let_them_go() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  assert_eq!(seeded.text("tasks-filter"), "Filter");
+  seeded.click("tasks-filter");
+  seeded.until("the filter menu", |seeded| seeded.laid_out("tasks-filter-menu"));
+  let menu = seeded.texts("tasks-filter-menu");
+  for word in ["Pipeline", "Feature delivery v3", "Quick fix v2", "No pipeline", "Priority", "High", "Tag", "webhooks"] {
+    assert!(menu.iter().any(|said| said == word), "the menu offers {word}: {menu:?}");
+  }
+  assert!(!menu.iter().any(|said| said == "Module"), "the project has no module: {menu:?}");
+  let quick = option(&mut seeded, "pipeline", "Quick fix v2");
+  seeded.click(&quick);
+  seeded.until("the rows laid out", Seeded::rows_laid_out);
   let keys = seeded.keys();
   assert!(!keys.is_empty() && keys.len() < 24, "{keys:?}");
   for key in &keys {
     let pipeline = seeded.text(&format!("task-pipeline-{key}"));
-    assert!(pipeline.starts_with("Quick fix"), "{key}: {pipeline}");
+    assert_eq!(pipeline, "Quick fix v2", "{key}");
   }
-  let footer = seeded.text("tasks-footer");
-  assert!(footer.starts_with(&format!("{} tasks match", keys.len())), "{footer}");
+  assert_eq!(seeded.text("tasks-filter"), "Filter · 1");
+  let high = option(&mut seeded, "priority", "High");
+  seeded.click(&high);
+  seeded.until("the rows laid out", Seeded::rows_laid_out);
+  assert!(seeded.keys().is_empty(), "no Quick fix task is High: {:?}", seeded.keys());
+  assert_eq!(seeded.text("tasks-filter"), "Filter · 2");
+  assert_eq!(seeded.text("tasks-chip-pipeline-1"), "Pipeline Quick fix v2");
+  assert_eq!(seeded.text("tasks-chip-priority-1"), "Priority High");
+  assert!(seeded.shows("tasks-clear-query"), "the view says the filters hide its rows");
+  // The menu closes with its button; it stays open while options are chosen.
+  seeded.click("tasks-filter");
+  seeded.until("the menu closed", |seeded| !seeded.shows("tasks-filter-menu"));
+  seeded.click("tasks-chip-pipeline-1-remove");
+  seeded.until("the High tasks", |seeded| !seeded.keys().is_empty());
+  let mut high = seeded.keys();
+  high.sort();
+  assert_eq!(high, ["KON-10", "KON-12", "KON-18", "KON-5"], "the High tasks");
+  seeded.click("tasks-filter-clear");
+  seeded.until("every row", |seeded| seeded.keys().len() == 24);
+  assert!(!seeded.shows("tasks-filters"), "no chip once nothing is chosen");
+  assert_eq!(seeded.text("tasks-filter"), "Filter");
 }
 
-/// Chooses the option of the select `id` whose label starts with `label`.
-fn choose(seeded: &mut Seeded, id: &str, label: &str) {
-  let mut select = seeded
-    .window
-    .tree
-    .get_element_by_id_mut(id)
-    .and_then(|element| element.as_select())
-    .unwrap_or_else(|| panic!("{id} is a select"));
-  let index = select
-    .labels()
-    .iter()
-    .position(|option| option.starts_with(label))
-    .unwrap_or_else(|| panic!("{id} offers {label}: {:?}", select.labels()));
-  select.commit(index);
-  seeded.window.pass();
+/// The id of the option of `facet` saying `words` in the open Filter menu.
+fn option(seeded: &mut Seeded, facet: &str, words: &str) -> String {
+  (0..32)
+    .map(|index| format!("tasks-filter-{facet}-{index}"))
+    .find(|id| seeded.window.texts(id).is_some_and(|said| said.join(" ") == words))
+    .unwrap_or_else(|| panic!("the {facet} facet offers {words}"))
+}
+
+#[test]
+fn tasks_display_orders_the_rows_and_says_sorting_leaves_the_queue_alone() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::Backlog));
+  assert_eq!(seeded.keys(), ["KON-3", "KON-4", "KON-22"], "manual order");
+  sort(&mut seeded, "newest");
+  assert_eq!(seeded.keys(), ["KON-22", "KON-4", "KON-3"]);
+  sort(&mut seeded, "priority");
+  assert_eq!(seeded.keys().first().map(String::as_str), Some("KON-3"), "Low before no priority");
+  seeded.click("tasks-display");
+  seeded.until("the display menu", |seeded| seeded.laid_out("tasks-sort-note"));
+  assert_eq!(seeded.text("tasks-sort-note"), "Sorting never changes the run queue.");
+}
+
+/// Chooses the order `name` in Display.
+fn sort(seeded: &mut Seeded, name: &str) {
+  seeded.click("tasks-display");
+  let id = format!("tasks-sort-{name}");
+  seeded.until("the display menu", |seeded| seeded.laid_out(&id));
+  seeded.click(&id);
   seeded.until("the rows laid out", Seeded::rows_laid_out);
 }
 
@@ -164,7 +173,7 @@ fn tasks_the_search_s_cross_clears_it() {
   seeded.click("tasks-search-clear");
   assert_eq!(
     seeded.window.navigation().route_now(),
-    seeded.route(TaskList::default())
+    seeded.route(TaskList::new(TaskListTab::All))
   );
   assert_eq!(seeded.keys().len(), 24);
   assert!(!seeded.shows("tasks-search-clear"), "an empty search has no cross");

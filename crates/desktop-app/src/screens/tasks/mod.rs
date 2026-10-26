@@ -1,62 +1,70 @@
-//! The project's Tasks list (`Tasks · full page · dark` `C2E5Po`): its tasks by workflow tab, searched and
-//! narrowed to a pipeline, in the order chosen, each row saying what the task needs or where its run
-//! stands, and opening the task. The task a Create just added stands out (`Tasks · new task highlighted`
-//! `t3oAOi`). Its other states: a project without tasks (`PMJrB`), the tasks being read (`kA8bx`), read
-//! failing (`oDyZB`) and a search that hides every row (`EHGLs`). Needs you lists and counts the tasks
-//! something of waits for; what waits and is no task's (the project's memory records) is named in a notice
-//! over its rows, which opens the Needs you panel.
+//! The project's Tasks list (`Tasks · redesign` `Lw1Gb` in the new `orchester.pen`, ORC-99): one header row with the
+//! search, Filter, Display, *More actions* and New task; the views Active, Backlog, Done and All with their counts;
+//! the applied filters as chips; and the view's rows, one line each, Active grouped by what happens next (Needs you,
+//! Running, Queued, Ready to start, then Stopped and Finished, which the design has no row for) and All by workflow
+//! status (`views::grouped`). Each row says in one phrase where its task stands and opens the task; under the pointer
+//! it shows its actions. The task a Create just added stands out. Its other states: a project without tasks (`03 No
+//! tasks yet` `f54MO`), the tasks being read, read failing, and a search or filters that hide every row. What waits
+//! for the person and is no task's (the project's memory records) is named in a notice over Active's rows, which opens
+//! the Needs you panel.
 //!
-//! The tasks are the project feed's, as they stand with its runner: while no runner serves the project, a
-//! run recorded as running is interrupted. Not built yet (D4): selecting tasks and what is done to a
-//! selection, the Status, Priority and Tags filters and Manage tags.
+//! The tasks are the project feed's, as they stand with its runner: while no runner serves the project, a run recorded
+//! as running is interrupted. Not built yet (D4): selecting tasks and what is done to a selection, Manage tags.
 
+mod cache;
+mod display;
+mod facets;
 mod header;
+mod list;
 mod not_shared;
-mod query;
+mod phrase;
 mod queue;
 
 pub(crate) use self::queue::actor_now;
-mod readiness;
 mod row;
 mod shared;
 mod states;
-mod table;
-mod view;
+mod views;
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::KeyboardEvent,
     theme::SpacingSize,
   },
-  components::Column,
-  layout::layout_kind::ScrollState,
+  components::{Column, Row},
+  core::{ElementRef, Signal},
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{project::TaskKey, task::organization::TaskFilter};
+use orchester_core::project::TaskKey;
 use orchester_workspace::{
-  modules::ModuleFilter,
   runner::{RunnerStatus, state::RunnerState},
   tasks::{
-    browse::{self, PipelineFilter, Query, TaskSort},
+    browse::{self, Facets, TaskSort},
     data::ProjectTasks,
-    list::TaskRow,
+    views::grouped,
   },
 };
 use parking_lot::Mutex;
 
 use self::{
-  query::Choices,
-  table::Rows,
-  view::{ListView, RowsKey, TabCounts},
+  cache::{ListCache, Reading, Rows, RowsKey},
+  facets::Options,
+  header::{Choices, Header},
+  list::{Folded, Folding, Source},
+  row::ItemProps,
+  views::{label_key, list_view},
 };
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
   routes::{TaskList, TaskListTab},
   screens::task_close::{self, Closer},
-  theme::{ExtraSpacing, TasksSpacing},
-  ui::table::ROW_HEIGHT,
+  theme::TasksSpacing,
 };
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, list: &TaskList) -> Element {
@@ -80,7 +88,11 @@ impl DevtoolsInspectable for TasksProps {}
 
 struct TasksScreen {
   choices: Choices,
-  view: ListView,
+  /// The groups folded away.
+  folded: Signal<Folded>,
+  /// `/` asked for the search: the next render focuses it.
+  focus_search: Signal<bool>,
+  cache: ListCache,
   /// Where the rows are scrolled to, and what they were last placed for ([`TasksScreen::place`]).
   scroll: ScrollState,
   placed: Mutex<Option<Placed>>,
@@ -96,15 +108,17 @@ impl Component for TasksScreen {
     let typed = props.list.search().unwrap_or_default().to_owned();
     let search = ctx.signal(typed);
     let navigation = Navigation::of(ctx);
-    ctx.watch(&search, move |text: &String| query::follow_search(&navigation, text));
+    ctx.watch(&search, move |text: &String| header::follow_search(&navigation, text));
     Self {
       choices: Choices {
         search,
-        pipeline: ctx.signal(PipelineFilter::default()),
-        module: ctx.signal(ModuleFilter::default()),
+        facets: ctx.signal(Facets::default()),
         sort: ctx.signal(TaskSort::default()),
+        search_input: ElementRef::default(),
       },
-      view: ListView::default(),
+      folded: ctx.signal(Folded::default()),
+      focus_search: ctx.signal(false),
+      cache: ListCache::default(),
       scroll: ScrollState::new(),
       placed: Mutex::new(None),
       closer: Closer::new(ctx, (props.project.open, props.project.feed), None),
@@ -113,11 +127,16 @@ impl Component for TasksScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(self.closer.clone());
+    ctx.provide(Folding(self.folded.clone()));
     let TasksProps { project, list } = ctx.props::<TasksProps>().clone();
     // The path's search wins: Back, Clear and automation change it too.
     let routed = list.search().unwrap_or_default();
     if self.choices.search.get_untracked() != routed {
       self.choices.search.set(routed.to_owned());
+    }
+    if self.focus_search.get() {
+      ctx.focus(&self.choices.search_input);
+      self.focus_search.set(false);
     }
     let id = project.open.project.id();
     let shared = shared::read(ctx, &project);
@@ -130,21 +149,32 @@ impl Component for TasksScreen {
       .height(Dimension::Pct(100.0))
       .padding(
         Padding::new()
-          .top(ExtraSpacing::Roomy.role())
-          .left(TasksSpacing::Page.role())
-          .right(TasksSpacing::Page.role()),
+          .top(SpacingSize::Xl)
+          .left(TasksSpacing::Sides.role())
+          .right(TasksSpacing::Sides.role()),
       )
-      .spacing(SpacingSize::Md)
-      .child(header::header(ctx, id, queue(&project), shared.as_ref()))
-      .with_children(not_member);
+      .spacing(TasksSpacing::Stack.role())
+      .on_key_down(slash(self.focus_search.clone()));
+    let header = |ctx: &mut Ctx, options, queue| {
+      header::header(
+        ctx,
+        Header {
+          project: id,
+          choices: &self.choices,
+          options,
+          queue,
+          shared: shared.as_ref(),
+        },
+      )
+    };
     match project.feed.tasks.get() {
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => {
-        page.child(states::empty_project(ctx, id))
-      }
+      TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => page
+        .child(header::title_only(ctx))
+        .with_children(not_member)
+        .child(states::empty_project(ctx, id)),
       TasksState::Ready(source) => {
         // The filter is gone once no task is Not shared: the list is the shared one again.
         let not_shared = list.not_shared() && !source.not_shared.is_empty();
-        let (tasks, counts) = self.view.tasks(&source, (online(&project), not_shared));
         let shown = Shown {
           project: &project,
           list: &list,
@@ -152,56 +182,52 @@ impl Component for TasksScreen {
           shared: shared.as_ref(),
           not_shared,
         };
-        self.list(ctx, page, &shown, (&tasks, counts))
+        let options = Arc::new(Options::of(ctx, &source));
+        let page = page.child(header(ctx, Some(options.clone()), queue(&project)));
+        self.list(ctx, page.with_children(not_member), &shown, &options)
       }
       TasksState::Loading => page
-        .child(header::tabs(ctx, id, &list, None))
-        .child(query::query(ctx, &self.choices, None))
+        .child(header(ctx, None, None))
+        .with_children(not_member)
+        .child(views::views(ctx, (id, &list), None, None))
         .child(states::reading(ctx, project.open.project.name().as_str())),
       TasksState::Failed(error) => page
-        .child(header::tabs(ctx, id, &list, None))
-        .child(query::out_of_reach(query::query(ctx, &self.choices, None)))
+        .child(header(ctx, None, None))
+        .with_children(not_member)
+        .child(views::views(ctx, (id, &list), None, None))
         .child(states::failed(ctx, &project.feed, &error)),
     }
   }
 }
 
 impl TasksScreen {
-  /// The tabs, the query and the tab's rows as searched, narrowed and ordered, with their count, or why
-  /// there is none.
-  fn list(
-    &self,
-    ctx: &mut Ctx,
-    page: Column,
-    shown: &Shown<'_>,
-    (tasks, counts): (&ProjectTasks, TabCounts),
-  ) -> Column {
+  /// The views, what is held and filtered, and the view's rows as searched, filtered and ordered, or why there is none.
+  fn list(&self, ctx: &mut Ctx, page: Column, shown: &Shown<'_>, options: &Options) -> Column {
     let (project, list) = (shown.project, shown.list);
     let id = project.open.project.id();
+    let separator = ctx.t("tasks.listSeparator");
+    let (reading, totals) = self
+      .cache
+      .reading(shown.source, (online(project), shown.not_shared), |tasks| {
+        browse::faceted(tasks, ("", &separator), &Facets::default(), TaskSort::Manual)
+      });
     let key = RowsKey {
-      tab: list.tab(),
       not_shared: shown.not_shared,
       search: list.search().unwrap_or_default().to_owned(),
-      pipeline: self.choices.pipeline.get(),
-      module: self.choices.module.get(),
+      facets: self.choices.facets.get(),
       sort: self.choices.sort.get(),
     };
-    let filtered = !key.search.trim().is_empty() || key.pipeline.0.is_some() || key.module != ModuleFilter::Any;
-    let separator = ctx.t("tasks.listSeparator");
-    let rows = self.read_rows(&key, &separator);
-    let kept = shown.not_shared.then(|| {
-      let name = project.open.project.name().as_str();
-      not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
+    let Rows { rows, counts } = self.cache.rows(key.clone(), |tasks| {
+      browse::faceted(tasks, (&key.search, &separator), &key.facets, key.sort)
     });
-    let page = page
-      .child(header::tabs(ctx, id, list, Some(counts)))
-      .with_children(held_groups(ctx, project, tasks))
-      .child(query::query(ctx, &self.choices, Some(tasks)))
-      .with_children(not_shared::filters(ctx, (id, list), shown.source.not_shared.len()))
-      .with_children(kept)
-      .with_children(states::outside_tasks(ctx, list.tab(), tasks))
-      .with_children(task_close::panel(ctx, &self.closer, "tasks-close"));
-    if rows.is_empty() {
+    let page = self.top(ctx, page, shown, (&reading, counts), options);
+    let parts = grouped(
+      list_view(list.tab()),
+      &rows,
+      (&reading.tasks, &reading.waiting),
+      key.sort,
+    );
+    if parts.is_empty() {
       // Rows that come back are placed afresh, at their top.
       *self.placed.lock() = None;
       let found = if shown.not_shared {
@@ -212,42 +238,72 @@ impl TasksScreen {
       if !found.is_empty() {
         return page.child(not_shared::only_not_shared(ctx, (id, list), &found));
       }
-      return page.child(self.no_rows(ctx, list.tab(), counts.get(list.tab()), filtered));
+      let filtered = !key.search.trim().is_empty() || !key.facets.is_empty();
+      return page.child(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered));
     }
-    let count = if shown.not_shared {
-      table::Count::NotShared(shown.source.not_shared.len())
-    } else if found_by_former_key(&rows, &key.search) {
-      table::Count::FormerKey
-    } else {
-      table::Count::Tasks
+    let highlight = list.highlight().map(ToString::to_string);
+    let source = Source {
+      project: id,
+      tasks: &reading.tasks,
+      needs: &reading.needs,
+      highlight: highlight.as_deref(),
+      shared: shown.shared.is_some(),
     };
-    // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes:
-    // a list keeps its top row in place while its rows change, which these must not.
-    let list_key = format!("tasks-rows-{key:?}");
-    let list_key = match self.place(key, list.highlight(), &rows) {
+    let items = list::items(ctx, &source, &parts, &self.folded.get());
+    // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes: a list keeps
+    // its top row in place while its rows change, which these must not.
+    let list_key = format!("tasks-rows-{:?}-{key:?}", list.tab());
+    let list_key = match self.place((list.tab(), key), list.highlight(), &items) {
       true => list_key,
       false => format!("{list_key}-awaiting"),
     };
-    let highlight = list.highlight().map(ToString::to_string);
-    let shown = Rows {
-      project: id,
-      tasks,
-      rows,
-      highlight: highlight.as_deref(),
-      scroll: self.scroll.clone(),
-      list_key,
-      shared: shown.shared.is_some(),
-    };
-    page
-      .child(table::table(ctx, &shown))
-      .child(table::footer(ctx, &shown, (filtered, count)))
+    page.child(list::list(ctx, Arc::new(items), (self.scroll.clone(), list_key)))
   }
 
-  /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top,
-  /// for another tab, search, pipeline or sort. A highlighted task the rows do not hold yet (the feed is
-  /// still reading the tasks again) is scrolled to once a reading brings it. A render for anything else
-  /// leaves the rows where they are. Answers whether the rows hold the highlighted task, if any.
-  fn place(&self, key: RowsKey, highlight: Option<&TaskKey>, rows: &[TaskRow]) -> bool {
+  /// The views with the held chip at their end, the held groups, the applied filters, the *Not shared* notice, what
+  /// waits outside the tasks, and the close confirmation's panel.
+  fn top(
+    &self,
+    ctx: &mut Ctx,
+    page: Column,
+    shown: &Shown<'_>,
+    (reading, counts): (&Reading, cache::ViewCounts),
+    options: &Options,
+  ) -> Column {
+    let (project, list) = (shown.project, shown.list);
+    let id = project.open.project.id();
+    let chip = queue_part(ctx, project, queue::QueuePart::Chip);
+    let held = (!reading.tasks.queue.groups.is_empty()).then(|| queue_part(ctx, project, queue::QueuePart::Groups));
+    let mut filters: Vec<Element> = not_shared::filter(ctx, (id, list), shown.source.not_shared.len())
+      .into_iter()
+      .collect();
+    filters.extend(facets::chips(ctx, &self.choices.facets, options));
+    let filters = (!filters.is_empty()).then(|| {
+      Row::new()
+        .id("tasks-filters")
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(filters)
+    });
+    let kept = shown.not_shared.then(|| {
+      let name = project.open.project.name().as_str();
+      not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
+    });
+    page
+      .child(views::views(ctx, (id, list), Some(counts), chip))
+      .with_children(held.flatten())
+      .with_children(filters)
+      .with_children(kept)
+      .with_children(states::outside_tasks(ctx, list.tab(), &reading.tasks))
+      .with_children(task_close::panel(ctx, &self.closer, "tasks-close"))
+  }
+
+  /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top, for another
+  /// view, search, filter or sort. A highlighted task the rows do not hold yet (the feed is still reading the tasks
+  /// again) is scrolled to once a reading brings it. A render for anything else leaves the rows where they are.
+  /// Answers whether the rows hold the highlighted task, if any.
+  fn place(&self, key: (TaskListTab, RowsKey), highlight: Option<&TaskKey>, items: &[ItemProps]) -> bool {
     let mut placed = self.placed.lock();
     let same = placed
       .as_ref()
@@ -255,15 +311,14 @@ impl TasksScreen {
     if same && placed.as_ref().is_some_and(|placed| placed.reached) {
       return true;
     }
-    let found = highlight.and_then(|task| {
-      let task = task.to_string();
-      rows.iter().position(|row| *row.key == *task)
-    });
+    let found = highlight.and_then(|task| list::offset_of(items, &task.to_string()));
     match found {
-      Some(index) => self.scroll.set_scroll_pending(0.0, ROW_HEIGHT * index as f32),
+      Some(offset) => self.scroll.set_scroll_pending(0.0, offset),
       // Still waiting for the highlighted task: the rows stay where they were put.
       None if same => return false,
-      None => self.scroll.scroll_to_top_pending(),
+      // An offset, not a scroll to the top: a list mounted anew opens at a queued offset, or else at the one the
+      // shared scroll state kept from the rows before.
+      None => self.scroll.set_scroll_pending(0.0, 0.0),
     }
     let reached = highlight.is_none() || found.is_some();
     *placed = Some(Placed {
@@ -274,61 +329,53 @@ impl TasksScreen {
     reached
   }
 
-  /// Why `tab` shows no row: it has none of its `count` tasks at all, or the query hides them, which
+  /// Why `view` shows no row: it has none of its `count` tasks at all, or the search and the filters hide them, which
   /// Clear undoes.
-  fn no_rows(&self, ctx: &Ctx, tab: TaskListTab, count: usize, filtered: bool) -> Column {
-    let word = ctx.t(header::label_key(tab));
+  fn no_rows(&self, ctx: &Ctx, view: TaskListTab, count: usize, filtered: bool) -> Column {
     if count == 0 || !filtered {
-      return states::empty_tab(ctx, &word, tab == TaskListTab::NeedsYou);
+      return states::empty_view(ctx, view);
     }
-    let (search, pipeline) = (self.choices.search.clone(), self.choices.pipeline.clone());
-    let module = self.choices.module.clone();
-    states::no_matches(ctx, (&word, count), move || {
+    let (search, facets) = (self.choices.search.clone(), self.choices.facets.clone());
+    states::no_matches(ctx, (&ctx.t(label_key(view)), count), move || {
       search.set(String::new());
-      pipeline.set(PipelineFilter::default());
-      module.set(ModuleFilter::default());
-    })
-  }
-
-  /// The rows `key` asks for: the tab's tasks as searched, narrowed to a pipeline and a module, and ordered.
-  fn read_rows(&self, key: &RowsKey, separator: &str) -> std::sync::Arc<Vec<TaskRow>> {
-    self.view.rows(key.clone(), |tasks| {
-      let organization = TaskFilter::default();
-      let query = Query {
-        text: &key.search,
-        pipeline: key.pipeline,
-        organization: &organization,
-        separator,
-      };
-      browse::rows_in(tasks, header::workspace_tab(key.tab), (query, key.module), key.sort)
+      facets.set(Facets::default());
     })
   }
 }
 
-/// The groups whose new starts are held, under the tabs; nothing when none is.
-fn held_groups(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks) -> Option<Element> {
-  let id = project.open.project.id();
-  (!tasks.queue.groups.is_empty()).then(|| {
-    ctx.mount_keyed::<queue::QueueControls>(
-      &format!("tasks-queue-groups-{id}"),
-      queue::QueueProps {
-        project: id,
-        root: project.open.repo_root.clone(),
-        queue: (*tasks.queue).clone(),
-        part: queue::QueuePart::Groups,
-      },
-    )
-  })
+/// `/` asks for the search, unless a text field has the keys or a modifier is held.
+fn slash(focus: Signal<bool>) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
+  move |event: KeyboardEvent| {
+    if event.default_prevented() || event.text_input_focused || event.ctrl || event.alt || event.meta {
+      return;
+    }
+    if event.key == "/" {
+      event.prevent_default();
+      focus.set(true);
+    }
+  }
 }
 
-/// The holds on new starts, once the tasks are read.
+/// `part` of the holds on new starts, once the tasks are read.
+fn queue_part(ctx: &mut Ctx, project: &ShownProject, part: queue::QueuePart) -> Option<Element> {
+  let props = queue(project)?;
+  let name = match part {
+    queue::QueuePart::Menu { .. } => "menu",
+    queue::QueuePart::Chip => "chip",
+    queue::QueuePart::Groups => "groups",
+  };
+  let key = format!("tasks-queue-{name}-{}", project.open.project.id());
+  Some(ctx.mount_keyed::<queue::QueueControls>(&key, queue::QueueProps { part, ..props }))
+}
+
+/// The holds on new starts, once the tasks are read; the mount picks its part.
 fn queue(project: &ShownProject) -> Option<queue::QueueProps> {
   match project.feed.tasks.get() {
     TasksState::Ready(tasks) => Some(queue::QueueProps {
       project: project.open.project.id(),
       root: project.open.repo_root.clone(),
       queue: (*tasks.queue).clone(),
-      part: queue::QueuePart::Project,
+      part: queue::QueuePart::Chip,
     }),
     TasksState::Loading | TasksState::Failed(_) => None,
   }
@@ -356,23 +403,9 @@ struct Shown<'a> {
   not_shared: bool,
 }
 
-/// Whether `search` found each of `rows` only by its key before joining (`T1ahf8`), which the count then says.
-fn found_by_former_key(rows: &[TaskRow], search: &str) -> bool {
-  let text = search.trim().to_lowercase();
-  !text.is_empty()
-    && rows.iter().all(|row| {
-      row
-        .former_key
-        .as_ref()
-        .is_some_and(|former| former.to_lowercase().contains(&text))
-        && !row.key.to_lowercase().contains(&text)
-        && !row.title.to_lowercase().contains(&text)
-    })
-}
-
 /// What the rows were last placed for, and whether the highlighted task, if any, was among them.
 struct Placed {
-  key: RowsKey,
+  key: (TaskListTab, RowsKey),
   highlight: Option<TaskKey>,
   reached: bool,
 }

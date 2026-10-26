@@ -40,7 +40,7 @@ fn shared_project_task_list_says_where_it_lives_and_when_it_is_read_only() {
       .contains("ask an owner, Alice Moreau, to add you again")
   );
   assert_eq!(
-    window.text("tasks-create-multiple-reason"),
+    window.text("tasks-new-task-reason-text"),
     "Read-only: you're not a member."
   );
 

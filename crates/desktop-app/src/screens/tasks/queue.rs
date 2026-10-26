@@ -1,9 +1,10 @@
-//! Holding new starts from the Tasks header (`docs/design/orchester-workspace.md`, "Pause scheduling"; no frame draws
-//! it, so it keeps to the header's controls): *Hold new starts* holds them in the whole project, and while they are
-//! held the header says so with *Release*. Each reviewed group whose new starts are held is named by its tasks, with
-//! its own *Release*. Running runs go on either way (`orchester_workspace::tasks::hold`).
+//! Holding new starts from the Tasks list (`docs/design/orchester-workspace.md`, "Pause scheduling"; `Tasks · redesign`
+//! `Lw1Gb`): the header's *More actions* (`…`) holds them in the whole project, or releases them, beside Create
+//! multiple, which is not built yet and says why; while they are held a warning chip at the end of the views says so
+//! with its *Release*. Each reviewed group whose new starts are held is named by its tasks under the views, with its
+//! own *Release*. Running runs go on either way (`orchester_workspace::tasks::hold`).
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -13,6 +14,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::Element,
 };
@@ -34,8 +36,11 @@ use crate::{
   theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    chip::{BadgeTone, badge},
     field::field_error,
     icon::{Icon, icon},
+    icon_button::IconButton,
+    menu::{MenuItem, menu_at_end, menu_panel},
     message::message_text,
   },
 };
@@ -48,11 +53,12 @@ pub(super) struct QueueProps {
   pub(super) part: QueuePart,
 }
 
-/// Which part of the holds a mount shows: the whole project's, in the header's button row, or the held groups,
-/// under the tabs, so the header keeps its layout (`C2E5Po`).
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// Which part of the holds a mount shows: the header's *More actions* with Create multiple, unavailable for its
+/// `reason`; the chip at the end of the views while the whole project's new starts are held; or the held groups.
+#[derive(Clone, PartialEq, Eq)]
 pub(super) enum QueuePart {
-  Project,
+  Menu { reason: Arc<str> },
+  Chip,
   Groups,
 }
 
@@ -72,6 +78,9 @@ impl DevtoolsInspectable for Holding {}
 
 pub(super) struct QueueControls {
   hold: FutureAction<Holding, (), Message>,
+  /// The header's menu, while it is open, and its button.
+  open: Signal<bool>,
+  anchor: ElementRef,
 }
 
 impl Component for QueueControls {
@@ -98,7 +107,11 @@ impl Component for QueueControls {
         }
       },
     );
-    Self { hold }
+    Self {
+      hold,
+      open: ctx.signal(false),
+      anchor: ElementRef::default(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -122,36 +135,72 @@ impl Component for QueueControls {
         &ctx.t_args("tasks.queue.failed", [("reason", &*message_text(ctx, error))]),
       )
     });
-    if props.part == QueuePart::Groups {
-      return groups(ctx, &props.queue, &press, pending).with_children(failed);
-    }
-    let project = if props.queue.project {
-      let release = ActionButton::new(
-        "tasks-queue-release",
-        ButtonKind::Secondary,
-        ctx.t("tasks.queue.release"),
-      )
-      .icon(Icon::Play);
-      Row::new()
-        .id("tasks-queue-held")
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(held_note("tasks-queue-held-note", &ctx.t("tasks.queue.held")))
-        .child(enabled(release, pending, press(HoldScope::Project, false)))
-    } else {
-      let hold =
-        ActionButton::new("tasks-queue-hold", ButtonKind::Secondary, ctx.t("tasks.queue.hold")).icon(Icon::CirclePause);
-      Row::new().child(enabled(hold, pending, press(HoldScope::Project, true)))
+    let shown = match &props.part {
+      QueuePart::Groups => return groups(ctx, &props.queue, &press, pending).with_children(failed),
+      QueuePart::Menu { reason } => {
+        let held = props.queue.project;
+        let hold = (!pending).then(|| press(HoldScope::Project, !held));
+        self.menu(ctx, (held, hold), reason)
+      }
+      QueuePart::Chip if props.queue.project => {
+        let release = ActionButton::new("tasks-queue-release", ButtonKind::Ghost, ctx.t("tasks.queue.release"))
+          .icon(Icon::Play)
+          .small();
+        Row::new()
+          .id("tasks-queue-held")
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(badge("tasks-queue-held-note", BadgeTone::Warning, &ctx.t("tasks.queue.onHold")))
+          .child(enabled(release, pending, press(HoldScope::Project, false)))
+          .into()
+      }
+      QueuePart::Chip => return Column::new().with_children(failed),
     };
-    // Its error shows in place of nothing: the header's row keeps one line.
-    match failed {
-      Some(failed) => Column::new()
-        .id("tasks-queue")
-        .align_items(Alignment::End)
-        .child(project)
-        .child(failed),
-      None => Column::new().id("tasks-queue").child(project),
-    }
+    // Its error shows under it: the header's and the views' rows keep one line until something failed.
+    Column::new()
+      .id(match props.part {
+        QueuePart::Menu { .. } => "tasks-queue",
+        _ => "tasks-queue-chip",
+      })
+      .align_items(Alignment::End)
+      .child(shown)
+      .with_children(failed)
+  }
+}
+
+impl QueueControls {
+  /// The `…` button and, while it is open, its menu: *Hold new starts*, or *Release new starts* while they are `held`,
+  /// which `hold` changes unless a change is under way; and Create multiple, unavailable for `reason`.
+  fn menu(
+    &self,
+    ctx: &mut Ctx,
+    (held, hold): (bool, Option<impl Fn() + Send + Sync + 'static>),
+    reason: &Arc<str>,
+  ) -> Element {
+    let open = self.open.clone();
+    let button = IconButton::new("tasks-more", Icon::Ellipsis, ctx.t("tasks.more"))
+      .element(self.anchor.clone())
+      .on_click(move || open.update(|open| *open = !*open));
+    let shown = self.open.get();
+    let button = if shown { button.active() } else { button }.render(ctx);
+    let menu = shown.then(|| {
+      let (id, glyph, label) = if held {
+        ("tasks-queue-release-all", Icon::Play, ctx.t("tasks.queue.releaseAll"))
+      } else {
+        ("tasks-queue-hold", Icon::CirclePause, ctx.t("tasks.queue.hold"))
+      };
+      let item = match hold {
+        Some(hold) => MenuItem::new(id, label, hold),
+        None => MenuItem::unavailable(id, label, ctx.t("tasks.queue.changing")).without_lock(),
+      };
+      let create = MenuItem::unavailable("tasks-create-multiple", ctx.t("tasks.createMultiple"), reason.clone())
+        .icon(Icon::ListPlus);
+      let panel = menu_panel("tasks-more-menu")
+        .child(item.icon(glyph).render(ctx, &self.open))
+        .child(create.render(ctx, &self.open));
+      menu_at_end(self.anchor.clone(), self.open.clone(), panel)
+    });
+    Row::new().child(button).with_children(menu).into()
   }
 }
 

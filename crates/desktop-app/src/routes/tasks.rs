@@ -11,41 +11,27 @@ const HIGHLIGHT: &str = "highlight";
 const SHOW: &str = "show";
 const NOT_SHARED: &str = "not-shared";
 
-/// A tab of the Tasks list (`Workflow tabs` `F3K93b` in `t3oAOi`): every task, the ones that need the
-/// person, or one workflow status. All is the one it opens on.
+/// A view of the Tasks list (`Views` in `Tasks · redesign` `Lw1Gb`, ORC-99): Active (Todo, In progress, In review and
+/// what waits for the person), Backlog, Done (Done and Canceled) or All. Active is the one it opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskListTab {
   #[default]
-  All,
-  NeedsYou,
+  Active,
   Backlog,
-  Todo,
-  InProgress,
-  InReview,
   Done,
+  All,
 }
 
 impl TaskListTab {
-  pub const ALL: [Self; 7] = [
-    Self::All,
-    Self::NeedsYou,
-    Self::Backlog,
-    Self::Todo,
-    Self::InProgress,
-    Self::InReview,
-    Self::Done,
-  ];
+  pub const ALL: [Self; 4] = [Self::Active, Self::Backlog, Self::Done, Self::All];
 
-  /// The tab's name in a path's query and in the app's MCP tools.
+  /// The view's name in a path's query and in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
-      Self::All => "all",
-      Self::NeedsYou => "needs_you",
+      Self::Active => "active",
       Self::Backlog => "backlog",
-      Self::Todo => "todo",
-      Self::InProgress => "in_progress",
-      Self::InReview => "in_review",
       Self::Done => "done",
+      Self::All => "all",
     }
   }
 

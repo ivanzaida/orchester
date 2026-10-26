@@ -1,5 +1,5 @@
-//! What each row says about its task, in the tone the design gives it, and where a row, New task and a
-//! Create's highlight lead.
+//! What each row says about its task in one phrase, in the tone the design gives it, what the pointer brings up on it,
+//! and where a row, its action, New task and a Create's highlight lead.
 
 use orchester_app::{
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView},
@@ -8,46 +8,42 @@ use orchester_app::{
 
 use crate::harness::Seeded;
 
-/// A row of the seed's `tasks`: its key, what its readiness cell starts with and the icon before it, and
-/// its run line. No runner serves the project, so a run recorded as running is interrupted.
-const ROWS: [(&str, &str, Icon, &str); 12] = [
-  ("KON-1", "Merged into", Icon::GitMerge, "Merged"),
-  ("KON-3", "Needs ", Icon::PencilLine, "Draft"),
-  ("KON-5", "Ready to queue", Icon::CirclePlay, "Draft"),
-  ("KON-8", "Waiting for its run to start", Icon::Hourglass, "Queued"),
-  ("KON-9", "Every step passed", Icon::CircleCheck, "Completed"),
-  ("KON-10", "Waiting for you", Icon::Hand, "Needs input"),
-  ("KON-11", "Run failed", Icon::CircleX, "Failed · 04 Run checks"),
-  ("KON-16", "No checkpoint yet", Icon::CirclePause, "Interrupted"),
-  ("KON-17", "Held · a task failed", Icon::CirclePause, "Queued"),
-  ("KON-19", "Blocked · KON-18 unfinished", Icon::Ban, "Draft"),
-  ("KON-23", "Raise the limit to continue", Icon::Gauge, "Stopped at limit"),
-  ("KON-24", "Run #", Icon::CircleHelp, "Unreadable"),
+/// A row of the seed's `tasks`: its key, what its phrase starts with and its status icon. No runner serves the
+/// project, so a run recorded as running is interrupted.
+const ROWS: [(&str, &str, Icon); 13] = [
+  ("KON-1", "Merged into", Icon::GitMerge),
+  ("KON-3", "Needs ", Icon::PencilLine),
+  ("KON-5", "Ready to queue", Icon::Circle),
+  ("KON-8", "Waiting for its run to start", Icon::Clock3),
+  ("KON-10", "Review plan v1", Icon::Map),
+  ("KON-11", "Failed at 0", Icon::CircleX),
+  ("KON-12", "Approve cargo add rand", Icon::Hand),
+  ("KON-14", "Stopped after retries", Icon::CirclePause),
+  ("KON-16", "No checkpoint yet", Icon::CirclePause),
+  ("KON-17", "Held · a task failed", Icon::CirclePause),
+  ("KON-19", "Blocked · KON-18 unfinished", Icon::Ban),
+  ("KON-23", "Stopped at its token limit", Icon::Gauge),
+  ("KON-24", "Latest run unreadable", Icon::CircleHelp),
 ];
 
 #[test]
-fn tasks_readiness_says_what_each_phase_needs_including_held_blocked_and_unreadable() {
-  let mut seeded = Seeded::tasks("tasks", TaskList::default());
-  for (key, readiness, mark, run) in ROWS {
-    let said = seeded.text(&format!("task-readiness-{key}"));
-    assert!(said.starts_with(readiness), "{key}: {said}");
+fn tasks_each_row_says_one_state_phrase_with_its_icon() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  for (key, phrase, mark) in ROWS {
+    let said = seeded.text(&format!("task-state-{key}"));
+    assert!(said.starts_with(phrase), "{key}: {said}");
     assert_eq!(
-      seeded.glyph(&format!("task-readiness-icon-{key}")),
+      seeded.glyph(&format!("task-status-{key}")),
       mark.glyph(),
       "{key}: the mark of {said}"
     );
-    assert_eq!(seeded.text(&format!("task-run-{key}-label")), run, "{key}");
   }
-  assert!(
-    seeded.text("task-readiness-KON-24").ends_with("could not be read"),
-    "an unreadable run says so"
-  );
-  assert!(seeded.shows("task-blocked-KON-19"), "a blocked task carries the flag");
-  assert!(!seeded.shows("task-blocked-KON-18"));
+  let failed = seeded.text("task-state-KON-11");
+  assert!(failed.ends_with(" Run checks"), "a failed run says at which step: {failed}");
 }
 
 #[test]
-fn tasks_a_row_shows_its_key_title_tags_pipeline_priority_and_workflow() {
+fn tasks_a_row_shows_its_key_title_tags_pipeline_priority_and_age() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
   assert_eq!(seeded.texts("task-key-KON-12"), ["KON-12"]);
   assert_eq!(
@@ -55,22 +51,38 @@ fn tasks_a_row_shows_its_key_title_tags_pipeline_priority_and_workflow() {
     ["Add retry to webhook sender", "backend", "webhooks"],
     "the tags in the project's order"
   );
-  assert!(seeded.text("task-pipeline-KON-12").starts_with("Feature delivery"));
-  assert_eq!(seeded.text("task-priority-KON-12"), "High");
-  assert_eq!(seeded.text("task-workflow-KON-12"), "In progress");
-  assert!(!seeded.shows("task-new-KON-12"), "only a Create's task is new");
-  assert_eq!(
-    seeded.texts("tasks-table-header"),
-    [
-      "ID",
-      "TASK / TAGS",
-      "PIPELINE",
-      "PRIORITY",
-      "WORKFLOW / RUN",
-      "DEPENDENCY / READINESS"
-    ]
+  assert_eq!(seeded.text("task-pipeline-KON-12"), "Feature delivery v3");
+  assert!(seeded.shows("task-priority-KON-12"), "the priority's icon");
+  let age = seeded.text("task-age-KON-12");
+  let (count, unit) = age.split_at(age.len() - 1);
+  assert!(
+    count.parse::<u32>().is_ok() && ["m", "h", "d"].contains(&unit),
+    "its age in its largest whole unit: {age}"
   );
-  assert_eq!(seeded.text("tasks-footer"), "24 tasks · 13 runs started");
+  assert!(!seeded.shows("task-new-KON-12"), "only a Create's task is new");
+  assert!(!seeded.shows("task-more-KON-12"), "the actions show under the pointer only");
+  assert!(!seeded.shows("tasks-footer"), "no footer");
+}
+
+#[test]
+fn tasks_the_pointer_brings_up_a_waiting_task_s_action_and_its_menu() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::default());
+  seeded.hover("task-row-KON-10");
+  seeded.until("the row's actions", |seeded| seeded.laid_out("task-more-KON-10"));
+  assert!(!seeded.shows("task-pipeline-KON-10"), "the actions take the pipeline's place");
+  assert_eq!(seeded.text("task-action-KON-10"), "Review plan");
+  seeded.click("task-action-KON-10");
+  let summary = ProjectPage::Task("KON-10".parse().expect("a task key"), TaskView::of(TaskTab::Summary));
+  assert_eq!(
+    seeded.window.navigation().route_now(),
+    Route::Project(seeded.project, summary),
+    "the plan is decided on its Summary"
+  );
+  seeded.go(TaskList::default());
+  seeded.until("the rows laid out", Seeded::rows_laid_out);
+  seeded.hover("task-row-KON-5");
+  seeded.until("the row's menu", |seeded| seeded.laid_out("task-more-KON-5"));
+  assert!(!seeded.shows("task-action-KON-5"), "a task nothing waits for has its menu only");
 }
 
 #[test]
@@ -109,26 +121,28 @@ fn tasks_highlight_tints_the_task_a_create_added_and_badges_it_new() {
 
 #[test]
 fn tasks_highlight_below_the_fold_scrolls_its_row_into_view() {
-  let key = "KON-22".parse().expect("a task key");
+  let key = "KON-7".parse().expect("a task key");
   let mut seeded = Seeded::tasks_in("tasks", TaskList::new(TaskListTab::All).with_highlight(key), 900);
-  seeded.until("the new task in view", |seeded| seeded.in_view("KON-22"));
+  seeded.until("the new task in view", |seeded| seeded.in_view("KON-7"));
   assert!(
-    !seeded.in_view("KON-1"),
-    "the list scrolled to it: KON-1 is above the fold"
+    !seeded.in_view("KON-3"),
+    "the list scrolled to it: Backlog's KON-3 is above the fold"
   );
 }
 
 #[test]
-fn tasks_a_new_tab_sort_search_or_pipeline_starts_the_list_at_its_top() {
-  let mut seeded = Seeded::tasks_in("tasks", TaskList::default(), 900);
+fn tasks_another_view_sort_or_search_starts_the_list_at_its_top() {
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::new(TaskListTab::All), 900);
   seeded.scroll_down();
-  assert!(!seeded.in_view("KON-1"), "the list scrolled down");
-  choose_sort(&mut seeded, "Newest first");
-  seeded.until("a new sort to start at the top", |seeded| seeded.in_view("KON-24"));
+  assert!(!seeded.in_view("KON-3"), "the list scrolled down");
+  seeded.go(TaskList::new(TaskListTab::All).with_search("e"));
+  seeded.until("a new search to start at the top", |seeded| {
+    let first = seeded.keys()[0].clone();
+    seeded.in_view(&first)
+  });
   seeded.scroll_down();
-  assert!(!seeded.in_view("KON-24"));
-  seeded.go(TaskList::new(TaskListTab::Todo));
-  seeded.until("a new tab to start at the top", |seeded| {
+  seeded.go(TaskList::default());
+  seeded.until("a new view to start at the top", |seeded| {
     let first = seeded.keys()[0].clone();
     seeded.in_view(&first)
   });
@@ -142,7 +156,7 @@ fn tasks_a_created_task_the_feed_reads_later_is_scrolled_into_view() {
     !seeded.shows("task-row-KON-25"),
     "the feed has not read the new task yet"
   );
-  assert!(seeded.in_view("KON-1"), "the rows wait at their top");
+  assert!(seeded.in_view("KON-3"), "the rows wait at their top");
   let details = orchester_core::task::TaskDetails {
     title: orchester_core::name::Name::new("Show token spend per step").expect("a title"),
     brief: String::new(),
@@ -163,57 +177,39 @@ fn tasks_a_created_task_the_feed_reads_later_is_scrolled_into_view() {
 
 #[test]
 fn tasks_rows_that_come_back_after_a_search_without_matches_start_at_the_top() {
-  let mut seeded = Seeded::tasks_in("tasks", TaskList::default(), 900);
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::new(TaskListTab::All), 900);
   seeded.scroll_down();
-  assert!(!seeded.in_view("KON-1"));
-  seeded.go(TaskList::default().with_search("zzzz"));
+  assert!(!seeded.in_view("KON-3"));
+  seeded.go(TaskList::new(TaskListTab::All).with_search("zzzz"));
   assert!(seeded.shows("tasks-no-rows"));
-  seeded.go(TaskList::default());
-  seeded.until("the rows back at the top", |seeded| seeded.in_view("KON-1"));
+  seeded.go(TaskList::new(TaskListTab::All));
+  seeded.until("the rows back at the top", |seeded| seeded.in_view("KON-3"));
 }
 
 #[test]
-fn tasks_a_long_readiness_is_cut_with_an_ellipsis_inside_its_cell() {
-  let mut seeded = Seeded::tasks("task-states", TaskList::default());
-  let said = seeded.bounds("task-readiness-KON-6");
-  let row = seeded.bounds("task-row-KON-6");
-  // The row ends in its 12 padding, the 14 chevron and the 12 before it.
-  assert!(
-    said.x + said.width <= row.x + row.width - 38.0 + 0.5,
-    "the text stays in its cell: {said:?} in {row:?}"
-  );
+fn tasks_a_long_phrase_is_cut_with_an_ellipsis_inside_its_cell() {
+  let mut seeded = Seeded::tasks("task-states", TaskList::new(TaskListTab::All));
+  for key in seeded.keys() {
+    let said = seeded.bounds(&format!("task-state-{key}"));
+    assert!(said.width <= 320.5, "{key}: the phrase keeps to its 320: {said:?}");
+  }
 }
 
-/// Chooses the sort whose label starts with `label`.
-fn choose_sort(seeded: &mut Seeded, label: &str) {
-  let mut select = seeded
-    .window
-    .tree
-    .get_element_by_id_mut("tasks-sort")
-    .and_then(|element| element.as_select())
-    .expect("the sort is a select");
-  let index = select
-    .labels()
+#[test]
+fn tasks_done_lists_the_task_that_changed_last_first() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::Done));
+  let tasks = seeded.shown_tasks();
+  let mut done: Vec<_> = tasks
+    .tasks
     .iter()
-    .position(|option| option.starts_with(label))
-    .expect("the sort offers it");
-  select.commit(index);
-  seeded.window.pass();
-}
-
-#[test]
-fn tasks_a_failed_run_says_at_which_step_and_a_pipeline_reads_with_its_version() {
-  let mut seeded = Seeded::tasks("tasks", TaskList::default());
-  let failed = seeded.text("task-run-KON-11-label");
-  assert!(
-    failed.starts_with("Failed · 0") && failed.ends_with(" Run checks"),
-    "{failed}"
-  );
-  assert_eq!(
-    seeded.text("task-run-KON-9-label"),
-    "Completed",
-    "a finished run names no step"
-  );
-  assert_eq!(seeded.text("task-pipeline-KON-12"), "Feature delivery v3");
-  assert_eq!(seeded.text("task-pipeline-KON-4"), "No pipeline");
+    .filter(|task| task.organization().status().is_closed())
+    .map(|task| {
+      let changed = tasks.updated.get(&task.id()).copied().unwrap_or(task.created_at());
+      (std::cmp::Reverse(changed), task.key().to_string())
+    })
+    .collect();
+  done.sort();
+  let expected: Vec<String> = done.into_iter().map(|(_, key)| key).collect();
+  assert_eq!(seeded.keys(), expected);
+  assert!(!seeded.shows("tasks-group-done"), "Done is a flat list");
 }

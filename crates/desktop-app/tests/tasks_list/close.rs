@@ -4,7 +4,7 @@
 //! deleted. `cargo test -p orchester-app --test tasks_list tasks_close_`.
 
 use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::{ProjectPage, Route, TaskList, TaskView};
+use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab, TaskView};
 use orchester_core::{
   store::TaskStore,
   task::{Task, organization::WorkflowStatus},
@@ -26,8 +26,14 @@ fn status(seeded: &Seeded, key: &str) -> WorkflowStatus {
   stored(seeded, key).expect("the task").organization().status()
 }
 
-/// Opens the *More actions* menu `menu` and chooses its row `choice`, each once laid out.
+/// Opens the *More actions* menu `menu` and chooses its row `choice`, each once laid out. A row's menu shows under the
+/// pointer: it moves onto the row first.
 fn choose(seeded: &mut Seeded, menu: &str, choice: &str) {
+  if let Some(key) = menu.strip_prefix("task-more-") {
+    let row = format!("task-row-{key}");
+    seeded.until(&row, |seeded| seeded.laid_out(&row));
+    seeded.hover(&row);
+  }
   press(seeded, menu);
   press(seeded, &format!("{menu}-{choice}"));
 }
@@ -38,21 +44,28 @@ fn press(seeded: &mut Seeded, id: &str) {
   seeded.click(id);
 }
 
+/// The group KON-11's row is under in All, as the list reads again after a change.
+fn group_of(seeded: &mut Seeded, key: &str) -> Option<String> {
+  seeded
+    .groups()
+    .into_iter()
+    .find(|(_, keys)| keys.iter().any(|shown| shown == key))
+    .map(|(group, _)| group)
+}
+
 #[test]
 fn tasks_close_a_task_whose_run_failed_from_its_row_and_reopen_it() {
-  let mut seeded = Seeded::tasks("tasks", TaskList::default());
-  assert_eq!(seeded.text("task-workflow-KON-11"), "In progress");
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  assert_eq!(group_of(&mut seeded, "KON-11").as_deref(), Some("in_progress"));
 
   choose(&mut seeded, "task-more-KON-11", "cancel");
   seeded.until("KON-11 Canceled", |seeded| {
-    seeded.window.texts("task-workflow-KON-11").map(|texts| texts.join(" ")) == Some("Canceled".to_owned())
+    group_of(seeded, "KON-11").as_deref() == Some("canceled")
   });
   assert_eq!(status(&seeded, "KON-11"), WorkflowStatus::Canceled);
 
   choose(&mut seeded, "task-more-KON-11", "reopen");
-  seeded.until("KON-11 reopened", |seeded| {
-    seeded.window.texts("task-workflow-KON-11").map(|texts| texts.join(" ")) == Some("Todo".to_owned())
-  });
+  seeded.until("KON-11 reopened", |seeded| group_of(seeded, "KON-11").as_deref() == Some("todo"));
   assert_eq!(
     status(&seeded, "KON-11"),
     WorkflowStatus::Todo,
@@ -60,9 +73,7 @@ fn tasks_close_a_task_whose_run_failed_from_its_row_and_reopen_it() {
   );
 
   choose(&mut seeded, "task-more-KON-11", "done");
-  seeded.until("KON-11 Done", |seeded| {
-    seeded.window.texts("task-workflow-KON-11").map(|texts| texts.join(" ")) == Some("Done".to_owned())
-  });
+  seeded.until("KON-11 Done", |seeded| group_of(seeded, "KON-11").as_deref() == Some("done"));
 }
 
 #[test]
