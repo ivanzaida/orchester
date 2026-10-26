@@ -97,11 +97,9 @@ fn more(ctx: &mut Ctx, panel: &ServerPanel) -> Element {
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let confirming = panel.confirming.clone();
-    let item = MenuItem::new(
-      "orchester-server-sign-out",
-      ctx.t("cloud.server.signOut"),
-      move || confirming.set(true),
-    )
+    let item = MenuItem::new("orchester-server-sign-out", ctx.t("cloud.server.signOut"), move || {
+      confirming.set(true)
+    })
     .icon(Icon::LogOut);
     menu_at_end(
       anchor,

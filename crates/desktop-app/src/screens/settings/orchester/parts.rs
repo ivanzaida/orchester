@@ -1,10 +1,7 @@
 //! Words the tab's parts share: what a part says in 12.5 `text_secondary` (`ysTEY`) and a hint under its actions in
 //! 11.5 `text_muted` (`FVLQK`), both wrapping.
 
-use lurq::{
-  components::Text,
-  node::dimension::Dimension,
-};
+use lurq::{components::Text, node::dimension::Dimension};
 
 use crate::theme::ExtraTypography;
 

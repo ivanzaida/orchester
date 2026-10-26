@@ -156,10 +156,8 @@ impl Component for OrchesterTab {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let view = ctx.props::<Props>().view;
     if view.panel == OrchesterPanel::Connect {
-      let page = ctx.mount_keyed::<connect::ConnectPage>(
-        "settings-orchester-connect",
-        connect::Props { server: view.server },
-      );
+      let page =
+        ctx.mount_keyed::<connect::ConnectPage>("settings-orchester-connect", connect::Props { server: view.server });
       return frame::column("orchester-connect-scroll", page);
     }
     let services = Services::of(ctx);
@@ -198,7 +196,7 @@ impl Component for OrchesterTab {
           "orchester-cloud",
           cloud::Props {
             snapshot: snapshot.clone(),
-            invites: invites.clone(),
+            invites,
             accepted,
             two_factor,
           },

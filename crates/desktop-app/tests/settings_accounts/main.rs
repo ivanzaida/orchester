@@ -52,7 +52,9 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
       );
       sign_in(work.folder().path().expect("a folder"));
       go(&mut window, None, AccountsPanel::Account);
-      window.until("Work's check", |window| joined(window, &row(work.id())).contains("Signed in"));
+      window.until("Work's check", |window| {
+        joined(window, &row(work.id())).contains("Signed in")
+      });
       assert!(joined(&mut window, &row(work.id())).contains("Work"));
       assert!(joined(&mut window, "accounts-group-claude_code").contains("1 account"));
       assert!(joined(&mut window, "accounts-group-codex").contains("2 accounts"));
@@ -69,7 +71,10 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
           .expect("the row is laid out")
           .y
       };
-      assert!(top(&mut window, work.id()) < top(&mut window, default), "Default sorts last");
+      assert!(
+        top(&mut window, work.id()) < top(&mut window, default),
+        "Default sorts last"
+      );
       assert!(joined(&mut window, "settings-tab-accounts").contains("Accounts 3"));
       click(&mut window, &format!("account-row-{}-open", work.id()));
       window.until("Work's page", |window| {
@@ -202,7 +207,9 @@ fn settings_accounts_renames_in_place() {
     go(&mut window, Some(work.id()), AccountsPanel::Account);
     more(&mut window);
     click(&mut window, "account-rename");
-    window.until("the name field in the head", |window| shown(window, "account-rename-field"));
+    window.until("the name field in the head", |window| {
+      shown(window, "account-rename-field")
+    });
     set(&mut window, "account-rename-field", "Kontur team");
     click(&mut window, "account-rename-save");
     window.until("the new name", |window| {
@@ -255,8 +262,13 @@ fn settings_accounts_removes_an_account_in_place_and_moves_its_connections() {
       assert!(joined(&mut window, "account-used-by-meta").contains("1 in 1 project"));
       more(&mut window);
       click(&mut window, "account-remove");
-      window.until("the question in place", |window| shown(window, "account-remove-question"));
-      assert!(shown(&mut window, "account-page"), "asked on the account's page, not in a dialog");
+      window.until("the question in place", |window| {
+        shown(window, "account-remove-question")
+      });
+      assert!(
+        shown(&mut window, "account-page"),
+        "asked on the account's page, not in a dialog"
+      );
       assert!(joined(&mut window, "account-remove-question").contains("Remove Work from Orchester?"));
       click(&mut window, "account-remove-keep");
       window.until("the question gone", |window| !shown(window, "account-remove-question"));

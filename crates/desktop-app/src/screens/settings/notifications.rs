@@ -1,9 +1,9 @@
 //! Settings › Notifications (`02 · Notifications` `fQTFi` in the new `orchester.pen`, ORC-56): *Notify me when* with a
 //! switch per group of OS notifications (*Needs you* and *Stopped* on, *Finished and info* off until changed), *How*
 //! with *Sound* and *Quiet hours*, which, while on, has its start and end on a row of their own, and the Orchestrator's
-//! daily report (`super::daily_report`). A change shows at once, in the window's [`NotificationPrefs`], and is saved off
-//! the UI thread; one that was not saved says why under the groups. A build that shows no OS notifications says so over
-//! them.
+//! daily report (`super::daily_report`). A change shows at once, in the window's [`NotificationPrefs`], and is saved
+//! off the UI thread; one that was not saved says why under the groups. A build that shows no OS notifications says so
+//! over them.
 
 use lurq::{
   app::{

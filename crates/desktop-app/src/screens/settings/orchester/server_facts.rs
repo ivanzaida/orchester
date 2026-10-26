@@ -25,7 +25,10 @@ const ADMIN_SIGN_IN: &str = "orchester-server-admin-sign-in";
 /// How this computer trusts the server's certificate, and whether it reads in mono: a pinned one's check code.
 fn certificate_fact(ctx: &Ctx, entry: &ServerEntry) -> (String, bool) {
   match entry.stored.certificate_pin.as_deref().and_then(check_code) {
-    Some(code) => (ctx.t_args("cloud.server.facts.checked", [("code", code)]).to_string(), true),
+    Some(code) => (
+      ctx.t_args("cloud.server.facts.checked", [("code", code)]).to_string(),
+      true,
+    ),
     None if entry.address.is_https() => (ctx.t("cloud.server.facts.system").to_string(), false),
     None => (ctx.t("cloud.server.facts.plain").to_string(), false),
   }

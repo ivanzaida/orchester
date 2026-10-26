@@ -126,9 +126,9 @@ pub(super) fn confirmation(
       Some(run) => notice.body(ta(
         ctx,
         "accounts.remove.running",
-        [("run", run.label.clone()), ("account", shown.clone())],
+        [("run", run.label.clone()), ("account", shown)],
       )),
-      None => notice.title(ta(ctx, "accounts.remove.title", [("account", shown.clone())])),
+      None => notice.title(ta(ctx, "accounts.remove.title", [("account", shown)])),
     };
     return notice
       .part(paragraph("account-remove-connections", &connections))
@@ -288,12 +288,7 @@ fn confirm(ctx: &Ctx, work: &Work, account: &AgentAccount, shown: &str) -> Actio
 fn keep(ctx: &mut Ctx, work: &Work, id: AgentAccountId) -> ActionButton {
   let navigation = Navigation::of(ctx);
   let removal = work.removal.clone();
-  ActionButton::new(
-    "account-remove-keep",
-    ButtonKind::Ghost,
-    t(ctx, "accounts.remove.keep"),
-  )
-  .on_click(move || {
+  ActionButton::new("account-remove-keep", ButtonKind::Ghost, t(ctx, "accounts.remove.keep")).on_click(move || {
     removal.move_to.set(MoveChoice::Unset);
     removal.trash.set(false);
     navigation.close_panel(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)));

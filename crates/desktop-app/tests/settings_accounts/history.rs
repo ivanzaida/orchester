@@ -39,9 +39,16 @@ fn settings_accounts_an_account_opens_as_a_page_and_its_crumb_goes_back() {
       click(&mut window, &format!("account-row-{claude}-open"));
       assert_eq!(now(&window), at(Some(claude), AccountsPanel::Account));
       window.until("Claude's page", |window| shown(window, "account-page"));
-      assert!(!shown(&mut window, "settings-accounts"), "the page takes the list's place");
+      assert!(
+        !shown(&mut window, "settings-accounts"),
+        "the page takes the list's place"
+      );
       click(&mut window, "account-crumb");
-      assert_eq!(now(&window), at(None, AccountsPanel::Account), "the crumb goes back to the list");
+      assert_eq!(
+        now(&window),
+        at(None, AccountsPanel::Account),
+        "the crumb goes back to the list"
+      );
       window.until("the list", |window| shown(window, "settings-accounts"));
       click(&mut window, &format!("account-row-{codex}-open"));
       assert_eq!(now(&window), at(Some(codex), AccountsPanel::Account));

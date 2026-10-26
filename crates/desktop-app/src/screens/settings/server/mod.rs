@@ -137,7 +137,8 @@ fn installation(ctx: &mut Ctx, status: &McpStatus, server: Option<AppMcp>) -> El
       state: status.server.clone(),
     },
   );
-  let connect = ctx.mount_keyed::<connect::ConnectBlock>("settings-mcp-connect", connect::Props { server, port: commands });
+  let connect =
+    ctx.mount_keyed::<connect::ConnectBlock>("settings-mcp-connect", connect::Props { server, port: commands });
   let connected = connected::connected(ctx, status);
   group(ctx, "settings.automation.server.meta.installation")
     .rows([enabled, address, token, connect, connected])

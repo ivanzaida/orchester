@@ -139,9 +139,9 @@ fn more(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> El
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let items = menu_items(ctx, parts, work, account);
-    let panel = items
-      .into_iter()
-      .fold(menu_panel("account-more-menu"), |panel, item| panel.child(item.render(ctx, &open)));
+    let panel = items.into_iter().fold(menu_panel("account-more-menu"), |panel, item| {
+      panel.child(item.render(ctx, &open))
+    });
     menu_at_end(anchor, open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
@@ -154,8 +154,12 @@ fn menu_items(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
     let navigation = navigation.clone();
     move || navigation.go(Route::Accounts(AccountsView::of(id, panel)))
   };
-  let rename = MenuItem::new("account-rename", t(ctx, "accounts.actions.rename"), to(AccountsPanel::Rename))
-    .icon(Icon::Pencil);
+  let rename = MenuItem::new(
+    "account-rename",
+    t(ctx, "accounts.actions.rename"),
+    to(AccountsPanel::Rename),
+  )
+  .icon(Icon::Pencil);
   let remove = if account.is_default() {
     MenuItem::unavailable(
       "account-remove",
@@ -163,7 +167,11 @@ fn menu_items(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
       remove::default_reason(ctx, account),
     )
   } else {
-    MenuItem::new("account-remove", t(ctx, "accounts.actions.remove"), to(AccountsPanel::Remove))
+    MenuItem::new(
+      "account-remove",
+      t(ctx, "accounts.actions.remove"),
+      to(AccountsPanel::Remove),
+    )
   }
   .icon(Icon::Trash2);
   std::iter::once(rename)

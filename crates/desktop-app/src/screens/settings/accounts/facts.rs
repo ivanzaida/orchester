@@ -41,7 +41,11 @@ pub(super) fn group(ctx: &mut Ctx, account: &AgentAccount) -> Element {
     let email = identity.and_then(|identity| identity.email.clone());
     let plan_name = identity.and_then(|identity| identity.plan.as_deref()).map(plan);
     let who = match (email, plan_name) {
-      (Some(email), Some(plan)) => Ok(ta(ctx, "accounts.identity.emailPlan", [("email", email), ("plan", plan)])),
+      (Some(email), Some(plan)) => Ok(ta(
+        ctx,
+        "accounts.identity.emailPlan",
+        [("email", email), ("plan", plan)],
+      )),
       (Some(email), None) => Ok(email),
       (None, Some(plan)) => Ok(ta(ctx, "accounts.identity.plan", [("plan", plan)])),
       (None, None) => Err(not_reported.clone()),
@@ -54,7 +58,11 @@ pub(super) fn group(ctx: &mut Ctx, account: &AgentAccount) -> Element {
       .and_then(|identity| identity.method)
       .map(|method| t(ctx, method_key(method)))
       .ok_or(not_reported);
-    rows.push(fact(ctx, ("account-fact-method", "accounts.details.signedInWith"), method));
+    rows.push(fact(
+      ctx,
+      ("account-fact-method", "accounts.details.signedInWith"),
+      method,
+    ));
   }
   let checked_with = checked_with(ctx, account);
   rows.push(fact(
@@ -87,9 +95,9 @@ pub(super) fn group(ctx: &mut Ctx, account: &AgentAccount) -> Element {
 
 /// A fact's row, its value at the end: muted when the CLI does not report it.
 fn fact(ctx: &mut Ctx, (id, key): (&str, &str), shown: Result<String, String>) -> Element {
-  let control = match &shown {
-    Ok(text) => value(&format!("{id}-value"), text),
-    Err(missing) => value(&format!("{id}-value"), missing).color(PaletteColor::TextMuted),
+  let control = match shown {
+    Ok(text) => value(&format!("{id}-value"), &text),
+    Err(missing) => value(&format!("{id}-value"), &missing).color(PaletteColor::TextMuted),
   };
   SettingRow::new(id.to_owned(), t(ctx, key)).control(control).render(ctx)
 }
@@ -98,10 +106,7 @@ fn fact(ctx: &mut Ctx, (id, key): (&str, &str), shown: Result<String, String>) -
 /// get in its tooltip.
 fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
   let path = folder(account);
-  let text = path
-    .as_ref()
-    .map(|path| path.display().to_string())
-    .unwrap_or_default();
+  let text = path.as_ref().map(|path| path.display().to_string()).unwrap_or_default();
   let text = if account.is_default() {
     ta(ctx, "accounts.details.ownFolder", [("folder", text)])
   } else {
@@ -141,14 +146,18 @@ fn folder_buttons(ctx: &mut Ctx, path: Option<&std::path::PathBuf>) -> Vec<Eleme
     })
     .render(ctx);
   let opened = path.cloned();
-  let open = IconButton::new("account-open-folder", Icon::FolderOpen, t(ctx, "accounts.actions.openFolder"))
-    .small()
-    .on_click(move || {
-      if let Some(path) = &opened {
-        open(path.clone());
-      }
-    })
-    .render(ctx);
+  let open = IconButton::new(
+    "account-open-folder",
+    Icon::FolderOpen,
+    t(ctx, "accounts.actions.openFolder"),
+  )
+  .small()
+  .on_click(move || {
+    if let Some(path) = &opened {
+      open(path.clone());
+    }
+  })
+  .render(ctx);
   vec![copy, open]
 }
 

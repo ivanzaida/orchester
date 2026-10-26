@@ -306,9 +306,12 @@ pub fn tab(ctx: &mut Ctx) -> Element {
         .rows(approvals),
     )
     .child(
-      SettingGroup::new("settings-orchestrator-may", ctx.t("settings.automation.orchestratorMay"))
-        .end(only_you(ctx, "settings-orchestrator-may-only-you"))
-        .rows(orchestrator),
+      SettingGroup::new(
+        "settings-orchestrator-may",
+        ctx.t("settings.automation.orchestratorMay"),
+      )
+      .end(only_you(ctx, "settings-orchestrator-may-only-you"))
+      .rows(orchestrator),
     );
   frame::column("settings-automation-scroll", pane).into()
 }

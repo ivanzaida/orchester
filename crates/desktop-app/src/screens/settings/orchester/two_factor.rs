@@ -1,11 +1,11 @@
 //! Two-factor authentication in Settings › Orchester Cloud and the All projects notice (`Account card · two-factor
-//! off` `AstDs` and `Accept needs two-factor` `g0GfK` in `ZUuMT`). It is turned on and off on the cloud's security page,
-//! never here: the account card says whether it is on, with *Turn on…* ↗ while it is off. Accepting an invite needs it
-//! on the account and a sign-in with a code on this computer: an invite the cloud says needs it, or whose accept it
-//! refused, says which one is missing and offers the one step that fixes it, *Turn on two-factor authentication* ↗ or
-//! *Sign in again*, which signs out and locks so the person signs in at the gate with the code (the designer's
-//! decision, `Nq3Mf`). After a sign-in with a recovery code that leaves few, a warning says to make new ones; no frame
-//! draws it, so it is the UI kit's warning callout.
+//! off` `AstDs` and `Accept needs two-factor` `g0GfK` in `ZUuMT`). It is turned on and off on the cloud's security
+//! page, never here: the account card says whether it is on, with *Turn on…* ↗ while it is off. Accepting an invite
+//! needs it on the account and a sign-in with a code on this computer: an invite the cloud says needs it, or whose
+//! accept it refused, says which one is missing and offers the one step that fixes it, *Turn on two-factor
+//! authentication* ↗ or *Sign in again*, which signs out and locks so the person signs in at the gate with the code
+//! (the designer's decision, `Nq3Mf`). After a sign-in with a recovery code that leaves few, a warning says to make new
+//! ones; no frame draws it, so it is the UI kit's warning callout.
 
 use lurq::{
   app::{

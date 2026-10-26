@@ -1,5 +1,5 @@
-//! *Rotate the token?* asked in place under the row (`Rotate` `HyIPf` in `shpsk`), and what came of it: the new token in
-//! use, or the secret store's refusal with *Try again*. And the token the server cannot read (`Token unreadable`
+//! *Rotate the token?* asked in place under the row (`Rotate` `HyIPf` in `shpsk`), and what came of it: the new token
+//! in use, or the secret store's refusal with *Try again*. And the token the server cannot read (`Token unreadable`
 //! `w9yATo`): what the store said, that the server is off until it can, *Try again* and *Rotate token*.
 
 use lurq::{

@@ -5,12 +5,7 @@
 //! that applies from the next start, or what `ORCHESTER_APP_MCP_WINDOW_CONTROL` decided for this run
 //! (`McpSettings::this_run`).
 
-use lurq::{
-  app::ctx::Ctx,
-  components::Row,
-  layout::Alignment,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, layout::Alignment, node::Element};
 
 use crate::{
   mcp::{McpLink, McpSettings, ThisRun, settings::WINDOW_CONTROL_VARIABLE},

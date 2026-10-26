@@ -35,7 +35,11 @@ fn orchester_invite_row_declines_in_place_after_asking() {
     window.tree.get_element_by_id(&format!("{card}-accept")).is_none(),
     "the question takes the actions' place"
   );
-  assert!(window.text(&format!("{card}-decline-question-title")).starts_with("Decline the invite to"));
+  assert!(
+    window
+      .text(&format!("{card}-decline-question-title"))
+      .starts_with("Decline the invite to")
+  );
   press(&mut window, &format!("{card}-keep"));
   shows(&mut window, &format!("{card}-accept"));
   assert!(cloud.declined().is_empty(), "kept");

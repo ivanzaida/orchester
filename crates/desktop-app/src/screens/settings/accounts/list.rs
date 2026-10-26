@@ -90,7 +90,7 @@ fn row(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount, navigation: &Naviga
     .align_items(lurq::layout::Alignment::Center)
     .child(state_line(ctx, &format!("{id}-state"), shown))
     .child(opens_mark());
-  SettingRow::new(id.clone(), name(ctx, account))
+  SettingRow::new(id, name(ctx, account))
     .lead(mark_tile(ctx, account.cli()))
     .hint(line)
     .control(state)

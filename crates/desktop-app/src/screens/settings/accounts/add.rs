@@ -170,8 +170,11 @@ fn cli_row(ctx: &mut Ctx, draft: &Draft, chosen: AccountCli) -> Element {
       move || signal.set(CliChoice(cli)),
     )
   });
-  let row = SettingRow::new("account-add-cli", t(ctx, "accounts.add.cli"))
-    .control(segmented("account-add-cli-choice", segments, Focus::Keyboard));
+  let row = SettingRow::new("account-add-cli", t(ctx, "accounts.add.cli")).control(segmented(
+    "account-add-cli-choice",
+    segments,
+    Focus::Keyboard,
+  ));
   let row = if chosen.supports_accounts_on(Platform::current()) {
     row
   } else {
@@ -200,7 +203,11 @@ fn name_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
         "accounts.add.nameShown",
         [("cli", cli.clone()), ("name", typed.to_owned())],
       ))
-      .info(ta(ctx, "accounts.add.nameHint", [("cli", cli), ("name", typed.to_owned())]))
+      .info(ta(
+        ctx,
+        "accounts.add.nameHint",
+        [("cli", cli), ("name", typed.to_owned())],
+      ))
   };
   row.render(ctx)
 }
@@ -217,7 +224,10 @@ fn folder_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli, problem: Option<&Me
     ("account-add-folder-new", &t(ctx, "accounts.add.folderNew")),
     &planned.clone().unwrap_or_else(|| t(ctx, "accounts.add.noFolderHere")),
     chosen == FolderChoice::New,
-    planned.is_some().then(|| draft.folder.clone()).map(|signal| move || signal.set(FolderChoice::New)),
+    planned
+      .is_some()
+      .then(|| draft.folder.clone())
+      .map(|signal| move || signal.set(FolderChoice::New)),
   );
   let existing_detail = ta(
     ctx,

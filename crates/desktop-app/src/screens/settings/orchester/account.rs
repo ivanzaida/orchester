@@ -36,7 +36,12 @@ const SIGN_OUT: &str = "orchester-cloud-sign-out";
 pub(super) const SIGN_OUT_CONFIRM: &str = "orchester-cloud-sign-out-confirm";
 
 /// The card: the avatar, the name with the two-factor line `after` it, the email and the host, and *Sign out*.
-pub(super) fn card(ctx: &Ctx, panel: &CloudPanel, (account, address): (&StoredCloudAccount, &CloudAddress), after: Vec<Element>) -> Element {
+pub(super) fn card(
+  ctx: &Ctx,
+  panel: &CloudPanel,
+  (account, address): (&StoredCloudAccount, &CloudAddress),
+  after: Vec<Element>,
+) -> Element {
   let avatar = Row::new()
     .id("orchester-cloud-avatar")
     .width(Dimension::Px(AVATAR))
@@ -50,7 +55,10 @@ pub(super) fn card(ctx: &Ctx, panel: &CloudPanel, (account, address): (&StoredCl
     .child(Text::new(&initials(&account.display_name)).variant(SettingsText::CardInitials.role()));
   let email = ctx.t_args(
     "cloud.account.emailAt",
-    [("email", account.email.as_str()), ("host", &address.address.authority())],
+    [
+      ("email", account.email.as_str()),
+      ("host", &address.address.authority()),
+    ],
   );
   let text = Column::new()
     .flex(1.0)

@@ -156,7 +156,10 @@ fn project_row(ctx: &mut Ctx, shown: &Shown<'_>, (navigation, server): (&Navigat
   let line = match (shown.checkout, role) {
     (Some(checkout), Some(role)) => ctx.t_args(
       "cloud.server.projects.linkedRole",
-      [("role", role.to_string()), ("path", shorten_path(&checkout.repo_root, CHECKOUT_PATH))],
+      [
+        ("role", role.to_string()),
+        ("path", shorten_path(&checkout.repo_root, CHECKOUT_PATH)),
+      ],
     ),
     (Some(checkout), None) => ctx.t_args(
       "cloud.server.projects.linkedTo",
@@ -170,9 +173,5 @@ fn project_row(ctx: &mut Ctx, shown: &Shown<'_>, (navigation, server): (&Navigat
     .info(shown_address(&shown.address).to_owned())
     .control(action)
     .render(ctx);
-  Column::new()
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .child(row)
-    .into()
+  Column::new().id(id).width(Dimension::Pct(100.0)).child(row).into()
 }

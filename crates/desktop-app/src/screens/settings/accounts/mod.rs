@@ -267,7 +267,10 @@ impl Component for AccountsTab {
     let uses = uses(ctx, selected, props.revision.get());
     let (scroll, pane) = match (props.view.panel, selected) {
       (AccountsPanel::Add, _) => ("settings-accounts-add-scroll", add::page(ctx, &self.work)),
-      (AccountsPanel::SignIn, Some(_)) => ("settings-accounts-sign-in-scroll", sign_in::page(ctx, &parts, &self.work)),
+      (AccountsPanel::SignIn, Some(_)) => (
+        "settings-accounts-sign-in-scroll",
+        sign_in::page(ctx, &parts, &self.work),
+      ),
       (_, Some(_)) => (
         "settings-account-scroll",
         details::page(ctx, &parts, &self.work, uses.as_ref()),

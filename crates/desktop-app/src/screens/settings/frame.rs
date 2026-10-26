@@ -123,7 +123,12 @@ pub(super) fn crumb(id: &str, parent: &str, open: Open) -> Element {
 
 /// A sub-page's head (`Head` `N0kGb`): an optional tile, its title in 16/600 with a line under it, and its actions at
 /// the end, 12 apart.
-pub(super) fn head(id: &str, tile: Option<Element>, (title, line): (&str, Option<Element>), actions: Vec<Element>) -> Row {
+pub(super) fn head(
+  id: &str,
+  tile: Option<Element>,
+  (title, line): (&str, Option<Element>),
+  actions: Vec<Element>,
+) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))

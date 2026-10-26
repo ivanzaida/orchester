@@ -179,5 +179,9 @@ impl SettingsScreen {
 
 /// The Accounts tab's column while the accounts are read, or say why they cannot be.
 fn accounts_pane(state: Element) -> Element {
-  frame::column("settings-accounts-scroll", frame::pane("settings-accounts").child(state)).into()
+  frame::column(
+    "settings-accounts-scroll",
+    frame::pane("settings-accounts").child(state),
+  )
+  .into()
 }

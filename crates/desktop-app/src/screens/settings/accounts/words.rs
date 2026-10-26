@@ -26,21 +26,49 @@ pub(super) enum Shown {
 pub(super) fn look(shown: Shown) -> Look {
   let look = |icon_color, key, color| Look { icon_color, key, color };
   match shown {
-    Shown::Checking => look(PaletteColor::TextMuted, "accounts.status.checking", PaletteColor::TextSecondary),
-    Shown::SigningIn => look(PaletteColor::TextMuted, "accounts.status.signingIn", PaletteColor::TextSecondary),
+    Shown::Checking => look(
+      PaletteColor::TextMuted,
+      "accounts.status.checking",
+      PaletteColor::TextSecondary,
+    ),
+    Shown::SigningIn => look(
+      PaletteColor::TextMuted,
+      "accounts.status.signingIn",
+      PaletteColor::TextSecondary,
+    ),
     Shown::State(state) => match state {
-      AccountState::SignedIn => look(PaletteColor::Success, "accounts.status.signedIn", PaletteColor::TextSecondary),
-      AccountState::NotSignedIn => look(PaletteColor::Warning, "accounts.status.notSignedIn", PaletteColor::Warning),
+      AccountState::SignedIn => look(
+        PaletteColor::Success,
+        "accounts.status.signedIn",
+        PaletteColor::TextSecondary,
+      ),
+      AccountState::NotSignedIn => look(
+        PaletteColor::Warning,
+        "accounts.status.notSignedIn",
+        PaletteColor::Warning,
+      ),
       AccountState::Expired => look(PaletteColor::Warning, "accounts.status.expired", PaletteColor::Warning),
-      AccountState::Unknown => look(PaletteColor::TextMuted, "accounts.status.unknown", PaletteColor::TextSecondary),
+      AccountState::Unknown => look(
+        PaletteColor::TextMuted,
+        "accounts.status.unknown",
+        PaletteColor::TextSecondary,
+      ),
       AccountState::CliMissing => look(PaletteColor::Danger, "accounts.status.cliMissing", PaletteColor::Danger),
-      AccountState::FolderMissing => look(PaletteColor::Danger, "accounts.status.folderMissing", PaletteColor::Danger),
+      AccountState::FolderMissing => look(
+        PaletteColor::Danger,
+        "accounts.status.folderMissing",
+        PaletteColor::Danger,
+      ),
       AccountState::Unsupported => look(
         PaletteColor::TextMuted,
         "accounts.status.unsupported",
         PaletteColor::TextSecondary,
       ),
-      AccountState::NotChecked => look(PaletteColor::TextMuted, "accounts.status.notChecked", PaletteColor::TextMuted),
+      AccountState::NotChecked => look(
+        PaletteColor::TextMuted,
+        "accounts.status.notChecked",
+        PaletteColor::TextMuted,
+      ),
     },
   }
 }

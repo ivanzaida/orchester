@@ -112,15 +112,13 @@ impl Component for AddressRow {
       // Nothing listens at the address: its Copy is muted and does nothing.
       ServerState::PortTaken { .. } => {
         let address = self.address(ctx, port, false);
-        row
-          .hint(ctx.t("settings.automation.server.address.hintFixed"))
-          .control(
-            Row::new()
-              .spacing(SpacingSize::Md)
-              .align_items(Alignment::Center)
-              .child(address)
-              .child(state_label(ctx, &props.state)),
-          )
+        row.hint(ctx.t("settings.automation.server.address.hintFixed")).control(
+          Row::new()
+            .spacing(SpacingSize::Md)
+            .align_items(Alignment::Center)
+            .child(address)
+            .child(state_label(ctx, &props.state)),
+        )
       }
       ServerState::Off => {
         let address = self.address(ctx, port, false);

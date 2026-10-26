@@ -73,10 +73,13 @@ pub(super) fn group(ctx: &mut Ctx, uses: Option<&AccountUses>) -> Element {
       .icon(Icon::ArrowUpRight)
       .small()
       .opens(navigation.to(Route::Project(project, ProjectPage::Connections(view))));
-      SettingRow::new(format!("account-used-by-{connection}"), used.connection_name.to_string())
-        .hint(hint(ctx, used))
-        .control(open)
-        .render(ctx)
+      SettingRow::new(
+        format!("account-used-by-{connection}"),
+        used.connection_name.to_string(),
+      )
+      .hint(hint(ctx, used))
+      .control(open)
+      .render(ctx)
     })
     .collect();
   let mut group = SettingGroup::new("account-used-by", t(ctx, "accounts.usedBy.group")).rows(rows);

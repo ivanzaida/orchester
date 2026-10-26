@@ -268,7 +268,8 @@ impl SettingRow {
     self
   }
 
-  pub fn render(self, ctx: &mut Ctx) -> Element {
+  /// The label with its (i), and the hint under them.
+  fn text(&self, ctx: &mut Ctx) -> Column {
     let label = Text::new(&self.label)
       .id(format!("{}-label", self.id))
       .variant(ExtraTypography::Strong.role())
@@ -277,14 +278,14 @@ impl SettingRow {
       } else {
         PaletteColor::TextPrimary
       });
-    let info = self.info.map(|info| {
+    let info = self.info.clone().map(|info| {
       let mark = Row::new()
         .id(format!("{}-info", self.id))
         .describe("a11y_name", info.clone())
         .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
       Tooltip::new(format!("{}-info", self.id), info).wrap(ctx, mark)
     });
-    let text = Column::new()
+    Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
@@ -295,13 +296,17 @@ impl SettingRow {
           .child(label)
           .with_children(info),
       )
-      .with_children(self.hint.map(|(hint, tone)| {
-        Text::new(&hint)
+      .with_children(self.hint.as_ref().map(|(hint, tone)| {
+        Text::new(hint)
           .id(format!("{}-hint", self.id))
           .variant(TypographyStyle::Description)
           .color(tone.color())
           .width(Dimension::Pct(100.0))
-      }));
+      }))
+  }
+
+  pub fn render(self, ctx: &mut Ctx) -> Element {
+    let text = self.text(ctx);
     let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SettingsSpacing::RowY.role());
     let padding = if self.dependent {
       padding.left(SettingsSpacing::Dependent.role())

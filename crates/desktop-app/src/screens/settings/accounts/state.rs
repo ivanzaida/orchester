@@ -76,22 +76,21 @@ pub(super) fn notice(
         "accounts.state.notSignedIn",
         [("program", program), ("folder", folder_text)],
       );
-      return Some(signed_out(ctx, (parts, work), account, titled(NoticeTone::Warning).body(body)));
+      return Some(signed_out(
+        ctx,
+        (parts, work),
+        account,
+        titled(NoticeTone::Warning).body(body),
+      ));
     }
     AccountState::Expired => {
-      let body = match account.email() {
-        Some(email) => ta(
-          ctx,
-          "accounts.state.expired",
-          [("email", email.to_owned()), ("program", program), ("account", shown_name)],
-        ),
-        None => ta(
-          ctx,
-          "accounts.state.expiredUnknown",
-          [("program", program), ("account", shown_name)],
-        ),
-      };
-      return Some(signed_out(ctx, (parts, work), account, titled(NoticeTone::Warning).body(body)));
+      let body = expired(ctx, account, (program, shown_name));
+      return Some(signed_out(
+        ctx,
+        (parts, work),
+        account,
+        titled(NoticeTone::Warning).body(body),
+      ));
     }
     AccountState::CliMissing => titled(NoticeTone::Danger).body(ta(
       ctx,
@@ -116,7 +115,12 @@ pub(super) fn notice(
         "accounts.state.folderMissing",
         [("folder", folder_text), ("account", shown_name)],
       );
-      return Some(folder_missing(ctx, work, account, titled(NoticeTone::Danger).body(body)));
+      return Some(folder_missing(
+        ctx,
+        work,
+        account,
+        titled(NoticeTone::Danger).body(body),
+      ));
     }
     AccountState::Unsupported => titled(NoticeTone::Info).body(t(ctx, "accounts.state.unsupported")),
     AccountState::NotChecked => titled(NoticeTone::Info).body(ta(
@@ -126,6 +130,22 @@ pub(super) fn notice(
     )),
   };
   Some(notice.into())
+}
+
+/// What an expired sign-in means, with who was signed in when the CLI said.
+fn expired(ctx: &Ctx, account: &AgentAccount, (program, shown): (String, String)) -> String {
+  match account.email() {
+    Some(email) => ta(
+      ctx,
+      "accounts.state.expired",
+      [("email", email.to_owned()), ("program", program), ("account", shown)],
+    ),
+    None => ta(
+      ctx,
+      "accounts.state.expiredUnknown",
+      [("program", program), ("account", shown)],
+    ),
+  }
 }
 
 /// An account not signed in or whose sign-in expired: the sign-in and *Check again*, and, never signed in, the login
@@ -215,8 +235,7 @@ pub(super) fn check_again(
   account: AgentAccountId,
   (id, kind): (&str, ButtonKind),
 ) -> ActionButton {
-  let button = ActionButton::new(id.to_owned(), kind, t(ctx, "accounts.actions.checkAgain"))
-  .icon(Icon::RefreshCw);
+  let button = ActionButton::new(id.to_owned(), kind, t(ctx, "accounts.actions.checkAgain")).icon(Icon::RefreshCw);
   if parts.checking.contains(&account) {
     button.loading()
   } else {

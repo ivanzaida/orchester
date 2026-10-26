@@ -72,6 +72,42 @@ pub(super) fn follows(parts: &Parts, work: &Work, account: &AgentAccount) -> boo
       && parts.shown(account) == Shown::State(AccountState::NotSignedIn))
 }
 
+/// What the sign-in came to once the terminal closed: signed in, the CLI missing, or still signed out; `None` while
+/// it is open or was not opened yet.
+fn outcome(ctx: &mut Ctx, (parts, work): (&Parts, &Work), account: &AgentAccount) -> Option<Element> {
+  let id = account.id();
+  let cli = account.cli();
+  let program = cli.program().to_owned();
+  match parts.shown(account) {
+    Shown::State(AccountState::SignedIn) => Some(signed_in(ctx, parts, account)),
+    Shown::State(AccountState::CliMissing) => Some(
+      SettingNotice::new("account-sign-in-cli-missing", NoticeTone::Danger)
+        .title(ta(ctx, "accounts.signIn.cliMissing", [("program", program)]))
+        .body(ta(
+          ctx,
+          "accounts.signIn.cliMissingBody",
+          [("cli", t(ctx, cli_key(cli)))],
+        ))
+        .action(check_again(ctx, parts, work, id))
+        .into(),
+    ),
+    Shown::State(_) if work.sign_in.state().get().is_fulfilled() && work.opened_at(id).is_some() => Some(
+      SettingNotice::new("account-sign-in-still-out", NoticeTone::Warning)
+        .title(ta(
+          ctx,
+          "accounts.signIn.stillOut",
+          [("program", program), ("account", name(ctx, account))],
+        ))
+        .body(t(ctx, "accounts.signIn.stillOutBody"))
+        .part(own_terminal(ctx, account))
+        .action(open_button(ctx, work, id, true))
+        .action(check_again(ctx, parts, work, id))
+        .into(),
+    ),
+    _ => None,
+  }
+}
+
 /// Where the sign-in stands: the terminal open, signed in, still signed out, the CLI missing, or not opened yet;
 /// `later` adds *Finish later*, which leaves *Add account* for the account's page.
 pub(super) fn panel(ctx: &mut Ctx, (parts, work): (&Parts, &Work), account: &AgentAccount, later: bool) -> Element {
@@ -85,32 +121,7 @@ pub(super) fn panel(ctx: &mut Ctx, (parts, work): (&Parts, &Work), account: &Age
     .get()
     .error
     .map(|error| field_error("account-sign-in-error", &message_text(ctx, &error)));
-  let state = parts.shown(account);
-  let outcome = match state {
-    Shown::State(AccountState::SignedIn) => Some(signed_in(ctx, parts, account)),
-    Shown::State(AccountState::CliMissing) => Some(
-      SettingNotice::new("account-sign-in-cli-missing", NoticeTone::Danger)
-        .title(ta(ctx, "accounts.signIn.cliMissing", [("program", program.clone())]))
-        .body(ta(ctx, "accounts.signIn.cliMissingBody", [("cli", t(ctx, cli_key(cli)))]))
-        .action(check_again(ctx, parts, work, id))
-        .into(),
-    ),
-    Shown::State(_) if work.sign_in.state().get().is_fulfilled() && work.opened_at(id).is_some() => Some(
-      SettingNotice::new("account-sign-in-still-out", NoticeTone::Warning)
-        .title(ta(
-          ctx,
-          "accounts.signIn.stillOut",
-          [("program", program.clone()), ("account", shown.clone())],
-        ))
-        .body(t(ctx, "accounts.signIn.stillOutBody"))
-        .part(own_terminal(ctx, account))
-        .action(open_button(ctx, work, id, true))
-        .action(check_again(ctx, parts, work, id))
-        .into(),
-    ),
-    _ => None,
-  };
-  if let Some(outcome) = outcome {
+  if let Some(outcome) = outcome(ctx, (parts, work), account) {
     return Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -118,17 +129,13 @@ pub(super) fn panel(ctx: &mut Ctx, (parts, work): (&Parts, &Work), account: &Age
       .child(outcome)
       .into();
   }
-  let opened = state == Shown::SigningIn;
+  let opened = parts.shown(account) == Shown::SigningIn;
   let text_key = if opened {
     "accounts.signIn.opened"
   } else {
     "accounts.signIn.notOpened"
   };
-  let mut panel = SettingPanel::new(
-    PANEL,
-    ta(ctx, "accounts.signIn.title", [("program", program.clone())]),
-  )
-  .text(
+  let mut panel = SettingPanel::new(PANEL, ta(ctx, "accounts.signIn.title", [("program", program.clone())])).text(
     "account-sign-in-text",
     &ta(
       ctx,

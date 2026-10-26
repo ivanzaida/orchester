@@ -1,10 +1,10 @@
 //! What Settings says in place (the states sheets `poD7g`, `shpsk` and `ZUuMT` of the new `orchester.pen`):
-//! - a notice (`Notice · warning` `TPqRf`): a 14 icon in its tone's color and, 10 after it, an optional title in
-//!   13/500 `text_primary`, what happened in 12 `text_secondary`, parts such as a code, actions 8 apart and a note in
-//!   11.5 `text_muted`, 6 apart; 10 over and under and 12 at its sides, on its tone's muted fill, radius 6, no stroke.
-//!   A question asked in place is a notice whose actions answer it (`Rotate the token?` `XG6M1`).
-//! - a panel (`Sign in` `yKzFt`, `Remove` `CTa4g`): a title in 13/600, what it says and its parts and actions 10
-//!   apart, 12 over and under and 14 at its sides inside a `border` stroke, radius 10; a destructive question is on
+//! - a notice (`Notice · warning` `TPqRf`): a 14 icon in its tone's color and, 10 after it, an optional title in 13/500
+//!   `text_primary`, what happened in 12 `text_secondary`, parts such as a code, actions 8 apart and a note in 11.5
+//!   `text_muted`, 6 apart; 10 over and under and 12 at its sides, on its tone's muted fill, radius 6, no stroke. A
+//!   question asked in place is a notice whose actions answer it (`Rotate the token?` `XG6M1`).
+//! - a panel (`Sign in` `yKzFt`, `Remove` `CTa4g`): a title in 13/600, what it says and its parts and actions 10 apart,
+//!   12 over and under and 14 at its sides inside a `border` stroke, radius 10; a destructive question is on
 //!   `danger_muted` inside a `danger` stroke.
 
 use std::sync::Arc;
