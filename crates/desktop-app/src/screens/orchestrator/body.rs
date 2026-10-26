@@ -11,7 +11,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::{Ctx, FutureState},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
