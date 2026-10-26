@@ -15,6 +15,7 @@ mod code_index;
 mod completions;
 mod connections;
 mod consistent;
+mod default_pipeline;
 mod environment;
 mod estimates;
 mod feedback;

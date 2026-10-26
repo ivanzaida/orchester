@@ -118,10 +118,12 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
-    ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline => pipelines::new_pipeline(ctx, project),
-    ProjectPage::Pipeline(id, panel) => pipelines::editor(ctx, project, *id, (panel.clone(), None)),
-    ProjectPage::PipelineVersion(id, version, panel) => {
-      pipelines::editor(ctx, project, *id, (panel.clone(), Some(*version)))
+    ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_) => {
+      pipelines::new_pipeline(ctx, project)
+    }
+    ProjectPage::Pipeline(id, view) => pipelines::editor(ctx, project, *id, (view.clone(), None)),
+    ProjectPage::PipelineVersion(id, version, view) => {
+      pipelines::editor(ctx, project, *id, (view.clone(), Some(*version)))
     }
     ProjectPage::Agents => agents::screen(ctx, project, agents::Shown::List),
     ProjectPage::NewAgent(tab) => agents::screen(ctx, project, agents::Shown::New(*tab)),

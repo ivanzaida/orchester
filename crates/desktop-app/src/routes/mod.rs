@@ -19,9 +19,9 @@
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
 //! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
 //! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). Secrets, the Skills
-//! library, an agent profile, Instructions, a pipeline's editor, Memory and Project settings keep their tab,
+//! library, an agent profile, Instructions, a pipeline's page, Memory and Project settings keep their tab,
 //! filter, item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`],
-//! [`InstructionsView`], [`PipelinePanel`], [`MemoryTab`], [`ProjectSettingsTab`]);
+//! [`InstructionsView`], [`PipelineView`], [`MemoryTab`], [`ProjectSettingsTab`]);
 //! `/project/<id>/settings?tab=sharing&ask=make-local` opens Sharing with *Make local*'s question. A tab, source
 //! or kind left out of the query is the one the screen opens on.
 //!
@@ -81,7 +81,7 @@ pub use self::{
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
-  pipeline::PipelinePanel,
+  pipeline::{PipelineTab, PipelineView, StepPage},
   project_settings::ProjectSettingsTab,
   screen::Screen,
   secrets::{SecretsPanel, SecretsTab, SecretsView},
@@ -183,7 +183,9 @@ impl Route {
   /// A pipeline's list, creation page and editor belong to one sidebar screen, with distinct paths.
   pub fn pattern(&self) -> String {
     match self {
-      Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline | ProjectPage::CopyPipeline(_)) => {
+        NEW_PIPELINE_PATTERN.to_owned()
+      }
       Self::Project(_, ProjectPage::Pipeline(..) | ProjectPage::PipelineVersion(..)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),

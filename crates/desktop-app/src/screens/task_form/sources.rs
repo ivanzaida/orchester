@@ -35,7 +35,7 @@ use orchester_workspace::{
 use crate::{
   mcp::input_gate::Guarded,
   navigation::Navigation,
-  routes::{PipelinePanel, ProjectPage, ProjectSettingsTab, Route},
+  routes::{PipelineView, ProjectPage, ProjectSettingsTab, Route},
   screens::connections::widen::{WidenConfirm, WidenProps},
   theme::{ExtraSpacing, ExtraTypography, SourcesSpacing},
   ui::{
@@ -424,7 +424,7 @@ fn inherited(ctx: &mut Ctx, props: &SourcesProps, inherited: &Inherited, mut blo
   let Some((pipeline, _)) = props.pipeline.filter(|_| !inherited.pipeline.is_empty()) else {
     return block;
   };
-  let route = Route::Project(props.project, ProjectPage::Pipeline(pipeline, PipelinePanel::Pipeline));
+  let route = Route::Project(props.project, ProjectPage::Pipeline(pipeline, PipelineView::Steps));
   let view = link(
     ctx,
     "task-form-sources-pipeline-link",

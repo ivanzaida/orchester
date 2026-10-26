@@ -46,11 +46,15 @@ pub struct Base {
 impl lurq::app::component::DevtoolsInspectable for Base {}
 
 impl Base {
-  fn new_task() -> Self {
+  /// New task's start, with the project's default pipeline chosen.
+  fn new_task(pipeline: Option<orchester_core::id::ResourceId>) -> Self {
     Self {
       task: None,
       revision: None,
-      values: Values::default(),
+      values: Values {
+        pipeline,
+        ..Values::default()
+      },
     }
   }
 
@@ -121,10 +125,10 @@ impl TaskForm {
       (None, Some(_)) => None,
       (None, None) => return false,
     };
-    let stored = props
-      .subject
-      .task()
-      .map_or_else(Base::new_task, |task| Base::of(task, separator));
+    let stored = props.subject.task().map_or_else(
+      || Base::new_task(props.default_pipeline),
+      |task| Base::of(task, separator),
+    );
     if let Some(task) = props.subject.task().filter(|_| props.subject.awaits_first_run()) {
       // A queued task's details are locked: edits kept for it from an earlier visit cannot be saved.
       if kept.is_some() {
