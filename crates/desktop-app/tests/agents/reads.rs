@@ -16,12 +16,11 @@ fn agents_save_is_recorded_and_read_again_once() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   screen.open(id);
-  screen.set("agent-responsibility", "Checks the complete change");
   let feed = screen.window.projects().feed(project_id());
   let before = feed.outside.get_untracked().profiles;
   let reads = Reads::count();
-  screen.click("agent-save");
-  screen.until("saved", |s| s.text("screen-agents").contains("Draft saved"));
+  screen.set("agent-responsibility", "Checks the complete change");
+  screen.until("saved on its own", |s| s.text("screen-agents").contains("Draft saved"));
   let until = Instant::now() + Duration::from_millis(500);
   while Instant::now() < until {
     screen.window.tree.tick_futures();

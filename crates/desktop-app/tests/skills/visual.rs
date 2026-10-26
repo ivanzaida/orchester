@@ -2,32 +2,23 @@
 use super::*;
 
 #[test]
-fn skills_visual_empty_variants_and_populated_repository_setting_are_truthful() {
+fn skills_visual_empty_list_and_populated_groups_are_truthful() {
   let mut s = Skills::new();
   s.go(ProjectPage::Skills(Default::default()));
   assert!(!s.text("skills-empty").contains("Found in this repository"));
+  assert!(s.text("skills-empty").contains("No skills in Kontur yet"));
   assert!(s.text("skills-empty").contains("Write the first one for Kontur"));
-  assert!(
-    s.text("skills-empty")
-      .contains("Starts an empty draft for all of Kontur")
-  );
-  assert!(s.window.tree.get_element_by_id("skills-found").is_none());
-  let card = bounds(&mut s, "skills-empty");
-  assert!(
-    card.height >= 216.0 && card.height < 300.0,
-    "first-skill card keeps its own height: {card:?}"
-  );
-  let guide = bounds(&mut s, "skills-guidance");
-  let ownership = bounds(&mut s, "skills-ownership");
-  assert!(ownership.y >= guide.y + guide.height && ownership.x >= guide.x);
+  assert!(s.window.tree.get_element_by_id("skills-empty-new").is_some());
+  assert!(s.window.tree.get_element_by_id("skill-repository-files").is_some());
   let mut s = Skills::new();
   s.seed("checks", false);
   s.go(ProjectPage::Skills(Default::default()));
   s.window.until("populated library", |w| {
-    w.tree.get_element_by_id("skills-list").is_some()
+    w.tree.get_element_by_id("skills-group-project").is_some()
   });
-  assert!(s.window.tree.get_element_by_id("skill-repository-files").is_some());
-  assert!(s.text("skills-ownership").contains("Native agents"));
+  assert!(s.text("skills-count").contains("1 skills · 1 with unpublished drafts"));
+  assert!(s.text("skills-group-project").contains("checks"));
+  assert!(s.text("skills-repository-settings").contains("Native agents"));
 }
 
 #[test]
@@ -35,7 +26,7 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
   let mut s = Skills::new();
   let reference = prepare_import(&s);
   s.go(ProjectPage::Skills(Default::default()));
-  assert!(s.text("skills-found").contains("3 items"));
+  assert!(s.text("skills-repository-settings").contains("3 items"));
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("1 instruction, 2 skills"));
   assert!(s.text("skill-import-create").contains("Create 3 drafts"));
@@ -94,76 +85,23 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
   );
 }
 
-/// WMT1W `r3tdmV` / `WYErT`: the header centers its contents in 40 with room above them, the
-/// footer's explanation is inset 10/12 inside its own band, and a pointer-only source has no arrow.
+/// *Found in this repository* (`03`): what the repository holds, counted, with the switch and Import; the import
+/// page lists each item, a pointer-only source with nothing to import.
 #[test]
-fn skills_visual_found_header_footer_insets_and_pointer_row() {
+fn skills_visual_found_in_this_repository_counts_and_opens_the_import() {
   let mut s = Skills::new();
   prepare_import(&s);
   fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
   s.go(ProjectPage::Skills(Default::default()));
-  assert!(s.text("skills-found").contains("4 items"));
-  let found = bounds(&mut s, "skills-found");
-  let header = bounds(&mut s, "skills-found-header");
-  let title = bounds(&mut s, "skills-found-title");
-  let folder = bounds(&mut s, "skills-found-folder");
-  // The fixture's folder is long enough to wrap: the header grows around it instead of cutting it.
-  assert!(folder.height > 20.0, "long folder wraps: {folder:?}");
-  assert!(
-    header.height >= 40.0 && folder.y - header.y >= 9.9 && header.y + header.height - folder.y - folder.height >= 9.9,
-    "header keeps room around the whole folder: {header:?} / {folder:?}"
-  );
-  assert!(
-    (folder.y + folder.height / 2.0 - (header.y + header.height / 2.0)).abs() < 1.0,
-    "folder centered: {folder:?} in {header:?}"
-  );
-  let middle = header.y + header.height / 2.0;
-  assert!(
-    (title.y + title.height / 2.0 - middle).abs() < 1.0,
-    "title centered: {title:?} in {header:?}"
-  );
-  assert!(title.y - header.y >= 10.0, "room above the title: {title:?}");
-  assert!(
-    folder.x + folder.width <= header.x + header.width - 11.9,
-    "folder ends at the header's inset: {folder:?}"
-  );
-  let footer = bounds(&mut s, "skills-found-footer");
-  let note = bounds(&mut s, "skills-found-note");
-  assert!(
-    s.text("skills-found-note")
-      .contains("Import from repository shows each item")
-  );
-  assert!(
-    (note.x - footer.x - 12.0).abs() < 0.1,
-    "explanation inset from the left: {note:?} in {footer:?}"
-  );
-  assert!(
-    note.y - footer.y >= 10.0 && note.y - footer.y < 11.5,
-    "explanation inset from the top: {note:?} in {footer:?}"
-  );
-  assert!(footer.y + footer.height <= found.y + found.height + 0.1);
-  assert!(
-    found.y + found.height - footer.y - footer.height < 1.1,
-    "footer closes the box"
-  );
+  assert!(s.text("skills-repository-settings").contains("4 items"));
+  assert!(s.text("skills-found-import").contains("Import shows each item with a preview"));
+  s.click("skills-found-import-open");
+  s.window.until("the import page", |w| {
+    w.tree.get_element_by_id("skills-import-review").is_some()
+  });
   assert!(s.text("skill-source-1").contains("CLAUDE.md"));
   assert!(s.text("skill-source-summary-1").contains("nothing to import"));
   assert!(s.window.tree.get_element_by_id("skill-source-arrow-1").is_none());
-  assert!(s.window.tree.get_element_by_id("skill-source-arrow-0").is_some());
-  let long = bounds(&mut s, "skill-source-3");
-  let row = bounds(&mut s, "skill-source-row-3");
-  assert!(s.text("skill-source-3").contains("long-supported-repository-name"));
-  assert!(long.height > 20.0, "long source wraps: {long:?}");
-  assert!(
-    long.y - row.y >= 7.9 && row.y + row.height - long.y - long.height >= 7.9,
-    "wrapped source keeps room above and below (TJ0Cb): {long:?} in {row:?}"
-  );
-  let first = bounds(&mut s, "skill-source-row-0");
-  assert!((first.height - 34.0).abs() < 0.1, "one-line row stays 34: {first:?}");
-  assert!(
-    footer.y >= row.y + row.height - 0.1,
-    "the list grows with the wrapped row instead of cutting it: {row:?} / {footer:?}"
-  );
 }
 
 #[test]
@@ -177,7 +115,7 @@ fn skills_visual_empty_description_explanation_and_saved_published_header_are_vi
   assert!(s.text("skill-save-status").contains("Draft saved · Published v1"));
   assert_eq!(
     glyph(&mut s, "skill-save-icon"),
-    orchester_app::ui::icon::Icon::CloudCheck.glyph().to_string()
+    orchester_app::ui::icon::Icon::CircleDashed.glyph().to_string()
   );
   assert!(s.text("skill-publish-unavailable").contains("description"));
   let reason = bounds(&mut s, "skill-publish-unavailable");
@@ -201,7 +139,7 @@ fn skills_visual_unpublished_status_and_disabled_upload_keep_actual_draft() {
   let id = s.seed("checks", false);
   s.go(ProjectPage::Skill(id));
   assert!(s.text("skill-save-status").contains("Draft saved · Not published"));
-  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::FilePenLine.glyph().to_string());
+  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::CircleDashed.glyph().to_string());
   s.set("skill-name", "");
   assert!(s.text("skill-save-status").contains("fix marked fields"));
   assert_eq!(glyph(&mut s, "skill-publish-icon"), Icon::Upload.glyph().to_string());
@@ -237,14 +175,14 @@ fn skills_visual_mark_a_draft_automation_wrote_until_a_person_saves_it() {
     w.texts("skill-save-status")
       .is_some_and(|t| t.join(" ") == "Draft written by automation · Published v1")
   });
-  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::Bot.glyph().to_string());
+  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::CircleDashed.glyph().to_string());
   s.set("skill-description", "A person's description.");
   s.settle(id, "A person's description.");
   s.window.until("the person's draft", |w| {
     w.texts("skill-save-status")
       .is_some_and(|t| t.join(" ") == "Draft saved · Published v1")
   });
-  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::CloudCheck.glyph().to_string());
+  assert_eq!(glyph(&mut s, "skill-save-icon"), Icon::CircleDashed.glyph().to_string());
   let skills = ProjectSkills::load_in(&s.repo).expect("read");
   assert!(
     !skills.by_automation(&s.entry(id)),

@@ -17,8 +17,7 @@ fn agents_custom_model_summary_matches_saved_value_and_effort_options() {
   );
   screen.click("agent-model-option-1");
   screen.set("agent-custom-model", "test-model");
-  assert!(!screen.exists("agent-save"), "the resolved profile is unchanged");
-  assert!(!screen.text("agent-draft-card").contains("→ CLI default"));
+  assert!(!screen.text("agent-draft-bar").contains("→ CLI default"));
   screen.click("agent-effort");
   assert!(
     screen
@@ -28,16 +27,12 @@ fn agents_custom_model_summary_matches_saved_value_and_effort_options() {
   assert!(screen.text("agent-effort-menu").contains("High"));
   screen.click("agent-effort-option-0");
   screen.set("agent-custom-model", "custom-test");
-  assert!(screen.text("agent-save-status").contains("Unsaved changes"));
-  assert!(screen.text("agent-draft-card").contains("test-model → custom-test"));
-  screen.click("agent-save");
-  screen.until("custom model saved", |s| {
-    !s.exists("agent-save") && !s.exists("agent-saving")
+  screen.until("custom model saved on its own", |s| {
+    s.listed().profile(id).expect("profile").profile.model().as_str() == "custom-test"
   });
-  assert_eq!(
-    screen.listed().profile(id).expect("profile").profile.model().as_str(),
-    "custom-test"
-  );
+  screen.until("the bar names the change", |s| {
+    s.text("agent-draft-bar").contains("test-model → custom-test")
+  });
 }
 
 #[test]

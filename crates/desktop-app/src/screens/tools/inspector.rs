@@ -1,12 +1,11 @@
-//! Project & access inspector (`i37vu`) and the Access tab (`lfvWC`).
+//! Project & access beside a tool's page (`04b`).
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
-  layout::Alignment,
-  node::{border::Border, dimension::Dimension, padding::Padding},
+  components::{Column, Text},
+  node::dimension::Dimension,
 };
 use orchester_workspace::tools::data::{ProjectTools, ToolEntry};
 
@@ -20,20 +19,20 @@ use crate::{
   },
 };
 
+/// The side beside a tool's page (`Project & access` in 04b): who owns it, its kind, secrets, access and version,
+/// the steps that call it, and what a command tool holds.
 pub(super) fn inspector(ctx: &Ctx, p: &EditorProps) -> Column {
-  // Inspector `i37vu`: 340 wide, its header `mVwpH` 44 high.
-  const WIDTH: f32 = 340.0;
-  const HEADER: f32 = 44.0;
   let count = p.entry.iter().flat_map(|e| p.data.listed.used_by(e.id)).count();
   let bottom = ctx.t(if p.entry.as_ref().is_some_and(|e| !e.runnable()) {
     "tools.secretsNote"
   } else {
     "tools.commandNote"
   });
-  let body = Column::new()
+  Column::new()
+    .id("tool-inspector")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+    .child(Text::new(&ctx.t("tools.inspectorTitle")).variant(crate::theme::HubText::GroupTitle.role()))
     .child(properties(ctx, p))
     .child(crate::ui::unavailable::reason_line(
       "tool-inspector-access-reason",
@@ -48,29 +47,8 @@ pub(super) fn inspector(ctx: &Ctx, p: &EditorProps) -> Column {
         ))
         .child(uses(ctx, &p.data.listed, p.entry.as_ref()))
         .child(note("tool-pinned", Icon::Pin, &ctx.t("tools.pinnedNote"))),
-    );
-  Column::new()
-    .id("tool-inspector")
-    .width(Dimension::Px(WIDTH))
-    .height(Dimension::Pct(100.0))
-    .flex_shrink(0.0)
-    .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(HEADER))
-        .align_items(Alignment::Center)
-        .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
-        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(Text::new(&ctx.t("tools.inspectorTitle")).variant(TypographyStyle::Body)),
     )
-    .child(ScrollVertical::new(body).flex(1.0).min_height(Dimension::Px(0.0)))
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-        .child(note("tool-command-note", Icon::Info, &bottom)),
-    )
+    .child(note("tool-command-note", Icon::Info, &bottom))
 }
 fn uses(ctx: &Ctx, listed: &ProjectTools, entry: Option<&ToolEntry>) -> Column {
   let uses: Vec<_> = entry.into_iter().flat_map(|e| listed.used_by(e.id)).collect();

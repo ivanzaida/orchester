@@ -1,15 +1,13 @@
-//! The project's Memory page (`Content · Memory` `ketjQ` in `CIThk`): the title with *New record*, the tabs under it
-//! and the open tab's body, which scrolls. Nothing sits beside the body, so nothing runs past the window's right edge
-//! at any width the window takes (`ghfRl` at 960).
+//! Memory, the Agents hub's last tab (`05 Memory` `padSP`): *New record* at the head's right, then the status pills,
+//! what the open status means and its records, or the tab's settings, scrolling under the hub's tabs.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row, ScrollVertical, Text},
+  app::ctx::Ctx,
+  components::Column,
   core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_workspace::memory::read::ProjectMemory;
 
@@ -24,7 +22,8 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::MemoryTab,
-  theme::{ExtraSpacing, ExtraTypography, MemoryText, SecretsSpacing},
+  screens::hub::{self, Head, HubTab},
+  theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -47,113 +46,84 @@ pub(super) fn page(
   (project, read, retries): (&ShownProject, Read, &Signal<u64>),
   view: Option<View>,
 ) -> Element {
-  let frame = Column::new()
+  let head = Head::actions([new_record(ctx, state, view.map(|view| view.tab))]);
+  let content = content(ctx, state, (project, read, retries), view);
+  Column::new()
     .id("screen-memory")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(ExtraSpacing::Roomy.role())
-        .bottom(SpacingSize::Xl)
-        .left(SecretsSpacing::Page.role())
-        .right(SecretsSpacing::Page.role()),
-    )
-    .spacing(SpacingSize::Lg)
-    .child(header(ctx, state, view.map(|view| view.tab)));
+    .child(hub::page(ctx, project, (HubTab::Memory, head), content))
+    .into()
+}
+
+fn content(
+  ctx: &mut Ctx,
+  state: &MemoryState,
+  (project, read, retries): (&ShownProject, Read, &Signal<u64>),
+  view: Option<View>,
+) -> Element {
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Row.role());
   let memory = match read {
-    Read::Reading => return frame.child(loading("memory-loading", &ctx.t("memory.reading"))).into(),
+    Read::Reading => return loading("memory-loading", &ctx.t("memory.reading")).into(),
     Read::Failed(reason) => {
       let retries = retries.clone();
       let body = ctx.t_args("memory.loadFailedBody", [("reason", message_text(ctx, &reason))]);
-      return frame
-        .child(load_error(
-          ctx,
-          "memory-load-error",
-          (&ctx.t("memory.loadFailed"), &body),
-          move || retries.update(|count| *count += 1),
-        ))
-        .into();
+      return load_error(
+        ctx,
+        "memory-load-error",
+        (&ctx.t("memory.loadFailed"), &body),
+        move || retries.update(|count| *count += 1),
+      );
     }
     Read::Ready(memory) => memory,
   };
   let Some(view) = view else {
-    return frame.child(loading("memory-loading", &ctx.t("memory.reading"))).into();
+    return loading("memory-loading", &ctx.t("memory.reading")).into();
   };
-  frame
+  let pane = pane
     .child(tabs::strip(ctx, state.project_id, (&memory, view.order), view.tab))
-    .child(body(ctx, state, (project, &memory), view))
+    .child(body(ctx, state, (project, &memory), view));
+  hub::list_body("memory-main", Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane))
+}
+
+/// *New record*, which opens its editor on the Active tab (`f3mwij`).
+fn new_record(ctx: &mut Ctx, state: &MemoryState, shown: Option<MemoryTab>) -> Element {
+  let (open, navigation, project) = (state.clone(), Navigation::of(ctx), state.project_id);
+  ActionButton::new("memory-new", ButtonKind::Primary, ctx.t("memory.newRecord"))
+    .icon(Icon::Plus)
+    .on_click(move || {
+      open.open(Opened::New);
+      if shown != Some(MemoryTab::Active) {
+        navigation.go(tabs::route(project, MemoryTab::Active));
+      }
+    })
     .into()
 }
 
-/// *Memory*, what the page is, and *New record*, which opens its editor on the Active tab (`f3mwij`).
-fn header(ctx: &mut Ctx, state: &MemoryState, shown: Option<MemoryTab>) -> Row {
-  let (open, navigation, project) = (state.clone(), Navigation::of(ctx), state.project_id);
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Lg)
-    .align_items(Alignment::End)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(Text::new(&ctx.t("memory.title")).variant(ExtraTypography::Display.role()))
-        .child(
-          Text::new(&ctx.t_args("memory.description", [("project", &*state.project)])).variant(MemoryText::Lead.role()),
-        ),
-    )
-    .child(
-      ActionButton::new("memory-new", ButtonKind::Primary, ctx.t("memory.newRecord"))
-        .icon(Icon::Plus)
-        .on_click(move || {
-          open.open(Opened::New);
-          if shown != Some(MemoryTab::Active) {
-            navigation.go(tabs::route(project, MemoryTab::Active));
-          }
-        }),
-    )
-}
-
-/// The open tab's body, scrolling under the tabs.
+/// The open tab's body under the pills.
 fn body(
   ctx: &mut Ctx,
   state: &MemoryState,
   (project, memory): (&ShownProject, &Arc<ProjectMemory>),
   view: View,
 ) -> Element {
-  let content: Element = if view.tab == MemoryTab::Settings {
-    ctx.mount_keyed::<SettingsTab>(
+  if view.tab == MemoryTab::Settings {
+    return ctx.mount_keyed::<SettingsTab>(
       "memory-settings-tab",
       SettingsProps {
         project: project.clone(),
         stored: memory.settings,
       },
-    )
-  } else {
-    let shown = status_tab::Shown {
-      memory,
-      tab: view.tab,
-      order: view.order,
-    };
-    status_tab::body(ctx, state, shown).into()
+    );
+  }
+  let shown = status_tab::Shown {
+    memory,
+    tab: view.tab,
+    order: view.order,
   };
-  Column::new()
-    .id("memory-body")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .min_height(Dimension::Px(0.0))
-    .child(
-      ScrollVertical::new(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::new().right(SpacingSize::Sm))
-          .child(content),
-      )
-      .id("memory-main")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0)),
-    )
-    .into()
+  status_tab::body(ctx, state, shown).into()
 }
 
 /// *N records couldn't be read and are left out* (`GCHz6`).

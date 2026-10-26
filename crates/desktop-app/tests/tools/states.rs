@@ -56,8 +56,10 @@ fn tools_library_reports_kind_state_version_and_published_callers() {
     "{access}"
   );
   t.click("tool-tab-inputs_outputs");
-  assert!(t.text("tool-inputs-unavailable").contains("not available yet"));
+  t.wait_for("tool-inputs-outputs");
+  assert!(t.text("tool-inputs-outputs").contains("Exit code"));
   t.click("tool-tab-usage_log");
+  t.wait_for("tool-usage-unavailable");
   assert!(t.text("tool-usage-unavailable").contains("not available yet"));
 }
 
@@ -67,8 +69,7 @@ fn tools_invalid_values_and_repository_programs_cannot_be_saved() {
   t.go(ProjectPage::NewTool);
   t.set("tool-name", "Checks");
   t.set("tool-program", "scripts/check");
-  t.ready();
-  assert!(t.text("tool-program-note").contains("search path"));
+  t.wait_note("search path");
   t.set("tool-timeout", "soon");
   t.set("tool-exitCodes", "zero");
   t.set("tool-outputLimit", "0");
@@ -81,7 +82,7 @@ fn tools_invalid_values_and_repository_programs_cannot_be_saved() {
   ] {
     assert!(t.exists(id));
   }
-  t.click("tool-save");
+  t.click("tool-create");
   assert!(!t.exists("tool-confirm"));
   assert!(
     orchester_workspace::tools::data::ProjectTools::load(&t.db())
@@ -96,8 +97,7 @@ fn tools_invalid_values_and_repository_programs_cannot_be_saved() {
   t.set("tool-outputLimit", "64");
   t.set("tool-environment", "");
   t.set("tool-program", &program.to_string_lossy());
-  t.ready();
-  assert!(t.text("tool-program-note").contains("repository"));
+  t.wait_note("repository");
 }
 
 #[test]

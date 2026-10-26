@@ -1,22 +1,25 @@
-//! Command editor lifecycle and in-place questions, no modal (`S5Gn5R`, `QyM60`).
+//! A tool's page (`04b` `nuoSy`): the crumb, head, draft bar and tabs, then the tab with the tool's project and access
+//! beside it. A command tool saves as a draft on its own once its fields check out; a change that widens what it
+//! may do asks at its field first (*Allow this command tool?*), and publishing asks again only for what was not
+//! allowed yet. Questions open in place, never in a modal.
 use std::sync::Arc;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::SpacingSize,
   },
-  components::{Column, Row, ScrollVertical},
-  core::Signal,
-  node::{Element, dimension::Dimension, padding::Padding},
+  components::Column,
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension},
 };
+pub(super) use orchester_workspace::tools::editor::next_version;
 use orchester_workspace::{
   agents::data::VersionState,
-  connections::mcp::Allowed,
+  messages::Message,
   tools::{
     data::ToolEntry,
-    editor::{Edit, EditorData, next_version},
+    editor::{Edit, EditorData},
     form::{CommandErrors, CommandText},
   },
 };
@@ -24,22 +27,31 @@ use orchester_workspace::{
 use super::{
   fields::Fields,
   head, inspector, words,
-  work::{self, Start, Work},
+  work::{self, Work},
 };
 use crate::{
   navigation::Navigation,
   project::{ShownProject, own::OwnChanges},
   routes::{ProjectPage, Route, ToolTab},
-  screens::connections::widen::{WidenConfirm, WidenProps},
-  theme::{ConnectionsSpacing, ExtraSpacing},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-    inspector::note,
-    message::message_text,
-    notice::{Notice, NoticeTone},
-  },
+  screens::hub::{self, page_head::More},
+  theme::HubSpacing,
+  ui::{icon::Icon, inspector::note, message::message_text},
 };
+
+/// Reads the tools again and starts the page over from what is saved.
+#[derive(Clone)]
+pub struct Reload {
+  pub revision: Signal<u64>,
+  /// The revision the page started over at: the page waits for a read at least this new.
+  pub reset_at: Signal<u64>,
+}
+impl Reload {
+  pub fn run(&self) {
+    let next = self.revision.get_untracked() + 1;
+    self.revision.set(next);
+    self.reset_at.set(next);
+  }
+}
 
 #[derive(Clone)]
 pub struct EditorProps {
@@ -47,6 +59,7 @@ pub struct EditorProps {
   pub data: EditorData,
   pub entry: Option<ToolEntry>,
   pub revision: Signal<u64>,
+  pub reload: Reload,
   /// Where a save records its change of the tools.
   pub tools: OwnChanges,
   pub read_revision: u64,
@@ -63,15 +76,40 @@ impl PartialEq for EditorProps {
 }
 impl DevtoolsInspectable for EditorProps {}
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Asking(Option<Edit>);
+pub(super) struct Asking(pub Option<Edit>);
 impl DevtoolsInspectable for Asking {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Baseline(pub Option<ToolEntry>);
+impl DevtoolsInspectable for Baseline {}
+/// The widenings the person allowed on this page.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct AllowedHere(pub Vec<Message>);
+impl DevtoolsInspectable for AllowedHere {}
+/// The tool the last save sent, so a failed save is not sent again on its own.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct Sent(pub Option<orchester_core::resource::Tool>);
+impl DevtoolsInspectable for Sent {}
+/// A question about the tool itself, asked in place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Ask {
+  Nothing,
+  Discard,
+  Remove,
+}
+impl DevtoolsInspectable for Ask {}
 pub struct ToolEditor {
-  action: Work,
-  fields: Fields,
-  baseline: Option<ToolEntry>,
-  text: CommandText,
-  asking: Signal<Asking>,
-  busy: Signal<bool>,
+  pub(super) action: Work,
+  pub(super) fields: Fields,
+  pub(super) baseline: Signal<Baseline>,
+  pub(super) asking: Signal<Asking>,
+  pub(super) busy: Signal<bool>,
+  pub(super) allowed: Signal<AllowedHere>,
+  pub(super) sent: Signal<Sent>,
+  /// The write under way replaces the draft with the latest version: the page starts over once it ends.
+  pub(super) restart: Signal<bool>,
+  pub(super) ask: Signal<Ask>,
+  more: Signal<bool>,
+  anchor: ElementRef,
 }
 impl Component for ToolEditor {
   type Props = EditorProps;
@@ -86,14 +124,19 @@ impl Component for ToolEditor {
     let editor = Self {
       action: work::action(ctx),
       fields: Fields::new(ctx, name, &text),
-      baseline: props.entry.clone(),
-      text,
+      baseline: ctx.signal(Baseline(props.entry.clone())),
       asking: ctx.signal(Asking(None)),
       busy: ctx.signal(false),
+      allowed: ctx.signal(AllowedHere::default()),
+      sent: ctx.signal(Sent::default()),
+      restart: ctx.signal(false),
+      ask: ctx.signal(Ask::Nothing),
+      more: ctx.signal(false),
+      anchor: ctx.element_ref(),
     };
     let action = editor.action.clone();
-    let (revision, busy) = (props.revision.clone(), editor.busy.clone());
-    let tools = props.tools.clone();
+    let (revision, busy, restart) = (props.revision.clone(), editor.busy.clone(), editor.restart.clone());
+    let (tools, reload) = (props.tools.clone(), props.reload.clone());
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
     ctx.watch(&action.state(), move |state| {
@@ -104,352 +147,168 @@ impl Component for ToolEditor {
       if let Some(saved) = state.data.filter(|_| state.is_fulfilled()) {
         // The save recorded its change; this screen reads the tools again once, on its revision.
         tools.saw(saved.1);
-        revision.update(|r| *r += 1);
         let tab = match navigation.route_now() {
           Route::Project(_, ProjectPage::Tool(_, tab)) => tab,
           _ => ToolTab::Configuration,
         };
         navigation.replace(Route::Project(project, ProjectPage::Tool(saved.0, tab)));
+        // A draft started again from the latest version starts the page over from it.
+        if restart.get_untracked() {
+          restart.set(false);
+          reload.run();
+        } else {
+          revision.update(|r| *r += 1);
+        }
       }
     });
     editor
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<EditorProps>().clone();
-    let action = self.action.clone();
-    let (checked, checking) = super::validation::checked(ctx, &self.fields, self.baseline.as_ref(), &p);
-    let unchanged = self.fields.text() == self.text && self.baseline.is_some();
-    let changed = self.baseline != p.entry;
+    self.adopt(&p);
+    let baseline = self.baseline.get().0;
+    let (checked, checking) = super::validation::checked(ctx, &self.fields, baseline.as_ref(), &p);
+    let unchanged = baseline.as_ref().is_some_and(|e| {
+      let same_text = CommandText::of(&e.tool).is_some_and(|text| text == self.fields.text());
+      same_text || (!checking && matches!(&checked, Ok(Edit::Save { tool, .. }) if **tool == e.tool))
+    });
+    let outside = baseline != p.entry;
     let busy = self.busy.get();
-    let state = words::editor_state(ctx, self.baseline.as_ref(), unchanged, busy);
-    let title = self
-      .baseline
-      .as_ref()
-      .map_or(ctx.t("tools.newTitle"), |e| e.name.clone());
-    let errors = checked.as_ref().err().cloned().unwrap_or_default();
-    let read_only = self
-      .baseline
-      .as_ref()
-      .is_some_and(|e| CommandText::of(&e.tool).is_none());
-    let save_reason = if read_only {
-      Some(ctx.t("tools.readOnlyTitle"))
-    } else if checking {
-      Some(ctx.t("tools.checking"))
-    } else if changed {
-      Some(ctx.t("tools.changed"))
-    } else if self.baseline.is_none() && self.fields.name.get().is_empty() && self.fields.text().program.is_empty() {
-      Some(ctx.t("tools.enterRequired"))
-    } else if checked.is_err() {
-      Some(ctx.t_args("tools.fixFields", [("count", error_count(&errors).to_string())]))
-    } else {
-      None
+    let read_only = baseline.as_ref().is_some_and(|e| CommandText::of(&e.tool).is_none());
+    let widening = match &checked {
+      Ok(edit) if baseline.is_some() && !unchanged && !checking && !outside && !read_only => self.autosave(&p, edit),
+      _ => None,
     };
-    let publish_reason = publish_reason(ctx, self.baseline.as_ref(), unchanged);
-    let save = checked.ok().filter(|_| !checking && !unchanged && !changed && !busy);
-    let publish = self
-      .baseline
-      .clone()
-      .filter(|_| publish_reason.is_none() && !changed && !busy)
-      .map(Edit::Publish);
-    let buttons = vec![
-      self.save_button(ctx, save, &p, &action, save_reason.as_deref()).into(),
-      self
-        .publish_button(ctx, publish, &p, &action, publish_reason.as_deref())
-        .into(),
-    ];
-    let reason = action
-      .state()
-      .get()
-      .error
-      .as_ref()
-      .map(|e| message_text(ctx, e))
-      .or(save_reason)
-      .or(publish_reason);
-    let head = head::head(ctx, &p, &title, &state, buttons, reason.as_deref());
-    let body = self.body(ctx, &p, &errors, busy || self.asking.get().0.is_some(), &action);
-    let question = self.asking.get().0.map(|edit| self.confirm(ctx, &p, &action, edit));
-    Column::new()
+    let errors = checked.as_ref().err().cloned().unwrap_or_default();
+    let title = baseline.as_ref().map_or(ctx.t("tools.newTitle"), |e| e.name.clone());
+    let more = baseline.as_ref().map(|_| {
+      let (ask, open) = (self.ask.clone(), self.more.clone());
+      More {
+        open: self.more.clone(),
+        anchor: self.anchor.clone(),
+        remove: Arc::new(move || {
+          open.set(false);
+          ask.set(Ask::Remove);
+        }),
+      }
+    });
+    let mut pane = Column::new()
       .id("tool-editor")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(head)
-      .with_children(question.map(|question| {
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::symmetric(ConnectionsSpacing::Page.role(), SpacingSize::Lg))
-          .child(question)
-      }))
-      .child(body)
+      .spacing(HubSpacing::Sections.role())
+      .child(head::crumb(ctx, &p))
+      .child(head::head(ctx, &p, (baseline.as_ref(), &title), more))
+      .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
+    pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
+      (Some(question), _) => pane.child(question),
+      (None, Some(edit)) => pane.child(self.confirm(ctx, &p, edit)),
+      (None, None) => {
+        let status = words::editor_state(ctx, baseline.as_ref(), unchanged, busy).0;
+        let actions = self.bar_actions(ctx, &p, (&checked, checking), (unchanged, outside));
+        pane.child(head::bar(ctx, baseline.as_ref(), (status, unchanged), actions))
+      }
+    };
+    pane = pane
+      .with_children(self.failure(ctx))
+      .child(head::tabs(ctx, &p))
+      .child(self.body(ctx, &p, &errors, (busy || self.asking.get().0.is_some(), read_only), widening));
+    hub::item_body("tool-page", pane, Some(inspector::inspector(ctx, &p).into()))
   }
 }
 
 impl ToolEditor {
-  fn save_button(
-    &self,
-    ctx: &Ctx,
-    edit: Option<Edit>,
-    p: &EditorProps,
-    action: &Work,
-    reason: Option<&str>,
-  ) -> ActionButton {
-    let button = ActionButton::new("tool-save", ButtonKind::Secondary, ctx.t("tools.save")).icon(Icon::Save);
-    self.action_button(button, edit, p, action, reason)
-  }
-  fn publish_button(
-    &self,
-    ctx: &Ctx,
-    edit: Option<Edit>,
-    p: &EditorProps,
-    action: &Work,
-    reason: Option<&str>,
-  ) -> ActionButton {
-    let label = next_version(self.baseline.as_ref()).map_or(ctx.t("tools.versionLimit"), |v| {
-      ctx.t_args("tools.publish", [("version", v.get().to_string())])
-    });
-    self.action_button(
-      ActionButton::new("tool-publish", ButtonKind::Primary, label).icon(Icon::Upload),
-      edit,
-      p,
-      action,
-      reason,
-    )
-  }
-  fn action_button(
-    &self,
-    button: ActionButton,
-    edit: Option<Edit>,
-    p: &EditorProps,
-    action: &Work,
-    reason: Option<&str>,
-  ) -> ActionButton {
-    if self.busy.get() {
-      return button.loading();
-    }
-    if self.asking.get().0.is_some() {
-      return button.disabled();
-    }
-    let Some(edit) = edit else {
-      return match reason {
-        Some(_) => button.disabled(),
-        None => button.disabled(),
-      };
+  /// A read that shows what this page itself wrote, or the same tool in another standing, becomes the page's
+  /// baseline; any other change waits for the person's Reload.
+  fn adopt(&self, p: &EditorProps) {
+    let baseline = self.baseline.get_untracked().0;
+    let Some(entry) = p.entry.as_ref().filter(|entry| Some(*entry) != baseline.as_ref()) else {
+      return;
     };
-    let reasons = edit.reasons(p.data.latest.as_ref());
-    let (asking, busy, action, open) = (
-      self.asking.clone(),
-      self.busy.clone(),
-      action.clone(),
-      p.project.open.clone(),
-    );
-    button.on_click(move || {
-      if busy.get_untracked() {
-        return;
-      }
-      if !reasons.is_empty() {
-        asking.set(Asking(Some(edit.clone())));
-      } else {
-        busy.set(true);
-        action.run(Start {
-          open: open.clone(),
-          edit: edit.clone(),
-          allowed: Allowed::These(Vec::new()),
-        });
-      }
-    })
+    let ours = baseline.as_ref().is_some_and(|b| b.id == entry.id && b.tool == entry.tool)
+      || self.sent.get_untracked().0.as_ref() == Some(&entry.tool);
+    if ours && !self.busy.get_untracked() {
+      self.baseline.set(Baseline(Some(entry.clone())));
+    }
   }
-  fn confirm(&self, ctx: &mut Ctx, p: &EditorProps, action: &Work, edit: Edit) -> Element {
-    let reasons = edit.reasons(p.data.latest.as_ref());
-    let mut words: Vec<Arc<str>> = reasons.iter().map(|r| message_text(ctx, r)).collect();
-    words.push(ctx.t("tools.execution"));
-    let (asking, keep, busy, action) = (
-      self.asking.clone(),
-      self.asking.clone(),
-      self.busy.clone(),
-      action.clone(),
-    );
-    let (open, fields, text, name) = (
-      p.project.open.clone(),
-      self.fields.clone(),
-      self.fields.text(),
-      self.fields.name.get(),
-    );
-    ctx.mount_keyed::<WidenConfirm>(
-      "tool-confirm",
-      WidenProps {
-        id: "tool-confirm".into(),
-        card: true,
-        affirming: false,
-        automation: crate::mcp::input_gate::Guarded::PermissionWidening,
-        title: ctx.t("tools.confirmTitle"),
-        reasons: words.into(),
-        confirm: ctx.t("tools.confirm"),
-        keep: ctx.t("tools.keepEditing"),
-        on_confirm: Arc::new(move || {
-          if busy.get_untracked() || fields.text() != text || fields.name.get_untracked() != name {
-            return;
-          }
-          busy.set(true);
-          asking.set(Asking(None));
-          action.run(Start {
-            open: open.clone(),
-            edit: edit.clone(),
-            allowed: Allowed::These(reasons.clone()),
-          });
-        }),
-        on_keep: Arc::new(move || keep.set(Asking(None))),
-      },
-    )
+
+  /// Saves `edit` when it changes the draft, unless it widens what the tool may do beyond what the person allowed
+  /// here: then the reasons, for the question at the field.
+  fn autosave(&self, p: &EditorProps, edit: &Edit) -> Option<(Edit, Vec<Message>)> {
+    let Edit::Save { tool, .. } = edit else {
+      return None;
+    };
+    if self.busy.get() || self.asking.get().0.is_some() || self.sent.get().0.as_ref() == Some(&**tool) {
+      return None;
+    }
+    let reasons = edit.reasons(None);
+    let allowed = self.allowed.get().0;
+    if reasons.iter().any(|reason| !allowed.contains(reason)) {
+      return Some((edit.clone(), reasons));
+    }
+    self.starter(p).run(edit.clone(), reasons);
+    None
   }
-  fn body(&self, ctx: &mut Ctx, p: &EditorProps, errors: &CommandErrors, locked: bool, action: &Work) -> Row {
+
+  fn body(
+    &self,
+    ctx: &mut Ctx,
+    p: &EditorProps,
+    errors: &CommandErrors,
+    (locked, read_only): (bool, bool),
+    widening: Option<(Edit, Vec<Message>)>,
+  ) -> Element {
     let tab = match p.page {
       ProjectPage::Tool(_, tab) => tab,
       _ => ToolTab::Configuration,
     };
-    let read_only = p.entry.as_ref().is_some_and(|e| CommandText::of(&e.tool).is_none());
+    let baseline = self.baseline.get().0;
     let mut main = Column::new()
+      .id("tool-tab-body")
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .padding(
-        Padding::new()
-          .top(ExtraSpacing::Tabs.role())
-          .bottom(SpacingSize::Lg)
-          .left(ConnectionsSpacing::Page.role())
-          .right(ConnectionsSpacing::Page.role()),
-      );
-    if self.baseline != p.entry {
-      let revision = p.revision.clone();
-      main = main.child(
-        Notice::new("tool-changed", NoticeTone::Warning, ctx.t("tools.changed")).action(
-          ActionButton::new("tool-reload", ButtonKind::Secondary, ctx.t("tools.reload"))
-            .on_click(move || revision.update(|r| *r += 1)),
-        ),
-      );
+      .spacing(HubSpacing::Sections.role())
+      .with_children(self.outside_change(ctx, p));
+    if read_only {
+      return main.child(super::editor_asks::read_only(ctx, p)).into();
     }
-    let content: Element = if read_only {
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Lg)
-        .child(
-          crate::ui::state::EmptyState::new(
-            "tool-read-only",
-            Icon::Lock,
-            ctx.t("tools.readOnlyTitle"),
-            ctx.t(match p.entry.as_ref().map(|e| e.tool.action()) {
-              Some(orchester_core::resource::ToolAction::Http(_)) => "tools.httpUnavailable",
-              _ => "tools.databaseUnavailable",
-            }),
-          )
-          .wide(),
-        )
-        .child(note("tool-command-only", Icon::Info, &ctx.t("tools.readOnlyDetail")))
-        .into()
-    } else {
-      match tab {
-        ToolTab::Configuration => {
-          main = main.with_children(self.stale(ctx, p, locked, action));
-          self.fields.render(ctx, errors, self.baseline.is_some(), locked).into()
-        }
-        ToolTab::Access => super::access::access(ctx, p).into(),
-        ToolTab::InputsOutputs => crate::ui::state::EmptyState::new(
-          "tool-inputs-unavailable",
-          Icon::ArrowRightLeft,
-          ctx.t("tools.inputsTitle"),
-          ctx.t("tools.inputsDetail"),
-        )
-        .wide()
-        .into(),
-        ToolTab::UsageLog => crate::ui::state::EmptyState::new(
+    main = match (tab, baseline.as_ref()) {
+      (ToolTab::Configuration, _) | (_, None) => main
+        .with_children(self.stale(ctx, p, locked))
+        .child(self.fields.render(ctx, errors, baseline.is_some(), locked))
+        .with_children(widening.map(|(edit, reasons)| self.widening(ctx, edit, reasons))),
+      (ToolTab::InputsOutputs, Some(entry)) => main.child(super::inputs::inputs(ctx, entry)),
+      (ToolTab::Access, _) => main.child(super::access::access(ctx, p)),
+      (ToolTab::UsageLog, _) => main.child(
+        crate::ui::state::EmptyState::new(
           "tool-usage-unavailable",
           Icon::History,
           ctx.t("tools.usageTitle"),
           ctx.t("tools.usageDetail"),
         )
-        .wide()
-        .into(),
-      }
-    };
-    main = main.child(content);
-    if !read_only {
-      main = main.child(note("tool-execution", Icon::TriangleAlert, &ctx.t("tools.execution")));
-    }
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .child(ScrollVertical::new(main).id("tool-form-scroll").flex(1.0))
-      .child(inspector::inspector(ctx, p))
-  }
-  fn stale(&self, ctx: &mut Ctx, p: &EditorProps, locked: bool, action: &Work) -> Option<Element> {
-    let e = self.baseline.as_ref()?;
-    let VersionState::StaleDraft { based_on, published } = e.state else {
-      return None;
-    };
-    let start = ActionButton::new(
-      "tool-start-latest",
-      ButtonKind::Secondary,
-      ctx.t_args(
-        "tools.startLatest",
-        [("version", published.map_or(0, |v| v.get()).to_string())],
+        .wide(),
       ),
-    );
-    let keep = ActionButton::new("tool-keep-draft", ButtonKind::Primary, ctx.t("tools.keepDraft"));
-    let enabled = !locked && self.fields.text() == self.text && self.baseline == p.entry;
-    let start = self.action_button(start, enabled.then(|| Edit::StartLatest(e.clone())), p, action, None);
-    let keep = self.action_button(keep, enabled.then(|| Edit::KeepDraft(e.clone())), p, action, None);
+    };
+    main
+      .child(note("tool-execution", Icon::TriangleAlert, &ctx.t("tools.execution")))
+      .into()
+  }
+
+  /// A failed write, with what it said; an edit sends the save again.
+  fn failure(&self, ctx: &Ctx) -> Option<Element> {
+    let state = self.action.state().get();
+    let error = state.error.as_ref().filter(|_| !state.is_pending())?;
     Some(
-      Notice::new("tool-stale", NoticeTone::Warning, ctx.t("tools.staleTitle"))
-        .body(ctx.t_args(
-          "tools.staleDetail",
-          [
-            (
-              "baseline",
-              based_on.map_or(ctx.t("tools.noBaseline").to_string(), |v| {
-                ctx
-                  .t_args("tools.compactVersion", [("version", v.get().to_string())])
-                  .to_string()
-              }),
-            ),
-            ("version", published.map_or(0, |v| v.get()).to_string()),
-          ],
-        ))
-        .action(start)
-        .action(keep)
-        .into(),
+      crate::ui::notice::Notice::new(
+        "tool-save-error",
+        crate::ui::notice::NoticeTone::Danger,
+        ctx.t("tools.saveFailed"),
+      )
+      .body(message_text(ctx, error))
+      .into(),
     )
   }
-}
-fn publish_reason(ctx: &Ctx, entry: Option<&ToolEntry>, unchanged: bool) -> Option<Arc<str>> {
-  let Some(entry) = entry else {
-    return Some(ctx.t("tools.enterRequired"));
-  };
-  if CommandText::of(&entry.tool).is_none() {
-    return Some(ctx.t("tools.readOnlyTitle"));
+
+  pub(super) fn stale_state(&self) -> Option<(ToolEntry, VersionState)> {
+    let entry = self.baseline.get().0?;
+    matches!(entry.state, VersionState::StaleDraft { .. }).then(|| (entry.clone(), entry.state))
   }
-  if !unchanged {
-    return Some(ctx.t("tools.saveFirst"));
-  }
-  if matches!(entry.state, VersionState::StaleDraft { .. }) {
-    return Some(ctx.t("tools.staleFirst"));
-  }
-  if !entry.state.has_draft() {
-    return Some(ctx.t_args(
-      "tools.noChanges",
-      [("version", entry.state.published().map_or(0, |v| v.get()).to_string())],
-    ));
-  }
-  next_version(Some(entry)).is_none().then(|| ctx.t("tools.versionLimit"))
-}
-fn error_count(errors: &CommandErrors) -> usize {
-  [
-    &errors.name,
-    &errors.program,
-    &errors.arguments,
-    &errors.timeout,
-    &errors.exit_codes,
-    &errors.output_limit,
-    &errors.environment,
-  ]
-  .into_iter()
-  .filter(|error| error.is_some())
-  .count()
 }

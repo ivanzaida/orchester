@@ -2,6 +2,7 @@
 mod actions;
 mod active;
 mod harness;
+mod hub;
 mod models;
 mod reads;
 mod regressions;

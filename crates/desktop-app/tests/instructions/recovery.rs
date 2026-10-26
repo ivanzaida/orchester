@@ -201,7 +201,7 @@ fn instructions_delayed_autosave_acknowledges_baseline_without_resetting_newer_i
   db.execute_batch("COMMIT").expect("release private save");
   screen.until("newer saved", |s| {
     s.entry(id).body.text().as_str() == "Newer candidate"
-      && s.text("instruction-save-status").contains("Draft saved · Published v1")
+      && s.text("instruction-save-status").contains("Based on Published v1")
   });
   let db = ProjectDb::open(&screen.root).expect("private db");
   assert_eq!(
@@ -236,32 +236,27 @@ fn instructions_delayed_step_create_keeps_selected_pipeline_and_step_locked() {
   store
     .publish_draft::<Pipeline>(other, Timestamp::now())
     .expect("published fixture");
-  screen.go();
-  screen.click("instruction-tab-3");
+  screen.list();
   screen.click("instructions-new");
-  screen.until("step form", |s| s.exists("instruction-step"));
+  screen.until("scope choice", |s| s.exists("instruction-scope-step"));
+  screen.click("instruction-scope-step");
+  screen.until("step form", |s| s.exists("instruction-scope-step-select"));
   screen.set("instruction-name", "Step agreement");
-  screen.choose("instruction-pipeline", "Feature delivery");
-  screen.choose("instruction-step", "01 Implement");
+  screen.choose("instruction-scope-step-select", "Feature delivery · 01 Implement");
   screen.set("instruction-prompt", "Step candidate");
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("private db");
   db.execute_batch("BEGIN IMMEDIATE").expect("delay private create");
   screen.click("instruction-create");
   assert!(screen.text("instruction-save-status").contains("Saving"));
+  // The scope stays where it was chosen while the rule is created.
   screen
     .window
     .tree
-    .get_element_by_id_mut("instruction-pipeline")
-    .and_then(|e| e.as_select())
-    .expect("locked pipeline")
-    .commit(1);
-  screen
-    .window
-    .tree
-    .get_element_by_id_mut("instruction-step")
+    .get_element_by_id_mut("instruction-scope-step-select")
     .and_then(|e| e.as_select())
     .expect("locked step")
-    .commit(0);
+    .commit(1);
+  screen.click("instruction-scope-project");
   screen.window.pass();
   db.execute_batch("COMMIT").expect("release private create");
   screen.until("step created", |s| s.exists("instruction-publish"));

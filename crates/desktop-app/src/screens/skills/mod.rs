@@ -1,6 +1,6 @@
-//! Skills library and editor, Skills layer TOntf in orchester2.pen.
+//! Skills, the Agents hub's third tab (`03 Skills` `w0NiG0`): the skills by scope with what this repository holds, a
+//! skill's page (`03b` `QbDWX`), and importing the repository's files with its result (`03c` `cC55E`).
 mod editor;
-mod guidance;
 mod import_preview;
 mod import_result;
 mod inspector;
@@ -24,7 +24,10 @@ use state::{Panel, View};
 
 use crate::{
   project::{ShownProject, own::OwnChanges},
+  screens::hub::{self, Head, HubTab},
   ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
     message::message_text,
     state::{load_error, loading},
   },
@@ -60,13 +63,33 @@ impl Component for SkillsScreen {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
-    let reading = self.read(ctx, &project);
-    let mut frame = Column::new()
+    let body = self.body(ctx, &project);
+    let head = Head::actions([
+      ActionButton::new("skills-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
+        .icon(Icon::FolderOpen)
+        .opens(self.view.panel.to(Panel::Import))
+        .into(),
+      ActionButton::new("skills-new", ButtonKind::Primary, ctx.t("skills.new"))
+        .icon(Icon::Plus)
+        .opens(self.view.panel.to(Panel::New))
+        .into(),
+    ]);
+    Column::new()
       .id("screen-skills")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0));
+      .height(Dimension::Pct(100.0))
+      .child(hub::page(ctx, &project, (HubTab::Skills, head), body))
+  }
+}
+impl SkillsScreen {
+  fn body(&self, ctx: &mut Ctx, project: &ShownProject) -> Element {
+    let project = project.clone();
+    let reading = self.read(ctx, &project);
+    let mut frame = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
     let Some((data, read_reset)) = reading.data.clone() else {
-      return frame.child(self.awaiting(ctx, reading.error.as_ref().filter(|_| !reading.is_pending()), false));
+      return frame
+        .child(self.awaiting(ctx, reading.error.as_ref().filter(|_| !reading.is_pending()), false))
+        .into();
     };
     if reading.is_fulfilled() && !reading.is_pending() {
       self.accepted_reset.set(read_reset);
@@ -113,16 +136,18 @@ impl Component for SkillsScreen {
         let entry = match panel {
           Panel::Edit(id) => {
             let Some(entry) = props.data.listed.entry(id).cloned() else {
-              return frame.child(if reading.is_pending() {
-                Element::from(loading("skill-loading", &ctx.t("skills.reading")))
-              } else {
-                crate::ui::notice::Notice::new(
-                  "skill-missing",
-                  crate::ui::notice::NoticeTone::Danger,
-                  ctx.t("skills.notFound"),
-                )
-                .into()
-              });
+              return frame
+                .child(if reading.is_pending() {
+                  Element::from(loading("skill-loading", &ctx.t("skills.reading")))
+                } else {
+                  crate::ui::notice::Notice::new(
+                    "skill-missing",
+                    crate::ui::notice::NoticeTone::Danger,
+                    ctx.t("skills.notFound"),
+                  )
+                  .into()
+                })
+                .into();
             };
             Some(entry)
           }
@@ -135,7 +160,15 @@ impl Component for SkillsScreen {
         ctx.mount_keyed::<editor::Editor>(&key, editor::Props { page: props, entry })
       }
     };
-    frame.child(content)
+    frame
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0))
+          .child(content),
+      )
+      .into()
   }
 }
 impl SkillsScreen {

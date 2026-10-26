@@ -158,9 +158,9 @@ fn memory_synthetic_input_approves_nothing_and_says_only_a_person_changes_memory
       .starts_with("Only a person changes memory here")
   );
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Proposed);
-  assert_eq!(page.text("memory-tab-waiting-badge"), "4");
+  assert_eq!(page.text("memory-tab-waiting-count"), "4");
   page.press_until(&format!("{proposal}-approve"), "a person's approval", |window| {
-    window.text("memory-tab-waiting-badge") == "3"
+    window.text("memory-tab-waiting-count") == "3"
   });
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Active);
 }

@@ -16,7 +16,7 @@ fn project() -> Page {
 #[test]
 fn memory_project_page_lists_every_proposal_in_its_waiting_tab() {
   let mut page = project();
-  assert_eq!(page.text("memory-tab-waiting-badge"), "4");
+  assert_eq!(page.text("memory-tab-waiting-count"), "4");
   assert_eq!(
     page.text("memory-tab-note"),
     "Agents get a record from their next invocation after you approve it. Until then no agent receives it."

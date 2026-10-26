@@ -53,11 +53,7 @@ fn instructions_removed_step_rule_stays_listed_selectable_and_can_be_reassigned(
       .step(&removed)
       .is_some()
   );
-  screen.go();
-  screen.click("instruction-tab-3");
-  screen.until("current rule selected", |s| {
-    s.text("instruction-prompt") == "Current step text"
-  });
+  screen.list();
   assert!(screen.exists(&format!("instruction-{current}")));
   assert!(
     screen.exists(&format!("instruction-{orphan}")),
@@ -74,7 +70,12 @@ fn instructions_removed_step_rule_stays_listed_selectable_and_can_be_reassigned(
   });
   assert!(screen.entry(orphan).state.has_draft());
   assert_eq!(screen.entry(orphan).state.published().expect("published").get(), 1);
-  assert!(screen.exists(&format!("instruction-{orphan}")));
+  screen.until("the page took the save", |s| {
+    let status = s.text("instruction-save-status");
+    status.contains("· saved") && !status.contains("Saving")
+  });
+  screen.click("instruction-crumb");
+  screen.until("the list", |s| s.exists(&format!("instruction-{orphan}")));
   assert_eq!(screen.entry(current).body.text().as_str(), "Current step text");
 }
 
@@ -119,8 +120,7 @@ fn instructions_step_library_omits_empty_steps_but_keeps_empty_pipeline_headings
     InstructionScope::Step { pipeline, step: review },
     false,
   );
-  screen.go();
-  screen.click("instruction-tab-3");
+  screen.list();
   screen.until("step library", |s| s.exists(&format!("instruction-{first}")));
   let library = screen.text("instruction-library");
   assert!(library.contains("01 Implement"));

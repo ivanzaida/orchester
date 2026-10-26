@@ -1,8 +1,8 @@
-//! The page's tabs under its title (`Tabs` `W721XP` in `CIThk`): one per status of its records, each with its count
-//! (*Active 10*; a tab whose count is 0 shows its name only), and Settings at the right end. *Waiting for approval*
-//! counts its proposals in a badge and leads the tabs while proposals wait; otherwise it follows *Active*, which the
-//! page then opens on (`HFISx` in `C0OJpC`). The order is set once the page has read its records and never moves
-//! under the pointer. A tab is a place of the route (`ProjectPage::Memory`).
+//! The Memory tab's status pills (`05` `padSP`): one per status of its records, each with its count (a pill whose
+//! count is 0 shows its name only), and Settings at the right end. *Waiting for approval* counts its proposals in
+//! `warning` and leads the pills while proposals wait; otherwise it follows *Active*, which the tab then opens on.
+//! The order is set once the tab has read its records and never moves under the pointer. A pill is a place of the
+//! route (`ProjectPage::Memory`).
 
 use std::sync::Arc;
 
@@ -13,10 +13,8 @@ use orchester_workspace::memory::{listing::StatusFilter, read::ProjectMemory};
 use crate::{
   navigation::Navigation,
   routes::{MemoryTab, ProjectPage, Route},
-  ui::{
-    icon::Icon,
-    tabs::{PageTab, counted, page_tabs_with_end},
-  },
+  screens::hub::pills::{self, Pill},
+  ui::icon::Icon,
 };
 
 /// The order of the status tabs, set when the page opens.
@@ -100,29 +98,18 @@ pub const fn route(project: ProjectId, tab: MemoryTab) -> Route {
   Route::Project(project, ProjectPage::Memory(Some(tab)))
 }
 
-/// The tabs in `order`, `shown` the current one, with the counts of `memory`.
+/// The status pills in `order` (`05` `padSP`), `shown` the current one, each with its count of `memory` — the
+/// proposals that wait in `warning` — and Settings at the right end.
 pub fn strip(ctx: &mut Ctx, project: ProjectId, (memory, order): (&ProjectMemory, Order), shown: MemoryTab) -> Element {
   let navigation = Navigation::of(ctx);
-  let tab = |ctx: &Ctx, tab: MemoryTab| {
-    let id = format!("memory-tab-{}", tab.name());
-    let count = statuses(tab).map_or(0, |status| memory.count(status));
-    let label = match tab {
-      MemoryTab::Waiting | MemoryTab::Settings => name(ctx, tab),
-      _ if count == 0 => name(ctx, tab),
-      _ => counted(ctx, &name(ctx, tab), count),
-    };
-    let page_tab = if tab == shown {
-      PageTab::current(id, label)
-    } else {
-      PageTab::to(id, label, false, navigation.to(route(project, tab)))
-    };
-    if tab == MemoryTab::Waiting && count > 0 {
-      page_tab.badge(count)
-    } else {
-      page_tab
-    }
+  let pill = |ctx: &Ctx, tab: MemoryTab| Pill {
+    id: format!("memory-tab-{}", tab.name()).into(),
+    label: name(ctx, tab),
+    count: statuses(tab).map(|status| (memory.count(status), tab == MemoryTab::Waiting)),
+    current: tab == shown,
+    open: navigation.to(route(project, tab)),
   };
-  let statuses: Vec<PageTab> = order.statuses().into_iter().map(|status| tab(ctx, status)).collect();
-  let settings = tab(ctx, MemoryTab::Settings);
-  page_tabs_with_end(ctx, "memory-tabs", statuses, [settings]).into()
+  let statuses = order.statuses().into_iter().map(|status| pill(ctx, status)).collect();
+  let settings = pill(ctx, MemoryTab::Settings);
+  pills::strip("memory-tabs", statuses, vec![settings]).into()
 }

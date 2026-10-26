@@ -64,20 +64,6 @@ pub fn files(ctx: &Ctx, count: usize) -> Arc<str> {
     _ => ctx.t_args("skills.filesCount", [("count", count.to_string())]),
   }
 }
-pub fn saved_at(ctx: &Ctx, entry: &orchester_workspace::skills::data::SkillEntry) -> Arc<str> {
-  entry.draft_saved_at.map_or_else(
-    || version(ctx, entry.state),
-    |time| {
-      ctx.t_args(
-        "skills.draftSavedAt",
-        [
-          ("version", next(entry.state).to_string()),
-          ("time", orchester_workspace::display::clock(time)),
-        ],
-      )
-    },
-  )
-}
 
 pub fn types(ctx: &Ctx, instructions: usize, skills: usize) -> Arc<str> {
   ctx.t_args(

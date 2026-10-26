@@ -41,7 +41,6 @@ fn tools_unsupported_kind_is_listed_and_cannot_be_edited() {
   t.edit(id);
   assert!(t.exists("tool-read-only"));
   assert!(!t.exists("tool-program"));
-  t.click("tool-save");
   t.click("tool-publish");
   assert!(!t.exists("tool-confirm"));
   assert_eq!(t.entry(id).tool, tool);
@@ -107,8 +106,7 @@ fn tools_external_change_preserves_unsaved_fields_and_requires_reload() {
   t.window.until("changed tool notice", |w| {
     w.tree.get_element_by_id("tool-changed").is_some()
   });
-  t.click("tool-save");
-  assert!(!t.exists("tool-confirm"));
+  assert!(!t.exists("tool-confirm") && !t.exists("tool-widen"));
   let value = t
     .window
     .tree
@@ -127,5 +125,5 @@ fn tools_external_change_preserves_unsaved_fields_and_requires_reload() {
     "Saved elsewhere"
   );
   t.go(ProjectPage::Tool(id, ToolTab::InputsOutputs));
-  assert!(t.exists("tool-inputs-unavailable"));
+  assert!(t.exists("tool-inputs-outputs"));
 }

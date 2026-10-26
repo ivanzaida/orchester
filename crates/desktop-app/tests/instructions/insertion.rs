@@ -32,6 +32,6 @@ fn instructions_variable_picker_replaces_selection_and_autosaves_exact_raw_bytes
     screen.entry(id).body.text().as_str() == "left {{task.title}} right"
       && screen
         .text("instruction-save-status")
-        .contains("Draft saved · Published v1")
+        .contains("Based on Published v1")
   });
 }

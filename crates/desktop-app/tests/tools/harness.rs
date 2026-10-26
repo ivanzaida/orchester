@@ -41,10 +41,12 @@ impl Tools {
     self.go(ProjectPage::Tool(id, ToolTab::Configuration));
     self.ready();
   }
+  /// The page shows its draft bar, so the program's check had its turn.
   pub fn ready(&mut self) {
-    self.window.until("program validation", |w| {
-      !w.texts("tool-action-reason")
-        .is_some_and(|t| t.join(" ").contains("Checking"))
+    self.window.until("tool page", |w| {
+      w.tree.tick_futures();
+      w.pass();
+      w.tree.get_element_by_id("tool-draft-bar").is_some() || w.tree.get_element_by_id("tool-confirm").is_some()
     });
   }
   pub fn set(&mut self, id: &str, value: &str) {
@@ -88,17 +90,42 @@ impl Tools {
     }
     id
   }
+  /// Answers the question in place of the draft bar (Create draft, Publish).
   pub fn confirm(&mut self) {
+    self.answer("tool-confirm");
+  }
+  /// Answers the question at the field a saved change widens.
+  pub fn widen(&mut self) {
+    self.answer("tool-widen");
+  }
+  fn answer(&mut self, question: &str) {
+    let confirm = format!("{question}-confirm");
     self.window.until("question is armed", |w| {
       w.tree.tick_futures();
       w.pass();
-      w.tree.get_element_by_id("tool-confirm-confirm").is_some()
+      w.tree.get_element_by_id(&confirm).is_some()
     });
-    self.click("tool-confirm-confirm");
+    self.click(&confirm);
+  }
+  /// Waits for the program's check to say `words` under the program field.
+  pub fn wait_note(&mut self, words: &str) {
+    self.window.until("program check", |w| {
+      w.tree.tick_futures();
+      w.pass();
+      w.texts("tool-program-note").is_some_and(|t| t.join(" ").contains(words))
+    });
   }
   pub fn wait_state(&mut self, state: &str) {
     self.window.until("editor state", |w| {
-      w.texts("tool-state").is_some_and(|t| t.join(" ").contains(state))
+      w.tree.tick_futures();
+      w.texts("tool-draft-bar-status").is_some_and(|t| t.join(" ").contains(state))
+    });
+  }
+  pub fn wait_for(&mut self, id: &str) {
+    self.window.until(id, |w| {
+      w.tree.tick_futures();
+      w.pass();
+      w.tree.get_element_by_id(id).is_some()
     });
   }
 }

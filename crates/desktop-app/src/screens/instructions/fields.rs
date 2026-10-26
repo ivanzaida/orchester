@@ -196,11 +196,13 @@ impl Fields {
       name.render(ctx),
       None,
     );
+    // A new rule chooses its scope above these fields ([`super::scope_choice`]).
+    let scope_fields = if existing { self.scope_fields(ctx, data) } else { Vec::new() };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::End)
-      .with_children(self.scope_fields(ctx, data))
+      .with_children(scope_fields)
       .with_children(
         (!matches!(self.scope.get(), ScopeChoice::AgentRole(_) | ScopeChoice::Step(..)))
           .then(|| self.targets_field(ctx, data, errors.is_some_and(FormErrors::targets_invalid))),

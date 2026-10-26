@@ -1945,6 +1945,10 @@ Decided 2026-10-07 (auto mode's reviewer, see [Token budgets](#token-budgets); n
 
 Work is counted in tasks, as the burndown counts it; nothing is money. `get_delivery` gives the same series and forecasts.
 
+## Agents hub
+
+Since ORC-107 (`Agents · redesign` `ZsU3S`), Profiles, Instructions, Skills, Tools and Memory are the five tabs of one Agents page, not five screens. The head says *Agents* with the open tab's actions at its right; each tab counts its items (Memory counts the proposals that wait, in `warning`); each tab, item and sub-tab keeps its own route, and an opened item is a page under the tabs with a crumb back to its list. Profiles and tools save their draft on their own; a change that widens what an agent or a command may do is asked at its field before it is saved, and Publish asks again only for what was not allowed yet. Discard draft and Remove are asked in place: removing a profile, skill or tool in use lists its users and *Remove and reset* clears it from each of them. The sections below describe the screens as they were drawn before the hub; where they name a screen, read the hub's tab.
+
 ## Memory screens
 
 Drawn 2026-09-30 (ORC-27, Memory 3/3), group `K4KyPj` ("States · Memory", last in 02 / Tasks & runs at y 41963, height 4408; the section is now 46371 high). Screens and interaction only; what memory is and how it is kept is described with the behaviour. Fixture: Kontur, ORC-128 *Add GitHub authentication*, Run 128 in 03 Implement. Proposed copy namespace: `memory.*` (screens, dialogs), `settings.memory.*` and `runs.activity.*` for the invocation panel.

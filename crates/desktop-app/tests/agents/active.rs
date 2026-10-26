@@ -37,7 +37,6 @@ fn agents_active_run_keeps_pinned_identity_metadata_and_task_navigation() {
   assert_eq!(active.started_at, Some(started), "Started, not creation time");
 
   screen.open(profile);
-  screen.click("agent-tab-used");
   assert_eq!(screen.text("agent-active-count"), "1");
   let bounds = screen
     .window
@@ -45,13 +44,14 @@ fn agents_active_run_keeps_pinned_identity_metadata_and_task_navigation() {
     .get_element_by_id_mut("agent-active-0")
     .and_then(|element| element.bounds())
     .expect("active row laid out");
-  assert_eq!(bounds.height, 48.0, "l5Pjj row height");
+  // A hub row (`fYNhS`): its label and the run's line under it.
+  assert!(bounds.height >= 48.0, "the row holds both lines: {bounds:?}");
   let text = screen.text("agent-active-0");
   for expected in [
     "KON-1 · Test the pinned profile".to_owned(),
     "Delivery v1 · 02 Implement".to_owned(),
     format!("started {}", orchester_workspace::display::clock(started)),
-    "Builder v1".to_owned(),
+    // The pinned version: the run keeps v1 of the profile, whatever it is called now.
     "Keeps v1 until it ends".to_owned(),
   ] {
     assert!(text.contains(&expected), "{expected}: {text}");

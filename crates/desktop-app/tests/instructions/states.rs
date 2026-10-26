@@ -39,8 +39,10 @@ fn instructions_autosave_retains_published_version_then_publishes_next() {
   screen.set("instruction-prompt", "New draft text");
   assert!(screen.text("instruction-save-status").contains("Unsaved"));
   screen.until("draft saved", |s| {
+    let status = s.text("instruction-save-status");
     s.entry(id).body.text().as_str() == "New draft text"
-      && s.text("instruction-save-status").contains("Draft saved · Published v1")
+      && status.contains("Draft v2 · saved")
+      && status.contains("Based on Published v1")
   });
   let db = ProjectDb::open(&screen.root).expect("valid instruction fixture");
   assert_eq!(
@@ -77,7 +79,8 @@ fn instructions_invalid_placeholder_keeps_typed_text_and_holds_navigation() {
   screen.click("instruction-tab-1");
   assert!(screen.exists("instruction-leave-question"));
   assert!(screen.text("instruction-prompt").contains("secret.value"));
-  screen.click("instruction-keep");
+  // Keep editing is the question's action (06c).
+  screen.click("instruction-leave-question-confirm");
   assert!(screen.exists("instruction-prompt"));
 }
 #[test]
@@ -178,17 +181,22 @@ fn instructions_all_scope_tabs_show_their_editor_and_save_timing() {
     InstructionScope::Step { pipeline, step },
     true,
   );
-  screen.go();
-  screen.click("instruction-tab-1");
+  // One list of every scope (02); each rule opens on its own page with its scope's fields.
+  screen.list();
+  let list = screen.text("instruction-library");
+  for name in ["Builder agreement", "Delivery agreement", "Implement agreement"] {
+    assert!(list.contains(name), "{name}: {list}");
+  }
+  screen.click(&format!("instruction-{role}"));
   screen.until("role", |s| s.exists("instruction-role"));
-  assert!(screen.text("instruction-library").contains("Builder agreement"));
   screen.choose("instruction-event", "Agent start & resume");
   screen.until("timing saved", |s| {
-    s.entry(role).body.events().len() == 2 && s.text("instruction-save-status").contains("Draft saved · Published v1")
+    s.entry(role).body.events().len() == 2 && s.text("instruction-save-status").contains("Based on Published v1")
   });
-  screen.click("instruction-tab-2");
+  screen.click("instruction-crumb");
+  screen.until("the list", |s| s.exists(&format!("instruction-{pipeline_rule}")));
+  screen.click(&format!("instruction-{pipeline_rule}"));
   screen.until("pipeline", |s| s.exists("instruction-pipeline"));
-  assert!(screen.text("instruction-library").contains("Delivery agreement"));
   assert_eq!(
     screen
       .entry(pipeline_rule)
@@ -198,9 +206,10 @@ fn instructions_all_scope_tabs_show_their_editor_and_save_timing() {
       .get(),
     1
   );
-  screen.click("instruction-tab-3");
+  screen.click("instruction-crumb");
+  screen.until("the list", |s| s.exists(&format!("instruction-{step_rule}")));
+  screen.click(&format!("instruction-{step_rule}"));
   screen.until("step", |s| s.exists("instruction-step"));
-  assert!(screen.text("instruction-library").contains("Implement agreement"));
   assert!(matches!(
     screen.entry(step_rule).body.scope(),
     InstructionScope::Step { .. }
@@ -224,22 +233,22 @@ fn instructions_outside_conflict_keeps_typed_text_then_reloads_explicitly() {
   });
 }
 #[test]
-fn instructions_new_scope_starts_a_fresh_inline_editor() {
+fn instructions_new_rule_chooses_its_scope_and_the_next_starts_fresh() {
   let mut screen = Instructions::new();
   super::preview::seed_preview(&screen);
-  screen.go();
-  screen.click("instruction-tab-1");
+  screen.list();
   screen.click("instructions-new");
-  screen.until("new role", |s| s.exists("instruction-role"));
+  screen.until("the scope choice", |s| s.exists("instruction-scope-role"));
+  screen.click("instruction-scope-role");
+  screen.until("the role select", |s| s.exists("instruction-scope-role-select"));
   screen.set("instruction-name", "Role rule");
-  screen.choose("instruction-role", "Builder");
+  screen.choose("instruction-scope-role-select", "Builder");
   screen.set("instruction-prompt", "Do the work.");
   screen.click("instruction-create");
   screen.until("created role", |s| s.exists("instruction-publish"));
-  screen.click("instruction-tab-2");
   screen.click("instructions-new");
-  screen.until("new pipeline", |s| s.exists("instruction-pipeline"));
-  assert_eq!(screen.text("instruction-name"), "");
+  screen.until("a fresh new rule", |s| s.exists("instruction-scope-project") && s.exists("instruction-create"));
+  assert_eq!(screen.value("instruction-name"), "");
 }
 #[test]
 fn instructions_theme_roles_match_the_prompt_and_library_design() {
@@ -294,7 +303,7 @@ fn instructions_failed_load_is_visible_and_can_retry() {
   db.execute("UPDATE resource_drafts SET body=?1", [stored])
     .expect("valid instruction fixture");
   screen.click("instructions-load-error-retry");
-  screen.until("reloaded", |s| s.exists("instruction-prompt"));
+  screen.until("reloaded", |s| s.exists("instruction-library"));
 }
 #[test]
 fn instructions_selecting_agents_saves_the_normalized_targets() {
@@ -307,7 +316,7 @@ fn instructions_selecting_agents_saves_the_normalized_targets() {
     matches!(
       s.entry(id).body.targets(),
       orchester_core::resource::AgentTargets::Roles(_)
-    ) && s.text("instruction-save-status").contains("Draft saved · Published v1")
+    ) && s.text("instruction-save-status").contains("Based on Published v1")
   });
   assert_eq!(
     screen.entry(id).body.targets(),

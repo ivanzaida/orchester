@@ -123,13 +123,10 @@ pub(crate) struct Entry {
   id: Arc<str>,
   tile: Option<Icon>,
   label: Arc<str>,
-  /// The label in Geist Mono, e.g. a path.
-  mono: bool,
   hint: Option<(Arc<str>, Option<PaletteColor>)>,
   end: Vec<Element>,
   press: Option<Press>,
-  /// Indented as a sub-row of the row above it (`↳ 02 Plan · Planner` in 02).
-  sub: bool,
+  elsewhere: bool,
 }
 
 impl Entry {
@@ -138,21 +135,15 @@ impl Entry {
       id: id.into(),
       tile: None,
       label: label.into(),
-      mono: false,
       hint: None,
       end: Vec::new(),
       press: None,
-      sub: false,
+      elsewhere: false,
     }
   }
 
   pub(crate) fn tile(mut self, glyph: Icon) -> Self {
     self.tile = Some(glyph);
-    self
-  }
-
-  pub(crate) fn mono(mut self) -> Self {
-    self.mono = true;
     self
   }
 
@@ -178,8 +169,9 @@ impl Entry {
     self
   }
 
-  pub(crate) fn sub(mut self) -> Self {
-    self.sub = true;
+  /// A press opens another tab or page: the row ends in an arrow out instead of a chevron (`↗` in 01c's side).
+  pub(crate) fn elsewhere(mut self) -> Self {
+    self.elsewhere = true;
     self
   }
 }
@@ -188,11 +180,7 @@ impl From<Entry> for Element {
   fn from(entry: Entry) -> Self {
     let label = Text::new(&entry.label)
       .id(format!("{}-label", entry.id))
-      .variant(if entry.mono {
-        ExtraTypography::PropertyMono.role()
-      } else {
-        ExtraTypography::Strong.role()
-      })
+      .variant(ExtraTypography::Strong.role())
       .nowrap();
     let text = Column::new()
       .flex(1.0)
@@ -209,19 +197,20 @@ impl From<Entry> for Element {
           None => hint,
         }
       }));
-    let opens = entry.press.is_some();
+    let opens = entry.press.is_some().then_some(if entry.elsewhere {
+      Icon::ArrowUpRight
+    } else {
+      Icon::ChevronRight
+    });
     let row = Row::new()
       .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::symmetric(HubSpacing::Row.role(), HubSpacing::RowY.role())
-          .left(if entry.sub { HubSpacing::Groups.role() } else { HubSpacing::Row.role() }),
-      )
+      .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::RowY.role()))
       .spacing(lurq::app::theme::SpacingSize::Md)
       .align_items(Alignment::Center)
       .with_children(entry.tile.map(|glyph| tile(glyph, false)))
       .child(text)
       .with_children(entry.end)
-      .with_children(opens.then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)));
+      .with_children(opens.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted)));
     match entry.press {
       Some(press) => pressed(press)
         .id(entry.id.clone())

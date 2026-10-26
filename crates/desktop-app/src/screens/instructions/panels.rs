@@ -3,11 +3,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{InjectionEvent, Variable};
 use orchester_workspace::instructions::{
@@ -24,7 +24,6 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  theme::ExtraSpacing,
   ui::{
     field::{FieldInput, field_error},
     icon::Icon,
@@ -35,8 +34,6 @@ use crate::{
   },
 };
 
-// Variables panel r8Ipz and prompt viewer's sources rail.
-pub const PANEL_WIDTH: f32 = 340.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CopyReceipt {
   pub composition: orchester_core::run::Composition,
@@ -112,10 +109,8 @@ impl Component for Panels {
     let head = self.header(ctx, &props);
     let mut frame = Column::new()
       .id("instruction-panel")
-      .width(Dimension::Px(PANEL_WIDTH))
+      .width(Dimension::Px(crate::screens::hub::SIDE_WIDTH))
       .height(Dimension::Pct(100.0))
-      .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
       .spacing(SpacingSize::Sm)
       .child(head);
     if let Some(error) = catalog.error.clone().filter(|_| catalog.is_rejected()) {
@@ -209,14 +204,13 @@ impl Panels {
       .inspector()
       .on_click(move || close.close(Panel::Hidden))
       .render(ctx);
+    // The switcher sits at the panel's end, beside Close (02b, 02d).
     Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Xs)
-      .child(
-        Row::new()
-          .flex(1.0)
-          .child(segmented("instruction-panel-tabs", segments, Focus::Pointer)),
-      )
+      .spacing(SpacingSize::Sm)
+      .align_items(lurq::layout::Alignment::Center)
+      .child(Row::new().flex(1.0))
+      .child(segmented("instruction-panel-tabs", segments, Focus::Pointer))
       .child(cross)
       .into()
   }

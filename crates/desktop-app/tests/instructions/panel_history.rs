@@ -47,7 +47,7 @@ fn instructions_side_panels_are_history_entries_and_closing_leaves_none() {
   back(&mut screen);
   screen.until("preview again", |s| s.exists("instruction-full-prompt"));
   assert_eq!(panel(&screen), InstructionsPanel::Preview);
-  assert!(screen.exists("instructions-tabs"), "the page is back around the rule");
+  assert!(screen.exists("agents-hub-tabs"), "the page is back around the rule");
   back(&mut screen);
   screen.until("variables again", |s| s.exists("instruction-variable-detail"));
   assert_eq!(panel(&screen), InstructionsPanel::Variables);

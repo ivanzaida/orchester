@@ -1,52 +1,49 @@
-//! Editor ilieH: debounced serial autosaves and publication of the saved draft.
+//! An instruction's page (`02b Instruction` `Sn37u`, `02e New instruction` `dMYPx`): its head and draft bar, the rule's
+//! settings and prompt, and the Prompt preview / Variables panel beside them. Edits save as a draft once the fields
+//! rest ([`super::autosave`]); a new rule chooses its scope and is created with Create draft.
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
-  core::Signal,
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::{Column, Row},
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::name::Name;
+use orchester_core::{name::Name, resource::Instruction};
 use orchester_workspace::{
   agents::data::VersionState,
   instructions::{
     data::{InstructionEntry, ProjectInstructions},
     form::FormErrors,
     preview::PreviewChoice,
-    publication::{self, RetainedRun},
+    publication,
   },
 };
 
 use super::{
   autosave::Autosave,
   availability::{self, Availability},
+  editor_actions::{self, Ask},
   fields::Fields,
-  library, panels,
+  page_head, panels, scope_choice,
   state::{Panel, Saved, Selection, SidePanel, Tab, View},
   words,
-  work::{self, Author, Change, Failure, Write},
+  work::{self, Author, Change},
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::ShownProject,
-  theme::ExtraSpacing,
+  theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    message::message_text,
   },
 };
 
-// Editor header f4Slyn.
-const EDITOR_HEADER_HEIGHT: f32 = 56.0;
-
 /// Whether the input being delivered may publish an instruction (ORC-30): a person's always; an MCP client's only
 /// under *Let automation change agent permissions*, as `publish_instruction` takes it.
-fn may_publish(gate: Option<&InputGate>) -> bool {
+pub(super) fn may_publish(gate: Option<&InputGate>) -> bool {
   let may = input_may_decide(gate, Guarded::PermissionWidening);
   if !may {
     tracing::warn!("synthetic input pressed Publish on an instruction; not taken");
@@ -79,16 +76,19 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 pub struct Editor {
-  fields: Fields,
-  saved: Signal<Saved>,
-  work: work::Work,
+  pub(super) fields: Fields,
+  pub(super) saved: Signal<Saved>,
+  pub(super) work: work::Work,
   autosave: Autosave,
   /// What the preview is for: the panels choose it, the editor reads what it says about the variables.
   choice: Signal<PreviewChoice>,
-  panel: SidePanel,
-  published: Signal<Option<u32>>,
+  pub(super) panel: SidePanel,
+  pub(super) published: Signal<Option<u32>>,
   /// Publishing reaches agents' prompts: lurq's synthetic input publishes only under the person's consent.
-  gate: Option<InputGate>,
+  pub(super) gate: Option<InputGate>,
+  pub(super) ask: Signal<Ask>,
+  pub(super) more: Signal<bool>,
+  pub(super) anchor: ElementRef,
 }
 impl Component for Editor {
   type Props = Props;
@@ -108,6 +108,9 @@ impl Component for Editor {
       panel: SidePanel::new(ctx.signal(props.panel), props.selection.clone()),
       published: published.clone(),
       gate: ctx.use_context::<InputGate>(),
+      ask: ctx.signal(Ask::Nothing),
+      more: ctx.signal(false),
+      anchor: ctx.element_ref(),
     };
     let (selection, reloads) = (props.selection.clone(), props.reloads.clone());
     let fields = editor.fields.clone();
@@ -164,17 +167,9 @@ impl Component for Editor {
       },
       ..entry.clone()
     });
-    let library = library::list(
-      ctx,
-      &props.data,
-      props.tab,
-      live.as_ref(),
-      props.project.open.project.name().as_str(),
-      &props.selection,
-    );
     let catalog = availability::catalog(ctx, &props.project, &props.data);
     let availability = Availability::of(ctx, &catalog, &self.choice.get(), live.as_ref());
-    let body = self.body(ctx, &props, parsed.as_ref().err(), (dirty, busy), &availability);
+    let pane = self.pane(ctx, &props, (&parsed, dirty, busy), &availability);
     let panel = ctx.mount_keyed::<panels::Panels>(
       "instruction-panels",
       panels::Props {
@@ -197,26 +192,44 @@ impl Component for Editor {
     Row::new()
       .id("instruction-editor")
       .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .child(library)
-      .child(body)
+      .height(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(HubSpacing::BodyTop.role())
+          .left(HubSpacing::Side.role())
+          .right(HubSpacing::Side.role())
+          .bottom(HubSpacing::Row.role()),
+      )
+      .spacing(HubSpacing::Beside.role())
+      .child(pane)
       .child(panel)
       .into()
   }
 }
 impl Editor {
-  fn body(
+  fn pane(
     &self,
     ctx: &mut Ctx,
     props: &Props,
-    errors: Option<&FormErrors>,
-    (dirty, busy): (bool, bool),
+    (parsed, dirty, busy): (&Result<Instruction, FormErrors>, bool, bool),
     availability: &Availability,
   ) -> Element {
+    let errors = parsed.as_ref().err();
     let saved_value = self.saved.get().0;
     let saved = saved_value.as_ref();
-    let header = self.header(ctx, saved, dirty, busy);
+    let top = self.top(ctx, props, saved, (dirty, busy, errors.is_some()));
+    let mut pane = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .height(Dimension::Pct(100.0))
+      .spacing(HubSpacing::Row.role())
+      .child(top);
+    pane = editor_actions::write_error(self, ctx, pane);
+    pane = editor_actions::published_notice(self, ctx, &availability.retained, pane);
+    pane = editor_actions::reload(self, ctx, props, (saved, busy), pane);
+    if saved.is_none() {
+      pane = pane.child(scope_choice::render(ctx, &self.fields, &props.data, busy));
+    }
     let settings = self.fields.settings(ctx, &props.data, saved.is_some(), errors);
     let prompt = self.fields.prompt(
       ctx,
@@ -224,296 +237,133 @@ impl Editor {
       errors,
       (busy && !dirty, &availability.unavailable),
     );
-    let mut body = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .height(Dimension::Pct(100.0))
-      .child(header);
-    body = self.write_error(ctx, body);
-    body = self.published_notice(ctx, &availability.retained, body);
-    body = self.reload(ctx, props, saved, busy, body);
-    body
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0))
-          .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Lg))
-          .spacing(ExtraSpacing::Inset.role())
-          .child(settings)
-          .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
-          .child(prompt)
-          .with_children(super::editor_notes::warning(ctx, &self.fields, availability))
-          .with_children(
-            (self.fields.blocked().is_empty() || (busy && !self.work.publishing())).then(|| {
-              Row::new()
-                .spacing(SpacingSize::Sm)
-                .child(crate::ui::icon::icon(
-                  if dirty || (busy && !self.work.publishing()) {
-                    Icon::Lock
-                  } else {
-                    Icon::Info
-                  },
-                  crate::theme::IconSize::Xs,
-                  PaletteColor::TextMuted,
-                ))
-                .child(
-                  Text::new(&if dirty || (busy && !self.work.publishing()) {
-                    ctx.t("instructions.publishSaveWaiting")
-                  } else {
-                    words::footer(ctx, props.tab, saved.and_then(|entry| entry.state.published()))
-                  })
-                  .id("instruction-publish-note")
-                  .variant(TypographyStyle::Caption),
-                )
-            }),
-          ),
-      )
+    pane
+      .child(settings)
+      .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
+      .child(prompt)
+      .with_children(super::editor_notes::warning(ctx, &self.fields, availability))
       .into()
-  }
-  fn write_error(&self, ctx: &Ctx, body: Column) -> Column {
-    let Some(error) = self
-      .work
-      .action
-      .state()
-      .get()
-      .error
-      .filter(|_| self.work.action.state().get().is_rejected())
-    else {
-      return body;
-    };
-    let (retry, gate) = (self.work.clone(), self.gate.clone());
-    let candidate = self.work.retry(&self.fields);
-    let valid = candidate.is_some();
-    let retry =
-      ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(move || {
-        let Some(candidate) = &candidate else {
-          return;
-        };
-        if !matches!(candidate.change(), Some(Change::Publish(..))) || may_publish(gate.as_ref()) {
-          retry.run(candidate.clone());
-        }
-      });
-    let (title, explanation) = if self.work.publication_failed() {
-      words::publication_failure(
-        ctx,
-        self.saved.get().0.as_ref().and_then(|entry| entry.state.published()),
-        error.message(),
-      )
-    } else {
-      (ctx.t("instructions.writeFailed"), message_text(ctx, error.message()))
-    };
-    let notice =
-      crate::ui::notice::Notice::new("instruction-write-error", crate::ui::notice::NoticeTone::Danger, title)
-        .body(explanation)
-        .action(if valid { retry } else { retry.disabled() });
-    if self.work.publication_failed() {
-      body.child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Md))
-          .child(notice.stacked()),
-      )
-    } else {
-      body.child(notice.inspector())
-    }
-  }
-  fn published_notice(&self, ctx: &mut Ctx, retained: &[RetainedRun], body: Column) -> Column {
-    let Some(version) = self.published.get() else {
-      return body;
-    };
-    let dismiss = self.published.clone();
-    let dismiss = crate::ui::icon_button::IconButton::new(
-      "instruction-published-dismiss",
-      Icon::X,
-      ctx.t("instructions.closePanel"),
-    )
-    .small()
-    .on_click(move || dismiss.set(None))
-    .render(ctx);
-    body.child(crate::ui::notice::result_notice(
-      "instruction-published-notice",
-      &words::published_notice(ctx, version, retained),
-      dismiss,
-    ))
   }
 
-  fn reload(&self, ctx: &Ctx, props: &Props, saved: Option<&InstructionEntry>, busy: bool, body: Column) -> Column {
-    let Some(entry) = saved else {
-      return body;
-    };
-    let rejected = self.work.action.state().get().is_rejected();
-    let conflict = matches!(self.work.action.state().get().error, Some(Failure::Conflict(_)));
-    let retry_keeps_draft = self.work.publication_failed()
-      && !conflict
-      && matches!(
-        self.work.retry(&self.fields).as_ref().and_then(Write::change),
-        Some(Change::Publish(..))
-      );
-    if props.entry.as_ref() == Some(entry)
-      && (!rejected || retry_keeps_draft)
-      && !matches!(entry.state, VersionState::StaleDraft { .. })
-    {
-      return body;
-    }
-    let work = self.work.clone();
-    let id = entry.id;
-    let fields = self.fields.clone();
-    let reload = ActionButton::new(
-      "instruction-reload",
-      ButtonKind::Secondary,
-      ctx.t("instructions.reload"),
-    )
-    .on_click(move || work.run(Write::Reload(id, fields.snapshot())));
-    body
-      .with_children(
-        (props.entry.as_ref() != Some(entry))
-          .then(|| Text::new(&ctx.t("instructions.outsideChange")).variant(TypographyStyle::Caption)),
-      )
-      .child(if busy { reload.disabled() } else { reload })
-  }
-  fn header(&self, ctx: &Ctx, saved: Option<&InstructionEntry>, dirty: bool, busy: bool) -> Element {
-    let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
-    // The draft as automation saved it over the MCP server (ORC-30): who wrote it shows before the person publishes.
-    let automated = !busy && !dirty && saved.is_some_and(|entry| ctx.props::<Props>().data.by_automation(entry));
-    let status = if busy {
-      ctx.t("instructions.saving")
-    } else if self.fields.instruction().is_err() {
-      ctx.t("instructions.notSaved")
-    } else if dirty {
-      ctx.t("instructions.unsaved")
-    } else if automated {
-      words::automation_version(ctx, state)
+  /// The crumb, the head, and the draft bar or what is asked in its place.
+  fn top(&self, ctx: &mut Ctx, props: &Props, saved: Option<&InstructionEntry>, (dirty, busy, invalid): (bool, bool, bool)) -> Element {
+    let name = self.fields.name.get();
+    let title = if name.trim().is_empty() {
+      ctx.t("instructions.new")
     } else {
-      words::editor_version(ctx, state)
+      name.as_str().into()
     };
-    let button = self.action_button(ctx, saved, dirty, busy);
-    Row::new()
-      .id("instruction-editor-header")
+    let tab = saved.map_or(props.tab, |entry| Tab::of(entry.body.scope()));
+    let sub = ctx.t_args(
+      "instructions.pageSub",
+      [
+        ("scope", words::scope(ctx, tab).to_string()),
+        ("project", props.project.open.project.name().to_string()),
+      ],
+    );
+    let more = saved.map(|_| page_head::More {
+      open: self.more.clone(),
+      anchor: self.anchor.clone(),
+      remove: {
+        let ask = self.ask.clone();
+        std::sync::Arc::new(move || ask.set(Ask::Remove))
+      },
+    });
+    let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
+    let automated = !busy && !dirty && saved.is_some_and(|entry| props.data.by_automation(entry));
+    let bar = match editor_actions::question(self, ctx, props, saved) {
+      Some(question) => question,
+      None => page_head::bar(
+        ctx,
+        tab,
+        &page_head::Now {
+          state,
+          dirty,
+          busy,
+          invalid,
+          automated,
+          saved_at: saved.and_then(|entry| entry.draft_saved_at),
+        },
+        self.bar_actions(ctx, saved, dirty, busy),
+      ),
+    };
+    Column::new()
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(EDITOR_HEADER_HEIGHT))
-      .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(
-        Column::new()
-          .spacing(ExtraSpacing::Hair.role())
-          .child(
-            Text::new(&words::editor_scope(
-              ctx,
-              ctx.props::<Props>().tab,
-              state.has_draft() || dirty,
-              state.published(),
-            ))
-            .variant(TypographyStyle::Caption),
-          )
-          .child(Text::new(&self.fields.name.get()).variant(TypographyStyle::Title)),
-      )
-      .child(
-        Row::new()
-          .flex(1.0)
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(crate::ui::icon::icon(
-            if busy {
-              Icon::LoaderCircle
-            } else if self.fields.instruction().is_err() {
-              Icon::CircleAlert
-            } else if !dirty && !state.has_draft() {
-              Icon::CircleCheck
-            } else if automated {
-              Icon::Bot
-            } else if state.published().is_none() {
-              Icon::CircleDashed
-            } else {
-              Icon::FilePen
-            },
-            crate::theme::IconSize::Sm,
-            if self.fields.instruction().is_err() {
-              PaletteColor::Danger
-            } else if !dirty && !state.has_draft() {
-              PaletteColor::Success
-            } else {
-              PaletteColor::TextMuted
-            },
-          ))
-          .child(
-            Text::new(&status)
-              .id("instruction-save-status")
-              .variant(TypographyStyle::Description)
-              .color(if self.fields.instruction().is_err() {
-                PaletteColor::Danger
-              } else {
-                PaletteColor::TextSecondary
-              }),
-          ),
-      )
-      .with_children((ctx.props::<Props>().tab != Tab::Steps || state.has_draft() || dirty).then_some(button))
+      .spacing(HubSpacing::Row.role())
+      .child(page_head::crumb(ctx, &props.selection, saved.is_none()))
+      .child(page_head::head(ctx, (&title, &sub), more))
+      .with_children(editor_actions::remove_question(self, ctx, props, saved))
+      .child(bar)
       .into()
   }
+
+  fn bar_actions(&self, ctx: &Ctx, saved: Option<&InstructionEntry>, dirty: bool, busy: bool) -> Vec<Element> {
+    let mut actions = Vec::new();
+    if let Some(entry) = saved
+      && entry.state.has_draft()
+      && entry.state.published().is_some()
+    {
+      let ask = self.ask.clone();
+      let discard = ActionButton::new("instruction-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
+      actions.push(if busy || dirty { discard.disabled() } else { discard.on_click(move || ask.set(Ask::Discard)) }.into());
+    }
+    actions.push(self.action_button(ctx, saved, dirty, busy).into());
+    actions
+  }
+
   fn action_button(&self, ctx: &Ctx, saved: Option<&InstructionEntry>, dirty: bool, busy: bool) -> ActionButton {
     let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
     let number = state.published().map_or(1, |v| v.get().saturating_add(1));
     let work = self.work.clone();
-    if let Some(entry) = saved {
-      if !dirty && !state.has_draft() {
-        let panel = self.panel.clone();
-        return ActionButton::new(
-          "instruction-preview-prompt",
-          ButtonKind::Secondary,
-          ctx.t("instructions.previewPrompt"),
-        )
-        .icon(Icon::Eye)
-        .on_click(move || panel.choose(Panel::Preview));
-      }
-      let (entry, gate) = (entry.clone(), self.gate.clone());
-      let publish = ActionButton::new(
-        "instruction-publish",
-        ButtonKind::Primary,
-        ctx.t_args("instructions.publish", [("version", number.to_string())]),
-      )
-      .icon(Icon::Upload)
-      .on_click(move || {
-        if may_publish(gate.as_ref()) && publication::missing(entry.body.text(), entry.body.events()).is_empty() {
-          work.run(Change::Publish(entry.clone()).into());
-        }
-      });
-      if self.work.publishing() {
-        publish.loading()
-      } else if busy || dirty || !state.has_draft() || matches!(state, VersionState::StaleDraft { .. }) {
-        publish.unavailable(ctx.t("instructions.publishSaveWaiting"))
-      } else if !self.fields.blocked().is_empty() {
-        publish.unavailable(ctx.t("instructions.publishWaiting"))
-      } else {
-        publish
-      }
-    } else {
+    let Some(entry) = saved else {
       let candidate = self
         .fields
         .instruction()
         .ok()
         .and_then(|body| Name::new(&self.fields.name.get()).ok().map(|name| (name, body)));
       let valid = candidate.is_some();
-      let save = ActionButton::new(
-        "instruction-create",
-        ButtonKind::Primary,
-        ctx.t("instructions.createDraft"),
-      )
-      .icon(Icon::Save)
-      .on_click(move || {
-        if let Some((name, body)) = &candidate {
-          // Work::run tells whether an MCP client's input wrote it or presses Create.
-          work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
-        }
-      });
-      if busy {
+      let save = ActionButton::new("instruction-create", ButtonKind::Primary, ctx.t("instructions.createDraft"))
+        .icon(Icon::Check)
+        .on_click(move || {
+          if let Some((name, body)) = &candidate {
+            // Work::run tells whether an MCP client's input wrote it or presses Create.
+            work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
+          }
+        });
+      return if busy {
         save.loading()
       } else if valid {
         save
       } else {
         save.disabled()
+      };
+    };
+    if !dirty && !state.has_draft() {
+      let panel = self.panel.clone();
+      return ActionButton::new("instruction-preview-prompt", ButtonKind::Secondary, ctx.t("instructions.previewPrompt"))
+        .icon(Icon::Eye)
+        .on_click(move || panel.choose(Panel::Preview));
+    }
+    let (entry, gate) = (entry.clone(), self.gate.clone());
+    let publish = ActionButton::new(
+      "instruction-publish",
+      ButtonKind::Primary,
+      ctx.t_args("instructions.publish", [("version", number.to_string())]),
+    )
+    .icon(Icon::Upload)
+    .on_click(move || {
+      if may_publish(gate.as_ref()) && publication::missing(entry.body.text(), entry.body.events()).is_empty() {
+        work.run(Change::Publish(entry.clone()).into());
       }
+    });
+    if self.work.publishing() {
+      publish.loading()
+    } else if busy || dirty || !state.has_draft() || matches!(state, VersionState::StaleDraft { .. }) {
+      publish.unavailable(ctx.t("instructions.publishSaveWaiting"))
+    } else if !self.fields.blocked().is_empty() {
+      publish.unavailable(ctx.t("instructions.publishWaiting"))
+    } else {
+      publish
     }
   }
 }

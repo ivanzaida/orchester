@@ -71,6 +71,13 @@ impl Question {
     self
   }
 
+  /// The action's and the way back's own element ids, where a screen named them before the hub.
+  pub(crate) fn button_ids(mut self, confirm: &str, keep: &str) -> Self {
+    self.confirm = self.confirm.id(confirm);
+    self.keep = self.keep.id(keep);
+    self
+  }
+
   pub(crate) fn failure(mut self, failure: Option<Arc<str>>) -> Self {
     self.failure = failure;
     self

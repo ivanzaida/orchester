@@ -1,15 +1,15 @@
-//! gJurA form and the inline unavailable explanation abZYW.
+//! A skill's fields (`Skill` and `Body` in 03b) and why its draft cannot be published, under them.
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{messages::Message, skills::editor::publish_reason};
 
-use super::{super::words, DESCRIPTION_HEIGHT, Editor, Props, SCOPE_WIDTH};
+use super::{super::words, BODY_HEIGHT, DESCRIPTION_HEIGHT, Editor, Props, SCOPE_WIDTH};
 use crate::{
   theme::ExtraSpacing,
   ui::{
@@ -50,16 +50,8 @@ impl Editor {
       .locked(locked)
       .render(ctx);
     Column::new()
+      .id("skill-form")
       .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .padding(
-        Padding::new()
-          .left(crate::theme::skills::form_inset())
-          .right(crate::theme::skills::form_inset())
-          .top(ExtraSpacing::Tabs.role())
-          .bottom(SpacingSize::Md),
-      )
       .spacing(SpacingSize::Md)
       .child(
         Row::new()
@@ -77,8 +69,7 @@ impl Editor {
       ))
       .child(
         Column::new()
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0))
+          .height(Dimension::Px(BODY_HEIGHT))
           .width(Dimension::Pct(100.0))
           .spacing(ExtraSpacing::Snug.role())
           .child(

@@ -31,7 +31,7 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
   let before = screen.entry(id);
   screen.go();
   screen.until("saved draft", |s| {
-    s.text("instruction-save-status").contains("Draft saved")
+    s.text("instruction-save-status").contains("· saved")
   });
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("private db");
   db.execute_batch(
@@ -55,15 +55,16 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
     !screen.exists("instruction-reload"),
     "publication error has only its retry action"
   );
-  let header = bounds(&mut screen, "instruction-editor-header");
+  // The notice spans the page's pane under the draft bar (02b); inside it, GxmNs's insets.
+  let bar = bounds(&mut screen, "instruction-save");
   let notice = bounds(&mut screen, "instruction-write-error");
   let title = bounds(&mut screen, "instruction-write-error-title");
   let explanation = bounds(&mut screen, "instruction-write-error-body");
   let glyph = bounds(&mut screen, "instruction-write-error-icon");
   let retry = bounds(&mut screen, "instruction-retry");
-  close(notice.x - header.x, 20.0);
-  close(header.x + header.width - notice.x - notice.width, 20.0);
-  close(notice.y - header.y - header.height, 12.0);
+  close(notice.x, bar.x);
+  close(notice.width, bar.width);
+  assert!(notice.y >= bar.y + bar.height, "under the draft bar: {notice:?} / {bar:?}");
   close(glyph.x - notice.x, 14.0);
   close(glyph.y - notice.y, 12.0);
   close(title.x - glyph.x - glyph.width, 10.0);

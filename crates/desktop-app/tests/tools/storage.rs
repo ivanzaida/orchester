@@ -13,10 +13,15 @@ fn tools_database_lock_shows_actionable_cause_and_retry_recovers() {
   // The read gives up once it waited for the lock five seconds instead of a minute (process-wide, for
   // every test of this binary).
   orchester_store::set_lock_budget_for_test(std::time::Duration::from_secs(5));
-  // Rollback-journal exclusive locks block readers as well as writers, on both platforms.
-  sqlite
-    .execute_batch("PRAGMA journal_mode = DELETE; BEGIN EXCLUSIVE")
-    .expect("lock fixture database");
+  // Rollback-journal exclusive locks block readers as well as writers, on both platforms. The window's own reads
+  // (the list, the hub's tab counts) come and go meanwhile: the lock is taken between them.
+  let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+  while let Err(error) = sqlite.execute_batch("PRAGMA journal_mode = DELETE; BEGIN EXCLUSIVE") {
+    assert!(std::time::Instant::now() < deadline, "lock fixture database: {error}");
+    t.window.tree.tick_futures();
+    t.window.pass();
+    std::thread::sleep(std::time::Duration::from_millis(10));
+  }
   t.window
     .projects()
     .feed(super::support::project_id())

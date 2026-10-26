@@ -115,8 +115,9 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   fs::write(s.repo.join("AGENTS.md"), "Read the project rules.").expect("instructions");
   fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
   s.go(ProjectPage::Skills(Default::default()));
-  let empty = s.text("skills-empty");
-  assert!(empty.contains(".claude/skills/checks") && empty.contains("AGENTS.md"));
+  assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
+  let found = s.text("skills-repository-settings");
+  assert!(found.contains("3 items") && found.contains("2 instructions, 1 skill"), "{found}");
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("nothing to import"));
   s.click("skill-import-preview-2");
@@ -261,7 +262,7 @@ fn skills_repository_files_enabling_asks_and_off_applies_without_publishing() {
   s.window
     .until("setting on", |_| db.repository_agent_files().expect("setting").is_on());
   s.window.until("on label", |w| {
-    w.texts("skill-repository-files")
+    w.texts("skill-repository-files-state")
       .is_some_and(|t| t.join(" ").contains("On"))
   });
   s.click("skill-repository-files");
@@ -403,10 +404,9 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
   s.window.until("library reflects the saved scope", |w| {
     w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Delivery"))
   });
-  s.click("skills-tab-Project");
-  assert!(s.text("skills-list").contains("No skills in this scope"));
-  s.click("skills-tab-Pipelines");
-  assert!(s.text("skills-list").contains("Delivery"));
+  // One list, a group per scope (03): the skill is under Pipelines & steps, and no Project group is left empty.
+  assert!(s.text("skills-group-pipelines").contains("Delivery"));
+  assert!(s.window.tree.get_element_by_id("skills-group-project").is_none());
 }
 
 #[test]
@@ -521,9 +521,9 @@ fn skills_crumb_returns_to_the_library_filter_it_came_from() {
   s.window.navigation().go(library.clone());
   s.go(ProjectPage::Skill(id));
   s.window.until("the skill's crumb", |w| {
-    w.tree.get_element_by_id("skill-crumb-0").is_some()
+    w.tree.get_element_by_id("skill-crumb").is_some()
   });
-  s.click("skill-crumb-0");
+  s.click("skill-crumb");
   s.window.pass();
   assert_eq!(s.window.navigation().route_now(), library);
 }

@@ -7,7 +7,9 @@
 
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
+pub(crate) mod page_head;
 pub(crate) mod parts;
+pub(crate) mod pills;
 pub(crate) mod question;
 pub(crate) mod removal;
 mod tabs;

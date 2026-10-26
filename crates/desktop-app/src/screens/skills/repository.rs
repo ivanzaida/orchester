@@ -29,13 +29,12 @@ use orchester_workspace::{
 use super::PageProps;
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  screens::hub::parts as hub_parts,
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::ExtraSpacing,
   ui::{
-    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     field::field_error,
-    inspector::note,
     message::message_text,
     notice::{Notice, NoticeTone},
     tinted_note::person_only,
@@ -233,18 +232,11 @@ impl Component for Found {
       refused: ctx.signal(false),
     }
   }
+  /// *Found in this repository* (`03` `w0NiG0`): the Repository agent files switch, then Import with what the
+  /// repository holds.
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<PageProps>().clone();
     let on = p.data.agent_files.is_on();
-    let mut panel = Column::new()
-      .id("skills-repository-settings")
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .child(
-        Text::new(&ctx.t("skills.repositorySettings"))
-          .width(Dimension::Pct(100.0))
-          .variant(ExtraTypography::Strong.role()),
-      );
     let asking = self.asking.clone();
     let save = self.save.clone();
     let root = p.project.open.repo_root.clone();
@@ -257,7 +249,8 @@ impl Component for Found {
       } else {
         "skills.repositoryOff"
       }),
-    );
+    )
+    .hide_label();
     let toggle = if self.save.state().get().is_pending() {
       toggle
     } else {
@@ -269,11 +262,35 @@ impl Component for Found {
         }
       })
     };
-    panel = panel.child(toggle).child(note(
-      "skills-repository-mechanism",
-      crate::ui::icon::Icon::Info,
-      &ctx.t("skills.repositoryExplain"),
-    ));
+    // `Off ●` at the row's end (03): the setting's state in words, then its switch.
+    let state = hub_parts::quiet(&ctx.t(if on { "skills.repositoryStateOn" } else { "skills.repositoryStateOff" }))
+      .id("skill-repository-files-state");
+    let control = Row::new()
+      .spacing(SpacingSize::Sm)
+      .align_items(lurq::layout::Alignment::Center)
+      .child(state)
+      .child(toggle);
+    let files = hub_parts::field(
+      "skills-repository-files",
+      &ctx.t("skills.repositoryFiles"),
+      Some(&ctx.t("skills.repositoryExplain")),
+      control,
+    );
+    let items = &p.data.repository.items;
+    let of = |kind| items.iter().filter(|i| i.kind == kind).count();
+    let found = super::words::types(ctx, of(ItemKind::Instruction), of(ItemKind::Skill));
+    let open = ActionButton::new("skills-found-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
+      .icon(crate::ui::icon::Icon::FolderOpen)
+      .opens(p.view.panel.to(super::state::Panel::Import));
+    let import = hub_parts::Entry::new("skills-found-import", found)
+      .hint(ctx.t("skills.foundImportHint"))
+      .end(open);
+    let count = ctx.t_args("skills.repositoryCount", [("count", items.len().to_string())]);
+    let mut panel = hub_parts::group(
+      "skills-repository-settings",
+      hub_parts::head("skills-repository-settings", &ctx.t("skills.repositoryTitle"), Some(&count), None),
+      hub_parts::boxed("skills-repository-rows", [files.into(), import.into()]),
+    );
     if self.asking.get() {
       panel = panel.child(self.question(ctx, &p));
       if self.refused.get() {
@@ -399,14 +416,11 @@ impl Import {
   }
   fn review_header(&self, ctx: &mut Ctx, p: &PageProps) -> Column {
     let back = p.view.panel.clone();
-    let crumbs = breadcrumb(
-      ctx,
+    let here = ctx.t("skills.import");
+    let crumbs = crate::screens::hub::page_head::crumb(
       "skill-import-crumb",
-      CrumbSeparator::Chevron,
-      vec![
-        Crumb::to(ctx.t("skills.title"), back.to(back.library())),
-        Crumb::here(ctx.t("skills.import")),
-      ],
+      (&ctx.t("hub.tabs.skills"), back.to(back.library())),
+      Some(&here),
     );
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -468,87 +482,4 @@ impl Import {
 
     list
   }
-}
-
-/// WMT1W's discovered sources (`cyNh6`) are separate from the actual repository setting.
-pub fn inventory(ctx: &mut Ctx, p: &PageProps) -> Element {
-  let items = p
-    .data
-    .repository
-    .items
-    .iter()
-    .enumerate()
-    .map(|(i, item)| (i, item.clone()))
-    .collect();
-  let rows = super::repository_list::listed(ctx, "skills-found-items", items, None, None, false);
-  Column::new()
-    .id("skills-found")
-    .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .rounded(crate::theme::ExtraRadius::Tile.role())
-    .clip()
-    .child(found_header(ctx, p))
-    .child(rows)
-    .child(
-      Row::new()
-        .id("skills-found-footer")
-        .width(Dimension::Pct(100.0))
-        .background(PaletteColor::SurfacePanel)
-        .border_top(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .padding(Padding::symmetric(
-          crate::theme::skills::cell_spacing(),
-          ExtraSpacing::Loose.role(),
-        ))
-        .child(
-          Text::new(&ctx.t("skills.repositoryPreviewNote"))
-            .id("skills-found-note")
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .variant(crate::theme::skills::found_note()),
-        ),
-    )
-    .into()
-}
-/// Found header `r3tdmV`: 40 high, its contents centered, the repository's folder at its end. A folder
-/// too long for one line wraps, and keeps room above and below it.
-const FOUND_HEADER_HEIGHT: f32 = 40.0;
-fn found_header(ctx: &Ctx, p: &PageProps) -> Row {
-  Row::new()
-    .id("skills-found-header")
-    .width(Dimension::Pct(100.0))
-    .min_height(Dimension::Px(FOUND_HEADER_HEIGHT))
-    .align_items(lurq::layout::Alignment::Center)
-    .padding(Padding::symmetric(
-      crate::theme::skills::cell_spacing(),
-      ExtraSpacing::Loose.role(),
-    ))
-    .spacing(SpacingSize::Sm)
-    .border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(crate::ui::icon::icon(
-      crate::ui::icon::Icon::FolderGit2,
-      crate::theme::IconSize::Md,
-      PaletteColor::TextSecondary,
-    ))
-    .child(
-      Text::new(&ctx.t("skills.repositoryTitle"))
-        .id("skills-found-title")
-        .variant(crate::theme::skills::found_title()),
-    )
-    .child(
-      Text::new(&ctx.t_args(
-        "skills.repositoryCount",
-        [("count", p.data.repository.items.len().to_string())],
-      ))
-      .id("skills-found-count")
-      .variant(crate::theme::skills::found_count()),
-    )
-    .child(
-      Text::new(&p.project.open.repo_root.display().to_string())
-        .id("skills-found-folder")
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .text_align(lurq::layout::text_style::TextAlign::Right)
-        .variant(ExtraTypography::MonoKey.role()),
-    )
 }

@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{InstructionsTab, InstructionsView, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -12,6 +12,16 @@ use orchester_workspace::instructions::{
 };
 
 use super::support::{Data, Window, project_id};
+
+/// The scope tab a rule was in before the list had a group per scope.
+fn scope_tab(scope: &InstructionScope) -> InstructionsTab {
+  match scope {
+    InstructionScope::Project => InstructionsTab::Project,
+    InstructionScope::AgentRole { .. } => InstructionsTab::Roles,
+    InstructionScope::Pipeline { .. } => InstructionsTab::Pipelines,
+    InstructionScope::Step { .. } => InstructionsTab::Steps,
+  }
+}
 
 pub struct Instructions {
   pub window: Window,
@@ -44,12 +54,46 @@ impl Instructions {
     }
     entry.id
   }
+  /// Opens Instructions as it opened before the Agents hub: on the first project rule, or the list without one.
   pub fn go(&mut self) {
+    self.list();
+    self.open_tab(InstructionsTab::Project);
+  }
+  /// The list of every rule (`02`).
+  pub fn list(&mut self) {
     self.window.navigation().go(Route::Project(
       project_id(),
       ProjectPage::Instructions(Default::default()),
     ));
-    self.until("instructions read", |s| s.exists("instructions-tabs"));
+    self.until("instructions read", |s| {
+      s.exists("instructions-new") && (s.exists("instruction-library") || s.exists("instructions-empty"))
+    });
+  }
+  /// The first rule of `tab`'s scope, as its tab opened it before the list had a group per scope; the list when
+  /// the scope has none.
+  pub fn open_tab(&mut self, tab: InstructionsTab) {
+    let mut rules: Vec<InstructionEntry> = self
+      .listed()
+      .entries
+      .iter()
+      .filter(|e| scope_tab(e.body.scope()) == tab)
+      .cloned()
+      .collect();
+    rules.sort_by(|a, b| a.name.cmp(&b.name));
+    let first = rules.first().map(|e| e.id);
+    self.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::Instructions(InstructionsView::rule(tab, first)),
+    ));
+    let name = rules.first().map(|e| e.name.to_string());
+    self.until("the rule or the list", |s| {
+      // Unsaved edits ask before the page leaves them.
+      s.exists("instruction-leave-question")
+        || match &name {
+          Some(name) => s.exists("instruction-prompt") && s.exists("instruction-title") && s.text("instruction-title") == *name,
+          None => s.exists("instruction-library") || s.exists("instructions-empty"),
+        }
+    });
   }
   pub fn until(&mut self, what: &str, mut predicate: impl FnMut(&mut Self) -> bool) {
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
@@ -67,7 +111,11 @@ impl Instructions {
       std::thread::sleep(Duration::from_millis(5));
     }
   }
+  /// Presses `id`; `instruction-tab-N`, a scope tab before the hub, opens that scope's first rule.
   pub fn click(&mut self, id: &str) {
+    if let Some(index) = id.strip_prefix("instruction-tab-").and_then(|n| n.parse::<usize>().ok()) {
+      return self.open_tab(InstructionsTab::ALL[index]);
+    }
     self
       .window
       .tree
@@ -106,6 +154,16 @@ impl Instructions {
       .tree
       .key_down(key.into(), code.into(), shift, control, false);
     self.window.pass();
+  }
+  /// What the person typed into the input `id`.
+  pub fn value(&mut self, id: &str) -> String {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.as_text_input())
+      .unwrap_or_else(|| panic!("{id}"))
+      .value()
   }
   pub fn choose(&mut self, id: &str, label: &str) {
     let mut select = self

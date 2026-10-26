@@ -28,7 +28,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
   after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
+  (an MCP server's id); agents, instructions, skills, tools and memory are the five tabs of one Agents page \
+  (Profiles, Instructions, Skills, Tools, Memory), each its own route: skills takes `skill` (a skill id, new or \
+  import), tools takes tool (a tool id, or new), and its page's tab; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \

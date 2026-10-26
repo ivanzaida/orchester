@@ -1,15 +1,17 @@
-//! Keep unsaved text when changing instructions or leaving the page.
+//! Keep unsaved text when changing instructions or leaving the page: *Leave with unsaved changes?*, the one wording
+//! instructions and skills share (`06c`), asked in place above the page.
 use lurq::{
   app::ctx::Ctx,
-  components::{Column, Row, Text},
-  node::Element,
+  components::Column,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use super::state::Selection;
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
-  theme::{ExtraSpacing, ExtraTypography},
-  ui::button::{ActionButton, ButtonKind},
+  screens::hub::question::{Question, Weight},
+  theme::HubSpacing,
+  ui::icon::Icon,
 };
 
 pub fn question(ctx: &mut Ctx, selection: &Selection, guard: &LeaveGuard) -> Option<Element> {
@@ -19,43 +21,34 @@ pub fn question(ctx: &mut Ctx, selection: &Selection, guard: &LeaveGuard) -> Opt
   let (keep, leave) = (selection.clone(), selection.clone());
   let (keep_guard, leave_guard) = (guard.clone(), guard.clone());
   let nav = Navigation::of(ctx);
-  let confirm =
-    ActionButton::new("instruction-leave", ButtonKind::Secondary, ctx.t("instructions.leave")).on_click(move || {
-      if leave.busy.get_untracked() {
-        return;
-      }
-      if let Some(view) = leave.pending.get_untracked() {
-        leave.dirty.set(false);
-        leave.pending.set(None);
-        leave.show(view);
-      } else {
-        leave_guard.leave(&nav);
-      }
-    });
+  let question = Question::new(
+    "instruction-leave-question",
+    Weight::Neutral,
+    (ctx.t("hub.leave.title"), ctx.t("hub.leave.sentence")),
+    ((Icon::Pencil, ctx.t("hub.leave.keep")), ctx.t("hub.leave.leave")),
+  )
+  // Keep editing is the question's action; Leave editor is the way out.
+  .on_confirm(false, move || {
+    keep.pending.set(None);
+    keep_guard.keep_editing();
+  })
+  .on_keep(move || {
+    if leave.busy.get_untracked() {
+      return;
+    }
+    if let Some(view) = leave.pending.get_untracked() {
+      leave.dirty.set(false);
+      leave.pending.set(None);
+      leave.show(view);
+    } else {
+      leave_guard.leave(&nav);
+    }
+  });
   Some(
     Column::new()
-      .id("instruction-leave-question")
-      .spacing(ExtraSpacing::Snug.role())
-      .padding(ExtraSpacing::Tabs.role())
-      .child(Text::new(&ctx.t("instructions.leaveQuestion")).variant(ExtraTypography::Strong.role()))
-      .child(Text::new(&ctx.t("instructions.leaveDetail")).variant(ExtraTypography::Note.role()))
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .child(
-            ActionButton::new("instruction-keep", ButtonKind::Primary, ctx.t("instructions.keep")).on_click(
-              move || {
-                keep.pending.set(None);
-                keep_guard.keep_editing();
-              },
-            ),
-          )
-          .child(if selection.busy.get() {
-            confirm.disabled()
-          } else {
-            confirm
-          }),
-      )
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::new().left(HubSpacing::Side.role()).right(HubSpacing::Side.role()).top(HubSpacing::BodyTop.role()))
+      .child(question)
       .into(),
   )
 }
