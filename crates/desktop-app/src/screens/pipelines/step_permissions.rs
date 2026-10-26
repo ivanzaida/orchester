@@ -1,194 +1,97 @@
-//! Gate and permissions controls; the workspace decides what the profile can narrow.
+//! A step's Permissions page (`02e · step permissions` `T46Jq`): its commands, narrowed from the profile's in a
+//! picker, *Turn network off* and *Ask when a tool needs approval*, what the profile allows, and *Use profile
+//! commands and network* once the step narrows them. A step can only narrow what its profile and its connection
+//! enforce on this platform; a choice they cannot is locked with why (`03b` `g6Ecy`). Turning Ask off asks before
+//! saving (`super::save`).
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
+  app::ctx::Ctx,
   components::Column,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   permission::{StepCommands, StepNetwork, StepPermissions},
-  resource::{RepositoryAccess, Step, StepKind, takes_base_moves, takes_base_moves_by_default},
+  resource::{Step, StepKind},
 };
 use orchester_workspace::pipelines::{data::ProfileChoice, narrowing};
 
-use super::{parts, state::State};
+use super::{state::State, step_fields::Props};
 use crate::ui::{
+  button::{ActionButton, ButtonKind},
   icon::Icon,
-  inspector::{control, note},
-  pressable::Focus,
-  tabs::{Segment, SegmentFace, segmented},
+  row_group::{GroupRow, RowGroup, note},
   toggle::{Toggle, ToggleKind},
 };
 
-pub fn rows(ctx: &mut Ctx, state: &State, step: &Step, locked: bool) -> Element {
-  let mut body = Column::new()
-    .spacing(SpacingSize::Xs)
-    .child(parts::section(ctx, "pipelines.gateAccess"));
-  let (edit, key) = (state.clone(), step.key.clone());
-  let gate = Toggle::new(
-    "step-gate",
-    ToggleKind::Switch,
-    step.approval_gate,
-    ctx.t("pipelines.gate"),
-  );
-  body = body.child(switch_row(
-    ctx,
-    "pipelines.gate",
-    if locked {
-      gate
-    } else {
-      gate.on_change(move |on| edit.update(|s| s.change(&key, |step| step.approval_gate = on)))
-    },
-  ));
+/// The page's groups under its head.
+pub fn page(ctx: &mut Ctx, props: &Props) -> Vec<Element> {
+  let editing = props.state.get();
   let StepKind::Agent {
-    profile, repository, ..
-  } = &step.kind
+    profile: Some(profile), ..
+  } = props.step.kind
   else {
-    return body.into();
+    return vec![note("step-narrow-note", &ctx.t("pipelines.narrowHint")).into()];
   };
-  let editing = state.get();
-  let choice = profile.and_then(|id| editing.opened.assignables.profile(id));
-  let (edit, key) = (state.clone(), step.key.clone());
-  let writable = !locked && (choice.is_some_and(narrowing::can_write) || *repository == RepositoryAccess::Write);
-  let segments = [(false, "pipelines.readOnly"), (true, "pipelines.canWrite")].map(|(write, label)| {
-    let (edit, key) = (edit.clone(), key.clone());
-    Segment::new(
-      if write { "step-write" } else { "step-read" },
-      SegmentFace::Text(ctx.t(label)),
-      (*repository == RepositoryAccess::Write) == write,
-      move || {
-        if writable {
-          edit.update(|s| {
-            s.change(&key, |step| {
-              if let StepKind::Agent { repository, .. } = &mut step.kind {
-                *repository = if write {
-                  RepositoryAccess::Write
-                } else {
-                  RepositoryAccess::ReadOnly
-                };
-              }
-            })
-          });
-        }
-      },
-    )
-  });
-  body = body.child(control(
-    "step-access",
-    &ctx.t("pipelines.access"),
-    segmented("step-access-choice", segments, Focus::Keyboard),
-  ));
-  if *repository == RepositoryAccess::Write {
-    body = body.child(base_moves_rows(ctx, state, (editing.shown().steps(), step), locked));
-  }
-  // An agent step's own sources (`O6piA3`) come between its access and its permissions.
-  let sources = super::sources::step_section(ctx, state, &step.key, locked);
-  let Some(choice) = choice else {
-    return body
-      .child(sources)
-      .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
-      .into();
+  let Some(choice) = editing.opened.assignables.profile(profile).cloned() else {
+    return vec![note("step-narrow-note", &ctx.t("pipelines.narrowHint")).into()];
   };
-  body
-    .child(sources)
-    .child(permission_section(ctx, state, step, choice, locked))
-    .into()
+  let picker = ctx.mount_keyed::<super::command_picker::Commands>(&format!("step-commands-{}", props.step.key), props.clone());
+  let commands = RowGroup::new("step-commands", ctx.t("pipelines.commands"))
+    .lead(inheritance(ctx, &choice))
+    .row(GroupRow::new("step-command-summary", ctx.t("pipelines.commands")).end(picker));
+  let mut parts: Vec<Element> = vec![commands.into(), network(ctx, props, &choice)];
+  parts.extend(reset(ctx, props));
+  parts
 }
 
-/// *Merge the base branch when it moves* (ORC-65) for a writing step of `steps`, as the pipeline's rule decides it for
-/// `step`: its own choice, else the default. A choice the default already makes is not kept, so the step goes on
-/// following the rule.
-fn base_moves_rows(ctx: &Ctx, state: &State, (steps, step): (&[Step], &Step), locked: bool) -> Column {
-  let by_default = takes_base_moves_by_default(steps, step);
-  let toggle = Toggle::new(
-    "step-base-moves",
-    ToggleKind::Switch,
-    takes_base_moves(steps, &step.key),
-    ctx.t("pipelines.baseMoves"),
-  );
-  let (edit, key) = (state.clone(), step.key.clone());
-  let toggle = if locked {
-    toggle
+/// What the profile allows, which a step can only narrow (`g2zgHb`).
+fn inheritance(ctx: &Ctx, choice: &ProfileChoice) -> std::sync::Arc<str> {
+  let commands = narrowing::commands(choice);
+  if commands.is_empty() {
+    ctx.t("pipelines.narrowHint")
   } else {
-    toggle.on_change(move |on| {
-      edit.update(|s| {
-        s.change(&key, |step| {
-          if let StepKind::Agent { permissions, .. } = &mut step.kind {
-            permissions.takes_base_moves = (on != by_default).then_some(on);
-          }
-        });
-      });
-    })
-  };
-  Column::new()
-    .spacing(SpacingSize::Xs)
-    .child(switch_row(ctx, "pipelines.baseMoves", toggle))
-    .child(note(
-      "step-base-moves-note",
-      Icon::Info,
-      &ctx.t("pipelines.baseMovesHint"),
-    ))
+    ctx.t_args(
+      "pipelines.profileCommandsHint",
+      [
+        ("profile", choice.name.as_ref()),
+        ("commands", commands.join(", ").as_str()),
+      ],
+    )
+  }
 }
 
-fn permission_section(ctx: &mut Ctx, state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Element {
-  let mut body = Column::new().spacing(SpacingSize::Xs);
-  let context = ctx.t_args(
-    if let StepKind::Agent { permissions, .. } = &step.kind
-      && *permissions != narrowing::inherit_profile(permissions)
-    {
-      "pipelines.narrowerThan"
-    } else {
-      "pipelines.permissionsFrom"
-    },
-    [("profile", choice.name.as_ref())],
-  );
-  body = body.child(
-    crate::ui::inspector::section("step-permissions", SpacingSize::Xs).child(crate::ui::inspector::section_title(
-      "step-permissions-title",
-      &ctx.t("pipelines.permissions"),
-      Some(&context),
-    )),
-  );
-  let picker = ctx.mount_keyed::<super::command_picker::Commands>(
-    &format!("step-commands-{}", step.key),
-    super::step_fields::Props {
-      state: state.clone(),
-      step: step.clone(),
-      locked,
-      navigation_locked: locked,
-    },
-  );
-  body = body.child(control("step-command-summary", &ctx.t("pipelines.commands"), picker));
-  body
-    .child(network_rows(ctx, state, step, choice, locked))
-    .child(reset(ctx, state, step, locked))
-    .into()
-}
-pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Column {
+/// The commands the step allows now: the profile's, or its own narrowing.
+fn current(step: &Step, choice: &ProfileChoice) -> (Vec<String>, bool, bool) {
   let StepKind::Agent { permissions, .. } = &step.kind else {
-    return Column::new();
+    return (Vec::new(), false, false);
   };
-  let mut commands = Column::new().spacing(SpacingSize::Xs);
-  let all = narrowing::commands(choice);
-  let current: Vec<String> = match &permissions.commands {
-    StepCommands::AsProfile => all.clone(),
+  let commands = match &permissions.commands {
+    StepCommands::AsProfile => narrowing::commands(choice),
     StepCommands::Only(only) => only.entries().iter().map(ToString::to_string).collect(),
   };
-  for (index, command) in all.iter().enumerate() {
-    let included = current.contains(command);
-    let chosen = command.clone();
-    let current = current.clone();
-    let (edit, key, choice, off, ask) = (
-      state.clone(),
-      step.key.clone(),
-      choice.clone(),
-      permissions.network == StepNetwork::Off,
-      permissions.interactive_tool_approvals,
-    );
+  (
+    commands,
+    permissions.network == StepNetwork::Off,
+    permissions.interactive_tool_approvals,
+  )
+}
+
+/// The command picker's rows: one checkbox per command the profile allows.
+pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Column {
+  let mut commands = Column::new().spacing(lurq::app::theme::SpacingSize::Xs);
+  let (current, off, ask) = current(step, choice);
+  for (index, command) in narrowing::commands(choice).iter().enumerate() {
     let toggle = Toggle::new(
       format!("step-command-{index}"),
       ToggleKind::Checkbox,
-      included,
+      current.contains(command),
       command.as_str(),
+    );
+    let (edit, key, choice, chosen, current) = (
+      state.clone(),
+      step.key.clone(),
+      choice.clone(),
+      command.clone(),
+      current.clone(),
     );
     commands = commands.child(if locked {
       toggle
@@ -199,101 +102,55 @@ pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, l
         if on {
           only.push(chosen.clone());
         }
-        apply(&edit, &key, &choice, Some(&only), off, ask);
+        apply(&edit, &key, &choice, (Some(&only), off, ask));
       })
     });
   }
   commands
 }
-fn network_rows(ctx: &mut Ctx, state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Element {
-  let StepKind::Agent { permissions, .. } = &step.kind else {
-    return Column::new().into();
-  };
-  let all = narrowing::commands(choice);
-  let current: Vec<String> = match &permissions.commands {
-    StepCommands::AsProfile => all.clone(),
-    StepCommands::Only(only) => only.entries().iter().map(ToString::to_string).collect(),
-  };
-  let mut body = Column::new().spacing(SpacingSize::Xs);
-  let (edit, key, choice_clone, only, ask) = (
-    state.clone(),
-    step.key.clone(),
+
+/// Network and tools (`x402h`).
+fn network(ctx: &mut Ctx, props: &Props, choice: &ProfileChoice) -> Element {
+  let (commands, off, ask) = current(&props.step, choice);
+  let list = (!narrowing::commands(choice).is_empty()).then_some(commands);
+  let can_block = narrowing::can_block_network(choice);
+  let (edit, key, picked, only) = (
+    props.state.clone(),
+    props.step.key.clone(),
     choice.clone(),
-    current.clone(),
-    permissions.interactive_tool_approvals,
+    list.clone(),
   );
-  let network = Toggle::new(
-    "step-network-off",
-    ToggleKind::Switch,
-    permissions.network == StepNetwork::Off,
-    ctx.t("pipelines.networkOff"),
-  );
-  let list = (!all.is_empty()).then_some(only);
-  let network_row = switch_row(
-    ctx,
-    "pipelines.networkOff",
-    if !locked && narrowing::can_block_network(choice) {
-      network.on_change(move |off| apply(&edit, &key, &choice_clone, list.as_deref(), off, ask))
-    } else {
-      network
-    },
-  );
-  body = body.child(if narrowing::can_block_network(choice) {
-    network_row.into()
+  let network = Toggle::new("step-network-off", ToggleKind::Switch, off, ctx.t("pipelines.networkOff")).hide_label();
+  let network = if !props.locked && can_block {
+    network.on_change(move |off| apply(&edit, &key, &picked, (only.as_deref(), off, ask)))
   } else {
-    crate::ui::tooltip::Tooltip::new("step-network-reason", ctx.t("pipelines.networkUnavailable"))
-      .wrap(ctx, network_row)
-  });
-  let inheritance = inheritance_note(ctx, choice);
-  let (edit, key, choice, only, off) = (
-    state.clone(),
-    step.key.clone(),
-    choice.clone(),
-    current,
-    permissions.network == StepNetwork::Off,
-  );
-  let list = (!all.is_empty()).then_some(only);
-  let asks = Toggle::new(
-    "step-ask-tools",
-    ToggleKind::Switch,
-    permissions.interactive_tool_approvals,
-    ctx.t("pipelines.askTools"),
-  );
-  body
-    .child(switch_row(
-      ctx,
-      "pipelines.askTools",
-      if locked {
-        asks
-      } else {
-        asks.on_change(move |ask| apply(&edit, &key, &choice, list.as_deref(), off, ask))
-      },
-    ))
-    .child(inheritance)
+    network
+  };
+  let network: Element = if can_block {
+    network.into()
+  } else {
+    crate::ui::tooltip::Tooltip::new("step-network-reason", ctx.t("pipelines.networkUnavailable")).wrap(ctx, network)
+  };
+  let network = GroupRow::new("step-network-row", ctx.t("pipelines.networkOff")).end(network);
+  let network = if can_block { network } else { network.muted() };
+  let (edit, key, picked) = (props.state.clone(), props.step.key.clone(), choice.clone());
+  let asks = Toggle::new("step-ask-tools", ToggleKind::Switch, ask, ctx.t("pipelines.askTools")).hide_label();
+  let asks = if props.locked {
+    asks
+  } else {
+    asks.on_change(move |ask| apply(&edit, &key, &picked, (list.as_deref(), off, ask)))
+  };
+  RowGroup::new("step-network", ctx.t("pipelines.networkTools"))
+    .row(network)
+    .row(GroupRow::new("step-ask-tools-row", ctx.t("pipelines.askTools")).end(asks))
     .into()
 }
-fn inheritance_note(ctx: &Ctx, choice: &ProfileChoice) -> lurq::components::Row {
-  let commands = narrowing::commands(choice);
-  let text = if commands.is_empty() {
-    ctx.t("pipelines.narrowHint")
-  } else {
-    ctx.t_args(
-      "pipelines.profileCommandsHint",
-      [
-        ("profile", choice.name.as_ref()),
-        ("commands", commands.join(", ").as_str()),
-      ],
-    )
-  };
-  note("step-narrow-note", Icon::Info, &text)
-}
+
 fn apply(
   state: &State,
   key: &orchester_core::resource::StepKey,
   choice: &ProfileChoice,
-  only: Option<&[String]>,
-  off: bool,
-  ask: bool,
+  (only, off, ask): (Option<&[String]>, bool, bool),
 ) {
   let result = narrowing::permissions(only, off, ask, choice);
   state.update(|s| {
@@ -310,46 +167,23 @@ fn apply(
     })
   });
 }
-fn switch_row(ctx: &Ctx, key: &str, toggle: Toggle) -> lurq::components::Row {
-  lurq::components::Row::new()
-    .width(lurq::node::dimension::Dimension::Pct(100.0))
-    .min_height(lurq::node::dimension::Dimension::Px(28.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(lurq::layout::Alignment::Center)
-    .child(parts::caption(&ctx.t(key)).flex(1.0))
-    .child(toggle.hide_label())
-}
-pub(super) fn command_summary(ctx: &Ctx, step: &Step) -> String {
-  if let StepKind::Agent { permissions, .. } = &step.kind
-    && let StepCommands::Only(only) = &permissions.commands
-  {
-    return ctx
-      .t_args(
-        "pipelines.narrowedCommands",
-        [("count", only.entries().len().to_string())],
-      )
-      .to_string();
-  }
-  ctx.t("pipelines.inherit").to_string()
-}
 
-fn reset(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Column {
-  use crate::ui::button::{ActionButton, ButtonKind};
-
-  let body = Column::new();
-  let StepKind::Agent { permissions, .. } = &step.kind else {
-    return body;
+/// *Use profile commands and network*, once the step narrows them.
+fn reset(ctx: &Ctx, props: &Props) -> Option<Element> {
+  let StepKind::Agent { permissions, .. } = &props.step.kind else {
+    return None;
   };
   let inherited = narrowing::inherit_profile(permissions);
   if inherited == *permissions {
-    return body;
+    return None;
   }
-  let (edit, key) = (state.clone(), step.key.clone());
+  let (edit, key) = (props.state.clone(), props.step.key.clone());
   let reset = ActionButton::new(
     "step-permissions-reset",
     ButtonKind::Ghost,
     ctx.t("pipelines.resetPermissions"),
   )
+  .icon(Icon::RotateCcw)
   .on_click(move || {
     edit.update(|s| {
       s.field(&format!("{key}:step-permissions"), Ok(inherited.clone()), |s, value| {
@@ -361,5 +195,10 @@ fn reset(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Column {
       });
     });
   });
-  body.child(if locked { reset.disabled() } else { reset })
+  Some(
+    lurq::components::Row::new()
+      .width(Dimension::Pct(100.0))
+      .child(if props.locked { reset.disabled() } else { reset })
+      .into(),
+  )
 }

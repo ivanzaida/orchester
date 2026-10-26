@@ -24,6 +24,7 @@ mod files;
 mod fonts;
 mod form;
 mod gate;
+mod groups;
 mod import;
 pub mod instructions;
 mod lifecycle;
@@ -72,6 +73,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   gate::{GateSpacing, GateText},
+  groups::GroupText,
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -83,6 +85,7 @@ pub use self::{
   orchestrator::{OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
+  pipelines::{PipelinesSpacing, PipelinesText},
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},

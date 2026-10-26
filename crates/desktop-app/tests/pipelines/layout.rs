@@ -1,4 +1,4 @@
-//! Visual-regression contracts for the inspector and versioned Settings.
+//! Layout contracts of the pipeline page: its fields, New pipeline's starts, Versions and the Settings tab.
 use orchester_core::{resource::Pipeline, store::ResourceStore};
 
 use crate::pipelines_support::Editor;
@@ -21,8 +21,8 @@ fn pipelines_compact_inspector_pointer_focus_covers_body_and_insets_and_saves_ty
       .tree
       .get_element_by_id_mut("pipeline-description-box")
       .and_then(|element| element.bounds())
-      .expect("compact inspector field laid out");
-    // The inspector's one-line field must not inherit the Tools 50px or ordinary 84px minimum.
+      .expect("summary field laid out");
+    // The row's one-line field must not inherit the Tools 50px or ordinary 84px minimum.
     assert!(bounds.height >= 28.0 && bounds.height < 50.0, "{bounds:?}");
     editor.focus("pipeline-summary-name");
     let x = bounds.x + bounds.width * horizontal;
@@ -75,8 +75,7 @@ fn pipelines_empty_library_entries_select_the_requested_start_on_the_creation_pa
         .text("pipelines-empty")
         .contains("Nothing runs until you publish it")
     );
-    let parallel = editor.text("pipeline-starter-parallel");
-    assert!(parallel.contains("Run checks") && parallel.contains("Review"));
+    assert!(editor.text("pipeline-empty-starter").contains("6 steps · 2 approval gates"));
     editor.click(action);
     editor.until("new pipeline page", |e| e.exists("pipeline-name"));
     let route = editor.window.navigation().route_now();
@@ -99,7 +98,7 @@ fn pipelines_empty_library_entries_select_the_requested_start_on_the_creation_pa
 }
 
 #[test]
-fn pipelines_new_starter_preview_stays_compact_across_creation_states() {
+fn pipelines_new_starter_row_keeps_its_steps_across_creation_states() {
   let mut editor = Editor::new();
   editor.empty("Existing pipeline");
   editor.go(orchester_app::routes::ProjectPage::NewPipeline);
@@ -107,22 +106,21 @@ fn pipelines_new_starter_preview_stays_compact_across_creation_states() {
   for state in ["default", "collision", "empty"] {
     if state == "collision" {
       editor.set("pipeline-name", "Existing pipeline");
-      editor.until("name collision", |e| e.exists("pipeline-slug-collision"));
+      editor.until("name collision", |e| e.exists("pipeline-open-existing"));
     } else if state == "empty" {
       editor.set("pipeline-name", "");
       editor.click("pipeline-start-2");
     }
-    assert!(!editor.exists("pipeline-starter-parallel"));
-    assert!(editor.text("pipeline-starter-parallel-marker").contains('∥'));
+    let chain = editor.text("pipeline-start-0-hint");
+    assert!(chain.contains("Run checks ∥ Review"), "{state}: {chain}");
     let bounds = editor
       .window
       .tree
       .get_element_by_id_mut("pipeline-start-0")
       .and_then(|element| element.bounds())
-      .expect("starter option laid out");
-    // Iewpp in lAQis: two compact chip rows inside a 560 × 103 option.
-    assert!((bounds.width - 560.0).abs() < 1.0, "{state}: {bounds:?}");
-    assert!((bounds.height - 103.0).abs() < 3.0, "{state}: {bounds:?}");
+      .expect("starter row laid out");
+    // `Pane` `DuHgB`: rows 720 wide at most.
+    assert!(bounds.width <= 720.5, "{state}: {bounds:?}");
   }
 }
 
@@ -136,6 +134,7 @@ fn pipelines_first_version_without_draft_has_no_phantom_entry_or_self_comparison
   assert!(!editor.exists("pipeline-history-draft"));
   assert!(editor.text("pipeline-version-1").contains("first version"));
   editor.click("pipeline-version-1");
+  editor.until("v1's changes", |e| e.exists("pipeline-version-changes"));
   assert_eq!(editor.text("pipeline-compare-label"), "Compare with draft");
   assert!(
     editor
@@ -145,18 +144,7 @@ fn pipelines_first_version_without_draft_has_no_phantom_entry_or_self_comparison
   editor.click("pipeline-compare");
   assert!(!editor.exists("pipeline-comparison-changes"));
   assert!(!editor.text("screen-pipelines").contains("Compared with published"));
-  for id in ["pipeline-compare", "pipeline-restore"] {
-    let bounds = editor
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|e| e.bounds())
-      .unwrap();
-    assert!(
-      bounds.x >= 1092.0 && bounds.x + bounds.width <= 1432.0,
-      "{id}: {bounds:?}"
-    );
-  }
+  assert!(editor.text("pipeline-viewing-banner").contains("Restore v1 as draft"));
   assert!(editor.db().draft::<Pipeline>(id).unwrap().is_none());
   editor.click("pipeline-back-draft");
   editor.set("pipeline-description", "First unpublished edit");
@@ -164,28 +152,20 @@ fn pipelines_first_version_without_draft_has_no_phantom_entry_or_self_comparison
   editor.click("pipeline-history");
   editor.until("real draft entry", |e| e.exists("pipeline-history-draft"));
   editor.click("pipeline-version-1");
+  editor.until("v1's changes", |e| e.exists("pipeline-version-changes"));
   editor.click("pipeline-compare");
   assert!(editor.text("pipeline-comparison-changes").contains("saved draft v2"));
 }
 
 #[test]
-fn pipelines_inspector_fields_fit_the_window_and_dependency_picker_stays_compact() {
+fn pipelines_step_fields_fit_the_column_and_dependency_picker_stays_compact() {
   let mut editor = Editor::new();
   editor.profile();
   let id = editor.empty("Layout");
   editor.open(id);
   editor.click("pipeline-add-step");
   editor.choose("step-executor", "Reviewer");
-  editor.set(
-    "step-instructions",
-    "Check the change against the acceptance criteria and explain the result.",
-  );
-  for id in [
-    "step-executor",
-    "step-model",
-    "step-instructions-box",
-    "step-budget-box",
-  ] {
+  for id in ["step-executor", "step-model", "step-budget-box"] {
     let bounds = editor
       .window
       .tree
@@ -193,23 +173,23 @@ fn pipelines_inspector_fields_fit_the_window_and_dependency_picker_stays_compact
       .and_then(|e| e.bounds())
       .expect("field laid out");
     assert!(bounds.x + bounds.width <= 1432.0, "{id} clips: {bounds:?}");
-    assert!(bounds.width <= 184.0, "{id} exceeds value column: {bounds:?}");
-  }
-  for id in ["step-executor-row", "step-model-row", "step-budget-row"] {
-    let bounds = editor
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .expect("compact row laid out");
-    assert!(
-      (bounds.height - 28.0).abs() < 0.1,
-      "{id} adds vertical inset: {bounds:?}"
-    );
+    assert!(bounds.width <= 221.0, "{id} exceeds its row's control: {bounds:?}");
   }
   assert!(!editor.exists("step-after-menu"));
   editor.click("step-after-picker");
   assert!(editor.exists("step-after-menu"));
+  editor.click("step-instructions-row");
+  editor.set(
+    "step-instructions",
+    "Check the change against the acceptance criteria and explain the result.",
+  );
+  let bounds = editor
+    .window
+    .tree
+    .get_element_by_id_mut("step-instructions-box")
+    .and_then(|e| e.bounds())
+    .expect("instructions laid out");
+  assert!(bounds.x + bounds.width <= 1432.0, "instructions clip: {bounds:?}");
 }
 
 #[test]
@@ -235,8 +215,13 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
       .unwrap()
       .is_some_and(|d| d.body().description() == "Changed description")
   });
-  assert!(editor.exists("pipeline-settings-draft"));
-  editor.click("pipeline-description-undo");
+  assert!(editor.exists("pipeline-settings-draft"), "the changed row says it changed in the draft");
+  assert!(
+    editor
+      .text("pipeline-settings-change-strip")
+      .contains("1 setting changed in draft v2")
+  );
+  editor.click("pipeline-settings-undo");
   assert_eq!(editor.value("pipeline-settings-description"), "");
   editor.until("undo saved", |e| {
     e.db()
@@ -244,6 +229,7 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
       .unwrap()
       .is_none_or(|d| d.body().description().is_empty())
   });
+  assert!(!editor.exists("pipeline-settings-change-strip"));
   editor.set("pipeline-settings-description", "Only in the draft");
   editor.until("draft metadata saved", |e| {
     e.db()
@@ -251,25 +237,17 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
       .unwrap()
       .is_some_and(|d| d.body().description() == "Only in the draft")
   });
-  editor.click("pipeline-settings-nav-starts");
-  let starts = editor
-    .window
-    .tree
-    .get_element_by_id_mut("pipeline-on-start")
-    .and_then(|e| e.bounds())
-    .unwrap();
-  assert!(
-    starts.y > 88.0 && starts.y < 872.0,
-    "Starts section was revealed: {starts:?}"
-  );
-  editor.click("pipeline-back-steps");
+  assert_eq!(editor.text("pipeline-on-start-value"), "On task start");
+  assert!(!editor.exists("pipeline-settings-nav-starts"), "the planned sections are gone");
+  editor.click("pipeline-tab-steps");
   editor.click("pipeline-history");
   editor.until("version", |e| e.exists("pipeline-version-1"));
   editor.click("pipeline-version-1");
   editor.click("pipeline-compare");
   assert!(editor.text("screen-pipelines").contains("Compared with saved draft v2"));
   editor.click("pipeline-start");
-  assert_eq!(editor.value("pipeline-description"), "What this pipeline is for");
+  editor.until("v1's changes", |e| e.exists("pipeline-version-summary"));
+  assert!(editor.text("pipeline-version-summary").contains("Changes in v1"));
 }
 
 #[test]
@@ -280,7 +258,7 @@ fn pipelines_settings_preserves_invalid_name_across_navigation() {
   editor.click("pipeline-settings");
   editor.set("pipeline-settings-name", "");
   assert!(editor.text("pipeline-settings-page").contains("Enter a pipeline name"));
-  editor.click("pipeline-back-steps");
+  editor.click("pipeline-tab-steps");
   editor.click("pipeline-settings");
   assert_eq!(editor.value("pipeline-settings-name"), "");
   assert!(editor.text("pipeline-settings-page").contains("Enter a pipeline name"));
@@ -307,10 +285,10 @@ fn pipelines_failure_routes_are_visible_and_do_not_intercept_card_centers() {
     .tree
     .get_element_by_id_mut("pipeline-failure-route-review")
     .and_then(|element| element.bounds())
-    .expect("review return connector laid out");
+    .expect("review's route laid out");
   assert!(
     route.width > 0.0 && route.height > 0.0,
-    "route overlay collapsed: {route:?}"
+    "route line collapsed: {route:?}"
   );
   for (key, name) in [("run-checks", "Run checks"), ("review", "Review")] {
     let bounds = editor

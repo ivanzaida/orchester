@@ -28,6 +28,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -86,6 +87,52 @@ impl Component for WidenConfirm {
   type Props = WidenProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    Self::new(ctx)
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<WidenProps>().clone();
+    let buttons = self.buttons(ctx, &props, ButtonKind::Secondary);
+    if props.card {
+      card_question(&props, buttons)
+    } else {
+      question(&props, buttons)
+    }
+  }
+}
+
+/// [`WidenConfirm`] as a warning notice in place, its confirm and *Keep* under its reasons (`Notice · warning`
+/// `DAKkj` in `fXnX2`): where a page asks before it saves or publishes, among its other content.
+pub struct WidenNotice(WidenConfirm);
+
+impl Component for WidenNotice {
+  type Props = WidenProps;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    Self(WidenConfirm::new(ctx))
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<WidenProps>().clone();
+    let (keep, confirm) = self.0.buttons(ctx, &props, ButtonKind::Ghost);
+    let mut reasons = props.reasons.iter();
+    let mut notice = Notice::new(props.id.clone(), NoticeTone::Warning, props.title.clone()).stacked();
+    if let Some(first) = reasons.next() {
+      notice = notice.body(first.clone());
+    }
+    for reason in reasons {
+      notice = notice.part(
+        Text::new(reason)
+          .variant(ExtraTypography::Prose.role())
+          .width(Dimension::Pct(100.0)),
+      );
+    }
+    Element::from(notice.action(confirm).action(keep))
+  }
+}
+
+impl WidenConfirm {
+  fn new(ctx: &mut Ctx) -> Self {
     let gate = ctx.use_context::<InputGate>();
     let props = ctx.props::<WidenProps>();
     let policy = props.automation;
@@ -101,9 +148,9 @@ impl Component for WidenConfirm {
     }
   }
 
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<WidenProps>().clone();
-    if let Some(gate) = self.gate.as_ref().filter(|_| locks_input(&props)) {
+  /// The question's *Keep*, a button of `keep_kind`, and its confirm, each guarded as its consent says.
+  fn buttons(&self, ctx: &mut Ctx, props: &WidenProps, keep_kind: ButtonKind) -> (ActionButton, ActionButton) {
+    if let Some(gate) = self.gate.as_ref().filter(|_| locks_input(props)) {
       let mut protected = self.protected.lock();
       if protected
         .as_ref()
@@ -124,13 +171,13 @@ impl Component for WidenConfirm {
       .is_some();
     // An approval card's question only narrows when taken back: any input may. Elsewhere taking it back may discard
     // a person's draft, which stays theirs.
-    let keep = if locks_input(&props) {
+    let keep = if locks_input(props) {
       guarded_handler(self.gate.clone(), props.automation, props.on_keep.clone())
     } else {
       props.on_keep.clone()
     };
-    let keep = ActionButton::new(format!("{}-keep", props.id), ButtonKind::Secondary, props.keep.clone())
-      .on_click(move || keep());
+    let keep =
+      ActionButton::new(format!("{}-keep", props.id), keep_kind, props.keep.clone()).on_click(move || keep());
     let confirm = ActionButton::new(
       format!("{}-confirm", props.id),
       ButtonKind::Primary,
@@ -147,11 +194,7 @@ impl Component for WidenConfirm {
     } else {
       confirm.disabled()
     };
-    if props.card {
-      card_question(&props, (keep, confirm))
-    } else {
-      question(&props, (keep, confirm))
-    }
+    (keep, confirm)
   }
 }
 

@@ -1,5 +1,5 @@
-//! UI state; graph edits and their validation remain the core's. The panel beside the graph is the route's
-//! ([`Panel`]), so Back and Forward step through the panels a person opened.
+//! UI state; step edits and their validation remain the core's. What the page shows is the route's ([`View`]):
+//! its tab and what the Steps column shows, so Back and Forward step through the places a person opened.
 use std::{collections::BTreeMap, fmt};
 
 use lurq::{app::component::DevtoolsInspectable, core::Signal};
@@ -9,21 +9,21 @@ use orchester_core::{
 };
 use orchester_workspace::{messages::Message, pipelines::data::OpenedPipeline};
 
-pub use crate::routes::PipelinePanel as Panel;
+pub use crate::routes::{PipelineTab as Tab, PipelineView as View, StepPage};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
 };
 
-/// Opens the editor's panels by its route. Called outside a [`State`] update: a move can ask the leave guard,
-/// which reads the state.
+/// Opens the page's places by its route. Called outside a [`State`] update: a move can ask the leave guard, which
+/// reads the state.
 #[derive(Clone)]
-pub struct Panels {
+pub struct Views {
   navigation: Navigation,
   project: ProjectId,
   pipeline: ResourceId,
 }
-impl Panels {
+impl Views {
   pub const fn new(navigation: Navigation, project: ProjectId, pipeline: ResourceId) -> Self {
     Self {
       navigation,
@@ -31,27 +31,32 @@ impl Panels {
       pipeline,
     }
   }
-  /// A panel the person chose, as a new entry of the tab's history; of the published version viewed, if
-  /// any, but the publish review, which is the draft's.
-  pub fn choose(&self, panel: Panel) {
-    let viewed = self.viewed().filter(|_| panel != Panel::Publish);
-    self.navigation.go(self.route(panel, viewed));
+  /// A place the person chose, as a new entry of the tab's history; of the published version viewed, if any, but
+  /// the publish review, which is the draft's.
+  pub fn choose(&self, view: View) {
+    let viewed = self.viewed().filter(|_| view != View::Publish);
+    self.navigation.go(self.route(view, viewed));
   }
-  /// A published version the person picked in the history, as a new entry of the tab's history.
+  /// A tab the person chose: the draft's, leaving the version viewed.
+  pub fn tab(&self, view: View) {
+    self.navigation.go(self.route(view, None));
+  }
+  /// A published version the person picked in Versions, as a new entry of the tab's history.
   pub fn view(&self, version: VersionNumber) {
-    self.navigation.go(self.route(Panel::History, Some(version)));
+    self.navigation.go(self.route(View::Versions, Some(version)));
   }
-  /// *Cancel*, the close button, a removed step and a publish done: back to the summary of what is shown,
-  /// the draft or the version viewed, leaving no entry for the panel closed.
+  /// *Cancel*, a removed step and a publish done: back to the summary of what is shown, the draft's or the
+  /// version's, leaving no entry for the place closed.
   pub fn close(&self) {
-    self.navigation.close_panel(self.route(Panel::Pipeline, self.viewed()));
+    let view = if self.viewed().is_some() { View::Versions } else { View::Steps };
+    self.navigation.close_panel(self.route(view, self.viewed()));
   }
-  /// *Return to draft* and a restore done: back to the draft's summary, leaving no entry for the version.
+  /// *Back to editing* and a restore done: back to the draft's steps, leaving no entry for the version.
   pub fn to_draft(&self) {
-    self.navigation.close_panel(self.route(Panel::Pipeline, None));
+    self.navigation.close_panel(self.route(View::Steps, None));
   }
-  /// The published version the route views, if it is this editor's.
-  fn viewed(&self) -> Option<VersionNumber> {
+  /// The published version the route views, if it is this page's.
+  pub fn viewed(&self) -> Option<VersionNumber> {
     match self.navigation.route_now() {
       Route::Project(project, ProjectPage::PipelineVersion(pipeline, version, _))
         if project == self.project && pipeline == self.pipeline =>
@@ -61,30 +66,34 @@ impl Panels {
       _ => None,
     }
   }
-  /// Whether `route` is this editor's, on any panel: moving between panels leaves no edits behind.
+  /// Whether `route` is this page's, in any place: moving between them leaves no edits behind.
   pub fn holds(&self, route: &Route) -> bool {
     matches!(route, Route::Project(project, ProjectPage::Pipeline(pipeline, _) | ProjectPage::PipelineVersion(pipeline, ..))
       if *project == self.project && *pipeline == self.pipeline)
   }
-  fn route(&self, panel: Panel, version: Option<VersionNumber>) -> Route {
+  /// The route of `view` of the draft or, with `version`, of that published version.
+  pub fn route(&self, view: View, version: Option<VersionNumber>) -> Route {
     Route::Project(
       self.project,
       match version {
-        Some(version) => ProjectPage::PipelineVersion(self.pipeline, version, panel),
-        None => ProjectPage::Pipeline(self.pipeline, panel),
+        Some(version) => ProjectPage::PipelineVersion(self.pipeline, version, view),
+        None => ProjectPage::Pipeline(self.pipeline, view),
       },
     )
   }
+  pub const fn project(&self) -> ProjectId {
+    self.project
+  }
 }
-impl PartialEq for Panels {
+impl PartialEq for Views {
   fn eq(&self, other: &Self) -> bool {
     self.project == other.project && self.pipeline == other.pipeline
   }
 }
-impl Eq for Panels {}
-impl fmt::Debug for Panels {
+impl Eq for Views {}
+impl fmt::Debug for Views {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.debug_struct("Panels")
+    f.debug_struct("Views")
       .field("project", &self.project)
       .field("pipeline", &self.pipeline)
       .finish_non_exhaustive()
@@ -95,12 +104,12 @@ pub struct Editing {
   pub opened: OpenedPipeline,
   pub name: orchester_core::name::Name,
   pub edit: PipelineEdit,
-  /// The panel the route shows, as the editor last rendered it; changed only through [`Panels`].
-  pub panel: Panel,
-  pub panels: Panels,
+  /// What the route shows, as the page last rendered it; changed only through [`Views`].
+  pub view: View,
+  pub views: Views,
   pub errors: BTreeMap<String, Message>,
   pub inputs: BTreeMap<String, String>,
-  /// The published version shown read-only, as the route names it ([`Panels::view`]).
+  /// The published version shown read-only, as the route names it ([`Views::view`]).
   pub viewing: Option<Pipeline>,
   pub viewing_version: Option<VersionNumber>,
   pub epoch: u64,
@@ -110,13 +119,13 @@ pub struct Editing {
 }
 impl DevtoolsInspectable for Editing {}
 impl Editing {
-  pub fn new(opened: OpenedPipeline, (panels, panel): (Panels, Panel)) -> Self {
+  pub fn new(opened: OpenedPipeline, (views, view): (Views, View)) -> Self {
     Self {
       edit: PipelineEdit::new(opened.body.clone()),
       name: orchester_core::name::Name::new(&opened.name).expect("stored resource names are valid"),
       opened,
-      panel,
-      panels,
+      view,
+      views,
       errors: BTreeMap::new(),
       inputs: BTreeMap::new(),
       viewing: None,
@@ -126,6 +135,14 @@ impl Editing {
       restore_requested: false,
       published_notice: None,
     }
+  }
+  /// Whether the draft or the name has errors or edits not saved yet.
+  pub fn unsaved(&self) -> bool {
+    self.dirty() || !self.errors.is_empty()
+  }
+  /// Whether a draft exists beside the published version: saved, or edits not saved yet.
+  pub fn has_draft(&self) -> bool {
+    self.opened.draft_saved_at.is_some() || self.unsaved()
   }
   pub fn dirty(&self) -> bool {
     self.name.as_str() != self.opened.name.as_ref() || self.edit.validate().as_ref() != Ok(&self.opened.body)
@@ -151,7 +168,7 @@ impl Editing {
       }
     }
   }
-  /// Takes the version viewed into the draft; the caller then returns to the draft ([`Panels::to_draft`]).
+  /// Takes the version viewed into the draft; the caller then returns to the draft ([`Views::to_draft`]).
   pub fn restore(&mut self) {
     if let Some(body) = self.viewing.take() {
       self.edit = PipelineEdit::new(body);

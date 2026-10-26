@@ -53,7 +53,7 @@ fn starting_reload(page: Page) -> (Editor, orchester_core::id::ResourceId, Pipel
     }
     Page::Step | Page::Remove | Page::Dependencies => {
       editor.click("pipeline-step-step");
-      "step-instructions"
+      "step-name"
     }
   };
   editor.set(field, "Local unsaved text");
@@ -102,11 +102,11 @@ fn pending_reload(page: Page) {
   );
   attempt_controls(&mut editor, page, field);
   editor.until("successful reload accepted", |e| !e.exists("pipeline-loading"));
-  // The reloaded editor keeps the panel the route shows; the summary holds the description.
+  // The reloaded page keeps what the route shows; the summary holds the description.
   match page {
     Page::Empty => {}
-    Page::Settings => editor.click("pipeline-back-steps"),
-    Page::Step | Page::Remove | Page::Dependencies => editor.click("pipeline-inspector-close"),
+    Page::Settings => editor.click("pipeline-tab-steps"),
+    Page::Step | Page::Remove | Page::Dependencies => editor.click("pipeline-start"),
   }
   assert_eq!(editor.value("pipeline-description"), "External successful reload");
   assert!(!editor.exists("pipeline-write-error"));
@@ -130,22 +130,20 @@ fn pending_reload(page: Page) {
 fn attempt_controls(editor: &mut Editor, page: Page, field: &str) {
   match page {
     Page::Empty => {
-      editor.click("pipeline-add-first");
+      editor.click("pipeline-add-step");
       editor.click("pipeline-use-starter");
       assert!(!editor.exists("step-name"));
       assert!(!editor.exists("pipeline-step-implement"));
       assert_eq!(editor.value(field), "Local unsaved text");
     }
     Page::Settings => {
-      for undo in ["pipeline-description-undo", "pipeline-settings-undo"] {
-        assert!(editor.exists(undo));
-        editor.click(undo);
-        assert_eq!(
-          editor.value(field),
-          "Local unsaved text",
-          "{undo} is locked during reload"
-        );
-      }
+      assert!(editor.exists("pipeline-settings-undo"));
+      editor.click("pipeline-settings-undo");
+      assert_eq!(
+        editor.value(field),
+        "Local unsaved text",
+        "Undo change is locked during reload"
+      );
     }
     Page::Step => {
       editor.focus("step-name");

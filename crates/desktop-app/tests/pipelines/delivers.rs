@@ -14,12 +14,18 @@ fn pipelines_delivers_is_chosen_in_settings_and_saved_in_the_draft() {
   let id = editor.published();
   editor.open(id);
   editor.click("pipeline-settings");
-  editor.until("the settings page", |e| e.exists("pipeline-delivers"));
-  assert!(editor.exists("pipeline-delivers-changes"));
+  editor.until("the Settings tab", |e| e.exists("pipeline-delivers-changes"));
   assert!(
     editor
       .text("pipeline-settings-delivery")
-      .contains("What a run delivers")
+      .contains("What a run that passes every step leaves"),
+    "the section says what a run delivers"
+  );
+  assert!(
+    editor
+      .text("pipeline-delivers-report")
+      .contains("no repository changes are expected"),
+    "each choice says what it means"
   );
   editor.click("pipeline-delivers-report");
   editor.until("the report choice saved in the draft", |e| {

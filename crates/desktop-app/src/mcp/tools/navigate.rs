@@ -34,7 +34,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
-  it. A tab or kind left out is the one the screen opens on. Answers the \
+  it; pipelines opens the list, from whose rows a pipeline's page opens on its Steps, Settings and Versions tabs. A \
+  tab or kind left out is the one the screen opens on. Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";

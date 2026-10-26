@@ -8,10 +8,7 @@ use lurq::{
 use orchester_core::resource::StepKind;
 use orchester_workspace::pipelines::narrowing;
 
-use super::{
-  step_fields::Props,
-  step_permissions::{command_rows, command_summary},
-};
+use super::{step_access::command_summary, step_fields::Props, step_permissions::command_rows};
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   popover::{PopoverSide, popover, popover_panel},
@@ -63,7 +60,7 @@ impl Component for Commands {
       ScrollVertical::new(command_rows(&props.state, &props.step, choice, props.locked))
         .max_height(Dimension::Px(260.0)),
     );
-    Column::new().width(Dimension::Pct(100.0)).child(trigger).child(popover(
+    Column::new().width(Dimension::Px(super::step_fields::FIELD_WIDTH)).child(trigger).child(popover(
       self.anchor.clone(),
       self.open.clone(),
       PopoverSide::Below,

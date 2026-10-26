@@ -1,8 +1,9 @@
-//! The Deliver step's inspector (`Inspector` `rwwek` in `qukzW`, `yxq0Q` in `OqgbW`): its mode (*Approve to merge*,
-//! *Auto-merge*, and *Pull request*, visibly not available yet), its merge method with what it does (the squash
-//! commit's title and body for *Squash*), the profile its Integrate step resolves conflicts with, and whether Check
-//! runs again on the merged result, which Auto-merge keeps on (faded, a lock and why). *Remove step* takes the step
-//! off the draft. A pipeline without one shows what that means and *Add Deliver step*.
+//! The Deliver step's column (`03 · Deliver step` `gzNi4`, its variants in `03b` `g6Ecy`): its Mode as radio rows
+//! (*Approve to merge*, *Auto-merge*, and *Pull request*, visibly *Coming later*), its merge method with what it
+//! does (the squash commit's title and body for *Squash*), the profile its Integrate step resolves conflicts with,
+//! and whether Check runs again on the merged result, which Auto-merge keeps on (faded, a lock and why). *Remove
+//! step* takes the step off the draft. A pipeline without one says what that means and offers *Add Deliver step*
+//! (`03c` `y6Bjyv`).
 
 use std::sync::Arc;
 
@@ -10,7 +11,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, SelectOption, Spacer, Text},
   core::{Ref, Signal},
@@ -23,20 +24,22 @@ use orchester_workspace::{
   pipelines::deliver::{IntegratorChoice, integrating_step, integrator_profiles},
 };
 
-use super::{parts, state::State};
+use super::state::State;
 use crate::{
-  theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize, LOCKED_SWITCH_OPACITY},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, LOCKED_SWITCH_OPACITY, PipelinesText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::SelectField,
     icon::{Icon, icon},
-    inspector::{control, section, section_title},
-    option_card::OptionCard,
-    pressable::Focus,
+    pressable::{Focus, Press},
+    row_group::{GroupRow, RowGroup, note},
     tabs::{Segment, SegmentFace, segmented},
-    toggle::{Toggle, ToggleKind},
+    toggle::{Toggle, ToggleKind, radio_mark},
   },
 };
+
+/// The integrator's select (`Select` `Bd3OV`).
+const INTEGRATOR_WIDTH: f32 = 180.0;
 
 #[derive(Clone)]
 pub struct DeliverProps {
@@ -53,54 +56,48 @@ impl PartialEq for DeliverProps {
 
 impl DevtoolsInspectable for DeliverProps {}
 
-pub struct DeliverInspector {
+pub struct DeliverColumn {
   integrator: Signal<IntegratorChoice>,
   /// Whether the step is locked, as last shown.
   locked: Ref<bool>,
 }
 
-impl Component for DeliverInspector {
+impl Component for DeliverColumn {
   type Props = DeliverProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<DeliverProps>().clone();
     let chosen = props.deliver.as_ref().and_then(DeliverStep::integrator);
-    let inspector = Self {
+    let column = Self {
       integrator: ctx.signal(IntegratorChoice(chosen)),
       locked: ctx.create_ref(props.locked),
     };
-    let (state, locked) = (props.state, inspector.locked.clone());
-    ctx.watch(&inspector.integrator, move |choice| {
+    let (state, locked) = (props.state, column.locked.clone());
+    ctx.watch(&column.integrator, move |choice| {
       if !locked.get() {
         edit(&state, |deliver| deliver.with_integrator(choice.0));
       }
     });
-    inspector
+    column
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DeliverProps>().clone();
     self.locked.set(props.locked);
-    let editing = props.state.get();
-    let number = editing.shown().steps().len() + 1;
-    let eyebrow = ctx.t_args("pipelines.step", [("number", format!("{number:02}"))]);
-    let title = Text::new(&ctx.t("delivery.step.title"))
-      .id("deliver-title")
-      .variant(ExtraTypography::Strong.role())
-      .into();
+    let column = Column::new()
+      .id("deliver-column")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Lg);
     let Some(deliver) = props.deliver.clone() else {
-      let body = none_body(ctx, &props);
-      return parts::panel_with_title(ctx, &eyebrow, title, body, None, Some(props.state));
+      return column.child(heading(ctx, &props, None)).child(none_body(ctx, &props));
     };
-    // 10 between the sections (`b13kg`).
-    let body = parts::panel_body()
-      .spacing(ExtraSpacing::Loose.role())
-      .child(mode_section(ctx, &props, &deliver))
-      .child(merge_section(ctx, &props, &deliver))
-      .child(self.conflicts_section(ctx, &props, &deliver))
-      .child(check_section(ctx, &props, &deliver));
-    let footer = remove_footer(ctx, &props);
-    parts::panel_with_title(ctx, &eyebrow, title, body.into(), Some(footer), Some(props.state))
+    let number = props.state.get().shown().steps().len() + 1;
+    column
+      .child(heading(ctx, &props, Some(number)))
+      .child(mode_group(ctx, &props, &deliver))
+      .child(merge_group(ctx, &props, &deliver))
+      .child(self.conflicts_group(ctx, &props, &deliver))
+      .child(check_group(ctx, &props, &deliver))
   }
 }
 
@@ -116,127 +113,115 @@ fn edit(state: &State, change: impl FnOnce(DeliverStep) -> DeliverStep) {
   });
 }
 
-fn mode_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
-  let card = |id: &str, (glyph, title, body): (Icon, &str, &str), mode: DeliverMode| {
-    let (state, locked) = (props.state.clone(), props.locked);
-    let card = OptionCard::new(
-      id.to_owned(),
-      (glyph, ctx.t(title)),
-      ctx.t(body),
-      deliver.mode() == mode,
-      move || {
-        if !locked {
-          edit(&state, |deliver| deliver.with_mode(mode));
-        }
-      },
-    );
-    if locked && deliver.mode() != mode {
-      card.waiting()
-    } else {
-      card
-    }
-  };
-  Column::new()
-    .id("deliver-mode")
+/// Its number and name, and *Remove step* while the step can be edited (`Step heading` `MQhNe`).
+fn heading(ctx: &Ctx, props: &DeliverProps, number: Option<usize>) -> Row {
+  let remove = number.is_some().then(|| {
+    let state = props.state.clone();
+    let remove = ActionButton::new("deliver-remove", ButtonKind::DangerGhost, ctx.t("delivery.step.remove"))
+      .icon(Icon::Trash2)
+      .on_click(move || {
+        state.update(|editing| {
+          if editing.viewing.is_none() {
+            editing.edit.set_deliver(None);
+          }
+        });
+        state.get_untracked().views.close();
+      });
+    if props.locked { remove.disabled() } else { remove }
+  });
+  Row::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xs)
-    .child(section_title("deliver-mode-title", &ctx.t("delivery.step.mode"), None))
-    .child(card(
-      "deliver-mode-approve",
-      (Icon::Hand, "delivery.step.approve", "delivery.step.approveBody"),
-      DeliverMode::ApproveToMerge,
-    ))
-    .child(card(
-      "deliver-mode-auto",
-      (Icon::Zap, "delivery.step.auto", "delivery.step.autoBody"),
-      DeliverMode::AutoMerge,
-    ))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .with_children(number.map(|n| Text::new(&format!("{n:02}")).variant(PipelinesText::StepNumber.role())))
     .child(
-      OptionCard::new(
-        "deliver-mode-pull-request",
-        (Icon::GitPullRequest, ctx.t("delivery.step.pullRequest")),
-        ctx.t("delivery.step.pullRequestBody"),
-        false,
-        || {},
-      )
-      .unavailable(ctx.t("delivery.step.comingLater")),
+      Text::new(&ctx.t("delivery.step.title"))
+        .id("deliver-title")
+        .variant(TypographyStyle::Title),
+    )
+    .child(Spacer::new().flex(1.0))
+    .with_children(remove)
+}
+
+/// A radio row of the Mode group.
+fn mode_row(ctx: &Ctx, props: &DeliverProps, (id, title, body): (&str, &str, &str), (mode, chosen): (DeliverMode, bool)) -> GroupRow {
+  let (state, locked) = (props.state.clone(), props.locked);
+  let row = GroupRow::new(id, ctx.t(title))
+    .leading(radio_mark(chosen))
+    .hint(ctx.t(body))
+    .chosen(false);
+  if locked {
+    return row;
+  }
+  row.press(Press::run(move || edit(&state, |deliver| deliver.with_mode(mode))))
+}
+
+fn mode_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGroup {
+  RowGroup::new("deliver-mode", ctx.t("delivery.step.mode"))
+    .row(mode_row(
+      ctx,
+      props,
+      ("deliver-mode-approve", "delivery.step.approve", "delivery.step.approveBody"),
+      (DeliverMode::ApproveToMerge, deliver.mode() == DeliverMode::ApproveToMerge),
+    ))
+    .row(mode_row(
+      ctx,
+      props,
+      ("deliver-mode-auto", "delivery.step.auto", "delivery.step.autoBody"),
+      (DeliverMode::AutoMerge, deliver.mode() == DeliverMode::AutoMerge),
+    ))
+    .row(
+      GroupRow::new("deliver-mode-pull-request", ctx.t("delivery.step.pullRequest"))
+        .muted()
+        .leading(radio_mark(false).opacity(crate::theme::DISABLED_OPACITY))
+        .hint(ctx.t("delivery.step.pullRequestBody"))
+        .value(&ctx.t("delivery.step.comingLater")),
     )
 }
 
-fn merge_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
+fn merge_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGroup {
   let segments = [
-    (
-      MergeMethod::MergeCommit,
-      "deliver-merge-commit",
-      "delivery.step.mergeCommit",
-    ),
+    (MergeMethod::MergeCommit, "deliver-merge-commit", "delivery.step.mergeCommit"),
     (MergeMethod::Squash, "deliver-squash", "delivery.step.squash"),
   ]
   .map(|(method, id, label)| {
     let (state, locked) = (props.state.clone(), props.locked);
-    Segment::new(
-      id,
-      SegmentFace::Text(ctx.t(label)),
-      deliver.method() == method,
-      move || {
-        if !locked {
-          edit(&state, |deliver| deliver.with_method(method));
-        }
-      },
-    )
+    Segment::new(id, SegmentFace::Text(ctx.t(label)), deliver.method() == method, move || {
+      if !locked {
+        edit(&state, |deliver| deliver.with_method(method));
+      }
+    })
   });
-  let mut section = section("deliver-merge", SpacingSize::Xs)
-    .child(section_title(
-      "deliver-merge-title",
-      &ctx.t("delivery.step.merge"),
-      None,
-    ))
-    .child(control(
-      "deliver-method",
-      &ctx.t("delivery.step.method"),
-      Row::new().child(segmented("deliver-method-choice", segments, Focus::Keyboard)),
-    ));
-  section = match deliver.method() {
-    MergeMethod::MergeCommit => section.child(read_back(
-      "deliver-method-read-back",
-      &ctx.t("delivery.step.mergeCommitReadBack"),
-    )),
-    MergeMethod::Squash => section.child(control(
-      "deliver-squash-message",
-      &ctx.t("delivery.step.squashMessage"),
-      Column::new()
-        .spacing(SpacingSize::Xs)
-        .child(
-          Text::new(&ctx.t("delivery.step.squashTitle"))
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextPrimary),
-        )
-        .child(Text::new(&ctx.t("delivery.step.squashBody")).variant(ExtraTypography::Note.role())),
-    )),
+  let hint = match deliver.method() {
+    MergeMethod::MergeCommit => ctx.t("delivery.step.mergeCommitReadBack"),
+    MergeMethod::Squash => ctx.t("delivery.step.squashTitle"),
   };
-  section
+  let group = RowGroup::new("deliver-merge", ctx.t("delivery.step.merge")).row(
+    GroupRow::new("deliver-method", ctx.t("delivery.step.method"))
+      .hint(hint)
+      .end(segmented("deliver-method-choice", segments, Focus::Keyboard)),
+  );
+  match deliver.method() {
+    MergeMethod::Squash => group.after(note("deliver-squash-body", &ctx.t("delivery.step.squashBody"))),
+    MergeMethod::MergeCommit => group,
+  }
 }
 
-impl DeliverInspector {
-  fn conflicts_section(&self, ctx: &mut Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
+impl DeliverColumn {
+  fn conflicts_group(&self, ctx: &mut Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGroup {
     let editing = props.state.get();
-    let section = section("deliver-conflicts", SpacingSize::Xs).child(section_title(
-      "deliver-conflicts-title",
-      &ctx.t("delivery.step.conflicts"),
-      None,
-    ));
+    let group = RowGroup::new("deliver-conflicts", ctx.t("delivery.step.conflicts"));
+    let row = GroupRow::new("deliver-integrator-row", ctx.t("delivery.step.resolveWith"));
     let Ok(pipeline) = editing.shown().validate() else {
-      return section.child(read_back(
-        "deliver-integrator-read-back",
-        &ctx.t("delivery.step.integratorUnknown"),
-      ));
+      return group.row(row.muted().hint(ctx.t("delivery.step.integratorUnknown")));
     };
     let profiles = integrator_profiles(&pipeline);
     if profiles.is_empty() {
-      return section.child(read_back(
-        "deliver-integrator-read-back",
-        &ctx.t("delivery.step.noIntegrator"),
-      ));
+      return group.row(
+        row
+          .hint(ctx.t("delivery.step.noIntegrator"))
+          .value(&ctx.t("delivery.step.badgeConflictsPerson")),
+      );
     }
     let name = |profile| {
       editing
@@ -264,22 +249,13 @@ impl DeliverInspector {
       self.integrator.clone(),
       options,
     )
-    .leading(Icon::Bot)
+    .width(Dimension::Px(INTEGRATOR_WIDTH))
     .render(ctx);
-    section
-      .child(control(
-        "deliver-integrator-row",
-        &ctx.t("delivery.step.resolveWith"),
-        select,
-      ))
-      .child(read_back(
-        "deliver-integrator-read-back",
-        &ctx.t("delivery.step.integratorReadBack"),
-      ))
+    group.row(row.hint(ctx.t("delivery.step.integratorReadBack")).end(select))
   }
 }
 
-fn check_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Column {
+fn check_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGroup {
   let toggle = Toggle::new(
     "deliver-recheck",
     ToggleKind::Switch,
@@ -304,7 +280,7 @@ fn check_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Colu
       .on_change(move |on| edit(&state, |deliver| deliver.with_recheck(on)))
       .into()
   };
-  let read_back_words = if deliver.recheck_locked() {
+  let words = if deliver.recheck_locked() {
     ctx.t("delivery.step.recheckLocked")
   } else if !deliver.recheck() {
     ctx.t("delivery.step.recheckOff")
@@ -314,27 +290,11 @@ fn check_section(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> Colu
       None => ctx.t("delivery.step.recheckNoTools"),
     }
   };
-  section("deliver-check", SpacingSize::Xs)
-    .child(section_title(
-      "deliver-check-title",
-      &ctx.t("delivery.step.check"),
-      None,
-    ))
-    .child(
-      Row::new()
-        .id("deliver-recheck-row")
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&ctx.t("delivery.step.recheck"))
-            .variant(ExtraTypography::Property.role())
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0)),
-        )
-        .child(switch),
-    )
-    .child(read_back("deliver-recheck-read-back", &read_back_words))
+  RowGroup::new("deliver-check", ctx.t("delivery.step.check")).row(
+    GroupRow::new("deliver-recheck-row", ctx.t("delivery.step.recheck"))
+      .hint(words)
+      .end(switch),
+  )
 }
 
 /// The names of the tools the pipeline's checking tool steps run, joined: what Check runs again
@@ -358,39 +318,7 @@ fn check_tools(props: &DeliverProps) -> Option<String> {
   (!names.is_empty()).then(|| names.join(", "))
 }
 
-/// What a setting does, under its control, in line with the controls past their labels' column.
-fn read_back(id: &str, words: &str) -> Row {
-  control(
-    id,
-    "",
-    Text::new(words)
-      .id(format!("{id}-text"))
-      .variant(DeliveryText::ReadBack.role())
-      .width(Dimension::Pct(100.0)),
-  )
-}
-
-fn remove_footer(ctx: &Ctx, props: &DeliverProps) -> Element {
-  let state = props.state.clone();
-  let remove = ActionButton::new("deliver-remove", ButtonKind::DangerGhost, ctx.t("delivery.step.remove"))
-    .icon(Icon::Trash2)
-    .on_click(move || {
-      state.update(|editing| {
-        if editing.viewing.is_none() {
-          editing.edit.set_deliver(None);
-        }
-      });
-      state.get_untracked().panels.close();
-    });
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
-    .child(Spacer::new().flex(1.0))
-    .child(if props.locked { remove.disabled() } else { remove })
-    .into()
-}
-
-/// A pipeline without a Deliver step: what that means, and *Add Deliver step*.
+/// A pipeline without a Deliver step: what that means, and *Add Deliver step* (`No Deliver step` `mUY21`).
 fn none_body(ctx: &Ctx, props: &DeliverProps) -> Element {
   let state = props.state.clone();
   let add = ActionButton::new("deliver-add", ButtonKind::Primary, ctx.t("delivery.step.add"))
@@ -402,15 +330,28 @@ fn none_body(ctx: &Ctx, props: &DeliverProps) -> Element {
         }
       });
     });
-  parts::panel_body()
+  Column::new()
+    .id("deliver-none")
+    .width(Dimension::Pct(100.0))
+    .padding(ExtraSpacing::Inset.role())
     .spacing(SpacingSize::Sm)
+    .rounded(RadiusSize::Lg)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
     .child(Text::new(&ctx.t("delivery.step.noneTitle")).variant(ExtraTypography::Strong.role()))
-    .child(parts::note(&ctx.t("delivery.step.noneBody")))
-    .child(Row::new().child(if props.locked { add.disabled() } else { add }))
+    .child(
+      Text::new(&ctx.t("delivery.step.noneBody"))
+        .variant(ExtraTypography::Prose.role())
+        .width(Dimension::Pct(100.0)),
+    )
+    .with_children(props.state.get().viewing.is_none().then(|| {
+      Row::new()
+        .padding(lurq::node::padding::Padding::new().top(SpacingSize::Xs))
+        .child(if props.locked { add.disabled() } else { add })
+    }))
     .into()
 }
 
-/// The words of the Deliver card and chip: its mode and method.
+/// The words of the Deliver card: its mode and method.
 pub(super) fn executor_words(ctx: &Ctx, deliver: &DeliverStep) -> Arc<str> {
   let method = crate::screens::merge_queue::words::method(ctx, deliver.method());
   match deliver.mode() {
@@ -419,13 +360,13 @@ pub(super) fn executor_words(ctx: &Ctx, deliver: &DeliverStep) -> Arc<str> {
   }
 }
 
-/// The Deliver step's panel in the editor.
-pub(super) fn panel(ctx: &mut Ctx, state: &State, locked: bool) -> Element {
+/// The Deliver step's column on the page.
+pub(super) fn column(ctx: &mut Ctx, state: &State, locked: bool) -> Element {
   let editing = state.get();
   let props = DeliverProps {
     state: state.clone(),
     deliver: editing.shown().deliver().cloned(),
-    locked,
+    locked: locked || editing.viewing.is_some(),
   };
-  ctx.mount_keyed::<DeliverInspector>(&format!("deliver-inspector-{}", editing.epoch), props)
+  ctx.mount_keyed::<DeliverColumn>(&format!("deliver-column-{}", editing.epoch), props)
 }

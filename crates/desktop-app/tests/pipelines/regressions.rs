@@ -56,9 +56,10 @@ fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
   keyboard_across_save(&mut editor, "pipeline-description", "a");
   editor.click("pipeline-settings");
   keyboard_across_save(&mut editor, "pipeline-settings-description", "d");
-  editor.click("pipeline-back-steps");
+  editor.click("pipeline-tab-steps");
   editor.click("pipeline-add-step");
   editor.set("step-name", "Typing");
+  editor.click("step-instructions-row");
   keyboard_across_save(&mut editor, "step-instructions", "g");
 }
 

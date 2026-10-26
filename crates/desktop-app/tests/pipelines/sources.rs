@@ -38,7 +38,7 @@ fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
   editor.open(id);
   editor.click("pipeline-summary-settings");
   editor.until("the project's sources", |e| e.exists("pipeline-project-source-0"));
-  assert_eq!(editor.text("pipeline-project-source-0-chip"), "project");
+  assert_eq!(editor.text("pipeline-project-source-0-hint"), "Project");
   std::fs::create_dir_all(editor.repo().join("docs")).expect("a project folder");
   stand_ins.choose(Some(editor.repo().join("docs")));
   editor.click("pipeline-sources-add-add");
@@ -55,7 +55,7 @@ fn pipelines_sources_a_chosen_folder_joins_the_draft_and_publishing_it_asks() {
   });
   assert!(editor.exists("pipeline-source-0"), "it can be removed");
   assert!(!editor.exists("pipeline-sources-add-hint"));
-  editor.click("pipeline-back-steps");
+  editor.click("pipeline-tab-steps");
   editor.click("pipeline-publish");
   editor.until("publish question", |e| e.exists("pipeline-publish-question-confirm"));
   editor.arm();
@@ -84,6 +84,7 @@ fn pipelines_sources_a_step_lists_its_own_beside_what_it_inherits() {
     .expect("the project's");
   editor.open(id);
   editor.click("pipeline-add-step");
+  editor.click("step-open-sources");
   editor.until("the step's sources", |e| e.exists("step-sources-add-path"));
   editor.until("what it inherits", |e| e.exists("step-sources-project-0"));
   assert_eq!(editor.text("step-sources-title-meta"), "0 own · 1 inherited");
@@ -93,7 +94,7 @@ fn pipelines_sources_a_step_lists_its_own_beside_what_it_inherits() {
   });
   editor.click("step-sources-add-add");
   editor.until("listed", |e| e.exists("step-source-0"));
-  assert_eq!(editor.text("step-source-0-meta"), "This step");
+  assert_eq!(editor.text("step-source-0-hint"), "This step");
   assert_eq!(editor.text("step-sources-title-meta"), "1 own · 1 inherited");
   // The draft saves itself once the edits rest.
   let listed = |body: &Pipeline| -> Vec<SourcePath> {
@@ -138,6 +139,7 @@ fn pipelines_sources_a_failed_read_of_the_projects_says_why_with_try_again_never
   unreadable(&editor, true);
   editor.open(id);
   editor.click("pipeline-add-step");
+  editor.click("step-open-sources");
   editor.until("the failure", |e| e.exists("step-sources-load-error"));
   assert!(
     editor
@@ -155,7 +157,9 @@ fn pipelines_sources_a_failed_read_of_the_projects_says_why_with_try_again_never
   assert!(!editor.exists("step-sources-project"));
   unreadable(&editor, false);
   editor.click("step-sources-load-error-retry");
-  editor.until("read again", |e| e.exists("step-sources-add-path"));
+  editor.until("read again", |e| {
+    e.exists("step-sources-add-path") && e.exists("step-sources-title-meta")
+  });
   assert_eq!(editor.text("step-sources-title-meta"), "0 own · 1 inherited");
   assert!(!editor.exists("step-sources-load-error"));
 }

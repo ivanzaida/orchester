@@ -1,7 +1,7 @@
 //! Actual current-profile navigation keeps pending decisions and unsaved Pipeline fields intact.
 use std::collections::BTreeSet;
 
-use orchester_app::routes::{PipelinePanel, ProjectPage, Route};
+use orchester_app::routes::{PipelineView, ProjectPage, Route};
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -91,7 +91,7 @@ fn current_agent(editor: &mut Editor, profile: ResourceId, role: &str) {
   assert!(editor.text("agent-model").contains("test-model"));
 }
 fn stays(editor: &Editor, id: ResourceId) {
-  let step = PipelinePanel::Step(StepKey::new("research").expect("valid step key"));
+  let step = PipelineView::Step(StepKey::new("research").expect("valid step key"));
   assert_eq!(
     editor.window.navigation().route_now(),
     Route::Project(project_id(), ProjectPage::Pipeline(id, step))
@@ -123,14 +123,14 @@ fn pipelines_profile_link_holds_dirty_invalid_fields_and_keep_preserves_them() {
   let (mut editor, id, ..) = assigned_profile();
   let before = stored(&editor, id);
   open_step(&mut editor, id);
-  editor.set("step-instructions", "Unsaved local instructions");
+  editor.set("step-name", "Unsaved local name");
   editor.set("step-budget", "invalid budget");
   editor.click("step-open-profile");
   stays(&editor, id);
   assert!(editor.exists("pipeline-leave-question"));
   editor.click("pipeline-leave-keep");
   assert!(!editor.exists("pipeline-leave-question"));
-  assert_eq!(editor.value("step-instructions"), "Unsaved local instructions");
+  assert_eq!(editor.value("step-name"), "Unsaved local name");
   assert_eq!(editor.value("step-budget"), "invalid budget");
   assert_eq!(stored(&editor, id), before);
 }
@@ -144,7 +144,7 @@ fn pipelines_profile_link_and_leave_confirm_wait_for_actual_save_completion() {
     .db()
     .publish_draft::<AgentProfile>(assigned, Timestamp::now())
     .expect("normal current profile publication makes this save body runnable");
-  editor.set("step-instructions", "Saved before navigation");
+  editor.set("step-name", "Saved before navigation");
   editor.click("pipeline-save");
   // Hold future delivery, rather than guessing how long the database write takes.
   editor.click("step-open-profile");
@@ -164,7 +164,7 @@ fn pipelines_profile_link_and_leave_confirm_wait_for_actual_save_completion() {
   editor.click("pipeline-leave-keep");
   editor.until("actual pipeline save accepted", |e| !e.exists("pipeline-save"));
   assert_eq!(
-    stored(&editor, id).body().steps()[0].instructions.as_str(),
+    stored(&editor, id).body().steps()[0].name.as_str(),
     "Saved before navigation"
   );
   assert!(
@@ -202,7 +202,7 @@ fn pipelines_profile_link_waits_for_successful_reload_then_opens_current_agent()
     .db()
     .publish_draft::<AgentProfile>(assigned, Timestamp::now())
     .expect("normal external publication permits the old assignment to save");
-  editor.set("step-instructions", "Local unsaved text");
+  editor.set("step-name", "Local unsaved text");
   let before = stored(&editor, id);
   let mut edit = orchester_core::resource::PipelineEdit::new(before.body().clone());
   edit.set_description("External successful reload");

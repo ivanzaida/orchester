@@ -149,8 +149,8 @@ fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_se
     let title = bounds(&mut editor, &format!("pipeline-step-title-{}", step.key));
     let executor = bounds(&mut editor, &format!("pipeline-step-executor-{}", step.key));
     assert!(
-      card.y >= previous_bottom + 20.0,
-      "cards and connectors must stay separate: {card:?}"
+      card.y >= previous_bottom + 10.0,
+      "cards and the edges between them must stay separate: {card:?}"
     );
     assert!(title.y + title.height <= executor.y, "title covers metadata");
     assert!(
@@ -233,7 +233,7 @@ fn pipelines_unpublished_profile_shows_draft_identity_model_and_stays_unassignab
   );
   assert!(editor.exists("step-open-profile"));
   assert!(editor.text("step-model").contains("qa-model"));
-  assert!(editor.text("step-model-source").contains("From the profile’s draft"));
+  assert!(editor.text("step-model-row-hint").contains("From the profile’s draft"));
   editor.click("pipeline-publish");
   assert!(!editor.exists("pipeline-publish-confirm"));
 }
@@ -262,8 +262,10 @@ fn pipelines_unsupported_database_is_distinct_from_runnable_commands() {
     .steps()[0]
     .clone();
   let card = format!("pipeline-step-{}", step.key);
-  assert!(editor.text(&card).contains("exit code"));
+  // The runnable command step waits for an approval, which its card says in place of what decides it.
+  assert!(!editor.text(&card).contains("Unavailable"), "{}", editor.text(&card));
   editor.click(&card);
+  assert!(editor.text("step-executor-row-hint").contains("exit code"));
   assert!(!editor.exists("step-tool-unavailable"));
 }
 
@@ -315,6 +317,6 @@ fn pipelines_publication_problem_links_flow_onto_another_line() {
     );
     assert!(rect.y + rect.height <= strip.y + strip.height, "{link}: {rect:?}");
     editor.click(&link);
-    assert!(editor.exists("step-profile-required"));
+    assert!(editor.text("step-executor-row-hint").contains("Choose a profile before publishing"));
   }
 }

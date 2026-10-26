@@ -29,21 +29,10 @@ impl Component for Dependencies {
     let props = ctx.props::<Props>().clone();
     let editing = props.state.get();
     let shown = editing.shown();
-    let names: Vec<_> = shown
-      .steps()
-      .iter()
-      .enumerate()
-      .filter(|(_, s)| props.step.depends_on.contains(&s.key))
-      .map(|(index, s)| format!("{:02} {}", index + 1, s.name))
-      .collect();
-    let label = if names.is_empty() {
-      ctx.t("pipelines.onStart").to_string()
-    } else {
-      names.join(", ")
-    };
     let open = self.open.clone();
-    let trigger = ActionButton::new("step-after-picker", ButtonKind::Select, label)
+    let trigger = ActionButton::new("step-after-picker", ButtonKind::Select, label(ctx, &shown, &props.step))
       .fill_width()
+      .bounded_label()
       .element_ref(self.anchor.clone())
       .on_click(move || open.update(|v| *v = !*v));
     let mut menu = popover_panel("step-after-menu", 260.0);
@@ -71,6 +60,7 @@ impl Component for Dependencies {
       });
     }
     Column::new()
+      .width(lurq::node::dimension::Dimension::Px(super::step_fields::FIELD_WIDTH))
       .child(if props.locked { trigger.disabled() } else { trigger })
       .child(popover(
         self.anchor.clone(),
@@ -78,5 +68,21 @@ impl Component for Dependencies {
         PopoverSide::Below,
         menu,
       ))
+  }
+}
+
+/// The steps `step` runs after, by number and name, or *On task start* when it runs first.
+pub fn label(ctx: &Ctx, shown: &orchester_core::resource::PipelineEdit, step: &orchester_core::resource::Step) -> String {
+  let names: Vec<_> = shown
+    .steps()
+    .iter()
+    .enumerate()
+    .filter(|(_, s)| step.depends_on.contains(&s.key))
+    .map(|(index, s)| format!("{:02} {}", index + 1, s.name))
+    .collect();
+  if names.is_empty() {
+    ctx.t("pipelines.onTaskStart").to_string()
+  } else {
+    names.join(", ")
   }
 }

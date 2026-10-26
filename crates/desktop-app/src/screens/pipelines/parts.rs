@@ -1,22 +1,25 @@
-//! Editor frame and inspector geometry from gHEgt, Oriq0 and K3w4J.
+//! The Pipelines pages' frame (`Pipelines · redesign` `evQ4U`): the page, its header's back link and title line,
+//! the body under the header with its pane or its flow and step column, and a step page's head.
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography},
-  ui::inspector::section_title,
+  theme::{ExtraSpacing, ExtraTypography, GroupText, IconSize, PipelinesSpacing},
+  ui::{
+    icon::{Icon, icon},
+    pressable::{Press, pressed},
+  },
 };
 
-pub const INSPECTOR_WIDTH: f32 = 340.0;
-const HEADER_HEIGHT: f32 = 52.0;
-const INSPECTOR_HEADER: f32 = 44.0;
+/// A list or form pane's width at most (`Pane` `ZLmFa`).
+pub const PANE_WIDTH: f32 = 720.0;
 
 pub fn page() -> Column {
   Column::new()
@@ -24,100 +27,132 @@ pub fn page() -> Column {
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
 }
-pub fn header() -> Row {
+
+/// The header's column: 20 over it, 28 at its sides, 10 between its lines (`Header` `Jf1Gu`).
+pub fn header() -> Column {
+  Column::new()
+    .id("pipeline-header")
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(PipelinesSpacing::PageTop.role())
+        .left(ExtraSpacing::Roomy.role())
+        .right(ExtraSpacing::Roomy.role()),
+    )
+    .spacing(ExtraSpacing::Loose.role())
+}
+
+/// The title line: the title, then what sits at its end (`Title row` `M8v20`).
+pub fn title_row(id: &str, title: &str) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(HEADER_HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-}
-pub fn panel(
-  ctx: &mut Ctx,
-  eyebrow: &str,
-  title: &str,
-  body: Element,
-  footer: Option<Element>,
-  close: Option<super::state::State>,
-) -> Element {
-  panel_with_title(
-    ctx,
-    eyebrow,
-    Text::new(title).variant(TypographyStyle::Title).into(),
-    body,
-    footer,
-    close,
-  )
-}
-pub fn panel_with_title(
-  ctx: &mut Ctx,
-  eyebrow: &str,
-  title: Element,
-  body: Element,
-  footer: Option<Element>,
-  close: Option<super::state::State>,
-) -> Element {
-  let close = close.map(|state| {
-    let panels = state.get_untracked().panels;
-    crate::ui::icon_button::IconButton::new(
-      "pipeline-inspector-close",
-      crate::ui::icon::Icon::X,
-      ctx.t("pipelines.closeInspector"),
-    )
-    .small()
-    .on_click(move || panels.close())
-    .render(ctx)
-  });
-  Column::new()
-    .id("pipeline-inspector")
-    .width(Dimension::Px(INSPECTOR_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
-      Row::new()
-        .height(Dimension::Px(INSPECTOR_HEADER))
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(Text::new(eyebrow).variant(ExtraTypography::ColumnHeading.role()))
-        .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(title))
-        .with_children(close),
+      Text::new(title)
+        .id(id.to_owned())
+        .variant(TypographyStyle::Heading)
+        .nowrap()
+        .text_overflow(lurq::components::TextOverflow::Elipsis)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
-    .child(ScrollVertical::new(body).flex(1.0).min_height(Dimension::Px(0.0)))
-    .with_children(footer)
+}
+
+/// `← <label>` (`Back` `MYia7`): back to where the page belongs.
+pub fn back_link(id: &str, label: &str, press: Press) -> Element {
+  pressed(press)
+    .id(id.to_owned())
+    .spacing(ExtraSpacing::Snug.role())
+    .describe("a11y_name", label.to_owned())
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(label)
+        .id(format!("{id}-label"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted),
+    )
     .into()
 }
-pub fn panel_body() -> Column {
+
+/// The body under the header, scrolling: 20 over it and 28 at its sides (`Body` `mifhW`).
+pub fn body(id: &str, content: impl Into<Element>) -> ScrollVertical {
+  ScrollVertical::new(
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(PipelinesSpacing::PageTop.role())
+          .left(ExtraSpacing::Roomy.role())
+          .right(ExtraSpacing::Roomy.role())
+          .bottom(SpacingSize::Xl),
+      )
+      .child(content),
+  )
+  .id(id.to_owned())
+  .width(Dimension::Pct(100.0))
+  .flex(1.0)
+  .min_height(Dimension::Px(0.0))
+}
+
+/// A pane of groups, 24 apart, [`PANE_WIDTH`] wide at most (`Pane` `ZLmFa`).
+pub fn pane(id: &str) -> Column {
+  Column::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .max_width(Dimension::Px(PANE_WIDTH))
+    .spacing(SpacingSize::Xl)
+}
+
+/// A step page's head: back to its step, its title and what it says of the step (`Sub-page head` `Z1LPH`).
+pub fn sub_head(id: &str, back: Element, title: &str, meta: Option<&str>) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(SpacingSize::Xs)
+    .spacing(SpacingSize::Sm)
+    .child(back)
+    .child(
+      Row::new()
+        .id(id.to_owned())
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(title)
+            .id(format!("{id}-text"))
+            .variant(TypographyStyle::Title),
+        )
+        .with_children(meta.map(|meta| {
+          Text::new(meta)
+            .id(format!("{id}-meta"))
+            .variant(GroupText::Hint.role())
+        })),
+    )
 }
-pub fn section(ctx: &Ctx, key: &'static str) -> Element {
-  section_title(key, &ctx.t(key), None)
-    .height(Dimension::Px(30.0))
-    .padding(Padding::new().top(ExtraSpacing::Loose.role()))
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .into()
+
+/// The words under a group or a page's head in 12.5 `text_secondary` (`XbZuU`).
+pub fn lead(id: &str, words: &str) -> Text {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(ExtraTypography::Lead.role())
+    .width(Dimension::Pct(100.0))
 }
+
 pub fn caption(text: &str) -> Text {
   Text::new(text).variant(TypographyStyle::Caption)
 }
+
 pub fn note(text: &str) -> Text {
   Text::new(text)
     .variant(ExtraTypography::Note.role())
     .width(Dimension::Pct(100.0))
 }
 
-/// XoQDX: the change's own symbol, aligned to its first line.
-pub fn change_row(ctx: &Ctx, change: &orchester_core::resource::PipelineChange) -> Row {
+/// A change of a version, with its own symbol, as a row of a group (`Reha1` in `fXnX2`).
+pub fn change_row(
+  ctx: &Ctx,
+  id: &str,
+  change: &orchester_core::resource::PipelineChange,
+) -> crate::ui::row_group::GroupRow {
   use orchester_core::resource::{PipelineChange, StepChange};
-
-  use crate::ui::icon::{Icon, icon};
   let glyph = match change {
     PipelineChange::Description => Icon::FilePen,
     PipelineChange::Deliver(_) => Icon::GitMerge,
@@ -132,33 +167,14 @@ pub fn change_row(ctx: &Ctx, change: &orchester_core::resource::PipelineChange) 
       _ => Icon::FilePen,
     },
   };
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Start)
-    .child(icon(glyph, crate::theme::IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      Text::new(&crate::ui::message::message_text(
-        ctx,
-        &orchester_workspace::pipelines::describe::change(change),
-      ))
-      .variant(ExtraTypography::Prose.role())
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0)),
-    )
+  let words = crate::ui::message::message_text(ctx, &orchester_workspace::pipelines::describe::change(change));
+  crate::ui::row_group::GroupRow::new(id, words).leading(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
 }
+
 pub fn pipeline_name_error(ctx: &Ctx, error: &orchester_workspace::messages::Message) -> std::sync::Arc<str> {
   if *error == orchester_workspace::messages::name_error(&orchester_core::name::NameError::Blank) {
     ctx.t("pipelines.invalidName")
   } else {
     crate::ui::message::message_text(ctx, error)
   }
-}
-/// Text-only inspector notice in lAQis and Z26ZFs.
-pub fn text_notice(id: &str, title: &str, detail: &str) -> Column {
-  crate::ui::card::card(id, crate::ui::card::CardSurface::Raised)
-    .padding(SpacingSize::Sm)
-    .spacing(SpacingSize::Xs)
-    .child(Text::new(title).variant(ExtraTypography::Strong.role()))
-    .child(note(detail))
 }
