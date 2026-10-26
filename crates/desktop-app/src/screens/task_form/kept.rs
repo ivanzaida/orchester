@@ -18,8 +18,9 @@ use std::{
 
 use orchester_core::{
   id::{ProjectId, ResourceId, TaskId},
+  resource::Deliverable,
   sharing::TaskRevision,
-  task::estimate::StoryPoints,
+  task::{estimate::StoryPoints, organization::Priority},
   time::Timestamp,
 };
 use orchester_workspace::workspace::Workspace;
@@ -243,6 +244,8 @@ fn encode_values(values: &Values) -> Value {
     "time_limit": values.time_limit,
     "points": values.points.map(StoryPoints::get),
     "no_automatic_merge": values.no_automatic_merge,
+    "priority": values.priority,
+    "delivers": values.delivers.map(Deliverable::as_str),
   })
 }
 
@@ -274,10 +277,19 @@ fn decode_values(value: &Value) -> Option<Values> {
     None | Some(Value::Null) => None,
     Some(points) => Some(StoryPoints::new(u32::try_from(points.as_u64()?).ok()?).ok()?),
   };
-  // Edits kept before the form had *Don't merge automatically* did not change it.
+  // Edits kept before the form had *Don't merge automatically*, a priority or what the runs deliver did not change
+  // them.
   let no_automatic_merge = match value.get("no_automatic_merge") {
     None => false,
     Some(flag) => flag.as_bool()?,
+  };
+  let priority = match value.get("priority") {
+    None => Priority::default(),
+    Some(priority) => serde_json::from_value(priority.clone()).ok()?,
+  };
+  let delivers = match value.get("delivers") {
+    None | Some(Value::Null) => None,
+    Some(delivers) => Some(delivers.as_str()?.parse::<Deliverable>().ok()?),
   };
   Some(Values {
     title: text("title")?,
@@ -288,6 +300,8 @@ fn decode_values(value: &Value) -> Option<Values> {
     time_limit: text("time_limit")?,
     points,
     no_automatic_merge,
+    priority,
+    delivers,
   })
 }
 

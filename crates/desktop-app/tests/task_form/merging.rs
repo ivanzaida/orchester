@@ -1,6 +1,6 @@
-//! The Merging section's *Don't merge automatically* (ORC-69), a part of the task's organization: Create and Create &
-//! run save it with the new task, Save changes turns it on and off, a newer version saved elsewhere keeps the person's
-//! choice, and leaving the form keeps it with the other edits.
+//! *Don't merge automatically* (ORC-69) under *…*, a part of the task's organization: Create and Create & run save it
+//! with the new task, Save changes turns it on and off, a newer version saved elsewhere keeps the person's choice, and
+//! leaving the form keeps it with the other edits.
 
 use orchester_app::routes::{ProjectPage, TaskList};
 use orchester_core::task::TaskStatus;
@@ -8,6 +8,7 @@ use orchester_core::task::TaskStatus;
 use crate::{harness::Form, versions::until_value};
 
 const SWITCH: &str = "task-form-no-automatic-merge";
+const MORE: &str = "task-form-more";
 
 /// Whether the switch shows on: its knob at the end of its track.
 fn shows_on(form: &mut Form) -> bool {
@@ -58,6 +59,7 @@ fn opted_out(form: &Form, key: &str) -> bool {
 fn form_merging_create_saves_it_and_save_changes_turns_it_off() {
   let mut form = Form::seeded("live");
   form.new_task();
+  form.open(MORE);
   assert_eq!(form.text(&format!("{SWITCH}-label")), "Don't merge automatically");
   assert!(!shows_on(&mut form), "off for a new task");
   form.set("task-form-title-input", "Keep it for the person");
@@ -65,11 +67,12 @@ fn form_merging_create_saves_it_and_save_changes_turns_it_off() {
   until_shows(&mut form, true);
   form.click("task-form-create");
   form.window.until("Create stored the task", |window| {
-    window.tree.get_element_by_id("task-form-title").is_none()
+    window.tree.get_element_by_id("task-form-title-input").is_none()
   });
   assert!(opted_out(&form, "KON-7"), "Create saved it with the task");
 
   form.edit("KON-7");
+  form.open(MORE);
   until_shows(&mut form, true);
   assert_eq!(form.status(), "Draft saved locally");
   form.click(SWITCH);
@@ -85,6 +88,7 @@ fn form_merging_create_and_run_saves_it_with_the_queued_task() {
   let mut form = Form::seeded("live");
   form.new_task();
   form.fill("Add a delivery log", "Quick fix v1");
+  form.open(MORE);
   form.click(SWITCH);
   until_shows(&mut form, true);
   form.click("task-form-run");
@@ -99,6 +103,7 @@ fn form_merging_a_newer_version_keeps_the_persons_choice() {
   let mut form = Form::seeded("live");
   form.edit("KON-1");
   assert!(!opted_out(&form, "KON-1"));
+  form.open(MORE);
   form.click(SWITCH);
   until_shows(&mut form, true);
   form.change_elsewhere("KON-1", |details| details.brief = "Brief from automation.".to_owned());
@@ -121,12 +126,14 @@ fn form_merging_leaving_keeps_the_choice_with_the_edits() {
   let mut form = Form::seeded("live");
   let task = form.task("KON-1").expect("KON-1").id();
   form.edit("KON-1");
+  form.open(MORE);
   form.click(SWITCH);
   form.until_kept(Some(task), "the choice is kept", |kept| {
     kept.is_some_and(|kept| kept.contains("\"no_automatic_merge\":true"))
   });
   form.go(ProjectPage::Tasks(TaskList::default()));
   form.edit("KON-1");
+  form.open(MORE);
   until_shows(&mut form, true);
   assert!(
     form.status().starts_with("Unsaved changes · kept from "),

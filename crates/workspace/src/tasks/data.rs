@@ -67,6 +67,8 @@ pub struct PipelineChoice {
   /// The published version this choice represents.
   pub version: VersionNumber,
   pub steps: Vec<PipelineStepChoice>,
+  /// What a run of this version delivers, unless a task says otherwise (ORC-93).
+  pub delivers: orchester_core::resource::Deliverable,
 }
 
 /// The project's tasks and the pipelines they can use, read together.
@@ -500,6 +502,7 @@ fn pipeline_choice(
     name: resource.name().as_str().into(),
     version: version.number(),
     steps: step_choices(version.body().steps(), assignables),
+    delivers: version.body().delivers(),
   }
 }
 

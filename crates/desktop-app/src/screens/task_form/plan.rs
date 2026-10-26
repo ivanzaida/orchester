@@ -1,75 +1,55 @@
-//! The Pipeline section (`Section · Pipeline` `cE6EO`): the select of the project's published pipelines
-//! (`DQAHc`: drafts are not offered; without a published pipeline the select stays in place, unavailable
-//! with its reason, and *Open Pipelines* leads to them), and the chosen pipeline's execution plan
-//! (`Execution plan` `U5hUUe`): its steps with who runs each and the approval gates (`Plan step row`
-//! `zA6TT`), and a note on the gates. Without a choice the plan's place says to choose (`No plan`
-//! `j1DUN`).
+//! The Pipeline chip (`Pipeline` `Fam0J`, set `sxreX`) and its menu (`Pipeline menu` `GyjOt` in `02` `lnN0y`): the
+//! project's published pipelines, drafts not offered, each with its steps and where it waits for approval, a check on
+//! the chosen one, and *Manage pipelines* under a separator. Without a published pipeline the menu says so and still
+//! leads to them; a shared task's pipeline this computer lacks is named with what saving does. Once a pipeline is
+//! chosen, the plan line under the chips (`Plan line` `o27CHI`) reads its steps, where approval is needed and *View
+//! pipeline ↗*, in place of the old execution plan card.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, SelectOption, Spacer, Text},
+  components::{Column, Row, Spacer, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ResourceId;
+use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::tasks::{
   data::{PipelineChoice, PipelineStepChoice},
   list::PipelineLabel,
 };
 
-use super::{Nav, state::View};
+use super::{
+  Nav,
+  chips::{ChipState, Look, MenuOption, PropertyChip},
+  state::View,
+};
 use crate::{
+  navigation::Navigation,
+  routes::{PipelineView, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    button::{ActionButton, ButtonKind},
-    field::{FieldInput, SelectField},
-    form_section::{Label, Place, section, side_row},
+    filter::filter_menu_panel,
     icon::{Icon, icon},
+    menu::{MenuItem, separator},
     message::message_text,
+    pressable::{Focus, opening},
+    tooltip::Truncated,
   },
 };
 
-/// The select's width (`Control` `ZIliW`), the plan's head and note heights (`Head` `FuYHQ`, `Approval
-/// note` `QNkoh`), a step row's height (`Step 01` `bgxmZ`), and the columns of its number and name.
-const SELECT_WIDTH: f32 = 240.0;
-const PLAN_HEAD_HEIGHT: f32 = 36.0;
-const STEP_HEIGHT: f32 = 34.0;
-const STEP_NUMBER_WIDTH: f32 = 18.0;
-const STEP_NAME_WIDTH: f32 = 150.0;
+/// The menu's width (`Pipeline menu` `GyjOt`).
+const MENU_WIDTH: f32 = 380.0;
 
 /// The chosen pipeline, if any.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pick(pub Option<ResourceId>);
 
 impl lurq::app::component::DevtoolsInspectable for Pick {}
-
-pub fn pipeline_section(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Element {
-  let note = view.queued().then(|| ctx.t("task_form.queued.lockedMeta"));
-  let label = Label::new("task-form-pipeline", ctx.t("task_form.fields.pipeline.label"))
-    .description(ctx.t("task_form.fields.pipeline.description"));
-  let control = control(ctx, view, pick, nav);
-  let plan = Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Xs))
-    .child(match view.pipeline() {
-      Some(choice) => plan(ctx, choice, nav),
-      None => no_plan(ctx),
-    });
-  let rows = vec![side_row(label, control, Place::Within, false), plan.into()];
-  section(
-    "task-form-pipeline-section",
-    &ctx.t("task_form.sections.pipeline"),
-    note.as_deref(),
-    rows,
-  )
-  .into()
-}
 
 pub(super) fn choice_label(ctx: &Ctx, choice: &PipelineChoice) -> Arc<str> {
   ctx.t_args(
@@ -81,94 +61,104 @@ pub(super) fn choice_label(ctx: &Ctx, choice: &PipelineChoice) -> Arc<str> {
   )
 }
 
-fn control(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Element {
-  let name = ctx.t("task_form.fields.pipeline.label");
-  if view.no_pipelines() {
-    let box_text = Signal::new(ctx.t("task_form.fields.pipeline.none").to_string());
-    let open = ActionButton::new(
-      "task-form-open-pipelines",
-      ButtonKind::Ghost,
-      ctx.t("task_form.fields.pipeline.open"),
-    )
-    .opens(nav.to_pipelines());
-    return Column::new()
-      .width(Dimension::Px(SELECT_WIDTH))
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::End)
-      .child(
-        FieldInput::new("task-form-pipeline-input", name, box_text)
-          .locked()
-          .trailing(Icon::Lock)
-          .render(ctx),
-      )
-      .child(open)
-      .into();
-  }
-  if view.locked() {
-    let chosen = view
-      .pipeline()
-      .map(|choice| choice_label(ctx, choice))
-      .unwrap_or_default();
-    return Column::new()
-      .width(Dimension::Px(SELECT_WIDTH))
-      .child(
-        FieldInput::new("task-form-pipeline-input", name, Signal::new(chosen.to_string()))
-          .locked()
-          .trailing(Icon::Lock)
-          .render(ctx),
-      )
-      .into();
-  }
-  let options = view
-    .pipelines
-    .iter()
-    .flat_map(|pipelines| pipelines.iter())
-    .map(|choice| {
-      SelectOption::new(Pick(Some(choice.id)), choice_label(ctx, choice)).detail(option_detail(ctx, choice))
-    })
-    .collect();
-  let select = SelectField::new("task-form-pipeline-input", name, pick.clone(), options)
-    .placeholder(ctx.t("task_form.fields.pipeline.placeholder"))
-    .width(Dimension::Px(SELECT_WIDTH))
-    .render(ctx);
-  match view.missing_pipeline.as_deref().filter(|_| pick.get().0.is_none()) {
-    Some(slug) => Column::new()
-      .width(Dimension::Px(SELECT_WIDTH))
-      .spacing(ExtraSpacing::Snug.role())
-      .child(select)
-      .child(
-        Text::new(&message_text(
-          ctx,
-          &PipelineLabel::Missing { slug: Arc::from(slug) }.message(),
-        ))
-        .id("task-form-pipeline-missing")
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::Warning),
-      )
-      .child(
-        Text::new(&ctx.t("task_form.fields.pipeline.missingKept"))
-          .id("task-form-pipeline-missing-kept")
-          .variant(ExtraTypography::Note.role())
-          .width(Dimension::Pct(100.0)),
-      )
-      .into(),
-    None => select,
-  }
+/// The chip; `warning` once the person tried to run without a pipeline.
+pub fn pipeline_chip(
+  ctx: &mut Ctx,
+  view: &View,
+  (state, nav): (&ChipState, &Nav),
+  (pick, warning): (&Signal<Pick>, bool),
+) -> Element {
+  let (look, value) = match (view.pipeline(), &view.missing_pipeline) {
+    (Some(choice), _) => (Look::Set, choice_label(ctx, choice)),
+    (None, Some(slug)) if view.values.pipeline.is_none() => (Look::Set, slug.clone()),
+    (None, _) if view.no_pipelines() => (Look::Empty, ctx.t("task_form.fields.pipeline.noneShort")),
+    (None, _) => (Look::Empty, ctx.t("task_form.fields.pipeline.choose")),
+  };
+  let panel = state.is_open().then(|| menu(ctx, view, (state, nav), pick));
+  PropertyChip::new(
+    "task-form-pipeline",
+    Icon::Workflow,
+    (ctx.t("task_form.fields.pipeline.label"), value),
+    look,
+  )
+  .warning(warning && look == Look::Empty)
+  .locked(view.locked())
+  .render(state, panel)
 }
 
-/// What an option says under its name: its version, its steps and where it waits for approval.
+fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Signal<Pick>) -> Element {
+  let chosen = view.values.pipeline;
+  let mut panel = filter_menu_panel("task-form-pipeline-menu", MENU_WIDTH);
+  if let Some(slug) = view.missing_pipeline.as_deref().filter(|_| chosen.is_none()) {
+    panel = panel.child(missing(ctx, slug));
+  }
+  if view.no_pipelines() {
+    panel = panel.child(
+      MenuItem::unavailable(
+        "task-form-pipeline-none",
+        ctx.t("task_form.fields.pipeline.none"),
+        ctx.t("task_form.fields.pipeline.noneShort"),
+      )
+      .render(ctx, &state.open),
+    );
+  }
+  for (index, choice) in view.pipelines.iter().flat_map(|pipelines| pipelines.iter()).enumerate() {
+    let (id, pick) = (choice.id, pick.clone());
+    panel = panel.child(
+      MenuOption {
+        id: format!("task-form-pipeline-option-{index}"),
+        icon: Icon::Workflow,
+        title: choice_label(ctx, choice),
+        help: Some(option_detail(ctx, choice)),
+        chosen: chosen == Some(id),
+      }
+      .render(&state.open, move || pick.set(Pick(Some(id)))),
+    );
+  }
+  let manage = MenuItem::opens(
+    "task-form-manage-pipelines",
+    ctx.t("task_form.fields.pipeline.manage"),
+    nav.to_pipelines(),
+  )
+  .icon(Icon::ArrowUpRight)
+  .in_form()
+  .render(ctx, &state.open);
+  panel.child(separator(ctx)).child(manage).into()
+}
+
+/// A shared task's pipeline that this computer has none of, and what saving does with it.
+fn missing(ctx: &Ctx, slug: &str) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(
+      Text::new(&message_text(
+        ctx,
+        &PipelineLabel::Missing { slug: Arc::from(slug) }.message(),
+      ))
+      .id("task-form-pipeline-missing")
+      .variant(TypographyStyle::Caption)
+      .color(PaletteColor::Warning),
+    )
+    .child(
+      Text::new(&ctx.t("task_form.fields.pipeline.missingKept"))
+        .id("task-form-pipeline-missing-kept")
+        .variant(ExtraTypography::Note.role())
+        .width(Dimension::Pct(100.0)),
+    )
+    .into()
+}
+
+/// What a pipeline says under its name: its steps and where it waits for approval.
 fn option_detail(ctx: &Ctx, choice: &PipelineChoice) -> Arc<str> {
   let steps = steps_text(ctx, choice.steps.len());
-  let version = choice.version.to_string();
   match gates(ctx, &choice.steps) {
     Some(gates) => ctx.t_args(
-      "task_form.plan.optionGates",
-      [("version", version.as_str()), ("steps", &steps), ("gates", &gates)],
+      "task_form.plan.menuGates",
+      [("steps", steps.as_str()), ("gates", &gates)],
     ),
-    None => ctx.t_args(
-      "task_form.plan.optionNoGates",
-      [("version", version.as_str()), ("steps", &steps)],
-    ),
+    None => ctx.t_args("task_form.plan.menuNoGates", [("steps", steps.as_str())]),
   }
 }
 
@@ -193,140 +183,52 @@ fn gates(ctx: &Ctx, steps: &[PipelineStepChoice]) -> Option<String> {
   (!gated.is_empty()).then(|| gated.join(&separator))
 }
 
-fn plan(ctx: &mut Ctx, choice: &PipelineChoice, nav: &Nav) -> Element {
-  let view_pipeline = ActionButton::new(
-    "task-form-view-pipeline",
-    ButtonKind::Ghost,
-    ctx.t("task_form.plan.view"),
-  )
-  .opens(nav.to_pipelines());
-  let meta = ctx.t_args(
-    "task_form.plan.meta",
-    [
-      ("pipeline", choice_label(ctx, choice).to_string()),
-      ("steps", steps_text(ctx, choice.steps.len())),
-    ],
-  );
-  let head = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(PLAN_HEAD_HEIGHT))
-    .padding(Padding::new().left(SpacingSize::Md).right(ExtraSpacing::Snug.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t("task_form.plan.title")).variant(TypographyStyle::Label))
-    .child(Spacer::new().flex(1.0))
-    .child(
-      Text::new(&meta)
-        .id("task-form-plan-meta")
-        .variant(TypographyStyle::Caption),
-    )
-    .child(view_pipeline);
-  let steps: Vec<Element> = (1..)
-    .zip(&choice.steps)
-    .map(|(number, step)| step_row(ctx, number, step))
-    .collect();
-  Column::new()
-    .id("task-form-plan")
-    .width(Dimension::Pct(100.0))
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip()
-    .child(head)
-    .with_children(steps)
-    .child(gate_note(ctx, &choice.steps))
-    .into()
-}
-
-/// One step (`Plan step row` `zA6TT`): its number, name, who runs it and whether it waits for approval.
-fn step_row(ctx: &Ctx, number: usize, step: &PipelineStepChoice) -> Element {
-  let executor = Row::new()
-    .flex(1.0)
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(icon(
-      match (step.pull_request, step.tool) {
-        (true, _) => Icon::GitPullRequest,
-        (false, true) => Icon::Terminal,
-        (false, false) => Icon::Bot,
-      },
-      IconSize::Base,
-      PaletteColor::TextSecondary,
-    ))
-    .child(Text::new(&message_text(ctx, &step.executor)).variant(TypographyStyle::Description));
-  let gate = step.approval_gate.then(|| {
-    Row::new()
-      .id(format!("task-form-step-{number}-gate"))
-      .spacing(ExtraSpacing::Pair.role())
-      .align_items(Alignment::Center)
-      .child(icon(Icon::Hand, IconSize::Base, PaletteColor::Warning))
-      .child(
-        Text::new(&ctx.t("task_form.plan.gate"))
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::Warning)
-          .nowrap(),
-      )
-  });
-  Row::new()
-    .id(format!("task-form-step-{number}"))
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(STEP_HEIGHT))
-    .padding(Padding::horizontal(SpacingSize::Md))
-    .spacing(SpacingSize::Md)
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(
-      Text::new(&format!("{number:02}"))
-        .width(Dimension::Px(STEP_NUMBER_WIDTH))
-        .variant(ExtraTypography::MonoNote.role()),
-    )
-    .child(
-      Text::new(&step.name)
-        .width(Dimension::Px(STEP_NAME_WIDTH))
-        .variant(TypographyStyle::Label),
-    )
-    .child(executor)
-    .with_children(gate)
-    .into()
-}
-
-/// Under the steps: which steps need approval (`Approval note` `QNkoh`), or that none does (`w6hmb`).
-fn gate_note(ctx: &Ctx, steps: &[PipelineStepChoice]) -> Row {
-  let (glyph, color, words) = match gates(ctx, steps) {
-    Some(gated) => (
-      Icon::Hand,
+/// The plan line under the chips once a pipeline is chosen (`Plan line` `o27CHI`): a 13 `route`, the steps in 12
+/// `text_secondary`, where approval is needed in `warning`, and *View pipeline ↗* at the end, 8 apart.
+pub fn plan_line(ctx: &mut Ctx, view: &View, project: ProjectId) -> Option<Element> {
+  let choice = view.pipeline()?;
+  let steps = choice
+    .steps
+    .iter()
+    .map(|step| &*step.name)
+    .collect::<Vec<_>>()
+    .join(&ctx.t("task_form.plan.stepSeparator"));
+  let steps = Truncated::new("task-form-plan-steps", steps, TypographyStyle::Description).render(ctx);
+  let (gate, color) = match gates(ctx, &choice.steps) {
+    Some(gates) => (
+      ctx.t_args("task_form.plan.lineGates", [("gates", gates)]),
       PaletteColor::Warning,
-      ctx.t_args("task_form.plan.approval", [("steps", gated)]),
     ),
-    None => (Icon::Info, PaletteColor::TextMuted, ctx.t("task_form.plan.noGates")),
+    None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::TextMuted),
   };
-  Row::new()
-    .id("task-form-plan-note")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(PLAN_HEAD_HEIGHT))
-    .padding(Padding::horizontal(SpacingSize::Md))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, color))
-    .child(Text::new(&words).variant(TypographyStyle::Description))
-}
-
-/// The plan's place while no pipeline is chosen (`No plan` `j1DUN`).
-fn no_plan(ctx: &Ctx) -> Element {
-  Row::new()
-    .id("task-form-no-plan")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inset.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(icon(Icon::Workflow, IconSize::Base, PaletteColor::TextMuted))
+  let route = Route::Project(project, ProjectPage::Pipeline(choice.id, PipelineView::Steps));
+  let view_pipeline = Focus::Link
+    .apply(opening(Navigation::of(ctx).to(route)))
+    .id("task-form-view-pipeline")
+    .flex_shrink(0.0)
     .child(
-      Text::new(&ctx.t("task_form.plan.choose"))
+      Text::new(&ctx.t("task_form.plan.view"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
-    )
-    .into()
+        .nowrap(),
+    );
+  Some(
+    Row::new()
+      .id("task-form-plan")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(icon(Icon::Route, IconSize::Base, PaletteColor::TextMuted))
+      .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(steps))
+      .child(
+        Text::new(&gate)
+          .id("task-form-plan-gate")
+          .variant(TypographyStyle::Description)
+          .color(color)
+          .nowrap()
+          .flex_shrink(0.0),
+      )
+      .child(Spacer::new().flex(1.0))
+      .child(view_pipeline)
+      .into(),
+  )
 }

@@ -212,8 +212,9 @@ impl TaskForm {
 
   /// A newer version `task` came while the fields hold edits made on `base`: when the two changed
   /// different fields, the edits are put on it without asking; else the person chooses per field. Edits
-  /// that are not valid yet are compared once they are saved. *Don't merge automatically* is the
-  /// organization's and merges by itself: the person's choice when they changed it, else the newer one's.
+  /// that are not valid yet are compared once they are saved. *Don't merge automatically*, the priority and
+  /// what the runs deliver are the organization's and merge by themselves: the person's choice when they
+  /// changed one, else the newer one's.
   fn meet_newer(&self, task: &Arc<Task>, base: &Base, (separator, at): (&str, Option<Timestamp>)) {
     self.newer.set(Some(Newer(task.clone())));
     let values = self.fields.values_untracked();
@@ -228,6 +229,8 @@ impl TaskForm {
       // Story points are not part of the details: the person's choice in the field stays.
       self.fields.fill(&Values {
         no_automatic_merge: organization.no_automatic_merge(),
+        priority: organization.priority(),
+        delivers: organization.delivers(),
         points: values.points,
         ..Values::of_details(&merge.merged(|_| Choice::Mine), separator)
       });
