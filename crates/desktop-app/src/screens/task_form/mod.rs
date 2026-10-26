@@ -1,33 +1,37 @@
-//! New task (`New task · empty · dark` `s7jKkA`, `New task · filled · dark` `fJ4v9`) and Edit task (`Edit
-//! task · draft · no changes · dark` `Qp1B0`, `Edit task · already ran` `v2c76`), one page in the layer
-//! `New task` (`ZLTEI`): the brief, the pipeline with its execution plan, the limits, *Don't merge
-//! automatically* (ORC-69, [`merging`]), and the action bar.
-//! *Create* saves a draft and opens Tasks with the new row highlighted; *Create & run* saves, queues and
-//! starts the run, and a run the runner did not start keeps the form with *Retry run* (`H8GYVZ`,
-//! `t0fDw`). Edit task saves changes in place, discards them in place (`LVI8K`), and keeps them on this
-//! computer when the page is left (`Fd1ai`). A newer version saved meanwhile is put under the edits, and
-//! where both changed a field the person chooses (`Edit task · conflict · newer version` `PenUu`). The
-//! rest of the Organization section is left out of the dogfood build (D4).
+//! New task and Edit task as a composer (`Task form · redesign` `HFXxX` in the new `orchester.pen`: `01` `S0TjN`,
+//! `02` `lnN0y`, `03` `jsySh`, `04` `Qzvo0`, `05` `ey0JJ`): the title and the outcome typed on the page, the acceptance
+//! criteria inline, the task's settings as property chips that open today's controls in popovers (`chips`), the plan
+//! line, and an action bar that says the one thing the next action needs.
+//! *Create* saves a draft and opens Tasks with the new row highlighted; *Create & run* (Ctrl Enter) saves, queues and
+//! starts the run, and a run the runner did not start keeps the form with *Retry run* (`H8GYVZ`, `t0fDw`). Edit task
+//! saves changes in place (Ctrl S), discards them in place (`LVI8K`), and keeps them on this computer when the page is
+//! left (`Fd1ai`). A newer version saved meanwhile is put under the edits, and where both changed a field the person
+//! chooses (`Edit task · conflict · newer version` `PenUu`).
 
 mod actions;
 mod bar;
 mod base;
 mod brief;
+mod chips;
+mod composer;
 mod conflict;
 mod criteria;
+mod delivers;
 mod fields;
 mod form;
 mod handlers;
 mod head;
 mod kept;
+mod keys;
 mod limits;
 mod merging;
 mod module;
 mod plan;
-pub(crate) mod points;
+mod points;
+mod priority;
+mod reason;
 mod sources;
 mod state;
-mod unbuilt;
 mod values;
 
 use std::sync::Arc;
@@ -60,7 +64,7 @@ use crate::{
   },
 };
 
-/// The form's column (`Form` `V1U9lg`), which the action bar's content lines up with (`Inner` `uIqao`).
+/// The composer's column (`Composer` `IxeaX`).
 const FORM_WIDTH: f32 = 720.0;
 
 pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {

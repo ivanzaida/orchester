@@ -11,6 +11,7 @@
 //! `cargo test -p orchester-app --test shared_project shared_project_`
 
 mod conflict;
+mod delivers;
 mod discovery;
 #[allow(dead_code, reason = "the N1 harness, of which these tests use a part")]
 #[path = "../orchester/harness.rs"]

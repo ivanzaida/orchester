@@ -5,17 +5,10 @@
     },
     "crumbs": {
       "tasks": "Tasks",
-      "newTask": "New task",
-      "edit": "Edit"
+      "newTask": "New task"
     },
-    "new": {
-      "title": "What would you like to build?",
-      "description": "A task is a brief with acceptance criteria. Its pipeline runs it step by step in a worktree of its own."
-    },
-    "edit": {
-      "title": "Edit task",
-      "description": "Changes apply to draft {{key}}. Nothing runs until you choose Create & run.",
-      "descriptionRan": "{{key}} already ran. Changes apply to future runs only; its runs keep the brief they started with."
+    "notes": {
+      "ran": "{{key}} already ran. Changes apply to future runs; its runs keep the brief they started with."
     },
     "status": {
       "notSaved": "Not saved yet",
@@ -34,7 +27,6 @@
       "savedAs": "Saved as {{key}}.",
       "description": "Saved as {{key}}. The fields stay locked while its run waits to start.",
       "unconfirmedDescription": "Saved as {{key}}. The runner did not say whether its run started; Retry run never creates a second run.",
-      "lockedMeta": "Locked while queued",
       "retryNote": "Retry run starts the run that is already queued. It never creates a second run.",
       "retry": "Retry run",
       "noRun": {
@@ -45,56 +37,60 @@
     "progress": {
       "creatingForRun": "Saving the task. Its run is queued right after.",
       "starting": "Waiting for the runner to start the run.",
-      "creatingDraft": "Saving a draft. Tasks opens next with the new task highlighted."
+      "creatingDraft": "Saving a draft. Tasks opens next with the new task highlighted.",
+      "saving": "Saving your changes."
     },
     "kept": {
       "note": "Your changes from {{time}} were kept on this computer. Save them, or discard them to return to the saved draft.",
       "noteNew": "Your changes from {{time}} were kept on this computer. Create the task, or discard them to start again.",
       "noteRan": "Your changes from {{time}} were kept on this computer. Save them for future runs, or discard them to return to the saved task."
     },
-    "sections": {
-      "brief": "Brief",
-      "context": "Context",
-      "pipeline": "Pipeline",
-      "module": "Module",
-      "limits": "Limits",
-      "points": "Story points",
-      "merging": "Merging",
-      "instructions": "Instructions"
-    },
-    "project": {
-      "label": "Project",
-      "description": "New tasks go to the current project."
-    },
     "fields": {
       "title": {
         "label": "Task title",
-        "placeholder": "Name the outcome"
+        "placeholder": "Task title"
       },
       "brief": {
         "label": "Describe the outcome",
-        "placeholder": "What should change, and why?"
+        "placeholder": "Describe the outcome — what should change, and why? Markdown works."
       },
       "criteria": {
         "label": "Acceptance criteria",
-        "description": "Reviewers check the result against each one.",
+        "hint": "· reviewers check the result against each one",
         "placeholder": "A check the result must pass",
         "add": "Add criterion",
+        "addNext": "Add criterion · Enter in the last one adds the next",
         "name": "Criterion {{number}}",
         "remove": "Remove criterion {{number}}"
       },
       "pipeline": {
         "label": "Pipeline",
-        "description": "Runs the task step by step. Only published pipelines are listed.",
-        "placeholder": "Choose a pipeline",
+        "choose": "Choose",
+        "noneShort": "None published",
         "none": "No published pipelines in this project",
-        "open": "Open Pipelines ↗",
+        "manage": "Manage pipelines",
         "missingKept": "Saving keeps it as the task's pipeline; choosing one here replaces it for every member."
       },
       "module": {
         "label": "Module",
-        "description": "The epic, milestone or sprint the task counts toward.",
-        "none": "No module"
+        "none": "None",
+        "noModule": "No module"
+      },
+      "priority": {
+        "label": "Priority",
+        "none": "None"
+      },
+      "limits": {
+        "label": "Limits",
+        "title": "Run limits",
+        "none": "No limit",
+        "invalid": "Not valid",
+        "both": "{{tokens}} · {{minutes}}",
+        "tokens": "{{tokens}} tokens",
+        "minutes": {
+          "one": "1 min",
+          "other": "{{count}} min"
+        }
       },
       "budget": {
         "label": "Run budget",
@@ -116,35 +112,57 @@
         }
       },
       "points": {
-        "label": "Story points",
-        "description": "How much work the task is, on 1, 2, 3, 5, 8, 13, 21. Automatic: Orchester estimates it when allowed in Project settings › Runs. Points you choose are never changed by automation.",
+        "label": "Points",
+        "auto": "Auto",
         "automatic": "Automatic",
+        "automaticDetail": "Orchester estimates it when allowed in Project settings › Runs",
         "one": "1 point",
         "other": "{{count}} points",
         "estimated": "Orchester estimated {{points}}.",
         "estimatedWhy": "Orchester estimated {{points}}: {{reason}}"
       },
+      "more": {
+        "label": "More settings"
+      },
       "noAutomaticMerge": {
         "label": "Don't merge automatically",
         "description": "The Orchestrator never merges this task's runs on its own, even when you let it merge finished runs: it tells you a run is ready and the merge stays yours."
+      }
+    },
+    "delivers": {
+      "label": "Delivers",
+      "head": "What a run of this task delivers",
+      "asPipeline": "As the pipeline says",
+      "asPipelineHelp": "The chosen pipeline says what its runs deliver.",
+      "pipelineSays": "{{pipeline}} says: {{what}}.",
+      "changes": "Code changes",
+      "changesHelp": "Its commits are merged into the base branch. A run that commits nothing waits for you.",
+      "report": "A report",
+      "reportHelp": "Its last step's report is the result. No commits expected, nothing to merge.",
+      "outside": "Outside the repository",
+      "outsideHelp": "Done through MCP tools — a Pencil or Figma design, tickets. Its report and the tool calls that changed something are the result; nothing to merge.",
+      "changesOrReport": "Code changes or a report",
+      "changesOrReportHelp": "Merged when it commits something; otherwise its report is the result.",
+      "chip": {
+        "changes": "Code changes",
+        "report": "A report",
+        "outside": "Outside the repo",
+        "changesOrReport": "Changes or report"
       },
-      "context": {
-        "reason": "Links and notes as context are not available yet."
-      },
-      "instructions": {
-        "label": "Included instructions",
-        "description": "Project, agent and pipeline instructions are included automatically.",
-        "action": "Preview",
-        "reason": "Preview is not available yet."
+      "says": {
+        "changes": "repository changes",
+        "report": "a report",
+        "outside": "work outside the repository",
+        "changesOrReport": "changes or a report"
       }
     },
     "sources": {
       "label": "Sources",
-      "description": "Folders and files outside the worktree that this task's agents may read and search without asking. They come on top of the project's and the pipeline steps' sources.",
+      "description": "Folders and files outside the worktree this task's agents may read without asking.",
       "thisTask": "This task",
       "fromProject": "From the project",
       "fromPipeline": "From the pipeline",
-      "editInSettings": "Edit in Project settings",
+      "editInSettings": "Project settings",
       "viewPipeline": "View pipeline",
       "count": "{{count}}",
       "folderOwn": "Folder · this task",
@@ -153,7 +171,7 @@
       "folderOf": "Folder · {{origin}}",
       "fileOf": "File · {{origin}}",
       "goneOf": "{{origin}}",
-      "add": "Add source",
+      "add": "Add",
       "question": "Let this task's agents read this without asking?",
       "confirm": "Add source",
       "keep": "Don't add",
@@ -161,24 +179,22 @@
       "summaryOne": "A run of this task starts with 1 source and keeps it until it ends; a missing one is skipped. Reading anywhere else outside the worktree asks you.",
       "summaryNone": "A run of this task starts with no sources. Reading anything outside the worktree asks you.",
       "loadFailed": "The sources couldn't be read",
-      "loadFailedBody": "{{reason}} Nothing was changed. The task's sources can be changed once they can be read."
+      "loadFailedBody": "{{reason}} Nothing was changed. The task's sources can be changed once they can be read.",
+      "unread": "…"
     },
     "plan": {
-      "title": "Execution plan",
       "choice": "{{name}} {{version}}",
-      "meta": "{{pipeline}} · {{steps}}",
       "steps": {
         "one": "1 step",
         "other": "{{count}} steps"
       },
-      "optionGates": "Published {{version}} · {{steps}} · approval at {{gates}}",
-      "optionNoGates": "Published {{version}} · {{steps}} · no approval gates",
-      "view": "View pipeline ↗",
-      "gate": "waits for approval",
+      "menuGates": "{{steps}} · approval at {{gates}}",
+      "menuNoGates": "{{steps}} · no approval gates",
       "gateSeparator": ", ",
-      "approval": "Approval is required for {{steps}}.",
-      "noGates": "This pipeline has no approval gates.",
-      "choose": "Choose a pipeline to see its execution plan."
+      "stepSeparator": " → ",
+      "lineGates": "· approval at {{gates}}",
+      "lineNoGates": "· no approval gates",
+      "view": "View pipeline ↗"
     },
     "actions": {
       "create": "Create",
@@ -187,26 +203,47 @@
       "discard": "Discard changes",
       "keepEditing": "Keep editing"
     },
+    "keys": {
+      "ctrlEnter": "Ctrl Enter",
+      "cmdEnter": "⌘ Enter",
+      "ctrlS": "Ctrl S",
+      "cmdS": "⌘ S"
+    },
     "reasons": {
-      "create": "Create unavailable: {{what}}.",
-      "run": "Run unavailable: {{what}}.",
-      "save": "Save changes unavailable: {{what}}.",
-      "nothingChanged": "Save changes unavailable: nothing has changed.",
-      "ranNoRun": "Create & run is not offered: this task already has a run.",
+      "create": "To create, {{what}}.",
+      "createAndRun": "To create, {{what}}. To run, also {{more}}.",
+      "run": "To run, {{what}}.",
+      "save": "To save, {{what}}.",
+      "nothingChanged": "Nothing to save: no field has changed.",
+      "ready": "Ready to run · the run starts as soon as an agent slot is free.",
+      "readyReport": "Ready to run · the result is its report; no branch to merge.",
+      "readyOutside": "Ready to run · the result is its report and the MCP changes; no branch to merge.",
+      "keepsChanges": "Leaving the page keeps your changes on this computer.",
       "list": {
         "two": "{{first}} and {{second}}",
         "more": "{{first}}, {{rest}}"
       },
       "need": {
-        "title": "add a task title",
+        "title": "add a title",
         "brief": "describe the outcome",
-        "criteria": "add an acceptance criterion",
+        "criteria": "add one criterion",
         "pipeline": "choose a pipeline",
-        "noPipelines": "no published pipeline in this project",
+        "noPipelines": "publish a pipeline first: there is no published pipeline in this project",
         "budget": "fix the run budget",
         "timeLimit": "fix the time limit",
-        "keepComplete": "a task that ran keeps a brief, criteria and a pipeline",
+        "keepComplete": "keep a brief, criteria and a pipeline: the task already ran",
         "newerVersion": "save your changes on the newer version first"
+      },
+      "also": {
+        "title": "a title",
+        "brief": "the outcome",
+        "criteria": "one criterion",
+        "pipeline": "a pipeline",
+        "noPipelines": "a published pipeline, which this project does not have yet",
+        "budget": "a valid run budget",
+        "timeLimit": "a valid time limit",
+        "keepComplete": "a brief, criteria and a pipeline",
+        "newerVersion": "your changes saved on the newer version"
       }
     },
     "discard": {

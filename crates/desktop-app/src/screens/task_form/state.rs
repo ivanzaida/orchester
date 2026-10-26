@@ -65,7 +65,7 @@ pub enum Phase {
   },
 }
 
-/// What one of the actions still needs, said after "unavailable:".
+/// What one of the actions still needs, said in the action bar's line (`super::reason`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Need {
   Title,
@@ -79,22 +79,6 @@ pub enum Need {
   KeepComplete,
   /// A newer version was saved under the edits: they are saved onto it first.
   NewerVersion,
-}
-
-impl Need {
-  pub const fn key(self) -> &'static str {
-    match self {
-      Self::Title => "task_form.reasons.need.title",
-      Self::Brief => "task_form.reasons.need.brief",
-      Self::Criteria => "task_form.reasons.need.criteria",
-      Self::Pipeline => "task_form.reasons.need.pipeline",
-      Self::NoPipelines => "task_form.reasons.need.noPipelines",
-      Self::Budget => "task_form.reasons.need.budget",
-      Self::TimeLimit => "task_form.reasons.need.timeLimit",
-      Self::KeepComplete => "task_form.reasons.need.keepComplete",
-      Self::NewerVersion => "task_form.reasons.need.newerVersion",
-    }
-  }
 }
 
 /// The form as one render reads it.
@@ -129,6 +113,8 @@ pub struct View {
   /// The newer version's fields to choose from, while the person chooses.
   pub conflict: Option<Conflict>,
   pub choices: Choices,
+  /// The person asked to run while the run still needed something: the chips it needs say their names in `warning`.
+  pub tried_run: bool,
 }
 
 impl View {
