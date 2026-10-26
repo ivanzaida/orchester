@@ -483,3 +483,38 @@ fn summary_a_tool_request_waiting_reads_needs_input_everywhere() {
   let services = page.window.launch.services().expect("the session started").clone();
   services.runners.terminate();
 }
+
+/// *Edit task*'s key (E in `JapSp`) opens Edit task from the page, but not from the task's memory or Local integration,
+/// editors of their own whose text lurq does not count as a text input.
+#[test]
+fn summary_e_opens_edit_task_but_not_from_the_tasks_own_editors() {
+  let mut page = Page::seeded("task-states");
+  let key = page.open("draft, ready to queue");
+  let Route::Project(project, _) = page.window.navigation().route_now() else {
+    panic!("a project's page");
+  };
+  let press_e = |page: &mut Page| {
+    page
+      .window
+      .tree
+      .key_down("e".into(), "KeyE".into(), false, false, false);
+    page.window.tree.key_up("e".into(), "KeyE".into(), false, false, false);
+    page.window.pass();
+  };
+  let memory = Route::Project(project, ProjectPage::Task(key.parse().expect("a key"), TaskView::Memory));
+  page.window.navigation().go(memory.clone());
+  page.window.until("the task's memory", |window| {
+    window.navigation().route_now() == memory && window.texts("task-tab-summary").is_some()
+  });
+  press_e(&mut page);
+  assert_eq!(page.window.navigation().route_now(), memory, "E stays the memory's");
+  page.open("draft, ready to queue");
+  press_e(&mut page);
+  assert!(
+    matches!(
+      page.window.navigation().route_now(),
+      Route::Project(_, ProjectPage::EditTask(edited)) if edited.to_string() == key
+    ),
+    "E opens Edit task"
+  );
+}

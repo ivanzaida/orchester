@@ -123,7 +123,7 @@ impl Component for TaskHeader {
           .right(TaskSpacing::Side.role()),
       )
       .spacing(ExtraSpacing::Loose.role())
-      .on_key_down(edit_key(ctx, &props.task))
+      .on_key_down(edit_key(ctx, &props.task, &props.view))
       .child(back::row(ctx, &props))
       .child(title_row)
       .child(run_line::status_line(ctx, &props.task))
@@ -237,9 +237,12 @@ fn subject(task: &TaskContext) -> Subject {
   }
 }
 
-/// E opens Edit task while the task can be edited, unless a field has the keys or a modifier is held.
-fn edit_key(ctx: &mut Ctx, task: &TaskContext) -> impl Fn(KeyboardEvent) + use<> {
-  let editable = task.detail.editable() && !task.detail.not_shared();
+/// E opens Edit task while the task can be edited, unless a field has the keys or a modifier is held. Local
+/// integration and the task's memory are editors of their own, whose editors and read-only text are no text inputs
+/// to lurq: E stays theirs there.
+fn edit_key(ctx: &mut Ctx, task: &TaskContext, view: &TaskView) -> impl Fn(KeyboardEvent) + use<> {
+  let own_editor = matches!(view, TaskView::LocalIntegration | TaskView::Memory);
+  let editable = task.detail.editable() && !task.detail.not_shared() && !own_editor;
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
     task.project.open.project.id(),

@@ -53,7 +53,7 @@ use self::{
 use super::TaskContext;
 use crate::{
   navigation::{Navigation, press::OpenIn},
-  routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
+  routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskView},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -75,7 +75,7 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
     project: task.project.open.project.id(),
     detail: task.detail.clone(),
     file,
-    agent_at_work: Follow::of(&task.detail, task.online, TaskTab::Changes).agent_at_work,
+    agent_at_work: Follow::of(&task.detail, task.online, &TaskView::Changes(None)).agent_at_work,
     reads: ChangesReads::of(ctx),
   };
   ctx.mount_keyed::<ChangesTab>("task-changes-tab", props)
