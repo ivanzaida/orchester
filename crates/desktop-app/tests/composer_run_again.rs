@@ -118,6 +118,9 @@ fn composer_run_again_of_a_task_changed_since_the_page_read_it_keeps_the_message
   wait(&mut window, "Run again", |window| {
     ready_in_menu(window, "task-run-again")
   });
+  // The menu closes again, or it would take the composer's clicks.
+  click(&mut window, "task-more");
+  assert!(window.tree.get_element_by_id("task-more-panel").is_none(), "the menu closed");
   window.navigation().go(page(TaskView::of(TaskTab::Conversation)));
   wait(&mut window, "the composer's Run again", |window| {
     window

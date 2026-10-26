@@ -283,7 +283,12 @@ fn changes_try_locally_opens_local_integration_in_place_of_the_tab() {
       Route::Project(_, ProjectPage::Task(_, TaskView::LocalIntegration))
     )
   });
-  page.wait_for("task-local-integration");
+  // The view itself, or what it says before the run succeeded.
+  page.window.until("the Local integration view", |window| {
+    ["task-local-integration", "local-not-ready"]
+      .iter()
+      .any(|id| window.tree.get_element_by_id(id).is_some())
+  });
   assert!(page.shows("task-tab-changes"), "the page's tabs stay");
   let path = page.window.navigation().route_now().path();
   assert!(path.ends_with("/tasks/KON-12/changes?view=local-integration"), "{path}");
