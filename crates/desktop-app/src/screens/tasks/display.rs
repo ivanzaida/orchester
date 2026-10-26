@@ -11,7 +11,7 @@ use lurq::{
   components::{Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::tasks::browse::TaskSort;
 
@@ -24,6 +24,9 @@ use crate::{
     menu::{MenuItem, menu, menu_panel, separator},
   },
 };
+
+/// The menu's width, as the Filter menu's: wide enough for its note on one line.
+const MENU_WIDTH: f32 = 260.0;
 
 /// The orders, in the menu's order, each with the i18n key of its words and its name for element ids.
 const SORTS: [(TaskSort, &str, &str); 5] = [
@@ -94,6 +97,7 @@ impl Component for DisplayControl {
         .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
         .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role()));
       let panel = menu_panel("tasks-display-menu")
+        .width(Dimension::Px(MENU_WIDTH))
         .child(filter_group(
           "tasks-display-sort",
           Icon::ListOrdered,

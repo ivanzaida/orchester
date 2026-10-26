@@ -16,7 +16,7 @@ use lurq::{
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::ProjectId,
@@ -44,6 +44,9 @@ use crate::{
     message::message_text,
   },
 };
+
+/// The `…` menu's width, as the Filter menu's.
+const MENU_WIDTH: f32 = 260.0;
 
 #[derive(Clone, PartialEq)]
 pub(super) struct QueueProps {
@@ -218,6 +221,7 @@ impl QueueControls {
       let create = MenuItem::unavailable("tasks-create-multiple", ctx.t("tasks.createMultiple"), reason.clone())
         .icon(Icon::ListPlus);
       let panel = menu_panel("tasks-more-menu")
+        .width(Dimension::Px(MENU_WIDTH))
         .child(item.icon(glyph).render(ctx, &self.open))
         .child(create.render(ctx, &self.open));
       menu_at_end(self.anchor.clone(), self.open.clone(), panel)

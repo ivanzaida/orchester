@@ -226,6 +226,26 @@ fn sort(seeded: &mut Seeded, name: &str) {
 }
 
 #[test]
+fn tasks_display_and_more_menus_drop_down_under_their_buttons_not_across_the_window() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::default());
+  for (button, menu) in [
+    ("tasks-display", "tasks-display-menu"),
+    ("tasks-more", "tasks-more-menu"),
+  ] {
+    seeded.click(button);
+    seeded.until("the menu", |seeded| seeded.laid_out(menu));
+    let (anchor, panel) = (seeded.bounds(button), seeded.bounds(menu));
+    assert_eq!(panel.width, 260.0, "{menu} keeps the Filter menu's width");
+    assert!(
+      panel.x <= anchor.x + anchor.width && panel.x + panel.width >= anchor.x,
+      "{menu} drops down under {button}: {panel:?} against {anchor:?}"
+    );
+    seeded.click(button);
+    seeded.until("the menu closed", |seeded| !seeded.shows(menu));
+  }
+}
+
+#[test]
 fn tasks_the_search_s_cross_clears_it() {
   let mut seeded = Seeded::tasks("tasks", search("HubSpot"));
   assert_eq!(seeded.keys(), ["KON-13"]);
