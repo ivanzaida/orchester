@@ -6,17 +6,13 @@
 
 use std::{path::Path, sync::Arc};
 
-use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
 use orchester_core::orchestrator::git::{GitChange, GitOperation, GitPlace, GitProposal, ResetMode};
 
 use super::{
-  super::card,
+  super::decision,
   facts::Part,
-  words::{Accept, Phase, View, Words, state},
+  words::{Accept, Phase, View, Words},
 };
 use crate::ui::{button::ButtonKind, code_box::CodeBox, icon::Icon};
 
@@ -54,7 +50,7 @@ pub(super) fn words(ctx: &Ctx, view: &View, git: &GitChange) -> Words {
     },
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.git.byYou"),
+    settled: None,
     effect,
     accept: proposal.map(|_| Accept {
       label: ctx.t("orchestrator.change.git.accept"),
@@ -124,10 +120,5 @@ pub(super) fn warning(ctx: &Ctx, id: &str, (view, git): (&View, &GitChange)) -> 
     1 => ctx.t("orchestrator.change.git.losesOne"),
     count => ctx.t_args("orchestrator.change.git.losesCount", [("count", count.to_string())]),
   };
-  Some(card::note(
-    id,
-    "loses",
-    (Icon::ShieldAlert, PaletteColor::Warning),
-    &text,
-  ))
+  Some(decision::warning(id, "loses", &text))
 }

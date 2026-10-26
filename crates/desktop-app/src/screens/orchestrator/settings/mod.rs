@@ -8,6 +8,8 @@
 mod form;
 mod publish;
 
+pub(super) use self::form::effort_word;
+
 use std::sync::Arc;
 
 use lurq::{
@@ -277,7 +279,7 @@ fn head(ctx: &mut Ctx, project: &ShownProject, (publishing, save): (Option<&Publ
         ctx.t("orchestrator.title"),
         navigation.to(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::Latest))),
       ),
-      Crumb::here(ctx.t("orchestrator.coordinator.settings")),
+      Crumb::here(ctx.t("orchestrator.settings.crumb")),
     ],
   );
   let description = Text::new(&ctx.t_args("orchestrator.settings.description", [("project", name)]))

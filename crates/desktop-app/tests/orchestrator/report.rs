@@ -1,6 +1,6 @@
-//! The project's daily report in the Orchestrator conversation (ORC-47): its entry opens a row of its own, in the
-//! action card's frame, titled with its day and when it was delivered, with each part's heading and lines, every item
-//! a link into the app, and what the Orchestrator does with it while *Let the Orchestrator answer agents* is on.
+//! The project's daily report in the Orchestrator conversation (ORC-47): its entry opens a row of its own, one line
+//! with its day, its totals and when it was delivered, which opens into each part's heading and lines, every item a
+//! link into the app, and what the Orchestrator does with it while *Let the Orchestrator answer agents* is on.
 
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
@@ -38,9 +38,17 @@ fn orchestrator_report_shows_its_day_its_parts_and_their_links() {
   let (report, seq) = keep_report(&screen, false);
   screen.go(OrchestratorChat::Latest);
   let card = format!("orchestrator-report-wait-{seq}");
-  screen.until("the report's card", |screen| screen.exists(&card));
-  let shown = screen.text(&card);
+  screen.until("the report's line", |screen| screen.exists(&card));
   let day = report.day.format("%Y-%m-%d").to_string();
+  let line = screen.text(&card);
+  assert!(
+    line.contains(&format!("Daily report · {day}")) && line.contains("merged") && line.contains("tokens"),
+    "one line with its day and totals: {line}"
+  );
+  assert!(!screen.exists(&format!("{card}-sections")), "its sections start folded");
+  screen.click(&format!("{card}-head"));
+  screen.until("its sections", |screen| screen.exists(&format!("{card}-sections")));
+  let shown = screen.text(&card);
   for part in [
     format!("Daily report · {day}"),
     "What was done".to_owned(),
@@ -69,7 +77,9 @@ fn orchestrator_report_kept_to_start_a_turn_says_the_orchestrator_adds_a_summary
   let (_, seq) = keep_report(&screen, true);
   screen.go(OrchestratorChat::Latest);
   let card = format!("orchestrator-report-wait-{seq}");
-  screen.until("the report's card", |screen| screen.exists(&card));
+  screen.until("the report's line", |screen| screen.exists(&card));
+  screen.click(&format!("{card}-head"));
+  screen.until("its sections", |screen| screen.exists(&format!("{card}-sections")));
   let shown = screen.text(&card);
   assert!(
     shown.contains("Let the Orchestrator answer agents is on: the Orchestrator adds a summary")

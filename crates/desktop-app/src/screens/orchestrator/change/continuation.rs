@@ -14,7 +14,7 @@ use orchester_core::orchestrator::{
 
 use super::{
   facts::Part,
-  words::{Accept, Phase, View, Words, state},
+  words::{Accept, Phase, View, Words},
 };
 use crate::ui::{button::ButtonKind, icon::Icon};
 
@@ -90,7 +90,7 @@ pub(super) fn continuation(ctx: &Ctx, view: &View, (number, choice): (u32, &Cont
     glyph,
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.continue.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label,

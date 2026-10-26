@@ -99,8 +99,11 @@ fn orchestrator_resolve_card_note_reads_as_one_paragraph() {
     .count();
   let turn = proposal_card(&screen);
   let card = format!("{}-{}", turn.trim_end_matches("-0"), parts - 1);
-  // Run, Choice, Conflicting files, Note.
+  // Run, Choice, Conflicting files, then the Note behind *Show details*.
   let note = format!("{card}-fact-3");
+  screen.until("the card's facts", |screen| screen.exists(&format!("{card}-details")));
+  assert!(!screen.exists(&note), "three facts show, the rest wait behind Show details");
+  screen.click(&format!("{card}-details"));
   screen.until("the resolution's note", |screen| screen.exists(&note));
 
   let shown = screen.text(&note);

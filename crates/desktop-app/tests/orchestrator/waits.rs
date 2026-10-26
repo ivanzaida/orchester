@@ -129,14 +129,18 @@ fn orchestrator_run_end_lands_in_the_conversation_that_started_the_run() {
   let (seq, end) = ends(&screen.db())[0];
   assert_eq!(end, RunEnd::Succeeded);
   let card = format!("orchestrator-wait-wait-{seq}");
-  screen.until("its card", |screen| screen.exists(&card));
+  screen.until("its line", |screen| screen.exists(&card));
   let shown = screen.text(&card);
-  for part in [
-    format!("of {key} is ready to merge"),
-    "It waits for you on the task's Summary".to_owned(),
-  ] {
+  for part in ["Ready to merge".to_owned(), format!("{key} · #1"), "Review ↗".to_owned()] {
     assert!(shown.contains(&part), "{part} in {shown}");
   }
+  // What happens with it is said once the line is opened.
+  screen.click(&format!("{card}-line"));
+  screen.until("what happens with it", |screen| {
+    screen
+      .text(&format!("{card}-reason"))
+      .contains("It waits for you on the task's Summary")
+  });
   screen.click(&format!("{card}-open"));
   assert!(
     matches!(screen.route(), Route::Project(_, ProjectPage::Task(task, TaskView::Summary)) if task.to_string() == key),

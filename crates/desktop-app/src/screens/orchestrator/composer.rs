@@ -1,15 +1,15 @@
-//! The Orchestrator's composer (`Composer` `QQ2ZM` as the Orchestrator draws it, `ZRbgy`, `VP0Fm`): one box —
-//! `surface_input` in a `border_strong` stroke (`border_focus` while the field has the focus), radius 10, 10 by 12
-//! inside, 8 between the message and its row — whose row holds *Attach* (a 26 square with a `paperclip`, which opens
-//! the system's picker); the recipient pill *To: Orchestrator* (`waypoints`); what it acts with (a 12 `shield` and
-//! 11.5 `text_muted`, 8 in from its sides); and at the end the 28 `accent` square that sends (`arrow-up`), faded
-//! while there is nothing to send. While the Orchestrator answers the composer stays usable (ORC-92): the square sends
-//! after the answer, and a chevron beside it opens the other ways of sending ([`super::send_menu`]). The files attached
+//! The Orchestrator's composer (`Composer` `Nv6kV` in `01 Conversation` `wRSL4`): one box — `surface_input` in a
+//! `border_strong` stroke (`border_focus` while the field has the focus), radius 10, 10 over it, 10 at its end, 8
+//! under it and 12 at its start, 10 between the message and its bar — whose bar holds, 6 apart, *Attach* (a 24 square
+//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); *Ctrl Enter* in Geist
+//! Mono 11 `text_muted`; and the 28 `accent` square that sends (`arrow-up`), faded while there is nothing to send.
+//! While the Orchestrator answers the composer stays usable (ORC-92): the square sends after the answer, and a chevron
+//! beside it opens the other ways of sending ([`super::send_menu`]); Esc stops the answer. Until the Orchestrator is
+//! set up (`02 Not set up` `Wd5CL`) the box is on `surface_panel` in a `border` stroke, says it can't answer yet, the
+//! chip reads *Not set up* and *Set up the Orchestrator* takes the keys' and the square's place. The files attached
 //! show as chips over the message (`ui::attachments::tray`); a paste of an image, files or long text attaches them,
-//! and so does a drop on the box. Under the box, 8 apart, why the files last given were not attached, then the keys:
-//! Enter adds a line, Ctrl+Enter (Cmd+Enter on macOS) sends, and while it answers Esc stops the answer (*Stop
-//! response*), as in Claude Code: with the focus in the field, once nothing else open took the key. The draft and its
-//! files stay until its message is kept; a failed send keeps them.
+//! and so does a drop on the box; why the files last given were not attached shows under it. The draft and its files
+//! stay until its message is kept; a failed send keeps them.
 
 use std::sync::Arc;
 
@@ -34,20 +34,17 @@ use crate::{
   theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     attachments::tray::{self, PutBack},
-    composer::{message_scrollbar, recipient_pill},
+    composer::message_scrollbar,
     icon::{Icon, icon},
-    kbd::key_cap,
     pressable::{inert, pressable},
     tooltip::Tooltip,
   },
 };
 
-/// The most lines the message grows to before its lines scroll; a new conversation's box starts at three
-/// (`B8fEg`, 58 high, in `ZRbgy`).
+/// The most lines the message grows to before its lines scroll.
 const MAX_LINES: usize = 6;
-const START_LINES: usize = 3;
-/// *Attach*'s square (`hprBf`).
-const ATTACH_SIZE: f32 = 26.0;
+/// *Attach*'s square (`PkWbZ`).
+const ATTACH_SIZE: f32 = 24.0;
 /// What names the composer's attachments, in tools and tests.
 const ATTACHMENTS: &str = "orchestrator-composer";
 
@@ -74,46 +71,54 @@ pub(super) enum Sending {
 /// The box as a screen shows it.
 pub(super) struct ComposerBox<'a> {
   pub(super) placeholder: Arc<str>,
-  /// A new conversation's taller box.
-  pub(super) start: bool,
   pub(super) sending: &'a Sending,
   pub(super) focused: &'a Signal<bool>,
   /// Stops the answer under way (Esc), while there is one.
   pub(super) stop: Option<Press>,
+  /// The runs-on chip.
+  pub(super) runs_on: Element,
+  /// *Set up the Orchestrator*, while it is not set up.
+  pub(super) set_up: Option<Element>,
 }
 
 /// The box, and why the files last given were not attached under it.
-pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: &ComposerBox<'_>) -> Column {
-  let stroke = if composer.focused.get() {
-    PaletteColor::BorderFocus
-  } else {
-    PaletteColor::BorderStrong
+pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) -> Column {
+  let not_set_up = composer.set_up.is_some();
+  let (fill, stroke) = match (not_set_up, composer.focused.get()) {
+    (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
+    (false, true) => (PaletteColor::SurfaceInput, PaletteColor::BorderFocus),
+    (false, false) => (PaletteColor::SurfaceInput, PaletteColor::BorderStrong),
   };
-  let field = field(ctx, view, composer);
+  let field = field(ctx, view, &composer, not_set_up);
+  let end: Vec<Element> = match composer.set_up {
+    Some(set_up) => vec![set_up],
+    None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],
+  };
   let bar = Row::new()
     .id("orchestrator-composer-bar")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(attach(ctx, view))
-    .child(recipient_pill(
-      ctx,
-      (&ctx.t("orchestrator.composer.recipient"), Icon::Waypoints),
-      None,
-    ))
-    .child(permissions(ctx))
+    .child(composer.runs_on)
     .child(Spacer::new().flex(1.0))
-    .child(send(ctx, view, composer.sending));
+    .with_children(end);
   let draft = view.draft.clone();
   let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));
   let attached = tray::tray(ctx, ATTACHMENTS, &view.attached, &put_back);
   let boxed = Column::new()
     .id("orchestrator-composer")
+    .describe("set_up", (!not_set_up).to_string())
     .width(Dimension::Pct(100.0))
-    .padding_vertical(ExtraSpacing::Loose.role())
-    .padding_horizontal(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceInput)
+    .padding(
+      Padding::new()
+        .top(ExtraSpacing::Loose.role())
+        .right(ExtraSpacing::Loose.role())
+        .bottom(SpacingSize::Sm)
+        .left(SpacingSize::Md),
+    )
+    .spacing(ExtraSpacing::Loose.role())
+    .background(fill)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
     .with_children(attached)
@@ -126,40 +131,21 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: &ComposerBox<'_>) -
     .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
 }
 
-/// The keys under the box: *Enter adds a line ·* [Ctrl Enter] *sends*, and while the Orchestrator `answering`,
-/// *· [Esc] stops the answer*.
-pub(super) fn keys(ctx: &Ctx, answering: bool) -> Row {
-  let keys = ctx.t(if cfg!(target_os = "macos") {
+/// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
+fn keys(ctx: &Ctx) -> Text {
+  Text::new(&ctx.t(if cfg!(target_os = "macos") {
     "orchestrator.keys.cmdEnter"
   } else {
     "orchestrator.keys.ctrlEnter"
-  });
-  let caption = |key: &str| Text::new(&ctx.t(key)).variant(TypographyStyle::Caption).nowrap();
-  let stops = answering.then(|| {
-    Row::new()
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Center)
-      .child(key_cap("orchestrator-keys-stop", &ctx.t("orchestrator.keys.esc")))
-      .child(caption("orchestrator.composer.stops"))
-  });
-  Row::new()
-    .id("orchestrator-keys")
-    .flex_shrink(0.0)
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(caption("orchestrator.composer.lines"))
-    .child(key_cap("orchestrator-keys-send", &keys))
-    .child(caption(if answering {
-      "orchestrator.composer.sendsAfter"
-    } else {
-      "orchestrator.composer.sends"
-    }))
-    .with_children(stops)
+  }))
+  .id("orchestrator-keys")
+  .variant(ExtraTypography::MonoNote.role())
+  .nowrap()
 }
 
 /// The message field: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or long text attaches
-/// them instead of pasting words.
-fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>) -> Element {
+/// them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in `text_secondary`.
+fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
     FormTextRole {
@@ -180,14 +166,18 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>) -> Element {
     menu: view.menu.clone(),
     focused: composer.focused.clone(),
   };
-  let first = if composer.start { START_LINES } else { 1 };
+  let placeholder = if not_set_up {
+    PaletteColor::TextSecondary
+  } else {
+    PaletteColor::TextMuted
+  };
   TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
-    .placeholder_style(resolve(PaletteColor::TextMuted))
+    .placeholder_style(resolve(placeholder))
     .caret_color(PaletteColor::TextPrimary)
     .id("orchestrator-input")
     .describe("a11y_name", composer.placeholder.clone())
     .textarea()
-    .rows(first, MAX_LINES)
+    .rows(1, MAX_LINES)
     .scrollbar(message_scrollbar(ctx))
     .width(Dimension::Pct(100.0))
     .placeholder(&composer.placeholder)
@@ -246,33 +236,13 @@ fn attach(ctx: &mut Ctx, view: &View) -> Element {
     .describe("state", "enabled")
     .describe("a11y_name", label)
     .size(Dimension::Px(ATTACH_SIZE), Dimension::Px(ATTACH_SIZE))
+    .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::TextSecondary));
+    .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::TextMuted));
   Tooltip::new("orchestrator-attach", ctx.t("attachments.attachHint")).wrap(ctx, square)
-}
-
-/// What the Orchestrator acts with, and in its tooltip how its actions are checked.
-fn permissions(ctx: &mut Ctx) -> Element {
-  let label = Row::new()
-    .id("orchestrator-permissions")
-    .height(Dimension::Px(ControlHeight::Sm.value()))
-    .padding(Padding::horizontal(SpacingSize::Sm))
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(Icon::Shield, IconSize::Sm, PaletteColor::TextMuted))
-    .child(
-      Text::new(&ctx.t("orchestrator.composer.permissions"))
-        .variant(ExtraTypography::Note.role())
-        .nowrap(),
-    );
-  Tooltip::new(
-    "orchestrator-permissions",
-    ctx.t("orchestrator.composer.permissionsHint"),
-  )
-  .wrap(ctx, label)
 }
 
 /// The square that sends: faded with why while nothing can be sent, the loader while it sends; split with the send
@@ -317,6 +287,7 @@ fn send(ctx: &mut Ctx, view: &View, sending: &Sending) -> Element {
   let button = button
     .id("orchestrator-send")
     .describe("a11y_name", label)
+    .flex_shrink(0.0)
     .background(PaletteColor::Accent)
     .rounded(RadiusSize::Md)
     .child(face);

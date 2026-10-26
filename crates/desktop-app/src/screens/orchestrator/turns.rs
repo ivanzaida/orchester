@@ -11,7 +11,6 @@ use orchester_core::{
   attachment::{Attachment, is_names_only},
   id::ChatMessageId,
   orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, DailyReport, EntryKind, TurnState, WaitTurn},
-  resource::ModelId,
   time::Timestamp,
 };
 
@@ -20,7 +19,6 @@ use orchester_core::{
 pub(super) enum Part {
   Reply {
     text: Arc<str>,
-    model: ModelId,
     at: Timestamp,
   },
   Action {
@@ -138,14 +136,6 @@ impl Turn {
     }
   }
 
-  /// The model that wrote the answer's first reply.
-  pub(super) fn model(&self) -> Option<&ModelId> {
-    self.answer.iter().find_map(|part| match part {
-      Part::Reply { model, .. } => Some(model),
-      Part::Action { .. } | Part::Event { .. } => None,
-    })
-  }
-
   /// Whether the answer did something through a tool.
   pub(super) fn acted(&self) -> bool {
     self.answer.iter().any(|part| {
@@ -204,9 +194,8 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         });
         continue;
       }
-      EntryKind::Reply { text, model } => Part::Reply {
+      EntryKind::Reply { text, .. } => Part::Reply {
         text: Arc::from(text.as_str()),
-        model: model.clone(),
         at: entry.at,
       },
       EntryKind::Action(action) => Part::Action {

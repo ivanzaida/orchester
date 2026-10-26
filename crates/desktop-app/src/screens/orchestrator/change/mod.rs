@@ -1,42 +1,38 @@
-//! The card of a publication, cancel, merge, answer, message, continuation or repository the Orchestrator's agent
-//! proposed or the chat did itself, and of a run it started without asking because auto mode is on (`Orchestrator ·
-//! publish proposal` `b55NqO` and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action
-//! card's frame, its head with the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts
-//! and, while it waits, the diff of the text it publishes or the `.gitignore` a first commit honours; what it did or
-//! would do; its notes; and its actions. While it waits, only a person applies it: lurq's synthetic input is refused
-//! in the handler, visibly; *Dismiss* changes nothing and stays open to automation. The facts are read when the card
+//! The card of a publication, cancel, merge, answer, message, continuation, pause, resume, release, repository, git
+//! work or MCP server change the Orchestrator's agent proposed or the chat did itself, and of a run it started without
+//! asking because auto mode is on. While it waits for the person it is a decision card (`3 · Decisions` `bxJZp`,
+//! [`super::decision`]): its question, what it is about, its facts (the first three, the rest behind *Show details*)
+//! and, while it waits, the diff of the text it publishes, its git commands or the `.gitignore` a first commit
+//! honours; a warning strip for what is risky in it; and its actions. Only a person applies it: lurq's synthetic input
+//! is refused in the handler, visibly; *Dismiss* changes nothing and stays open to automation. Decided, being carried
+//! out, done by the chat itself or refused, it folds into its event line ([`folded`]). The facts are read when the card
 //! shows ([`orchester_workspace::orchestrator::facts`]); a repository's are the ones its proposal keeps.
 
 pub(in crate::screens) mod answer;
 mod continuation;
 mod control;
 mod facts;
+mod folded;
 mod git;
 mod mcp;
+mod opens;
 mod repository;
 mod widens;
 mod words;
-
-use std::sync::Arc;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::is_synthetic_input,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::Row,
   core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{
-    ChatAction,
-    change::{Change, Publishing},
-  },
+  orchestrator::{ChatAction, change::Change},
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -46,17 +42,22 @@ use orchester_workspace::{
   workspace::OrchestratorConsent,
 };
 
-use self::words::{Accept, Phase, View, Words};
-use super::card::{self, DecideAction, Deciding};
+use self::{
+  facts::Fact,
+  words::{Accept, Phase, View, Words},
+};
+use super::{
+  card::{self, DecideAction, Deciding},
+  decision,
+};
 use crate::{
   navigation::Navigation,
-  routes::{Route, TaskTab},
   services::Services,
   ui::{
-    button::{ActionButton, ButtonKind},
-    chip::TagChip,
+    button::ActionButton,
     icon::Icon,
     message::message_text,
+    tinted_note::{person_only, tinted_note},
   },
 };
 
@@ -66,7 +67,7 @@ pub(super) struct ChangeProps {
   /// The conversation's scope; without it nothing is read and no decision is taken.
   pub(super) scope: Option<ChatScope>,
   /// The project, and its name as people read it.
-  pub(super) project: (ProjectId, Arc<str>),
+  pub(super) project: (ProjectId, std::sync::Arc<str>),
   /// The action's entry in the conversation.
   pub(super) seq: i64,
   pub(super) action: ChatAction,
@@ -74,6 +75,11 @@ pub(super) struct ChangeProps {
 }
 
 impl DevtoolsInspectable for ChangeProps {}
+
+/// Whether the card of `action` waits for the person: a decision card rather than a line.
+pub(super) fn waits(action: &ChatAction) -> bool {
+  Phase::of(action) == Phase::Waits
+}
 
 /// What was read for a card: its facts, and whether the person lets the Orchestrator publish drafts and lets
 /// automation widen what agents may do.
@@ -90,6 +96,8 @@ pub(super) struct ChangeCard {
   decide: DecideAction,
   /// Synthetic input tried the person's action.
   refused: Signal<bool>,
+  /// The facts after the first three are shown.
+  details: Signal<bool>,
 }
 
 impl Component for ChangeCard {
@@ -99,12 +107,12 @@ impl Component for ChangeCard {
     Self {
       decide: card::decide_action(ctx),
       refused: ctx.signal(false),
+      details: ctx.signal(false),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ChangeProps>().clone();
-    let id = props.id.as_str();
     let loaded = read_facts(ctx, &props);
     let read = loaded.data.as_ref();
     let view = View {
@@ -113,319 +121,186 @@ impl Component for ChangeCard {
       facts: read.and_then(|read| read.facts.as_ref()),
       project: &props.project.1,
     };
-    let Words {
-      glyph,
-      title,
-      chip,
-      state,
-      effect,
-      accept,
-      person_only,
-    } = words::words(ctx, &view);
-    let chip = chip.map(|chip| {
-      let (suffix, words) = chip.parts();
-      TagChip::new(format!("{id}-{suffix}"), ctx.t(words)).into()
-    });
-    let head = card::head(id, (glyph, &title), chip, state);
-    let (facts, diff): (Option<Column>, Vec<Element>) = match view.action.change.as_ref().map(|change| &change.change) {
-      // A first commit shows what its proposal keeps, and the `.gitignore` it honours.
-      Some(change @ Change::InitRepository { .. }) => {
-        let root = props.scope.as_ref().map(|scope| scope.root.as_path());
-        let rows = repository::rows(ctx, change, root);
-        (
-          Some(facts::column(ctx, id, rows)),
-          repository::gitignore(ctx, id, (&view, change)).into_iter().collect(),
-        )
-      }
-      // Git's work shows where it ran, its commands and, while it waits, what it would lose.
-      Some(Change::Git(git)) => {
-        let root = props.scope.as_ref().map(|scope| scope.root.as_path());
-        let rows = git::rows(ctx, git, root);
-        (Some(facts::column(ctx, id, rows)), git::boxes(ctx, id, (&view, git)))
-      }
-      // An MCP server's change shows the server as applying it leaves it, which its proposal keeps.
-      Some(Change::Mcp(mcp)) => {
-        let rows = mcp::rows(ctx, mcp);
-        (Some(facts::column(ctx, id, rows)), Vec::new())
-      }
-      _ => (
-        facts::rows(ctx, id, &view, props.project.0),
-        facts::diff(ctx, id, &view).map(Into::into).into_iter().collect(),
-      ),
-    };
-    let notes = self.notes(ctx, (&props, &view, person_only), (read, &loaded.error));
-    // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
-    // and the apply refuses anything else than what was shown.
-    let shown = match (&loaded.error, read.map(|read| read.facts.as_ref())) {
-      (None, Some(Some(read::Facts::Publication(publication)))) => Some(publication.widens.clone()),
-      (None, Some(Some(read::Facts::Run(_)))) => Some(Vec::new()),
-      // A change with nothing to read (a release of new starts, a run or draft no longer there) widens nothing. Apply
-      // checks it again first (`orchestrator::change::apply`: nothing held to release, a run that went on, a draft
-      // saved again or gone) and refuses it with the card's own words.
-      (None, Some(None)) => Some(Vec::new()),
-      _ => None,
-    };
-    card::frame(id, view.phase().name())
-      .describe("on_its_own", props.action.on_its_own.to_string())
-      .child(head)
-      .with_children(facts)
-      .with_children(diff)
-      .with_children(notes.0)
-      .child(
-        Text::new(&effect)
-          .id(format!("{id}-effect"))
-          .variant(TypographyStyle::Body)
-          .width(Dimension::Pct(100.0)),
-      )
-      .with_children(notes.1)
-      .with_children(self.actions(ctx, &props, (&view, accept), shown))
+    let words = words::words(ctx, &view);
+    let opens = opens::opens(ctx, (props.project.0, &props.project.1), &view);
+    let deciding = view.phase() == Phase::Waits && words.accept.is_some() && words.settled.is_none();
+    if !deciding {
+      let failed = self.decide.state().get().error.or_else(|| loaded.error.clone());
+      return folded::line(ctx, (&props.id, &view), &words, (opens, failed));
+    }
+    self.decision(ctx, (&props, &view), words, (read, &loaded.error, opens))
   }
 }
 
+/// What a decision card shows besides its words: what was read, why reading failed, and the places it opens.
+type Shown<'a> = (Option<&'a Read>, &'a Option<Message>, Vec<opens::Opens>);
+
 impl ChangeCard {
+  /// The decision card of `view`, which waits for the person.
+  fn decision(
+    &self,
+    ctx: &mut Ctx,
+    (props, view): (&ChangeProps, &View),
+    words: Words,
+    (read, unread, opens): Shown<'_>,
+  ) -> Element {
+    let id = props.id.as_str();
+    let (rows, boxes) = self.content(ctx, props, view);
+    let facts = facts::column(ctx, id, rows, &self.details);
+    let warnings = warnings(ctx, id, (view, read));
+    let widens = warnings.iter().any(|(widening, _)| *widening);
+    // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
+    // and the apply refuses anything else than what was shown.
+    let shown = match (unread, read.map(|read| read.facts.as_ref())) {
+      (None, Some(Some(read::Facts::Publication(publication)))) => Some(publication.widens.clone()),
+      // A change with nothing to read (a release of new starts, a run or draft no longer there) widens nothing. Apply
+      // checks it again first (`orchestrator::change::apply`: nothing held to release, a run that went on, a draft
+      // saved again or gone) and refuses it with the card's own words.
+      (None, Some(Some(read::Facts::Run(_)) | None)) => Some(Vec::new()),
+      _ => None,
+    };
+    let notes = self.notes(ctx, (id, view, words.person_only), unread);
+    let actions = self.actions(ctx, props, (words.accept, opens), shown);
+    let time = orchester_workspace::display::clock(view.at);
+    decision::frame(id, view.phase().name(), widens)
+      .describe("on_its_own", props.action.on_its_own.to_string())
+      .child(decision::head(
+        ctx,
+        id,
+        (words.glyph, &words.title),
+        view.action.task.as_deref(),
+        &time,
+      ))
+      .child(decision::body(id, &words.effect))
+      .with_children(facts)
+      .with_children(boxes)
+      .with_children(warnings.into_iter().map(|(_, strip)| strip))
+      .with_children(notes)
+      .with_children(actions)
+      .into()
+  }
+
+  /// The facts of the card and, while it waits, the boxes of what it would do: a diff, git's commands, a `.gitignore`.
+  fn content(&self, ctx: &mut Ctx, props: &ChangeProps, view: &View) -> (Vec<Fact>, Vec<Element>) {
+    let id = props.id.as_str();
+    let root = props.scope.as_ref().map(|scope| scope.root.as_path());
+    match view.action.change.as_ref().map(|change| &change.change) {
+      // A first commit shows what its proposal keeps, and the `.gitignore` it honours.
+      Some(change @ Change::InitRepository { .. }) => (
+        repository::rows(ctx, change, root),
+        repository::gitignore(ctx, id, (view, change)).into_iter().collect(),
+      ),
+      // Git's work shows where it would run, its commands and what it would lose.
+      Some(Change::Git(git)) => (git::rows(ctx, git, root), git::boxes(ctx, id, (view, git))),
+      // An MCP server's change shows the server as applying it leaves it, which its proposal keeps.
+      Some(Change::Mcp(mcp)) => (mcp::rows(ctx, mcp), Vec::new()),
+      _ => (
+        facts::rows(ctx, view, props.project.0),
+        facts::diff(ctx, id, view).map(Into::into).into_iter().collect(),
+      ),
+    }
+  }
+
+  /// The notes over the actions: that the person approved it in the chat, a refused click of automation, why reading
+  /// or deciding failed.
+  fn notes(&self, ctx: &Ctx, (id, view, person): (&str, &View, &'static str), unread: &Option<Message>) -> Vec<Row> {
+    let mut notes: Vec<Row> = card::approved_in_chat(ctx, id, view.action).into_iter().collect();
+    if self.refused.get() {
+      notes.push(person_only(format!("{id}-person-only"), &ctx.t(person)));
+    }
+    if let Some(error) = self.decide.state().get().error.or_else(|| unread.clone()) {
+      notes.push(tinted_note(
+        format!("{id}-error"),
+        (Icon::CircleAlert, lurq::app::theme::PaletteColor::Danger),
+        &message_text(ctx, &error),
+      ));
+    }
+    notes
+  }
+
+  /// The accept, *Dismiss* and the places the card opens, with *Only you can apply*; nothing without the
+  /// conversation's scope. The accept is taken only once the card knows what it widens (`shown`).
+  fn actions(
+    &self,
+    ctx: &mut Ctx,
+    props: &ChangeProps,
+    (accept, opens): (Option<Accept>, Vec<opens::Opens>),
+    shown: Option<Vec<Message>>,
+  ) -> Option<Row> {
+    let id = props.id.as_str();
+    let (scope, accept) = (props.scope.as_ref()?, accept?);
+    let pending = self.decide.state().get().is_pending();
+    let deciding = |decision| Deciding {
+      scope: scope.clone(),
+      seq: props.seq,
+      decision,
+    };
+    let start = ActionButton::new(format!("{id}-start"), accept.kind, accept.label).icon(accept.glyph);
+    let dismiss = decision::dismiss_button(ctx, id);
+    let (start, dismiss) = match (pending, shown) {
+      (true, _) => (start.disabled(), dismiss.disabled()),
+      (false, None) => (start.disabled(), self.dismiss(dismiss, deciding(Decision::Dismiss))),
+      (false, Some(widens)) => {
+        let (decide, refused, accepting) = (
+          self.decide.clone(),
+          self.refused.clone(),
+          deciding(Decision::Accept { widens }),
+        );
+        let start = start.on_click(move || {
+          if is_synthetic_input() {
+            tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
+            refused.set(true);
+            return;
+          }
+          decide.run(accepting.clone());
+        });
+        (start, self.dismiss(dismiss, deciding(Decision::Dismiss)))
+      }
+    };
+    let navigation = Navigation::of(ctx);
+    let mut buttons: Vec<Element> = vec![start.into(), dismiss.into()];
+    buttons.extend(opens.into_iter().enumerate().map(|(index, (_, label, route))| {
+      decision::open_button(format!("{id}-open-{index}"), label)
+        .opens(navigation.to(route))
+        .into()
+    }));
+    Some(decision::actions(ctx, id, buttons))
+  }
+
   /// *Dismiss*, which changes nothing and stays open to automation.
   fn dismiss(&self, dismiss: ActionButton, dismissing: Deciding) -> ActionButton {
     let decide = self.decide.clone();
     dismiss.on_click(move || decide.run(dismissing.clone()))
   }
-
-  /// The notes before the effect (a draft that widens while the switch is on) and after it (how the chat published,
-  /// what was checked, a refused click of automation, why reading or deciding failed).
-  fn notes(
-    &self,
-    ctx: &Ctx,
-    (props, view, person_only): (&ChangeProps, &View, &'static str),
-    (read, unread): (Option<&Read>, &Option<Message>),
-  ) -> (Vec<Row>, Vec<Row>) {
-    let id = props.id.as_str();
-    let project = &*props.project.1;
-    let mut before = Vec::new();
-    let mut after = Vec::new();
-    let publication = view.action.change.as_ref().and_then(|change| match change.change {
-      Change::Publish { of, .. } => Some(of),
-      _ => None,
-    });
-    let widens = matches!(read.and_then(|read| read.facts.as_ref()), Some(read::Facts::Publication(found)) if !found.widens.is_empty());
-    if view.phase() == Phase::Waits && widens && read.is_some_and(|read| read.publishes && !read.widens) {
-      let name = view.facts.map_or_else(String::new, |facts| match facts {
-        read::Facts::Publication(found) => found.name.clone(),
-        read::Facts::Run(_) => String::new(),
-      });
-      before.push(card::note(
-        id,
-        "widens",
-        (Icon::ShieldAlert, PaletteColor::Warning),
-        &ctx.t_args("orchestrator.change.publish.widens", [("name", name.as_str())]),
-      ));
-    }
-    if let Some(change) = view.action.change.as_ref() {
-      before.extend(repository::sensitive(ctx, id, (view, &change.change)));
-      match &change.change {
-        Change::Git(git) => before.extend(git::warning(ctx, id, (view, git))),
-        Change::Mcp(mcp) => before.extend(mcp::warnings(ctx, id, (view, mcp))),
-        _ => {}
-      }
-    }
-    match (view.phase(), publication) {
-      (Phase::Done, Some(of)) => {
-        let place = ctx.t(words::screen_of(of).title_key());
-        after.push(card::note(
-          id,
-          "checked",
-          (Icon::ShieldCheck, PaletteColor::TextMuted),
-          &ctx.t_args(
-            "orchestrator.change.publish.publishedAs",
-            [("place", &*place), ("project", project)],
-          ),
-        ));
-      }
-      (Phase::Done | Phase::Refused(_), None) if view.action.auto_mode => after.push(card::note(
-        id,
-        "checked",
-        (Icon::ShieldCheck, PaletteColor::TextMuted),
-        &ctx.t_args("orchestrator.action.checked", [("project", project)]),
-      )),
-      _ => {}
-    }
-    after.extend(card::approved_in_chat(ctx, id, view.action));
-    // Automation's refused click is told while the card waits; once it was decided, the note is gone.
-    if self.refused.get() && view.phase() == Phase::Waits {
-      after.push(card::note(
-        id,
-        "person-only",
-        (Icon::Hand, PaletteColor::Warning),
-        &ctx.t(person_only),
-      ));
-    }
-    let failed = self.decide.state().get().error.or_else(|| unread.clone());
-    if let Some(error) = failed {
-      after.push(card::note(
-        id,
-        "error",
-        (Icon::CircleAlert, PaletteColor::Danger),
-        &message_text(ctx, &error),
-      ));
-    }
-    (before, after)
-  }
-
-  /// The person's action and *Dismiss* while it waits, then the places it opens; `None` when there is neither. The
-  /// action is taken only once the card knows what it widens (`shown`).
-  fn actions(
-    &self,
-    ctx: &mut Ctx,
-    props: &ChangeProps,
-    (view, accept): (&View, Option<Accept>),
-    shown: Option<Vec<Message>>,
-  ) -> Option<Row> {
-    let id = props.id.as_str();
-    let opens = opens(ctx, props, view);
-    let waits = matches!(view.phase(), Phase::Waits) && props.scope.is_some() && accept.is_some();
-    // A card with nothing to do or open has no actions row, nor its gap (an applied release).
-    if !waits && opens.is_empty() {
-      return None;
-    }
-    let mut row = Row::new()
-      .id(format!("{id}-actions"))
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center);
-    if let (Phase::Waits, Some(scope), Some(accept)) = (view.phase(), &props.scope, accept) {
-      let pending = self.decide.state().get().is_pending();
-      let deciding = |decision| Deciding {
-        scope: scope.clone(),
-        seq: props.seq,
-        decision,
-      };
-      let accept = ActionButton::new(format!("{id}-start"), accept.kind, accept.label).icon(accept.glyph);
-      let dismiss = ActionButton::new(
-        format!("{id}-dismiss"),
-        ButtonKind::Secondary,
-        ctx.t("orchestrator.proposal.dismiss"),
-      );
-      let (accept, dismiss) = match (pending, shown) {
-        (true, _) => (accept.disabled(), dismiss.disabled()),
-        (false, None) => (accept.disabled(), self.dismiss(dismiss, deciding(Decision::Dismiss))),
-        (false, Some(widens)) => {
-          let (decide, refused, accepting) = (
-            self.decide.clone(),
-            self.refused.clone(),
-            deciding(Decision::Accept { widens }),
-          );
-          let accept = accept.on_click(move || {
-            if is_synthetic_input() {
-              tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
-              refused.set(true);
-              return;
-            }
-            decide.run(accepting.clone());
-          });
-          (accept, self.dismiss(dismiss, deciding(Decision::Dismiss)))
-        }
-      };
-      row = row.child(accept).child(dismiss);
-    }
-    let navigation = Navigation::of(ctx);
-    Some(
-      row.with_children(opens.into_iter().enumerate().map(|(index, (glyph, label, route))| {
-        ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
-          .icon(glyph)
-          .opens(navigation.to(route))
-      })),
-    )
-  }
 }
 
-/// The places a card opens: the draft or what was published, *What automation may do* after the chat published
-/// itself, the run's changes while a merge waits, the task otherwise, and the queue for a refused release.
-fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Route)> {
-  let project = props.project.0;
-  let task = view.action.task.as_deref();
-  let task_open = |tab| {
-    task.and_then(|key| {
-      facts::task_route(project, key, tab).map(|route| {
-        (
-          Icon::ArrowUpRight,
-          ctx.t_args("orchestrator.action.openTask", [("task", key)]),
-          route,
-        )
-      })
-    })
+/// The warning strips of a waiting card, each with whether it says the card widens what agents may do: a draft that
+/// widens while *Let the Orchestrator publish drafts* is on, files that look as if they hold secrets, git work that
+/// loses work, an MCP server that widens or whose program is not found.
+fn warnings(ctx: &Ctx, id: &str, (view, read): (&View, Option<&Read>)) -> Vec<(bool, Row)> {
+  let mut strips = Vec::new();
+  let widening = match read.and_then(|read| read.facts.as_ref()) {
+    Some(read::Facts::Publication(found)) if !found.widens.is_empty() => Some(found.name.as_str()),
+    _ => None,
   };
-  match view.action.change.as_ref().map(|change| &change.change) {
-    Some(Change::Publish { of, resource, .. }) => publish_opens(ctx, (props, view), (*of, *resource)),
-    Some(Change::Merge { .. }) if view.phase().waits() => task
-      .and_then(|key| facts::task_route(project, key, TaskTab::Changes))
-      .map(|route| {
-        (
-          Icon::ArrowUpRight,
-          ctx.t("orchestrator.change.merge.openChanges"),
-          route,
-        )
-      })
-      .into_iter()
-      .collect(),
-    Some(Change::Cancel { .. }) if view.phase().waits() => Vec::new(),
-    // A release names a task only for its group: the task opens on its Details.
-    Some(Change::Release { .. }) if matches!(view.phase(), Phase::Refused(_)) => {
-      let queue = (
-        Icon::ArrowUpRight,
-        ctx.t("orchestrator.action.openQueue"),
-        super::action::queue_route(project),
-      );
-      task_open(TaskTab::default()).into_iter().chain([queue]).collect()
-    }
-    Some(Change::Release { .. }) => task_open(TaskTab::default()).into_iter().collect(),
-    Some(Change::Mcp(mcp)) => mcp::opens(ctx, (view, project), mcp),
-    // Every other change is to a run of the task, which its Summary shows.
-    _ => task_open(TaskTab::Summary).into_iter().collect(),
+  if let Some(name) = widening.filter(|_| read.is_some_and(|read| read.publishes && !read.widens)) {
+    let words = ctx.t_args("orchestrator.change.publish.widens", [("name", name)]);
+    strips.push((true, decision::warning(id, "widens", &words)));
   }
-}
-
-fn publish_opens(
-  ctx: &Ctx,
-  (props, view): (&ChangeProps, &View),
-  publication: (Publishing, orchester_core::id::ResourceId),
-) -> Vec<(Icon, Arc<str>, Route)> {
-  let route = facts::draft_route(props.project.0, publication);
-  match view.phase() {
-    Phase::Applied | Phase::Done => {
-      let name = view.facts.map_or_else(
-        || {
-          view
-            .action
-            .change
-            .as_ref()
-            .map(|change| change.subject.clone())
-            .unwrap_or_default()
-        },
-        |facts| match facts {
-          read::Facts::Publication(found) => found.name.clone(),
-          read::Facts::Run(_) => String::new(),
-        },
-      );
-      let mut opens = vec![(
-        Icon::ArrowUpRight,
-        ctx.t_args("orchestrator.change.publish.open", [("name", name.as_str())]),
-        route,
-      )];
-      if view.phase() == Phase::Done {
-        opens.push((
-          Icon::Settings,
-          ctx.t("orchestrator.change.publish.automation"),
-          Route::Settings,
-        ));
-      }
-      opens
-    }
-    Phase::Waits | Phase::Applying | Phase::Dismissed | Phase::Refused(_) => {
-      vec![(
-        Icon::ArrowUpRight,
-        ctx.t("orchestrator.change.publish.openDraft"),
-        route,
-      )]
-    }
+  let Some(change) = view.action.change.as_ref() else {
+    return strips;
+  };
+  strips.extend(repository::sensitive(ctx, id, (view, &change.change)).map(|strip| (false, strip)));
+  match &change.change {
+    Change::Git(git) => strips.extend(git::warning(ctx, id, (view, git)).map(|strip| (false, strip))),
+    Change::Mcp(mcp) => strips.extend(
+      mcp::warnings(ctx, id, (view, mcp))
+        .into_iter()
+        .map(|strip| (mcp.widens, strip)),
+    ),
+    _ => {}
   }
+  strips
 }
 
 /// The card's facts and the person's switches, read again whenever the action's outcome changes.

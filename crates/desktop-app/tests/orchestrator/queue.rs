@@ -58,8 +58,8 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
   assert!(held(&screen), "still held");
   assert!(
-    screen.text("orchestrator-conversation").contains("Open queue"),
-    "the refused card opens the queue"
+    screen.text("orchestrator-conversation").contains("Queue ↗"),
+    "the refused line opens the queue"
   );
 }
 
@@ -255,10 +255,7 @@ fn orchestrator_hold_card_names_the_group_its_tasks_and_resumes() {
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
   let card = screen.text("orchestrator-conversation");
   assert!(card.contains("New starts held · the group of KON-1"), "{card}");
-  assert!(
-    card.contains("2 waiting tasks held") && card.contains("KON-2"),
-    "{card}"
-  );
+  assert!(card.contains("2 waiting · KON-1, KON-2"), "{card}");
   assert!(
     !card.contains("New starts held in Kontur"),
     "a group hold is not the project's: {card}"

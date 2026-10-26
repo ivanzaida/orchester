@@ -4,34 +4,24 @@
     "dot": "·",
     "dash": "—",
     "date": "{{month}} {{day}}",
-    "answerMeta": "{{model}} · {{time}}",
     "newTitle": "New conversation",
     "history": "History",
-    "manageContext": "Manage context",
-    "manageContextUnavailable": "Choosing what each reply gets isn't built yet: each reply gets the Orchestrator's rules and this conversation.",
+    "new": "New",
     "newConversation": "New conversation",
-    "newConversationHere": "This is a new conversation.",
-    "coordinator": {
-      "model": "{{connection}} / {{model}}",
-      "notSet": "Not set up",
-      "settings": "Settings"
-    },
     "meta": {
-      "unsaved": "Not saved until you send",
-      "startedToday": "Project conversation · started {{time}}",
-      "started": "Project conversation · started {{date}}"
+      "today": "· today {{time}}",
+      "on": "· {{date}}"
     },
     "start": {
       "title": "What should we plan?",
-      "description": "Discuss an idea, break work into tasks, check on the queue or ask how things are going. A task the Orchestrator creates stays a draft until a run starts."
+      "description": "The Orchestrator reads the project and acts through Orchester with your project's permissions: it creates tasks, starts and continues runs, and answers agents when you let it."
     },
     "composer": {
-      "placeholderNew": "Describe what you want to build, or ask about this project…",
-      "placeholder": "Message Orchestrator…",
+      "placeholder": "Message the Orchestrator…",
+      "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex connection and a model for it.",
+      "setUp": "Set up the Orchestrator",
+      "readable": "Conversations stay readable; you can send once it is set up.",
       "loading": "Loading…",
-      "recipient": "To: Orchestrator",
-      "permissions": "Acts with your project permissions",
-      "permissionsHint": "Every action it takes is checked like the same action in the app, with your permissions in this project.",
       "send": "Send",
       "sendEmpty": "Write a message or attach a file first.",
       "notReady": "Choose and publish what the Orchestrator runs on in its settings first.",
@@ -41,29 +31,52 @@
       "nowDetail": "The Orchestrator gets it at its next tool call, inside this answer",
       "stopAndSend": "Stop and send",
       "stopAndSendDetail": "Stops this answer, then sends it as the next message",
-      "options": "More ways to send",
-      "lines": "Enter adds a line ·",
-      "sends": "sends",
-      "sendsAfter": "sends after this answer ·",
-      "stops": "stops the answer"
+      "options": "More ways to send"
     },
     "keys": {
       "ctrlEnter": "Ctrl Enter",
-      "cmdEnter": "⌘ Enter",
-      "esc": "Esc"
+      "cmdEnter": "⌘ Enter"
     },
-    "context": {
-      "line": "Each reply gets the Orchestrator's rules and this conversation"
+    "runsOn": {
+      "tip": "Acts with your project permissions: every action it takes is checked like the same action in the app.",
+      "notSetUp": "Not set up",
+      "unread": "Unknown",
+      "claude": "Claude Code",
+      "codex": "Codex",
+      "signIn": "{{cli}} · {{account}} · {{model}}",
+      "cli": "{{cli}} · {{model}}",
+      "provider": "{{provider}} · {{model}}",
+      "claudeSignIns": "Claude Code · your sign-ins",
+      "codexSignIns": "Codex · your sign-ins",
+      "providers": "API providers · pay per token",
+      "who": "{{email}} · {{plan}} plan",
+      "limitUntil": "{{email}} · limit until {{time}}",
+      "signedOut": "Not signed in · sign in in Connections",
+      "use": "{{used}}% of 5h",
+      "useUnknown": "5h use not read",
+      "limitReached": "limit reached",
+      "providerWho": "{{cli}} · {{host}}",
+      "today": "{{tokens}} today",
+      "noPlanLimit": "no plan limit",
+      "key": "Its key: secret {{secret}}",
+      "keyGone": "Its key's secret is missing",
+      "model": "Model",
+      "effort": "Effort",
+      "effortDefault": "Default",
+      "effortDefaultDetail": "the CLI's own",
+      "effortMaxDetail": "slower, more tokens",
+      "sentTo": "Prompts, repository content and command output go to {{host}} under its terms. Orchester reads no plan limits there.",
+      "publishNote": "Publishes v{{version}} of the Orchestrator's settings: the next answer runs on it.",
+      "publishOverDraft": "Publishes v{{version}} and replaces the draft saved in Orchestrator settings.",
+      "newSession": "Another account starts a new session: earlier messages aren't remembered.",
+      "settings": "Settings ↗"
     },
     "suggestions": {
-      "eyebrow": "SUGGESTIONS",
       "plan": "Plan work from a scope file: tasks with briefs and acceptance criteria.",
       "running": "What's running, what's waiting and what's blocked right now?",
       "order": "Suggest an order for the Todo tasks and which can run in parallel.",
-      "idea": "Talk through an idea before it becomes a task.",
-      "note": "A suggestion fills the prompt so you can edit it. Nothing is sent until you press Send."
+      "idea": "Talk through an idea before it becomes a task."
     },
-    "footer": "Conversations stay in History for {{project}} · each task keeps its own Conversation",
     "delivery": {
       "sending": "Sending…",
       "delivered": "Delivered · {{time}}",
@@ -80,8 +93,8 @@
       "dismiss": "Dismiss"
     },
     "thinking": "Orchestrator is thinking",
-    "stop": "Stop response",
-    "stopNote": "Stop response ends this answer only. Tasks, runs and the queue are not touched.",
+    "stop": "Stop",
+    "stopNote": "Stop ends this answer only. Tasks, runs and the queue are not touched.",
     "stopFailed": "The answer couldn't be stopped: {{reason}}",
     "stopped": {
       "nothing": "Response stopped by you · {{time}} · nothing was created or changed",
@@ -90,19 +103,52 @@
     "interrupted": "The answer was cut short when Orchester or its runner closed",
     "askAgain": "Ask again",
     "askAgainNote": "Sends your last message once more.",
+    "line": {
+      "open": "Open ↗",
+      "queue": "Queue ↗",
+      "summary": "Summary ↗",
+      "review": "Review ↗",
+      "raise": "Raise ↗",
+      "continue": "Continue ↗",
+      "answer": "Answer ↗",
+      "link": "{{label}} ↗",
+      "run": "{{task}} · #{{run}}",
+      "byYou": "by you",
+      "byYouInChat": "by you in the chat",
+      "targetBy": "{{target}} · {{by}}",
+      "applying": "Being carried out"
+    },
+    "decision": {
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
+      "onlyYou": "Only you can apply"
+    },
+    "digest": {
+      "one": "1 waiting for you",
+      "other": "{{count}} waiting for you",
+      "since": "since {{time}}",
+      "end": {
+        "succeeded": "Ready to merge",
+        "failed": "Run failed",
+        "stopped": "Waits for your decision",
+        "limit": "Stopped at a limit",
+        "interrupted": "Run interrupted"
+      }
+    },
     "failure": {
       "unreachable": "Orchestrator can't reach {{connection}}",
       "unreachableUnknown": "The Orchestrator couldn't start",
       "notSignedIn": "The connection's CLI isn't signed in on this computer. Your message and this conversation are kept; nothing else changed.",
       "cannotStart": "The connection's CLI couldn't be started; the runner's log says why. Your message and this conversation are kept; nothing else changed.",
       "connectionGone": "The Orchestrator's connection is gone or can't run it. Choose another in Orchestrator settings; this conversation is kept.",
-      "accountNone": "The connection has no account to sign in with; choose one in Connections. Your message and this conversation are kept.",
-      "accountFolderMissing": "The account's folder {{folder}} is gone; choose another account in Connections. Your message and this conversation are kept.",
-      "accountUnsupported": "This connection's account can't be used on this computer yet; choose Default in Connections. Your message and this conversation are kept.",
+      "accountNone": "The connection has no account to sign in with; pick another account. Your message and this conversation are kept.",
+      "accountFolderMissing": "The account's folder {{folder}} is gone; pick another account. Your message and this conversation are kept.",
+      "accountUnsupported": "This connection's account can't be used on this computer yet; pick another account. Your message and this conversation are kept.",
       "failed": "The answer failed",
       "failedBody": "{{reason}} · Your message and this conversation are kept.",
       "retry": "Retry",
       "openConnections": "Open Connections",
+      "pickAccount": "Pick account",
       "earlier": "This answer failed: {{reason}}",
       "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
       "earlierUnreachable": "This answer failed: the Orchestrator couldn't start",
@@ -115,14 +161,12 @@
     },
     "setupFailed": "What the Orchestrator runs on couldn't be read",
     "notReady": {
-      "title": "Choose what the Orchestrator runs on",
-      "body": "Pick a Claude Code or Codex connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
       "openSettings": "Open settings"
     },
     "loading": {
       "title": "Loading conversation…",
       "note": "Messages load together. Suggestions don't show while loading.",
-      "meta": "Opening from History"
+      "meta": "· opening from History"
     },
     "loadFailed": "Couldn't read the conversation",
     "notFound": {
@@ -131,52 +175,41 @@
     },
     "action": {
       "createTask": {
-        "done": "Created {{task}} as a draft",
-        "refused": "Create task · not done",
-        "effect": "It is in Tasks as a draft. Nothing is queued and no agent has started."
+        "done": "Created a draft",
+        "refused": "Create task · not done"
       },
       "updateTask": {
-        "done": "Changed {{task}}",
-        "refused": "Change {{task}} · not done",
-        "effect": "Its details changed as Edit task changes them."
+        "done": "Changed",
+        "refused": "Change {{task}} · not done"
       },
       "runTask": {
-        "done": "Started {{task}}",
-        "refused": "Start {{task}} · not done",
-        "effect": "It runs as Start in Tasks runs it, after the queue's checks."
+        "done": "Started",
+        "refused": "Start {{task}} · not done"
       },
       "pauseRun": {
         "done": "Paused a run",
-        "refused": "Pause a run · not done",
-        "effect": "The run pauses at its agents' next checkpoint."
+        "refused": "Pause a run · not done"
       },
       "resumeRun": {
         "done": "Resumed a run",
-        "refused": "Resume a run · not done",
-        "effect": "The run goes on from where it stopped."
+        "refused": "Resume a run · not done"
       },
       "holdQueue": {
         "done": "New starts held",
-        "refused": "Hold new starts · not done",
-        "effect": "Running runs go on; queued tasks wait until you release them in Tasks."
+        "refused": "Hold new starts · not done"
       },
       "releaseQueue": {
         "done": "New starts released",
-        "refused": "Release new starts · not done",
-        "effect": "Queued tasks start again as their groups allow."
+        "refused": "Release new starts · not done"
       },
       "duplicatePipeline": {
         "done": "Copied a pipeline as a draft",
-        "refused": "Copy a pipeline · not done",
-        "effect": "The copy is a draft: no task runs it until its first version is published."
+        "refused": "Copy a pipeline · not done"
       },
       "other": {
         "done": "Used {{tool}}",
         "refused": "{{tool}} · not done"
       },
-      "confirmed": "Confirmed · {{time}}",
-      "refusedState": "Refused · {{time}}",
-      "checked": "Checked like the same action in the app, with your permissions in {{project}}.",
       "openTask": "Open {{task}}",
       "openQueue": "Open queue"
     },
@@ -185,20 +218,26 @@
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
     "wait": {
-      "question": "{{agent}} asks a question · {{task}} run #{{run}}",
-      "questionAnyone": "An agent asks a question · {{task}} run #{{run}}",
-      "message": "{{agent}} waits for a reply · {{task}} run #{{run}}",
-      "messageAnyone": "An agent waits for a reply · {{task}} run #{{run}}",
-      "plan": "{{agent}}'s plan waits for a decision · {{task}} run #{{run}}",
-      "planAnyone": "A plan waits for a decision · {{task}} run #{{run}}",
-      "noticed": "Waits · {{time}}",
+      "what": {
+        "question": "{{agent}} asks a question",
+        "questionAnyone": "An agent asks a question",
+        "message": "{{agent}} waits for a reply",
+        "messageAnyone": "An agent waits for a reply",
+        "plan": "{{agent}}'s plan waits for a decision",
+        "planAnyone": "A plan waits for a decision"
+      },
+      "status": {
+        "waits": "Waits for you",
+        "reading": "Orchestrator is reading",
+        "answered": "Answered by the Orchestrator",
+        "answeredByYou": "Answered by you"
+      },
       "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
       "effectOwn": "The agent asks again after the Orchestrator's own answer, so it waits for you: the Orchestrator doesn't answer it by itself.",
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
-      "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
-      "open": "Open {{task}}'s conversation"
+      "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes."
     },
     "held": {
       "projectTitle": "New starts held in {{project}}",
@@ -206,31 +245,31 @@
       "groupTitle": "New starts held · the group of {{task}}",
       "groupEffect": "No waiting task in this group starts until you resume. Running tasks keep running.",
       "waiting": {
-        "one": "1 waiting task held",
-        "other": "{{count}} waiting tasks held"
+        "none": "No task waits"
       },
+      "waitingKeys": "{{count}} waiting · {{keys}}",
+      "more": "{{keys}} +{{count}}",
+      "separator": ", ",
       "checked": "Same action as Pause scheduling in the queue, checked against your permissions in {{project}}.",
+      "tip": "{{effect}} {{checked}}",
       "resume": "Resume new starts"
     },
     "proposal": {
       "title": "Start {{task}} on {{pipeline}}?",
+      "about": "{{title}} · {{brief}}",
+      "criteria": "Criteria",
       "waits": "Waits for you · {{time}}",
-      "effect": "Nothing has started. The Orchestrator asked to start this run; it starts only when you choose Start, after the queue's checks.",
       "start": "Start",
       "dismiss": "Dismiss",
       "briefCut": "This is only the opening of the brief: open {{task}} to read all of it before you start.",
-      "showCriteria": "Show {{count}} acceptance criteria",
-      "hideCriteria": "Hide {{count}} acceptance criteria",
+      "showCriteria": "{{count}} · Show them",
+      "hideCriteria": "{{count}} · Hide them",
       "criterion": "• {{criterion}}",
       "personOnly": "Only a person starts a run the Orchestrator proposed: input from automation is refused here.",
-      "dismissedTitle": "Start {{task}} · dismissed",
-      "dismissedState": "Dismissed · {{time}}",
-      "dismissedEffect": "You dismissed it. Nothing started."
+      "dismissedTitle": "Start {{task}} · dismissed"
     },
     "historyPanel": {
-      "title": "History",
-      "close": "Close History",
-      "search": "Search conversations in {{project}}",
+      "search": "Search conversations",
       "today": "TODAY",
       "yesterday": "YESTERDAY",
       "earlier": "EARLIER",
@@ -238,15 +277,13 @@
         "one": "1 message",
         "other": "{{count}} messages"
       },
-      "current": {
-        "one": "This conversation · 1 message",
-        "other": "This conversation · {{count}} messages"
-      },
+      "meta": "{{when}} · {{messages}}",
       "empty": "No conversation yet. Your first message starts one.",
       "noMatch": "No conversation's title has these words.",
-      "note": "Only conversations in {{project}}. Opening one keeps your draft; Esc closes History."
+      "note": "Conversations stay in this project on this computer."
     },
     "settings": {
+      "crumb": "Settings",
       "description": "Plans work with you, drafts tasks and coordinates {{project}}'s queue.",
       "publish": {
         "published": "Published v{{version}}",
@@ -315,8 +352,6 @@
       "saveFailed": "Not saved: {{reason}}"
     },
     "change": {
-      "applying": "Being carried out · {{time}}",
-      "appliedInChat": "Applied by you in the chat · {{time}}",
       "approvedInChat": "You approved it in the chat: “{{words}}”",
       "personOnly": {
         "publish": "Only a person publishes a draft the Orchestrator proposed: input from automation is refused here.",
@@ -350,7 +385,6 @@
         "removeAccept": "Remove server",
         "dismissed": "MCP server {{server}} · dismissed",
         "refused": "MCP server {{server}} · not done",
-        "byYou": "Applied by you · {{time}}",
         "effectWaitsWidens": "Nothing is changed yet. Agents of the profiles that choose this server get it as shown above from their next start; agents at work keep what they started with.",
         "effectWaits": "Nothing is changed yet. Agents of the profiles that choose this server work as shown above from their next start; agents at work keep what they started with.",
         "effectApplied": "You applied it: agents that start from now on get the server as shown above.",
@@ -379,7 +413,7 @@
         "callsRun": "{{tools}} run without asking; every other call asks",
         "usedBy": "Used by",
         "usedByNone": "No profile chooses it yet",
-        "open": "Open in Connections"
+        "open": "Connections"
       },
       "repository": {
         "waits": "Make {{project}}'s folder a git repository?",
@@ -388,7 +422,6 @@
         "doneCommit": "Made the first commit of {{project}}'s repository",
         "dismissed": "Git repository for {{project}} · dismissed",
         "refused": "Git repository for {{project}} · not done",
-        "byYou": "Made by you · {{time}}",
         "effectWaits": "Nothing is made yet. git init runs in the project's folder, then the first commit is made by the author git is set up with. No remote is added, nothing is pushed and git's settings stay as they are.",
         "effectWaitsCommit": "Nothing is committed yet. The first commit is made by the author git is set up with; the repository's history stays untouched otherwise. No remote is added, nothing is pushed and git's settings stay as they are.",
         "effectApplied": "The folder is a git repository on {{branch}} with its first commit: runs can branch from it now.",
@@ -414,7 +447,6 @@
         "done": "Answered the question in run #{{run}} of {{task}}",
         "dismissed": "Answer to run #{{run}} of {{task}} · dismissed",
         "refused": "Answer to run #{{run}} of {{task}} · not done",
-        "byYou": "Sent by you · {{time}}",
         "effectWaits": "Nothing is sent yet. Send answer gives the asking agent this answer: {{answer}}. The task's conversation shows it as the Orchestrator's.",
         "effectSent": "The agent got this answer at {{time}}: {{answer}}. The task's conversation shows it as the Orchestrator's.",
         "effectDismissed": "You dismissed it. Nothing was sent; the agent still waits for an answer.",
@@ -425,7 +457,6 @@
         "done": "Sent a message to run #{{run}} of {{task}}",
         "dismissed": "Message to run #{{run}} of {{task}} · dismissed",
         "refused": "Message to run #{{run}} of {{task}} · not done",
-        "byYou": "Sent by you · {{time}}",
         "effectWaits": "Nothing is sent yet. Send message gives the run's agents this message, as the task's composer would: {{text}}",
         "effectSent": "Sent at {{time}}, as the task's composer sends it; the task's conversation shows it as the Orchestrator's: {{text}}",
         "effectDismissed": "You dismissed it. Nothing was sent.",
@@ -453,7 +484,6 @@
         "done": "Published {{name}} v{{version}}",
         "dismissed": "Publish {{name}} v{{version}} · dismissed",
         "refused": "Publish {{name}} v{{version}} · not done",
-        "byYou": "Published by you · {{time}}",
         "effectWaits": "Nothing is published yet. Agents read v{{before}} until you publish v{{version}}; a run already under way keeps the version it started with.",
         "effectWaitsProfile": "Nothing is published yet. {{name}} keeps v{{before}} until you publish v{{version}}.",
         "effectFirst": "Nothing is published yet. No agent gets {{name}} until you publish v{{version}}.",
@@ -464,7 +494,6 @@
         "effectDoneKeeping": "Let the Orchestrator publish drafts is on, so the chat published it without asking. Agents read v{{version}} from their next step; runs under way keep v{{before}}.",
         "effectDismissed": "You dismissed it. Nothing was published; the draft stays in {{place}}.",
         "widens": "This draft widens what {{name}} may do, so it waits for you even though Let the Orchestrator publish drafts is on. Let automation change agent permissions is off.",
-        "publishedAs": "Published as Publish in {{place}} publishes it, with your permissions in {{project}}.",
         "accept": "Publish v{{version}}",
         "openDraft": "Open draft",
         "open": "Open {{name}}",
@@ -475,7 +504,6 @@
         "done": "Cancelled run #{{run}} of {{task}}",
         "dismissed": "Cancel run #{{run}} of {{task}} · dismissed",
         "refused": "Cancel run #{{run}} of {{task}} · not done",
-        "byYou": "Cancelled by you · {{time}}",
         "effectWaits": "Nothing has stopped yet. Cancel stops the run's agents now; its worktree, branch and finished steps stay so you can read what it did. Nothing is merged or deleted.",
         "effectApplied": "Its agents stopped at {{time}}. The worktree and the branch {{branch}} are kept; {{task}} can run again from Tasks.",
         "effectAppliedPlain": "Its agents stopped at {{time}}. Its worktree and branch are kept; {{task}} can run again from Tasks.",
@@ -489,27 +517,26 @@
         "done": "Merged run #{{run}} of {{task}}",
         "dismissed": "Merge run #{{run}} of {{task}} · dismissed",
         "refused": "Merge run #{{run}} of {{task}} · not done",
-        "byYou": "Merged by you · {{time}}",
         "effectWaitsInto": "Nothing is merged yet. Merge into {{into}} merges it as Merge in the task's review does, after the same checks.",
         "effectWaits": "Nothing is merged yet. Merge merges it as Merge in the task's review does, after the same checks.",
         "effectMerged": "{{into}} moved forward to {{revision}}.",
-        "onItsOwn": "On its own",
+        "onItsOwn": "on its own",
         "effectOnItsOwn": "Merged by the Orchestrator on its own, as you let it merge finished runs: {{into}} moved forward to {{revision}}.",
         "effectOnItsOwnPlain": "Merged by the Orchestrator on its own, as you let it merge finished runs.",
         "outsideTitle": "Run #{{run}} of {{task}} is in {{into}} already",
-        "outsideState": "Merged without Orchester",
+        "outsideState": "merged without Orchester",
         "effectOutside": "{{into}} holds this run’s work already: it was merged without Orchester. Nothing is merged again.",
         "effectApplied": "The run's work is merged.",
         "effectDismissed": "You dismissed it. Nothing was merged; the run stays ready for review.",
         "acceptInto": "Merge into {{into}}",
         "accept": "Merge",
-        "openChanges": "Open changes"
+        "openChanges": "Review changes"
       },
       "start": {
         "doneOn": "Started {{task}} on {{pipeline}}",
         "done": "Started {{task}}",
         "refused": "Start {{task}} · not done",
-        "autoMode": "Auto mode",
+        "autoMode": "auto mode",
         "effect": "Auto mode is on in {{project}}, so the Orchestrator started this run without asking. It went through the queue's checks, as Start in Tasks does."
       },
       "facts": {
@@ -609,7 +636,6 @@
         "doneResolve": "Sent run #{{run}} of {{task}} back to {{step}} to resolve its conflicts with {{branch}}",
         "dismissed": "Continuing run #{{run}} of {{task}} · dismissed",
         "refused": "Continuing run #{{run}} of {{task}} · not done",
-        "byYou": "Continued by you · {{time}}",
         "effectWaitsRetry": "Nothing changed yet. Allow retry runs the stopped step once more, as the task's Summary does.",
         "effectWaitsReturn": "Nothing changed yet. Return sends the work back to {{step}}, with the note for its agent, as the task's Summary does.",
         "effectWaitsResolve": "Nothing changed yet. Its agent at {{step}} merges {{branch}} in and resolves the conflicting files, as the task's Ask an agent to resolve does; the steps after it run again.",
@@ -625,7 +651,6 @@
         "done": "Paused run #{{run}} of {{task}}",
         "dismissed": "Pausing run #{{run}} of {{task}} · dismissed",
         "refused": "Pausing run #{{run}} of {{task}} · not done",
-        "byYou": "Paused by you · {{time}}",
         "effectWaits": "Nothing changed yet. Pause stops the run at its next checkpoint, as the task's page does.",
         "effectApplied": "The run pauses at its next checkpoint; asked at {{time}}.",
         "effectDismissed": "You dismissed it. The run goes on.",
@@ -636,7 +661,6 @@
         "done": "Resumed run #{{run}} of {{task}}",
         "dismissed": "Resuming run #{{run}} of {{task}} · dismissed",
         "refused": "Resuming run #{{run}} of {{task}} · not done",
-        "byYou": "Resumed by you · {{time}}",
         "effectWaits": "Nothing changed yet. Resume lets the paused run go on, as the task's page does.",
         "effectApplied": "The run went on at {{time}}.",
         "effectDismissed": "You dismissed it. The run stays paused.",
@@ -649,7 +673,6 @@
         "doneGroup": "Released new starts of {{group}}'s group",
         "dismissed": "Releasing new starts · dismissed",
         "refused": "Releasing new starts · not done",
-        "byYou": "Released by you · {{time}}",
         "effectWaits": "Nothing changed yet. Release lets the held tasks start again, in the queue's order.",
         "effectApplied": "New starts went on at {{time}}.",
         "effectDismissed": "You dismissed it. New starts stay held.",
@@ -660,9 +683,8 @@
         "done": "Ran {{command}}",
         "dismissed": "{{command}} · dismissed",
         "refused": "{{command}} · not done",
-        "byYou": "Run by you · {{time}}",
-        "accept": "Apply",
-        "where": "Where",
+        "accept": "Run it",
+        "where": "In",
         "checkout": "The project's checkout",
         "runWorktree": "Run #{{run}}'s worktree",
         "commandsWait": "Runs",
@@ -690,19 +712,22 @@
       }
     },
     "end": {
-      "succeeded": "Run #{{run}} of {{task}} is ready to merge",
-      "failed": "Run #{{run}} of {{task}} failed",
-      "failedAt": "Run #{{run}} of {{task}} failed at {{step}}",
-      "stopped": "Run #{{run}} of {{task}} waits for your decision",
-      "stoppedAt": "Run #{{run}} of {{task}} waits for your decision at {{step}}",
-      "limitTokens": "Run #{{run}} of {{task}} stopped at its token budget",
-      "limitTime": "Run #{{run}} of {{task}} stopped at its time limit",
-      "limitDaily": "Run #{{run}} of {{task}} stopped at the daily budget",
-      "limitGroup": "Run #{{run}} of {{task}} stopped at its group's budget",
-      "limitStep": "Run #{{run}} of {{task}} stopped at a step's budget",
-      "limitPlan": "Run #{{run}} of {{task}} stopped at an account's plan limit",
-      "interrupted": "Run #{{run}} of {{task}} was interrupted",
-      "noticed": "{{time}}",
+      "line": {
+        "succeeded": "Ready to merge",
+        "failed": "Failed",
+        "failedAt": "Failed at {{step}}",
+        "stopped": "Waits for your decision",
+        "stoppedAt": "Waits for your decision at {{step}}",
+        "limitTokens": "Stopped at its token budget",
+        "limitTime": "Stopped at its time limit",
+        "limitDaily": "Stopped at the daily budget",
+        "limitGroup": "Stopped at its group's budget",
+        "limitStep": "Stopped at a step's budget",
+        "limitPlan": "Stopped at an account's plan limit",
+        "interrupted": "Interrupted when Orchester or its runner closed",
+        "limitDailyMore": "Stopped at the daily budget · {{count}} more runs",
+        "limitGroupMore": "Stopped at their group's budget · {{count}} more runs"
+      },
       "effectReadyAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator tells you it is ready, and merges it only if you asked it to here.",
       "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads the run and tells you what happened and the choices you have.",
       "effectContinuing": "Let the Orchestrator continue interrupted runs is on too, so the Orchestrator continues the run once from its last checkpoint and tells you.",
@@ -722,16 +747,17 @@
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
-      "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you.",
-      "open": "Open {{task}}'s summary",
-      "limitDailyMore": "Run #{{run}} of {{task}} and {{count}} more stopped at the daily budget",
-      "limitGroupMore": "Run #{{run}} of {{task}} and {{count}} more stopped at their group's budget"
+      "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you."
     },
     "report": {
       "title": "Daily report · {{day}}",
       "conversation": "Daily report · {{day}}",
-      "delivered": "Delivered {{time}}",
-      "deliveredOn": "Delivered {{day}}, {{time}}",
+      "deliveredOn": "{{day}}, {{time}}",
+      "totals": {
+        "merged": "merged",
+        "waiting": "wait for you",
+        "tokens": "tokens"
+      },
       "effectSummary": "Let the Orchestrator answer agents is on, so the Orchestrator reads the report and adds a short summary and its recommendations below. It changes nothing: what it recommends is yours to do.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator adds a summary and its recommendations after the turn under way ends.",
       "asOf": "Runs, waits and the queue as they stood at {{time}}.",

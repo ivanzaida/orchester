@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::orchestrator::change::MessageThen;
 
-use super::words::{Accept, Phase, View, Words, state};
+use super::words::{Accept, Phase, View, Words};
 use crate::ui::{button::ButtonKind, icon::Icon};
 
 /// An answer to the question run `#number` waits with: `answer`, the options picked and the Orchestrator's words.
@@ -36,7 +36,7 @@ pub(super) fn answer(ctx: &Ctx, view: &View, (number, answer): (u32, &str)) -> W
     glyph: Icon::Reply,
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.answer.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t("orchestrator.change.answer.accept"),
@@ -89,7 +89,7 @@ pub(super) fn message(ctx: &Ctx, view: &View, (number, text, then): (u32, &str, 
     glyph: Icon::MessageSquareText,
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.message.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t(moving(then).1),

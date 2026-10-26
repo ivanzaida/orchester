@@ -1,19 +1,19 @@
-//! A new conversation (`Orchestrator · new conversation` `HvzWI`, `Body` `V6ZLzQ`): centered, 680 wide, 20 apart:
-//! *What should we plan?* (28/600) with what the chat is for (12 `text_secondary`, 1.5); the composer, its box three
-//! lines high, with the keys and what each reply gets under it; the suggestions (`Prompt chip` `gFvYI` on `hover`,
-//! radius 8, 8 by 10 inside: a 13 icon, the prompt in 12 `text_secondary` and a 12 `corner-down-left`), two a row,
-//! which fill the prompt and send nothing; and at the foot where conversations stay.
+//! A new conversation (`03 New conversation` `c99rep`, `Start` `Y7fviC`): centered, 640 wide, 20 apart: a 36 tile
+//! (`surface_raised` in a `border` stroke, radius 8) with an 18 `waypoints`; *What should we plan?* (24/600); what the
+//! chat is for (13 `text_secondary`); the composer, with the focus; and four suggestions, two a row 6 apart (`border`
+//! stroke, radius 8, 8 by 10 inside: a 13 icon in `text_muted` and the prompt in 12 `text_secondary`), which fill the
+//! prompt and send nothing.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
-  layout::Alignment,
-  node::{Element, Style, dimension::Dimension, padding::Padding},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
+  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 
 use super::View;
@@ -21,131 +21,90 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText},
   ui::{
     icon::{Icon, icon},
-    pressable::{inert, pressable},
-    tooltip::Tooltip,
+    pressable::pressable,
   },
 };
 
-/// The start's width (`Start` `ktXkH`) and a suggestion's height (`IMKR2`).
-const WIDTH: f32 = 680.0;
-const SUGGESTION_HEIGHT: f32 = 52.0;
+/// The start's width (`Y7fviC`), its tile's side (`x5G1nb`) and a suggestion's height (`VLqDm`).
+const WIDTH: f32 = 640.0;
+const TILE_SIZE: f32 = 36.0;
+const SUGGESTION_HEIGHT: f32 = 32.0;
 
 /// The suggestions, two a row: their icons and words.
 const SUGGESTIONS: [[(Icon, &str); 2]; 2] = [
   [
-    (Icon::ListTodo, "orchestrator.suggestions.plan"),
-    (Icon::Activity, "orchestrator.suggestions.running"),
+    (Icon::Sparkles, "orchestrator.suggestions.plan"),
+    (Icon::ListChecks, "orchestrator.suggestions.running"),
   ],
   [
-    (Icon::ListOrdered, "orchestrator.suggestions.order"),
-    (Icon::Lightbulb, "orchestrator.suggestions.idea"),
+    (Icon::Sparkles, "orchestrator.suggestions.order"),
+    (Icon::ListChecks, "orchestrator.suggestions.idea"),
   ],
 ];
 
-/// The start around `composer` (the box and the keys under it) for project `project`, with `notice` over the
-/// composer when something keeps the chat from sending.
-pub(super) fn start(
-  ctx: &mut Ctx,
-  view: &View,
-  (composer, notice): (Column, Option<Element>),
-  project: &str,
-) -> Element {
-  let intro = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(
-      Text::new(&ctx.t("orchestrator.start.title"))
-        .id("orchestrator-start-title")
-        .variant(ExtraTypography::Display.role()),
-    )
-    .child(
-      Text::new(&ctx.t("orchestrator.start.description"))
-        .variant(TypographyStyle::Description)
-        .width(Dimension::Pct(100.0)),
-    );
-  let under = Row::new()
-    .id("orchestrator-under-composer")
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+/// The start around `composer`, with `notice` over the composer when something keeps the chat from sending.
+pub(super) fn start(ctx: &mut Ctx, view: &View, (composer, notice): (Column, Option<Element>)) -> Element {
+  let tile = Row::new()
+    .size(Dimension::Px(TILE_SIZE), Dimension::Px(TILE_SIZE))
     .align_items(Alignment::Center)
-    .child(super::composer::keys(ctx, false))
-    .child(Spacer::new().flex(1.0))
-    .child(icon(Icon::Layers2, IconSize::Sm, PaletteColor::TextMuted))
-    .child(
-      // The whole sentence, on a second line when the column is narrow: never cut.
-      Text::new(&ctx.t("orchestrator.context.line"))
-        .id("orchestrator-context-line")
-        .variant(TypographyStyle::Caption)
-        .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .child(manage_context(ctx));
+    .justify(Justify::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(ExtraRadius::Tile.role())
+    .child(icon(Icon::Waypoints, IconSize::Xl, PaletteColor::TextSecondary));
   let start = Column::new()
     .id("orchestrator-start")
     .width(Dimension::Px(WIDTH))
     .max_width(Dimension::Pct(100.0))
     .spacing(OrchestratorSpacing::Start.role())
-    .child(intro)
+    .align_items(Alignment::Center)
+    .child(tile)
+    .child(
+      Text::new(&ctx.t("orchestrator.start.title"))
+        .id("orchestrator-start-title")
+        .variant(OrchestratorText::StartTitle.role())
+        .text_align(TextAlign::Center),
+    )
+    .child(
+      Text::new(&ctx.t("orchestrator.start.description"))
+        .id("orchestrator-start-description")
+        .variant(ExtraTypography::Lead.role())
+        .text_align(TextAlign::Center)
+        .width(Dimension::Pct(100.0)),
+    )
     .with_children(notice)
-    .child(composer.child(under))
+    .child(composer)
     .child(suggestions(ctx, view));
   Column::new()
     .id("orchestrator-new")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .padding(super::body::side_room().bottom(SpacingSize::Lg))
+    .padding(
+      Padding::new()
+        .left(OrchestratorSpacing::PageSide.role())
+        .right(OrchestratorSpacing::PageSide.role())
+        .bottom(SpacingSize::Section),
+    )
     .align_items(Alignment::Center)
     .child(Spacer::new().flex(1.0))
     .child(start)
     .child(Spacer::new().flex(1.0))
-    .child(
-      Text::new(&ctx.t_args("orchestrator.footer", [("project", project)]))
-        .id("orchestrator-footer")
-        .variant(TypographyStyle::Caption)
-        .nowrap(),
-    )
     .into()
 }
 
-/// *Manage context*, not built: its words and a lock, why in its tooltip.
-fn manage_context(ctx: &mut Ctx) -> Element {
-  let reason = ctx.t("orchestrator.manageContextUnavailable");
-  let link = inert(lurq::components::Button::empty())
-    .id("orchestrator-context-link")
-    .flex_shrink(0.0)
-    .describe("state", "unavailable")
-    .describe("reason", reason.clone())
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&ctx.t("orchestrator.manageContext"))
-        .variant(OrchestratorText::ContextLink.role())
-        .nowrap(),
-    )
-    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted));
-  Tooltip::new("orchestrator-context-link", reason).wrap(ctx, link)
-}
-
-/// The suggestions, their heading and what pressing one does.
+/// The suggestions, two a row.
 fn suggestions(ctx: &mut Ctx, view: &View) -> Element {
   let rows = SUGGESTIONS.map(|row| {
     Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Snug.role())
       .with_children(row.map(|(glyph, key)| suggestion(ctx, view, glyph, key)))
   });
   Column::new()
     .id("orchestrator-suggestions")
     .width(Dimension::Pct(100.0))
-    .padding_top(SpacingSize::Sm)
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("orchestrator.suggestions.eyebrow")).variant(OrchestratorText::Eyebrow.role()))
+    .spacing(ExtraSpacing::Snug.role())
     .with_children(rows)
-    .child(
-      Text::new(&ctx.t("orchestrator.suggestions.note"))
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0)),
-    )
     .into()
 }
 
@@ -164,13 +123,14 @@ fn suggestion(ctx: &mut Ctx, view: &View, glyph: Icon, key: &str) -> Element {
   ))
   .describe("a11y_name", words.clone())
   .flex(1.0)
-  .height(Dimension::Px(SUGGESTION_HEIGHT))
+  .min_width(Dimension::Px(0.0))
+  .min_height(Dimension::Px(SUGGESTION_HEIGHT))
   .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-  .spacing(ExtraSpacing::Inline.role())
-  .align_items(Alignment::Start)
-  .background(ExtraColor::Hover.role())
+  .spacing(SpacingSize::Sm)
+  .align_items(Alignment::Center)
+  .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
   .rounded(ExtraRadius::Tile.role())
-  .hovered_style(Style::new().background(ExtraColor::Pressed.role()))
+  .hovered_style(Style::new().background(ExtraColor::Hover.role()))
   .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
   .child(
     Text::new(&words)
@@ -178,6 +138,5 @@ fn suggestion(ctx: &mut Ctx, view: &View, glyph: Icon, key: &str) -> Element {
       .flex(1.0)
       .min_width(Dimension::Px(0.0)),
   )
-  .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
   .into()
 }

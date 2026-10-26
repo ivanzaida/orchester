@@ -6,17 +6,13 @@
 
 use std::{path::Path, sync::Arc};
 
-use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
 use orchester_core::orchestrator::change::{Change, FirstCommitOf, Gitignore};
 
 use super::{
-  super::card,
+  super::decision,
   facts::Part,
-  words::{Accept, Phase, View, Words, state},
+  words::{Accept, Phase, View, Words},
 };
 use crate::ui::{button::ButtonKind, code_box::CodeBox, icon::Icon};
 
@@ -53,7 +49,7 @@ pub(super) fn words(ctx: &Ctx, view: &View, (branch, exists): (&str, bool)) -> W
     glyph: Icon::GitBranchPlus,
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.repository.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t(accept),
@@ -143,10 +139,5 @@ pub(super) fn sensitive(ctx: &Ctx, id: &str, (view, change): (&View, &Change)) -
     ),
     _ => ctx.t_args("orchestrator.change.repository.sensitive", [("files", named)]),
   };
-  Some(card::note(
-    id,
-    "sensitive",
-    (Icon::ShieldAlert, PaletteColor::Warning),
-    &text,
-  ))
+  Some(decision::warning(id, "sensitive", &text))
 }

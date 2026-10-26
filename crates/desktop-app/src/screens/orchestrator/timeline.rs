@@ -1,56 +1,44 @@
-//! The conversation (`Chat` in `ZJzV0`): one row per turn, newest last, in a list that keeps the rows out of view
-//! unbuilt and opens at the very end of the newest turn, following it (`ui::chat::follow`). A turn is the person's
-//! message (`Your message` `mr4lC`) with where it stands
-//! (*Sending…*, then *Delivered* and when, `check-check` in `success`), the Orchestrator's answer
-//! (`Agent message` `dcd0m` with `waypoints`: its replies as every chat draws what an agent wrote,
-//! `ui::chat::agent_text`, and its actions as cards, `action`), and how the turn ended: while it thinks, the working
-//! line with *Stop response* (`Thinking` `PR7nz`); stopped or cut short, an
-//! event line (`Event divider` `YKpmi`) and *Ask again*; failed, a danger notice with *Retry* (and *Open
-//! Connections* or *Open settings* when the connection is why, `failure`), or for an earlier turn an event line. A
-//! wait of an agent of the project opens a row of its own with its card (`wait`, linking to the task's Conversation),
-//! and the answer and ending of the turn it started by itself, if any; such a turn ends without *Ask again* or
-//! *Retry*.
+//! The conversation (`Chat` `ECQg8` in `01 Conversation` `wRSL4`): one row per turn, newest last, 18 apart, in a list
+//! that keeps the rows out of view unbuilt and opens at the very end of the newest turn, following it
+//! (`ui::chat::follow`). A turn is the person's message (`Your message`, right-aligned on `own_message`) with where it
+//! stands (*Sending…*, then *Delivered* and when), the Orchestrator's answer ([`super::answer`]), and how the turn
+//! ended ([`super::ending`]). A wait of an agent of the project opens a row of its own with its line
+//! ([`super::wait`]), what the turn it started by itself said and did nested under it as a quote; the end of a run its
+//! line ([`super::run_end`]) and a daily report its card ([`super::report`]), with the turn they started, if any.
+//! Waits for the person kept one after another, with no message of theirs between them, gather into one digest
+//! ([`super::digest`]).
 
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
-  },
-  components::{Column, Row, Spacer, Stack, Text, VirtualizedList},
+  app::{component::Component, ctx::Ctx},
+  components::{Column, Stack, VirtualizedList},
   layout::{
-    Alignment, StackAlignment,
+    StackAlignment,
     scrollbar::{ScrollBarPlacement, ScrollBarStyle},
   },
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::{ChatMessageId, ProjectId},
-  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, Queued, SessionChange, TurnFailure, TurnState},
-  time::Timestamp,
+  orchestrator::{Queued, TurnState, WaitKind},
 };
-use orchester_workspace::{display, orchestrator::tools::ChatScope};
+use orchester_workspace::orchestrator::tools::ChatScope;
 
 use super::{
-  change::{ChangeCard, ChangeProps},
-  failure::{earlier, failure_notice},
-  held::{HeldCard, HeldProps},
-  proposal::{ProposalProps, StartProposal},
+  digest::{Digest, DigestProps, Waited, for_the_person},
+  report::{ReportCard, ReportProps},
   send::QueuedChange,
-  turns::{Arrival, Part, Turn},
+  turns::{Arrival, Turn},
+  wait::Status,
 };
 use crate::{
-  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::OrchestratorSpacing,
   ui::{
-    button::{ActionButton, ButtonKind},
     chat::{
-      Avatar, agent_text, chat_row,
       follow::{Follow, jump_room},
       names::ProjectNames,
     },
-    icon::{Icon, icon},
     markdown::LinkHandler,
   },
 };
@@ -71,6 +59,8 @@ pub(super) struct TurnEnv {
   pub(super) stop: Arc<dyn Fn() + Send + Sync>,
   /// Sends the words once more, as a new message.
   pub(super) ask_again: Arc<dyn Fn(Arc<str>) + Send + Sync>,
+  /// Opens the composer's runs-on picker, where another account is chosen.
+  pub(super) pick_account: Arc<dyn Fn() + Send + Sync>,
   /// Takes a queued message, with its words, back into the composer, or removes it.
   pub(super) change_queued: Arc<dyn Fn(ChatMessageId, Arc<str>, QueuedChange) + Send + Sync>,
   /// What a press on a link in a reply does.
@@ -109,11 +99,13 @@ impl PartialEq for TurnRow {
 
 impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 
-/// A row of the list: a turn, or the room under the last one while *Jump to latest* floats over the chat's foot, so
-/// the turn can scroll clear of it.
+/// A row of the list: a turn, a digest of waits for the person, or the room under the last one while *Jump to
+/// latest* floats over the chat's foot, so the turn can scroll clear of it.
 #[derive(Clone, PartialEq)]
 enum Line {
-  Turn(TurnRow),
+  /// A turn; `first` is the list's first row, which keeps the chat's top room over it.
+  Turn { row: TurnRow, first: bool },
+  Digest { digest: DigestProps, first: bool },
   JumpRoom,
 }
 
@@ -122,7 +114,8 @@ impl lurq::app::component::DevtoolsInspectable for Line {}
 impl Line {
   fn key(&self) -> String {
     match self {
-      Self::Turn(row) => row.turn.key(),
+      Self::Turn { row, .. } => row.turn.key(),
+      Self::Digest { digest, .. } => digest.id.clone(),
       Self::JumpRoom => "orchestrator-jump-room".to_owned(),
     }
   }
@@ -135,11 +128,10 @@ pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>) -> Elemen
   let arrived = arrivals(&rows);
   let reveal = follow.follow(rows.len(), arrived, None);
   let following = follow.following.get();
-  let lines: Vec<Line> = rows
-    .into_iter()
-    .map(Line::Turn)
-    .chain((!following).then_some(Line::JumpRoom))
-    .collect();
+  let mut lines = gathered(rows);
+  if !following {
+    lines.push(Line::JumpRoom);
+  }
   // The thumb keeps a lane of its own, so it never covers a message's end.
   let scrollbar = ScrollBarStyle {
     placement: ScrollBarPlacement::Reserved,
@@ -168,6 +160,55 @@ pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>) -> Elemen
     .into()
 }
 
+/// A row that goes in a digest: a wait or a run's end for the person that started no turn.
+fn digested(row: &TurnRow) -> Option<Waited> {
+  let wait = row.turn.wait.as_deref()?;
+  (row.turn.state.is_none() && for_the_person(wait)).then(|| Waited {
+    key: row.turn.key(),
+    wait: wait.clone(),
+    at: row.turn.at,
+  })
+}
+
+/// `rows` as the list's lines: two or more waits for the person kept one after another gather into a digest.
+fn gathered(rows: Vec<TurnRow>) -> Vec<Line> {
+  let mut lines: Vec<Line> = Vec::new();
+  let mut run: Vec<TurnRow> = Vec::new();
+  let flush = |lines: &mut Vec<Line>, run: &mut Vec<TurnRow>| {
+    let first = lines.is_empty();
+    match run.len() {
+      0 => {}
+      1 => lines.push(Line::Turn {
+        row: run.remove(0),
+        first,
+      }),
+      _ => {
+        let project = run[0].env.project;
+        let waits: Vec<Waited> = run.drain(..).filter_map(|row| digested(&row)).collect();
+        lines.push(Line::Digest {
+          digest: DigestProps {
+            id: format!("orchestrator-digest-{}", waits[0].key),
+            project,
+            waits,
+          },
+          first,
+        });
+      }
+    }
+  };
+  for row in rows {
+    if digested(&row).is_some() {
+      run.push(row);
+      continue;
+    }
+    flush(&mut lines, &mut run);
+    let first = lines.is_empty();
+    lines.push(Line::Turn { row, first });
+  }
+  flush(&mut lines, &mut run);
+  lines
+}
+
 /// What the person can see arrive, counted: each turn, each part of its answer, and its end. Anything new moves a
 /// following chat to its end, and *N new* counts it.
 fn arrivals(rows: &[TurnRow]) -> usize {
@@ -194,297 +235,88 @@ impl Component for TurnView {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Line::Turn(row) = ctx.props::<Line>().clone() else {
-      return jump_room();
-    };
-    let key = row.turn.key();
-    // A wait of an agent and a daily report open their row with their own card (`super::wait`, `super::report`); a
-    // person's turn with their message.
-    let opening = match (&row.turn.wait, &row.turn.report) {
-      (Some(wait), _) => super::wait::card(
-        ctx,
-        &format!("orchestrator-wait-{key}"),
-        (wait, row.turn.at, row.turn.state.is_some()),
-        row.env.project,
-      ),
-      (None, Some(report)) => super::report::card(
-        ctx,
-        &format!("orchestrator-report-{key}"),
-        (report, row.turn.at, row.turn.state.is_some()),
-        &row.env,
-      ),
-      (None, None) => super::delivery::opening_message(ctx, &row, &key),
-    };
-    let answer = answer(ctx, &row);
-    // A message that waits has no answer yet, and an answer a message took mid-way ends under that message.
-    let end = if row.turn.message.is_some() && row.turn.arrival != Arrival::Waiting && !row.turn.continued {
-      ending(ctx, &row)
-    } else {
-      Vec::new()
-    };
-    super::body::turn_room(
-      Column::new()
-        .id(format!("orchestrator-turn-{key}"))
-        .describe("turn", turn_name(row.turn.state.as_ref()))
-        .describe("arrival", arrival_name(row.turn.arrival))
-        .width(Dimension::Pct(100.0))
-        .padding_vertical(SpacingSize::Sm)
-        .spacing(SpacingSize::Lg)
-        .child(opening)
-        .with_children(answer)
-        .with_children(end),
-    )
-    .into()
-  }
-}
-
-/// The Orchestrator's answer: its replies and actions, under its name, its model and when it began.
-fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
-  let first = row.turn.answer.first()?;
-  let time = display::clock(first.at());
-  let meta = match row.turn.model() {
-    Some(model) => ctx
-      .t_args(
-        "orchestrator.answerMeta",
-        [("model", model.as_str()), ("time", time.as_str())],
-      )
-      .to_string(),
-    None => time,
-  };
-  let key = row.turn.key();
-  let parts: Vec<Element> = row
-    .turn
-    .answer
-    .iter()
-    .enumerate()
-    .map(|(index, part)| match part {
-      Part::Reply { text: said, .. } => agent_text(
-        ctx,
-        &format!("orchestrator-reply-{key}-{index}"),
-        said,
-        (row.env.project, &row.env.names),
-        &row.env.links,
-      ),
-      Part::Action { action, at, seq } => action_card(
-        ctx,
-        row,
-        &format!("orchestrator-action-{key}-{index}"),
-        (action, *at, *seq),
-      ),
-      Part::Event {
-        event: ChatEvent::NewSession { because },
-        ..
-      } => {
-        let words = match because {
-          SessionChange::Connection => ctx.t("orchestrator.newSession.connection"),
-          SessionChange::Account => ctx.t("orchestrator.newSession.account"),
-        };
-        event(ctx, &format!("orchestrator-event-{key}-{index}"), Icon::History, &words)
+    match ctx.props::<Line>().clone() {
+      Line::Turn { row, first } => turn(ctx, &row, first),
+      Line::Digest { digest, first } => {
+        let key = digest.id.clone();
+        let mounted = ctx.mount_keyed::<Digest>(&key, digest);
+        room(Column::new().width(Dimension::Pct(100.0)).child(mounted), first)
       }
-    })
-    .collect();
-  // The answer's parts, 10 apart: replies, cards and events (`b55NqO`'s *Answer*).
-  let body = Column::new()
-    .id(format!("orchestrator-answer-{key}-parts"))
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Loose.role())
-    .with_children(parts);
-  Some(chat_row(
-    format!("orchestrator-answer-{key}"),
-    Avatar::Orchestrator,
-    (&ctx.t("orchestrator.title"), &meta),
-    vec![body.into()],
-  ))
-}
-
-/// The card of `action`, taken at `at` as entry `seq` of the conversation; `id` names it.
-fn action_card(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&ChatAction, Timestamp, i64)) -> Element {
-  let id = id.to_owned();
-  if action.change.is_some() || action.auto_mode {
-    return ctx.mount_keyed::<ChangeCard>(
-      &id,
-      ChangeProps {
-        id: id.clone(),
-        scope: row.env.scope.clone(),
-        project: (row.env.project, Arc::from(row.env.name.as_ref())),
-        seq,
-        action: action.clone(),
-        at,
-      },
-    );
-  }
-  match (&action.outcome, &row.env.scope) {
-    (ActionOutcome::Proposed(start), Some(scope)) => ctx.mount_keyed::<StartProposal>(
-      &id,
-      ProposalProps {
-        id: id.clone(),
-        scope: scope.clone(),
-        seq,
-        task: action.task.clone().unwrap_or_default(),
-        start: (**start).clone(),
-        applying: action.claimed.is_some(),
-        at,
-      },
-    ),
-    (ActionOutcome::Done, Some(scope)) if action.held.is_some() => ctx.mount_keyed::<HeldCard>(
-      &id,
-      HeldProps {
-        id: id.clone(),
-        project: (row.env.project, row.env.name.to_string()),
-        root: scope.root.clone(),
-        task: action.task.clone(),
-        held: action.held.clone().unwrap_or(HeldWork {
-          group: None,
-          waiting: Vec::new(),
-        }),
-        at,
-      },
-    ),
-    _ => super::action::card(ctx, &id, (action, at), (row.env.project, &row.env.name)),
-  }
-}
-
-/// How the turn ended, with what the person can do about the newest one; nothing for a wait that started no turn.
-/// A turn a wait started has no words of the person's to send again, so it ends with its event line alone.
-fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
-  let Some(state) = &row.turn.state else {
-    return Vec::new();
-  };
-  match state {
-    // A message that waits, or one taken by an answer no longer kept, has no ending of its own.
-    TurnState::Answered | TurnState::Queued(_) | TurnState::Steering | TurnState::Joined => Vec::new(),
-    TurnState::Thinking if row.last => thinking(ctx, row),
-    TurnState::Thinking => Vec::new(),
-    TurnState::Stopped => {
-      let key = if row.turn.acted() {
-        "orchestrator.stopped.acted"
-      } else {
-        "orchestrator.stopped.nothing"
-      };
-      // When it was stopped; a turn kept before the time was recorded says when it was sent.
-      let time = row.turn.ended.or(row.turn.at).map(display::clock).unwrap_or_default();
-      let words = ctx.t_args(key, [("time", time.as_str())]);
-      again(ctx, row, event(ctx, "orchestrator-stopped", Icon::Square, &words))
+      Line::JumpRoom => jump_room(),
     }
-    TurnState::Failed(TurnFailure::Interrupted) => again(
-      ctx,
-      row,
-      event(
-        ctx,
-        "orchestrator-interrupted",
-        Icon::CirclePause,
-        &ctx.t("orchestrator.interrupted"),
-      ),
+  }
+}
+
+/// A turn's row: what opens it, the answer and how it ended.
+fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
+  let key = row.turn.key();
+  // A wait of an agent, a run's end and a daily report open their row with their own line or card; a person's turn
+  // with their message. What a wait's turn said nests under its line.
+  let (opening, answer) = match (&row.turn.wait, &row.turn.report) {
+    (Some(wait), _) => {
+      let id = format!("orchestrator-wait-{key}");
+      let turned = row.turn.state.is_some();
+      match wait.kind {
+        WaitKind::Ended(end) => {
+          let line = super::run_end::line(ctx, &id, (wait, end, row.turn.at, turned), row.env.project);
+          (line, super::answer::answer(ctx, row))
+        }
+        _ => {
+          let status = Status::of(wait, row.turn.state.as_ref(), &row.turn.answer);
+          let line = super::wait::line(ctx, &id, (wait, row.turn.at, turned), (status, row.env.project));
+          (line, super::answer::nested(ctx, row))
+        }
+      }
+    }
+    (None, Some(report)) => {
+      let id = format!("orchestrator-report-{key}");
+      let props = ReportProps {
+        id: id.clone(),
+        report: (**report).clone(),
+        at: row.turn.at,
+        turned: row.turn.state.is_some(),
+        project: row.env.project,
+        names: row.env.names.clone(),
+        links: row.env.links.clone(),
+      };
+      let card = ctx.mount_keyed::<ReportCard>(&id, props);
+      (card, super::answer::answer(ctx, row))
+    }
+    (None, None) => (
+      super::delivery::opening_message(ctx, row, &key),
+      super::answer::answer(ctx, row),
     ),
-    TurnState::Failed(failure) if row.last && !row.turn.on_its_own() => vec![failure_notice(ctx, row, failure)],
-    TurnState::Failed(failure) => vec![event(
-      ctx,
-      "orchestrator-failed",
-      Icon::CircleAlert,
-      &earlier(ctx, failure),
-    )],
-  }
-}
-
-/// The working line with *Stop response*, and what stopping does.
-fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
-  let stop = row.env.stop.clone();
-  let mut button =
-    ActionButton::new("orchestrator-stop", ButtonKind::Ghost, ctx.t("orchestrator.stop")).icon(Icon::Square);
-  button = if row.stopping {
-    button.loading()
-  } else {
-    button.on_click(move || stop())
   };
-  let line = Row::new()
-    .id("orchestrator-thinking")
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .child(
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::LoaderCircle, IconSize::Base, PaletteColor::TextMuted))
-        .child(
-          Text::new(&ctx.t("orchestrator.thinking"))
-            .variant(ExtraTypography::Note.role())
-            .nowrap(),
-        ),
-    )
-    .child(Spacer::new().flex(1.0))
-    .child(button);
-  let note = Text::new(&ctx.t("orchestrator.stopNote"))
-    .id("orchestrator-stop-note")
-    .variant(ExtraTypography::Note.role())
-    .width(Dimension::Pct(100.0));
-  vec![
+  // A message that waits has no answer yet, and an answer a message took mid-way ends under that message.
+  let end = if row.turn.message.is_some() && row.turn.arrival != Arrival::Waiting && !row.turn.continued {
+    super::ending::ending(ctx, row)
+  } else {
+    Vec::new()
+  };
+  room(
     Column::new()
+      .id(format!("orchestrator-turn-{key}"))
+      .describe("turn", turn_name(row.turn.state.as_ref()))
+      .describe("arrival", arrival_name(row.turn.arrival))
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .child(line)
-      .child(note)
-      .into(),
-  ]
-}
-
-/// `event`, then, for the newest turn a person's message started, *Ask again* and what it does. *Ask again* sends the
-/// words once more, so a message with attached files, which it would send without them, does not offer it: the
-/// person sends them again from the composer.
-fn again(ctx: &Ctx, row: &TurnRow, event: Element) -> Vec<Element> {
-  if !row.last || row.turn.on_its_own() || !row.turn.attachments.is_empty() {
-    return vec![event];
-  }
-  let ask = row.env.ask_again.clone();
-  let words = row.turn.text.clone();
-  let mut button = ActionButton::new(
-    "orchestrator-ask-again",
-    ButtonKind::Secondary,
-    ctx.t("orchestrator.askAgain"),
+      .spacing(OrchestratorSpacing::Items.role())
+      .child(opening)
+      .with_children(answer)
+      .with_children(end),
+    first,
   )
-  .icon(Icon::RotateCcw);
-  button = if row.can_ask {
-    button.on_click(move || ask(words.clone()))
-  } else {
-    button.disabled()
-  };
-  let action = Row::new()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(button)
-    .child(
-      Text::new(&ctx.t("orchestrator.askAgainNote"))
-        .variant(ExtraTypography::Note.role())
-        .nowrap(),
-    );
-  vec![event, action.into()]
 }
 
-/// An event line: a `border` rule at each side of a 12 icon and its words in 11/500 `text_secondary`.
-fn event(ctx: &Ctx, id: &str, glyph: Icon, words: &str) -> Element {
-  let line = ctx.theme().border_size_value(BorderSize::Sm);
-  let rule = || {
-    Row::new()
-      .flex(1.0)
-      .height(Dimension::Px(line))
-      .background(PaletteColor::Border)
+/// A row's room in the scrolling turns: the chat's column, centred, 18 under it, and the chat's top room over the
+/// first.
+fn room(content: Column, first: bool) -> Element {
+  let padding = Padding::new().bottom(OrchestratorSpacing::Items.role());
+  let padding = if first {
+    padding.top(OrchestratorSpacing::Start.role())
+  } else {
+    padding
   };
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(rule())
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
-    .child(
-      Text::new(words)
-        .id(format!("{id}-label"))
-        .variant(ConversationText::Divider.role())
-        .color(PaletteColor::TextSecondary)
-        .nowrap(),
-    )
-    .child(rule())
-    .into()
+  super::body::turn_room(content.padding(padding)).into()
 }
 
 /// The name `describe` reports a turn by, for tests and QA; `none` for a wait that started no turn.

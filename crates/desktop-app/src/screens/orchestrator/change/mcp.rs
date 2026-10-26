@@ -8,19 +8,16 @@
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
-};
+use lurq::{app::ctx::Ctx, components::Row};
 use orchester_core::{
   id::ProjectId,
   orchestrator::mcp::{McpAuthorizationShown, McpChange, McpOperation, McpTransportShown},
 };
 
 use super::{
-  super::card,
+  super::decision,
   facts::Part,
-  words::{Accept, Phase, View, Words, state},
+  words::{Accept, Phase, View, Words},
 };
 use crate::{
   routes::{ConnectionsView, ProjectPage, Route},
@@ -49,7 +46,7 @@ pub(super) fn words(ctx: &Ctx, view: &View, mcp: &McpChange) -> Words {
     glyph,
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.mcp.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t(accept),
@@ -222,10 +219,9 @@ pub(super) fn warnings(ctx: &Ctx, id: &str, (view, mcp): (&View, &McpChange)) ->
   }
   let mut notes = Vec::new();
   if mcp.widens {
-    notes.push(card::note(
+    notes.push(decision::warning(
       id,
       "mcp-widens",
-      (Icon::ShieldAlert, PaletteColor::Warning),
       &ctx.t("orchestrator.change.mcp.widens"),
     ));
   }
@@ -233,10 +229,9 @@ pub(super) fn warnings(ctx: &Ctx, id: &str, (view, mcp): (&View, &McpChange)) ->
     program, found: None, ..
   } = &mcp.server.transport
   {
-    notes.push(card::note(
+    notes.push(decision::warning(
       id,
       "not-found",
-      (Icon::TriangleAlert, PaletteColor::Warning),
       &ctx.t_args("orchestrator.change.mcp.notFound", [("program", program.as_str())]),
     ));
   }

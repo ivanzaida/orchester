@@ -1,21 +1,14 @@
-//! What the Orchestrator's proposal and action cards share (`Action card` `nQIhx`, the proposals of `b55NqO`,
-//! `UKgrR`, `Ee2JE`): the raised frame, radius 10, 12 over and under and 14 at its sides, its parts 10 apart; the
-//! head with a 14 icon, the title (12.5/600, line height 1.5), a chip right after it and, at its end, the state's 12
-//! icon and words; a note in 11.5 beside its 12 icon; and the person's decision on a proposal, taken off the event
-//! loop.
-
-use std::sync::Arc;
+//! What the Orchestrator's decision cards share: the note that the person approved a proposal in the chat, and the
+//! person's decision on a proposal, taken off the event loop.
 
 use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
     i18n::I18n,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::PaletteColor,
   },
-  components::{Column, Row, Text, TextOverflow},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::Row,
 };
 use orchester_core::orchestrator::ChatAction;
 use orchester_workspace::{
@@ -29,86 +22,15 @@ use orchester_workspace::{
 use crate::{
   mcp::domain,
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
-  ui::icon::{Icon, icon},
+  ui::{icon::Icon, tinted_note::tinted_note},
 };
-
-/// The card's frame, named `id`, its outcome told to tools.
-pub(super) fn frame(id: &str, outcome: &'static str) -> Column {
-  Column::new()
-    .id(id.to_owned())
-    .describe("outcome", outcome)
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Section.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-}
-
-/// Where a card stands, at the end of its head: its icon in its color, and its words.
-pub(super) struct State {
-  pub(super) glyph: Icon,
-  pub(super) color: PaletteColor,
-  pub(super) words: Arc<str>,
-}
-
-/// The head of card `id`: its icon and title, a chip after the title, and its state at the end.
-pub(super) fn head(id: &str, (glyph, title): (Icon, &str), chip: Option<Element>, state: State) -> Row {
-  // One line, as every card's head: a title too long for it ends in an ellipsis. The title, or the title with the chip
-  // right after it, takes the free room, so the title is never squeezed against the state at the end: a box sized by
-  // an earlier, narrower layout would cut words that fit. The chip's free room is after it (`fIukg` in `Ee2JE`).
-  let title = Text::new(title)
-    .id(format!("{id}-title"))
-    .variant(OrchestratorText::CardTitle.role())
-    .nowrap()
-    .text_overflow(TextOverflow::Elipsis)
-    .min_width(Dimension::Px(0.0));
-  let titled: Element = match chip {
-    Some(chip) => Row::new()
-      .id(format!("{id}-titled"))
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(title.flex_shrink(1.0))
-      .child(chip)
-      .into(),
-    None => title.flex(1.0).into(),
-  };
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
-    .child(titled)
-    .child(
-      Row::new()
-        .id(format!("{id}-state"))
-        .spacing(ExtraSpacing::Pair.role())
-        .align_items(Alignment::Center)
-        .child(icon(state.glyph, IconSize::Sm, state.color))
-        .child(
-          Text::new(&state.words)
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
-            .nowrap(),
-        ),
-    )
-}
-
-/// A note of card `id` (`{id}-{suffix}`): `text` in `color` beside its icon in the same color.
-pub(super) fn note(id: &str, suffix: &str, (glyph, color): (Icon, PaletteColor), text: &str) -> Row {
-  crate::ui::tinted_note::tinted_note(format!("{id}-{suffix}"), (glyph, color), text)
-}
 
 /// The note of card `id` that the person approved its proposal in the chat, quoting the message that did
 /// (`{id}-in-chat`, ORC-96); `None` for one decided otherwise.
 pub(super) fn approved_in_chat(ctx: &Ctx, id: &str, action: &ChatAction) -> Option<Row> {
   let approval = action.approved_in.as_ref()?;
-  Some(note(
-    id,
-    "in-chat",
+  Some(tinted_note(
+    format!("{id}-in-chat"),
     (Icon::MessageSquare, PaletteColor::TextMuted),
     &ctx.t_args(
       "orchestrator.change.approvedInChat",

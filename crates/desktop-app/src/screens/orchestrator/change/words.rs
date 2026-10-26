@@ -1,10 +1,10 @@
-//! What a card of a publication, cancel, merge or auto-mode start says (`b55NqO`, `UKgrR`, `Ee2JE`): its icon and
-//! title, where it stands (*Waits for you*, *Published / Cancelled / Merged by you*, *Confirmed* for what the chat did
-//! itself, *Dismissed*, *Refused*), what it did or would do, and the person's action on it.
+//! What a card of a publication, cancel, merge or auto-mode start says (`bxJZp`, `VGbU7`): its icon and title, what
+//! it did or would do, and the person's action on it. Where it stands is its decision card while it waits, else its
+//! event line ([`super::line`]).
 
 use std::sync::Arc;
 
-use lurq::app::{ctx::Ctx, theme::PaletteColor};
+use lurq::app::ctx::Ctx;
 use orchester_core::{
   orchestrator::{
     ActionOutcome, ChatAction,
@@ -17,10 +17,7 @@ use orchester_workspace::{
   orchestrator::facts::{Facts, Publication, RunFacts, Stands},
 };
 
-use super::{
-  super::{card::State, proposal::waits},
-  control::{Control, control},
-};
+use super::control::{Control, control};
 use crate::{
   routes::Screen,
   ui::{button::ButtonKind, icon::Icon},
@@ -120,31 +117,33 @@ pub(super) struct Accept {
 pub(super) struct Words {
   pub(super) glyph: Icon,
   pub(super) title: Arc<str>,
-  /// The chip beside the title of what was done without asking: *Auto mode*, or *On its own* for a finished run the
+  /// The chip after the target of what was done without asking: *Auto mode*, or *On its own* for a finished run the
   /// Orchestrator merged on its own.
   pub(super) chip: Option<Chip>,
-  pub(super) state: State,
+  /// A proposal that no longer waits though nobody decided it (a run merged without Orchester): what its line says
+  /// after its title.
+  pub(super) settled: Option<Arc<str>>,
   pub(super) effect: Arc<str>,
   pub(super) accept: Option<Accept>,
   /// What a refused click by automation says.
   pub(super) person_only: &'static str,
 }
 
-/// Why the chat did something without asking, as the chip beside the card's title names it.
+/// Why the chat did something without asking, as the chip after the line's target names it.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Chip {
-  /// Auto mode is on for the project (`{id}-auto-mode`).
+  /// Auto mode is on for the project.
   AutoMode,
-  /// The person lets the Orchestrator merge finished runs on its own (`{id}-on-its-own`).
+  /// The person lets the Orchestrator merge finished runs on its own.
   OnItsOwn,
 }
 
 impl Chip {
-  /// The chip's element id suffix and its words.
-  pub(super) const fn parts(self) -> (&'static str, &'static str) {
+  /// The chip's words.
+  pub(super) const fn words(self) -> &'static str {
     match self {
-      Self::AutoMode => ("auto-mode", "orchestrator.change.start.autoMode"),
-      Self::OnItsOwn => ("on-its-own", "orchestrator.change.merge.onItsOwn"),
+      Self::AutoMode => "orchestrator.change.start.autoMode",
+      Self::OnItsOwn => "orchestrator.change.merge.onItsOwn",
     }
   }
 }
@@ -192,44 +191,18 @@ fn subject(view: &View) -> String {
     .unwrap_or_default()
 }
 
-/// The state at the end of the head, the person's apply worded by `by_you`, or as applied in the chat when the person
-/// approved it there.
-pub(super) fn state(ctx: &Ctx, view: &View, by_you: &str) -> State {
-  let time = view.time();
-  let (glyph, color, key) = match view.phase() {
-    Phase::Waits => return waits(ctx, view.at),
-    Phase::Applying => (
-      Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
-      "orchestrator.change.applying",
-    ),
-    Phase::Applied if view.action.approved_in.is_some() => (
-      Icon::CircleCheck,
-      PaletteColor::Success,
-      "orchestrator.change.appliedInChat",
-    ),
-    Phase::Applied => (Icon::CircleCheck, PaletteColor::Success, by_you),
-    Phase::Done => (
-      Icon::CircleCheck,
-      PaletteColor::Success,
-      "orchestrator.action.confirmed",
-    ),
-    Phase::Dismissed => (
-      Icon::CircleX,
-      PaletteColor::TextSecondary,
-      "orchestrator.proposal.dismissedState",
-    ),
-    Phase::Refused(_) => (
-      Icon::Ban,
-      PaletteColor::TextSecondary,
-      "orchestrator.action.refusedState",
-    ),
-  };
-  State {
-    glyph,
-    color,
-    words: ctx.t_args(key, [("time", time.as_str())]),
+/// What the line of `view` says after its target, as `by_you` words the person's apply: that the person applied it,
+/// in the chat when they approved it there; nothing for anything else.
+pub(super) fn by_you(ctx: &Ctx, view: &View) -> Option<Arc<str>> {
+  if view.phase() != Phase::Applied {
+    return None;
   }
+  let key = if view.action.approved_in.is_some() {
+    "orchestrator.line.byYouInChat"
+  } else {
+    "orchestrator.line.byYou"
+  };
+  Some(ctx.t(key))
 }
 
 /// The icon of a publication of kind `of`, as its screen's.
@@ -296,7 +269,7 @@ fn publish(ctx: &Ctx, view: &View, (of, version, name): (Publishing, u32, &str))
     glyph: publish_glyph(of),
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.publish.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t_args(
@@ -338,7 +311,7 @@ fn cancel(ctx: &Ctx, view: &View, number: u32) -> Words {
     glyph: Icon::CircleStop,
     title: ctx.t_args(title, args),
     chip: None,
-    state: state(ctx, view, "orchestrator.change.cancel.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t("orchestrator.change.cancel.accept"),
@@ -401,7 +374,7 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
     glyph: Icon::GitMerge,
     title: ctx.t_args(title, args),
     chip: on_its_own.then_some(Chip::OnItsOwn),
-    state: state(ctx, view, "orchestrator.change.merge.byYou"),
+    settled: None,
     effect,
     accept: Some(Accept {
       label,
@@ -421,11 +394,7 @@ fn merged_outside(ctx: &Ctx, view: &View, (number, into): (u32, &str)) -> Words 
     glyph: Icon::GitMerge,
     title: ctx.t_args("orchestrator.change.merge.outsideTitle", args),
     chip: None,
-    state: State {
-      glyph: Icon::CircleCheck,
-      color: PaletteColor::Success,
-      words: ctx.t("orchestrator.change.merge.outsideState"),
-    },
+    settled: Some(ctx.t("orchestrator.change.merge.outsideState")),
     effect: ctx.t_args("orchestrator.change.merge.effectOutside", args),
     accept: None,
     person_only: "orchestrator.change.personOnly.merge",
@@ -457,7 +426,7 @@ fn start(ctx: &Ctx, view: &View) -> Words {
     glyph,
     title,
     chip: view.action.auto_mode.then_some(Chip::AutoMode),
-    state: state(ctx, view, "orchestrator.action.confirmed"),
+    settled: None,
     effect,
     accept: None,
     person_only: "orchestrator.proposal.personOnly",

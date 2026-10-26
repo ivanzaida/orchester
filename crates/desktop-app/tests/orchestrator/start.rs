@@ -1,5 +1,5 @@
-//! A new conversation (`HvzWI`): its start, suggestions that fill the prompt and send nothing, and what keeps the chat
-//! from sending until the Orchestrator has something to run on.
+//! A new conversation (`03 New conversation` `c99rep`): its start, suggestions that fill the prompt and send nothing,
+//! and, until the Orchestrator has something to run on, the composer saying so (`02 Not set up` `Wd5CL`).
 
 use orchester_app::routes::OrchestratorChat;
 
@@ -11,17 +11,16 @@ fn orchestrator_new_conversation_starts_with_suggestions_that_fill_the_prompt() 
   screen.go(OrchestratorChat::Latest);
   screen.until("the start", |screen| screen.exists("orchestrator-start-title"));
   assert_eq!(screen.text("orchestrator-title"), "New conversation");
-  assert_eq!(screen.text("orchestrator-meta"), "Not saved until you send");
-  assert_eq!(screen.text("orchestrator-runs-on"), "Claude · Kontur / haiku");
+  assert_eq!(screen.text("orchestrator-meta"), "");
+  let runs_on = screen.text("orchestrator-runs-on");
   assert!(
-    screen
-      .text("orchestrator-footer")
-      .contains("Conversations stay in History for Kontur")
+    runs_on.starts_with("Claude Code · ") && runs_on.ends_with(" · haiku"),
+    "{runs_on}"
   );
+  assert!(screen.text("orchestrator-keys").ends_with(" Enter"), "the keys that send, in the bar");
   assert!(
-    screen
-      .text("orchestrator-under-composer")
-      .contains("Enter adds a line ·")
+    !screen.exists("orchestrator-footer") && !screen.exists("orchestrator-under-composer"),
+    "no keys line and no footer under the composer"
   );
   screen.click("orchestrator-suggestion-running");
   assert_eq!(
@@ -39,17 +38,29 @@ fn orchestrator_new_conversation_starts_with_suggestions_that_fill_the_prompt() 
 }
 
 #[test]
-fn orchestrator_without_a_connection_says_where_to_choose_one() {
+fn orchestrator_without_a_connection_says_so_in_the_composer() {
   let mut screen = Orchestrator::new(Setup::NotChosen);
   screen.go(OrchestratorChat::New);
-  screen.until("why it can't send", |screen| screen.exists("orchestrator-not-ready"));
+  assert_eq!(screen.text("orchestrator-runs-on"), "Not set up");
   assert!(
     screen
-      .text("orchestrator-not-ready")
-      .contains("Choose what the Orchestrator runs on")
+      .text("orchestrator-input")
+      .starts_with("The Orchestrator can't answer yet"),
+    "{}",
+    screen.text("orchestrator-input")
   );
-  assert_eq!(screen.text("orchestrator-runs-on"), "Not set up");
-  screen.send("Plan the webhook work.");
+  assert!(
+    !screen.exists("orchestrator-send") && !screen.exists("orchestrator-not-ready-notice"),
+    "no send and no notice over the composer"
+  );
+  screen.set("orchestrator-input", "Plan the webhook work.");
+  screen
+    .window
+    .tree
+    .get_element_by_id_mut("orchestrator-input")
+    .expect("the message field")
+    .focus();
+  screen.key(("Enter", "Enter"), true);
   for _ in 0..20 {
     screen.window.tree.tick_futures();
     screen.window.pass();
@@ -59,6 +70,10 @@ fn orchestrator_without_a_connection_says_where_to_choose_one() {
     screen.text("orchestrator-input"),
     "Plan the webhook work.",
     "the draft stays"
+  );
+  assert_eq!(
+    screen.text("orchestrator-open-settings"),
+    "Set up the Orchestrator"
   );
   screen.click("orchestrator-open-settings");
   screen.until("its settings", |screen| screen.exists("orchestrator-settings-form"));

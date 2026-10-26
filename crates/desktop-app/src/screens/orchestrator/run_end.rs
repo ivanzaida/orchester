@@ -1,21 +1,14 @@
-//! The end of a task's latest run in the Orchestrator's conversation (`Orchestrator · run ends · states` `J9n4q4`,
-//! `docs/design/orchestrator-toolset.md`, "Decisions" 5): in the action card's frame (`Action card` `nQIhx`), as an
-//! agent's wait ([`super::wait`]), its head with how the run ended or stopped, the task and the run (and how many
-//! more runs a shared limit stopped at once), and at its end the end's icon in its color and when it was noticed;
-//! what happens with it (the Orchestrator takes it up by itself while *Let the Orchestrator answer agents* is on, and
-//! merges a run that succeeded on its own while *merge finished runs on its own* is on too, else it waits for the
-//! person); and *Open* the task's Summary.
+//! The end of a task's latest run in the Orchestrator's conversation, as an event line (`RUN ENDS` in `1 · Event
+//! lines` `VGbU7`; `docs/design/orchestrator-toolset.md`, "Decisions" 5): its icon in its tone, how the run ended or
+//! stopped (and how many more runs a shared limit stopped at once), the task and the run, when it was noticed, and the
+//! one link that acts on it, to the task's Summary: *Review ↗* a run ready to merge, *Raise ↗* a limit, *Continue ↗*
+//! an interrupted run, else *Summary ↗*. What happens with it (the Orchestrator takes it up by itself while *Let the
+//! Orchestrator answer agents* is on, and merges a run that succeeded on its own while *merge finished runs on its
+//! own* is on too, else it waits for the person) is said on hover and once pressed.
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::{Row, Text},
-  node::{Element, dimension::Dimension},
-};
+use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   id::ProjectId,
   orchestrator::{AgentWait, Continuing, MergeLeft, Merging, RunEnd},
@@ -25,64 +18,47 @@ use orchester_core::{
 };
 use orchester_workspace::display;
 
-use super::card::{self, State};
+use super::{
+  line::{Line, LineLink, Tone},
+  wait::run_target,
+};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-  },
+  ui::{icon::Icon, pressable::Press},
 };
 
-/// The card of `wait`, the end `end` of its run, kept at `at`, which started an Orchestrator turn by itself when
+/// The line of `wait`, the end `end` of its run, kept at `at`, which started an Orchestrator turn by itself when
 /// `turned`; in project `project`; `id` names it.
-pub(super) fn card(
+pub(super) fn line(
   ctx: &mut Ctx,
   id: &str,
   (wait, end, at, turned): (&AgentWait, RunEnd, Option<Timestamp>, bool),
   project: ProjectId,
 ) -> Element {
-  let run = wait.number.to_string();
+  let (glyph, tone) = look(end);
   let step = step_label(ctx, wait);
-  let (glyph, color) = look(end);
-  let title = ctx.t_args(
-    title(end, (wait.step.is_some(), wait.others > 0)),
-    [
-      ("task", wait.task.as_str()),
-      ("run", run.as_str()),
-      ("step", &*step),
-      ("count", &wait.others.to_string()),
-    ],
+  let what = ctx.t_args(
+    what(end, (wait.step.is_some(), wait.others > 0)),
+    [("step", &*step), ("count", &wait.others.to_string())],
   );
-  let time = at.map(display::clock).unwrap_or_default();
-  let state = State {
-    glyph,
-    color,
-    words: ctx.t_args("orchestrator.end.noticed", [("time", time.as_str())]),
-  };
-  let effect = effect(ctx, wait, end, turned);
-  card::frame(id, name(end))
-    .describe("automatic", wait.automatic.to_string())
-    .child(card::head(id, (glyph, &title), None, state))
-    .child(
-      Text::new(&effect)
-        .id(format!("{id}-effect"))
-        .variant(TypographyStyle::Body)
-        .width(Dimension::Pct(100.0)),
-    )
-    .with_children(open_summary(ctx, id, project, &wait.task))
-    .into()
+  Line::new(id, (glyph, tone), what)
+    .outcome(name(end))
+    .target(Some(run_target(ctx, wait)))
+    .time(at.map(display::clock))
+    .link(open_summary(ctx, end, project, &wait.task))
+    .detail(Some(effect(ctx, wait, end, turned)))
+    .render(ctx)
 }
 
-/// The icon of `end` and the color of its state.
-const fn look(end: RunEnd) -> (Icon, PaletteColor) {
+/// The icon of `end` and its tone.
+pub(super) const fn look(end: RunEnd) -> (Icon, Tone) {
   match end {
-    RunEnd::Succeeded => (Icon::GitMerge, PaletteColor::Success),
-    RunEnd::Failed => (Icon::CircleX, PaletteColor::Danger),
-    RunEnd::Stopped { .. } => (Icon::Hand, PaletteColor::Warning),
-    RunEnd::Limit { .. } => (Icon::Gauge, PaletteColor::Warning),
-    RunEnd::Interrupted => (Icon::CirclePause, PaletteColor::Warning),
+    RunEnd::Succeeded => (Icon::CircleCheck, Tone::Success),
+    RunEnd::Failed => (Icon::CircleX, Tone::Danger),
+    RunEnd::Stopped { .. } => (Icon::Hand, Tone::Warning),
+    RunEnd::Limit { .. } => (Icon::Gauge, Tone::Warning),
+    RunEnd::Interrupted => (Icon::CirclePause, Tone::Warning),
   }
 }
 
@@ -98,26 +74,26 @@ fn step_label(ctx: &Ctx, wait: &AgentWait) -> Arc<str> {
   }
 }
 
-/// The title of `end`, naming the step it stopped at when it is `named`, and the other runs the same limit stopped
-/// when there are `more`.
-const fn title(end: RunEnd, (named, more): (bool, bool)) -> &'static str {
+/// What the line says of `end`, naming the step it stopped at when it is `named`, and the other runs the same limit
+/// stopped when there are `more`.
+const fn what(end: RunEnd, (named, more): (bool, bool)) -> &'static str {
   match (end, named) {
-    (RunEnd::Succeeded, _) => "orchestrator.end.succeeded",
-    (RunEnd::Failed, true) => "orchestrator.end.failedAt",
-    (RunEnd::Failed, false) => "orchestrator.end.failed",
-    (RunEnd::Stopped { .. }, true) => "orchestrator.end.stoppedAt",
-    (RunEnd::Stopped { .. }, false) => "orchestrator.end.stopped",
+    (RunEnd::Succeeded, _) => "orchestrator.end.line.succeeded",
+    (RunEnd::Failed, true) => "orchestrator.end.line.failedAt",
+    (RunEnd::Failed, false) => "orchestrator.end.line.failed",
+    (RunEnd::Stopped { .. }, true) => "orchestrator.end.line.stoppedAt",
+    (RunEnd::Stopped { .. }, false) => "orchestrator.end.line.stopped",
     (RunEnd::Limit { limit }, _) => match (limit, more) {
-      (RunLimit::DailyBudget, true) => "orchestrator.end.limitDailyMore",
-      (RunLimit::GroupBudget, true) => "orchestrator.end.limitGroupMore",
-      (RunLimit::Tokens, _) => "orchestrator.end.limitTokens",
-      (RunLimit::Time, _) => "orchestrator.end.limitTime",
-      (RunLimit::DailyBudget, false) => "orchestrator.end.limitDaily",
-      (RunLimit::GroupBudget, false) => "orchestrator.end.limitGroup",
-      (RunLimit::StepBudget { .. }, _) => "orchestrator.end.limitStep",
-      (RunLimit::PlanLimit { .. }, _) => "orchestrator.end.limitPlan",
+      (RunLimit::DailyBudget, true) => "orchestrator.end.line.limitDailyMore",
+      (RunLimit::GroupBudget, true) => "orchestrator.end.line.limitGroupMore",
+      (RunLimit::Tokens, _) => "orchestrator.end.line.limitTokens",
+      (RunLimit::Time, _) => "orchestrator.end.line.limitTime",
+      (RunLimit::DailyBudget, false) => "orchestrator.end.line.limitDaily",
+      (RunLimit::GroupBudget, false) => "orchestrator.end.line.limitGroup",
+      (RunLimit::StepBudget { .. }, _) => "orchestrator.end.line.limitStep",
+      (RunLimit::PlanLimit { .. }, _) => "orchestrator.end.line.limitPlan",
     },
-    (RunEnd::Interrupted, _) => "orchestrator.end.interrupted",
+    (RunEnd::Interrupted, _) => "orchestrator.end.line.interrupted",
   }
 }
 
@@ -146,7 +122,7 @@ fn effect(ctx: &Ctx, wait: &AgentWait, end: RunEnd, turned: bool) -> Arc<str> {
   ctx.t(key)
 }
 
-/// Why a run that succeeded is left to the person, as its card says it.
+/// Why a run that succeeded is left to the person, as its line says it.
 fn left_words(ctx: &Ctx, why: &MergeLeft) -> Arc<str> {
   match why {
     MergeLeft::NotReady => ctx.t("orchestrator.end.mergeLeft.notReady"),
@@ -165,21 +141,21 @@ fn left_words(ctx: &Ctx, why: &MergeLeft) -> Arc<str> {
   }
 }
 
-/// *Open* the task's Summary, where the person decides what comes next.
-fn open_summary(ctx: &mut Ctx, id: &str, project: ProjectId, task: &str) -> Option<Element> {
+/// The link to the task's Summary, where the person decides what comes next, in the words of what it does for `end`.
+pub(super) fn open_summary(ctx: &mut Ctx, end: RunEnd, project: ProjectId, task: &str) -> Option<LineLink> {
   let key: TaskKey = task.parse().ok()?;
   let navigation = Navigation::of(ctx);
-  let label = ctx.t_args("orchestrator.end.open", [("task", task)]);
   let route = Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)));
-  Some(
-    Row::new()
-      .child(
-        ActionButton::new(format!("{id}-open"), ButtonKind::Ghost, label)
-          .icon(Icon::ArrowUpRight)
-          .on_click(move || navigation.go(route.clone())),
-      )
-      .into(),
-  )
+  let label = match end {
+    RunEnd::Succeeded => "orchestrator.line.review",
+    RunEnd::Limit { .. } => "orchestrator.line.raise",
+    RunEnd::Interrupted => "orchestrator.line.continue",
+    RunEnd::Failed | RunEnd::Stopped { .. } => "orchestrator.line.summary",
+  };
+  Some(LineLink {
+    label: ctx.t(label),
+    press: Press::Open(navigation.to(route)),
+  })
 }
 
 /// The name tools read of `end`.

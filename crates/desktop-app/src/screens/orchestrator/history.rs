@@ -1,10 +1,10 @@
-//! History (`Panel · History` `pHsY5` in `kPs8W`): the project's conversations beside the chat, 400 wide after a
-//! `border` line. Its head (14 over, 16 at its sides, 10 under): *History* (13/600), the project's name (11.5
-//! `text_muted`), the *Esc* key and *Close*; a search field over the list (16 at its sides, 8 under); the list,
-//! under a `border` line, by when each conversation last changed (*Today*, *Yesterday*, *Earlier*: Geist Mono 11
-//! `text_muted`, tracking 0.6), each a row (`Conversation row` `V37fU`: radius 6, 8 by 10 inside) with its title
-//! (12.5/500), when (11 `text_muted`) and how many messages (11.5 `text_muted`), the one shown on `hover`; and a note
-//! at its foot. Opening one keeps the draft; Esc closes it.
+//! History (`History panel` `eFI39` in `04 History open` `l1ET7x`): the project's conversations in a 300-wide panel
+//! over the chat's right edge, under the header, on `surface_panel` after a `border` line, its shadow cast to its
+//! left. A search field at its top (12 in, 8 under it); the list, 8 in at its sides, its rows 2 apart, by when each
+//! conversation last changed (*Today*, *Yesterday*, *Earlier*: Geist Mono 10.5 `text_muted`, 10 over and 4 under),
+//! each a row (radius 6, 7 by 10 inside) with its title (12.5/500, `text_primary` for the one shown, else
+//! `text_secondary`) over when and how many messages (11 `text_muted`), the one shown on `hover`; and a note at its
+//! foot over a `border` line. Opening one keeps the draft; Esc or the header's toggle closes it.
 
 use std::sync::Arc;
 
@@ -14,9 +14,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow, VirtualizedList},
+  components::{Column, Row, Text, TextOverflow, VirtualizedList},
   core::Signal,
-  layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -29,12 +28,12 @@ use orchester_workspace::display;
 use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorSpacing, OrchestratorText},
-  ui::{field::FieldInput, icon::Icon, icon_button::IconButton, kbd::key_cap, pressable::opening},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorShadow, OrchestratorText},
+  ui::{field::FieldInput, pressable::opening},
 };
 
-/// The panel's width (`pHsY5`).
-const WIDTH: f32 = 400.0;
+/// The panel's width (`eFI39`).
+const WIDTH: f32 = 300.0;
 
 /// When a conversation last changed, as the list groups it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,8 +67,7 @@ impl Day {
 /// A row of the list: a day's heading or a conversation.
 #[derive(Clone, PartialEq)]
 enum Item {
-  /// A day's label; the first sits close under the list's line (`kPs8W`).
-  Day { day: Day, first: bool },
+  Day(Day),
   Chat {
     listing: ChatListing,
     current: bool,
@@ -83,29 +81,24 @@ impl lurq::app::component::DevtoolsInspectable for Item {}
 impl Item {
   fn key(&self) -> String {
     match self {
-      Self::Day { day, .. } => format!("day-{day:?}"),
+      Self::Day(day) => format!("day-{day:?}"),
       Self::Chat { listing, .. } => listing.chat.id().to_string(),
     }
   }
 }
 
-/// The panel over `chats` of the project (`name`), `current` the one shown; `open` closes it and `search` filters
-/// it by title.
+/// The panel over `chats` of the project, `current` the one shown; `search` filters it by title.
 pub(super) fn panel(
   ctx: &mut Ctx,
-  (open, search): (&Signal<bool>, &Signal<String>),
-  (project, name): (ProjectId, &str),
+  search: &Signal<String>,
+  project: ProjectId,
   (chats, current): (&[ChatListing], Option<ChatId>),
 ) -> Element {
-  let head = head(ctx, open, name);
-  let field = FieldInput::new(
-    "orchestrator-history-search",
-    ctx.t_args("orchestrator.historyPanel.search", [("project", name)]),
-    search.clone(),
-  )
-  .search()
-  .placeholder(ctx.t_args("orchestrator.historyPanel.search", [("project", name)]))
-  .render(ctx);
+  let label = ctx.t("orchestrator.historyPanel.search");
+  let field = FieldInput::new("orchestrator-history-search", label.clone(), search.clone())
+    .search()
+    .placeholder(label)
+    .render(ctx);
   let items = items(chats, (current, project), &search.get());
   let list: Element = if items.is_empty() {
     let words = if chats.is_empty() {
@@ -116,7 +109,7 @@ pub(super) fn panel(
     Column::new()
       .id("orchestrator-history-empty")
       .flex(1.0)
-      .padding(SpacingSize::Lg)
+      .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Loose.role()))
       .child(Text::new(&ctx.t(words)).variant(TypographyStyle::Caption))
       .into()
   } else {
@@ -130,16 +123,17 @@ pub(super) fn panel(
     .id("orchestrator-history-panel")
     .width(Dimension::Px(WIDTH))
     .height(Dimension::Pct(100.0))
-    .flex_shrink(0.0)
+    .background(PaletteColor::SurfacePanel)
     .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(head)
+    .box_shadow(OrchestratorShadow::History.role())
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
         .padding(
           Padding::new()
-            .left(SpacingSize::Lg)
-            .right(SpacingSize::Lg)
+            .top(SpacingSize::Md)
+            .left(SpacingSize::Md)
+            .right(SpacingSize::Md)
             .bottom(SpacingSize::Sm),
         )
         .child(field),
@@ -148,60 +142,24 @@ pub(super) fn panel(
       Column::new()
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-        .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .min_height(Dimension::Px(0.0))
+        .padding(Padding::horizontal(SpacingSize::Sm))
         .child(list),
     )
-    .child(foot(ctx, name))
+    .child(foot(ctx))
     .into()
 }
 
-/// The panel's head: its title, the project's name, *Esc* and *Close*.
-fn head(ctx: &mut Ctx, open: &Signal<bool>, name: &str) -> Row {
-  let close = open.clone();
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(ExtraSpacing::Section.role())
-        .bottom(ExtraSpacing::Loose.role())
-        .left(SpacingSize::Lg)
-        .right(SpacingSize::Lg),
-    )
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t("orchestrator.historyPanel.title")).variant(OrchestratorText::PanelTitle.role()))
-    .child(Text::new(name).variant(ExtraTypography::Note.role()).nowrap())
-    .child(Spacer::new().flex(1.0))
-    .child(key_cap("orchestrator-history-esc", &ctx.t("orchestrator.keys.esc")))
-    .child(
-      IconButton::new(
-        "orchestrator-history-close",
-        Icon::X,
-        ctx.t("orchestrator.historyPanel.close"),
-      )
-      .inspector()
-      .on_click(move || close.set(false))
-      .render(ctx),
-    )
-}
-
 /// The note at the panel's foot.
-fn foot(ctx: &Ctx, name: &str) -> Column {
+fn foot(ctx: &Ctx) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(SpacingSize::Md)
-        .bottom(ExtraSpacing::Section.role())
-        .left(SpacingSize::Lg)
-        .right(SpacingSize::Lg),
-    )
+    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Loose.role()))
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
-      Text::new(&ctx.t_args("orchestrator.historyPanel.note", [("project", name)]))
+      Text::new(&ctx.t("orchestrator.historyPanel.note"))
         .id("orchestrator-history-note")
-        .variant(TypographyStyle::Caption)
+        .variant(ExtraTypography::Note.role())
         .width(Dimension::Pct(100.0)),
     )
 }
@@ -219,10 +177,7 @@ fn items(chats: &[ChatListing], (current, project): (Option<ChatId>, ProjectId),
     }
     let day = Day::of(listing.last, today);
     if last_day != Some(day) {
-      items.push(Item::Day {
-        day,
-        first: items.is_empty(),
-      });
+      items.push(Item::Day(day));
       last_day = Some(day);
     }
     items.push(Item::Chat {
@@ -246,17 +201,13 @@ impl Component for ItemView {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     match ctx.props::<Item>().clone() {
-      Item::Day { day, first } => Row::new()
+      Item::Day(day) => Row::new()
         .width(Dimension::Pct(100.0))
         .padding(
           Padding::new()
-            .left(SpacingSize::Xs)
-            .right(SpacingSize::Xs)
-            .top(if first {
-              ExtraSpacing::Tight.role()
-            } else {
-              OrchestratorSpacing::HistoryDay.role()
-            })
+            .left(SpacingSize::Sm)
+            .right(SpacingSize::Sm)
+            .top(ExtraSpacing::Loose.role())
             .bottom(SpacingSize::Xs),
         )
         .child(Text::new(&ctx.t(day.key())).variant(OrchestratorText::Eyebrow.role()))
@@ -280,19 +231,22 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
     super::date(ctx, listing.last)
   };
   let count = listing.messages.to_string();
-  let meta = match (current, listing.messages) {
-    (true, 1) => ctx.t("orchestrator.historyPanel.current.one"),
-    (true, _) => ctx.t_args("orchestrator.historyPanel.current.other", [("count", count.as_str())]),
-    (false, 1) => ctx.t("orchestrator.historyPanel.messages.one"),
-    (false, _) => ctx.t_args("orchestrator.historyPanel.messages.other", [("count", count.as_str())]),
+  let messages = if listing.messages == 1 {
+    ctx.t("orchestrator.historyPanel.messages.one")
+  } else {
+    ctx.t_args("orchestrator.historyPanel.messages.other", [("count", count.as_str())])
   };
+  let meta = ctx.t_args(
+    "orchestrator.historyPanel.meta",
+    [("when", &*when), ("messages", &*messages)],
+  );
   let navigation = Navigation::of(ctx);
   let route = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::Chat(id)));
   let row = opening(navigation.to(route))
     .id(format!("orchestrator-history-{id}"))
     .describe("current", current.to_string())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::TextArea.role()))
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()));
   let row = if current {
@@ -300,35 +254,27 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
   } else {
     row
   };
+  let title_color = if current {
+    PaletteColor::TextPrimary
+  } else {
+    PaletteColor::TextSecondary
+  };
   row
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Fine.role())
+        .spacing(ExtraSpacing::Tight.role())
         .child(
-          Row::new()
+          Text::new(listing.chat.title())
+            .variant(OrchestratorText::Emphasis.role())
+            .color(title_color)
             .width(Dimension::Pct(100.0))
-            .spacing(SpacingSize::Sm)
-            .align_items(Alignment::Center)
-            .child(
-              Text::new(listing.chat.title())
-                .variant(OrchestratorText::Emphasis.role())
-                .flex(1.0)
-                .min_width(Dimension::Px(0.0))
-                .nowrap()
-                .text_overflow(TextOverflow::Elipsis),
-            )
-            .child(
-              Text::new(&when)
-                .variant(TypographyStyle::Caption)
-                .flex_shrink(0.0)
-                .nowrap(),
-            ),
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis),
         )
         .child(
           Text::new(&meta)
-            .variant(ExtraTypography::Note.role())
-            .min_width(Dimension::Px(0.0))
+            .variant(TypographyStyle::Caption)
             .nowrap()
             .text_overflow(TextOverflow::Elipsis),
         ),
