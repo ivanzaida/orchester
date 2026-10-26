@@ -25,12 +25,10 @@ use crate::{
     connections::{
       data::{Entry, github_state},
       inspector::{Asks, Confirm, asked, mcp_switch, status_line},
-      words::{
-        GITHUB_GLYPH, agent_glyph, agent_line, connection_status, github_status, mcp_glyph, program_name,
-      },
+      words::{GITHUB_GLYPH, agent_glyph, agent_line, connection_status, github_status, mcp_glyph, program_name},
       work::Work,
     },
-    project_settings::kit::{EmptyRow, Group, SettingRow, tile},
+    project_settings::kit::{EmptyRow, Glyph, Group, SettingRow, tile},
   },
   services::accounts::Accounts,
   theme::{ExtraSpacing, IconSize},
@@ -55,7 +53,10 @@ pub(super) fn groups(
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
   let open = |connection: ConnectionId| {
-    navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::of(connection))))
+    navigation.to(Route::Project(
+      id,
+      ProjectPage::Connections(ConnectionsView::of(connection)),
+    ))
   };
   let add = |kind: NewConnection| navigation.to(Route::Project(id, ProjectPage::NewConnection(kind)));
   let name = project.open.project.name().as_str();
@@ -123,7 +124,12 @@ fn agents_group(
           ctx.t("connections.emptyProvidersTitle"),
           ctx.t_args("connections.emptyDetail", [("project", project)]),
         )
-        .action(add_button(ctx, "connections-agents-empty-add", "connections.groups.add", add)),
+        .action(add_button(
+          ctx,
+          "connections-agents-empty-add",
+          "connections.groups.add",
+          add,
+        )),
       )
       .into();
   }
@@ -148,7 +154,7 @@ fn agents_group(
       row(
         ctx,
         Entry::Agent(connection),
-        (agent_glyph(connection.provider()), line),
+        (agent_glyph(connection), line),
         vec![status_line(ctx, &format!("connection-row-{}-status", connection.id()), status, None).into()],
         open(connection.id()),
       )
@@ -160,17 +166,14 @@ fn agents_group(
 fn github_group(ctx: &mut Ctx, listed: &ProjectConnections, open: &impl Fn(ConnectionId) -> Open) -> Element {
   let group = Group::new("connections-github", ctx.t("connections.groups.github"));
   if listed.github.is_empty() {
-    let reason = reason_line(
-      "connections-add-reason",
-      &ctx.t("connections.github.addUnavailable"),
-    );
+    let reason = reason_line("connections-add-reason", &ctx.t("connections.github.addUnavailable"));
     return group
       .row(
         EmptyRow::new(
           "connections-github-empty",
           Icon::GitPullRequest,
           ctx.t("connections.github.emptyTitle"),
-          ctx.t("connections.github.emptyDetail"),
+          ctx.t("connections.github.emptyShort"),
         )
         .action(reason),
       )
@@ -206,7 +209,7 @@ fn github_group(ctx: &mut Ctx, listed: &ProjectConnections, open: &impl Fn(Conne
       row(
         ctx,
         Entry::GitHub(connection),
-        (GITHUB_GLYPH, line),
+        (GITHUB_GLYPH.into(), line),
         vec![status.into()],
         open(connection.id()),
       )
@@ -236,7 +239,12 @@ fn mcp_group(
           ctx.t("connections.mcp.emptyTitle"),
           ctx.t("connections.mcp.emptyDetailShort"),
         )
-        .action(add_button(ctx, "connections-mcp-empty-add", "connections.groups.add", add)),
+        .action(add_button(
+          ctx,
+          "connections-mcp-empty-add",
+          "connections.groups.add",
+          add,
+        )),
       )
       .into();
   }
@@ -253,7 +261,10 @@ fn mcp_group(
     let line = if users.is_empty() {
       ctx.t_args("connections.mcp.rowUnused", [("what", what)])
     } else {
-      ctx.t_args("connections.mcp.rowUsed", [("what", what), ("profiles", users.join(", "))])
+      ctx.t_args(
+        "connections.mcp.rowUsed",
+        [("what", what), ("profiles", users.join(", "))],
+      )
     };
     let id = server.id();
     let state = (
@@ -267,7 +278,13 @@ fn mcp_group(
       &asks(id),
       !users.is_empty(),
     );
-    let row = row(ctx, Entry::Mcp(server), (mcp_glyph(server), line.to_string()), vec![switch], open(id));
+    let row = row(
+      ctx,
+      Entry::Mcp(server),
+      (mcp_glyph(server).into(), line.to_string()),
+      vec![switch],
+      open(id),
+    );
     group = group.row(row);
     if let Some(confirm) = state.1 {
       group = group.after(asked(ctx, server, (confirm, &users), &asks(id)));
@@ -277,11 +294,11 @@ fn mcp_group(
 }
 
 /// A connection's row: its tile, its name over `line`, `ends` and the chevron; it opens the connection's page.
-fn row(ctx: &mut Ctx, entry: Entry<'_>, (glyph, line): (Icon, String), mut ends: Vec<Element>, open: Open) -> Element {
+fn row(ctx: &mut Ctx, entry: Entry<'_>, (glyph, line): (Glyph, String), mut ends: Vec<Element>, open: Open) -> Element {
   ends.push(chevron());
   SettingRow::new(format!("connection-row-{}", entry.id()), entry.name())
     .item()
-    .lead(tile(glyph))
+    .lead(tile(ctx, glyph))
     .hint(line)
     .controls(ends)
     .opens(open)

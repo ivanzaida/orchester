@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use orchester_app::routes::{ConnectionsTab, NewConnection, ProjectPage};
+use orchester_app::routes::{NewConnection, ProjectPage};
 use orchester_core::connection::mcp::McpTransport;
 
 use super::harness::Seeded;
@@ -19,7 +19,7 @@ fn connections_mcp_server_is_added_with_its_tools_that_run_without_asking() {
   seeded.set("connection-mcp-name", "Pencil Design");
   assert!(
     seeded
-      .text("connection-form-reason")
+      .text("connection-form-actions-reason")
       .contains("use small letters, digits"),
     "the first reason is the name's"
   );
@@ -30,7 +30,7 @@ fn connections_mcp_server_is_added_with_its_tools_that_run_without_asking() {
   seeded.set("connection-mcp-arguments", "--app\ndesktop\n--agent\ncodexCLI");
   seeded.set("connection-mcp-exempt-tools", TOOLS);
   assert!(
-    !seeded.exists("connection-form-reason"),
+    !seeded.exists("connection-form-actions-reason"),
     "nothing keeps it from being saved"
   );
   // A new server widens what agents may do: a person confirms it in place.
@@ -41,7 +41,7 @@ fn connections_mcp_server_is_added_with_its_tools_that_run_without_asking() {
   assert!(seeded.text("connection-confirm-save").contains("pencil-design"));
   seeded.click("connection-confirm-save-confirm");
   seeded.until("the saved server", |seeded| {
-    if let Some(reason) = seeded.window.texts("connection-form-reason") {
+    if let Some(reason) = seeded.window.texts("connection-form-actions-reason") {
       panic!("not saved: {reason:?}");
     }
     seeded.exists("connection-inspector")
@@ -69,9 +69,12 @@ fn connections_mcp_server_edits_keep_what_is_not_changed() {
   let docs = seeded.server("kontur-docs").expect("kontur-docs");
   seeded.go(ProjectPage::EditConnection(docs.id()));
   seeded.until("the form", |seeded| seeded.exists("connection-mcp-exempt-tools"));
-  assert_eq!(seeded.text("connection-form-status"), "No changes");
+  assert_eq!(seeded.text("connection-form-actions-reason"), "Nothing changed yet.");
   seeded.set("connection-mcp-exempt-tools", "search_docs");
-  assert_eq!(seeded.text("connection-form-status"), "Unsaved changes");
+  assert!(
+    !seeded.exists("connection-form-actions-reason"),
+    "a change can be saved"
+  );
   seeded.click("connection-save");
   seeded.until("the saved server", |seeded| seeded.exists("connection-inspector"));
   let edited = seeded.server("kontur-docs").expect("kontur-docs");
@@ -80,40 +83,64 @@ fn connections_mcp_server_edits_keep_what_is_not_changed() {
   assert_eq!(edited.environment(), docs.environment(), "the variables stay");
 }
 
+/// A server's switch on its page: off asked in place when a profile chooses it, on asked in place as it widens.
 #[test]
-fn connections_mcp_server_is_turned_off_and_on_and_removed() {
+fn connections_mcp_server_is_turned_off_and_on_in_place() {
   let mut seeded = Seeded::new("connections");
-  seeded.list(ConnectionsTab::McpServers);
   let docs = seeded.server("kontur-docs").expect("kontur-docs");
-  seeded.click(&Seeded::row(docs.id()));
+  seeded.open(docs.id());
   // Designer chooses it: turning it off asks first.
-  seeded.click("connection-turn-off");
+  seeded.click("connection-switch");
   assert!(seeded.text("connection-confirm").contains("Turn off kontur-docs?"));
   seeded.click("connection-confirm-keep");
   assert!(!seeded.exists("connection-confirm"));
   assert!(seeded.server("kontur-docs").expect("kontur-docs").enabled());
-  seeded.click("connection-turn-off");
+  seeded.click("connection-switch");
   seeded.click("connection-confirm-turn-off");
   seeded.until("the server turned off", |seeded| {
-    seeded.server("kontur-docs").is_some_and(|server| !server.enabled()) && seeded.exists("connection-turn-on")
+    seeded.server("kontur-docs").is_some_and(|server| !server.enabled())
+      && seeded.text("connection-inspector-status").contains("Turned off")
   });
-  seeded.click("connection-turn-on");
+  seeded.click("connection-switch");
   seeded.until("the question", |seeded| {
     seeded.exists("connection-confirm-turn-on-confirm")
   });
   seeded.click("connection-confirm-turn-on-confirm");
   seeded.until("the server turned on", |seeded| {
-    seeded.server("kontur-docs").is_some_and(|server| server.enabled()) && seeded.exists("connection-turn-off")
+    seeded.server("kontur-docs").is_some_and(|server| server.enabled())
   });
+}
+
+/// Remove, from a server's … menu, asks in place under its groups; Keep it keeps the server, Remove removes it and
+/// goes back to Connections. A server a profile chooses cannot be removed, and says which.
+#[test]
+fn connections_mcp_server_is_removed_in_place() {
+  let mut seeded = Seeded::new("connections");
+  let docs = seeded.server("kontur-docs").expect("kontur-docs");
+  seeded.open(docs.id());
+  seeded.click("connection-more");
+  assert!(
+    seeded.text("connection-more-menu").contains("Designer"),
+    "Remove says which profile keeps it"
+  );
+  seeded.click("connection-more");
   let sentry = seeded.server("sentry").expect("sentry");
-  seeded.click(&Seeded::row(sentry.id()));
+  seeded.open(sentry.id());
+  seeded.click("connection-more");
   seeded.click("connection-remove");
   assert!(seeded.text("connection-confirm").contains("Remove sentry?"));
+  assert!(seeded.exists("connection-confirm-keep"), "Keep it beside the action");
+  seeded.click("connection-confirm-keep");
+  assert!(!seeded.exists("connection-confirm"));
+  assert!(seeded.server("sentry").is_some(), "Keep it keeps the server");
+  seeded.click("connection-more");
+  seeded.click("connection-remove");
   seeded.click("connection-confirm-remove");
   seeded.until("the server removed", |seeded| {
     seeded.server("sentry").is_none()
       && seeded.selected().is_none()
-      && seeded.text("connections-tab-mcp_servers") == "MCP servers 2"
+      && seeded.exists("connections-mcp")
+      && !seeded.text("connections-mcp").contains("sentry")
   });
 }
 

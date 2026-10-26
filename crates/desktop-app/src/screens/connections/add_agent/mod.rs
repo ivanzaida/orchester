@@ -59,8 +59,9 @@ use crate::{
     Services,
     accounts::{self, Accounts},
   },
-  theme::ExtraTypography,
+  theme::{ExtraTypography, IconSize},
   ui::{
+    agent_mark::AgentMark,
     button::{ActionButton, ButtonKind},
     field::FieldInput,
     form_section::Label,
@@ -289,7 +290,7 @@ impl AddAgent {
     action_bar(vec![cancel.into(), button.into()], refusal.as_deref().or(reason))
   }
 
-  /// The kinds; choosing another CLI suggests its name, unless the person typed one.
+  /// The kinds, each led by its maker's mark; choosing another CLI suggests its name, unless the person typed one.
   fn kind_section(&self, ctx: &Ctx, listed: Option<&ProjectConnections>, project: &str) -> Element {
     let card = |provider: AgentProvider, (id, glyph, detail): (&str, Icon, &str)| -> Element {
       let (kind, program) = (self.kind.clone(), self.program.clone());
@@ -307,7 +308,8 @@ impl AddAgent {
             suggest(&name, &suggested, new);
           }
         },
-      );
+      )
+      .mark(AgentMark::of(provider).render(ctx, IconSize::Md));
       match provider.is_native() {
         true => card.unavailable(ctx.t("connections.kind.nativeUnavailable")).into(),
         false => card.into(),
@@ -317,7 +319,11 @@ impl AddAgent {
     let kinds = [
       (
         AgentProvider::ClaudeCodeCli,
-        ("connection-kind-claude", Icon::Terminal, "connections.kind.claudeDetail"),
+        (
+          "connection-kind-claude",
+          Icon::Terminal,
+          "connections.kind.claudeDetail",
+        ),
       ),
       (
         AgentProvider::CodexCli,
@@ -325,7 +331,11 @@ impl AddAgent {
       ),
       (
         AgentProvider::AnthropicApi,
-        ("connection-kind-anthropic", Icon::Cpu, "connections.kind.anthropicDetail"),
+        (
+          "connection-kind-anthropic",
+          Icon::Cpu,
+          "connections.kind.anthropicDetail",
+        ),
       ),
       (
         AgentProvider::OpenAiApi,
@@ -336,11 +346,12 @@ impl AddAgent {
       .id("connection-kinds")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .with_children(
-        kinds
-          .into_iter()
-          .map(|(provider, shown)| Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(card(provider, shown))),
-      );
+      .with_children(kinds.into_iter().map(|(provider, shown)| {
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .child(card(provider, shown))
+      }));
     Group::new("connection-kind-section", ctx.t("connections.kind.label"))
       .after(cards)
       .after(
@@ -375,7 +386,12 @@ impl AddAgent {
       rows.push(super::account::add_row(ctx, accounts, provider, &self.account));
     }
     rows.push(check_row(ctx, (provider, self.provider.on()), state, &self.recheck));
-    form_group("connection-section", &ctx.t("connections.dialog.connection"), None, rows)
+    form_group(
+      "connection-section",
+      &ctx.t("connections.dialog.connection"),
+      None,
+      rows,
+    )
   }
 }
 

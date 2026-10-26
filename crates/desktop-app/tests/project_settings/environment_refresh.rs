@@ -31,7 +31,7 @@ fn project_settings_environment_background_read_failure_retries_fresh_without_an
   assert_eq!(page.value(INPUT), "", "untouched baseline stays visible");
   assert!(page.text("project-settings-save-status").starts_with("Not saved"));
   assert_eq!(page.text(RELOAD), "Try again");
-  page.click("settings-tab-limits");
+  page.click("settings-tab-general");
   assert!(page.exists(INPUT), "failed read keeps navigation locked");
 
   sql
@@ -50,7 +50,7 @@ fn project_settings_environment_background_read_failure_retries_fresh_without_an
     "",
     "only a settled fresh read can replace the baseline"
   );
-  page.click("settings-tab-limits");
+  page.click("settings-tab-general");
   assert!(page.exists(INPUT), "pending retry cannot unlock navigation");
   page.saved();
   assert_eq!(page.value(INPUT), "CI=2");

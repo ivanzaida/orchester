@@ -12,8 +12,6 @@ mod provider;
 mod rename;
 mod result;
 
-pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
-
 use std::sync::Arc;
 
 use lurq::{
@@ -29,6 +27,7 @@ use lurq::{
 use orchester_core::{id::ConnectionId, time::Timestamp};
 use orchester_workspace::{connections::data::ProjectConnections, display, messages::Message, workspace::OpenProject};
 
+pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
 use super::{
   data::Entry,
   words::{CHECKING, Shown},
@@ -36,7 +35,7 @@ use super::{
 };
 use crate::{
   navigation::link::Open,
-  screens::project_settings::kit::{SettingRow, back, entity_head},
+  screens::project_settings::kit::{Glyph, SettingRow, back, entity_head},
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -114,7 +113,7 @@ pub(super) struct Actions {
 
 /// A page's parts as a kind fills them.
 pub(super) struct Parts {
-  pub glyph: Icon,
+  pub glyph: Glyph,
   /// The name, or its rename in place.
   pub title: Element,
   pub status: Shown,
@@ -154,6 +153,7 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
     head_actions.push(more_menu(ctx, actions, parts.menu));
   }
   let head = entity_head(
+    ctx,
     "connection-inspector-header",
     (parts.glyph, parts.title),
     status.into(),
@@ -184,15 +184,11 @@ fn more_menu(ctx: &mut Ctx, actions: &Actions, items: Vec<MenuItem>) -> Element 
     .element(anchor.clone())
     .on_click(move || toggle.update(|open| *open = !*open))
     .render(ctx);
-  let panel = items
-    .into_iter()
-    .fold(menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)), |panel, item| {
-      panel.child(item.render(ctx, &open))
-    });
-  Row::new()
-    .child(button)
-    .child(menu_at_end(anchor, open, panel))
-    .into()
+  let panel = items.into_iter().fold(
+    menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)),
+    |panel, item| panel.child(item.render(ctx, &open)),
+  );
+  Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
 }
 
 /// The connection's name as the head shows it.
@@ -266,7 +262,10 @@ fn rename_item(ctx: &Ctx, inspecting: &Inspecting<'_>, actions: &Actions) -> Men
     .icon(Icon::Pencil);
   }
   let renaming = actions.renaming.clone();
-  MenuItem::new("connection-rename", ctx.t("connections.rename.action"), move || renaming.set(true)).icon(Icon::Pencil)
+  MenuItem::new("connection-rename", ctx.t("connections.rename.action"), move || {
+    renaming.set(true)
+  })
+  .icon(Icon::Pencil)
 }
 
 /// When the connection was last checked, or that it was not.
@@ -284,10 +283,14 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
   } else {
     (labels.join(", ").into(), ctx.t("connections.usedByHint"))
   };
-  let agents = ActionButton::new("connection-open-agents", ButtonKind::Ghost, ctx.t("connections.agentsLink"))
-    .icon(Icon::ArrowUpRight)
-    .compact()
-    .opens(actions.agents.clone());
+  let agents = ActionButton::new(
+    "connection-open-agents",
+    ButtonKind::Ghost,
+    ctx.t("connections.agentsLink"),
+  )
+  .icon(Icon::ArrowUpRight)
+  .compact()
+  .opens(actions.agents.clone());
   let row = SettingRow::new("connection-used-by", label)
     .hint(hint)
     .control(agents)
@@ -301,7 +304,9 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
 fn detail_row(ctx: &mut Ctx, id: &str, (label, value): (&str, &str), mono: bool) -> Element {
   let value = crate::screens::project_settings::kit::value(&format!("{id}-value"), value);
   let value = if mono {
-    value.variant(crate::theme::ExtraTypography::PropertyMono.role()).color(PaletteColor::TextSecondary)
+    value
+      .variant(crate::theme::ExtraTypography::PropertyMono.role())
+      .color(PaletteColor::TextSecondary)
   } else {
     value
   };

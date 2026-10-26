@@ -1,5 +1,5 @@
-//! The fields and actions of New secret and Replace value: New secret is a page under Secrets with the crumb back to it,
-//! its fields a group of rows (name, kind, value, project, environment); Replace value is asked in place on the
+//! The fields and actions of New secret and Replace value: New secret is a page under Secrets with the crumb back to
+//! it, its fields a group of rows (name, kind, value, project, environment); Replace value is asked in place on the
 //! secret's page, its new value in a box with the secret's uses. Each says what was found of the name and why it cannot
 //! be saved yet, and a write that failed.
 use lurq::{

@@ -31,7 +31,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
-    field::{FieldInput, SelectField, field_error},
+    field::{FieldInput, SelectField},
     icon::{Icon, icon},
     pressable::pressable,
     toggle::{Toggle, ToggleKind},
@@ -40,7 +40,12 @@ use crate::{
 
 impl Link {
   /// The page's groups and what linking says under them.
-  pub(super) fn link_section(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Vec<Element> {
+  pub(super) fn link_section(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    listed: Option<&Result<Listed, Said>>,
+  ) -> Vec<Element> {
     let mut parts: Vec<Element> = Vec::new();
     parts.extend(self.discovery_offer(ctx, props));
     let server = self.server_row(ctx, props);
@@ -126,7 +131,8 @@ impl Link {
 
   /// The server the project goes to, with its state; *Connect a server* when this computer has none.
   fn server_row(&self, ctx: &mut Ctx, props: &Props) -> Element {
-    let row = SettingRow::new("sharing-server", ctx.t("sharing.link.server")).info(ctx.t("sharing.link.serverDescription"));
+    let row =
+      SettingRow::new("sharing-server", ctx.t("sharing.link.server")).info(ctx.t("sharing.link.serverDescription"));
     if props.facts.servers.is_empty() {
       let navigation = Navigation::of(ctx);
       let connect = ActionButton::new(
@@ -199,7 +205,11 @@ impl Link {
           .label_color(PaletteColor::TextSecondary)
           .render(ctx),
       ],
-      Some(Ok(listed)) => listed.0.iter().map(|project| self.project_choice(ctx, project)).collect(),
+      Some(Ok(listed)) => listed
+        .0
+        .iter()
+        .map(|project| self.project_choice(ctx, project))
+        .collect(),
     };
     let address = FieldInput::new("sharing-address", ctx.t("sharing.link.address"), self.address.clone())
       .mono()
@@ -326,9 +336,7 @@ impl Link {
       );
     match fill {
       Some(fill) => line.background(fill).into(),
-      None => line
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .into(),
+      None => line.border(Border::inside(BorderSize::Sm, PaletteColor::Border)).into(),
     }
   }
 

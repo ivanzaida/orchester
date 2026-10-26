@@ -38,21 +38,19 @@ fn add_remote(seeded: &mut Seeded, name: &str, scheme: &str, extra: Option<(&str
   }
   seeded.click("connection-save");
   assert!(
-    seeded
-      .text("connection-form-reason")
-      .contains("choose the secret to send"),
+    seeded.text(Seeded::REASON).contains("choose the secret to send"),
     "{scheme}: Save says the secret is missing"
   );
   assert!(seeded.exists("connection-mcp-secret-error"));
   choose(seeded, "connection-mcp-secret", &secret);
-  assert!(!seeded.exists("connection-form-reason"), "{scheme}: it can be saved");
+  assert!(!seeded.exists(Seeded::REASON), "{scheme}: it can be saved");
   seeded.click("connection-save");
   seeded.until("the question", |seeded| {
     seeded.exists("connection-confirm-save-confirm")
   });
   seeded.click("connection-confirm-save-confirm");
   seeded.until("the saved server", |seeded| {
-    if let Some(reason) = seeded.window.texts("connection-form-reason") {
+    if let Some(reason) = seeded.window.texts(Seeded::REASON) {
       panic!("not saved: {reason:?}");
     }
     seeded.exists("connection-inspector")
@@ -86,7 +84,7 @@ fn connections_mcp_remote_server_is_saved_with_each_authorization() {
   );
   assert!(
     seeded
-      .text("connection-authentication")
+      .text("connection-authentication-row")
       .contains(&format!("Basic, user deploy, password from {label}"))
   );
   add_remote(&mut seeded, "pasted-docs", "Basic: pasted credential", None);
@@ -109,7 +107,7 @@ fn connections_mcp_remote_server_is_saved_with_each_authorization() {
   );
   assert!(
     seeded
-      .text("connection-authentication")
+      .text("connection-authentication-row")
       .contains(&format!("Header X-API-Key from {label}"))
   );
   add_remote(&mut seeded, "bearer-docs", "Bearer token", None);
@@ -162,6 +160,6 @@ fn connections_mcp_stored_bearer_server_opens_as_it_was() {
   seeded.go(orchester_app::routes::ProjectPage::EditConnection(sentry.id()));
   seeded.until("the form", |seeded| seeded.exists("connection-mcp-authorization"));
   assert!(seeded.text("connection-mcp-authorization").contains("Bearer token"));
-  assert_eq!(seeded.text("connection-form-status"), "No changes");
+  assert_eq!(seeded.text(Seeded::REASON), "Nothing changed yet.");
   assert!(seeded.text("connection-mcp-secret").contains("SENTRY_TOKEN"));
 }

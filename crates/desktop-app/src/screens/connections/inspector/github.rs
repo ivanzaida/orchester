@@ -49,7 +49,12 @@ pub(super) fn parts(
   let state = github_state(inspecting.listed, connection);
   let status = shown(inspecting, github_status(&state));
   let mut notices = match &state {
-    GitHubState::WrongAccount { active, .. } => vec![wrong_account(ctx, connection, (active.as_str(), &state), (inspecting, actions))],
+    GitHubState::WrongAccount { active, .. } => vec![wrong_account(
+      ctx,
+      connection,
+      (active.as_str(), &state),
+      (inspecting, actions),
+    )],
     GitHubState::SignedIn { .. } | GitHubState::NotChecked => Vec::new(),
     _ => vec![sentence(
       "connection-inspector-sentence",
@@ -66,15 +71,29 @@ pub(super) fn parts(
     ));
   }
   notices.extend(result::github(ctx, connection, &state, inspecting));
-  let detail = connection
-    .last_check()
-    .map(|check| ctx.t_args("connections.checkedAt", [("time", &*last_checked(ctx, inspecting.now, Some(check.at)))]));
+  let detail = connection.last_check().map(|check| {
+    ctx.t_args(
+      "connections.checkedAt",
+      [("time", &*last_checked(ctx, inspecting.now, Some(check.at)))],
+    )
+  });
   Parts {
-    glyph: GITHUB_GLYPH,
-    title: title_with_rename(ctx, (inspecting, actions), (connection.id(), connection.name().as_str())),
+    glyph: GITHUB_GLYPH.into(),
+    title: title_with_rename(
+      ctx,
+      (inspecting, actions),
+      (connection.id(), connection.name().as_str()),
+    ),
     status,
     status_detail: detail,
-    actions: vec![check_button(inspecting, ("connection-check", ctx.t("connections.checkAgain")), actions).into()],
+    actions: vec![
+      check_button(
+        inspecting,
+        ("connection-check", ctx.t("connections.checkAgain")),
+        actions,
+      )
+      .into(),
+    ],
     menu: menu(ctx, &state, (inspecting, actions)),
     notices,
     groups: vec![connection_group(ctx, connection, &state, inspecting)],
@@ -87,10 +106,12 @@ pub(super) fn parts(
 fn menu(ctx: &Ctx, state: &GitHubState, (inspecting, actions): (&Inspecting<'_>, &Actions)) -> Vec<MenuItem> {
   let reason = ctx.t("connections.github.editUnavailable");
   let other = match state {
-    GitHubState::ProgramMissing | GitHubState::Unrecognized => {
-      MenuItem::unavailable("connection-choose-program", ctx.t("connections.github.chooseProgram"), reason.clone())
-        .icon(Icon::FolderOpen)
-    }
+    GitHubState::ProgramMissing | GitHubState::Unrecognized => MenuItem::unavailable(
+      "connection-choose-program",
+      ctx.t("connections.github.chooseProgram"),
+      reason.clone(),
+    )
+    .icon(Icon::FolderOpen),
     _ => MenuItem::unavailable("connection-edit", ctx.t("connections.edit"), reason.clone()).icon(Icon::Pencil),
   };
   let mut items = vec![rename_item(ctx, inspecting, actions), other];
@@ -99,8 +120,12 @@ fn menu(ctx: &Ctx, state: &GitHubState, (inspecting, actions): (&Inspecting<'_>,
     GitHubState::SignedIn { .. } | GitHubState::WrongAccount { .. } | GitHubState::MissingScope { .. }
   ) {
     items.push(
-      MenuItem::unavailable("connection-change-account", ctx.t("connections.github.changeAccount"), reason)
-        .icon(Icon::UserRoundCog),
+      MenuItem::unavailable(
+        "connection-change-account",
+        ctx.t("connections.github.changeAccount"),
+        reason,
+      )
+      .icon(Icon::UserRoundCog),
     );
   }
   items
@@ -151,7 +176,12 @@ fn wrong_account(
 
 /// *Connection* (`MqOPV`): the host, `gh` and its path, the account and scopes it is signed in with, and the account
 /// and repository the project expects through it.
-fn connection_group(ctx: &mut Ctx, connection: &GitHubConnection, state: &GitHubState, inspecting: &Inspecting<'_>) -> Element {
+fn connection_group(
+  ctx: &mut Ctx,
+  connection: &GitHubConnection,
+  state: &GitHubState,
+  inspecting: &Inspecting<'_>,
+) -> Element {
   let check = connection.last_check();
   let path = display::shorten_path(connection.executable(), PATH_CHARS);
   let (program, program_tone) = match check.map(|check| &check.result) {
@@ -175,10 +205,34 @@ fn connection_group(ctx: &mut Ctx, connection: &GitHubConnection, state: &GitHub
     _ => (ctx.t("connections.github.noScopes"), Tone::Muted),
   };
   let mut rows = vec![
-    row(ctx, "connection-host", ("connections.property.host", connection.host().as_str()), Tone::Secondary, None),
-    row(ctx, "connection-program", ("connections.property.program", &program), program_tone, Some(&path)),
-    row(ctx, "connection-account", ("connections.property.account", &account), account_tone, None),
-    row(ctx, "connection-scopes", ("connections.property.scopes", &scopes), scopes_tone, None),
+    row(
+      ctx,
+      "connection-host",
+      ("connections.property.host", connection.host().as_str()),
+      Tone::Secondary,
+      None,
+    ),
+    row(
+      ctx,
+      "connection-program",
+      ("connections.property.program", &program),
+      program_tone,
+      Some(&path),
+    ),
+    row(
+      ctx,
+      "connection-account",
+      ("connections.property.account", &account),
+      account_tone,
+      None,
+    ),
+    row(
+      ctx,
+      "connection-scopes",
+      ("connections.property.scopes", &scopes),
+      scopes_tone,
+      None,
+    ),
   ];
   if let Some(link) = inspecting.listed.link_of(connection.id()) {
     let repo = link.repo();
@@ -219,7 +273,8 @@ fn connection_group(ctx: &mut Ctx, connection: &GitHubConnection, state: &GitHub
 
 /// A row with its value at the end in `tone`, and what it leaves out in its hint.
 fn row(ctx: &mut Ctx, id: &str, (label, shown): (&str, &str), tone: Tone, hint: Option<&str>) -> Element {
-  let row = SettingRow::new(id.to_owned(), ctx.t(label)).control(value(&format!("{id}-value"), shown).color(tone.color()));
+  let row =
+    SettingRow::new(id.to_owned(), ctx.t(label)).control(value(&format!("{id}-value"), shown).color(tone.color()));
   match hint {
     Some(hint) => row.hint(hint.to_owned()),
     None => row,
@@ -229,7 +284,9 @@ fn row(ctx: &mut Ctx, id: &str, (label, shown): (&str, &str), tone: Tone, hint: 
 
 fn account(ctx: &Ctx, state: &GitHubState) -> (std::sync::Arc<str>, Tone) {
   match state {
-    GitHubState::SignedIn { account } | GitHubState::MissingScope { account } => (account.as_str().into(), Tone::Secondary),
+    GitHubState::SignedIn { account } | GitHubState::MissingScope { account } => {
+      (account.as_str().into(), Tone::Secondary)
+    }
     GitHubState::WrongAccount { active, .. } => (active.as_str().into(), Tone::Warning),
     GitHubState::NotSignedIn => (ctx.t("connections.github.status.notSignedIn"), Tone::Warning),
     GitHubState::ProgramMissing => (ctx.t("connections.github.accountUntilFound"), Tone::Muted),

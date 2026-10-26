@@ -20,10 +20,11 @@ use crate::{
   routes::{NewConnection, ProjectPage, Route},
   screens::{
     connections::words::provider_key,
-    project_settings::kit::{EmptyRow, Group, SettingRow, Tone, page_head, tile},
+    project_settings::kit::{EmptyRow, Glyph, Group, SettingRow, Tone, page_head, tile},
   },
   theme::ExtraSpacing,
   ui::{
+    agent_mark::AgentMark,
     button::{ActionButton, ButtonKind},
     icon::Icon,
     unavailable::reason_line,
@@ -73,12 +74,16 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
   rows.push(
     SettingRow::new("connections-way-api", ctx.t("connections.empty.apiProvider"))
       .item()
-      .lead(tile(Icon::Globe))
+      .lead(tile(ctx, Icon::Cloud))
       .hint(ctx.t("connections.empty.apiProviderDetail"))
       .control(
-        ActionButton::new("connections-way-api-add", ButtonKind::Secondary, ctx.t("connections.groups.add"))
-          .icon(Icon::Plus)
-          .opens(add(NewConnection::AgentProvider)),
+        ActionButton::new(
+          "connections-way-api-add",
+          ButtonKind::Secondary,
+          ctx.t("connections.groups.add"),
+        )
+        .icon(Icon::Plus)
+        .opens(add(NewConnection::AgentProvider)),
       )
       .render(ctx),
   );
@@ -99,7 +104,7 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
           "connections-github-empty",
           Icon::GitPullRequest,
           ctx.t("connections.github.emptyTitle"),
-          ctx.t("connections.github.emptyDetail"),
+          ctx.t("connections.github.emptyShort"),
         )
         .action(reason),
       ),
@@ -113,17 +118,22 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
           ctx.t("connections.mcp.emptyDetailShort"),
         )
         .action(
-          ActionButton::new("connections-mcp-empty-add", ButtonKind::Ghost, ctx.t("connections.groups.add"))
-            .icon(Icon::Plus)
-            .compact()
-            .opens(add(NewConnection::McpServer)),
+          ActionButton::new(
+            "connections-mcp-empty-add",
+            ButtonKind::Ghost,
+            ctx.t("connections.groups.add"),
+          )
+          .icon(Icon::Plus)
+          .compact()
+          .opens(add(NewConnection::McpServer)),
         ),
       ),
     )
     .into()
 }
 
-/// A CLI as found: Add when a copy is on the search path, Check again when none is, nothing while it is looked for.
+/// A CLI as found, its maker's mark leading: Add when a copy is on the search path, Check again when none is, nothing
+/// while it is looked for.
 fn cli_row(ctx: &mut Ctx, cli: AgentProvider, on_path: Option<bool>, (add, recheck): (Open, &Signal<u64>)) -> Element {
   let id = match cli {
     AgentProvider::ClaudeCodeCli => "connections-way-claude",
@@ -131,23 +141,29 @@ fn cli_row(ctx: &mut Ctx, cli: AgentProvider, on_path: Option<bool>, (add, reche
   };
   let row = SettingRow::new(id, ctx.t(provider_key(cli)))
     .item()
-    .lead(tile(Icon::Terminal));
+    .lead(tile(ctx, Glyph::Mark(AgentMark::of(cli))));
   let row = match on_path {
     None => row.hint(ctx.t("connections.empty.looking")),
-    Some(true) => row
-      .toned(ctx.t("connections.empty.found"), Tone::Success)
-      .control(
-        ActionButton::new(format!("{id}-add"), ButtonKind::Primary, ctx.t("connections.groups.add"))
-          .icon(Icon::Plus)
-          .opens(add),
-      ),
+    Some(true) => row.toned(ctx.t("connections.empty.found"), Tone::Success).control(
+      ActionButton::new(
+        format!("{id}-add"),
+        ButtonKind::Primary,
+        ctx.t("connections.groups.add"),
+      )
+      .icon(Icon::Plus)
+      .opens(add),
+    ),
     Some(false) => {
       let recheck = recheck.clone();
       row.hint(ctx.t("connections.empty.notFound")).control(
-        ActionButton::new(format!("{id}-check"), ButtonKind::Ghost, ctx.t("connections.checkAgain"))
-          .icon(Icon::RefreshCw)
-          .compact()
-          .on_click(move || recheck.update(|count| *count += 1)),
+        ActionButton::new(
+          format!("{id}-check"),
+          ButtonKind::Ghost,
+          ctx.t("connections.checkAgain"),
+        )
+        .icon(Icon::RefreshCw)
+        .compact()
+        .on_click(move || recheck.update(|count| *count += 1)),
       )
     }
   };

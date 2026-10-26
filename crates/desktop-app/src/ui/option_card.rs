@@ -39,6 +39,8 @@ enum Choice {
 pub struct OptionCard {
   id: Arc<str>,
   icon: Icon,
+  /// Shown in place of the icon.
+  mark: Option<Element>,
   title: Arc<str>,
   description: Arc<str>,
   chosen: bool,
@@ -61,6 +63,7 @@ impl OptionCard {
     Self {
       id: id.into(),
       icon,
+      mark: None,
       title: title.into(),
       description: description.into(),
       chosen,
@@ -89,11 +92,18 @@ impl OptionCard {
     self
   }
 
-  fn text(&self, glyph: PaletteColor) -> Column {
+  /// A mark in its own colors in place of the icon, e.g. the maker of an agent kind's models (`ui::agent_mark`).
+  pub fn mark(mut self, mark: impl Into<Element>) -> Self {
+    self.mark = Some(mark.into());
+    self
+  }
+
+  fn text(&self, glyph: PaletteColor, mark: Option<Element>) -> Column {
+    let lead = mark.unwrap_or_else(|| icon(self.icon, IconSize::Md, glyph).into());
     let title = Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .with_children((!self.inline_summary).then(|| icon(self.icon, IconSize::Md, glyph)))
+      .with_children((!self.inline_summary).then_some(lead))
       .child(
         Text::new(&self.title)
           .id(format!("{}-title", self.id))
@@ -165,7 +175,7 @@ impl OptionCard {
 }
 
 impl From<OptionCard> for Element {
-  fn from(card: OptionCard) -> Self {
+  fn from(mut card: OptionCard) -> Self {
     let glyph = if card.chosen {
       PaletteColor::TextPrimary
     } else {
@@ -180,7 +190,8 @@ impl From<OptionCard> for Element {
       ),
       Choice::Choose(_) | Choice::Waiting => None,
     };
-    let text = card.text(glyph).with_children(reason);
+    let mark = card.mark.take();
+    let text = card.text(glyph, mark).with_children(reason);
     let (fill, stroke) = if card.chosen {
       (PaletteColor::SurfaceRaised, PaletteColor::Accent)
     } else {

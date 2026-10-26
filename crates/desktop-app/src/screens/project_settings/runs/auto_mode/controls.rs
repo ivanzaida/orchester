@@ -104,6 +104,7 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
 }
 fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
   let connection = connection_select(ctx, tab, &options, busy);
+  // A model is named by the id its CLI takes, as its developer names it (the person's decision for ORC-103).
   let model = select(
     ctx,
     ("settings-reviewer-model", "project_settings.model", MODEL_WIDTH),
@@ -111,7 +112,10 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     options
       .models
       .into_iter()
-      .map(|model| (model.clone(), model_label(ctx, &model)))
+      .map(|model| {
+        let label = model.as_str().into();
+        (model, label)
+      })
       .collect(),
     busy,
   );
@@ -135,17 +139,12 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     Ok(shown) => {
       let readback = ctx.t_args(
         "project_settings.reviewedBy",
-        [
-          ("model", model_label(ctx, shown.model.as_str()).as_ref()),
-          ("connection", &shown.connection),
-        ],
+        [("model", shown.model.as_str()), ("connection", &shown.connection)],
       );
-      row
-        .hint(ctx.t("project_settings.reviewerHint"))
-        .info(ctx.t_args(
-          "project_settings.reviewerInfo",
-          [("detail", &*detail), ("readback", &*readback)],
-        ))
+      row.hint(ctx.t("project_settings.reviewerHint")).info(ctx.t_args(
+        "project_settings.reviewerInfo",
+        [("detail", &*detail), ("readback", &*readback)],
+      ))
     }
     Err(why) => row.info(detail).toned(message_text(ctx, &why), Tone::Warning),
   };
@@ -163,17 +162,6 @@ fn default_connection_label(ctx: &Ctx, name: Option<&str>) -> Arc<str> {
   name
     .map(|name| ctx.t_args("project_settings.defaultConnection", [("connection", name)]))
     .unwrap_or_else(|| ctx.t("project_settings.default"))
-}
-
-fn model_label(ctx: &Ctx, model: &str) -> Arc<str> {
-  let key = match model {
-    "claude-haiku-4-5-20251001" => "project_settings.haiku45",
-    "claude-sonnet-5-5" => "project_settings.sonnet55",
-    "claude-opus-5-5" => "project_settings.opus55",
-    "claude-fable-5-1" => "project_settings.fable51",
-    _ => return model.into(),
-  };
-  ctx.t(key)
 }
 
 /// The reviewer's connection (`kGBHZ`): the default, the connections a reviewer runs on, and those on an API provider

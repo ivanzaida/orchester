@@ -1,6 +1,6 @@
-//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch and reviewer, saved as they change, with the input-locked,
-//! person-only question asked in place under the group before a change that widens what the reviewer approves, and the
-//! project's approval rules.
+//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch and reviewer, saved as they change, with the
+//! input-locked, person-only question asked in place under the group before a change that widens what the reviewer
+//! approves, and the project's approval rules.
 mod controls;
 mod feedback;
 mod rules;

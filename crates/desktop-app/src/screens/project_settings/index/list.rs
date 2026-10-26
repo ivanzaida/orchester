@@ -56,7 +56,11 @@ pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebui
   }
   let Some(list) = &state.data else {
     let words = ctx.t("project_settings.reading");
-    return vec![reading.under(loading("settings-index-list-loading", &words)).render(ctx)];
+    return vec![
+      reading
+        .under(loading("settings-index-list-loading", &words))
+        .render(ctx),
+    ];
   };
   if list.0.0.is_empty() {
     return vec![
@@ -69,12 +73,7 @@ pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebui
       .into(),
     ];
   }
-  list
-    .0
-    .0
-    .iter()
-    .map(|row| index_row(ctx, row, rebuild, root))
-    .collect()
+  list.0.0.iter().map(|row| index_row(ctx, row, rebuild, root)).collect()
 }
 
 fn index_row(ctx: &mut Ctx, row: &IndexRow, rebuild: &Rebuild, root: &Path) -> Element {
@@ -163,7 +162,10 @@ fn summary(ctx: &Ctx, short: &str, state: &State) -> Arc<str> {
       .to_string(),
     other => detail(ctx, other),
   };
-  ctx.t_args("project_settings.indexAt", [("revision", short), ("what", what.as_str())])
+  ctx.t_args(
+    "project_settings.indexAt",
+    [("revision", short), ("what", what.as_str())],
+  )
 }
 
 fn count(ctx: &Ctx, n: usize) -> String {

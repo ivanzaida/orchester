@@ -167,7 +167,10 @@ impl ConnectionsScreen {
         && let Route::Project(project, ProjectPage::Connections(view)) = navigation.route_now()
         && view.selected() == Some(done.id)
       {
-        navigation.replace(Route::Project(project, ProjectPage::Connections(ConnectionsView::default())));
+        navigation.replace(Route::Project(
+          project,
+          ProjectPage::Connections(ConnectionsView::default()),
+        ));
       }
     });
   }
@@ -184,7 +187,11 @@ impl ConnectionsScreen {
   }
 
   /// What starts work on a connection, listed in the status bar's activity.
-  fn starter(&self, project: &ShownProject, listed: &ProjectConnections) -> Arc<dyn Fn(ConnectionId, Work) + Send + Sync> {
+  fn starter(
+    &self,
+    project: &ShownProject,
+    listed: &ProjectConnections,
+  ) -> Arc<dyn Fn(ConnectionId, Work) + Send + Sync> {
     let (work, running, last) = (self.work.clone(), self.running.clone(), self.last.clone());
     let open = project.open.clone();
     let names: Vec<(ConnectionId, String)> = data::entries(listed)
@@ -276,7 +283,13 @@ impl ConnectionsScreen {
   }
 
   /// What the page of connection `inspected` does.
-  fn actions(&self, ctx: &mut Ctx, project: &ShownProject, listed: &ProjectConnections, inspected: ConnectionId) -> Actions {
+  fn actions(
+    &self,
+    ctx: &mut Ctx,
+    project: &ShownProject,
+    listed: &ProjectConnections,
+    inspected: ConnectionId,
+  ) -> Actions {
     let asking = self.asking.clone();
     let navigation = Navigation::of(ctx);
     let (project_id, edit) = (project.open.project.id(), navigation.clone());

@@ -234,9 +234,7 @@ impl Route {
   pub const fn nav_screen(&self) -> Screen {
     match self.screen() {
       Screen::Task | Screen::NewTask | Screen::EditTask => Screen::Tasks,
-      Screen::Connections | Screen::NewConnection | Screen::EditConnection | Screen::Secrets => {
-        Screen::ProjectSettings
-      }
+      Screen::Connections | Screen::NewConnection | Screen::EditConnection | Screen::Secrets => Screen::ProjectSettings,
       Screen::OrchestratorSettings => Screen::Orchestrator,
       screen => screen,
     }

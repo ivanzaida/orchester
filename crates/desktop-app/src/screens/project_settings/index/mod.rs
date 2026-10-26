@@ -122,8 +122,8 @@ impl Component for CodeIndex {
       return work::pending(ctx, &state, &self.revision);
     };
     let on = read.0.code_index.is_on();
-    let mut group = Group::new("settings-index-section", ctx.t("project_settings.indexHeading"))
-      .row(setting(ctx, &props, on, &save));
+    let mut group =
+      Group::new("settings-index-section", ctx.t("project_settings.indexHeading")).row(setting(ctx, &props, on, &save));
     if on {
       if let Some(total) = list::total(ctx, &list) {
         group = group.end(

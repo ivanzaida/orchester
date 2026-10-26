@@ -108,7 +108,10 @@ impl ProviderForm {
       .spacing(SpacingSize::Sm)
       .child(sign_in)
       .child(provider);
-    form_row(Label::new("connection-runs-on-field", ctx.t("connections.runsOn")), cards)
+    form_row(
+      Label::new("connection-runs-on-field", ctx.t("connections.runsOn")),
+      cards,
+    )
   }
 
   fn url_row(&self, ctx: &mut Ctx, cli: AgentProvider) -> Element {

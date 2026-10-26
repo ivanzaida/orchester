@@ -146,7 +146,10 @@ impl Component for Environment {
     let row = self.row(ctx, &props, &save, open);
     let mut group = Group::new("settings-environment-section", ctx.t("project_settings.environment")).row(row);
     if let Some(error) = save.state().get().error {
-      group = group.after(field_error("settings-environment-save-error", &message_text(ctx, &error)));
+      group = group.after(field_error(
+        "settings-environment-save-error",
+        &message_text(ctx, &error),
+      ));
     }
     if let Some(error) = &state.error {
       group = group.after(self.read_error(ctx, &save, error));
@@ -256,14 +259,17 @@ impl Environment {
     .icon(if open { Icon::Check } else { Icon::Pencil })
     .in_form()
     .on_click(move || editing.update(|editing| *editing = !*editing));
-    let row = SettingRow::new("settings-environment-variables-row", ctx.t("project_settings.variablesLabel"))
-      .info(ctx.t("project_settings.environmentInfo"))
-      .hint(hint)
-      .control(value(
-        "settings-variable-count",
-        &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
-      ))
-      .control(edit);
+    let row = SettingRow::new(
+      "settings-environment-variables-row",
+      ctx.t("project_settings.variablesLabel"),
+    )
+    .info(ctx.t("project_settings.environmentInfo"))
+    .hint(hint)
+    .control(value(
+      "settings-variable-count",
+      &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
+    ))
+    .control(edit);
     if !open {
       return row.render(ctx);
     }

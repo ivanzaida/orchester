@@ -114,11 +114,11 @@ fn domain_window_input_cannot_turn_on_an_mcp_server() {
   served.ok(
     "navigate",
     &json!({
-      "route": "connections", "project": project.to_string(), "tab": "mcp_servers", "selected": postgres.id().to_string(),
+      "route": "connections", "project": project.to_string(), "selected": postgres.id().to_string(),
     }),
   );
-  served.until("the inspector", |served| served.shows("connection-turn-on"));
-  served.click_by_client("connection-turn-on").expect("Turn on asks");
+  served.until("the server's page", |served| served.shows("connection-switch"));
+  served.click_by_client("connection-switch").expect("Turn on asks");
   served.until("the question", |served| {
     served.shows("connection-confirm-turn-on-confirm")
   });
@@ -148,13 +148,17 @@ fn domain_tools_changes_show_on_the_open_connections_page() {
   served.ok(
     "navigate",
     &json!({
-      "route": "connections", "project": project.to_string(), "tab": "mcp_servers", "selected": docs.id().to_string(),
+      "route": "connections", "project": project.to_string(), "selected": docs.id().to_string(),
     }),
   );
-  served.until("the inspector", |served| served.shows("connection-turn-off"));
+  served.until("the server's page", |served| {
+    super::tools_window::text(served, "connection-inspector-status").contains("On")
+  });
   served.ok(
     "set_mcp_server_enabled",
     &json!({ "project": project.to_string(), "server": "kontur-docs", "enabled": false }),
   );
-  served.until("the server shown off", |served| served.shows("connection-turn-on"));
+  served.until("the server shown off", |served| {
+    super::tools_window::text(served, "connection-inspector-status").contains("Turned off")
+  });
 }

@@ -5,11 +5,7 @@
 
 use std::sync::Arc;
 
-use lurq::{
-  app::ctx::Ctx,
-  core::Signal,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_core::source::SourcePath;
 use orchester_workspace::sources::{
   check::Kind,
@@ -99,7 +95,15 @@ pub(super) fn rows(
     .listed
     .iter()
     .enumerate()
-    .map(|(index, listed)| row(ctx, &format!("settings-source-{index}"), listed, &read.checked, (&remove, &check_again, busy)))
+    .map(|(index, listed)| {
+      row(
+        ctx,
+        &format!("settings-source-{index}"),
+        listed,
+        &read.checked,
+        (&remove, &check_again, busy),
+      )
+    })
     .collect()
 }
 
@@ -179,9 +183,12 @@ pub(super) fn add(
   (locked, adding): (bool, &Signal<bool>),
   on_add: Arc<dyn Fn(SourcePath) + Send + Sync>,
 ) -> Element {
-  let row = SettingRow::new("settings-sources-add-row", ctx.t("project_settings.sourcesTab.addTitle"))
-    .hint(ctx.t("project_settings.sourcesTab.addHint"))
-    .info(ctx.t("project_settings.sourcesTab.addInfo"));
+  let row = SettingRow::new(
+    "settings-sources-add-row",
+    ctx.t("project_settings.sourcesTab.addTitle"),
+  )
+  .hint(ctx.t("project_settings.sourcesTab.addHint"))
+  .info(ctx.t("project_settings.sourcesTab.addInfo"));
   if !adding.get() {
     let open = adding.clone();
     return row
@@ -269,9 +276,9 @@ pub(super) fn outside(ctx: &mut Ctx) -> Element {
     .map(|(id, [setting, rule, how], held)| {
       let row = SettingRow::new(*id, ctx.t(setting)).hint(ctx.t(rule)).info(ctx.t(how));
       let row = match held {
-        Held::Enforced => row.control(
-          value(&format!("{id}-held"), &enforced).variant(ProjectSettingsText::Hint.role()),
-        ),
+        Held::Enforced => {
+          row.control(value(&format!("{id}-held"), &enforced).variant(ProjectSettingsText::Hint.role()))
+        }
         Held::Elsewhere => row,
       };
       row.render(ctx)

@@ -88,7 +88,10 @@ fn tool_row(ctx: &mut Ctx, state: &FutureState<Checked, Message>, revision: &Sig
   let info = match source {
     Some(source) => ctx.t_args(
       "project_settings.ripgrepInfo",
-      [("detail", ctx.t("project_settings.ripgrepDetail").to_string()), ("source", source.to_string())],
+      [
+        ("detail", ctx.t("project_settings.ripgrepDetail").to_string()),
+        ("source", source.to_string()),
+      ],
     ),
     None => ctx.t("project_settings.ripgrepDetail"),
   };
@@ -137,7 +140,11 @@ fn install_row(
         ],
       ),
     ),
-    Some(Install::Failed { error, .. }) => (ctx.t("project_settings.installFailed"), Tone::Danger, failure(ctx, error)),
+    Some(Install::Failed { error, .. }) => (
+      ctx.t("project_settings.installFailed"),
+      Tone::Danger,
+      failure(ctx, error),
+    ),
     Some(Install::Installed { .. }) => (
       ctx.t("project_settings.installFailed"),
       Tone::Danger,

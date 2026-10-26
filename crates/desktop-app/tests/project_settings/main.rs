@@ -4,6 +4,7 @@ mod domain;
 mod environment;
 mod environment_geometry;
 mod environment_refresh;
+mod estimates;
 mod general;
 mod github;
 mod harness;

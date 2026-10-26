@@ -1,9 +1,11 @@
-//! Runs (`02 · Runs` `b7Ya1u`): Auto mode (whether new runs use it, its reviewer, and *Approved for every run* with a
-//! count that opens the project's rules, [`super::rules`]), Limits (the run and daily budgets, the time limit and how
-//! many agents and QA apps work at once) and Environment (its variables' count and Edit, which opens today's editor
-//! with its confirmation), each saving as a person leaves a field.
+//! Runs (`02 · Runs` `b7Ya1u`, the Runs window `g406O`): Auto mode (whether new runs use it, its reviewer, and
+//! *Approved for every run* with a count that opens the project's rules, [`super::rules`]), Estimates (*Let Orchester
+//! estimate story points*, a person's switch), Limits (the run and daily budgets, the time limit and how many agents
+//! and QA apps work at once) and Environment (its variables' count and Edit, which opens today's editor with its
+//! confirmation), each saving as a person leaves a field.
 mod auto_mode;
 mod environment;
+mod estimates;
 mod limits;
 
 use lurq::{
@@ -63,6 +65,7 @@ impl Component for Runs {
         own: self.own.clone(),
       },
     );
+    let estimates = ctx.mount_keyed::<estimates::Estimates>("project-settings-estimates", props.clone());
     let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", props.clone());
     let environment = ctx.mount_keyed::<environment::Environment>("project-settings-environment", props);
     page::scroll(
@@ -70,6 +73,7 @@ impl Component for Runs {
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Roomy.role())
         .child(auto)
+        .child(estimates)
         .child(limits)
         .child(environment),
     )

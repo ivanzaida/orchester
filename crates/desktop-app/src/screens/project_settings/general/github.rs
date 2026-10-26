@@ -225,7 +225,10 @@ fn account_status(ctx: &Ctx, state: &GitHubState) -> (Arc<str>, Tone) {
       "project_settings.githubWrongAccount",
       [("active", active.as_str()), ("expected", expected.as_str())],
     ),
-    GitHubState::MissingScope { .. } => ctx.t("connections.github.detail.missingScope"),
+    GitHubState::MissingScope { .. } => ctx.t_args(
+      "connections.github.detail.missingScope",
+      [("scope", orchester_core::connection::REQUIRED_SCOPE)],
+    ),
     GitHubState::NotSignedIn => ctx.t("connections.github.detail.notSignedIn"),
     GitHubState::NotChecked => ctx.t("connections.detail.notChecked"),
     GitHubState::SignInUnknown => ctx.t("connections.github.detail.signInUnknown"),

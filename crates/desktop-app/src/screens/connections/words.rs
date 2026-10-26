@@ -8,7 +8,10 @@ use orchester_core::connection::{
   AgentConnection, AgentProvider, ConnectionAccount, ConnectionStatus, GitHubState, mcp::McpServer,
 };
 
-use crate::ui::icon::Icon;
+use crate::{
+  screens::project_settings::kit::Glyph,
+  ui::{agent_mark::AgentMark, icon::Icon},
+};
 
 /// The tone a status is said in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,11 +139,12 @@ pub(super) const fn vendor_key(provider: AgentProvider) -> &'static str {
   }
 }
 
-/// The glyph of a connection's kind (`Glyph icon` in `Connection list row` `LoIZ8`): an agent CLI, a model
-/// API Orchester runs agents on, GitHub, an MCP program or a remote MCP server. The bundled icons have no
-/// GitHub mark, so GitHub shows its pull requests' glyph.
-pub(super) const fn agent_glyph(provider: AgentProvider) -> Icon {
-  if provider.is_native() { Icon::Cpu } else { Icon::Bot }
+/// The glyph of an agent connection (`Agent marks` `z7PmEL`): the mark of the maker whose models it runs (Claude Code,
+/// Codex, the Anthropic and OpenAI APIs), or Lucide's cloud for a CLI on an API provider such as DeepSeek. GitHub, an
+/// MCP program and a remote MCP server keep their Lucide glyphs; the bundled icons have no GitHub mark, so GitHub shows
+/// its pull requests' glyph.
+pub(super) fn agent_glyph(connection: &AgentConnection) -> Glyph {
+  AgentMark::of_connection(connection).map_or(Glyph::Icon(Icon::Cloud), Glyph::Mark)
 }
 
 pub(super) const GITHUB_GLYPH: Icon = Icon::GitPullRequest;

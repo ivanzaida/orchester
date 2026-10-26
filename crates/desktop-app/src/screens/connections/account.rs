@@ -279,7 +279,10 @@ pub(super) fn account_row(
   let hint = match (detail, limits) {
     (Some(detail), Some(limits)) => Some(
       ctx
-        .t_args("connections.account.withLimits", [("detail", detail), ("limits", limits)])
+        .t_args(
+          "connections.account.withLimits",
+          [("detail", detail), ("limits", limits)],
+        )
         .to_string(),
     ),
     (detail, limits) => detail.or(limits),
@@ -292,7 +295,10 @@ pub(super) fn account_row(
     .id("connection-account-link")
     .spacing(crate::theme::ExtraSpacing::Snug.role())
     .align_items(lurq::layout::Alignment::Center)
-    .child(crate::screens::project_settings::kit::value("connection-account-name", &shown))
+    .child(crate::screens::project_settings::kit::value(
+      "connection-account-name",
+      &shown,
+    ))
     .child(crate::ui::icon::icon(
       Icon::ArrowUpRight,
       crate::theme::IconSize::Md,

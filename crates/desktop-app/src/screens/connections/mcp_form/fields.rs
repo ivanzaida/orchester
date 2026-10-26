@@ -132,7 +132,12 @@ impl Fields {
       TransportChoice::Http => self.remote_rows(ctx, &errors, &listed.secrets),
     });
     vec![
-      form_group("connection-mcp-server", &ctx.t("connections.mcp.dialog.server"), None, rows),
+      form_group(
+        "connection-mcp-server",
+        &ctx.t("connections.mcp.dialog.server"),
+        None,
+        rows,
+      ),
       self.approvals_section(ctx, &errors),
       closing(ctx, project),
     ]

@@ -1,7 +1,7 @@
 //! A project and window of the test's own, with settings driven by element id.
 use std::{path::PathBuf, time::Duration};
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{ProjectPage, ProjectSettingsTab, Route};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
   id::ConnectionId,
@@ -19,6 +19,7 @@ pub struct Settings {
   editing: String,
 }
 impl Settings {
+  /// Project settings on Runs, where Auto mode, the limits and the environment are.
   pub fn new(reviewer: bool) -> Self {
     let mut window = Window::open();
     let repo = window.data.dir.path().join("repo-kontur");
@@ -26,18 +27,34 @@ impl Settings {
       add_reviewer(&repo);
     }
     window.tree.resize(1440, 1375);
-    window
-      .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Settings(Default::default())));
-    window.until("settings General", |window| window.texts("settings-auto").is_some());
+    window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::Settings(ProjectSettingsTab::Runs),
+    ));
+    window.until("settings Runs", |window| window.texts("settings-auto").is_some());
     Self {
       window,
       repo,
       editing: String::new(),
     }
   }
+  /// The tab that holds what `name` names, once `ready` shows: Limits and Environment are on Runs, Sources and the code
+  /// index on Context. The environment's variables show once its row's Edit opens them.
   pub fn tab(&mut self, name: &str, ready: &str) {
-    self.click(&format!("settings-tab-{name}"));
+    let tab = match name {
+      "limits" | "environment" => "runs",
+      "sources" | "codeIndex" | "code_index" => "context",
+      tab => tab,
+    };
+    self.click(&format!("settings-tab-{tab}"));
+    if ready == "settings-environment-variables" {
+      self.until("the environment's row", |s| {
+        s.exists(ready) || s.exists("settings-environment-edit")
+      });
+      if !self.exists(ready) {
+        self.click("settings-environment-edit");
+      }
+    }
     self.until("the tab", |s| s.exists(ready));
   }
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {

@@ -12,7 +12,9 @@ use orchester_core::{
 use super::{
   Actions, Inspecting, Parts,
   agent::{checked_detail, menu, models, program_rows},
-  check_button, rename::title_with_rename, result, sentence, sentence_tone, shown,
+  check_button,
+  rename::title_with_rename,
+  result, sentence, sentence_tone, shown,
 };
 use crate::{
   screens::{
@@ -37,9 +39,14 @@ pub(super) fn parts(
   let key = secrets.iter().find(|secret| secret.id() == provider.key());
   let status = connection.status_with(secrets);
   let shown_status = shown(inspecting, connection_status(connection, status));
-  let mut runs_on = Group::new("connection-provider", ctx.t("connections.runsOn")).rows(program_rows(ctx, connection, inspecting));
+  let mut runs_on =
+    Group::new("connection-provider", ctx.t("connections.runsOn")).rows(program_rows(ctx, connection, inspecting));
   runs_on = runs_on.rows(runs_on_rows(ctx, connection.provider(), provider, key));
-  let check = check_button(inspecting, ("connection-test", ctx.t("connections.checkAgain")), actions);
+  let check = check_button(
+    inspecting,
+    ("connection-test", ctx.t("connections.checkAgain")),
+    actions,
+  );
   let head_actions = if status == ConnectionStatus::KeyMissing {
     let edit = ActionButton::new("connection-edit-key", ButtonKind::Primary, ctx.t("connections.edit"))
       .icon(Icon::Pencil)
@@ -61,8 +68,12 @@ pub(super) fn parts(
     .collect();
   notices.extend(result::agent(ctx, connection, inspecting));
   Parts {
-    glyph: agent_glyph(connection.provider()),
-    title: title_with_rename(ctx, (inspecting, actions), (connection.id(), connection.name().as_str())),
+    glyph: agent_glyph(connection),
+    title: title_with_rename(
+      ctx,
+      (inspecting, actions),
+      (connection.id(), connection.name().as_str()),
+    ),
     status: shown_status,
     status_detail: checked_detail(ctx, connection, inspecting),
     actions: head_actions,
@@ -87,7 +98,10 @@ fn runs_on_rows(ctx: &mut Ctx, cli: AgentProvider, provider: &ApiProvider, key: 
   let mut rows = vec![
     SettingRow::new("connection-runs-on", ctx.t("connections.runsOn"))
       .hint(ctx.t(interface))
-      .control(value("connection-runs-on-value", &ctx.t("connections.apiProvider.label")))
+      .control(value(
+        "connection-runs-on-value",
+        &ctx.t("connections.apiProvider.label"),
+      ))
       .render(ctx),
     SettingRow::new("connection-provider-base-url", ctx.t("connections.apiProvider.url"))
       .hint(ctx.t_args("connections.apiProvider.sentTo", [("host", provider.base_url().host())]))

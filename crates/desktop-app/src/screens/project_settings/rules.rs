@@ -67,7 +67,10 @@ impl Component for Rules {
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let crumb = back(
       "settings-rules-crumb",
-      (&ctx.t("project_settings.runs"), Some(&ctx.t("project_settings.projectRules"))),
+      (
+        &ctx.t("project_settings.runs"),
+        Some(&ctx.t("project_settings.projectRules")),
+      ),
       Navigation::of(ctx).to(Route::Project(
         props.project.open.project.id(),
         ProjectPage::Settings(ProjectSettingsTab::Runs),
@@ -96,10 +99,14 @@ impl Rules {
   /// The rules, each with Revoke, under their count and *Add rule*, unavailable; or that there is none yet.
   fn rules(&self, ctx: &mut Ctx, props: &TabProps, rules: &[ProjectRule]) -> Element {
     let busy = self.save.state().get().is_pending();
-    let add = ActionButton::new("settings-rules-add", ButtonKind::Ghost, ctx.t("project_settings.addRule"))
-      .icon(Icon::Plus)
-      .compact()
-      .unavailable(ctx.t("project_settings.addRuleUnavailable"));
+    let add = ActionButton::new(
+      "settings-rules-add",
+      ButtonKind::Ghost,
+      ctx.t("project_settings.addRule"),
+    )
+    .icon(Icon::Plus)
+    .compact()
+    .unavailable(ctx.t("project_settings.addRuleUnavailable"));
     let count = Text::new(&rules.len().to_string())
       .id("settings-rules-count")
       .variant(crate::theme::ProjectSettingsText::Hint.role());
@@ -158,7 +165,11 @@ impl Rules {
     let revoke = if busy {
       revoke.disabled()
     } else {
-      let start = work::start(&self.save, props.project.open.repo_root.clone(), Change::Revoke(rule.id));
+      let start = work::start(
+        &self.save,
+        props.project.open.repo_root.clone(),
+        Change::Revoke(rule.id),
+      );
       revoke.on_click(move || start())
     };
     SettingRow::new(
@@ -183,7 +194,10 @@ fn how_added(ctx: &Ctx) -> Element {
   let tile = Column::new()
     .id("settings-rules-answer")
     .width(Dimension::Pct(50.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Inline.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Loose.role(),
+      ExtraSpacing::Inline.role(),
+    ))
     .spacing(ExtraSpacing::Fine.role())
     .background(PaletteColor::SurfacePanel)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))

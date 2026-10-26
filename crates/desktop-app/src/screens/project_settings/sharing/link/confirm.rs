@@ -46,7 +46,11 @@ impl Link {
           .on_click(move || sharing.set(false));
         let link = self.link_button(ctx, self.choice(props, listed), resolving.is_pending());
         let hint = ctx.t("sharing.link.hint");
-        column.child(form_actions("sharing-link-actions", vec![cancel.into(), link], Some(&hint)))
+        column.child(form_actions(
+          "sharing-link-actions",
+          vec![cancel.into(), link],
+          Some(&hint),
+        ))
       }
     };
     column = column.with_children(self.person.reason(ctx, LINK));

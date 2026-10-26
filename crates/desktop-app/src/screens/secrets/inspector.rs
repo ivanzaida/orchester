@@ -1,8 +1,9 @@
-//! A secret's page (`06b` `famwr`): the crumb back to Secrets; its head with its kind's tile, its name, its environment,
-//! how many use it and when its value was set, Replace value and the … menu (Archive); *Replace value* asked in place
-//! under the head (`form`); *Details* (project, environment, kind, value and when it was last rotated), *Used by* (each
-//! tool and MCP server, as links), *Recent access* (which Orchester does not record yet, and says so), and *Archive …?*
-//! asked in place under them (`Archive · question` `fw0eT`). An archived secret says so, and offers neither.
+//! A secret's page (`06b` `famwr`): the crumb back to Secrets; its head with its kind's tile, its name, its
+//! environment, how many use it and when its value was set, Replace value and the … menu (Archive); *Replace value*
+//! asked in place under the head (`form`); *Details* (project, environment, kind, value and when it was last rotated),
+//! *Used by* (each tool and MCP server, as links), *Recent access* (which Orchester does not record yet, and says so),
+//! and *Archive …?* asked in place under them (`Archive · question` `fw0eT`). An archived secret says so, and offers
+//! neither.
 
 use lurq::{
   app::{
@@ -107,7 +108,8 @@ impl Component for Inspector {
         },
       )
     });
-    let archive = (props.panel == SecretsPanel::Archive && !props.secret.is_archived()).then(|| self.archive(ctx, &props));
+    let archive =
+      (props.panel == SecretsPanel::Archive && !props.secret.is_archived()).then(|| self.archive(ctx, &props));
     Column::new()
       .id("secret-inspector")
       .width(Dimension::Pct(100.0))
@@ -152,7 +154,8 @@ impl Inspector {
     if !secret.is_archived() {
       let (view, id) = (props.view.clone(), secret.id());
       let pending = self.action.state().get().is_pending();
-      let replace = ActionButton::new("secret-replace", ButtonKind::Secondary, ctx.t("secrets.replace")).icon(Icon::RefreshCw);
+      let replace =
+        ActionButton::new("secret-replace", ButtonKind::Secondary, ctx.t("secrets.replace")).icon(Icon::RefreshCw);
       let replace = if pending || props.panel == SecretsPanel::Replace {
         replace.disabled()
       } else {
@@ -162,8 +165,9 @@ impl Inspector {
       actions.push(self.more(ctx, props, pending));
     }
     entity_head(
+      ctx,
       "secret-inspector-header",
-      (words::glyph(secret.kind()), title.into()),
+      (words::glyph(secret.kind()).into(), title.into()),
       meta.into(),
       actions,
     )
@@ -178,7 +182,11 @@ impl Inspector {
       .on_click(move || toggle.update(|open| *open = !*open))
       .render(ctx);
     let archive = if pending {
-      MenuItem::unavailable("secret-archive", ctx.t("secrets.archive"), ctx.t("secrets.archiving.running"))
+      MenuItem::unavailable(
+        "secret-archive",
+        ctx.t("secrets.archive"),
+        ctx.t("secrets.archiving.running"),
+      )
     } else {
       let (view, id) = (props.view.clone(), props.secret.id());
       MenuItem::new("secret-archive", ctx.t("secrets.archive"), move || {
@@ -189,10 +197,7 @@ impl Inspector {
     let panel = menu_panel("secret-more-menu")
       .width(Dimension::Px(MENU_WIDTH))
       .child(archive.render(ctx, &open));
-    Row::new()
-      .child(button)
-      .child(menu_at_end(anchor, open, panel))
-      .into()
+    Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
   }
 
   /// *Archive …?* in place: what it does to what uses the secret, Archive and Keep it.
@@ -241,7 +246,12 @@ impl Inspector {
     let keep = ActionButton::new("secret-archive-cancel", ButtonKind::Ghost, ctx.t("secrets.keepIt"))
       .on_click(move || view.close_panel());
     let keep = if state.is_pending() { keep.disabled() } else { keep };
-    let mut asked = question("secret-archive-question", &title, &[impact, explanation], vec![go.into(), keep.into()]);
+    let mut asked = question(
+      "secret-archive-question",
+      &title,
+      &[impact, explanation],
+      vec![go.into(), keep.into()],
+    );
     if let Some(error) = &state.error {
       asked = asked.child(field_error("secret-archive-error", &message_text(ctx, error)));
     }
@@ -259,13 +269,24 @@ fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
     ),
   };
   let mut rows = vec![
-    detail(ctx, "secret-project", ("secrets.project", project.open.project.name().as_str())),
+    detail(
+      ctx,
+      "secret-project",
+      ("secrets.project", project.open.project.name().as_str()),
+    ),
     detail(
       ctx,
       "secret-environment",
-      ("secrets.environment", &ctx.t(words::environment_key(secret.environment()))),
+      (
+        "secrets.environment",
+        &ctx.t(words::environment_key(secret.environment())),
+      ),
     ),
-    detail(ctx, "secret-kind", ("secrets.kind", &ctx.t(words::kind_key(secret.kind())))),
+    detail(
+      ctx,
+      "secret-kind",
+      ("secrets.kind", &ctx.t(words::kind_key(secret.kind()))),
+    ),
   ];
   if secret.is_archived() {
     rows.push(
@@ -291,9 +312,7 @@ fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
     );
   }
   rows.push(detail(ctx, "secret-rotated", ("secrets.rotated", &rotated)));
-  Group::new("secret-details", ctx.t("secrets.details"))
-    .rows(rows)
-    .into()
+  Group::new("secret-details", ctx.t("secrets.details")).rows(rows).into()
 }
 
 fn detail(ctx: &mut Ctx, id: &str, (key, shown): (&str, &str)) -> Element {
@@ -338,7 +357,7 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
     group.row(EmptyRow::new(
       "secret-use-none",
       Icon::Unlink,
-      ctx.t("secrets.uses.noneHeading"),
+      ctx.t("secrets.uses.noneTitle"),
       note,
     ))
   } else {

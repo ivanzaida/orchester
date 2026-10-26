@@ -258,7 +258,9 @@
       "leaveBody": "You stop being a member of {{project}} on {{server}}. Its tasks stay here as they are, read-only; an owner can invite you again.",
       "leaveConfirm": "Leave",
       "leaveKeep": "Stay a member",
-      "makeLocalSection": "Make local"
+      "makeLocalSection": "Make local",
+      "leaveHint": "You stop being a member; the project stays on the server for the team",
+      "makeLocalHint": "Keeps a copy of its tasks here; the server's stay for the team"
     },
     "upload": {
       "crumb": "Link to {{server}}",
@@ -338,7 +340,11 @@
       "countAsOf": "{{count}} · as of {{time}}",
       "youUntil": "· you, until {{time}}",
       "comeBack": "To come back, ask an owner, {{owners}}, to add {{username}} in {{server}}'s server admin; Check again looks at once, and Orchester also checks every minute.",
-      "comeBackNoName": "To come back, ask an owner, {{owners}}, to add you again in {{server}}'s server admin; Check again looks at once, and Orchester also checks every minute."
+      "comeBackNoName": "To come back, ask an owner, {{owners}}, to add you again in {{server}}'s server admin; Check again looks at once, and Orchester also checks every minute.",
+      "asOf": "{{names}} · as of {{time}}",
+      "comeBackTitle": "Not a member any more",
+      "memberHint": "{{username}} · added {{day}}",
+      "namedMore": "{{names}} +{{more}}"
     },
     "makeLocal": {
       "reading": "Reading what making it local changes…",
@@ -392,7 +398,8 @@
       "noAddress": "The project's address hasn't been read from its server yet, so there's nothing to write.",
       "noServer": "Unavailable while the project's server isn't in Settings › Orchester: Orchester checks the address against that server before writing it.",
       "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester doesn't write it. If {{own}} is how your team reaches {{server}}, connect to it by that address.",
-      "invalidAddress": "{{server}} answered with a project address Orchester can't read, so Orchester doesn't write it."
+      "invalidAddress": "{{server}} answered with a project address Orchester can't read, so Orchester doesn't write it.",
+      "state": "{{file}} · {{committed}}"
     },
     "join": {
       "crumb": "Join {{key}}",
@@ -527,6 +534,31 @@
         "link": "Link a checkout…",
         "open": "Open Settings › Orchester"
       }
+    },
+    "share": {
+      "title": "Share {{project}} on a team server",
+      "lead": "Its tasks move to the server; teammates see and run them. Runs, worktrees and settings stay on each computer.",
+      "server": "Server",
+      "projectOnServer": "Project on the server",
+      "addressHint": "Or the address of a project you are a member of",
+      "cancel": "Cancel",
+      "localProject": "Local project",
+      "onlyYou": "Only you",
+      "onServer": "Share on a team server",
+      "onServerHint": "Its tasks move to the server; teammates see and run them",
+      "open": "Share…"
+    },
+    "team": {
+      "title": "Team server",
+      "address": "Address",
+      "addressHint": "Synced {{time}} · {{state}}",
+      "role": "Your role",
+      "roleHint": "Key {{key}} · since {{day}}",
+      "leave": "Leave the project",
+      "refused": "What a shared project can't do yet",
+      "refusedFields": "Task fields the server doesn't keep",
+      "refusedFieldsHint": "Delivers, Don't merge automatically · the server refuses a change rather than lose it",
+      "refusedFieldsInfo": "A shared project's server keeps neither what a task's runs deliver nor Don't merge automatically. Setting either on a task of this project is refused rather than lost, so the Orchestrator never merges or completes a task on its own that you believe opted out or set otherwise."
     }
   }
 }

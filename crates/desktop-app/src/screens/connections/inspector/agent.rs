@@ -68,7 +68,11 @@ pub(super) fn parts(
 }
 
 /// Rename and Edit connection, the … menu of an agent connection; Edit chooses a CLI connection's account.
-pub(super) fn menu(ctx: &Ctx, connection: &AgentConnection, (inspecting, actions): (&Inspecting<'_>, &Actions)) -> Vec<MenuItem> {
+pub(super) fn menu(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  (inspecting, actions): (&Inspecting<'_>, &Actions),
+) -> Vec<MenuItem> {
   let edit = MenuItem::opens(
     "connection-edit",
     ctx.t("connections.edit"),
@@ -94,16 +98,30 @@ fn cli(
     .row(
       SettingRow::new("connection-authentication", ctx.t("connections.runsOn"))
         .hint(ctx.t("connections.runsOnHint"))
-        .control(value("connection-authentication-value", &ctx.t("connections.ownSignIn")))
+        .control(value(
+          "connection-authentication-value",
+          &ctx.t("connections.ownSignIn"),
+        ))
         .render(ctx),
     )
     .row(super::super::account::account_row(ctx, inspecting.accounts, connection));
   Parts {
-    glyph: agent_glyph(connection.provider()),
-    title: title_with_rename(ctx, (inspecting, actions), (connection.id(), connection.name().as_str())),
+    glyph: agent_glyph(connection),
+    title: title_with_rename(
+      ctx,
+      (inspecting, actions),
+      (connection.id(), connection.name().as_str()),
+    ),
     status: shown_status,
     status_detail: checked_detail(ctx, connection, inspecting),
-    actions: vec![check_button(inspecting, ("connection-test", ctx.t("connections.checkAgain")), actions).into()],
+    actions: vec![
+      check_button(
+        inspecting,
+        ("connection-test", ctx.t("connections.checkAgain")),
+        actions,
+      )
+      .into(),
+    ],
     menu: menu(ctx, connection, (inspecting, actions)),
     notices,
     groups: vec![runs_on.into(), models(ctx, connection, inspecting, actions), used],
@@ -181,8 +199,14 @@ pub(super) fn program_rows(ctx: &mut Ctx, connection: &AgentConnection, inspecti
     .map(|program| display::shorten_path(program, PATH_CHARS))
     .unwrap_or_default();
   let hint = match launch.map(Launch::via) {
-    Some(Via::CommandScript) => ctx.t_args("connections.programRunsWith", [("path", path.as_str()), ("runner", CMD)]),
-    Some(Via::NodeScript { .. }) => ctx.t_args("connections.programRunsWith", [("path", path.as_str()), ("runner", NODE)]),
+    Some(Via::CommandScript) => ctx.t_args(
+      "connections.programRunsWith",
+      [("path", path.as_str()), ("runner", CMD)],
+    ),
+    Some(Via::NodeScript { .. }) => ctx.t_args(
+      "connections.programRunsWith",
+      [("path", path.as_str()), ("runner", NODE)],
+    ),
     Some(Via::LauncherProgram) => ctx.t_args(
       "connections.programRunsWith",
       [
@@ -250,7 +274,12 @@ fn too_old(ctx: &Ctx, connection: &AgentConnection) -> Option<Element> {
 
 /// *Models* (`OWJtS`): the models the last check listed (a model the CLI is too old for marked) in the row's hint,
 /// where the list came from in its (i), and Refresh; a CLI on an API provider types its models in Edit connection.
-pub(super) fn models(ctx: &mut Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, actions: &Actions) -> Element {
+pub(super) fn models(
+  ctx: &mut Ctx,
+  connection: &AgentConnection,
+  inspecting: &Inspecting<'_>,
+  actions: &Actions,
+) -> Element {
   let names: Vec<String> = connection
     .models()
     .iter()
@@ -355,8 +384,12 @@ fn native(
     .unavailable(reason.clone());
   let edit = MenuItem::unavailable("connection-edit", ctx.t("connections.edit"), reason).icon(Icon::Pencil);
   Parts {
-    glyph: agent_glyph(connection.provider()),
-    title: title_with_rename(ctx, (inspecting, actions), (connection.id(), connection.name().as_str())),
+    glyph: agent_glyph(connection),
+    title: title_with_rename(
+      ctx,
+      (inspecting, actions),
+      (connection.id(), connection.name().as_str()),
+    ),
     status: shown(
       inspecting,
       connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
@@ -377,7 +410,12 @@ fn native(
 }
 
 /// A native connection's provider, preset, endpoint, key and where it runs.
-fn native_rows(ctx: &mut Ctx, connection: &AgentConnection, api: &ApiEndpoint, inspecting: &Inspecting<'_>) -> Vec<Element> {
+fn native_rows(
+  ctx: &mut Ctx,
+  connection: &AgentConnection,
+  api: &ApiEndpoint,
+  inspecting: &Inspecting<'_>,
+) -> Vec<Element> {
   let provider = ctx.t(provider_key(connection.provider()));
   let key = inspecting
     .listed
@@ -410,7 +448,12 @@ fn native_rows(ctx: &mut Ctx, connection: &AgentConnection, api: &ApiEndpoint, i
       api.base_url().as_str().into(),
       true,
     ),
-    ("connection-authentication", "connections.property.authentication", key, false),
+    (
+      "connection-authentication",
+      "connections.property.authentication",
+      key,
+      false,
+    ),
     (
       "connection-execution",
       "connections.property.execution",

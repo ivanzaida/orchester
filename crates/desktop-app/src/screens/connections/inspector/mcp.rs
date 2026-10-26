@@ -10,7 +10,9 @@
 use std::{path::Path, sync::Arc};
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::connection::mcp::{HttpServer, McpAuthorization, McpEnvValue, McpServer, McpTransport, StdioServer};
+use orchester_core::connection::mcp::{
+  HttpServer, McpAuthorization, McpEnvValue, McpServer, McpTransport, StdioServer,
+};
 use orchester_workspace::{connections::mcp::enabling, display};
 
 use super::{Actions, Confirm, Inspecting, Parts, title, used_by_row};
@@ -61,12 +63,25 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
     !users.is_empty(),
   );
   let busy = inspecting.running.is_some();
-  let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.mcp.editShort")).icon(Icon::Pencil);
-  let edit = if busy { edit.disabled() } else { edit.opens((actions.edit)(server.id())) };
+  let edit = ActionButton::new(
+    "connection-edit",
+    ButtonKind::Secondary,
+    ctx.t("connections.mcp.editShort"),
+  )
+  .icon(Icon::Pencil);
+  let edit = if busy {
+    edit.disabled()
+  } else {
+    edit.opens((actions.edit)(server.id()))
+  };
   let question = inspecting
     .confirming
     .map(|confirm| asked(ctx, server, (confirm, &users), &asks));
-  let mut groups = vec![server_group(ctx, server, inspecting), sends_group(ctx, server, inspecting), tools_group(ctx)];
+  let mut groups = vec![
+    server_group(ctx, server, inspecting),
+    sends_group(ctx, server, inspecting),
+    tools_group(ctx),
+  ];
   groups.push(used_by_row(ctx, &users, actions, "connections.mcp.notUsed"));
   let off = (!server.enabled() && !users.is_empty()).then(|| {
     let key = if users.len() == 1 {
@@ -81,7 +96,7 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
     )
   });
   Parts {
-    glyph: mcp_glyph(server),
+    glyph: mcp_glyph(server).into(),
     title: title(server.name().as_str()).into(),
     status: mcp_status(server.enabled()),
     status_detail: Some(detail),
@@ -124,7 +139,9 @@ pub(in crate::screens::connections) fn switch(
   match (running, confirming) {
     (Some(_), _) | (None, Some(_)) => toggle.into(),
     (None, None) if enabled && used => toggle.on_change(move |_| confirm(Some(Confirm::TurnOff))).into(),
-    (None, None) if enabled => toggle.on_change(move |_| start(server_id, Work::SetEnabled(false))).into(),
+    (None, None) if enabled => toggle
+      .on_change(move |_| start(server_id, Work::SetEnabled(false)))
+      .into(),
     (None, None) => toggle.on_change(move |_| confirm(Some(Confirm::TurnOn))).into(),
   }
 }
@@ -144,7 +161,13 @@ pub(in crate::screens::connections) fn asked(
 }
 
 /// Rename, which Edit MCP server does, and Remove: unavailable, with why, while profiles choose the server.
-fn menu(ctx: &Ctx, server: &McpServer, inspecting: &Inspecting<'_>, actions: &Actions, users: &[String]) -> Vec<MenuItem> {
+fn menu(
+  ctx: &Ctx,
+  server: &McpServer,
+  inspecting: &Inspecting<'_>,
+  actions: &Actions,
+  users: &[String],
+) -> Vec<MenuItem> {
   let rename = MenuItem::opens(
     "connection-rename",
     ctx.t("connections.rename.action"),
@@ -153,7 +176,11 @@ fn menu(ctx: &Ctx, server: &McpServer, inspecting: &Inspecting<'_>, actions: &Ac
   .icon(Icon::Pencil);
   let remove = if users.is_empty() {
     match inspecting.running {
-      Some(_) => MenuItem::unavailable("connection-remove", ctx.t("connections.mcp.remove"), ctx.t("connections.busy")),
+      Some(_) => MenuItem::unavailable(
+        "connection-remove",
+        ctx.t("connections.mcp.remove"),
+        ctx.t("connections.busy"),
+      ),
       None => {
         let confirm = actions.confirm.clone();
         MenuItem::new("connection-remove", ctx.t("connections.mcp.remove"), move || {
@@ -186,7 +213,9 @@ fn server_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) 
 fn row(ctx: &mut Ctx, id: &str, (label, shown): (&str, &str), mono: bool) -> SettingRow {
   let value = value(&format!("{id}-value"), shown);
   let value = if mono {
-    value.variant(ExtraTypography::PropertyMono.role()).color(lurq::app::theme::PaletteColor::TextSecondary)
+    value
+      .variant(ExtraTypography::PropertyMono.role())
+      .color(lurq::app::theme::PaletteColor::TextSecondary)
   } else {
     value
   };
@@ -200,11 +229,25 @@ fn stdio_rows(ctx: &mut Ctx, stdio: &StdioServer) -> Vec<Element> {
     Some(folder) => (folder.as_str().to_owned(), true),
     None => (ctx.t("connections.mcp.theWorktree").to_string(), false),
   };
-  let runs_as = row(ctx, "connection-type", ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeStdio")), false)
-    .hint(ctx.t("connections.mcp.startedByCli"))
-    .render(ctx);
+  let runs_as = row(
+    ctx,
+    "connection-type",
+    ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeStdio")),
+    false,
+  )
+  .hint(ctx.t("connections.mcp.startedByCli"))
+  .render(ctx);
   let program = display::shorten_path(Path::new(stdio.program().as_str()), PATH_CHARS);
-  let mut rows = vec![runs_as, row(ctx, "connection-program", ("connections.mcp.property.program", &program), true).render(ctx)];
+  let mut rows = vec![
+    runs_as,
+    row(
+      ctx,
+      "connection-program",
+      ("connections.mcp.property.program", &program),
+      true,
+    )
+    .render(ctx),
+  ];
   if !arguments.is_empty() {
     rows.push(
       row(
@@ -216,7 +259,15 @@ fn stdio_rows(ctx: &mut Ctx, stdio: &StdioServer) -> Vec<Element> {
       .render(ctx),
     );
   }
-  rows.push(row(ctx, "connection-folder", ("connections.mcp.property.folder", &folder), mono).render(ctx));
+  rows.push(
+    row(
+      ctx,
+      "connection-folder",
+      ("connections.mcp.property.folder", &folder),
+      mono,
+    )
+    .render(ctx),
+  );
   rows
 }
 
@@ -240,10 +291,21 @@ fn http_rows(ctx: &mut Ctx, http: &HttpServer, inspecting: &Inspecting<'_>) -> V
     ),
   };
   vec![
-    row(ctx, "connection-type", ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeHttp")), false)
-      .hint(ctx.t("connections.mcp.reachedByCli"))
-      .render(ctx),
-    row(ctx, "connection-endpoint", ("connections.mcp.property.endpoint", http.url().as_str()), true).render(ctx),
+    row(
+      ctx,
+      "connection-type",
+      ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeHttp")),
+      false,
+    )
+    .hint(ctx.t("connections.mcp.reachedByCli"))
+    .render(ctx),
+    row(
+      ctx,
+      "connection-endpoint",
+      ("connections.mcp.property.endpoint", http.url().as_str()),
+      true,
+    )
+    .render(ctx),
     row(
       ctx,
       "connection-authentication",
@@ -282,12 +344,18 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
     .iter()
     .map(|(name, shown)| match shown {
       McpEnvValue::Text(text) => ctx
-        .t_args("connections.mcp.variableText", [("name", name.as_str()), ("value", text.as_str())])
+        .t_args(
+          "connections.mcp.variableText",
+          [("name", name.as_str()), ("value", text.as_str())],
+        )
         .to_string(),
       McpEnvValue::Secret(secret) => ctx
         .t_args(
           "connections.mcp.variableSecret",
-          [("name", name.as_str()), ("secret", &*secret_name(ctx, inspecting, *secret))],
+          [
+            ("name", name.as_str()),
+            ("secret", &*secret_name(ctx, inspecting, *secret)),
+          ],
         )
         .to_string(),
     })
@@ -301,7 +369,12 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
   } else {
     variables.join("; ").into()
   };
-  let mut variables_row = row(ctx, "connection-variables", ("connections.mcp.variables", &shown), false);
+  let mut variables_row = row(
+    ctx,
+    "connection-variables",
+    ("connections.mcp.variables", &shown),
+    false,
+  );
   if missing {
     let open = Navigation::of(ctx).to(Route::Project(
       inspecting.open.project.id(),
@@ -311,20 +384,34 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
       .toned(ctx.t("connections.mcp.secretMissing.title"), Tone::Warning)
       .info(ctx.t("connections.mcp.secretMissing.detail"))
       .control(
-        ActionButton::new("connection-open-secrets", ButtonKind::Secondary, ctx.t("connections.mcp.openSecrets"))
-          .icon(Icon::KeyRound)
-          .compact()
-          .opens(open),
+        ActionButton::new(
+          "connection-open-secrets",
+          ButtonKind::Secondary,
+          ctx.t("connections.mcp.openSecrets"),
+        )
+        .icon(Icon::KeyRound)
+        .compact()
+        .opens(open),
       );
   }
   let tools = server.exempt_tools().tools();
   let exempt = if tools.is_empty() {
     ctx.t("connections.mcp.exemptToolsNone")
   } else {
-    tools.iter().map(|tool| tool.as_str()).collect::<Vec<_>>().join(", ").into()
+    tools
+      .iter()
+      .map(|tool| tool.as_str())
+      .collect::<Vec<_>>()
+      .join(", ")
+      .into()
   };
-  let exempt_row = row(ctx, "connection-exempt-tools", ("connections.mcp.exemptTools", &exempt), false)
-    .info(ctx.t("connections.mcp.exemptToolsNote"));
+  let exempt_row = row(
+    ctx,
+    "connection-exempt-tools",
+    ("connections.mcp.exemptTools", &exempt),
+    false,
+  )
+  .info(ctx.t("connections.mcp.exemptToolsNote"));
   let rows = vec![variables_row.render(ctx), exempt_row.render(ctx)];
   Group::new("connection-variables", ctx.t("connections.mcp.sendsGroup"))
     .rows(rows)
@@ -422,11 +509,18 @@ fn narrowing(ctx: &Ctx, server: &McpServer, (narrowing, users): (Narrowing, &[St
       ctx.t("connections.mcp.confirmRemove.keep"),
     ),
   };
-  let (start, close, id_of, back) = (asks.start.clone(), asks.confirm.clone(), server.id(), asks.confirm.clone());
-  let go = ActionButton::new(id, ButtonKind::Danger, label).icon(glyph).on_click(move || {
-    close(None);
-    start(id_of, work);
-  });
+  let (start, close, id_of, back) = (
+    asks.start.clone(),
+    asks.confirm.clone(),
+    server.id(),
+    asks.confirm.clone(),
+  );
+  let go = ActionButton::new(id, ButtonKind::Danger, label)
+    .icon(glyph)
+    .on_click(move || {
+      close(None);
+      start(id_of, work);
+    });
   let keep = ActionButton::new("connection-confirm-keep", ButtonKind::Ghost, keep).on_click(move || back(None));
   question("connection-confirm", &title, &[body], vec![go.into(), keep.into()]).into()
 }

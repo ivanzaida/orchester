@@ -249,10 +249,14 @@ impl Linked {
     let state = self.leave.state().get();
     let entry = props.facts.linked_server();
     let unavailable = leave_unavailable(ctx, entry, server);
-    let button = ActionButton::new("sharing-leave", ButtonKind::Secondary, ctx.t("sharing.linked.leaveButton"))
-      .icon(Icon::LogOut)
-      .in_form();
-    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.linked.leave"))
+    let button = ActionButton::new(
+      "sharing-leave",
+      ButtonKind::Secondary,
+      ctx.t("sharing.linked.leaveButton"),
+    )
+    .icon(Icon::LogOut)
+    .in_form();
+    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.team.leave"))
       .hint(ctx.t("sharing.linked.leaveHint"))
       .info(ctx.t_args(
         // Without the server in the list, this computer is not connected to it for anything else either.

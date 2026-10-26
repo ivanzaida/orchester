@@ -156,7 +156,10 @@ pub(super) fn program_row(
     )
     .child(reason_line("connection-choose-file-reason", &choose_reason));
   let description = ctx.t_args("connections.dialog.programHint", [("program", program)]);
-  form_row(Label::new("connection-program", label).description(description), control)
+  form_row(
+    Label::new("connection-program", label).description(description),
+    control,
+  )
 }
 
 /// The check row, and the sign-in command under it while the CLI is not signed in. On an API provider (`on_provider`)
@@ -241,7 +244,10 @@ pub(super) fn check_row(
     .spacing(SpacingSize::Sm)
     .child(row)
     .with_children(command);
-  form_row(Label::new("connection-check", ctx.t("connections.dialog.check")), control)
+  form_row(
+    Label::new("connection-check", ctx.t("connections.dialog.check")),
+    control,
+  )
 }
 
 /// The check row's icon, its color, word and sentence.

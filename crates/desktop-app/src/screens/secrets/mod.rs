@@ -86,7 +86,11 @@ impl Component for SecretsScreen {
       })
       .state()
       .get();
-    let Some(listed) = loaded.data.clone().filter(|_| loaded.error.is_none() || loaded.is_pending()) else {
+    let Some(listed) = loaded
+      .data
+      .clone()
+      .filter(|_| loaded.error.is_none() || loaded.is_pending())
+    else {
       return kit::scroll(match loaded.error {
         Some(ref error) if !loaded.is_pending() => self.failed(ctx, error),
         _ => loading("secrets-loading", &ctx.t("secrets.reading")).into(),

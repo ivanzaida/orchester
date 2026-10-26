@@ -84,7 +84,7 @@ fn add_codex() {
   });
   seeded.until("Recheck leaves the window settled", |s| !s.window.tree.needs_redraw());
   seeded.set("connection-name", "Claude · Kontur");
-  assert!(seeded.text("connection-form-reason").contains("already has this name"));
+  assert!(seeded.text(Seeded::REASON).contains("already has this name"));
   seeded.set("connection-name", "Codex · local");
   seeded.click("connection-save");
   seeded.until("the saved connection", |seeded| seeded.exists("connection-inspector"));

@@ -96,7 +96,7 @@ app and compare the rest.
 `{"scenario": "<scenario>", "fake_agents": null, "no_runner": null}`. Orchester runs the worktree's
 `tools/qa-app.ps1` for you on the scenario, in `.tmp/qa/run-<number>-<step>/`, and answers the copy's pid.
 As many QA apps run on the computer at once as the project's *QA apps at once* allows (Project settings ›
-Limits, default 2): while other runs' QA apps hold every QA slot, the call waits and the run's transcript
+Runs › Limits, default 2): while other runs' QA apps hold every QA slot, the call waits and the run's transcript
 says *Waiting for a QA slot*; never write lease, ACK or hold notes, and never
 start the script yourself. Calling it again replaces your QA app; Orchester stops it, and frees the slot,
 when your turn ends, and also while your turn waits for a person (a tool approval, a question): start it

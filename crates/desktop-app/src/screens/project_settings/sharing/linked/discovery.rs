@@ -119,8 +119,7 @@ impl Component for DiscoveryRow {
       .filter(|_| !state.is_pending())
       .map(|reason| field_error("sharing-discovery-error", &reason.text(ctx)).into());
     let row = row.under_all(error);
-    Group::new("project-settings-sharing-discovery", ctx.t("sharing.discovery.label"))
-      .row(row.render(ctx))
+    Group::new("project-settings-sharing-discovery", ctx.t("sharing.discovery.label")).row(row.render(ctx))
   }
 }
 

@@ -1,8 +1,8 @@
 //! The other patterns of the page: an empty row (`Empty · No sources yet` `JKOnV`: an outlined 28 tile, what is
 //! missing in 13/500 `text_secondary` over one sentence in 12 `text_muted`, and its action), the question asked in
-//! place (`Archive · question` `fw0eT`: `surface_raised` inside a `border` stroke, radius 6, 10 over and under and 12 at
-//! its sides, its title in 13/600 over one sentence in 12 `text_secondary` and its actions, 8 apart), a sub-page's back
-//! crumb (`Crumb` `YYkW6`: an arrow and where it goes back to in 12 `text_muted`, the page after a `/` in
+//! place (`Archive · question` `fw0eT`: `surface_raised` inside a `border` stroke, radius 6, 10 over and under and 12
+//! at its sides, its title in 13/600 over one sentence in 12 `text_secondary` and its actions, 8 apart), a sub-page's
+//! back crumb (`Crumb` `YYkW6`: an arrow and where it goes back to in 12 `text_muted`, the page after a `/` in
 //! `text_secondary`), a sub-page's head (`Head` `mHwXV`: its title in 16/600 over what it does in 12.5
 //! `text_secondary`), an opened item's head (`Head` `a4Inip`: a 36 tile, its name in 16/600 over its status, its
 //! actions at the end), an item's 28 tile (`Tile` `oxMxA`) and a terminal command with Copy (`Command` `SiCGv`).
@@ -26,6 +26,7 @@ use crate::{
     ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText, SettingsText,
   },
   ui::{
+    agent_mark::AgentMark,
     code_box::CodeBox,
     icon::{Icon, icon},
     pressable::opening,
@@ -37,11 +38,34 @@ const TILE: f32 = 28.0;
 /// An opened item's tile (`Tile` `AFO61`).
 const HEAD_TILE: f32 = 36.0;
 
-/// An item's 28 tile on `surface_raised` inside a `border` stroke, radius 6, its 14 glyph `text_secondary`.
-pub(crate) fn tile(glyph: Icon) -> Row {
+/// What an item's tile shows: a Lucide glyph in `text_secondary`, or the mark of the maker of an agent's models in its
+/// own color (`ui::agent_mark`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Glyph {
+  Icon(Icon),
+  Mark(AgentMark),
+}
+
+impl From<Icon> for Glyph {
+  fn from(glyph: Icon) -> Self {
+    Self::Icon(glyph)
+  }
+}
+
+impl Glyph {
+  fn render(self, ctx: &Ctx, size: IconSize) -> Element {
+    match self {
+      Self::Icon(glyph) => icon(glyph, size, PaletteColor::TextSecondary).into(),
+      Self::Mark(mark) => mark.render(ctx, size),
+    }
+  }
+}
+
+/// An item's 28 tile on `surface_raised` inside a `border` stroke, radius 6, its 14 glyph or mark.
+pub(crate) fn tile(ctx: &Ctx, glyph: impl Into<Glyph>) -> Row {
   square(TILE, RadiusSize::Md)
     .background(PaletteColor::SurfaceRaised)
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+    .child(glyph.into().render(ctx, IconSize::Md))
 }
 
 /// An empty row's 28 tile: only its `border` stroke, its 14 glyph `text_muted` (`Tile` `Uagnp`).
@@ -171,11 +195,7 @@ pub(crate) fn back(id: &str, (parent, here): (&str, Option<&str>), open: Open) -
     .hovered_style(Style::new().background(crate::theme::ExtraColor::Hover.role()))
     .describe("a11y_name", parent.to_owned())
     .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      Text::new(parent)
-        .variant(ProjectSettingsText::Hint.role())
-        .nowrap(),
-    );
+    .child(Text::new(parent).variant(ProjectSettingsText::Hint.role()).nowrap());
   let here = here.map(|here| {
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
@@ -219,10 +239,16 @@ pub(crate) fn page_head(id: &str, title: &str, lead: Option<&str>) -> Element {
 }
 
 /// An opened item's head: its 36 tile with `glyph`, `title` over `status`, and `actions` at the end.
-pub(crate) fn entity_head(id: &str, (glyph, title): (Icon, Element), status: Element, actions: Vec<Element>) -> Element {
+pub(crate) fn entity_head(
+  ctx: &Ctx,
+  id: &str,
+  (glyph, title): (Glyph, Element),
+  status: Element,
+  actions: Vec<Element>,
+) -> Element {
   let tile = square(HEAD_TILE, ExtraRadius::Tile.role())
     .background(PaletteColor::SurfaceRaised)
-    .child(icon(glyph, IconSize::Lg, PaletteColor::TextSecondary));
+    .child(glyph.render(ctx, IconSize::Lg));
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))

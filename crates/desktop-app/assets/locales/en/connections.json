@@ -55,7 +55,9 @@
       "githubSignedIn": "gh · {{host}} · signed in as {{account}}",
       "withAccount": "{{line}} · account {{account}}",
       "apiProvider": "{{program}} · {{host}}",
-      "apiProviderVersion": "{{program}} {{version}} · {{host}}"
+      "apiProviderVersion": "{{program}} {{version}} · {{host}}",
+      "githubFor": "{{line}} · pull requests and pushes for {{repository}}",
+      "usedBy": "{{line}} · used by {{usage}}"
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
@@ -237,7 +239,8 @@
         "name": "Save unavailable: {{reason}}",
         "noProgram": "Save is available once the program is found on the PATH.",
         "notRecognized": "The program was not recognized as the chosen CLI, so the connection cannot be saved."
-      }
+      },
+      "addCrumb": "Add provider"
     },
     "github": {
       "add": "Add GitHub connection",
@@ -274,7 +277,11 @@
       "chooseProgram": "Choose program…",
       "changeAccount": "Change account or access",
       "usedByTool": "Used by tool",
-      "toolsUnavailable": "Not listed in this app yet"
+      "toolsUnavailable": "Not listed in this app yet",
+      "programFound": "gh {{version}} · found on the PATH",
+      "repositoryFrom": "{{repository}} · from {{remote}}",
+      "wrongAccountTitle": "Pull requests wait while gh is signed in as another account",
+      "emptyShort": "Pull requests need gh signed in on this computer; Orchester uses it as it is."
     },
     "mcp": {
       "add": "Add MCP server",
@@ -395,13 +402,31 @@
         "goneTitle": "This MCP server is no longer here",
         "goneDetail": "It was removed from the project. Connections lists the servers it has.",
         "widenTitle": "Saving widens what agents may do",
-        "keepEditing": "Keep editing"
+        "keepEditing": "Keep editing",
+        "addCrumb": "Add MCP server",
+        "editHere": "Edit {{name}}",
+        "programHere": "A program here",
+        "remoteServer": "A remote server (HTTP)"
       },
       "offUsersOne": "Turned off: {{profiles}} works without it until it is turned on.",
       "confirmOn": {
         "title": "Turn on {{name}}?",
         "keep": "Keep it off"
-      }
+      },
+      "editShort": "Edit",
+      "emptyDetailShort": "A program on this computer or a remote server that agents may use.",
+      "noVariables": "None",
+      "notUsedShort": "no profile chooses it yet",
+      "openSecrets": "Open Secrets",
+      "removeServer": "Remove server",
+      "rowUnused": "{{what}} · no profile chooses it yet",
+      "rowUsed": "{{what}} · used by {{profiles}}",
+      "runsAs": "Runs as",
+      "sendsGroup": "Sends",
+      "serverGroup": "Server",
+      "usedByShort": "used by {{profiles}}",
+      "variableSecret": "{{name}} from secret {{secret}}",
+      "variableText": "{{name}}={{value}}"
     },
     "account": {
       "label": "Account",
@@ -444,7 +469,8 @@
         "cliMissing": "CLI not found · install it, then check again in Settings",
         "folderMissing": "folder missing · runs won't start · choose it in Settings",
         "unsupported": "not supported on macOS yet"
-      }
+      },
+      "withLimits": "{{detail}} · {{limits}}"
     },
     "apiProvider": {
       "label": "Runs on",
@@ -509,6 +535,37 @@
         "staging": "Staging",
         "production": "Production"
       }
+    },
+    "agentsLink": "Agents",
+    "busy": "Unavailable while other work runs on this connection.",
+    "checkedAt": "checked {{time}}",
+    "connectionGroup": "Connection",
+    "listedMore": "{{names}} +{{more}}",
+    "modelsItLists": "Models it lists",
+    "more": "More",
+    "ownSignIn": "Its own sign-in",
+    "programRunsWith": "{{path}} · run by {{runner}}",
+    "runsOn": "Runs on",
+    "runsOnHint": "Its own sign-in, or an API provider with a key",
+    "statusWith": "{{status}} · {{detail}}",
+    "usedByHint": "Agent profiles that choose this connection",
+    "usedByHintNone": "No agent profile chooses it yet",
+    "empty": {
+      "title": "Connect an agent",
+      "lead": "Tasks run on a CLI on this computer or on a model API with a project key. Each agent profile then chooses its connection and model.",
+      "looking": "Looking for it on the search path…",
+      "found": "Found on the search path · sign in with one of your accounts",
+      "notFound": "Not found on the PATH · install it, then Check again",
+      "apiProvider": "A CLI on an API provider",
+      "apiProviderDetail": "Claude Code or Codex on a compatible API such as DeepSeek's, with a key from Secrets"
+    },
+    "groups": {
+      "add": "Add",
+      "addMcp": "Add MCP server",
+      "addProvider": "Add provider",
+      "agentProviders": "Agent providers",
+      "github": "GitHub",
+      "mcpServers": "MCP servers"
     }
   }
 }

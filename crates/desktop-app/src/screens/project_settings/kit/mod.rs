@@ -12,7 +12,7 @@ mod row;
 pub(crate) use self::{
   form::{form_actions, form_group, form_row},
   group::Group,
-  parts::{EmptyRow, back, command_line, entity_head, outlined_tile, page_head, question, tile},
+  parts::{EmptyRow, Glyph, back, command_line, entity_head, outlined_tile, page_head, question, tile},
   row::{SettingRow, Tone, value},
 };
 /// A tab's column of groups, scrolling under the page's tabs.
