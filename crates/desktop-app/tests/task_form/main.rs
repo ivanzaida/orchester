@@ -22,6 +22,7 @@ mod support;
 mod versions;
 
 use harness::Form;
+use lurq::app::events::MouseButton;
 use orchester_app::routes::{ProjectPage, Route, TaskList};
 use orchester_core::{
   store::{RunStore, TaskStore},
@@ -340,24 +341,41 @@ fn form_criteria_move_with_the_keyboard() {
 }
 
 /// A criterion row is 8 over and under one line (`cScHP`, 33 high): its ×, a 24 square, shows on it without
-/// making it taller, and still removes it.
+/// making it taller, and a press where the pointer sees it removes it.
 #[test]
 fn form_criteria_rows_keep_their_height_with_the_remove_button() {
   let mut form = Form::seeded("live");
   form.new_task();
   form.click("task-form-add-criterion");
   form.set("task-form-criterion-1-input", "First");
-  focus(&mut form, "task-form-criterion-1-input");
+  form.click("task-form-add-criterion");
+  form.set("task-form-criterion-2-input", "Second");
   let row = form.bounds("task-form-criterion-1");
   let remove = form.bounds("task-form-criterion-1-remove");
   assert!(row.height < remove.height + 16.0, "the row is {} high", row.height);
   assert!(
-    remove.y >= row.y && remove.y + remove.height <= row.y + row.height,
+    remove.height > 0.0 && remove.y >= row.y && remove.y + remove.height <= row.y + row.height,
     "the × sits on its row: {remove:?} in {row:?}"
   );
-  form.click("task-form-criterion-1-remove");
-  assert!(!form.exists("task-form-criterion-1"), "the × removes it");
+  let input = form.bounds("task-form-criterion-1-input");
+  assert!(
+    input.x + input.width <= remove.x,
+    "the text stops before the ×: {input:?}, {remove:?}"
+  );
+  let (x, y) = (remove.x + remove.width / 2.0, remove.y + remove.height / 2.0);
+  let tree = &mut form.window.tree;
+  tree.mouse_move(x, y);
+  tree.mouse_down(x, y, MouseButton::Left);
+  tree.mouse_up(x, y, MouseButton::Left);
+  form.window.pass();
+  assert_eq!(
+    form.value("task-form-criterion-1-input"),
+    "Second",
+    "a press on the × removes its criterion"
+  );
+  assert!(!form.exists("task-form-criterion-2"), "one criterion is left");
 }
+
 fn focus(form: &mut Form, id: &str) {
   form
     .window

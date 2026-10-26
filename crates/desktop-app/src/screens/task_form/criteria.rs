@@ -13,15 +13,15 @@ use lurq::{
     events::{TextInputEvent, keyboard_event::KeyboardEvent},
     theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextInput},
+  components::{Column, Row, Stack, Text, TextInput},
   core::{ElementRef, Signal},
-  layout::Alignment,
+  layout::{Alignment, StackAlignment},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 
 use super::state::View;
 use crate::{
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormText},
   ui::{
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -158,6 +158,9 @@ fn add_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, first: bool) -> Element
     .into()
 }
 
+/// A criterion: its row, and over the row's end its ×. The × lies over the row rather than in it, so the row stays 8
+/// over and under one line (`cScHP`) while the 24 square × keeps its own bounds to be drawn and pressed in; the row
+/// keeps the ×'s width free at its end, so the text never runs under it.
 fn criterion_row(
   ctx: &mut Ctx,
   criteria: &Signal<Vec<Criterion>>,
@@ -171,8 +174,17 @@ fn criterion_row(
   }
   let number = (index + 1).to_string();
   let frame = row_frame()
+    .child(
+      Text::new(&format!("{:02}", index + 1))
+        .width(Dimension::Px(NUMBER_WIDTH))
+        .variant(ExtraTypography::MonoNote.role()),
+    )
+    .child(criterion_input(ctx, criteria, row, &number, locked));
+  let item = Stack::new()
     .id(format!("task-form-criterion-{number}"))
     .key(format!("criterion-{}", row.id))
+    .width(Dimension::Pct(100.0))
+    .stack_align(StackAlignment::CenterEnd)
     .on_mouse_enter({
       let hovered = row.hovered.clone();
       move || hovered.set(true)
@@ -180,17 +192,15 @@ fn criterion_row(
     .on_mouse_leave({
       let hovered = row.hovered.clone();
       move || hovered.set(false)
-    })
-    .child(
-      Text::new(&format!("{:02}", index + 1))
-        .width(Dimension::Px(NUMBER_WIDTH))
-        .variant(ExtraTypography::MonoNote.role()),
-    )
-    .child(criterion_input(ctx, criteria, row, &number, locked));
+    });
   if locked {
-    return frame.into();
+    return item.child(frame).into();
   }
-  frame.child(remove_button(ctx, criteria, row, &number)).into()
+  let room = Row::new().width(Dimension::Px(ControlHeight::Sm.value()));
+  item
+    .child(frame.child(room))
+    .child(remove_button(ctx, criteria, row, &number))
+    .into()
 }
 
 fn criterion_input(
@@ -237,8 +247,8 @@ fn criterion_input(
   input.on_key_down(keys(criteria, row))
 }
 
-/// The criterion's ×, seen while the pointer is on its row or it or its input has the focus. It takes no height of
-/// the row, which stays 8 over and under one line (`cScHP`): it hangs centred on the row's middle.
+/// The criterion's ×, seen while the pointer is on its row or it or its input has the focus; it lies centred on the
+/// row's end.
 fn remove_button(ctx: &mut Ctx, criteria: &Signal<Vec<Criterion>>, row: &Criterion, number: &str) -> Element {
   let shown = row.hovered.get() || row.focused.get();
   let (criteria, id) = (criteria.clone(), row.id);
@@ -252,9 +262,6 @@ fn remove_button(ctx: &mut Ctx, criteria: &Signal<Vec<Criterion>>, row: &Criteri
   .on_click(move || criteria.update(|rows| rows.retain(|row| row.id != id)))
   .render(ctx);
   Row::new()
-    .height(Dimension::Px(0.0))
-    .align_items(Alignment::Center)
-    .overflow_visible()
     .opacity(if shown { 1.0 } else { 0.0 })
     .describe("shown", if shown { "true" } else { "false" })
     .child(button)
