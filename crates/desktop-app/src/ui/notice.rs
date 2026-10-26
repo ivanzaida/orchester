@@ -31,7 +31,8 @@ pub enum NoticeTone {
 }
 
 impl NoticeTone {
-  const fn name(self) -> &'static str {
+  /// The tone's name, as tools read it from an element's `tone`.
+  pub const fn name(self) -> &'static str {
     match self {
       Self::Info => "info",
       Self::Warning => "warning",

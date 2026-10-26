@@ -191,6 +191,7 @@ icons! {
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
   Monitor => '\u{e11d}',
+  MonitorPlay => '\u{e485}',
   MousePointerClick => '\u{e120}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',

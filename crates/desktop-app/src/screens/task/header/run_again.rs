@@ -44,7 +44,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::controls::{Control, Reason, named_steps};
+use super::controls::{Control, Offer, Reason, named_steps};
 use crate::{
   project::ProjectFeed,
   theme::{ExtraTypography, TaskText},
@@ -54,6 +54,7 @@ use crate::{
     detail_row::{DetailValue, detail_row},
     icon::Icon,
     message::message_text,
+    pressable::Press,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -207,17 +208,15 @@ pub fn start_action(
   })
 }
 
-/// The Run again button, unavailable with why when the task cannot run again or no runner is connected
-/// to start it; nothing until the check was read. `busy`: git removes or merges the latest run's worktrees, which must
-/// end first.
+/// Run again, unavailable with why when the task cannot run again or no runner is connected to start it; nothing until
+/// the check was read. `busy`: git removes or merges the latest run's worktrees, which must end first.
 pub fn button(
   ctx: &Ctx,
   check: Option<&Result<RunAgainCheck, Message>>,
   (open, remove): (&Signal<Confirming>, &Signal<bool>),
   (busy, online): (bool, bool),
 ) -> Option<Control> {
-  let button =
-    ActionButton::new("task-run-again", ButtonKind::Secondary, ctx.t("task.runAgain.action")).icon(Icon::RotateCcw);
+  let look = ("task-run-again", "task.runAgain.action", Icon::RotateCcw);
   let reason = match check? {
     Err(error) => Reason {
       short: ctx.t("task.reasons.runAgainUnknown"),
@@ -233,25 +232,24 @@ pub fn button(
         full: ctx.t("task.controls.offline"),
       },
       Ok(_) if busy || open.get().0.is_some() => {
-        return Some(Control {
-          button: button.disabled(),
-          reason: None,
-        });
+        return Some(Control::new(ctx, look, ButtonKind::Secondary, Offer::Disabled));
       }
       Ok(_) => {
         let (open, remove) = (open.clone(), remove.clone());
-        let button = button.on_click(move || {
+        let press = Press::run(move || {
           remove.set(false);
           open.set(Confirming(Some(IdempotencyKey::generate())));
         });
-        return Some(Control { button, reason: None });
+        return Some(Control::new(ctx, look, ButtonKind::Secondary, Offer::Ready(press)));
       }
     },
   };
-  Some(Control {
-    button: button.unavailable(reason.full.clone()),
-    reason: Some(reason),
-  })
+  Some(Control::new(
+    ctx,
+    look,
+    ButtonKind::Secondary,
+    Offer::Unavailable(reason),
+  ))
 }
 
 /// Why the task cannot run again, in a few words.

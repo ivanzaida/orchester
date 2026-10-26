@@ -31,6 +31,9 @@ fn local_integration_worktree_removal_refusal_keeps_inline_confirmation_and_reco
   };
   *view = TaskView::Summary;
   page.window.navigation().go(summary);
+  // Remove worktree is a row of the header's *More actions*.
+  page.ready("task-more");
+  page.click("task-more");
   page.ready("task-remove-worktree");
   let db = ProjectDb::open(page.root()).expect("db");
   let run = db.run(page.run()).expect("read").expect("run");

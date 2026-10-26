@@ -197,6 +197,18 @@ impl Closer {
 
   /// The *More actions* menu of `subject`, its rows' ids starting with `id`, closed by a choice through `open`.
   fn menu(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject), open: &Signal<bool>) -> Column {
+    let (rows, delete) = self.rows(ctx, (id, subject), open);
+    menu_panel(&format!("{id}-panel"))
+      .width(Dimension::Px(MENU_WIDTH))
+      .with_children(rows)
+      .child(separator(ctx))
+      .child(delete)
+  }
+
+  /// The rows of a *More actions* menu that close, reopen and delete `subject`, their ids starting with `id`, closed
+  /// by a choice through `open`: those that close or reopen it, and *Delete task…* apart, for the menu's end (the
+  /// task page's menu holds them among its own, ORC-100).
+  pub fn rows(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject), open: &Signal<bool>) -> (Vec<Element>, Element) {
     let busy = self.action.state().get().is_pending();
     let item = |suffix: &str, (label, glyph): (Arc<str>, Icon), request: Request| {
       let id = format!("{id}-{suffix}");
@@ -209,7 +221,7 @@ impl Closer {
     let close = |closing| Request::Close(subject.clone(), closing, Stop::Unconfirmed);
     let done = (ctx.t("task_close.menu.done"), Icon::CircleCheck);
     let cancel = (ctx.t("task_close.menu.cancel"), Icon::CircleSlash);
-    let mut items = match subject.status {
+    let items = match subject.status {
       WorkflowStatus::Done => vec![
         item(
           "reopen",
@@ -232,7 +244,7 @@ impl Closer {
       ],
     };
     let delete_label = ctx.t("task_close.menu.delete");
-    items.push(if subject.shared {
+    let delete = if subject.shared {
       MenuItem::unavailable(
         format!("{id}-delete"),
         delete_label,
@@ -243,14 +255,10 @@ impl Closer {
       MenuItem::new(format!("{id}-delete"), delete_label, move || {
         closer.ask_delete(subject.clone())
       })
-    });
-    let delete = items.pop().map(|item| item.icon(Icon::Trash2).render(ctx, open));
+    };
+    let delete = delete.icon(Icon::Trash2).render(ctx, open);
     let rows: Vec<Element> = items.into_iter().map(|item| item.render(ctx, open)).collect();
-    menu_panel(&format!("{id}-panel"))
-      .width(Dimension::Px(MENU_WIDTH))
-      .with_children(rows)
-      .child(separator(ctx))
-      .with_children(delete)
+    (rows, delete)
   }
 }
 

@@ -1,13 +1,12 @@
-//! Where the task stands and what that means, at the top of the Summary (`Notice · Implement is running
-//! · attempt 2` `uqbUH` in `lUXff`, stopped at the token limit in `oTzJZ`, waits after retries in
-//! `DVuXu`, ready for review in `F2LtFn`): one notice per phase of the task's latest run, with Open
-//! conversation where the conversation is where the person looks or answers.
+//! Where the task stands and what that means, as the run's last event on the Summary says it (`Last event` `TGEq8`
+//! in `01 · Summary`): one sentence per phase of the task's latest run, with Open conversation where the
+//! conversation is where the person looks or answers.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  id::StepExecutionId,
+  id::{RunId, StepExecutionId},
   resource::WithoutCommits,
   run::{PauseReason, RunFailure, RunLimit, RunStatus, RunnerFailure, Stuck},
   task::TaskStatus,
@@ -26,14 +25,9 @@ use orchester_workspace::{
   },
 };
 
-use crate::ui::{
-  icon::Icon,
-  message::message_text,
-  notice::{Notice, NoticeTone},
-  status::Status,
-};
+use crate::ui::{icon::Icon, message::message_text, notice::NoticeTone, status::Status};
 
-/// What the notice says, before its action.
+/// What the run's last event says, before its action.
 pub struct Said {
   pub tone: NoticeTone,
   pub icon: Icon,
@@ -58,11 +52,26 @@ impl Said {
     self.conversation = true;
     self
   }
+}
 
-  pub fn notice(self) -> Notice {
-    Notice::new("task-notice", self.tone, self.title)
-      .icon(self.icon)
-      .body(self.body)
+/// A decision's own title and body for the run's last event, for the run `run` at its event `sequence`: words read for
+/// an earlier moment are not said.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventWords {
+  pub run: RunId,
+  pub sequence: u64,
+  pub title: Arc<str>,
+  pub body: Arc<str>,
+}
+
+impl EventWords {
+  /// `said` in these words, while they are of `run` as it stands.
+  pub fn apply(&self, run: &RunView, mut said: Said) -> Said {
+    if self.run == run.id() && self.sequence == run.run.last_sequence().get() {
+      said.title = self.title.clone();
+      said.body = self.body.clone();
+    }
+    said
   }
 }
 

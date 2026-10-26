@@ -1,12 +1,9 @@
 {
   "task": {
     "tabs": {
-      "conversation": "Conversation",
       "summary": "Summary",
-      "details": "Details",
-      "changes": "Changes",
-      "artifacts": "Artifacts",
-      "memory": "Memory"
+      "conversation": "Conversation",
+      "changes": "Changes"
     },
     "listSeparator": ", ",
     "page": {
@@ -22,13 +19,30 @@
     },
     "crumbs": {
       "tasks": "Tasks",
-      "notShared": "Not shared"
+      "notShared": "Not shared",
+      "back": "Back to Tasks"
     },
-    "edit": "Edit",
+    "edit": "Edit task",
     "removeWorktree": "Remove worktree",
     "returnToStep": "Return to a step",
+    "primary": {
+      "approve": "Approve",
+      "answer": "Answer",
+      "review": "Review",
+      "merge": "Merge"
+    },
+    "more": {
+      "label": "More actions",
+      "copyLink": "Copy link",
+      "openWorktree": "Open worktree in Files",
+      "memory": "Memory for this task",
+      "worktreeRemoved": "The run's worktree was removed; its committed work stays on its branch.",
+      "underWay": "Under way…",
+      "waits": "Waits for what is under way"
+    },
     "status": {
       "step": "{{number}} {{step}}",
+      "at": "{{status}} at {{step}}",
       "retriesUsed": "retries used",
       "failed": "reported failed",
       "unverified": "could not check everything",
@@ -43,10 +57,10 @@
       "byAutomation": "{{count}} story points, set by automation"
     },
     "runLine": {
-      "run": "Run {{run}} · {{pipeline}} {{version}}",
-      "attempt": "Run {{run}} · attempt {{attempt}} · {{pipeline}} {{version}}",
-      "when": "Run {{run}} · {{pipeline}} {{version}} · {{when}}",
-      "attemptWhen": "Run {{run}} · attempt {{attempt}} · {{pipeline}} {{version}} · {{when}}",
+      "run": "Run {{run}}",
+      "attempt": "Run {{run}} · attempt {{attempt}}",
+      "when": "Run {{run}} · {{when}}",
+      "attemptWhen": "Run {{run}} · attempt {{attempt}} · {{when}}",
       "started": "started {{time}}",
       "paused": "paused {{time}}",
       "stopped": "stopped {{time}}",
@@ -129,7 +143,6 @@
       "start": "Start run #{{run}}"
     },
     "reasons": {
-      "join": " · ",
       "offline": "Runner not connected",
       "blocked": "Blocked by {{tasks}}",
       "worktreeRemoved": "Worktree removed",

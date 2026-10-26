@@ -1,14 +1,14 @@
-//! The Summary of a task whose latest run is delivered by the project's merge queue (ORC-19,
+//! The decision of a task whose latest run is delivered by the project's merge queue (ORC-19,
 //! `orchester_workspace::merge_queue`), in place of Ready for review: its pipeline ends in a Deliver step, so the
 //! queue merges it and *Merge into main* is not offered. While the run joins the queue, waits its turn or is delivered,
 //! the state card says where it stands with the phases of its delivery (`ulEuh`, integrating `RRk9E`, [`card`]);
 //! waiting for the person's approval, *Review before merging* with *Merge into main*, *Open changes* and *Reject*
-//! beside it (`wN5Bz`, [`side`]); after the Integrate step could not resolve its conflicts, why, the files, what
-//! Integrate did and *Resolve myself* or *Reject* (`hKct7`); while the person resolves them in the run's worktree,
-//! where and what *I've resolved it* checks (`fAcWt`, [`resolve`]); once merged, where it went and what was cleared
-//! (`lvupO`). Each keeps the Summary's frame: the stages ([`rows::stages`]), what changed and its verification with
-//! what the delivery added, *Runs of this task*, and *Run details* beside them with its *Delivery* rows ([`details`]).
-//! A person's decision changes the queue off the UI thread; the queue's driver goes on from there.
+//! (`wN5Bz`, [`side`]); after the Integrate step could not resolve its conflicts, why, the files, what Integrate did
+//! and *Resolve myself* or *Reject* (`hKct7`); while the person resolves them in the run's worktree, where and what
+//! *I've resolved it* checks (`fAcWt`, [`resolve`]); once merged, where it went and what was cleared (`lvupO`). Each
+//! shows its decision first at the top of the Summary, then the phases ([`rows::stages`]) and what changed and its
+//! verification with what the delivery added; the run's facts end with its *Delivery* rows ([`details`]). A person's
+//! decision changes the queue off the UI thread; the queue's driver goes on from there.
 
 mod card;
 mod commits;
@@ -48,10 +48,8 @@ use orchester_workspace::{
 
 use self::rows::Stage;
 use super::{
-  super::run_details::run_details,
   TaskContext, arranged,
   ready::{changed, in_worktree},
-  runs_section,
 };
 use crate::{services::Services, ui::button::ActionButton};
 
@@ -231,7 +229,7 @@ impl Component for DeliveryDecision {
       commits: commits.as_ref(),
       acts: &acts,
     };
-    let (mut parts, lead) = match &state {
+    let (parts, lead) = match &state {
       Some(QueueState::Merged(delivered)) => (view.merged(ctx, delivered), None),
       Some(QueueState::WaitingForApproval) if queue.deliver.mode() == DeliverMode::ApproveToMerge => {
         (view.review(ctx), Some(side::review(ctx, &view)))
@@ -249,11 +247,8 @@ impl Component for DeliveryDecision {
       Some(QueueState::Left(left)) => (view.left(ctx, left), Some(side::left(ctx, &view, left))),
       _ => (view.delivering(ctx), None),
     };
-    parts.extend(runs_section(ctx, &props));
-    let linked = crate::screens::task::sharing::linked(ctx, &props);
-    let section = crate::screens::task::sharing::section(ctx, &props, (linked.as_ref(), None));
-    let side = run_details(ctx, &props, run, (lead, section));
-    arranged(ctx, parts, None, Some(side))
+    // The decision the person makes comes first: what it rests on follows it.
+    arranged(lead.into_iter().chain(parts).collect())
   }
 }
 

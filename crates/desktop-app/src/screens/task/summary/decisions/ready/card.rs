@@ -35,7 +35,7 @@ use crate::{
   navigation::Navigation,
   routes::{Route, TaskView},
   services::Services,
-  theme::{DecisionSpacing, DecisionText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -59,39 +59,36 @@ pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullReques
   )
 }
 
-/// The Ready card's frame (`hyzq2`): its title and what it means beside the check, then its `actions` and why those
-/// that cannot be used are unavailable (`reasons`). A run that committed nothing and is completed rather than merged
-/// shows it too (ORC-93).
+/// The Ready card's frame (`Decision · Ready to merge` `I500yD`): on `surface_raised` in a `success` stroke, its head
+/// (the 14 check in `success` and its title in 13/600), what it means in 12.5 `text_secondary`, then its `actions` and
+/// why those that cannot be used are unavailable (`reasons`). A run that committed nothing and is completed rather than
+/// merged shows it too (ORC-93, `Decision · Complete the task?` `YEOlP`).
 pub(in super::super) fn frame((title, body): (Arc<str>, Arc<str>), actions: Element, reasons: Vec<Element>) -> Element {
-  let text = Column::new()
-    .flex(1.0)
-    .spacing(ExtraSpacing::Fine.role())
+  let head = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::CircleCheck, IconSize::Md, PaletteColor::Success))
     .child(
       Text::new(&title)
         .id("task-notice-title")
-        .variant(DecisionText::ReadyTitle.role()),
-    )
-    .child(
-      Text::new(&body)
-        .id("task-notice-body")
-        .variant(ExtraTypography::Lead.role()),
+        .variant(TaskText::SectionTitle.role()),
     );
   Column::new()
     .id("task-notice")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(DecisionSpacing::ReadySide.role(), SpacingSize::Lg))
-    .spacing(SpacingSize::Md)
-    .background(PaletteColor::SuccessMuted)
+    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+    .spacing(ExtraSpacing::Loose.role())
+    .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Success))
     .rounded(RadiusSize::Lg)
     .describe("tone", "success")
+    .child(head)
     .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Loose.role())
-        .align_items(Alignment::Start)
-        .child(icon(Icon::CircleCheck, IconSize::Lg, PaletteColor::Success))
-        .child(text),
+      Text::new(&body)
+        .id("task-notice-body")
+        .variant(ExtraTypography::Lead.role())
+        .width(Dimension::Pct(100.0)),
     )
     .child(actions)
     .with_children(reasons)

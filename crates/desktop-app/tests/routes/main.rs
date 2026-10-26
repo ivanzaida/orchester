@@ -303,33 +303,22 @@ fn a_tasks_tabs_share_one_router_pattern_and_its_forms_keep_their_own() {
   }
   assert_eq!(leaf(format!("{task}/KON-12/edit")), Screen::EditTask.pattern());
   assert_eq!(leaf(format!("{task}/new")), Screen::NewTask.pattern());
-  assert_eq!(TaskTab::default(), TaskTab::Details, "a task opens on its Details");
+  assert_eq!(TaskTab::default(), TaskTab::Summary, "a task opens on its Summary");
   assert_eq!(
     TaskTab::ALL,
-    [
-      TaskTab::Details,
-      TaskTab::Conversation,
-      TaskTab::Changes,
-      TaskTab::LocalIntegration,
-      TaskTab::Summary,
-      TaskTab::Artifacts,
-      TaskTab::Memory,
-    ],
-    "Details first, Summary after the run's tabs, Artifacts and Memory last"
+    [TaskTab::Summary, TaskTab::Conversation, TaskTab::Changes],
+    "Summary, Conversation, Changes (ORC-100)"
   );
-  let names = TaskTab::ALL.map(TaskTab::name);
+  assert_eq!(TaskTab::ALL.map(TaskTab::name), ["summary", "conversation", "changes"]);
   assert_eq!(
-    names,
-    [
-      "details",
-      "conversation",
-      "changes",
-      "local-integration",
-      "summary",
-      "artifacts",
-      "memory"
-    ],
-    "each tab keeps its name, so links naming one still open it"
+    TaskView::Memory.tab(),
+    TaskTab::Summary,
+    "the task's memory is a view of its Summary"
+  );
+  assert_eq!(
+    TaskView::LocalIntegration.tab(),
+    TaskTab::Changes,
+    "Local integration is a view of Changes"
   );
 }
 
@@ -462,7 +451,7 @@ fn screens_open_on_their_first_tab() {
   for screen in [Screen::AllProjects, Screen::Settings, Screen::Task, Screen::EditTask] {
     assert_eq!(ProjectPage::of(screen), None, "{screen:?}");
   }
-  assert_eq!(TaskView::default(), TaskView::Details);
+  assert_eq!(TaskView::default(), TaskView::Summary);
 }
 
 #[test]

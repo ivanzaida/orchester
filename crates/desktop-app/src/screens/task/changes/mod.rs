@@ -54,7 +54,11 @@ use super::TaskContext;
 use crate::{
   navigation::{Navigation, press::OpenIn},
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
-  ui::message::message_text,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+    message::message_text,
+  },
 };
 
 /// How many files the Changes tab lists, for its label; `None` while that is not known: what the page's
@@ -152,7 +156,7 @@ impl Component for ChangesTab {
       }
       CheckpointedRead::Ready(checkpointed) => checkpointed,
     };
-    let column = column.child(toolbar(ctx, run, checkpointed));
+    let column = column.child(toolbar(ctx, run, checkpointed, self.try_locally(ctx, &props)));
     let committed = match checkpointed {
       Checkpointed::TooLarge { size, .. } => {
         return column.child(states::too_large(ctx, *size, run.run.branch().as_str()));
@@ -220,6 +224,23 @@ impl ChangesTab {
     let made = FileListing::of(committed, uncommitted);
     *listing = Some(made.clone());
     made
+  }
+
+  /// *Try locally* (`Local integration` `G2Vq3` in `03 · Changes`): Local integration, in this tab's place.
+  fn try_locally(&self, ctx: &Ctx, props: &ChangesProps) -> ActionButton {
+    let task = &props.detail.task;
+    let page = ProjectPage::task(
+      task.key().clone(),
+      TaskView::LocalIntegration,
+      props.detail.not_shared(),
+    );
+    ActionButton::new(
+      "changes-try-locally",
+      ButtonKind::Ghost,
+      ctx.t("changes.toolbar.tryLocally"),
+    )
+    .icon(Icon::MonitorPlay)
+    .opens(self.navigation.to(Route::Project(props.project, page)))
   }
 
   /// The file list beside the selected file's diff.

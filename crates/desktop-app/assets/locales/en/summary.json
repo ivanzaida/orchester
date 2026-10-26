@@ -1,8 +1,89 @@
 {
   "summary": {
-    "openConversation": "Open conversation",
+    "openConversation": "Open conversation →",
     "brief": "Brief",
     "criteria": "Acceptance criteria",
+    "noBrief": "No brief yet",
+    "noCriteria": "No acceptance criteria yet",
+    "version": {
+      "creation": "As created",
+      "runStart": "As run #{{run}} started",
+      "current": "Current task",
+      "provenance": {
+        "creation": "Read-only · the task as it was saved at creation",
+        "runStart": "Read-only · the requirements run #{{run}} was given",
+        "currentNoRun": "The current task · no run has started yet",
+        "currentEdited": "The current task · edited after run #{{run}} started",
+        "currentUnchanged": "The current task · unchanged since run #{{run}} started",
+        "currentNotRecorded": "The current task · what run #{{run}} was given was not recorded",
+        "currentRunUnknown": "The current task · its latest run can't be read",
+        "currentElsewhere": "The current task · run #{{run}} ran on another computer, which keeps what it was given"
+      },
+      "fallback": {
+        "title": "Creation version not recorded",
+        "runStart": "This older task has no creation snapshot; the version its latest run started with is shown instead.",
+        "current": "This older task has no creation snapshot, and this computer keeps no version a run started with; its current requirements are shown instead.",
+        "line": "{{title}}. {{explanation}}"
+      }
+    },
+    "run": {
+      "title": "Run",
+      "meta": "{{pipeline}} {{version}} · run {{run}}",
+      "event": "{{title}}. {{body}}"
+    },
+    "output": {
+      "title": "Output",
+      "none": "Nothing yet. A step's report shows here once the step ends; runs keep no other artifacts yet.",
+      "runSummary": "Run summary",
+      "report": "{{step}} report",
+      "after": "after {{step}} · {{time}}",
+      "step": "{{number}} {{step}}"
+    },
+    "properties": {
+      "status": "Status",
+      "priority": "Priority",
+      "pipeline": "Pipeline",
+      "tags": "Tags",
+      "dependsOn": "Depends on",
+      "limits": "Limits",
+      "branch": "Branch",
+      "created": "Created",
+      "pipelineValue": "{{pipeline}} {{version}}",
+      "pipelineGone": "{{version}} of a pipeline no longer in the project",
+      "notChosen": "Not chosen yet",
+      "notRecorded": "Not recorded",
+      "changed": "· changed",
+      "taskNow": "The latest run started with this; the task has {{value}} now.",
+      "tokens": "{{budget}} tokens",
+      "minutes": "{{minutes}} min",
+      "both": "{{first}} · {{second}}",
+      "noLimits": "No limits",
+      "notKnown": "Not known yet",
+      "none": "—",
+      "separator": " · ",
+      "memory": {
+        "reading": "Memory notes",
+        "none": "No memory notes",
+        "one": "1 memory note",
+        "other": "{{count}} memory notes"
+      }
+    },
+    "facts": {
+      "run": "Run {{run}}",
+      "thisRun": "this run",
+      "ended": "ended",
+      "base": "Base",
+      "checkpoint": "Checkpoint",
+      "tokens": "Tokens",
+      "active": "Active time",
+      "activeOf": "{{active}} of {{minutes}} min",
+      "activeNoLimit": "{{active}} · no limit",
+      "model": "Model",
+      "modelValue": "{{model}} · {{agent}}",
+      "worktree": "Worktree",
+      "worktreeTip": "{{path}} · click to copy",
+      "more": "Account, cached input, duration, agents, permissions"
+    },
     "notice": {
       "theAgent": "The agent",
       "draftTitle": "No runs yet",
@@ -88,7 +169,7 @@
       "planLimitBody": "The CLI refused {{step}}'s next turn: its account reached its plan limit. {{agent}}'s session is kept in the account's folder. {{kept}}"
     },
     "steps": {
-      "title": "Steps",
+      "byAgent": "{{agent}} · {{detail}}",
       "detail": "{{state}} · attempt {{attempt}} · {{tokens}} tokens · {{duration}}",
       "commandDetail": "{{state}} · attempt {{attempt}} · {{duration}}",
       "waitsForApproval": "Needs you · waiting since {{time}}",
@@ -117,12 +198,29 @@
       }
     },
     "runs": {
-      "title": "Runs of this task",
-      "run": "Run #{{run}}",
+      "title": "Runs",
+      "number": "#{{run}}",
       "runUnnumbered": "A run",
-      "thisRun": "this run",
       "noTime": "—",
       "when": "{{month}} {{day}}, {{time}}",
+      "whenTokens": "{{when}} · {{tokens}} tokens",
+      "stands": "{{status}} · {{detail}}",
+      "short": {
+        "unreadable": "can't be read",
+        "none": "no worktree",
+        "kept": "worktree kept",
+        "inUse": "worktree in use",
+        "unknown": "worktree not read",
+        "removed": "worktree removed",
+        "missing": "worktree gone"
+      },
+      "menu": {
+        "label": "Run actions",
+        "conversation": "Open its conversation",
+        "noWorktree": "The run has no worktree left.",
+        "removeWorking": "Unavailable while the run works: its worktree comes back to remove once it ends.",
+        "removing": "Removing…"
+      },
       "worktree": {
         "unreadable": "Nothing can be said of its worktree while run #{{run}} can't be read",
         "unreadableUnnumbered": "Nothing can be said of its worktree while the run can't be read",
@@ -163,29 +261,13 @@
       "waitsForApproval": "{{step}} · waiting for your approval"
     },
     "thisRun": {
-      "title": "This run",
-      "pipeline": "Pipeline",
-      "pipelineValue": "{{pipeline}} {{version}}",
-      "branch": "Branch",
-      "base": "Base",
       "baseValue": "{{branch}} · {{revision}}",
-      "checkpoint": "Last checkpoint",
       "checkpointValue": "{{revision}} · {{time}}",
-      "model": "Model",
-      "modelValue": "{{model}} ({{agent}})",
       "commandTool": "Command tool · no model",
       "none": "—",
-      "budget": "Budget",
-      "budgetValue": "{{used}} / {{budget}} tokens",
-      "budgetReached": "{{used}} / {{budget}} tokens · limit reached",
-      "budgetNoLimit": "No limit · {{used}} tokens used",
       "noLimit": "No limit",
-      "tokens": "{{budget}} tokens",
       "cached": "Cached input",
       "cachedValue": "{{count}} · not counted",
-      "timeLimit": "Time limit",
-      "minutes": "{{minutes}} min",
-      "active": "Active agent time",
       "permissions": "Permissions",
       "runningWith": "Running with · {{agent}}",
       "lastRanWith": "Last ran with · {{agent}}",
@@ -198,18 +280,13 @@
       "commandsAny": "Any command in the worktree",
       "networkOff": "Network off",
       "networkOn": "Network on",
-      "worktree": "Worktree",
       "worktreeRemoved": "Removed at {{time}}",
-      "notChosen": "Not chosen yet",
       "noCheckpoint": "None yet",
       "account": "Account",
       "accountValue": "{{account}} · {{email}}",
       "accountAtLimit": "{{account}} · limit reached",
       "accountUnknown": "An account no longer known",
       "defaultAccount": "Default"
-    },
-    "thisTask": {
-      "title": "This task"
     },
     "report": {
       "title": "Report",
@@ -229,18 +306,12 @@
     },
     "empty": {
       "title": "No runs yet",
-      "text": "Start a run to see its progress and results here.\nThe task description and acceptance criteria are in Details.",
-      "details": "View task details",
+      "text": "Start a run to see its progress and results here.",
       "missing": "Start run is unavailable: the draft is missing details. Add them in Edit first."
     },
     "runDetails": {
-      "title": "Run details",
-      "project": "Project",
-      "base": "Base revision",
-      "branch": "Working branch",
       "duration": "Duration",
       "durationValue": "{{minutes}} min · {{start}} – {{end}}",
-      "tokens": "Tokens used",
       "tokensNoLimit": "{{used}} · no limit",
       "tokensValue": "{{used}} of {{budget}}",
       "agents": "Agents"

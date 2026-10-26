@@ -248,11 +248,13 @@ enum StatusSize {
   Compact,
 }
 
-/// A status's icon and word, with an optional detail after it (`Running · 03 Implement`).
+/// A status's icon and word, with an optional detail after it (`Running · 03 Implement`), or a sentence of its own
+/// in its place (`Interrupted at 03 Implement`, `Status` `ev3VX` in the task header `j8DakG`).
 pub struct StatusChip {
   id: Arc<str>,
   status: Status,
   detail: Option<Arc<str>>,
+  words: Option<Arc<str>>,
   size: StatusSize,
 }
 
@@ -262,6 +264,7 @@ impl StatusChip {
       id: id.into(),
       status,
       detail: None,
+      words: None,
       size: StatusSize::Regular,
     }
   }
@@ -272,6 +275,12 @@ impl StatusChip {
     self
   }
 
+  /// `words` in place of the status's word and its detail, which already name the status.
+  pub fn words(mut self, words: impl Into<Arc<str>>) -> Self {
+    self.words = Some(words.into());
+    self
+  }
+
   pub fn compact(mut self) -> Self {
     self.size = StatusSize::Compact;
     self
@@ -279,9 +288,10 @@ impl StatusChip {
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let word = ctx.t(self.status.key());
-    let text = match &self.detail {
-      Some(detail) => ctx.t_args("ui.status.withDetail", [("status", word), ("detail", detail.clone())]),
-      None => word,
+    let text = match (&self.words, &self.detail) {
+      (Some(words), _) => words.clone(),
+      (None, Some(detail)) => ctx.t_args("ui.status.withDetail", [("status", word), ("detail", detail.clone())]),
+      (None, None) => word,
     };
     let (icon_size, typography) = match self.size {
       StatusSize::Regular => (IconSize::Base, TypographyStyle::Label),

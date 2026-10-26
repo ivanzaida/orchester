@@ -158,6 +158,17 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       format!("{root}/tasks/KON-12/changes?file=src/a%20b.rs&from=worktree"),
       json!({ "project": PROJECT, "key": "KON-12", "tab": "changes", "file": "src/a b.rs", "from": "worktree" }),
     ),
+    // A task's memory and Local integration open in place of Summary and Changes.
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-12", "view": "memory" }),
+      format!("{root}/tasks/KON-12/summary?view=memory"),
+      json!({ "project": PROJECT, "key": "KON-12", "tab": "summary", "view": "memory" }),
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-12", "tab": "changes", "view": "local-integration" }),
+      format!("{root}/tasks/KON-12/changes?view=local-integration"),
+      json!({ "project": PROJECT, "key": "KON-12", "tab": "changes", "view": "local-integration" }),
+    ),
     (
       json!({ "route": "files", "project": PROJECT, "file": "src/a b.rs", "at": "base", "line": "3-5" }),
       format!("{root}/files/src/a%20b.rs?at=base&line=3-5"),
@@ -220,6 +231,36 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     (
       json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "files" }),
       "unknown_tab",
+    ),
+    // The task page's former tabs (ORC-100): Details and Artifacts went into Summary, Memory and Local integration
+    // are views (`view`).
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "details" }),
+      "unknown_tab",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "artifacts" }),
+      "unknown_tab",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "memory" }),
+      "unknown_tab",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "local-integration" }),
+      "unknown_tab",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "changes", "view": "memory" }),
+      "invalid_param",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "view": "artifacts" }),
+      "invalid_param",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "file": "a.rs", "view": "local-integration" }),
+      "invalid_param",
     ),
     (
       json!({ "route": "overview", "project": PROJECT, "tab": "all" }),

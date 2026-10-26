@@ -195,11 +195,11 @@ fn domain_reads_existing_results_carry_links_the_router_opens() {
   let page = format!("/project/{}/tasks/{}", seeded.project, key.as_str().expect("a key"));
   assert_eq!(
     link_of(listed),
-    format!("{page}/details"),
-    "a task opens on its Details"
+    format!("{page}/summary"),
+    "a task opens on its Summary"
   );
   let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
-  assert_eq!(link_of(&task), format!("{page}/details"), "a task opens on its Details");
+  assert_eq!(link_of(&task), format!("{page}/summary"), "a task opens on its Summary");
   for run in list(&task, "runs") {
     assert_eq!(
       link_of(run),

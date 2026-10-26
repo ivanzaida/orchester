@@ -269,6 +269,26 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_a_chosen_file() {
   });
 }
 
+/// *Try locally* at the toolbar's end (`G2Vq3` in `03 · Changes`) opens Local integration in place of the tab, which
+/// stays the chosen one (ORC-100).
+#[test]
+fn changes_try_locally_opens_local_integration_in_place_of_the_tab() {
+  let mut page = Page::open();
+  page.changes("KON-12", "changes-try-locally");
+  assert_eq!(page.texts("changes-try-locally"), ["Try locally"]);
+  page.click("changes-try-locally");
+  page.window.until("Local integration", |window| {
+    matches!(
+      window.navigation().route_now(),
+      Route::Project(_, ProjectPage::Task(_, TaskView::LocalIntegration))
+    )
+  });
+  page.wait_for("task-local-integration");
+  assert!(page.shows("task-tab-changes"), "the page's tabs stay");
+  let path = page.window.navigation().route_now().path();
+  assert!(path.ends_with("/tasks/KON-12/changes?view=local-integration"), "{path}");
+}
+
 #[test]
 fn changes_paints_keywords_and_numbers_and_leaves_operators_plain() {
   let mut page = Page::open();
