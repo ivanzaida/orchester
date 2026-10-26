@@ -339,6 +339,25 @@ fn form_criteria_move_with_the_keyboard() {
   );
 }
 
+/// A criterion row is 8 over and under one line (`cScHP`, 33 high): its ×, a 24 square, shows on it without
+/// making it taller, and still removes it.
+#[test]
+fn form_criteria_rows_keep_their_height_with_the_remove_button() {
+  let mut form = Form::seeded("live");
+  form.new_task();
+  form.click("task-form-add-criterion");
+  form.set("task-form-criterion-1-input", "First");
+  focus(&mut form, "task-form-criterion-1-input");
+  let row = form.bounds("task-form-criterion-1");
+  let remove = form.bounds("task-form-criterion-1-remove");
+  assert!(row.height < remove.height + 16.0, "the row is {} high", row.height);
+  assert!(
+    remove.y >= row.y && remove.y + remove.height <= row.y + row.height,
+    "the × sits on its row: {remove:?} in {row:?}"
+  );
+  form.click("task-form-criterion-1-remove");
+  assert!(!form.exists("task-form-criterion-1"), "the × removes it");
+}
 fn focus(form: &mut Form, id: &str) {
   form
     .window

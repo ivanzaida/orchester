@@ -1,7 +1,8 @@
 //! Acceptance criteria inline (`Criteria` `rxCYt`): a head with the count and what reviewers do with them (12/500
 //! `text_secondary` and 12 `text_muted`), then one row per criterion (`Criterion 1` `cScHP`): its number in Geist Mono
 //! 11 `text_muted` and its text in 13, 12 apart, 8 over and under, a `border` line over it, typed in place, its × at
-//! the end under the pointer or while it has the focus; *+ Add criterion* last (`Add criterion` `iqH3b`). The keyboard
+//! the end under the pointer or while it has the focus; *+ Add criterion* last, a `border` line under it too
+//! (`Add criterion` `iqH3b`, `lmfff`). The keyboard
 //! edits the list as the deprecated desktop's form does, and moves rows too: Enter adds a criterion after the one typed
 //! in, so Enter in the last adds the next; Backspace in an empty one removes it, Alt+↑ and Alt+↓ move it; the focus
 //! follows. None of them puts a line break in a criterion.
@@ -137,7 +138,8 @@ fn add_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, first: bool) -> Element
       rows.push(added);
     });
   });
-  let frame = row_frame();
+  // The list's last line closes it with a second `border` line (`lmfff`).
+  let frame = row_frame().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border));
   Focus::Keyboard
     .apply(press)
     .id("task-form-add-criterion")
@@ -235,7 +237,8 @@ fn criterion_input(
   input.on_key_down(keys(criteria, row))
 }
 
-/// The criterion's ×, seen while the pointer is on its row or it or its input has the focus.
+/// The criterion's ×, seen while the pointer is on its row or it or its input has the focus. It takes no height of
+/// the row, which stays 8 over and under one line (`cScHP`): it hangs centred on the row's middle.
 fn remove_button(ctx: &mut Ctx, criteria: &Signal<Vec<Criterion>>, row: &Criterion, number: &str) -> Element {
   let shown = row.hovered.get() || row.focused.get();
   let (criteria, id) = (criteria.clone(), row.id);
@@ -249,6 +252,9 @@ fn remove_button(ctx: &mut Ctx, criteria: &Signal<Vec<Criterion>>, row: &Criteri
   .on_click(move || criteria.update(|rows| rows.retain(|row| row.id != id)))
   .render(ctx);
   Row::new()
+    .height(Dimension::Px(0.0))
+    .align_items(Alignment::Center)
+    .overflow_visible()
     .opacity(if shown { 1.0 } else { 0.0 })
     .describe("shown", if shown { "true" } else { "false" })
     .child(button)

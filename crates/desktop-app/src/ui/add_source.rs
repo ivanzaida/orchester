@@ -4,7 +4,8 @@
 //! (`orchester_workspace::sources::check`), and the hint says what was found (`Sources · states` `lOOY6`): a
 //! readable folder or file (`circle-check` in `success`), a path that is not needed (`info`), or why it is
 //! refused, in `danger` with the box's stroke; *Add source* is pressed only for a readable one. In an inspector
-//! (`Add` `sbqLR`) the box runs over the buttons, *Add* at the end; Pipeline settings has only *Add folder*
+//! (`Add` `sbqLR`) the box runs over the buttons, *Add* at the end; in a popover (`Add row` `d49YSf`) the box, an
+//! icon-only *Choose folder…* and a primary *Add* share one line; Pipeline settings has only *Add folder*
 //! (`m90ZI`): a chosen folder that passes the check is added, and the hint says why one is refused.
 
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use super::{
   button::{ActionButton, ButtonKind},
   field::FieldInput,
   icon::{Icon, icon},
+  icon_button::IconButton,
   message::message_text,
 };
 use crate::{
@@ -48,6 +50,9 @@ pub enum Layout {
   Stacked,
   /// Only *Add folder*.
   Picker,
+  /// A popover's one line (`Add row` `d49YSf` in `B56QE`): the box, an icon-only *Choose folder…* and a primary
+  /// *Add*, 6 apart; the hint only once a path was checked.
+  Compact,
 }
 
 type OnAdd = Arc<dyn Fn(SourcePath) + Send + Sync>;
@@ -147,7 +152,11 @@ impl Component for AddSource {
     *self.on_add.lock() = (!props.locked).then(|| props.on_add.clone());
     let typed = self.text.get().trim().to_owned();
     let checked = self.check(ctx, &props, &typed);
-    let choose = self.choose_button(ctx, &props);
+    let choose: Element = if props.layout == Layout::Compact {
+      self.choose_icon(ctx, &props)
+    } else {
+      self.choose_button(ctx, &props).into()
+    };
     if props.layout == Layout::Picker {
       let refused = self.refused.get();
       return Column::new()
@@ -165,8 +174,8 @@ impl Component for AddSource {
     let field = self.field(ctx, &props, refused);
     let hint = hint(ctx, &props.id, checked.as_ref().map(|checked| &checked.1), props.layout);
     let column = Column::new().id(props.id.to_string()).width(Dimension::Pct(100.0));
-    if props.layout == Layout::Stacked {
-      return column
+    match props.layout {
+      Layout::Stacked => column
         .spacing(SpacingSize::Sm)
         .child(field)
         .child(
@@ -177,21 +186,26 @@ impl Component for AddSource {
             .child(Spacer::new().flex(1.0))
             .child(add),
         )
-        .with_children(checked.is_some().then_some(hint));
+        .with_children(checked.is_some().then_some(hint)),
+      Layout::Compact => column
+        .spacing(ExtraSpacing::Snug.role())
+        .child(line(field, ExtraSpacing::Snug.role()).child(choose).child(add))
+        .with_children(checked.is_some().then_some(hint)),
+      Layout::Line | Layout::Picker => column
+        .spacing(ExtraSpacing::Snug.role())
+        .child(line(field, SpacingSize::Sm).child(choose).child(add))
+        .child(hint),
     }
-    column
-      .spacing(ExtraSpacing::Snug.role())
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .align_items(Alignment::Center)
-          .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(field))
-          .child(choose)
-          .child(add),
-      )
-      .child(hint)
   }
+}
+
+/// The box, as wide as the line leaves it, with what follows it `spacing` apart.
+fn line(field: Element, spacing: SpacingSize) -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(spacing)
+    .align_items(Alignment::Center)
+    .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(field))
 }
 
 /// Opens the system's folder picker; for *Add folder* (a place given) the chosen folder is checked there too.
@@ -261,7 +275,7 @@ impl AddSource {
         Icon::FolderPlus,
         props.place.clone(),
       ),
-      Layout::Line | Layout::Stacked => (
+      Layout::Line | Layout::Stacked | Layout::Compact => (
         format!("{}-choose", props.id),
         ctx.t("ui.addSource.choose"),
         Icon::FolderOpen,
@@ -277,9 +291,29 @@ impl AddSource {
     button.on_click(move || pick.run((title.clone(), place.clone())))
   }
 
+  /// *Choose folder…* with only its glyph (`Choose folder` `Xvt5w`); its words are its tooltip.
+  fn choose_icon(&self, ctx: &mut Ctx, props: &AddSourceProps) -> Element {
+    let button = IconButton::new(
+      format!("{}-choose", props.id),
+      Icon::FolderOpen,
+      ctx.t("ui.addSource.choose"),
+    )
+    .inspector()
+    .in_form();
+    if props.locked || self.pick.state().get().is_pending() {
+      return button.render(ctx);
+    }
+    let (pick, title) = (self.pick.clone(), ctx.t("ui.addSource.pickerTitle"));
+    button.on_click(move || pick.run((title.clone(), None))).render(ctx)
+  }
+
   fn add_button(&self, props: &AddSourceProps, ready: Option<Candidate>) -> ActionButton {
-    let button =
-      ActionButton::new(format!("{}-add", props.id), ButtonKind::Secondary, props.add.clone()).icon(Icon::Plus);
+    let kind = if props.layout == Layout::Compact {
+      ButtonKind::Primary
+    } else {
+      ButtonKind::Secondary
+    };
+    let button = ActionButton::new(format!("{}-add", props.id), kind, props.add.clone()).icon(Icon::Plus);
     let Some(candidate) = ready else {
       return button.disabled();
     };

@@ -268,7 +268,7 @@ impl TaskSources {
       AddSourceProps {
         id: "task-form-sources-add".into(),
         place: Some(place),
-        layout: Layout::Line,
+        layout: Layout::Compact,
         add: ctx.t("task_form.sources.add"),
         locked: busy || self.asking.get().is_some(),
         on_add: Arc::new(move |path| ask.set(Some(Asked(path)))),
