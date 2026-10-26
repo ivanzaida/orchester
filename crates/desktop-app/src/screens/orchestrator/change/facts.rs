@@ -211,10 +211,14 @@ fn publication_rows(
       .iter()
       .map(|reason| widens::compact(ctx, reason).to_string())
       .collect();
-    rows.push((
-      ctx.t("orchestrator.change.facts.widens"),
-      vec![Part::Value(widens.join(&separator).into())],
-    ));
+    // Right under the draft's name, so it is among the facts shown without *Show details*.
+    rows.insert(
+      1,
+      (
+        ctx.t("orchestrator.change.facts.widens"),
+        vec![Part::Value(widens.join(&separator).into())],
+      ),
+    );
   }
   rows
 }

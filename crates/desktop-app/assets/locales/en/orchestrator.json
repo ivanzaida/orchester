@@ -494,6 +494,7 @@
         "effectDoneKeeping": "Let the Orchestrator publish drafts is on, so the chat published it without asking. Agents read v{{version}} from their next step; runs under way keep v{{before}}.",
         "effectDismissed": "You dismissed it. Nothing was published; the draft stays in {{place}}.",
         "widens": "This draft widens what {{name}} may do, so it waits for you even though Let the Orchestrator publish drafts is on. Let automation change agent permissions is off.",
+        "widensWaits": "This draft widens what {{name}} may do. Check what it widens before you publish it.",
         "accept": "Publish v{{version}}",
         "openDraft": "Open draft",
         "open": "Open {{name}}",

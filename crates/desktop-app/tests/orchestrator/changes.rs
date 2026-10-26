@@ -212,6 +212,32 @@ fn orchestrator_person_publishes_what_widens_and_dismisses() {
 }
 
 #[test]
+fn orchestrator_widening_card_shows_what_it_widens_without_details() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let builder = screen.builder();
+  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
+  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
+  // Let the Orchestrator publish drafts stays off: the card still warns that the draft widens.
+  screen.go(OrchestratorChat::New);
+  call(&mut screen, PUBLISH_PIPELINE, 1);
+  let card = proposal_card(&screen);
+  screen.until("the warning", |screen| screen.exists(&format!("{card}-widens")));
+  assert!(
+    screen
+      .text(&format!("{card}-widens"))
+      .contains("This draft widens what Delivery may do."),
+    "{}",
+    screen.text(&format!("{card}-widens"))
+  );
+  // Right under the draft's name, among the facts shown without Show details.
+  let fact = screen.text(&format!("{card}-fact-1"));
+  assert!(
+    fact.starts_with("Widens"),
+    "the second fact says what it widens: {fact}"
+  );
+}
+
+#[test]
 fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let builder = screen.builder();

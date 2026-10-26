@@ -277,16 +277,21 @@ impl ChangeCard {
 }
 
 /// The warning strips of a waiting card, each with whether it says the card widens what agents may do: a draft that
-/// widens while *Let the Orchestrator publish drafts* is on, files that look as if they hold secrets, git work that
-/// loses work, an MCP server that widens or whose program is not found.
+/// widens (saying why it waits while *Let the Orchestrator publish drafts* is on), files that look as if they hold
+/// secrets, git work that loses work, an MCP server that widens or whose program is not found.
 fn warnings(ctx: &Ctx, id: &str, (view, read): (&View, Option<&Read>)) -> Vec<(bool, Row)> {
   let mut strips = Vec::new();
   let widening = match read.and_then(|read| read.facts.as_ref()) {
     Some(read::Facts::Publication(found)) if !found.widens.is_empty() => Some(found.name.as_str()),
     _ => None,
   };
-  if let Some(name) = widening.filter(|_| read.is_some_and(|read| read.publishes && !read.widens)) {
-    let words = ctx.t_args("orchestrator.change.publish.widens", [("name", name)]);
+  if let Some(name) = widening {
+    let key = if read.is_some_and(|read| read.publishes && !read.widens) {
+      "orchestrator.change.publish.widens"
+    } else {
+      "orchestrator.change.publish.widensWaits"
+    };
+    let words = ctx.t_args(key, [("name", name)]);
     strips.push((true, decision::warning(id, "widens", &words)));
   }
   let Some(change) = view.action.change.as_ref() else {
