@@ -31,15 +31,22 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 
   let project = screen.project;
+  // A project without tasks shows its title alone: one task, read in, brings the list and its holds.
+  let delivery = screen.delivery();
+  screen.draft_on(delivery, "First");
+  screen.window.projects().feed(project).saved();
   screen
     .window
     .navigation()
     .go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
   screen.until("Tasks saying so", |screen| {
-    screen.text("tasks-queue-held").contains("New starts held")
+    screen.exists("tasks-queue-held") && screen.text("tasks-queue-held").contains("New starts on hold")
   });
   screen.click("tasks-queue-release");
   screen.until("released", |screen| !held(screen));
+  // Hold new starts is in the header's More actions.
+  screen.until("the header's menu", |screen| screen.exists("tasks-more"));
+  screen.click("tasks-more");
   screen.until("Hold new starts again", |screen| screen.exists("tasks-queue-hold"));
   screen.click("tasks-queue-hold");
   screen.until("held from Tasks", |screen| held(screen));
@@ -212,7 +219,7 @@ fn held_group(
 }
 
 #[test]
-fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
+fn tasks_show_held_groups_under_the_views_and_keep_the_header() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let project = screen.project;
   let delivery = screen.delivery();
@@ -222,16 +229,16 @@ fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
     .navigation()
     .go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
   screen.until("Tasks", |screen| {
-    screen.exists("tasks-queue-hold") && screen.exists("tasks-tab-all")
+    screen.exists("tasks-more") && screen.exists("tasks-view-all")
   });
-  let tabs = screen.bounds("tasks-tab-all").y;
+  let views = screen.bounds("tasks-view-all").y;
   held_group(&screen, delivery, &keys);
 
   screen.until("the held group", |screen| screen.exists("tasks-queue-group-0"));
-  assert_eq!(screen.bounds("tasks-tab-all").y, tabs, "the header keeps its layout");
+  assert_eq!(screen.bounds("tasks-view-all").y, views, "the header keeps its layout");
   assert!(
-    screen.bounds("tasks-queue-group-0").y > tabs,
-    "the group's line is under the tabs"
+    screen.bounds("tasks-queue-group-0").y > views,
+    "the group's line is under the views"
   );
   assert!(screen.text("tasks-queue-group-0").contains("KON-1, KON-2"));
   screen.click("tasks-queue-release-group-0");

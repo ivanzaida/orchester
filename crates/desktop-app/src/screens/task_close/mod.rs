@@ -357,6 +357,11 @@ impl MenuPlace {
       anchor: ElementRef::default(),
     }
   }
+
+  /// Whether the menu is open: a row that shows its button under the pointer keeps it while the menu is.
+  pub fn is_open(&self) -> bool {
+    self.open.get()
+  }
 }
 
 /// The *More actions* button (`…`) of `subject`, as `id`, with its menu while it is open, at the end of a row or of

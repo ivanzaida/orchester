@@ -130,6 +130,8 @@ pub struct ActionButton {
   bounded: bool,
   /// Drawn pressed while what it opened shows.
   held: bool,
+  /// What it sets applies something now, e.g. a filter.
+  applied: bool,
   element: Option<ElementRef>,
 }
 
@@ -150,6 +152,7 @@ impl ActionButton {
       large: false,
       bounded: false,
       held: false,
+      applied: false,
       element: None,
     }
   }
@@ -247,6 +250,13 @@ impl ActionButton {
     self
   }
 
+  /// What it sets applies something now (`Filter · 2` `Dn5JJ` in the Tasks list's redesign): `accent_muted` inside a
+  /// `border_strong` stroke, its content `text_primary`.
+  pub fn applied(mut self, applied: bool) -> Self {
+    self.applied = applied;
+    self
+  }
+
   pub fn element_ref(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
     self
@@ -320,7 +330,11 @@ impl ActionButton {
 
 impl From<ActionButton> for Element {
   fn from(button: ActionButton) -> Self {
-    let color = button.kind.content();
+    let color = if button.applied {
+      PaletteColor::TextPrimary
+    } else {
+      button.kind.content()
+    };
     let (height, glyph, label) = button.metrics();
     let mut frame = Button::empty()
       .id(button.id.clone())
@@ -365,6 +379,12 @@ impl From<ActionButton> for Element {
     }
     if button.held {
       frame = frame.background(ExtraColor::Pressed.role()).describe("held", "true");
+    }
+    if button.applied {
+      frame = frame
+        .background(PaletteColor::AccentMuted)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .describe("applied", "true");
     }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
