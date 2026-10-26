@@ -1,5 +1,6 @@
 //! The form as one component: its fields, the version of the task its edits are made on (`base`), its
-//! actions and where they lead (`handlers`), and what one render reads of them ([`View`]).
+//! actions and where they lead (`handlers`), and what one render reads of them ([`View`]). The page is the composer
+//! (`super::composer`) in a scroll area over the action bar.
 
 use std::sync::Arc;
 
@@ -7,10 +8,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::keyboard_event::KeyboardEvent,
     theme::SpacingSize,
   },
   components::{Column, ScrollVertical},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -26,23 +28,17 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use super::{
-  FORM_WIDTH, Nav,
+  Nav,
   actions::{QueuedTask, RunAction, RunServices, SaveAction, run_action, save_action},
-  bar::action_bar,
+  bar::{Handlers, action_bar},
   base::{Base, Newer, Written},
-  brief::{BriefFields, brief},
-  conflict::{Choices, Conflict, conflict_parts},
+  chips::Chips,
+  conflict::{Choices, Conflict},
   fields::Fields,
-  head::{head, no_run_notice},
   kept::KeptEdits,
-  limits::{LimitFields, limits_section},
-  merging::merging_section,
-  module::module_section,
-  plan::pipeline_section,
-  points::points_section,
-  sources::{Drafted, SourcesProps, context_section},
+  keys::FormKeys,
+  sources::Drafted,
   state::{Phase, Subject, View},
-  unbuilt::instructions_section,
 };
 use crate::{project::ShownProject, routes::Screen, services::Services, theme::TaskFormSpacing};
 
@@ -100,6 +96,13 @@ pub struct TaskForm {
   pub(super) written: Arc<Mutex<Written>>,
   /// A new task's sources, which Create stores with it; a stored task's are saved as they change.
   pub(super) sources: Signal<Drafted>,
+  /// The property chips' popovers.
+  pub(super) chips: Chips,
+  /// The person asked to run while the run still needed something.
+  pub(super) tried_run: Signal<bool>,
+  /// The title's input, which has the focus on a new task.
+  pub(super) title_input: ElementRef,
+  pub(super) title_focused: Signal<bool>,
 }
 
 /// Leaving the form writes the edits whose pause has not ended yet.
@@ -163,6 +166,10 @@ impl Component for TaskForm {
       ),
       written: Arc::default(),
       sources: ctx.signal(Drafted::default()),
+      chips: Chips::new(ctx),
+      tried_run: ctx.signal(false),
+      title_input: ElementRef::default(),
+      title_focused: ctx.signal(false),
     };
     form.follow_save(ctx, &save, &props);
     form.follow_run(ctx, &run, &props);
@@ -190,19 +197,21 @@ impl Component for TaskForm {
     let view = self.view(&props, (&save, &run), &separator);
     self.keep(&view, &props.project.feed);
     let handlers = self.handlers(&props, &view, (&save, &run));
+    let keys = self.keys(&view, &handlers);
     let page = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(
         Padding::new()
-          .top(TaskFormSpacing::PageTop.role())
-          .bottom(TaskFormSpacing::PageBottom.role())
-          .left(SpacingSize::Xl)
-          .right(SpacingSize::Xl),
+          .top(SpacingSize::Xl)
+          .bottom(SpacingSize::Xl)
+          .left(TaskFormSpacing::Side.role())
+          .right(TaskFormSpacing::Side.role()),
       )
       .align_items(Alignment::Center)
-      .child(self.form(ctx, &props, &view, &separator));
+      .child(self.composer(ctx, &props, &view, &separator));
     root
       .describe("phase", phase_name(&view.phase))
+      .on_key_down(move |event: KeyboardEvent| keys.down(&event))
       .child(ScrollVertical::new(page).id("task-form-scroll").flex(1.0))
       .child(action_bar(ctx, &view, self.confirming_discard.get(), &handlers))
   }
@@ -219,51 +228,21 @@ const fn phase_name(phase: &Phase) -> &'static str {
 }
 
 impl TaskForm {
-  /// The page's sections, in the design's order, or the fields to choose between while a newer version
-  /// conflicts with the edits.
-  fn form(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {
-    let page = Column::new()
-      .id("task-form")
-      .width(Dimension::Px(FORM_WIDTH))
-      .spacing(SpacingSize::Section)
-      .child(head(ctx, view, &self.nav));
-    if let Some(conflict) = &view.conflict {
-      let pipelines = props.pipelines.as_deref().map(Vec::as_slice);
-      return page.with_children(conflict_parts(ctx, conflict, &self.choices, pipelines));
+  /// What Ctrl+Enter and Ctrl+S do now: what the bar's buttons would, while they can be pressed.
+  fn keys(&self, view: &View, handlers: &Handlers) -> FormKeys {
+    let editing = matches!(view.phase, Phase::Editing);
+    let save_ready = if view.subject.is_new() {
+      view.create_needs().is_empty()
+    } else {
+      view.save_changes_needs().is_some_and(|needs| needs.is_empty())
+    };
+    FormKeys {
+      run: handlers.run.clone().filter(|_| editing && view.run_needs().is_empty()),
+      offers_run: editing && !matches!(view.subject, Subject::Ran(_)),
+      save: handlers.save.clone().filter(|_| editing && save_ready),
+      active: !self.confirming_discard.get_untracked() && view.conflict.is_none(),
+      tried_run: self.tried_run.clone(),
     }
-    let brief_fields = BriefFields {
-      title: &self.fields.title,
-      brief: &self.fields.brief,
-      criteria: &self.fields.criteria,
-    };
-    let limit_fields = LimitFields {
-      budget: &self.fields.budget,
-      time_limit: &self.fields.time_limit,
-    };
-    let sources = SourcesProps {
-      repo_root: props.project.open.repo_root.clone(),
-      project: props.project.open.project.id(),
-      project_name: props.project.open.project.name().as_str().into(),
-      task: view.subject.task().map(|task| task.id()),
-      pipeline: view.pipeline().map(|choice| (choice.id, choice.version)),
-      drafted: self.sources.clone(),
-      locked: view.locked(),
-    };
-    page
-      .with_children(no_run_notice(ctx, view))
-      .child(brief(ctx, view, &props.project.open, &brief_fields))
-      .child(context_section(ctx, sources))
-      .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
-      .with_children(module_section(ctx, view, &props.modules, &self.fields.module))
-      .child(limits_section(ctx, view, &limit_fields, separator))
-      .child(points_section(ctx, view, &self.fields.points))
-      .with_children(merging_section(
-        ctx,
-        view,
-        props.shared,
-        &self.fields.no_automatic_merge,
-      ))
-      .child(instructions_section(ctx))
   }
 
   /// The task the form is about: New task becomes a draft once Create & run saved it without queuing.
@@ -306,6 +285,7 @@ impl TaskForm {
       newer: self.newer.get().is_some(),
       conflict: self.conflict.get(),
       choices: self.choices.get(),
+      tried_run: self.tried_run.get(),
     }
   }
 
