@@ -182,10 +182,10 @@ fn tasks_tabs_and_a_tasks_tabs_are_history() {
   save_draft_in(&window.data.repo("repo-kontur"), target, &draft).expect("the draft is saved");
   let list = |tab| project(ProjectPage::Tasks(TaskList::new(tab)));
   window.navigation().go(list(TaskListTab::default()));
-  window.until("the Tasks list's tabs", |window| {
-    window.texts("tasks-tab-backlog").is_some()
+  window.until("the Tasks list's views", |window| {
+    window.texts("tasks-view-backlog").is_some()
   });
-  window.press("tasks-tab-backlog");
+  window.press("tasks-view-backlog");
   assert_eq!(now(&window), list(TaskListTab::Backlog));
   back(&mut window);
   assert_eq!(now(&window), list(TaskListTab::default()));

@@ -23,7 +23,7 @@ mod versions;
 
 use harness::Form;
 use lurq::app::events::MouseButton;
-use orchester_app::routes::{ProjectPage, Route, TaskList};
+use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
   store::{RunStore, TaskStore},
   task::TaskStatus,
@@ -130,12 +130,16 @@ fn form_create_saves_a_draft_and_highlights_it_in_tasks() {
   form.new_task();
   form.set("task-form-title-input", "Write the delivery docs");
   form.click("task-form-create");
+  // All, since a draft is Backlog's and the list opens on Active, which leaves it out.
   let highlighted = Route::Project(
     form.project,
-    ProjectPage::Tasks(TaskList::default().with_highlight("KON-7".parse().expect("a key"))),
+    ProjectPage::Tasks(TaskList::new(TaskListTab::All).with_highlight("KON-7".parse().expect("a key"))),
   );
   form.window.until("Tasks with the new task highlighted", |window| {
     window.navigation().route_now() == highlighted
+  });
+  form.window.until("the new task's row badged New", |window| {
+    window.texts("task-new-KON-7").is_some_and(|words| words == ["New"])
   });
   let task = form.task("KON-7").expect("Create stored the task");
   assert_eq!(task.status(), TaskStatus::Draft);

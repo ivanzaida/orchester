@@ -171,8 +171,9 @@ pixels: the logical size times `app_state`'s `window.scale_factor` (`{"width": 2
 before you compare. Then `navigate`, which takes
 the route's params and answers the route the tab shows, for example:
 
-- `{"route": "tasks", "project": "<id>"}`, with `"tab"` `all`, `needs_you`, `backlog`, `todo`,
-  `in_progress`, `in_review` or `done`, `"q"` (the search) or `"highlight": "KON-12"`;
+- `{"route": "tasks", "project": "<id>"}`, with `"tab"` `active` (the default), `backlog`, `done` or `all` (the
+  list's views since ORC-99; the old workflow tab names are refused with `unknown_tab`), `"q"` (the search) or
+  `"highlight": "KON-12"`;
 - `{"route": "overview", "project": "<id>"}`, with `"tab"` `running`, `needs_you`, `queued` or
   `failed`;
 - `{"route": "task", "project": "<id>", "key": "KON-12"}` (Summary), with `"tab"` `conversation`

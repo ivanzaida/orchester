@@ -40,7 +40,7 @@ fn shared_project_task_list_says_where_it_lives_and_when_it_is_read_only() {
       .contains("ask an owner, Alice Moreau, to add you again")
   );
   assert_eq!(
-    window.text("tasks-create-multiple-reason"),
+    window.text("tasks-new-task-reason-text"),
     "Read-only: you're not a member."
   );
 
@@ -63,4 +63,28 @@ fn shared_project_task_list_says_where_it_lives_and_when_it_is_read_only() {
   );
   shows(&mut window, "sharing-members-come-back-row");
   no_admin_endpoint(&recorder);
+}
+
+#[test]
+fn shared_project_task_list_without_tasks_keeps_its_line_and_locks_new_task() {
+  let (server, kontur) = server();
+  let mut window = harness::window(Some(KONTUR_REMOTE));
+  let _recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
+  link_kontur(&window);
+  let tasks = Route::Project(crate::support::project_id(), ProjectPage::Tasks(TaskList::default()));
+
+  go(&mut window, tasks.clone(), "tasks-empty");
+  shows(&mut window, "tasks-shared-line");
+  assert_eq!(window.text("tasks-shared-server"), "Shared on Kontur team");
+  assert!(window.tree.get_element_by_id("tasks-empty-new-task-reason").is_none());
+
+  server.remove_member(&kontur, "ivan");
+  window.launch.services().expect("services").servers.sync_now();
+  go(&mut window, tasks, "tasks-not-member");
+  shows(&mut window, "tasks-empty");
+  assert_eq!(window.text("tasks-shared-role"), "You were a member · ivan");
+  assert_eq!(
+    window.text("tasks-empty-new-task-reason-text"),
+    "Read-only: you're not a member."
+  );
 }
