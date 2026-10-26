@@ -162,13 +162,8 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
     Some(Change::Answer {
       number, choices, text, ..
     }) => {
-      let separator = ctx.t("orchestrator.change.facts.separator");
-      let answer = choices
-        .iter()
-        .map(String::as_str)
-        .chain(text.as_deref())
-        .collect::<Vec<_>>();
-      super::answer::answer(ctx, view, (*number, &answer.join(&separator)))
+      let answer = super::answer::answer_words(ctx, choices, text.as_deref());
+      super::answer::answer(ctx, view, (*number, &answer))
     }
     Some(Change::Message { number, text, then, .. }) => super::answer::message(ctx, view, (*number, text, *then)),
     Some(Change::Pause { number, .. }) => control(ctx, view, (Control::Pause, Some(*number), None)),

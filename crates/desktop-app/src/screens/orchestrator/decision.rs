@@ -93,6 +93,29 @@ pub(super) fn body(id: &str, words: &str) -> Text {
     .width(Dimension::Pct(100.0))
 }
 
+/// The words the card would send, as a quote (`Quote` in `bxJZp`): 12.5 `text_primary` 12 in from a 2 `border_strong`
+/// line, 2 over and under them; `{id}-quote`.
+pub(super) fn quote(id: &str, words: &str) -> Column {
+  Column::new()
+    .id(format!("{id}-quote"))
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .left(SpacingSize::Md)
+        .top(ExtraSpacing::Tight.role())
+        .bottom(ExtraSpacing::Tight.role()),
+    )
+    .border_left(Border::inside(BorderSize::Md, PaletteColor::BorderStrong))
+    .child(
+      Text::new(words)
+        .id(format!("{id}-quote-text"))
+        .variant(ExtraTypography::Lead.role())
+        .color(PaletteColor::TextPrimary)
+        .selectable(true)
+        .width(Dimension::Pct(100.0)),
+    )
+}
+
 /// A warning strip of card `id` (`{id}-{suffix}`): only for what is risky in it.
 pub(super) fn warning(id: &str, suffix: &str, words: &str) -> Row {
   Row::new()

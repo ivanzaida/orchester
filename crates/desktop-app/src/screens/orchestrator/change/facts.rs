@@ -341,6 +341,18 @@ fn run_rows(ctx: &Ctx, view: &View, run: &RunFacts, project: ProjectId) -> Vec<(
     Some(Change::Continue { step, why, choice, .. }) => {
       rows.extend(super::continuation::rows(ctx, (step.as_ref(), *why), choice));
     }
+    // What the question asks comes first (`Asked` in `bxJZp`).
+    Some(Change::Answer { .. }) => {
+      if let Some(asked) = &run.asked {
+        rows.insert(
+          0,
+          (
+            ctx.t("orchestrator.change.facts.asked"),
+            vec![Part::Value(asked.as_str().into())],
+          ),
+        );
+      }
+    }
     _ => {}
   }
   rows

@@ -60,10 +60,14 @@ pub enum OrchestratorText {
   LinkLabel,
   /// 12.5 `text_secondary`, 1.5: what a labelled link adds after it (`XosQ1` in `w262B`).
   LinkDetail,
+  /// 12/600 `text_secondary`: a section's heading in an open daily report (`XCYjc` in `VZKyw`).
+  ReportHeading,
+  /// 11.5 `text_muted`: what an item of a daily report adds at its end (`HlavS` in `VZKyw`).
+  ReportMeta,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 21] = [
+  pub const ALL: [Self; 23] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -85,6 +89,8 @@ impl OrchestratorText {
     Self::LinkAddress,
     Self::LinkLabel,
     Self::LinkDetail,
+    Self::ReportHeading,
+    Self::ReportMeta,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -114,6 +120,8 @@ impl OrchestratorText {
       Self::LinkAddress => "orchestrator_link_address",
       Self::LinkLabel => "orchestrator_link_label",
       Self::LinkDetail => "orchestrator_link_detail",
+      Self::ReportHeading => "orchestrator_report_heading",
+      Self::ReportMeta => "orchestrator_report_meta",
     }
   }
 
@@ -146,6 +154,8 @@ impl OrchestratorText {
       Self::LinkAddress => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::LinkLabel => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::LinkDetail => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
+      Self::ReportHeading => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
+      Self::ReportMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
     }
   }
 }

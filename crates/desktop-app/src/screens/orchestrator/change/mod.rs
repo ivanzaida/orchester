@@ -58,6 +58,7 @@ use crate::{
     icon::Icon,
     message::message_text,
     tinted_note::{person_only, tinted_note},
+    tooltip::Tooltip,
   },
 };
 
@@ -164,16 +165,16 @@ impl ChangeCard {
     let notes = self.notes(ctx, (id, view, words.person_only), unread);
     let actions = self.actions(ctx, props, (words.accept, opens), shown);
     let time = orchester_workspace::display::clock(view.at);
+    let (below, tip) = answer::shown(ctx, id, view, &words.effect);
+    let head = decision::head(ctx, id, (words.glyph, &words.title), view.action.task.as_deref(), &time);
+    let head = match tip {
+      Some(tip) => Tooltip::new(format!("{id}-why"), tip).wrap(ctx, head),
+      None => head.into(),
+    };
     decision::frame(id, view.phase().name(), widens)
       .describe("on_its_own", props.action.on_its_own.to_string())
-      .child(decision::head(
-        ctx,
-        id,
-        (words.glyph, &words.title),
-        view.action.task.as_deref(),
-        &time,
-      ))
-      .child(decision::body(id, &words.effect))
+      .child(head)
+      .with_children(below)
       .with_children(facts)
       .with_children(boxes)
       .with_children(warnings.into_iter().map(|(_, strip)| strip))

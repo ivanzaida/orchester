@@ -56,9 +56,10 @@ use crate::{
   },
 };
 
-/// The picker's width (`WaQcn`) and the chip's height (`KohZb`).
+/// The picker's width (`WaQcn`), the chip's height (`KohZb`) and the height of the line between its parts.
 const WIDTH: f32 = 360.0;
 const CHIP_HEIGHT: f32 = 24.0;
+const RULE_HEIGHT: f32 = 1.0;
 
 /// What the chip and its picker are about: the project at `root`, what the Orchestrator runs on as read (`None` while
 /// it is read or could not be), and whether reading it failed; `open` shows the picker.
@@ -250,10 +251,12 @@ impl RunsOnPicker {
         Row::new()
           .width(Dimension::Pct(100.0))
           .padding(Padding::vertical(SpacingSize::Xs))
+          // A line 1 high: a row without height draws no inside stroke.
           .child(
             Row::new()
               .width(Dimension::Pct(100.0))
-              .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)),
+              .height(Dimension::Px(RULE_HEIGHT))
+              .background(PaletteColor::Border),
           ),
       )
       .with_children(choices)

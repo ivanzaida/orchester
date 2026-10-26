@@ -138,21 +138,21 @@
     "failure": {
       "unreachable": "Orchestrator can't reach {{connection}}",
       "unreachableUnknown": "The Orchestrator couldn't start",
-      "notSignedIn": "The connection's CLI isn't signed in on this computer. Your message and this conversation are kept; nothing else changed.",
-      "cannotStart": "The connection's CLI couldn't be started; the runner's log says why. Your message and this conversation are kept; nothing else changed.",
-      "connectionGone": "The Orchestrator's connection is gone or can't run it. Choose another in Orchestrator settings; this conversation is kept.",
-      "accountNone": "The connection has no account to sign in with; pick another account. Your message and this conversation are kept.",
-      "accountFolderMissing": "The account's folder {{folder}} is gone; pick another account. Your message and this conversation are kept.",
-      "accountUnsupported": "This connection's account can't be used on this computer yet; pick another account. Your message and this conversation are kept.",
+      "notSignedIn": "Its CLI isn't signed in on this computer. Your message is kept.",
+      "cannotStart": "Its CLI couldn't be started; the runner's log says why. Your message is kept.",
+      "connectionGone": "Its connection is gone or can't run it. Choose another in Orchestrator settings.",
+      "accountNone": "The connection has no account to sign in with. Your message is kept; pick another account.",
+      "accountFolderMissing": "The account's folder {{folder}} is gone. Your message is kept; pick another account.",
+      "accountUnsupported": "This account can't be used on this computer yet. Your message is kept; pick another account.",
       "failed": "The answer failed",
-      "failedBody": "{{reason}} · Your message and this conversation are kept.",
+      "failedBody": "{{reason}} · Your message is kept.",
       "retry": "Retry",
       "openConnections": "Open Connections",
       "pickAccount": "Pick account",
       "earlier": "This answer failed: {{reason}}",
       "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
       "earlierUnreachable": "This answer failed: the Orchestrator couldn't start",
-      "timeLimit": "It ran longer than {{minutes}} minutes, the most one answer may take, and was ended. What it did until then stays; ask again in smaller parts.",
+      "timeLimit": "It ran longer than {{minutes}} minutes and was ended; what it did stays. Ask again in smaller parts.",
       "earlierTimeLimit": "This answer was ended after {{minutes}} minutes"
     },
     "sendProblem": {
@@ -447,8 +447,8 @@
         "done": "Answered the question in run #{{run}} of {{task}}",
         "dismissed": "Answer to run #{{run}} of {{task}} · dismissed",
         "refused": "Answer to run #{{run}} of {{task}} · not done",
-        "effectWaits": "Nothing is sent yet. Send answer gives the asking agent this answer: {{answer}}. The task's conversation shows it as the Orchestrator's.",
-        "effectSent": "The agent got this answer at {{time}}: {{answer}}. The task's conversation shows it as the Orchestrator's.",
+        "effectWaits": "Nothing is sent yet. Send answer gives the asking agent the answer quoted on the card; the task's conversation shows it as the Orchestrator's.",
+        "effectSent": "The agent got this answer at {{time}}; the task's conversation shows it as the Orchestrator's: {{answer}}",
         "effectDismissed": "You dismissed it. Nothing was sent; the agent still waits for an answer.",
         "accept": "Send answer"
       },
@@ -541,6 +541,7 @@
         "effect": "Auto mode is on in {{project}}, so the Orchestrator started this run without asking. It went through the queue's checks, as Start in Tasks does."
       },
       "facts": {
+        "asked": "Asked",
         "instruction": "Instruction",
         "pipeline": "Pipeline",
         "profile": "Profile",
@@ -775,45 +776,54 @@
         "waits": "Nothing waits for you.",
         "next": "No task waits in the queue."
       },
-      "merged": "- Merged: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
-      "mergedByOrchestrator": "- Merged by the Orchestrator: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
-      "mergedOnItsOwn": "- Merged by the Orchestrator on its own: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
-      "action": {
-        "direct": "- Orchestrator: [{{what}}]({{link}}) — {{tool}} at {{time}}",
-        "applied": "- You applied: [{{what}}]({{link}}) — {{tool}} at {{time}}"
+      "item": {
+        "task": "{{task}} · {{title}}",
+        "merged": "merged {{time}} · run #{{run}}",
+        "mergedByOrchestrator": "by the Orchestrator {{time}} · run #{{run}}",
+        "mergedOnItsOwn": "by the Orchestrator on its own {{time}} · run #{{run}}",
+        "direct": "by the Orchestrator · {{tool}} {{time}}",
+        "applied": "applied by you · {{tool}} {{time}}",
+        "ready": "ready to merge · run #{{run}}",
+        "working": "at work · run #{{run}}",
+        "stopped": "at {{step}} · run #{{run}}",
+        "run": "run #{{run}}",
+        "wait": {
+          "approval": "{{task}} · tool request: {{what}}",
+          "approvalBare": "{{task}} · tool request",
+          "question": "{{task}} · question at {{what}}",
+          "questionBare": "{{task}} · question",
+          "message": "{{task}} · waits for a message at {{what}}",
+          "messageBare": "{{task}} · waits for a message",
+          "plan": "{{task}} · plan to decide at {{what}}",
+          "planBare": "{{task}} · plan to decide",
+          "proposal": "{{what}}",
+          "proposalBare": "Proposal"
+        },
+        "total": "{{spent}} of {{budget}}",
+        "totalUnlimited": "{{spent}} · no daily limit",
+        "agentTime": "{{time}} of agent time",
+        "share": "{{spent}} tokens · {{time}}",
+        "next": "next {{place}}"
       },
-      "ready": "- Ready to merge: [{{task}} · {{title}}]({{link}}) — run #{{run}}; merge it on its Summary",
-      "working": "- At work: [{{task}} · {{title}}]({{link}}) — run #{{run}}",
       "stopped": {
-        "failed": "- Failed: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}}; return it to an earlier step or run it again on its Summary",
-        "retries": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} used up its retries; allow one more or return it on its Summary",
-        "brokeAgain": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} broke again; allow a retry or return it on its Summary",
-        "noRoute": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} reported the work failed with no step to return it to; decide on its Summary",
-        "unverified": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} could not check everything; accept, retry or return it on its Summary",
-        "unchanged": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} was not run again on unchanged work; accept, retry or return it on its Summary",
-        "limitTokens": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} used its token budget; raise it on its Summary",
-        "limitTime": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} reached its time limit; raise it on its Summary",
-        "limitDaily": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} stopped at the daily budget; resume it once the day has room, or raise the budget",
-        "limitGroup": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} stopped at its group's budget; raise the group's budget",
-        "limitStep": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} used the step's budget; raise it on its Summary",
-        "limitPlan": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} reached an account's plan limit; resume it once the plan allows",
-        "interrupted": "- Interrupted: [{{task}} · {{title}}]({{link}}) — run #{{run}}; continue it from its last checkpoint on its Summary"
-      },
-      "wait": {
-        "approval": "- Tool request: [{{task}}]({{link}}) — run #{{run}}: {{what}}",
-        "question": "- Question: [{{task}}]({{link}}) — run #{{run}} at {{what}}",
-        "message": "- Waits for a message: [{{task}}]({{link}}) — run #{{run}} at {{what}}",
-        "plan": "- Plan to decide: [{{task}}]({{link}}) — run #{{run}} at {{what}}",
-        "proposal": "- Proposal: [{{what}}]({{link}}) — {{task}}"
+        "ready": "Ready to merge: merge it on its Summary.",
+        "failed": "Failed at {{step}}: return it to an earlier step or run it again on its Summary.",
+        "retries": "Waits for you: {{step}} used up its retries. Allow one more or return it on its Summary.",
+        "brokeAgain": "Waits for you: {{step}} broke again. Allow a retry or return it on its Summary.",
+        "noRoute": "Waits for you: {{step}} reported the work failed with no step to return it to. Decide on its Summary.",
+        "unverified": "Waits for you: {{step}} could not check everything. Accept, retry or return it on its Summary.",
+        "unchanged": "Waits for you: {{step}} was not run again on unchanged work. Accept, retry or return it on its Summary.",
+        "limitTokens": "At a limit: it used its token budget. Raise it on its Summary.",
+        "limitTime": "At a limit: it reached its time limit. Raise it on its Summary.",
+        "limitDaily": "At a limit: it stopped at the daily budget. Resume it once the day has room, or raise the budget.",
+        "limitGroup": "At a limit: it stopped at its group's budget. Raise the group's budget.",
+        "limitStep": "At a limit: {{step}} used the step's budget. Raise it on its Summary.",
+        "limitPlan": "At a limit: {{step}} reached an account's plan limit. Resume it once the plan allows.",
+        "interrupted": "Interrupted: continue it from its last checkpoint on its Summary."
       },
       "usage": {
-        "total": "- Tokens: [{{spent}} of {{budget}}]({{link}}) — {{time}} of agent time",
-        "totalUnlimited": "- Tokens: [{{spent}}]({{link}}) — {{time}} of agent time; no daily limit",
-        "task": "- Task: [{{task}} · {{title}}]({{link}}) — {{spent}} tokens, {{time}}",
-        "account": "- Account: [{{name}}]({{link}}) — {{spent}} tokens, {{time}}",
         "noAccount": "No account"
-      },
-      "queued": "- Next {{place}}: [{{task}} · {{title}}]({{link}})"
+      }
     }
   }
 }

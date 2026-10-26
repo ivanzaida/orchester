@@ -25,6 +25,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
+    tooltip::Truncated,
   },
 };
 
@@ -90,12 +91,8 @@ pub(super) fn failure_line(ctx: &mut Ctx, row: &TurnRow, failure: &TurnFailure) 
             .variant(OrchestratorText::Line.role())
             .width(Dimension::Pct(100.0)),
         )
-        .child(
-          Text::new(&body)
-            .id("orchestrator-failure-body")
-            .variant(TypographyStyle::Description)
-            .width(Dimension::Pct(100.0)),
-        ),
+        // One line (`LsXK1`): a longer reason is cut, whole in its tooltip.
+        .child(Truncated::new("orchestrator-failure-body", body, TypographyStyle::Description).render(ctx)),
     )
     .with_children(retry(ctx, row))
     .with_children(fix.button(ctx, row))

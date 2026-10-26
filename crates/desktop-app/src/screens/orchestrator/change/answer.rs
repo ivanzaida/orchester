@@ -1,16 +1,46 @@
 //! What a card of an answer or a message the Orchestrator gives a run's agents says
-//! (`docs/design/orchestrator-toolset.md`, "Decisions" 5), in the frame and states of the cancel and merge cards
-//! (`b55NqO`, `UKgrR`): its icon and title, where it stands, what it sends or sent (the task's conversation names the
-//! Orchestrator as its sender) and, for a message to a run none of whose agents waits or works, how sending it moves
-//! the run, and the person's action while it waits. No Pencil frame draws these two yet.
+//! (`docs/design/orchestrator-toolset.md`, "Decisions" 5): its icon and title, where it stands, what it sends or sent
+//! (the task's conversation names the Orchestrator as its sender) and, for a message to a run none of whose agents
+//! waits or works, how sending it moves the run, and the person's action while it waits. Waiting, the answer or the
+//! message is the card's quote and what sending does its question's tooltip (`Answer the question in run #95?` in
+//! `bxJZp`).
 
 use std::sync::Arc;
 
-use lurq::app::ctx::Ctx;
-use orchester_core::orchestrator::change::MessageThen;
+use lurq::{app::ctx::Ctx, node::Element};
+use orchester_core::orchestrator::change::{Change, MessageThen};
 
-use super::words::{Accept, Phase, View, Words};
+use super::{
+  super::decision,
+  words::{Accept, Phase, View, Words},
+};
 use crate::ui::{button::ButtonKind, icon::Icon};
+
+/// What a waiting card of `view`, named `id`, shows under its head, and what its question's tooltip says: an answer's
+/// or a message's words as a quote, what sending does on hover; a release of new starts nothing more than its
+/// question, what releasing does on hover; any other card `effect`, what it is about.
+pub(super) fn shown(ctx: &Ctx, id: &str, view: &View, effect: &Arc<str>) -> (Option<Element>, Option<Arc<str>>) {
+  match view.action.change.as_ref().map(|change| &change.change) {
+    Some(Change::Answer { choices, text, .. }) => (
+      Some(decision::quote(id, &answer_words(ctx, choices, text.as_deref())).into()),
+      Some(effect.clone()),
+    ),
+    Some(Change::Message { text, .. }) => (Some(decision::quote(id, text).into()), Some(effect.clone())),
+    Some(Change::Release { .. }) => (None, Some(effect.clone())),
+    _ => (Some(decision::body(id, effect).into()), None),
+  }
+}
+
+/// An answer's words: the labels of the options it picks, then its own text.
+pub(super) fn answer_words(ctx: &Ctx, choices: &[String], text: Option<&str>) -> String {
+  let separator = ctx.t("orchestrator.change.facts.separator");
+  choices
+    .iter()
+    .map(String::as_str)
+    .chain(text)
+    .collect::<Vec<_>>()
+    .join(&separator)
+}
 
 /// An answer to the question run `#number` waits with: `answer`, the options picked and the Orchestrator's words.
 pub(super) fn answer(ctx: &Ctx, view: &View, (number, answer): (u32, &str)) -> Words {
@@ -24,7 +54,8 @@ pub(super) fn answer(ctx: &Ctx, view: &View, (number, answer): (u32, &str)) -> W
   };
   let time = view.time();
   let effect = match view.phase() {
-    Phase::Waits | Phase::Applying => ctx.t_args("orchestrator.change.answer.effectWaits", [("answer", answer)]),
+    // The answer itself is the card's quote ([`shown`]).
+    Phase::Waits | Phase::Applying => ctx.t("orchestrator.change.answer.effectWaits"),
     Phase::Applied | Phase::Done => ctx.t_args(
       "orchestrator.change.answer.effectSent",
       [("answer", answer), ("time", time.as_str())],

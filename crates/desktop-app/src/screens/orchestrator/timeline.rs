@@ -299,9 +299,6 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
         report: (**report).clone(),
         at: row.turn.at,
         turned: row.turn.state.is_some(),
-        project: row.env.project,
-        names: row.env.names.clone(),
-        links: row.env.links.clone(),
       };
       let card = ctx.mount_keyed::<ReportCard>(&id, props);
       (card, super::answer::answer(ctx, row))

@@ -62,6 +62,13 @@ fn orchestrator_report_shows_its_day_its_parts_and_their_links() {
   ] {
     assert!(shown.contains(&part), "{part} in {shown}");
   }
+  // Each item is a line that opens its place: never its address (`VZKyw`).
+  assert!(!shown.contains("orchester:"), "no raw app links: {shown}");
+  let tokens = format!("{card}-part-3-item-0");
+  assert!(
+    screen.text(&format!("{tokens}-meta")).ends_with("of agent time"),
+    "the day's tokens, its agent time at the end"
+  );
   assert!(
     !shown.contains(&key),
     "a draft is not queued, so the queue does not name it: {shown}"

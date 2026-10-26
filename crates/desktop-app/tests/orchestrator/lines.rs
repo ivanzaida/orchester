@@ -248,6 +248,10 @@ fn orchestrator_decided_proposal_folds_into_its_line() {
   assert!(screen.text(&format!("{waiting}-state")).starts_with("Waits for you · "));
   assert_eq!(screen.text(&format!("{waiting}-person")), "Only you can apply");
   assert!(screen.exists(&format!("{waiting}-dismiss")));
+  assert!(
+    !screen.exists(&format!("{waiting}-effect")),
+    "a release says what it does on hover only"
+  );
 
   let (chat, applied) = with_action(&screen, "Released?", &release(ActionOutcome::Applied));
   screen.go(chat);
@@ -262,4 +266,22 @@ fn orchestrator_decided_proposal_folds_into_its_line() {
     (screen.bounds(&applied).height - 32.0).abs() < 0.5,
     "decided, the card is a line"
   );
+}
+
+#[test]
+fn orchestrator_answer_card_quotes_the_answer_it_would_send() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let (chat, card) = with_action(&screen, "Answer it", &answer(95, ActionOutcome::Waits));
+  screen.go(chat);
+  screen.until("the decision card", |screen| screen.exists(&format!("{card}-start")));
+  assert_eq!(
+    screen.text(&format!("{card}-quote")),
+    "Decisions inside the new layout.",
+    "the answer is the card's quote"
+  );
+  assert!(
+    !screen.exists(&format!("{card}-effect")),
+    "what sending does is the question's tooltip, not a paragraph"
+  );
+  assert_eq!(screen.text(&format!("{card}-start")), "Send answer");
 }

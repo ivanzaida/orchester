@@ -10,11 +10,11 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer, Text},
   layout::Alignment,
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::orchestrator::{TurnFailure, TurnState};
 use orchester_workspace::display;
@@ -35,6 +35,8 @@ use crate::{
 
 /// The working line's height (`o5Ak8`).
 const LINE_HEIGHT: f32 = 32.0;
+/// A divider's lines' height (`EpB7m` in `LWHoS`).
+const RULE_HEIGHT: f32 = 1.0;
 
 /// How the turn ended, with what the person can do about the newest one; nothing for a wait that started no turn.
 pub(super) fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
@@ -135,10 +137,12 @@ fn ask_again(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
 
 /// A centered divider named `id`: a `border` line at each side of `words` and, when there is one, `action`.
 pub(super) fn divider(id: &str, words: &str, action: Option<Element>) -> Element {
+  // A line 1 high (`EpB7m`): a row without height draws no inside stroke.
   let rule = || {
     Row::new()
       .flex(1.0)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .height(Dimension::Px(RULE_HEIGHT))
+      .background(PaletteColor::Border)
   };
   Row::new()
     .id(id.to_owned())
