@@ -292,8 +292,7 @@ pub fn save_checked_in(
     )?;
     before.id
   } else {
-    let taken = db.resources(ResourceKind::Skill)?;
-    let taken = taken.iter().map(|e| e.slug().clone()).collect::<Vec<_>>();
+    let taken = db.slugs(ResourceKind::Skill)?;
     let fallback = Slug::new("skill").expect("skill is a valid slug");
     db.create_resource(Slug::unique_for(&name, &fallback, &taken), name, body, now)?
       .id()

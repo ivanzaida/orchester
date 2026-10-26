@@ -158,11 +158,7 @@ fn entries(db: &ProjectDb) -> Result<Vec<SkillEntry>, StoreError> {
 /// its name.
 pub fn create_in(repo_root: &Path, name: Name) -> Result<ResourceId, StoreError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let taken: Vec<Slug> = db
-    .resources(ResourceKind::Skill)?
-    .iter()
-    .map(|resource| resource.slug().clone())
-    .collect();
+  let taken: Vec<Slug> = db.slugs(ResourceKind::Skill)?;
   let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
   let slug = Slug::unique_for(&name, &fallback, &taken);
   let body = Skill::new(String::new(), String::new(), Vec::new(), InstructionScope::Project)

@@ -1,0 +1,50 @@
+{
+  "hub": {
+    "title": "Agents",
+    "tabs": {
+      "profiles": "Profiles",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "memory": "Memory"
+    },
+    "saving": "Saving…",
+    "saved": "Draft saved",
+    "allSaved": "All changes saved",
+    "more": "More actions",
+    "discard": {
+      "action": "Discard draft",
+      "title": "Discard draft v{{version}}?",
+      "sentence": "Its changes are lost. Published v{{version}} stays the version new runs use.",
+      "confirm": "Discard draft",
+      "keep": "Keep draft"
+    },
+    "remove": {
+      "action": "Remove",
+      "title": "Remove {{name}}?",
+      "unused": "No pipeline step uses it. Finished runs keep showing the version they ran.",
+      "unusedInstruction": "No agent gets it from its next run on. Finished runs keep showing the version they ran.",
+      "unusedSkill": "No agent gets this skill now. Finished runs keep showing the version they ran.",
+      "inUseProfile": "Remove and reset deletes it and clears it from every user: each step below loses its profile, and its pipeline’s draft asks you to choose one.",
+      "inUseTool": "Remove and reset deletes it and clears it from every user: each step below loses its tool, and its pipeline’s draft asks you to choose one.",
+      "inUseSkillOne": "Remove and reset deletes it and clears it from every user: {{name}} no longer gets this skill.",
+      "inUseSkillOther": "Remove and reset deletes it and clears it from every user: the agents below no longer get this skill.",
+      "confirm": "Remove",
+      "reset": "Remove and reset",
+      "keep": "Keep it",
+      "stepPublished": "{{pipeline}} v{{version}} · {{number}} {{step}}",
+      "stepDraft": "{{pipeline}} · Draft v{{version}} · {{number}} {{step}}",
+      "reachRole": "{{name}} · Role scope",
+      "reachProject": "{{name}} · Project scope",
+      "reachPipeline": "{{name}} · Pipeline scope",
+      "reachStep": "{{pipeline}} · {{step}} · Step scope",
+      "removed": "Removed {{name}}"
+    },
+    "leave": {
+      "title": "Leave with unsaved changes?",
+      "sentence": "Saved drafts are kept. Changes that have not saved will be left behind.",
+      "keep": "Keep editing",
+      "leave": "Leave editor"
+    }
+  }
+}

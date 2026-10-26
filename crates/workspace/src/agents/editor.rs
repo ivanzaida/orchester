@@ -87,6 +87,30 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
   Ok(Outcome::Saved(id))
 }
 
+/// What the stored draft of `entry` already widens over the latest published version: allowed when it was saved, so
+/// an autosave of later edits asks only about what widens beyond it. A profile without a draft widens nothing.
+pub fn approved_in(root: &Path, entry: &ProfileEntry) -> Result<Vec<Message>, Message> {
+  if !entry.state.has_draft() {
+    return Ok(Vec::new());
+  }
+  let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
+  let Some(connection) = listed.connections.iter().find(|c| c.id() == entry.profile.connection()) else {
+    return Ok(Vec::new());
+  };
+  let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  super::widening::reasons(&db, Some(entry.id), &entry.profile, connection.provider())
+    .map_err(|error| messages::store_error(&error))
+}
+
+/// The stored profile `id` as the editor shows it, after a write.
+pub fn entry_in(root: &Path, id: ResourceId) -> Result<ProfileEntry, Message> {
+  ProjectAgents::load_in(root)
+    .map_err(|error| messages::store_error(&error))?
+    .profile(id)
+    .cloned()
+    .ok_or_else(|| Message::new("errors.storage"))
+}
+
 fn perform(root: &Path, request: &Request) -> Result<ResourceId, Message> {
   let result = match (request.action, &request.existing) {
     (Action::Save, None) => data::apply_in(root, ProfileChange::Create(request.profile.clone())),

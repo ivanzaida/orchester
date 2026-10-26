@@ -52,6 +52,7 @@ mod read_only;
 mod rebases;
 mod repository;
 mod repository_import;
+mod removals;
 mod resolutions;
 mod resources;
 mod reviewer_usage;

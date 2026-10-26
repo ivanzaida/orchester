@@ -1,26 +1,33 @@
-//! Project agent profiles, layer Agents Gg0hY. The list, a new profile and a profile's editor tab are the
-//! route's ([`Shown`]), so Back and Forward step through them.
-mod actions;
+//! Profiles, the Agents hub's first tab (`01 Profiles` `B94gsw`, `01b Profile` `acOlR`, `01c` `WAWHr`): the list, a
+//! new profile and a profile's page are the route's ([`Shown`]), so Back and Forward step through them. A profile's
+//! page is one page: its role, connection and model, and permissions beside what enforces them, what else reaches
+//! its prompts and where it is used. Edits save as a draft as they are made.
 mod active;
+mod autosave;
 mod editor;
 mod enforcement;
 mod entries;
 mod fields;
 mod list;
-mod panels;
+mod model;
+mod page_head;
 mod permissions;
 mod policy_panel;
+mod prompts;
+mod questions;
+mod side;
 mod uses;
 mod words;
+mod work;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::Column,
+  components::Text,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{agents::data::ProjectAgents, background, messages, tasks::outside::Outside};
@@ -29,13 +36,15 @@ use crate::{
   navigation::{Navigation, link::Open},
   project::{ShownProject, own::OwnChanges},
   routes::{AgentTab, ProjectPage, Route},
+  screens::hub::{self, Head, HubTab},
   ui::{
     message::message_text,
     state::{load_error, loading},
   },
 };
 
-/// What the route shows of the profiles: their list, a new profile, or one profile, each editor on its tab.
+/// What the route shows of the profiles: their list, a new profile, or one profile. The tab a route names is kept
+/// for its links; the page shows all of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shown {
   List,
@@ -52,7 +61,7 @@ impl Shown {
   }
 }
 
-/// Moves between the list, a new profile and a profile's tabs, each a place of the tab's history.
+/// Moves between the list, a new profile and a profile, each a place of the tab's history.
 #[derive(Clone)]
 pub(super) struct AgentsNav {
   project: ProjectId,
@@ -70,15 +79,17 @@ impl AgentsNav {
       ProjectPage::Import(crate::routes::ImportTab::Agents),
     ))
   }
-  /// The profile a save named, on the tab the editor shows now, in place of the editor it was saved from:
-  /// a new profile gets its id.
+  /// The profile a new profile's first save created, in place of the new profile.
   pub fn saved(&self, id: ResourceId) {
     let tab = match self.navigation.route_now() {
       Route::Project(_, ProjectPage::NewAgent(tab) | ProjectPage::Agent(_, tab)) => tab,
       _ => AgentTab::default(),
     };
-    let shown = Shown::Edit(id, tab);
-    self.navigation.replace(Route::Project(self.project, shown.page()));
+    self.navigation.replace(Route::Project(self.project, Shown::Edit(id, tab).page()));
+  }
+  /// The list, in place of a profile that was removed.
+  pub fn removed(&self) {
+    self.navigation.replace(Route::Project(self.project, Shown::List.page()));
   }
 }
 
@@ -91,6 +102,7 @@ impl DevtoolsInspectable for Props {}
 
 pub struct AgentsScreen {
   nav: AgentsNav,
+  /// Counts the reloads of a profile that read it anew into its page.
   revision: Signal<u64>,
   retry: Signal<u64>,
   /// The profile changes, the screen's own too.
@@ -128,6 +140,7 @@ impl Component for AgentsScreen {
       self.retry.get(),
       outside.of(Outside::Connections),
       outside.of(Outside::Pipelines),
+      outside.of(Outside::Instructions) + outside.of(Outside::Skills),
       self.profiles.count(&project.feed),
       // The profiles' active uses: the runs that run them start and end.
       project.feed.states.get(),
@@ -147,30 +160,29 @@ impl Component for AgentsScreen {
       })
       .state()
       .get();
-    let frame = Column::new()
-      .id("screen-agents")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0));
     if loaded.is_pending() && loaded.data.as_ref().is_none_or(|(saved, _)| *saved != revision) {
-      return frame.child(loading("agents-loading", &ctx.t("agents.reading")));
+      let body = loading("agents-loading", &ctx.t("agents.reading"));
+      return frame(ctx, &project, Head::default(), body);
     }
     let error = loaded.error.clone().filter(|_| loaded.is_rejected());
     if let Some(error) = &error
       && (loaded.data.is_none() || shown == Shown::List)
     {
       let retry = self.retry.clone();
-      return frame.child(load_error(
+      let body = load_error(
         ctx,
         "agents-load-error",
         (&ctx.t("agents.loadFailed"), &message_text(ctx, error)),
         move || retry.update(|n| *n += 1),
-      ));
+      );
+      return frame(ctx, &project, Head::default(), body);
     }
     let reading = loaded.is_pending();
     let Some((_, listed)) = loaded.data else {
-      return frame.child(loading("agents-loading", &ctx.t("agents.reading")));
+      let body = loading("agents-loading", &ctx.t("agents.reading"));
+      return frame(ctx, &project, Head::default(), body);
     };
-    frame.child(self.content(ctx, (project, shown), listed, error, reading))
+    self.content(ctx, (project, shown), listed, (error, reading))
   }
 }
 impl AgentsScreen {
@@ -179,16 +191,22 @@ impl AgentsScreen {
     ctx: &mut Ctx,
     (project, shown): (ShownProject, Shown),
     listed: ProjectAgents,
-    load_error: Option<messages::Message>,
-    reading: bool,
+    (load_error, reading): (Option<messages::Message>, bool),
   ) -> Element {
     let revision = self.revision.get();
-    let (entry, tab) = match shown {
-      Shown::List => return list::list(ctx, &project, &listed, &self.nav),
-      Shown::New(tab) => (None, tab),
-      Shown::Edit(id, tab) => match listed.profile(id) {
-        Some(entry) => (Some(entry.clone()), tab),
-        None => return lurq::components::Text::new(&ctx.t("agents.gone")).into(),
+    let entry = match shown {
+      Shown::List => {
+        let head = list::head(ctx, &listed, &self.nav);
+        let body = list::list(ctx, &project, &listed, &self.nav);
+        return frame(ctx, &project, head, body);
+      }
+      Shown::New(_) => None,
+      Shown::Edit(id, _) => match listed.profile(id) {
+        Some(entry) => Some(entry.clone()),
+        None => {
+          let body = hub::list_body("agents-gone", Text::new(&ctx.t("agents.gone")));
+          return frame(ctx, &project, Head::default(), body);
+        }
       },
     };
     let key = format!("agent-editor-{:?}-{revision}", entry.as_ref().map(|e| e.id));
@@ -198,7 +216,6 @@ impl AgentsScreen {
         project,
         listed,
         entry,
-        tab,
         nav: self.nav.clone(),
         revision: self.revision.clone(),
         retry: self.retry.clone(),
@@ -208,4 +225,14 @@ impl AgentsScreen {
       },
     )
   }
+}
+
+/// The hub on its Profiles tab around `body`, as the screen's element.
+fn frame(ctx: &mut Ctx, project: &ShownProject, head: Head, body: impl Into<Element>) -> Element {
+  lurq::components::Column::new()
+    .id("screen-agents")
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .height(lurq::node::dimension::Dimension::Pct(100.0))
+    .child(hub::page(ctx, project, (HubTab::Profiles, head), body))
+    .into()
 }

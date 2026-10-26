@@ -1155,6 +1155,7 @@
     },
     "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet.",
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
+    "neverPublished": "It was never published, so its draft is all it has. Remove it instead.",
     "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
     "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
     "effortOneWord": "A reasoning effort is one word, such as high.",

@@ -24,6 +24,7 @@ mod files;
 mod fonts;
 mod form;
 mod gate;
+mod hub;
 mod import;
 pub mod instructions;
 mod lifecycle;
@@ -72,6 +73,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   gate::{GateSpacing, GateText},
+  hub::{HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -148,6 +150,7 @@ pub fn install(app: &mut App, mode: Mode) {
   sources::install(theme);
   delivery::install(theme);
   import::install(theme);
+  hub::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

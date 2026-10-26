@@ -11,6 +11,7 @@ mod connections;
 mod delivery;
 mod files;
 pub(crate) mod gate;
+pub(crate) mod hub;
 mod import;
 mod instructions;
 mod kept;

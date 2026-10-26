@@ -60,6 +60,8 @@ pub struct PageTab {
   explanation: Option<Arc<str>>,
   /// A count of what waits for the person, in a badge after the label.
   badge: Option<usize>,
+  /// A count in words of its own after the label, and whether it counts what waits for the person.
+  count: Option<(usize, bool)>,
 }
 
 impl PageTab {
@@ -71,6 +73,7 @@ impl PageTab {
       state,
       explanation: None,
       badge: None,
+      count: None,
     }
   }
 
@@ -111,6 +114,14 @@ impl PageTab {
   #[must_use]
   pub const fn badge(mut self, count: usize) -> Self {
     self.badge = Some(count);
+    self
+  }
+
+  /// `count` 6 after the label in 12 `text_muted`, or in `warning` when it counts what `waits` for the person (the
+  /// Agents hub's tabs, `JasTq`, `Wk4e9` in `Cc3JP`); its element id is `<id>-count`.
+  #[must_use]
+  pub const fn count(mut self, count: usize, waits: bool) -> Self {
+    self.count = Some((count, waits));
     self
   }
 
@@ -158,15 +169,32 @@ impl PageTab {
       .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" });
-    let button = match self.badge {
-      Some(count) => button.child(
+    let button = match (self.badge, self.count) {
+      (Some(count), _) => button.child(
         Row::new()
           .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
           .child(label)
           .child(count_badge(&format!("{}-badge", self.id), count)),
       ),
-      None => button.child(label),
+      (None, Some((count, waits))) => button.child(
+        Row::new()
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .child(label)
+          .child(
+            Text::new(&count.to_string())
+              .id(format!("{}-count", self.id))
+              .variant(TypographyStyle::Description)
+              .color(if waits {
+                PaletteColor::Warning
+              } else {
+                PaletteColor::TextMuted
+              })
+              .nowrap(),
+          ),
+      ),
+      (None, None) => button.child(label),
     };
     let button = if self.explanation.is_some() {
       button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))

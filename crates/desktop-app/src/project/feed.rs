@@ -78,6 +78,8 @@ pub struct ProjectFeed {
   pub unsaved: Signal<UnsavedForms>,
   /// Saved pipeline names read by editor tabs, shared with their chrome labels.
   pub pipeline_names: Signal<PipelineNames>,
+  /// What the Agents hub's tabs counted last, which they show again while they count anew on another tab.
+  pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The tasks last read while no runner served the project, as they stand without one.
   offline: Arc<Mutex<Option<Offline>>>,
 }
@@ -159,6 +161,7 @@ impl ProjectFeed {
       job_state: Signal::new(jobs.state()),
       unsaved: Signal::new(UnsavedForms::default()),
       pipeline_names: Signal::new(PipelineNames::default()),
+      hub_counts: Signal::new(None),
       offline: Arc::default(),
       jobs,
     }
