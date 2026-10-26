@@ -1,6 +1,6 @@
 //! What the design verification of N1 found, held in place: the key a first link keeps, the linked page's rows, the
 //! projects an offline server's entry still lists, the end of *Connect a server* at a server already connected, *Try
-//! again* when nothing answers, and the token note after signing out.
+//! again* when nothing answers, the token note after signing out, and the steps in their box with *Cancel* at its end.
 
 use std::net::TcpListener;
 
@@ -173,5 +173,48 @@ fn orchester_design_connect_tries_again_when_nothing_answers() {
       .get_element_by_id("orchester-connect-address-hint")
       .is_none(),
     "the hint gives way to the error"
+  );
+}
+
+/// The steps are the rows of one box, each as wide as it, and *Cancel* ends the row under it (`A8uyj`, `qXW3I` in
+/// `MrVql`; Verify, attempt 3).
+#[test]
+fn orchester_design_connect_steps_are_rows_of_a_box_with_cancel_at_its_end() {
+  let mut window = window(None);
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::connect()),
+    "orchester-connect-address",
+  );
+  let mut bounds = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let steps = bounds("orchester-connect-steps");
+  let mut bottom = steps.y;
+  for id in [
+    "orchester-connect-step-address",
+    "orchester-connect-step-compare",
+    "orchester-connect-step-join",
+    "orchester-connect-step-username",
+  ] {
+    let step = bounds(id);
+    assert!((step.width - steps.width).abs() < 0.5, "{id} spans the box: {step:?} {steps:?}");
+    assert!(step.y + 0.5 >= bottom, "{id} follows the step above: {step:?}");
+    bottom = step.y + step.height;
+  }
+  assert!(bottom <= steps.y + steps.height + 0.5, "the steps stay in their box");
+  let actions = bounds("orchester-connect-actions");
+  let cancel = bounds("orchester-connect-cancel");
+  assert!(
+    (cancel.x + cancel.width - (actions.x + actions.width)).abs() < 0.5,
+    "Cancel ends the row: {cancel:?} {actions:?}"
+  );
+  assert!(
+    (actions.x + actions.width - (steps.x + steps.width)).abs() < 0.5,
+    "the row under the box ends with it: {actions:?} {steps:?}"
   );
 }

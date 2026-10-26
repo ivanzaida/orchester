@@ -15,7 +15,7 @@ use lurq::{
   clipboard::copy_to_clipboard,
   components::Row,
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::app_mcp::McpPort;
@@ -177,10 +177,14 @@ impl AddressRow {
       .icon(Icon::Pencil)
       .on_click(move || editing.set(true))
     });
+    // It shares the row with the label, as the value with Copy inside it does.
     Row::new()
       .id(format!("{ID}-value-box"))
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
+      .justify(Justify::End)
       .child(value.render(ctx))
       .with_children(edit)
       .into()

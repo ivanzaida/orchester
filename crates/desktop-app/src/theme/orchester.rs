@@ -20,7 +20,7 @@ pub enum OrchesterText {
   FormTitle,
   /// 22/600 `text_primary`, tracking -0.3: *Connect a server* under its breadcrumb (`zHmtd` in `zxe2P`).
   PageTitle,
-  /// 14/600 `text_primary`: a step's title in *Connect a server* (`T1et0` in `zxe2P`); a later step's in
+  /// 13/600 `text_primary`: a step's title in *Connect a server* (`DwjDQ` in `MrVql`); a later step's in
   /// `text_muted`.
   StepTitle,
   /// 10.5/600: the number in a step's dot (`oCb5r`), `text_inverse` on the current one, `text_muted` on a later one.
@@ -69,7 +69,7 @@ impl OrchesterText {
     match self {
       Self::FormTitle => style(18.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::PageTitle => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.text_primary),
-      Self::StepTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::StepTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::StepNumber => style(10.5, FontWeight::SemiBold, 1.0, 0.0, palette.text_inverse),
       Self::Code => mono(style(24.0, FontWeight::Medium, 1.3, 3.0, palette.text_primary)),
       Self::InviteTitle => style(13.0, FontWeight::Medium, 1.45, 0.0, palette.text_primary),

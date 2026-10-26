@@ -14,7 +14,7 @@ use lurq::{
   },
   components::{Row, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 
@@ -135,13 +135,15 @@ impl Component for CopiedValueView {
         .color(color)
         .nowrap()
     });
+    // The pair shares the row with the label rather than pushing it out: a long path is cut, the label stays whole.
     Row::new()
       .id(format!("{}-value", props.id))
-      .flex_shrink(1.0)
+      .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(mono_value(&props.id, &props.shown))
+      .justify(Justify::End)
+      .child(mono_value(&props.id, &props.shown).flex_shrink(1.0))
       .child(button.render(ctx))
       .with_children(said)
   }

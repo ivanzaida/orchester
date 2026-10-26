@@ -1,9 +1,10 @@
 //! *Connect a server* (`05b · Join step` `MrVql`, `05b2 · Compare the check code` `IBnMu`): a page under Settings ›
-//! Orchester Cloud with its crumb back, its title and what connecting is, four steps on a rail and *Cancel*.
-//! **Address**: what answers there is asked before anything is sent (nothing answers, not an Orchester server, not set
-//! up yet, plain HTTP only after an explicit allow, a certificate the system trusts, already connected). **Compare the
-//! check code**: for a server with its own certificate, which only a person confirms. **Join**: with the Orchester
-//! account or an invite code. **Your username there**: only for someone new on the server. Then the server's page.
+//! Orchester Cloud with its crumb back, its title and what connecting is, four steps in a box and *Cancel* at the end
+//! under it. **Address**: what answers there is asked before anything is sent (nothing answers, not an Orchester
+//! server, not set up yet, plain HTTP only after an explicit allow, a certificate the system trusts, already
+//! connected). **Compare the check code**: for a server with its own certificate, which only a person confirms.
+//! **Join**: with the Orchester account or an invite code. **Your username there**: only for someone new on the
+//! server. Then the server's page.
 
 mod join;
 mod steps;
@@ -15,7 +16,8 @@ use lurq::{
   },
   components::Row,
   core::Signal,
-  node::Element,
+  layout::layout_kind::Justify,
+  node::{Element, dimension::Dimension},
 };
 use orchester_api::client::{PlainHttp, ServerAddress};
 use orchester_core::id::ServerId;
@@ -148,7 +150,13 @@ impl Component for ConnectPage {
         Vec::new(),
       ))
       .child(steps)
-      .child(Row::new().id("orchester-connect-actions").child(cancel))
+      .child(
+        Row::new()
+          .id("orchester-connect-actions")
+          .width(Dimension::Pct(100.0))
+          .justify(Justify::End)
+          .child(cancel),
+      )
   }
 }
 

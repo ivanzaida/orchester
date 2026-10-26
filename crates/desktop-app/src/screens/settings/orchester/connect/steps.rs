@@ -1,7 +1,8 @@
-//! The steps of *Connect a server* on their rail (`Steps` `YlIGu` in `zxe2P`): each a 22 dot (a check once done, its
-//! number on `text_primary` while current, in a `border_strong` ring later) with a line down to the next, its title
-//! (14/600) and its content. *Address* and *Compare the check code* are here; *Join* and *Your username there* are in
-//! [`super::join`].
+//! The steps of *Connect a server* as the rows of one box (`Steps` `A8uyj` in `05b · Connect a server` `MrVql`): a 1
+//! `border` stroke, radius 10, a 1 `border` line between steps. A step is 14 over and under and 16 at its sides, 12
+//! between its 22 dot (a check once done, its number on `text_primary` while current, in a `border_strong` ring later)
+//! and its title (13/600) with its content 12 under it. *Address* and *Compare the check code* are here; *Join* and
+//! *Your username there* are in [`super::join`].
 
 use lurq::{
   app::{
@@ -18,7 +19,7 @@ use orchester_workspace::sharing::{Reaching, ServerEntry};
 use super::{ConnectPage, Found, Stage, join};
 use crate::{
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing, OrchesterText},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -28,10 +29,8 @@ use crate::{
   },
 };
 
-/// A step's dot (`l5QYK8`), and the check inside a done one.
+/// A step's dot (`e2VVsP`), and the check inside a done one.
 const DOT: f32 = 22.0;
-/// The line from a step's dot down to the next step (`BuPRX`).
-const RAIL_LINE: f32 = 1.0;
 /// The address field's width in the first step (`ZJytn`).
 const FIELD_WIDTH: f32 = 420.0;
 
@@ -66,16 +65,12 @@ pub(super) fn steps(ctx: &mut Ctx, page: &ConnectPage, entries: &[ServerEntry]) 
   let address_content = address(ctx, page, (found.as_ref(), entries));
   // A server this computer is already signed in to ends the flow at its address: there is nothing to trust or join.
   let already = found.as_ref().is_some_and(|found| already_in(found, entries).is_some());
-  let mut column = Column::new()
-    .id("orchester-connect-steps")
-    .width(Dimension::Pct(100.0))
-    .child(step(
-      ("orchester-connect-step-address", address_mark, &address_title),
-      address_content,
-      !already,
-    ));
+  let mut rows = vec![step(
+    ("orchester-connect-step-address", address_mark, &address_title),
+    address_content,
+  )];
   if already {
-    return column.into();
+    return boxed(rows);
   }
   if own || found.is_none() {
     let content = match (&found, stage.clone()) {
@@ -88,11 +83,7 @@ pub(super) fn steps(ctx: &mut Ctx, page: &ConnectPage, entries: &[ServerEntry]) 
     } else {
       ctx.t("sharing.connect.compare.title").to_string()
     };
-    column = column.child(step(
-      ("orchester-connect-step-compare", compare_mark, &title),
-      content,
-      true,
-    ));
+    rows.push(step(("orchester-connect-step-compare", compare_mark, &title), content));
   }
   let joining = found.as_ref().filter(|_| stage == Stage::Join);
   let join_title = ctx.t("sharing.connect.join.title").to_string();
@@ -100,10 +91,9 @@ pub(super) fn steps(ctx: &mut Ctx, page: &ConnectPage, entries: &[ServerEntry]) 
     Some(_) => join::join_step(ctx, page),
     None => later(ctx, "sharing.connect.join.later"),
   };
-  column = column.child(step(
+  rows.push(step(
     ("orchester-connect-step-join", join_mark, &join_title),
     join_content,
-    true,
   ));
   let name_title = ctx.t("sharing.connect.username.title").to_string();
   let name_mark = if stage == Stage::Join {
@@ -115,31 +105,35 @@ pub(super) fn steps(ctx: &mut Ctx, page: &ConnectPage, entries: &[ServerEntry]) 
     Some(found) => join::username_step(ctx, page, found),
     None => later_with(ctx, "sharing.connect.username.later", found.as_ref()),
   };
-  column
-    .child(step(
-      ("orchester-connect-step-username", name_mark, &name_title),
-      name_content,
-      false,
-    ))
+  rows.push(step(
+    ("orchester-connect-step-username", name_mark, &name_title),
+    name_content,
+  ));
+  boxed(rows)
+}
+
+/// The steps in their box, a line between each two.
+fn boxed(rows: Vec<Row>) -> Element {
+  let rows = rows.into_iter().enumerate().map(|(index, row)| {
+    if index == 0 {
+      row
+    } else {
+      row.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    }
+  });
+  Column::new()
+    .id("orchester-connect-steps")
+    .width(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .clip()
+    .with_children(rows)
     .into()
 }
 
-/// A step: its dot and line on the rail, its title, and `content` under the title.
-fn step((id, mark, title): (&str, Mark, &str), content: Element, line: bool) -> Row {
+/// A step: its dot, its title, and `content` under the title.
+fn step((id, mark, title): (&str, Mark, &str), content: Element) -> Row {
   let later = matches!(mark, Mark::Later(_));
-  let mut rail = Column::new()
-    .width(Dimension::Px(DOT))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(dot(mark));
-  if line {
-    rail = rail.child(
-      Row::new()
-        .flex(1.0)
-        .width(Dimension::Px(RAIL_LINE))
-        .background(PaletteColor::Border),
-    );
-  }
   let title = Text::new(title)
     .id(format!("{id}-title"))
     .variant(OrchesterText::StepTitle.role())
@@ -151,8 +145,9 @@ fn step((id, mark, title): (&str, Mark, &str), content: Element, line: bool) -> 
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .spacing(OrchesterSpacing::FormGap.role())
-    .align_items(Alignment::Stretch)
+    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Start)
     .describe(
       "state",
       match mark {
@@ -161,14 +156,18 @@ fn step((id, mark, title): (&str, Mark, &str), content: Element, line: bool) -> 
         Mark::Later(_) => "later",
       },
     )
-    .child(rail)
+    .child(dot(mark))
     .child(
       Column::new()
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
-        .padding(Padding::new().bottom(OrchesterSpacing::FormTop.role()))
-        .spacing(ExtraSpacing::Inline.role())
-        .child(title)
+        .spacing(SpacingSize::Md)
+        .child(
+          Row::new()
+            .height(Dimension::Px(DOT))
+            .align_items(Alignment::Center)
+            .child(title),
+        )
         .child(content),
     )
 }
