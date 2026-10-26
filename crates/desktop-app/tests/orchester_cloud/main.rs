@@ -131,11 +131,13 @@ fn orchester_cloud_accepts_an_invite_and_joins_again_with_the_account() {
     "the cloud's copy ended"
   );
 
+  // *Sign out…* is in the server page's *…* (`zNDt4`).
   go(
     &mut window,
     Route::Orchester(OrchesterView::server(entry.stored.id)),
-    "orchester-server-sign-out",
+    "orchester-server-more",
   );
+  press(&mut window, "orchester-server-more");
   press(&mut window, "orchester-server-sign-out");
   press(&mut window, "orchester-server-sign-out-confirm");
   shows(&mut window, "orchester-server-join-again");

@@ -169,6 +169,13 @@ impl Shown {
       .is_some_and(|texts| texts.iter().any(|text| text == words))
   }
 
+  /// Whether the server listens, as the line under *Address* says (`Address` `Z2NAcC`).
+  fn listening(&mut self) -> bool {
+    self
+      .texts("settings-mcp-address-hint")
+      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Listening")))
+  }
+
   fn click(&mut self, id: &str) {
     let bounds = self
       .tree

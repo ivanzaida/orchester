@@ -1,15 +1,11 @@
-//! *Projects on this computer* in a team server's entry (`Projects` `hYXPh` in `SFaAp`): the person's projects on the
-//! server, each with its role, its address and the checkout linked to it here with *Open*, or *not on this
-//! computer*. While the server cannot be read, the projects linked here still show.
+//! *Projects on this computer* on a team server's page (`Projects on this computer` `SkLi4` in `C6qnY`): the person's
+//! projects on the server, a row each with its role and the checkout linked to it here and *Open*, or *not on this
+//! computer* and *Link a checkout…*. While the server cannot be read, the projects linked here still show.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  },
-  components::{Column, Row, Text, TextOverflow},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::Column,
+  node::{Element, dimension::Dimension},
 };
 use orchester_api::MemberRole;
 use orchester_core::id::ServerId;
@@ -20,36 +16,34 @@ use orchester_workspace::{
 
 use super::{
   Said,
-  parts::{hint, section, section_title},
+  parts::hint,
   server::{Projects, Props},
   words::{counted, shown_address},
 };
 use crate::{
   navigation::Navigation,
   routes::{JoinTarget, OverviewTab, ProjectPage, Route},
-  theme::{AccountsSpacing, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
+    icon::Icon,
+    setting_rows::{SettingGroup, SettingRow, group_note},
   },
 };
-
-/// The glyph tile of a project row (`ORDuC`).
-const PROJECT_TILE: f32 = 28.0;
 
 /// The most characters of a checkout's path a project row shows before it cuts the middle.
 const CHECKOUT_PATH: usize = 40;
 
-/// The section, as the server answered.
+/// The group, as the server answered.
 pub(super) fn projects(ctx: &mut Ctx, props: &Props, projects: Option<&Result<Projects, Said>>) -> Element {
   let meta = counted(
     ctx,
     ("cloud.server.projects.linked.one", "cloud.server.projects.linked.other"),
     props.linked.len(),
   );
-  let mut parts: Vec<Element> = Vec::new();
+  let mut group = SettingGroup::new("orchester-server-projects", ctx.t("cloud.server.projects.title")).meta(meta);
+  let mut lines: Vec<Element> = Vec::new();
   match projects {
-    None => parts.push(
+    None => lines.push(
       hint(
         "orchester-server-projects-reading",
         &ctx.t("cloud.server.projects.reading"),
@@ -58,34 +52,24 @@ pub(super) fn projects(ctx: &mut Ctx, props: &Props, projects: Option<&Result<Pr
     ),
     Some(Err(reason)) => {
       // Offline or signed out: the projects linked here are still known.
-      parts.push(hint("orchester-server-projects-unread", &reason.text(ctx)).into());
-      if !props.linked.is_empty() {
-        parts.push(list(ctx, props, props.linked.iter().map(Source::Linked).collect()));
-      }
+      lines.push(hint("orchester-server-projects-unread", &reason.text(ctx)).into());
+      group = group.rows(rows(ctx, props, props.linked.iter().map(Source::Linked).collect()));
     }
     Some(Ok(projects)) if projects.0.is_empty() => {
-      parts.push(hint("orchester-server-projects-none", &ctx.t("cloud.server.projects.none")).into());
+      lines.push(hint("orchester-server-projects-none", &ctx.t("cloud.server.projects.none")).into());
     }
-    Some(Ok(projects)) => parts.push(list(ctx, props, projects.0.iter().map(Source::Server).collect())),
+    Some(Ok(projects)) => group = group.rows(rows(ctx, props, projects.0.iter().map(Source::Server).collect())),
   }
-  parts.push(
-    Text::new(&ctx.t("cloud.server.projects.explanation"))
-      .id("orchester-server-projects-explanation")
-      .variant(ExtraTypography::Prose.role())
-      .color(PaletteColor::TextMuted)
-      .width(Dimension::Pct(100.0))
-      .into(),
-  );
-  section(
-    "orchester-server-projects",
-    section_title(
-      "orchester-server-projects-title",
-      &ctx.t("cloud.server.projects.title"),
-      Some(&meta),
-    ),
-    parts,
-  )
-  .into()
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(group)
+    .with_children(lines)
+    .child(group_note(
+      "orchester-server-projects-explanation",
+      &ctx.t("cloud.server.projects.explanation"),
+    ))
+    .into()
 }
 
 /// A project row's source: the server's list, or only what this computer has linked.
@@ -127,22 +111,17 @@ impl<'a> Source<'a> {
   }
 }
 
-fn list(ctx: &mut Ctx, props: &Props, rows: Vec<Source<'_>>) -> Element {
+fn rows(ctx: &mut Ctx, props: &Props, sources: Vec<Source<'_>>) -> Vec<Element> {
   let navigation = Navigation::of(ctx);
-  let mut card = Column::new()
-    .id("orchester-server-projects-list")
-    .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceBase)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip();
-  for row in rows {
-    card = card.child(project_row(ctx, &row.shown(), (&navigation, props.entry.stored.id)));
-  }
-  card.into()
+  sources
+    .into_iter()
+    .map(|source| project_row(ctx, &source.shown(), (&navigation, props.entry.stored.id)))
+    .collect()
 }
 
-fn project_row(ctx: &Ctx, shown: &Shown<'_>, (navigation, server): (&Navigation, ServerId)) -> Element {
+/// A project (`kontur` `GMSQV`): its name, its role and the checkout here, and *Open* or *Link a checkout…*; its
+/// address in the tooltip.
+fn project_row(ctx: &mut Ctx, shown: &Shown<'_>, (navigation, server): (&Navigation, ServerId)) -> Element {
   let id = format!("orchester-server-project-{}", shown.slug);
   let action = match shown.checkout {
     Some(checkout) => ActionButton::new(
@@ -159,7 +138,7 @@ fn project_row(ctx: &Ctx, shown: &Shown<'_>, (navigation, server): (&Navigation,
     None => {
       let button = ActionButton::new(
         format!("{id}-link"),
-        ButtonKind::Secondary,
+        ButtonKind::Ghost,
         ctx.t("cloud.server.projects.link"),
       )
       .icon(Icon::FolderPlus);
@@ -169,83 +148,31 @@ fn project_row(ctx: &Ctx, shown: &Shown<'_>, (navigation, server): (&Navigation,
       }
     }
   };
-  let glyph = if shown.checkout.is_some() {
-    Icon::FolderGit2
-  } else {
-    Icon::Folder
-  };
-  Row::new()
-    .id(id.clone())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(
-      AccountsSpacing::Edge.role(),
-      ExtraSpacing::Inline.role(),
-    ))
-    .spacing(AccountsSpacing::Cell.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(tile(glyph))
-    .child(lines(ctx, &id, shown))
-    .child(action)
-    .into()
-}
-
-/// The name with the role, and the address with the checkout here.
-fn lines(ctx: &Ctx, id: &str, shown: &Shown<'_>) -> Column {
   let role = shown.role.map(|role| match role {
     MemberRole::Owner => ctx.t("cloud.server.projects.owner"),
     MemberRole::Member => ctx.t("cloud.server.projects.member"),
   });
-  let place = match shown.checkout {
-    // A long checkout path keeps its start and its last folders, cut in the middle (`H:\…\work\kontur`).
-    Some(checkout) => Text::new(&shorten_path(&checkout.repo_root, CHECKOUT_PATH))
-      .id(format!("{id}-checkout"))
-      .variant(OrchesterText::Address.role())
-      .color(PaletteColor::TextMuted)
-      .nowrap()
-      .text_overflow(TextOverflow::Elipsis),
-    None => Text::new(&ctx.t("cloud.server.projects.notHere"))
-      .variant(ExtraTypography::Note.role())
-      .color(PaletteColor::Warning)
-      .nowrap(),
+  // A long checkout path keeps its start and its last folders, cut in the middle (`H:\…\work\kontur`).
+  let line = match (shown.checkout, role) {
+    (Some(checkout), Some(role)) => ctx.t_args(
+      "cloud.server.projects.linkedRole",
+      [("role", role.to_string()), ("path", shorten_path(&checkout.repo_root, CHECKOUT_PATH))],
+    ),
+    (Some(checkout), None) => ctx.t_args(
+      "cloud.server.projects.linkedTo",
+      [("path", shorten_path(&checkout.repo_root, CHECKOUT_PATH))],
+    ),
+    (None, Some(role)) => ctx.t_args("cloud.server.projects.notHereRole", [("role", role)]),
+    (None, None) => ctx.t("cloud.server.projects.notHere"),
   };
-  let top = Row::new()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&shown.name)
-        .id(format!("{id}-name"))
-        .variant(ExtraTypography::Strong.role())
-        .nowrap(),
-    )
-    .with_children(role.map(|role| Text::new(&role).variant(ExtraTypography::Note.role()).nowrap()));
-  let line = Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(shown_address(&shown.address))
-        .variant(OrchesterText::Address.role())
-        .nowrap(),
-    )
-    .child(Text::new(&ctx.t("cloud.factSeparator")).variant(ExtraTypography::Note.role()))
-    .child(place);
+  let row = SettingRow::new(format!("{id}-entry"), shown.name.clone())
+    .hint(line.to_string())
+    .info(shown_address(&shown.address).to_owned())
+    .control(action)
+    .render(ctx);
   Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(AccountsSpacing::Lines.role())
-    .child(top)
-    .child(line)
-}
-
-fn tile(glyph: Icon) -> Row {
-  Row::new()
-    .width(Dimension::Px(PROJECT_TILE))
-    .height(Dimension::Px(PROJECT_TILE))
-    .flex_shrink(0.0)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Sm)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .child(row)
+    .into()
 }

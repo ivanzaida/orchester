@@ -88,10 +88,12 @@ fn orchester_design_offline_server_lists_the_projects_linked_here() {
       .texts("orchester-server-header-facts")
       .is_some_and(|texts| texts.join(" ").contains("Orchester server "))
   });
-  let checkout = window.text("orchester-server-project-kontur-checkout");
+  // The row's line names the checkout linked here (`quCVl` in `C6qnY`).
+  let line = window.text("orchester-server-project-kontur-entry-hint");
+  let checkout = line.rsplit("linked to ").next().unwrap_or_default();
   assert!(
     checkout.contains('…') && checkout.ends_with("repo-kontur") && checkout.chars().count() <= 40,
-    "a long checkout path is cut in its middle: {checkout}"
+    "a long checkout path is cut in its middle: {line}"
   );
   recorder.go_down();
   // The monitor asks a connected server once a minute; *Try now* asks at once.

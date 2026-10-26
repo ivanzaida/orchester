@@ -11,7 +11,7 @@ use super::*;
 fn settings_mcp_connect_shows_the_commands_with_the_token_masked() {
   let port = free_port();
   let mut shown = Shown::installed(port, Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let claude = format!(
     "claude mcp add --transport http --scope user orchester http://127.0.0.1:{port}/mcp --header \"Authorization: \
      Bearer ••••••••••••••••\""
@@ -22,22 +22,12 @@ fn settings_mcp_connect_shows_the_commands_with_the_token_masked() {
     words.iter().any(|word| word == "--header "),
     "a word is laid out whole, so the command breaks only at spaces: {words:?}"
   );
-  // At 1440 the first line ends with --header and the second starts with "Authorization: (lye6f).
+  // At 1440 the command takes two lines in its box under the row (`Command` `vSHp7`).
   let word =
     |shown: &mut Shown, index: usize| shown.bounds(&format!("settings-mcp-connect-claude-command-word-0-{index}"))[1];
   let first = word(&mut shown, 0);
-  assert_eq!(word(&mut shown, 9), first, "--header ends the first line");
-  assert!(word(&mut shown, 10) > first, "\"Authorization: starts the second");
-  let [_, _, _, two_lines] = shown.bounds("settings-mcp-connect-claude-command-box");
-  let [_, _, _, one_line] = shown.bounds("settings-mcp-address-value-box");
-  assert!(
-    (two_lines - 44.0).abs() < 0.5,
-    "two lines of mono 11.5 at 1.4, 6 over and under them (PEnj5): {two_lines}"
-  );
-  assert!(
-    (one_line - 36.0).abs() < 0.5,
-    "one line beside a 24-high Copy, 6 over and under (PEnj5): {one_line}"
-  );
+  let last = words.len() - 1;
+  assert!(word(&mut shown, last) > first, "the command breaks onto a second line");
   shown.click("settings-mcp-connect-codex");
   shown.until("the Codex tab", |shown| {
     shown.texts("settings-mcp-connect-codex-command").is_some()

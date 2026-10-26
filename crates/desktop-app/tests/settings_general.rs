@@ -36,9 +36,11 @@ fn settings_general_shows_its_sections_with_the_save_state() {
     assert!(texts.iter().any(|text| text == words), "{words} in {texts:?}");
   }
   assert_eq!(window.text("settings-save-state"), "All changes saved");
+  // The version and which build it is (`EwNQ3`).
+  let build = if cfg!(debug_assertions) { "development" } else { "release" };
   assert_eq!(
     window.text("settings-version-value"),
-    format!("v{}", env!("CARGO_PKG_VERSION"))
+    format!("v{} · {build}", env!("CARGO_PKG_VERSION"))
   );
   let database = window.data.database();
   assert!(

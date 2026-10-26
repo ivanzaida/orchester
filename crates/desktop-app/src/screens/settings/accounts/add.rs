@@ -1,7 +1,8 @@
-//! *Add account* in place of the details (`IOyJl`): step 1 of 2 chooses the CLI, the name and the folder, a new one
-//! Orchester creates in its application data or one the person already uses, which must stay outside every project
-//! and repository (`GE7a3`). *Create folder and sign in* saves the account and goes on to step 2 (`sign_in`); a
-//! brought folder is checked at once instead.
+//! *Add account* as a page of its own (`03c · Add account` `XAm8i`): the crumb back to Accounts, the title and what an
+//! account is, then *1. Name and folder* — the CLI, the name and the folder, a new one Orchester creates in its
+//! application data or one the person already uses, which must stay outside every project and repository — and
+//! *2. Sign in with the CLI*, what comes next. *Create folder and sign in* saves the account and goes on to its
+//! sign-in (`sign_in`); a brought folder is checked at once instead.
 
 use std::path::PathBuf;
 
@@ -9,12 +10,12 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   account::{AccountCli, FolderProblem},
@@ -29,25 +30,30 @@ use orchester_workspace::{
 
 use super::{
   Work,
-  details::{frame, glyph, header_row},
-  list::Adding,
-  words::{cli_key, own_folder_text, t, ta},
+  words::{cli_key, login_command, own_folder_text, t, ta},
   work::Change,
 };
 use crate::{
   navigation::Navigation,
   routes::{AccountsView, Route},
+  screens::settings::frame,
   services::Services,
-  theme::{AccountsSpacing, AccountsText, ExtraTypography},
+  theme::{ExtraTypography, IconSize, SettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
-    icon::Icon,
-    inspector::note,
+    icon::{Icon, icon},
     message::message_text,
-    option_card::OptionCard,
+    pressable::Focus,
+    setting_rows::{HintTone, SettingGroup, SettingRow},
+    tabs::{Segment, SegmentFace, segmented},
+    toggle::{Toggle, ToggleKind},
   },
 };
+
+/// The name's field (`Input` `t5Yiek`) and the folder's options (`Control` `dysaB`).
+const NAME_WIDTH: f32 = 340.0;
+const FOLDER_WIDTH: f32 = 460.0;
 
 /// The chosen CLI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,223 +108,184 @@ impl Draft {
     });
     draft
   }
-
-  /// The row the list shows for the account being added.
-  pub fn adding(&self) -> Adding {
-    Adding {
-      cli: self.cli.get().0,
-      name: self.name.get(),
-    }
-  }
 }
 
-pub(super) fn panel(ctx: &mut Ctx, work: &Work) -> Element {
+/// The page's crumb and head, which its sign-in step shares.
+pub(super) fn heading(ctx: &mut Ctx, pane: Column) -> Column {
+  let navigation = Navigation::of(ctx);
+  pane
+    .child(frame::crumb(
+      "account-add-crumb",
+      &t(ctx, "settings.tabs.accounts"),
+      navigation.to(Route::Accounts(AccountsView::default())),
+    ))
+    .child(frame::head(
+      "account-add-head",
+      None,
+      (
+        &t(ctx, "accounts.add.title"),
+        Some(frame::lead("account-add-lead", &t(ctx, "accounts.add.sub")).into()),
+      ),
+      Vec::new(),
+    ))
+}
+
+pub(super) fn page(ctx: &mut Ctx, work: &Work) -> Column {
   let draft = &work.draft;
   let cli = draft.cli.get().0;
   let problem = folder_problem(ctx, draft, cli);
-  let body = Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::all(AccountsSpacing::Panel.role()))
-    .spacing(AccountsSpacing::Parts.role())
-    .child(steps(ctx))
-    .child(cli_choice(ctx, draft))
-    .child(name_field(ctx, draft, cli))
-    .child(folder_choice(ctx, draft, cli, problem.as_ref()))
-    .child(note(
-      "account-add-note",
-      Icon::ShieldCheck,
-      &ta(ctx, "accounts.add.folderNote", [("folder", own_folder_text(cli))]),
-    ));
-  frame("account-add")
-    .child(
-      header_row("account-add-header").child(glyph(Icon::Plus)).child(
-        Column::new()
-          .flex(1.0)
-          .spacing(SpacingSize::Xs)
-          .child(Text::new(&t(ctx, "accounts.add.title")).variant(AccountsText::Title.role()))
-          .child(
-            Text::new(&t(ctx, "accounts.add.sub"))
-              .variant(ExtraTypography::Prose.role())
-              .width(Dimension::Pct(100.0)),
-          ),
-      ),
+  let first = SettingGroup::new("account-add-step-1", t(ctx, "accounts.add.step1"))
+    .row(cli_row(ctx, draft, cli))
+    .row(name_row(ctx, draft, cli))
+    .row(folder_row(ctx, draft, cli, problem.as_ref()));
+  let existing = draft.folder.get() == FolderChoice::Existing;
+  let (after, hint) = if existing {
+    (
+      t(ctx, "accounts.add.afterBrought"),
+      t(ctx, "accounts.add.afterBroughtHint"),
     )
-    .child(ScrollVertical::new(body).id("account-add-scroll").flex(1.0))
-    .child(footer(ctx, work, problem.is_some()))
-    .into()
-}
-
-/// *1. Name and folder*, current, beside *2. Sign in with the CLI* (`i5CrTt`, `kjk4x`).
-pub(super) fn steps(ctx: &Ctx) -> Element {
-  Row::new()
-    .id("account-add-steps")
-    .width(Dimension::Pct(100.0))
-    .spacing(AccountsSpacing::Cell.role())
-    .child(step(
-      "account-add-step-1",
-      Icon::CircleDot,
-      &t(ctx, "accounts.add.step1"),
-      true,
-      None,
-    ))
-    .child(step(
-      "account-add-step-2",
-      Icon::Circle,
-      &t(ctx, "accounts.add.step2"),
-      false,
-      None,
-    ))
-    .into()
-}
-
-/// One step: its icon and title, filled while it is the current one, with what was done under a finished one.
-pub(super) fn step(id: &str, glyph: Icon, title: &str, current: bool, done: Option<&str>) -> Element {
-  let color = if current || done.is_some() {
-    PaletteColor::TextPrimary
   } else {
-    PaletteColor::TextMuted
+    (
+      t(ctx, "accounts.add.after"),
+      ta(ctx, "accounts.add.afterHint", [("command", login_command(cli))]),
+    )
   };
-  let icon_color = if done.is_some() {
-    PaletteColor::Success
-  } else {
-    color.clone()
-  };
-  let row = Row::new()
-    .id(id.to_owned())
-    .flex(1.0)
-    .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Sm))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Start)
-    .describe("current", current.to_string())
-    .child(crate::ui::icon::icon(glyph, crate::theme::IconSize::Base, icon_color))
-    .child(
-      Column::new()
-        .spacing(AccountsSpacing::Lines.role())
-        .child(Text::new(title).variant(ExtraTypography::Strong.role()).color(color))
-        .with_children(done.map(|done| Text::new(done).variant(ExtraTypography::Note.role()))),
-    );
-  if current {
-    row
-      .background(crate::theme::ExtraColor::Hover.role())
-      .rounded(lurq::app::theme::RadiusSize::Md)
-      .into()
-  } else {
-    row.into()
-  }
+  let second = SettingGroup::new("account-add-step-2", t(ctx, "accounts.add.step2"))
+    .row(SettingRow::new("account-add-after", after).hint(hint).render(ctx));
+  let blocked = problem.is_some() || !cli.supports_accounts_on(Platform::current());
+  heading(ctx, frame::pane("account-add-page"))
+    .child(first)
+    .child(second)
+    .child(footer(ctx, work, blocked))
 }
 
-fn label(ctx: &Ctx, key: &str) -> Text {
-  Text::new(&t(ctx, key))
-    .variant(ExtraTypography::Note.role())
-    .color(PaletteColor::TextSecondary)
-}
-
-fn cli_choice(ctx: &Ctx, draft: &Draft) -> Element {
-  let chosen = draft.cli.get().0;
-  let card = |cli: AccountCli, detail: &str| {
+/// *CLI*: Claude Code or Codex; one this computer can't add an account of says so in its hint.
+fn cli_row(ctx: &mut Ctx, draft: &Draft, chosen: AccountCli) -> Element {
+  let segments = [AccountCli::ClaudeCode, AccountCli::Codex].map(|cli| {
     let signal = draft.cli.clone();
-    let card = OptionCard::new(
+    Segment::new(
       format!("account-add-cli-{}", cli.as_str()),
-      (Icon::SquareTerminal, t(ctx, cli_key(cli))),
-      t(ctx, detail),
+      SegmentFace::Text(ctx.t(cli_key(cli))),
       chosen == cli,
       move || signal.set(CliChoice(cli)),
-    );
-    let card = if cli.supports_accounts_on(Platform::current()) {
-      card
-    } else {
-      card.unavailable(t(ctx, "accounts.state.unsupported"))
-    };
-    Column::new().flex(1.0).child(card)
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(label(ctx, "accounts.add.cli"))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(AccountsSpacing::Cell.role())
-        .child(card(AccountCli::ClaudeCode, "accounts.add.claudeDetail"))
-        .child(card(AccountCli::Codex, "accounts.add.codexDetail")),
     )
-    .into()
-}
-
-fn name_field(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
-  let typed = draft.name.get();
-  let hint = if typed.trim().is_empty() {
-    t(ctx, "accounts.add.nameHintEmpty")
+  });
+  let row = SettingRow::new("account-add-cli", t(ctx, "accounts.add.cli"))
+    .control(segmented("account-add-cli-choice", segments, Focus::Keyboard));
+  let row = if chosen.supports_accounts_on(Platform::current()) {
+    row
   } else {
-    ta(
-      ctx,
-      "accounts.add.nameHint",
-      [("cli", t(ctx, cli_key(cli))), ("name", typed.trim().to_owned())],
-    )
+    row
+      .toned_hint(t(ctx, "accounts.status.unsupported"), HintTone::Warning)
+      .info(t(ctx, "accounts.state.unsupported"))
   };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(label(ctx, "accounts.add.name"))
-    .child(FieldInput::new("account-add-name", t(ctx, "accounts.add.name"), draft.name.clone()).render(ctx))
-    .child(
-      Text::new(&hint)
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0)),
-    )
-    .into()
+  row.render(ctx)
 }
 
-fn folder_choice(ctx: &mut Ctx, draft: &Draft, cli: AccountCli, problem: Option<&Message>) -> Element {
+/// *Name*: how the account will read, and the rest of what the name is for in the tooltip.
+fn name_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
+  let typed = draft.name.get();
+  let typed = typed.trim();
+  let field = FieldInput::new("account-add-name", t(ctx, "accounts.add.name"), draft.name.clone())
+    .width(Dimension::Px(NAME_WIDTH))
+    .render(ctx);
+  let row = SettingRow::new("account-add-name-row", t(ctx, "accounts.add.name")).control(field);
+  let row = if typed.is_empty() {
+    row.info(t(ctx, "accounts.add.nameHintEmpty"))
+  } else {
+    let cli = t(ctx, cli_key(cli));
+    row
+      .hint(ta(
+        ctx,
+        "accounts.add.nameShown",
+        [("cli", cli.clone()), ("name", typed.to_owned())],
+      ))
+      .info(ta(ctx, "accounts.add.nameHint", [("cli", cli), ("name", typed.to_owned())]))
+  };
+  row.render(ctx)
+}
+
+/// *Folder*: a new one Orchester creates or one the person already uses, and for that one its path, *Choose…* and
+/// why it can't be an account's.
+fn folder_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli, problem: Option<&Message>) -> Element {
   let workspace = Services::of(ctx).workspace;
   let chosen = draft.folder.get();
   let planned = workspace
     .planned_folder(cli, draft.name.get().trim())
     .map(|folder| folder.display().to_string());
-  let new = {
-    let signal = draft.folder.clone();
-    let card = OptionCard::new(
-      "account-add-folder-new",
-      (Icon::FolderPlus, t(ctx, "accounts.add.folderNew")),
-      planned.clone().unwrap_or_else(|| t(ctx, "accounts.add.noFolderHere")),
-      chosen == FolderChoice::New,
-      move || signal.set(FolderChoice::New),
-    );
-    if planned.is_some() {
-      card.mono_description()
-    } else {
-      card.unavailable(t(ctx, "accounts.add.noFolderHere"))
-    }
+  let new = folder_option(
+    ("account-add-folder-new", &t(ctx, "accounts.add.folderNew")),
+    &planned.clone().unwrap_or_else(|| t(ctx, "accounts.add.noFolderHere")),
+    chosen == FolderChoice::New,
+    planned.is_some().then(|| draft.folder.clone()).map(|signal| move || signal.set(FolderChoice::New)),
+  );
+  let existing_detail = ta(
+    ctx,
+    "accounts.add.folderExistingDetail",
+    [
+      ("program", cli.program().to_owned()),
+      ("variable", cli.folder_variable().to_owned()),
+    ],
+  );
+  let signal = draft.folder.clone();
+  let existing = folder_option(
+    ("account-add-folder-existing", &t(ctx, "accounts.add.folderExisting")),
+    &existing_detail,
+    chosen == FolderChoice::Existing,
+    Some(move || signal.set(FolderChoice::Existing)),
+  );
+  let options = Column::new()
+    .id("account-add-folder-options")
+    .width(Dimension::Px(FOLDER_WIDTH))
+    .spacing(SpacingSize::Sm)
+    .child(new)
+    .child(existing);
+  let row = SettingRow::new("account-add-folder", t(ctx, "accounts.add.folder")).control(options);
+  let row = if chosen == FolderChoice::Existing {
+    row.below(path_field(ctx, draft, problem))
+  } else {
+    row
   };
-  let existing = {
-    let signal = draft.folder.clone();
-    OptionCard::new(
-      "account-add-folder-existing",
-      (Icon::FolderOpen, t(ctx, "accounts.add.folderExisting")),
-      ta(
-        ctx,
-        "accounts.add.folderExistingDetail",
-        [
-          ("program", cli.program().to_owned()),
-          ("variable", cli.folder_variable().to_owned()),
-        ],
-      ),
-      chosen == FolderChoice::Existing,
-      move || signal.set(FolderChoice::Existing),
-    )
+  row.render(ctx)
+}
+
+/// An option of *Folder*: its radio, its name and what it means; without `choose` it can't be chosen here.
+fn folder_option(
+  (id, title): (&str, &str),
+  detail: &str,
+  chosen: bool,
+  choose: Option<impl Fn() + Send + Sync + 'static>,
+) -> Element {
+  let radio = Toggle::new(id.to_owned(), ToggleKind::Radio, chosen, title.to_owned()).hide_label();
+  let radio = match choose {
+    Some(choose) => radio.on_change(move |_| choose()),
+    None => radio,
   };
-  let path = (chosen == FolderChoice::Existing).then(|| path_field(ctx, draft, problem));
-  Column::new()
+  Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(label(ctx, "accounts.add.folder"))
-    .child(new)
-    .child(existing)
-    .with_children(path)
+    .align_items(Alignment::Start)
+    .child(radio)
+    .child(
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .child(
+          Text::new(title)
+            .id(format!("{id}-title"))
+            .variant(SettingsText::OptionTitle.role()),
+        )
+        .child(
+          Text::new(detail)
+            .id(format!("{id}-detail"))
+            .variant(ExtraTypography::Note.role())
+            .width(Dimension::Pct(100.0)),
+        ),
+    )
     .into()
 }
 
-/// The brought folder's path, *Choose…*, and why it can't be an account's (`GE7a3`).
+/// The brought folder's path, *Choose…*, and why it can't be an account's.
 fn path_field(ctx: &mut Ctx, draft: &Draft, problem: Option<&Message>) -> Element {
   let pick = draft.pick.clone();
   let field = FieldInput::new("account-add-path", t(ctx, "accounts.add.folder"), draft.path.clone())
@@ -376,10 +343,12 @@ fn folder_problem(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Option<Messa
     .flatten()
 }
 
-/// *Cancel* and *Create folder and sign in* (or *Add and check* for a brought folder), with what the save said.
+/// Why account folders stay outside projects, *Cancel* and *Create folder and sign in* (or *Add and check* for a
+/// brought folder), with what the save said over them (`Actions` `CJzgg`).
 fn footer(ctx: &mut Ctx, work: &Work, blocked: bool) -> Element {
   let navigation = Navigation::of(ctx);
   let draft = work.draft.clone();
+  let cli = draft.cli.get().0;
   let existing = draft.folder.get() == FolderChoice::Existing;
   let name = Name::new(&draft.name.get()).ok();
   let ready = name.is_some() && !blocked && (!existing || !draft.path.get().trim().is_empty());
@@ -408,25 +377,39 @@ fn footer(ctx: &mut Ctx, work: &Work, blocked: bool) -> Element {
   } else {
     save.disabled()
   };
-  let cancel = ActionButton::new(
-    "account-add-cancel",
-    ButtonKind::Secondary,
-    t(ctx, "accounts.add.cancel"),
-  )
-  .on_click(move || navigation.close_panel(Route::Accounts(AccountsView::default())));
+  let cancel = ActionButton::new("account-add-cancel", ButtonKind::Ghost, t(ctx, "accounts.add.cancel"))
+    .icon(Icon::X)
+    .on_click(move || navigation.close_panel(Route::Accounts(AccountsView::default())));
   let error = work
     .change_error()
     .map(|error| field_error("account-add-error", &message_text(ctx, &error)));
-  Row::new()
-    .id("account-add-footer")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(AccountsSpacing::Panel.role(), SpacingSize::Md))
+  let reason = Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .align_items(Alignment::Start)
+    .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ta(ctx, "accounts.add.folderNote", [("folder", own_folder_text(cli))]))
+        .id("account-add-note")
+        .variant(lurq::app::theme::TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
     .with_children(error)
-    .child(Spacer::new().flex(1.0))
-    .child(cancel)
-    .child(save)
+    .child(
+      Row::new()
+        .id("account-add-footer")
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .align_items(Alignment::Center)
+        .child(reason)
+        .child(cancel)
+        .child(save),
+    )
     .into()
 }

@@ -45,8 +45,9 @@ fn orchester_two_factor_off_offers_turning_it_on() {
   let card = format!("orchester-invite-{invite}");
   shows(&mut window, &format!("{card}-turn-on"));
   assert_eq!(window.text("orchester-cloud-two-factor"), "Two-factor: off");
+  // Said in place of the invite's actions (`Accept needs two-factor` `g0GfK`).
   assert_eq!(
-    window.text(&format!("{card}-two-factor")),
+    window.text(&format!("{card}-two-factor-title")),
     "Accepting needs two-factor authentication on your account."
   );
   assert!(window.tree.get_element_by_id(&format!("{card}-accept")).is_none());
@@ -173,7 +174,7 @@ fn orchester_two_factor_signs_in_again_with_a_code_and_accepts() {
   press(&mut window, &format!("{card}-not-now"));
   shows(&mut window, &format!("{card}-two-factor"));
   assert_eq!(
-    window.text(&format!("{card}-two-factor")),
+    window.text(&format!("{card}-two-factor-title")),
     "Accepting needs a sign-in with your code. This computer signed in before you turned on two-factor."
   );
   go(

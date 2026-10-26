@@ -9,7 +9,7 @@ use super::*;
 fn settings_mcp_synthetic_input_changes_nothing() {
   let port = free_port();
   let mut shown = Shown::installed(port, Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let token = shown.token();
   let gate = shown.link.input_gate();
   for (control, blocked) in [
@@ -29,10 +29,12 @@ fn settings_mcp_synthetic_input_changes_nothing() {
   }
   shown.tree.tick_futures();
   shown.pass();
-  assert!(shown.says("settings-mcp-state", "Listening"), "still on");
+  assert!(shown.listening(), "still on");
   assert!(!gate.token_shown(), "not shown");
   assert!(shown.texts("settings-mcp-token-rotate-question").is_none(), "not asked");
   assert_eq!(shown.token(), token, "not rotated");
+  // *Port* opens the field under the address.
+  shown.click("settings-mcp-port-edit");
   shown
     .tree
     .get_element_by_id_mut("settings-mcp-port")

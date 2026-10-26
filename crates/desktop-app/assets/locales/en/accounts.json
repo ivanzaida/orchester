@@ -12,6 +12,7 @@
       "claudeDetail": "You sign in with claude auth login.",
       "codexDetail": "You sign in with codex login.",
       "name": "Name",
+      "nameShown": "Shown as {{cli}} · {{name}}",
       "nameHint": "Shown in connections, runs and plan limits, as {{cli}} · {{name}}. Each account of a CLI has its own name.",
       "nameHintEmpty": "Shown in connections, runs and plan limits. Each account of a CLI has its own name.",
       "folder": "Folder",
@@ -24,7 +25,11 @@
       "cancel": "Cancel",
       "create": "Create folder and sign in",
       "bring": "Add and check",
-      "noFolderHere": "Orchester has no folder for new accounts on this computer; choose a folder you already use."
+      "noFolderHere": "Orchester has no folder for new accounts on this computer; choose a folder you already use.",
+      "after": "After the folder is made",
+      "afterHint": "You sign in with {{command}}; Orchester runs it with this folder and checks the result.",
+      "afterBrought": "After the folder is added",
+      "afterBroughtHint": "Orchester checks at once who is signed in to it."
     },
     "note": "Accounts belong to you on this computer; every project can use them. Each is a folder where the CLI keeps its own sign-in. GitHub keeps using gh's signed-in account for now.",
     "reading": "Reading the accounts…",
@@ -72,7 +77,8 @@
       "unread": "The CLI's answer about who is signed in can't be read",
       "folderGone": "Its folder is gone · runs on it don't start",
       "waiting": "Not signed in yet · waiting for the terminal",
-      "adding": "{{cli}} · name it, then sign in"
+      "adding": "{{cli}} · name it, then sign in",
+      "ownFolder": "The CLI's own folder · {{identity}}"
     },
     "method": {
       "claudeAi": "claude.ai",
@@ -81,6 +87,9 @@
       "apiKey": "An API key"
     },
     "details": {
+      "title": "{{cli}} · {{name}}",
+      "checkedAt": "checked {{time}}",
+      "signIn": "Sign-in",
       "factSeparator": "·",
       "account": "Account",
       "usedBy": "Used by {{count}}",
@@ -88,6 +97,7 @@
       "plan": "Plan",
       "signedInWith": "Signed in with",
       "folder": "Folder",
+      "folderHint": "Where the CLI keeps this sign-in",
       "checkedWith": "Checked with",
       "lastChecked": "Last checked",
       "planValue": "{{plan}}, as {{program}} reports it",
@@ -104,6 +114,7 @@
       "checkAgain": "Check again",
       "rename": "Rename",
       "remove": "Remove",
+      "more": "More",
       "copyFolder": "Copy folder path",
       "openFolder": "Open folder",
       "signIn": "Sign in in a terminal",
@@ -122,6 +133,7 @@
       "window": "{{hours}}-hour",
       "resets": "resets {{time}}",
       "reached": "limit reached · resets {{time}}",
+      "used": "{{percent}}%",
       "noteClaude": "Claude Code reports limits only while it runs, so they are as of the last run or check on this account. Check now runs the smallest turn Claude Code can, a one-word answer on Haiku, which spends a few tokens of this account's plan; Orchester never checks on its own.",
       "noteCodex": "Orchester reads Codex's limits on its own, without a turn or tokens: when the app starts, when this account changes, after a reset, and every few minutes while the status bar's plan limits or the Usage page are open."
     },
@@ -202,8 +214,12 @@
     },
     "usedBy": {
       "title": "Connections",
+      "group": "Used by",
       "meta": "{{count}} in {{projects}} projects",
       "metaOne": "{{count}} in 1 project",
+      "hint": "{{project}} · {{profiles}}",
+      "hintNoProfile": "{{project}} · no agent profile yet",
+      "open": "Open",
       "profiles": "{{project}} · {{connection}} → {{profiles}}",
       "noProfile": "{{project}} · {{connection}} → no agent profile yet",
       "empty": "No connection uses this account yet. Choose it as a connection's account in a project's Connections.",

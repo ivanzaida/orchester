@@ -1,47 +1,118 @@
-//! The parts of a team server's entry (`SFaAp`, `Aowlk`): what is wrong first (a changed certificate to compare, an
-//! ended sign-in to join again), *Sign out of Kontur team on this computer?* in place, the facts, *Projects on this
-//! computer*, *Your other computers* and *Server admin*.
+//! The top of a team server's page (`05c · Team server` `C6qnY`, its states in `ZUuMT`): the head — a server tile, the
+//! server's name, its state and what it runs, *Server admin* and *…* with *Sign out…* — then what is wrong (a changed
+//! certificate to compare `N1rNun`, an ended sign-in to join again `f5Psv`) and *Sign out of Kontur team on this
+//! computer?* in place (`zNDt4`). The groups under them are in [`super::server_facts`].
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
-  node::{Element, border::Border, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
-use orchester_store::JoinedWith;
-use orchester_workspace::sharing::{Connection, LinkedProject, ServerEntry, device};
+use orchester_workspace::sharing::{Connection, LinkedProject, ServerEntry};
 
 use super::{
   Said,
-  code::{Purpose, compared},
-  parts::{hint, paragraph, section, section_title},
+  code::compared,
+  list::state,
+  parts::{hint, paragraph},
   server::{JoinedAgain, Presented, Props, ServerPanel, check_code},
-  words::day,
+  words::server_look,
 };
 use crate::{
   navigation::Navigation,
   routes::{OrchesterPanel, OrchesterView, Route},
+  screens::settings::frame,
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
     field::field_error,
-    icon::Icon,
-    inspector::{self, PropertyValue},
+    icon::{Icon, icon},
+    icon_button::IconButton,
+    menu::{MenuItem, menu_at_end, menu_panel},
+    notice::NoticeTone,
+    setting_notice::SettingNotice,
+    setting_rows::head_tile,
   },
 };
 
 /// The buttons only a person presses ([`super::PersonOnly`]).
-const ADD_COMPUTER: &str = "orchester-server-add-computer";
-const ADMIN_SIGN_IN: &str = "orchester-server-admin-sign-in";
 const JOIN_AGAIN: &str = "orchester-server-join-again";
 const SIGN_OUT: &str = "orchester-server-sign-out-confirm";
 const CERTIFICATE_MATCHES: &str = "orchester-server-certificate-matches";
 
-/// What is wrong with the server, first in the panel, and what came of an answer to it.
+/// The head (`Head` `oPhLG`): the tile, the name, the state with what the server runs (`runs`), *Server admin* while
+/// it is reachable, and *…*.
+pub(super) fn head(ctx: &mut Ctx, panel: &ServerPanel, (entry, runs): (&ServerEntry, Option<String>)) -> Element {
+  let separator = ctx.t("cloud.factSeparator");
+  let line = Row::new()
+    .id("orchester-server-header-facts")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(state(ctx, "orchester-server-header-state", &server_look(entry)))
+    .child(
+      Text::new(&separator)
+        .variant(lurq::app::theme::TypographyStyle::Description)
+        .color(PaletteColor::TextMuted),
+    )
+    .child(
+      Text::new(&runs.unwrap_or_else(|| entry.address.authority()))
+        .variant(lurq::app::theme::TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
+  let reachable = entry
+    .connection
+    .is_some_and(|connection| connection != Connection::SignedOut);
+  let mut actions: Vec<Element> = Vec::new();
+  if reachable {
+    actions.push(super::server_facts::open_admin(ctx, panel, entry, ButtonKind::Secondary).into());
+  }
+  if entry.in_use() {
+    actions.push(more(ctx, panel));
+  }
+  let tile = head_tile(icon(Icon::Server, IconSize::Md, PaletteColor::TextSecondary));
+  frame::head(
+    "orchester-server-header",
+    Some(tile.into()),
+    (&entry.stored.name, Some(line.into())),
+    actions,
+  )
+  .into()
+}
+
+/// *…* and its menu: *Sign out…*, which asks in place.
+fn more(ctx: &mut Ctx, panel: &ServerPanel) -> Element {
+  let (open, anchor) = panel.more.clone();
+  let toggle = open.clone();
+  let button = IconButton::new("orchester-server-more", Icon::Ellipsis, ctx.t("cloud.server.more"))
+    .element(anchor.clone())
+    .on_click(move || toggle.update(|open| *open = !*open));
+  let shown = open.get();
+  let button = if shown { button.active() } else { button }.render(ctx);
+  let menu = shown.then(|| {
+    let confirming = panel.confirming.clone();
+    let item = MenuItem::new(
+      "orchester-server-sign-out",
+      ctx.t("cloud.server.signOut"),
+      move || confirming.set(true),
+    )
+    .icon(Icon::LogOut);
+    menu_at_end(
+      anchor,
+      open.clone(),
+      menu_panel("orchester-server-more-menu").child(item.render(ctx, &open)),
+    )
+  });
+  Row::new().child(button).with_children(menu).into()
+}
+
+/// What is wrong with the server, first on its page, and what came of an answer to it.
 pub(super) fn problems(
   ctx: &mut Ctx,
   panel: &ServerPanel,
@@ -70,7 +141,7 @@ pub(super) fn problems(
   parts
 }
 
-fn project_names(linked: &[LinkedProject]) -> String {
+pub(super) fn project_names(linked: &[LinkedProject]) -> String {
   linked
     .iter()
     .map(|project| project.name.as_str().to_owned())
@@ -148,7 +219,7 @@ fn new_code(ctx: &mut Ctx, panel: &ServerPanel, (entry, presented): (&ServerEntr
   let confirming = panel.confirming.clone();
   let differs = ActionButton::new(
     "orchester-server-certificate-differs",
-    ButtonKind::Secondary,
+    ButtonKind::DangerGhost,
     ctx.t("cloud.server.certificate.differs"),
   )
   .on_click(move || confirming.set(true));
@@ -202,41 +273,31 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
     server: Some(id),
     panel: OrchesterPanel::Connect,
   })));
-  let mut column = Column::new()
-    .id("orchester-server-signed-out")
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(
-      Callout::new(
-        "orchester-server-signed-out-notice",
-        CalloutTone::Warning,
-        ctx.t_args(
-          if entry.in_use() {
-            "cloud.server.signedOut.title"
-          } else {
-            "cloud.server.signedOut.byYouTitle"
-          },
-          [("server", entry.stored.name.as_str())],
-        ),
-      )
-      .icon(Icon::LogOut)
-      .body(ctx.t(if entry.in_use() {
-        "cloud.server.signedOut.body"
+  let mut notice = SettingNotice::new("orchester-server-signed-out-notice", NoticeTone::Warning)
+    .title(ctx.t_args(
+      if entry.in_use() {
+        "cloud.server.signedOut.title"
       } else {
-        "cloud.server.signedOut.byYouBody"
-      })),
-    )
-    .child(Row::new().spacing(SpacingSize::Sm).child(again).child(with_code))
-    .with_children(panel.person.reason(ctx, JOIN_AGAIN));
+        "cloud.server.signedOut.byYouTitle"
+      },
+      [("server", entry.stored.name.as_str())],
+    ))
+    .body(ctx.t(if entry.in_use() {
+      "cloud.server.signedOut.body"
+    } else {
+      "cloud.server.signedOut.byYouBody"
+    }))
+    .action(again)
+    .action(with_code);
+  if let Some(reason) = panel.person.reason(ctx, JOIN_AGAIN) {
+    notice = notice.part(reason);
+  }
   match state.data.clone().filter(|_| state.is_fulfilled()) {
     Some(JoinedAgain::Waiting) => {
-      column = column.child(hint(
-        "orchester-server-join-waiting",
-        &ctx.t("cloud.server.signedOut.waiting"),
-      ));
+      notice = notice.note(ctx.t("cloud.server.signedOut.waiting"));
     }
     Some(JoinedAgain::NotInvited) => {
-      column = column.child(field_error(
+      notice = notice.part(field_error(
         "orchester-server-join-not-invited",
         &ctx.t_args(
           "sharing.connect.notInvitedServer",
@@ -246,7 +307,11 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
     }
     Some(JoinedAgain::Joined) | None => {}
   }
-  column.into()
+  Column::new()
+    .id("orchester-server-signed-out")
+    .width(Dimension::Pct(100.0))
+    .child(notice)
+    .into()
 }
 
 /// *Sign out of Kontur team on this computer?* in place, naming the projects it affects.
@@ -282,194 +347,40 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
     })
   };
   let keep = panel.confirming.clone();
-  Column::new()
-    .id("orchester-server-sign-out-question")
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
-    .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .child(
-      Text::new(&ctx.t_args("cloud.server.signOutQuestion.title", [("server", name)]))
-        .variant(ExtraTypography::Strong.role()),
+  let notice = SettingNotice::new("orchester-server-sign-out-question", NoticeTone::Warning)
+    .title(ctx.t_args("cloud.server.signOutQuestion.title", [("server", name)]))
+    .part(paragraph("orchester-server-sign-out-affects", &affects).variant(ExtraTypography::Prose.role()))
+    .part(
+      paragraph(
+        "orchester-server-sign-out-forgets",
+        &ctx.t_args("cloud.server.signOutQuestion.forgets", [("server", name)]),
+      )
+      .variant(ExtraTypography::Prose.role()),
     )
-    .child(paragraph("orchester-server-sign-out-affects", &affects))
-    .child(paragraph(
-      "orchester-server-sign-out-forgets",
-      &ctx.t_args("cloud.server.signOutQuestion.forgets", [("server", name)]),
-    ))
-    .child(
-      Row::new().spacing(SpacingSize::Sm).child(confirm).child(
-        ActionButton::new(
-          "orchester-server-sign-out-keep",
-          ButtonKind::Secondary,
-          ctx.t("cloud.server.signOutQuestion.keep"),
-        )
-        .on_click(move || keep.set(false)),
-      ),
-    )
-    .with_children(panel.person.reason(ctx, SIGN_OUT))
-    .into()
-}
-
-/// Address, certificate, the account there, how and when this computer joined, and this computer.
-/// How this computer trusts the server's certificate; a pinned one's check code reads in mono (`Checked · 3F7A-…` in
-/// `SFaAp`).
-fn certificate_fact(ctx: &Ctx, entry: &ServerEntry) -> (String, PropertyValue) {
-  match entry.stored.certificate_pin.as_deref().and_then(check_code) {
-    Some(code) => (
-      ctx.t_args("cloud.server.facts.checked", [("code", code)]).to_string(),
-      PropertyValue::Mono,
-    ),
-    None if entry.address.is_https() => (ctx.t("cloud.server.facts.system").to_string(), PropertyValue::Plain),
-    None => (ctx.t("cloud.server.facts.plain").to_string(), PropertyValue::Plain),
+    .action(confirm)
+    .action(
+      ActionButton::new(
+        "orchester-server-sign-out-keep",
+        ButtonKind::Ghost,
+        ctx.t("cloud.server.signOutQuestion.keep"),
+      )
+      .on_click(move || keep.set(false)),
+    );
+  match panel.person.reason(ctx, SIGN_OUT) {
+    Some(reason) => notice.part(reason).into(),
+    None => notice.into(),
   }
 }
 
-pub(super) fn facts(ctx: &Ctx, entry: &ServerEntry) -> Element {
-  let stored = &entry.stored;
-  let (certificate, certificate_look) = certificate_fact(ctx, entry);
-  let you = stored.account.as_ref().map_or_else(
-    || ctx.t("cloud.server.facts.nobody").to_string(),
-    |account| {
-      let role = if account.admin {
-        ctx.t("cloud.server.facts.admin")
-      } else {
-        ctx.t("cloud.server.facts.member")
-      };
-      ctx
-        .t_args(
-          "cloud.server.facts.you",
-          [
-            ("name", account.display_name.as_str()),
-            ("username", account.username.as_str()),
-            ("role", &role),
-          ],
-        )
-        .to_string()
-    },
-  );
-  let joined_day = day(
-    ctx,
-    stored
-      .account
-      .as_ref()
-      .map_or(stored.added_at, |account| account.signed_in_at),
-  );
-  let joined = match stored.joined_with {
-    Some(JoinedWith::Cloud(_)) => ctx.t_args("cloud.server.facts.joinedCloud", [("day", joined_day)]),
-    Some(JoinedWith::Code) => ctx.t_args("cloud.server.facts.joinedCode", [("day", joined_day)]),
-    None => ctx.t_args("cloud.server.facts.joinedOn", [("day", joined_day)]),
-  };
-  let computer = ctx.t_args(
-    if entry.in_use() {
-      "cloud.server.facts.computerValue"
-    } else {
-      "cloud.server.facts.computerSignedOut"
-    },
-    [("computer", device::this_computer())],
-  );
-  Column::new()
-    .id("orchester-server-facts")
-    .width(Dimension::Pct(100.0))
-    .child(inspector::property(
-      "orchester-server-address",
-      &ctx.t("cloud.server.facts.address"),
-      entry.address.as_str(),
-      PropertyValue::Mono,
-    ))
-    .child(inspector::property(
-      "orchester-server-certificate",
-      &ctx.t("cloud.server.facts.certificate"),
-      &certificate,
-      certificate_look,
-    ))
-    .child(inspector::property(
-      "orchester-server-you",
-      &ctx.t("cloud.server.facts.youThere"),
-      &you,
-      PropertyValue::Plain,
-    ))
-    .child(inspector::property(
-      "orchester-server-joined",
-      &ctx.t("cloud.server.facts.joined"),
-      &joined,
-      PropertyValue::Plain,
-    ))
-    .child(inspector::property(
-      "orchester-server-computer",
-      &ctx.t("cloud.server.facts.computer"),
-      &computer,
-      PropertyValue::Plain,
-    ))
-    .into()
+/// The server admin's address, which opens in the browser.
+pub(super) fn admin_url(entry: &ServerEntry) -> String {
+  format!("{}/admin", entry.address.as_str())
 }
 
-/// *Your other computers* with *Add a computer*.
-pub(super) fn computers(ctx: &Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Element {
-  let text = ctx.t_args("cloud.server.computers.body", [("server", entry.stored.name.as_str())]);
-  let add = pairing_button(ctx, panel, (ADD_COMPUTER, Purpose::Computer));
-  section(
-    "orchester-server-computers",
-    section_title(
-      "orchester-server-computers-title",
-      &ctx.t("cloud.server.computers.title"),
-      None,
-    ),
-    std::iter::once(paragraph("orchester-server-computers-text", &text).into())
-      .chain(std::iter::once(lurq::components::Row::new().child(add).into()))
-      .chain(panel.person.reason(ctx, ADD_COMPUTER))
-      .collect(),
-  )
-  .into()
-}
-
-fn pairing_button(ctx: &Ctx, panel: &ServerPanel, (id, purpose): (&'static str, Purpose)) -> ActionButton {
-  let (label, glyph, kind) = match purpose {
-    Purpose::Computer => (ctx.t("cloud.server.computers.add"), Icon::Laptop, ButtonKind::Secondary),
-    Purpose::Admin => (ctx.t("cloud.server.admin.signIn"), Icon::KeyRound, ButtonKind::Ghost),
-  };
-  let (pairing, showing, person) = (panel.pairing.clone(), panel.showing.clone(), panel.person.clone());
-  let button = ActionButton::new(id.to_owned(), kind, label).icon(glyph);
-  if panel.pairing.state().get().is_pending() {
-    button.disabled()
-  } else {
-    // A pairing code signs a computer or a browser in as this person: only a person asks for one (review 1, B2).
-    button.on_click(move || {
-      if person.allows(id) {
-        showing.set(true);
-        pairing.run(purpose);
-      }
-    })
-  }
-}
-
-/// *Server admin*: *Open server admin* (a link) and *Sign in to the admin* (a pairing code).
-pub(super) fn admin(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Element {
-  let admin_url = format!("{}/admin", entry.address.as_str());
-  let admin = entry.stored.account.as_ref().is_some_and(|account| account.admin);
-  let text = if admin {
-    ctx.t_args(
-      "cloud.server.admin.bodyAdmin",
-      [("server", entry.stored.name.as_str()), ("url", admin_url.as_str())],
-    )
-  } else {
-    ctx.t_args(
-      "cloud.server.admin.bodyMember",
-      [("server", entry.stored.name.as_str()), ("url", admin_url.as_str())],
-    )
-  };
-  let services = Services::of(ctx);
-  let (links, opened) = (services.links, panel.opened.clone());
-  let url = admin_url;
-  let open = ActionButton::new(
-    "orchester-server-open-admin",
-    ButtonKind::Secondary,
-    ctx.t("cloud.server.admin.open"),
-  )
-  .icon(Icon::ExternalLink)
-  .on_click(move || match links.open(&url) {
+/// Opens `url` in the browser, or says why it could not, under the page's head.
+pub(super) fn opener(ctx: &mut Ctx, panel: &ServerPanel, url: String) -> impl Fn() + Send + Sync + 'static {
+  let (links, opened) = (Services::of(ctx).links, panel.opened.clone());
+  move || match links.open(&url) {
     Ok(()) => opened.set(None),
     Err(error) => {
       tracing::warn!(%error, "the server admin could not be opened");
@@ -477,43 +388,5 @@ pub(super) fn admin(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> 
         Said::new("cloud.server.admin.openFailed").with("url", url.clone()),
       ));
     }
-  });
-  let sign_in = pairing_button(ctx, panel, (ADMIN_SIGN_IN, Purpose::Admin));
-  section(
-    "orchester-server-admin",
-    section_title("orchester-server-admin-title", &ctx.t("cloud.server.admin.title"), None),
-    std::iter::once(paragraph("orchester-server-admin-text", &text).into())
-      .chain(std::iter::once(
-        lurq::components::Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(open)
-          .child(sign_in)
-          .into(),
-      ))
-      .chain(panel.person.reason(ctx, ADMIN_SIGN_IN))
-      .chain(std::iter::once(
-        hint("orchester-server-admin-hint", &ctx.t("cloud.server.admin.hint")).into(),
-      ))
-      .collect(),
-  )
-  .into()
-}
-
-/// Where this computer's token for the server is kept.
-pub(super) fn token_note(ctx: &Ctx, entry: &ServerEntry) -> Element {
-  let mac = cfg!(target_os = "macos");
-  let key = match (entry.in_use(), entry.connection) {
-    // Signed out from here: the token was deleted with the sign-in.
-    (false, _) if mac => "cloud.server.tokenNote.noneMacos",
-    (false, _) => "cloud.server.tokenNote.noneWindows",
-    (true, Some(Connection::SignedOut)) => "cloud.server.tokenNote.refused",
-    (true, _) if mac => "cloud.server.tokenNote.macos",
-    (true, _) => "cloud.server.tokenNote.windows",
-  };
-  inspector::note(
-    "orchester-server-token-note",
-    Icon::KeyRound,
-    &ctx.t_args(key, [("server", entry.stored.name.as_str())]),
-  )
-  .into()
+  }
 }

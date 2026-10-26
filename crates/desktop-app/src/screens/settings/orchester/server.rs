@@ -1,15 +1,15 @@
-//! A team server's entry (`Server details` `v9NL4N` in `SFaAp`; its states in `Aowlk`): the header with *Sign out…*,
+//! A team server's page under Settings › Orchester Cloud (`05c · Team server` `C6qnY`; its states in `ZUuMT`): the
+//! crumb back; the head with the server's state and what it runs, *Server admin* (a link) and *…* with *Sign out…*,
 //! which asks in place and names the projects it affects; a changed certificate to compare (person only) or an ended
-//! sign-in to join again; the server's facts; the person's projects there with their checkouts here; *Add a computer*;
-//! and the server admin, *Open server admin* (a link) and *Sign in to the admin* (a pairing code). The pairing code
-//! shows once.
+//! sign-in to join again; *You there*; the person's projects there with their checkouts here; *Add a computer*; and
+//! *Sign in to the admin* (a pairing code). The pairing code shows once.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
   },
-  core::Signal,
+  core::{ElementRef, Signal},
   node::Element,
 };
 use orchester_api::certificate::CertificatePin;
@@ -20,16 +20,14 @@ use orchester_workspace::sharing::{
 use super::{
   Said,
   code::{Purpose, Secret, Shown, shown_code},
-  parts::{Fact, body, frame, header},
-  server_parts, server_projects,
-  words::{cloud_error, server_look, sharing_error},
+  server_facts, server_parts, server_projects,
+  words::{cloud_error, sharing_error},
 };
 use crate::{
+  navigation::Navigation,
+  routes::{OrchesterView, Route},
+  screens::settings::frame,
   services::Services,
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -76,6 +74,8 @@ pub(super) struct ServerPanel {
   pub(super) opened: Signal<Option<Said>>,
   /// Making a pairing code, signing out and joining again are a person's.
   pub(super) person: super::PersonOnly,
+  /// The head's *…* menu: whether it is open, and the button it opens at.
+  pub(super) more: (Signal<bool>, ElementRef),
 }
 
 /// How joining again with the cloud account ended.
@@ -162,6 +162,7 @@ impl Component for ServerPanel {
       join_again,
       opened: ctx.signal(None),
       person: super::PersonOnly::new(ctx),
+      more: (ctx.signal(false), ElementRef::default()),
     }
   }
 
@@ -173,53 +174,40 @@ impl Component for ServerPanel {
       .flatten();
     let presented = presented(ctx, &props.entry);
     let entry = &props.entry;
-    let look = server_look(entry);
-    let facts: Vec<Fact> = std::iter::once(Fact::Plain(entry.address.authority()))
-      .chain(version(ctx, entry).map(Fact::Plain))
-      .collect();
+    let runs = version(ctx, entry);
     // A future belongs to its place among the render's futures: the projects' is asked only while the server is in
     // use and connected, so it comes after those asked in every render.
     let projects = projects(ctx, &props);
-    let mut head = header(
-      ctx,
-      "orchester-server-header",
-      (Icon::Server, &entry.stored.name, &look),
-      (Vec::new(), &facts),
+    let navigation = Navigation::of(ctx);
+    let crumb = frame::crumb(
+      "orchester-server-crumb",
+      &ctx.t("settings.tabs.orchester"),
+      navigation.to(Route::Orchester(OrchesterView::default())),
     );
-    if entry.in_use() {
-      let confirming = self.confirming.clone();
-      head = head.child(
-        ActionButton::new(
-          "orchester-server-sign-out",
-          ButtonKind::Secondary,
-          ctx.t("cloud.server.signOut"),
-        )
-        .icon(Icon::LogOut)
-        .on_click(move || confirming.set(true)),
-      );
-    }
-    let mut parts = Vec::new();
-    parts.extend(server_parts::problems(ctx, self, (&props, presented.as_ref())));
+    let head = server_parts::head(ctx, self, (entry, runs));
+    let mut pane = frame::pane("orchester-server-details")
+      .child(crumb)
+      .child(head)
+      .with_children(server_parts::problems(ctx, self, (&props, presented.as_ref())));
     if self.confirming.get() {
-      parts.push(server_parts::sign_out_question(ctx, self, &props));
+      pane = pane.child(server_parts::sign_out_question(ctx, self, &props));
     }
     if let Some(shown) = shown {
       let showing = self.showing.clone();
-      parts.push(shown_code(ctx, shown, move || showing.set(false)));
+      pane = pane.child(shown_code(ctx, shown, move || showing.set(false)));
     }
-    parts.push(server_parts::facts(ctx, entry));
-    parts.push(server_projects::projects(ctx, &props, projects.as_ref()));
+    pane = pane
+      .child(server_facts::facts(ctx, entry))
+      .child(server_projects::projects(ctx, &props, projects.as_ref()));
     if entry
       .connection
       .is_some_and(|connection| connection != Connection::SignedOut)
     {
-      parts.push(server_parts::computers(ctx, self, entry));
-      parts.push(server_parts::admin(ctx, self, entry));
+      pane = pane
+        .child(server_facts::computers(ctx, self, entry))
+        .child(server_facts::admin(ctx, self, entry));
     }
-    parts.push(server_parts::token_note(ctx, entry));
-    frame("orchester-server-details")
-      .child(head)
-      .child(body("orchester-server-body", parts))
+    pane.child(server_facts::token_note(ctx, entry))
   }
 }
 

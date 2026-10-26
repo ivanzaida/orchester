@@ -1,20 +1,14 @@
-//! How an account reads in Settings › Accounts (`E96CI`): its name, its state as an icon and a word in the state's
-//! color, the line under its name, its folder, and the CLI's words for it.
+//! How an account reads in Settings › Accounts (`t8i6m`): its name, its state as a dot and a word in the state's
+//! colors, the line under its name, its folder, and the CLI's words for it.
 
 use std::path::PathBuf;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::account::{AccountCli, AccountIdentity, AccountState, AgentAccount, SignInMethod, same_sign_in};
-use orchester_workspace::{accounts::own_folder, display::shorten_path};
+use orchester_workspace::accounts::own_folder;
 
-use crate::ui::icon::Icon;
-
-/// How long a folder may read in a list row before its middle is left out (`q8bz5`).
-const ROW_FOLDER_CHARS: usize = 40;
-
-/// What a row and the details header show for a state: the icon, its color, the word and the word's color.
+/// What a row and the page's head show for a state: the dot's color, the word and the word's color.
 pub(super) struct Look {
-  pub icon: Icon,
   pub icon_color: PaletteColor,
   pub key: &'static str,
   pub color: PaletteColor,
@@ -30,74 +24,23 @@ pub(super) enum Shown {
 }
 
 pub(super) fn look(shown: Shown) -> Look {
-  let look = |icon, icon_color, key, color| Look {
-    icon,
-    icon_color,
-    key,
-    color,
-  };
+  let look = |icon_color, key, color| Look { icon_color, key, color };
   match shown {
-    Shown::Checking => look(
-      Icon::LoaderCircle,
-      PaletteColor::TextMuted,
-      "accounts.status.checking",
-      PaletteColor::TextSecondary,
-    ),
-    Shown::SigningIn => look(
-      Icon::LoaderCircle,
-      PaletteColor::TextMuted,
-      "accounts.status.signingIn",
-      PaletteColor::TextSecondary,
-    ),
+    Shown::Checking => look(PaletteColor::TextMuted, "accounts.status.checking", PaletteColor::TextSecondary),
+    Shown::SigningIn => look(PaletteColor::TextMuted, "accounts.status.signingIn", PaletteColor::TextSecondary),
     Shown::State(state) => match state {
-      AccountState::SignedIn => look(
-        Icon::CircleCheck,
-        PaletteColor::Success,
-        "accounts.status.signedIn",
-        PaletteColor::TextSecondary,
-      ),
-      AccountState::NotSignedIn => look(
-        Icon::CircleAlert,
-        PaletteColor::Warning,
-        "accounts.status.notSignedIn",
-        PaletteColor::Warning,
-      ),
-      AccountState::Expired => look(
-        Icon::CircleAlert,
-        PaletteColor::Warning,
-        "accounts.status.expired",
-        PaletteColor::Warning,
-      ),
-      AccountState::Unknown => look(
-        Icon::CircleHelp,
-        PaletteColor::TextMuted,
-        "accounts.status.unknown",
-        PaletteColor::TextSecondary,
-      ),
-      AccountState::CliMissing => look(
-        Icon::CircleX,
-        PaletteColor::Danger,
-        "accounts.status.cliMissing",
-        PaletteColor::Danger,
-      ),
-      AccountState::FolderMissing => look(
-        Icon::FolderX,
-        PaletteColor::Danger,
-        "accounts.status.folderMissing",
-        PaletteColor::Danger,
-      ),
+      AccountState::SignedIn => look(PaletteColor::Success, "accounts.status.signedIn", PaletteColor::TextSecondary),
+      AccountState::NotSignedIn => look(PaletteColor::Warning, "accounts.status.notSignedIn", PaletteColor::Warning),
+      AccountState::Expired => look(PaletteColor::Warning, "accounts.status.expired", PaletteColor::Warning),
+      AccountState::Unknown => look(PaletteColor::TextMuted, "accounts.status.unknown", PaletteColor::TextSecondary),
+      AccountState::CliMissing => look(PaletteColor::Danger, "accounts.status.cliMissing", PaletteColor::Danger),
+      AccountState::FolderMissing => look(PaletteColor::Danger, "accounts.status.folderMissing", PaletteColor::Danger),
       AccountState::Unsupported => look(
-        Icon::Ban,
         PaletteColor::TextMuted,
         "accounts.status.unsupported",
         PaletteColor::TextSecondary,
       ),
-      AccountState::NotChecked => look(
-        Icon::CircleDashed,
-        PaletteColor::TextMuted,
-        "accounts.status.notChecked",
-        PaletteColor::TextMuted,
-      ),
+      AccountState::NotChecked => look(PaletteColor::TextMuted, "accounts.status.notChecked", PaletteColor::TextMuted),
     },
   }
 }
@@ -159,11 +102,6 @@ pub(super) fn folder(account: &AgentAccount) -> Option<PathBuf> {
 /// The CLI's own folder, Default's, as the environment names it.
 pub(super) fn own_folder_text(cli: AccountCli) -> String {
   own_folder(cli).map_or_else(String::new, |folder| folder.display().to_string())
-}
-
-/// The folder, short enough for a list row.
-pub(super) fn row_folder(account: &AgentAccount) -> String {
-  folder(account).map_or_else(String::new, |folder| shorten_path(&folder, ROW_FOLDER_CHARS))
 }
 
 /// The line under an account's name: who is signed in and the plan, or what to do.

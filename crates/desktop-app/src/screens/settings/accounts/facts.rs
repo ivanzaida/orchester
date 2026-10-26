@@ -11,7 +11,8 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  account::{AccountCheckResult, AgentAccount},
+  account::{AccountCheckResult, AccountState, AgentAccount},
+  connection::invocation::Platform,
   time::Timestamp,
 };
 use orchester_workspace::display;
@@ -93,8 +94,8 @@ fn fact(ctx: &mut Ctx, (id, key): (&str, &str), shown: Result<String, String>) -
   SettingRow::new(id.to_owned(), t(ctx, key)).control(control).render(ctx)
 }
 
-/// *Folder*: where the CLI keeps the sign-in, with Copy and *Open folder*; what runs on the account get in its
-/// tooltip.
+/// *Folder*: where the CLI keeps the sign-in, with Copy and *Open folder* while it is there; what runs on the account
+/// get in its tooltip.
 fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
   let path = folder(account);
   let text = path
@@ -106,7 +107,29 @@ fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
   } else {
     text
   };
-  let copied = path.as_ref().map(|path| path.display().to_string());
+  let gone = account.state(Platform::current()) == AccountState::FolderMissing;
+  let buttons = if gone {
+    Vec::new()
+  } else {
+    folder_buttons(ctx, path.as_ref())
+  };
+  let control = Row::new()
+    .id("account-fact-folder-value")
+    .flex_shrink(1.0)
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(mono_value("account-fact-folder-path", &text))
+    .with_children(buttons);
+  SettingRow::new("account-fact-folder", t(ctx, "accounts.details.folder"))
+    .hint(t(ctx, "accounts.details.folderHint"))
+    .info(runs_get(ctx, account))
+    .control(control)
+    .render(ctx)
+}
+
+/// Copy and *Open folder* for the folder at `path`.
+fn folder_buttons(ctx: &mut Ctx, path: Option<&std::path::PathBuf>) -> Vec<Element> {
+  let copied = path.map(|path| path.display().to_string());
   let copy = IconButton::new("account-copy-folder", Icon::Copy, t(ctx, "accounts.actions.copyFolder"))
     .small()
     .on_click(move || {
@@ -117,7 +140,7 @@ fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
       }
     })
     .render(ctx);
-  let opened = path.clone();
+  let opened = path.cloned();
   let open = IconButton::new("account-open-folder", Icon::FolderOpen, t(ctx, "accounts.actions.openFolder"))
     .small()
     .on_click(move || {
@@ -126,19 +149,7 @@ fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
       }
     })
     .render(ctx);
-  let control = Row::new()
-    .id("account-fact-folder-value")
-    .flex_shrink(1.0)
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(mono_value("account-fact-folder-path", &text))
-    .child(copy)
-    .child(open);
-  SettingRow::new("account-fact-folder", t(ctx, "accounts.details.folder"))
-    .hint(t(ctx, "accounts.details.folderHint"))
-    .info(runs_get(ctx, account))
-    .control(control)
-    .render(ctx)
+  vec![copy, open]
 }
 
 /// The program the last check ran, or why it ran none: no CLI on the PATH, or no folder to check.

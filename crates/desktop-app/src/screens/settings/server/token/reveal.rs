@@ -31,6 +31,8 @@ use crate::{
 
 /// How long the token shows before it hides again.
 const SHOWN_FOR: u32 = 30;
+/// The token's room, as wide as it shows (`Value` `n7PkZH` in `shpsk`).
+const VALUE_WIDTH: f32 = 281.0;
 
 /// The token while it shows, with the mark that keeps clients from reading the window; once it is hidden, that mark
 /// until a render no longer draws the token, so clients never read a window that still shows it.
@@ -100,7 +102,8 @@ pub(super) fn ready(ctx: &mut Ctx, props: &Props, again: u32) -> Read {
 }
 
 /// The token masked, or shown as sensitive text while a person reads it, in Geist Mono 12 `text_secondary` (`Text`
-/// `n0m69`, shown `n7PkZH` in `shpsk`); a token longer than its room ends in an ellipsis.
+/// `n0m69`, shown `n7PkZH` in `shpsk`), in a room as wide as the shown token's, so *Show* and *Hide* move nothing; a
+/// token longer than its room ends in an ellipsis.
 pub(super) fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
   let text = match shown {
     Some(token) => Text::new(token.expose()).sensitive(),
@@ -108,6 +111,7 @@ pub(super) fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
   };
   Row::new()
     .id("settings-mcp-token-value")
+    .width(Dimension::Px(VALUE_WIDTH))
     .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0))
     .padding_right(ExtraSpacing::Snug.role())

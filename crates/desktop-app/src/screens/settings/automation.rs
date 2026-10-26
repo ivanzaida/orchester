@@ -383,11 +383,21 @@ impl Component for ConsentRow {
       .into_iter()
       .chain(problem.map(Element::from))
       .chain(blocked);
+    // Window control's one line says what this run has and when a change applies (its eight variants,
+    // `window_rows::window_control_hint`), once the stored choice is known.
+    let hint = match (consent, shown) {
+      (Consent::WindowControl, Some(chosen)) => Some(window_rows::window_control_hint(ctx, chosen)),
+      (Consent::WindowControl, None) => None,
+      _ => Some(ctx.t(hint).to_string()),
+    };
     let row = SettingRow::new(id, ctx.t(label))
-      .hint(ctx.t(hint))
       .info(ctx.t(words.description))
       .control(switch)
       .below_all(below);
+    let row = match hint {
+      Some(hint) => row.hint(hint),
+      None => row,
+    };
     let row = if consent == Consent::Orchestrator(OrchestratorConsent::MergeFinished) {
       row.dependent()
     } else {
@@ -397,29 +407,23 @@ impl Component for ConsentRow {
   }
 }
 
-/// What a row says under itself about the switch it shows: what the Orchestrator does once it may publish, how
-/// automation's answers read once it may answer, and what window control is for this run and when a change applies
-/// (its eight variants, `window_rows::window_control_hint`).
-fn said(ctx: &mut Ctx, consent: Consent, shown: Option<bool>) -> Option<Element> {
-  let (id, glyph, words) = match (consent, shown) {
+/// What a row says under itself about the switch it shows: what the Orchestrator does once it may publish, and how
+/// automation's answers read once it may answer.
+fn said(ctx: &Ctx, consent: Consent, shown: Option<bool>) -> Option<Element> {
+  let (id, glyph, key) = match (consent, shown) {
     (Consent::Orchestrator(OrchestratorConsent::PublishDrafts), Some(true)) => (
       "settings-publish-drafts-on",
       Icon::MessagesSquare,
-      ctx.t("settings.automation.publishDrafts.on").to_string(),
+      "settings.automation.publishDrafts.on",
     ),
     (Consent::AnswerApprovals, Some(true)) => (
       "settings-answer-approvals-on",
       Icon::ListChecks,
-      ctx.t("settings.automation.answerApprovals.on").to_string(),
-    ),
-    (Consent::WindowControl, Some(chosen)) => (
-      "settings-window-control-hint",
-      Icon::Info,
-      window_rows::window_control_hint(ctx, chosen),
+      "settings.automation.answerApprovals.on",
     ),
     _ => return None,
   };
-  Some(status_line(id, glyph, &words).into())
+  Some(status_line(id, glyph, &ctx.t(key)).into())
 }
 
 impl ConsentRow {

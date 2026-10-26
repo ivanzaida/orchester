@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::theme::{PaletteColor, SpacingSize, TypographyStyle},
   components::{Column, Row, ScrollVertical, Text, TextOverflow},
-  layout::{Alignment, layout_kind::ScrollState},
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
@@ -92,11 +92,6 @@ pub(super) fn column(id: &str, pane: impl Into<Element>) -> ScrollVertical {
   .width(Dimension::Pct(100.0))
   .flex(1.0)
   .min_height(Dimension::Px(0.0))
-}
-
-/// [`column`] kept by `state`, which the tab moves.
-pub(super) fn column_with(id: &str, pane: impl Into<Element>, state: &ScrollState) -> ScrollVertical {
-  column(id, pane).with_scroll_state(state.clone())
 }
 
 /// The column of groups (`Pane` `ZbG8J`): [`FORM_WIDTH`] wide at most, 28 between its groups.

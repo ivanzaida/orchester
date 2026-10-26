@@ -109,9 +109,19 @@ impl Component for AddressRow {
           .hint(ctx.t("settings.automation.server.address.hintListening"))
           .control(control)
       }
-      ServerState::PortTaken { .. } => row
-        .hint(ctx.t("settings.automation.server.address.hintFixed"))
-        .control(state_label(ctx, &props.state)),
+      // Nothing listens at the address: its Copy is muted and does nothing.
+      ServerState::PortTaken { .. } => {
+        let address = self.address(ctx, port, false);
+        row
+          .hint(ctx.t("settings.automation.server.address.hintFixed"))
+          .control(
+            Row::new()
+              .spacing(SpacingSize::Md)
+              .align_items(Alignment::Center)
+              .child(address)
+              .child(state_label(ctx, &props.state)),
+          )
+      }
       ServerState::Off => {
         let address = self.address(ctx, port, false);
         row
@@ -265,7 +275,7 @@ impl AddressRow {
       ActionButton::new(
         "settings-mcp-port-cancel",
         ButtonKind::Ghost,
-        ctx.t("common.cancel"),
+        ctx.t("settings.automation.server.port.cancel"),
       )
       .on_click(move || {
         editing.set(false);

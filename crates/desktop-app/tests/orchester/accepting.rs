@@ -133,11 +133,11 @@ fn orchester_accept_never_lists_an_invite_it_keeps_as_accepted() {
       .get_element_by_id(&format!("orchester-invite-{invite}"))
       .is_none()
   });
-  shows(&mut window, "orchester-invites-none");
+  shows(&mut window, "orchester-invites-none-row");
   assert!(
-    !window.text("orchester-invites-title").contains("waiting"),
-    "{}",
-    window.text("orchester-invites-title")
+    window.texts("orchester-invites-meta").is_none(),
+    "no invite waits: {:?}",
+    window.texts("orchester-invites-meta")
   );
   go(&mut window, Route::AllProjects, "all-projects-tabs");
   window.pass();

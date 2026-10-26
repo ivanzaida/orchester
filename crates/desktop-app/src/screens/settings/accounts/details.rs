@@ -20,7 +20,7 @@ use orchester_workspace::{accounts::AccountUses, display};
 use super::{
   Parts, Work, facts, limits,
   list::state_line,
-  remove, state, used_by,
+  remove, sign_in, state, used_by,
   words::{Shown, cli_key, name, t, ta},
   work::Change,
 };
@@ -62,10 +62,16 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, uses: Option<&Acco
   };
   let question = (parts.view.panel == AccountsPanel::Remove && !account.is_default())
     .then(|| remove::confirmation(ctx, parts, work, account, uses));
+  // The sign-in in place says where the account stands while it shows; the state's notice would say it twice.
+  let state = if sign_in::follows(parts, work, account) {
+    Some(sign_in::panel(ctx, (parts, work), account, false))
+  } else {
+    state::notice(ctx, (parts, work), account, shown)
+  };
   let limits = (shown != Shown::State(AccountState::Unsupported)).then(|| limits::group(ctx, work, account));
   pane
     .child(head)
-    .with_children(state::notice(ctx, (parts, work), account, shown))
+    .with_children(state)
     .with_children(question)
     .child(facts::group(ctx, account))
     .with_children(limits)

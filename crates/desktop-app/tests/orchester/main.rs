@@ -13,6 +13,7 @@ mod clipboard;
 mod design;
 mod harness;
 mod history;
+mod invites;
 mod landing;
 mod person_only;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
@@ -81,7 +82,8 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
   press(&mut window, "gate-sign-in");
   let accept = format!("orchester-invite-{invite}-accept");
   go(&mut window, Route::Orchester(OrchesterView::default()), &accept);
-  assert!(window.text("orchester-row-cloud").contains("1 invite waiting"));
+  // The invite is a row of *Invites*, its heading counting what waits (`YwJ2b` in `ZUuMT`).
+  assert!(window.text("orchester-invites-meta").contains("1 waiting"));
   invite_notice(&mut window, &invite);
   go(&mut window, Route::Orchester(OrchesterView::default()), &accept);
   press(&mut window, &accept);
@@ -351,7 +353,7 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
   assert_eq!(joined.user.username, "ivan");
 
   press(&mut window, "orchester-pairing-done");
-  press(&mut window, "orchester-server-sign-out");
+  harness::sign_out_of_server(&mut window);
   shows(&mut window, "orchester-server-sign-out-affects");
   assert!(window.text("orchester-server-sign-out-affects").contains("Kontur"));
   press(&mut window, "orchester-server-sign-out-confirm");
@@ -383,7 +385,7 @@ fn orchester_server_keeps_its_version_as_its_projects_are_read_again() {
   go(
     &mut window,
     Route::Orchester(OrchesterView::server(entry.stored.id)),
-    "orchester-server-projects-list",
+    "orchester-server-projects-rows",
   );
   window.until("the server's version", version_shown);
   let asked = version_reads(&recorder);
@@ -396,7 +398,7 @@ fn orchester_server_keeps_its_version_as_its_projects_are_read_again() {
   window.until("the projects read again", |window| {
     kept &= version_shown(window);
     window
-      .texts("orchester-server-projects-list")
+      .texts("orchester-server-projects-rows")
       .is_some_and(|texts| texts.iter().any(|text| text == "Notes"))
   });
   assert!(
