@@ -1,7 +1,22 @@
 //! The design values of the Tasks list (`Tasks · redesign` `Lw1Gb` in the new `orchester.pen`, ORC-99) and of the
 //! Modules pages that share its frame, which the UI kit's roles do not carry, registered as lurq `Extra` roles.
 
-use lurq::app::theme::{SpacingSize, Theme};
+use lurq::{
+  app::theme::{SpacingSize, Theme},
+  layout::scrollbar::ScrollBarStyle,
+};
+
+/// The list's scrollbar runs in the page's 28 at the panel's right edge, 10 in from it, clear of the rows (the design
+/// draws none; the person asked for it away from the rows and near the edge).
+const LIST_SCROLL_EDGE: f32 = 10.0;
+
+/// `base`, the theme's scrollbar, placed for the Tasks list.
+pub fn list_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  ScrollBarStyle {
+    edge_inset: Some(LIST_SCROLL_EDGE),
+    ..base.clone()
+  }
+}
 
 /// Gaps and paddings of the Tasks list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

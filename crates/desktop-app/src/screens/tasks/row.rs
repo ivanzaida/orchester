@@ -35,7 +35,7 @@ use crate::{
   navigation::{Navigation, waiting::Destination},
   routes::{ProjectPage, Route, TaskView},
   screens::task_close::{self, Closer, MenuPlace, Subject},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TasksSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::{BadgeTone, TagChip, badge},
@@ -113,10 +113,15 @@ impl Component for ListItem {
       ItemProps::Group(line) => group_line(ctx, &line),
       ItemProps::Task(props) => self.task(ctx, &props),
     };
-    // 2 under each line, as the list's lines are apart (`ZCJb1`).
+    // 2 under each line, as the list's lines are apart (`ZCJb1`), and the page's 28 at their end: the list runs to the
+    // panel's edge for its scrollbar.
     Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::new().bottom(ExtraSpacing::Tight.role()))
+      .padding(
+        Padding::new()
+          .bottom(ExtraSpacing::Tight.role())
+          .right(TasksSpacing::Sides.role()),
+      )
       .child(line)
   }
 }

@@ -30,7 +30,7 @@ use super::{
 };
 use crate::{
   navigation::waiting::Destination,
-  theme::{ExtraSpacing, IconSize, TasksSpacing},
+  theme::{ExtraSpacing, IconSize, TasksSpacing, list_scrollbar},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -164,12 +164,15 @@ pub(super) fn offset_of(items: &[ItemProps], key: &str) -> Option<f32> {
 }
 
 /// The items, windowed and scrolled where `scroll` says; `list_key` is new for another view, search, filter or sort: a
-/// list keeps its top row in place while its rows change, which a new list must not.
+/// list keeps its top row in place while its rows change, which a new list must not. The list runs to the panel's
+/// right edge, its lines 28 from it, so its scrollbar sits in that room, clear of the rows.
 pub(super) fn list(ctx: &mut Ctx, items: Arc<Vec<ItemProps>>, (scroll, list_key): (ScrollState, String)) -> Element {
   let total: f32 = items.iter().map(height).sum();
+  let scrollbar = list_scrollbar(&ctx.theme().scrollbar());
   let lines = VirtualizedList::new_shared(ctx, items)
     .list_key(list_key)
     .with_scroll_state(scroll)
+    .scrollbar(scrollbar)
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .max_height(Dimension::Px(total))

@@ -143,20 +143,17 @@ impl Component for TasksScreen {
     let not_member = shared
       .as_ref()
       .and_then(|shared| shared::not_member(ctx, &project, shared));
+    // The page keeps 28 at its left; its parts keep the 28 at their right themselves ([`inset`]), so the list can run
+    // to the panel's edge with its scrollbar there.
     let page = Column::new()
       .id("screen-tasks")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Xl)
-          .left(TasksSpacing::Sides.role())
-          .right(TasksSpacing::Sides.role()),
-      )
+      .padding(Padding::new().top(SpacingSize::Xl).left(TasksSpacing::Sides.role()))
       .spacing(TasksSpacing::Stack.role())
       .on_key_down(slash(self.focus_search.clone()));
     let header = |ctx: &mut Ctx, options, queue| {
-      header::header(
+      inset(header::header(
         ctx,
         Header {
           project: id,
@@ -165,13 +162,14 @@ impl Component for TasksScreen {
           queue,
           shared: shared.as_ref(),
         },
-      )
+      ))
     };
+    let not_member = not_member.map(inset);
     match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => page
-        .child(header::title_only(ctx))
+        .child(inset(header::title_only(ctx)))
         .with_children(not_member)
-        .child(states::empty_project(ctx, id)),
+        .child(inset(states::empty_project(ctx, id)).flex(1.0)),
       TasksState::Ready(source) => {
         // The filter is gone once no task is Not shared: the list is the shared one again.
         let not_shared = list.not_shared() && !source.not_shared.is_empty();
@@ -189,13 +187,13 @@ impl Component for TasksScreen {
       TasksState::Loading => page
         .child(header(ctx, None, None))
         .with_children(not_member)
-        .child(views::views(ctx, (id, &list), None, None))
-        .child(states::reading(ctx, project.open.project.name().as_str())),
+        .child(inset(views::views(ctx, (id, &list), None, None)))
+        .child(inset(states::reading(ctx, project.open.project.name().as_str()))),
       TasksState::Failed(error) => page
         .child(header(ctx, None, None))
         .with_children(not_member)
-        .child(views::views(ctx, (id, &list), None, None))
-        .child(states::failed(ctx, &project.feed, &error)),
+        .child(inset(views::views(ctx, (id, &list), None, None)))
+        .child(inset(states::failed(ctx, &project.feed, &error))),
     }
   }
 }
@@ -236,10 +234,10 @@ impl TasksScreen {
         not_shared::matching(shown.source, &key.search, &separator)
       };
       if !found.is_empty() {
-        return page.child(not_shared::only_not_shared(ctx, (id, list), &found));
+        return page.child(inset(not_shared::only_not_shared(ctx, (id, list), &found)));
       }
       let filtered = !key.search.trim().is_empty() || !key.facets.is_empty();
-      return page.child(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered));
+      return page.child(inset(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered)));
     }
     let highlight = list.highlight().map(ToString::to_string);
     let source = Source {
@@ -291,12 +289,12 @@ impl TasksScreen {
       not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
     });
     page
-      .child(views::views(ctx, (id, list), Some(counts), chip))
-      .with_children(held.flatten())
-      .with_children(filters)
-      .with_children(kept)
-      .with_children(states::outside_tasks(ctx, list.tab(), &reading.tasks))
-      .with_children(task_close::panel(ctx, &self.closer, "tasks-close"))
+      .child(inset(views::views(ctx, (id, list), Some(counts), chip)))
+      .with_children(held.flatten().map(inset))
+      .with_children(filters.map(inset))
+      .with_children(kept.map(inset))
+      .with_children(states::outside_tasks(ctx, list.tab(), &reading.tasks).map(inset))
+      .with_children(task_close::panel(ctx, &self.closer, "tasks-close").map(inset))
   }
 
   /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top, for another
@@ -341,6 +339,14 @@ impl TasksScreen {
       facets.set(Facets::default());
     })
   }
+}
+
+/// `part` 28 from the panel's right edge, where the page leaves that room to the list's scrollbar.
+fn inset(part: impl Into<Element>) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().right(TasksSpacing::Sides.role()))
+    .child(part)
 }
 
 /// `/` asks for the search, unless a text field has the keys or a modifier is held.
