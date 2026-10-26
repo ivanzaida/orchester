@@ -158,11 +158,12 @@ impl Pending {
         detail: None,
       })
       .collect();
+    // Models by the id the CLI takes, as the developer names them, never a prettified name.
     let model = select(
       "orchestrator-runs-on-model",
       &ctx.t("orchestrator.runsOn.model"),
       (&self.model, &self.model_open),
-      models,
+      (models, ExtraTypography::PropertyMono.role()),
     );
     let efforts = current.as_ref().map(|model| setup.efforts(connection, model)).unwrap_or_default();
     let efforts = if efforts.is_empty() {
@@ -186,7 +187,7 @@ impl Pending {
         "orchestrator-runs-on-effort",
         &ctx.t("orchestrator.runsOn.effort"),
         (&self.effort, &self.effort_open),
-        options,
+        (options, TypographyStyle::Description),
       )
     });
     std::iter::once(model).chain(effort).collect()

@@ -1,7 +1,8 @@
 //! A choice of the runs-on picker (`Model` `IAMbH`, `Effort` `VToZ2` in `WaQcn`; `Effort dropdown` `w5O9TT`): a
 //! 36-high row, 4 by 8 inside, 8 apart: its label (12 `text_muted`, 56 wide) and its field (28 high on
-//! `surface_input` in a `border` stroke, `border_focus` while open, radius 6, 10 at its sides: the chosen option in 12
-//! and a chevron). Open, its options show under it, inside the picker, as a select menu does (`surface_raised` in a
+//! `surface_input` in a `border` stroke, `border_focus` while open, radius 6, 10 at its sides: the chosen option in 12,
+//! a model's id in Geist Mono 12 as the CLI takes it (`DBf1P`), and a chevron). Open, its options show under it,
+//! inside the picker, as a select menu does (`surface_raised` in a
 //! `border_strong` stroke, radius 8, 4 inside, 2 apart): each 28 high, 8 at its sides, its words (12) and what it
 //! adds (11 `text_muted`), the chosen one checked on the `hover` fill. They open inside the picker, not over it, so the
 //! picker stays the one popup.
@@ -35,12 +36,13 @@ pub(super) struct Choice {
   pub(super) detail: Option<Arc<str>>,
 }
 
-/// The choice named `id`, labelled `label`, of `options`, bound to `value`; `open` shows its options.
+/// The choice named `id`, labelled `label`, of `options`, bound to `value`, its options' words in `look`; `open`
+/// shows its options.
 pub(super) fn select(
   id: &str,
   label: &str,
   (value, open): (&Signal<String>, &Signal<bool>),
-  options: Vec<Choice>,
+  (options, look): (Vec<Choice>, TypographyStyle),
 ) -> Element {
   let chosen = value.get();
   let shown = open.get();
@@ -67,7 +69,7 @@ pub(super) fn select(
     .child(
       Text::new(&words)
         .id(format!("{id}-value"))
-        .variant(TypographyStyle::Description)
+        .variant(look)
         .color(PaletteColor::TextPrimary)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
@@ -96,12 +98,17 @@ pub(super) fn select(
     .id(format!("{id}-row"))
     .width(Dimension::Pct(100.0))
     .child(row)
-    .with_children(shown.then(|| menu(id, (value, open), options, &chosen)))
+    .with_children(shown.then(|| menu(id, (value, open), (options, look), &chosen)))
     .into()
 }
 
-/// The options under the field; choosing one closes them.
-fn menu(id: &str, (value, open): (&Signal<String>, &Signal<bool>), options: Vec<Choice>, chosen: &str) -> Element {
+/// The options under the field, their words in `look`; choosing one closes them.
+fn menu(
+  id: &str,
+  (value, open): (&Signal<String>, &Signal<bool>),
+  (options, look): (Vec<Choice>, TypographyStyle),
+  chosen: &str,
+) -> Element {
   let rows = options.into_iter().enumerate().map(|(index, option)| {
     let picked = option.value == chosen;
     let (value, open, choice) = (value.clone(), open.clone(), option.value.clone());
@@ -120,7 +127,7 @@ fn menu(id: &str, (value, open): (&Signal<String>, &Signal<bool>), options: Vec<
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(
       Text::new(&option.label)
-        .variant(TypographyStyle::Description)
+        .variant(look)
         .color(PaletteColor::TextPrimary)
         .nowrap(),
     )

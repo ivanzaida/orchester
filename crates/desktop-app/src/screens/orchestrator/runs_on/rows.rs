@@ -1,5 +1,6 @@
 //! The runs-on picker's rows (`Runs on menu` `WaQcn` in `05 Account and model picker` `v6mWp8`): the project's agent
-//! connections the Orchestrator can run on, grouped under a 26-high heading (a 12 icon and 11/500 `text_muted`):
+//! connections the Orchestrator can run on, grouped under a 26-high heading (the CLI's maker's 12 mark, or for API
+//! providers the 12 lucide cloud, and 11/500 `text_muted`):
 //! *Claude Code · your sign-ins*, *Codex · your sign-ins*, then *API providers · pay per token*. A row is 45 high,
 //! radius 6, 6 by 8 inside, 10 apart: its name (12.5/500) over who is signed in and the plan (11.5 `text_muted`; a
 //! limit reached and until when in `warning`), then 88 wide the plan's 5-hour use (Geist Mono 10.5) over a 4 meter, and
@@ -41,6 +42,7 @@ use crate::{
   services::accounts::{Accounts, account_name, plan_name},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
+    agent_mark::agent_mark,
     icon::{Icon, icon},
     meter::{MeterTone, meter},
     pressable::{inert, pressable},
@@ -111,9 +113,9 @@ pub(super) fn groups(
 ) -> Vec<Element> {
   let shown = sources.shown();
   let mut parts: Vec<Element> = Vec::new();
-  for (provider, glyph, key) in [
-    (AgentProvider::ClaudeCodeCli, Icon::Sparkle, "orchestrator.runsOn.claudeSignIns"),
-    (AgentProvider::CodexCli, Icon::SquareTerminal, "orchestrator.runsOn.codexSignIns"),
+  for (provider, key) in [
+    (AgentProvider::ClaudeCodeCli, "orchestrator.runsOn.claudeSignIns"),
+    (AgentProvider::CodexCli, "orchestrator.runsOn.codexSignIns"),
   ] {
     let rows: Vec<Element> = shown
       .iter()
@@ -121,7 +123,9 @@ pub(super) fn groups(
       .map(|row| sign_in_row(ctx, sources, row, (chosen, choose)))
       .collect();
     if !rows.is_empty() {
-      parts.push(heading(ctx, &format!("orchestrator-runs-on-{}", key_suffix(provider)), (glyph, key)));
+      // The CLI's maker's mark (`Mark` `PDVXx`, `FW7qZ`).
+      let mark = agent_mark(ctx, provider, IconSize::Sm);
+      parts.push(heading(ctx, &format!("orchestrator-runs-on-{}", key_suffix(provider)), (mark, key)));
       parts.extend(rows);
     }
   }
@@ -136,7 +140,7 @@ pub(super) fn groups(
     parts.push(heading(
       ctx,
       "orchestrator-runs-on-providers",
-      (Icon::Cloud, "orchestrator.runsOn.providers"),
+      (icon(Icon::Cloud, IconSize::Sm, PaletteColor::TextMuted).into(), "orchestrator.runsOn.providers"),
     ));
     parts.extend(providers);
   }
@@ -150,8 +154,8 @@ const fn key_suffix(provider: AgentProvider) -> &'static str {
   }
 }
 
-/// A group's heading, named `id`.
-fn heading(ctx: &Ctx, id: &str, (glyph, key): (Icon, &str)) -> Element {
+/// A group's heading, named `id`: its glyph and its words.
+fn heading(ctx: &Ctx, id: &str, (glyph, key): (Element, &str)) -> Element {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -159,7 +163,7 @@ fn heading(ctx: &Ctx, id: &str, (glyph, key): (Icon, &str)) -> Element {
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(glyph)
     .child(
       Text::new(&ctx.t(key))
         .variant(lurq::app::theme::TypographyStyle::FieldLabel)
