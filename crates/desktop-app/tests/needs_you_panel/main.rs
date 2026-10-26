@@ -6,7 +6,8 @@
 //! and the close, and the pill opening it again after each way it closes ([`closing`]); an expanded approval's
 //! layout and the pinned project header ([`expanded`]); a question's panel layout, the notes of what was answered
 //! while the panel is open and an expanded item kept in view ([`in_place`]); an item whose request cannot be read
-//! again ([`reread`]); the same count wherever Needs you shows ([`counts`]). Needs `git`.
+//! again ([`reread`]); the same count wherever Needs you shows ([`counts`]); two projects that wait, each tab's
+//! count and each project's item in its own tab ([`tabs`]). Needs `git`.
 
 mod automation;
 mod closing;
@@ -22,6 +23,7 @@ mod kontur;
 mod reread;
 #[path = "../support/mod.rs"]
 mod support;
+mod tabs;
 
 use std::time::{Duration, Instant};
 

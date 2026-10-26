@@ -1,6 +1,7 @@
 //! Links in what an agent writes in a chat (`docs/design/orchestrator-toolset.md`, "Links"). An `orchester:` link
-//! names a place in the app by its route path and a press opens it as a browser opens a link: in the active tab, or
-//! in a new tab with Ctrl (Cmd on macOS) or the middle button (`navigation::press`); an `https:` link shows its host
+//! names a place in the app by its route path and a press opens it as a browser opens a link: in the active tab (a
+//! place of another project in that project's tab, `Navigation::open_item`), or in a new tab with Ctrl (Cmd on
+//! macOS) or the middle button (`navigation::press`); an `https:` link shows its host
 //! after it and a person's press opens it in the default browser, whatever the button or keys; synthetic input (an
 //! MCP client driving the window) may follow a link in the app but never opens the browser. A link to anything
 //! else, to a route the app does not know, or to a place outside a project (Add project, Settings: what an agent may
@@ -92,7 +93,7 @@ pub fn follow(navigation: &Navigation, destination: &str, press: LinkPress) -> F
   match ChatLink::of(destination) {
     ChatLink::App(route) => match press.open_in() {
       Some(open) => {
-        navigation.open(route, open);
+        navigation.open_item(route, open);
         Followed::Went(open)
       }
       None => Followed::NotFollowed,

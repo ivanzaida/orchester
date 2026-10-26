@@ -1,7 +1,8 @@
 //! The Needs you panel the title bar's pill opens (`Needs you panel` `BrP6i` of `Needs you · panel open · dark`
 //! `VnLOT`, its states in `R1AZc` and answering in place in `zwuZt`): a popover anchored to the pill, not a
 //! modal; Esc or a press outside closes it. Its head (`mxdKm`) says how many wait and in which projects; its
-//! list (`RZz9r`) groups what waits by project, in the order of the tabs, oldest first in each, and scrolls
+//! list (`RZz9r`) groups what waits by project, the active tab's first and the others in the order of the tabs,
+//! every project a tab shows whichever tab is active, oldest first in each, and scrolls
 //! once the panel reaches the window's height, with the header of the project it is in pinned over it (`o1BDj`,
 //! `uioh2`); its footer (`mG6gL`) opens the active project's Overview.
 //!

@@ -61,7 +61,7 @@ pub fn app_state(
     })
     .collect();
   state["route"] = route_json(active.route());
-  state["history"] = json!({ "can_back": active.can_back(), "can_forward": active.can_forward() });
+  state["history"] = json!({ "can_back": tabs.can_back(), "can_forward": active.can_forward() });
   state["tabs"] = json!(open);
   Ok(state)
 }

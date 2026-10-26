@@ -1,7 +1,9 @@
 //! Moving around the window: the tabs (`tabs`), each with its own history, and the router that shows
 //! the active tab's place. Every navigation goes through [`Navigation`], which changes the tabs and then
 //! has the router show the active tab's route; the router keeps no history of its own (it is always
-//! replaced), so Back and Forward are the active tab's. Each Orchester Cloud account has tabs of its own (`accounts`).
+//! replaced), so Back and Forward are the active tab's, except that Back on the place an item of another project
+//! opened in returns to the tab it was opened from (`tabs`, [`Navigation::open_item`]). Each Orchester Cloud account
+//! has tabs of its own (`accounts`).
 
 pub mod accounts;
 pub mod guard;
@@ -128,6 +130,17 @@ impl Navigation {
     }
   }
 
+  /// Opens `route`, an item of a project a person opens (what waits in Needs you, a notification's place, a chat's
+  /// link, a status bar event), where `open` says: a plain press keeps each project in its own tab
+  /// ([`TabSet::open_item`]), so another project's item never takes the active tab's place; a press for a new tab
+  /// opens one as [`open`](Self::open) does.
+  pub fn open_item(&self, route: Route, open: OpenIn) {
+    match open {
+      OpenIn::ActiveTab => self.change(|tabs| tabs.open_item(route)),
+      OpenIn::BackgroundTab | OpenIn::NewTab => self.open(route, open),
+    }
+  }
+
   pub fn select(&self, id: TabId) {
     self.change(|tabs| tabs.select(id));
   }
@@ -154,11 +167,11 @@ impl Navigation {
     before
   }
 
-  /// Opens `route` like [`open`](Self::open), pointing at `card` on the page it opens when the window shows it
-  /// then, also when the active tab is there already: a page opened in a background tab is not shown, and nothing
-  /// points at its card. A departure an editor holds points at nothing.
+  /// Opens `route`, an item, like [`open_item`](Self::open_item), pointing at `card` on the page it opens when the
+  /// window shows it then, also when the active tab is there already: a page opened in a background tab is not
+  /// shown, and nothing points at its card. A departure an editor holds points at nothing.
   pub fn open_to_card(&self, route: &Route, open: OpenIn, card: Pointed) {
-    self.open(route.clone(), open);
+    self.open_item(route.clone(), open);
     if open != OpenIn::BackgroundTab && self.route_now() == *route {
       let number = self.pointings.fetch_add(1, Ordering::Relaxed) + 1;
       self.pointed.set(Some((number, card)));

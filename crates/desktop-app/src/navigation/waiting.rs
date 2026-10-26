@@ -67,11 +67,12 @@ impl Destination {
     })
   }
 
-  /// Opens it where a press asks (`navigation::link`), pointing at its card when it opens in sight.
+  /// Opens it, an item, where a press asks (`navigation::link`), in its project's tab ([`Navigation::open_item`]),
+  /// pointing at its card when it opens in sight.
   pub fn open(&self, navigation: &Navigation, at: OpenIn) {
     match &self.pointed {
       Some(card) => navigation.open_to_card(&self.route, at, card.clone()),
-      None => navigation.open(self.route.clone(), at),
+      None => navigation.open_item(self.route.clone(), at),
     }
   }
 }

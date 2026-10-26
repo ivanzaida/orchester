@@ -96,10 +96,13 @@ pub fn attention(projects: &Projects, project: ProjectId) -> Option<Attention> {
   unread.then_some(Attention::TasksUnread)
 }
 
-/// Each project the tabs show whose tasks are read, in the order of the tabs, and what waits in it.
+/// Each project the tabs show whose tasks are read, the active tab's first and then in the order of the tabs, and
+/// what waits in it: the same projects whichever tab is active.
 pub fn waiting(projects: &Projects, tabs: &TabSet) -> Vec<Waiting> {
   let mut all: Vec<Waiting> = Vec::new();
-  for project in tabs.tabs().iter().filter_map(|tab| tab.route().project()) {
+  let active = tabs.active().route().project();
+  let others = tabs.tabs().iter().filter_map(|tab| tab.route().project());
+  for project in active.into_iter().chain(others) {
     if all.iter().any(|waiting| waiting.project == project) {
       continue;
     }

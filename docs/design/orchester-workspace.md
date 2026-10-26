@@ -398,6 +398,21 @@ window: there is one window.
   tab. The sidebar's *All projects* item and the menu's *All projects* open it in the current tab.
 - Link-like navigation inside a page (a task row, a pipeline, a pull request) stays in the tab;
   middle-click or Ctrl/Cmd+click on those opens a new tab only where the target is a whole page.
+- **An item of a project** (decided 2026-10-26, ORC-97) — what waits in *Needs you* (the title bar's panel and
+  the Overview's list), a clicked notification, a link in a chat, an event of the status bar — keeps each
+  project in its own tab. An item of the current tab's project opens in the current tab, as a new history
+  entry. An item of another project never replaces the current tab: a tab that shows that item, or else the
+  first tab of its project, becomes active and goes to it; without one, the item opens in a new tab right of
+  the current one, which becomes active. A tab that shows no project (All projects) goes to the item itself
+  when no tab of its project is open. Ctrl/Cmd+click and middle-click still open the item in a new tab right
+  of the current one, without switching.
+- **Back across tabs.** A tab that an item opened in from another tab remembers that tab at the history entry
+  it arrived at. Back (mouse back, Alt+Left, Cmd+[) on that entry returns to the tab it came from, which
+  shows what it showed; the link is used once, and Back from the entry later walks the tab's own history.
+  Going on from that entry keeps the link with it, so Back returns to the entry and then to the tab it came
+  from. Forward never crosses tabs. The link goes when the entry leaves the tab's history (going somewhere
+  from a place behind it, the history limit) or when the tab it came from is closed; Back then acts on the
+  tab's own history.
 - Close: the × button, middle-click, Ctrl/Cmd+W. The next tab to the right becomes active (the
   left one if it was the last). Closing an inactive tab does not switch tabs. Closing asks only
   when the tab's page would ask on navigating away (unsaved edits, e.g. an agent profile before
