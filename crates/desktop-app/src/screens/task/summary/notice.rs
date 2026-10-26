@@ -75,6 +75,8 @@ impl EventWords {
   }
 }
 
+impl lurq::app::component::DevtoolsInspectable for EventWords {}
+
 /// The notice of `detail`. `runner`: the project's runner, while a run recorded as running lost it;
 /// `approval`: a tool request of the run that waits for the person.
 pub fn said(ctx: &Ctx, detail: &TaskDetail, runner: Option<&RunnerState>, approval: Option<&ShownApproval>) -> Said {

@@ -501,7 +501,10 @@ fn summary_e_opens_edit_task_but_not_from_the_tasks_own_editors() {
     page.window.tree.key_up("e".into(), "KeyE".into(), false, false, false);
     page.window.pass();
   };
-  let memory = Route::Project(project, ProjectPage::Task(key.parse().expect("a key"), TaskView::Memory));
+  let memory = Route::Project(
+    project,
+    ProjectPage::Task(key.parse().expect("a key"), TaskView::Memory),
+  );
   page.window.navigation().go(memory.clone());
   page.window.until("the task's memory", |window| {
     window.navigation().route_now() == memory && window.texts("task-tab-summary").is_some()
