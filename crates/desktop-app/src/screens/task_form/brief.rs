@@ -30,10 +30,15 @@ pub struct BriefFields<'a> {
   pub title_input: &'a ElementRef,
 }
 
-/// `typography` resolved in `color`, as a text input draws it.
-fn text_style(ctx: &Ctx, typography: TypographyStyle, color: PaletteColor) -> lurq::layout::text_style::TextStyle {
+/// `typography` resolved as a text input draws it: its text in `color`, then its placeholder muted.
+fn text_styles(
+  ctx: &Ctx,
+  typography: TypographyStyle,
+  color: PaletteColor,
+) -> [lurq::layout::text_style::TextStyle; 2] {
   let theme = ctx.theme();
-  FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette())
+  [color, PaletteColor::TextMuted]
+    .map(|color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette()))
 }
 
 /// `input` that takes no input while the form is `locked`.
@@ -48,10 +53,10 @@ fn locking(input: TextInput, locked: bool) -> TextInput {
 }
 
 pub fn title(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
-  let role = TaskFormText::Title.role();
+  let [text, placeholder] = text_styles(ctx, TaskFormText::Title.role(), PaletteColor::TextPrimary);
   let name = ctx.t("task_form.fields.title.label");
-  let input = TextInput::styled(fields.title.clone(), text_style(ctx, role, PaletteColor::TextPrimary))
-    .placeholder_style(text_style(ctx, role, PaletteColor::TextMuted))
+  let input = TextInput::styled(fields.title.clone(), text)
+    .placeholder_style(placeholder)
     .placeholder(&ctx.t("task_form.fields.title.placeholder"))
     .id("task-form-title-input")
     .describe("a11y_name", name)
@@ -75,10 +80,10 @@ pub fn title(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
 }
 
 pub fn outcome(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
-  let role = TaskFormText::Outcome.role();
+  let [text, placeholder] = text_styles(ctx, TaskFormText::Outcome.role(), PaletteColor::TextSecondary);
   let name = ctx.t("task_form.fields.brief.label");
-  let input = TextInput::styled(fields.brief.clone(), text_style(ctx, role, PaletteColor::TextSecondary))
-    .placeholder_style(text_style(ctx, role, PaletteColor::TextMuted))
+  let input = TextInput::styled(fields.brief.clone(), text)
+    .placeholder_style(placeholder)
     .placeholder(&ctx.t("task_form.fields.brief.placeholder"))
     .id("task-form-brief-input")
     .describe("a11y_name", name)
