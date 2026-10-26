@@ -65,17 +65,17 @@ impl Form {
   /// New task, once its fields are filled.
   pub fn new_task(&mut self) {
     self.go(ProjectPage::NewTask);
-    self
-      .window
-      .until("New task's form", |window| window.texts("task-form-title").is_some());
+    self.window.until("New task's form", |window| {
+      window.tree.get_element_by_id("task-form-title-input").is_some()
+    });
   }
 
-  /// Edit task on `key`, once its fields are filled.
+  /// Edit task on `key`, once its fields are filled, or the fields to choose between versions shown.
   pub fn edit(&mut self, key: &str) {
     self.go(ProjectPage::EditTask(key.parse().expect("a task key")));
-    self
-      .window
-      .until("Edit task's form", |window| window.texts("task-form-title").is_some());
+    self.window.until("Edit task's form", |window| {
+      window.tree.get_element_by_id("task-form-head").is_some()
+    });
   }
 
   pub fn set(&mut self, id: &str, value: &str) {
@@ -99,21 +99,36 @@ impl Form {
       .value()
   }
 
-  /// Chooses the pipeline labelled `label` in the select.
+  /// Opens the popover of the chip `id` (`task-form-limits`, `task-form-more`…), unless it is open.
+  pub fn open(&mut self, id: &str) {
+    let panel = match id {
+      "task-form-pipeline" | "task-form-delivers" | "task-form-module" | "task-form-points" | "task-form-priority" => {
+        format!("{id}-menu")
+      }
+      _ => format!("{id}-popover"),
+    };
+    if !self.exists(&panel) {
+      self.click(id);
+    }
+    self.window.until(&format!("{panel} opens"), |window| {
+      window.tree.get_element_by_id(&panel).is_some()
+    });
+  }
+
+  /// Chooses the pipeline whose title starts with `label` in the Pipeline chip's menu.
   pub fn choose_pipeline(&mut self, label: &str) {
-    let mut select = self
-      .window
-      .tree
-      .get_element_by_id_mut("task-form-pipeline-input")
-      .and_then(|element| element.as_select())
-      .expect("the pipeline select");
-    let index = select
-      .labels()
-      .iter()
-      .position(|option| &**option == label)
-      .unwrap_or_else(|| panic!("an option {label}"));
-    select.commit(index);
-    self.window.pass();
+    self.open("task-form-pipeline");
+    for index in 0.. {
+      let id = format!("task-form-pipeline-option-{index}");
+      let Some(title) = self.window.texts(&format!("{id}-title")) else {
+        break;
+      };
+      if title.join("").starts_with(label) {
+        self.click(&id);
+        return;
+      }
+    }
+    panic!("the pipeline menu offers {label}");
   }
 
   pub fn click(&mut self, id: &str) {
@@ -130,6 +145,16 @@ impl Form {
     self.window.tree.get_element_by_id(id).is_some()
   }
 
+  /// Where the element `id` is laid out.
+  pub fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
   /// The words of the element `id`, joined.
   pub fn text(&mut self, id: &str) -> String {
     self
@@ -139,13 +164,24 @@ impl Form {
       .join(" ")
   }
 
-  /// Every reason and problem under the actions.
+  /// The one line at the action bar's start, if any.
   pub fn reasons(&mut self) -> Vec<String> {
-    self.window.texts("task-form-reasons").unwrap_or_default()
+    self
+      .window
+      .texts("task-form-reason-text")
+      .map(|texts| vec![texts.join("")])
+      .unwrap_or_default()
   }
 
   pub fn status(&mut self) -> String {
     self.text("task-form-status-label")
+  }
+
+  /// Sets the run budget and the time limit in the Limits chip's popover.
+  pub fn limits(&mut self, budget: &str, time_limit: &str) {
+    self.open("task-form-limits");
+    self.set("task-form-budget-input", budget);
+    self.set("task-form-time-limit-input", time_limit);
   }
 
   /// Fills a task that can run on `pipeline`.
@@ -155,8 +191,7 @@ impl Form {
     self.click("task-form-add-criterion");
     self.set("task-form-criterion-1-input", "Every attempt is stored.");
     self.choose_pipeline(pipeline);
-    self.set("task-form-budget-input", "1,400,000");
-    self.set("task-form-time-limit-input", "30");
+    self.limits("1,400,000", "30");
   }
 
   pub fn db(&self) -> ProjectDb {
