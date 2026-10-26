@@ -104,10 +104,7 @@ fn tasks_a_failed_reading_says_why_with_try_again_never_an_empty_list() {
 
 #[test]
 fn tasks_a_search_that_hides_every_row_says_so_and_clear_brings_them_back() {
-  let mut seeded = Seeded::tasks(
-    "tasks",
-    TaskList::default().with_search("retry budget per endpoint"),
-  );
+  let mut seeded = Seeded::tasks("tasks", TaskList::default().with_search("retry budget per endpoint"));
   assert_eq!(
     seeded.texts("tasks-no-rows"),
     [

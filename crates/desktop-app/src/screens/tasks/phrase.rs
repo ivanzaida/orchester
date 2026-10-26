@@ -42,7 +42,10 @@ fn waits(ctx: &Ctx, need: &NeedItem, tasks: &ProjectTasks) -> Phrase {
   let (glyph, words) = match (&need.waiting.kind, need.kind) {
     (WaitingKind::Approval(shown), _) if shown.approval.command => {
       let (line, _) = shown.first_line();
-      (Icon::Hand, ctx.t_args("tasks.state.approveCommand", [("command", line)]))
+      (
+        Icon::Hand,
+        ctx.t_args("tasks.state.approveCommand", [("command", line)]),
+      )
     }
     (WaitingKind::Approval(shown), _) => (
       Icon::Hand,

@@ -94,7 +94,11 @@ impl Component for DisplayControl {
         .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
         .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role()));
       let panel = menu_panel("tasks-display-menu")
-        .child(filter_group("tasks-display-sort", Icon::ListOrdered, &ctx.t("tasks.display.sort")))
+        .child(filter_group(
+          "tasks-display-sort",
+          Icon::ListOrdered,
+          &ctx.t("tasks.display.sort"),
+        ))
         .with_children(items)
         .child(separator(ctx))
         .child(note);

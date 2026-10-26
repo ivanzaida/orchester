@@ -72,7 +72,10 @@ fn view(
   let id = format!("tasks-view-{}", tab.name());
   let current = tab == list.tab();
   let word = ctx.t(label_key(tab));
-  let count = counts.map_or_else(|| ctx.t("tasks.views.unknownCount").to_string(), |counts| counts.get(tab).to_string());
+  let count = counts.map_or_else(
+    || ctx.t("tasks.views.unknownCount").to_string(),
+    |counts| counts.get(tab).to_string(),
+  );
   let (style, color) = if current {
     (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
   } else {
@@ -84,7 +87,10 @@ fn view(
     .height(Dimension::Px(VIEW_HEIGHT))
     .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
     .spacing(ExtraSpacing::Snug.role())
-    .describe("a11y_name", ctx.t_args("ui.tabCount", [("label", &*word), ("count", &count)]))
+    .describe(
+      "a11y_name",
+      ctx.t_args("ui.tabCount", [("label", &*word), ("count", &count)]),
+    )
     .describe("state", if current { "current" } else { "enabled" })
     .child(
       Text::new(&word)

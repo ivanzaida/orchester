@@ -290,9 +290,13 @@ fn state_cell(ctx: &mut Ctx, key: &str, phrase: &Phrase) -> Row {
 /// The pipeline a task runs, cut to its cell.
 fn pipeline(ctx: &mut Ctx, row: &TaskRow) -> Element {
   let label = pipeline_label(ctx, &row.pipeline);
-  Truncated::new(format!("task-pipeline-{}", row.key), label, TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
-    .render(ctx)
+  Truncated::new(
+    format!("task-pipeline-{}", row.key),
+    label,
+    TypographyStyle::Description,
+  )
+  .color(PaletteColor::TextMuted)
+  .render(ctx)
 }
 
 /// The priority's icon alone; its word names it for tools.

@@ -39,12 +39,20 @@ fn task_views_facets_keep_a_task_with_any_chosen_value_of_each_facet() {
   };
   let rows = |facets: &Facets, text: &str| browse::faceted(&data, (text, ", "), facets, TaskSort::Manual);
   let none = Facets::default();
-  assert_eq!(titles(&rows(&none, "")), ["Incomplete", "To queue"], "no facet keeps every task");
+  assert_eq!(
+    titles(&rows(&none, "")),
+    ["Incomplete", "To queue"],
+    "no facet keeps every task"
+  );
   let without = Facets {
     pipelines: vec![None],
     ..Facets::default()
   };
-  assert_eq!(titles(&rows(&without, "")), ["Incomplete"], "None is a task without a pipeline");
+  assert_eq!(
+    titles(&rows(&without, "")),
+    ["Incomplete"],
+    "None is a task without a pipeline"
+  );
   let either = Facets {
     pipelines: vec![None, pipeline],
     ..Facets::default()
@@ -79,7 +87,11 @@ fn task_views_hold_each_task_once_and_needs_you_whatever_its_status() {
   assert_eq!(active[0].group, Some(Group::ReadyToStart), "a draft is ready to start");
   let waiting = HashSet::from([rows[1].id]);
   let counts = ListView::ALL.map(|view| view.count(&rows, &waiting));
-  assert_eq!(counts, [2, 0, 0, 2], "a Done task that waits for the person is Active's");
+  assert_eq!(
+    counts,
+    [2, 0, 0, 2],
+    "a Done task that waits for the person is Active's"
+  );
   let active = grouped(ListView::Active, &rows, (&data, &waiting), TaskSort::Manual);
   assert_eq!(active[0].group, Some(Group::NeedsYou), "Needs you comes first");
   assert_eq!(titles(&active[0].rows), ["To queue"]);

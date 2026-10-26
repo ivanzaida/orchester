@@ -100,7 +100,10 @@ impl Options {
       .map(|pipeline| {
         let words = ctx.t_args(
           "tasks.pipelineVersion",
-          [("name", pipeline.name.to_string()), ("version", pipeline.version.get().to_string())],
+          [
+            ("name", pipeline.name.to_string()),
+            ("version", pipeline.version.get().to_string()),
+          ],
         );
         (Value::Pipeline(Some(pipeline.id)), words)
       })
@@ -208,7 +211,9 @@ impl FilterControl {
   fn panel(&self, ctx: &mut Ctx, options: &Options, facets: &Signal<Facets>) -> Column {
     let query = self.query.get().trim().to_lowercase();
     let chosen = facets.get();
-    let mut groups = Column::new().width(Dimension::Pct(100.0)).spacing(ExtraSpacing::Tight.role());
+    let mut groups = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role());
     let mut found = false;
     for facet in &options.0 {
       let values: Vec<&(Value, Arc<str>)> = facet
@@ -243,7 +248,10 @@ impl FilterControl {
     if !found {
       return panel.child(
         Row::new()
-          .padding(Padding::symmetric(lurq::app::theme::SpacingSize::Sm, ExtraSpacing::Snug.role()))
+          .padding(Padding::symmetric(
+            lurq::app::theme::SpacingSize::Sm,
+            ExtraSpacing::Snug.role(),
+          ))
           .child(
             Text::new(&ctx.t_args("tasks.filter.noMatch", [("query", self.query.get().trim())]))
               .id("tasks-filter-no-match")

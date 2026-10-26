@@ -31,7 +31,13 @@ impl ListView {
     let status = row.organization.status();
     let waits = waiting.contains(&row.id);
     match self {
-      Self::Active => waits || matches!(status, WorkflowStatus::Todo | WorkflowStatus::InProgress | WorkflowStatus::InReview),
+      Self::Active => {
+        waits
+          || matches!(
+            status,
+            WorkflowStatus::Todo | WorkflowStatus::InProgress | WorkflowStatus::InReview
+          )
+      }
       Self::Backlog => !waits && status == WorkflowStatus::Backlog,
       Self::Done => !waits && status.is_closed(),
       Self::All => true,

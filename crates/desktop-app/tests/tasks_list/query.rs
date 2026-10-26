@@ -100,10 +100,22 @@ fn tasks_filter_narrows_the_rows_by_pipeline_and_priority_and_its_chips_let_them
   seeded.click("tasks-filter");
   seeded.until("the filter menu", |seeded| seeded.laid_out("tasks-filter-menu"));
   let menu = seeded.texts("tasks-filter-menu");
-  for word in ["Pipeline", "Feature delivery v3", "Quick fix v2", "No pipeline", "Priority", "High", "Tag", "webhooks"] {
+  for word in [
+    "Pipeline",
+    "Feature delivery v3",
+    "Quick fix v2",
+    "No pipeline",
+    "Priority",
+    "High",
+    "Tag",
+    "webhooks",
+  ] {
     assert!(menu.iter().any(|said| said == word), "the menu offers {word}: {menu:?}");
   }
-  assert!(!menu.iter().any(|said| said == "Module"), "the project has no module: {menu:?}");
+  assert!(
+    !menu.iter().any(|said| said == "Module"),
+    "the project has no module: {menu:?}"
+  );
   let quick = option(&mut seeded, "pipeline", "Quick fix v2");
   seeded.click(&quick);
   seeded.until("the rows laid out", Seeded::rows_laid_out);
@@ -117,11 +129,18 @@ fn tasks_filter_narrows_the_rows_by_pipeline_and_priority_and_its_chips_let_them
   let high = option(&mut seeded, "priority", "High");
   seeded.click(&high);
   seeded.until("the rows laid out", Seeded::rows_laid_out);
-  assert!(seeded.keys().is_empty(), "no Quick fix task is High: {:?}", seeded.keys());
+  assert!(
+    seeded.keys().is_empty(),
+    "no Quick fix task is High: {:?}",
+    seeded.keys()
+  );
   assert_eq!(seeded.text("tasks-filter"), "Filter · 2");
   assert_eq!(seeded.text("tasks-chip-pipeline-1"), "Pipeline Quick fix v2");
   assert_eq!(seeded.text("tasks-chip-priority-1"), "Priority High");
-  assert!(seeded.shows("tasks-clear-query"), "the view says the filters hide its rows");
+  assert!(
+    seeded.shows("tasks-clear-query"),
+    "the view says the filters hide its rows"
+  );
   // The menu closes with its button; it stays open while options are chosen.
   seeded.click("tasks-filter");
   seeded.until("the menu closed", |seeded| !seeded.shows("tasks-filter-menu"));
@@ -151,7 +170,11 @@ fn tasks_display_orders_the_rows_and_says_sorting_leaves_the_queue_alone() {
   sort(&mut seeded, "newest");
   assert_eq!(seeded.keys(), ["KON-22", "KON-4", "KON-3"]);
   sort(&mut seeded, "priority");
-  assert_eq!(seeded.keys().first().map(String::as_str), Some("KON-3"), "Low before no priority");
+  assert_eq!(
+    seeded.keys().first().map(String::as_str),
+    Some("KON-3"),
+    "Low before no priority"
+  );
   seeded.click("tasks-display");
   seeded.until("the display menu", |seeded| seeded.laid_out("tasks-sort-note"));
   assert_eq!(seeded.text("tasks-sort-note"), "Sorting never changes the run queue.");

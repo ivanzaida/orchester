@@ -39,7 +39,10 @@ fn tasks_each_row_says_one_state_phrase_with_its_icon() {
     );
   }
   let failed = seeded.text("task-state-KON-11");
-  assert!(failed.ends_with(" Run checks"), "a failed run says at which step: {failed}");
+  assert!(
+    failed.ends_with(" Run checks"),
+    "a failed run says at which step: {failed}"
+  );
 }
 
 #[test]
@@ -60,7 +63,10 @@ fn tasks_a_row_shows_its_key_title_tags_pipeline_priority_and_age() {
     "its age in its largest whole unit: {age}"
   );
   assert!(!seeded.shows("task-new-KON-12"), "only a Create's task is new");
-  assert!(!seeded.shows("task-more-KON-12"), "the actions show under the pointer only");
+  assert!(
+    !seeded.shows("task-more-KON-12"),
+    "the actions show under the pointer only"
+  );
   assert!(!seeded.shows("tasks-footer"), "no footer");
 }
 
@@ -69,7 +75,10 @@ fn tasks_the_pointer_brings_up_a_waiting_task_s_action_and_its_menu() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
   seeded.hover("task-row-KON-10");
   seeded.until("the row's actions", |seeded| seeded.laid_out("task-more-KON-10"));
-  assert!(!seeded.shows("task-pipeline-KON-10"), "the actions take the pipeline's place");
+  assert!(
+    !seeded.shows("task-pipeline-KON-10"),
+    "the actions take the pipeline's place"
+  );
   assert_eq!(seeded.text("task-action-KON-10"), "Review plan");
   seeded.click("task-action-KON-10");
   let summary = ProjectPage::Task("KON-10".parse().expect("a task key"), TaskView::of(TaskTab::Summary));
@@ -82,7 +91,10 @@ fn tasks_the_pointer_brings_up_a_waiting_task_s_action_and_its_menu() {
   seeded.until("the rows laid out", Seeded::rows_laid_out);
   seeded.hover("task-row-KON-5");
   seeded.until("the row's menu", |seeded| seeded.laid_out("task-more-KON-5"));
-  assert!(!seeded.shows("task-action-KON-5"), "a task nothing waits for has its menu only");
+  assert!(
+    !seeded.shows("task-action-KON-5"),
+    "a task nothing waits for has its menu only"
+  );
 }
 
 #[test]

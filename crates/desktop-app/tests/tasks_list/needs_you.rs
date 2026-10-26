@@ -49,10 +49,7 @@ fn tasks_needs_you_names_exactly_the_title_bar_s_tasks_and_each_active_task_is_i
 fn tasks_all_is_grouped_by_workflow_status() {
   let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
   let groups = seeded.groups();
-  let counted: Vec<(&str, usize)> = groups
-    .iter()
-    .map(|(name, keys)| (name.as_str(), keys.len()))
-    .collect();
+  let counted: Vec<(&str, usize)> = groups.iter().map(|(name, keys)| (name.as_str(), keys.len())).collect();
   assert_eq!(
     counted,
     [
@@ -83,7 +80,9 @@ fn tasks_a_group_folds_away_under_its_header() {
     "its header keeps its count"
   );
   seeded.click("tasks-group-queued");
-  seeded.until("the group open again", |seeded| seeded.shows(&format!("task-row-{key}")));
+  seeded.until("the group open again", |seeded| {
+    seeded.shows(&format!("task-row-{key}"))
+  });
 }
 
 #[test]

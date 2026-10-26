@@ -65,7 +65,9 @@ fn tasks_close_a_task_whose_run_failed_from_its_row_and_reopen_it() {
   assert_eq!(status(&seeded, "KON-11"), WorkflowStatus::Canceled);
 
   choose(&mut seeded, "task-more-KON-11", "reopen");
-  seeded.until("KON-11 reopened", |seeded| group_of(seeded, "KON-11").as_deref() == Some("todo"));
+  seeded.until("KON-11 reopened", |seeded| {
+    group_of(seeded, "KON-11").as_deref() == Some("todo")
+  });
   assert_eq!(
     status(&seeded, "KON-11"),
     WorkflowStatus::Todo,
@@ -73,7 +75,9 @@ fn tasks_close_a_task_whose_run_failed_from_its_row_and_reopen_it() {
   );
 
   choose(&mut seeded, "task-more-KON-11", "done");
-  seeded.until("KON-11 Done", |seeded| group_of(seeded, "KON-11").as_deref() == Some("done"));
+  seeded.until("KON-11 Done", |seeded| {
+    group_of(seeded, "KON-11").as_deref() == Some("done")
+  });
 }
 
 #[test]

@@ -150,7 +150,11 @@ impl Component for QueueControls {
           .id("tasks-queue-held")
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center)
-          .child(badge("tasks-queue-held-note", BadgeTone::Warning, &ctx.t("tasks.queue.onHold")))
+          .child(badge(
+            "tasks-queue-held-note",
+            BadgeTone::Warning,
+            &ctx.t("tasks.queue.onHold"),
+          ))
           .child(enabled(release, pending, press(HoldScope::Project, false)))
           .into()
       }
