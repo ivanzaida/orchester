@@ -1,9 +1,12 @@
 //! The QA seed (`examples/seed`): every scenario builds a new repository in a temporary folder and registers
 //! its project, and what it wrote reads back through the store the way the app reads it: the task list's
 //! tabs and phases, the runs' checkpoints, worktrees and transcripts, the live connection (`live`), the schema a
-//! newer build left, and what the seed refuses (`refusals`). Needs `git`.
+//! newer build left, what the seed refuses (`refusals`) and its command line (`command_line`). Needs `git`.
 
 mod agents;
+#[path = "../../examples/seed/cli.rs"]
+mod cli;
+mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
