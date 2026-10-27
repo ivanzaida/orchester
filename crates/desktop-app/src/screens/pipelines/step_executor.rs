@@ -3,9 +3,10 @@
 //! tool step; and the step's model as the CLI takes it. The variants of 03b (`g6Ecy`): no profile chosen, a profile
 //! with only a draft (*Open <profile>*), a tool that cannot run with why, by its kind.
 use lurq::{
-  app::ctx::Ctx,
-  components::SelectOption,
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Row, SelectOption},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{StepKind, ToolKind};
@@ -68,7 +69,18 @@ pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> (Group
       tone,
       locked: props.locked,
     };
-    row.end(field.render(ctx))
+    let field = field.render(ctx);
+    // *Open Builder* before the box, in the row (`ozGhL` in `bxdNK`).
+    match &draft {
+      Some(profile) => row.end(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(profile_action(ctx, props, profile))
+          .child(field),
+      ),
+      None => row.end(field),
+    }
   };
   let row = match (missing, &draft) {
     (true, _) => row.toned_hint(ctx.t("pipelines.missingProfile"), HintTone::Warning),
@@ -78,7 +90,7 @@ pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> (Group
       None => row,
     },
   };
-  (row, notices(ctx, props, draft.as_ref()))
+  (row, notices(ctx, draft.as_ref()))
 }
 
 /// The executor's name, as a viewed version shows it.
@@ -98,11 +110,10 @@ fn executor_name(ctx: &Ctx, props: &Props) -> String {
   }
 }
 
-fn notices(ctx: &mut Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> Vec<Element> {
-  let editing = props.state.get();
-  let mut notices = Vec::new();
-  if let Some(profile) = draft {
-    notices.push(
+/// A profile not published's notice, after the group (`OXySp` in `bxdNK`); *Open Builder* is in the Executor row.
+fn notices(ctx: &Ctx, draft: Option<&DraftProfileChoice>) -> Vec<Element> {
+  draft
+    .map(|profile| {
       Notice::new(
         "step-profile-unpublished",
         NoticeTone::Warning,
@@ -111,26 +122,26 @@ fn notices(ctx: &mut Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> 
       .stacked()
       .flat()
       .body(ctx.t_args("pipelines.profileDraftHint", [("name", profile.name.as_ref())]))
-      .action(profile_action(ctx, props, profile))
-      .into(),
-    );
-  }
-  if let StepKind::Tool { tool: Some(id) } = props.step.kind
-    && let Some(tool) = editing.opened.assignables.tool(id).filter(|tool| !tool.runnable)
-  {
-    notices.push(
-      Notice::new(
-        "step-tool-unavailable",
-        NoticeTone::Info,
-        ctx.t("pipelines.toolUnavailable"),
-      )
-      .icon(Icon::Lock)
-      .flat()
-      .body(ctx.t(tool_reason(tool.kind)))
-      .into(),
-    );
-  }
-  notices
+      .into()
+    })
+    .into_iter()
+    .collect()
+}
+
+/// Why the step's tool cannot run, by its kind, between the Executor row and the Model row (`pcNiB` in `mRLFg`).
+pub fn tool_notice(ctx: &Ctx, props: &Props) -> Option<Element> {
+  let tool = unavailable_tool(props)?;
+  Some(
+    Notice::new(
+      "step-tool-unavailable",
+      NoticeTone::Info,
+      ctx.t("pipelines.toolUnavailable"),
+    )
+    .icon(Icon::Lock)
+    .flat()
+    .body(ctx.t(tool_reason(tool.kind)))
+    .into(),
+  )
 }
 
 /// What the step's profile runs on (`Runs on Claude Code · account Work`), or what decides a tool step.
@@ -160,12 +171,14 @@ fn runs_on(ctx: &mut Ctx, props: &Props) -> Option<std::sync::Arc<str>> {
   ))
 }
 
+/// *Open Builder*, a ghost button with the outward arrow (`ozGhL` in `bxdNK`).
 fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) -> Element {
   let button = ActionButton::new(
     "step-open-profile",
-    ButtonKind::Secondary,
+    ButtonKind::Ghost,
     ctx.t_args("pipelines.openProfile", [("name", profile.name.as_ref())]),
-  );
+  )
+  .icon(Icon::ArrowUpRight);
   if props.navigation_locked {
     return crate::ui::tooltip::Tooltip::new("step-open-profile-reason", ctx.t("pipelines.profileWait"))
       .wrap(ctx, button.disabled());

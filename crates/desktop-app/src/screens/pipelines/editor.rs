@@ -105,6 +105,7 @@ impl Component for Editor {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<EditorProps>().clone();
     ctx.provide(super::sources::EditorProject(props.project.open.clone()));
+    ctx.provide(super::leaving::Leaving(self.leave.clone()));
     let writing = self.action.state().get().is_pending();
     if self.writing.get_untracked() != writing {
       self.writing.set(writing);

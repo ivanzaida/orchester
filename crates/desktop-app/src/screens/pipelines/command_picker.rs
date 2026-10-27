@@ -38,6 +38,7 @@ impl Component for Commands {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    super::leaving::close_while_asked(ctx, &self.open);
     let editing = props.state.get();
     let StepKind::Agent {
       profile: Some(profile), ..

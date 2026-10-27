@@ -1,8 +1,8 @@
 //! The Executor field and its menu (`Executor` `RodWl` in `IsU5u`, open in `03d` `a5RI7`): the box shows the chosen
-//! profile's or tool's name (`Select` `s3R8u`); the menu (`Executor list` `FHpIk`) opens under it from its end with
-//! *Choose a profile* in `text_muted` first, the profiles with the agent icon, a line, then the tools with the tool
-//! icon. A draft profile and a tool that cannot run are listed faded and say why under their name, without a lock.
-//! Built from the shared menu rows (`Menu item` `mAHGP`).
+//! profile's or tool's name (`Select` `s3R8u`); the menu (`Executor list` `FHpIk`), as wide as the box, opens under
+//! it with *Choose a profile* in `text_muted` first, the profiles with the agent icon, a line, then the tools with
+//! the tool icon. A draft profile and a tool that cannot run are listed faded and say why under their name, without a
+//! lock. Built from the shared menu rows (`Menu item` `mAHGP`).
 use std::sync::Arc;
 
 use lurq::{
@@ -22,13 +22,10 @@ use crate::{
   theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_at_end, menu_panel, separator},
+    menu::{MenuItem, menu, menu_panel, separator},
     pressable::{Focus, pressable},
   },
 };
-
-/// The open menu's width (`Executor list` `FHpIk`).
-const MENU_WIDTH: f32 = 240.0;
 /// The most an open menu grows to before it scrolls.
 const MENU_MAX_HEIGHT: f32 = 320.0;
 
@@ -103,6 +100,7 @@ impl Component for Field {
     if props.locked && self.open.get_untracked() {
       self.open.set(false);
     }
+    super::leaving::close_while_asked(ctx, &self.open);
     let chosen = props.value.get();
     let mut rows = Column::new()
       .width(Dimension::Pct(100.0))
@@ -119,13 +117,14 @@ impl Component for Field {
         index += 1;
       }
     }
+    // As wide as the box and under its start (`Executor list` `FHpIk`).
     let panel = menu_panel(&format!("{}-menu", props.id))
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(Dimension::Px(props.width))
       .child(ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)));
     Row::new()
       .width(Dimension::Px(props.width))
       .child(self.trigger(&props, &chosen))
-      .child(menu_at_end(self.anchor.clone(), self.open.clone(), panel))
+      .child(menu(self.anchor.clone(), self.open.clone(), panel))
   }
 }
 

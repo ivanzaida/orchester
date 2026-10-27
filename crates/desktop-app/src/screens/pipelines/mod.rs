@@ -28,6 +28,7 @@ mod step_column;
 mod step_executor;
 mod step_fields;
 mod step_instructions;
+mod step_name;
 mod step_permissions;
 mod summary;
 mod versions;

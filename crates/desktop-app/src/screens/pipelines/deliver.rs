@@ -277,6 +277,27 @@ impl DeliverColumn {
 }
 
 fn check_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGroup {
+  let row = GroupRow::new("deliver-recheck-row", ctx.t("delivery.step.recheck"));
+  let group = RowGroup::new("deliver-check", ctx.t("delivery.step.check"));
+  let tools = check_tools(props);
+  // With no command tool step there is nothing to run again: the row is muted and its switch off and inert
+  // (`OY1JH` in `x5hQj`), whatever the step stores. Auto-merge's own words come first.
+  if tools.is_none() && !deliver.recheck_locked() {
+    let switch = Toggle::new(
+      "deliver-recheck",
+      ToggleKind::Switch,
+      false,
+      ctx.t("delivery.step.recheck"),
+    )
+    .hide_label()
+    .settled();
+    return group.row(
+      row
+        .muted()
+        .hint(ctx.t("delivery.step.recheckNoTools"))
+        .end(Row::new().describe("unavailable", "true").child(switch)),
+    );
+  }
   let toggle = Toggle::new(
     "deliver-recheck",
     ToggleKind::Switch,
@@ -306,16 +327,12 @@ fn check_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGro
   } else if !deliver.recheck() {
     ctx.t("delivery.step.recheckOff")
   } else {
-    match check_tools(props) {
+    match tools {
       Some(tools) => ctx.t_args("delivery.step.recheckReadBack", [("tools", tools)]),
       None => ctx.t("delivery.step.recheckNoTools"),
     }
   };
-  RowGroup::new("deliver-check", ctx.t("delivery.step.check")).row(
-    GroupRow::new("deliver-recheck-row", ctx.t("delivery.step.recheck"))
-      .hint(words)
-      .end(switch),
-  )
+  group.row(row.hint(words).end(switch))
 }
 
 /// The names of the command tools the pipeline's checking tool steps run, joined: what Check runs again

@@ -6,7 +6,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::SpacingSize,
+    theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
   core::{Ref, Signal},
@@ -18,20 +18,18 @@ use super::{
   parts,
   state::{StepPage, View},
   step_fields::{Fields, Props},
+  step_name::{self, StepName, StepNameProps},
 };
 use crate::{
-  theme::PipelinesText,
+  theme::{ExtraSpacing, PipelinesText},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::FieldInput,
+    field::field_error,
     message::message_text,
     notice::{Notice, NoticeTone},
     pressable::Press,
   },
 };
-
-/// The name field's width (`Step name` `C78A4`).
-const NAME_WIDTH: f32 = 260.0;
 
 #[derive(Clone, PartialEq)]
 pub struct ColumnProps {
@@ -42,6 +40,8 @@ impl DevtoolsInspectable for ColumnProps {}
 
 pub struct StepColumn {
   name: Signal<String>,
+  /// Whether the name is being edited.
+  editing: Signal<bool>,
   removing: Signal<bool>,
   /// Whether the step is locked, as last shown.
   locked: Ref<bool>,
@@ -59,6 +59,7 @@ impl Component for StepColumn {
       .unwrap_or_else(|| props.step.name.as_str().to_owned());
     let column = Self {
       name: ctx.signal(name),
+      editing: ctx.signal(false),
       removing: ctx.signal(false),
       locked: ctx.create_ref(props.locked || props.viewing),
     };
@@ -138,21 +139,27 @@ impl StepColumn {
     });
   }
 
-  /// The number, the name and the step's actions, or the question that removes it (`Step heading` `o9vgM`).
+  /// The number, the name and the step's actions, or the question that removes it (`Step heading` `o9vgM`); under
+  /// them how the name's editing ends, or why the name is not accepted (`Hint` `H8ZndV` in `BxHzj`).
   fn heading(&self, ctx: &mut Ctx, props: &Props, number: &str) -> Element {
+    let error = props
+      .state
+      .get()
+      .errors
+      .get(&format!("{}:step-name", props.step.key))
+      .cloned();
     let name: Element = if props.locked || props.viewing {
-      Text::new(props.step.name.as_str())
-        .id("step-name")
-        .variant(lurq::app::theme::TypographyStyle::Title)
-        .into()
+      step_name::read_only(props.step.name.as_str()).into()
     } else {
-      let mut field = FieldInput::new("step-name", ctx.t("pipelines.stepName"), self.name.clone())
-        .text_style(lurq::app::theme::TypographyStyle::Title)
-        .width(Dimension::Px(NAME_WIDTH));
-      if let Some(error) = props.state.get().errors.get(&format!("{}:step-name", props.step.key)) {
-        field = field.error(message_text(ctx, error));
-      }
-      field.render(ctx)
+      ctx.mount_keyed::<StepName>(
+        "step-name",
+        StepNameProps {
+          value: self.name.clone(),
+          editing: self.editing.clone(),
+          label: ctx.t("pipelines.stepName"),
+          refused: error.is_some(),
+        },
+      )
     };
     let row = Row::new()
       .id("step-heading")
@@ -165,15 +172,34 @@ impl StepColumn {
     if props.viewing {
       return row.into();
     }
-    if self.removing.get() {
-      return Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Md)
-        .child(row)
-        .child(self.remove_question(ctx, props))
-        .into();
-    }
-    row.with_children(self.actions(ctx, props)).into()
+    let editable = !props.locked;
+    let below: Option<Element> = match error.filter(|_| editable) {
+      Some(error) => Some(field_error("step-name-note", &message_text(ctx, &error)).into()),
+      None => (editable && self.editing.get()).then(|| {
+        Text::new(&ctx.t("pipelines.stepNameHint"))
+          .id("step-name-hint")
+          .variant(TypographyStyle::Caption)
+          .into()
+      }),
+    };
+    let removing = self.removing.get();
+    let row: Element = if removing {
+      row.into()
+    } else {
+      row.with_children(self.actions(ctx, props)).into()
+    };
+    // One shape whatever shows under the row, so the name's field stays mounted, and focused, as its hint comes.
+    let heading = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(row)
+      .with_children(below);
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Md)
+      .child(heading)
+      .with_children(removing.then(|| self.remove_question(ctx, props)))
+      .into()
   }
 
   fn actions(&self, ctx: &Ctx, props: &Props) -> [ActionButton; 2] {

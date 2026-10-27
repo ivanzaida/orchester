@@ -126,6 +126,7 @@
     "confirm": "Confirm",
     "tool": "Tool",
     "stepName": "Step name",
+    "stepNameHint": "Enter to save · Esc to cancel",
     "error": "The pipeline could not be saved",
     "reload": "Reload saved pipeline",
     "conflict": "The saved pipeline changed elsewhere. Reload it before saving; your unsaved changes will be replaced.",

@@ -29,8 +29,14 @@ pub struct RowGroup {
   count: Option<Arc<str>>,
   end: Option<Element>,
   lead: Option<Arc<str>>,
-  rows: Vec<Element>,
+  rows: Vec<Part>,
   after: Vec<Element>,
+}
+
+/// A row in the outline, or what stands between two outlines.
+enum Part {
+  Row(Element),
+  Between(Element),
 }
 
 impl RowGroup {
@@ -65,12 +71,19 @@ impl RowGroup {
   }
 
   pub fn row(mut self, row: impl Into<Element>) -> Self {
-    self.rows.push(row.into());
+    self.rows.push(Part::Row(row.into()));
     self
   }
 
   pub fn rows(mut self, rows: impl IntoIterator<Item = impl Into<Element>>) -> Self {
-    self.rows.extend(rows.into_iter().map(Into::into));
+    self.rows.extend(rows.into_iter().map(|row| Part::Row(row.into())));
+    self
+  }
+
+  /// What stands between the rows so far and the next ones, outside the outline, which it splits in two: a notice
+  /// about the row above that the rows below follow from (a tool that cannot run, `pcNiB` in `mRLFg`).
+  pub fn between(mut self, between: impl Into<Element>) -> Self {
+    self.rows.push(Part::Between(between.into()));
     self
   }
 
@@ -79,6 +92,43 @@ impl RowGroup {
     self.after.push(after.into());
     self
   }
+}
+
+/// The group's rows in outlines, split where something stands between them; the first outline is `<id>-rows`.
+fn outlines(id: &str, parts: Vec<Part>) -> Vec<Element> {
+  let mut shown: Vec<Element> = Vec::new();
+  let mut outline: Option<Column> = None;
+  let mut count = 0;
+  for part in parts {
+    match part {
+      Part::Row(row) => {
+        let line = Column::new().width(Dimension::Pct(100.0)).child(row);
+        outline = Some(match outline {
+          Some(outline) => outline.child(line.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))),
+          None => {
+            count += 1;
+            let id = if count == 1 {
+              format!("{id}-rows")
+            } else {
+              format!("{id}-rows-{count}")
+            };
+            Column::new()
+              .id(id)
+              .width(Dimension::Pct(100.0))
+              .rounded(RadiusSize::Lg)
+              .border_inside(BorderSize::Sm, PaletteColor::Border)
+              .child(line)
+          }
+        });
+      }
+      Part::Between(between) => {
+        shown.extend(outline.take().map(Element::from));
+        shown.push(between);
+      }
+    }
+  }
+  shown.extend(outline.map(Element::from));
+  shown
 }
 
 impl From<RowGroup> for Element {
@@ -106,22 +156,7 @@ impl From<RowGroup> for Element {
         .variant(GroupText::Hint.role())
         .width(Dimension::Pct(100.0))
     });
-    let rows = (!group.rows.is_empty()).then(|| {
-      let mut outline = Column::new()
-        .id(format!("{}-rows", group.id))
-        .width(Dimension::Pct(100.0))
-        .rounded(RadiusSize::Lg)
-        .border_inside(BorderSize::Sm, PaletteColor::Border);
-      for (index, row) in group.rows.into_iter().enumerate() {
-        let line = Column::new().width(Dimension::Pct(100.0)).child(row);
-        outline = outline.child(if index == 0 {
-          line
-        } else {
-          line.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        });
-      }
-      outline
-    });
+    let rows = outlines(&group.id, group.rows);
     Column::new()
       .id(group.id.to_string())
       .width(Dimension::Pct(100.0))

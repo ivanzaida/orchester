@@ -11,10 +11,10 @@ use lurq::{
   core::{Ref, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{Step, StepKey};
-use orchester_workspace::{
-  messages::Message,
-  pipelines::fields::{self, Executor, ModelChoice, RouteChoice},
+use orchester_core::resource::{PipelineError, Step, StepKey};
+use orchester_workspace::pipelines::{
+  fields::{self, Executor, ModelChoice, RouteChoice},
+  problems::rule_message,
 };
 
 use super::state::{State, StepPage, View};
@@ -99,6 +99,9 @@ impl Fields {
   fn step_group(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let (executor, notices) = super::step_executor::executor(ctx, props, self.executor.clone());
     let mut group = RowGroup::new("step-group", ctx.t("pipelines.stepGroup")).row(executor);
+    if let Some(notice) = super::step_executor::tool_notice(ctx, props) {
+      group = group.between(notice);
+    }
     if let Some(model) = super::step_executor::model(ctx, props, &self.model) {
       group = group.row(model);
     }
@@ -149,7 +152,7 @@ impl Fields {
     };
     // A step on a cycle says so on its Runs after row (`A cycle` `Igf5o` in `g6Ecy`).
     let after = if super::dependencies::on_cycle(&shown, &props.step.key) {
-      let message = Message::new("pipelines.problems.cycleAt").with("step", props.step.name.as_str().to_owned());
+      let message = rule_message(&editing.edit, &PipelineError::Cycle(props.step.key.clone()));
       after.toned_hint(message_text(ctx, &message), HintTone::Danger)
     } else {
       after

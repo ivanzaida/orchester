@@ -234,3 +234,36 @@ fn pipelines_flow_a_step_on_a_cycle_says_so_on_its_runs_after_row() {
   editor.click("step-after-step-2");
   assert!(!editor.exists("step-dependencies-hint"), "the hint goes with the cycle");
 }
+
+#[test]
+fn pipelines_flow_leave_page_leaves_a_cycle_that_cannot_be_saved() {
+  use orchester_app::routes::{ProjectPage, Route};
+  let mut editor = Editor::new();
+  // As the app's `navigate` tool goes: straight through the navigation, from outside the page; to another of the
+  // project's pages, then out of the project.
+  let tasks = Route::Project(crate::support::project_id(), ProjectPage::Tasks(Default::default()));
+  for (name, away) in [("Cycle", tasks), ("Cycle again", Route::AllProjects)] {
+    let id = editor.empty(name);
+    editor.open(id);
+    editor.click("pipeline-add-step");
+    editor.click("pipeline-add-step");
+    editor.click("pipeline-step-step");
+    editor.click("step-after-picker");
+    editor.click("step-after-step-2");
+    editor.arm();
+    assert!(editor.exists("step-after-menu"));
+    editor.window.navigation().go(away.clone());
+    editor.window.pass();
+    assert!(editor.exists("pipeline-leave-question"), "{away:?}");
+    // An open menu would take the press on Leave page to close itself.
+    editor.arm();
+    assert!(
+      !editor.exists("step-after-menu"),
+      "the picker closes while the page asks"
+    );
+    editor.click("pipeline-leave-confirm");
+    editor.window.until("left", |w| w.navigation().route_now() == away);
+    editor.arm();
+    assert_eq!(editor.window.navigation().route_now(), away, "Leave page stays left");
+  }
+}

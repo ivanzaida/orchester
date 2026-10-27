@@ -282,3 +282,6 @@ mod watch_pileup;
 
 #[path = "pipelines/sources.rs"]
 mod sources;
+
+#[path = "pipelines/step_name.rs"]
+mod step_name;
