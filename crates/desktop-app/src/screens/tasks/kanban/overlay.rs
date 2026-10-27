@@ -186,8 +186,9 @@ pub fn zones(ctx: &Ctx, state: &BoardState, id: &str, zones: &Zones) -> Element 
     .into()
 }
 
-/// One of Done's zones, raised while the pointer is over it.
-fn zone(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), (key, over): (&str, bool)) -> Column {
+/// One of Done's zones, raised while the pointer is over it. It is a stack, since only a stack places its veil by
+/// `absolute`: in a column the veil would have no size.
+fn zone(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), (key, over): (&str, bool)) -> Stack {
   let label = Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(SpacingSize::Md))
@@ -201,8 +202,9 @@ fn zone(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), (key, over): 
         .color(PaletteColor::TextSecondary)
         .nowrap(),
     );
-  let zone = Column::new()
+  let zone = Stack::new()
     .id(id.to_owned())
+    .stack_align(StackAlignment::TopStart)
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .min_height(Dimension::Px(0.0))
@@ -219,6 +221,7 @@ fn zone(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), (key, over): 
     .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
     .child(
       Column::new()
+        .id(format!("{id}-veil"))
         .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
         .background(PaletteColor::SurfaceBase)
         .opacity(DROP_VEIL_OPACITY),

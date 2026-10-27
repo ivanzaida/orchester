@@ -114,7 +114,7 @@
         "move": "M",
         "priority": "P",
         "tags": "T",
-        "copy": "Ctrl+C",
+        "copy": "Ctrl C",
         "copyMac": "⌘ C"
       },
       "menu": {
@@ -250,7 +250,7 @@
         "order": "Order",
         "properties": "Card properties",
         "showEmpty": "Show empty columns",
-        "showCanceled": "Show Canceled",
+        "showCanceled": "Show Canceled column",
         "reset": "Reset to default",
         "saved": "Saved for this project",
         "byStatus": "Status",
@@ -265,7 +265,7 @@
         "points": "Points",
         "module": "Module",
         "tags": "Tags",
-        "run": "Run",
+        "run": "Run status",
         "readiness": "Readiness",
         "agent": "Agent",
         "age": "Age",

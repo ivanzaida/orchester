@@ -13,8 +13,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
-  layout::Alignment,
+  components::{Column, Row, Stack, Text},
+  layout::{Alignment, StackAlignment},
   node::{Element, HitTestBehavior, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::tasks::moves;
@@ -67,11 +67,13 @@ pub struct Shown {
 }
 
 /// The layer over the cards of the column `id` that refuses for `refusal`: the scrim while a card is lifted, and the
-/// chip near its top. It lets the pointer through but for the chip, whose tooltip says why in full.
+/// chip near its top. It lets the pointer through but for the chip, whose tooltip says why in full. It is a stack,
+/// since only a stack places a child by `absolute`: in a column the scrim would have no size.
 pub fn layer(ctx: &mut Ctx, id: &str, refusal: &Refusal, shown: Shown) -> Element {
   let chip = chip(ctx, id, refusal, shown.hovered);
-  let mut layer = Column::new()
+  let mut layer = Stack::new()
     .id(format!("{id}-overlay"))
+    .stack_align(StackAlignment::TopStart)
     .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
     .hit_test(HitTestBehavior::ContentOnly);
   if shown.scrim {

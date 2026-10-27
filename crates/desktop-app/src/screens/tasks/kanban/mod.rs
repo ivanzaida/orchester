@@ -361,7 +361,13 @@ impl Board {
       .iter()
       .map(|column_model| {
         if folded(display, &column_model.key) {
-          strip(ctx, state, column_model, lurq::app::theme::PaletteColor::Border)
+          // The collapsed Canceled strip stands out in a stronger stroke (`05 Collapsed and empty`).
+          let stroke = if column_model.key == ColumnKey::Status(WorkflowStatus::Canceled) {
+            lurq::app::theme::PaletteColor::BorderStrong
+          } else {
+            lurq::app::theme::PaletteColor::Border
+          };
+          strip(ctx, state, column_model, stroke)
         } else {
           column(ctx, (state, &shared), (column_model, &column_model.cards), None)
         }

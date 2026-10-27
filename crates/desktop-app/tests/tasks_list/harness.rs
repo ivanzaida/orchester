@@ -189,9 +189,10 @@ impl Seeded {
       .unwrap_or_else(|| panic!("{id} is an icon"))
   }
 
-  /// Delivers what the window's futures finished until `done` holds.
+  /// Delivers what the window's futures finished until `done` holds. The wait is long enough for the whole binary's
+  /// tests sharing the machine in a debug build.
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
       self.window.tree.tick_futures();
       self.window.pass();

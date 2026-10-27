@@ -65,6 +65,28 @@ fn moved(before: &[(String, ElementRect)], now: &[(String, ElementRect)], except
     .collect()
 }
 
+/// Asserts that `cover` is laid out over the whole of `under`: a layer placed by `absolute` outside a stack has no
+/// size, and draws nothing.
+fn covers(seeded: &mut Seeded, under: &str, cover: &str) {
+  let under_bounds = seeded.bounds(under);
+  let cover_bounds = seeded.bounds(cover);
+  assert!(
+    under_bounds.width > 0.0 && under_bounds.height > 0.0,
+    "{under} has a size: {under_bounds:?}"
+  );
+  for (is, should) in [
+    (cover_bounds.x, under_bounds.x),
+    (cover_bounds.y, under_bounds.y),
+    (cover_bounds.width, under_bounds.width),
+    (cover_bounds.height, under_bounds.height),
+  ] {
+    assert!(
+      (is - should).abs() < 0.5,
+      "{cover} covers {under}: {cover_bounds:?} over {under_bounds:?}"
+    );
+  }
+}
+
 fn escape(seeded: &mut Seeded) {
   seeded
     .window
@@ -92,10 +114,18 @@ fn tasks_board_layout_a_refused_card_is_shown_over_the_columns_and_no_card_moves
     seeded.laid_out("tasks-board-column-done-zone-done")
   });
   assert!(seeded.laid_out("tasks-board-column-done-zone-canceled"));
+  // Done's zones not under the pointer are veiled over their whole size (`GdDT9`, `XzRhw`).
+  for zone in ["done", "canceled"] {
+    let id = format!("tasks-board-column-done-zone-{zone}");
+    covers(&mut seeded, &id, &format!("{id}-veil"));
+  }
   for column in ["backlog", "todo", "in_review"] {
+    // The scrim dims the whole of the column's cards, not just a point of it (`wjtLk`).
+    let overlay = format!("tasks-board-column-{column}-overlay");
+    covers(&mut seeded, &overlay, &format!("tasks-board-column-{column}-scrim"));
     assert!(
-      seeded.laid_out(&format!("tasks-board-column-{column}-scrim")),
-      "{column} is dimmed"
+      seeded.bounds(&overlay).height > 100.0,
+      "{column}'s layer spans its cards"
     );
     assert_eq!(refusal(&mut seeded, column), "Run not ended: stop it from the task");
   }
