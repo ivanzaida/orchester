@@ -220,7 +220,7 @@
     "approvalsDefault": "The connection’s approval rules apply",
     "mcpStdio": "stdio · {{program}}",
     "mcpHttp": "HTTP · {{host}}",
-    "openPipeline": "Open current pipeline",
+    "openPipeline": "Open pipeline",
     "pipelineSaveFirst": "Save this profile’s changes before opening a pipeline.",
     "pipelineWait": "Finish the pending profile action before opening a pipeline.",
     "pipelineRefreshFirst": "Refresh this profile before opening a pipeline.",

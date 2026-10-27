@@ -273,7 +273,7 @@ fn model_select(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnect
     placeholder: None,
     mono: true,
   }
-  .render(ctx)
+  .render_inline(ctx)
 }
 
 /// The effort a model lists as a dropdown, or on an API provider any one word its CLI takes; `None` for a model of a
@@ -334,7 +334,7 @@ fn effort_field(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnect
       placeholder: None,
       mono: false,
     }
-    .render(ctx),
+    .render_inline(ctx),
   )
 }
 

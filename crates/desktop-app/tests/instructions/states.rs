@@ -189,7 +189,7 @@ fn instructions_all_scope_tabs_show_their_editor_and_save_timing() {
   }
   screen.click(&format!("instruction-{role}"));
   screen.until("role", |s| s.exists("instruction-role"));
-  screen.choose("instruction-event", "Agent start & resume");
+  screen.click("instruction-event-both");
   screen.until("timing saved", |s| {
     s.entry(role).body.events().len() == 2 && s.text("instruction-save-status").contains("Based on Published v1")
   });

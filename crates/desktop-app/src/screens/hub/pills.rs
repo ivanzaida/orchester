@@ -1,5 +1,6 @@
-//! Status pills (`Pills` in 05): a row of fully rounded pills, each a place of the route with its name and count; the
-//! current one raised and outlined, a count that waits on the person in `warning`.
+//! Status pills (`Status tabs` `c1C9MR` in 05): a row of fully rounded pills, each a place of the route with its name
+//! and count; the current one on the `pressed` fill inside `border_strong`, a count that waits on the person in
+//! `warning`.
 use std::sync::Arc;
 
 use lurq::{
@@ -29,14 +30,14 @@ pub(crate) struct Pill {
 
 impl From<Pill> for Element {
   fn from(pill: Pill) -> Self {
-    let label = Text::new(&pill.label)
-      .variant(HubText::BarStatus.role())
-      .color(if pill.current {
-        PaletteColor::TextPrimary
-      } else {
-        PaletteColor::TextSecondary
-      })
-      .nowrap();
+    let label = if pill.current {
+      Text::new(&pill.label).variant(HubText::BarStatus.role())
+    } else {
+      Text::new(&pill.label)
+        .variant(HubText::Value.role())
+        .color(PaletteColor::TextSecondary)
+    }
+    .nowrap();
     let count = pill.count.filter(|(count, _)| *count > 0).map(|(count, waits)| {
       Text::new(&count.to_string())
         .id(format!("{}-count", pill.id))
@@ -64,7 +65,7 @@ impl From<Pill> for Element {
       .child(label)
       .with_children(count);
     let row = if pill.current {
-      row.background(PaletteColor::SurfaceRaised)
+      row.background(ExtraColor::Pressed.role())
     } else {
       row
     };

@@ -47,12 +47,7 @@ pub(super) fn head(
       } else {
         "tools.draft"
       });
-      let count = p.data.listed.used_by(entry.id).count();
-      let used = if count == 0 {
-        ctx.t("tools.unused")
-      } else {
-        ctx.t_args("tools.usedSteps", [("count", count.to_string())])
-      };
+      let used = super::words::used(ctx, p.data.listed.used_by(entry.id).count());
       let sub = ctx.t_args(
         "tools.pageSub",
         [

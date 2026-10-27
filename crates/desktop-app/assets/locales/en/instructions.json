@@ -39,6 +39,7 @@
     "profileLabel": "{{role}} · {{slug}}",
     "prompt": "Prompt",
     "lines": "Markdown · {{count}} lines",
+    "linesOne": "Markdown · 1 line",
     "variables": "Variables",
     "preview": "Prompt preview",
     "system": "System",
@@ -282,6 +283,13 @@
     "scopePipelineHint": "The agents of one pipeline.",
     "scopeStep": "Step override",
     "scopeStepHint": "One pipeline step, after the step's own instructions.",
-    "scopeStepOption": "{{pipeline}} · {{step}}"
+    "scopeStepOption": "{{pipeline}} · {{step}}",
+    "ruleTitle": "Rule",
+    "applyHintProject": "Project rule: the agents it names, or all agents",
+    "applyHintPipeline": "Pipeline: the agents it names, or all its agents",
+    "injectHint": "When Orchester adds it to the prompt",
+    "markdown": "Markdown",
+    "insertVariable": "Insert variable",
+    "newFooter": "Edits save as a draft. Publishing makes the rule apply to new runs."
   }
 }

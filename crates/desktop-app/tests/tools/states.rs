@@ -40,21 +40,19 @@ fn tools_library_reports_kind_state_version_and_published_callers() {
   let draft = t.seed("Unpublished", false);
   t.go(ProjectPage::Tools);
   let row = t.text(&format!("tool-row-{id}"));
-  for word in ["Command", "Published v1", "1 pipeline steps", "Ready"] {
+  for word in ["Command", "Published v1", "1 pipeline step", "Ready"] {
     assert!(row.contains(word), "{row} lacks {word}");
   }
+  assert!(!row.contains("1 pipeline steps"), "{row}");
   assert!(t.text(&format!("tool-row-{draft}")).contains("not published"));
   t.click(&format!("tool-row-{id}"));
   t.window
-    .until("editor", |w| w.tree.get_element_by_id("tool-uses").is_some());
-  assert!(t.text("tool-uses").contains("Delivery v1 / Run checks"));
+    .until("editor", |w| w.tree.get_element_by_id("tool-properties").is_some());
   t.click("tool-tab-access");
   assert!(t.text("tool-access-tab").contains("Exit code decides the step"));
   let access = t.text("tool-access-step-0");
-  assert!(
-    access.contains("Delivery v1") && access.contains("01 Run checks"),
-    "{access}"
-  );
+  assert!(access.contains("Delivery v1 / 01 Run checks"), "{access}");
+  assert!(t.window.tree.get_element_by_id("tool-access-open-0").is_some());
   t.click("tool-tab-inputs_outputs");
   t.wait_for("tool-inputs-outputs");
   assert!(t.text("tool-inputs-outputs").contains("Exit code"));

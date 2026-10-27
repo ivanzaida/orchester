@@ -34,6 +34,9 @@ use crate::{
   },
 };
 
+/// The panel beside a rule (`Side` `CBvLu` in 02b), wider than the hub's side column.
+const PANEL_WIDTH: f32 = 424.0;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CopyReceipt {
   pub composition: orchester_core::run::Composition,
@@ -109,7 +112,8 @@ impl Component for Panels {
     let head = self.header(ctx, &props);
     let mut frame = Column::new()
       .id("instruction-panel")
-      .width(Dimension::Px(crate::screens::hub::SIDE_WIDTH))
+      .width(Dimension::Px(PANEL_WIDTH))
+      .flex_shrink(0.0)
       .height(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(head);
@@ -184,15 +188,14 @@ impl Panels {
   }
   fn header(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let segments = [
-      (Panel::Variables, "instructions.variables"),
-      (Panel::Preview, "instructions.preview"),
+      (Panel::Preview, "preview", "instructions.preview"),
+      (Panel::Variables, "variables", "instructions.variables"),
     ]
     .into_iter()
-    .enumerate()
-    .map(|(index, (panel, key))| {
+    .map(|(panel, name, key)| {
       let chosen = props.panel.clone();
       Segment::new(
-        format!("instruction-panel-{index}"),
+        format!("instruction-panel-{name}"),
         SegmentFace::Text(ctx.t(key)),
         props.panel.get() == panel,
         move || chosen.choose(panel),

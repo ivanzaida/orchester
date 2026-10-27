@@ -163,13 +163,22 @@ pub(crate) fn list_body(id: &str, pane: impl Into<Element>) -> Element {
   item_body(id, pane, None)
 }
 
+/// [`list_body`] with a pane `width` wide at most, e.g. Memory's 760 (`Pane` `Jy4nw` in 05).
+pub(crate) fn list_body_wide(id: &str, pane: impl Into<Element>, width: f32) -> Element {
+  body(id, (pane.into(), width), None)
+}
+
 /// An opened item: `pane` with `side` beside it, both scrolling as one page under the tabs (the design's tall
 /// windows, 01c, 02, 04b, are whole pages that scroll).
 pub(crate) fn item_body(id: &str, pane: impl Into<Element>, side: Option<Element>) -> Element {
+  body(id, (pane.into(), PANE_WIDTH), side)
+}
+
+fn body(id: &str, (pane, width): (Element, f32), side: Option<Element>) -> Element {
   let pane = Column::new()
     .id(format!("{id}-pane"))
     .flex_shrink(1.0)
-    .width(Dimension::Px(PANE_WIDTH))
+    .width(Dimension::Px(width))
     .min_width(Dimension::Px(0.0))
     .child(pane);
   let row = Row::new()

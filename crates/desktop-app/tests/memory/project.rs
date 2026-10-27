@@ -17,31 +17,35 @@ fn project() -> Page {
 fn memory_project_page_lists_every_proposal_in_its_waiting_tab() {
   let mut page = project();
   assert_eq!(page.text("memory-tab-waiting-count"), "4");
-  assert_eq!(
-    page.text("memory-tab-note"),
-    "Agents get a record from their next invocation after you approve it. Until then no agent receives it."
+  assert!(
+    page.text("memory-tab-note").contains(
+      "Agents get a record from their next invocation after you approve it. Until then no agent receives it."
+    )
   );
-  assert_eq!(page.text("memory-tab-order"), "Oldest first");
+  assert_eq!(page.text("memory-queue-title"), "Waiting for your approval");
+  assert_eq!(page.text("memory-queue-count"), "4 · Oldest first");
   let typed = page.record("API handlers return typed errors");
   let proposal = format!("memory-proposal-{}", typed.id());
-  assert_eq!(page.text(&format!("{proposal}-scope")), "Project · Decision");
+  assert_eq!(page.text(&format!("{proposal}-kind")), "Decision");
+  let meta = page.text(&format!("{proposal}-scope"));
+  assert!(meta.starts_with("Project · "), "{meta}");
   assert_eq!(
     page.text(&format!("{proposal}-supersedes")),
     "Supersedes 1 active record · api.errors by Reviewer"
   );
   let rate = page.record("GitHub's secondary rate limit");
-  assert_eq!(
-    page.text(&format!("memory-proposal-{}-scope", rate.id())),
-    "Task KON-16 · Fact"
-  );
-  assert!(!page.has("memory-filter-status"), "the tab is the status");
+  assert_eq!(page.text(&format!("memory-proposal-{}-kind", rate.id())), "Fact");
+  let meta = page.text(&format!("memory-proposal-{}-scope", rate.id()));
+  assert!(meta.starts_with("Task KON-16 · "), "{meta}");
+  // The queue is listed whole, oldest first, as drawn (05): no search or filters on it.
   for filter in [
+    "memory-filter-status",
     "memory-search",
     "memory-filter-type",
     "memory-filter-author",
     "memory-filter-tag",
   ] {
-    assert!(page.has(filter), "{filter} in the tab");
+    assert!(!page.has(filter), "{filter} on the queue");
   }
   assert!(!page.has("memory-panel"), "no side panel");
 }

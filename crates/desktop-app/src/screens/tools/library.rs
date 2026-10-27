@@ -84,12 +84,7 @@ fn row(ctx: &Ctx, (nav, project): (&Navigation, ProjectId), listed: &ProjectTool
       ("secrets", secrets.to_string()),
     ],
   );
-  let count = listed.used_by(entry.id).count();
-  let used = if count == 0 {
-    ctx.t("tools.unused")
-  } else {
-    ctx.t_args("tools.usedSteps", [("count", count.to_string())])
-  };
+  let used = super::words::used(ctx, listed.used_by(entry.id).count());
   let (tone, standing) = if !entry.runnable() {
     (Tone::Muted, ctx.t("tools.unavailable"))
   } else {

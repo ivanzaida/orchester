@@ -1,12 +1,8 @@
-//! The command fields (`zOpcp`), with workspace validation under each value.
+//! A command tool's fields on its Configuration tab (`04b` `nuoSy`), with workspace validation under each value.
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::Column,
   core::Signal,
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{
@@ -14,15 +10,8 @@ use orchester_workspace::{
   tools::form::{CommandErrors, CommandText},
 };
 
-use crate::{
-  theme::{ExtraSpacing, IconSize},
-  ui::{
-    field::{FieldInput, field},
-    form_section::section,
-    icon::{Icon, icon},
-    message::message_text,
-  },
-};
+use super::fields_rows::{Control, Setting, read_row, section, setting};
+use crate::{screens::hub::parts::note, theme::HubSpacing, ui::icon::Icon};
 #[derive(Clone)]
 pub(super) struct Fields {
   pub name: Signal<String>,
@@ -58,139 +47,122 @@ impl Fields {
       environment: self.environment.get(),
     }
   }
+  /// The Command, Run and Environment sections; a saved tool's name is fixed and only read.
   pub fn render(&self, ctx: &mut Ctx, errors: &CommandErrors, existing: bool, busy: bool) -> Column {
-    let name = self.input(ctx, "name", self.name.clone(), &errors.name, existing || busy);
-    // Name `t8jJ9h`: fixed 220, description gets the remaining room.
-    const NAME_WIDTH: f32 = 220.0;
-    let description = self.input(ctx, "descriptionLabel", self.description.clone(), &None, busy);
-    let identity = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .child(Column::new().width(Dimension::Px(NAME_WIDTH)).child(name))
-      .child(Column::new().flex(1.0).child(description));
-    let program = self.input(ctx, "program", self.program.clone(), &errors.program, busy);
-    let arguments = self.input(ctx, "arguments", self.arguments.clone(), &errors.arguments, busy);
-    let runfields = self.run_fields(ctx, errors, busy);
-    let variables = self.input(ctx, "variables", self.environment.clone(), &errors.environment, busy);
+    let name = if existing {
+      read_row(
+        "name",
+        &ctx.t("tools.name"),
+        Some(&ctx.t("tools.nameHint")),
+        &self.name.get(),
+      )
+    } else {
+      self.setting(ctx, ("name", "tools.name", None), Control::Text, (&errors.name, busy))
+    };
+    let command = vec![
+      name,
+      self.setting(
+        ctx,
+        ("description", "tools.descriptionLabel", None),
+        Control::Text,
+        (&None, busy),
+      ),
+      self.setting(
+        ctx,
+        ("program", "tools.program", Some("tools.programHint")),
+        Control::Mono,
+        (&errors.program, busy),
+      ),
+      self.setting(
+        ctx,
+        ("arguments", "tools.arguments", Some("tools.argumentsHint")),
+        Control::Lines,
+        (&errors.arguments, busy),
+      ),
+      read_row(
+        "working-directory",
+        &ctx.t("tools.workingDirectory"),
+        None,
+        &ctx.t("tools.worktree"),
+      ),
+    ];
+    let run = vec![
+      self.setting(
+        ctx,
+        ("timeout", "tools.timeout", None),
+        Control::Number,
+        (&errors.timeout, busy),
+      ),
+      self.setting(
+        ctx,
+        ("exitCodes", "tools.exitCodes", None),
+        Control::Number,
+        (&errors.exit_codes, busy),
+      ),
+      self.setting(
+        ctx,
+        ("outputLimit", "tools.outputLimit", None),
+        Control::Number,
+        (&errors.output_limit, busy),
+      ),
+    ];
+    let environment = vec![self.setting(
+      ctx,
+      ("environment", "tools.variables", Some("tools.environmentHint")),
+      Control::Lines,
+      (&errors.environment, busy),
+    )];
     Column::new()
       .id("tool-fields")
       .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Tabs.role())
-      .child(identity)
-      .child(
-        section(
-          "tool-command",
-          &ctx.t("tools.commandSection"),
-          None,
-          vec![
-            Column::new()
-              .spacing(ExtraSpacing::Loose.role())
-              .child(program)
-              .child(arguments)
-              .child(field(
-                "tool-working-directory",
-                Some(&ctx.t("tools.workingDirectory")),
-                Row::new()
-                  .spacing(ExtraSpacing::Pair.role())
-                  .align_items(Alignment::Center)
-                  .child(icon(Icon::FolderGit2, IconSize::Md, PaletteColor::TextMuted))
-                  .child(Text::new(&ctx.t("tools.worktree")).variant(TypographyStyle::Description)),
-                None,
-              ))
-              .into(),
-          ],
-        )
-        .spacing(ExtraSpacing::Loose.role()),
-      )
-      .child(
-        section(
-          "tool-run",
-          &ctx.t("tools.run"),
-          None,
-          vec![
-            Column::new()
-              .spacing(ExtraSpacing::Loose.role())
-              .child(runfields)
-              .child(Text::new(&ctx.t("tools.runHint")).variant(TypographyStyle::Caption))
-              .into(),
-          ],
-        )
-        .spacing(ExtraSpacing::Loose.role()),
-      )
-      .child(
-        section(
-          "tool-environment-section",
-          &ctx.t("tools.environment"),
-          None,
-          vec![variables],
-        )
-        .spacing(ExtraSpacing::Loose.role()),
-      )
-  }
-  fn run_fields(&self, ctx: &mut Ctx, errors: &CommandErrors, busy: bool) -> Row {
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
+      .spacing(HubSpacing::Sections.role())
+      .child(section("tool-command", &ctx.t("tools.commandSection"), command))
       .child(
         Column::new()
-          .flex(1.0)
-          .child(self.input(ctx, "timeout", self.timeout.clone(), &errors.timeout, busy)),
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(section("tool-run", &ctx.t("tools.run"), run))
+          .child(note("tool-run-hint", Icon::Info, &ctx.t("tools.runHint"))),
       )
-      .child(Column::new().flex(1.0).child(self.input(
-        ctx,
-        "exitCodes",
-        self.exit_codes.clone(),
-        &errors.exit_codes,
-        busy,
-      )))
-      .child(Column::new().flex(1.0).child(self.input(
-        ctx,
-        "outputLimit",
-        self.output_limit.clone(),
-        &errors.output_limit,
-        busy,
-      )))
+      .child(section(
+        "tool-environment-section",
+        &ctx.t("tools.environment"),
+        environment,
+      ))
   }
-  fn input(&self, ctx: &mut Ctx, key: &str, value: Signal<String>, error: &Option<Message>, locked: bool) -> Element {
-    let id = match key {
-      "descriptionLabel" => "description",
-      "variables" => "environment",
-      other => other,
+
+  /// One setting row: its input is `tool-<id>`, named and labelled by `label`, with `hint` under the label unless
+  /// the field has an error.
+  fn setting(
+    &self,
+    ctx: &mut Ctx,
+    (id, label, hint): (&str, &str, Option<&str>),
+    control: Control,
+    (error, locked): (&Option<Message>, bool),
+  ) -> Element {
+    let value = match id {
+      "name" => self.name.clone(),
+      "description" => self.description.clone(),
+      "program" => self.program.clone(),
+      "arguments" => self.arguments.clone(),
+      "timeout" => self.timeout.clone(),
+      "exitCodes" => self.exit_codes.clone(),
+      "outputLimit" => self.output_limit.clone(),
+      _ => self.environment.clone(),
     };
-    let id = format!("tool-{id}");
-    let label = ctx.t(&format!("tools.{key}"));
-    let mut input = FieldInput::new(id.clone(), label.clone(), value);
-    if matches!(key, "arguments" | "variables") {
-      input = input.compact_text_area();
-    }
-    if !matches!(key, "name" | "descriptionLabel") {
-      input = input.mono();
-    }
-    if locked {
-      input = input.locked();
-      if key == "name" {
-        input = input.trailing(Icon::Lock);
-      }
-    }
-    if error.is_some() {
-      input = input.invalid();
-    }
-    let hint = match key {
-      "name" if locked => Some("tools.nameHint"),
-      "program" => Some("tools.programHint"),
-      "arguments" => Some("tools.argumentsHint"),
-      "variables" => Some("tools.environmentHint"),
-      _ => None,
-    };
-    let control = input.render(ctx);
-    let hint = error.is_none().then(|| hint.map(|key| ctx.t(key))).flatten();
-    field(&id, Some(&label), control, hint.as_deref())
-      .with_children(error.as_ref().map(|error| {
-        Text::new(&message_text(ctx, error))
-          .id(format!("{id}-note"))
-          .variant(TypographyStyle::Caption)
-          .color(PaletteColor::Danger)
-      }))
-      .into()
+    let label = ctx.t(label);
+    let hint = hint.filter(|_| error.is_none()).map(|key| ctx.t(key));
+    setting(
+      ctx,
+      &Setting {
+        id,
+        label: &label,
+        hint: hint.as_deref(),
+        control,
+        error,
+        locked,
+      },
+      value,
+    )
   }
 }

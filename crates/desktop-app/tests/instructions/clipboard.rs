@@ -65,7 +65,7 @@ fn instructions_copied_receipt_resets_for_new_event_and_draft_without_rewriting_
   seed_preview(&screen);
   screen.rule("Agreement", "Original {{task.title}}", InstructionScope::Project, true);
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("copy button", |s| s.exists("instruction-copy-prompt"));
   screen.click("instruction-copy-prompt");
   assert!(screen.text("instruction-copy-prompt").contains("Copied"));

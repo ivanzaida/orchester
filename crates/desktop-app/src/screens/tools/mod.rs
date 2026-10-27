@@ -5,6 +5,7 @@ mod add_menu;
 mod editor;
 mod editor_asks;
 mod fields;
+mod fields_rows;
 mod head;
 mod inputs;
 mod inspector;

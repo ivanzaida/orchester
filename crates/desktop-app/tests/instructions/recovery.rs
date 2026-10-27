@@ -1,5 +1,4 @@
 //! Delays and failures use only this test's private project, through real input and persistence.
-use lurq::app::events::MouseButton;
 use orchester_app::root::Start;
 use orchester_core::{
   name::Name,
@@ -100,6 +99,7 @@ fn instructions_delayed_reload_preserves_post_request_text_picker_targets_and_ti
   seed_preview(&screen);
   let id = screen.rule("Agreement", "Original", InstructionScope::Project, true);
   screen.go();
+  screen.click("instruction-variables");
   screen.until("picker loaded", |s| s.exists("instruction-variable-insert"));
   editor::save_in(
     &screen.root,
@@ -116,7 +116,7 @@ fn instructions_delayed_reload_preserves_post_request_text_picker_targets_and_ti
   type_value(&mut screen, "instruction-prompt", "After request ");
   screen.click("instruction-variable-insert");
   screen.choose("instruction-targets", "Builder");
-  screen.choose("instruction-event", "Start & resume");
+  screen.click("instruction-event-both");
   let retained = screen.text("instruction-prompt");
   assert!(retained.contains("After request"));
   assert!(retained.contains("{{task.title}}"));
@@ -139,19 +139,8 @@ fn instructions_delayed_first_create_locks_name_prompt_open_menu_picker_targets_
   screen.until("new form", |s| s.exists("instruction-name"));
   screen.set("instruction-name", "Created agreement");
   screen.set("instruction-prompt", "Captured candidate");
+  screen.click("instruction-variables");
   screen.until("picker", |s| s.exists("instruction-variable-insert"));
-  // Open the timing menu before the pending operation so its retained options are exercised.
-  let bounds = screen
-    .window
-    .tree
-    .get_element_by_id_mut("instruction-event")
-    .and_then(|e| e.bounds())
-    .expect("event bounds");
-  let (x, y) = (bounds.x + 5.0, bounds.y + 5.0);
-  screen.window.tree.mouse_move(x, y);
-  screen.window.tree.mouse_down(x, y, MouseButton::Left);
-  screen.window.tree.mouse_up(x, y, MouseButton::Left);
-  screen.window.pass();
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("private db");
   db.execute_batch("BEGIN IMMEDIATE").expect("delay private create");
   screen.click("instruction-create");
@@ -165,13 +154,8 @@ fn instructions_delayed_first_create_locks_name_prompt_open_menu_picker_targets_
     .and_then(|e| e.as_select())
     .expect("locked targets")
     .commit(1);
-  screen
-    .window
-    .tree
-    .get_element_by_id_mut("instruction-event")
-    .and_then(|e| e.as_select())
-    .expect("locked timing")
-    .commit(1);
+  // The timing stays as it was chosen while the rule is created.
+  screen.click("instruction-event-resume");
   screen.window.pass();
   screen.key("ArrowDown", "ArrowDown", false, false);
   screen.key("Enter", "Enter", false, false);
@@ -281,7 +265,7 @@ fn instructions_delayed_reload_discards_pre_request_text_but_keeps_later_timing(
   let hold = hold(&screen);
   hold.set(true);
   screen.click("instruction-reload");
-  screen.choose("instruction-event", "Agent resume");
+  screen.click("instruction-event-resume");
   hold.set(false);
   screen.until("merged reload", |s| {
     s.entry(id).body.text().as_str() == "Outside"

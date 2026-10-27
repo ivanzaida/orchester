@@ -32,6 +32,9 @@ use crate::{
   },
 };
 
+/// The page's width (`Pane` `Jy4nw` in 05), wider than the hub's other lists.
+const PANE_WIDTH: f32 = 760.0;
+
 /// The tab the page shows, among its tabs in the order they were set in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct View {
@@ -91,9 +94,10 @@ fn content(
   let pane = pane
     .child(tabs::strip(ctx, state.project_id, (&memory, view.order), view.tab))
     .child(body(ctx, state, (project, &memory), view));
-  hub::list_body(
+  hub::list_body_wide(
     "memory-main",
     Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane),
+    PANE_WIDTH,
   )
 }
 

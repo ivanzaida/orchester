@@ -5,10 +5,9 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  components::{Column, Row, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  app::ctx::Ctx,
+  components::Column,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{resource::InstructionScope, run::PromptPart};
 use orchester_workspace::{
@@ -27,13 +26,10 @@ use super::{
 use crate::{
   screens::hub::{
     self,
-    parts::{Entry, Tone, boxed, group, head, note, status},
+    parts::{Entry, Tone, boxed, group, head, note, status, sub_head},
   },
-  theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
-  ui::{
-    icon::{Icon, icon},
-    pressable::Press,
-  },
+  theme::HubSpacing,
+  ui::{icon::Icon, pressable::Press},
 };
 
 pub fn list(ctx: &mut Ctx, data: &ProjectInstructions, selection: &Selection) -> Element {
@@ -76,7 +72,7 @@ fn section(
   let rules = group_of
     .rows
     .iter()
-    .filter(|line| matches!(line, Line::Rule(_) | Line::Orphan(_)))
+    .filter(|line| matches!(line, Line::Rule(_) | Line::StepRule { .. } | Line::Orphan(_)))
     .count();
   let count = (tab == Tab::Project).then(|| rules.to_string());
   let rows: Vec<Element> = if group_of.rows.is_empty() {
@@ -109,20 +105,10 @@ fn line_row(
       count,
       overrides,
     } => head_row(ctx, (tab, index), label, (*count, *overrides)),
-    Line::Step { label } => Row::new()
-      .id(format!("instructions-step-{}-{index}", tab.name()))
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(
-        HubSpacing::Groups.role(),
-        ExtraSpacing::Loose.role(),
-      ))
-      .spacing(lurq::app::theme::SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::TextMuted))
-      .child(Text::new(label).variant(HubText::GroupTitle.role()))
-      .into(),
-    Line::Rule(entry) => rule_row(ctx, data, entry, selection, false),
-    Line::Orphan(entry) => rule_row(ctx, data, entry, selection, true),
+    Line::Step { label } => sub_head(&format!("instructions-step-{}-{index}", tab.name()), label, None, true).into(),
+    Line::Rule(entry) => rule_row(ctx, data, (entry, None), selection, false),
+    Line::StepRule { entry, step } => rule_row(ctx, data, (entry, Some(step)), selection, false),
+    Line::Orphan(entry) => rule_row(ctx, data, (entry, None), selection, true),
     Line::Removed(name) => Entry::new(
       format!("instructions-removed-{index}"),
       ctx.t_args("hub.remove.removed", [("name", &**name)]),
@@ -140,45 +126,41 @@ fn head_row(ctx: &Ctx, (tab, index): (Tab, usize), label: &str, (count, override
     (true, 1) => "instructions.overrideOne",
     (true, _) => "instructions.overrideMany",
   };
-  Row::new()
-    .id(format!("instructions-head-{}-{index}", tab.name()))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(HubSpacing::Row.role(), ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfacePanel)
-    .child(
-      Text::new(label)
-        .variant(HubText::GroupTitle.role())
-        .color(PaletteColor::TextPrimary),
-    )
-    .child(Text::new(&ctx.t_args(key, [("count", count.to_string())])).variant(HubText::Hint.role()))
-    .into()
+  let count = ctx.t_args(key, [("count", count.to_string())]);
+  sub_head(
+    &format!("instructions-head-{}-{index}", tab.name()),
+    label,
+    Some(&count),
+    false,
+  )
+  .into()
 }
 
 fn rule_row(
   ctx: &Ctx,
   data: &ProjectInstructions,
-  entry: &InstructionEntry,
+  (entry, step): (&InstructionEntry, Option<&Arc<str>>),
   selection: &Selection,
   orphan: bool,
 ) -> Element {
   let events = Events::of(entry.body.events());
   let scope = entry.body.scope();
+  let targets = match step {
+    // Under its step's row: the step it overrides, then when it is injected (`umbc1` in `XWrFf`).
+    Some(step) => step.clone(),
+    None => where_it_applies(ctx, data, scope, entry),
+  };
   let hint: Arc<str> = if orphan {
     ctx.t(if matches!(scope, InstructionScope::Step { .. }) {
       "instructions.orphanStep"
     } else {
       "instructions.orphanPipeline"
     })
-  } else if matches!(scope, InstructionScope::Step { .. }) {
-    // Under its step's row, which names the step and who runs it: when it is injected.
-    words::scoped_event(ctx, events, false)
   } else {
     ctx.t_args(
       "instructions.rowMeta",
       [
-        ("targets", where_it_applies(ctx, data, scope, entry)),
+        ("targets", targets),
         (
           "event",
           words::scoped_event(ctx, events, matches!(scope, InstructionScope::AgentRole { .. })),
@@ -188,11 +170,11 @@ fn rule_row(
   };
   let (tone, version) = version(ctx, entry.state);
   let tab = Tab::of(scope);
-  Entry::new(format!("instruction-{}", entry.id), entry.name.clone())
+  let row = Entry::new(format!("instruction-{}", entry.id), entry.name.clone())
     .hint(hint)
     .end(status(&format!("instruction-version-{}", entry.id), tone, &version))
-    .press(Press::Open(selection.to(View::rule(tab, Some(entry.id)))))
-    .into()
+    .press(Press::Open(selection.to(View::rule(tab, Some(entry.id)))));
+  if step.is_some() { row.indented() } else { row }.into()
 }
 
 /// Who a rule reaches, as its row says it: the role or the pipeline it belongs to, or the agents it selects.

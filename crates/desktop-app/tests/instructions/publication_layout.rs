@@ -88,6 +88,7 @@ fn instructions_publication_conflict_keeps_reload_available_and_preserves_outsid
   let mut screen = Instructions::new();
   let id = screen.rule("Standards", "Opened draft", InstructionScope::Project, false);
   screen.go();
+  screen.click("instruction-variables");
   screen.until("ready to publish", |s| s.exists("instruction-variable-insert"));
   let outside = editor::save_in(
     &screen.root,

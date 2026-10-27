@@ -126,12 +126,9 @@ fn instructions_step_library_omits_empty_steps_but_keeps_empty_pipeline_headings
   assert!(library.contains("01 Implement"));
   assert!(library.contains("02 Review"));
   assert!(!library.contains("03 Run checks"));
-  assert_eq!(
-    library.matches("01 Implement").count(),
-    1,
-    "no empty Quick fix step rows"
-  );
-  assert_eq!(library.matches("02 Review").count(), 1, "no empty Quick fix step rows");
+  // Each step is named twice, by its row and by its rule's hint (`umbc1`): no empty Quick fix step rows.
+  assert_eq!(library.matches("01 Implement").count(), 2, "{library}");
+  assert_eq!(library.matches("02 Review").count(), 2, "{library}");
   assert!(library.contains("Feature delivery"));
   assert!(library.contains("2 overrides"));
   assert!(library.contains("Quick fix"));

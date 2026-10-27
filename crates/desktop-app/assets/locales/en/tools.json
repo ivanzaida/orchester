@@ -83,8 +83,8 @@
     "commandSection": "Command",
     "program": "Program",
     "programHint": "A name on the search path (cargo) or an absolute path outside this project’s repository. The file found is stored as a fixed path.",
-    "arguments": "Arguments · one per line",
-    "argumentsHint": "Passed to the program as they are. No shell reads them, so quotes, * and $ are not special.",
+    "arguments": "Arguments",
+    "argumentsHint": "One per line. No shell reads them, so quotes, * and $ are not special.",
     "workingDirectory": "Working directory",
     "worktree": "The worktree of the step that runs it",
     "run": "Run",
@@ -154,6 +154,11 @@
     "unsavedPublished": "Unsaved changes · Published v{{version}}",
     "noBaseline": "no published version",
     "pipelineTitle": "{{pipeline}} v{{version}}",
-    "stepTitle": "{{ordinal}} {{step}}"
+    "stepTitle": "{{ordinal}} {{step}}",
+    "useHint": "Published v{{version}} · Exit code decides the step",
+    "openPipeline": "Open pipeline",
+    "accessNow": "Every pipeline step that selects this tool can run it.",
+    "accessPlanned": "Limiting it to chosen pipelines and steps, an environment, approval for each call or an access window is planned.",
+    "usedStepOne": "1 pipeline step"
   }
 }

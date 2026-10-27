@@ -18,6 +18,7 @@ mod opened;
 mod page;
 mod parts;
 mod proposal;
+mod queue_row;
 mod row;
 mod settings;
 pub(crate) mod state;

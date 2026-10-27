@@ -68,22 +68,46 @@ impl DevtoolsInspectable for ChoiceField {}
 
 impl ChoiceField {
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    ctx.mount_keyed::<Picker>(&self.id.clone(), self)
+    ctx.mount_keyed::<Picker>(
+      &self.id.clone(),
+      PickerProps {
+        field: self,
+        inline: false,
+      },
+    )
+  }
+
+  /// The field whose menu rows are one line each: no icon, the detail after the label (`Menu` `jGqpS` in 01d).
+  pub fn render_inline(self, ctx: &mut Ctx) -> Element {
+    ctx.mount_keyed::<Picker>(
+      &self.id.clone(),
+      PickerProps {
+        field: self,
+        inline: true,
+      },
+    )
   }
 }
+
+#[derive(Clone, PartialEq)]
+struct PickerProps {
+  field: ChoiceField,
+  inline: bool,
+}
+impl DevtoolsInspectable for PickerProps {}
 
 struct Picker {
   anchor: ElementRef,
 }
 impl Component for Picker {
-  type Props = ChoiceField;
+  type Props = PickerProps;
   fn create(_: &mut Ctx) -> Self {
     Self {
       anchor: ElementRef::new(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<ChoiceField>().clone();
+    let PickerProps { field: props, inline } = ctx.props::<PickerProps>().clone();
     let chosen = props.value.get();
     let trigger = self.trigger(&props, &chosen);
     let mut rows = Column::new()
@@ -106,7 +130,12 @@ impl Component for Picker {
       } else {
         item
       };
-      let mut item = item.icon(choice.icon).chosen(choice.value == chosen).in_form();
+      let item = if inline {
+        item.inline_detail()
+      } else {
+        item.icon(choice.icon)
+      };
+      let mut item = item.chosen(choice.value == chosen).in_form();
       if let Some(detail) = &choice.detail {
         item = item.detail(detail.clone());
       }

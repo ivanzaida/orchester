@@ -19,6 +19,7 @@ mod library_groups;
 mod page_head;
 mod panels;
 mod preview;
+mod rule;
 mod scope_choice;
 mod sources;
 mod state;

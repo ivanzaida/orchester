@@ -8,6 +8,7 @@ fn instructions_variable_picker_replaces_selection_and_autosaves_exact_raw_bytes
   seed_preview(&screen);
   let id = screen.rule("Standards", "left middle right", InstructionScope::Project, true);
   screen.go();
+  screen.click("instruction-variables");
   screen.until("catalog", |screen| screen.exists("instruction-variable-insert"));
   screen.focus_prompt();
   screen.key("Home", "Home", false, true);

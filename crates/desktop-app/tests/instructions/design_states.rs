@@ -80,10 +80,11 @@ fn instructions_preview_keeps_horizontal_actions_visible_and_viewer_is_read_only
     false,
   );
   screen.go();
+  screen.click("instruction-panel-variables");
   screen.until("variable context", |s| s.exists("instruction-variable-context"));
   assert!(screen.text("instruction-variable-context").contains("KON-1 · Builder"));
   assert!(screen.text("instruction-variable-detail").contains("Available"));
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   let view = screen
     .window
@@ -244,7 +245,7 @@ fn instructions_full_viewer_can_return_when_its_task_loses_preview_context() {
     false,
   );
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   screen.click("instruction-full-prompt");
   screen.until("viewer", |s| s.exists("instruction-full-viewer"));

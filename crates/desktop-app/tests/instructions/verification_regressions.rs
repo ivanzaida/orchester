@@ -112,7 +112,7 @@ fn instructions_verify_preview_label_tracks_draft_and_published_state() {
     false,
   );
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("draft preview", |s| s.exists("instruction-full-prompt"));
   assert!(
     screen
@@ -150,7 +150,7 @@ fn instructions_verify_full_viewer_heading_uses_design_title_typography() {
     true,
   );
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   screen.click("instruction-full-prompt");
   let style = screen.window.app.theme().typography_style(TypographyStyle::Title);

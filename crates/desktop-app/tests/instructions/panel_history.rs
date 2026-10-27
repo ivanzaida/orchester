@@ -35,17 +35,20 @@ fn instructions_side_panels_are_history_entries_and_closing_leaves_none() {
     true,
   );
   screen.go();
-  screen.until("variables", |s| s.exists("instruction-variable-detail"));
-  assert_eq!(panel(&screen), InstructionsPanel::Variables);
-  screen.click("instruction-panel-1");
+  // A project rule opens with its prompt preview (02b).
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   assert_eq!(panel(&screen), InstructionsPanel::Preview);
+  screen.click("instruction-panel-variables");
+  screen.until("variables", |s| s.exists("instruction-variable-detail"));
+  assert_eq!(panel(&screen), InstructionsPanel::Variables);
+  screen.click("instruction-panel-preview");
+  screen.until("preview again", |s| s.exists("instruction-full-prompt"));
   screen.click("instruction-full-prompt");
   screen.until("viewer", |s| s.exists("instruction-full-viewer"));
   assert_eq!(panel(&screen), InstructionsPanel::Full);
 
   back(&mut screen);
-  screen.until("preview again", |s| s.exists("instruction-full-prompt"));
+  screen.until("preview after the viewer", |s| s.exists("instruction-full-prompt"));
   assert_eq!(panel(&screen), InstructionsPanel::Preview);
   assert!(screen.exists("agents-hub-tabs"), "the page is back around the rule");
   back(&mut screen);
@@ -59,13 +62,16 @@ fn instructions_side_panels_are_history_entries_and_closing_leaves_none() {
   screen.click("instruction-full-prompt");
   screen.until("viewer", |s| s.exists("instruction-full-viewer"));
   screen.click("instruction-viewer-back");
-  screen.until("preview after the viewer", |s| s.exists("instruction-full-prompt"));
+  screen.until("preview after the viewer's Back", |s| {
+    s.exists("instruction-full-prompt")
+  });
   forward(&mut screen);
   assert_eq!(panel(&screen), InstructionsPanel::Preview);
 
   screen.click("instruction-panel-close");
   assert_eq!(panel(&screen), InstructionsPanel::Hidden);
   assert!(!screen.exists("instruction-panel"));
+  // Closing replaced the preview's entry: Back goes to the Variables before it.
   back(&mut screen);
   screen.until("variables before the closed preview", |s| {
     s.exists("instruction-variable-detail")

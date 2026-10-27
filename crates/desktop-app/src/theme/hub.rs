@@ -30,10 +30,15 @@ pub enum HubText {
   Hint,
   /// 12 `text_secondary`: a row's status beside its dot (`PChrl` in `B6JYf`).
   Status,
+  /// 12/500 `text_secondary`: what kind a row's item is before its meta line, e.g. a proposal's *Decision*
+  /// (`Bnyni` in `f0kkti`).
+  Kind,
+  /// 13.5/500 `text_primary`, 1.45: what a memory proposal says (`AnUhX` in `f0kkti`).
+  Statement,
 }
 
 impl HubText {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 10] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -42,6 +47,8 @@ impl HubText {
     Self::Area,
     Self::Hint,
     Self::Status,
+    Self::Kind,
+    Self::Statement,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -58,6 +65,8 @@ impl HubText {
       Self::Area => "hub_area",
       Self::Hint => "hub_hint",
       Self::Status => "hub_status",
+      Self::Kind => "hub_kind",
+      Self::Statement => "hub_statement",
     }
   }
 
@@ -71,6 +80,8 @@ impl HubText {
       Self::Area => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
       Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
       Self::Status => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
+      Self::Statement => style(13.5, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
     }
   }
 }
@@ -101,10 +112,14 @@ pub enum HubSpacing {
   FieldY,
   /// 16: a form row's label to its control (`BzwDA`).
   FieldGap,
+  /// 7: over and under a sub-head inside a group's rows, e.g. a role's (`ksfLm` in `V0UtB`).
+  SubY,
+  /// 28: a step's sub-head and its rules from the box's side (`mwisw`, `XWrFf` in `w31Kt`).
+  Indent,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 14] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -117,6 +132,8 @@ impl HubSpacing {
     Self::RowY,
     Self::FieldY,
     Self::FieldGap,
+    Self::SubY,
+    Self::Indent,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -137,12 +154,14 @@ impl HubSpacing {
       Self::RowY => "hub_row_y",
       Self::FieldY => "hub_field_y",
       Self::FieldGap => "hub_field_gap",
+      Self::SubY => "hub_sub_y",
+      Self::Indent => "hub_indent",
     }
   }
 
   pub const fn value(self) -> f32 {
     match self {
-      Self::Side | Self::Groups => 28.0,
+      Self::Side | Self::Groups | Self::Indent => 28.0,
       Self::HeadTop | Self::Sections => 24.0,
       Self::HeadBottom => 12.0,
       Self::BodyTop | Self::SideSections => 20.0,
@@ -151,6 +170,7 @@ impl HubSpacing {
       Self::RowY => 10.0,
       Self::FieldY => 11.0,
       Self::FieldGap => 16.0,
+      Self::SubY => 7.0,
     }
   }
 }

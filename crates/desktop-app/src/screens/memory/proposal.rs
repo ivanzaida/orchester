@@ -1,8 +1,8 @@
-//! A record waiting for approval (`Memory / Proposal row` `LdHs2`): on `surface_raised`, what it says with its
-//! meta line and tags, the record it would replace (*Supersedes 1 active record · key by author*), and *Reject*,
-//! *Edit* (which opens *Review proposed record* in its place) and *Approve*. On the task's tab it says *Waits for your
-//! approval* and that agents do not receive it until then; on the project's page it names its scope and type
-//! instead (*Project · Decision*, *Task KON-12 · Warning*).
+//! A record waiting for approval on a task's Memory tab (`Memory / Proposal row` `LdHs2`): on `surface_raised`, what
+//! it says with its meta line and tags, the record it would replace (*Supersedes 1 active record · key by author*),
+//! *Waits for your approval*, and *Reject*, *Edit* (which opens *Review proposed record* in its place) and *Approve*
+//! after the note that agents do not receive it until then. The project page's queue lists its proposals as rows
+//! instead ([`super::queue_row`]).
 
 use lurq::{
   app::{
@@ -41,32 +41,21 @@ pub enum Listed {
 
 /// `memory`, a proposal, among `records` of its scope (which hold the record it would replace).
 pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins: &Origins, listed: Listed) -> Element {
+  if listed == Listed::Queue {
+    return super::queue_row::row(ctx, (memory, records), origins);
+  }
   let state = MemoryState::of(ctx);
   let id = format!("memory-proposal-{}", memory.id());
-  let queue = listed == Listed::Queue;
-  let mut head = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
-  if queue {
-    let scope = words::join(
-      ctx,
-      &[
-        words::scope(ctx, memory, origins).to_string(),
-        words::kind_name(ctx, memory.content().kind()).to_string(),
-      ],
-    );
-    head = head.child(
-      Text::new(&scope)
-        .id(format!("{id}-scope"))
-        .variant(TypographyStyle::FieldLabel)
-        .nowrap(),
-    );
-  }
-  head = head.with_children(memory.content().key().map(|key| {
-    Text::new(key.as_str())
-      .id(format!("{id}-key"))
-      .variant(ExtraTypography::MonoNote.role())
-      .nowrap()
-  }));
-  let mut body = Column::new()
+  let head = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .with_children(memory.content().key().map(|key| {
+      Text::new(key.as_str())
+        .id(format!("{id}-key"))
+        .variant(ExtraTypography::MonoNote.role())
+        .nowrap()
+    }));
+  let body = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Xs)
@@ -81,18 +70,16 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(Text::new(&words::proposal_meta(ctx, memory, origins, queue)).variant(TypographyStyle::Caption))
+        .child(Text::new(&words::proposal_meta(ctx, memory, origins, false)).variant(TypographyStyle::Caption))
         .with_children(parts::tags(&id, memory)),
-    );
-  body = body.with_children(supersedes(ctx, memory, records, origins, &id));
-  // `Waiting` (`V6r5PT`) sits at the row's top right, beside the body, so the text stops short of it.
-  let waiting = (!queue).then(|| {
-    parts::status(
-      &format!("{id}-waiting"),
-      (Icon::Hand, ctx.t("memory.proposal.waiting")),
-      PaletteColor::Warning,
     )
-  });
+    .with_children(supersedes(ctx, memory, records, origins, &id));
+  // `Waiting` (`V6r5PT`) sits at the row's top right, beside the body, so the text stops short of it.
+  let waiting = parts::status(
+    &format!("{id}-waiting"),
+    (Icon::Hand, ctx.t("memory.proposal.waiting")),
+    PaletteColor::Warning,
+  );
   Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
@@ -110,14 +97,20 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
         .spacing(SpacingSize::Md)
         .child(parts::glyph(words::glyph(memory.content().kind())))
         .child(body)
-        .with_children(waiting),
+        .child(waiting),
     )
-    .child(actions(ctx, &state, memory, (&id, queue)))
+    .child(actions(ctx, &state, memory, &id))
     .into()
 }
 
 /// *Supersedes 1 active record · key by author*, when the proposal names an active record it would replace.
-fn supersedes(ctx: &Ctx, memory: &Memory, records: &[Memory], origins: &Origins, id: &str) -> Option<Element> {
+pub(super) fn supersedes(
+  ctx: &Ctx,
+  memory: &Memory,
+  records: &[Memory],
+  origins: &Origins,
+  id: &str,
+) -> Option<Element> {
   let replaced = records.iter().find(|record| {
     Some(record.id()) == memory.supersedes() && record.status() == orchester_core::memory::MemoryStatus::Active
   })?;
@@ -142,8 +135,8 @@ fn supersedes(ctx: &Ctx, memory: &Memory, records: &[Memory], origins: &Origins,
   )
 }
 
-/// *Agents don't receive it until you approve.* on the task's tab, then *Reject*, *Edit* and *Approve* (`foPMI`).
-fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, (id, queue): (&str, bool)) -> Element {
+/// *Agents don't receive it until you approve.*, then *Reject*, *Edit* and *Approve* (`foPMI`).
+fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Element {
   let (record, revision) = (memory.id(), memory.revision());
   let busy = state.busy();
   let pending = state.pending_for(Some(record));
@@ -179,14 +172,12 @@ fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, (id, queue): (&s
   .icon(Icon::Check)
   .on_click(write(Change::Approve(None)));
   let approve = if pending { approve.loading() } else { held(approve) };
-  let mut row = Row::new()
+  let row = Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().left(MemorySpacing::TextIndent.role()))
     .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center);
-  if !queue {
-    row = row.child(Text::new(&ctx.t("memory.proposal.note")).variant(TypographyStyle::Caption));
-  }
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t("memory.proposal.note")).variant(TypographyStyle::Caption));
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)

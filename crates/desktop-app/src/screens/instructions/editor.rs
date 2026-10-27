@@ -5,9 +5,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::SpacingSize,
   },
-  components::{Column, Row},
+  components::{Column, Row, Text},
   core::{ElementRef, Signal},
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{name::Name, resource::Instruction};
@@ -34,7 +36,7 @@ use super::{
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::ShownProject,
-  theme::HubSpacing,
+  theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -222,7 +224,7 @@ impl Editor {
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
-      .spacing(HubSpacing::Row.role())
+      .spacing(HubSpacing::Sections.role())
       .child(top);
     pane = editor_actions::write_error(self, ctx, pane);
     pane = editor_actions::published_notice(self, ctx, &availability.retained, pane);
@@ -242,10 +244,12 @@ impl Editor {
       .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
       .child(prompt)
       .with_children(super::editor_notes::warning(ctx, &self.fields, availability))
+      .with_children(saved.is_none().then(|| self.foot(ctx, props, busy)))
       .into()
   }
 
-  /// The crumb, the head, and the draft bar or what is asked in its place.
+  /// The crumb, the head, and the draft bar or what is asked in its place. A new rule has no bar: its head says
+  /// whether it is saved yet, and Create draft is at the page's foot (02e).
   fn top(
     &self,
     ctx: &mut Ctx,
@@ -260,6 +264,20 @@ impl Editor {
       name.as_str().into()
     };
     let tab = saved.map_or(props.tab, |entry| Tab::of(entry.body.scope()));
+    let Some(entry) = saved else {
+      // `instruction-save-status`: the id the bar's status has on a saved rule.
+      let sub = ctx.t(if busy {
+        "instructions.saving"
+      } else {
+        "instructions.unsaved"
+      });
+      return Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(HubSpacing::Row.role())
+        .child(page_head::crumb(ctx, &props.selection, true))
+        .child(page_head::head(ctx, (&title, &sub, "instruction-save-status"), None))
+        .into();
+    };
     let sub = ctx.t_args(
       "instructions.pageSub",
       [
@@ -267,28 +285,27 @@ impl Editor {
         ("project", props.project.open.project.name().to_string()),
       ],
     );
-    let more = saved.map(|_| page_head::More {
+    let more = page_head::More {
       open: self.more.clone(),
       anchor: self.anchor.clone(),
       remove: {
         let ask = self.ask.clone();
         std::sync::Arc::new(move || ask.set(Ask::Remove))
       },
-    });
-    let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
-    let automated = !busy && !dirty && saved.is_some_and(|entry| props.data.by_automation(entry));
+    };
+    let automated = !busy && !dirty && props.data.by_automation(entry);
     let bar = match editor_actions::question(self, ctx, props, saved) {
       Some(question) => question,
       None => page_head::bar(
         ctx,
         tab,
         &page_head::Now {
-          state,
+          state: entry.state,
           dirty,
           busy,
           invalid,
           automated,
-          saved_at: saved.and_then(|entry| entry.draft_saved_at),
+          saved_at: entry.draft_saved_at,
         },
         self.bar_actions(ctx, saved, dirty, busy),
       ),
@@ -296,10 +313,31 @@ impl Editor {
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
-      .child(page_head::crumb(ctx, &props.selection, saved.is_none()))
-      .child(page_head::head(ctx, (&title, &sub), more))
+      .child(page_head::crumb(ctx, &props.selection, false))
+      .child(page_head::head(ctx, (&title, &sub, "instruction-sub"), Some(more)))
       .with_children(editor_actions::remove_question(self, ctx, props, saved))
       .child(bar)
+      .into()
+  }
+
+  /// A new rule's foot: what saving does, Cancel and Create draft (`hFV2O` in 02e).
+  fn foot(&self, ctx: &Ctx, props: &Props, busy: bool) -> Element {
+    let selection = props.selection.clone();
+    let cancel = ActionButton::new("instruction-cancel", ButtonKind::Ghost, ctx.t("instructions.cancel"))
+      .on_click(move || selection.open(View::default()));
+    Row::new()
+      .id("instruction-foot")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(
+        Text::new(&ctx.t("instructions.newFooter"))
+          .variant(HubText::Hint.role())
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0)),
+      )
+      .child(if busy { cancel.disabled() } else { cancel })
+      .child(self.action_button(ctx, None, true, busy))
       .into()
   }
 

@@ -28,6 +28,11 @@ pub(super) enum Line {
     label: Arc<str>,
   },
   Rule(InstructionEntry),
+  /// A rule under its step's row; `step` names the step in its hint.
+  StepRule {
+    entry: InstructionEntry,
+    step: Arc<str>,
+  },
   /// A rule whose pipeline or step was deleted.
   Orphan(InstructionEntry),
   /// A rule the person removed on this page.
@@ -161,6 +166,10 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
         continue;
       }
       let number = format!("{:02}", step.ordinal);
+      let name = ctx.t_args(
+        "instructions.stepLabel",
+        [("number", number.clone()), ("name", step.name.to_string())],
+      );
       let label = match &step.role {
         Some(role) => ctx.t_args(
           "instructions.stepRoleLabel",
@@ -170,13 +179,13 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
             ("role", role.to_string()),
           ],
         ),
-        None => ctx.t_args(
-          "instructions.stepLabel",
-          [("number", number), ("name", step.name.to_string())],
-        ),
+        None => name.clone(),
       };
       rows.push(Line::Step { label });
-      rows.extend(of_step.into_iter().map(|entry| Line::Rule((*entry).clone())));
+      rows.extend(of_step.into_iter().map(|entry| Line::StepRule {
+        entry: (*entry).clone(),
+        step: name.clone(),
+      }));
     }
     // A pipeline draft can remove a step while its instructions still need a new place.
     rows.extend(

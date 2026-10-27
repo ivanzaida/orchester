@@ -82,9 +82,10 @@ fn instructions_preview_composes_real_sources_and_full_prompt_without_a_modal() 
     true,
   );
   screen.go();
+  screen.click("instruction-panel-variables");
   screen.until("variables", |s| s.exists("instruction-variable-detail"));
   assert!(screen.text("instruction-variable-value").contains("Add retry"));
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   assert!(screen.text("instruction-panel").contains("Pipeline rule"));
   screen.click("instruction-full-prompt");
@@ -106,11 +107,11 @@ fn instructions_missing_run_variable_is_flagged_and_copy_is_disabled() {
     false,
   );
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("missing variable", |s| s.exists("instruction-unavailable-variable"));
   assert!(screen.text("instruction-unavailable-variable").contains("run.revision"));
   screen.click("instruction-copy-prompt");
-  screen.click("instruction-panel-0");
+  screen.click("instruction-panel-variables");
   screen.set("instruction-variable-search", "revision");
   screen.click("instruction-variable-group-run");
   screen.click("instruction-variable-run.revision");
@@ -184,7 +185,7 @@ fn instructions_preview_keeps_task_selection_when_another_task_cannot_be_preview
     true,
   );
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("initial unavailable preview", |s| {
     s.exists("instruction-preview-unavailable")
   });

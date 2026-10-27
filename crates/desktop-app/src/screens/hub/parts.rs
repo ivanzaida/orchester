@@ -118,6 +118,33 @@ pub(crate) fn tile(glyph: Icon, page: bool) -> Row {
     ))
 }
 
+/// A sub-head inside a group's rows: a role's, a pipeline's or, indented with its glyph, a step's (`ksfLm`, `mwisw`
+/// in `jtiqe`): 30 high on `surface_raised`, its label in 12/600 `text_secondary`, then `count` in quiet words.
+pub(crate) fn sub_head(id: &str, label: &str, count: Option<&str>, step: bool) -> Row {
+  let start = if step { HubSpacing::Indent } else { HubSpacing::Row };
+  Row::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(HubSpacing::SubY.role())
+        .bottom(HubSpacing::SubY.role())
+        .left(start.role())
+        .right(HubSpacing::Row.role()),
+    )
+    .spacing(lurq::app::theme::SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .with_children(step.then(|| icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::TextMuted)))
+    .child(
+      Text::new(label)
+        .id(format!("{id}-label"))
+        .variant(HubText::GroupTitle.role())
+        .nowrap(),
+    )
+    .with_children(count.map(|count| Text::new(count).variant(HubText::Hint.role()).nowrap()))
+}
+
 /// A list row: a tile, its label and hint, then `end` and a chevron when it opens something.
 pub(crate) struct Entry {
   id: Arc<str>,
@@ -127,6 +154,7 @@ pub(crate) struct Entry {
   end: Vec<Element>,
   press: Option<Press>,
   elsewhere: bool,
+  indent: bool,
 }
 
 impl Entry {
@@ -139,6 +167,7 @@ impl Entry {
       end: Vec::new(),
       press: None,
       elsewhere: false,
+      indent: false,
     }
   }
 
@@ -174,6 +203,12 @@ impl Entry {
     self.elsewhere = true;
     self
   }
+
+  /// The row sits under a step's sub-head, indented as far as it (`XWrFf` in `w31Kt`).
+  pub(crate) fn indented(mut self) -> Self {
+    self.indent = true;
+    self
+  }
 }
 
 impl From<Entry> for Element {
@@ -202,9 +237,20 @@ impl From<Entry> for Element {
     } else {
       Icon::ChevronRight
     });
+    let start = if entry.indent {
+      HubSpacing::Indent
+    } else {
+      HubSpacing::Row
+    };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::RowY.role()))
+      .padding(
+        Padding::new()
+          .top(HubSpacing::RowY.role())
+          .bottom(HubSpacing::RowY.role())
+          .left(start.role())
+          .right(HubSpacing::Row.role()),
+      )
       .spacing(lurq::app::theme::SpacingSize::Md)
       .align_items(Alignment::Center)
       .with_children(entry.tile.map(|glyph| tile(glyph, false)))

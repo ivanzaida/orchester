@@ -58,7 +58,8 @@ pub struct More {
   pub remove: Arc<dyn Fn() + Send + Sync>,
 }
 
-pub fn head(ctx: &mut Ctx, (title, sub): (&str, &str), more: Option<More>) -> Element {
+/// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet.
+pub fn head(ctx: &mut Ctx, (title, sub, sub_id): (&str, &str, &str), more: Option<More>) -> Element {
   let menu = more.map(|more| {
     let remove = more.remove.clone();
     let item = MenuItem::new("instruction-remove", ctx.t("hub.remove.action"), move || remove())
@@ -93,7 +94,7 @@ pub fn head(ctx: &mut Ctx, (title, sub): (&str, &str), more: Option<More>) -> El
             .id("instruction-title")
             .variant(HubText::PageTitle.role()),
         )
-        .child(Text::new(sub).id("instruction-sub").variant(HubText::Hint.role())),
+        .child(Text::new(sub).id(sub_id.to_owned()).variant(HubText::Hint.role())),
     )
     .with_children(menu)
     .into()

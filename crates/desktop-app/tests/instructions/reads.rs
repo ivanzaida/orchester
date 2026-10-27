@@ -34,6 +34,7 @@ fn instructions_reload_reads_the_list_again_too() {
   let mut screen = Instructions::new();
   let id = screen.rule("Standards", "Opened draft", InstructionScope::Project, false);
   screen.go();
+  screen.click("instruction-variables");
   screen.until("ready to publish", |s| s.exists("instruction-variable-insert"));
   // Written by another program: nothing tells the window.
   editor::save_in(
