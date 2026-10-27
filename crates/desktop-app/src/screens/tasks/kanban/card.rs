@@ -29,8 +29,10 @@ use orchester_workspace::tasks::{
   list::{PipelineLabel, ReadinessKind, TaskRow},
 };
 
-use super::super::{list::age, phrase::Phrase, row::points_chip};
-use super::display::{Display, Property};
+use super::{
+  super::{list::age, phrase::Phrase, row::points_chip},
+  display::{Display, Property},
+};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{

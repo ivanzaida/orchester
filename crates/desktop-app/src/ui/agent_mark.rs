@@ -1,7 +1,7 @@
 //! The mark of who runs an agent (`Claude` and `Codex` in the cards of `Tasks board · redesign` `J6gQo`): Claude's in
-//! `mark_claude` for a Claude agent (Claude Code, or Anthropic's API run by Orchester), the OpenAI knot in `text_primary`
-//! for a Codex or OpenAI agent, 14 square. The bundled lucide font carries no brand icons, so both are the design's
-//! own paths (`assets/icons/claude.svg`, `codex.svg`).
+//! `mark_claude` for a Claude agent (Claude Code, or Anthropic's API run by Orchester), the OpenAI knot in
+//! `text_primary` for a Codex or OpenAI agent, 14 square. The bundled lucide font carries no brand icons, so both are
+//! the design's own paths (`assets/icons/claude.svg`, `codex.svg`).
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},

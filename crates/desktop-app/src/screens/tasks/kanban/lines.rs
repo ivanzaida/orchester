@@ -1,8 +1,8 @@
 //! The lines over the board's columns and the hint under a lifted card: a change that did not happen, *{{task}} was not
 //! changed. {{reason}}* on `danger_muted` until it is dismissed (`Error line` in `14 Shared project` `EFrKQ`, `A drop
 //! that fails` `Crd26`); where a task canceled from the board went, *KON-16 is Canceled.* with Reopen task and Show
-//! Canceled (`Done line` in `Where a canceled card goes` `VAbCz`); and while a card is lifted, what dropping it where it
-//! is over does, with Esc that cancels (`Hint` `n5NsV` in `02 Dragging` `Yyeme`).
+//! Canceled (`Done line` in `Where a canceled card goes` `VAbCz`); and while a card is lifted, what dropping it where
+//! it is over does, with Esc that cancels (`Hint` `n5NsV` in `02 Dragging` `Yyeme`).
 
 use lurq::{
   app::{

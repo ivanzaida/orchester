@@ -2,9 +2,9 @@
 //! workspace's rules ([`moves::decide`]): a drop that changes nothing stays, a refused one says why at the column's
 //! top, Done and Canceled close the task through the screen's closer (its run stopped first after the confirmation in
 //! place), Done asks first for work that waits to be merged, Todo asks first when queuing starts the task at once and
-//! offers Run again for a task whose run ended. By priority or module a drop sets them; by pipeline it is refused, since
-//! a pipeline is chosen on the task's page. A drop into another row of the board sets the row's module or priority too.
-//! The Move to menu and the keys move a card the same way.
+//! offers Run again for a task whose run ended. By priority or module a drop sets them; by pipeline it is refused,
+//! since a pipeline is chosen on the task's page. A drop into another row of the board sets the row's module or
+//! priority too. The Move to menu and the keys move a card the same way.
 
 use std::sync::Arc;
 

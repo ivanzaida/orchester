@@ -209,8 +209,8 @@ fn note(words: &str) -> Text {
     .nowrap()
 }
 
-/// *New task* at Backlog's foot, which opens the field; faded and pressed in vain while quick add is locked, its tooltip
-/// saying why.
+/// *New task* at Backlog's foot, which opens the field; faded and pressed in vain while quick add is locked, its
+/// tooltip saying why.
 fn foot(ctx: &Ctx, open: Result<Arc<dyn Fn() + Send + Sync>, Arc<str>>) -> Element {
   let content = |row: Row| {
     row

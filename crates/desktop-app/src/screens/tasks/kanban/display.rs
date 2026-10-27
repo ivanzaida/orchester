@@ -258,8 +258,8 @@ fn key(project: ProjectId) -> String {
   format!("orchester-app.tasks.display.{project}")
 }
 
-/// How `project`'s tasks were last shown; the defaults when nothing was kept. Blocks on SQLite (one row). What cannot be
-/// read is logged and reads as the defaults: only this app writes it.
+/// How `project`'s tasks were last shown; the defaults when nothing was kept. Blocks on SQLite (one row). What cannot
+/// be read is logged and reads as the defaults: only this app writes it.
 pub fn read(workspace: &Workspace, project: ProjectId) -> Display {
   match workspace.ui_state(&key(project)) {
     Ok(Some(text)) => Display::decode(&text).unwrap_or_else(|| {
