@@ -123,18 +123,19 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   );
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("nothing to import"));
-  s.click("skill-import-preview-2");
-  assert!(s.text("skill-import-content").contains("Run cargo check"));
-  assert!(s.text("skill-import-preview").contains("notes.md"));
-  assert!(s.text("skill-import-preview").contains("Check the project"));
+  s.click("skill-import-item-2");
+  assert!(s.text("skill-import-source-text").contains("Run cargo check"));
+  assert!(s.text("skill-import-source").contains("notes.md"));
+  assert!(s.text("skill-import-source").contains("Check the project"));
   let preview = s
     .window
     .tree
-    .get_element_by_id_mut("skill-import-preview")
+    .get_element_by_id_mut("skill-import-source")
     .and_then(|e| e.bounds())
     .expect("preview bounds");
+  // The one import page (02c): the preview is the 384 side beside the 720 groups.
   assert!(
-    (preview.width - 732.0).abs() < 1.0 && preview.height > 400.0,
+    (preview.width - 384.0).abs() < 1.0 && preview.height > 300.0,
     "preview stays beside repository items: {preview:?}"
   );
   s.click("skill-import-create");
@@ -159,7 +160,9 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
     w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Draft v1"))
   });
   s.click(&format!("skill-row-{}", entries.entries[0].id));
-  assert!(s.text("skill-inspector").contains("notes.md"));
+  // 03b: the reference files sit under the body, the origin beside them.
+  assert!(s.text("skill-files").contains("notes.md"));
+  assert!(s.text("skill-inspector").contains("Imported from"));
   assert!(s.text("skill-origin-source").contains(".claude/skills/checks"));
 }
 #[test]

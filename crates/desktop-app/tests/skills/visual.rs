@@ -30,12 +30,14 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("1 instruction, 2 skills"));
   assert!(s.text("skill-import-create").contains("Create 3 drafts"));
-  assert!(s.text("skill-source-type-0").contains("Instruction"));
-  assert!(s.text("skill-source-type-1").contains("Skill"));
-  s.click("skill-import-select-2");
+  // Grouped by kind as 02c draws them: each group says what its items become.
+  assert!(s.text("skill-import-instructions").contains("each becomes a draft project instruction"));
+  assert!(s.text("skill-import-instructions").contains("AGENTS.md"));
+  assert!(s.text("skill-import-skills").contains("Skills · each becomes a draft skill"));
+  s.click("skill-import-toggle-2");
   assert!(s.text("skills-import-review").contains("1 instruction, 1 skill"));
   assert!(s.text("skill-import-create").contains("Create 2 drafts"));
-  s.click("skill-import-select-2");
+  s.click("skill-import-toggle-2");
   s.window.pass();
   check_review_geometry(&mut s);
   s.click("skill-import-create");
@@ -102,9 +104,10 @@ fn skills_visual_found_in_this_repository_counts_and_opens_the_import() {
   s.window.until("the import page", |w| {
     w.tree.get_element_by_id("skills-import-review").is_some()
   });
-  assert!(s.text("skill-source-1").contains("CLAUDE.md"));
-  assert!(s.text("skill-source-summary-1").contains("nothing to import"));
-  assert!(s.window.tree.get_element_by_id("skill-source-arrow-1").is_none());
+  assert!(s.text("skill-import-path-1").contains("CLAUDE.md"));
+  assert!(s.text("skill-import-detail-1").contains("nothing to import"));
+  // A source with nothing to import is not chosen: three of the four items become drafts.
+  assert!(s.text("skill-import-create").contains("Create 3 drafts"));
 }
 
 #[test]
@@ -312,14 +315,13 @@ fn prepare_import(s: &Skills) -> PathBuf {
   fs::write(&reference, "Private reference content").expect("reference");
   reference
 }
+/// 02c's layout: the notice above the groups, rows holding their path over what it becomes, the bar last.
 fn check_review_geometry(s: &mut Skills) {
   for i in 1..=2 {
-    let title = bounds(s, &format!("skill-source-{i}"));
-    let summary = bounds(s, &format!("skill-source-summary-{i}"));
-    let row = bounds(s, &format!("skill-source-row-{i}"));
-    let kind = bounds(s, &format!("skill-source-type-{i}"));
-    assert!(row.height >= 50.0, "rows grow from the ordinary 50px design height");
-    assert!(title.width > 200.0, "source keeps its allocated width: {title:?}");
+    let title = bounds(s, &format!("skill-import-path-{i}"));
+    let summary = bounds(s, &format!("skill-import-detail-{i}"));
+    let row = bounds(s, &format!("skill-import-item-{i}"));
+    assert!(row.height >= 50.0, "rows keep the design's 58px rows: {row:?}");
     assert!(
       summary.y >= title.y + title.height - 0.1,
       "source and summary do not overlap: {title:?} / {summary:?}"
@@ -328,17 +330,18 @@ fn check_review_geometry(s: &mut Skills) {
       row.y + row.height >= summary.y + summary.height - 0.1,
       "row contains wrapped summary"
     );
-    assert!(kind.x >= title.x + title.width - 0.1, "type is a separate column");
   }
   let notice = bounds(s, "skill-import-notice");
+  let groups = bounds(s, "skill-import-instructions");
   let footer = bounds(s, "skill-import-footer");
   let review = bounds(s, "skills-import-review");
+  assert!(groups.y >= notice.y + notice.height, "the notice comes first");
   assert!(
-    footer.y >= notice.y + notice.height,
-    "consequences precede the final action band"
+    footer.y >= groups.y + groups.height,
+    "the groups precede the final action band"
   );
   assert!(
     (footer.y + footer.height - review.y - review.height).abs() < 0.1,
-    "footer is the final band"
+    "the bar is the column's last part"
   );
 }

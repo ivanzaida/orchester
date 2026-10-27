@@ -1,14 +1,16 @@
-//! Repository import review U69ob: reads repository files and creates only selected drafts.
+//! Import from repository (`02c` `P21bwh`), one page under the hub's tabs reached from Instructions and Skills: the
+//! crumb, the page's title and where it read, the notice that it only creates drafts, then one group per kind with a
+//! row per item found, and the bar with what is chosen, Cancel and Create; beside them the opened item's preview. It
+//! reads repository files and creates only the chosen drafts.
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Text},
   core::Signal,
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   agent_files::import::{Candidate, ImportItem, ItemKind, Unimportable},
@@ -22,19 +24,21 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::{
-  import_rows::{Unchosen, Viewed},
-  state::Selection,
-};
+use super::state::Selection;
 use crate::{
   project::ShownProject,
-  theme::{ExtraSpacing, ExtraTypography},
+  screens::hub::{
+    self,
+    draft_bar::{DraftBar, Standing},
+    import_preview,
+    import_rows::{Review, Unchosen, Viewed},
+    page_head,
+  },
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
   ui::{
-    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::Icon,
-    icon_button::IconButton,
     notice::{Notice, NoticeTone},
   },
 };
@@ -118,64 +122,80 @@ impl Component for Import {
       })
       .state()
       .get();
-    let page = Column::new()
+    let mut page = Column::new()
       .id("instruction-import-review")
       .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .child(header(ctx, &props));
+      .spacing(HubSpacing::Sections.role())
+      .child(top(ctx, &props));
     if read.is_pending() && read.data.is_none() {
-      return page.child(crate::ui::state::loading(
+      page = page.child(crate::ui::state::loading(
         "instruction-import-loading",
         &ctx.t("instructions.importReading"),
       ));
+      return hub::item_body(PAGE, page, None);
     }
     if read.is_rejected() {
-      return page.child(field_error(
+      page = page.child(field_error(
         "instruction-import-error",
         &ctx.t("instructions.importReadFailed"),
       ));
+      return hub::item_body(PAGE, page, None);
     }
     let Some(scan) = read.data else {
-      return page;
+      return hub::item_body(PAGE, page, None);
     };
     self.loaded(ctx, &props, &scan, page)
   }
 }
+/// The page's scrolling body (`instruction-import-page`, its `-pane` and `-side`).
+const PAGE: &str = "instruction-import-page";
 impl Import {
-  fn loaded(&self, ctx: &mut Ctx, props: &Props, scan: &RepositoryScan, mut page: Column) -> Column {
+  fn loaded(&self, ctx: &mut Ctx, props: &Props, scan: &RepositoryScan, mut page: Column) -> Element {
     let state = self.action.state().get();
     if let Some(Imported(created)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-      return self.created(ctx, props, created, page);
+      return hub::item_body(PAGE, self.created(ctx, props, created, page), None);
     }
+    page = page.child(
+      Notice::new(
+        "instruction-import-notice",
+        NoticeTone::Info,
+        ctx.t("instructions.importDraftsOnly"),
+      )
+      .icon(Icon::Info)
+      .body(ctx.t("instructions.importNote")),
+    );
     if state.is_rejected() {
       page = page.child(field_error(
         "instruction-import-error",
         &ctx.t("instructions.importFailed"),
       ));
     }
-    page
-      .child(self.review(ctx, scan, state.is_pending()))
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(
-            Padding::new()
-              .left(SpacingSize::Xl)
-              .right(SpacingSize::Xl)
-              .bottom(SpacingSize::Md),
-          )
-          .child(
-            Notice::new(
-              "instruction-import-notice",
-              NoticeTone::Info,
-              ctx.t("instructions.importDraftsOnly"),
-            )
-            .icon(Icon::ShieldCheck)
-            .body(ctx.t("instructions.importNote")),
-          ),
+    let busy = state.is_pending();
+    page = if scan.items.is_empty() {
+      page.child(
+        Text::new(&ctx.t("instructions.importEmpty"))
+          .id("instruction-import-empty")
+          .variant(HubText::Hint.role()),
       )
-      .child(self.footer(ctx, props, scan, state.is_pending()))
+    } else {
+      let review = Review {
+        id: "instruction-import",
+        items: &scan.items,
+        unchosen: self.unchosen.clone(),
+        viewed: self.viewed.clone(),
+        busy,
+        detail: item_detail,
+      };
+      page.with_children(review.groups(ctx))
+    };
+    page = page.child(self.footer(ctx, props, scan, busy));
+    let side = import_preview::preview(
+      ctx,
+      "instruction-import",
+      self.viewed.get().item(&scan.items),
+      item_detail,
+    );
+    hub::item_body(PAGE, page, Some(side))
   }
   fn created(&self, ctx: &Ctx, props: &Props, created: &[CreatedDraft], mut page: Column) -> Column {
     page = page.child(
@@ -196,68 +216,30 @@ impl Import {
       .opens(selection.to(selection.opened_from())),
     )
   }
-  fn review(&self, ctx: &mut Ctx, scan: &RepositoryScan, busy: bool) -> Element {
-    let rows = if scan.items.is_empty() {
-      Element::from(Text::new(&ctx.t("instructions.importEmpty")).variant(TypographyStyle::Description))
-    } else {
-      super::import_rows::list(ctx, &scan.items, self.unchosen.clone(), self.viewed.clone(), busy)
-    };
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .child(
-        Column::new()
-          .width(Dimension::Px(IMPORT_LIST_WIDTH))
-          .height(Dimension::Pct(100.0))
-          .min_height(Dimension::Px(0.0))
-          .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
-          .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-          .child(rows),
-      )
-      .child(
-        Column::new()
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0))
-          .height(Dimension::Pct(100.0))
-          .padding(Padding::symmetric(SpacingSize::Xl, ExtraSpacing::Inset.role()))
-          .child(super::import_preview::preview(ctx, self.viewed.get().item(&scan.items))),
-      )
-      .into()
-  }
+  /// What is chosen, then Cancel and Create (`Draft bar` `KxTuA`).
   fn footer(&self, ctx: &Ctx, props: &Props, scan: &RepositoryScan, busy: bool) -> Element {
     let chosen = self.chosen(scan);
     let instructions = chosen.iter().filter(|item| item.kind == ItemKind::Instruction).count();
     let cancel = props.selection.clone();
     let cancel = ActionButton::new(
       "instruction-import-cancel",
-      ButtonKind::Secondary,
+      ButtonKind::Ghost,
       ctx.t("instructions.cancel"),
     )
     .on_click(move || cancel.close(cancel.opened_from()));
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(IMPORT_FOOTER_HEIGHT))
-      .padding(Padding::horizontal(SpacingSize::Xl))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(
-        Text::new(&ctx.t_args(
-          "instructions.importSelection",
-          [
-            ("selected", chosen.len().to_string()),
-            ("total", scan.items.len().to_string()),
-            ("instructions", instructions.to_string()),
-            ("skills", (chosen.len() - instructions).to_string()),
-          ],
-        ))
-        .id("instruction-import-selection")
-        .variant(TypographyStyle::Description)
-        .flex(1.0),
-      )
-      .child(if busy { cancel.disabled() } else { cancel })
-      .child(self.create_button(ctx, scan, busy))
+    let status = ctx.t_args(
+      "instructions.importSelection",
+      [
+        ("selected", chosen.len().to_string()),
+        ("total", scan.items.len().to_string()),
+        ("instructions", instructions.to_string()),
+        ("skills", (chosen.len() - instructions).to_string()),
+      ],
+    );
+    // `instruction-import-selection`: the bar keeps the id the import gave what is chosen.
+    DraftBar::new("instruction-import-selection", Standing::Choosing, status)
+      .action(if busy { cancel.disabled() } else { cancel })
+      .action(self.create_button(ctx, scan, busy))
       .into()
   }
   fn create_button(&self, ctx: &Ctx, scan: &RepositoryScan, busy: bool) -> ActionButton {
@@ -285,65 +267,47 @@ impl Import {
 impl Import {
   /// The items the import makes drafts of, in the scan's order.
   fn chosen(&self, scan: &RepositoryScan) -> Vec<ImportItem> {
-    let unchosen = self.unchosen.get();
-    scan
-      .items
-      .iter()
-      .filter(|item| unchosen.chosen(item))
-      .cloned()
-      .collect()
+    self.unchosen.get().of(&scan.items)
   }
 }
-/// Items pane qNGoR and footer WLlV8 in the import review.
-const IMPORT_LIST_WIDTH: f32 = 460.0;
-const IMPORT_FOOTER_HEIGHT: f32 = 56.0;
-
-fn header(ctx: &mut Ctx, props: &Props) -> Element {
+/// The crumb back to Instructions, then the page's title and where it read (`Top` `F9FVc`).
+fn top(ctx: &Ctx, props: &Props) -> Element {
   let back = &props.selection;
-  let crumbs = breadcrumb(
-    ctx,
+  let title = ctx.t("instructions.import");
+  let crumb = page_head::crumb(
     "instruction-import-crumbs",
-    CrumbSeparator::Chevron,
-    vec![
-      Crumb::to(ctx.t("instructions.title"), back.to(back.opened_from())),
-      Crumb::here(ctx.t("instructions.import")),
-    ],
+    (&ctx.t("instructions.title"), back.to(back.opened_from())),
+    Some(&title),
   );
-  let back = IconButton::new(
-    "instruction-import-return",
-    Icon::ArrowLeft,
-    ctx.t("instructions.backInstructions"),
-  )
-  .small()
-  .opens(back.to(back.opened_from()))
-  .render(ctx);
+  let detail = ctx.t_args(
+    "instructions.importDetail",
+    [("folder", props.project.open.repo_root.to_string_lossy().as_ref())],
+  );
   Column::new()
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Xl, ExtraSpacing::Inset.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Xs)
-        .align_items(Alignment::Center)
-        .child(back)
-        .child(crumbs),
-    )
+    .spacing(HubSpacing::Row.role())
+    .child(crumb)
     .child(
       Column::new()
+        .id("instruction-import-head")
         .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Xs)
-        .child(Text::new(&ctx.t("instructions.import")).variant(TypographyStyle::Heading))
+        .spacing(ExtraSpacing::Fine.role())
         .child(
-          Text::new(&ctx.t_args(
-            "instructions.importDetail",
-            [("folder", props.project.open.repo_root.to_string_lossy().as_ref())],
-          ))
-          .variant(TypographyStyle::Description),
+          Text::new(&title)
+            .id("instruction-import-title")
+            .variant(HubText::PageTitle.role()),
+        )
+        .child(
+          Text::new(&detail)
+            .id("instruction-import-sub")
+            .variant(HubText::Hint.role())
+            .color(PaletteColor::TextSecondary)
+            .width(Dimension::Pct(100.0)),
         ),
     )
     .into()
 }
+/// What an item becomes, or why it cannot be imported (`Draft project instruction “AGENTS” · 84 lines`).
 pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
   match &item.outcome {
     Err(Unimportable::OnlyImports { targets }) => ctx.t_args(

@@ -1,15 +1,18 @@
-//! Repository review d9qrZ and result XNgaG; no repository file is written.
-use std::{collections::BTreeSet, sync::Arc};
+//! Import from repository as Skills opens it (`02c` `P21bwh`), the same page Instructions opens: the crumb, the
+//! page's title and where it read, the notice that it only creates drafts, the groups of items found and the bar
+//! with what is chosen, Cancel and Create, with the opened item's preview beside them; then its result (`03c`
+//! `cC55E`). No repository file is written. Also *Found in this repository* on the Skills list.
+use std::sync::Arc;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, Text},
   core::Signal,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   agent_files::import::{Candidate, ImportItem, ItemKind, Unimportable},
@@ -29,21 +32,27 @@ use orchester_workspace::{
 use super::PageProps;
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  screens::hub::parts as hub_parts,
+  screens::hub::{
+    self,
+    draft_bar::{DraftBar, Standing},
+    import_preview,
+    import_rows::{Review, Unchosen, Viewed},
+    page_head, parts as hub_parts,
+  },
   services::Services,
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
+    icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
     tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
 };
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Chosen(pub BTreeSet<String>);
-impl DevtoolsInspectable for Chosen {}
+/// The review's id: its rows, groups and preview are named after it (`skill-import-item-<n>`, `skill-import-source`).
+const REVIEW: &str = "skill-import";
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Created {
   drafts: Vec<CreatedDraft>,
@@ -61,8 +70,8 @@ type Work = FutureAction<
   Message,
 >;
 pub struct Import {
-  selected: Signal<Chosen>,
-  preview: Signal<usize>,
+  unchosen: Signal<Unchosen>,
+  viewed: Signal<Viewed>,
   key: IdempotencyKey,
   work: Work,
 }
@@ -96,18 +105,9 @@ impl Component for Import {
         revision.update(|r| *r += 1);
       }
     });
-    let selected = ctx
-      .props::<PageProps>()
-      .data
-      .repository
-      .items
-      .iter()
-      .filter(|i| i.outcome.is_ok())
-      .map(|i| i.source.clone())
-      .collect();
     Self {
-      selected: ctx.signal(Chosen(selected)),
-      preview: ctx.signal(0),
+      unchosen: ctx.signal(Unchosen::default()),
+      viewed: ctx.signal(Viewed::default()),
       key: IdempotencyKey::generate(),
       work,
     }
@@ -118,54 +118,38 @@ impl Component for Import {
     if let Some(created) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
       return super::import_result::result(ctx, &p, &created.drafts, created.total);
     }
-    let items = p.data.repository.items.clone();
-    let header = self.review_header(ctx, &p);
-    let list = self.items(ctx, &items, state.is_pending());
-    let preview = items
-      .get(self.preview.get())
-      .map(|item| super::import_preview::panel(ctx, item));
-    let page = Column::new()
+    let items = &p.data.repository.items;
+    let pending = state.is_pending();
+    let mut page = Column::new()
       .id("skills-import-review")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(header)
+      .spacing(HubSpacing::Sections.role())
+      .child(review_top(ctx, &p))
       .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0))
-          .child(
-            ScrollVertical::new(list)
-              .width(Dimension::Px(460.0))
-              .height(Dimension::Pct(100.0))
-              .border_right(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border)),
-          )
-          .with_children(preview),
+        Notice::new("skill-import-notice", NoticeTone::Info, ctx.t("skills.importNotice"))
+          .icon(Icon::Info)
+          .body(ctx.t("skills.importNoticeDetail")),
       )
       .with_children(
         state
           .error
           .as_ref()
-          .filter(|_| !state.is_pending())
+          .filter(|_| !pending)
           .map(|error| field_error("skill-import-error", &message_text(ctx, error))),
-      )
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(
-            Padding::new()
-              .left(SpacingSize::Xl)
-              .right(SpacingSize::Xl)
-              .bottom(crate::theme::skills::cell_spacing()),
-          )
-          .child(
-            Notice::new("skill-import-notice", NoticeTone::Info, ctx.t("skills.importNotice"))
-              .body(ctx.t("skills.importNoticeDetail")),
-          ),
       );
-    page
-      .child(self.review_footer(ctx, &p, &items, state.is_pending()))
-      .into()
+    let review = Review {
+      id: REVIEW,
+      items,
+      unchosen: self.unchosen.clone(),
+      viewed: self.viewed.clone(),
+      busy: pending,
+      detail: item_summary,
+    };
+    page = page
+      .with_children(review.groups(ctx))
+      .child(self.review_bar(ctx, &p, items, pending));
+    let side = import_preview::preview(ctx, REVIEW, self.viewed.get().item(items), item_summary);
+    hub::item_body("skills-import-page", page, Some(side))
   }
 }
 pub fn item_summary(ctx: &Ctx, item: &ImportItem) -> Arc<str> {
@@ -359,13 +343,21 @@ impl Found {
   }
 }
 impl Import {
-  fn review_footer(&self, ctx: &Ctx, p: &PageProps, items: &[ImportItem], pending: bool) -> Row {
-    let chosen = self.selected.get().0;
-    let chosen = items
-      .iter()
-      .filter(|i| chosen.contains(&i.source))
-      .cloned()
-      .collect::<Vec<_>>();
+  /// What is chosen, then Cancel and Create (`Draft bar` `KxTuA`).
+  fn review_bar(&self, ctx: &Ctx, p: &PageProps, items: &[ImportItem], pending: bool) -> Element {
+    let chosen = self.unchosen.get().of(items);
+    let instructions = chosen.iter().filter(|i| i.kind == ItemKind::Instruction).count();
+    let status = ctx.t_args(
+      "skills.importSelected",
+      [
+        ("selected", chosen.len().to_string()),
+        ("total", items.len().to_string()),
+        (
+          "types",
+          super::words::types(ctx, instructions, chosen.len() - instructions).to_string(),
+        ),
+      ],
+    );
     let open = p.project.open.clone();
     let action = self.work.clone();
     let key = self.key;
@@ -375,120 +367,57 @@ impl Import {
       ButtonKind::Primary,
       ctx.t_args("skills.importAction", [("count", chosen.len().to_string())]),
     )
-    .icon(crate::ui::icon::Icon::FilePlus);
+    .icon(Icon::FilePlus);
     let button = if chosen.is_empty() || pending {
       button.disabled()
     } else {
       button.on_click(move || action.run((open.clone(), key, chosen.clone(), total)))
     };
-    let count = Text::new(
-      &ctx.t_args(
-        "skills.importSelected",
-        [
-          ("selected", self.selected.get().0.len().to_string()),
-          ("total", items.len().to_string()),
-          (
-            "types",
-            super::words::types(
-              ctx,
-              items
-                .iter()
-                .filter(|i| self.selected.get().0.contains(&i.source) && i.kind == ItemKind::Instruction)
-                .count(),
-              items
-                .iter()
-                .filter(|i| self.selected.get().0.contains(&i.source) && i.kind == ItemKind::Skill)
-                .count(),
-            )
-            .to_string(),
-          ),
-        ],
-      ),
-    )
-    .variant(TypographyStyle::Caption);
     let back = p.view.panel.clone();
-    let cancel = ActionButton::new("skills-back", ButtonKind::Secondary, ctx.t("skills.cancel"))
+    let cancel = ActionButton::new("skills-back", ButtonKind::Ghost, ctx.t("skills.cancel"))
       .on_click(move || back.close(back.library()));
     let cancel = if pending { cancel.disabled() } else { cancel };
-    Row::new()
-      .id("skill-import-footer")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(56.0))
-      .align_items(lurq::layout::Alignment::Center)
-      .padding(Padding::horizontal(SpacingSize::Xl))
-      .spacing(SpacingSize::Sm)
-      .border_top(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(count)
-      .child(lurq::components::Spacer::new().flex(1.0))
-      .child(cancel)
-      .child(button)
+    // `skill-import-footer`: the bar keeps the id the review gave its footer.
+    DraftBar::new("skill-import-footer", Standing::Choosing, status)
+      .action(cancel)
+      .action(button)
+      .into()
   }
-  fn review_header(&self, ctx: &mut Ctx, p: &PageProps) -> Column {
-    let back = p.view.panel.clone();
-    let here = ctx.t("skills.import");
-    let crumbs = crate::screens::hub::page_head::crumb(
-      "skill-import-crumb",
-      (&ctx.t("hub.tabs.skills"), back.to(back.library())),
-      Some(&here),
-    );
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .left(SpacingSize::Xl)
-          .right(SpacingSize::Xl)
-          .top(ExtraSpacing::Inset.role())
-          .bottom(SpacingSize::Lg),
-      )
-      .spacing(ExtraSpacing::Loose.role())
-      .border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(crumbs)
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Xs)
-          .child(Text::new(&ctx.t("skills.import")).variant(TypographyStyle::Heading))
-          .child(
-            Text::new(&ctx.t_args(
-              "skills.importDetail",
-              [("folder", p.project.open.repo_root.display().to_string())],
-            ))
-            .width(Dimension::Pct(100.0))
-            .variant(TypographyStyle::Description),
-          ),
-      )
-  }
-  fn items(&self, ctx: &mut Ctx, items: &[ImportItem], pending: bool) -> Column {
-    let mut list = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-      .spacing(SpacingSize::Sm);
-    for kind in [ItemKind::Instruction, ItemKind::Skill] {
-      list = list.child(
-        Text::new(&ctx.t(if kind == ItemKind::Skill {
-          "skills.importSkills"
-        } else {
-          "skills.importInstructions"
-        }))
-        .variant(crate::theme::skills::import_caption()),
-      );
-
-      let entries = items
-        .iter()
-        .enumerate()
-        .filter(|(_, i)| i.kind == kind)
-        .map(|(index, item)| (index, item.clone()))
-        .collect();
-      list = list.child(super::repository_list::listed(
-        ctx,
-        &format!("skill-import-{kind:?}"),
-        entries,
-        Some(self.selected.clone()),
-        Some(self.preview.clone()),
-        pending,
-      ));
-    }
-
-    list
-  }
+}
+/// The crumb back to Skills, then the page's title and where it read (`Top` `F9FVc`).
+fn review_top(ctx: &Ctx, p: &PageProps) -> Element {
+  let back = p.view.panel.clone();
+  let title = ctx.t("skills.import");
+  let crumb = page_head::crumb(
+    "skill-import-crumb",
+    (&ctx.t("hub.tabs.skills"), back.to(back.library())),
+    Some(&title),
+  );
+  let detail = ctx.t_args(
+    "skills.importDetail",
+    [("folder", p.project.open.repo_root.display().to_string())],
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Row.role())
+    .child(crumb)
+    .child(
+      Column::new()
+        .id("skill-import-head")
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Fine.role())
+        .child(
+          Text::new(&title)
+            .id("skill-import-title")
+            .variant(HubText::PageTitle.role()),
+        )
+        .child(
+          Text::new(&detail)
+            .id("skill-import-sub")
+            .variant(HubText::Hint.role())
+            .color(PaletteColor::TextSecondary)
+            .width(Dimension::Pct(100.0)),
+        ),
+    )
+    .into()
 }

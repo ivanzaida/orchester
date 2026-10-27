@@ -12,10 +12,15 @@ fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
   screen.go();
   screen.click("instructions-import");
   screen.until("review", |s| s.exists("instruction-import-create"));
-  // A page of its own under the hub's tabs (02c): the list is not beside it.
+  // A page of its own under the hub's tabs (02c): the list is not beside it, the preview is.
   assert!(!screen.exists("instruction-library") && !screen.exists("instructions-empty"));
-  let review = screen.text("instruction-import-review");
-  assert!(review.contains("INSTRUCTIONS"));
+  assert!(screen.text("instruction-import-title").contains("Import from repository"));
+  assert!(
+    screen
+      .text("instruction-import-instructions-title")
+      .contains("Instructions · each becomes a draft project instruction")
+  );
+  let review = screen.text("instruction-import-page");
   assert!(review.contains("Draft project instruction AGENTS · v1"));
   assert!(review.contains("Project · change it in the editor"));
   assert!(review.contains("All agents · Agent start"));

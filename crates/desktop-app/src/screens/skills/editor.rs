@@ -1,8 +1,10 @@
 //! A skill's page (`03b Skill` `QbDWX`), one page under the hub's tabs: the crumb, head and draft bar, then the skill's
-//! name, scope, description and body, with where it loads, its versions, origin, files and active runs beside it. An
-//! edit saves the draft on its own; publishing asks first. Questions open in place, never in a modal.
+//! name, scope and description, its body and its reference files, with where it loads, its versions, origin and
+//! active runs beside them. An edit saves the draft on its own; publishing asks first. Questions open in place, never
+//! in a modal.
 
 mod asks;
+mod files;
 mod form;
 mod header;
 
@@ -23,11 +25,14 @@ use super::{
   work::{self, Change, Saved, Work},
 };
 use crate::{screens::hub, theme::HubSpacing};
-// The scope picker's width and the description's height in the form.
-const SCOPE_WIDTH: f32 = 300.0;
+/// A field's width in the *Skill* rows (`zalHn`, `MdHMb`) and the description's height.
+const FIELD_WIDTH: f32 = 280.0;
 const DESCRIPTION_HEIGHT: f32 = 64.0;
 /// The body's editor, in a page that scrolls.
 const BODY_HEIGHT: f32 = 240.0;
+/// The page's main column (`Pane` `FgUP6`) and its side (`Side` `jGRYJ`).
+const MAIN_WIDTH: f32 = 680.0;
+const SIDE_WIDTH: f32 = 424.0;
 #[derive(Clone)]
 pub struct Props {
   pub page: PageProps,
@@ -154,16 +159,9 @@ impl Component for Editor {
     pane = pane
       .with_children(self.failure(ctx, &p))
       .with_children(self.reload_question(ctx, &p, busy))
-      .child(self.form(ctx, &p, parsed.as_ref().err()));
-    let side = inspector::panel(
-      ctx,
-      &p.page,
-      baseline.as_ref(),
-      self.files.clone(),
-      self.choosing_file.clone(),
-      busy,
-    );
-    hub::item_body("skill-page", pane, Some(side))
+      .with_children(self.form(ctx, &p, parsed.as_ref().err(), busy));
+    let side = inspector::panel(ctx, &p.page, baseline.as_ref());
+    hub::page_body("skill-page", (pane.into(), MAIN_WIDTH), (side, SIDE_WIDTH))
   }
 }
 impl Editor {

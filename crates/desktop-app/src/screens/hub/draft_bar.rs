@@ -25,6 +25,8 @@ pub(crate) enum Standing {
   Attention,
   /// Nothing to publish: the latest version is current.
   Published,
+  /// Items being chosen, e.g. what an import creates (`F3ukWF` in 02c).
+  Choosing,
 }
 
 impl Standing {
@@ -33,6 +35,7 @@ impl Standing {
       Self::Draft => (Icon::CircleDashed, PaletteColor::Warning),
       Self::Attention => (Icon::TriangleAlert, PaletteColor::Warning),
       Self::Published => (Icon::CircleCheck, PaletteColor::Success),
+      Self::Choosing => (Icon::ListChecks, PaletteColor::TextSecondary),
     }
   }
 }

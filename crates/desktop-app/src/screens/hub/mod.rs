@@ -7,6 +7,8 @@
 
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
+pub(crate) mod import_preview;
+pub(crate) mod import_rows;
 pub(crate) mod page_head;
 pub(crate) mod parts;
 pub(crate) mod pills;
