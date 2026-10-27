@@ -53,9 +53,10 @@ pub fn column_question(ctx: &mut Ctx) -> Option<Element> {
 }
 
 impl Writes {
-  /// *Save draft* while edits are unsaved; it asks first when the draft would be weaker.
+  /// *Save draft* while edits are unsaved, a field's error among them (`02g` `PexNQ`), disabled until they are
+  /// valid; it asks first when the draft would be weaker.
   pub fn save_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> Option<ActionButton> {
-    if editing.viewing.is_some() || !editing.dirty() {
+    if editing.viewing.is_some() || !editing.unsaved() {
       return None;
     }
     let writes = self.clone();

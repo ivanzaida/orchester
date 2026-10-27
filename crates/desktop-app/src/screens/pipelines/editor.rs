@@ -369,10 +369,15 @@ impl Editor {
 
 /// The fields' errors and the rules the draft breaks that keep it from being saved.
 fn errors(ctx: &Ctx, editing: &Editing) -> Vec<Element> {
+  // A step's Instructions page shows its text's error under the field only (`02g` `PexNQ`).
+  let instructions = match &editing.view {
+    View::StepPage(key, super::state::StepPage::Instructions) => Some(format!("{key}:step-instructions")),
+    _ => None,
+  };
   let mut errors = Vec::new();
   for (field, error) in &editing.errors {
     // The Settings tab shows the name's error on its field.
-    if field == "pipeline-name" && editing.view == View::Settings {
+    if (field == "pipeline-name" && editing.view == View::Settings) || instructions.as_ref() == Some(field) {
       continue;
     }
     let message = if field == "pipeline-name" {

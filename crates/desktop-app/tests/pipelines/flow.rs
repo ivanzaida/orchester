@@ -160,3 +160,34 @@ fn pipelines_viewed_version_reads_each_step_and_restores_at_once_without_a_draft
   );
   assert!(editor.exists("pipeline-add-step"));
 }
+
+#[test]
+fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
+  let mut editor = Editor::new();
+  let id = editor.published();
+  editor.open(id);
+  editor.click("pipeline-step-step");
+  editor.click("step-instructions-row");
+  editor.set("step-instructions", "Check {{task.brief");
+  assert!(
+    editor.text("screen-pipelines").contains("never closed"),
+    "the field says what is wrong"
+  );
+  assert!(
+    !editor.exists("pipeline-field-error"),
+    "the error is said once, under the field"
+  );
+  assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
+  assert!(editor.exists("pipeline-save"), "Save draft stays in the header");
+  editor.click("pipeline-save");
+  editor.arm();
+  assert!(
+    editor.db().draft::<Pipeline>(id).unwrap().is_none(),
+    "an invalid draft is not saved"
+  );
+  editor.click("step-page-back");
+  assert!(
+    editor.exists("pipeline-field-error"),
+    "away from its field, the page says it"
+  );
+}
