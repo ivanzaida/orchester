@@ -9,6 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
+    events::KeyboardEvent,
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -22,6 +23,7 @@ use crate::{
   ui::{
     form_section::Label,
     icon::{Icon, icon},
+    pressable::pressable,
     tooltip::Tooltip,
   },
 };
@@ -151,6 +153,38 @@ fn field_row(id: &str, words: Column, control: Element) -> Element {
         .child(control),
     )
     .into()
+}
+
+/// A note under a field's control in 11.5 `text_muted`, e.g. how its pills are added (`Note` `ku8BO`).
+pub(crate) fn form_note(id: &str, words: &str) -> Text {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(ExtraTypography::Note.role())
+    .width(Dimension::Pct(100.0))
+}
+
+/// A note under a field's control that does something when pressed, e.g. *or New secret…* (`Note` `Z6Pq8I`).
+pub(crate) fn form_link(id: &str, words: &str, press: impl Fn() + Send + Sync + 'static) -> Element {
+  pressable(press)
+    .id(id.to_owned())
+    .describe("a11y_name", words)
+    .child(
+      Text::new(words)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Note.role()),
+    )
+    .into()
+}
+
+/// A key handler that runs `add` on Enter, as a field with *Add* beside it does (`Entry row` `w12Vx`); Enter adds and
+/// submits nothing else.
+pub(crate) fn on_enter(add: impl Fn() + Send + Sync + 'static) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
+  move |event: KeyboardEvent| {
+    if event.key == "Enter" && !event.shift {
+      add();
+      event.prevent_default();
+    }
+  }
 }
 
 /// A warning line under a group (`Widens` `tXVIh`, `Sent to` `s4sjZm`): a `warning` triangle and what it warns of in

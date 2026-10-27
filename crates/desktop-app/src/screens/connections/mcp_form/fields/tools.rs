@@ -14,7 +14,7 @@ use lurq::{
 
 use super::Fields;
 use crate::{
-  screens::project_settings::kit::FormField,
+  screens::project_settings::kit::{FormField, form_note, on_enter},
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -38,6 +38,7 @@ impl Fields {
           Element::from(
             TagChip::new(format!("connection-mcp-tool-{index}"), tool.as_str())
               .mono()
+              .pill()
               .removable(ctx.t("connections.mcp.dialog.removeTool"), move || {
                 kept.update(|text| *text = remove(text, &tool));
               }),
@@ -61,6 +62,7 @@ impl Fields {
     .icon(Icon::Plus)
     .in_form()
     .on_click(move || add_typed(&kept, &typed));
+    let (kept, typed) = (self.exempt_tools.clone(), self.tool.clone());
     let control = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
@@ -68,11 +70,16 @@ impl Fields {
         Row::new()
           .width(Dimension::Pct(100.0))
           .spacing(ExtraSpacing::Snug.role())
+          .on_key_down(on_enter(move || add_typed(&kept, &typed)))
           .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(entry))
           .child(add),
       )
       .with_children(error.map(|error| field_error("connection-mcp-exempt-tools-error", &error)))
-      .with_children(pills);
+      .with_children(pills)
+      .child(form_note(
+        "connection-mcp-exempt-tools-note",
+        &ctx.t("connections.mcp.dialog.toolsNote"),
+      ));
     FormField::new(
       "connection-mcp-exempt-tools",
       ctx.t("connections.mcp.dialog.runWithoutAsking"),

@@ -10,7 +10,9 @@ mod parts;
 mod row;
 
 pub(crate) use self::{
-  form::{FormField, form_actions, form_actions_noted, form_group, form_row, warning_line},
+  form::{
+    FormField, form_actions, form_actions_noted, form_group, form_link, form_note, form_row, on_enter, warning_line,
+  },
   group::Group,
   parts::{EmptyRow, Glyph, back, command_line, entity_head, outlined_tile, page_head, question, tile},
   row::{SettingRow, Tone, value},

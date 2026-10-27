@@ -425,6 +425,7 @@
         "runWithoutAsking": "Run without asking",
         "runWithoutAskingHint": "When the profile asks before MCP actions, these still run",
         "addToolPlaceholder": "Add a tool name",
+        "toolsNote": "Tool names as the server names them; every other call asks.",
         "removeTool": "Remove tool",
         "widensProgram": "This widens what agents may do: they run this program with what it is sent. Check where it comes from before you add it.",
         "widensRemote": "This widens what agents may do: they send this server what its tools are given. Check where it comes from before you add it."
@@ -528,7 +529,9 @@
       "interfaceClaudeShort": "Claude Code speaks the Anthropic Messages API",
       "interfaceCodexShort": "Codex speaks the OpenAI Responses API",
       "keyHintShort": "A project secret holds it; only the CLI process gets it",
+      "orNewSecret": "or New secret…",
       "modelsHintShort": "The ids the provider serves; profiles choose from them",
+      "modelsNote": "Enter adds it; × removes one.",
       "theHost": "the provider",
       "interface": "Interface",
       "wireClaude": "Anthropic Messages API",

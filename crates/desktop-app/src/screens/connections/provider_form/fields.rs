@@ -19,7 +19,7 @@ use orchester_workspace::connections::{api_provider::base_url, data::ProjectConn
 
 use super::{KeyChoice, OnProvider, ProviderForm, active, name_problem};
 use crate::{
-  screens::project_settings::kit::{FormField, warning_line},
+  screens::project_settings::kit::{FormField, form_link, form_note, on_enter, warning_line},
   theme::{ExtraSpacing, ExtraTypography, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -183,6 +183,15 @@ impl ProviderForm {
     if archived.is_some() {
       select = select.invalid();
     }
+    // *or New secret…* under the select (`Note` `Z6Pq8I`) chooses a new secret, as its last option does.
+    let new_secret = (self.key.get() != KeyChoice::New).then(|| {
+      let key = self.key.clone();
+      form_link(
+        "connection-provider-new-secret",
+        &ctx.t("connections.apiProvider.orNewSecret"),
+        move || key.set(KeyChoice::New),
+      )
+    });
     let control = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -194,6 +203,7 @@ impl ProviderForm {
         );
         field_error("connection-provider-key-error", &text)
       }))
+      .with_children(new_secret)
       .with_children(self.new_secret_fields(ctx, &listed.secrets));
     FormField::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
       .hint(ctx.t("connections.apiProvider.keyHintShort"))
@@ -245,8 +255,8 @@ impl ProviderForm {
     ]
   }
 
-  /// The field and *Add* that add model ids (`Entry row` `w12Vx`), and the models added as removable pills under them
-  /// (`Pills` `TQ7md`).
+  /// The field and *Add* that add model ids (`Entry row` `w12Vx`), Enter in the field as *Add*, the models added as
+  /// removable pills under them (`Pills` `TQ7md`) and the note of how (`Note` `ku8BO`).
   fn models_row(&self, ctx: &mut Ctx) -> Element {
     let listed = self.models.get().0;
     let pills = (!listed.is_empty()).then(|| {
@@ -260,6 +270,7 @@ impl ProviderForm {
           Element::from(
             TagChip::new(format!("connection-provider-model-{index}"), model.as_str())
               .mono()
+              .pill()
               .removable(ctx.t("connections.apiProvider.removeModel"), move || {
                 models.update(|models| models.0.retain(|kept| *kept != model));
                 error.set(None);
@@ -293,6 +304,7 @@ impl ProviderForm {
     .icon(Icon::Plus)
     .in_form()
     .on_click(move || Self::add_typed_models(&models, &typed, &error));
+    let (models, typed, error) = (self.models.clone(), self.model.clone(), self.model_error.clone());
     let control = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
@@ -300,13 +312,18 @@ impl ProviderForm {
         Row::new()
           .width(Dimension::Pct(100.0))
           .spacing(ExtraSpacing::Snug.role())
+          .on_key_down(on_enter(move || Self::add_typed_models(&models, &typed, &error)))
           .child(Column::new().flex(1.0).child(input))
           .child(add),
       )
       .with_children(
         problem.map(|problem| field_error("connection-provider-model-error", &message_text(ctx, &problem.message))),
       )
-      .with_children(pills);
+      .with_children(pills)
+      .child(form_note(
+        "connection-provider-models-note",
+        &ctx.t("connections.apiProvider.modelsNote"),
+      ));
     FormField::new("connection-provider-models", ctx.t("connections.apiProvider.models"))
       .hint(ctx.t("connections.apiProvider.modelsHintShort"))
       .info(ctx.t("connections.apiProvider.modelsHint"))

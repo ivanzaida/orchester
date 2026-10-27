@@ -141,6 +141,8 @@ name a Codex connection that is not stored, so nothing can run.
 | `tasks-unreadable` | The project opens; its one task's stored status is unknown, so reading the task list fails with `Corrupt` | Tasks load error |
 | `decisions` | Runs ready for review (one conflicts with the moved `main`, one merges cleanly, one has no branch), one that waits after Review's retries, and *Check the empty states on screen*, whose Review could not check two states and waits unverified | Ready for review, merge conflict; waits after retries (`DVuXu`); waits unverified (no frame of its own: compare with `DVuXu`'s parts) |
 | `live` | Six drafts ready to run with the fake Codex (needs `-FakeAgents`): KON-1 ends ready for review, KON-2 asks to approve `cargo add serde`, KON-3 asks a question with options, KON-4 waits for its plan, KON-5 keeps working, KON-6 fails and waits for a person | Running, approval, question and plan states, live |
+| `project-settings` | `connections`, plus `acme/kontur` linked and expecting `dana-k` while `gh` is signed in as `ivanzaida`; base branch `release/2.4`, which is gone; secrets in Development, Staging and Production (`DEEPSEEK_API_KEY` used by the tool `deploy-preview`, `FIGMA_TOKEN` rotated and used by the MCP server `figma`, `GITHUB_APP_KEY` unused, `OLD_FIGMA_TOKEN` archived), records only; `figma` on with `FIGMA_API_KEY` from `FIGMA_TOKEN`, two tools run without asking and the profile Design reviewer using it | Project settings `XGtkg`: 01b, 05, 06, 06b (open `FIGMA_TOKEN`), 13 (open `figma`), 14 (open GitHub) |
+| `project-settings-shared` | `project-settings` linked as owner to `orchester.example.com/kontur` with four members as last read; no server answers and this computer's server list lacks it, so the address says so and *Leave* is unavailable with why | 04b Sharing · shared (its address hint and *Leave* differ from the frame, which draws a connected server) |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their
 running runs interrupted and ends the approvals they waited for. Capture running states of
@@ -181,7 +183,12 @@ the route's params and answers the route the tab shows, for example:
   `worktree`; `"view": "memory"` opens the task's memory (from Summary's properties) and
   `"view": "local-integration"` Local integration (Changes' *Try locally*). The former tabs
   `details`, `artifacts`, `memory` and `local-integration` are refused with `unknown_tab`;
-- `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`.
+- `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`;
+- `{"route": "project_settings", "project": "<id>"}` (General), with `"tab"` `runs`, `context`, `connections`,
+  `secrets` or `sharing`, and with tab `runs` `"view": "rules"` (*Approved for every run*). Connections and Secrets
+  keep their own routes, which open those tabs: `connections` with `"selected"` (a connection's id) opens its page,
+  `new_connection` with `"kind"` `agent_provider` or `mcp_server` the add pages, `edit_connection` with
+  `"connection"` an MCP server's form.
 
 Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot`
 through `call_run_app`. Open the returned PNG path and include it in the verification report.
