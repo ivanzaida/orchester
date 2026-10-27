@@ -85,7 +85,8 @@ pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Han
     .into()
 }
 
-fn frame() -> Row {
+/// The bar's frame, which New module and Edit module put their actions in too.
+pub(in crate::screens) fn frame() -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEIGHT))

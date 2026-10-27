@@ -20,7 +20,6 @@ mod signed_in;
 
 use std::{error::Error, fs, sync::Arc};
 
-use orchester_api::client::ServerAddress;
 use orchester_app::{
   app_log, clipboard,
   startup::{Launch, WindowPosition},
@@ -62,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   let cloud = AccountCloud::start();
   if let Some(services) = launch.services() {
     if signed_out {
-      let address = ServerAddress::parse(&cloud.url())?;
+      let address = signed_in::cloud_address(&cloud);
       runtime.block_on(services.cloud.set_address(Some(address)))?;
     } else {
       signed_in::sign_in(services, runtime.handle(), &cloud);

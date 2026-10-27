@@ -134,8 +134,9 @@ fn action(ctx: &Ctx, project: ProjectId, need: &NeedItem) -> NeedAction {
   }
 }
 
-/// How long ago `created` was at `now`, in its largest whole unit: `now`, `12m`, `2h`, `3d`.
-fn age(ctx: &Ctx, now: Timestamp, created: Timestamp) -> Arc<str> {
+/// How long ago `created` was at `now`, in its largest whole unit: `now`, `12m`, `2h`, `3d`; a module's Summary words
+/// its tasks' ages so too.
+pub(crate) fn age(ctx: &Ctx, now: Timestamp, created: Timestamp) -> Arc<str> {
   let minutes = (now.unix_millis() - created.unix_millis()).max(0) / 60_000;
   let (key, count) = match minutes {
     0 => return ctx.t("tasks.age.now"),

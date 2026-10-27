@@ -56,6 +56,8 @@ pub struct FormProps {
   pub modules: Arc<Vec<Module>>,
   /// Whether the project is shared on a server, which keeps no *Don't merge automatically*.
   pub shared: bool,
+  /// The module a new task starts in, as a module's *New task in module* opens the form.
+  pub starts_in: Option<orchester_core::id::ModuleId>,
   /// The project's tasks, whose kept edits stay; those of other tasks are removed.
   pub tasks: Arc<[TaskId]>,
   /// When the task was last saved, as the project's tasks were read.

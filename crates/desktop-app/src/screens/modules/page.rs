@@ -1,7 +1,10 @@
-//! A module's page (no frame yet, ORC-48; laid out as a Usage card under a Tasks-style header): back to Modules,
-//! the module's name, state, dates and description with *Edit*, its progress, the burndown as a chart or a table
-//! ([`super::burndown`]), and its tasks, each opening its page. The page is read off the UI thread, again whenever
-//! the project's tasks are read again.
+//! A module's page (`02 · Module · Summary` `KpLYv`, `03 · Module · Burndown` `YyKzx`), in the task page's frame: the
+//! Modules header ([`super::header`]) with `← Modules / name`, the name with *New task in module* and *More actions*
+//! ([`super::more`]), the status line (the state chip, then its dates, its progress and its forecast in 12
+//! `text_muted`) and the tabs Summary and Burndown, each a place of its own (`/modules/<id>`,
+//! `/modules/<id>/burndown`); under them the tab: the Summary ([`super::summary`]) or the burndown card
+//! ([`super::burndown`]). The page is read off the UI thread, again whenever the project's tasks are read again; until
+//! it is, and when it cannot be or the module no longer exists, the way back stays over what the body says.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -13,40 +16,43 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
-  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::ModuleId, time::Timestamp};
+use orchester_core::{
+  id::{ModuleId, ProjectId},
+  time::Timestamp,
+};
 use orchester_workspace::{
   background,
   messages::{self, Message},
   modules::data::ModulePage,
 };
 
-use super::{Editing, burndown, editor, words};
+use super::{burndown, header, more, save, summary, words};
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
-  routes::{ProjectPage, Route, TaskView},
-  screens::usage::table::{Cell, Density, Width, column, opening, row, table},
-  theme::{ExtraSpacing, ExtraTypography, TasksSpacing},
+  routes::{ModuleListTab, ModuleTab, ProjectPage, Route},
+  theme::{ExtraSpacing, IconSize, TaskSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    field::field_error,
+    icon::{Icon, icon},
     message::message_text,
+    pressable::opening,
     state::{EmptyState, load_error, loading},
-    status::workflow_chip,
+    tabs::{PageTab, page_tabs},
   },
 };
 
-/// The key and status columns of the module's tasks.
-const KEY_COLUMN: f32 = 96.0;
-const STATUS_COLUMN: f32 = 140.0;
+/// The not-found state's text column, which its explanation fills (`Text` `v4Pmi`).
+const MISSING_MEASURE: f32 = 420.0;
 
 #[derive(Clone, PartialEq)]
 pub struct PageProps {
   pub project: ShownProject,
   pub module: ModuleId,
+  pub tab: ModuleTab,
 }
 
 impl DevtoolsInspectable for PageProps {}
@@ -73,144 +79,208 @@ pub struct ReadFailed(pub Message);
 impl DevtoolsInspectable for ReadFailed {}
 
 pub struct ModuleScreen {
-  editing: Signal<Editing>,
-  /// The burndown reads as a table.
+  /// The burndown reads as a table; kept as the tabs switch.
   table: Signal<bool>,
   retry: Signal<u64>,
+  menu: more::MenuPlace,
+  /// *Close module* and *Reopen module*.
+  save: save::SaveAction,
 }
 
 impl Component for ModuleScreen {
   type Props = PageProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let save = save::action(ctx);
+    let feed = ctx.props::<PageProps>().project.feed.clone();
+    ctx.watch(&save.state(), move |state| {
+      if state.is_fulfilled() && state.data.is_some() {
+        feed.saved();
+      }
+    });
     Self {
-      editing: ctx.signal(Editing::Closed),
       table: ctx.signal(false),
       retry: ctx.signal(0),
+      menu: more::MenuPlace::new(ctx),
+      save,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let PageProps { project, module } = ctx.props::<PageProps>().clone();
-    // Read again whenever the project's tasks are read again, which every save and run change does.
+    let PageProps { project, module, tab } = ctx.props::<PageProps>().clone();
+    // Read again whenever the project's tasks are read again, which every run change does, and after every save: a
+    // save of the module alone (its state, its dates) leaves the tasks as they were, and the feed does not publish
+    // tasks equal to the ones it holds.
     let revision = match project.feed.tasks.get() {
       TasksState::Ready(tasks) => Arc::as_ptr(&tasks.tasks) as usize,
       TasksState::Loading | TasksState::Failed(_) => 0,
     };
+    let saves = project.feed.saves.get();
     let read = read(
       ctx,
       project.open.repo_root.clone(),
       module,
-      (revision, self.retry.get()),
+      (revision, saves, self.retry.get()),
     );
+    let id = project.open.project.id();
     // A failed read keeps the page read before it: it is not shown (nor edited) as if it were current.
     let failed = read.error.as_ref().filter(|_| read.is_rejected());
-    let content = match (failed, &read.data) {
+    let (top, body) = match (failed, &read.data) {
       (Some(ReadFailed(message)), _) => {
         let retry = self.retry.clone();
-        let body = message_text(ctx, message);
-        vec![load_error(
+        let words = message_text(ctx, message);
+        let failed = load_error(
           ctx,
           "module-load-error",
-          (&ctx.t("modules.readFailed"), &body),
+          (&ctx.t("modules.readFailed"), &words),
           move || {
             retry.update(|count| *count += 1);
           },
-        )]
+        );
+        (back_only(ctx, id), padded(failed))
       }
-      (None, Some(Read(Some(page)))) => self.page(ctx, &project, page),
-      (None, Some(Read(None))) => vec![missing(ctx)],
-      (None, None) => vec![loading("module-loading", &ctx.t("modules.page.reading")).into()],
+      (None, Some(Read(Some(page)))) => (
+        self.header(ctx, (&project, page), tab),
+        self.body(ctx, &project, page, tab),
+      ),
+      (None, Some(Read(None))) => (back_only(ctx, id), padded(missing(ctx))),
+      (None, None) => (
+        back_only(ctx, id),
+        padded(loading("module-loading", &ctx.t("modules.page.reading")).into()),
+      ),
     };
-    let page = Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(ExtraSpacing::Roomy.role())
-          .bottom(SpacingSize::Section)
-          .left(TasksSpacing::Page.role())
-          .right(TasksSpacing::Page.role()),
-      )
-      .spacing(SpacingSize::Lg)
-      .child(back(ctx, project.open.project.id()))
-      .with_children(content);
     Column::new()
       .id("screen-modules")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(ScrollVertical::new(page).id("module-scroll").flex(1.0))
+      .child(top)
+      .child(body)
   }
 }
 
 impl ModuleScreen {
-  fn page(&self, ctx: &mut Ctx, project: &ShownProject, page: &Arc<ModulePage>) -> Vec<Element> {
-    let mut parts = vec![self.header(ctx, page)];
-    if self.editing.get() == Editing::Edit {
-      parts.push(ctx.mount_keyed::<editor::ModuleEditor>(
-        &format!("module-editor-{}", page.module.id()),
-        editor::EditorProps {
-          project: project.clone(),
-          module: Some(Arc::new(page.module.clone())),
-          editing: self.editing.clone(),
-        },
-      ));
-    }
-    parts.push(burndown::card(ctx, page, &self.table));
-    parts.push(tasks(ctx, project, page));
-    parts
+  fn header(&self, ctx: &mut Ctx, (project, page): (&ShownProject, &Arc<ModulePage>), tab: ModuleTab) -> Element {
+    let id = project.open.project.id();
+    let details = page.module.details();
+    let navigation = Navigation::of(ctx);
+    let new_task = ActionButton::new("module-new-task", ButtonKind::Primary, ctx.t("modules.page.newTask"))
+      .icon(Icon::Plus)
+      .opens(navigation.to(Route::Project(id, ProjectPage::NewTaskInModule(page.module.id()))));
+    let actions = vec![
+      new_task.into(),
+      more::more(ctx, (project, page), &self.menu, &self.save),
+    ];
+    let chip = header::state_chip(ctx, "module-state", details.state());
+    let facts = Text::new(&words::facts(ctx, details, page.progress, &page.forecast))
+      .id("module-facts")
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .nowrap();
+    let mut status = vec![chip, facts.into()];
+    status.extend(self.refused(ctx));
+    header::header(header::Header {
+      id: "module-header",
+      back: Some(header::back_row(ctx, id, details.name().as_str())),
+      title: header::title(ctx, "module-title", details.name().as_str()),
+      actions,
+      status: header::status_line("module-status-row", status),
+      tabs: tabs(ctx, (id, page.module.id()), tab),
+    })
   }
 
-  fn header(&self, ctx: &Ctx, page: &ModulePage) -> Element {
-    let details = page.module.details();
-    let editing = self.editing.clone();
-    let edit = ActionButton::new("module-edit", ButtonKind::Secondary, ctx.t("modules.page.edit"))
-      .icon(Icon::Pencil)
-      .on_click(move || editing.set(Editing::Edit));
-    let facts = [
-      words::state(ctx, details.state()),
-      words::dates(ctx, details),
-      words::progress(ctx, page.progress),
-    ]
-    .join(" · ");
-    let description = (!details.description().is_empty()).then(|| {
-      Text::new(details.description())
-        .id("module-description-text")
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary)
-    });
-    Row::new()
-      .id("module-header")
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .align_items(Alignment::End)
-      .child(
-        Column::new()
-          .flex(1.0)
-          .spacing(ExtraSpacing::Snug.role())
-          .child(
-            Text::new(details.name().as_str())
-              .id("module-title")
-              .variant(ExtraTypography::Display.role()),
-          )
-          .child(
-            Text::new(&facts)
-              .id("module-facts")
-              .variant(TypographyStyle::Description),
-          )
-          .with_children(description),
-      )
-      .child(edit)
-      .into()
+  /// Why *Close module* or *Reopen module* was refused, at the status line's end.
+  fn refused(&self, ctx: &Ctx) -> Option<Element> {
+    let state = self.save.state().get();
+    let save::Refused(message) = state.error.as_ref().filter(|_| state.is_rejected())?;
+    Some(field_error("module-state-error", &message_text(ctx, message)).into())
+  }
+
+  fn body(&self, ctx: &mut Ctx, project: &ShownProject, page: &Arc<ModulePage>, tab: ModuleTab) -> Element {
+    match tab {
+      ModuleTab::Summary => ctx.mount_keyed::<summary::ModuleSummary>(
+        "module-summary",
+        summary::SummaryProps {
+          project: project.clone(),
+          page: page.clone(),
+        },
+      ),
+      ModuleTab::Burndown => {
+        let card = burndown::card(ctx, page, &self.table);
+        ScrollVertical::new(
+          Column::new()
+            .id("module-burndown-body")
+            .width(Dimension::Pct(100.0))
+            .padding(body_padding())
+            .child(card),
+        )
+        .id("module-scroll")
+        .flex(1.0)
+        .into()
+      }
+    }
   }
 }
 
-/// Back to the Modules list.
-fn back(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Element {
+/// Summary and Burndown.
+fn tabs(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), chosen: ModuleTab) -> Element {
   let navigation = Navigation::of(ctx);
-  ActionButton::new("module-back", ButtonKind::Ghost, ctx.t("modules.page.back"))
-    .icon(Icon::ArrowLeft)
-    .compact()
-    .opens(navigation.to(Route::Project(project, ProjectPage::Modules)))
+  let tabs: Vec<PageTab> = ModuleTab::ALL
+    .into_iter()
+    .map(|tab| {
+      let label = ctx.t(match tab {
+        ModuleTab::Summary => "modules.page.tabs.summary",
+        ModuleTab::Burndown => "modules.page.tabs.burndown",
+      });
+      let open = navigation.to(Route::Project(project, ProjectPage::Module(module, tab)));
+      PageTab::to(format!("module-tab-{}", tab.name()), label, tab == chosen, open)
+    })
+    .collect();
+  page_tabs(ctx, "module-tabs", tabs).into()
+}
+
+/// The page's body under its header: 24 over it, 28 at its sides and under it.
+pub fn body_padding() -> Padding {
+  Padding::new()
+    .top(SpacingSize::Xl)
+    .left(TaskSpacing::Side.role())
+    .right(TaskSpacing::Side.role())
+    .bottom(TaskSpacing::Foot.role())
+}
+
+fn padded(content: Element) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(body_padding())
+    .child(content)
+    .into()
+}
+
+/// `← Modules` alone, over a page that is read, failed or gone (`Crumb` `XeoEE`).
+fn back_only(ctx: &mut Ctx, project: ProjectId) -> Element {
+  let navigation = Navigation::of(ctx);
+  let list = Route::Project(project, ProjectPage::Modules(ModuleListTab::default()));
+  let words = ctx.t("modules.page.back");
+  let back = opening(navigation.to(list))
+    .id("module-back")
+    .describe("a11y_name", words.clone())
+    .spacing(ExtraSpacing::Snug.role())
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&words)
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
+  Row::new()
+    .id("module-back-row")
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(TaskSpacing::Header.role())
+        .left(TaskSpacing::Side.role())
+        .right(TaskSpacing::Side.role()),
+    )
+    .child(back)
     .into()
 }
 
@@ -221,63 +291,10 @@ fn missing(ctx: &Ctx) -> Element {
     ctx.t("modules.page.notFound"),
     ctx.t("modules.page.notFoundBody"),
   )
+  .unframed()
+  .centered()
+  .measure(MISSING_MEASURE)
   .into()
-}
-
-/// The module's tasks: key, title and workflow status, each opening its page.
-fn tasks(ctx: &mut Ctx, project: &ShownProject, page: &ModulePage) -> Element {
-  let heading = Text::new(&ctx.t("modules.page.tasks"))
-    .id("module-tasks-title")
-    .variant(TypographyStyle::Title);
-  let body = if page.tasks.is_empty() {
-    Text::new(&ctx.t("modules.page.noTasks"))
-      .id("module-no-tasks")
-      .variant(TypographyStyle::Description)
-      .into()
-  } else {
-    let columns = [
-      column(ctx.t("modules.columns.key"), Width::Px(KEY_COLUMN), false),
-      column(ctx.t("modules.columns.task"), Width::Flex(1.0), false),
-      column(ctx.t("modules.columns.status"), Width::Px(STATUS_COLUMN), false),
-    ];
-    let navigation = Navigation::of(ctx);
-    let id = project.open.project.id();
-    let rows = page
-      .tasks
-      .iter()
-      .enumerate()
-      .map(|(index, task)| {
-        let cells = vec![
-          Cell::Muted(task.key().to_string().into()),
-          Cell::Text(task.details().title.as_str().into()),
-          Cell::Element(
-            workflow_chip(
-              ctx,
-              &format!("module-task-{index}-status"),
-              task.organization().status(),
-            )
-            .into(),
-          ),
-        ];
-        let open = navigation.to(Route::Project(
-          id,
-          ProjectPage::Task(task.key().clone(), TaskView::default()),
-        ));
-        opening(
-          row(&format!("module-task-{index}"), &columns, Density::List, cells),
-          open,
-        )
-      })
-      .collect();
-    table(ctx, "module-tasks", &columns, Density::List, rows)
-  };
-  Column::new()
-    .id("module-tasks-section")
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(heading)
-    .child(body)
-    .into()
 }
 
 /// Module `module` of the project at `root`, read off the UI thread again whenever `deps` change.
