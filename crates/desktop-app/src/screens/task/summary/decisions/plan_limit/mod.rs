@@ -1,13 +1,14 @@
-//! Stopped at an account's plan limit (`Task · Summary · stopped at an account's plan limit` `EwAhH`): under where the
-//! task stands and the run's stages, *Continue this run* ([`card`]): the account's windows as its CLI last reported
-//! them and the choice — wait for the account's reset (the default: the runner then resumes the same session on the
-//! same account by itself) or continue now on another account of the same CLI, as a new session of the stopped step
-//! for this run only. A running agent never moves to another account by itself. Then which account each step of the
-//! run ran on ([`accounts`]). Every request needs the project's runner.
+//! Stopped at an account's plan limit (`Task · Summary · stopped at an account's plan limit` `EwAhH`), as a decision
+//! card at the top of the Summary (`CqVv3`): *Continue this run* ([`card`]): the account's windows as its CLI last
+//! reported them and the choice — wait for the account's reset (the default: the runner then resumes the same session
+//! on the same account by itself) or continue now on another account of the same CLI, as a new session of the stopped
+//! step for this run only. A running agent never moves to another account by itself. Then which account each step of
+//! the run ran on ([`accounts`]). Every request needs the project's runner.
 
 mod accounts;
 mod card;
 mod waiting;
+mod words;
 
 use lurq::{
   app::{
@@ -18,18 +19,14 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{account::AgentAccount, connection::plan_limits::LimitReading, time::Timestamp};
+use orchester_core::account::AgentAccount;
 use orchester_workspace::{
-  background, display, messages,
+  background, messages,
   tasks::{detail::RunView, plan_limit::PlanStop},
 };
 
-use super::{TaskContext, action::decision_action, arranged, stages::stages, task_notice, this_run_panel};
-use crate::{
-  mcp::input_gate::InputGate,
-  services::{Services, accounts::listed as accounts_listed},
-  ui::{notice::Notice, plan_window::when},
-};
+use super::{TaskContext, action::decision_action, arranged};
+use crate::{mcp::input_gate::InputGate, services::accounts::listed as accounts_listed};
 
 /// The request to continue, for its button to show it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -82,13 +79,11 @@ impl Component for PlanLimitDecision {
       return Column::new().into();
     };
     let stop = read(ctx, &props, run);
-    let now = Services::of(ctx).clock.now();
     // The account the stopped agent started on, as the runner recorded it.
     let account: Option<AgentAccount> = stop
       .as_ref()
       .and_then(|stop| stop.account)
       .and_then(|id| listed.of(id).cloned());
-    let focus = run.stopped_step().map(|step| step.key.as_str().to_owned());
     // A step that waits before its agent starts is said by its own card (`XPjSc`), not as a stop.
     if let Some(stop) = stop.as_ref().filter(|stop| !stop.started) {
       let waiting = waiting::WaitingCard {
@@ -103,24 +98,12 @@ impl Component for PlanLimitDecision {
         gate: self.gate.as_ref(),
       }
       .render(ctx);
-      let parts = vec![
-        stages(run, focus.as_deref(), now),
-        waiting,
-        accounts::section(ctx, run, &listed),
-      ];
-      let side = this_run_panel(ctx, &props, None);
-      return arranged(ctx, parts, None, side);
+      return arranged(vec![waiting, accounts::section(ctx, run, &listed)]);
     }
-    let mut parts: Vec<Element> = vec![
-      notice(
-        ctx,
-        &props,
-        run,
-        (account.as_ref(), stop.as_ref().and_then(|stop| stop.reading.as_ref())),
-      )
-      .into(),
-      stages(run, focus.as_deref(), now),
-    ];
+    if let (Some(stop), Some(account)) = (stop.as_ref(), account.as_ref()) {
+      words::publish(ctx, &props, run, (account, stop.reading.as_ref()));
+    }
+    let mut parts: Vec<Element> = Vec::new();
     if let Some(stop) = stop.as_ref() {
       parts.push(
         card::ChoiceCard {
@@ -138,8 +121,7 @@ impl Component for PlanLimitDecision {
       );
     }
     parts.push(accounts::section(ctx, run, &listed));
-    let side = this_run_panel(ctx, &props, None);
-    arranged(ctx, parts, None, side)
+    arranged(parts)
   }
 }
 
@@ -160,53 +142,4 @@ fn read(ctx: &mut Ctx, props: &TaskContext, run: &RunView) -> Option<PlanStop> {
     .get()
     .data
     .and_then(|read| read.0)
-}
-
-/// Where the task stands, named after the account (`Stopped at Work's plan limit · checkpoint 7c1e9f2`).
-fn notice(
-  ctx: &Ctx,
-  props: &TaskContext,
-  run: &RunView,
-  (account, reading): (Option<&AgentAccount>, Option<&LimitReading>),
-) -> Notice {
-  let mut said = task_notice(ctx, props);
-  let Some(account) = account else {
-    return said.notice();
-  };
-  let name = card::account_name(ctx, account);
-  let checkpoint = run
-    .run
-    .last_checkpoint()
-    .filter(|_| run.saved_at_pause && !props.lost())
-    .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).to_owned());
-  said.title = match checkpoint {
-    Some(checkpoint) => ctx.t_args(
-      "decisions.planLimit.noticeTitle",
-      [("account", name.as_str()), ("checkpoint", checkpoint.as_str())],
-    ),
-    None => ctx.t_args("decisions.planLimit.noticeTitleUnsaved", [("account", name.as_str())]),
-  };
-  let now = Timestamp::now();
-  let step = run.stopped_step().map(|step| step.name.to_string()).unwrap_or_default();
-  let agent = run
-    .stopped_step()
-    .and_then(|step| step.agent.as_deref())
-    .unwrap_or_default()
-    .to_owned();
-  said.body = match reading.and_then(|reading| reading.resets_at(now)) {
-    Some(resets) => ctx.t_args(
-      "decisions.planLimit.noticeBody",
-      [
-        ("step", step),
-        ("account", name),
-        ("time", when(ctx, resets, now, card::TIMES)),
-        ("agent", agent),
-      ],
-    ),
-    None => ctx.t_args(
-      "decisions.planLimit.noticeBodyNoReset",
-      [("step", step), ("account", name), ("agent", agent)],
-    ),
-  };
-  said.notice()
 }

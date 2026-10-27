@@ -1,6 +1,6 @@
-//! *This run › Account* (`EwAhH`): the account the run's latest agent invocation started on, as the runner recorded
-//! it, by its name and who was signed in; in `warning`, saying its limit is reached, while the run is stopped at it.
-//! A removed account still names it: the run ran on it.
+//! The run's *Account* among its facts (`EwAhH`): the account the run's latest agent invocation started on, as the
+//! runner recorded it, by its name and who was signed in; in `warning`, saying its limit is reached, while the run is
+//! stopped at it. A removed account still names it: the run ran on it.
 
 use lurq::{
   app::{
@@ -8,18 +8,16 @@ use lurq::{
     ctx::Ctx,
     theme::PaletteColor,
   },
-  components::Text,
   node::Element,
 };
 use orchester_core::{account::AgentAccount, id::AgentAccountId};
 use orchester_workspace::{background, messages};
 
-use super::this_run::row;
-use crate::{
-  services::Services,
-  theme::ExtraTypography,
-  ui::detail_row::{DetailValue, detail_row_of},
+use super::{
+  properties::{Look, value},
+  run_facts::fact,
 };
+use crate::services::Services;
 
 /// The account, and whether the run is stopped at its plan limit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +55,7 @@ impl Component for RunAccount {
       })
       .state()
       .get();
-    let value = match read.data.and_then(|read| read.0) {
+    let named = match read.data.and_then(|read| read.0) {
       Some(account) => {
         let name = account.name().map_or_else(
           || ctx.t("summary.thisRun.defaultAccount").to_string(),
@@ -75,20 +73,16 @@ impl Component for RunAccount {
       }
       None => ctx.t("summary.thisRun.accountUnknown").to_string(),
     };
+    let key = ctx.t("summary.thisRun.account");
     if !at_limit {
-      return row(ctx, "summary.thisRun.account", &value, DetailValue::Text);
+      return fact(
+        "task-this-run-account",
+        &key,
+        value("task-this-run-account-value", &named, Look::Secondary),
+      );
     }
-    let value = ctx.t_args("summary.thisRun.accountAtLimit", [("account", value.as_str())]);
-    detail_row_of(
-      "task-this-run-account",
-      &ctx.t("summary.thisRun.account"),
-      Text::new(&value)
-        .id("task-this-run-account-value")
-        .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::Warning)
-        .flex(1.0)
-        .min_width(lurq::node::dimension::Dimension::Px(0.0)),
-    )
-    .into()
+    let named = ctx.t_args("summary.thisRun.accountAtLimit", [("account", named.as_str())]);
+    let shown = value("task-this-run-account-value", &named, Look::Secondary).color(PaletteColor::Warning);
+    fact("task-this-run-account", &key, shown)
   }
 }

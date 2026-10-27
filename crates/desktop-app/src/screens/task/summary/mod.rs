@@ -1,54 +1,57 @@
-//! The Summary tab (`Body` `ZhoTU` in `lUXff`): in its column, where the task stands (`notice`), the
-//! run's steps (`steps`), the brief and the acceptance criteria (`brief`) and *Runs of this task*
-//! (`runs`); beside it *This run* (`this_run`), or *Run details* once the run ended (`run_details`). While
-//! the run waits for a decision (its plan, a raised limit, how it goes on after its retries, its merge),
-//! the Summary is that decision's ([`decisions`]): those designs draw the run's stages in place of its
-//! steps, leave the brief out, pin a decision bar or put the decision above *This run*. A task whose
-//! latest run cannot be read shows why, that the run's actions are unavailable, and its runs. Before the
-//! task's first run it says there are no runs yet (`empty`, `Xxrdy`). The organization history comes
-//! later (agreed deviation D4).
+//! The Summary tab (ORC-100, `01 · Summary` `AsE7R`, the full page `01b` `HvPSr`, waiting for a decision `01c`
+//! `SaKMC`): what the task asks for and where it stands, in one page that scrolls whole. In its column, 28 apart: the
+//! decision the run waits for, as a card at the top ([`decisions`], `Decision cards` `CqVv3`), and returning the work
+//! of a run that ended to a step; the run (`run`: its steps on a rail and its last event); the brief with the version
+//! of the requirements it shows (`brief`) and the acceptance criteria; what the run made (`output`); and the task's
+//! runs (`runs`). Beside it, 40 away, the task's properties with its run's facts and its memory (`properties`). Before
+//! the task's first run the column says there are no runs yet (`empty`) over the brief; a task kept *Not shared*
+//! says why it is read-only, or asks *Share task* in place; a task whose latest run cannot be read says why.
 
 mod brief;
 mod decisions;
 mod empty;
 mod live;
 mod notice;
+mod output;
+mod properties;
+mod run;
 mod run_account;
-mod run_details;
+mod run_facts;
 pub(super) mod runs;
 mod steps;
-mod this_run;
-
-use std::sync::Arc;
+mod version;
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
+  core::Signal,
   layout::{Alignment, layout_kind::ScrollState},
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::time::Timestamp;
 
-pub use self::decisions::{decisions, returnable};
-use self::runs::Runs;
+pub use self::{
+  decisions::{Waiting, decisions, returnable, waiting},
+  notice::EventWords,
+  version::Version,
+};
+use self::{runs::Runs, version::VersionMenu};
 use super::{PageState, TaskContext, sharing};
 use crate::{
-  navigation::Navigation,
-  routes::{Route, TaskTab, TaskView},
-  services::Services,
   theme::{TaskSpacing, TaskText},
   ui::{
-    button::{ActionButton, ButtonKind},
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
     unavailable::reason_line,
   },
 };
+
+/// The properties' column (`Properties` `Sq8ss`).
+const PROPERTIES_WIDTH: f32 = 260.0;
 
 #[derive(Clone, PartialEq)]
 pub struct SummaryProps {
@@ -57,41 +60,38 @@ pub struct SummaryProps {
 
 impl lurq::app::component::DevtoolsInspectable for SummaryProps {}
 
-pub struct TaskSummary;
+pub struct TaskSummary {
+  /// The brief's version menu.
+  versions: VersionMenu,
+  /// The run's other facts are open under its group of the properties.
+  more_facts: Signal<bool>,
+}
 
 impl Component for TaskSummary {
   type Props = SummaryProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      versions: VersionMenu::new(ctx),
+      more_facts: ctx.signal(false),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
-    if let Some(decision) = decisions(ctx, &props.task) {
-      return decision;
-    }
-    let detail = &props.task.detail;
-    let linked = sharing::linked(ctx, &props.task);
-    let next = sharing::next_key(ctx, &props.task);
-    let section = sharing::section(ctx, &props.task, (linked.as_ref(), next.as_ref()));
-    // A Not shared task runs only once it is shared, so it keeps its read-only Summary (`R4elt`).
-    if detail.before_first_run() && !detail.not_shared() {
-      // What the shared project says of the task stays beside it.
-      let panel = section.map(|section| this_task(ctx, &props.task, Some(section)));
-      return layout(empty::empty(ctx, &props.task), panel);
-    }
+    let task = &props.task;
+    let detail = &task.detail;
+    let linked = sharing::linked(ctx, task);
+    let next = sharing::next_key(ctx, task);
+    let section = sharing::section(ctx, task, (linked.as_ref(), next.as_ref()));
     let state = PageState::of(ctx);
-    let removal = state.removal.get();
-    let runs = runs::section(
-      ctx,
-      &Runs {
-        task: &props.task,
-        removal,
-      },
-    );
-    let scroll = state.summary_scroll;
-    if let Some(unreadable) = &detail.latest_unreadable {
+    let column: Vec<Element> = if detail.not_shared() {
+      self.kept_parts(ctx, task, (linked.as_ref(), next.as_ref()))
+    } else if detail.before_first_run() {
+      std::iter::once(empty::empty(ctx, task))
+        .chain(self.requirements(ctx, task))
+        .collect()
+    } else if let Some(unreadable) = &detail.latest_unreadable {
       let notice = Notice::new(
         "task-notice",
         NoticeTone::Danger,
@@ -101,166 +101,155 @@ impl Component for TaskSummary {
       .body(message_text(ctx, &unreadable.detail));
       let actions = reason_line("task-unreadable-actions", &message_text(ctx, &unreadable.actions()));
       // What the task asks for can still be read, and its other runs.
-      let brief = brief::sections(ctx, detail.task.details());
-      let parts = [notice.into(), actions.into()]
+      [notice.into(), actions.into()]
         .into_iter()
-        .chain(brief)
-        .chain(runs)
-        .collect();
-      return layout(column(parts, scroll), None);
-    }
-    let parts = if detail.not_shared() {
-      self.kept_parts(ctx, &props, (linked.as_ref(), next.as_ref()), runs)
+        .chain(self.requirements(ctx, task))
+        .chain(runs_section(ctx, task))
+        .collect()
     } else {
-      self.parts(ctx, &props, runs)
+      self.parts(ctx, task)
     };
-    let root = props.task.project.open.repo_root.clone();
-    let panel = match &detail.run {
-      Some(run) if run.run.status().is_terminal() => {
-        let lead = decisions::return_card(ctx, &props.task);
-        run_details::run_details(ctx, &props.task, run, (lead, section))
-      }
-      Some(run) => this_run::this_run(ctx, run, (&root, props.task.lost()), (None, section)),
-      None => this_task(ctx, &props.task, section),
-    };
-    layout(column(parts, scroll), Some(panel))
+    let properties = properties::column(ctx, task, (section, &self.more_facts));
+    layout(column, properties, state.summary_scroll)
   }
 }
 
 impl TaskSummary {
+  /// The column's sections, in the design's order.
+  fn parts(&self, ctx: &mut Ctx, task: &TaskContext) -> Vec<Element> {
+    let detail = &task.detail;
+    let decision = decisions(ctx, task);
+    let ended = detail.run.as_ref().is_some_and(|run| run.run.status().is_terminal());
+    let returning = ended.then(|| decisions::return_card(ctx, task)).flatten();
+    // A run a teammate holds of a shared task is said even though this computer does not have it.
+    let run = run::section(ctx, task, detail.run.as_ref());
+    let output = detail.run.as_ref().map(|run| output::section(ctx, task, run));
+    decision
+      .into_iter()
+      .chain(returning)
+      .chain([run])
+      .chain(self.requirements(ctx, task))
+      .chain(output)
+      .chain(runs_section(ctx, task))
+      .collect()
+  }
+
   /// A *Not shared* task's column (`R4elt`): why it is read-only, or *Share task*'s question in place (`TfVtK`), then
-  /// the brief and its runs.
+  /// what it asks for, its run and its runs.
   fn kept_parts(
     &self,
     ctx: &mut Ctx,
-    props: &SummaryProps,
+    task: &TaskContext,
     (linked, next): (Option<&sharing::Linked>, Option<&orchester_core::project::TaskKey>),
-    runs: Option<Element>,
   ) -> Vec<Element> {
     let top = if PageState::of(ctx).share.get() {
       ctx.mount_keyed::<sharing::question::ShareQuestion>(
         "task-share-question-component",
         sharing::question::Props {
-          task: props.task.clone(),
+          task: task.clone(),
           linked: linked.cloned(),
           next: next.cloned(),
         },
       )
     } else {
-      sharing::notice(ctx, &props.task, linked)
+      sharing::notice(ctx, task, linked)
     };
+    let run = task.detail.run.as_ref().map(|run| run::section(ctx, task, Some(run)));
     std::iter::once(top)
-      .chain(brief::sections(ctx, props.task.detail.task.details()))
-      .chain(runs)
+      .chain(run)
+      .chain(self.requirements(ctx, task))
+      .chain(runs_section(ctx, task))
       .collect()
   }
 
-  /// The column's sections, in the design's order.
-  fn parts(&self, ctx: &mut Ctx, props: &SummaryProps, runs: Option<Element>) -> Vec<Element> {
-    let detail = &props.task.detail;
-    let lost = props.task.lost();
-    let runner = props
-      .task
-      .project
-      .feed
-      .status
-      .get()
-      .map(|status| status.state_for(&props.task.project.open.repo_root));
-    let approval = props.task.waiting_approval();
-    let said = notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref());
-    let conversation = said.conversation;
-    let mut notice = said.notice();
-    if conversation {
-      notice = notice.action(open_conversation(ctx, props));
+  /// The brief, in the version the person picked, and its acceptance criteria.
+  fn requirements(&self, ctx: &mut Ctx, task: &TaskContext) -> [Element; 2] {
+    let state = PageState::of(ctx);
+    let requirements = &task.detail.requirements;
+    let chosen = state.requirements.get().map(|Version(source)| source);
+    let shown = requirements.shown(chosen);
+    // Set only when it changes: what is shown is then what the menu holds.
+    if chosen != Some(shown) {
+      state.requirements.set(Some(Version(shown)));
     }
-    let now = Services::of(ctx).clock.now();
-    let waiting: Vec<(Arc<str>, Timestamp)> = approval
-      .iter()
-      .filter_map(|shown| Some((shown.step_key.clone()?, shown.approval.requested_at)))
-      .collect();
-    // What the task asked for is what its run was asked, even after the task was edited for a later run.
-    let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
-    let steps = detail
-      .run
-      .as_ref()
-      .map(|run| steps::section(ctx, run, lost, &waiting, now));
-    std::iter::once(notice.into())
-      .chain(steps)
-      .chain(brief::sections(ctx, details))
-      .chain(runs)
-      .collect()
+    let details = requirements
+      .details(shown)
+      .expect("the version shown is one the task kept")
+      .clone();
+    let version = self.versions.chip(ctx, requirements, (shown, &state.requirements));
+    let fallback = version::fallback(ctx, requirements, shown);
+    [
+      brief::brief(ctx, &details, (version, fallback)),
+      brief::criteria(ctx, &details),
+    ]
   }
 }
 
-fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(
-    props.task.project.open.project.id(),
-    props.task.page(TaskView::of(TaskTab::Conversation)),
-  );
-  ActionButton::new(
-    "task-open-conversation",
-    ButtonKind::Secondary,
-    ctx.t("summary.openConversation"),
-  )
-  .icon(Icon::MessageSquare)
-  .opens(navigation.to(route))
+/// *Runs* with every run of the task, as the column ends.
+fn runs_section(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
+  let removal = PageState::of(ctx).removal.get();
+  runs::section(ctx, &Runs { task, removal })
 }
 
-/// A section's title with its count (`Head · Steps` `P4Q0cn`).
-pub fn section_head(ctx: &Ctx, id: &str, title: &str, count: Option<usize>) -> Element {
+/// A section's title with its count (`Heading · Acceptance criteria` `JYD1k`): 13/600, the count in 12 `text_muted`,
+/// 8 apart.
+pub fn section_head(ctx: &Ctx, id: &str, title: &str, count: Option<usize>) -> Row {
   Row::new()
     .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t(title)).variant(TaskText::SectionTitle.role()))
+    .child(Text::new(&ctx.t(title)).variant(TaskText::SectionTitle.role()).nowrap())
     .with_children(count.map(|count| {
       Text::new(&count.to_string())
+        .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
+        .nowrap()
     }))
-    .into()
 }
 
-/// The Summary's column of `parts`, scrolling when it is taller than the window (`Summary column`
-/// `N3nD9i`).
-fn column(parts: Vec<Element>, scroll: ScrollState) -> Element {
-  let content = Column::new()
+/// The column of `parts` and the `properties` beside it, 24 from the top and 28 from the sides, scrolling together
+/// when they are taller than the window (`Body` `PSNRw`).
+fn layout(parts: Vec<Element>, properties: Element, scroll: ScrollState) -> Element {
+  let column = Column::new()
     .id("task-summary-column")
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(TaskSpacing::Sections.role())
+    .with_children(parts);
+  let properties = Column::new()
+    .id("task-properties")
+    .width(Dimension::Px(PROPERTIES_WIDTH))
+    .flex_shrink(0.0)
+    .padding(Padding::new().left(SpacingSize::Xl))
+    .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(properties);
+  let body = Row::new()
+    .id("task-summary-body")
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
-        .top(TaskSpacing::Panel.role())
-        .left(SpacingSize::Section)
-        .right(SpacingSize::Section)
+        .top(SpacingSize::Xl)
+        .left(TaskSpacing::Side.role())
+        .right(TaskSpacing::Side.role())
         .bottom(TaskSpacing::Foot.role()),
     )
-    .spacing(TaskSpacing::Block.role())
-    .with_children(parts);
-  ScrollVertical::new(content)
-    .id("task-summary-scroll")
-    .with_scroll_state(scroll)
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .into()
-}
-
-/// *This task* beside a task without a run, with the shared project's `section` on top.
-fn this_task(ctx: &mut Ctx, task: &TaskContext, section: Option<Element>) -> Element {
-  let pipelines = match task.project.feed.tasks.get() {
-    crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
-    _ => Vec::new(),
-  };
-  this_run::this_task(ctx, &task.detail, &pipelines, section)
-}
-
-fn layout(column: Element, panel: Option<Element>) -> Element {
-  Row::new()
+    .spacing(TaskSpacing::Columns.role())
+    .align_items(Alignment::Start)
+    .child(column)
+    .child(properties);
+  Column::new()
     .id("task-summary")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .min_height(Dimension::Px(0.0))
-    .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(column))
-    .with_children(panel)
+    .child(
+      ScrollVertical::new(body)
+        .id("task-summary-scroll")
+        .with_scroll_state(scroll)
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0)),
+    )
     .into()
 }

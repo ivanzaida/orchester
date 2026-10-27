@@ -158,6 +158,17 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       format!("{root}/tasks/KON-12/changes?file=src/a%20b.rs&from=worktree"),
       json!({ "project": PROJECT, "key": "KON-12", "tab": "changes", "file": "src/a b.rs", "from": "worktree" }),
     ),
+    // A task's memory and Local integration open in place of Summary and Changes.
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-12", "view": "memory" }),
+      format!("{root}/tasks/KON-12/summary?view=memory"),
+      json!({ "project": PROJECT, "key": "KON-12", "tab": "summary", "view": "memory" }),
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-12", "tab": "changes", "view": "local-integration" }),
+      format!("{root}/tasks/KON-12/changes?view=local-integration"),
+      json!({ "project": PROJECT, "key": "KON-12", "tab": "changes", "view": "local-integration" }),
+    ),
     (
       json!({ "route": "files", "project": PROJECT, "file": "src/a b.rs", "at": "base", "line": "3-5" }),
       format!("{root}/files/src/a%20b.rs?at=base&line=3-5"),
@@ -270,6 +281,32 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     let error = navigate(&navigation, &args).expect_err("a refusal");
     assert_eq!(error.code(), code, "{args}");
     assert_eq!(error.to_json()["code"], code);
+  }
+  assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
+}
+
+/// The task page's former tabs (ORC-100): Details and Artifacts went into Summary, Memory and Local integration are
+/// views (`view`) of Summary and Changes.
+#[test]
+fn navigate_refuses_the_task_pages_former_tabs_and_misplaced_views() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let refusals = [
+    (json!({ "tab": "details" }), "unknown_tab"),
+    (json!({ "tab": "artifacts" }), "unknown_tab"),
+    (json!({ "tab": "memory" }), "unknown_tab"),
+    (json!({ "tab": "local-integration" }), "unknown_tab"),
+    (json!({ "tab": "changes", "view": "memory" }), "invalid_param"),
+    (json!({ "view": "artifacts" }), "invalid_param"),
+    (json!({ "file": "a.rs", "view": "local-integration" }), "invalid_param"),
+  ];
+  for (extra, code) in refusals {
+    let mut args = json!({ "route": "task", "project": PROJECT, "key": "KON-1" });
+    for (name, value) in extra.as_object().expect("an object") {
+      args[name] = value.clone();
+    }
+    let error = navigate(&navigation, &args).expect_err("a refusal");
+    assert_eq!(error.code(), code, "{args}");
   }
   assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
 }

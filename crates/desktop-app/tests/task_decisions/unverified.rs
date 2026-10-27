@@ -7,11 +7,12 @@ use super::{OFFLINE, Page};
 fn decision_unverified_lists_what_was_not_checked_and_offers_accept_run_again_and_return() {
   let mut page = Page::seeded("decisions");
   page.open("waits unverified after Review", "task-retry-decision");
-  assert_eq!(
-    page.text("task-notice-title"),
-    "Unverified: Review could not check 2 things"
+  let event = page.text("task-event-text");
+  assert!(
+    event.starts_with("Unverified: Review could not check 2 things"),
+    "{event}"
   );
-  assert!(page.text("task-notice").contains("no retry was used"));
+  assert!(event.contains("no retry was used"), "{event}");
   // The header says why it waits, not that retries were used.
   let status = page.text("task-status");
   assert!(status.contains("could not check everything"), "{status}");
@@ -45,9 +46,9 @@ fn decision_unverified_lists_what_was_not_checked_and_offers_accept_run_again_an
 fn decision_unchanged_after_a_failed_verdict_shows_it_and_runs_again_first() {
   let mut page = Page::seeded("decisions");
   page.open("waits unchanged after Review failed", "task-retry-decision");
-  assert_eq!(page.text("task-notice-title"), "Review was not run again");
-  let notice = page.text("task-notice");
-  assert!(notice.contains("last failed on this same revision"), "{notice}");
+  let event = page.text("task-event-text");
+  assert!(event.starts_with("Review was not run again"), "{event}");
+  assert!(event.contains("last failed on this same revision"), "{event}");
   assert!(page.text("task-status").contains("not run again"));
   // Review sent the work back to Implement, which changed nothing: the work goes back there by default.
   let options = page.options("task-return-step");

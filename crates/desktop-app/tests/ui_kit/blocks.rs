@@ -284,7 +284,7 @@ fn markdown_with_a_blank_line_between_paragraphs_keeps_one_line_of_its_body_betw
   let mut kit = Kit::show(|ctx| {
     let view = |id: &str, text: &str| {
       MarkdownView::new(id, text, Arc::new(|_: &str, _: &lurq::app::events::MouseEvent| {}))
-        .style(TaskText::DetailsBody.role(), PaletteColor::TextPrimary)
+        .style(TaskText::Brief.role(), PaletteColor::TextPrimary)
         .blank_line_between_blocks()
     };
     Column::new()
@@ -302,7 +302,7 @@ Also handle cancellation.",
       .into()
   });
   let line = kit.bounds("one").height;
-  // Two lines and the empty one between them, as `bU9bE` in `ZSiHd` draws a description.
+  // Two lines and the empty one between them, as the Summary draws a brief.
   assert_close(kit.bounds("two").height, 3.0 * line, "two paragraphs");
 }
 

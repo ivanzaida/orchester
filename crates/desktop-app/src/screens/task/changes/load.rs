@@ -26,7 +26,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use crate::{
-  routes::{ChangedFile, TaskTab},
+  routes::{ChangedFile, TaskView},
   services::Services,
   ui::tabs::counted,
 };
@@ -131,12 +131,12 @@ pub struct Follow {
 }
 
 impl Follow {
-  /// For `detail`'s page on `tab`, while its project's runner is `online` or not: an agent works on the
-  /// run while it runs and its runner is there.
-  pub fn of(detail: &TaskDetail, online: bool, tab: TaskTab) -> Self {
+  /// For `detail`'s page while it shows `view`, while its project's runner is `online` or not: an agent works on the
+  /// run while it runs and its runner is there. Local integration, in the Changes tab's place, shows none of its files.
+  pub fn of(detail: &TaskDetail, online: bool, view: &TaskView) -> Self {
     Self {
       agent_at_work: detail.phase() == TaskPhase::Running && !detail.lost_its_runner(online),
-      tab_open: tab == TaskTab::Changes,
+      tab_open: matches!(view, TaskView::Changes(_)),
     }
   }
 }

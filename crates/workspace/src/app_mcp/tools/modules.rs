@@ -250,7 +250,7 @@ fn page_json(project: ProjectId, page: &ModulePage) -> Value {
         "id": task.id().to_string(),
         "title": task.details().title.as_str(),
         "workflow_status": Workflow::from(task.organization().status()),
-        "link": task_link(project, &key, TaskPage::Details),
+        "link": task_link(project, &key, TaskPage::Summary),
       })
     })
     .collect();

@@ -145,6 +145,9 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
       insert("key", &key.to_string());
       insert("tab", view.tab().name());
+      if let Some(sub) = view.sub_name() {
+        insert("view", sub);
+      }
       if let Some(file) = view.file() {
         insert("file", file.path());
         insert("from", file.source().name());

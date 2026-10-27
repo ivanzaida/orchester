@@ -67,8 +67,8 @@ fn conversation_message_links_task_keys_and_routes_and_opens_them_by_browser_rul
   }
 
   let other_key = other.parse().expect("a task key");
-  let details = Route::Project(project, ProjectPage::Task(other_key, TaskView::Details));
-  opens_by_browser_rules(&mut window, &other, &details);
+  let summary = Route::Project(project, ProjectPage::Task(other_key, TaskView::Summary));
+  opens_by_browser_rules(&mut window, &other, &summary);
   window.navigation().back();
   window.until("the chat again", |window| is_link(window, &changes));
   let place = Route::parse(&changes).expect("the Changes route");
