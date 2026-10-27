@@ -13,13 +13,13 @@ import { cloudLink, settings } from "@/lib/server/team/settings";
 import { identityToken } from "../fake-api/cloud";
 import { startFakeApi } from "../fake-api/server";
 
-const PORT = 4297;
 let server: Server;
+let origin: string;
 
-beforeAll(() => {
-  process.env.ORCHESTER_ADMIN_SERVER_URL = `http://127.0.0.1:${PORT}`;
+beforeAll(async () => {
+  ({ server, origin } = await startFakeApi());
+  process.env.ORCHESTER_ADMIN_SERVER_URL = origin;
   process.env.ORCHESTER_ADMIN_SECRET = Buffer.alloc(32, 9).toString("base64");
-  server = startFakeApi(PORT);
 });
 
 afterAll(() => {
@@ -30,7 +30,7 @@ const place = { proto: "https" as const, host: "orchester.kontur.dev" };
 const anonymous: CallOptions = { place, client: "203.0.113.7" };
 
 async function recorded(): Promise<{ path: string; forwardedFor: string | null; forwardedHost: string | null; forwardedProto: string | null; authorization: string | null }[]> {
-  const response = await fetch(`http://127.0.0.1:${PORT}/__fake/requests`);
+  const response = await fetch(`${origin}/__fake/requests`);
   return (await response.json()) as never;
 }
 

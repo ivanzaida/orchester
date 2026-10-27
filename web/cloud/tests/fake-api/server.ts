@@ -2,7 +2,8 @@
  * A stand-in for the cloud's API (`/api/v1`) on loopback, for the page tests and for design verification. Each
  * state is reached by what is typed; `web/cloud/README.md` lists them. Run: `node tests/fake-api/server.ts 4110`.
  */
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 
 import { FULL, resetAccounts, routeSignedIn, signInAccount, signInChecked, type Answer } from "./accounts.ts";
 import { routeRegistry } from "./registry.ts";
@@ -163,7 +164,13 @@ function redacted(body: Record<string, unknown>): Record<string, unknown> {
   return copy;
 }
 
-export function startFakeApi(port: number) {
+export interface Started {
+  server: Server;
+  /** `http://127.0.0.1:<port>`, with the port the server got. */
+  origin: string;
+}
+
+export function startFakeApi(port = 0): Promise<Started> {
   const server = createServer((request, response) => {
     const path = new URL(request.url ?? "/", "http://fake").pathname;
     if (path === "/__fake/requests") {
@@ -196,12 +203,17 @@ export function startFakeApi(port: number) {
       }, delay);
     });
   });
-  server.listen(port, "127.0.0.1");
-  return server;
+  // Port 0 lets the system pick a free one, so test runs side by side never share a fake.
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      resolve({ server, origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}` });
+    });
+  });
 }
 
 if (process.argv[1]?.endsWith("server.ts") === true) {
-  const port = Number(process.argv[2] ?? "4110");
-  startFakeApi(port);
-  console.log(`fake cloud API on http://127.0.0.1:${port}/api/v1`);
+  void startFakeApi(Number(process.argv[2] ?? "4110")).then(({ origin }) => {
+    console.log(`fake cloud API on ${origin}/api/v1`);
+  });
 }
