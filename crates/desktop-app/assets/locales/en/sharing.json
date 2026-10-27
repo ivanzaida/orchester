@@ -21,7 +21,7 @@
         "plain": "This address isn't encrypted: allow plain HTTP for it first."
       },
       "found": {
-        "line": "{{address}} · {{runs}}"
+        "about": "{{server}} · {{address}} · {{runs}}"
       },
       "plain": {
         "title": "This address isn't encrypted",

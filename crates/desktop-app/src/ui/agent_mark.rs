@@ -2,9 +2,9 @@
 //! API by its kind, it shows its maker's own mark instead of a lucide glyph. Claude Code is the Claude mark
 //! (`Mark/Claude` `eFnry`) in `mark_claude`; Codex and OpenAI's API the OpenAI knot (`Mark/OpenAI` `e2P9hh`) and
 //! Anthropic's API Anthropic's "A" (`Mark/Anthropic` `OiwFt`), both in `text_primary`. The marks are Simple Icons'
-//! SVGs (CC0), filled in a theme color, as large as an icon of `size`. A CLI on an API provider such as DeepSeek runs
-//! on someone else's models, so it shows no maker's mark ([`AgentMark::of_connection`]). One helper serves the
-//! Orchestrator's runs-on picker and Connections.
+//! SVGs (CC0), filled in a theme color, as large as an icon of `size` or as the caller asks ([`mark_icon`]). A CLI on
+//! an API provider such as DeepSeek runs on someone else's models, so it shows no maker's mark
+//! ([`AgentMark::of_connection`]). One helper serves the Orchestrator's runs-on picker, Connections and Settings.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -12,7 +12,10 @@ use lurq::{
   node::{Element, dimension::Dimension},
   svg::SvgData,
 };
-use orchester_core::connection::{AgentConnection, AgentProvider};
+use orchester_core::{
+  account::AccountCli,
+  connection::{AgentConnection, AgentProvider},
+};
 
 use crate::theme::{ExtraColor, IconSize};
 
@@ -47,6 +50,27 @@ impl AgentMark {
       .then(|| Self::of(connection.provider()))
   }
 
+  /// The mark of an account's CLI: Claude Code's is Claude's, Codex's OpenAI's.
+  pub const fn of_cli(cli: AccountCli) -> Self {
+    match cli {
+      AccountCli::ClaudeCode => Self::Claude,
+      AccountCli::Codex => Self::OpenAi,
+    }
+  }
+
+  /// The mark of an MCP client by the name it gave itself (`claude-code`, `codex-mcp-client`), when the name is one
+  /// of the CLIs'.
+  pub fn of_client(name: &str) -> Option<Self> {
+    let name = name.to_ascii_lowercase();
+    if name.contains("claude") {
+      Some(Self::Claude)
+    } else if name.contains("codex") {
+      Some(Self::OpenAi)
+    } else {
+      None
+    }
+  }
+
   /// The color the design fills the mark with.
   pub fn color(self) -> PaletteColor {
     match self {
@@ -65,11 +89,16 @@ impl AgentMark {
 
   /// The mark in its color, as large as an icon of `size`.
   pub fn render(self, ctx: &Ctx, size: IconSize) -> Element {
-    let fill = ctx.theme().palette_color(self.color());
-    let side = Dimension::Px(size.size());
-    Svg::new(SvgData::from_str(self.svg()).with_fill(fill))
-      .describe("mark", format!("{self:?}"))
-      .size(side, side)
-      .into()
+    mark_icon(ctx, self, size.size())
   }
+}
+
+/// `mark`, `side` wide and high, in its color.
+pub fn mark_icon(ctx: &Ctx, mark: AgentMark, side: f32) -> Element {
+  let fill = ctx.theme().palette_color(mark.color());
+  let side = Dimension::Px(side);
+  Svg::new(SvgData::from_str(mark.svg()).with_fill(fill))
+    .describe("mark", format!("{mark:?}"))
+    .size(side, side)
+    .into()
 }

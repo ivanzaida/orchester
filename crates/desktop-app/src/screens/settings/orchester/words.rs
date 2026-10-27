@@ -1,5 +1,5 @@
-//! How Settings › Orchester says things: a refusal or failure as its own words (`Said`, a key of the `cloud` area
-//! and its values), a server's connection as an icon and a word in the state's colors (`Aowlk`), and the cloud's
+//! How Settings › Orchester Cloud says things: a refusal or failure as its own words (`Said`, a key of the `cloud`
+//! area and its values), a server's connection as a dot and a word in the state's colors (`z9Zzt`), and the cloud's
 //! and the team servers' refusals in the person's words.
 
 use lurq::app::{component::DevtoolsInspectable, ctx::Ctx, theme::PaletteColor};
@@ -9,8 +9,6 @@ use orchester_workspace::{
   display,
   sharing::{Connection, ServerEntry, SharingError, cloud::CloudError},
 };
-
-use crate::ui::icon::Icon;
 
 /// Words to show: a key and its values.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,9 +36,8 @@ impl Said {
   }
 }
 
-/// What a server's row and header show for its state.
+/// What a server's row and page show for its state: the dot's color, the word and the word's color.
 pub struct Look {
-  pub icon: Icon,
   pub icon_color: PaletteColor,
   pub key: &'static str,
   pub color: PaletteColor,
@@ -48,10 +45,9 @@ pub struct Look {
   pub name: &'static str,
 }
 
-/// The state of `entry`: a changed certificate before anything else, then its connection.
+/// The state of `entry` (`z9Zzt` in `ZUuMT`): a changed certificate before anything else, then its connection.
 pub fn server_look(entry: &ServerEntry) -> Look {
-  let look = |icon, icon_color, key, color, name| Look {
-    icon,
+  let look = |icon_color, key, color, name| Look {
     icon_color,
     key,
     color,
@@ -59,7 +55,6 @@ pub fn server_look(entry: &ServerEntry) -> Look {
   };
   if entry.certificate_changed {
     return look(
-      Icon::ShieldAlert,
       PaletteColor::Danger,
       "cloud.state.certificateChanged",
       PaletteColor::Danger,
@@ -68,38 +63,33 @@ pub fn server_look(entry: &ServerEntry) -> Look {
   }
   match entry.connection {
     None | Some(Connection::SignedOut) => look(
-      Icon::LogOut,
       PaletteColor::Warning,
       "cloud.state.signedOut",
       PaletteColor::Warning,
       "signed-out",
     ),
     Some(Connection::Checking) => look(
-      Icon::LoaderCircle,
-      PaletteColor::TextMuted,
+      PaletteColor::Warning,
       "cloud.state.connecting",
-      PaletteColor::TextSecondary,
+      PaletteColor::Warning,
       "connecting",
     ),
     Some(Connection::Connected) => look(
-      Icon::CircleCheck,
       PaletteColor::Success,
       "cloud.state.connected",
       PaletteColor::TextSecondary,
       "connected",
     ),
     Some(Connection::Reconnecting { .. }) => look(
-      Icon::LoaderCircle,
-      PaletteColor::TextMuted,
+      PaletteColor::Warning,
       "cloud.state.connecting",
-      PaletteColor::TextSecondary,
+      PaletteColor::Warning,
       "reconnecting",
     ),
     Some(Connection::Offline { .. }) => look(
-      Icon::WifiOff,
-      PaletteColor::Warning,
+      PaletteColor::TextMuted,
       "cloud.state.offline",
-      PaletteColor::Warning,
+      PaletteColor::TextMuted,
       "offline",
     ),
   }

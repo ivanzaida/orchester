@@ -6,13 +6,13 @@ use super::*;
 fn settings_mcp_listening_names_the_address_and_never_the_token() {
   let port = free_port();
   let mut shown = Shown::installed(port, Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   for words in [
     "Orchester MCP server",
     "This installation",
     "Let agents connect to Orchester",
     "Address",
-    &format!("http://127.0.0.1:{port}/mcp"),
+    &format!("127.0.0.1:{port}"),
     "Access token",
     "•••• •••• •••• •••• •••• •••• •••• ••••",
     "Connect an agent",
@@ -55,14 +55,16 @@ fn settings_mcp_port_taken_is_said_and_another_port_moves_the_server() {
   shown.until("listening on the new port", |shown| {
     shown.says("status-mcp", &format!("MCP 127.0.0.1:{next}"))
   });
-  assert!(shown.says("settings-mcp", &format!("http://127.0.0.1:{next}/mcp")));
+  assert!(shown.says("settings-mcp", &format!("127.0.0.1:{next}")));
   drop(holder);
 }
 
 #[test]
 fn settings_mcp_port_outside_the_range_is_not_taken() {
   let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
+  // *Port* opens the field under the address.
+  shown.click("settings-mcp-port-edit");
   type_port(&mut shown, "80");
   shown.click("settings-mcp-use-port");
   shown.until("the field's error", |shown| {
@@ -75,7 +77,7 @@ fn settings_mcp_port_outside_the_range_is_not_taken() {
 fn settings_mcp_off_listens_nowhere_until_turned_on() {
   let port = free_port();
   let mut shown = Shown::installed(port, Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   shown.click("settings-mcp-enabled-switch");
   shown.until("off", |shown| shown.says("settings-mcp-state", "Off"));
   assert!(shown.says("status-mcp", "MCP off"));
@@ -110,7 +112,7 @@ fn settings_mcp_unreadable_token_says_why_and_tries_again() {
   assert!(shown.says("settings-mcp", "No address while the server is not running."));
   vault.refuse_reads(false);
   shown.click("settings-mcp-unreadable-again");
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   assert!(shown.texts("settings-mcp-unreadable").is_none());
 }
 
@@ -166,7 +168,7 @@ fn settings_mcp_unreadable_token_offers_no_commands() {
 #[test]
 fn settings_mcp_status_popover_opens_over_the_bar_at_the_window_end() {
   let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   shown.click("status-mcp");
   let [x, y, width, height] = shown.bounds("status-mcp-popover");
   let [bar_x, bar_y, bar_width, _] = shown.bounds("status-bar");
@@ -184,11 +186,26 @@ fn settings_mcp_address_copy_is_unavailable_while_nothing_listens() {
   let port = holder.local_addr().expect("its address").port();
   let mut shown = Shown::installed(port, Arc::default());
   shown.until("port taken", |shown| shown.texts("settings-mcp-port-taken").is_some());
-  // An available Copy would put the address on the clipboard and say Copied; this one is muted and does nothing.
+  // The address shows with its Copy, which takes no press while nothing listens there (eTrCO).
+  assert!(shown.says("settings-mcp-address-value", &format!("127.0.0.1:{port}")));
   shown.click("settings-mcp-address-value-copy");
   assert!(
-    shown.says("settings-mcp-address-value-copy", "Copy"),
-    "unavailable (eTrCO)"
+    !shown.everything().iter().any(|text| text.starts_with("Copied")),
+    "unavailable: nothing was copied"
   );
   drop(holder);
+}
+
+#[test]
+fn settings_mcp_address_copy_says_what_came_of_it() {
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", Shown::listening);
+  assert!(shown.texts("settings-mcp-address-value-copied").is_none());
+  shown.click("settings-mcp-address-value-copy");
+  // Copy says it for a moment, as the command row's Copy did: copied, or that the clipboard refused it.
+  assert!(
+    shown.says("settings-mcp-address-value-copied", "Copied")
+      || shown.says("settings-mcp-address-value-copied", "Couldn't copy"),
+    "Copy says what came of it"
+  );
 }

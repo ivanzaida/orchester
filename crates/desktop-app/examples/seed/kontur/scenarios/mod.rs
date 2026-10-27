@@ -23,6 +23,7 @@ mod orchestrator;
 mod pipelines;
 mod project_settings;
 mod pull_requests;
+pub mod settings;
 mod sources;
 mod task_states;
 mod tasks;
@@ -75,7 +76,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 43] = [
+pub const ALL: [Scenario; 44] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -109,6 +110,7 @@ pub const ALL: [Scenario; 43] = [
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("accounts", accounts::seed),
+  Scenario::of("settings", settings::seed),
   Scenario::of("pull-requests", pull_requests::seed),
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),

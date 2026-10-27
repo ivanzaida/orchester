@@ -1,15 +1,19 @@
-//! The app's settings: a header with its tabs (`General · Automation · Accounts · Orchester`, `t098v`, `lye6f` and
-//! `Cu20b`) over the open tab. *General* (`hUaXB`, `general`) holds the theme, the plan limits' warning threshold and
-//! this computer. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and *What automation may do*: what
-//! automation may always do, and the person's own switches for what it may widen through the MCP server and whether
-//! the Orchestrator chat acts itself, which no tool can change. On both, the header says whether every change was saved
-//! (`save_state`). *Accounts* (`accounts`, layer `hgOl2`) holds the person's agent CLI accounts. *Orchester*
-//! (`orchester`) holds the Orchester Cloud account and the team servers, and *Connect a server* replaces the whole
-//! page. The older frames' *Servers* tab is this *Orchester* tab (the person's decision, 2026-10-22).
+//! The app's settings (`App settings · redesign` `iUmo3` in the new `orchester.pen`): the title, the five page tabs
+//! *General · Notifications · Accounts · Automation · Orchester Cloud* (`page`) and the open tab's column of groups
+//! under them (`frame`). *General* (`l838Ty`, `general`) holds the theme, the plan limits' warning threshold and this
+//! computer. *Notifications* (`fQTFi`, `notifications`) holds what notifies, how, quiet hours and the Orchestrator's
+//! daily report (`daily_report`). *Automation* (`aMkOw`) holds *Orchester MCP server* (`server`) and what automation
+//! may do (`automation`): what it may always do, and the person's own switches for what it may widen through the MCP
+//! server and whether the Orchestrator chat acts itself, which no tool can change. On these three the header says
+//! whether every change was saved (`save_state`). *Accounts* (`t8i6m`, `accounts`) lists the person's agent CLI
+//! accounts by CLI, an account opening its page and *Add account* its own. *Orchester Cloud* (`vPV73`, `orchester`;
+//! its route keeps the id `orchester`) holds the cloud account, invites and the team servers in one column, a server
+//! opening its page and *Connect a server* its steps.
 
 mod accounts;
 mod automation;
 mod daily_report;
+mod frame;
 mod general;
 mod notifications;
 pub mod orchester;
@@ -25,11 +29,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::SpacingSize,
   },
-  components::Column,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::account::AgentAccount;
 use orchester_workspace::{
@@ -40,11 +42,10 @@ use parking_lot::Mutex;
 
 use self::save_state::SaveState;
 use crate::{
-  routes::{AccountsView, OrchesterPanel, OrchesterView, Screen},
+  routes::{AccountsView, OrchesterView},
   services::Services,
   ui::{
     message::message_text,
-    settings_page::form_scroll,
     state::{load_error, loading},
   },
 };
@@ -58,31 +59,47 @@ impl DevtoolsInspectable for Listed {}
 /// The open tab of Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
-  /// Settings › General (`hUaXB`).
+  /// Settings › General (`l838Ty`).
   General,
+  /// Settings › Notifications (`fQTFi`).
+  Notifications,
+  /// Settings › Automation (`aMkOw`).
   Automation,
+  /// Settings › Accounts (`t8i6m`), an account's page (`xN1Jy`) or *Add account* (`XAm8i`).
   Accounts(AccountsView),
-  /// Settings › Orchester (`Cu20b`), or *Connect a server* (`zxe2P`).
+  /// Settings › Orchester Cloud (`vPV73`), a team server's page (`C6qnY`) or *Connect a server* (`MrVql`).
   Orchester(OrchesterView),
 }
 
 impl SettingsTab {
-  /// Whether the header says if every change was saved, in place of an action: the tabs whose changes save as they
-  /// are made.
+  /// Whether the header says if every change was saved: the tabs whose changes save as they are made.
   const fn saves_as_made(self) -> bool {
-    matches!(self, Self::General | Self::Automation)
+    matches!(self, Self::General | Self::Notifications | Self::Automation)
   }
 }
 
 #[derive(Clone, Copy, PartialEq)]
 struct Props {
   tab: SettingsTab,
+  /// Automation asks *Rotate the token?* in place (`shpsk`), as its route asks.
+  rotation: bool,
 }
 
 impl DevtoolsInspectable for Props {}
 
 pub fn screen(ctx: &mut Ctx, tab: SettingsTab) -> Element {
-  ctx.mount_keyed::<SettingsScreen>("settings", Props { tab })
+  ctx.mount_keyed::<SettingsScreen>("settings", Props { tab, rotation: false })
+}
+
+/// Settings › Automation asking *Rotate the token?* under the access token.
+pub fn asking_rotation(ctx: &mut Ctx) -> Element {
+  ctx.mount_keyed::<SettingsScreen>(
+    "settings",
+    Props {
+      tab: SettingsTab::Automation,
+      rotation: true,
+    },
+  )
 }
 
 struct SettingsScreen {
@@ -106,21 +123,7 @@ impl Component for SettingsScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let tab = ctx.props::<Props>().tab;
-    if let SettingsTab::Orchester(view) = tab
-      && view.panel == OrchesterPanel::Connect
-    {
-      // *Connect a server* is a page of its own, without Settings' header and tabs (`zxe2P`).
-      return Column::new()
-        .id(format!("screen-{}", Screen::Settings.name()))
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Pct(100.0))
-        .child(ctx.mount_keyed::<orchester::connect::ConnectPage>(
-          "settings-orchester-connect",
-          orchester::connect::Props { server: view.server },
-        ))
-        .into();
-    }
+    let Props { tab, rotation } = *ctx.props::<Props>();
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
     let workspace = Services::of(ctx).workspace;
@@ -139,7 +142,8 @@ impl Component for SettingsScreen {
     let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
     let body = match tab {
       SettingsTab::General => general::tab(ctx),
-      SettingsTab::Automation => automation(ctx),
+      SettingsTab::Notifications => notifications::tab(ctx),
+      SettingsTab::Automation => automation::tab(ctx, rotation),
       SettingsTab::Orchester(view) => {
         ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view })
       }
@@ -153,7 +157,7 @@ impl Component for SettingsScreen {
             revision: self.revision.clone(),
           },
         ),
-        _ => loading("settings-accounts-loading", &ctx.t("accounts.reading")).into(),
+        _ => accounts_pane(loading("settings-accounts-loading", &ctx.t("accounts.reading")).into()),
       },
     };
     let saved = tab.saves_as_made().then(|| self.saves.summary());
@@ -164,7 +168,7 @@ impl Component for SettingsScreen {
 impl SettingsScreen {
   fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
     let revision = self.revision.clone();
-    load_error(
+    accounts_pane(load_error(
       ctx,
       "settings-accounts-load-error",
       (
@@ -172,7 +176,7 @@ impl SettingsScreen {
         &ctx.t_args("accounts.loadFailureDetail", [("reason", message_text(ctx, error))]),
       ),
       move || revision.update(|revision| *revision += 1),
-    )
+    ))
   }
 
   /// Forgets the saves of the tab that was shown when another one opens.
@@ -186,14 +190,11 @@ impl SettingsScreen {
   }
 }
 
-/// *Orchester MCP server*, *What automation may do* and *Notifications*, scrolling under the header: the switches sit
-/// below the server's section, out of a window's height.
-fn automation(ctx: &mut Ctx) -> Element {
-  let form = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xl)
-    .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
-    .child(automation::section(ctx))
-    .child(ctx.mount_keyed::<notifications::NotificationsSection>("notifications", ()));
-  form_scroll("settings-automation-scroll", form).into()
+/// The Accounts tab's column while the accounts are read, or say why they cannot be.
+fn accounts_pane(state: Element) -> Element {
+  frame::column(
+    "settings-accounts-scroll",
+    frame::pane("settings-accounts").child(state),
+  )
+  .into()
 }

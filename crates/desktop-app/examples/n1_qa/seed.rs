@@ -29,7 +29,12 @@ pub fn seed(
 ) -> Result<Route, Box<dyn Error>> {
   sign_in(backends, services, runtime)?;
   let cloud = &services.cloud;
-  let settings = |panel| Route::Orchester(OrchesterView { server: None, panel });
+  let settings = |panel| {
+    Route::Orchester(OrchesterView {
+      panel,
+      ..OrchesterView::default()
+    })
+  };
   if matches!(state, State::Project | State::LinkConfirm | State::Linked) {
     return project::seed(state, (backends, services, workspace), (runtime, folder));
   }

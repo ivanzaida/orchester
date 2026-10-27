@@ -9,7 +9,7 @@ use super::*;
 fn settings_mcp_synthetic_input_changes_nothing() {
   let port = free_port();
   let mut shown = Shown::installed(port, Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let token = shown.token();
   let gate = shown.link.input_gate();
   for (control, blocked) in [
@@ -29,10 +29,12 @@ fn settings_mcp_synthetic_input_changes_nothing() {
   }
   shown.tree.tick_futures();
   shown.pass();
-  assert!(shown.says("settings-mcp-state", "Listening"), "still on");
+  assert!(shown.listening(), "still on");
   assert!(!gate.token_shown(), "not shown");
   assert!(shown.texts("settings-mcp-token-rotate-question").is_none(), "not asked");
   assert_eq!(shown.token(), token, "not rotated");
+  // *Port* opens the field under the address.
+  shown.click("settings-mcp-port-edit");
   shown
     .tree
     .get_element_by_id_mut("settings-mcp-port")
@@ -49,4 +51,28 @@ fn settings_mcp_synthetic_input_changes_nothing() {
     Some(port),
     "not moved"
   );
+}
+
+/// The route that asks *Rotate the token?* opens the question in place (`shpsk`), as a QA copy's `navigate` does; only
+/// a person's *Rotate token* answers it.
+#[test]
+fn settings_mcp_the_route_asks_to_rotate_and_only_a_person_answers() {
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", Shown::listening);
+  let token = shown.token();
+  shown
+    .link
+    .navigation()
+    .expect("the window's navigation")
+    .go(Route::RotateToken);
+  shown.until("the question", |shown| {
+    shown.says("settings-mcp-token-rotate-question", "Rotate the token?")
+  });
+  with_synthetic_input(|| shown.click("settings-mcp-token-rotate-confirm"));
+  assert!(shown.texts("settings-mcp-token-blocked").is_some(), "not taken");
+  shown.tree.tick_futures();
+  shown.pass();
+  assert_eq!(shown.token(), token, "not rotated");
+  shown.click("settings-mcp-token-rotate-keep");
+  assert!(shown.texts("settings-mcp-token-rotate-question").is_none(), "kept");
 }
