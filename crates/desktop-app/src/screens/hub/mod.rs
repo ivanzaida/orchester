@@ -171,10 +171,15 @@ pub(crate) fn list_body_wide(id: &str, pane: impl Into<Element>, width: f32) -> 
 /// An opened item: `pane` with `side` beside it, both scrolling as one page under the tabs (the design's tall
 /// windows, 01c, 02, 04b, are whole pages that scroll).
 pub(crate) fn item_body(id: &str, pane: impl Into<Element>, side: Option<Element>) -> Element {
-  body(id, (pane.into(), PANE_WIDTH), side)
+  body(id, (pane.into(), PANE_WIDTH), side.map(|side| (side, SIDE_WIDTH)))
 }
 
-fn body(id: &str, (pane, width): (Element, f32), side: Option<Element>) -> Element {
+/// [`item_body`] with a pane and a side of their own widths, e.g. a memory record's 680 and 424 (05c).
+pub(crate) fn page_body(id: &str, pane: (Element, f32), side: (Element, f32)) -> Element {
+  body(id, pane, Some(side))
+}
+
+fn body(id: &str, (pane, width): (Element, f32), side: Option<(Element, f32)>) -> Element {
   let pane = Column::new()
     .id(format!("{id}-pane"))
     .flex_shrink(1.0)
@@ -193,10 +198,10 @@ fn body(id: &str, (pane, width): (Element, f32), side: Option<Element>) -> Eleme
     .spacing(HubSpacing::Beside.role())
     .align_items(Alignment::Start)
     .child(pane)
-    .with_children(side.map(|side| {
+    .with_children(side.map(|(side, side_width)| {
       Column::new()
         .id(format!("{id}-side"))
-        .width(Dimension::Px(SIDE_WIDTH))
+        .width(Dimension::Px(side_width))
         .flex_shrink(0.0)
         .spacing(HubSpacing::SideSections.role())
         .child(side)

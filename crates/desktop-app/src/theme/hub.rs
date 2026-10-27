@@ -35,10 +35,12 @@ pub enum HubText {
   Kind,
   /// 13.5/500 `text_primary`, 1.45: what a memory proposal says (`AnUhX` in `f0kkti`).
   Statement,
+  /// Geist Mono 13/500 `text_primary`: a row's label that is code, e.g. a variable (`wuoOU` in 02d `JXvc0`).
+  Code,
 }
 
 impl HubText {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 11] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -49,6 +51,7 @@ impl HubText {
     Self::Status,
     Self::Kind,
     Self::Statement,
+    Self::Code,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -67,6 +70,7 @@ impl HubText {
       Self::Status => "hub_status",
       Self::Kind => "hub_kind",
       Self::Statement => "hub_statement",
+      Self::Code => "hub_code",
     }
   }
 
@@ -82,6 +86,7 @@ impl HubText {
       Self::Status => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::Statement => style(13.5, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
+      Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
     }
   }
 }

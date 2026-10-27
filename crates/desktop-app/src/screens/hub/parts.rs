@@ -155,6 +155,9 @@ pub(crate) struct Entry {
   press: Option<Press>,
   elsewhere: bool,
   indent: bool,
+  chosen: bool,
+  code: bool,
+  chevron: bool,
 }
 
 impl Entry {
@@ -168,7 +171,28 @@ impl Entry {
       press: None,
       elsewhere: false,
       indent: false,
+      chosen: false,
+      code: false,
+      chevron: true,
     }
+  }
+
+  /// The row is the one chosen, filled with `hover` (`Db46B` in 02b's sources, `pHCCx` in 02d).
+  pub(crate) const fn chosen(mut self, chosen: bool) -> Self {
+    self.chosen = chosen;
+    self
+  }
+
+  /// The label is code, e.g. a variable's `{{task.id}}` (`wuoOU` in 02d).
+  pub(crate) const fn code(mut self) -> Self {
+    self.code = true;
+    self
+  }
+
+  /// A press chooses the row in place rather than opening something: no chevron at its end.
+  pub(crate) const fn in_place(mut self) -> Self {
+    self.chevron = false;
+    self
   }
 
   pub(crate) fn tile(mut self, glyph: Icon) -> Self {
@@ -215,7 +239,11 @@ impl From<Entry> for Element {
   fn from(entry: Entry) -> Self {
     let label = Text::new(&entry.label)
       .id(format!("{}-label", entry.id))
-      .variant(ExtraTypography::Strong.role())
+      .variant(if entry.code {
+        HubText::Code.role()
+      } else {
+        ExtraTypography::Strong.role()
+      })
       .nowrap();
     let text = Column::new()
       .flex(1.0)
@@ -232,7 +260,7 @@ impl From<Entry> for Element {
           None => hint,
         }
       }));
-    let opens = entry.press.is_some().then_some(if entry.elsewhere {
+    let opens = (entry.chevron && entry.press.is_some()).then_some(if entry.elsewhere {
       Icon::ArrowUpRight
     } else {
       Icon::ChevronRight
@@ -257,10 +285,16 @@ impl From<Entry> for Element {
       .child(text)
       .with_children(entry.end)
       .with_children(opens.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted)));
+    let row = if entry.chosen {
+      row.background(ExtraColor::Hover.role())
+    } else {
+      row
+    };
     match entry.press {
       Some(press) => pressed(press)
         .id(entry.id.clone())
         .width(Dimension::Pct(100.0))
+        .describe("state", if entry.chosen { "chosen" } else { "enabled" })
         .hovered_style(Style::new().background(ExtraColor::Hover.role()))
         .child(row)
         .into(),

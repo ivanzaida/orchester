@@ -1,9 +1,10 @@
 //! A status tab of the project's page: what the tab is and its records. *Waiting for approval* (`05 Memory` `padSP`)
 //! says when agents get a record, then lists every proposal of the project and its tasks, oldest first, in one box,
 //! each with *Approve*, *Edit* and *Reject* in place. The others have the search and the *Type*, *Author* and *Tag*
-//! filters and list the project's records of their statuses, pinned first, each opening its details in place,
-//! *Active* grouped by type and the rest in one list. A tab without records says so instead, without its search and
-//! filters (`ejSHj`); one whose search finds nothing names the tabs that hold matches (`tab_no_match`).
+//! filters (and on *Active* how many are active and wait) and list the project's records of their statuses, pinned
+//! first, each opening its own page, *Active* grouped by type and the rest in one box. A tab without records says so
+//! instead, without its search and filters (`ejSHj`); one whose search finds nothing names the tabs that hold matches
+//! (`tab_no_match`).
 
 use std::sync::Arc;
 
@@ -35,7 +36,7 @@ use super::{
 use crate::{
   routes::MemoryTab,
   screens::hub::parts::{boxed, group, head as head_row, note},
-  theme::ExtraTypography,
+  theme::{ExtraTypography, HubSpacing, HubText},
   ui::icon::Icon,
 };
 
@@ -79,13 +80,35 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
     status: statuses,
     ..state.filters.get()
   };
-  column = column.child(ctx.mount_keyed::<toolbar::FilterBar>(
+  let bar = ctx.mount_keyed::<toolbar::FilterBar>(
     "memory-project-filters",
     toolbar::FiltersProps {
       project: true,
       tags: listing::tags(&listed).into(),
     },
-  ));
+  );
+  // How many are active and wait, at the toolbar's end on Active (`NW4wY` in 05b).
+  let count = (tab == MemoryTab::Active).then(|| {
+    Text::new(&ctx.t_args(
+      "memory.toolbar.counts",
+      [
+        ("active", memory.count(listing::StatusFilter::Active).to_string()),
+        ("waiting", memory.waiting.len().to_string()),
+      ],
+    ))
+    .id("memory-page-count")
+    .variant(HubText::Hint.role())
+    .nowrap()
+  });
+  column = column.child(
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(bar)
+      .child(Row::new().flex(1.0))
+      .with_children(count),
+  );
   match records(ctx, state, (memory, tab), &filters) {
     Some(records) => column.child(records),
     None => column.child(tab_no_match(ctx, state, (memory, tab, shown.order), &filters)),
@@ -183,6 +206,7 @@ fn records(
     Column::new()
       .id("memory-records")
       .width(Dimension::Pct(100.0))
+      .spacing(HubSpacing::Groups.role())
       .with_children(list::row_failure(ctx, state, &memory.records, filters))
       .with_children(groups)
       .into(),

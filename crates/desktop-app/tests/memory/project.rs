@@ -55,8 +55,10 @@ fn memory_project_page_lists_its_active_records_grouped_by_type() {
   let mut page = project();
   page.memory_tab(MemoryTab::Active);
   assert_eq!(page.text("memory-tab-active"), "Active 10");
+  assert_eq!(page.text("memory-page-count"), "10 active · 4 waiting");
   let records = page.text("memory-records");
-  for heading in ["DECISIONS", "WARNINGS", "FACTS", "TO DO", "SUMMARIES", "OBSERVATIONS"] {
+  // Each type is a group of the hub's rows, headed as the hub heads them (05b).
+  for heading in ["Decisions", "Warnings", "Facts", "To do", "Summaries", "Observations"] {
     assert!(records.contains(heading), "{heading} in {records}");
   }
   assert!(
@@ -65,7 +67,7 @@ fn memory_project_page_lists_its_active_records_grouped_by_type() {
   );
   let engine = page.record("Kontur keeps its data in SQLite");
   let meta = page.text(&format!("memory-record-{}-meta", engine.id()));
-  assert!(meta.starts_with("Planner · KON-12 · Run"), "{meta}");
+  assert!(meta.contains("Planner · KON-12 · Run"), "{meta}");
   assert!(meta.contains("edited by you"), "{meta}");
   assert_eq!(
     page.text(&format!("memory-record-{}-history", engine.id())),
@@ -75,13 +77,18 @@ fn memory_project_page_lists_its_active_records_grouped_by_type() {
 }
 
 #[test]
-fn memory_project_page_reviews_a_proposal_as_a_diff_of_the_active_record() {
+fn memory_project_page_reviews_a_proposal_on_its_own_page_as_a_diff_of_the_active_record() {
   let mut page = project();
   let typed = page.record("API handlers return typed errors");
   let old = page.record("Handlers map domain errors");
   page.window.press(&format!("memory-proposal-{}-edit", typed.id()));
   let editor = format!("memory-editor-{}", typed.id());
   page.until("the review", |window| window.texts(&editor).is_some());
+  // The review is a page of its own (05e): its crumb back to the tab, and no pills or queue under it.
+  assert_eq!(page.text("memory-record-crumb"), "Memory");
+  assert!(page.text("memory-record-title").starts_with("Review proposed"));
+  assert!(!page.has("memory-tabs"), "no pills on the record's page");
+  assert!(!page.has("memory-queue"), "no queue on the record's page");
   assert_eq!(
     page.text(&format!("{editor}-removed-text")),
     old.content().text(),
@@ -99,50 +106,58 @@ fn memory_project_page_reviews_a_proposal_as_a_diff_of_the_active_record() {
       .text(&format!("{editor}-added-meta"))
       .ends_with("edited by you: the text")
   );
-  assert_eq!(
-    page.text(&format!("{editor}-reject-note")),
-    "Kept, never given or restored."
+  assert!(page.has(&format!("{editor}-reject")));
+  assert!(
+    page.has(&format!("{editor}-importance-high")),
+    "importance is a segmented control"
   );
   let (approve, frame) = (page.bounds(&format!("{editor}-save")), page.bounds(&editor));
   assert!(
     approve.x + approve.width <= frame.x + frame.width,
     "Approve fits in the footer: {approve:?} in {frame:?}"
   );
+  page.window.press("memory-record-crumb");
+  page.until("the queue again", |window| window.texts("memory-queue").is_some());
+  assert!(!page.has(&editor));
 }
 
 #[test]
-fn memory_project_page_opens_a_records_details_in_place_and_deprecates_it() {
+fn memory_project_page_opens_a_record_as_its_own_page_and_deprecates_it() {
   let mut page = project();
   page.memory_tab(MemoryTab::Active);
   let engine = page.record("Kontur keeps its data in SQLite").id();
   page.window.press(&format!("memory-record-{engine}-select"));
-  page.until("the details", |window| window.texts("memory-details").is_some());
-  assert!(page.has(&format!("memory-record-{engine}-open")));
+  page.until("the record's page", |window| window.texts("memory-details").is_some());
+  assert!(page.has("memory-record-page"));
+  assert!(
+    page.has(&format!("memory-editor-{engine}")),
+    "an active record opens in its editor"
+  );
   assert_eq!(page.text("memory-details-source-title"), "Author and source");
   assert!(page.text("memory-details-history").contains("1 earlier version"));
-  assert!(page.text("memory-details-source-value").contains("KON-12 · Run"));
+  assert!(page.text("memory-details-source-hint").contains("KON-12 · Run"));
   page.until("the invocations it was given", |window| {
     window
       .texts("memory-details-given")
       .is_some_and(|texts| texts.join(" ").contains("No invocation was given it yet."))
   });
-  assert_eq!(page.text("memory-details-actions"), "Edit Unpin Deprecate Delete");
-  page.press_until("memory-details-deprecate", "the deprecation", |window| {
-    window.texts(&format!("memory-record-{engine}")).is_none()
+  assert!(page.has("memory-page-delete"));
+  page.press_until("memory-page-deprecate", "the deprecation", |window| {
+    window.texts("memory-record-page").is_none()
   });
   let deprecated = page.stored(engine).expect("kept");
   assert_eq!(deprecated.status(), MemoryStatus::Deprecated);
   assert!(!deprecated.is_pinned());
   page.memory_tab(MemoryTab::Deprecated);
   page.window.press(&format!("memory-record-{engine}-select"));
-  page.until("its details", |window| window.texts("memory-details").is_some());
-  assert!(page.has("memory-details-restore"));
+  page.until("its page", |window| window.texts("memory-record-page").is_some());
+  assert!(page.has("memory-page-restore"));
   assert!(
-    !page.has("memory-details-edit"),
+    !page.has("memory-page-deprecate") && !page.has(&format!("memory-editor-{engine}")),
     "a deprecated record is restored or deleted"
   );
-  page.window.press(&format!("memory-record-{engine}-select"));
-  assert!(!page.has("memory-details"), "a second press closes them");
+  page.window.press("memory-record-crumb");
+  assert!(!page.has("memory-record-page"), "the crumb goes back to the list");
 }
 
 #[test]

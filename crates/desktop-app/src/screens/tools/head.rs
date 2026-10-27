@@ -47,7 +47,7 @@ pub(super) fn head(
       } else {
         "tools.draft"
       });
-      let used = super::words::used(ctx, p.data.listed.used_by(entry.id).count());
+      let used = super::words::used_by(ctx, p.data.listed.used_by(entry.id).count());
       let sub = ctx.t_args(
         "tools.pageSub",
         [

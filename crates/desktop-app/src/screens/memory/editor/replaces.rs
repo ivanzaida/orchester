@@ -46,15 +46,30 @@ impl RecordEditor {
       Some(key) => ctx.t_args("memory.editor.replacesKeyed", [("kind", &*kind), ("key", key.as_str())]),
       None => ctx.t_args("memory.editor.replaces", [("kind", &*kind)]),
     };
+    if page {
+      // The record's page: the group's head, the diff and what approving does (`IZHh4` in 05e).
+      let group = format!("{id}-replaces");
+      let note = crate::screens::hub::parts::note(
+        &format!("{group}-note"),
+        Icon::Info,
+        &ctx.t("memory.editor.replacesTextDiff"),
+      );
+      return crate::screens::hub::parts::group(
+        &group,
+        crate::screens::hub::parts::head(&group, &title, None, None),
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(self.diff(ctx, (replaced, proposal), id))
+          .child(note),
+      )
+      .into();
+    }
     let notice = Column::new()
       .id(format!("{id}-replaces"))
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-      .spacing(if page {
-        SpacingSize::Sm
-      } else {
-        ExtraSpacing::Snug.role()
-      })
+      .spacing(ExtraSpacing::Snug.role())
       .background(PaletteColor::SurfacePanel)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Tile.role())
@@ -65,17 +80,7 @@ impl RecordEditor {
           .child(icon(Icon::Replace, IconSize::Base, PaletteColor::TextSecondary))
           .child(Text::new(&title).variant(TypographyStyle::Label)),
       )
-      .child(
-        Text::new(&ctx.t(if page {
-          "memory.editor.replacesTextDiff"
-        } else {
-          "memory.editor.replacesText"
-        }))
-        .variant(MemoryText::NoticeText.role()),
-      );
-    if page {
-      return notice.child(self.diff(ctx, (replaced, proposal), id)).into();
-    }
+      .child(Text::new(&ctx.t("memory.editor.replacesText")).variant(MemoryText::NoticeText.role()));
     let quoted = words::join(ctx, &[old.content().text().to_owned(), replaced.meta.to_string()]);
     notice
       .child(

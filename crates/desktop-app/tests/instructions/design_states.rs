@@ -105,7 +105,9 @@ fn instructions_preview_keeps_horizontal_actions_visible_and_viewer_is_read_only
     copy.x > view.x && copy.y + copy.height < 875.0,
     "actions fit inside the page"
   );
-  assert!(screen.text("instruction-panel").contains("Project rule · this rule"));
+  // The source row's sub-line names its part, its version and that it is this rule (`fSWIV` in 02b).
+  let panel = screen.text("instruction-panel");
+  assert!(panel.contains("Project rule · Draft v1 · this rule"), "{panel}");
   screen.click("instruction-full-prompt");
   screen.until("viewer", |s| s.exists("instruction-full-viewer"));
   assert!(

@@ -117,7 +117,7 @@ fn instructions_verify_preview_label_tracks_draft_and_published_state() {
   assert!(
     screen
       .text("instruction-panel")
-      .contains("DRAFT PREVIEW · A RUN STARTED NOW")
+      .contains("Draft preview · a run started now")
   );
   screen.click("instruction-publish");
   screen.until("published preview", |s| {
@@ -125,8 +125,8 @@ fn instructions_verify_preview_label_tracks_draft_and_published_state() {
   });
   assert!(!screen.entry(id).state.has_draft());
   let published = screen.text("instruction-panel");
-  assert!(published.contains("PREVIEW · A RUN STARTED NOW"));
-  assert!(!published.contains("DRAFT PREVIEW"));
+  assert!(published.contains("Preview · a run started now"));
+  assert!(!published.contains("Draft preview"));
   screen.click("instruction-full-prompt");
   assert!(!screen.text("instruction-full-viewer").contains("DRAFT PREVIEW"));
   screen.click("instruction-viewer-back");
@@ -135,7 +135,7 @@ fn instructions_verify_preview_label_tracks_draft_and_published_state() {
   assert!(
     screen
       .text("instruction-panel")
-      .contains("DRAFT PREVIEW · A RUN STARTED NOW")
+      .contains("Draft preview · a run started now")
   );
 }
 

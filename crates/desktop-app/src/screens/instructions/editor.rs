@@ -221,11 +221,16 @@ impl Editor {
     let saved = saved_value.as_ref();
     let top = self.top(ctx, props, saved, (dirty, busy, errors.is_some()));
     let mut pane = Column::new()
+      .id("instruction-pane")
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(top);
+    // A new rule with no panel beside it keeps the hub's column (`Pane` in 02e).
+    if saved.is_none() && self.panel.get() == Panel::Hidden {
+      pane = pane.max_width(Dimension::Px(crate::screens::hub::PANE_WIDTH));
+    }
     pane = editor_actions::write_error(self, ctx, pane);
     pane = editor_actions::published_notice(self, ctx, &availability.retained, pane);
     pane = editor_actions::reload(self, ctx, props, (saved, busy), pane);

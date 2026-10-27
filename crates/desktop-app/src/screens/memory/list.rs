@@ -1,18 +1,18 @@
 //! The grouped list of records the Memory screens share (`Record list` `sglU2` in `a0PLO`, `Fqhrb` in `TeKGM`): the
-//! records waiting for approval first on a task's tab, then a group per type under its heading; in a record's place
-//! its editor or its delete confirmation while one is open, and on the project's page its details under its row
-//! while a press opened them (`aBtsx`). A task's handoffs show the latest, with *Show N earlier handoffs* for the
-//! steps' other ones.
+//! records waiting for approval first on a task's tab, then a group per type under its heading, and in a record's
+//! place its editor or its delete confirmation while one is open. On the project's page each group is the hub's
+//! group of rows (`Handoffs` `yG8AV` in 05b) and a press on a record opens its own page ([`super::record_page`]). A
+//! task's handoffs show the latest, with *Show N earlier handoffs* for the steps' other ones.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::MemoryId,
@@ -26,17 +26,17 @@ use orchester_workspace::memory::{
 
 use super::{
   delete::DeleteConfirm,
-  details::{DetailsProps, RecordDetails},
   editor::{RecordEditor, opened_on},
   opened::{self, Among},
   parts,
   proposal::{self, Listed as Place},
-  row::{Details, Earlier, RecordRow, RowProps},
+  row::{Earlier, RecordRow, RowProps},
   state::{MemoryState, Opened},
   words,
 };
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, IconSize, MemorySpacing},
+  screens::hub::parts as hub_parts,
+  theme::{ExtraSpacing, IconSize, MemorySpacing},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -76,12 +76,16 @@ pub fn groups(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>) -> Vec<E
 }
 
 /// `input`'s records in one list without group headings, as the project page's *Deprecated*, *Superseded* and
-/// *Rejected* tabs show them (`hxQhj` in `C0OJpC`).
+/// *Rejected* tabs show them (`hxQhj` in `C0OJpC`), there in one box of rows (05f).
 pub fn flat(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>) -> Vec<Element> {
-  listing::flat(input.records, input.filters)
+  let rows: Vec<Element> = listing::flat(input.records, input.filters)
     .into_iter()
     .map(|memory| entry(ctx, state, input, (memory, None)))
-    .collect()
+    .collect();
+  if rows.is_empty() || input.project.is_none() {
+    return rows;
+  }
+  vec![hub_parts::boxed("memory-flat-rows", rows).into()]
 }
 
 fn group(
@@ -90,15 +94,17 @@ fn group(
   input: ListInput<'_>,
   (listed, latest): (&Listed<'_>, Option<MemoryId>),
 ) -> Element {
+  let project = input.project.is_some();
   let (key, label) = match listed.group {
     Group::Waiting => ("waiting".to_owned(), ctx.t("memory.group.waiting")),
+    // The project's page heads its groups as the hub does (`Handoffs` `yG8AV` in 05b).
+    Group::Kind(kind) if project => (kind.name().to_owned(), words::kind_plural(ctx, kind)),
     Group::Kind(kind) => (
       kind.name().to_owned(),
       words::kind_plural(ctx, kind).to_uppercase().into(),
     ),
   };
   let id = format!("memory-group-{key}");
-  let heading = parts::group_heading(&format!("{id}-heading"), &label, listed.records.len());
   let mut shown: Vec<&Memory> = listed.records.clone();
   let mut earlier: Vec<&Memory> = Vec::new();
   if listed.group == Group::Kind(MemoryKind::Handoff) && latest.is_some() && !state.earlier_handoffs.get() {
@@ -107,32 +113,35 @@ fn group(
       .iter()
       .partition(|memory| Some(memory.id()) == latest || memory.status() != MemoryStatus::Active);
   }
-  let mut column = Column::new().id(id).width(Dimension::Pct(100.0));
-  column = if input.task_tab {
-    column.spacing(SpacingSize::Xs).child(
+  let handoffs =
+    listed.group == Group::Kind(MemoryKind::Handoff) && (!earlier.is_empty() || state.earlier_handoffs.get());
+  if project {
+    let mut rows: Vec<Element> = shown
+      .into_iter()
+      .map(|memory| entry(ctx, state, input, (memory, latest)))
+      .collect();
+    if handoffs {
+      rows.push(earlier_handoffs(ctx, state, input, &earlier));
+    }
+    let count = listed.records.len().to_string();
+    let head = hub_parts::head(&format!("{id}-heading"), &label, Some(&count), None);
+    return hub_parts::group(&id, head, hub_parts::boxed(&format!("{id}-rows"), rows)).into();
+  }
+  let heading = parts::group_heading(&format!("{id}-heading"), &label, listed.records.len());
+  let mut column = Column::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Xs)
+    .child(
       Row::new()
         .width(Dimension::Pct(100.0))
         .padding(Padding::horizontal(SpacingSize::Md))
         .child(heading),
-    )
-  } else {
-    column.child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .top(crate::theme::ExtraSpacing::Inset.role())
-            .bottom(SpacingSize::Xs)
-            .left(SpacingSize::Md)
-            .right(SpacingSize::Md),
-        )
-        .child(heading),
-    )
-  };
+    );
   for memory in shown {
     column = column.child(entry(ctx, state, input, (memory, latest)));
   }
-  if listed.group == Group::Kind(MemoryKind::Handoff) && (!earlier.is_empty() || state.earlier_handoffs.get()) {
+  if handoffs {
     column = column.child(earlier_handoffs(ctx, state, input, &earlier));
   }
   column.into()
@@ -158,41 +167,18 @@ fn entry(
   if input.task_tab && memory.status() == MemoryStatus::Proposed {
     return proposal::proposal(ctx, (memory, input.records), input.origins, Place::Task);
   }
-  let open = input.project.filter(|_| state.chosen() == Some(memory.id()));
   let props = RowProps {
     memory: memory.clone(),
     meta: words::meta(ctx, memory, input.origins, !input.task_tab),
     latest: Some(memory.id()) == latest,
     earlier: earlier_versions(ctx, memory, input),
-    details: input
-      .project
-      .map(|_| if open.is_some() { Details::Open } else { Details::Closed }),
+    page: input.project.is_some(),
   };
   let row = ctx.mount_keyed::<RecordRow>(&format!("memory-row-{}", memory.id()), props);
-  let note = row_note(ctx, state, memory.id()).map(note_line);
-  let Some(project) = open else {
-    let Some(note) = note else {
-      return row;
-    };
-    return Column::new().width(Dimension::Pct(100.0)).child(row).child(note).into();
+  let Some(note) = row_note(ctx, state, memory.id()).map(note_line) else {
+    return row;
   };
-  let details = ctx.mount_keyed::<RecordDetails>(
-    &format!("memory-details-{}", memory.id()),
-    DetailsProps {
-      memory: Arc::clone(project),
-      record: memory.id(),
-    },
-  );
-  Column::new()
-    .id(format!("memory-record-{}-open", memory.id()))
-    .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .child(row)
-    .with_children(note)
-    .child(details)
-    .into()
+  Column::new().width(Dimension::Pct(100.0)).child(row).child(note).into()
 }
 
 /// A row's note in its place under the row's text.

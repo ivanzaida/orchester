@@ -12,7 +12,7 @@ use lurq::{
 use orchester_workspace::memory::read::ProjectMemory;
 
 use super::{
-  Read,
+  Read, record_page,
   settings::{SettingsProps, SettingsTab},
   state::{MemoryState, Opened},
   status_tab,
@@ -91,6 +91,10 @@ fn content(
   let Some(view) = view else {
     return loading("memory-loading", &ctx.t("memory.reading")).into();
   };
+  // A record opened from the tab shows as its own page (05c, 05e).
+  if let Some(page) = record_page::page(ctx, state, &memory, view.tab) {
+    return page;
+  }
   let pane = pane
     .child(tabs::strip(ctx, state.project_id, (&memory, view.order), view.tab))
     .child(body(ctx, state, (project, &memory), view));

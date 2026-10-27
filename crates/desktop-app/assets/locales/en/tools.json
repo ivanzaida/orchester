@@ -55,6 +55,8 @@
     "needsSecret": "Needs a secret",
     "unused": "Unused",
     "usedSteps": "{{count}} pipeline steps",
+    "usedByStepOne": "used by 1 pipeline step",
+    "usedBySteps": "used by {{count}} pipeline steps",
     "ready": "Ready",
     "draft": "Draft",
     "unavailable": "Unavailable",

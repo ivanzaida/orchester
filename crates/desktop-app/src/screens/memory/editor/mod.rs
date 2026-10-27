@@ -6,6 +6,7 @@
 //! record, active at once, to this task or the project. One component for the three: mode is a prop.
 
 mod fields;
+mod page;
 mod replaces;
 
 use std::sync::Arc;
@@ -133,6 +134,10 @@ impl Component for RecordEditor {
     let props = ctx.props::<EditorProps>().clone();
     let state = MemoryState::of(ctx);
     let id = editor_id(&props);
+    // On the project's page a record and a proposal are edited on their own page (05c, 05e).
+    if state.task.is_none() && props.mode != EditorMode::New {
+      return self.page(ctx, &state, &props, &id);
+    }
     Column::new()
       .id(id.clone())
       .width(Dimension::Pct(100.0))
@@ -143,6 +148,7 @@ impl Component for RecordEditor {
       .child(self.head(ctx, &state, &props, &id))
       .child(self.fields(ctx, &state, &props, &id))
       .child(self.footer(ctx, &state, &props, &id))
+      .into()
   }
 }
 

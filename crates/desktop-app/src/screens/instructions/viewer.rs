@@ -141,7 +141,7 @@ fn sidebar(ctx: &Ctx, state: &Panels, props: &Props, resolved: &Resolved<'_>, co
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Sm)
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t(preview::mode_key(props))).variant(instructions::overline()))
+    .child(Text::new(&ctx.t(preview::mode_key(props)).to_uppercase()).variant(instructions::overline()))
     .child(
       Text::new(&ctx.t_args(
         "instructions.viewerContext",

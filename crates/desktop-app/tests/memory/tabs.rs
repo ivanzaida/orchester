@@ -163,10 +163,10 @@ fn memory_page_runs_past_no_edge_at_1440_or_960() {
     page.memory_tab(MemoryTab::Active);
     let engine = page.record("Kontur keeps its data in SQLite").id();
     page.window.press(&format!("memory-record-{engine}-select"));
-    page.until("the details", |window| window.texts("memory-details").is_some());
+    page.until("the record's page", |window| window.texts("memory-details").is_some());
     let past = page.past_right_edge("screen-memory", right);
-    assert!(past.is_empty(), "Active with a record open at {width}: {past:?}");
-    page.window.press(&format!("memory-record-{engine}-select"));
+    assert!(past.is_empty(), "a record's page at {width}: {past:?}");
+    page.window.press("memory-record-crumb");
     page.memory_tab(MemoryTab::Settings);
     let past = page.past_right_edge("screen-memory", right);
     assert!(past.is_empty(), "Settings at {width}: {past:?}");

@@ -3,8 +3,9 @@
 //! lines); the meta line with its tags; *Supersedes N earlier versions*, which unfolds them; and at its end the pin,
 //! the status of a record no agent is given and, under the pointer, its actions, whose room the end keeps while they
 //! are hidden, so the text never reflows under the pointer. A record no agent is given says what it says in
-//! `text_muted`; a deprecated one is restored or deleted, the others only deleted. On the project's page a press
-//! opens the record's details in place, and a second press closes them.
+//! `text_muted`; a deprecated one is restored or deleted, the others only deleted. On the project's page the row is
+//! one of the hub's (`RWzzY` in 05b): what it says on one line over its key and meta line, the latest handoff's or its
+//! importance's badge at its end, and a press opens the record's own page.
 
 use std::sync::Arc;
 
@@ -14,12 +15,12 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::memory::{Memory, MemoryKind, MemoryStatus};
+use orchester_core::memory::{Importance, Memory, MemoryKind, MemoryStatus};
 use orchester_workspace::memory::{change::Change, handoff::HandoffParts};
 
 use super::{
@@ -29,8 +30,11 @@ use super::{
   work::Write,
 };
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, MemoryText},
+  theme::{
+    ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize, MemoryText,
+  },
   ui::{
+    chip::{BadgeTone, badge},
     icon::{Icon, icon},
     icon_button::IconButton,
     pressable::pressable,
@@ -54,15 +58,9 @@ pub struct RowProps {
   /// The task's latest handoff, which every agent of the task is given.
   pub latest: bool,
   pub earlier: Arc<[Earlier]>,
-  /// A press opens its details in place, or closes them while they are open (the project's page).
-  pub details: Option<Details>,
-}
-
-/// Whether a row's details are open in place.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Details {
-  Closed,
-  Open,
+  /// The project's page: a row of the hub's box, one line of what it says over its meta line, its importance at the
+  /// end, and a press opens the record's page (05b).
+  pub page: bool,
 }
 
 impl DevtoolsInspectable for RowProps {}
@@ -89,32 +87,135 @@ impl Component for RecordRow {
     let row = Row::new()
       .id(id.clone())
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-      .spacing(SpacingSize::Md)
-      .rounded(ExtraRadius::Tile.role())
       .describe("status", memory.status().name())
       .describe("kind", memory.content().kind().name())
       .on_mouse_enter(move || enter.set(true))
-      .on_mouse_leave(move || leave.set(false))
-      .child(parts::glyph(words::glyph(memory.content().kind())))
-      .child(body(ctx, &state, &props, &id))
-      .child(self.trailing(ctx, &state, memory, &id));
-    // An open record's row sits in its details' box, which colors it (`aBtsx`).
-    let row = if self.hovered.get() && props.details != Some(Details::Open) {
+      .on_mouse_leave(move || leave.set(false));
+    let row = if props.page {
+      row
+        .padding(
+          Padding::new()
+            .top(HubSpacing::RowY.role())
+            .bottom(HubSpacing::RowY.role())
+            .left(HubSpacing::Row.role())
+            .right(HubSpacing::Row.role()),
+        )
+        .spacing(SpacingSize::Md)
+        .align_items(Alignment::Center)
+        .child(page_body(ctx, &state, &props, &id))
+        .child(self.page_trailing(ctx, &state, &props, &id))
+    } else {
+      row
+        .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+        .spacing(SpacingSize::Md)
+        .rounded(ExtraRadius::Tile.role())
+        .child(parts::glyph(words::glyph(memory.content().kind())))
+        .child(body(ctx, &state, &props, &id))
+        .child(self.trailing(ctx, &state, memory, &id))
+    };
+    let row = if self.hovered.get() {
       row.background(ExtraColor::Hover.role())
     } else {
       row
     };
-    let Some(details) = props.details else {
+    if !props.page {
       return Element::from(row);
-    };
+    }
     let record = memory.id();
     pressable(move || state.choose(record))
       .id(format!("{id}-select"))
       .width(Dimension::Pct(100.0))
-      .describe("details", if details == Details::Open { "open" } else { "closed" })
       .child(row)
       .into()
+  }
+}
+
+/// A row on the project's page: what it says on one line, then its key and meta line, and its history (`RWzzY`).
+fn page_body(ctx: &mut Ctx, state: &MemoryState, props: &RowProps, id: &str) -> Element {
+  let memory = &props.memory;
+  let content = memory.content();
+  let handoff = (content.kind() == MemoryKind::Handoff).then(|| HandoffParts::of(content.text()));
+  let text = handoff
+    .as_ref()
+    .map_or(content.text(), |parts| parts.summary.as_str())
+    .lines()
+    .next()
+    .unwrap_or_default()
+    .to_owned();
+  let shown = memory.status() == MemoryStatus::Active || memory.status() == MemoryStatus::Proposed;
+  let meta = match content.key() {
+    Some(key) => words::join(
+      ctx,
+      &[
+        ctx.t_args("memory.row.key", [("key", key.as_str())]).to_string(),
+        props.meta.to_string(),
+      ],
+    ),
+    None => props.meta.clone(),
+  };
+  let mut body = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Hair.role())
+    .child(
+      Text::new(&text)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Strong.role())
+        .color(if shown {
+          PaletteColor::TextPrimary
+        } else {
+          PaletteColor::TextMuted
+        })
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .child(
+      Text::new(&meta)
+        .id(format!("{id}-meta"))
+        .variant(HubText::Hint.role())
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    );
+  if !props.earlier.is_empty() {
+    body = body.child(history(ctx, state, props, id));
+  }
+  body.into()
+}
+
+impl RecordRow {
+  /// A page row's end: the pin, a closed record's status, the latest handoff's or its importance's badge, and the
+  /// actions under the pointer or the room they take (`i0I99`, `Z3eNbm`, `g8wBTs`).
+  fn page_trailing(&self, ctx: &mut Ctx, state: &MemoryState, props: &RowProps, id: &str) -> Element {
+    let memory = &props.memory;
+    let mut trailing = Row::new()
+      .flex_shrink(0.0)
+      .spacing(SpacingSize::Md)
+      .align_items(Alignment::Center);
+    if memory.is_pinned() {
+      trailing = trailing.child(icon(Icon::Pin, IconSize::Base, PaletteColor::TextPrimary).id(format!("{id}-pinned")));
+    }
+    if let Some(status) = words::closed_status(ctx, memory.status()) {
+      trailing = trailing.child(parts::status(
+        &format!("{id}-status"),
+        status,
+        PaletteColor::TextSecondary,
+      ));
+    }
+    let importance = memory.content().importance();
+    let (tone, word) = if props.latest {
+      (BadgeTone::Info, ctx.t("memory.row.latest"))
+    } else if importance == Importance::High {
+      (BadgeTone::Warning, words::importance(ctx, importance))
+    } else {
+      (BadgeTone::Neutral, words::importance(ctx, importance))
+    };
+    trailing = trailing.child(badge(&format!("{id}-badge"), tone, &word));
+    let actions = if self.hovered.get() && !state.busy() {
+      actions(ctx, state, memory, id)
+    } else {
+      actions_room(memory, id)
+    };
+    trailing.child(actions).into()
   }
 }
 

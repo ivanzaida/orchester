@@ -20,7 +20,14 @@ use crate::{
     toggle::{Toggle, ToggleKind},
   },
 };
-pub fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Resolved<'_>>) -> Element {
+/// The chosen variable's detail under its group, `context` saying for which task and role its value is (`x9Cv4`).
+pub fn detail(
+  ctx: &Ctx,
+  props: &Props,
+  variable: Variable,
+  resolved: Option<&Resolved<'_>>,
+  context: Option<Element>,
+) -> Element {
   let value = resolved.and_then(|r| r.value(variable));
   let missing = value.is_none();
   let head = head(ctx, variable);
@@ -31,7 +38,7 @@ pub fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Re
     .padding(SpacingSize::Md)
     .spacing(ExtraSpacing::Inline.role())
     .background(PaletteColor::SurfaceRaised)
-    .rounded(ExtraRadius::Tile.role())
+    .rounded(lurq::app::theme::RadiusSize::Lg)
     .border_inside(
       BorderSize::Sm,
       if missing {
@@ -40,6 +47,7 @@ pub fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Re
         PaletteColor::Border
       },
     )
+    .with_children(context)
     .child(head)
     .child(Text::new(&variables::description(ctx, variable)).variant(instructions::detail_description()))
     .child(box_value);

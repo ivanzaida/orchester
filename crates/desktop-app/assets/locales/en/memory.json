@@ -291,10 +291,21 @@
       "rejectNote": "Rejected proposals are kept and never given.",
       "rejectNoteShort": "Kept, never given or restored.",
       "approveNote": "Your edits are saved with the approval.",
+      "approveNotePage": "Your edits are saved with the approval. Rejected proposals are kept and never given.",
       "saveNote": "Changes reach agents from their next invocation.",
       "cancel": "Cancel",
       "save": "Save record",
-      "delete": "Delete…"
+      "delete": "Delete…",
+      "record": "Record"
+    },
+    "page": {
+      "crumb": "Memory",
+      "titleKeyed": "{{kind}} · {{key}}",
+      "sub": "{{status}} · {{meta}}"
+    },
+    "row": {
+      "key": "key {{key}}",
+      "latest": "Latest"
     },
     "delete": {
       "title": "Delete this record?",
@@ -334,7 +345,10 @@
       "byYou": "By you · {{time}}",
       "history": "History",
       "edited": "You edited it · {{time}}",
+      "editedTitle": "You edited it",
       "version": "v{{version}} · superseded {{time}} by this record",
+      "versionTitle": "v{{version}}",
+      "versionSuperseded": "superseded {{time}} by this record",
       "given": "Given to agents",
       "givenReading": "Reading the invocations…",
       "givenNone": "No invocation was given it yet.",
