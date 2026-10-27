@@ -204,8 +204,9 @@ fixed address instead (see *The new app's MCP server* below).
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `return_to_draft` (a queued task whose run never
-  started, as the task list's *Return to drafts* takes it back: only one its group holds for good;
-  refused with `not_queued`, `run_recorded` or `not_held`), `get_run`, `pause_run`, `resume_run`
+  started, to Draft and Backlog as the Tasks board's Backlog takes it back; one of a reviewed group only
+  when its group holds it for good; refused with `not_queued`, `run_recorded` or `not_held`),
+  `get_run`, `pause_run`, `resume_run`
   (continues an interrupted run), `cancel_run`, `send_message` (a message to the agents of a task's
   latest run, as the Conversation composer sends it in the run's state: it answers, follows up,
   continues a failed or stuck run, resumes a paused one or runs an ended task again; it waits for a

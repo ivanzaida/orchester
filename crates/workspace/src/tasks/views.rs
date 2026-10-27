@@ -1,12 +1,12 @@
-//! The Tasks list's views and groups (ORC-99). Active holds the Todo, In progress and In review tasks and every task
-//! something of waits for the person ([`ProjectTasks::waiting_tasks`]), whatever its status, so its *Needs you* group
-//! names exactly the tasks every *Needs you* counts; Backlog and Done (Done and Canceled) hold the rest, and All every
-//! task. Each task is in one of Active, Backlog and Done.
+//! The Tasks list's views and groups (ORC-99). Needs you holds only the tasks something of waits for the person
+//! ([`ProjectTasks::waiting_tasks`]), so it names exactly the tasks every *Needs you* counts (ORC-105). Active holds
+//! the Todo, In progress and In review tasks and every task that waits, whatever its status; Backlog and Done (Done and
+//! Canceled) hold the rest, and All every task. Each task is in one of Active, Backlog and Done.
 //!
 //! Active is grouped by what happens next: Needs you, Running, Queued, Ready to start, and the two groups the design
 //! has no row for: Stopped (a run that failed, paused, was interrupted, canceled, or cannot be read, and waits for no
 //! one) and Finished (every step passed, or merged, while the merge queue or nothing more needs the person). All is
-//! grouped by workflow status. Backlog and Done are flat, Done newest first.
+//! grouped by workflow status. Needs you, Backlog and Done are flat, Done newest first.
 
 use std::collections::HashSet;
 
@@ -17,6 +17,7 @@ use super::{browse::TaskSort, data::ProjectTasks, list::TaskRow};
 /// A view of the list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ListView {
+  NeedsYou,
   Active,
   Backlog,
   Done,
@@ -24,13 +25,14 @@ pub enum ListView {
 }
 
 impl ListView {
-  pub const ALL: [Self; 4] = [Self::Active, Self::Backlog, Self::Done, Self::All];
+  pub const ALL: [Self; 5] = [Self::NeedsYou, Self::Active, Self::Backlog, Self::Done, Self::All];
 
   /// Whether the view holds `row`, `waiting` being the tasks something of waits for the person.
   pub fn keeps(self, row: &TaskRow, waiting: &HashSet<TaskId>) -> bool {
     let status = row.organization.status();
     let waits = waiting.contains(&row.id);
     match self {
+      Self::NeedsYou => waits,
       Self::Active => {
         waits
           || matches!(
@@ -142,7 +144,7 @@ pub fn grouped(
       kept.sort_by_key(|row| std::cmp::Reverse(updated(row)));
       return flat(kept);
     }
-    ListView::Backlog | ListView::Done => return flat(kept),
+    ListView::NeedsYou | ListView::Backlog | ListView::Done => return flat(kept),
   };
   let of = |row: &TaskRow| match view {
     ListView::Active => Group::next(row, waiting),

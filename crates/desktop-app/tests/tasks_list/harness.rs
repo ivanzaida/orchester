@@ -68,7 +68,7 @@ impl Seeded {
     seeded.window.until("the tasks", |window| {
       window
         .texts("tasks-view-all-count")
-        .is_some_and(|count| count.concat() != "—")
+        .is_some_and(|count| !count.is_empty() && count.concat() != "—")
     });
     seeded.until("the rows laid out", Self::rows_laid_out);
     seeded
@@ -189,9 +189,10 @@ impl Seeded {
       .unwrap_or_else(|| panic!("{id} is an icon"))
   }
 
-  /// Delivers what the window's futures finished until `done` holds.
+  /// Delivers what the window's futures finished until `done` holds. The wait is long enough for the whole binary's
+  /// tests sharing the machine in a debug build.
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
       self.window.tree.tick_futures();
       self.window.pass();
@@ -249,7 +250,76 @@ impl Seeded {
     tree.mouse_up(x, y, MouseButton::Left);
     self.window.pass();
   }
+
+  /// A Shift+click at the middle of `id`.
+  pub fn shift_click(&mut self, id: &str) {
+    let bounds = self.bounds(id);
+    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    let tree = &mut self.window.tree;
+    tree.mouse_move_with_meta(x, y, true, false, false, false);
+    tree.mouse_down_with_meta(x, y, MouseButton::Left, true, false, false, false);
+    tree.mouse_up_with_meta(x, y, MouseButton::Left, true, false, false, false);
+    self.window.pass();
+  }
+
+  /// `scenario`'s Tasks at `list`, switched to the board once its tasks are read.
+  pub fn board(scenario: &str, list: TaskList) -> Self {
+    let mut seeded = Self::tasks(scenario, list);
+    seeded.until("the layout switch", |seeded| seeded.laid_out("tasks-layout-board"));
+    seeded.click("tasks-layout-board");
+    seeded.until("the board", |seeded| seeded.laid_out("tasks-board-columns"));
+    seeded
+  }
+
+  /// Lifts the card of `key` with the pointer and drops it on the column `column`, a little under its head, moving in
+  /// steps as a hand does.
+  pub fn drag(&mut self, key: &str, column: &str) {
+    let (_, (x1, y1)) = self.hold(key, column);
+    self.window.tree.mouse_up(x1, y1, MouseButton::Left);
+    self.window.pass();
+  }
+
+  /// Lifts the card of `key` and holds it over the column `column`, the button still down; answers where the card
+  /// was taken from and where the pointer is.
+  pub fn hold(&mut self, key: &str, column: &str) -> ((f32, f32), (f32, f32)) {
+    self.hold_over(key, &format!("tasks-board-column-{column}"))
+  }
+
+  /// Lifts the card of `key` and holds it over the element `id`, a little under its top, the button still down;
+  /// answers where the card was taken from and where the pointer is.
+  pub fn hold_over(&mut self, key: &str, id: &str) -> ((f32, f32), (f32, f32)) {
+    let card = format!("task-card-{key}");
+    self.until(&card, |seeded| seeded.laid_out(&card));
+    let (from, to) = (self.bounds(&card), self.bounds(id));
+    let (x0, y0) = (from.x + from.width / 2.0, from.y + from.height / 2.0);
+    let (x1, y1) = (to.x + to.width / 2.0, to.y + DROP_DEPTH.min(to.height / 2.0));
+    self.window.tree.mouse_move(x0, y0);
+    self.window.tree.mouse_down(x0, y0, MouseButton::Left);
+    self.window.pass();
+    for step in 1..=DRAG_STEPS {
+      let part = f32::from(step) / f32::from(DRAG_STEPS);
+      self
+        .window
+        .tree
+        .mouse_move(x0 + (x1 - x0) * part, y0 + (y1 - y0) * part);
+      self.window.pass();
+    }
+    ((x0, y0), (x1, y1))
+  }
+
+  /// The ids under the window's root that start with `prefix`.
+  pub fn ids(&mut self, prefix: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    if let Some(root) = self.window.tree.root() {
+      collect_ids(root, prefix, &mut ids);
+    }
+    ids
+  }
 }
+
+/// How far under a column's top a drag lets go, and in how many moves it gets there.
+const DROP_DEPTH: f32 = 80.0;
+const DRAG_STEPS: u16 = 8;
 
 /// The ids under `element` that start with `prefix`.
 fn collect_ids(element: ElementRef<'_>, prefix: &str, into: &mut Vec<String>) {

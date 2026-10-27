@@ -1,9 +1,11 @@
-//! The list's views (`Views` `ANTgi` in `Tasks · redesign` `Lw1Gb`): Active, Backlog, Done and All, each with how many
-//! tasks it holds as searched and filtered once they are read, `—` until then; 32 high, 20 apart, on a 1 `border`
-//! line. The current view's label is 13/500 `text_primary` over a 2 `accent` underline, the others' 13
+//! The list's views (`Views` `ANTgi` in `Tasks · redesign` `Lw1Gb`): Needs you (`Needs you view` `yiAlE` in `Tasks
+//! board · redesign` `J6gQo`: a 12 `warning` hand 6 before its label), Active, Backlog, Done and All, each with how
+//! many tasks it holds as searched and filtered once they are read; while they are read, a 14 × 8 bone in each count's
+//! place (`Count bone` `EbQay` in `05 · Loading` `R1nQlx`), and `—` when they cannot be; 32 high, 20 apart, on a 1
+//! `border` line. The current view's label is 13/500 `text_primary` over a 2 `accent` underline, the others' 13
 //! `text_secondary`; each count follows its label 6 after it in 12 `text_muted`. Another view keeps the search; the
 //! task a Create just added is no longer pointed out there. At the line's end, while new starts are held, the chip
-//! that says so with its Release (`queue`).
+//! that says so with its Release (`queue`). The board follows the view the list is on.
 
 use lurq::{
   app::{
@@ -21,18 +23,33 @@ use super::cache::ViewCounts;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab},
-  theme::{ExtraSpacing, ExtraTypography},
-  ui::pressable::opening,
+  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    pressable::opening,
+    skeleton::bone,
+  },
 };
 
-/// A view's height (`Active` `Decmu`).
+/// A view's height (`Active` `Decmu`) and a count's bone (`EbQay`).
 const VIEW_HEIGHT: f32 = 32.0;
+const COUNT_BONE: (f32, f32) = (14.0, 8.0);
 
-/// The views with their counts, `None` until the tasks are read, and `end` at the line's end.
+/// What the views know of how many tasks each holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Counts {
+  Read(ViewCounts),
+  /// The tasks are read: each count is a bone.
+  Reading,
+  /// The tasks cannot be read: each count is `—`.
+  Unknown,
+}
+
+/// The views with their counts, and `end` at the line's end.
 pub(super) fn views(
   ctx: &mut Ctx,
   (project, list): (ProjectId, &TaskList),
-  counts: Option<ViewCounts>,
+  counts: Counts,
   end: Option<Element>,
 ) -> Stack {
   let navigation = Navigation::of(ctx);
@@ -66,22 +83,33 @@ pub(super) fn views(
 fn view(
   ctx: &Ctx,
   (navigation, project, list): (&Navigation, ProjectId, &TaskList),
-  counts: Option<ViewCounts>,
+  counts: Counts,
   tab: TaskListTab,
 ) -> Element {
   let id = format!("tasks-view-{}", tab.name());
   let current = tab == list.tab();
   let word = ctx.t(label_key(tab));
-  let count = counts.map_or_else(
-    || ctx.t("tasks.views.unknownCount").to_string(),
-    |counts| counts.get(tab).to_string(),
-  );
+  let count = match counts {
+    Counts::Read(counts) => counts.get(tab).to_string(),
+    Counts::Reading | Counts::Unknown => ctx.t("tasks.views.unknownCount").to_string(),
+  };
   let (style, color) = if current {
     (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
   } else {
     (TypographyStyle::Body, PaletteColor::TextSecondary)
   };
   let to = TaskList::new(tab).with_search(list.search().unwrap_or_default());
+  let shown: Element = match counts {
+    Counts::Reading => bone(COUNT_BONE.0, COUNT_BONE.1).id(format!("{id}-count")).into(),
+    Counts::Read(_) | Counts::Unknown => Text::new(&count)
+      .id(format!("{id}-count"))
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .nowrap()
+      .into(),
+  };
+  let glyph = (tab == TaskListTab::NeedsYou)
+    .then(|| icon(Icon::Hand, IconSize::Sm, PaletteColor::Warning).id(format!("{id}-icon")));
   let button = opening(navigation.to(Route::Project(project, ProjectPage::Tasks(to))))
     .id(id.clone())
     .height(Dimension::Px(VIEW_HEIGHT))
@@ -92,6 +120,7 @@ fn view(
       ctx.t_args("ui.tabCount", [("label", &*word), ("count", &count)]),
     )
     .describe("state", if current { "current" } else { "enabled" })
+    .with_children(glyph)
     .child(
       Text::new(&word)
         .id(format!("{id}-label"))
@@ -99,13 +128,7 @@ fn view(
         .color(color)
         .nowrap(),
     )
-    .child(
-      Text::new(&count)
-        .id(format!("{id}-count"))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
-        .nowrap(),
-    );
+    .child(shown);
   if current {
     button
       .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Accent))
@@ -118,6 +141,7 @@ fn view(
 /// The workspace's view of the same tasks.
 pub(super) const fn list_view(tab: TaskListTab) -> ListView {
   match tab {
+    TaskListTab::NeedsYou => ListView::NeedsYou,
     TaskListTab::Active => ListView::Active,
     TaskListTab::Backlog => ListView::Backlog,
     TaskListTab::Done => ListView::Done,
@@ -127,6 +151,7 @@ pub(super) const fn list_view(tab: TaskListTab) -> ListView {
 
 pub(super) const fn label_key(tab: TaskListTab) -> &'static str {
   match tab {
+    TaskListTab::NeedsYou => "tasks.views.needsYou",
     TaskListTab::Active => "tasks.views.active",
     TaskListTab::Backlog => "tasks.views.backlog",
     TaskListTab::Done => "tasks.views.done",

@@ -59,6 +59,7 @@ pub mod rule_item;
 pub mod setting_notice;
 pub mod setting_rows;
 pub mod settings_page;
+pub mod skeleton;
 pub mod skill_row;
 pub mod source_box;
 pub mod source_row;

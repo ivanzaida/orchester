@@ -44,8 +44,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   project's slug there); automation `ask` rotate-token (Rotate the token?). Opening a page or a question is \
   navigation; answering it stays a person's. Every other screen takes `project`, the project's id (a \
   UUID, as app_state reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the \
-  search) and `highlight` (a task key, as \
-  after Create); edit_task `key`; task `key`, `tab` (summary, conversation or changes), `view` for what a tab opens in \
+  search) and `highlight` (a task key, as after Create), and shows the list or the board as last chosen for the \
+  project (press tasks-layout-list or tasks-layout-board to switch); edit_task `key`; task `key`, `tab` (summary, \
+  conversation or changes), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \

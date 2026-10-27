@@ -1,9 +1,11 @@
-//! The top of the Tasks list, one 32 high row (`Header` `AL7qv` in `Tasks · redesign` `Lw1Gb`): the title in 20/600,
-//! then at the end the search (240 wide, its `/` key cap while empty; `/` reaches it), Filter and Display (ghost
-//! buttons), *More actions* (`…`: holding new starts and Create multiple, `queue`) and New task, 8 apart. Until the
-//! tasks are read, Filter, Display and `…` cannot be pressed. A project without tasks shows the title alone (`03 No
-//! tasks yet` `f54MO`). A linked project's list says where it lives under the row (`Shared line` in `Xr4Wb`); once the
-//! person is no longer a member, New task is locked and says why there.
+//! The top of the Tasks list and board, one 32 high row (`Header` `AL7qv` in `Tasks · redesign` `Lw1Gb`, `Header`
+//! `p8uHPR` in `Tasks board · redesign` `J6gQo`): the title in 20/600, then at the end the search (240 wide, its `/`
+//! key cap while empty; `/` reaches it), List or Board (`Layout` `h3iCkX`, kept for the project), Filter and Display
+//! (ghost buttons; Display offers the board's options while the board shows), *More actions* (`…`: holding new starts
+//! and Create multiple, `queue`) and New task, 8 apart. Until the tasks are read, Filter, Display and `…` cannot be
+//! pressed. A project without tasks shows the title alone (`03 No tasks yet` `f54MO`). A linked project's list says
+//! where it lives under the row (`Shared line` in `Xr4Wb`); once the person is no longer a member, New task is locked
+//! and says why there.
 //!
 //! The search is part of the list's path (`?q=`), taking the current entry's place as it is typed, so Back leaves the
 //! list rather than replaying the typing; the filters and the order belong to the open list.
@@ -26,6 +28,7 @@ use orchester_workspace::tasks::browse::{Facets, TaskSort};
 use super::{
   display::{DisplayControl, DisplayProps},
   facets::{FilterControl, FilterProps, Options},
+  kanban::{display::Display, options::layout_switch},
   queue::{QueueControls, QueuePart, QueueProps},
   shared::{self, Shared},
 };
@@ -62,6 +65,8 @@ pub(super) struct Header<'a> {
   /// The holds on new starts, once the tasks are read.
   pub queue: Option<QueueProps>,
   pub shared: Option<&'a Shared>,
+  /// How the tasks are shown, kept for the project.
+  pub display: &'a Signal<Display>,
 }
 
 /// The header row, with why New task is locked and a linked project's line under it.
@@ -72,12 +77,19 @@ pub(super) fn header(ctx: &mut Ctx, header: Header<'_>) -> Column {
     options,
     queue,
     shared,
+    display,
   } = header;
   let read_only = shared.and_then(|shared| shared.read_only(ctx));
   let row = title_row(ctx)
     .child(Spacer::new().flex(1.0))
     .child(search(ctx, choices))
-    .with_children(controls(ctx, (project, choices), (options, queue), read_only.clone()));
+    .child(layout_switch(ctx, display, "tasks-layout", false))
+    .with_children(controls(
+      ctx,
+      (project, choices, display),
+      (options, queue),
+      read_only.clone(),
+    ));
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -106,7 +118,7 @@ fn search(ctx: &mut Ctx, choices: &Choices) -> lurq::node::Element {
 /// Filter, Display, `…` and New task, locked for `read_only`'s reason; Create multiple says the same reason.
 fn controls(
   ctx: &mut Ctx,
-  (project, choices): (ProjectId, &Choices),
+  (project, choices, shown): (ProjectId, &Choices, &Signal<Display>),
   (options, queue): (Option<Arc<Options>>, Option<QueueProps>),
   read_only: Option<Arc<str>>,
 ) -> Vec<lurq::node::Element> {
@@ -123,6 +135,7 @@ fn controls(
     DisplayProps {
       sort: choices.sort.clone(),
       ready,
+      display: shown.clone(),
     },
   );
   let reason = read_only.clone().unwrap_or_else(|| ctx.t("tasks.createMultipleReason"));

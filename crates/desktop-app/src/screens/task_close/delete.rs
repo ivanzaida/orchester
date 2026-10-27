@@ -38,6 +38,7 @@ use crate::{
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
+    popover::popover_panel,
     tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
@@ -45,12 +46,24 @@ use crate::{
 
 /// The confirmation of deleting `subject`, its parts' ids starting with `id`.
 pub fn confirmation(ctx: &mut Ctx, closer: &Closer, subject: &Subject, id: &str) -> Element {
+  confirmation_in(ctx, closer, subject, (id, None))
+}
+
+/// The confirmation of deleting `subject`, its parts' ids starting with `id`: a card in place, or the panel of a
+/// popover `width` wide at the task's card (the Tasks board, which asks at the card).
+pub fn confirmation_in(
+  ctx: &mut Ctx,
+  closer: &Closer,
+  subject: &Subject,
+  (id, popover): (&str, Option<f32>),
+) -> Element {
   ctx.mount_keyed::<DeleteCard>(
     &format!("{id}-delete-{}", subject.id),
     DeleteProps {
       closer: closer.clone(),
       subject: subject.clone(),
       id: Arc::from(format!("{id}-delete")),
+      popover,
     },
   )
 }
@@ -60,11 +73,15 @@ struct DeleteProps {
   closer: Closer,
   subject: Subject,
   id: Arc<str>,
+  popover: Option<f32>,
 }
 
 impl PartialEq for DeleteProps {
   fn eq(&self, other: &Self) -> bool {
-    self.subject == other.subject && self.id == other.id && self.closer.root == other.closer.root
+    self.subject == other.subject
+      && self.id == other.id
+      && self.popover == other.popover
+      && self.closer.root == other.closer.root
   }
 }
 
@@ -115,8 +132,11 @@ impl Component for DeleteCard {
       .get()
       .then(|| person_only(format!("{id}-person-only"), &ctx.t("task_close.delete.personOnly")));
     let deletable = matches!(preview, Some(Ok(_)));
-    card(id, CardSurface::Decision)
-      .spacing(SpacingSize::Md)
+    let frame = match props.popover {
+      Some(width) => popover_panel(id, width),
+      None => card(id, CardSurface::Decision).spacing(SpacingSize::Md),
+    };
+    frame
       .child(head)
       .with_children(body)
       .with_children(refused)
