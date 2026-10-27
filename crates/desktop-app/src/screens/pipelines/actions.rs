@@ -14,7 +14,7 @@ use super::{
   work::{Action, Work},
 };
 use crate::{
-  screens::connections::widen::{WidenLook, WidenNotice, WidenProps},
+  screens::connections::widen::{NoticeProps, WidenLook, WidenNotice, WidenProps},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -92,7 +92,8 @@ impl Writes {
     });
   }
 
-  /// *Publish vN*, or *Version history* when the published version has no draft.
+  /// *Publish vN*, or *Version history* when the published version has no draft. It stays enabled while its review
+  /// is open, as `02b` draws it.
   pub fn publish_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> ActionButton {
     let views = editing.views.clone();
     if editing.opened.latest.is_some() && editing.opened.draft_saved_at.is_none() && !editing.dirty() {
@@ -116,7 +117,6 @@ impl Writes {
     .on_click(move || views.choose(View::Publish));
     if busy
       || editing.viewing.is_some()
-      || editing.view == View::Publish
       || editing.unsaved()
       || editing.opened.draft_saved_at.is_none()
       || !super::publication::valid(editing)
@@ -138,24 +138,27 @@ impl Writes {
     let (writes, keep) = (self.clone(), self.asking.clone());
     ctx.mount_keyed::<WidenNotice>(
       "pipeline-save-question",
-      WidenProps {
-        id: "pipeline-save-question".into(),
-        look: WidenLook::Band,
-        affirming: false,
-        automation: crate::mcp::input_gate::Guarded::PermissionWidening,
-        title: ctx.t("pipelines.saveWeaker"),
-        reasons: words,
-        confirm: ctx.t("pipelines.save"),
-        keep: ctx.t("pipelines.keep"),
-        on_confirm: Arc::new(move || {
-          let current = writes.state.get();
-          if current.edit.validate().as_ref() != Ok(&body) || !current.errors.is_empty() {
-            return;
-          }
-          writes.asking.set(false);
-          writes.save(current, body.clone(), Allowed(reasons.clone()));
-        }),
-        on_keep: Arc::new(move || keep.set(false)),
+      NoticeProps {
+        question: WidenProps {
+          id: "pipeline-save-question".into(),
+          look: WidenLook::Band,
+          affirming: false,
+          automation: crate::mcp::input_gate::Guarded::PermissionWidening,
+          title: ctx.t("pipelines.saveWeaker"),
+          reasons: words,
+          confirm: ctx.t("pipelines.save"),
+          keep: ctx.t("pipelines.keep"),
+          on_confirm: Arc::new(move || {
+            let current = writes.state.get();
+            if current.edit.validate().as_ref() != Ok(&body) || !current.errors.is_empty() {
+              return;
+            }
+            writes.asking.set(false);
+            writes.save(current, body.clone(), Allowed(reasons.clone()));
+          }),
+          on_keep: Arc::new(move || keep.set(false)),
+        },
+        confirm_icon: Icon::Save,
       },
     )
   }
@@ -188,23 +191,26 @@ impl Writes {
     let (writes, keep) = (self.clone(), editing.views);
     let question = ctx.mount_keyed::<WidenNotice>(
       "pipeline-publish-question",
-      WidenProps {
-        id: "pipeline-publish-question".into(),
-        look: WidenLook::Band,
-        affirming: false,
-        automation: crate::mcp::input_gate::Guarded::PermissionWidening,
-        title: ctx.t("pipelines.publishWeaker"),
-        reasons: words,
-        confirm: ctx.t("pipelines.publishNow"),
-        keep: ctx.t("pipelines.keep"),
-        on_confirm: Arc::new(move || {
-          let current = writes.state.get();
-          if current.opened != before || current.unsaved() {
-            return;
-          }
-          writes.publish(before.clone(), Allowed(reasons.clone()));
-        }),
-        on_keep: Arc::new(move || keep.close()),
+      NoticeProps {
+        question: WidenProps {
+          id: "pipeline-publish-question".into(),
+          look: WidenLook::Band,
+          affirming: false,
+          automation: crate::mcp::input_gate::Guarded::PermissionWidening,
+          title: ctx.t("pipelines.publishWeaker"),
+          reasons: words,
+          confirm: ctx.t("pipelines.publishNow"),
+          keep: ctx.t("pipelines.keep"),
+          on_confirm: Arc::new(move || {
+            let current = writes.state.get();
+            if current.opened != before || current.unsaved() {
+              return;
+            }
+            writes.publish(before.clone(), Allowed(reasons.clone()));
+          }),
+          on_keep: Arc::new(move || keep.close()),
+        },
+        confirm_icon: Icon::ArrowUp,
       },
     );
     review.child(question).into()

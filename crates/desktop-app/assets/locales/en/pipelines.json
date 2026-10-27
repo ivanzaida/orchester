@@ -284,7 +284,7 @@
     "draftWith": "v{{version}} · {{detail}}",
     "noStepsYet": "no steps yet",
     "oneChangeSince": "{{count}} change since v{{base}}",
-    "changesSince": "{{count}} changes since v{{base}}",
+    "changesSinceBase": "{{count}} changes since v{{base}}",
     "stepsOneGate": "{{count}} · {{gates}} approval gate",
     "stepsGates": "{{count}} · {{gates}} approval gates",
     "chooseProfile": "Choose a profile",

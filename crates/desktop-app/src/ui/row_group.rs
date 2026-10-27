@@ -193,6 +193,8 @@ pub struct GroupRow {
   words_end: bool,
   /// Only marks around its label, no control: 10 above and below it and 12 between its parts.
   marked: bool,
+  /// A tile at its start and a button at its end: 11 above and below it and 12 between its parts.
+  tiled: bool,
   press: Option<Press>,
   chosen: bool,
 }
@@ -211,6 +213,7 @@ impl GroupRow {
       end: Vec::new(),
       words_end: false,
       marked: false,
+      tiled: false,
       press: None,
       chosen: false,
     }
@@ -220,6 +223,13 @@ impl GroupRow {
   /// 10 above and below and 12 between its parts (`Triager · Draft v1` `GQxqW`, `ZENDESK_TOKEN` `AEvnI` in `ky5kJ`).
   pub const fn marked(mut self) -> Self {
     self.marked = true;
+    self
+  }
+
+  /// The row starts with a tile and ends with a button, its label over a hint: 11 above and below and 12 between
+  /// its parts (`Starter · Feature delivery` `Asx53` in `l4Udx`).
+  pub const fn tiled(mut self) -> Self {
+    self.tiled = true;
     self
   }
 
@@ -274,6 +284,16 @@ impl GroupRow {
     let text = Text::new(value)
       .id(format!("{}-value", self.id))
       .variant(GroupText::Value.role())
+      .nowrap();
+    self.words(text)
+  }
+
+  /// The row's value at its end in 12.5 `text_primary`: what is to come (`After publishing` `Q3ULq` in `fXnX2`).
+  pub fn primary_value(self, value: &str) -> Self {
+    let text = Text::new(value)
+      .id(format!("{}-value", self.id))
+      .variant(GroupText::Value.role())
+      .color(PaletteColor::TextPrimary)
       .nowrap();
     self.words(text)
   }
@@ -357,12 +377,18 @@ fn hint(id: &str, (hint, tone): (&str, HintTone)) -> Text {
 
 impl From<GroupRow> for Element {
   fn from(row: GroupRow) -> Self {
-    let vertical = if (row.words_end || row.marked) && row.hint.is_none() {
+    let vertical = if row.tiled {
+      ExtraSpacing::TiledRow.role()
+    } else if (row.words_end || row.marked) && row.hint.is_none() {
       ExtraSpacing::Loose.role()
     } else {
       SpacingSize::Sm
     };
-    let between = if row.marked { SpacingSize::Md } else { SpacingSize::Lg };
+    let between = if row.marked || row.tiled {
+      SpacingSize::Md
+    } else {
+      SpacingSize::Lg
+    };
     let middle = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))

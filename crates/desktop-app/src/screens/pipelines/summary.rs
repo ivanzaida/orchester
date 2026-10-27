@@ -276,7 +276,7 @@ pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>>
     if changes == 1 {
       "pipelines.oneChangeSince"
     } else {
-      "pipelines.changesSince"
+      "pipelines.changesSinceBase"
     },
     [
       ("count", changes.to_string()),

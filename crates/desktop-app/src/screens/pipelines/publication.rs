@@ -166,7 +166,7 @@ fn versions(ctx: &Ctx, editing: &Editing, (current, next): (&str, &str)) -> RowG
   );
   RowGroup::new("pipeline-publish-versions", ctx.t("pipelines.versions"))
     .row(GroupRow::new("pipeline-publish-now", ctx.t("pipelines.currentVersion")).value(&now))
-    .row(GroupRow::new("pipeline-publish-after", ctx.t("pipelines.nextVersion")).value(&after))
+    .row(GroupRow::new("pipeline-publish-after", ctx.t("pipelines.nextVersion")).primary_value(&after))
 }
 
 /// The changes since the published version, each tagged on the flow too.
@@ -185,7 +185,16 @@ fn changes(ctx: &Ctx, editing: &Editing, current: &str) -> RowGroup {
     },
     [("count", changes.len().to_string()), ("version", current.to_owned())],
   );
-  let tagged = crate::ui::row_group::note("pipeline-changes-tagged", &ctx.t("pipelines.taggedOnCanvas"));
+  // A plain meta at the heading's end, on a line as high as a button (`btCFl` in `btEWI`).
+  let tagged = Row::new()
+    .min_height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
+    .align_items(lurq::layout::Alignment::Center)
+    .child(
+      lurq::components::Text::new(&ctx.t("pipelines.taggedOnCanvas"))
+        .id("pipeline-changes-tagged")
+        .variant(crate::theme::GroupText::Hint.role())
+        .nowrap(),
+    );
   RowGroup::new("pipeline-changes-title", title).end(tagged).rows(
     changes
       .iter()

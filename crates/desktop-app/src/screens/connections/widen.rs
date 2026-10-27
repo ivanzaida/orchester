@@ -117,19 +117,32 @@ impl Component for WidenConfirm {
   }
 }
 
+/// [`WidenNotice`]'s question and the icon its confirm carries: *Save draft*'s save, *Publish version*'s arrow-up.
+#[derive(Clone, PartialEq)]
+pub struct NoticeProps {
+  pub question: WidenProps,
+  pub confirm_icon: Icon,
+}
+
+impl DevtoolsInspectable for NoticeProps {}
+
 /// [`WidenConfirm`] as a warning notice in place, its confirm and *Keep* under its reasons (`Notice · warning`
 /// `DAKkj` in `fXnX2`): where a page asks before it saves or publishes, among its other content.
 pub struct WidenNotice(WidenConfirm);
 
 impl Component for WidenNotice {
-  type Props = WidenProps;
+  type Props = NoticeProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    Self(WidenConfirm::new(ctx))
+    let props = ctx.props::<NoticeProps>().question.clone();
+    Self(WidenConfirm::with(ctx, &props))
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<WidenProps>().clone();
+    let NoticeProps {
+      question: props,
+      confirm_icon,
+    } = ctx.props::<NoticeProps>().clone();
     let (keep, confirm) = self.0.buttons(ctx, &props, ButtonKind::Ghost);
     let mut reasons = props.reasons.iter();
     let mut notice = Notice::new(props.id.clone(), NoticeTone::Warning, props.title.clone()).stacked();
@@ -143,14 +156,19 @@ impl Component for WidenNotice {
           .width(Dimension::Pct(100.0)),
       );
     }
-    Element::from(notice.action(confirm).action(keep))
+    Element::from(notice.action(confirm.icon(confirm_icon)).action(keep))
   }
 }
 
 impl WidenConfirm {
   fn new(ctx: &mut Ctx) -> Self {
+    let props = ctx.props::<WidenProps>().clone();
+    Self::with(ctx, &props)
+  }
+
+  /// The question asked with `props`, which its component's own props hold.
+  fn with(ctx: &mut Ctx, props: &WidenProps) -> Self {
     let gate = ctx.use_context::<InputGate>();
-    let props = ctx.props::<WidenProps>();
     let policy = props.automation;
     let locks = locks_input(props);
     Self {

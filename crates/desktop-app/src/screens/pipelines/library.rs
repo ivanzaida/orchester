@@ -152,6 +152,7 @@ fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
       .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
   };
   let starter = GroupRow::new("pipeline-empty-starter", ctx.t("pipelines.starter"))
+    .tiled()
     .leading(tile(Icon::Sparkles))
     .hint(ctx.t("pipelines.starterLibraryHint"))
     .end(
@@ -164,6 +165,7 @@ fn empty(ctx: &mut Ctx, project: ProjectId) -> lurq::components::Column {
       .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline))),
     );
   let blank = GroupRow::new("pipeline-empty-blank", ctx.t("pipelines.empty"))
+    .tiled()
     .leading(tile(Icon::CircleDashed))
     .hint(ctx.t("pipelines.emptyRowHint"))
     .end(

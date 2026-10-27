@@ -104,7 +104,8 @@ pub fn pane(id: &str) -> Column {
     .spacing(SpacingSize::Xl)
 }
 
-/// A step page's head: back to its step, its title and what it says of the step (`Sub-page head` `Z1LPH`).
+/// A step page's head: back to its step, its title and what it says of the step, on a line as high as a button
+/// (`Sub-page head` `Z1LPH`).
 pub fn sub_head(id: &str, back: Element, title: &str, meta: Option<&str>) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -113,6 +114,7 @@ pub fn sub_head(id: &str, back: Element, title: &str, meta: Option<&str>) -> Col
     .child(
       Row::new()
         .id(id.to_owned())
+        .min_height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(
@@ -164,7 +166,9 @@ pub fn change_row(
     },
   };
   let words = crate::ui::message::message_text(ctx, &orchester_workspace::pipelines::describe::change(change));
-  crate::ui::row_group::GroupRow::new(id, words).leading(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+  crate::ui::row_group::GroupRow::new(id, words)
+    .marked()
+    .leading(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
 }
 
 pub fn pipeline_name_error(ctx: &Ctx, error: &orchester_workspace::messages::Message) -> std::sync::Arc<str> {
