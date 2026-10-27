@@ -1,79 +1,87 @@
-//! The chat and its settings share one head (`screens::orchestrator::page`): at 1440 × 900 and 960 wide, switching
-//! between them moves neither the breadcrumb, the title nor the content's left edge.
+//! The chat's frame at the design's 1440 × 900 (`Orchestrator · redesign` `hujxu`): a one-line 52 header with the
+//! title and, at its end, *New* and the History toggle; the conversation and its composer in a 760 column, centred;
+//! History 300 wide over the chat's right edge, under the header; a new conversation's start 640 wide.
 use orchester_app::routes::OrchestratorChat;
+use orchester_core::time::Timestamp;
 
-use super::harness::{Orchestrator, Setup};
-
-/// Where a page puts its breadcrumb and title (x, y), the line under its title and its content (x).
-#[derive(Debug)]
-struct Placed {
-  crumbs: (f32, f32),
-  title: (f32, f32),
-  line: f32,
-  content: f32,
-}
-
-fn at(screen: &mut Orchestrator, id: &str) -> (f32, f32) {
-  let bounds = screen.bounds(id);
-  (bounds.x, bounds.y)
-}
-
-fn chat(screen: &mut Orchestrator) -> Placed {
-  screen.go(OrchestratorChat::New);
-  Placed {
-    crumbs: at(screen, "orchestrator-crumbs"),
-    title: at(screen, "orchestrator-title"),
-    line: at(screen, "orchestrator-coordinator").0,
-    content: at(screen, "orchestrator-start").0,
-  }
-}
-
-fn settings(screen: &mut Orchestrator) -> Placed {
-  screen.settings();
-  Placed {
-    crumbs: at(screen, "orchestrator-settings-crumbs"),
-    title: at(screen, "orchestrator-settings-title"),
-    line: at(screen, "orchestrator-settings-summary").0,
-    content: at(screen, "orchestrator-settings-form").0,
-  }
-}
+use super::{
+  harness::{Orchestrator, Setup},
+  history::kept,
+};
 
 fn same(a: f32, b: f32) -> bool {
   (a - b).abs() < 0.5
 }
 
 #[test]
-fn orchestrator_chat_and_settings_share_the_head() {
+fn orchestrator_header_is_one_line_over_a_760_column_and_history_opens_on_the_right() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  for (width, height) in [(1440, 900), (960, 900)] {
-    screen.window.tree.resize(width, height);
-    screen.window.pass();
-    let chat = chat(&mut screen);
-    let settings = settings(&mut screen);
-    let shown = format!("at {width} wide: chat {chat:?}, settings {settings:?}");
+  let chat = kept(
+    &screen,
+    "Plan the GitHub app permissions",
+    Timestamp::now(),
+    "Auth first.",
+  );
+  screen.go(OrchestratorChat::Latest);
+  screen.until("the conversation", |screen| {
+    screen.text("orchestrator-conversation").contains("Auth first.")
+  });
+  let header = screen.bounds("orchestrator-header");
+  assert!(same(header.height, 52.0), "{header:?}");
+  for part in ["orchestrator-title", "orchestrator-new", "orchestrator-history"] {
+    let bounds = screen.bounds(part);
     assert!(
-      same(chat.crumbs.0, settings.crumbs.0) && same(chat.crumbs.1, settings.crumbs.1),
-      "breadcrumb, {shown}"
+      bounds.y >= header.y && bounds.y + bounds.height <= header.y + header.height,
+      "{part} on the header's line: {bounds:?} in {header:?}"
     );
-    assert!(
-      same(chat.title.0, settings.title.0) && same(chat.title.1, settings.title.1),
-      "title, {shown}"
-    );
-    let edge = settings.title.0;
-    assert!(same(chat.crumbs.0, edge), "breadcrumb over the title's start, {shown}");
-    assert!(
-      same(chat.line, edge) && same(settings.line, edge),
-      "the line under the title, {shown}"
-    );
-    assert!(
-      same(settings.content, edge),
-      "the form under the title's start, {shown}"
-    );
-    // The chat's column is centred and keeps its own width: from the title's start when the window leaves it no more
-    // room, never left of it.
-    assert!(chat.content > edge - 0.5, "the chat's column, {shown}");
-    if width == 960 {
-      assert!(same(chat.content, edge), "the chat's column fills its room, {shown}");
-    }
   }
+  assert!(
+    !screen.exists("orchestrator-crumbs") && !screen.exists("orchestrator-coordinator"),
+    "no breadcrumb and no coordinator line"
+  );
+  let main = screen.bounds("orchestrator-main");
+  let composer = screen.bounds("orchestrator-composer");
+  assert!(same(composer.width, 760.0), "{composer:?}");
+  let centre = |x: f32, width: f32| x + width / 2.0;
+  assert!(
+    (centre(composer.x, composer.width) - centre(main.x, main.width)).abs() < 1.0,
+    "the composer is centred: {composer:?} in {main:?}"
+  );
+  screen.click("orchestrator-history");
+  screen.until("History", |screen| screen.exists("orchestrator-history-panel"));
+  let panel = screen.bounds("orchestrator-history-panel");
+  assert!(same(panel.width, 300.0), "{panel:?}");
+  assert!(
+    same(panel.x + panel.width, main.x + main.width),
+    "over the chat's right edge: {panel:?} in {main:?}"
+  );
+  assert!(same(panel.y, header.y + header.height), "under the header: {panel:?}");
+  assert!(
+    same(screen.bounds("orchestrator-composer").x, composer.x),
+    "History lies over the chat and moves nothing"
+  );
+  let row = screen.bounds(&format!("orchestrator-history-{chat}"));
+  assert!(
+    same(row.height, 46.0),
+    "a conversation's row is 46 high (`aowsX`): {row:?}"
+  );
+}
+
+#[test]
+fn orchestrator_new_conversation_starts_640_wide_with_the_composer_focused() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  let start = screen.bounds("orchestrator-start");
+  assert!(same(start.width, 640.0), "{start:?}");
+  assert_eq!(screen.text("orchestrator-start-title"), "What should we plan?");
+  // 12 over the message and 28 between it and the bar (`QcfyZ`).
+  let composer = screen.bounds("orchestrator-composer");
+  assert!((composer.height - 93.0).abs() < 2.0, "{composer:?}");
+  screen.until("the focus in the composer", |screen| {
+    screen
+      .window
+      .tree
+      .focused_element()
+      .is_some_and(|focused| focused.id() == Some("orchestrator-input"))
+  });
 }

@@ -291,7 +291,7 @@ fn other_model(ctx: &mut Ctx, choices: &Choices) -> Column {
 
 /// The word for reasoning effort `effort`, as the agent profile editor says it; an effort with no word of its own
 /// shows as the CLI names it.
-fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
+pub(in crate::screens::orchestrator) fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
   match effort {
     "minimal" => ctx.t("orchestrator.settings.effort.minimal"),
     "low" => ctx.t("orchestrator.settings.effort.low"),

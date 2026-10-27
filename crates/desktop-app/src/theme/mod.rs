@@ -81,7 +81,7 @@ pub use self::{
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
-  orchestrator::{OrchestratorSpacing, OrchestratorText},
+  orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},

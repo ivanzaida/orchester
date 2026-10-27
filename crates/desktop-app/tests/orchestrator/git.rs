@@ -48,12 +48,13 @@ fn orchestrator_git_write_waits_for_the_switch_and_shows_what_ran() {
     commit,
     |outcome| matches!(outcome, ActionOutcome::Refused { code, .. } if code == "write_off"),
   );
-  assert!(
+  // The refused line says why once opened.
+  screen.click(&format!("{card}-line"));
+  screen.until("why", |screen| {
     screen
-      .text(&format!("{card}-effect"))
-      .contains("Let the Orchestrator write with git"),
-    "the card says why"
-  );
+      .text(&format!("{card}-reason"))
+      .contains("Let the Orchestrator write with git")
+  });
   assert_eq!(
     ask(&screen, &["log", "-1", "--format=%s"]),
     "initial",
@@ -63,15 +64,10 @@ fn orchestrator_git_write_waits_for_the_switch_and_shows_what_ran() {
   screen.let_orchestrator(OrchestratorConsent::WriteGit, true);
   let card = acted(&mut screen, commit, |outcome| *outcome == ActionOutcome::Done);
   assert_eq!(screen.text(&format!("{card}-title")), "Ran git commit");
-  let commands = screen.text(&format!("{card}-commands"));
-  assert!(
-    commands.contains("git add -A -- notes.txt") && commands.contains("git commit -F - -- notes.txt"),
-    "{commands}"
-  );
-  assert!(
-    screen.text(&format!("{card}-effect")).contains("Add notes"),
-    "what git said"
-  );
+  screen.click(&format!("{card}-line"));
+  screen.until("what git said", |screen| {
+    screen.text(&format!("{card}-reason")).contains("Add notes")
+  });
   assert_eq!(ask(&screen, &["log", "-1", "--format=%s"]), "Add notes");
 }
 

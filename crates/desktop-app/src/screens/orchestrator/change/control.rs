@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 
-use super::words::{Accept, Phase, View, Words, state};
+use super::words::{Accept, Phase, View, Words};
 use crate::ui::{button::ButtonKind, icon::Icon};
 
 /// Which of the three a card is.
@@ -58,7 +58,7 @@ pub(super) fn control(ctx: &Ctx, view: &View, (control, number, group): (Control
     glyph,
     title: ctx.t_args(&title, args),
     chip: None,
-    state: state(ctx, view, by_you(control)),
+    settled: None,
     effect,
     accept: Some(Accept {
       label: ctx.t(&key("accept")),
@@ -66,15 +66,6 @@ pub(super) fn control(ctx: &Ctx, view: &View, (control, number, group): (Control
       kind: ButtonKind::Primary,
     }),
     person_only: person_only(control),
-  }
-}
-
-/// The state of an applied card.
-const fn by_you(control: Control) -> &'static str {
-  match control {
-    Control::Pause => "orchestrator.change.pause.byYou",
-    Control::Resume => "orchestrator.change.resume.byYou",
-    Control::Release => "orchestrator.change.release.byYou",
   }
 }
 

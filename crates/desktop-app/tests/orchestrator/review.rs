@@ -238,7 +238,7 @@ fn orchestrator_saves_a_duplicate_as_a_draft_and_proposes_its_first_version() {
 }
 
 #[test]
-fn orchestrator_card_head_is_one_line_at_a_fractional_scale() {
+fn orchestrator_event_line_is_one_line_at_a_fractional_scale() {
   let mut screen = Orchestrator::new(Setup::Ready);
   // The verifier's window: 1440 wide at 1.5, where a title that fits was laid out on two lines.
   screen.window.tree.set_scale_factor(1.5);
@@ -255,15 +255,11 @@ fn orchestrator_card_head_is_one_line_at_a_fractional_scale() {
     1,
   );
   let card = proposal_card(&screen);
-  screen.until("the published card with its facts", |screen| {
-    screen.text(&format!("{card}-state")).contains("Confirmed") && screen.exists(&format!("{card}-facts"))
-  });
-  let (title, state) = (
-    screen.bounds(&format!("{card}-title")),
-    screen.bounds(&format!("{card}-state")),
-  );
+  screen.until("the published line", |screen| screen.exists(&format!("{card}-time")));
+  let (line, title) = (screen.bounds(&card), screen.bounds(&format!("{card}-title")));
+  // Bounds are in logical pixels: one line of 12.5 text is well under half the line.
   assert!(
-    title.height < state.height * 1.5,
-    "the head is one line: {title:?} against {state:?}"
+    (line.height - 32.0).abs() < 0.5 && title.height < line.height / 1.5,
+    "the line is 32 high, its words on one line: {title:?} in {line:?}"
   );
 }

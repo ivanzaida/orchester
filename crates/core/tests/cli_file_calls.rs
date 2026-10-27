@@ -408,3 +408,48 @@ fn cli_file_calls_are_recorded_under_the_tools_current_names() {
     json!("edit_file")
   );
 }
+
+/// Claude Code's result of a `read_file` that showed an image holds an image block beside its text: the call's row
+/// keeps the text line only, and a result the parser leaves as a raw line keeps no image data either.
+#[test]
+fn cli_file_calls_an_image_read_keeps_its_line_and_never_the_image_data() {
+  let data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB".repeat(100);
+  let line = "PNG read, 2882×1875, sent at 1568×1020";
+  let result = |id: &str, image: Value| {
+    json!({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": id,
+      "content": [{"type": "text", "text": line}, image]}]}})
+    .to_string()
+  };
+  let events = claude(&[
+    tool_use(
+      "msg_1",
+      "toolu_read",
+      "mcp__Orchester__read_file",
+      &json!({"filename": ".tmp/run-app/app-1.png"}),
+    ),
+    result(
+      "toolu_read",
+      json!({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": data}}),
+    ),
+    result(
+      "toolu_unknown",
+      json!({"type": "image", "data": data, "mimeType": "image/png"}),
+    ),
+  ]);
+  let finished = events.iter().find_map(|event| match event {
+    AgentEvent::CommandFinished { output, status, .. } => Some((output.as_str(), *status)),
+    _ => None,
+  });
+  assert_eq!(finished, Some((line, CommandStatus::Completed)));
+  let raw = events
+    .iter()
+    .find_map(|event| match event {
+      AgentEvent::Raw { line, .. } => Some(line.as_str()),
+      _ => None,
+    })
+    .expect("the result of an unknown call is kept raw");
+  assert!(raw.contains("[image left out]") && raw.contains(line), "{raw}");
+  for event in &events {
+    assert!(!format!("{event:?}").contains(&data), "{event:?}");
+  }
+}

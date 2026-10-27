@@ -45,7 +45,7 @@ pub use self::{
   index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, plain_relative, shown_hits},
   input::{Revision, ToolCall},
   lines::{LineEditError, range_now, replace_lines},
-  output::{MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
+  output::{AnswerImage, MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   processes::{ProcessCall, ProcessScopeError, RunProcessScope},

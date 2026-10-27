@@ -1,8 +1,10 @@
-//! The marks of the makers whose agents Orchester runs (`Agent marks` `z7PmEL` on Components `G7K9ux`): Claude Code's
-//! Claude mark in its orange (`Mark/Claude` `eFnry`), the OpenAI knot of Codex and the OpenAI API (`Mark/OpenAI`
-//! `e2P9hh`) and Anthropic's "A" of the Anthropic API (`Mark/Anthropic` `OiwFt`), both in `text_primary`. The SVGs are
-//! Simple Icons' (CC0), drawn as large as an icon of the size asked for. A CLI on an API provider such as DeepSeek runs
-//! on someone else's models, so it shows no maker's mark ([`AgentMark::of_connection`]); Lucide stays for the rest.
+//! The marks of the agents' makers (`Agent marks` `z7PmEL` on Components `G7K9ux`): where a screen shows a CLI or an
+//! API by its kind, it shows its maker's own mark instead of a lucide glyph. Claude Code is the Claude mark
+//! (`Mark/Claude` `eFnry`) in `mark_claude`; Codex and OpenAI's API the OpenAI knot (`Mark/OpenAI` `e2P9hh`) and
+//! Anthropic's API Anthropic's "A" (`Mark/Anthropic` `OiwFt`), both in `text_primary`. The marks are Simple Icons'
+//! SVGs (CC0), filled in a theme color, as large as an icon of `size`. A CLI on an API provider such as DeepSeek runs
+//! on someone else's models, so it shows no maker's mark ([`AgentMark::of_connection`]). One helper serves the
+//! Orchestrator's runs-on picker and Connections.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -45,6 +47,14 @@ impl AgentMark {
       .then(|| Self::of(connection.provider()))
   }
 
+  /// The color the design fills the mark with.
+  pub fn color(self) -> PaletteColor {
+    match self {
+      Self::Claude => ExtraColor::MarkClaude.role(),
+      Self::OpenAi | Self::Anthropic => PaletteColor::TextPrimary,
+    }
+  }
+
   const fn svg(self) -> &'static str {
     match self {
       Self::Claude => CLAUDE_SVG,
@@ -53,19 +63,12 @@ impl AgentMark {
     }
   }
 
-  /// The role the mark is filled with.
-  pub fn color(self) -> PaletteColor {
-    match self {
-      Self::Claude => ExtraColor::MarkClaude.role(),
-      Self::OpenAi | Self::Anthropic => PaletteColor::TextPrimary,
-    }
-  }
-
-  /// The mark, as large as an icon of `size`.
+  /// The mark in its color, as large as an icon of `size`.
   pub fn render(self, ctx: &Ctx, size: IconSize) -> Element {
     let fill = ctx.theme().palette_color(self.color());
     let side = Dimension::Px(size.size());
     Svg::new(SvgData::from_str(self.svg()).with_fill(fill))
+      .describe("mark", format!("{self:?}"))
       .size(side, side)
       .into()
   }

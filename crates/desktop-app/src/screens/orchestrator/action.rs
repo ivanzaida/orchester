@@ -1,22 +1,13 @@
-//! An action the Orchestrator took through one of Orchester's tools, in its answer (`Action card` `nQIhx`): on
-//! `surface_raised` in a `border` stroke, radius 10, 12 over and under and 14 at its sides, 10 apart: a 14 icon and
-//! what was done (12.5/600), and at its end whether it was done (`circle-check` in `success`, *Confirmed* and when)
-//! or refused (`ban`, *Refused* and when); what it did, or the tool's own reason it refused (13/1.5); that it was
-//! checked like the same action in the app (a 12 `shield-check` and 11.5 `text_muted`); and *Open* the task it
-//! names, and for a refused hold or release of new starts *Open queue*, as every refused card keeps a link (`PBrHr`,
-//! `lWl6U`, `v7qn7` in `ExRt1`).
+//! An action the Orchestrator took through one of Orchester's tools, in its answer, as an event line (`ACTIONS THE
+//! ORCHESTRATOR TOOK` in `1 · Event lines` `VGbU7`): done (`circle-check` in `success`, what was done and the task it
+//! names, *Open ↗* the task), refused (`ban` in `danger`, *… · not done*, the tool's own reason on hover and once
+//! pressed, *Open ↗* the task, or the queue for a refused hold or release of new starts), dismissed (`x` in
+//! `text_muted`), or a proposal that waits without its card. Several in one answer are one list
+//! ([`super::line::list`]).
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
-};
+use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   id::ProjectId,
   orchestrator::{ActionOutcome, ChatAction},
@@ -25,178 +16,125 @@ use orchester_core::{
 };
 use orchester_workspace::display;
 
+use super::line::{Chip, ChipTone, Line, LineLink, Tone};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
-  },
+  ui::{icon::Icon, pressable::Press},
 };
 
-/// What the card says of a tool, by its name: its icon and keys.
-struct Words {
-  glyph: Icon,
-  done: &'static str,
-  refused: &'static str,
-  effect: Option<&'static str>,
-}
-
-fn words(tool: &str) -> Words {
-  let (glyph, done, refused, effect) = match tool {
+/// What the line says of a tool, by its name: the keys of what it did and of its refusal.
+fn words(tool: &str) -> (&'static str, &'static str) {
+  match tool {
     "create_task" => (
-      Icon::FilePlus,
       "orchestrator.action.createTask.done",
       "orchestrator.action.createTask.refused",
-      Some("orchestrator.action.createTask.effect"),
     ),
     "update_task" => (
-      Icon::Pencil,
       "orchestrator.action.updateTask.done",
       "orchestrator.action.updateTask.refused",
-      Some("orchestrator.action.updateTask.effect"),
     ),
     "run_task" => (
-      Icon::Play,
       "orchestrator.action.runTask.done",
       "orchestrator.action.runTask.refused",
-      Some("orchestrator.action.runTask.effect"),
     ),
     "pause_run" => (
-      Icon::CirclePause,
       "orchestrator.action.pauseRun.done",
       "orchestrator.action.pauseRun.refused",
-      Some("orchestrator.action.pauseRun.effect"),
     ),
     "resume_run" => (
-      Icon::Play,
       "orchestrator.action.resumeRun.done",
       "orchestrator.action.resumeRun.refused",
-      Some("orchestrator.action.resumeRun.effect"),
     ),
     "hold_queue" => (
-      Icon::CirclePause,
       "orchestrator.action.holdQueue.done",
       "orchestrator.action.holdQueue.refused",
-      Some("orchestrator.action.holdQueue.effect"),
     ),
     "duplicate_pipeline" => (
-      Icon::Copy,
       "orchestrator.action.duplicatePipeline.done",
       "orchestrator.action.duplicatePipeline.refused",
-      Some("orchestrator.action.duplicatePipeline.effect"),
     ),
     "release_queue" => (
-      Icon::Play,
       "orchestrator.action.releaseQueue.done",
       "orchestrator.action.releaseQueue.refused",
-      Some("orchestrator.action.releaseQueue.effect"),
     ),
-    _ => (
-      Icon::Wrench,
-      "orchestrator.action.other.done",
-      "orchestrator.action.other.refused",
-      None,
-    ),
-  };
-  Words {
-    glyph,
-    done,
-    refused,
-    effect,
+    _ => ("orchestrator.action.other.done", "orchestrator.action.other.refused"),
   }
 }
 
-/// The card of `action`, taken at `at` in project `project` (`name`); `id` names it.
-pub(super) fn card(
+/// The line of `action`, taken at `at` in project `project`, without its time when `listed` in its answer's list
+/// (`Actions` `J0N1u`); `id` names it.
+pub(super) fn line(
   ctx: &mut Ctx,
   id: &str,
-  (action, at): (&ChatAction, Timestamp),
-  (project, name): (ProjectId, &str),
+  (action, at, listed): (&ChatAction, Timestamp, bool),
+  project: ProjectId,
 ) -> Element {
-  let Shown {
-    title,
-    glyph,
-    state,
-    state_glyph,
-    state_color,
-    effect,
-  } = shown(ctx, action, at);
-  let head = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
-    .child(
-      Text::new(&title)
-        .id(format!("{id}-title"))
-        .variant(OrchestratorText::CardTitle.role())
-        // The title takes the free room, so its box is never narrower than its words.
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
+  let (done, refused) = words(&action.tool);
+  let task = action.task.as_deref().unwrap_or_default();
+  let args = [("task", task), ("tool", action.tool.as_str())];
+  let time = (!listed).then(|| display::clock(action.settled.unwrap_or(at)));
+  let navigation = Navigation::of(ctx);
+  let open = task_route(project, task).map(|route| LineLink {
+    label: ctx.t("orchestrator.line.open"),
+    press: Press::Open(navigation.to(route)),
+  });
+  let target = (!task.is_empty()).then(|| -> Arc<str> {
+    match action.approved_in {
+      Some(_) => ctx.t_args(
+        "orchestrator.line.targetBy",
+        [("target", task), ("by", &*ctx.t("orchestrator.line.byYouInChat"))],
+      ),
+      None => task.into(),
+    }
+  });
+  let line = match &action.outcome {
+    ActionOutcome::Done | ActionOutcome::Applied => {
+      Line::new(id, (Icon::CircleCheck, Tone::Success), ctx.t_args(done, args)).target(target)
+    }
+    ActionOutcome::Refused { reason, .. } => {
+      let queue = matches!(action.tool.as_str(), "hold_queue" | "release_queue").then(|| LineLink {
+        label: ctx.t("orchestrator.line.queue"),
+        press: Press::Open(navigation.to(queue_route(project))),
+      });
+      return Line::new(id, (Icon::Ban, Tone::Danger), ctx.t_args(refused, args))
+        .outcome("refused")
+        .time(time)
+        .link(queue.or(open))
+        .detail(Some(Arc::from(reason.as_str())))
+        .render(ctx);
+    }
+    // Shown with its Start and Dismiss in a kept conversation (`super::proposal`); this is its line without them.
+    ActionOutcome::Proposed(start) => Line::new(
+      id,
+      (Icon::Hourglass, Tone::Warning),
+      ctx.t_args(
+        "orchestrator.proposal.title",
+        [("task", task), ("pipeline", start.pipeline.as_str())],
+      ),
     )
-    .child(
-      Row::new()
-        .id(format!("{id}-state"))
-        .spacing(ExtraSpacing::Pair.role())
-        .align_items(Alignment::Center)
-        .child(icon(state_glyph, IconSize::Sm, state_color))
-        .child(
-          Text::new(&state)
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
-            .nowrap(),
-        ),
-    );
-  // A proposal waiting or dismissed did nothing yet: no check to tell of.
-  let ran = !matches!(
-    action.outcome,
-    ActionOutcome::Proposed(_) | ActionOutcome::Waits | ActionOutcome::Dismissed
-  );
-  let checked = ran.then(|| {
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Start)
-      .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
-      .child(
-        Text::new(&ctx.t_args("orchestrator.action.checked", [("project", name)]))
-          .variant(ExtraTypography::Note.role())
-          .flex(1.0),
-      )
-  });
-  let open = open_task(ctx, id, project, action.task.as_deref());
-  let refused_queue = matches!(action.tool.as_str(), "hold_queue" | "release_queue")
-    && matches!(action.outcome, ActionOutcome::Refused { .. });
-  let queue = refused_queue.then(|| open_queue(ctx, id, project));
-  let links = (open.is_some() || queue.is_some()).then(|| {
-    Row::new()
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .with_children(open)
-      .with_children(queue)
-  });
-  Column::new()
-    .id(id.to_owned())
-    .describe("outcome", outcome_name(&action.outcome))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Section.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(head)
-    .with_children(effect.map(|effect| {
-      Text::new(&effect)
-        .id(format!("{id}-effect"))
-        .variant(TypographyStyle::Body)
-        .width(Dimension::Pct(100.0))
-    }))
-    .with_children(checked)
-    .with_children(super::card::approved_in_chat(ctx, id, action))
-    .with_children(links)
-    .into()
+    .chip(Some(Chip::new(
+      ctx.t("orchestrator.wait.status.waits"),
+      ChipTone::Warning,
+    ))),
+    // A change waits with its own card (`super::change`); this is a waiting action without it.
+    ActionOutcome::Waits => Line::new(id, (Icon::Hourglass, Tone::Warning), ctx.t_args(done, args))
+      .target(target)
+      .chip(Some(Chip::new(
+        ctx.t("orchestrator.wait.status.waits"),
+        ChipTone::Warning,
+      ))),
+    ActionOutcome::Dismissed => Line::new(
+      id,
+      (Icon::X, Tone::Muted),
+      ctx.t_args("orchestrator.proposal.dismissedTitle", args),
+    ),
+  };
+  line
+    .outcome(outcome_name(&action.outcome))
+    .time(time)
+    .link(open)
+    .render(ctx)
 }
 
 /// Tasks, where new starts of project `project` are held and released.
@@ -204,114 +142,10 @@ pub(super) fn queue_route(project: ProjectId) -> Route {
   Route::Project(project, ProjectPage::Tasks(TaskList::default()))
 }
 
-/// *Open queue* of card `id`, in project `project`.
-fn open_queue(ctx: &mut Ctx, id: &str, project: ProjectId) -> Element {
-  let navigation = Navigation::of(ctx);
-  ActionButton::new(
-    format!("{id}-queue"),
-    ButtonKind::Ghost,
-    ctx.t("orchestrator.action.openQueue"),
-  )
-  .icon(Icon::ArrowUpRight)
-  .opens(navigation.to(queue_route(project)))
-  .into()
-}
-
-/// What the card of `action`, taken at `at`, says and shows.
-struct Shown {
-  title: Arc<str>,
-  glyph: Icon,
-  state: Arc<str>,
-  state_glyph: Icon,
-  state_color: PaletteColor,
-  effect: Option<Arc<str>>,
-}
-
-fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
-  let words = words(&action.tool);
-  let task = action.task.as_deref().unwrap_or_default();
-  let args = [("task", task), ("tool", action.tool.as_str())];
-  let time = display::clock(at);
-  // A start the person approved in the chat says so, as of when it was started (ORC-96).
-  let confirmed = match action.approved_in {
-    Some(_) => ctx.t_args(
-      "orchestrator.change.appliedInChat",
-      [("time", display::clock(action.settled.unwrap_or(at)).as_str())],
-    ),
-    None => ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
-  };
-  let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
-    ActionOutcome::Done | ActionOutcome::Applied => (
-      ctx.t_args(words.done, args),
-      words.glyph,
-      confirmed,
-      Icon::CircleCheck,
-      PaletteColor::Success,
-      words.effect.map(|key| ctx.t(key)),
-    ),
-    ActionOutcome::Refused { reason, .. } => (
-      ctx.t_args(words.refused, args),
-      Icon::Ban,
-      ctx.t_args("orchestrator.action.refusedState", [("time", time.as_str())]),
-      Icon::Ban,
-      PaletteColor::TextSecondary,
-      Some(Arc::from(reason.as_str())),
-    ),
-    // Shown with its Start and Dismiss in a kept conversation (`super::proposal`); this is its card without them.
-    ActionOutcome::Proposed(start) => (
-      ctx.t_args(
-        "orchestrator.proposal.title",
-        [("task", task), ("pipeline", start.pipeline.as_str())],
-      ),
-      words.glyph,
-      ctx.t_args("orchestrator.proposal.waits", [("time", time.as_str())]),
-      Icon::Hourglass,
-      PaletteColor::Warning,
-      Some(ctx.t("orchestrator.proposal.effect")),
-    ),
-    // A change waits with its own card (`super::change`); this is a waiting action without it.
-    ActionOutcome::Waits => (
-      ctx.t_args(words.done, args),
-      words.glyph,
-      ctx.t_args("orchestrator.proposal.waits", [("time", time.as_str())]),
-      Icon::Hourglass,
-      PaletteColor::Warning,
-      None,
-    ),
-    ActionOutcome::Dismissed => (
-      ctx.t_args("orchestrator.proposal.dismissedTitle", args),
-      words.glyph,
-      ctx.t_args("orchestrator.proposal.dismissedState", [("time", time.as_str())]),
-      Icon::CircleX,
-      PaletteColor::TextSecondary,
-      Some(ctx.t("orchestrator.proposal.dismissedEffect")),
-    ),
-  };
-  Shown {
-    title,
-    glyph,
-    state,
-    state_glyph,
-    state_color,
-    effect,
-  }
-}
-
-/// *Open* the task the action names, when it names one people can read.
-pub(super) fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Option<&str>) -> Option<Element> {
-  let key: TaskKey = task?.parse().ok()?;
-  let navigation = Navigation::of(ctx);
-  let label = ctx.t_args("orchestrator.action.openTask", [("task", key.to_string().as_str())]);
-  let route = Route::Project(project, ProjectPage::Task(key, TaskView::default()));
-  Some(
-    Row::new()
-      .child(
-        ActionButton::new(format!("{id}-open"), ButtonKind::Ghost, label)
-          .icon(Icon::ArrowUpRight)
-          .opens(navigation.to(route)),
-      )
-      .into(),
-  )
+/// The page of task `task` in project `project`, when it is a key people can read.
+pub(super) fn task_route(project: ProjectId, task: &str) -> Option<Route> {
+  let key: TaskKey = task.parse().ok()?;
+  Some(Route::Project(project, ProjectPage::Task(key, TaskView::default())))
 }
 
 const fn outcome_name(outcome: &ActionOutcome) -> &'static str {

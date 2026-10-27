@@ -37,7 +37,7 @@ param(
     # (gh as another account, a gone base branch, secrets in three environments with uses, the MCP server
     # figma); project-settings-shared is it linked to a team server no one answers for (Sharing · shared).
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "changes", "cards", "decisions", "deliverables", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "project-settings", "project-settings-shared", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "pull-request-feedback", "sources", "usage", "usage-empty", "usage-bare", "import")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "orchestrator", "orchestrator-not-set-up", "changes", "cards", "decisions", "deliverables", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "project-settings", "project-settings-shared", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "pull-request-feedback", "sources", "usage", "usage-empty", "usage-bare", "import")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,

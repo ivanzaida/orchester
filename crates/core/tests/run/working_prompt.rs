@@ -89,7 +89,8 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
      the lines to replace and, as expected, exactly what they hold now), mcp__Orchester__create_file (new files \
      only), mcp__Orchester__delete_file and mcp__Orchester__move_file (one file each, never a folder). Claude Code's \
      own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or change files through the \
-     shell: no `cat`, `sed`, `awk`, heredocs, `rm` or `mv`.\nCommands already run in the task's worktree: never \
+     shell: no `cat`, `sed`, `awk`, heredocs, `rm` or `mv`. mcp__Orchester__read_file shows a PNG, JPEG or WebP file \
+     as the image: open screenshots with it.\nCommands already run in the task's worktree: never \
      start one with `cd`. A plain command matches the allowed commands; other commands wait for a person's approval."
   );
   let claude_reads = part(
@@ -105,7 +106,8 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
     read(&claude_reads, claude_processes()),
     "Read and search files only with Orchester's file tools: mcp__Orchester__read_file, \
      mcp__Orchester__list_files and mcp__Orchester__search_file. Claude Code's own Read, Grep and Glob are not \
-     available; do not read files through the shell (`cat`, `sed`, `awk`).\nCommands already run in the task's \
+     available; do not read files through the shell (`cat`, `sed`, `awk`). mcp__Orchester__read_file shows a PNG, \
+     JPEG or WebP file as the image: open screenshots with it.\nCommands already run in the task's \
      worktree: never start one with `cd`. Each command waits for a \
      person's approval: run only those the step needs."
   );
