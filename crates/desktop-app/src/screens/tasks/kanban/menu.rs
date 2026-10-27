@@ -65,7 +65,12 @@ pub fn card_menu(ctx: &mut Ctx, card: &CardModel, (open, anchor): (&Signal<bool>
 }
 
 /// Opens the list `page` of `card`'s menu in its place.
-fn opens(state: &BoardState, open: &Signal<bool>, card: &CardModel, page: MenuPage) -> impl Fn() + Send + Sync + 'static {
+fn opens(
+  state: &BoardState,
+  open: &Signal<bool>,
+  card: &CardModel,
+  page: MenuPage,
+) -> impl Fn() + Send + Sync + 'static {
   let (menu, open, task) = (state.menu.clone(), open.clone(), card.row.id);
   move || {
     menu.set(OpenMenu(Some((task, page))));
@@ -95,9 +100,27 @@ fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<b
   };
   let mut rows: Vec<Element> = vec![open_task.render(ctx, open), separator(ctx)];
   for (name, key, glyph, page, shortcut) in [
-    ("move", "tasks.board.menu.moveTo", Icon::ArrowRightLeft, MenuPage::MoveTo, "tasks.board.keys.move"),
-    ("priority", "tasks.board.menu.priority", Icon::SignalHigh, MenuPage::Priority, "tasks.board.keys.priority"),
-    ("tags", "tasks.board.menu.tags", Icon::Tag, MenuPage::Tags, "tasks.board.keys.tags"),
+    (
+      "move",
+      "tasks.board.menu.moveTo",
+      Icon::ArrowRightLeft,
+      MenuPage::MoveTo,
+      "tasks.board.keys.move",
+    ),
+    (
+      "priority",
+      "tasks.board.menu.priority",
+      Icon::SignalHigh,
+      MenuPage::Priority,
+      "tasks.board.keys.priority",
+    ),
+    (
+      "tags",
+      "tasks.board.menu.tags",
+      Icon::Tag,
+      MenuPage::Tags,
+      "tasks.board.keys.tags",
+    ),
   ] {
     let (label, keys) = (ctx.t(key), ctx.t(shortcut));
     let row = changing(name, label, glyph, page).shortcut(keys);
@@ -126,7 +149,12 @@ fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<b
 }
 
 /// Run again, for a task whose latest run ended: asked over the columns first, as a drop on Todo asks.
-fn run_again(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool), open: &Signal<bool>) -> Vec<Element> {
+fn run_again(
+  ctx: &mut Ctx,
+  card: &CardModel,
+  (dropping, busy): (&Dropping, bool),
+  open: &Signal<bool>,
+) -> Vec<Element> {
   if !card.row.has_run || card.row.run_not_ended || card.row.not_shared {
     return Vec::new();
   }
@@ -287,13 +315,17 @@ fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>
       next.push(*tag);
     }
     let (state, task, key) = (state.clone(), card.row.id, card.row.key.clone());
-    let item = MenuItem::new(format!("task-menu-{}-tag-{index}", card.row.key), name.clone(), move || {
-      state.change(vec![Change {
-        task,
-        key: key.clone(),
-        kind: ChangeKind::Tags(next.clone()),
-      }]);
-    })
+    let item = MenuItem::new(
+      format!("task-menu-{}-tag-{index}", card.row.key),
+      name.clone(),
+      move || {
+        state.change(vec![Change {
+          task,
+          key: key.clone(),
+          kind: ChangeKind::Tags(next.clone()),
+        }]);
+      },
+    )
     .icon(Icon::Tag)
     .chosen(chosen);
     rows.push(item.render(ctx, open));

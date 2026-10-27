@@ -57,10 +57,14 @@ pub fn failure(ctx: &mut Ctx, state: &BoardState, failed: &Failed) -> Element {
         .flex(1.0),
     )
     .child(
-      IconButton::new("tasks-board-failed-dismiss", Icon::X, ctx.t("tasks.board.failedDismiss"))
-        .small()
-        .on_click(move || dismiss.set(None))
-        .render(ctx),
+      IconButton::new(
+        "tasks-board-failed-dismiss",
+        Icon::X,
+        ctx.t("tasks.board.failedDismiss"),
+      )
+      .small()
+      .on_click(move || dismiss.set(None))
+      .render(ctx),
     )
     .into()
 }
@@ -86,14 +90,22 @@ pub fn canceled(ctx: &Ctx, (state, closer): (&BoardState, &Closer), task: &Subje
     )
     .child(Spacer::new().flex(1.0))
     .child(
-      ActionButton::new("tasks-board-canceled-reopen", ButtonKind::Ghost, ctx.t("task_close.menu.reopen"))
-        .icon(Icon::RotateCcw)
-        .on_click(move || reopen.reopen(subject.clone())),
+      ActionButton::new(
+        "tasks-board-canceled-reopen",
+        ButtonKind::Ghost,
+        ctx.t("task_close.menu.reopen"),
+      )
+      .icon(Icon::RotateCcw)
+      .on_click(move || reopen.reopen(subject.clone())),
     )
     .child(
-      ActionButton::new("tasks-board-canceled-show", ButtonKind::Ghost, ctx.t("tasks.board.showCanceled"))
-        .icon(Icon::Eye)
-        .on_click(move || display.update(|display| display.show_canceled = true)),
+      ActionButton::new(
+        "tasks-board-canceled-show",
+        ButtonKind::Ghost,
+        ctx.t("tasks.board.showCanceled"),
+      )
+      .icon(Icon::Eye)
+      .on_click(move || display.update(|display| display.show_canceled = true)),
     )
     .into()
 }
@@ -104,9 +116,7 @@ pub fn hint(ctx: &Ctx, drag: &Drag) -> Element {
   let words = match drag.over.as_ref() {
     None if drag.card.row.run_not_ended => ctx.t_args("tasks.board.hint.onlyClose", [("task", key)]),
     None => ctx.t_args("tasks.board.hint.move", [("task", key)]),
-    Some(target) if refusal_of(&drag.card, target).is_some() => {
-      ctx.t_args("tasks.board.hint.refused", [("task", key)])
-    }
+    Some(target) if refusal_of(&drag.card, target).is_some() => ctx.t_args("tasks.board.hint.refused", [("task", key)]),
     Some(target) => match &target.column {
       ColumnKey::Status(status) => match moves::decide(&drag.card.row, *status) {
         Decision::Move(Move::Queue) => ctx.t_args("tasks.board.hint.queue", [("task", key)]),

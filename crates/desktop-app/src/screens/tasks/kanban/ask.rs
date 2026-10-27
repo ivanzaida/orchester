@@ -64,7 +64,11 @@ pub fn ask_card(ctx: &Ctx, (state, closer): (&BoardState, &Closer), asked: &Ask)
   };
   let confirm = ActionButton::new(
     "tasks-board-ask-confirm",
-    if words.danger { ButtonKind::Danger } else { ButtonKind::Secondary },
+    if words.danger {
+      ButtonKind::Danger
+    } else {
+      ButtonKind::Secondary
+    },
     words.confirm,
   )
   .in_form();
@@ -124,7 +128,9 @@ pub fn answer(state: &BoardState, closer: &Closer, asked: &Ask) {
   state.asked.set(None);
   match asked.clone() {
     Ask::StartsNow { task, .. } => state.change(vec![change(&task, ChangeKind::Queue)]),
-    Ask::RunAgain { task, after, pipeline } => state.change(vec![change(&task, ChangeKind::RunAgain { after, pipeline })]),
+    Ask::RunAgain { task, after, pipeline } => {
+      state.change(vec![change(&task, ChangeKind::RunAgain { after, pipeline })])
+    }
     Ask::Unmerged(task) => closer.close(task, Closing::Done),
     Ask::BulkClose { closing, tasks, runs } => state.bulk.run(Bulk::Close(closing, tasks, runs)),
     Ask::BulkDelete(tasks) => state.bulk.run(Bulk::Delete(tasks)),
@@ -152,7 +158,11 @@ fn words(ctx: &Ctx, asked: &Ask) -> Words {
   match asked {
     Ask::StartsNow { task, free, pipeline } => neutral(
       ctx.t_args(
-        if *free == 1 { "tasks.board.ask.startsNow.one" } else { "tasks.board.ask.startsNow.other" },
+        if *free == 1 {
+          "tasks.board.ask.startsNow.one"
+        } else {
+          "tasks.board.ask.startsNow.other"
+        },
         [("task", task.key.to_string()), ("count", free.to_string())],
       ),
       ctx.t_args("tasks.board.ask.startsNow.detail", [("pipeline", &**pipeline)]),
@@ -160,7 +170,10 @@ fn words(ctx: &Ctx, asked: &Ask) -> Words {
     ),
     Ask::RunAgain { task, pipeline, .. } => neutral(
       ctx.t_args("tasks.board.ask.runAgain.title", [("task", &*task.key)]),
-      ctx.t_args("tasks.board.ask.runAgain.detail", [("task", &*task.key), ("pipeline", &**pipeline)]),
+      ctx.t_args(
+        "tasks.board.ask.runAgain.detail",
+        [("task", &*task.key), ("pipeline", &**pipeline)],
+      ),
       ("tasks.board.ask.runAgain.keep", "tasks.board.ask.runAgain.confirm"),
     ),
     Ask::Unmerged(task) => Words {
@@ -228,7 +241,10 @@ pub fn listed<'a>(ctx: &Ctx, tasks: impl Iterator<Item = &'a Subject>) -> String
     Some((last, first)) => ctx
       .t_args(
         "tasks.board.ask.keysAnd",
-        [("first", first.join(&ctx.t("tasks.listSeparator"))), ("last", (*last).to_owned())],
+        [
+          ("first", first.join(&ctx.t("tasks.listSeparator"))),
+          ("last", (*last).to_owned()),
+        ],
       )
       .to_string(),
   }

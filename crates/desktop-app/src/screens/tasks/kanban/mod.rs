@@ -184,7 +184,10 @@ impl Component for Board {
     let state = self.state.clone();
     let closer = Closer::of(ctx);
     let display = props.display.get();
-    let canceled = closer.closed().filter(|(_, closing)| *closing == Closing::Canceled).map(|(task, _)| task);
+    let canceled = closer
+      .closed()
+      .filter(|(_, closing)| *closing == Closing::Canceled)
+      .map(|(task, _)| task);
     if canceled.is_some() && !state.canceled_now.get_untracked() {
       state.canceled_now.set(true);
     }
@@ -250,13 +253,13 @@ impl Board {
     let state = &self.state;
     let (drag, refused, selected) = (state.drag.get(), state.refused.get(), state.selected.get());
     let waiting = match state.asked.get() {
-      Some(actions::Ask::StartsNow { task, .. } | actions::Ask::RunAgain { task, .. } | actions::Ask::Unmerged(task)) => {
-        Some(task.id)
-      }
+      Some(
+        actions::Ask::StartsNow { task, .. } | actions::Ask::RunAgain { task, .. } | actions::Ask::Unmerged(task),
+      ) => Some(task.id),
       _ => None,
     };
-    let quick_add = (display.columns == Columns::Status && !props.not_shared)
-      .then(|| props.read_only.clone().map_or(Ok(()), Err));
+    let quick_add =
+      (display.columns == Columns::Status && !props.not_shared).then(|| props.read_only.clone().map_or(Ok(()), Err));
     let shared = Shared {
       display,
       selected: &selected,
@@ -320,7 +323,9 @@ impl Board {
         .filter(|card| selected.0.contains(&card.row.id))
         .cloned()
         .collect();
-      parts.push(foot(ctx.mount_keyed::<bulk::BulkBar>("tasks-board-bulk", bulk::BarProps { cards })));
+      parts.push(foot(
+        ctx.mount_keyed::<bulk::BulkBar>("tasks-board-bulk", bulk::BarProps { cards }),
+      ));
     }
     parts
   }
@@ -333,7 +338,11 @@ fn foot(part: impl Into<Element>) -> Element {
 
 /// What stands over the columns: why the last change did not happen, where a canceled task went, and what is asked in
 /// place.
-fn top_lines(ctx: &mut Ctx, (state, closer): (&BoardState, &Closer), canceled: Option<&crate::screens::task_close::Subject>) -> Vec<Element> {
+fn top_lines(
+  ctx: &mut Ctx,
+  (state, closer): (&BoardState, &Closer),
+  canceled: Option<&crate::screens::task_close::Subject>,
+) -> Vec<Element> {
   let mut lines = Vec::new();
   if let Some(failed) = state.failed.get() {
     lines.push(lines::failure(ctx, state, &failed));

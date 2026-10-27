@@ -135,7 +135,11 @@ pub fn columns(ctx: &Ctx, source: &Source<'_>) -> Vec<ColumnModel> {
 type LaneOf = (String, Arc<str>, Icon, Box<dyn Fn(&TaskRow) -> bool>);
 
 /// The board's rows, each with its cards in `columns`' order; `None` without rows.
-pub fn lanes(ctx: &Ctx, display: &Display, (tasks, columns): (&ProjectTasks, &[ColumnModel])) -> Option<Vec<LaneModel>> {
+pub fn lanes(
+  ctx: &Ctx,
+  display: &Display,
+  (tasks, columns): (&ProjectTasks, &[ColumnModel]),
+) -> Option<Vec<LaneModel>> {
   let lanes: Vec<LaneOf> = match display.lanes {
     Lanes::None => return None,
     Lanes::Module => {
@@ -145,7 +149,12 @@ pub fn lanes(ctx: &Ctx, display: &Display, (tasks, columns): (&ProjectTasks, &[C
         .map(|module| {
           let id = module.id();
           let lane: Box<dyn Fn(&TaskRow) -> bool> = Box::new(move |row: &TaskRow| row.module == Some(id));
-          (format!("module-{id}"), Arc::from(module.name().as_str()), Icon::Target, lane)
+          (
+            format!("module-{id}"),
+            Arc::from(module.name().as_str()),
+            Icon::Target,
+            lane,
+          )
         })
         .collect();
       lanes.push((
@@ -264,17 +273,20 @@ fn look(ctx: &Ctx, key: &ColumnKey, tasks: &ProjectTasks) -> (Arc<str>, Icon, Pa
       (ctx.t(word), glyph, color)
     }
     ColumnKey::Module(Some(id)) => (
-      tasks
-        .modules
-        .iter()
-        .find(|module| module.id() == *id)
-        .map_or_else(|| Arc::from(id.to_string().as_str()), |module| Arc::from(module.name().as_str())),
+      tasks.modules.iter().find(|module| module.id() == *id).map_or_else(
+        || Arc::from(id.to_string().as_str()),
+        |module| Arc::from(module.name().as_str()),
+      ),
       Icon::Target,
       PaletteColor::TextMuted,
     ),
     ColumnKey::Module(None) => (ctx.t("tasks.filter.noModule"), Icon::Target, PaletteColor::TextMuted),
     ColumnKey::Pipeline(Some(name)) => (name.clone(), Icon::Workflow, PaletteColor::TextMuted),
-    ColumnKey::Pipeline(None) => (ctx.t("tasks.filter.noPipeline"), Icon::Workflow, PaletteColor::TextMuted),
+    ColumnKey::Pipeline(None) => (
+      ctx.t("tasks.filter.noPipeline"),
+      Icon::Workflow,
+      PaletteColor::TextMuted,
+    ),
   }
 }
 

@@ -67,9 +67,10 @@ pub fn move_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec<Men
         staying,
       } = bulk_move(dropping, cards, status);
       if moving.is_empty() && closing.is_empty() {
-        let reason = staying
-          .first()
-          .map_or_else(|| ctx.t("tasks.board.bulk.allThere"), |(_, refusal)| ctx.t(reason_key(*refusal)));
+        let reason = staying.first().map_or_else(
+          || ctx.t("tasks.board.bulk.allThere"),
+          |(_, refusal)| ctx.t(reason_key(*refusal)),
+        );
         return MenuItem::unavailable(id, label, reason).icon(glyph).without_lock();
       }
       let state = dropping.state.clone();
@@ -104,7 +105,10 @@ pub fn priority_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec
     .into_iter()
     .map(|priority| {
       let (glyph, key, _) = priority_look(priority);
-      let changes: Vec<Change> = cards.iter().map(|card| change(card, ChangeKind::Priority(priority))).collect();
+      let changes: Vec<Change> = cards
+        .iter()
+        .map(|card| change(card, ChangeKind::Priority(priority)))
+        .collect();
       let state = dropping.state.clone();
       MenuItem::new(
         format!("tasks-board-bulk-priority-{}", super::model::priority_name(priority)),

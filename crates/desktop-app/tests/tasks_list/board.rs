@@ -80,7 +80,10 @@ fn tasks_board_the_layout_switch_shows_the_columns_and_is_kept_for_the_project()
   assert!(in_column(&mut seeded, "KON-12", "in_progress"));
 
   // Away and back: the screen opens on the board again, read from the application database.
-  seeded.window.navigation().go(Route::Project(seeded.project, ProjectPage::Import(ImportTab::All)));
+  seeded
+    .window
+    .navigation()
+    .go(Route::Project(seeded.project, ProjectPage::Import(ImportTab::All)));
   seeded.window.pass();
   seeded.go(TaskList::new(TaskListTab::All));
   seeded.until("the board again", |seeded| seeded.laid_out("tasks-board-columns"));
@@ -95,10 +98,7 @@ fn tasks_board_an_incomplete_draft_is_refused_by_todo() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   seeded.drag("KON-3", "todo");
   assert_eq!(refusal(&mut seeded), "Add the missing details before running the task.");
-  assert_eq!(
-    seeded.text("tasks-board-refusal-title"),
-    "KON-3 can't be queued yet"
-  );
+  assert_eq!(seeded.text("tasks-board-refusal-title"), "KON-3 can't be queued yet");
   assert_eq!(status(&seeded, "KON-3"), WorkflowStatus::Backlog);
   assert_eq!(stored(&seeded, "KON-3").status(), TaskStatus::Draft);
 }
@@ -114,7 +114,10 @@ fn tasks_board_a_drop_that_fails_snaps_back_and_says_why() {
   assert!(said.starts_with("KON-5 was not changed. "), "{said}");
   assert_eq!(stored(&seeded, "KON-5").status(), TaskStatus::Draft);
   assert_eq!(status(&seeded, "KON-5"), WorkflowStatus::Backlog);
-  assert!(in_column(&mut seeded, "KON-5", "backlog"), "the card is back where it was");
+  assert!(
+    in_column(&mut seeded, "KON-5", "backlog"),
+    "the card is back where it was"
+  );
   press(&mut seeded, "tasks-board-failed-dismiss");
   assert!(!seeded.shows("tasks-board-failed"));
 }
@@ -122,7 +125,9 @@ fn tasks_board_a_drop_that_fails_snaps_back_and_says_why() {
 /// Drops the draft `key` on Backlog and waits until it is there.
 fn to_backlog(seeded: &mut Seeded, key: &str) {
   seeded.drag(key, "backlog");
-  seeded.until("the draft in Backlog", |seeded| status(seeded, key) == WorkflowStatus::Backlog);
+  seeded.until("the draft in Backlog", |seeded| {
+    status(seeded, key) == WorkflowStatus::Backlog
+  });
   assert_eq!(stored(seeded, key).status(), TaskStatus::Draft);
   seeded.until("its card in Backlog", |seeded| in_column(seeded, key, "backlog"));
 }
@@ -132,7 +137,9 @@ fn tasks_board_a_queued_task_that_never_ran_returns_to_draft_in_backlog_and_one_
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   assert_eq!(stored(&seeded, "KON-8").status(), TaskStatus::Queued);
   seeded.drag("KON-8", "backlog");
-  seeded.until("KON-8 a draft", |seeded| stored(seeded, "KON-8").status() == TaskStatus::Draft);
+  seeded.until("KON-8 a draft", |seeded| {
+    stored(seeded, "KON-8").status() == TaskStatus::Draft
+  });
   assert_eq!(status(&seeded, "KON-8"), WorkflowStatus::Backlog);
 
   seeded.drag("KON-1", "backlog");
@@ -151,7 +158,9 @@ fn tasks_board_a_run_that_has_not_ended_moves_only_through_the_stop_confirmation
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
 
   seeded.drag("KON-12", "done");
-  seeded.until("the stop confirmation", |seeded| seeded.laid_out("tasks-close-stop-keep"));
+  seeded.until("the stop confirmation", |seeded| {
+    seeded.laid_out("tasks-close-stop-keep")
+  });
   let asked = seeded.text("tasks-close-stop");
   assert!(asked.contains("Stop the run of KON-12?"), "{asked}");
   press(&mut seeded, "tasks-close-stop-keep");
@@ -173,7 +182,9 @@ fn tasks_board_a_run_that_ended_is_offered_run_again_in_place() {
 fn tasks_board_in_progress_changes_the_status_only_and_never_starts_a_run() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   seeded.drag("KON-15", "in_progress");
-  seeded.until("KON-15 In progress", |seeded| status(seeded, "KON-15") == WorkflowStatus::InProgress);
+  seeded.until("KON-15 In progress", |seeded| {
+    status(seeded, "KON-15") == WorkflowStatus::InProgress
+  });
   assert_eq!(stored(&seeded, "KON-15").status(), TaskStatus::Draft, "no run started");
 }
 
@@ -184,7 +195,9 @@ fn tasks_board_columns_by_pipeline_refuse_every_drop() {
   press(&mut seeded, "tasks-board-options-columns");
   press(&mut seeded, "tasks-board-options-columns-pipeline");
   // KON-12's run pins Feature delivery; KON-4 has no pipeline.
-  seeded.until("columns by pipeline", |seeded| seeded.laid_out("tasks-board-column-pipeline-none"));
+  seeded.until("columns by pipeline", |seeded| {
+    seeded.laid_out("tasks-board-column-pipeline-none")
+  });
   seeded
     .window
     .tree
@@ -208,7 +221,10 @@ fn tasks_board_a_card_canceled_from_its_menu_leaves_its_line_and_the_canceled_st
   seeded.until("the line", |seeded| seeded.laid_out("tasks-board-canceled"));
   assert!(seeded.text("tasks-board-canceled").starts_with("KON-15 is Canceled"));
   assert_eq!(status(&seeded, "KON-15"), WorkflowStatus::Canceled);
-  assert!(seeded.shows("tasks-board-column-canceled"), "the Canceled strip with its count");
+  assert!(
+    seeded.shows("tasks-board-column-canceled"),
+    "the Canceled strip with its count"
+  );
   press(&mut seeded, "tasks-board-canceled-show");
   seeded.until("Canceled shown", |seeded| in_column(seeded, "KON-15", "canceled"));
 }
@@ -217,10 +233,15 @@ fn tasks_board_a_card_canceled_from_its_menu_leaves_its_line_and_the_canceled_st
 fn tasks_board_quick_add_makes_a_draft_in_backlog_only() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   assert!(seeded.shows("tasks-board-column-backlog-add"));
-  assert!(!seeded.shows("tasks-board-column-todo-add"), "quick add is Backlog's alone");
+  assert!(
+    !seeded.shows("tasks-board-column-todo-add"),
+    "quick add is Backlog's alone"
+  );
   press(&mut seeded, "tasks-board-new-task");
   seeded.until("the field", |seeded| seeded.laid_out("tasks-board-quick-add-title"));
-  seeded.window.set("tasks-board-quick-add-title", "Write the board's docs");
+  seeded
+    .window
+    .set("tasks-board-quick-add-title", "Write the board's docs");
   seeded
     .window
     .tree
@@ -245,6 +266,8 @@ fn tasks_board_a_bulk_move_leaves_the_cards_that_cannot_go_and_says_why() {
   let row = seeded.text("tasks-board-bulk-move-backlog");
   assert!(row.contains("KON-12 stay: A run of this task has not ended."), "{row}");
   press(&mut seeded, "tasks-board-bulk-move-backlog");
-  seeded.until("KON-15 in Backlog", |seeded| status(seeded, "KON-15") == WorkflowStatus::Backlog);
+  seeded.until("KON-15 in Backlog", |seeded| {
+    status(seeded, "KON-15") == WorkflowStatus::Backlog
+  });
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress, "KON-12 stays");
 }

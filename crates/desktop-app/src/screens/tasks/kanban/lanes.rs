@@ -31,7 +31,12 @@ use crate::{
 const LANE_HEAD: f32 = 30.0;
 
 /// The columns' heads, then every row with its cards.
-pub fn lanes(ctx: &mut Ctx, (state, shared): (&BoardState, &Shared<'_>), columns: &[ColumnModel], lanes: &[LaneModel]) -> Element {
+pub fn lanes(
+  ctx: &mut Ctx,
+  (state, shared): (&BoardState, &Shared<'_>),
+  columns: &[ColumnModel],
+  lanes: &[LaneModel],
+) -> Element {
   let heads = Row::new()
     .id("tasks-board-heads")
     .width(Dimension::Pct(100.0))
@@ -43,7 +48,9 @@ pub fn lanes(ctx: &mut Ctx, (state, shared): (&BoardState, &Shared<'_>), columns
         .min_width(Dimension::Px(0.0))
         .child(head(ctx, (state, shared), column, &id))
     }));
-  let mut rows = Column::new().width(Dimension::Pct(100.0)).spacing(ExtraSpacing::Snug.role());
+  let mut rows = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role());
   for lane in lanes {
     let folded = shared.display.folded.contains(&lane.key);
     rows = rows.child(lane_head(ctx, state, (lane, columns), folded));

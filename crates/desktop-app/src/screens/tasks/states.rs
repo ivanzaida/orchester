@@ -101,7 +101,6 @@ pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId, read_only: Option
     .into()
 }
 
-
 /// The tasks cannot be read, why, and Try again, which reads them again.
 pub(super) fn failed(ctx: &Ctx, feed: &ProjectFeed, error: &Message) -> Element {
   let body = ctx.t_args("tasks.loadError.body", [("reason", message_text(ctx, error))]);

@@ -105,7 +105,10 @@ impl Component for CardView {
     let frame = frame(&props, look, parts).ref_element(self.frame.clone());
     let menu = held.then(|| card_menu(ctx, &props.card, (&self.open, &self.anchor)));
     let card = self.pressable(ctx, &props, frame);
-    Column::new().width(Dimension::Pct(100.0)).child(card).with_children(menu)
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .child(card)
+      .with_children(menu)
   }
 }
 
@@ -121,7 +124,12 @@ impl CardView {
       ProjectPage::Task(task, TaskView::default())
     };
     let open = Navigation::of(ctx).to(Route::Project(props.card.project, page));
-    let (middle, selected, focused, id) = (open.clone(), state.selected.clone(), state.focused.clone(), props.card.row.id);
+    let (middle, selected, focused, id) = (
+      open.clone(),
+      state.selected.clone(),
+      state.focused.clone(),
+      props.card.row.id,
+    );
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     let button = Button::empty()
       .id(format!("task-card-{key}"))

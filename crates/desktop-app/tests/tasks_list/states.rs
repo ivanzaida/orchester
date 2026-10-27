@@ -71,7 +71,10 @@ fn bones(seeded: &mut Seeded, id: &str) {
 fn tasks_loading_shows_the_list_skeleton_after_a_moment_and_bones_for_counts_never_an_empty_list() {
   let (mut seeded, hold) = held(TaskList::default());
   assert!(seeded.shows("tasks-loading"));
-  assert!(!seeded.shows("tasks-loading-rows"), "a fast reading never flashes the bones");
+  assert!(
+    !seeded.shows("tasks-loading-rows"),
+    "a fast reading never flashes the bones"
+  );
   bones(&mut seeded, "tasks-loading-rows");
   assert_eq!(seeded.texts("tasks-loading-rows"), Vec::<String>::new(), "bones only");
   assert_eq!(seeded.view("all"), "All", "each count a bone");
@@ -104,10 +107,17 @@ fn tasks_loading_on_the_board_shows_its_columns_heads_over_card_bones() {
   ] {
     let head = format!("tasks-loading-column-{column}-name");
     assert_eq!(seeded.text(&head), name, "the real head of {column}");
-    assert!(seeded.laid_out(&format!("tasks-loading-column-{column}-count")), "its count a bone");
+    assert!(
+      seeded.laid_out(&format!("tasks-loading-column-{column}-count")),
+      "its count a bone"
+    );
   }
   assert!(!seeded.shows("tasks-loading-column-canceled"));
-  assert_eq!(seeded.text("tasks-loading-new-task"), "New task", "Backlog keeps its foot");
+  assert_eq!(
+    seeded.text("tasks-loading-new-task"),
+    "New task",
+    "Backlog keeps its foot"
+  );
   assert!(!looks_empty(&mut seeded));
   let top = seeded.bounds("tasks-loading-column-backlog-head").y;
   hold.set(false);

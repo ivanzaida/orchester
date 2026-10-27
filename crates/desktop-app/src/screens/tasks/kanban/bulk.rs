@@ -120,7 +120,10 @@ async fn active_runs(project: &OpenProject, tasks: &[Subject]) -> Result<Vec<(Su
     let db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
     let mut runs = Vec::new();
     for task in read {
-      if let Some(run) = db.active_task_run(task.id).map_err(|error| messages::store_error(&error))? {
+      if let Some(run) = db
+        .active_task_run(task.id)
+        .map_err(|error| messages::store_error(&error))?
+      {
         runs.push((task, run));
       }
     }
@@ -225,9 +228,7 @@ impl Component for BulkBar {
       self.open.set(menu != BarMenu::None);
     }
     let popup = self.list(ctx, &dropping, &cards, menu);
-    self
-      .bar(ctx, &dropping, &cards)
-      .with_children(popup)
+    self.bar(ctx, &dropping, &cards).with_children(popup)
   }
 }
 
@@ -241,7 +242,11 @@ impl BulkBar {
       let button = ActionButton::new(format!("tasks-board-bulk-{name}"), ButtonKind::Ghost, ctx.t(label))
         .icon(glyph)
         .element_ref(anchor.clone());
-      if busy { button.disabled() } else { button.on_click(move || menu.set(which)) }
+      if busy {
+        button.disabled()
+      } else {
+        button.on_click(move || menu.set(which))
+      }
     };
     let closing = |name: &str, (label, glyph): (&str, Icon), closing: Closing| {
       let button = ActionButton::new(format!("tasks-board-bulk-{name}"), ButtonKind::Ghost, ctx.t(label)).icon(glyph);
@@ -251,30 +256,12 @@ impl BulkBar {
       let (bulk, tasks) = (state.bulk.clone(), subjects.clone());
       button.on_click(move || bulk.run(Bulk::Prepare(closing, tasks.clone())))
     };
-    let delete = ActionButton::new("tasks-board-bulk-delete", ButtonKind::DangerGhost, ctx.t("tasks.board.bulk.delete"))
-      .icon(Icon::Trash2);
-    let delete = match () {
-      () if dropping.shared => delete.unavailable(ctx.t("task_close.menu.deleteShared")),
-      () if busy => delete.disabled(),
-      () => {
-        let (asked, tasks) = (state.asked.clone(), subjects.clone());
-        delete.on_click(move || asked.set(Some(Ask::BulkDelete(tasks.clone()))))
-      }
-    };
+    let delete = delete_button(ctx, dropping, busy, &subjects);
     let selected = state.selected.clone();
     let clear = IconButton::new("tasks-board-bulk-clear", Icon::X, ctx.t("tasks.board.bulk.clear"))
       .small()
       .on_click(move || selected.set(Selected::default()));
-    Row::new()
-      .id("tasks-board-bulk")
-      .height(Dimension::Px(BAR_HEIGHT))
-      .padding(Padding::new().left(ExtraSpacing::Inset.role()).right(ExtraSpacing::Snug.role()))
-      .spacing(ExtraSpacing::Tight.role())
-      .align_items(Alignment::Center)
-      .rounded(RadiusSize::Lg)
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-      .box_shadow(ShadowStyle::Md)
+    bar_frame()
       .child(
         Text::new(&ctx.t_args("tasks.board.bulk.selected", [("count", cards.len().to_string())]))
           .id("tasks-board-bulk-count")
@@ -282,11 +269,34 @@ impl BulkBar {
           .nowrap(),
       )
       .child(divider())
-      .child(opener("move", ("tasks.board.bulk.moveTo", Icon::ArrowRightLeft), BarMenu::MoveTo, &self.anchors[0]))
-      .child(opener("priority", ("tasks.board.bulk.priority", Icon::SignalHigh), BarMenu::Priority, &self.anchors[1]))
-      .child(opener("tags", ("tasks.board.bulk.tags", Icon::Tag), BarMenu::Tags, &self.anchors[2]))
-      .child(closing("done", ("task_close.menu.done", Icon::CircleCheck), Closing::Done))
-      .child(closing("cancel", ("task_close.menu.cancel", Icon::CircleX), Closing::Canceled))
+      .child(opener(
+        "move",
+        ("tasks.board.bulk.moveTo", Icon::ArrowRightLeft),
+        BarMenu::MoveTo,
+        &self.anchors[0],
+      ))
+      .child(opener(
+        "priority",
+        ("tasks.board.bulk.priority", Icon::SignalHigh),
+        BarMenu::Priority,
+        &self.anchors[1],
+      ))
+      .child(opener(
+        "tags",
+        ("tasks.board.bulk.tags", Icon::Tag),
+        BarMenu::Tags,
+        &self.anchors[2],
+      ))
+      .child(closing(
+        "done",
+        ("task_close.menu.done", Icon::CircleCheck),
+        Closing::Done,
+      ))
+      .child(closing(
+        "cancel",
+        ("task_close.menu.cancel", Icon::CircleX),
+        Closing::Canceled,
+      ))
       .child(delete)
       .child(divider())
       .child(key_cap("tasks-board-bulk-esc", &ctx.t("tasks.board.keys.esc")))
@@ -314,6 +324,42 @@ impl BulkBar {
       .offset(0.0, -ExtraSpacing::Snug.value()),
     )
   }
+}
+
+/// Delete… for the selection: unavailable on a shared project, asked once over the columns otherwise.
+fn delete_button(ctx: &Ctx, dropping: &Dropping, busy: bool, subjects: &[Subject]) -> ActionButton {
+  let delete = ActionButton::new(
+    "tasks-board-bulk-delete",
+    ButtonKind::DangerGhost,
+    ctx.t("tasks.board.bulk.delete"),
+  )
+  .icon(Icon::Trash2);
+  match () {
+    () if dropping.shared => delete.unavailable(ctx.t("task_close.menu.deleteShared")),
+    () if busy => delete.disabled(),
+    () => {
+      let (asked, tasks) = (dropping.state.asked.clone(), subjects.to_vec());
+      delete.on_click(move || asked.set(Some(Ask::BulkDelete(tasks.clone()))))
+    }
+  }
+}
+
+/// The floating bar's frame (`Bulk bar` `vTiQj`).
+fn bar_frame() -> Row {
+  Row::new()
+    .id("tasks-board-bulk")
+    .height(Dimension::Px(BAR_HEIGHT))
+    .padding(
+      Padding::new()
+        .left(ExtraSpacing::Inset.role())
+        .right(ExtraSpacing::Snug.role()),
+    )
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Center)
+    .rounded(RadiusSize::Lg)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .box_shadow(ShadowStyle::Md)
 }
 
 fn divider() -> Column {

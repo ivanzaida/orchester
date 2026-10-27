@@ -215,7 +215,11 @@ fn card_bone(runs: bool, seed: usize) -> Column {
         .child(round_bone(RUN_DOT))
         .child(bone(RUNS[seed % RUNS.len()], RUN_HEIGHT))
     }))
-    .child(line().spacing(SpacingSize::Xs).with_children(CHIPS.map(|width| bone(width, CHIP_HEIGHT))))
+    .child(
+      line()
+        .spacing(SpacingSize::Xs)
+        .with_children(CHIPS.map(|width| bone(width, CHIP_HEIGHT))),
+    )
 }
 
 /// Backlog's *New task* foot, as the board draws it.

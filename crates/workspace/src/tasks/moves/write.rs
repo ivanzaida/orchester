@@ -89,8 +89,8 @@ pub fn queue_draft_in(repo_root: &Path, servers: &Servers, task: TaskId, actor: 
       .ok_or_else(|| Message::new("runs.preflight.pipelineNotPublished"))?;
     (draft.details().clone(), draft.revision(), version)
   };
-  let queued =
-    queue_in(repo_root, servers, SaveTarget::Task(task, revision), details, version).map_err(|failure| first(&failure))?;
+  let queued = queue_in(repo_root, servers, SaveTarget::Task(task, revision), details, version)
+    .map_err(|failure| first(&failure))?;
   // The queued task keeps the claim for the run the runner starts in its turn.
   drop(queued.claim);
   set_status_in(repo_root, servers, task, (WorkflowStatus::Todo, actor))
@@ -98,7 +98,12 @@ pub fn queue_draft_in(repo_root: &Path, servers: &Servers, task: TaskId, actor: 
 
 /// Takes the queued `task`, whose run never started, back to the drafts and sets it to Backlog. A task a reviewed group
 /// holds for good leaves its group as *Return to drafts* takes it; one its group still runs in its turn stays.
-pub fn return_to_draft_in(repo_root: &Path, servers: &Servers, task: TaskId, actor: ChangeActor) -> Result<(), Message> {
+pub fn return_to_draft_in(
+  repo_root: &Path,
+  servers: &Servers,
+  task: TaskId,
+  actor: ChangeActor,
+) -> Result<(), Message> {
   let mut db = ProjectDb::open(repo_root).map_err(|error| messages::store_error(&error))?;
   if db
     .task_group_for_task(task)

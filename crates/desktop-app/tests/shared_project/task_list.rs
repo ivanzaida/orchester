@@ -106,7 +106,11 @@ fn shared_project_board_of_a_former_member_is_read_only_with_more_actions_kept()
   let key = local_keys(&window).remove(0);
   let card = format!("task-card-{key}");
   window.until("the card laid out", |window| {
-    window.tree.get_element_by_id_mut(&card).and_then(|card| card.bounds()).is_some()
+    window
+      .tree
+      .get_element_by_id_mut(&card)
+      .and_then(|card| card.bounds())
+      .is_some()
   });
 
   // Quick add is locked: Backlog keeps its foot, which opens no field.
@@ -122,14 +126,20 @@ fn shared_project_board_of_a_former_member_is_read_only_with_more_actions_kept()
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} laid out"))
   };
-  let (from, todo) = (bounds(&mut window, &card), bounds(&mut window, "tasks-board-column-todo"));
+  let (from, todo) = (
+    bounds(&mut window, &card),
+    bounds(&mut window, "tasks-board-column-todo"),
+  );
   let (x0, y0) = (from.x + from.width / 2.0, from.y + from.height / 2.0);
   let (x1, y1) = (todo.x + todo.width / 2.0, todo.y + 80.0);
   window.tree.mouse_move(x0, y0);
   window.tree.mouse_down(x0, y0, MouseButton::Left);
   window.tree.mouse_move((x0 + x1) / 2.0, (y0 + y1) / 2.0);
   window.pass();
-  assert!(window.tree.get_element_by_id("tasks-board-lifted").is_none(), "nothing lifts");
+  assert!(
+    window.tree.get_element_by_id("tasks-board-lifted").is_none(),
+    "nothing lifts"
+  );
   window.tree.mouse_move(x1, y1);
   window.tree.mouse_up(x1, y1, MouseButton::Left);
   window.pass();

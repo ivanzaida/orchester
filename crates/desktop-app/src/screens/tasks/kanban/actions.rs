@@ -82,9 +82,17 @@ impl DevtoolsInspectable for Refused {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ask {
   /// Queuing the draft starts it at once: `free` agent slots are free and new starts are not held.
-  StartsNow { task: Subject, free: usize, pipeline: Arc<str> },
+  StartsNow {
+    task: Subject,
+    free: usize,
+    pipeline: Arc<str>,
+  },
   /// The task whose latest run `after` ended runs again.
-  RunAgain { task: Subject, after: RunId, pipeline: Arc<str> },
+  RunAgain {
+    task: Subject,
+    after: RunId,
+    pipeline: Arc<str>,
+  },
   /// Done closes the task whose work waits to be merged without merging it; its branch stays.
   Unmerged(Subject),
   /// Closing the selected `tasks` stops `runs` of them first, which have not ended.
@@ -281,7 +289,11 @@ pub fn actor_now() -> ChangeActor {
 
 /// Makes the changes asked for in turn, the first that does not happen ending the rest with why, and has the tasks
 /// read again either way.
-fn change_action(ctx: &mut Ctx, (project, feed): (OpenProject, ProjectFeed), failed: Signal<Option<Failed>>) -> ChangeAction {
+fn change_action(
+  ctx: &mut Ctx,
+  (project, feed): (OpenProject, ProjectFeed),
+  failed: Signal<Option<Failed>>,
+) -> ChangeAction {
   let services = Services::of(ctx);
   ctx.future_action(move |changes: Vec<Change>| {
     let (project, feed, services, failed) = (project.clone(), feed.clone(), services.clone(), failed.clone());
@@ -315,14 +327,10 @@ async fn make(project: &OpenProject, services: &Services, change: &Change, actor
       background::run(move || write::set_status_in(&root, &servers, task, (status, actor))).await
     }
     ChangeKind::Queue => background::run(move || write::queue_draft_in(&root, &servers, task, actor)).await,
-    ChangeKind::ReturnToDraft => {
-      background::run(move || write::return_to_draft_in(&root, &servers, task, actor)).await
-    }
+    ChangeKind::ReturnToDraft => background::run(move || write::return_to_draft_in(&root, &servers, task, actor)).await,
     ChangeKind::Priority(priority) => {
-      background::run(move || {
-        write::organize_in(&root, &servers, (task, actor), |value| value.with_priority(priority))
-      })
-      .await
+      background::run(move || write::organize_in(&root, &servers, (task, actor), |value| value.with_priority(priority)))
+        .await
     }
     ChangeKind::Module(module) => {
       background::run(move || write::set_module_in(&root, &servers, (task, actor), module)).await

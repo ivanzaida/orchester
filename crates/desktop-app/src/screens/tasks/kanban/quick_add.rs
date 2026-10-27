@@ -77,7 +77,11 @@ impl Component for QuickAdd {
     let services = Services::of(ctx);
     let (typed, next) = (title.clone(), batch.clone());
     let add = ctx.future_action(move |(key, name): Adding| {
-      let (root, servers, feed) = (project.open.repo_root.clone(), services.servers.clone(), project.feed.clone());
+      let (root, servers, feed) = (
+        project.open.repo_root.clone(),
+        services.servers.clone(),
+        project.feed.clone(),
+      );
       let (typed, next) = (typed.clone(), next.clone());
       async move {
         let added = background::run(move || quick_add_in(&root, &servers, key, name)).await?;
@@ -132,10 +136,14 @@ impl QuickAdd {
       .filter(|_| !pending)
       .map(|error| message_text(ctx, &error))
       .or_else(|| self.invalid.get());
-    let input = FieldInput::new("tasks-board-quick-add-title", ctx.t("tasks.board.quickAdd.label"), self.title.clone())
-      .placeholder(ctx.t("tasks.board.quickAdd.placeholder"))
-      .element(self.input.clone())
-      .render(ctx);
+    let input = FieldInput::new(
+      "tasks-board-quick-add-title",
+      ctx.t("tasks.board.quickAdd.label"),
+      self.title.clone(),
+    )
+    .placeholder(ctx.t("tasks.board.quickAdd.placeholder"))
+    .element(self.input.clone())
+    .render(ctx);
     let keys = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Pair.role())

@@ -41,7 +41,10 @@ pub fn reduced() -> Result<bool, MotionError> {
       std::path::Path::new("/usr/bin/defaults"),
       ["read", "com.apple.universalaccess", "reduceMotion"],
     ))
-    .map_err(|source| MotionError::Run { program: PROGRAM, source })?;
+    .map_err(|source| MotionError::Run {
+      program: PROGRAM,
+      source,
+    })?;
   Ok(macos_reduced(output.success(), &output.stdout))
 }
 

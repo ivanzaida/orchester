@@ -4,7 +4,6 @@
 //! empty columns and the Canceled column show, and *Reset to default*. Every choice is kept for the project. A 320
 //! wide panel, `surface_raised` in a `border_strong` stroke, radius 10, 12 inside, 10 between its parts.
 
-
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -119,8 +118,18 @@ impl Component for BoardOptions {
     let groups = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
-      .child(self.select(ctx, ("columns", "tasks.board.options.columns"), columns_key(display.columns), Open::Columns))
-      .child(self.select(ctx, ("rows", "tasks.board.options.rows"), lanes_key(display.lanes), Open::Rows))
+      .child(self.select(
+        ctx,
+        ("columns", "tasks.board.options.columns"),
+        columns_key(display.columns),
+        Open::Columns,
+      ))
+      .child(self.select(
+        ctx,
+        ("rows", "tasks.board.options.rows"),
+        lanes_key(display.lanes),
+        Open::Rows,
+      ))
       .child(self.select(ctx, ("order", "tasks.board.options.order"), order, Open::Order))
       .child(
         Row::new()
@@ -175,7 +184,11 @@ impl BoardOptions {
       .background(PaletteColor::SurfaceInput)
       .border(Border::inside(
         BorderSize::Sm,
-        if chosen { PaletteColor::BorderFocus } else { PaletteColor::Border },
+        if chosen {
+          PaletteColor::BorderFocus
+        } else {
+          PaletteColor::Border
+        },
       ))
       .describe("a11y_name", ctx.t(label))
       .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
@@ -244,8 +257,10 @@ impl BoardOptions {
           .into_iter()
           .map(|(sort, key)| {
             let chosen = props.sort.clone();
-            MenuItem::new(format!("tasks-board-options-order-{key}"), ctx.t(key), move || chosen.set(sort))
-              .chosen(props.sort.get() == sort)
+            MenuItem::new(format!("tasks-board-options-order-{key}"), ctx.t(key), move || {
+              chosen.set(sort)
+            })
+            .chosen(props.sort.get() == sort)
           })
           .collect(),
         &self.anchors[2],
@@ -290,7 +305,11 @@ pub fn layout_switch(ctx: &Ctx, display: &Signal<Display>, id: &str, words: bool
     ],
     Focus::Pointer,
   );
-  if words { switch.width(Dimension::Pct(100.0)) } else { switch }
+  if words {
+    switch.width(Dimension::Pct(100.0))
+  } else {
+    switch
+  }
 }
 
 /// *Card properties* and a chip for each, `accent_muted` in a `border_strong` stroke while it shows.

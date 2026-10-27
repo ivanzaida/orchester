@@ -29,10 +29,20 @@ use crate::{project::ShownProject, services::Services};
 
 impl TasksScreen {
   /// The board of the view the list is on, over `rows` as searched, filtered and ordered.
-  pub(super) fn board(&self, ctx: &mut Ctx, shown: &Shown<'_>, (reading, rows): (&Reading, &[TaskRow]), filtered: bool) -> Element {
+  pub(super) fn board(
+    &self,
+    ctx: &mut Ctx,
+    shown: &Shown<'_>,
+    (reading, rows): (&Reading, &[TaskRow]),
+    filtered: bool,
+  ) -> Element {
     let (project, list) = (shown.project, shown.list);
     let view = list_view(list.tab());
-    let kept: Vec<TaskRow> = rows.iter().filter(|row| view.keeps(row, &reading.waiting)).cloned().collect();
+    let kept: Vec<TaskRow> = rows
+      .iter()
+      .filter(|row| view.keeps(row, &reading.waiting))
+      .cloned()
+      .collect();
     // Every task of the view whatever the search and filters: a column says how many it hides.
     let every: Vec<TaskRow> = if filtered {
       let separator = ctx.t("tasks.listSeparator");
@@ -100,6 +110,10 @@ pub(super) fn keep_display(ctx: &mut Ctx, project: &ShownProject, display: &Sign
   let id = project.open.project.id();
   ctx.watch(display, move |shown: &Display| {
     let (workspace, shown) = (services.workspace.clone(), shown.clone());
-    drop(services.runtime.spawn_blocking(move || kept::keep(&workspace, id, &shown)));
+    drop(
+      services
+        .runtime
+        .spawn_blocking(move || kept::keep(&workspace, id, &shown)),
+    );
   });
 }

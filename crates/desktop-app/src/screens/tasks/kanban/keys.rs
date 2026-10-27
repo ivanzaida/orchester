@@ -133,18 +133,16 @@ fn enter(keys: &KeyContext) -> bool {
   } else {
     ProjectPage::Task(task, TaskView::default())
   };
-  keys.navigation.open(Route::Project(card.project, page), OpenIn::ActiveTab);
+  keys
+    .navigation
+    .open(Route::Project(card.project, page), OpenIn::ActiveTab);
   true
 }
 
 /// Moves the focus by `(columns, cards)`; the first card takes it when none has it.
 fn step(keys: &KeyContext, (across, down): (isize, isize)) -> bool {
   let state = &keys.dropping.state;
-  let at = state
-    .focused
-    .get_untracked()
-    .0
-    .and_then(|id| place(keys, id));
+  let at = state.focused.get_untracked().0.and_then(|id| place(keys, id));
   let next = match at {
     None => keys
       .grid
@@ -152,10 +150,18 @@ fn step(keys: &KeyContext, (across, down): (isize, isize)) -> bool {
       .find_map(|(_, cards)| cards.first())
       .map(|card| card.row.id),
     Some((column, card)) => {
-      let column = column.saturating_add_signed(across).min(keys.grid.len().saturating_sub(1));
+      let column = column
+        .saturating_add_signed(across)
+        .min(keys.grid.len().saturating_sub(1));
       let cards = &keys.grid[column].1;
-      let card = if across == 0 { card.saturating_add_signed(down) } else { card };
-      cards.get(card.min(cards.len().saturating_sub(1))).map(|card| card.row.id)
+      let card = if across == 0 {
+        card.saturating_add_signed(down)
+      } else {
+        card
+      };
+      cards
+        .get(card.min(cards.len().saturating_sub(1)))
+        .map(|card| card.row.id)
     }
   };
   match next {
@@ -202,10 +208,6 @@ fn menu(keys: &KeyContext, page: MenuPage) -> bool {
   let Some(card) = focused(keys).filter(|card| !card.row.not_shared) else {
     return false;
   };
-  keys
-    .dropping
-    .state
-    .menu
-    .set(OpenMenu(Some((card.row.id, page))));
+  keys.dropping.state.menu.set(OpenMenu(Some((card.row.id, page))));
   true
 }

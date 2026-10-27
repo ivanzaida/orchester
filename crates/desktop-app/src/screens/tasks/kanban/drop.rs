@@ -119,7 +119,11 @@ impl Dropping {
       Lanes::None => None,
       Lanes::Module => {
         let module = lane.strip_prefix("module-")?;
-        let module = if module == "none" { None } else { Some(module.parse().ok()?) };
+        let module = if module == "none" {
+          None
+        } else {
+          Some(module.parse().ok()?)
+        };
         (card.row.module != module).then_some(ChangeKind::Module(module))
       }
       Lanes::Priority => {

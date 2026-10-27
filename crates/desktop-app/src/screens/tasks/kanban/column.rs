@@ -87,7 +87,12 @@ pub fn column(
   };
   let over = shared.drag.filter(|drag| drag.over.as_ref() == Some(&target));
   let refusing = over.and_then(|drag| refusal_of(&drag.card, &target));
-  let body = body(ctx, (state, shared), (column, cards), (&target, &id, over, refusing.is_some()));
+  let body = body(
+    ctx,
+    (state, shared),
+    (column, cards),
+    (&target, &id, over, refusing.is_some()),
+  );
   let frame = Column::new()
     .id(id.clone())
     .flex(1.0)
@@ -118,7 +123,9 @@ fn body(
   (column, cards): (&ColumnModel, &[CardModel]),
   (target, id, over, refusing): (&Target, &str, Option<&Drag>, bool),
 ) -> Column {
-  let mut body = Column::new().width(Dimension::Pct(100.0)).spacing(ExtraSpacing::Snug.role());
+  let mut body = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role());
   if let Some(refused) = shared.refused.filter(|refused| refused.column == column.key)
     && (over.is_some() || shared.drag.is_none())
   {
@@ -154,7 +161,11 @@ fn lit(frame: Column, fill: PaletteColor, stroke: PaletteColor) -> Column {
 }
 
 /// The cards of a column, each mounted as itself.
-fn card_views(ctx: &mut Ctx, shared: &Shared<'_>, (place, cards): (&Target, &[super::card::CardModel])) -> Vec<Element> {
+fn card_views(
+  ctx: &mut Ctx,
+  shared: &Shared<'_>,
+  (place, cards): (&Target, &[super::card::CardModel]),
+) -> Vec<Element> {
   cards
     .iter()
     .map(|card| {
@@ -193,7 +204,12 @@ fn slots(
   drag: &Drag,
 ) -> Vec<Element> {
   if target.column == ColumnKey::Status(WorkflowStatus::Done) {
-    let done = drop_slot(ctx, "tasks-board-slot-done", (Icon::CircleCheck, PaletteColor::Success), "task_close.menu.done");
+    let done = drop_slot(
+      ctx,
+      "tasks-board-slot-done",
+      (Icon::CircleCheck, PaletteColor::Success),
+      "task_close.menu.done",
+    );
     let mut parts = vec![done.into()];
     parts.extend(card_views(ctx, shared, (target, cards)));
     if !shared.display.show_canceled {
@@ -201,8 +217,13 @@ fn slots(
         column: ColumnKey::Status(WorkflowStatus::Canceled),
         lane: target.lane.clone(),
       };
-      let canceled = drop_slot(ctx, "tasks-board-slot-canceled", (Icon::CircleX, PaletteColor::TextMuted), "task_close.menu.cancel")
-        .ref_element(state.target_ref(zone));
+      let canceled = drop_slot(
+        ctx,
+        "tasks-board-slot-canceled",
+        (Icon::CircleX, PaletteColor::TextMuted),
+        "task_close.menu.cancel",
+      )
+      .ref_element(state.target_ref(zone));
       parts.push(canceled.into());
     }
     return parts;
@@ -269,7 +290,9 @@ pub(super) fn head(ctx: &mut Ctx, (state, shared): (&BoardState, &Shared<'_>), c
   // A locked quick add says why as its label, which its tooltip shows (`Add task` in `15 Not a member` `kMKKv`).
   let add = (lane_is_backlog(column) && shared.quick_add.is_some()).then(|| {
     match shared.quick_add.clone().and_then(Result::err) {
-      Some(reason) => IconButton::new(format!("{id}-add"), Icon::Plus, reason).small().render(ctx),
+      Some(reason) => IconButton::new(format!("{id}-add"), Icon::Plus, reason)
+        .small()
+        .render(ctx),
       None => {
         let open = state.quick_open.clone();
         IconButton::new(format!("{id}-add"), Icon::Plus, ctx.t("tasks.board.quickAdd.open"))
@@ -358,7 +381,13 @@ fn empty(ctx: &Ctx, shared: &Shared<'_>, column: &ColumnModel) -> Column {
     (
       Icon::SearchX,
       ctx.t("tasks.board.column.noMatch.title"),
-      ctx.t_args(key, [("column", column.label.to_string()), ("count", column.total.to_string())]),
+      ctx.t_args(
+        key,
+        [
+          ("column", column.label.to_string()),
+          ("count", column.total.to_string()),
+        ],
+      ),
     )
   } else {
     (
@@ -369,18 +398,19 @@ fn empty(ctx: &Ctx, shared: &Shared<'_>, column: &ColumnModel) -> Column {
   };
   let clear = (shared.filtered && column.total > 0).then(|| {
     let clear = shared.clear.clone();
-    pressable(move || clear())
-      .id(format!("{id}-clear"))
-      .child(
-        Text::new(&ctx.t("tasks.board.column.noMatch.clear"))
-          .variant(TypographyStyle::Description)
-          .nowrap(),
-      )
+    pressable(move || clear()).id(format!("{id}-clear")).child(
+      Text::new(&ctx.t("tasks.board.column.noMatch.clear"))
+        .variant(TypographyStyle::Description)
+        .nowrap(),
+    )
   });
   Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), ExtraSpacing::SettingsHead.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Inset.role(),
+      ExtraSpacing::SettingsHead.role(),
+    ))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)

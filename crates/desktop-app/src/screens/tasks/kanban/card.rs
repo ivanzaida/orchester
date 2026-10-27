@@ -111,7 +111,12 @@ impl CardModel {
       points: row.estimate.as_ref().map(|estimate| points_chip(ctx, estimate)),
       waits: need.is_some(),
       highlighted: source.highlight == Some(&*row.key),
-      latest_run: source.tasks.phases.get(&row.id).and_then(|latest| latest.run()).map(|run| run.id),
+      latest_run: source
+        .tasks
+        .phases
+        .get(&row.id)
+        .and_then(|latest| latest.run())
+        .map(|run| run.id),
       pipeline: match &row.pipeline {
         PipelineLabel::Published { name, .. } => name.clone(),
         other => message_text(ctx, &other.message()),
@@ -196,7 +201,12 @@ pub struct CardLook {
 }
 
 /// The card's parts in a column: what it shows, with `more` (its *More actions*) at the top's end while acting.
-pub fn content(ctx: &mut Ctx, card: &CardModel, (display, look): (&Display, CardLook), more: Option<Element>) -> Column {
+pub fn content(
+  ctx: &mut Ctx,
+  card: &CardModel,
+  (display, look): (&Display, CardLook),
+  more: Option<Element>,
+) -> Column {
   let key = &card.row.key;
   let top = Row::new()
     .width(Dimension::Pct(100.0))
@@ -300,10 +310,13 @@ fn chips(ctx: &Ctx, card: &CardModel, display: &Display) -> Option<Row> {
   if display.shows(Property::Priority) {
     let (glyph, word, color) = priority_look(card.row.organization.priority());
     chips.push(
-      chip(format!("task-priority-{key}"), Padding::horizontal(ExtraSpacing::Fine.role()))
-        .describe("a11y_name", ctx.t(word))
-        .child(icon(glyph, IconSize::Sm, color))
-        .into(),
+      chip(
+        format!("task-priority-{key}"),
+        Padding::horizontal(ExtraSpacing::Fine.role()),
+      )
+      .describe("a11y_name", ctx.t(word))
+      .child(icon(glyph, IconSize::Sm, color))
+      .into(),
     );
   }
   if let Some(points) = card.points.as_ref().filter(|_| display.shows(Property::Points)) {
