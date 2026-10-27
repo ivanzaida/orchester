@@ -3,10 +3,11 @@
 //! fact: a run is told as it stands in its record, an action as its entry kept it.
 //!
 //! - *Merged*: the tasks whose run Orchester merged that day, in the order they were merged, each with who merged it:
-//!   the Orchestrator chat when it carried the merge out itself (on its own, ORC-69, or as asked), else a person.
+//!   the Orchestrator chat when it carried the merge out itself (on its own, ORC-69, or as asked), else a person. A
+//!   merge without Orchester has no time: it is never the day's.
 //! - *Ready*, *stopped*, *at work*: each task's latest run as it stands when the report is read: succeeded and not
-//!   merged; failed, stopped at a limit, waiting for a decision or interrupted, with how; or running. A pause the
-//!   person asked for and a cancel are neither.
+//!   merged, in Orchester or, as git proves, without it; failed, stopped at a limit, waiting for a decision or
+//!   interrupted, with how; or running. A pause the person asked for and a cancel are neither.
 //! - *Queued*: the queued tasks whose run has not started, in the order the project lists them.
 //! - *Waits for the person* ([`super::waiting`]), *usage* ([`super::usage`]).
 //! - *The Orchestrator's actions*: what it did itself that day (done, never settled by a person), and what a person
@@ -107,7 +108,7 @@ fn place(report: &mut DailyReport, facts: &DayFacts, (project, task): (ProjectId
   match run.status() {
     RunStatus::Pending => report.queued.push(report_task(project, &task.task)),
     RunStatus::Running => report.working.push(told(None, None)),
-    RunStatus::Succeeded if !task.merged(run.id()) => report.ready.push(told(None, ended)),
+    RunStatus::Succeeded if !task.merged(run.id()) && !task.merged_outside => report.ready.push(told(None, ended)),
     RunStatus::Succeeded | RunStatus::Cancelled | RunStatus::Paused(PauseReason::Requested) => {}
     _ => {
       if let Some(end) = end_of(run) {
