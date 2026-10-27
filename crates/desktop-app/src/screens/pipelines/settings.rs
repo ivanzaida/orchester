@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Row, Text},
+  components::{Column, Row, Text},
   core::{Ref, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -80,12 +80,8 @@ impl Component for Settings {
     self.locked.set(props.locked);
     let editing = props.state.get();
     let changed = changed(&editing);
-    let mut pane = parts::pane("pipeline-settings-page");
-    if changed.count() > 0 {
-      pane = pane.child(strip(ctx, &props.state, (changed.count(), props.locked)));
-    }
     let general = self.general(ctx, &props, &editing, changed.description);
-    pane
+    let pane = parts::pane("pipeline-settings-page")
       .child(general)
       .child(runs(ctx))
       .child(super::sources::settings_section(ctx, &props.state, props.locked))
@@ -94,7 +90,16 @@ impl Component for Settings {
         &props.state,
         (props.locked, changed.delivers),
       ))
-      .child(deliver_step(ctx, &editing))
+      .child(deliver_step(ctx, &editing));
+    // The strip spans the page above the pane, as the viewed version's banner does (`uHJyF` in `A29iv`).
+    Column::new()
+      .id("pipeline-settings-tab")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Lg)
+      .with_children(
+        (changed.count() > 0).then(|| strip(ctx, &props.state, (changed.count(), props.locked))),
+      )
+      .child(pane)
   }
 }
 
