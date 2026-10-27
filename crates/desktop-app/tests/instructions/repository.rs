@@ -32,6 +32,14 @@ fn instructions_findings_and_import_refuse_external_skill_tree_without_exposing_
   screen.until("automatic refusal", |s| s.exists("instructions-repository-error"));
   assert!(!screen.exists("instructions-repository-findings"));
   assert!(!screen.text("screen-instructions").contains("PRIVATE"));
+  // The findings' box holds one row with Try again in place of its rows; the rest of the page works.
+  let row = screen.text("instructions-repository-error");
+  assert!(row.contains("Try again"), "{row}");
+  assert!(screen.exists("instructions-empty-new") && screen.exists("instructions-empty-import"));
+  screen.click("instructions-repository-error-retry");
+  screen.until("read again and refused again", |s| {
+    s.exists("instructions-repository-error") && !s.text("instructions-repository-error").contains("Trying again")
+  });
   screen.click("instructions-import");
   screen.until("import refusal", |s| s.exists("instruction-import-error"));
   assert!(!screen.exists("instruction-import-create"));

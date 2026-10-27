@@ -8,6 +8,7 @@ mod blocks;
 mod buttons;
 mod chat_links;
 mod choices;
+mod failure;
 mod fields;
 mod harness;
 mod icons;

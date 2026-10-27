@@ -21,24 +21,17 @@ use lurq::{
   },
   components::Column,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ResourceId;
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-  tasks::outside::Outside,
-  tools::editor::EditorData,
-};
+use orchester_workspace::{background, messages, tasks::outside::Outside, tools::editor::EditorData};
 
 use crate::{
   project::{ShownProject, own::OwnChanges},
   routes::ProjectPage,
   screens::hub::{self, Head, HubTab},
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  theme::HubSpacing,
+  ui::{failure::LastFailure, state::loading},
 };
 
 #[derive(Clone, PartialEq)]
@@ -58,6 +51,8 @@ struct ToolsScreen {
   /// Add tool's menu in the head.
   menu: Signal<bool>,
   anchor: ElementRef,
+  /// Why the tools couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
 impl Component for ToolsScreen {
   type Props = Props;
@@ -69,6 +64,7 @@ impl Component for ToolsScreen {
       tools: OwnChanges::new(ctx, &[Outside::Tools]),
       menu: ctx.signal(false),
       anchor: ctx.element_ref(),
+      failure: LastFailure::default(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -109,29 +105,36 @@ impl ToolsScreen {
       .state()
       .get();
     let frame = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
-    let error = reading.error.as_ref().filter(|_| !reading.is_pending());
-    if matches!(props.page, ProjectPage::Tools)
-      && let Some(error) = error
-    {
-      return frame
-        .child(library::list(ctx, &props.project, Err(error), &self.retry))
-        .into();
-    }
+    let retry = self.retry.clone();
+    let what = ctx.t("tools.loadFailed");
+    let failure = hub::read_failure(
+      ctx,
+      &props.project,
+      (HubTab::Tools, "tools-load-error", &what),
+      self.failure.follow(&reading),
+      move || retry.update(|r| *r += 1),
+    );
     // A tool's page keeps showing while its own save is read again; after Reload it waits for the new read.
     let reset = self.reset_at.get();
     let current = reading
       .data
       .filter(|(read_id, read_revision, _)| *read_id == id && *read_revision >= reset);
-    let Some((_, _, data)) = current else {
-      return match error {
-        Some(error) => frame.child(self.failed(ctx, error)),
-        None => frame.child(loading("tools-loading", &ctx.t("tools.reading"))),
+    let (failure, data) = match (failure, current) {
+      (Some(failure), current) if current.is_none() || matches!(props.page, ProjectPage::Tools) => {
+        return hub::list_body("tools-failed", failure.page(ctx));
       }
-      .into();
+      (_, None) => return frame.child(loading("tools-loading", &ctx.t("tools.reading"))).into(),
+      (failure, Some((_, _, data))) => (failure, data),
     };
     let child = self.content(ctx, props, data, id);
     frame
-      .with_children(error.map(|error| self.failed(ctx, error)))
+      .with_children(failure.map(|failure| {
+        // What was read stays under it.
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::new().left(HubSpacing::Side.role()).right(HubSpacing::Side.role()).top(HubSpacing::BodyTop.role()))
+          .child(failure.page(ctx))
+      }))
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
@@ -143,7 +146,7 @@ impl ToolsScreen {
   }
   fn content(&self, ctx: &mut Ctx, props: Props, data: EditorData, id: Option<ResourceId>) -> Element {
     match props.page {
-      ProjectPage::Tools => library::list(ctx, &props.project, Ok(&data.listed), &self.retry),
+      ProjectPage::Tools => library::list(ctx, &props.project, &data.listed),
       ProjectPage::NewTool | ProjectPage::Tool(..) => {
         if id.is_some_and(|id| data.listed.tool(id).is_none()) {
           return crate::ui::notice::Notice::new(
@@ -179,15 +182,6 @@ impl ToolsScreen {
       }
       _ => unreachable!("Tools mounts only its own pages"),
     }
-  }
-  fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
-    let retry = self.retry.clone();
-    load_error(
-      ctx,
-      "tools-load-error",
-      (&ctx.t("tools.loadFailed"), &message_text(ctx, error)),
-      move || retry.update(|r| *r += 1),
-    )
   }
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {

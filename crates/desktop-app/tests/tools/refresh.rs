@@ -116,9 +116,11 @@ fn refresh(t: &Tools) {
     .outside
     .update(|c| c.tools += 1);
 }
+/// Waits until the read failed and is no longer under way: the card stays while it reads again.
 fn wait_failed(t: &mut Tools) {
   t.window.until("failed Tools refresh", |w| {
-    w.tree.get_element_by_id("tools-load-error").is_some()
+    w.texts("tools-load-error-retry")
+      .is_some_and(|label| !label.join(" ").contains("Trying again"))
   });
 }
 fn assert_fields(t: &mut Tools, values: &[(&str, &str)]) {

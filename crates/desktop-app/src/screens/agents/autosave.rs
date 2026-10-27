@@ -47,6 +47,7 @@ pub struct Autosave {
   pub held: Ref<bool>,
   /// The project's profiles and connections as last read, which the fields make a profile with.
   pub listed: Ref<Option<ProjectAgents>>,
+  source: Source,
 }
 
 impl Autosave {
@@ -68,28 +69,40 @@ impl Autosave {
       let rest = rest.clone();
       move || rest.run(())
     });
-    let reading = listed.clone();
+    let (reading, saving) = (listed.clone(), source.clone());
     ctx.watch(&rest.state(), move |state| {
       if state.is_fulfilled()
         && let Some(listed) = reading.get()
       {
-        save(&source, &listed);
+        save(&saving, &listed, false);
       }
     });
-    Self { rest, held, listed }
+    Self {
+      rest,
+      held,
+      listed,
+      source,
+    }
   }
 
   /// Rests again, so that what was edited while a write was under way is saved after it.
   pub fn again(&self) {
     self.rest.run(());
   }
+
+  /// Saves now what a failed save left unsaved: the person pressed Try again.
+  pub fn retry(&self) {
+    if let Some(listed) = self.listed.get() {
+      save(&self.source, &listed, true);
+    }
+  }
 }
 
 /// Saves the fields as the draft of the saved profile, unless they are invalid or unchanged, a write is under way or
-/// failed, or a question waits.
-fn save(source: &Source, listed: &ProjectAgents) {
+/// failed (unless `after_failure`: Try again), or a question waits.
+fn save(source: &Source, listed: &ProjectAgents, after_failure: bool) {
   let writing = source.work.state().get_untracked();
-  if writing.is_pending() || writing.is_rejected() || source.pending.get_untracked().0.is_some() {
+  if writing.is_pending() || (writing.is_rejected() && !after_failure) || source.pending.get_untracked().0.is_some() {
     return;
   }
   let (Ok(profile), Some(entry)) = (source.fields.profile_untracked(listed), source.saved.get_untracked().0) else {

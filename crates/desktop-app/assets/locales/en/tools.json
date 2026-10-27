@@ -138,7 +138,6 @@
     "confirm": "Confirm",
     "changed": "The stored tool changed while you were editing. Reload it before saving.",
     "reload": "Reload tool",
-    "loadFailedDetail": "Reading the tools from the project database failed: {{cause}} No tool was changed. The list appears once it can be read.",
     "addCommand": "Add command tool",
     "databaseQuery": "Database query",
     "importMcp": "Import from MCP",

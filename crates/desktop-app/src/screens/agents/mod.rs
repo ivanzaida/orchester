@@ -37,10 +37,7 @@ use crate::{
   project::{ShownProject, own::OwnChanges},
   routes::{AgentTab, ProjectPage, Route},
   screens::hub::{self, Head, HubTab},
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  ui::{failure::LastFailure, state::loading},
 };
 
 /// What the route shows of the profiles: their list, a new profile, or one profile. The tab a route names is kept
@@ -107,6 +104,8 @@ pub struct AgentsScreen {
   retry: Signal<u64>,
   /// The profile changes, the screen's own too.
   profiles: OwnChanges,
+  /// Why the profiles couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, shown: Shown) -> Element {
   ctx.mount_keyed::<AgentsScreen>(
@@ -129,6 +128,7 @@ impl Component for AgentsScreen {
       revision: ctx.signal(0),
       retry: ctx.signal(0),
       profiles: OwnChanges::new(ctx, &[Outside::Profiles]),
+      failure: LastFailure::default(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -160,23 +160,27 @@ impl Component for AgentsScreen {
       })
       .state()
       .get();
+    let failed = self.failure.follow(&loaded);
+    let retry = self.retry.clone();
+    let what = ctx.t("agents.loadFailed");
+    let failure = hub::read_failure(
+      ctx,
+      &project,
+      (HubTab::Profiles, "agents-load-error", &what),
+      failed.clone(),
+      move || retry.update(|n| *n += 1),
+    );
+    if let Some(failure) = failure
+      && (loaded.data.is_none() || shown == Shown::List)
+    {
+      let body = hub::list_body("agents-failed", failure.page(ctx));
+      return frame(ctx, &project, Head::default(), body);
+    }
     if loaded.is_pending() && loaded.data.as_ref().is_none_or(|(saved, _)| *saved != revision) {
       let body = loading("agents-loading", &ctx.t("agents.reading"));
       return frame(ctx, &project, Head::default(), body);
     }
-    let error = loaded.error.clone().filter(|_| loaded.is_rejected());
-    if let Some(error) = &error
-      && (loaded.data.is_none() || shown == Shown::List)
-    {
-      let retry = self.retry.clone();
-      let body = load_error(
-        ctx,
-        "agents-load-error",
-        (&ctx.t("agents.loadFailed"), &message_text(ctx, error)),
-        move || retry.update(|n| *n += 1),
-      );
-      return frame(ctx, &project, Head::default(), body);
-    }
+    let error = failed.filter(|(_, retrying)| !retrying).map(|(error, _)| error);
     let reading = loaded.is_pending();
     let Some((_, listed)) = loaded.data else {
       let body = loading("agents-loading", &ctx.t("agents.reading"));

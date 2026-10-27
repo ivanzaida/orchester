@@ -4,13 +4,11 @@
 use lurq::{
   app::ctx::Ctx,
   components::Column,
-  core::Signal,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ProjectId, resource::ToolAction};
 use orchester_workspace::{
   agents::data::VersionState,
-  messages::Message,
   tools::data::{ProjectTools, ToolEntry},
 };
 
@@ -27,33 +25,15 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    message::message_text,
     pressable::Press,
-    state::load_error,
   },
 };
 
-pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: Result<&ProjectTools, &Message>, retry: &Signal<u64>) -> Element {
+pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectTools) -> Element {
   let mut pane = Column::new()
     .id("tools-library")
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Sections.role());
-  let listed = match listed {
-    Ok(listed) => listed,
-    Err(error) => {
-      let retry = retry.clone();
-      pane = pane.child(load_error(
-        ctx,
-        "tools-load-error",
-        (
-          &ctx.t("tools.loadFailed"),
-          &ctx.t_args("tools.loadFailedDetail", [("cause", message_text(ctx, error))]),
-        ),
-        move || retry.update(|r| *r += 1),
-      ));
-      return hub::list_body("tools-list-page", pane);
-    }
-  };
   let (id, nav) = (project.open.project.id(), Navigation::of(ctx));
   let rows: Vec<Element> = if listed.tools.is_empty() {
     vec![empty(ctx, &nav, id)]

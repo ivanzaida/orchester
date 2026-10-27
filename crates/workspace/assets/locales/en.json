@@ -1111,6 +1111,7 @@
     "databaseLocked": "database is locked.",
     "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
+    "repositoryUnreadable": "The repository's agent files couldn't be read. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
     "dataFolderInUse": "Another Orchester window is using this data folder. Switch to that window, or close it and start Orchester again.",
     "dataFolderNotWritable": "Orchester cannot write to its data folder. The log has the system's reason.",

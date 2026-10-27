@@ -64,6 +64,30 @@
       "inReview": "In review",
       "done": "Done",
       "canceled": "Canceled"
+    },
+    "failure": {
+      "tryAgain": "Try again",
+      "tryingAgain": "Trying again…",
+      "openLog": "Open log",
+      "details": "Details",
+      "copyDetails": "Copy details",
+      "still": "Still can't be read",
+      "triesOne": "Tried once · at {{time}}",
+      "triesOther": "Tried {{count}} times · last at {{time}}",
+      "kind": "{{kind}} · {{message}}",
+      "why": {
+        "storage": "The project's database couldn't be read, so this can't be shown. Nothing was changed.",
+        "interrupted": "The read stopped before it finished, so this can't be shown. Nothing was changed.",
+        "other": "{{reason}} Nothing was changed."
+      },
+      "row": "Couldn't be read · {{reason}}",
+      "rowUnnamed": "An item couldn't be read",
+      "notSaved": "A change was not saved",
+      "notSavedRetry": "· Try again",
+      "fieldNotSaved": "Not saved: {{reason}} Your value is kept here.",
+      "busyTitle": "The project's database is busy",
+      "waitingSince": "Showing what was read at {{time}}. Orchester tries again on its own.",
+      "waiting": "Orchester tries again on its own; nothing was changed."
     }
   }
 }

@@ -21,12 +21,14 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
+use orchester_workspace::messages::Message;
 
 pub(crate) use self::tabs::HubTab;
 use crate::{
   project::ShownProject,
   routes::{InstructionsView, ProjectPage, Route, SkillsFilter},
   theme::HubSpacing,
+  ui::failure::{Failure, is_transient},
 };
 
 /// The pane's width (`Pane` `V7baZg`, `rA12N`); narrower when the window leaves less.
@@ -48,6 +50,37 @@ impl HubTab {
       },
     )
   }
+
+  /// The tab's bit in `ProjectFeed::hub_unread`.
+  pub(crate) const fn bit(self) -> u8 {
+    match self {
+      Self::Profiles => 1,
+      Self::Instructions => 2,
+      Self::Skills => 4,
+      Self::Tools => 8,
+      Self::Memory => 16,
+    }
+  }
+}
+
+/// How the read of `tab`'s own data stands, as `failed` says (`LastFailure::follow`): while it failed the tab shows no
+/// count, and its content is the failure (`Failure states · redesign` `SsC16`) saying `what` couldn't be read, with
+/// Try again running `retry` and Open log opening the project's runner log.
+pub(crate) fn read_failure(
+  ctx: &Ctx,
+  project: &ShownProject,
+  (tab, id, what): (HubTab, &str, &str),
+  failed: Option<(Message, bool)>,
+  retry: impl Fn() + Send + Sync + 'static,
+) -> Option<Failure> {
+  project.feed.mark_hub_unread(tab.bit(), failed.as_ref().is_some_and(|(error, _)| !is_transient(error)));
+  let (error, retrying) = failed?;
+  Some(
+    Failure::new(id, what, error)
+      .retry(retrying, retry)
+      .log(project.open.repo_root.clone())
+      .still_works(ctx.t("hub.failure.stillWorks")),
+  )
 }
 
 /// What the head shows at its right for the open tab: its save state, then its actions.

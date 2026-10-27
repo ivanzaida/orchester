@@ -35,7 +35,7 @@ use lurq::{
   },
   components::Column,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{background, instructions::data::ProjectInstructions, messages, tasks::outside::Outside};
 use state::{Selection, Tab, View};
@@ -43,11 +43,12 @@ use state::{Selection, Tab, View};
 use crate::{
   project::ShownProject,
   screens::hub::{self, Head, HubTab},
+  theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
+    failure::LastFailure,
     icon::Icon,
-    message::message_text,
-    state::{load_error, loading},
+    state::loading,
   },
 };
 
@@ -61,6 +62,8 @@ pub struct InstructionsScreen {
   /// recorded.
   reloads: Signal<u64>,
   leave: crate::navigation::guard::LeaveGuard,
+  /// Why the instructions couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: View) -> Element {
   ctx.mount_keyed::<InstructionsScreen>(
@@ -93,6 +96,7 @@ impl Component for InstructionsScreen {
       retry: ctx.signal(0),
       reloads: ctx.signal(0),
       leave,
+      failure: LastFailure::default(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -121,19 +125,35 @@ impl Component for InstructionsScreen {
       .get();
     let view = ctx.props::<Props>().1;
     let head = self.head(ctx, view);
+    let retry = self.retry.clone();
+    let what = ctx.t("instructions.loadFailed");
+    let failure = hub::read_failure(
+      ctx,
+      &project,
+      (HubTab::Instructions, "instructions-load-error", &what),
+      self.failure.follow(&read),
+      move || retry.update(|v| *v += 1),
+    );
+    let failure = match failure {
+      Some(failure) if read.data.is_none() => {
+        let body = hub::list_body("instructions-failed", failure.page(ctx));
+        return frame(ctx, &project, head, body);
+      }
+      failure => failure,
+    };
     if read.is_pending() && read.data.is_none() {
       let body = loading("instructions-loading", &ctx.t("instructions.reading"));
       return frame(ctx, &project, head, body.into());
     }
     let mut page = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
-    if let Some(error) = read.error.clone().filter(|_| read.is_rejected()) {
-      let retry = self.retry.clone();
-      page = page.child(load_error(
-        ctx,
-        "instructions-load-error",
-        (&ctx.t("instructions.loadFailed"), &message_text(ctx, &error)),
-        move || retry.update(|v| *v += 1),
-      ));
+    if let Some(failure) = failure {
+      // What was read stays under it.
+      page = page.child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::new().left(HubSpacing::Side.role()).right(HubSpacing::Side.role()).top(HubSpacing::BodyTop.role()))
+          .child(failure.page(ctx)),
+      );
     }
     let reading = read.is_pending();
     if let Some(data) = read.data {

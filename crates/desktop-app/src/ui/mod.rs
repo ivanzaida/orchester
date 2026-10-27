@@ -22,6 +22,7 @@ pub mod command_trigger;
 pub mod composer;
 pub mod detail_row;
 pub mod enforcement_row;
+pub mod failure;
 pub mod field;
 pub mod filter;
 pub mod form_section;

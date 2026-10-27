@@ -2,6 +2,8 @@
 //! name and responsibility fields and the role instructions inline, then the connection, the model and the reasoning
 //! effort as dropdowns of one width (01d). *Other model id…* opens the Model id row under Model (01e); a model that
 //! lists no efforts has no effort row.
+use std::sync::Arc;
+
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::Column,
@@ -9,7 +11,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{AgentConnection, ProviderEffortError, provider_effort},
-  resource::ModelId,
+  resource::{AgentProfile, ModelId},
 };
 use orchester_workspace::agents::{data::ProjectAgents, form::effort_options};
 
@@ -29,24 +31,41 @@ use crate::{
 /// A field's and a dropdown's width at a row's end (`vxuTD` in `BzwDA`).
 const CONTROL_WIDTH: f32 = 260.0;
 
-pub(super) fn role(ctx: &mut Ctx, fields: &Fields) -> Element {
-  let name = FieldInput::new("agent-role", ctx.t("agents.role"), fields.role.clone())
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .render(ctx);
-  let responsibility = FieldInput::new(
-    "agent-responsibility",
-    ctx.t("agents.responsibility"),
-    fields.responsibility.clone(),
+/// The Role section. With `unsaved`, a save failed: each field whose value differs from the saved `profile` keeps it
+/// with the `danger` stroke and the hint under it.
+pub(super) fn role(ctx: &mut Ctx, fields: &Fields, unsaved: Option<(&AgentProfile, Arc<str>)>) -> Element {
+  let (saved, unsaved_hint) = unsaved.unzip();
+  let hint = |differs: bool| unsaved_hint.clone().filter(|_| differs);
+  let (role, responsibility, instructions) = (
+    fields.role.get(),
+    fields.responsibility.get(),
+    fields.instructions.get(),
+  );
+  let name = with_hint(
+    FieldInput::new("agent-role", ctx.t("agents.role"), fields.role.clone()).width(Dimension::Px(CONTROL_WIDTH)),
+    hint(saved.is_some_and(|p| p.role().as_str() != role)),
   )
-  .width(Dimension::Px(CONTROL_WIDTH))
   .render(ctx);
-  let instructions = FieldInput::new(
-    "agent-instructions",
-    ctx.t("agents.instructions"),
-    fields.instructions.clone(),
+  let responsibility = with_hint(
+    FieldInput::new(
+      "agent-responsibility",
+      ctx.t("agents.responsibility"),
+      fields.responsibility.clone(),
+    )
+    .width(Dimension::Px(CONTROL_WIDTH)),
+    hint(saved.is_some_and(|p| p.responsibilities() != responsibility)),
   )
-  .text_area()
-  .mono()
+  .render(ctx);
+  let instructions = with_hint(
+    FieldInput::new(
+      "agent-instructions",
+      ctx.t("agents.instructions"),
+      fields.instructions.clone(),
+    )
+    .text_area()
+    .mono(),
+    hint(saved.is_some_and(|p| p.instructions().as_str() != instructions)),
+  )
   .render(ctx);
   let rows = [
     field("agent-role", &ctx.t("agents.role"), Some(&ctx.t("agents.roleHint")), name).into(),
@@ -71,6 +90,13 @@ pub(super) fn role(ctx: &mut Ctx, fields: &Fields) -> Element {
     boxed("agent-role-rows", rows),
   )
   .into()
+}
+
+fn with_hint(input: FieldInput, hint: Option<Arc<str>>) -> FieldInput {
+  match hint {
+    Some(hint) => input.error(hint),
+    None => input,
+  }
 }
 
 pub(super) fn connection_model(ctx: &mut Ctx, fields: &Fields, listed: &ProjectAgents, asked: Option<Element>) -> Element {

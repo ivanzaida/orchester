@@ -40,6 +40,7 @@ use crate::{
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    failure::{Failure, field_hint, not_saved},
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
@@ -188,9 +189,14 @@ impl Editor {
     }
   }
 
-  /// *Saving…*, *Draft saved* or *All changes saved* at the head's right.
+  /// *Saving…*, *Draft saved* or *All changes saved* at the head's right; *A change was not saved · Try again* after a
+  /// save failed.
   fn saved_state(&self, ctx: &Ctx, state: &State) -> Option<Element> {
     let entry = state.saved.as_ref()?;
+    if !state.busy && !state.changed_outside && self.save_failure().is_some() {
+      let again = self.autosave.clone();
+      return Some(not_saved(ctx, "agent-save-status", move || again.retry()));
+    }
     let (glyph, key) = if state.busy || (state.dirty && state.checked.is_ok()) {
       (Icon::LoaderCircle, "hub.saving")
     } else if state.dirty {
@@ -238,7 +244,13 @@ impl Editor {
       None => (None, None),
     };
     let connection_asked = if section == Some(Section::Connection) { asked.take() } else { None };
-    let role = model::role(ctx, &self.fields);
+    // A change that wasn't saved stays in its field, which says so.
+    let unsaved = self
+      .save_failure()
+      .filter(|_| !state.changed_outside)
+      .zip(state.saved.as_ref())
+      .map(|(error, entry)| (&entry.profile, field_hint(ctx, &error)));
+    let role = model::role(ctx, &self.fields, unsaved);
     let connection = model::connection_model(ctx, &self.fields, &props.listed, connection_asked);
     let context = Context {
       fields: &self.fields,
@@ -425,16 +437,16 @@ impl Editor {
     })
   }
 
-  fn notices(&self, ctx: &Ctx, props: &Props, state: &State) -> Vec<Element> {
+  fn notices(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Vec<Element> {
     let mut notices = Vec::new();
     if let Some(error) = &props.load_error {
       let retry = props.retry.clone();
-      notices.push(crate::ui::state::load_error(
-        ctx,
-        "agents-load-error",
-        (&ctx.t("agents.loadFailed"), &message_text(ctx, error)),
-        move || retry.update(|n| *n += 1),
-      ));
+      notices.push(
+        Failure::new("agents-load-error", ctx.t("agents.loadFailed"), error.clone())
+          .retry(props.reading, move || retry.update(|n| *n += 1))
+          .log(props.project.open.repo_root.clone())
+          .page(ctx),
+      );
     }
     if let Err(errors) = &state.checked
       && (state.saved.is_some() || self.tried.get())
@@ -446,8 +458,7 @@ impl Editor {
         notices.push(field_error("agent-validation-error", &message_text(ctx, error)).into());
       }
     }
-    let write = self.work.state().get();
-    let failure = write.error.clone().filter(|_| write.is_rejected());
+    let failure = self.save_failure();
     if state.changed_outside || failure.is_some() {
       let text = failure.map_or_else(|| ctx.t("agents.outsideChange"), |error| message_text(ctx, &error));
       let revision = props.revision.clone();
@@ -468,6 +479,12 @@ impl Editor {
       );
     }
     notices
+  }
+
+  /// Why the last save failed, while it is the last word of the page's writes.
+  fn save_failure(&self) -> Option<Message> {
+    let write = self.work.state().get();
+    write.error.clone().filter(|_| write.is_rejected())
   }
 
   /// Why Open pipeline waits now.

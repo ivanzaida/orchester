@@ -148,7 +148,7 @@ fn agents_failed_refetch_replaces_retained_data_and_retry_restores_it() {
   screen.until("failed refetch", |s| s.exists("agents-load-error"));
   assert!(!screen.exists(&format!("agent-{id}")), "stale profile is hidden");
   assert!(!screen.exists("agents-new"));
-  assert!(screen.text("agents-load-error").contains("could not"));
+  assert!(screen.text("agents-load-error").contains("couldn't be read"));
   db.execute("UPDATE resource_drafts SET body = ?1", [&body])
     .expect("restore fixture");
   screen.click("agents-load-error-retry");

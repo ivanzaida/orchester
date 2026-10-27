@@ -200,6 +200,33 @@ pub fn interrupted() -> Message {
   Message::new("errors.interrupted")
 }
 
+/// The repository's agent files could not be read; the cause is logged.
+pub fn repository_unreadable() -> Message {
+  Message::new("errors.repositoryUnreadable")
+}
+
+/// What kind of failure a message names, so a screen can say why in plain words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FailureKind {
+  /// The project's data could not be read or written ([`store_error`]'s storage failures).
+  Storage,
+  /// The database is busy: a wait that ends on its own.
+  Busy,
+  /// The work stopped before it finished ([`interrupted`]).
+  Interrupted,
+  /// Anything else; its own words say why.
+  Other,
+}
+
+pub fn failure_kind(message: &Message) -> FailureKind {
+  match message.key {
+    "errors.storage" => FailureKind::Storage,
+    "errors.databaseLocked" => FailureKind::Busy,
+    "errors.interrupted" => FailureKind::Interrupted,
+    _ => FailureKind::Other,
+  }
+}
+
 /// A task was changed since it was read, so a change made on what was read was not saved.
 pub fn task_changed_meanwhile() -> Message {
   Message::new("tasks.conflict.changedMeanwhile")

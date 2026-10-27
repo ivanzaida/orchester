@@ -188,7 +188,10 @@ impl Editor {
       retry
     };
     Some(
-      Notice::new("skill-save-error", NoticeTone::Danger, title)
+      // What was typed stays: the `danger` icon only, no red fill (`SsC16`).
+      Notice::new("skill-save-error", NoticeTone::Info, title)
+        .icon(Icon::CircleAlert)
+        .mark(lurq::app::theme::PaletteColor::Danger)
         .body(message_text(ctx, error))
         .action(retry)
         .action(reload)

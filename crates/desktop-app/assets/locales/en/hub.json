@@ -45,6 +45,9 @@
       "sentence": "Saved drafts are kept. Changes that have not saved will be left behind.",
       "keep": "Keep editing",
       "leave": "Leave editor"
+    },
+    "failure": {
+      "stillWorks": "Runs keep going, and the other tabs that read their own data still open."
     }
   }
 }

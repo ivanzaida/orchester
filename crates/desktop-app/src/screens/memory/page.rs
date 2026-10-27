@@ -27,9 +27,8 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    message::message_text,
     notice::{Notice, NoticeTone},
-    state::{load_error, loading},
+    state::loading,
   },
 };
 
@@ -65,18 +64,25 @@ fn content(
   let pane = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Row.role());
+  let failed = match &read {
+    Read::Failed(reason, retrying) => Some((reason.clone(), *retrying)),
+    Read::Reading | Read::Ready(_) => None,
+  };
+  let again = retries.clone();
+  let what = ctx.t("memory.loadFailed");
+  let failure = hub::read_failure(
+    ctx,
+    project,
+    (HubTab::Memory, "memory-load-error", &what),
+    failed,
+    move || again.update(|count| *count += 1),
+  );
+  if let Some(failure) = failure {
+    let failure = failure.still_works(ctx.t("memory.loadStillWorks"));
+    return hub::list_body("memory-failed", failure.page(ctx));
+  }
   let memory = match read {
-    Read::Reading => return loading("memory-loading", &ctx.t("memory.reading")).into(),
-    Read::Failed(reason) => {
-      let retries = retries.clone();
-      let body = ctx.t_args("memory.loadFailedBody", [("reason", message_text(ctx, &reason))]);
-      return load_error(
-        ctx,
-        "memory-load-error",
-        (&ctx.t("memory.loadFailed"), &body),
-        move || retries.update(|count| *count += 1),
-      );
-    }
+    Read::Reading | Read::Failed(..) => return loading("memory-loading", &ctx.t("memory.reading")).into(),
     Read::Ready(memory) => memory,
   };
   let Some(view) = view else {
@@ -133,7 +139,10 @@ pub(crate) fn unreadable(ctx: &Ctx, count: usize) -> Element {
   } else {
     ctx.t_args("memory.unreadable.other", [("count", count.to_string())])
   };
-  Notice::new("memory-unreadable", NoticeTone::Danger, title)
+  // What was read stays: information with the `danger` icon, not a red fill (`SsC16`).
+  Notice::new("memory-unreadable", NoticeTone::Info, title)
+    .icon(Icon::CircleAlert)
+    .mark(lurq::app::theme::PaletteColor::Danger)
     .body(ctx.t("memory.unreadable.body"))
     .into()
 }

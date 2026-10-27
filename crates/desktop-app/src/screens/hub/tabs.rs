@@ -128,12 +128,17 @@ impl Component for HubTabs {
       })
       .state()
       .get();
-    if let Some(counts) = read.data.filter(|_| !read.is_pending())
-      && feed.hub_counts.get_untracked() != Some(counts)
+    if let Some(counts) = read.fulfilled_data()
+      && feed.hub_counts.get_untracked() != Some(*counts)
     {
-      feed.hub_counts.set(Some(counts));
+      feed.hub_counts.set(Some(*counts));
+    }
+    // Counts that could not be read are hidden, not shown stale.
+    if read.is_rejected() && feed.hub_counts.get_untracked().is_some() {
+      feed.hub_counts.set(None);
     }
     let counts = feed.hub_counts.get();
+    let unread = feed.hub_unread.get();
     let navigation = Navigation::of(ctx);
     let id = project.open.project.id();
     let tabs: Vec<PageTab> = HubTab::ALL
@@ -143,7 +148,8 @@ impl Component for HubTabs {
         let tab_id = format!("agents-hub-tab-{}", choice.name());
         let open = PageTab::to(tab_id, label, choice == tab, navigation.to(choice.route(id)));
         match counts.map(|counts| choice.count(&counts)) {
-          Some((count, waits)) if count > 0 => open.count(count, waits),
+          // A tab whose own read failed shows no count.
+          Some((count, waits)) if count > 0 && unread & choice.bit() == 0 => open.count(count, waits),
           _ => open,
         }
       })

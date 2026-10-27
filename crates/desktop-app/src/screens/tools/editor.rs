@@ -297,11 +297,14 @@ impl ToolEditor {
     let state = self.action.state().get();
     let error = state.error.as_ref().filter(|_| !state.is_pending())?;
     Some(
+      // What was typed stays: the `danger` icon only, no red fill (`SsC16`).
       crate::ui::notice::Notice::new(
         "tool-save-error",
-        crate::ui::notice::NoticeTone::Danger,
+        crate::ui::notice::NoticeTone::Info,
         ctx.t("tools.saveFailed"),
       )
+      .icon(Icon::CircleAlert)
+      .mark(lurq::app::theme::PaletteColor::Danger)
       .body(message_text(ctx, error))
       .into(),
     )

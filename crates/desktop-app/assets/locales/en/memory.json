@@ -9,7 +9,7 @@
     "retry": "Try again",
     "personOnly": "Only a person changes memory here: input from an MCP client is refused, as what records say reaches every later agent. Clients can still read this page.",
     "loadFailed": "Memory couldn't be read",
-    "loadFailedBody": "{{reason}} Nothing was changed; agents keep working with what their prompts already hold.",
+    "loadStillWorks": "Agents keep working with what their prompts already hold.",
     "order": "Grouped by type · pinned first",
     "tabs": {
       "waiting": "Waiting for approval",
