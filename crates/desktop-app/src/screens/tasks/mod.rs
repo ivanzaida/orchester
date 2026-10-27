@@ -62,7 +62,10 @@ use self::{
   cache::{ListCache, Reading, Rows, RowsKey},
   facets::Options,
   header::{Choices, Header},
-  kanban::display::{Display, Layout},
+  kanban::{
+    display::{Display, Layout},
+    has_empty_columns,
+  },
   list::{Folded, Folding, Source},
   row::ItemProps,
   views::{Counts, label_key, list_view},
@@ -279,8 +282,10 @@ impl TasksScreen {
       if !found.is_empty() {
         return page.child(inset(not_shared::only_not_shared(ctx, (id, list), &found)));
       }
-      // A view the search and filters empty says so in the columns' place; an empty view shows its empty columns.
-      if self.display.get().layout == Layout::List || filtered {
+      // A view the search and filters empty says so in the columns' place; an empty view shows its empty columns, and
+      // says so too where it has none (Needs you, columns by pipeline).
+      let display = self.display.get();
+      if display.layout == Layout::List || filtered || !has_empty_columns(list.tab(), &display.columns) {
         return page.child(inset(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered)));
       }
     }

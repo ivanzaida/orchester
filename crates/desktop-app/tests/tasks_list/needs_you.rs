@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use orchester_app::routes::{TaskList, TaskListTab};
 
-use crate::harness::Seeded;
+use crate::{board::press, harness::Seeded};
 
 const BODY: &str = "This list shows tasks only. The Needs you panel lists everything that waits for you.";
 
@@ -194,4 +194,42 @@ fn tasks_needs_you_board_shows_only_the_waiting_cards() {
     !seeded.shows("tasks-board-column-backlog"),
     "a column without a waiting card stays away"
   );
+}
+
+/// Shows the board's rows by `lanes` through Display.
+fn rows_by(seeded: &mut Seeded, lanes: &str) {
+  press(seeded, "tasks-display");
+  press(seeded, "tasks-board-options-rows");
+  press(seeded, &format!("tasks-board-options-rows-{lanes}"));
+  seeded
+    .window
+    .tree
+    .key_down("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  seeded.until("Display closed", |seeded| !seeded.shows("tasks-board-options"));
+}
+
+/// Needs you on the board when nothing waits: the empty view's words, not a board without columns.
+fn says_needs_you_is_empty(seeded: &mut Seeded, lanes: &str) {
+  seeded.go(TaskList::new(TaskListTab::NeedsYou));
+  seeded.until("the empty view", |seeded| seeded.laid_out("tasks-no-rows-title"));
+  assert_eq!(
+    seeded.text("tasks-no-rows-title"),
+    "No tasks in this view.",
+    "rows by {lanes}"
+  );
+  assert!(!seeded.shows("tasks-board-columns"), "no blank board, rows by {lanes}");
+  assert!(!seeded.shows("tasks-board-lanes"), "no blank rows, rows by {lanes}");
+  assert!(seeded.shows("tasks-outside-tasks"), "the memory record is named");
+}
+
+#[test]
+fn tasks_needs_you_board_with_nothing_waiting_says_so_with_rows_too() {
+  // The seed's one task is done: All has a column, Needs you none.
+  let mut seeded = Seeded::board("memory-only", TaskList::new(TaskListTab::All));
+  says_needs_you_is_empty(&mut seeded, "none");
+  seeded.go(TaskList::new(TaskListTab::All));
+  seeded.until("the board", |seeded| seeded.laid_out("tasks-board-columns"));
+  rows_by(&mut seeded, "module");
+  seeded.until("the rows", |seeded| seeded.laid_out("tasks-board-lanes"));
+  says_needs_you_is_empty(&mut seeded, "module");
 }

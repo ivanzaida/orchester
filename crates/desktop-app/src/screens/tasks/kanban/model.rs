@@ -254,6 +254,16 @@ pub fn owns(view: TaskListTab, status: WorkflowStatus) -> bool {
   }
 }
 
+/// Whether the board of `view` has a column when the view holds no task: Needs you and columns by pipeline have none,
+/// so an empty view says so in their place.
+pub fn has_empty_columns(view: TaskListTab, columns: &Columns) -> bool {
+  match columns {
+    Columns::Status => WorkflowStatus::ALL.into_iter().any(|status| owns(view, status)),
+    Columns::Priority | Columns::Module => true,
+    Columns::Pipeline => false,
+  }
+}
+
 /// The column `row` belongs in.
 pub fn key_of(columns: &Columns, row: &TaskRow) -> ColumnKey {
   match columns {

@@ -54,6 +54,7 @@ use orchester_core::{
 };
 use orchester_workspace::tasks::{attention::NeedItem, close::Closing, data::ProjectTasks, list::TaskRow};
 
+pub use self::model::has_empty_columns;
 use self::{
   actions::BoardState,
   card::{CardModel, CardSource},
