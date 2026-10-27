@@ -1,12 +1,13 @@
 //! The board's questions, asked at the card and never in the board's layout, so nothing on it moves (`Popover · stop
 //! run` `XdfNz` in `04 Confirm in place` `ksvIz`, and the variants of `12 Moves and confirmations` `aUNO8`, `JUaF2`): a
-//! popover 340 wide under the card, its right edge on the column's, flipped to stay in the window. A move waits in its
-//! target column as the card at 50 % in a `border_focus` stroke (`KON-16` `y7FQj9`), its place in its own column kept
-//! as an outline; a question about a card that stays (*Delete KON-25?*) is asked at the card where it is, and one
-//! about the selected cards over the selection bar. The popover is `surface_raised` in a `border_strong` stroke,
-//! radius 10, 12 over and under its parts and 14 at its sides, 10 between them, lifted by the menu's shadow: a 15
-//! mark, the question in 13/600 and what it does in 12.5 `text_secondary`; *Enter confirms · Esc keeps it* 25 in; and
-//! its two buttons at its end. Esc, a press outside or the keep button put everything back; Enter confirms.
+//! popover 340 wide under the card, its right edge on the column's (its left in the first column), flipped to stay in
+//! the window. A move waits in its target column as the card at 50 % in a `border_focus` stroke (`KON-16` `y7FQj9`),
+//! its place in its own column kept as an outline; a question about a card that stays (*Delete KON-25?*) is asked at
+//! the card where it is, and one about the selected cards over the selection bar. The popover is `surface_raised` in a
+//! `border_strong` stroke, radius 10, 12 over and under its parts and 14 at its sides, 10 between them, lifted by the
+//! menu's shadow: a 15 mark, the question in 13/600 and what it does in 12.5 `text_secondary`; *Enter confirms · Esc
+//! keeps it* 25 in; and its two buttons at its end. Esc, a press outside or the keep button put everything back; Enter
+//! confirms.
 
 use std::sync::Arc;
 
@@ -111,9 +112,12 @@ pub fn panel(ctx: &mut Ctx, (state, closer): (&BoardState, &Closer)) -> Option<E
   Some(super::ask::ask_panel(ctx, (state, closer), &asked).into())
 }
 
-/// `panel` in its popover: at the card for a card's question, over the selection bar for the selected cards'.
-pub fn at_anchor(state: &BoardState, asking: &Asking, panel: Element) -> Element {
+/// `panel` in its popover: at the card for a card's question, over the selection bar for the selected cards'. Under a
+/// card it ends at the card's end, or, for a card in the board's first column (`first`), starts at its start, so it
+/// never covers the sidebar.
+pub fn at_anchor(state: &BoardState, (asking, first): (&Asking, bool), panel: Element) -> Element {
   let (anchor, side) = match asking {
+    Asking::Card { .. } if first => (state.question_anchor.clone(), PopoverSide::Below),
     Asking::Card { .. } => (state.question_anchor.clone(), PopoverSide::BelowEnd),
     Asking::Bulk => (state.bulk_anchor.clone(), PopoverSide::Above),
   };

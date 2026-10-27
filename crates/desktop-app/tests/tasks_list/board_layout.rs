@@ -275,6 +275,21 @@ fn tasks_board_layout_run_again_and_delete_ask_in_a_popover_at_the_card() {
   escape(&mut seeded);
   assert!(!seeded.shows("tasks-close-delete"));
   assert!(in_column(&mut seeded, "KON-15", "todo"));
+
+  // At a card of the first column, Backlog, it opens from the card's start, clear of the sidebar.
+  seeded.hover("task-card-KON-3");
+  press(&mut seeded, "task-more-KON-3");
+  press(&mut seeded, "task-menu-KON-3-delete");
+  seeded.until("the delete question", |seeded| {
+    seeded.laid_out("tasks-close-delete-title")
+  });
+  let (asked, card) = (seeded.bounds("tasks-close-delete"), seeded.bounds("task-card-KON-3"));
+  assert!(
+    (asked.x - card.x).abs() < 0.5,
+    "from the card's start: {asked:?} {card:?}"
+  );
+  assert!(asked.x >= columns.x, "inside the board: {asked:?} {columns:?}");
+  escape(&mut seeded);
 }
 
 fn enter(seeded: &mut Seeded) {

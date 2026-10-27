@@ -137,6 +137,7 @@ pub(super) fn no_matches(ctx: &Ctx, (view, count): (&str, usize), clear: impl Fn
 /// `view` holds no task.
 pub(super) fn empty_view(ctx: &Ctx, view: TaskListTab) -> Column {
   let detail = ctx.t(match view {
+    TaskListTab::NeedsYou => "tasks.emptyView.needsYou",
     TaskListTab::Active => "tasks.emptyView.active",
     TaskListTab::Backlog => "tasks.emptyView.backlog",
     TaskListTab::Done => "tasks.emptyView.done",
@@ -145,11 +146,11 @@ pub(super) fn empty_view(ctx: &Ctx, view: TaskListTab) -> Column {
   no_rows((Icon::ListChecks, &ctx.t("tasks.emptyView.title"), &detail), None)
 }
 
-/// On Active, whose first group is Needs you, what waits for the person in `tasks` and is no task's
+/// On Needs you, and on Active, whose first group is Needs you, what waits for the person in `tasks` and is no task's
 /// ([`attention::outside_tasks`]), with *Open Needs you*, which opens the title bar's panel that lists it; `None` in
 /// another view, or when everything that waits is a task's.
 pub(super) fn outside_tasks(ctx: &mut Ctx, view: TaskListTab, tasks: &ProjectTasks) -> Option<Element> {
-  if view != TaskListTab::Active {
+  if !matches!(view, TaskListTab::NeedsYou | TaskListTab::Active) {
     return None;
   }
   let title = attention::outside_tasks(tasks)?;

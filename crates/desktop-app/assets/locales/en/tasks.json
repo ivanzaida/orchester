@@ -16,6 +16,7 @@
       "failed": "Not changed: {{reason}}"
     },
     "views": {
+      "needsYou": "Needs you",
       "active": "Active",
       "backlog": "Backlog",
       "done": "Done",
@@ -199,7 +200,7 @@
         "moveTo": "Move to",
         "priority": "Priority",
         "tags": "Tags",
-        "delete": "Delete",
+        "delete": "Delete…",
         "clear": "Clear the selection",
         "allThere": "Every selected task is already there.",
         "stay": "{{tasks}} stay: {{reason}}"
@@ -291,6 +292,7 @@
     },
     "emptyView": {
       "title": "No tasks in this view.",
+      "needsYou": "A task shows here while something of it waits for you.",
       "active": "A task shows here once it is Todo, In progress or In review, or waits for you.",
       "backlog": "A task shows here while its workflow status is Backlog.",
       "done": "A task shows here once it is Done or Canceled.",

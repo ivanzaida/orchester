@@ -231,7 +231,15 @@ impl Component for Board {
     let (asking, asked) = self.asking(&props, &closer, (&display, &columns, lanes.is_some()));
     let body = self.body(ctx, (&props, &display), (&columns, lanes.as_deref()), asked.as_ref());
     let bulk = self.bulk_cards(&props);
-    let (popover, inline) = self.question(ctx, &closer, asking, (asked.is_some(), !bulk.is_empty()));
+    // A question at a card of the first column opens from the card's start, clear of the sidebar.
+    let first = asked.as_ref().is_some_and(|asked| {
+      let key = asked
+        .to
+        .clone()
+        .unwrap_or_else(|| model::key_of(&display.columns, &asked.card.row));
+      columns.first().is_some_and(|column| column.key == key)
+    });
+    let (popover, inline) = self.question(ctx, &closer, asking, (asked.is_some(), !bulk.is_empty(), first));
     let lines = top_lines(ctx, (&state, &closer), canceled.as_ref());
     let keys = KeyContext {
       dropping,
@@ -298,13 +306,14 @@ impl Board {
   }
 
   /// The question in its popover at the card or over the selection bar, or, about a card the board does not show or
-  /// a selection whose bar is gone, over the columns instead: `(popover, over the columns)`.
+  /// a selection whose bar is gone, over the columns instead: `(popover, over the columns)`. `first`: the card is in
+  /// the board's first column.
   fn question(
     &self,
     ctx: &mut Ctx,
     closer: &Closer,
     asking: Option<Asking>,
-    (card_shown, bar_shown): (bool, bool),
+    (card_shown, bar_shown, first): (bool, bool, bool),
   ) -> (Option<Element>, Option<Element>) {
     let state = &self.state;
     let anchored = match &asking {
@@ -314,7 +323,7 @@ impl Board {
     };
     let panel = asking.as_ref().and_then(|_| question::panel(ctx, (state, closer)));
     match (asking, panel) {
-      (Some(asking), Some(panel)) if anchored => (Some(question::at_anchor(state, &asking, panel)), None),
+      (Some(asking), Some(panel)) if anchored => (Some(question::at_anchor(state, (&asking, first), panel)), None),
       (_, panel) => (None, panel),
     }
   }

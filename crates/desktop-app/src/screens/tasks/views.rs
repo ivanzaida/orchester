@@ -1,5 +1,6 @@
-//! The list's views (`Views` `ANTgi` in `Tasks · redesign` `Lw1Gb`): Active, Backlog, Done and All, each with how many
-//! tasks it holds as searched and filtered once they are read; while they are read, a 14 × 8 bone in each count's
+//! The list's views (`Views` `ANTgi` in `Tasks · redesign` `Lw1Gb`): Needs you (`Needs you view` `yiAlE` in `Tasks
+//! board · redesign` `J6gQo`: a 12 `warning` hand 6 before its label), Active, Backlog, Done and All, each with how
+//! many tasks it holds as searched and filtered once they are read; while they are read, a 14 × 8 bone in each count's
 //! place (`Count bone` `EbQay` in `05 · Loading` `R1nQlx`), and `—` when they cannot be; 32 high, 20 apart, on a 1
 //! `border` line. The current view's label is 13/500 `text_primary` over a 2 `accent` underline, the others' 13
 //! `text_secondary`; each count follows its label 6 after it in 12 `text_muted`. Another view keeps the search; the
@@ -22,8 +23,12 @@ use super::cache::ViewCounts;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab},
-  theme::{ExtraSpacing, ExtraTypography},
-  ui::{pressable::opening, skeleton::bone},
+  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    pressable::opening,
+    skeleton::bone,
+  },
 };
 
 /// A view's height (`Active` `Decmu`) and a count's bone (`EbQay`).
@@ -103,6 +108,8 @@ fn view(
       .nowrap()
       .into(),
   };
+  let glyph = (tab == TaskListTab::NeedsYou)
+    .then(|| icon(Icon::Hand, IconSize::Sm, PaletteColor::Warning).id(format!("{id}-icon")));
   let button = opening(navigation.to(Route::Project(project, ProjectPage::Tasks(to))))
     .id(id.clone())
     .height(Dimension::Px(VIEW_HEIGHT))
@@ -113,6 +120,7 @@ fn view(
       ctx.t_args("ui.tabCount", [("label", &*word), ("count", &count)]),
     )
     .describe("state", if current { "current" } else { "enabled" })
+    .with_children(glyph)
     .child(
       Text::new(&word)
         .id(format!("{id}-label"))
@@ -133,6 +141,7 @@ fn view(
 /// The workspace's view of the same tasks.
 pub(super) const fn list_view(tab: TaskListTab) -> ListView {
   match tab {
+    TaskListTab::NeedsYou => ListView::NeedsYou,
     TaskListTab::Active => ListView::Active,
     TaskListTab::Backlog => ListView::Backlog,
     TaskListTab::Done => ListView::Done,
@@ -142,6 +151,7 @@ pub(super) const fn list_view(tab: TaskListTab) -> ListView {
 
 pub(super) const fn label_key(tab: TaskListTab) -> &'static str {
   match tab {
+    TaskListTab::NeedsYou => "tasks.views.needsYou",
     TaskListTab::Active => "tasks.views.active",
     TaskListTab::Backlog => "tasks.views.backlog",
     TaskListTab::Done => "tasks.views.done",

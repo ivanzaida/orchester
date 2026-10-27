@@ -79,9 +79,13 @@ pub fn board(ctx: &Ctx, (view, columns): (TaskListTab, Columns)) -> Column {
     )
 }
 
-/// The columns the board will show before its tasks say more: the view's own statuses, every priority, or three
-/// columns whose names are not known yet.
+/// The columns the board will show before its tasks say more: the view's own statuses (Needs you, which owns none,
+/// Active's, where what waits mostly is), every priority, or three columns whose names are not known yet.
 fn heads(ctx: &Ctx, view: TaskListTab, columns: Columns) -> Vec<Head> {
+  let view = match view {
+    TaskListTab::NeedsYou => TaskListTab::Active,
+    view => view,
+  };
   match columns {
     Columns::Status => WorkflowStatus::ALL
       .into_iter()

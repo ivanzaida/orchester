@@ -1,12 +1,12 @@
 //! The project's Tasks list (`Tasks · redesign` `Lw1Gb` in the new `orchester.pen`, ORC-99): one header row with the
-//! search, List or Board, Filter, Display, *More actions* and New task; the views Active, Backlog, Done and All with
-//! their counts; the applied filters as chips; and the view's rows, one line each, Active grouped by what happens next
-//! (Needs you, Running, Queued, Ready to start, then Stopped and Finished, which the design has no row for) and All by
-//! workflow status (`views::grouped`). Each row says in one phrase where its task stands and opens the task; under
-//! the pointer it shows its actions. The task a Create just added stands out. Its other states: a project without
-//! tasks (`03 No tasks yet` `f54MO`), the tasks being read (a skeleton, `skeleton`), read failing, and a search or
-//! filters that hide every row. What waits for the person and is no task's (the project's memory records) is named in
-//! a notice over Active's rows, which opens the Needs you panel.
+//! search, List or Board, Filter, Display, *More actions* and New task; the views Needs you (ORC-105), Active, Backlog,
+//! Done and All with their counts; the applied filters as chips; and the view's rows, one line each, Active grouped by
+//! what happens next (Needs you, Running, Queued, Ready to start, then Stopped and Finished, which the design has no
+//! row for) and All by workflow status (`views::grouped`). Each row says in one phrase where its task stands and opens
+//! the task; under the pointer it shows its actions. The task a Create just added stands out. Its other states: a
+//! project without tasks (`03 No tasks yet` `f54MO`), the tasks being read (a skeleton, `skeleton`), read failing, and
+//! a search or filters that hide every row. What waits for the person and is no task's (the project's memory records)
+//! is named in a notice over Needs you's and Active's rows, which opens the Needs you panel.
 //!
 //! The same header, views, filters and notices stand over the board (ORC-105, `kanban`), which shows the view's tasks
 //! as cards in columns; List or Board is kept for the project (`kanban::display`).

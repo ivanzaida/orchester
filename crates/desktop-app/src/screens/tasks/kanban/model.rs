@@ -1,8 +1,8 @@
 //! What the board shows, built from the rows the list reads (searched, filtered and ordered as the list orders them):
 //! its columns, each with its cards in order, and its rows (swimlanes) when Display asks for them. The view picks the
-//! columns (Active: Todo, In progress and In review; Backlog and Done their own; All every one) and keeps a column of
-//! any status that holds a task of the view, so nothing the view holds goes missing. Canceled shows only while
-//! Display shows it, or folded once a task was canceled from the board.
+//! columns (Needs you: none of its own; Active: Todo, In progress and In review; Backlog and Done their own; All every
+//! one) and keeps a column of any status that holds a task of the view, so nothing the view holds goes missing.
+//! Canceled shows only while Display shows it, or folded once a task was canceled from the board.
 
 use std::sync::Arc;
 
@@ -239,9 +239,11 @@ fn status_columns(source: &Source<'_>) -> Vec<WorkflowStatus> {
     .collect()
 }
 
-/// Whether `view` shows `status` as a column of its own, whatever its tasks.
+/// Whether `view` shows `status` as a column of its own, whatever its tasks. Needs you owns none: it shows only the
+/// columns that hold what waits.
 pub fn owns(view: TaskListTab, status: WorkflowStatus) -> bool {
   match view {
+    TaskListTab::NeedsYou => false,
     TaskListTab::Active => matches!(
       status,
       WorkflowStatus::Todo | WorkflowStatus::InProgress | WorkflowStatus::InReview
