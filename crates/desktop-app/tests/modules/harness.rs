@@ -129,9 +129,10 @@ impl Seeded {
     self.window.pass();
   }
 
-  /// Delivers what the window's futures finished until `done` holds.
+  /// Delivers what the window's futures finished until `done` holds. The deadline leaves room for the binary's
+  /// tests seeding their repositories side by side, which slows every reading of a project's tasks.
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
       self.window.tree.tick_futures();
       self.window.pass();
@@ -190,6 +191,33 @@ impl Seeded {
     ids.sort();
     ids
   }
+
+  /// A key pressed with nothing held.
+  pub fn key(&mut self, key: &str) {
+    self.window.tree.key_down(key.into(), key.into(), false, false, false);
+    self.window.pass();
+  }
+
+  /// Where `id` is laid out.
+  pub fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+}
+
+/// `details` with `description` and in `state`.
+pub fn with(details: &ModuleDetails, description: &str, state: ModuleState) -> ModuleDetails {
+  ModuleDetails::new(
+    details.name().clone(),
+    description,
+    (details.start(), details.target()),
+    state,
+  )
+  .expect("valid details")
 }
 
 /// Today, as the module pages count it.

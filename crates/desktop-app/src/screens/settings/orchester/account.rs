@@ -14,7 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_store::StoredCloudAccount;
-use orchester_workspace::sharing::{cloud::CloudAddress, device};
+use orchester_workspace::sharing::{cloud::CloudInUse, device};
 
 use super::{cloud::CloudPanel, words::day_and_time};
 use crate::{
@@ -39,7 +39,7 @@ pub(super) const SIGN_OUT_CONFIRM: &str = "orchester-cloud-sign-out-confirm";
 pub(super) fn card(
   ctx: &Ctx,
   panel: &CloudPanel,
-  (account, address): (&StoredCloudAccount, &CloudAddress),
+  (account, address): (&StoredCloudAccount, &CloudInUse),
   after: Vec<Element>,
 ) -> Element {
   let avatar = Row::new()
@@ -57,7 +57,7 @@ pub(super) fn card(
     "cloud.account.emailAt",
     [
       ("email", account.email.as_str()),
-      ("host", &address.address.authority()),
+      ("host", &address.address.web().authority()),
     ],
   );
   let text = Column::new()

@@ -9,10 +9,10 @@
 //! chooses (`Edit task · conflict · newer version` `PenUu`).
 
 mod actions;
-mod bar;
+pub(super) mod bar;
 mod base;
-mod brief;
-mod chips;
+pub(super) mod brief;
+pub(super) mod chips;
 mod composer;
 mod conflict;
 mod criteria;
@@ -42,7 +42,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  id::{ProjectId, TaskId},
+  id::{ModuleId, ProjectId, TaskId},
   project::TaskKey,
 };
 use orchester_workspace::tasks::data::ProjectTasks;
@@ -67,7 +67,8 @@ use crate::{
 /// The composer's column (`Composer` `IxeaX`).
 const FORM_WIDTH: f32 = 720.0;
 
-pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
+/// New task; `module`, the module it starts in, as *New task in module* opens it (ORC-112).
+pub fn new_task(ctx: &mut Ctx, project: &ShownProject, module: Option<ModuleId>) -> Element {
   let tasks = match read_tasks(ctx, project, Screen::NewTask) {
     Ok(tasks) => tasks,
     Err(waiting) => return waiting,
@@ -82,8 +83,10 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
     missing_pipeline: None,
     modules: tasks.modules,
     shared: tasks.shared,
+    starts_in: module,
   };
-  ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
+  let place = module.map(|module| format!("-in-{module}")).unwrap_or_default();
+  ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}{place}", project.open.project.id()), props)
 }
 
 pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Element {
@@ -116,6 +119,7 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
       .map(|slug| Arc::from(slug.as_str())),
     modules: tasks.modules.clone(),
     shared: tasks.shared,
+    starts_in: None,
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
 }

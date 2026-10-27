@@ -2,7 +2,10 @@
 //! and one module with its tasks and its burndown. Every function blocks on SQLite; the UI calls them off the UI
 //! thread.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+  collections::{BTreeSet, HashMap},
+  sync::Arc,
+};
 
 use chrono::NaiveDate;
 use orchester_core::{
@@ -87,6 +90,23 @@ pub fn summaries(modules: &[Module], tasks: &[Task]) -> Vec<ModuleSummary> {
       }
     })
     .collect()
+}
+
+/// When the remaining work of each module of the project in `db` is likely delivered after `now`, by the project's
+/// recent throughput, as a module's page forecasts it; the Modules list shows it in each row.
+pub fn forecasts(db: &ProjectDb, now: Timestamp) -> Result<HashMap<ModuleId, Forecast>, StoreError> {
+  let tasks = db.tasks()?;
+  let today = local_date(now);
+  let delivered = delivery::history(&DeliveryFacts::read(db, &tasks, now)?, today);
+  Ok(
+    summaries(&db.modules()?, &tasks)
+      .into_iter()
+      .map(|summary| {
+        let forecast = Forecast::of(summary.progress.remaining(), &delivered, today, forecast::SEED);
+        (summary.module.id(), forecast)
+      })
+      .collect(),
+  )
 }
 
 /// A module's page: the module, its tasks in the list's order, its progress, its burndown and when its remaining work

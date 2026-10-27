@@ -69,3 +69,7 @@ required-features = ["client"]
 [[test]]
 name = "client_proxy"
 required-features = ["client"]
+
+[[test]]
+name = "cloud_address"
+required-features = ["client"]
