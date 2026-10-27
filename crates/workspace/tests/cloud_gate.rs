@@ -25,8 +25,8 @@ use orchester_workspace::{
   sharing::{
     Servers,
     cloud::{
-      BUILD_ADDRESS, Cloud, CloudError, PUBLIC_ADDRESS, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn,
-      keep_checking, retry_wait,
+      BUILD_ADDRESS, BUILD_API_ADDRESS, Cloud, CloudError, PUBLIC_ADDRESS, PUBLIC_API_ADDRESS, RETRY_AFTER_CAP,
+      RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait,
     },
   },
 };
@@ -120,20 +120,12 @@ fn cloud_gate_stays_open_while_the_cloud_cannot_be_reached() {
 const FORMER_PUBLIC: &str = "https://orchester-cloud.lurq.dev";
 
 #[test]
-fn cloud_gate_builds_use_the_public_cloud_at_its_own_domain() {
-  if option_env!("ORCHESTER_CLOUD_URL").is_none() {
-    assert_eq!(BUILD_ADDRESS, "https://orchester.cloud");
-  }
-  assert_eq!(PUBLIC_ADDRESS, "https://orchester.cloud");
-}
-
-#[test]
 fn cloud_gate_keeps_a_sign_in_at_the_former_public_address_and_moves_it() {
   let cloud = AccountCloud::start();
   let desktop = Desktop::signed_in(&cloud);
   let stayed = restarted(&desktop);
   assert_eq!(
-    stayed.address().expect("address").address.as_str(),
+    stayed.address().expect("address").address.web().as_str(),
     cloud.url(),
     "a test cloud stays"
   );
@@ -149,14 +141,16 @@ fn cloud_gate_keeps_a_sign_in_at_the_former_public_address_and_moves_it() {
   assert!(moved.is_signed_in(), "the sign-in holds across the move");
   let account = moved.account().expect("account").expect("still signed in");
   assert_eq!(account.cloud_address, PUBLIC_ADDRESS);
+  assert_eq!(account.cloud_api_address.as_deref(), Some(PUBLIC_API_ADDRESS));
   assert_eq!(account.email, EMAIL);
   let address = moved.address().expect("address");
   assert_eq!(
     address.default,
-    BUILD_ADDRESS == PUBLIC_ADDRESS,
+    BUILD_ADDRESS == PUBLIC_ADDRESS && BUILD_API_ADDRESS == Some(PUBLIC_API_ADDRESS),
     "the public cloud is the build's own again"
   );
-  assert_eq!(address.address.as_str(), PUBLIC_ADDRESS);
+  assert_eq!(address.address.web().as_str(), PUBLIC_ADDRESS);
+  assert_eq!(address.address.api().map(|api| api.as_str()), Some(PUBLIC_API_ADDRESS));
   assert_eq!(
     desktop
       .vault

@@ -13,7 +13,7 @@ mod rows;
 
 pub use app_db::{
   AcceptedInvite, AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, RegisteredProject,
-  ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredServer,
+  ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredCloudAddress, StoredServer,
 };
 pub use busy::pause_lock_waits_with;
 #[cfg(feature = "test-support")]

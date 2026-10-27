@@ -7,6 +7,7 @@
 
 mod address;
 mod cloud;
+mod cloud_address;
 mod error;
 mod modules;
 mod pinned;
@@ -32,6 +33,7 @@ pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
   cloud::{CloudClient, SignInAnswer},
+  cloud_address::CloudAddress,
   error::ClientError,
 };
 use crate::{

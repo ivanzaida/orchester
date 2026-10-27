@@ -45,7 +45,7 @@ use orchester_workspace::{
   background,
   sharing::{
     LinkedProject, ServerEntry, Servers,
-    cloud::{Cloud, CloudAddress, CloudError},
+    cloud::{Cloud, CloudError, CloudInUse},
   },
 };
 
@@ -72,7 +72,7 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
   pub account: Option<StoredCloudAccount>,
-  pub address: CloudAddress,
+  pub address: CloudInUse,
   pub servers: Vec<ServerEntry>,
   /// The local projects linked to a project on each server, in the servers' order.
   pub linked: Vec<Vec<LinkedProject>>,

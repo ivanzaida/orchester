@@ -9,7 +9,7 @@ use std::path::Path;
 use orchester_api::{
   Credential, SharedProject,
   certificate::CertificatePin,
-  client::{Client, ServerAddress},
+  client::{Client, CloudAddress, ServerAddress},
 };
 use orchester_store::AppDb;
 use orchester_workspace::{
@@ -105,7 +105,9 @@ impl Backends {
     let cloud = Cloud::new(workspace, vault, servers);
     let runtime = Runtime::new().expect("runtime");
     runtime.block_on(async {
+      // The stand-in is the cloud's web and API address, its API at `/v1` as the public cloud's is.
       let address = ServerAddress::parse(&self.cloud.url()).expect("cloud address");
+      let address = CloudAddress::new(address.clone(), Some(address));
       cloud.set_address(Some(address)).await.expect("the stand-in cloud");
       cloud
         .sign_in(EMAIL.into(), Credential::new(PASSWORD.into()))

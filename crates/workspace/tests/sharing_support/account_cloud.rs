@@ -282,7 +282,13 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &S
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
-  let path = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
+  // The API at `/api/v1` on the web address, or at `/v1` on an API address of its own: the stand-in is both.
+  let path = line
+    .split_whitespace()
+    .take(2)
+    .collect::<Vec<_>>()
+    .join(" ")
+    .replacen(" /v1/", " /api/v1/", 1);
   if path == "GET /api/v1/me" {
     state.lock().checks_arrived += 1;
     while state.lock().checks_held {

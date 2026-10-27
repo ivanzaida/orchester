@@ -14,7 +14,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
@@ -45,6 +45,7 @@ pub struct EmptyState {
   secrets: bool,
   measure: Option<f32>,
   unframed: bool,
+  centered: bool,
   note: Option<Arc<str>>,
 }
 
@@ -67,6 +68,7 @@ impl EmptyState {
       secrets: false,
       measure: None,
       unframed: false,
+      centered: false,
       note: None,
     }
   }
@@ -98,6 +100,12 @@ impl EmptyState {
   /// The bare Instructions empty state sG2xi, with its repository findings below.
   pub fn unframed(mut self) -> Self {
     self.unframed = true;
+    self
+  }
+
+  /// Every part centered under the glyph, the explanation's lines too (`04 · Modules · none yet` `yJdJ9`).
+  pub fn centered(mut self) -> Self {
+    self.centered = true;
     self
   }
 
@@ -141,48 +149,68 @@ impl EmptyState {
   }
 }
 
-impl From<EmptyState> for Element {
-  fn from(empty: EmptyState) -> Self {
-    let tile = empty.glyph_tile();
+impl EmptyState {
+  /// The title over its explanation and the note, each line centered when the state is.
+  fn text(&self) -> Column {
+    let line = |text: Text| {
+      if self.centered {
+        text.text_align(TextAlign::Center)
+      } else {
+        text
+      }
+    };
     let text = Column::new()
-      .width(if empty.wide {
+      .width(if self.wide {
         Dimension::Pct(100.0)
       } else {
         Dimension::Auto
       })
-      .spacing(if empty.secrets || empty.unframed {
+      .spacing(if self.secrets || self.unframed {
         ExtraSpacing::Snug.role()
       } else {
         SpacingSize::Xs
       })
-      .child(
-        Text::new(&empty.title)
-          .id(format!("{}-title", empty.id))
-          .variant(if empty.compact {
-            ExtraTypography::Strong.role()
-          } else {
-            TypographyStyle::Title
-          }),
-      )
-      .child(
-        Text::new(&empty.explanation)
-          .width(if empty.wide {
+      .child(line(Text::new(&self.title).id(format!("{}-title", self.id)).variant(
+        if self.compact {
+          ExtraTypography::Strong.role()
+        } else {
+          TypographyStyle::Title
+        },
+      )))
+      .child(line(
+        Text::new(&self.explanation)
+          .width(if self.wide {
             Dimension::Pct(100.0)
           } else {
             Dimension::Auto
           })
-          .variant(if empty.compact {
+          .variant(if self.compact {
             TypographyStyle::Description
           } else {
             ExtraTypography::Lead.role()
           })
-          .max_width(empty.explanation_width()),
-      );
-    let text = text.with_children(empty.note.map(|note| {
-      Text::new(&note)
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
-    }));
+          .max_width(self.explanation_width()),
+      ))
+      .with_children(self.note.as_ref().map(|note| {
+        line(
+          Text::new(note)
+            .variant(TypographyStyle::Description)
+            .color(PaletteColor::TextMuted),
+        )
+      }));
+    if self.centered {
+      text.align_items(Alignment::Center)
+    } else {
+      text
+    }
+  }
+}
+
+impl From<EmptyState> for Element {
+  fn from(empty: EmptyState) -> Self {
+    let tile = empty.glyph_tile();
+    let text = empty.text();
+    let centered = empty.centered;
     let actions = (!empty.actions.is_empty()).then(|| {
       Row::new()
         .spacing(SpacingSize::Sm)
@@ -197,6 +225,11 @@ impl From<EmptyState> for Element {
       } else {
         ExtraSpacing::Inset.role()
       });
+    let frame = if centered {
+      frame.align_items(Alignment::Center)
+    } else {
+      frame
+    };
     let frame = if empty.unframed {
       frame
     } else {

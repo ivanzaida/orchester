@@ -14,10 +14,11 @@ use orchester_workspace::{
 
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
-  MemoryTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel,
-  ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
+  PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList,
+  TaskView, ToolTab,
   files::FILES,
-  project_screen_path,
+  modules, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -44,14 +45,18 @@ pub enum ProjectPage {
   OrchestratorSettings,
   Tasks(TaskList),
   NewTask,
+  /// New task, the task in a module from its start: a module's *New task in module* (`/tasks/new?module=<id>`).
+  NewTaskInModule(ModuleId),
   EditTask(TaskKey),
   /// A task kept *Not shared* when the project joined, by its kept key, which a shared task may have too (`R4elt`).
   KeptTask(TaskKey, TaskView),
   Task(TaskKey, TaskView),
-  /// The Modules list, with each module's progress.
-  Modules,
-  /// A module's page: its tasks and its burndown.
-  Module(ModuleId),
+  /// The Modules list on its view, with each module's progress.
+  Modules(ModuleListTab),
+  NewModule,
+  /// A module's page on its tab: its Summary with its tasks, or its burndown.
+  Module(ModuleId, ModuleTab),
+  EditModule(ModuleId),
   MergeQueue,
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
@@ -142,7 +147,7 @@ impl ProjectPage {
       Screen::OrchestratorSettings => Self::OrchestratorSettings,
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
-      Screen::Modules => Self::Modules,
+      Screen::Modules => Self::Modules(ModuleListTab::default()),
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
       Screen::Usage => Self::Usage(Box::default()),
@@ -167,10 +172,10 @@ impl ProjectPage {
       Self::Orchestrator(_) => Screen::Orchestrator,
       Self::OrchestratorSettings => Screen::OrchestratorSettings,
       Self::Tasks(_) => Screen::Tasks,
-      Self::NewTask => Screen::NewTask,
+      Self::NewTask | Self::NewTaskInModule(_) => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) | Self::KeptTask(..) => Screen::Task,
-      Self::Modules | Self::Module(_) => Screen::Modules,
+      Self::Modules(_) | Self::NewModule | Self::Module(..) | Self::EditModule(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
@@ -193,6 +198,9 @@ impl ProjectPage {
   }
 
   pub(super) fn path(&self, project_root: &str) -> String {
+    if let Some(path) = modules::path(project_root, self) {
+      return path;
+    }
     let tasks = format!("{project_root}/{TASKS}");
     let connections = format!("{project_root}/{CONNECTIONS}");
     let segment = |screen: Screen| project_screen_path(project_root, screen);
@@ -208,7 +216,6 @@ impl ProjectPage {
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
       Self::KeptTask(key, view) => view.path(&format!("{tasks}/{KEPT}/{key}")),
-      Self::Module(id) => format!("{project_root}/{MODULES}/{id}"),
       Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
@@ -258,18 +265,7 @@ impl ProjectPage {
         segment(Screen::ProjectSettings),
         &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))],
       ),
-      Self::Join(target) => {
-        let [server, project] = target.params();
-        with_query(
-          segment(Screen::ProjectSettings),
-          &[
-            ProjectSettingsTab::Sharing.param(),
-            (VIEW, Some(JOIN)),
-            (server.0, Some(&server.1)),
-            (project.0, Some(&project.1)),
-          ],
-        )
-      }
+      Self::Join(target) => join_path(segment(Screen::ProjectSettings), target),
       page => segment(page.screen()),
     }
   }
@@ -281,7 +277,7 @@ impl ProjectPage {
       [ORCHESTRATOR] => OrchestratorChat::take(params).map(Self::Orchestrator),
       [ORCHESTRATOR, SETTINGS] => Ok(Self::OrchestratorSettings),
       [TASKS] => TaskList::take(params).map(Self::Tasks),
-      [TASKS, NEW] => Ok(Self::NewTask),
+      [TASKS, NEW] => modules::new_task(params),
       [TASKS, KEPT, key, rest @ ..] => {
         let key = task_key(key)?;
         TaskView::parse(rest, params).map(|view| Self::KeptTask(key, view))
@@ -343,7 +339,7 @@ impl ProjectPage {
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
-      [MODULES, id] => id.parse().map(Self::Module).map_err(|_| RouteError::NoScreen),
+      [MODULES, rest @ ..] => modules::parse(rest, params),
       [segment] => Screen::ALL
         .into_iter()
         .find(|screen| screen.segment() == Some(*segment))
@@ -445,4 +441,18 @@ fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
       value,
     }),
   }
+}
+
+/// The join review of the project `target` names, over Project settings › Sharing at `settings`.
+fn join_path(settings: String, target: &JoinTarget) -> String {
+  let [server, project] = target.params();
+  with_query(
+    settings,
+    &[
+      ProjectSettingsTab::Sharing.param(),
+      (VIEW, Some(JOIN)),
+      (server.0, Some(&server.1)),
+      (project.0, Some(&project.1)),
+    ],
+  )
 }

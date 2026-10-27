@@ -216,7 +216,10 @@ fn seed_names_every_scenario_once() {
       "usage",
       "usage-empty",
       "usage-bare",
-      "import"
+      "import",
+      "modules",
+      "modules-short",
+      "modules-none"
     ]
   );
   for name in names {

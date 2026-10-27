@@ -1,11 +1,12 @@
 //! This computer's Orchester Cloud account (`docs/architecture/server.md`, "Orchester Cloud", row 41): signing in with
 //! the person's email and password through the cloud's API, signing out, the cloud's web pages *Create an account* and
-//! *Forgot password* open in the browser, the cloud's address (the build's, or a test cloud's from Settings ›
-//! Orchester › Advanced), and the account's invites ([`invites`]). The account is in the application database's
-//! `cloud_account` row; its device token in the keychain, under this installation's id, so a development build or a
-//! QA copy never signs the installed app in or out. The projects and team servers on this computer are each account's
-//! own: the signed-in account sees only its own, and another's stay, with their tokens, for when it signs in again,
-//! their shared projects kept in step meanwhile. The app is used only while this computer is signed in ([`gate`]).
+//! *Forgot password* open in the browser, the cloud's web and API addresses (the build's, or a test cloud's from
+//! Settings › Orchester Cloud › Advanced), and the account's invites ([`invites`]). The account is in the application
+//! database's `cloud_account` row; its device token in the keychain, under this installation's id, so a development
+//! build or a QA copy never signs the installed app in or out. The projects and team servers on this computer are each
+//! account's own: the signed-in account sees only its own, and another's stay, with their tokens, for when it signs in
+//! again, their shared projects kept in step meanwhile. The app is used only while this computer is signed in
+//! ([`gate`]).
 
 mod accepting;
 mod asking;
@@ -24,7 +25,7 @@ use std::sync::{
 };
 
 use orchester_api::{
-  client::{CloudClient, ServerAddress},
+  client::{AddressError, CloudAddress, CloudClient, ServerAddress},
   cloud::CloudErrorCode,
 };
 use orchester_core::{
@@ -32,7 +33,7 @@ use orchester_core::{
   secret::{SecretValue, VaultError, VaultKey},
   time::Timestamp,
 };
-use orchester_store::{CloudSignInEnd, EndedCloudSignIn, StoredCloudAccount};
+use orchester_store::{CloudSignInEnd, EndedCloudSignIn, StoredCloudAccount, StoredCloudAddress};
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
@@ -49,25 +50,54 @@ pub use self::{
 use super::Servers;
 use crate::{background, secrets::Vault, workspace::Workspace};
 
-/// The public Orchester Cloud (`docs/architecture/server.md`, row 59).
+/// The public Orchester Cloud's web address (`docs/architecture/server.md`, row 59), and the issuer of its identity
+/// tokens and key sets wherever its API answers.
 pub const PUBLIC_ADDRESS: &str = "https://orchester.cloud";
 
+/// The public cloud's API address, its API at `/v1` there (`docs/cloud-api.md`, "Base"). Until this app version its
+/// API was at `/api/v1` on [`PUBLIC_ADDRESS`]; what this computer stored with that moves here at the start ([`moved`]).
+pub const PUBLIC_API_ADDRESS: &str = "https://api.orchester.cloud";
+
 /// The public cloud's address until 2026-10-25, which still answers while people update (`docs/cloud-hosting.md` in
-/// `ivanzaida/orchester-cloud`, "Moving the cloud"): what this computer stored with it moves to [`PUBLIC_ADDRESS`] at
-/// the start ([`moved`]).
+/// `ivanzaida/orchester-platform`, "Moving the cloud"): what this computer stored with it moves to the public cloud's
+/// addresses at the start ([`moved`]).
 const FORMER_PUBLIC_ADDRESS: &str = "https://orchester-cloud.lurq.dev";
 
-/// Where Orchester Cloud runs for this build: `ORCHESTER_CLOUD_URL` at build time, or the public cloud.
+/// Where Orchester Cloud's web pages are for this build: `ORCHESTER_CLOUD_URL` at build time, or the public cloud's.
 pub const BUILD_ADDRESS: &str = match option_env!("ORCHESTER_CLOUD_URL") {
   Some(address) => address,
   None => PUBLIC_ADDRESS,
 };
 
-/// The cloud's address this computer uses, and whether it is the build's own.
+/// Where Orchester Cloud's API is for this build: `ORCHESTER_CLOUD_API_URL` at build time, or the public cloud's. A
+/// build that names another cloud with `ORCHESTER_CLOUD_URL` alone has none: that cloud's API is on its web address.
+pub const BUILD_API_ADDRESS: Option<&str> = match (
+  option_env!("ORCHESTER_CLOUD_URL"),
+  option_env!("ORCHESTER_CLOUD_API_URL"),
+) {
+  (_, Some(api)) => Some(api),
+  (Some(_), None) => None,
+  (None, None) => Some(PUBLIC_API_ADDRESS),
+};
+
+/// The build's own cloud: [`BUILD_ADDRESS`] and [`BUILD_API_ADDRESS`].
+pub fn build_address() -> Result<CloudAddress, AddressError> {
+  parse_address(BUILD_ADDRESS, BUILD_API_ADDRESS)
+}
+
+/// The cloud at the web address `web` whose API is at `api`, or on `web` without one.
+fn parse_address(web: &str, api: Option<&str>) -> Result<CloudAddress, AddressError> {
+  Ok(CloudAddress::new(
+    ServerAddress::parse(web)?,
+    api.map(ServerAddress::parse).transpose()?,
+  ))
+}
+
+/// The cloud this computer uses, and whether it is the build's own.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CloudAddress {
-  pub address: ServerAddress,
-  /// `false` while Settings › Orchester › Advanced names another cloud (a test cloud).
+pub struct CloudInUse {
+  pub address: CloudAddress,
+  /// `false` while Settings › Orchester Cloud › Advanced names another cloud (a test or self-run cloud).
   pub default: bool,
 }
 
@@ -171,24 +201,24 @@ impl Cloud {
     self.inner.changes.send_modify(|count| *count += 1);
   }
 
-  /// The cloud's address this computer uses. Blocking.
-  pub fn address(&self) -> Result<CloudAddress, CloudError> {
+  /// The cloud this computer uses. Blocking.
+  pub fn address(&self) -> Result<CloudInUse, CloudError> {
     let set = self.inner.workspace.db.lock().cloud_address()?;
     Ok(match set {
-      Some(text) => CloudAddress {
-        address: ServerAddress::parse(&text)?,
+      Some(set) => CloudInUse {
+        address: parse_address(&set.web, set.api.as_deref())?,
         default: false,
       },
-      None => CloudAddress {
-        address: ServerAddress::parse(BUILD_ADDRESS)?,
+      None => CloudInUse {
+        address: build_address()?,
         default: true,
       },
     })
   }
 
-  /// The address of `page` on the cloud this computer uses. Blocking.
+  /// The address of `page` on the web address of the cloud this computer uses. Blocking.
   pub fn web_page(&self, page: WebPage) -> Result<String, CloudError> {
-    Ok(format!("{}{}", self.address()?.address.as_str(), page.path()))
+    Ok(format!("{}{}", self.address()?.address.web().as_str(), page.path()))
   }
 
   /// The account signed in from this computer. Blocking.
@@ -210,14 +240,17 @@ impl Cloud {
 
   /// Uses the cloud at `address` from now on, `None` for the build's own; a cloud account signed in elsewhere is
   /// signed out first.
-  pub async fn set_address(&self, address: Option<ServerAddress>) -> Result<(), CloudError> {
+  pub async fn set_address(&self, address: Option<CloudAddress>) -> Result<(), CloudError> {
     if self.account_now().await?.is_some() {
       self.sign_out().await?;
     }
     let workspace = self.inner.workspace.clone();
     background::run(move || {
-      let text = address.as_ref().map(ServerAddress::as_str);
-      workspace.db.lock().set_cloud_address(text)
+      let stored = address.map(|address| StoredCloudAddress {
+        web: address.web().as_str().to_owned(),
+        api: address.api().map(|api| api.as_str().to_owned()),
+      });
+      workspace.db.lock().set_cloud_address(stored.as_ref())
     })
     .await??;
     self.changed();
@@ -241,7 +274,7 @@ impl Cloud {
       Err(VaultError::NotFound) => return,
       Err(error) => return tracing::warn!(%error, "cannot read this computer's cloud token to end its session"),
     };
-    let client = match ServerAddress::parse(&kept.account.cloud_address).map(CloudClient::new) {
+    let client = match account_address(&kept.account).map(CloudClient::new) {
       Ok(Ok(client)) => client,
       Ok(Err(error)) => return tracing::warn!(%error, "cannot reach the cloud to end this computer's session"),
       Err(error) => return tracing::warn!(%error, "the account's cloud has no address to end its session at"),
@@ -379,7 +412,7 @@ impl Cloud {
         return Err(CloudError::SignedOut);
       }
     };
-    let client = CloudClient::new(ServerAddress::parse(&kept.account.cloud_address)?)?;
+    let client = CloudClient::new(account_address(&kept.account)?)?;
     Ok((client, token, kept.generation, kept.account.account))
   }
 
@@ -469,4 +502,9 @@ fn forget_account(
 /// Where this installation keeps its cloud device token.
 fn device_key(workspace: &Workspace) -> Result<VaultKey, CloudError> {
   Ok(VaultKey::cloud_device(workspace.installation_id()?))
+}
+
+/// The cloud `account` signed in at.
+fn account_address(account: &StoredCloudAccount) -> Result<CloudAddress, AddressError> {
+  parse_address(&account.cloud_address, account.cloud_api_address.as_deref())
 }
