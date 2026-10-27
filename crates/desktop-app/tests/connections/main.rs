@@ -22,7 +22,6 @@ mod layout;
 mod list;
 mod mcp;
 mod mcp_authorization;
-mod qa_scenarios;
 mod reads;
 mod rename;
 mod test_result;

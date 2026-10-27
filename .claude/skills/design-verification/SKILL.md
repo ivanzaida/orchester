@@ -140,6 +140,12 @@ points the project's Codex connection at the copied fake (any scenario; `live` n
 `-NoRunner` copies no runner, so the app cannot start one. Without `-FakeAgents` the profiles
 name a Codex connection that is not stored, so nothing can run.
 
+To pick a scenario, list them with `cargo run -p orchester-app --example seed -- --list-scenarios` (one per line,
+sorted). The seed checks the name: an unknown one exits non-zero with the known ones, writes nothing, and
+`tools/qa-app.ps1` stops before starting the app. A new scenario is added only in the seed's registry
+(`ALL` in `crates/desktop-app/examples/seed/kontur/scenarios/mod.rs`), never in `tools/qa-app.ps1`: the script
+names no scenarios, so its git blob, which the project rule *Approved for every run* for `start_qa_app` is kept to,
+stays the same. The table below describes some of them.
 | Scenario | What it holds | Design frames it serves |
 |---|---|---|
 | `empty` | The catalogue (Explorer, Planner, Builder, Reviewer; Feature delivery v3, Quick fix v2), no task | Tasks and Overview empty project; New task empty |

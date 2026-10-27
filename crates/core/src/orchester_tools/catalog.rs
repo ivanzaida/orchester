@@ -55,7 +55,7 @@ const REPORT_PROGRESS: &str = r#"{"type":"object","properties":{
 },"required":["text"],"additionalProperties":false}"#;
 
 const START_QA_APP: &str = r#"{"type":"object","properties":{
-  "scenario":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]*$","maxLength":64,"description":"The seed scenario the copy starts on, as tools/qa-app.ps1 lists them (tasks, task-states, decisions, ...)."},
+  "scenario":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]*$","maxLength":64,"description":"The seed scenario the copy starts on, as the seed's --list-scenarios lists them (tasks, task-states, decisions, ...); an unknown one fails with the known ones."},
   "fake_agents":{"type":["boolean","null"],"description":"Run the copy's agents as Orchester's stand-ins; null for false."},
   "no_runner":{"type":["boolean","null"],"description":"Start the copy without a runner; null for false."}
 },"required":["scenario"],"additionalProperties":false}"#;

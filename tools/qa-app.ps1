@@ -4,6 +4,10 @@
 #   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedOut]
 #       [-WindowX <x> -WindowY <y>] [-Editor <program>]
 #
+# <scenario> is one of the seed's (`cargo run -p orchester-app --example seed -- --list-scenarios` lists them). A new
+# scenario is added only to the seed's registry (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), never
+# here: the seed checks the name, and on an unknown one exits non-zero with the known ones before it writes anything.
+#
 # 1. Builds the QA app (examples/qa_app: the app's own window, signed in to a stand-in Orchester Cloud on loopback
 #    with its token in a keychain in memory, past the sign-in gate; -SignedOut stops at the gate, with that stand-in
 #    as the cloud; with lurq's `perf_profile`, for profile sessions), the seed example and orchester-runner
@@ -38,19 +42,18 @@
 # approval, one that didn't finish), and shows the installed app's MCP rows: that server listens on a free port with
 # a token in memory, while the window's own server stays the QA copy's for the verifier.
 #
+# -Scenario project-settings reaches Project settings' drawn states (gh as another account, a gone base branch,
+# secrets in three environments with uses, the MCP server figma); project-settings-shared is it linked to a team
+# server no one answers for (Sharing · shared).
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never the user's install (E:\Orchester, formerly E:\projects\orchester), the user's discovery
 # folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
 param(
     [Parameter(Mandatory = $true)][string]$Name,
-    # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
-    # anything under .tmp/qa/<task>/ is replaced. project-settings reaches Project settings' drawn states
-    # (gh as another account, a gone base branch, secrets in three environments with uses, the MCP server
-    # figma); project-settings-shared is it linked to a team server no one answers for (Sharing · shared).
-    [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "orchestrator", "orchestrator-not-set-up", "changes", "cards", "decisions", "deliverables", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "project-settings", "project-settings-shared", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "settings", "pull-requests", "pull-request-feedback", "sources", "usage", "usage-empty", "usage-bare", "import", "modules", "modules-short", "modules-none")]
-    [string]$Scenario,
+    # The seed checks it against its registry (see the header); the app starts only when the seed succeeds.
+    [Parameter(Mandatory = $true)][string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
     [switch]$SignedOut,
