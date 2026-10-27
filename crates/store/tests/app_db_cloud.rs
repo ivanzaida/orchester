@@ -1,8 +1,8 @@
-//! The application database's Orchester Cloud rows: the account signed in, the cloud's address, and why the last
-//! sign-in ended, also through the two-factor migrations.
+//! The application database's Orchester Cloud rows: the account signed in, the cloud's addresses, and why the last
+//! sign-in ended, also through the two-factor and API address migrations.
 
 use orchester_core::time::Timestamp;
-use orchester_store::{AppDb, CloudSignInEnd, EndedCloudSignIn, StoredCloudAccount};
+use orchester_store::{AppDb, CloudSignInEnd, EndedCloudSignIn, StoredCloudAccount, StoredCloudAddress};
 
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -21,21 +21,60 @@ fn the_cloud_account_is_one_row_and_the_address_a_setting() {
     device_name: "IVAN-PC".into(),
     signed_in_at: at(5),
     cloud_address: "https://cloud.test.lurq.dev".into(),
+    cloud_api_address: Some("https://api.cloud.test.lurq.dev".into()),
   };
   db.set_cloud_account(Some(&account)).expect("signed in");
+  assert_eq!(db.cloud_account().expect("account"), Some(account.clone()));
   let other = StoredCloudAccount {
     email: "maria@example.com".into(),
+    cloud_api_address: None,
     ..account.clone()
   };
   db.set_cloud_account(Some(&other)).expect("another account replaces it");
   assert_eq!(db.cloud_account().expect("account"), Some(other));
   db.set_cloud_account(None).expect("signed out");
   assert_eq!(db.cloud_account().expect("account"), None);
-  db.set_cloud_address(Some("https://cloud.test.lurq.dev"))
-    .expect("a test cloud");
+  let pair = StoredCloudAddress {
+    web: "https://cloud.test.lurq.dev".into(),
+    api: Some("https://api.cloud.test.lurq.dev".into()),
+  };
+  db.set_cloud_address(Some(&pair)).expect("a test cloud");
+  assert_eq!(db.cloud_address().expect("address"), Some(pair.clone()));
+  let web_only = StoredCloudAddress { api: None, ..pair };
+  db.set_cloud_address(Some(&web_only))
+    .expect("a cloud without an API address");
+  assert_eq!(db.cloud_address().expect("address"), Some(web_only));
+  db.set_cloud_address(None).expect("the build's own");
+  assert_eq!(db.cloud_address().expect("address"), None);
+}
+
+/// The schema before the cloud's API address (28).
+const BEFORE_API_ADDRESS: u32 = 27;
+
+#[test]
+fn the_cloud_addresses_stored_before_the_api_address_have_none() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let raw = AppDb::create_at_version(&path, BEFORE_API_ADDRESS).expect("the schema before the API address");
+  raw
+    .execute_batch(
+      "INSERT INTO cloud_account (id, account_id, email, display_name, device_name, signed_in_at, cloud_address) \
+       VALUES (1, '0191c7c0-0000-7000-8000-000000000b0b', 'ivan@example.com', 'Ivan Zaida', 'IVAN-PC', 5, \
+       'https://orchester.cloud');
+       UPDATE app_settings SET cloud_address = 'https://orchester.cloud' WHERE id = 1;",
+    )
+    .expect("rows of that schema");
+  drop(raw);
+  let db = AppDb::open(&path).expect("migrate");
+  let account = db.cloud_account().expect("account").expect("kept");
+  assert_eq!(account.cloud_address, "https://orchester.cloud");
+  assert_eq!(account.cloud_api_address, None);
   assert_eq!(
-    db.cloud_address().expect("address").as_deref(),
-    Some("https://cloud.test.lurq.dev")
+    db.cloud_address().expect("address"),
+    Some(StoredCloudAddress {
+      web: "https://orchester.cloud".into(),
+      api: None,
+    })
   );
 }
 

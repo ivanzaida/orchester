@@ -14,7 +14,7 @@ use std::{
 
 use orchester_api::{
   Credential,
-  client::{CloudClient, ServerAddress, SignInAnswer},
+  client::{CloudAddress, CloudClient, ServerAddress, SignInAnswer},
   cloud::{CloudPlatform, CloudSignIn, DeviceInfo, ServerLinked},
   totp,
 };
@@ -92,6 +92,11 @@ impl RealCloud {
     format!("http://localhost:{}", self.address.port())
   }
 
+  /// The cloud on loopback has no API address of its own: its API is at `/api/v1` on its address.
+  pub fn cloud_address(&self) -> CloudAddress {
+    CloudAddress::new(ServerAddress::parse(&self.url()).expect("address"), None)
+  }
+
   /// A confirmed account: signed up, its confirmation link used with its password.
   pub fn account(&self, email: &str, password: &str, name: &str) {
     let body = json!({"email": email, "password": password, "display_name": name});
@@ -103,7 +108,7 @@ impl RealCloud {
 
   /// A device of the account, signed in as a desktop would.
   pub fn device(&self, email: &str, password: &str) -> Credential {
-    let client = CloudClient::new(ServerAddress::parse(&self.url()).expect("address")).expect("client");
+    let client = CloudClient::new(self.cloud_address()).expect("client");
     let request = CloudSignIn {
       email: email.into(),
       password: Credential::new(password.into()),

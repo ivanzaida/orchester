@@ -1,6 +1,7 @@
 //! A stand-in for Orchester Cloud on loopback: it answers `GET /api/v1/keys` with a key set its root signed and
 //! `POST /api/v1/identity-tokens` with a fresh identity token for one person and one invite, signed with
-//! `orchester-api`'s identity keys. Nothing else; enough for a desktop's cloud join.
+//! `orchester-api`'s identity keys. Nothing else; enough for a desktop's cloud join. It answers at `/v1` too, as a
+//! cloud's API on an address of its own does.
 
 use std::{
   io::{Read, Write},
@@ -69,7 +70,7 @@ impl FakeCloud {
           .lines()
           .next()
           .unwrap_or_default()
-          .to_owned();
+          .replacen(" /v1/", " /api/v1/", 1);
         let (status, body) = if line.starts_with("GET /api/v1/keys") {
           ("200 OK", json!({"key_set": served}).to_string())
         } else if line.starts_with("POST /api/v1/identity-tokens") {

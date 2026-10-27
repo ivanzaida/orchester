@@ -25,7 +25,7 @@ use std::{
 };
 
 use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
-use orchester_api::client::ServerAddress;
+use orchester_api::client::{CloudAddress, ServerAddress};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   brand, i18n,
@@ -174,8 +174,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   );
   let services = launch.services().ok_or("the QA session did not start")?.clone();
   if !own {
-    let address = ServerAddress::parse(&cloud.url())?;
-    runtime.block_on(services.cloud.set_address(Some(address)))?;
+    runtime.block_on(services.cloud.set_address(Some(signed_in::cloud_address(&cloud))))?;
   }
   seed(state, (&services, &runtime), (&cloud, own))?;
   println!(
@@ -247,7 +246,7 @@ fn seed(
       }
     }
     State::Advanced => {
-      let address = ServerAddress::parse("https://cloud.test.lurq.dev")?;
+      let address = CloudAddress::new(ServerAddress::parse("https://cloud.test.lurq.dev")?, None);
       runtime.block_on(services.cloud.set_address(Some(address)))?;
     }
     State::Unreachable => cloud.set_down(true),

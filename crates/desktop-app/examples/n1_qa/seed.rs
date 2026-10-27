@@ -4,7 +4,10 @@
 
 use std::{error::Error, path::Path};
 
-use orchester_api::{Credential, client::ServerAddress};
+use orchester_api::{
+  Credential,
+  client::{CloudAddress, ServerAddress},
+};
 use orchester_app::{
   routes::{OrchesterPanel, OrchesterView, Route},
   services::Services,
@@ -99,8 +102,10 @@ pub fn seed(
 pub fn sign_in(backends: &Backends, services: &Services, runtime: &Runtime) -> Result<(), Box<dyn Error>> {
   let cloud = &services.cloud;
   runtime.block_on(async {
+    // The stand-in is the cloud's web and API address, its API at `/v1` as the public cloud's is.
+    let address = ServerAddress::parse(&backends.cloud.url())?;
     cloud
-      .set_address(Some(ServerAddress::parse(&backends.cloud.url())?))
+      .set_address(Some(CloudAddress::new(address.clone(), Some(address))))
       .await?;
     cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())).await?;
     Ok::<_, Box<dyn Error>>(())
