@@ -1,6 +1,7 @@
-//! Settings › Accounts (`docs/design/agent-accounts.md`, layer `hgOl2`): the accounts listed by CLI with their states
-//! once their CLIs were asked, the shown one's details, adding one in place with a folder the person already uses,
-//! the sign-in step, renaming, and removing with its connections moved. Stand-in CLIs answer (see `harness`).
+//! Settings › Accounts (`03 · Accounts` `t8i6m`, `03b · Account` `xN1Jy`, `03c · Add account` `XAm8i`, states on
+//! `poD7g`): the accounts listed by CLI with their states once their CLIs were asked, an account's page, adding one
+//! with a folder the person already uses, the sign-in step, renaming in place, and removing in place with its
+//! connections moved. Stand-in CLIs answer (see `harness`).
 
 mod harness;
 mod history;
@@ -12,7 +13,7 @@ use orchester_app::routes::AccountsPanel;
 use orchester_core::{
   account::{AccountCli, AccountState},
   connection::{AgentConnection, AgentProvider, ConnectionAccount, invocation::Platform},
-  id::ConnectionId,
+  id::{AgentAccountId, ConnectionId},
   name::Name,
   store::ConnectionStore,
   time::Timestamp,
@@ -23,6 +24,18 @@ fn home() -> std::path::PathBuf {
   env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
     .map(Into::into)
     .expect("the child's home folder")
+}
+
+/// An account's row in the list.
+fn row(account: AgentAccountId) -> String {
+  format!("account-row-{account}-row")
+}
+
+/// Opens the account page's *…* menu.
+fn more(window: &mut Window) {
+  window.until("the page's head", |window| shown(window, "account-more"));
+  click(window, "account-more");
+  window.until("its menu", |window| shown(window, "account-more-menu"));
 }
 
 #[test]
@@ -38,23 +51,54 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
         &root.join("accounts").join("codex-work"),
       );
       sign_in(work.folder().path().expect("a folder"));
-      go(&mut window, Some(work.id()), AccountsPanel::Account);
-      let row = format!("account-row-{}", work.id());
-      window.until("Work's check", |window| joined(window, &row).contains("Signed in"));
-      assert!(joined(&mut window, &row).contains("Work"));
+      go(&mut window, None, AccountsPanel::Account);
+      window.until("Work's check", |window| {
+        joined(window, &row(work.id())).contains("Signed in")
+      });
+      assert!(joined(&mut window, &row(work.id())).contains("Work"));
       assert!(joined(&mut window, "accounts-group-claude_code").contains("1 account"));
       assert!(joined(&mut window, "accounts-group-codex").contains("2 accounts"));
-      let default = format!("account-row-{}", AccountCli::Codex.default_account());
+      let default = AccountCli::Codex.default_account();
       window.until("Default's check", |window| {
-        joined(window, &default).contains("Not signed in")
+        joined(window, &row(default)).contains("Not signed in")
       });
-      assert!(joined(&mut window, &default).contains("The CLI's own folder · sign in to use it"));
+      assert!(joined(&mut window, &row(default)).contains("The CLI's own folder · sign in to use it"));
+      let top = |window: &mut Window, account: AgentAccountId| {
+        window
+          .tree
+          .get_element_by_id_mut(&row(account))
+          .and_then(|element| element.bounds())
+          .expect("the row is laid out")
+          .y
+      };
+      assert!(
+        top(&mut window, work.id()) < top(&mut window, default),
+        "Default sorts last"
+      );
       assert!(joined(&mut window, "settings-tab-accounts").contains("Accounts 3"));
-      assert!(joined(&mut window, "account-title").contains("Work"));
-      assert!(joined(&mut window, "account-fact-checked-with").contains("codex 0.159.2 on the PATH"));
-      assert!(joined(&mut window, "account-fact-method").contains("ChatGPT"));
-      assert!(joined(&mut window, "account-runs-get").contains("CODEX_HOME"));
-      assert!(joined(&mut window, "account-no-token").contains("codex login status"));
+      click(&mut window, &format!("account-row-{}-open", work.id()));
+      window.until("Work's page", |window| {
+        joined(window, "account-head-title").contains("Codex · Work")
+      });
+      assert!(joined(&mut window, "account-fact-checked-with-row").contains("codex 0.159.2 on the PATH"));
+      // A long folder path keeps to its width, so the label and its hint keep theirs (`c0L3F` in `xN1Jy`).
+      let mut bounds = |id: &str| {
+        window
+          .tree
+          .get_element_by_id_mut(id)
+          .and_then(|element| element.bounds())
+          .unwrap_or_else(|| panic!("{id} is laid out"))
+      };
+      let (folder, path, hint) = (
+        bounds("account-fact-folder-row"),
+        bounds("account-fact-folder-path"),
+        bounds("account-fact-folder-hint"),
+      );
+      assert!(path.width <= 325.5, "{path:?}");
+      assert!(hint.height < 20.0, "the hint is one line: {hint:?}");
+      assert!(folder.height < 70.0, "{folder:?}");
+      assert!(joined(&mut window, "account-fact-method-row").contains("ChatGPT"));
+      assert!(joined(&mut window, "account-facts-note").contains("codex login status"));
       assert!(shown(&mut window, "settings-tab-general") && shown(&mut window, "settings-tab-orchester"));
     },
   );
@@ -73,21 +117,14 @@ fn settings_accounts_shows_why_an_account_does_not_run_and_the_login_to_copy() {
       });
       let command = joined(&mut window, "account-sign-in-command").replace(' ', "");
       assert!(command.contains("claudeauthlogin"), "{command}");
-      // The sign-in and Check again sit under the sentence (`E96CI`), not among the folder's actions.
-      let actions = joined(&mut window, "account-state-actions");
+      // The sign-in and Check again are the notice's actions under the head (`M32Lv`), not the folder's.
+      let actions = joined(&mut window, "account-state-sentence-actions");
       assert!(
         actions.contains("Sign in in a terminal") && actions.contains("Check again"),
         "{actions}"
       );
-      let folder = joined(&mut window, "account-folder-actions");
+      let folder = joined(&mut window, "account-fact-folder-row");
       assert!(!folder.contains("Sign in"), "{folder}");
-      let remove = joined(&mut window, "account-remove");
-      assert!(remove.contains("Remove"));
-      click(&mut window, "account-remove");
-      assert!(
-        !shown(&mut window, "account-remove-question"),
-        "Default can't be removed"
-      );
     },
   );
 }
@@ -99,9 +136,11 @@ fn settings_accounts_adds_a_folder_the_person_already_uses_and_refuses_one_in_a_
     |root| {
       let mut window = Window::open();
       go(&mut window, None, AccountsPanel::Add);
+      window.until("Add account's page", |window| shown(window, "account-add-page"));
+      assert!(joined(&mut window, "account-add-crumb").contains("Accounts"));
       click(&mut window, "account-add-cli-codex");
       set(&mut window, "account-add-name", "Client");
-      assert!(joined(&mut window, "account-row-adding").contains("Client"));
+      assert!(joined(&mut window, "account-add-name-row-hint").contains("Codex · Client"));
       click(&mut window, "account-add-folder-existing");
       let repository = root.join("repo");
       fs::create_dir_all(repository.join(".git")).expect("a repository");
@@ -120,8 +159,8 @@ fn settings_accounts_adds_a_folder_the_person_already_uses_and_refuses_one_in_a_
       window.until("the folder taken", |window| !shown(window, "account-add-folder-error"));
       click(&mut window, "account-add-save");
       let workspace = window.launch.workspace().expect("the session").clone();
-      window.until("the new account's details", |window| {
-        joined(window, "account-title").contains("Client")
+      window.until("the new account's page", |window| {
+        joined(window, "account-head-title").contains("Client")
           && joined(window, "account-title-state").contains("Signed in")
       });
       let added = workspace
@@ -145,20 +184,27 @@ fn settings_accounts_sign_in_step_shows_the_login_for_the_accounts_folder_and_ch
       let folder = root.join("accounts").join("codex-freelance");
       let freelance = add_account(&window, AccountCli::Codex, "Freelance", &folder);
       go(&mut window, Some(freelance.id()), AccountsPanel::SignIn);
-      window.until("the sign-in step", |window| shown(window, "account-sign-in-terminal"));
+      window.until("the sign-in step", |window| shown(window, "account-sign-in"));
       let command = joined(&mut window, "account-sign-in-own").replace(' ', "");
       assert!(
         command.contains("CODEX_HOME") && command.contains("codexlogin"),
         "{command}"
       );
       assert!(joined(&mut window, "account-add-step-1").contains("Freelance · folder created"));
-      window.until("the first check", |window| shown(window, "account-sign-in-check"));
-      sign_in(&folder);
-      window.until("Check again to be pressable", |window| {
-        !joined(window, &format!("account-row-{}", freelance.id())).contains("Checking")
+      let workspace = window.launch.workspace().expect("the session").clone();
+      window.until("the first check", |_| {
+        workspace
+          .agent_account(freelance.id())
+          .expect("read")
+          .is_some_and(|account| account.last_check().is_some())
       });
-      click(&mut window, "account-sign-in-check");
-      window.until("the signed-in outcome", |window| shown(window, "account-sign-in-done"));
+      sign_in(&folder);
+      window.until("the signed-in outcome", |window| {
+        if !shown(window, "account-sign-in-done") && shown(window, "account-sign-in-check") {
+          click(window, "account-sign-in-check");
+        }
+        shown(window, "account-sign-in-done")
+      });
       assert!(joined(&mut window, "account-sign-in-done").contains("Signed in"));
     },
   );
@@ -174,12 +220,16 @@ fn settings_accounts_renames_in_place() {
       "Work",
       &root.join("accounts").join("codex-work"),
     );
-    go(&mut window, Some(work.id()), AccountsPanel::Rename);
-    window.until("the name field", |window| shown(window, "account-rename-field"));
+    go(&mut window, Some(work.id()), AccountsPanel::Account);
+    more(&mut window);
+    click(&mut window, "account-rename");
+    window.until("the name field in the head", |window| {
+      shown(window, "account-rename-field")
+    });
     set(&mut window, "account-rename-field", "Kontur team");
     click(&mut window, "account-rename-save");
     window.until("the new name", |window| {
-      joined(window, "account-title").contains("Kontur team")
+      joined(window, "account-head-title").contains("Kontur team")
     });
     let stored = window
       .launch
@@ -194,9 +244,9 @@ fn settings_accounts_renames_in_place() {
 }
 
 #[test]
-fn settings_accounts_removes_an_account_and_moves_its_connections() {
+fn settings_accounts_removes_an_account_in_place_and_moves_its_connections() {
   in_child(
-    "settings_accounts_removes_an_account_and_moves_its_connections",
+    "settings_accounts_removes_an_account_in_place_and_moves_its_connections",
     |root| {
       let mut window = Window::open();
       let work = add_account(
@@ -221,14 +271,26 @@ fn settings_accounts_removes_an_account_and_moves_its_connections() {
         .expect("the project")
         .create_connection(&connection)
         .expect("created");
-      go(&mut window, Some(work.id()), AccountsPanel::UsedBy);
+      go(&mut window, Some(work.id()), AccountsPanel::Account);
       window.until("what uses Work", |window| {
         joined(window, "account-used-by").contains("Codex · Work")
       });
-      assert!(joined(&mut window, "account-tab-used-by").contains("Used by 1"));
+      assert!(joined(&mut window, "account-used-by-meta").contains("1 in 1 project"));
+      more(&mut window);
       click(&mut window, "account-remove");
-      window.until("the question", |window| shown(window, "account-remove-question"));
+      window.until("the question in place", |window| {
+        shown(window, "account-remove-question")
+      });
+      assert!(
+        shown(&mut window, "account-page"),
+        "asked on the account's page, not in a dialog"
+      );
       assert!(joined(&mut window, "account-remove-question").contains("Remove Work from Orchester?"));
+      click(&mut window, "account-remove-keep");
+      window.until("the question gone", |window| !shown(window, "account-remove-question"));
+      more(&mut window);
+      click(&mut window, "account-remove");
+      window.until("the question again", |window| shown(window, "account-remove-question"));
       click(&mut window, "account-remove-confirm");
       let workspace = window.launch.workspace().expect("the session").clone();
       window.until("Work removed", |_| {
@@ -248,14 +310,15 @@ fn settings_accounts_removes_an_account_and_moves_its_connections() {
         work.folder().path().expect("a folder").is_dir(),
         "the folder stays unless ticked"
       );
+      window.until("back on the list", |window| shown(window, "settings-accounts"));
     },
   );
 }
 
 #[test]
-fn settings_accounts_rename_header_holds_only_the_field_save_and_cancel() {
+fn settings_accounts_rename_head_holds_only_the_field_save_and_cancel() {
   in_child(
-    "settings_accounts_rename_header_holds_only_the_field_save_and_cancel",
+    "settings_accounts_rename_head_holds_only_the_field_save_and_cancel",
     |root| {
       let mut window = Window::open();
       let work = add_account(
@@ -267,12 +330,14 @@ fn settings_accounts_rename_header_holds_only_the_field_save_and_cancel() {
       go(&mut window, Some(work.id()), AccountsPanel::Rename);
       window.until("the name field", |window| shown(window, "account-rename-field"));
       assert!(shown(&mut window, "account-rename-save") && shown(&mut window, "account-rename-cancel"));
-      for hidden in ["account-check-again", "account-rename", "account-remove"] {
+      for hidden in ["account-check-again", "account-more"] {
         assert!(
           !shown(&mut window, hidden),
-          "{hidden} is not in the header while renaming"
+          "{hidden} is not in the head while renaming"
         );
       }
+      click(&mut window, "account-rename-cancel");
+      window.until("the head again", |window| shown(window, "account-more"));
     },
   );
 }
@@ -286,8 +351,13 @@ fn settings_accounts_says_in_place_why_default_cant_be_removed() {
       Some(AccountCli::ClaudeCode.default_account()),
       AccountsPanel::Account,
     );
-    window.until("Default's reason", |window| shown(window, "account-remove-default"));
-    assert!(joined(&mut window, "account-remove-default").contains("can't remove it"));
+    more(&mut window);
+    assert!(joined(&mut window, "account-remove").contains("can't remove it"));
+    click(&mut window, "account-remove");
+    assert!(
+      !shown(&mut window, "account-remove-question"),
+      "Default can't be removed"
+    );
   });
 }
 

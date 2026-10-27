@@ -77,10 +77,20 @@ pub fn add_account(window: &Window, cli: AccountCli, name: &str, folder: &Path) 
   account
 }
 
+/// The pages of Settings › Accounts: the list, an account's, *Add account* and its sign-in step.
+const PAGES: [&str; 4] = [
+  "settings-accounts",
+  "account-page",
+  "account-add-page",
+  "account-sign-in-page",
+];
+
 /// Opens Settings › Accounts at `panel` of `account`.
 pub fn go(window: &mut Window, account: Option<AgentAccountId>, panel: AccountsPanel) {
   window.navigation().go(Route::Accounts(AccountsView { account, panel }));
-  window.until("the accounts", |window| window.texts("accounts-list").is_some());
+  window.until("the accounts", |window| {
+    PAGES.iter().any(|page| window.texts(page).is_some())
+  });
 }
 
 pub fn click(window: &mut Window, id: &str) {

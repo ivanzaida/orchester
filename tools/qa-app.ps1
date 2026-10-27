@@ -26,6 +26,18 @@
 # opens on the person's desktop. Without it the QA app has none named: an ORCHESTER_EDITOR of the caller's is
 # dropped, and the app falls back to VS Code's code or the system's folder program, which a person's press opens.
 #
+# -Scenario settings is app Settings with a person's data in it (App settings · redesign, iUmo3), fixture-only and
+# deterministic. The seed writes agent accounts of both CLIs in different states with plan readings (Work signed in
+# and blocked from removal by a running run, Personal unused, Old's sign-in expired, Client in use by a connection,
+# Archive's folder missing), quiet hours 22:30-07:00 and the daily report at 18:30, and stand-in claude and codex in
+# bin/settings-qa/ that answer as those accounts stand: the QA app runs with them first on its PATH (folders that
+# hold a real claude or codex are left out) and its home, CLAUDE_CONFIG_DIR, CODEX_HOME and ORCHESTER_ACCOUNTS_DIR
+# there, so no real CLI or sign-in is read. The QA app (--settings) sets up loopback team servers (Kontur team
+# connected with Kontur linked, Build box offline, Old office with a changed certificate, Design team signed out of,
+# Team box whose sign-in ended), an invite waiting at the stand-in cloud, two invites kept here (one waiting for
+# approval, one that didn't finish), and shows the installed app's MCP rows: that server listens on a free port with
+# a token in memory, while the window's own server stays the QA copy's for the verifier.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never the user's install (E:\Orchester, formerly E:\projects\orchester), the user's discovery
@@ -37,7 +49,7 @@ param(
     # (gh as another account, a gone base branch, secrets in three environments with uses, the MCP server
     # figma); project-settings-shared is it linked to a team server no one answers for (Sharing · shared).
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "orchestrator", "orchestrator-not-set-up", "changes", "cards", "decisions", "deliverables", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "project-settings", "project-settings-shared", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "pull-request-feedback", "sources", "sources-unreadable", "usage", "usage-empty", "usage-bare", "import")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "orchestrator", "orchestrator-not-set-up", "changes", "cards", "decisions", "deliverables", "delivery", "delivery-blocked", "delivery-empty", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "project-settings", "project-settings-shared", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "settings", "pull-requests", "pull-request-feedback", "sources", "sources-unreadable", "usage", "usage-empty", "usage-bare", "import")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
@@ -151,9 +163,32 @@ $env:ORCHESTER_APP_MCP_WINDOW_CONTROL = "on"
 $env:ORCHESTER_APP_MCP_DISCOVERY = $mcp
 $env:ORCHESTER_APP_WINDOW_POSITION = $windowPosition
 $env:ORCHESTER_EDITOR = if ($Editor) { [System.IO.Path]::GetFullPath($Editor) } else { $null }
+if ($Scenario -eq "settings") {
+    # The seed's stand-in CLIs first on the PATH, without a folder that holds a real claude or codex, and the CLIs'
+    # own folders, the home and the folder for new accounts in bin/settings-qa/.
+    $fixtures = Join-Path $bin "settings-qa"
+    $holdsCli = {
+        param($folder)
+        foreach ($program in @("claude", "codex")) {
+            foreach ($extension in @("", ".exe", ".cmd", ".bat", ".ps1")) {
+                if (Test-Path -LiteralPath (Join-Path $folder "$program$extension") -PathType Leaf) { return $true }
+            }
+        }
+        return $false
+    }
+    $separator = [System.IO.Path]::PathSeparator
+    $kept = @($env:PATH -split $separator | Where-Object { $_ -and -not (& $holdsCli $_) })
+    $env:PATH = (@(Join-Path $fixtures "path") + $kept) -join $separator
+    $fixtureHome = Join-Path $fixtures "home"
+    $env:CLAUDE_CONFIG_DIR = Join-Path $fixtureHome ".claude"
+    $env:CODEX_HOME = Join-Path $fixtureHome ".codex"
+    if ($onWindows) { $env:USERPROFILE = $fixtureHome } else { $env:HOME = $fixtureHome }
+    $env:ORCHESTER_ACCOUNTS_DIR = Join-Path $fixtures "accounts"
+}
 $appProgram = Join-Path $bin "orchester-app-qa$exe"
 # Start-Process takes no empty argument list: an option that is always there leads the QA app's arguments.
 $appArguments = if ($SignedOut) { "--signed-out" } else { "--signed-in" }
+if ($Scenario -eq "settings") { $appArguments += " --settings" }
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"
 if ($onWindows) {

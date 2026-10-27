@@ -132,6 +132,7 @@ fn gate_sign_out_asks_in_place_and_locks() {
   );
   window.press("orchester-cloud-sign-out");
   shows(&mut window, "orchester-cloud-sign-out-question");
+  // Asked in place under the account card (`Sign out` `Q38L6j`); the notice's icon glyph is left out.
   assert_eq!(
     window.texts("orchester-cloud-sign-out-question").expect("the question"),
     [

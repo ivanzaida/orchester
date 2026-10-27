@@ -1,9 +1,10 @@
-//! *Connect a server* (`zxe2P` compare the check code, `bIwte` join with an invite code, `ZJytn` its states): a page
-//! of Settings › Orchester with its breadcrumb and *Cancel*, and four steps on a rail. **Address**: what answers there
-//! is asked before anything is sent (nothing answers, not an Orchester server, not set up yet, plain HTTP only after an
-//! explicit allow, a certificate the system trusts, already connected). **Compare the check code**: for a server with
-//! its own certificate, which only a person confirms. **Join**: with the Orchester account or an invite code.
-//! **Your username there**: only for someone new on the server. Then the server's entry.
+//! *Connect a server* (`05b · Join step` `MrVql`, `05b2 · Compare the check code` `IBnMu`): a page under Settings ›
+//! Orchester Cloud with its crumb back, its title and what connecting is, four steps in a box and *Cancel* at the end
+//! under it. **Address**: what answers there is asked before anything is sent (nothing answers, not an Orchester
+//! server, not set up yet, plain HTTP only after an explicit allow, a certificate the system trusts, already
+//! connected). **Compare the check code**: for a server with its own certificate, which only a person confirms.
+//! **Join**: with the Orchester account or an invite code. **Your username there**: only for someone new on the
+//! server. Then the server's page.
 
 mod join;
 mod steps;
@@ -12,12 +13,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::Row,
   core::Signal,
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  layout::layout_kind::Justify,
+  node::{Element, dimension::Dimension},
 };
 use orchester_api::client::{PlainHttp, ServerAddress};
 use orchester_core::id::ServerId;
@@ -29,22 +29,18 @@ use orchester_workspace::{
 use super::{Said, words::server_client};
 use crate::{
   navigation::Navigation,
-  routes::{OrchesterView, Route},
+  routes::{ConnectStep, OrchesterView, Route},
+  screens::settings::frame,
   services::Services,
-  theme::{ExtraTypography, OrchesterSpacing, OrchesterText},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
-  },
+  ui::button::{ActionButton, ButtonKind},
 };
-
-/// The steps' column (`YlIGu`).
-const STEPS_WIDTH: f32 = 720.0;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct Props {
   /// The server whose address the page starts with: joining it again with a code.
   pub server: Option<ServerId>,
+  /// The step the page opens on: past *Address*, it asks what answers at that server's address as *Continue* does.
+  pub step: ConnectStep,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -132,37 +128,56 @@ impl Component for ConnectPage {
     let entries = entries(ctx);
     self.seed(ctx, entries.as_deref());
     let steps = steps::steps(ctx, self, entries.as_deref().unwrap_or_default());
-    Column::new()
-      .id("orchester-connect")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(page_header(ctx))
+    let navigation = Navigation::of(ctx);
+    let back = navigation.clone();
+    let cancel = ActionButton::new(
+      "orchester-connect-cancel",
+      ButtonKind::Ghost,
+      ctx.t("sharing.connect.cancel"),
+    )
+    .on_click(move || back.close_panel(Route::Orchester(OrchesterView::default())));
+    frame::pane("orchester-connect")
+      .child(frame::crumb(
+        "orchester-connect-crumb",
+        &ctx.t("settings.tabs.orchester"),
+        navigation.to(Route::Orchester(OrchesterView::default())),
+      ))
+      .child(frame::head(
+        "orchester-connect-header",
+        None,
+        (
+          &ctx.t("sharing.connect.title"),
+          Some(frame::lead("orchester-connect-lead", &ctx.t("sharing.connect.lead")).into()),
+        ),
+        Vec::new(),
+      ))
+      .child(steps)
       .child(
-        ScrollVertical::new(
-          Row::new()
-            .width(Dimension::Pct(100.0))
-            .padding(Padding::symmetric(
-              OrchesterSpacing::PageSide.role(),
-              lurq::app::theme::SpacingSize::Xl,
-            ))
-            .child(Column::new().width(Dimension::Px(STEPS_WIDTH)).child(steps)),
-        )
-        .id("orchester-connect-scroll")
-        .flex(1.0),
+        Row::new()
+          .id("orchester-connect-actions")
+          .width(Dimension::Pct(100.0))
+          .justify(Justify::End)
+          .child(cancel),
       )
   }
 }
 
 impl ConnectPage {
-  /// Starts with the address of the server the page was opened for, once the servers are read.
+  /// Starts with the address of the server the page was opened for, once the servers are read; opened at a later
+  /// step, asks what answers there at once.
   fn seed(&self, ctx: &Ctx, entries: Option<&[ServerEntry]>) {
     let Some(entries) = entries.filter(|_| !self.seeded.get()) else {
       return;
     };
     self.seeded.set(true);
-    let server = ctx.props::<Props>().server;
-    if let Some(entry) = entries.iter().find(|entry| Some(entry.stored.id) == server) {
-      self.address.set(entry.address.as_str().to_owned());
+    let Props { server, step } = *ctx.props::<Props>();
+    let Some(entry) = entries.iter().find(|entry| Some(entry.stored.id) == server) else {
+      return;
+    };
+    let address = entry.address.as_str().to_owned();
+    self.address.set(address.clone());
+    if step != ConnectStep::Address {
+      self.reach.run((address, false));
     }
   }
 
@@ -213,69 +228,4 @@ fn reach_error(error: &orchester_api::client::ClientError, address: &ServerAddre
     ClientError::PlainHttpRefused => Said::new("sharing.connect.address.plain"),
     error => server_client(error),
   }
-}
-
-/// The page's header (`P2GyHo`): the breadcrumb, the title, what connecting is, and *Cancel*.
-fn page_header(ctx: &mut Ctx) -> Element {
-  let navigation = Navigation::of(ctx);
-  let crumb = |text: &str, color: PaletteColor| {
-    Text::new(text)
-      .variant(ExtraTypography::Lead.role())
-      .color(color)
-      .nowrap()
-  };
-  let breadcrumb = Row::new()
-    .id("orchester-connect-breadcrumb")
-    .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(crumb(
-      &ctx.t(crate::routes::Screen::Settings.title_key()),
-      PaletteColor::TextMuted,
-    ))
-    .child(icon(
-      Icon::ChevronRight,
-      crate::theme::IconSize::Sm,
-      PaletteColor::TextMuted,
-    ))
-    .child(crumb(&ctx.t("settings.tabs.orchester"), PaletteColor::TextMuted))
-    .child(icon(
-      Icon::ChevronRight,
-      crate::theme::IconSize::Sm,
-      PaletteColor::TextMuted,
-    ))
-    .child(crumb(&ctx.t("sharing.connect.title"), PaletteColor::TextSecondary));
-  let cancel = ActionButton::new(
-    "orchester-connect-cancel",
-    ButtonKind::Ghost,
-    ctx.t("sharing.connect.cancel"),
-  )
-  .on_click(move || navigation.close_panel(Route::Orchester(OrchesterView::default())));
-  Row::new()
-    .id("orchester-connect-header")
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(crate::theme::SettingsSpacing::PanelTop.role())
-        .right(OrchesterSpacing::PageSide.role())
-        .bottom(lurq::app::theme::SpacingSize::Lg)
-        .left(OrchesterSpacing::PageSide.role()),
-    )
-    .spacing(lurq::app::theme::SpacingSize::Lg)
-    .align_items(Alignment::End)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(SpacingSize::Sm)
-        .child(breadcrumb)
-        .child(Text::new(&ctx.t("sharing.connect.title")).variant(OrchesterText::PageTitle.role()))
-        .child(
-          Text::new(&ctx.t("sharing.connect.lead"))
-            .variant(ExtraTypography::Lead.role())
-            .width(Dimension::Pct(100.0)),
-        ),
-    )
-    .child(cancel)
-    .child(Spacer::new().width(Dimension::Px(0.0)))
-    .into()
 }

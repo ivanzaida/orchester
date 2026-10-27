@@ -2,14 +2,19 @@
 //! `main` opens it) on the data beside this program, past the sign-in gate (2026-10-16). It signs in as a person would,
 //! to a stand-in Orchester Cloud on loopback that answers while the window is open, with the device token in a keychain
 //! in memory: nothing reaches the OS keychain and no QA copy talks to the real cloud. `--signed-out` stops at the gate,
-//! with the stand-in set as the cloud (Advanced) so a person can sign in there. What it moves to the Recycle Bin /
-//! Trash goes to `trash` beside its data. Fixture data for QA, never shipped: an example is no part of the app's
-//! program.
+//! with the stand-in set as the cloud (Advanced) so a person can sign in there. `--settings` (the `settings`
+//! scenario) also sets up the team servers, invites and installed app's MCP rows app Settings shows ([`settings`]).
+//! What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA, never shipped: an
+//! example is no part of the app's program.
 //!
-//!   qa_app [--signed-in | --signed-out]
+//!   qa_app [--signed-in | --signed-out] [--settings]
 
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
+mod agents;
+#[path = "../../../workspace/tests/server_support/mod.rs"]
+mod server_support;
+mod settings;
 #[path = "../../tests/support/signed_in.rs"]
 mod signed_in;
 
@@ -27,11 +32,16 @@ use tokio::runtime::Runtime;
 
 fn main() -> Result<(), Box<dyn Error>> {
   let log = app_log::install();
-  let signed_out = match std::env::args().nth(1).as_deref() {
-    None | Some("--signed-in") => false,
-    Some("--signed-out") => true,
-    Some(other) => return Err(format!("expected --signed-in or --signed-out, not {other}").into()),
-  };
+  let mut signed_out = false;
+  let mut with_settings = false;
+  for argument in std::env::args().skip(1) {
+    match argument.as_str() {
+      "--signed-in" => signed_out = false,
+      "--signed-out" => signed_out = true,
+      "--settings" => with_settings = true,
+      other => return Err(format!("expected --signed-in, --signed-out or --settings, not {other}").into()),
+    }
+  }
   let position = WindowPosition::from_environment()?;
   let location = app_paths::app_data_location()?;
   if let Some(folder) = location.database.parent() {
@@ -58,13 +68,25 @@ fn main() -> Result<(), Box<dyn Error>> {
       signed_in::sign_in(services, runtime.handle(), &cloud);
     }
   }
+  let prepared = match (with_settings && !signed_out, launch.services(), launch.workspace()) {
+    (true, Some(services), Some(workspace)) => Some(settings::prepare(
+      (services, workspace),
+      (&runtime, &location.database),
+      &cloud,
+    )?),
+    (true, ..) => return Err("--settings needs a started session".into()),
+    (false, ..) => None,
+  };
   println!(
-    "cloud {} as {}\nsigned in {}",
+    "cloud {} as {}\nsigned in {}\nsettings fixtures {}",
     cloud.url(),
     signed_in::account_cloud::EMAIL,
-    !signed_out
+    !signed_out,
+    prepared.is_some()
   );
-  window::open(&runtime, &launch, position);
+  let (fixtures, shown) = prepared.map_or((None, None), |(fixtures, shown)| (Some(fixtures), Some(shown)));
+  window::open_showing(&runtime, &launch, position, shown);
+  drop(fixtures);
   clipboard::clear_at_exit();
   launch.end();
   Ok(())
