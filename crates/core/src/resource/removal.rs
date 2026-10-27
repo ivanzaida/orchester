@@ -43,12 +43,23 @@ pub enum Removal {
 }
 
 /// Whether a removal may clear the resource from the steps that run it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RemoveMode {
   /// Remove only a resource no step runs.
   Unused,
-  /// Clear it from every step that runs it, then remove it.
-  Reset,
+  /// Clear it from these steps, the ones the person was shown, then remove it. While the steps that run it are not
+  /// exactly these, nothing changes and the removal names them ([`Removal::InUse`]), so it is asked again.
+  Reset(Vec<StepUser>),
+}
+
+impl RemoveMode {
+  /// Whether `found`, the steps that run the resource now, are the ones this mode may go on with.
+  pub fn may_go_on(&self, found: &[StepUser]) -> bool {
+    match self {
+      Self::Unused => found.is_empty(),
+      Self::Reset(shown) => shown.len() == found.len() && found.iter().all(|user| shown.contains(user)),
+    }
+  }
 }
 
 /// The steps of one pipeline that run `executor`: those of its latest version, then those of its draft the version

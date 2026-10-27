@@ -52,7 +52,7 @@ impl ProjectDb {
 pub(super) fn remove(
   connection: &mut Connection,
   id: ResourceId,
-  mode: RemoveMode,
+  mode: &RemoveMode,
   now: Timestamp,
 ) -> Result<Removal, StoreError> {
   let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -63,6 +63,7 @@ pub(super) fn remove(
     return Err(StoreError::ResourceNotFound(id));
   }
   let mut users = Vec::new();
+  let mut running = Vec::new();
   // Only profiles and tools are named by pipeline steps; instructions and skills reach agents by their scope.
   if matches!(resource.kind(), ResourceKind::AgentProfile | ResourceKind::Tool) {
     let pipelines = load_resources(
@@ -74,18 +75,18 @@ pub(super) fn remove(
       let draft = load_draft::<Pipeline>(&transaction, pipeline.id())?;
       let latest = latest::<Pipeline>(&transaction, pipeline.id())?;
       let found = pipeline_step_users((pipeline.id(), pipeline.name()), (draft.as_ref(), latest.as_ref()), id);
-      if found.is_empty() {
-        continue;
+      if !found.is_empty() {
+        users.extend(found);
+        running.push((pipeline.id(), draft, latest));
       }
-      if mode == RemoveMode::Reset {
-        reset(&transaction, pipeline.id(), (draft, latest), (id, now))?;
-      }
-      users.extend(found);
     }
   }
-  if mode == RemoveMode::Unused && !users.is_empty() {
-    // Dropping the transaction rolls it back: nothing changed.
+  if !mode.may_go_on(&users) {
+    // Dropping the transaction rolls it back: nothing changed, and the steps that run it now are asked about.
     return Ok(Removal::InUse(users));
+  }
+  for (pipeline, draft, latest) in running {
+    reset(&transaction, pipeline, (draft, latest), (id, now))?;
   }
   transaction.execute(
     "INSERT INTO removed_resources (resource_id, removed_at) VALUES (?1, ?2)",

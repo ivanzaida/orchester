@@ -188,7 +188,8 @@ pub trait ResourceStore {
 
   /// Removes resource `id` (`crate::resource::Removal`), atomically with the reads that decide it: while steps of a
   /// pipeline's latest version or draft run it, [`RemoveMode::Unused`] changes nothing and names them, and
-  /// [`RemoveMode::Reset`] first saves each such pipeline's draft without it. Its versions stay.
+  /// [`RemoveMode::Reset`] first saves each such pipeline's draft without it, when those steps are exactly the ones
+  /// it lists; otherwise it too changes nothing and names them. Its versions stay.
   fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, Self::Error>;
 
   /// Stores `draft` as the resource's only draft, replacing an existing one. A draft that

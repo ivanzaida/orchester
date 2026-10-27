@@ -1556,7 +1556,8 @@
       "skill": "Publishing the skill gives every agent it applies to its description in the prompt and its body and reference files to read.",
       "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
       "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
-      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
+      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions.",
+      "removalPersonOnly": "Only a person removes this here: removing it changes what agents are told or which steps they run. Input from an MCP client is taken only while you let automation change agent permissions."
     }
   },
   "statusBar": {

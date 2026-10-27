@@ -1,7 +1,11 @@
 //! Remove, asked in place under an opened item's head (`06c`): a profile, instruction, skill or tool no one uses is
 //! removed after a plain question; one in use lists who uses it, and *Remove and reset* removes it and clears it from
-//! every one of them (`orchester_workspace::removal`). Whoever starts using it meanwhile is found by the removal
-//! itself, which then asks again with them.
+//! exactly the steps listed (`orchester_workspace::removal`). When the steps that run it are others by then, the
+//! removal changes nothing and the question asks again with them.
+//!
+//! Removing changes what agents are told (an instruction's or skill's text leaves their prompts) or which steps run
+//! what (a profile's or tool's steps are reset), so lurq's synthetic input (an MCP client driving the window) removes
+//! only under *Let automation change agent permissions*, as Publish does; otherwise the question says it is a person's.
 
 use std::sync::Arc;
 
@@ -20,11 +24,13 @@ use orchester_core::{
 use orchester_workspace::{
   background,
   messages::Message,
+  prompt_changes,
   removal::{self, Reached, Users},
 };
 
 use super::question::{Question, Weight};
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::ShownProject,
   services::Services,
   ui::{icon::Icon, message::message_text},
@@ -72,6 +78,9 @@ pub(crate) struct RemoveQuestion {
   work: FutureAction<RemoveMode, Removed, Message>,
   /// Who the removal found using it, when that is not who the question listed.
   found: Signal<Option<Found>>,
+  gate: Option<InputGate>,
+  /// An MCP client's input pressed the confirm without the person's consent; nothing was removed.
+  refused: Signal<bool>,
 }
 
 impl Component for RemoveQuestion {
@@ -99,7 +108,12 @@ impl Component for RemoveQuestion {
         None => {}
       }
     });
-    Self { work, found }
+    Self {
+      work,
+      found,
+      gate: ctx.use_context::<InputGate>(),
+      refused: ctx.signal(false),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -112,23 +126,30 @@ impl Component for RemoveQuestion {
       })
       .state()
       .get();
+    // Until who uses it is known (read, or found by a removal), nothing is offered: a failed read shows its failure
+    // instead of offering it as unused.
+    let known = self.found.get().is_some() || read.data.is_some();
     let users = match (self.found.get(), read.data.clone()) {
       (Some(Found(found)), _) => Users::Steps(found),
       (None, Some(users)) => users,
       (None, None) => Users::Steps(Vec::new()),
     };
     let state = self.work.state().get();
-    let failure = state
-      .error
-      .clone()
-      .filter(|_| state.is_rejected())
-      .or_else(|| read.error.clone().filter(|_| read.is_rejected()))
-      .map(|error| message_text(ctx, &error));
-    let busy = state.is_pending() || (read.is_pending() && read.data.is_none());
-    let mode = if users.is_empty() {
-      RemoveMode::Unused
+    let failure = if self.refused.get() {
+      Some(message_text(ctx, &prompt_changes::removal_person_only()))
     } else {
-      RemoveMode::Reset
+      state
+        .error
+        .clone()
+        .filter(|_| state.is_rejected())
+        .or_else(|| read.error.clone().filter(|_| read.is_rejected()))
+        .map(|error| message_text(ctx, &error))
+    };
+    let busy = state.is_pending() || !known;
+    // Reset goes on only with the steps listed here; any other use makes the removal ask again.
+    let mode = match &users {
+      Users::Steps(steps) if !steps.is_empty() => RemoveMode::Reset(steps.clone()),
+      Users::Steps(_) | Users::Reach(_) => RemoveMode::Unused,
     };
     let title = ctx.t_args("hub.remove.title", [("name", &*props.name)]);
     let (sentence, confirm) = words(ctx, kind, &users);
@@ -142,10 +163,19 @@ impl Component for RemoveQuestion {
       question = question.line(glyph, line);
     }
     let (work, keep) = (self.work.clone(), props.on_keep.clone());
+    let (gate, refused) = (self.gate.clone(), self.refused.clone());
     Element::from(
       question
         .failure(failure)
-        .on_confirm(busy, move || work.run(mode))
+        .on_confirm(busy, move || {
+          let may = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
+          refused.set(!may);
+          if may {
+            work.run(mode.clone());
+          } else {
+            tracing::warn!("synthetic input pressed Remove; not taken");
+          }
+        })
         .on_keep(move || keep()),
     )
   }

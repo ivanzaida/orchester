@@ -92,6 +92,47 @@ fn instructions_a_removed_rule_leaves_a_removed_line_in_its_group() {
 }
 
 #[test]
+fn instructions_remove_refuses_an_mcp_clients_press() {
+  let mut screen = Instructions::new();
+  let id = screen.rule(
+    "Never push to main",
+    "Never push to main.",
+    InstructionScope::Project,
+    true,
+  );
+  screen.list();
+  screen.until("listed", |s| {
+    s.text("instruction-library").contains("Never push to main")
+  });
+  screen.click(&format!("instruction-{id}"));
+  screen.until("the rule's page", |s| s.exists("instruction-more"));
+  screen.click("instruction-more");
+  screen.click("instruction-remove");
+  screen.until("asked in place", |s| s.exists("hub-remove-confirm"));
+  // An MCP client's press, without the person's consent, removes nothing and says it is a person's.
+  screen.until("refused", |s| {
+    if s.window.tree.get_element_by_id("hub-remove-confirm").is_some() {
+      lurq::app::events::with_synthetic_input(|| {
+        if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
+          confirm.click();
+        }
+      });
+    }
+    s.window.pass();
+    s.text("hub-remove").contains("Only a person removes this here")
+  });
+  assert!(screen.listed().entry(id).is_some(), "the rule stays");
+  // The person's own press removes it.
+  screen.until("removed", |s| {
+    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
+      confirm.click();
+    }
+    s.window.pass();
+    s.listed().entry(id).is_none()
+  });
+}
+
+#[test]
 fn instructions_discard_draft_returns_to_the_published_version() {
   let mut screen = Instructions::new();
   let id = screen.rule("Kept rule", "Published text", InstructionScope::Project, true);

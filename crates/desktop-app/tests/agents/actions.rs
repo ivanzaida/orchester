@@ -200,8 +200,50 @@ fn agents_remove_and_reset_a_profile_a_pipeline_step_uses() {
   );
 }
 
-/// A published pipeline whose one step runs `profile`.
+#[test]
+fn agents_remove_and_reset_asks_again_when_another_pipeline_started_using_it() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(true);
+  let delivery = assigned_pipeline(&screen, id);
+  screen.open(id);
+  screen.click("agent-more");
+  screen.click("agent-remove");
+  screen.until("question with its users", |s| {
+    s.exists("hub-remove-confirm") && s.text("hub-remove").contains("Delivery v1 · 01 Implement")
+  });
+  // While the question shows only Delivery, Review starts running the profile. One press: the question has read
+  // its users, so it takes it.
+  let review = assigned_pipeline_as(&screen, id, ("review", "Review"));
+  screen.click("hub-remove-confirm");
+  screen.until("asked again with Review", |s| {
+    s.exists("hub-remove") && s.text("hub-remove").contains("Review v1 · 01 Implement")
+  });
+  assert!(screen.listed().profile(id).is_some(), "nothing is removed");
+  let db = ProjectDb::open(&screen.root).expect("database");
+  for pipeline in [delivery, review] {
+    assert!(
+      db.draft::<Pipeline>(pipeline).expect("draft").is_none(),
+      "no pipeline is reset"
+    );
+  }
+  screen.press_until("hub-remove-confirm", "removed", |s| {
+    s.listed().profile(id).is_none() && s.exists("agents-new")
+  });
+  for pipeline in [delivery, review] {
+    assert!(
+      db.draft::<Pipeline>(pipeline).expect("draft").is_some(),
+      "both are reset"
+    );
+  }
+}
+
+/// A published Delivery pipeline whose one step runs `profile`.
 fn assigned_pipeline(screen: &Agents, profile: ResourceId) -> ResourceId {
+  assigned_pipeline_as(screen, profile, ("delivery", "Delivery"))
+}
+
+/// A published pipeline named `title` whose one step runs `profile`.
+fn assigned_pipeline_as(screen: &Agents, profile: ResourceId, (slug, title): (&str, &str)) -> ResourceId {
   let pipeline = Pipeline::new(vec![Step {
     key: StepKey::new("implement").expect("step key"),
     name: Name::new("Implement").expect("step name"),
@@ -221,8 +263,8 @@ fn assigned_pipeline(screen: &Agents, profile: ResourceId) -> ResourceId {
   let mut db = ProjectDb::open(&screen.root).expect("database");
   let resource = db
     .create_resource(
-      Slug::new("delivery").expect("slug"),
-      Name::new("Delivery").expect("name"),
+      Slug::new(slug).expect("slug"),
+      Name::new(title).expect("name"),
       &pipeline,
       Timestamp::now(),
     )

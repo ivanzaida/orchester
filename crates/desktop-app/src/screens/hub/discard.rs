@@ -13,6 +13,7 @@ use lurq::{
 };
 use orchester_core::resource::VersionNumber;
 use orchester_workspace::{background, messages::Message, tasks::outside::Outside};
+use parking_lot::Mutex;
 
 use super::question::{Question, Weight};
 use crate::{
@@ -38,8 +39,11 @@ pub(crate) struct DiscardProps {
 }
 
 impl PartialEq for DiscardProps {
+  /// The editor makes `discard` anew for the draft it shows now, so a draft saved while the question asks is the one
+  /// it discards.
   fn eq(&self, other: &Self) -> bool {
     (self.versions, self.change, &self.project) == (other.versions, other.change, &other.project)
+      && Arc::ptr_eq(&self.discard, &other.discard)
   }
 }
 
@@ -57,6 +61,8 @@ pub(crate) fn question(ctx: &mut Ctx, props: DiscardProps) -> Element {
 
 pub(crate) struct DiscardQuestion {
   work: FutureAction<(), Discarded, Message>,
+  /// The discard of the draft the editor shows now, which the confirm runs.
+  latest: Arc<Mutex<Discard>>,
 }
 
 impl Component for DiscardQuestion {
@@ -64,9 +70,10 @@ impl Component for DiscardQuestion {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<DiscardProps>().clone();
-    let discard = props.discard.clone();
+    let latest = Arc::new(Mutex::new(props.discard.clone()));
+    let current = latest.clone();
     let work = ctx.future_action(move |()| {
-      let discard = discard.clone();
+      let discard = current.lock().clone();
       async move { background::run(move || discard().map(Discarded)).await? }
     });
     let (changes, project, change, done) = (
@@ -81,11 +88,13 @@ impl Component for DiscardQuestion {
         done();
       }
     });
-    Self { work }
+    Self { work, latest }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DiscardProps>().clone();
+    // An autosave while the question asks gives the editor a new draft; the confirm discards that one.
+    *self.latest.lock() = props.discard.clone();
     let (draft, published) = props.versions;
     let state = self.work.state().get();
     let failure = state

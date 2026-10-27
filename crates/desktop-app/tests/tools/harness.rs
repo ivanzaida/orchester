@@ -116,12 +116,15 @@ impl Tools {
         .is_some_and(|t| t.join(" ").contains(words))
     });
   }
+  /// Waits for the draft bar to say `state`. A save checks the program and writes SQLite off the UI thread, which
+  /// takes longer while the whole binary runs its tests at once, so it waits longer than drawing does.
   pub fn wait_state(&mut self, state: &str) {
-    self.window.until("editor state", |w| {
-      w.tree.tick_futures();
-      w.texts("tool-draft-bar-status")
-        .is_some_and(|t| t.join(" ").contains(state))
-    });
+    self
+      .window
+      .until_within(std::time::Duration::from_secs(30), "editor state", |w| {
+        w.texts("tool-draft-bar-status")
+          .is_some_and(|t| t.join(" ").contains(state))
+      });
   }
   pub fn wait_for(&mut self, id: &str) {
     self.window.until(id, |w| {

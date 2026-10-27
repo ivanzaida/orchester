@@ -91,17 +91,24 @@ impl Fixture {
 
   /// A published Delivery pipeline whose implement step runs Builder.
   fn pipeline(&mut self) -> ResourceId {
+    self.pipeline_as("delivery", "Delivery")
+  }
+
+  /// A published pipeline `title` whose implement step runs Builder.
+  fn pipeline_as(&mut self, slug: &str, title: &str) -> ResourceId {
     let pipeline = Pipeline::new(vec![step("implement", self.builder)]).expect("valid pipeline");
-    let delivery = self
+    let id = self
       .db
-      .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(3))
+      .create_resource(Slug::new(slug).expect("slug"), name(title), &pipeline, at(3))
       .expect("create pipeline")
       .id();
-    self
-      .db
-      .publish_draft::<Pipeline>(delivery, at(4))
-      .expect("publish pipeline");
-    delivery
+    self.db.publish_draft::<Pipeline>(id, at(4)).expect("publish pipeline");
+    id
+  }
+
+  /// The steps that run Builder, as the in-place question lists them.
+  fn users(&mut self) -> Vec<orchester_core::resource::StepUser> {
+    orchester_core::resource::step_users(&self.db, self.builder).expect("step users")
   }
 
   fn listed(&self) -> bool {
@@ -152,9 +159,10 @@ fn removals_a_profile_in_use_lists_its_steps_and_stays() {
 fn removals_remove_and_reset_clears_the_profile_from_its_steps() {
   let mut fixture = Fixture::new();
   let delivery = fixture.pipeline();
+  let shown = fixture.users();
   let removal = fixture
     .db
-    .remove_resource(fixture.builder, RemoveMode::Reset, at(5))
+    .remove_resource(fixture.builder, RemoveMode::Reset(shown), at(5))
     .expect("remove and reset");
   assert_eq!(removal, Removal::Removed);
   assert!(!fixture.listed());
@@ -167,6 +175,31 @@ fn removals_remove_and_reset_clears_the_profile_from_its_steps() {
     draft.body().steps_run_by(fixture.builder).next().is_none(),
     "no step of the draft runs the removed profile"
   );
+}
+
+#[test]
+fn removals_reset_refuses_when_others_started_using_it() {
+  let mut fixture = Fixture::new();
+  let delivery = fixture.pipeline();
+  let shown = fixture.users();
+  // After the question listed Delivery, another pipeline starts running Builder.
+  let review = fixture.pipeline_as("review", "Review");
+  let Removal::InUse(users) = fixture
+    .db
+    .remove_resource(fixture.builder, RemoveMode::Reset(shown), at(5))
+    .expect("remove and reset")
+  else {
+    panic!("a user the question did not list is asked about again");
+  };
+  assert_eq!(users.len(), 2, "{users:?}");
+  assert!(users.iter().any(|user| user.pipeline == review));
+  assert!(fixture.listed(), "nothing is removed");
+  for pipeline in [delivery, review] {
+    assert!(
+      fixture.db.draft::<Pipeline>(pipeline).expect("draft").is_none(),
+      "no pipeline is reset"
+    );
+  }
 }
 
 #[test]
