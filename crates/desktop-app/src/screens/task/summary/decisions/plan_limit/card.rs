@@ -94,7 +94,7 @@ impl ChoiceCard<'_> {
     if self.stop.others.is_empty() && self.choice.get() == Choice::Other {
       self.choice.set(Choice::Wait);
     }
-    let mut card = card("plan-limit-choice", CardSurface::Decision)
+    let mut card = card("plan-limit-choice", CardSurface::Attention)
       .spacing(ExtraSpacing::Inset.role())
       .child(self.head(ctx));
     if let Some(reading) = &self.stop.reading {

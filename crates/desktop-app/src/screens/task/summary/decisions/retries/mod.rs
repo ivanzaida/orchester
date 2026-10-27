@@ -1,9 +1,9 @@
-//! Waits after retries (`Task · Summary · waits after retries` `DVuXu`): a step kept failing after its
-//! failure route was taken as often as it allows, or broke again after its restart, and the run waits for
-//! the person. Under where the task stands and the run's stages, the evidence ([`evidence`]): the latest
-//! attempt's steps, what the failing step reported, and that the changes and messages are kept. Above *This
-//! run*, the decision ([`decide`]): *Allow 1 retry & continue*, returning the work to an agent step with a
-//! note its agent reads, and *Stop and fail the run*; the runner carries out each.
+//! Waits after retries (`Decision · Stopped after 3 retries` `Q9sqJY` in `Decision cards` `CqVv3`): a step kept
+//! failing after its failure route was taken as often as it allows, or broke again after its restart, and the run
+//! waits for the person. At the top of the Summary the decision ([`decide`]): *Allow 1 retry & continue*, returning
+//! the work to an agent step with a note its agent reads, and *Stop and fail the run*; the runner carries out each.
+//! Under it the evidence ([`evidence`]): what the failing step reported, and that the changes and messages are kept.
+//! The run's last event says how often and where the step sent the work back ([`said`]).
 //!
 //! A step that reported unverified, or was not run again on an unchanged revision, waits the same way, with
 //! what it could not check above the evidence ([`unverified`]) and *Accept … as it is* and *Run … again* in
@@ -26,11 +26,8 @@ use orchester_core::{
 use orchester_workspace::tasks::detail::RunView;
 
 use self::decide::DecideCard;
-use super::{
-  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, step_label, task_notice,
-  this_run_panel,
-};
-use crate::{mcp::input_gate::InputGate, navigation::pointed::PointedCard, services::Services, ui::notice::Notice};
+use super::{Said, TaskContext, action::decision_action, arranged, pointing::Pointing, step_label};
+use crate::{mcp::input_gate::InputGate, navigation::pointed::PointedCard};
 
 /// Which decision was asked for, for the button that shows it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,20 +57,19 @@ pub struct Target(Option<StepKey>);
 
 impl lurq::app::component::DevtoolsInspectable for Target {}
 
-/// Where the task stands; after used-up retries, how often and where the step sent the work back
+/// Where the task stands, from `said`; after used-up retries, how often and where the step sent the work back
 /// (`Notice · Review still fails after 2 retries` in `DVuXu`); after a follow-up of a step without a failure route
 /// failed (the run had been ready for review), that it did and that nothing went back.
-fn notice(ctx: &Ctx, props: &TaskContext, run: &RunView, stuck: &Stuck) -> Notice {
-  let mut said = task_notice(ctx, props);
+pub fn said(ctx: &Ctx, run: &RunView, stuck: &Stuck, mut said: Said) -> Said {
   if stuck.can_accept() {
-    return unverified_notice(ctx, run, stuck, said);
+    return unverified_said(ctx, run, stuck, said);
   }
   let Stuck::RetriesExhausted(step) = stuck else {
-    return said.notice();
+    return said;
   };
   let view = |key: &StepKey| run.steps.iter().find(|view| view.key == *key);
   let (Some(failed), Some(target)) = (view(step), run.run.retry_from().and_then(view)) else {
-    return said.notice();
+    return said;
   };
   let count = run.run.automatic_retries_taken(step);
   let args = [
@@ -97,13 +93,13 @@ fn notice(ctx: &Ctx, props: &TaskContext, run: &RunView, stuck: &Stuck) -> Notic
   };
   said.title = ctx.t_args(title, args.clone());
   said.body = ctx.t_args(body, args);
-  said.notice()
+  said
 }
 
 /// "Unverified: Verify could not check 2 things", or "Verify was not run again", with what that means.
-fn unverified_notice(ctx: &Ctx, run: &RunView, stuck: &Stuck, mut said: super::Said) -> Notice {
+fn unverified_said(ctx: &Ctx, run: &RunView, stuck: &Stuck, mut said: Said) -> Said {
   let Some(step) = run.steps.iter().find(|view| view.key == *stuck.step()) else {
-    return said.notice();
+    return said;
   };
   let count = run.unverified().len();
   let args = [
@@ -131,7 +127,7 @@ fn unverified_notice(ctx: &Ctx, run: &RunView, stuck: &Stuck, mut said: super::S
   };
   said.title = ctx.t_args(title, args.clone());
   said.body = ctx.t_args(body, args);
-  said.notice()
+  said
 }
 
 pub struct RetryDecision {
@@ -173,7 +169,6 @@ impl Component for RetryDecision {
       self.target.set(Target(run.run.return_default()));
     }
     self.pointing.arrived(ctx, &props, PointedCard::Retries);
-    let now = Services::of(ctx).clock.now();
     let decide = DecideCard {
       run,
       stuck,
@@ -187,12 +182,10 @@ impl Component for RetryDecision {
       pointing: &self.pointing,
     }
     .render(ctx);
-    let parts: Vec<Element> = std::iter::once(notice(ctx, &props, run, stuck).into())
-      .chain(std::iter::once(stages(run, Some(stuck.step().as_str()), now)))
+    let parts: Vec<Element> = std::iter::once(decide)
       .chain(unverified::section(ctx, run, stuck.step()))
-      .chain(evidence::sections(ctx, &props, run, stuck.step(), now))
+      .chain(evidence::sections(ctx, &props, run, stuck.step()))
       .collect();
-    let side = this_run_panel(ctx, &props, Some(decide));
-    arranged(ctx, parts, None, side)
+    arranged(parts)
   }
 }

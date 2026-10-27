@@ -1,6 +1,7 @@
-//! A task's Memory tab (`Task · Memory · dark` `a0PLO`) on KON-12 of the `memory` scenario: the records grouped with
-//! the proposals first, the latest handoff flagged and the earlier ones folded, *Next agent receives*, and every change
-//! made in place — approve, review with edits, reject, edit, pin, delete, a new record — with the search and filters.
+//! A task's memory (`Task · Memory · dark` `a0PLO`, the view its Summary's properties link to) on KON-12 of the
+//! `memory` scenario: the records grouped with the proposals first, the latest handoff flagged and the earlier ones
+//! folded, *Next agent receives*, and every change made in place — approve, review with edits, reject, edit, pin,
+//! delete, a new record — with the search and filters.
 
 use orchester_core::memory::{MemoryScope, MemoryStatus};
 
@@ -10,6 +11,23 @@ fn kon_12() -> Page {
   let mut page = Page::seeded("memory");
   page.task_memory("KON-12");
   page
+}
+
+#[test]
+fn memory_task_summary_links_to_the_task_s_memory_with_its_active_count() {
+  let mut page = Page::seeded("memory");
+  page.task_summary("KON-12");
+  page.until("the count of its notes", |window| {
+    window.texts("task-memory-link-label") == Some(vec!["10 memory notes".to_owned()])
+  });
+  page.window.press("task-memory-link");
+  page.until("the task's memory", |window| window.texts("memory-list").is_some());
+  assert_eq!(page.text("memory-count"), "10 active · 2 waiting");
+  assert_eq!(
+    page.text("task-tab-summary"),
+    "Summary",
+    "the memory is a view of the Summary's tab"
+  );
 }
 
 #[test]
@@ -31,7 +49,6 @@ fn memory_task_tab_groups_the_records_with_the_waiting_ones_first() {
     "in the design's order: {groups}"
   );
   assert_eq!(page.text("memory-count"), "10 active · 2 waiting");
-  assert_eq!(page.text("task-tab-memory"), "Memory 10");
   let latest = page.record("Returned the work to Implement");
   assert!(page.has(&format!("memory-record-{}-latest", latest.id())));
   assert_eq!(

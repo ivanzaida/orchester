@@ -50,7 +50,7 @@ fn a_task_row_opens_its_task_by_browser_rules() {
   seeded.window.navigation().go(tasks_list(&seeded));
   seeded.until("the task rows", |seeded| !seeded.ids("task-row-").is_empty());
   let row = seeded.ids("task-row-").first().cloned().expect("a task row");
-  let place = task(&seeded, row.trim_start_matches("task-row-"), TaskTab::Details);
+  let place = task(&seeded, row.trim_start_matches("task-row-"), TaskTab::default());
   control_opens_by_browser_rules(&mut seeded.window, &row, &place);
 }
 
@@ -59,10 +59,12 @@ fn a_breadcrumb_opens_its_page_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   let row = seeded.ids("overview-row-").first().cloned().expect("a running task");
   let page = task(&seeded, row.trim_start_matches("overview-row-"), TaskTab::Summary);
-  seeded.window.navigation().go(page);
-  // *Kontur / Tasks / KON-12*: the second crumb is the Tasks list.
+  seeded.window.navigation().go(page.clone());
+  // *← Tasks / KON-12*: the first crumb is the Tasks list, and so is the arrow before it.
   let place = tasks_list(&seeded);
-  control_opens_by_browser_rules(&mut seeded.window, "task-crumbs-1", &place);
+  control_opens_by_browser_rules(&mut seeded.window, "task-crumbs-0", &place);
+  seeded.window.navigation().go(page);
+  control_opens_by_browser_rules(&mut seeded.window, "task-back", &place);
 }
 
 #[test]

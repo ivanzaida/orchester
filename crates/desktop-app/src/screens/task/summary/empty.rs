@@ -1,8 +1,8 @@
-//! The Summary before the task's first run (`Summary · empty before first run` `Pl3KV` in `Xxrdy`): no run
-//! has progress, results or history to show, so in their middle a 32 `workflow` glyph, *No runs yet* and what
-//! the Summary will hold, then *Start run* and *View task details*, 16 apart. Start run is the header's
-//! control for the first run (`header::controls::first_start`), sharing its request: unavailable with the
-//! same reason, which shows under it; a draft that misses details has none to offer, and says so.
+//! The Summary before the task's first run (`Summary · empty before first run` `Pl3KV` in `Xxrdy`), at the top of its
+//! column over the brief: no run has progress, results or history to show, so a 32 `workflow` glyph, *No runs yet* and
+//! what the Summary will hold, then *Start run*, 16 apart. Start run is the header's control for the first run
+//! (`header::controls::first_start`), sharing its request: unavailable with the same reason, which shows under it; a
+//! draft that misses details has none to offer, and says so.
 
 use std::sync::Arc;
 
@@ -12,13 +12,11 @@ use lurq::{
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Text},
-  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
+  layout::{Alignment, text_style::TextAlign},
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use crate::{
-  navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::task::{
     TaskContext,
     header::controls::{Controls, RunControls, first_start},
@@ -47,12 +45,9 @@ pub fn empty(ctx: &mut Ctx, task: &TaskContext) -> Element {
     .id("task-summary-empty")
     .describe("state", "no-runs")
     .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .min_height(Dimension::Px(0.0))
-    .padding(Padding::all(SpacingSize::Section))
+    .padding(Padding::vertical(SpacingSize::Xl))
     .spacing(SpacingSize::Lg)
     .align_items(Alignment::Center)
-    .justify(Justify::Center)
     .child(
       Text::new(&glyph(Icon::Workflow))
         .id("task-summary-empty-glyph")
@@ -74,7 +69,6 @@ pub fn empty(ctx: &mut Ctx, task: &TaskContext) -> Element {
     )
     .child(start)
     .with_children(reason)
-    .child(view_details(ctx, task))
     .into()
 }
 
@@ -90,23 +84,12 @@ fn start(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) 
     approval_waits: false,
   };
   if let Some(control) = first_start(ctx, &controls, "task-empty-start") {
-    return (control.button, control.reason.map(|reason| reason.full));
+    let reason = control.reason().map(|reason| reason.full.clone());
+    return (control.button(), reason);
   }
   let missing = ctx.t("summary.empty.missing");
   let button = ActionButton::new("task-empty-start", ButtonKind::Primary, ctx.t("task.controls.start"))
     .icon(Icon::Play)
     .unavailable(missing.clone());
   (button, Some(missing))
-}
-
-/// *View task details*: the Details tab, where the description and the acceptance criteria are.
-fn view_details(ctx: &mut Ctx, task: &TaskContext) -> ActionButton {
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(
-    task.project.open.project.id(),
-    ProjectPage::Task(task.detail.task.key().clone(), TaskView::of(TaskTab::Details)),
-  );
-  ActionButton::new("task-empty-details", ButtonKind::Ghost, ctx.t("summary.empty.details"))
-    .icon(Icon::FileText)
-    .opens(navigation.to(route))
 }

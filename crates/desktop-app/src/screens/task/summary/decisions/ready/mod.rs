@@ -1,13 +1,12 @@
-//! Ready for review (`Task · Summary · ready for review` `F2LtFn`) and what merging makes of it (`Task ·
-//! Summary · merge states` `kxMAN`). A run whose every step passed shows the Ready card ([`card`]) with
-//! *Merge into main*, *Create pull request* ([`pull_request`]), *Ask agent* and *Review PR*, then its stages,
-//! what changed and what verified it ([`changed`]) and *Runs of this task*; beside them *Run details*. Merging
-//! and creating a pull request run on the project's shared operations (`ProjectJobs`, which Orchester's MCP
-//! server uses too), so they go on when the page closes: the buttons show them under way. A merge that did not
-//! happen says why in place of the Ready card, with the files that conflicted, how to resolve them — in the person's
-//! editor or by an agent of the run ([`resolve`]) — and offers to merge again; while a merge waits in the run's
-//! worktree for the person to resolve it, that is shown instead ([`resolving`]); a merged run says where its work
-//! went and what was cleared after it.
+//! Ready for review (`Decision · Ready to merge` `I500yD` in `Decision cards` `CqVv3`) and what merging makes of it
+//! (`Task · Summary · merge states` `kxMAN`). A run whose every step passed shows the Ready card ([`card`]) at the top
+//! of the Summary with *Merge into main*, *Create pull request* ([`pull_request`]), *Ask agent* and *Review PR*, then
+//! what changed and what verified it ([`changed`]). Merging and creating a pull request run on the project's shared
+//! operations (`ProjectJobs`, which Orchester's MCP server uses too), so they go on when the page closes: the buttons
+//! show them under way. A merge that did not happen says why in place of the Ready card, with the files that
+//! conflicted, how to resolve them — in the person's editor or by an agent of the run ([`resolve`]) — and offers to
+//! merge again; while a merge waits in the run's worktree for the person to resolve it, that is shown instead
+//! ([`resolving`]); a merged run says where its work went and what was cleared after it.
 
 mod card;
 pub(super) mod changed;
@@ -44,9 +43,7 @@ use self::{
   resolve::{Asking, Offer, StepChoice},
   unpushed::Refused,
 };
-use super::{
-  super::run_details::run_details, TaskContext, arranged, return_ended::return_card, runs_section, stages::stages,
-};
+use super::{TaskContext, arranged};
 use crate::{mcp::input_gate::InputGate, services::Services};
 
 /// How often a merge waiting in the run's worktree is read again while the person resolves it.
@@ -114,23 +111,15 @@ impl Component for ReadyForReview {
       self.looking.stop();
     }
     let action = resolve::ask_action(ctx, &props, run.id());
-    let now = Services::of(ctx).clock.now();
     let job = props.jobs.run(run.id());
     // A merge git made shows as soon as it is made, also while the task is not read again with it.
     let made = props.detail.merge.as_ref().or(job.merged.as_ref());
     let mut parts: Vec<Element> = match (made, &job.merge) {
-      (None, _) if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull))
-        .into_iter()
-        .chain([stages(run, None, now)])
-        .chain(runs_section(ctx, &props))
-        .collect(),
+      (None, _) if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull)),
       (Some(merge), JobState::Failed(problem)) if props.detail.merge.is_none() => {
         card::not_merged(ctx, &props, run, (problem, Some(merge)), (&job.conflicts, &pull), None)
       }
-      (Some(merge), _) => vec![card::merged(ctx, &props, merge), stages(run, None, now)]
-        .into_iter()
-        .chain(runs_section(ctx, &props))
-        .collect(),
+      (Some(merge), _) => vec![card::merged(ctx, &props, merge)],
       (None, JobState::Failed(problem)) => {
         let offer = (!job.conflicts.is_empty()).then(|| {
           Offer {
@@ -150,21 +139,13 @@ impl Component for ReadyForReview {
       }
       (None, _) => vec![
         external.unwrap_or_else(|| card::ready(ctx, &props, run, &pull)),
-        stages(run, None, now),
         changed::columns(ctx, &props, read.as_ref(), (Vec::new(), None)),
-      ]
-      .into_iter()
-      .chain(runs_section(ctx, &props))
-      .collect(),
+      ],
     };
     if let Some(reminder) = reminder {
       parts.insert(0, reminder);
     }
-    let linked = crate::screens::task::sharing::linked(ctx, &props);
-    let section = crate::screens::task::sharing::section(ctx, &props, (linked.as_ref(), None));
-    let lead = return_card(ctx, &props);
-    let side = run_details(ctx, &props, run, (lead, section));
-    arranged(ctx, parts, None, Some(side))
+    arranged(parts)
   }
 }
 

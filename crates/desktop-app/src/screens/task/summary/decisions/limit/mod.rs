@@ -1,12 +1,12 @@
-//! Stopped at a limit (`Task · Summary · stopped at token limit` `oTzJZ`): under where the task stands and
-//! the run's stages, *Raise the limit* ([`card`]): what the run used of the limit that stopped it, a field
-//! for the new limit in whole numbers with what it reads as, what continuing does, *Continue with …*, and
-//! *Remove the limit*; then the tokens each step used ([`by_step`]). The new limit applies to this run
-//! only. Limits are optional and have no maximum (the person's decision of 2026-10-09): any whole number
-//! above what was used is taken, up to what a budget or time limit can hold, and *Remove the limit*
-//! continues the run without the limit that stopped it (`None`). Every request needs the project's runner:
-//! without one the actions are unavailable with the header's reason. A stop at a task group's budget, or
-//! at a step's budget that was not recorded, is not raised here: it says why, and offers nothing to press.
+//! Stopped at a limit (`Decision · Stopped at its token limit` `z4nfb` in `Decision cards` `CqVv3`): at the top of
+//! the Summary, *Raise the limit* ([`card`]): what the run used of the limit that stopped it, a field for the new
+//! limit in whole numbers with what it reads as, what continuing does, *Continue with …*, and *Remove the limit*;
+//! then the tokens each step used ([`by_step`]). The new limit applies to this run only. Limits are optional and
+//! have no maximum (the person's decision of 2026-10-09): any whole number above what was used is taken, up to what a
+//! budget or time limit can hold, and *Remove the limit* continues the run without the limit that stopped it
+//! (`None`). Every request needs the project's runner: without one the actions are unavailable with the header's
+//! reason. A stop at a task group's budget, or at a step's budget that was not recorded, is not raised here: it says
+//! why, and offers nothing to press. The run's last event names the checkpoint its work was saved at ([`said`]).
 
 mod by_step;
 mod card;
@@ -35,10 +35,8 @@ use orchester_workspace::{
 };
 
 use self::card::RaiseCard;
-use super::{
-  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, task_notice, this_run_panel,
-};
-use crate::{navigation::pointed::PointedCard, services::Services, ui::notice::Notice};
+use super::{Said, TaskContext, action::decision_action, arranged, pointing::Pointing};
+use crate::{navigation::pointed::PointedCard, services::Services};
 
 /// A suggested budget is the current one and half again, rounded up to this.
 const SUGGESTION_STEP: u64 = 100_000;
@@ -155,17 +153,15 @@ impl<'a> Stop<'a> {
   }
 }
 
-/// Where the task stands; after a token or time limit with the checkpoint its work was saved at
+/// Where the task stands, from `said`; after a token or time limit with the checkpoint its work was saved at
 /// (`Notice · Stopped at the token limit · checkpoint 7c1e9f2` in `oTzJZ`).
-fn notice(ctx: &Ctx, props: &TaskContext, stop: &Stop<'_>) -> Notice {
-  let mut said = task_notice(ctx, props);
-  let checkpoint = stop
-    .run
+pub fn said(ctx: &Ctx, props: &TaskContext, (run, limit): (&RunView, RunLimit), mut said: Said) -> Said {
+  let checkpoint = run
     .run
     .last_checkpoint()
-    .filter(|_| stop.run.saved_at_pause && !props.lost())
+    .filter(|_| run.saved_at_pause && !props.lost())
     .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).to_owned());
-  let key = match stop.limit {
+  let key = match limit {
     RunLimit::Tokens => Some("decisions.limit.noticeTokens"),
     RunLimit::Time => Some("decisions.limit.noticeTime"),
     _ => None,
@@ -173,7 +169,7 @@ fn notice(ctx: &Ctx, props: &TaskContext, stop: &Stop<'_>) -> Notice {
   if let (Some(key), Some(checkpoint)) = (key, checkpoint) {
     said.title = ctx.t_args(key, [("checkpoint", checkpoint)]);
   }
-  said.notice()
+  said
 }
 
 /// What the field holds.
@@ -224,7 +220,6 @@ impl Component for RaiseLimit {
     if self.pointing.arrived(ctx, &props, PointedCard::RaiseLimit) {
       ctx.focus(&self.input);
     }
-    let focus = stop.stopped.map(|step| step.key.as_str().to_owned());
     let raise = RaiseCard {
       stop: &stop,
       text: &self.text,
@@ -236,15 +231,9 @@ impl Component for RaiseLimit {
       input: &self.input,
     }
     .render(ctx);
-    let parts: Vec<Element> = vec![
-      notice(ctx, &props, &stop).into(),
-      stages(run, focus.as_deref(), now),
-      raise,
-    ]
-    .into_iter()
-    .chain(by_step::section(ctx, &stop, now))
-    .collect();
-    let side = this_run_panel(ctx, &props, None);
-    arranged(ctx, parts, None, side)
+    let parts: Vec<Element> = std::iter::once(raise)
+      .chain(by_step::section(ctx, &stop, now))
+      .collect();
+    arranged(parts)
   }
 }

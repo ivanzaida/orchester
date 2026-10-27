@@ -1,7 +1,8 @@
-//! The plan's card (`Plan review` `hLziL`): its title with who wrote it and when, the choice of the
-//! step's versions (`Picker · v2 · latest` `rMaOi`), the plan as Markdown, what changed since the version
-//! before from the person's note (`Changed` `t7skY`), and the task's acceptance criteria numbered
-//! (`Criterion` `Ysu5i`). An earlier version says which one waits instead.
+//! The plan's card (`Decision · plan` `x0PVdp` in `01c` `SaKMC`, on `surface_raised` in a `warning` stroke): its title
+//! with who wrote it and when, the choice of the step's versions (`Picker · v2 · latest` `rMaOi`), the plan as
+//! Markdown, what changed since the version before from the person's note (`Changed` `t7skY`), the task's acceptance
+//! criteria numbered (`Criterion` `Ysu5i`), and the decision at its end. An earlier version says which one waits
+//! instead.
 
 use lurq::{
   app::{
@@ -49,16 +50,19 @@ pub struct PlanCard<'a> {
 }
 
 impl PlanCard<'_> {
-  pub fn render(&self, ctx: &mut Ctx, shown: &Signal<Shown>) -> Element {
+  /// The card, `decision` at its end.
+  pub fn render(&self, ctx: &mut Ctx, shown: &Signal<Shown>, decision: Element) -> Element {
     let text = self.plan_text(ctx);
-    let card = card("plan-review", CardSurface::Decision)
+    let card = card("plan-review", CardSurface::Attention)
       .spacing(ExtraSpacing::Loose.role())
       .child(self.head(ctx, shown))
       .child(divider())
       .child(text)
       .with_children(self.change_line(ctx))
       .child(divider())
-      .child(self.criteria(ctx));
+      .child(self.criteria(ctx))
+      .child(divider())
+      .child(decision);
     self.pointing.ring(card).into()
   }
 
@@ -85,7 +89,7 @@ impl PlanCard<'_> {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Map, IconSize::Nav, PaletteColor::TextSecondary))
+      .child(icon(Icon::Map, IconSize::Md, PaletteColor::Warning))
       .child(
         Text::new(&title)
           .id("plan-review-title")

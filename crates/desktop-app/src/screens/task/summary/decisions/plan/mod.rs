@@ -1,10 +1,9 @@
-//! Plan review (`Task · Summary · plan review` `ciGbZ`): a run whose gated step waits for a decision on
-//! its plan. Under where the task stands and the run's stages, the plan's card ([`card`]): the plan as
-//! its agent wrote it, a choice of the step's versions, and the task's acceptance criteria. Under the
-//! column, pinned while it scrolls, the decision bar ([`bar`]): the note for the agent, *Request
-//! changes*, which needs the note, and *Approve plan & continue*. A decision goes to the runner, which
-//! records it and continues the run or gives the step's agent the note; an earlier version reads without
-//! a decision, as the bar always decides the plan that waits.
+//! Plan review (`Decision · plan` `x0PVdp` in `01c` `SaKMC`): a run whose gated step waits for a decision on its
+//! plan. At the top of the Summary the plan's card ([`card`]): the plan as its agent wrote it, a choice of the step's
+//! versions, and the task's acceptance criteria; at its end the decision ([`bar`]): the note for the agent, *Request
+//! changes*, which needs the note, and *Approve plan & continue*. A decision goes to the runner, which records it and
+//! continues the run or gives the step's agent the note; an earlier version reads without a decision, as the card
+//! always decides the plan that waits.
 
 mod bar;
 mod card;
@@ -19,10 +18,8 @@ use orchester_core::run::PlanVersion;
 use orchester_workspace::tasks::plan::PlanReview;
 
 use self::bar::{Choice, DecisionBar};
-use super::{
-  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, task_notice, this_run_panel,
-};
-use crate::{navigation::pointed::PointedCard, services::Services, ui::markdown::LinkHandler};
+use super::{TaskContext, action::decision_action, arranged, pointing::Pointing};
+use crate::{navigation::pointed::PointedCard, ui::markdown::LinkHandler};
 
 /// The version the card shows; `None` is the one that waits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,27 +62,8 @@ impl Component for PlanDecision {
       return Column::new().into();
     };
     self.pointing.arrived(ctx, &props, PointedCard::Plan);
-    let gated = run
-      .run
-      .awaiting_plan()
-      .first()
-      .and_then(|execution| run.step_of(*execution))
-      .map(|step| step.key.as_str().to_owned());
-    let now = Services::of(ctx).clock.now();
     let task = props.detail.run_task.as_ref().unwrap_or(&props.detail.task);
     let shown = review.shown(self.shown.get().0).clone();
-    let plan = card::PlanCard {
-      review: &review,
-      shown: &shown,
-      task,
-      on_link: &self.on_link,
-      pointing: &self.pointing,
-    };
-    let parts: Vec<Element> = vec![
-      task_notice(ctx, &props).notice().into(),
-      stages(run, gated.as_deref(), now),
-      plan.render(ctx, &self.shown),
-    ];
     let bar = DecisionBar {
       review: &review,
       run,
@@ -98,7 +76,13 @@ impl Component for PlanDecision {
       earlier: shown.version != review.waiting().version,
     }
     .render(ctx);
-    let side = this_run_panel(ctx, &props, None);
-    arranged(ctx, parts, Some(bar), side)
+    let plan = card::PlanCard {
+      review: &review,
+      shown: &shown,
+      task,
+      on_link: &self.on_link,
+      pointing: &self.pointing,
+    };
+    arranged(vec![plan.render(ctx, &self.shown, bar)])
   }
 }
