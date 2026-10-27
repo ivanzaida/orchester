@@ -200,6 +200,8 @@ fn seed_names_every_scenario_once() {
       "lifecycle",
       "connections",
       "api-providers",
+      "project-settings",
+      "project-settings-shared",
       "pipelines",
       "pipelines-empty",
       "accounts",

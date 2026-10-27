@@ -1,4 +1,6 @@
-//! Limits (jupiT, iZS4K): save on leave, per-field validation and optional-limit readbacks.
+//! Limits (`Limits` `tmV5e` in `02 · Runs`): the run and daily budgets, the time limit and how many agents and QA apps
+//! work at once, number fields with their units and read-backs, each saved as a person leaves it, with per-field
+//! validation and a change made outside the screen said under the group.
 use std::{path::Path, sync::Arc};
 
 use lurq::{
@@ -6,7 +8,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::Column,
+  components::{Column, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -16,17 +18,24 @@ use orchester_workspace::{
   budget::LimitsErrors, messages::Message, project_settings::LimitsText, tasks::outside::Outside,
 };
 
-use super::{
-  Status, TabProps, page,
+use super::super::{
+  Status, TabProps,
+  kit::{Group, SettingRow},
   work::{self, Change, Read, Save},
 };
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  field::{NumberField, field_error},
-  form_section::{Place, section},
-  message::message_text,
-  notice::{Notice, NoticeTone},
+use crate::{
+  theme::ExtraTypography,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::{NumberField, field_error},
+    message::message_text,
+    notice::{Notice, NoticeTone},
+    tooltip::Tooltip,
+  },
 };
+
+/// A limit's box (`Box` `jJ4rP`).
+const FIELD_WIDTH: f32 = 160.0;
 
 #[derive(Clone)]
 pub(super) struct Limits {
@@ -52,7 +61,7 @@ enum Field {
   Daily,
   Time,
   Slots,
-  /// *QA apps at once* (`yoQKh`), built as *Agents working at once*.
+  /// *QA apps at once* (`DsTyK`), built as *Agents at once*.
   Qa,
 }
 impl Field {
@@ -65,36 +74,52 @@ impl Field {
       Self::Qa => "settings-qa-slots",
     }
   }
-  const fn keys(self) -> (&'static str, &'static str, &'static str) {
+  /// The row's element id.
+  const fn row(self) -> &'static str {
     match self {
-      Self::Default => (
-        "project_settings.defaultBudget",
-        "project_settings.tokens",
-        "project_settings.noRunLimit",
-      ),
-      Self::Daily => (
-        "project_settings.dailyBudget",
-        "project_settings.tokens",
-        "project_settings.noDailyLimit",
-      ),
-      Self::Time => (
-        "project_settings.timeLimit",
-        "project_settings.minutes",
-        "project_settings.noTimeLimit",
-      ),
-      Self::Slots => (
-        "project_settings.slots",
-        "project_settings.agentsUnit",
-        "project_settings.slotsRange",
-      ),
-      Self::Qa => (
-        "project_settings.qaSlots",
-        "project_settings.appsUnit",
-        "project_settings.qaSlotsRange",
-      ),
+      Self::Default => "settings-default",
+      Self::Daily => "settings-daily",
+      Self::Time => "settings-time",
+      Self::Slots => "settings-slots",
+      Self::Qa => "settings-qa",
     }
   }
-  /// A count of slots: always entered, and read back as its range.
+  /// The row's label, its hint, what its (i) says, and the field's unit.
+  const fn keys(self) -> [&'static str; 4] {
+    match self {
+      Self::Default => [
+        "project_settings.runBudget",
+        "project_settings.runBudgetHint",
+        "project_settings.defaultBudgetDetail",
+        "project_settings.tokens",
+      ],
+      Self::Daily => [
+        "project_settings.dailyBudgetLabel",
+        "project_settings.dailyBudgetHint",
+        "project_settings.dailyBudgetDetail",
+        "project_settings.tokens",
+      ],
+      Self::Time => [
+        "project_settings.timeLimitLabel",
+        "project_settings.timeLimitHint",
+        "project_settings.timeDetail",
+        "project_settings.minutesUnit",
+      ],
+      Self::Slots => [
+        "project_settings.slotsLabel",
+        "project_settings.countRange",
+        "project_settings.slotsDetail",
+        "project_settings.agentsUnit",
+      ],
+      Self::Qa => [
+        "project_settings.qaSlots",
+        "project_settings.countRange",
+        "project_settings.qaSlotsDetail",
+        "project_settings.appsUnit",
+      ],
+    }
+  }
+  /// A count of slots: always entered, and with nothing to read back.
   const fn counts(self) -> bool {
     matches!(self, Self::Slots | Self::Qa)
   }
@@ -147,7 +172,7 @@ impl Component for Limits {
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(data) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(work::pending(ctx, &state, &self.revision));
+      return work::pending(ctx, &state, &self.revision);
     };
     if self.stored.get_untracked().is_none() {
       self.fill(data.clone());
@@ -182,28 +207,38 @@ impl Component for Limits {
       .map(|e| *e)
       .unwrap_or_default();
     let commit = self.commit(&props, &save);
-    let fields = self.sections(ctx, &errors, &commit);
-    let content = Column::new()
-      .spacing(crate::theme::ExtraSpacing::Roomy.role())
-      .with_children(work::error(ctx, &save))
-      .with_children(save.state().get().error.map(|_| {
-        let commit = commit.clone();
-        ActionButton::new(
-          "settings-limits-retry",
-          ButtonKind::Secondary,
-          ctx.t("project_settings.retry"),
-        )
-        .on_click(move || commit())
-      }))
-      .with_children(
-        state
-          .error
-          .map(|e| field_error("settings-limits-read-error", &message_text(ctx, &e))),
-      )
-      .with_children((outside && changed).then(|| self.outside(ctx, data)))
-      .with_children(fields)
-      .child(page::review_notice(ctx, false));
-    page::scroll(content)
+    let rows = self.rows(ctx, &errors, &commit);
+    let note = Text::new(&ctx.t("project_settings.limitsNote"))
+      .id("settings-limits-note")
+      .variant(ExtraTypography::Note.role());
+    let note = Tooltip::new("settings-changes-notice", ctx.t("project_settings.changesDetail")).wrap(ctx, note);
+    let mut group = Group::new("settings-limits", ctx.t("project_settings.limits"))
+      .end(note)
+      .rows(rows);
+    if let Some(error) = work::error(ctx, &save) {
+      let commit = commit.clone();
+      group = group.after(
+        Column::new()
+          .spacing(lurq::app::theme::SpacingSize::Sm)
+          .align_items(Alignment::Start)
+          .child(error)
+          .child(
+            ActionButton::new(
+              "settings-limits-retry",
+              ButtonKind::Secondary,
+              ctx.t("project_settings.retry"),
+            )
+            .on_click(move || commit()),
+          ),
+      );
+    }
+    if let Some(error) = state.error {
+      group = group.after(field_error("settings-limits-read-error", &message_text(ctx, &error)));
+    }
+    if outside && changed {
+      group = group.after(self.outside(ctx, data));
+    }
+    group.into()
   }
 }
 impl Limits {
@@ -273,6 +308,26 @@ impl Limits {
       ));
     }
   }
+  /// What a value set reads back as; nothing for a count, or for a limit that is not set (its box says No limit).
+  fn read_back(&self, ctx: &Ctx, kind: Field, text: String) -> Arc<str> {
+    if kind.counts() || text.trim().is_empty() {
+      return Arc::from("");
+    }
+    if matches!(kind, Field::Time) {
+      return ctx.t_args("project_settings.timeReadback", [("count", text)]);
+    }
+    let count = orchester_workspace::budget::read_optional_budget(&text, &self.separator)
+      .map(|v| v.map(|v| compact_tokens(v.get())).unwrap_or_default())
+      .unwrap_or_default();
+    ctx.t_args(
+      if matches!(kind, Field::Daily) {
+        "project_settings.dailyBudgetPerDay"
+      } else {
+        "project_settings.budgetReadback"
+      },
+      [("count", count)],
+    )
+  }
   fn number(
     &self,
     ctx: &mut Ctx,
@@ -287,29 +342,11 @@ impl Limits {
       Field::Slots => &self.slots,
       Field::Qa => &self.qa,
     };
-    let text = value.get();
-    let (label, unit, empty) = kind.keys();
-    let readback = if kind.counts() || text.trim().is_empty() {
-      ctx.t(empty)
-    } else if matches!(kind, Field::Time) {
-      ctx.t_args("project_settings.timeReadback", [("count", text)])
-    } else {
-      let count = orchester_workspace::budget::read_optional_budget(&text, &self.separator)
-        .map(|v| v.map(|v| compact_tokens(v.get())).unwrap_or_default())
-        .unwrap_or_default();
-      ctx.t_args(
-        if matches!(kind, Field::Daily) {
-          "project_settings.dailyBudgetReadback"
-        } else {
-          "project_settings.budgetReadback"
-        },
-        [("count", count)],
-      )
-    };
+    let [label, _, _, unit] = kind.keys();
+    let readback = self.read_back(ctx, kind, value.get());
     let commit = commit.clone();
     let mut field = NumberField::new(kind.id(), ctx.t(label), value.clone(), ctx.t(unit), readback)
-      .width(Dimension::Px(page::CONTROL_WIDTH))
-      .read_back_alignment(Alignment::Start)
+      .width(Dimension::Px(FIELD_WIDTH))
       .on_leave(move || commit());
     if !kind.counts() {
       field = field.placeholder(ctx.t("project_settings.noLimit"));
@@ -362,72 +399,25 @@ impl Limits {
     )
   }
 
-  fn sections(&self, ctx: &mut Ctx, errors: &LimitsErrors, commit: &Arc<dyn Fn() + Send + Sync>) -> Vec<Element> {
-    let default = self.number(ctx, Field::Default, errors.default_run_budget.as_ref(), commit);
-    let daily = self.number(ctx, Field::Daily, errors.daily_budget.as_ref(), commit);
-    let time = self.number(ctx, Field::Time, errors.default_time_limit.as_ref(), commit);
-    let slots = self.number(ctx, Field::Slots, errors.agent_slots.as_ref(), commit);
-    let qa = self.number(ctx, Field::Qa, errors.qa_slots.as_ref(), commit);
-    vec![
-      section(
-        "settings-budget-section",
-        &ctx.t("project_settings.tokenBudgets"),
-        None,
-        vec![
-          page::row(
-            ctx,
-            "settings-default",
-            ("project_settings.defaultBudget", "project_settings.defaultBudgetDetail"),
-            default,
-            Place::Within,
-          ),
-          page::row(
-            ctx,
-            "settings-daily",
-            ("project_settings.dailyBudget", "project_settings.dailyBudgetDetail"),
-            daily,
-            Place::Last,
-          ),
-        ],
-      )
-      .into(),
-      section(
-        "settings-time-section",
-        &ctx.t("project_settings.time"),
-        None,
-        vec![page::row(
-          ctx,
-          "settings-time",
-          ("project_settings.timeLimit", "project_settings.timeDetail"),
-          time,
-          Place::Last,
-        )],
-      )
-      .into(),
-      // The design draws no line between the section's two rows (`D4V6Cm`, `yoQKh`).
-      section(
-        "settings-agents-section",
-        &ctx.t("project_settings.agents"),
-        None,
-        vec![
-          page::row(
-            ctx,
-            "settings-slots",
-            ("project_settings.slots", "project_settings.slotsDetail"),
-            slots,
-            Place::Last,
-          ),
-          page::row(
-            ctx,
-            "settings-qa",
-            ("project_settings.qaSlots", "project_settings.qaSlotsDetail"),
-            qa,
-            Place::Last,
-          ),
-        ],
-      )
-      .into(),
+  fn rows(&self, ctx: &mut Ctx, errors: &LimitsErrors, commit: &Arc<dyn Fn() + Send + Sync>) -> Vec<Element> {
+    [
+      (Field::Default, errors.default_run_budget.as_ref()),
+      (Field::Daily, errors.daily_budget.as_ref()),
+      (Field::Time, errors.default_time_limit.as_ref()),
+      (Field::Slots, errors.agent_slots.as_ref()),
+      (Field::Qa, errors.qa_slots.as_ref()),
     ]
+    .into_iter()
+    .map(|(kind, error)| {
+      let field = self.number(ctx, kind, error, commit);
+      let [label, hint, info, _] = kind.keys();
+      SettingRow::new(kind.row(), ctx.t(label))
+        .hint(ctx.t(hint))
+        .info(ctx.t(info))
+        .control(field)
+        .render(ctx)
+    })
+    .collect()
   }
   fn outside(&self, ctx: &Ctx, read: Read) -> Element {
     let tab = self.clone();

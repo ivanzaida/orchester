@@ -32,9 +32,10 @@ const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
 /// A task kept Not shared, by its kept key (`/tasks/kept/KON-2/summary`).
 const KEPT: &str = "kept";
-/// What Project settings' Sharing tab shows in place of itself: the join review.
+/// What Project settings shows in place of a tab: the join review over Sharing, *Approved for every run* under Runs.
 const VIEW: &str = "view";
 const JOIN: &str = "join";
+const RULES: &str = "rules";
 
 /// A screen of one project, with what its path names besides the project.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -96,6 +97,8 @@ pub enum ProjectPage {
   /// Edit MCP server, the server's id.
   EditConnection(ConnectionId),
   Settings(ProjectSettingsTab),
+  /// Project settings › Runs › *Approved for every run*: the project's rules (`12` `wQy6o`).
+  ProjectRules,
   /// Project settings on its Sharing tab with *Make local*'s question open (the task list's *no longer a
   /// member* notice).
   MakeLocal,
@@ -188,7 +191,7 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings(_) | Self::MakeLocal | Self::Join(_) => Screen::ProjectSettings,
+      Self::Settings(_) | Self::ProjectRules | Self::MakeLocal | Self::Join(_) => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
       Self::Import(_) => Screen::ImportResources,
     }
@@ -258,18 +261,11 @@ impl ProjectPage {
         segment(Screen::ProjectSettings),
         &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
       ),
-      Self::Join(target) => {
-        let [server, project] = target.params();
-        with_query(
-          segment(Screen::ProjectSettings),
-          &[
-            ProjectSettingsTab::Sharing.param(),
-            (VIEW, Some(JOIN)),
-            (server.0, Some(&server.1)),
-            (project.0, Some(&project.1)),
-          ],
-        )
-      }
+      Self::ProjectRules => with_query(
+        segment(Screen::ProjectSettings),
+        &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))],
+      ),
+      Self::Join(target) => join_path(segment(Screen::ProjectSettings), target),
       page => segment(page.screen()),
     }
   }
@@ -418,8 +414,8 @@ fn tools(params: &mut Params) -> Result<ProjectPage, RouteError> {
   }
 }
 
-/// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), or the join
-/// review there (`view=join` with the project).
+/// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), the join
+/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`).
 fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
   let tab = ProjectSettingsTab::take(params)?;
   match (tab, params.take(VIEW)?) {
@@ -429,6 +425,7 @@ fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
         .map(ProjectPage::Join)
         .ok_or(RouteError::NoScreen);
     }
+    (ProjectSettingsTab::Runs, Some(view)) if view == RULES => return Ok(ProjectPage::ProjectRules),
     (_, Some(value)) => {
       return Err(RouteError::InvalidParam {
         param: VIEW.to_owned(),
@@ -444,4 +441,18 @@ fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
       value,
     }),
   }
+}
+
+/// The join review of the project `target` names, over Project settings › Sharing at `settings`.
+fn join_path(settings: String, target: &JoinTarget) -> String {
+  let [server, project] = target.params();
+  with_query(
+    settings,
+    &[
+      ProjectSettingsTab::Sharing.param(),
+      (VIEW, Some(JOIN)),
+      (server.0, Some(&server.1)),
+      (project.0, Some(&project.1)),
+    ],
+  )
 }

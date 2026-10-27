@@ -1,4 +1,5 @@
-//! General's stored identity, agent-file switch and reviewer/auto-mode actions.
+//! General's identity and repository settings, and Runs' auto mode with its reviewer and *Approved for every run*
+//! (`12` `wQy6o`), a page under Runs with Revoke.
 use orchester_core::store::SettingsStore;
 
 use super::harness::Settings;
@@ -6,11 +7,15 @@ use super::harness::Settings;
 #[test]
 fn project_settings_general_shows_project_identity_and_saves_repository_agent_files() {
   let mut page = Settings::new(false);
-  assert_eq!(page.value("settings-project-name"), "Kontur");
-  assert_eq!(page.value("settings-project-key"), "KON");
-  assert_eq!(page.value("settings-project-folder"), page.repo.display().to_string());
-  assert!(page.text("settings-name-row").contains("Renaming is not available yet"));
-  assert!(page.exists("settings-github"));
+  page.tab("general", "settings-project-name");
+  assert_eq!(page.text("settings-project-name"), "Kontur");
+  assert_eq!(page.text("settings-project-key"), "KON");
+  assert_eq!(page.text("settings-project-folder"), page.repo.display().to_string());
+  assert!(
+    !page.text("settings-name-row").contains("not available yet"),
+    "a plain value, without the not-available sentence"
+  );
+  assert!(page.exists("settings-repository"));
   let before = page.db().repository_agent_files().expect("setting").is_on();
   page.click("settings-agent-files");
   page.until("agent-file save", |p| {
@@ -18,6 +23,8 @@ fn project_settings_general_shows_project_identity_and_saves_repository_agent_fi
   });
   page.saved();
   assert_eq!(page.db().repository_agent_files().expect("saved").is_on(), !before);
+  page.click("settings-files-loads");
+  page.until("What each CLI loads", |p| p.exists("settings-files-panel"));
   assert!(page.text("settings-files-claude-values").contains("none"));
   assert!(page.text("settings-import-reason").contains("not built"));
 }
@@ -25,21 +32,27 @@ fn project_settings_general_shows_project_identity_and_saves_repository_agent_fi
 #[test]
 fn project_settings_general_turns_off_telling_working_agents_when_the_base_branch_moves() {
   let mut page = Settings::new(false);
+  page.tab("general", "settings-base-moved-row");
   assert!(page.db().tells_base_moves().expect("setting"), "on by default");
   assert!(
     page
       .text("settings-base-moved-row")
-      .contains("Tell working agents when the base branch moves")
+      .contains("When the base branch moves")
   );
   page.click("settings-base-notices");
   page.until("base notices save", |p| !p.db().tells_base_moves().expect("saved"));
   page.saved();
-  assert!(page.text("settings-base-notices").contains("Off"));
+  assert!(page.text("settings-base-moved-hint").contains("not told"));
 }
+
 #[test]
 fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
   let mut page = Settings::new(false);
-  assert!(page.exists("settings-auto-unavailable"));
+  assert!(
+    page
+      .text("settings-auto-reviewer-hint")
+      .contains("needs an agent connection")
+  );
   assert!(!page.exists("settings-reviewer-connection"));
   assert!(!page.exists("settings-reviewer-model"));
   assert!(!page.exists("settings-reviewer-effort"));
@@ -57,7 +70,6 @@ fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
 #[test]
 fn project_settings_auto_mode_asks_a_person_then_saves_and_can_turn_off_without_asking() {
   let mut page = Settings::new(true);
-  assert!(page.text("settings-reviewer-readback").to_lowercase().contains("haiku"));
   page.click("settings-auto-new-runs");
   page.until("auto-mode question", |p| p.exists("settings-auto-question-confirm"));
   assert!(page.window.link.input_gate().protecting());
@@ -88,7 +100,7 @@ fn project_settings_auto_mode_asks_a_person_then_saves_and_can_turn_off_without_
     .reviewer
     .expect("chosen");
   assert!(!choice.model.as_str().is_empty());
-  // Start another selection while General may still be reading back the previous save.
+  // Start another selection while Runs may still be reading back the previous save. A model is named by its id.
   for model in ["sonnet", "haiku", "sonnet"] {
     page.choose("settings-reviewer-model", model);
     page.until("model saved", |p| {
@@ -105,26 +117,26 @@ fn project_settings_auto_mode_asks_a_person_then_saves_and_can_turn_off_without_
 #[test]
 fn project_settings_github_check_reads_origin_and_says_when_no_github_remote_exists() {
   let mut page = Settings::new(false);
+  page.tab("general", "settings-project-name");
   super::index::git(&page.repo, &["init"]);
   page.until("repository read", |p| p.exists("settings-github-check"));
   page.click("settings-github-check");
-  page.until("origin checked", |p| p.exists("settings-github-detection"));
-  assert!(page.text("settings-github-detection").contains("No GitHub remote"));
-  assert_eq!(page.value("settings-github-repository"), "Not linked");
+  page.until("origin checked", |p| {
+    p.exists("settings-github-repo-hint") && p.text("settings-github-repo-hint").contains("No GitHub remote")
+  });
   assert!(!page.exists("settings-use-account"));
 }
 
+/// *Approved for every run* counts the project's rules on Runs and opens their page, where Revoke ends one and the
+/// crumb leads back to Runs.
 #[test]
-fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
+fn project_settings_approved_for_every_run_opens_its_rules_and_revokes_one() {
   use orchester_core::{
     run::{ApprovalSubject, ProjectScope, ToolReach},
     time::Timestamp,
   };
   let mut page = Settings::new(false);
-  assert_eq!(
-    page.text("settings-auto-rules"),
-    "None. A start_qa_app request offers Approve for every run of this project."
-  );
+  assert!(page.text("settings-auto-rules-row").contains("No rules"));
   let rule = {
     let mut db = page.db();
     let run = super::run_fixture::auto_run(&mut db);
@@ -139,15 +151,27 @@ fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
     db.add_project_approval_rule(&scope, (run, "invocation:qa"), Timestamp::now())
       .expect("rule")
   };
-  // General reads the settings again when it opens.
-  page.tab("environment", "settings-environment-variables");
-  page.tab("general", "settings-auto");
+  // Runs reads the settings again when it opens.
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-auto-rules-row");
+  page.until("the rule counted", |p| {
+    p.text("settings-auto-rules-row").contains("1 rule")
+  });
+  page.click("settings-auto-rules-row");
   let id = format!("settings-auto-rule-{}", rule.id.get());
-  page.until("the rule listed", |p| p.exists(&id));
-  assert_eq!(
-    page.text(&format!("{id}-words")),
-    "Orchester start_qa_app while tools/qa-app.ps1 is 3f2a1b9 · answered 0 times"
+  page.until("the rule listed", |p| p.exists(&format!("{id}-row")));
+  assert_eq!(page.text("settings-rules-crumb-back"), "Runs");
+  let words = page.text(&format!("{id}-row"));
+  assert!(words.contains("Orchester start_qa_app"), "{words}");
+  assert!(
+    words.contains("while tools/qa-app.ps1 is 3f2a1b9 · answered 0 times"),
+    "{words}"
   );
+  assert!(
+    page.exists("settings-rules-add"),
+    "Add rule stays, unavailable with why"
+  );
+  assert!(page.text("settings-rules-how-reason").contains("Always allow"));
   page.click(&format!("{id}-revoke"));
   page.until("the rule revoked", |p| {
     p.db()
@@ -156,7 +180,8 @@ fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
       .iter()
       .all(|rule| !rule.is_active())
   });
-  page.until("the list read again", |p| !p.exists(&id));
-  page.saved();
-  assert!(page.exists("settings-auto-rules-none"));
+  page.until("the list read again", |p| !p.exists(&format!("{id}-row")));
+  assert!(page.exists("settings-rules-none-row"));
+  page.click("settings-rules-crumb-back");
+  page.until("Runs", |p| p.exists("settings-auto-rules-row"));
 }

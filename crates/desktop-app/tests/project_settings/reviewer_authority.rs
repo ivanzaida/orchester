@@ -20,8 +20,8 @@ fn project_settings_reviewer_change_for_existing_auto_run_requires_person() {
   page.until("existing Auto run read", |p| {
     project_settings::load_in(&p.repo).expect("settings").auto_runs
   });
-  page.tab("limits", "settings-default-budget");
-  page.tab("general", "settings-reviewer-model");
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-reviewer-model");
   assert!(matches!(
     domain::call(&page, "set_auto_mode", json!({"project":"Kontur",
       "reviewer":{"connection":"Claude Code","model":"sonnet"}})).expect_err("automation OFF"),

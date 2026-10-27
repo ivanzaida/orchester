@@ -28,6 +28,27 @@ pub enum AutomationPoints {
 }
 
 impl ProjectDb {
+  /// Whether the project lets Orchester estimate story points (*Let Orchester estimate story points*); `None` until a
+  /// person sets it for the project, when the application-wide setting it moved from holds.
+  pub fn estimates_story_points(&self) -> Result<Option<bool>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT allowed FROM project_estimates WHERE id = 1", [], |row| {
+          row.get(0)
+        })
+        .optional()?,
+    )
+  }
+
+  pub fn set_estimates_story_points(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "INSERT INTO project_estimates (id, allowed) VALUES (1, ?1) ON CONFLICT (id) DO UPDATE SET allowed = ?1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
   /// The story points of `task`; `None` while it has none.
   pub fn story_estimate(&self, task: TaskId) -> Result<Option<StoryEstimate>, StoreError> {
     load(&self.connection, task)

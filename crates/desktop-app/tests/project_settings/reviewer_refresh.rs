@@ -28,15 +28,14 @@ fn project_settings_unrelated_refresh_preserves_reviewer_question_and_input_gate
   let mut page = Settings::new(true);
   question(&mut page);
   let original = page.db().auto_mode_settings().expect("A");
-  let before = page.db().repository_agent_files().expect("agent files");
-  // An adjacent person action also publishes a complete Settings object to AutoMode.
-  page.click("settings-agent-files");
-  page.until("agent files readback", |p| {
-    p.db().repository_agent_files().expect("saved") != before
+  // An adjacent person edit on Runs also publishes a complete Settings object to AutoMode.
+  page.set("settings-agent-slots", "5");
+  page.leave();
+  page.until("the agents' count saved", |p| {
+    p.db().project_limits().expect("limits").agent_slots().get().get() == 5
   });
-  page.until("agent files shown from refreshed Settings", |p| {
-    p.text("settings-agent-files")
-      .starts_with(if before.is_on() { "Off" } else { "On" })
+  page.until("the count shown from refreshed Settings", |p| {
+    p.value("settings-agent-slots") == "5"
   });
   assert!(page.exists("settings-auto-question-confirm"));
   assert!(page.text("settings-reviewer-model").contains("sonnet"));
@@ -85,7 +84,7 @@ fn project_settings_relevant_refresh_keeps_draft_and_old_confirm_cannot_overwrit
   page.click("settings-auto-reload");
   page.saved();
   assert_eq!(page.db().auto_mode_settings().expect("outside retained"), outside);
-  assert!(page.text("settings-reviewer-readback").contains("haiku"));
+  assert!(page.text("settings-reviewer-model").contains("haiku"));
   assert!(!page.window.link.input_gate().protecting());
 }
 
@@ -130,9 +129,9 @@ fn project_settings_failed_reviewer_save_retries_same_choice_only_on_explicit_ac
       .as_str(),
     "sonnet"
   );
-  page.tab("limits", "settings-default-budget");
-  page.tab("general", "settings-reviewer-model");
-  assert!(page.text("settings-reviewer-readback").contains("sonnet"));
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-reviewer-model");
+  assert!(page.text("settings-reviewer-model").contains("sonnet"));
 }
 
 #[test]
@@ -192,8 +191,8 @@ fn project_settings_failed_reviewer_reverting_to_baseline_abandons_retry_and_que
     assert!(!page.exists("settings-auto-question"));
     assert!(!page.window.link.input_gate().protecting());
     assert_eq!(page.db().auto_mode_settings().expect("A retained"), original);
-    page.tab("limits", "settings-default-budget");
-    page.tab("general", "settings-reviewer-model");
+    page.tab("general", "settings-project-name");
+    page.tab("runs", "settings-reviewer-model");
     assert!(page.text("settings-reviewer-model").contains("haiku"));
     assert_eq!(page.db().auto_mode_settings().expect("no abandoned B"), original);
   }
@@ -229,8 +228,8 @@ fn project_settings_failed_reviewer_new_draft_confirms_and_saves_only_visible_ch
   let saved = page.db().auto_mode_settings().expect("C").reviewer.expect("reviewer");
   assert_eq!(saved.model.as_str(), "sonnet");
   assert_eq!(saved.effort.as_deref(), Some("high"));
-  page.tab("limits", "settings-default-budget");
-  page.tab("general", "settings-reviewer-model");
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-reviewer-model");
   assert!(page.text("settings-reviewer-effort").contains("high"));
 }
 

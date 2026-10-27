@@ -96,7 +96,7 @@ fn secrets_mcp_tree_masks_values_and_refuses_automated_replacement_confirmation(
       .expect("private human opt-in fixture");
     let secret = s.seed("DOCS_TOKEN", Environment::Development);
     s.bind(&secret);
-    s.list();
+    s.open(&secret);
     s.click("secret-replace");
     s.set("secret-value", NEXT);
     let client = Client::new(&mut s);
@@ -149,7 +149,7 @@ fn secrets_stale_unused_replacement_rechecks_references_and_requires_person_conf
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Development);
   let key = VaultKey::new(project_id(), secret.id());
-  s.list();
+  s.open(&secret);
   s.click("secret-replace");
   s.set("secret-value", NEXT);
   assert!(!s.text("secret-uses").contains("kontur-docs"));

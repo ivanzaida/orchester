@@ -154,7 +154,7 @@
         "everyCall": "Not available: this check's access rules ask before every call."
       },
       "project": "Approve for every run of this project",
-      "projectCovers": "{{server}} {{tool}} in every run of this project while tools/qa-app.ps1 is unchanged (git blob {{script}}). A changed script asks again; revoke the rule in Project settings › Auto mode. Approves this one too.",
+      "projectCovers": "{{server}} {{tool}} in every run of this project while tools/qa-app.ps1 is unchanged (git blob {{script}}). A changed script asks again; revoke the rule in Project settings › Runs › Approved for every run. Approves this one too.",
       "everything": "Approve everything in this run",
       "everythingCovers": "Approves this one; then Run {{run}} answers its worktree commands and MCP calls itself. Network commands, writes outside the worktree, secrets, installs and destructive commands still ask you.",
       "everythingOn": "On already: Run {{run}} answers its requests itself, and leaves this one to you, as it never answers a request like it.",

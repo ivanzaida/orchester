@@ -1,9 +1,8 @@
-//! Project settings › Sources (`Project settings · Sources · dark` `kmNiF`; its states in `Sources · states` `lOOY6`):
-//! the project's sources with whether runs can read each now, *Add source* checked in place, what agents may do
-//! outside the worktree, and that changes apply to runs that start later. Adding a source lets agents read more
-//! without asking, so it is asked in place first (`connections::widen`, the window's input locked while it shows);
-//! removing one is taken at once, and says which running runs keep it. The rules are
-//! `orchester_workspace::sources::project`.
+//! Context › Sources (`Sources` `lWL4C` in `03 · Context`, empty in `09` `mE5oU`): the project's sources with whether
+//! runs can read each now, *Add a folder or file* checked in place, what agents may do outside the worktree, and that
+//! changes apply to runs that start later. Adding a source lets agents read more without asking, so it is asked in
+//! place first (`connections::widen`, the window's input locked while it shows); removing one is taken at once, says
+//! which running runs keep it, and offers Undo. The rules are `orchester_workspace::sources::project`.
 
 mod view;
 
@@ -14,7 +13,6 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
   },
-  components::Column,
   core::Signal,
   node::Element,
 };
@@ -30,12 +28,11 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::{Status, TabProps, page};
+use super::{Status, TabProps, kit::Group};
 use crate::{
   mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   services::Services,
-  theme::ExtraSpacing,
   ui::{
     add_source::Asked,
     field::field_error,
@@ -82,6 +79,8 @@ pub(super) struct Sources {
   asking: Signal<Option<Asked>>,
   /// The source removed last, until the next change.
   removed: Signal<Option<Removed>>,
+  /// *Add* opened the path box under its row.
+  adding: Signal<bool>,
 }
 
 impl Component for Sources {
@@ -94,6 +93,7 @@ impl Component for Sources {
       retried: ctx.signal(0),
       asking: ctx.signal(None),
       removed: ctx.signal(None),
+      adding: ctx.signal(false),
     };
     let (after, status, feed) = (
       tab.clone(),
@@ -109,6 +109,9 @@ impl Component for Sources {
         status.set(Status::Failed);
       } else if let Some(Done(removed)) = &state.data {
         after.asking.set(None);
+        if removed.is_none() {
+          after.adding.set(false);
+        }
         after.removed.set(removed.clone());
         status.set(Status::Saved);
         after.revision.update(|revision| *revision += 1);
@@ -129,23 +132,17 @@ impl Component for Sources {
       .clone()
       .filter(|read| !state.is_rejected() && read.retried == retried)
     else {
-      return page::scroll(self.pending(ctx, &state));
+      return self.pending(ctx, &state);
     };
     if !self.save.state().get().is_pending() && self.save.state().get().error.is_none() {
       props.status.set(Status::Saved);
     }
     let busy = self.save.state().get().is_pending();
-    let mut section = self.section(ctx, &props, &read, busy);
+    let mut group = self.group(ctx, &props, &read, busy);
     if let Some(error) = self.save.state().get().error {
-      section = section.child(field_error("settings-sources-save-error", &message_text(ctx, &error)));
+      group = group.after(field_error("settings-sources-save-error", &message_text(ctx, &error)));
     }
-    page::scroll(
-      Column::new()
-        .spacing(ExtraSpacing::Roomy.role())
-        .child(section)
-        .child(view::outside(ctx))
-        .child(view::later(ctx)),
-    )
+    group.into()
   }
 }
 
@@ -192,9 +189,9 @@ impl Sources {
     }
   }
 
-  /// The section: its heading and words, the list or that it is empty, the notice of a removed source, the question
-  /// about one to add, and *Add source*.
-  fn section(&self, ctx: &mut Ctx, props: &TabProps, read: &Read, busy: bool) -> Column {
+  /// The group: its count, the sources or that there is none, a removed source with Undo, the question about one to
+  /// add, and *Add a folder or file*.
+  fn group(&self, ctx: &mut Ctx, props: &TabProps, read: &Read, busy: bool) -> Group {
     let root = props.project.open.repo_root.clone();
     let remove = {
       let (save, root) = (self.save.clone(), root.clone());
@@ -209,24 +206,32 @@ impl Sources {
       Arc::new(move || revision.update(|revision| *revision += 1))
     };
     let asking = self.asking.get();
-    let list = view::list(ctx, read, (remove, check_again), busy);
-    let mut section = view::heading(ctx, props, read).child(list);
+    let mut group = view::heading(ctx, read).end(view::outside_info(ctx)).rows(view::rows(
+      ctx,
+      read,
+      (remove, check_again),
+      busy,
+      &self.adding,
+    ));
     if let Some(removed) = self.removed.get() {
       let (ask, path) = (self.asking.clone(), removed.path.clone());
-      section = section.child(view::removed(ctx, &removed, move || {
+      group = group.row(view::removed(ctx, &removed, move || {
         ask.set(Some(Asked(path.clone())));
       }));
     }
-    if let Some(Asked(path)) = &asking {
-      section = section.child(self.question(ctx, &root, path));
-    }
     let ask = self.asking.clone();
-    section.child(view::add(
-      ctx,
-      read,
-      busy || asking.is_some(),
-      Arc::new(move |path| ask.set(Some(Asked(path)))),
-    ))
+    if !read.listed.is_empty() || self.adding.get() {
+      group = group.row(view::add(
+        ctx,
+        read,
+        (busy || asking.is_some(), &self.adding),
+        Arc::new(move |path| ask.set(Some(Asked(path)))),
+      ));
+    }
+    if let Some(Asked(path)) = &asking {
+      group = group.after(self.question(ctx, &root, path));
+    }
+    group
   }
 
   fn question(&self, ctx: &mut Ctx, root: &std::path::Path, path: &SourcePath) -> Element {
@@ -239,7 +244,7 @@ impl Sources {
       "settings-sources-confirm",
       WidenProps {
         id: "settings-sources-question".into(),
-        card: false,
+        look: WidenLook::Box,
         affirming: false,
         automation: Guarded::PermissionWidening,
         title: ctx.t("project_settings.sourcesTab.question"),

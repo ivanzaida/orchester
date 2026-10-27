@@ -87,8 +87,14 @@ fn secrets_names_are_unique_among_active_secrets_of_an_environment() {
   );
   db.save_secret(&archived).expect("saved");
   assert!(db.secrets().expect("listed").is_empty());
-  assert_eq!(db.secret(first.id()).expect("read"), Some(archived));
+  assert_eq!(db.secret(first.id()).expect("read"), Some(archived.clone()));
+  assert_eq!(db.archived_secrets().expect("listed"), vec![archived.clone()]);
   db.create_secret(&duplicate).expect("an archived secret frees its name");
+  assert_eq!(
+    db.archived_secrets().expect("listed"),
+    vec![archived],
+    "the active one is not archived"
+  );
 }
 
 #[test]

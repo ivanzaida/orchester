@@ -1,4 +1,5 @@
-//! Tab selection never supplies evidence that an unfinished edit has been saved.
+//! Tab selection never supplies evidence that an unfinished edit has been saved: Runs, which holds the limits and the
+//! environment, stays its own while an edit there is unfinished, and the other tabs wait.
 use orchester_core::store::SettingsStore;
 
 use super::harness::Settings;
@@ -14,7 +15,7 @@ fn project_settings_tab_reselection_and_navigation_keep_invalid_limits_truthful(
   ] {
     page.set(id, invalid);
     page.leave();
-    page.click("settings-tab-limits");
+    page.click("settings-tab-runs");
     assert_eq!(page.value(id), invalid);
     assert_eq!(
       page.text("project-settings-save-status"),
@@ -37,21 +38,21 @@ fn project_settings_tab_reselection_keeps_invalid_and_dirty_environment_truthful
   page.tab("environment", "settings-environment-variables");
   page.set("settings-environment-variables", "1NAME=value");
   page.leave();
-  page.click("settings-tab-environment");
+  page.click("settings-tab-runs");
   assert_eq!(
     page.text("project-settings-save-status"),
     "Not saved · fix the marked field"
   );
-  page.click("settings-tab-limits");
+  page.click("settings-tab-context");
   assert_eq!(page.value("settings-environment-variables"), "1NAME=value");
   assert!(page.db().project_environment().expect("not persisted").is_empty());
   page.set("settings-environment-variables", "RUST_LOG=debug");
   assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
-  page.click("settings-tab-environment");
+  page.click("settings-tab-runs");
   assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
   page.leave();
   page.saved();
-  page.tab("limits", "settings-default-budget");
+  page.tab("context", "settings-index-use-row");
   page.tab("environment", "settings-environment-variables");
   assert_eq!(page.value("settings-environment-variables"), "RUST_LOG=debug");
 }

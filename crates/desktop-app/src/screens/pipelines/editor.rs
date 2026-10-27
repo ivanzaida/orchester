@@ -32,7 +32,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route},
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -451,7 +451,7 @@ impl Editor {
       "pipeline-save-question",
       WidenProps {
         id: "pipeline-save-question".into(),
-        card: false,
+        look: WidenLook::Band,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("pipelines.saveWeaker"),
@@ -513,7 +513,7 @@ impl Editor {
           "pipeline-publish-question",
           WidenProps {
             id: "pipeline-publish-question".into(),
-            card: false,
+            look: WidenLook::Band,
             affirming: false,
             automation: crate::mcp::input_gate::Guarded::PermissionWidening,
             title: ctx.t("pipelines.publishWeaker"),

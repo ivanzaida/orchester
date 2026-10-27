@@ -30,7 +30,7 @@ use crate::{
   navigation::Navigation,
   project::{ShownProject, own::OwnChanges},
   routes::{ProjectPage, Route, ToolTab},
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   theme::{ConnectionsSpacing, ExtraSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -277,7 +277,7 @@ impl ToolEditor {
       "tool-confirm",
       WidenProps {
         id: "tool-confirm".into(),
-        card: true,
+        look: WidenLook::Card,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("tools.confirmTitle"),

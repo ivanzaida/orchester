@@ -1,30 +1,39 @@
-//! The auto mode switch, reviewer selects and the domain's effective-reviewer readback.
+//! Auto mode's rows (`Auto mode` `WSQqT` in `02 · Runs`): its switch, the reviewer's connection, model and effort as
+//! three selects with the domain's effective-reviewer read-back in the row's (i), and *Approved for every run*.
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, SelectOption},
+  app::ctx::Ctx,
+  components::{Row, SelectOption},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::project_settings::{self, Settings};
 
 use super::{AutoMode, Props};
 use crate::{
-  screens::project_settings::{page, work::Save},
+  screens::project_settings::{
+    kit::{Group, SettingRow, Tone},
+    work::Save,
+  },
+  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     choice_field::{Choice, ChoiceField},
-    field::{FieldInput, SelectField, field},
-    form_section::{Place, section as form_section},
+    field::{FieldInput, SelectField},
     icon::Icon,
     message::message_text,
     toggle::{Toggle, ToggleKind},
-    unavailable::reason_line,
   },
 };
 
-pub fn section(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Element {
+/// The reviewer's selects (`Claude · Work` `JbMwq`, `Opus 5.5` `WffcY`, `Effort · Medium` `M0RSI`).
+const CONNECTION_WIDTH: f32 = 130.0;
+const MODEL_WIDTH: f32 = 104.0;
+const EFFORT_WIDTH: f32 = 120.0;
+
+pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Group {
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending() || tab.asking.get().0.is_some();
   let on_row = switch_row(ctx, tab, props, settings, save, (options.resolved.as_ref().err(), busy));
@@ -33,17 +42,14 @@ pub fn section(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings
   } else {
     reviewer_row(ctx, tab, options, busy)
   };
-  let rules = super::rules::row(ctx, props, settings, save);
-  form_section(
-    "settings-auto",
-    &ctx.t("project_settings.auto"),
-    None,
-    vec![on_row, reviewer, rules],
-  )
-  .into()
+  let rules = super::rules::row(ctx, props, settings);
+  Group::new("settings-auto", ctx.t("project_settings.auto"))
+    .row(on_row)
+    .row(reviewer)
+    .row(rules)
 }
 fn switch_row(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   tab: &AutoMode,
   props: &Props,
   settings: &Settings,
@@ -60,7 +66,8 @@ fn switch_row(
     } else {
       "project_settings.off"
     }),
-  );
+  )
+  .hide_label();
   if !busy && (on || unavailable.is_none()) {
     let (tab, props, save, base) = (tab.clone(), props.clone(), save.clone(), settings.auto_mode.clone());
     toggle = toggle.on_change(move |chosen| {
@@ -69,67 +76,52 @@ fn switch_row(
       tab.request(&props, &save, asked);
     });
   }
-  let control = Column::new()
-    .width(Dimension::Px(page::CONTROL_WIDTH))
-    .spacing(SpacingSize::Sm)
-    .child(toggle);
-  page::row(
-    ctx,
-    "settings-auto-on",
-    ("project_settings.newRuns", "project_settings.autoDetail"),
-    control.into(),
-    Place::Within,
-  )
+  SettingRow::new("settings-auto-on", ctx.t("project_settings.newRuns"))
+    .info(ctx.t("project_settings.autoDetail"))
+    .hint(ctx.t("project_settings.autoHint"))
+    .control(toggle)
+    .render(ctx)
 }
 fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);
   let project = props.tab.project.open.project.id();
-  let control = Column::new()
-    .width(Dimension::Px(page::CONTROL_WIDTH))
-    .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .child(reason_line(
-      "settings-auto-unavailable",
-      &ctx.t("project_settings.reviewerUnavailable"),
-    ))
-    .child(
-      ActionButton::new(
-        "settings-auto-open-connections",
-        ButtonKind::Secondary,
-        ctx.t("project_settings.openConnections"),
-      )
-      .icon(Icon::Plug)
-      .in_form()
-      .opens(nav.to(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
-      ))),
-    );
-  page::row(
-    ctx,
-    "settings-auto-reviewer",
-    ("project_settings.reviewer", "project_settings.reviewerDetail"),
-    control.into(),
-    Place::Within,
+  let open = ActionButton::new(
+    "settings-auto-open-connections",
+    ButtonKind::Secondary,
+    ctx.t("project_settings.openConnections"),
   )
+  .icon(Icon::Plug)
+  .in_form()
+  .opens(nav.to(crate::routes::Route::Project(
+    project,
+    crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
+  )));
+  SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"))
+    .info(ctx.t("project_settings.reviewerDetail"))
+    .toned(ctx.t("project_settings.reviewerUnavailable"), Tone::Warning)
+    .control(open)
+    .render(ctx)
 }
 fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
   let connection = connection_select(ctx, tab, &options, busy);
+  // A model is named by the id its CLI takes, as its developer names it (the person's decision for ORC-103).
   let model = select(
     ctx,
-    "settings-reviewer-model",
-    "project_settings.model",
+    ("settings-reviewer-model", "project_settings.model", MODEL_WIDTH),
     &tab.model,
     options
       .models
       .into_iter()
-      .map(|model| (model.clone(), model_label(ctx, &model)))
+      .map(|model| {
+        let label = model.as_str().into();
+        (model, label)
+      })
       .collect(),
     busy,
   );
   let effort = select(
     ctx,
-    "settings-reviewer-effort",
-    "project_settings.effort",
+    ("settings-reviewer-effort", "project_settings.effort", EFFORT_WIDTH),
     &tab.effort,
     std::iter::once((String::new(), ctx.t("project_settings.defaultEffort")))
       .chain(
@@ -141,62 +133,35 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
       .collect(),
     busy,
   );
-  let note = match options.resolved {
-    Ok(shown) => ctx.t_args(
-      "project_settings.reviewedBy",
-      [
-        ("model", model_label(ctx, shown.model.as_str()).as_ref()),
-        ("connection", &shown.connection),
-      ],
-    ),
-    Err(why) => message_text(ctx, &why),
+  let detail = ctx.t("project_settings.reviewerDetail");
+  let row = SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"));
+  let row = match options.resolved {
+    Ok(shown) => {
+      let readback = ctx.t_args(
+        "project_settings.reviewedBy",
+        [("model", shown.model.as_str()), ("connection", &shown.connection)],
+      );
+      row.hint(ctx.t("project_settings.reviewerHint")).info(ctx.t_args(
+        "project_settings.reviewerInfo",
+        [("detail", &*detail), ("readback", &*readback)],
+      ))
+    }
+    Err(why) => row.info(detail).toned(message_text(ctx, &why), Tone::Warning),
   };
-  let controls = Column::new()
-    .width(Dimension::Px(page::CONTROL_WIDTH))
-    .spacing(SpacingSize::Sm)
-    .child(field(
-      "settings-reviewer-connection-label",
-      Some(&ctx.t("project_settings.connection")),
-      connection,
-      None,
-    ))
-    .child(field(
-      "settings-reviewer-model-label",
-      Some(&ctx.t("project_settings.model")),
-      model,
-      None,
-    ))
-    .child(field(
-      "settings-reviewer-effort-label",
-      Some(&ctx.t("project_settings.effort")),
-      effort,
-      None,
-    ))
-    .child(page::note("settings-reviewer-readback", &note));
-  page::row(
-    ctx,
-    "settings-auto-reviewer",
-    ("project_settings.reviewer", "project_settings.reviewerDetail"),
-    controls.into(),
-    Place::Within,
-  )
+  let selects = Row::new()
+    .id("settings-reviewer-selects")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(connection)
+    .child(model)
+    .child(effort);
+  row.control(selects).render(ctx)
 }
 
 fn default_connection_label(ctx: &Ctx, name: Option<&str>) -> Arc<str> {
   name
     .map(|name| ctx.t_args("project_settings.defaultConnection", [("connection", name)]))
     .unwrap_or_else(|| ctx.t("project_settings.default"))
-}
-
-fn model_label(ctx: &Ctx, model: &str) -> Arc<str> {
-  let key = match model {
-    "claude-haiku-4-5-20251001" => "project_settings.haiku45",
-    "claude-sonnet-5-5" => "project_settings.sonnet55",
-    "claude-opus-5-5" => "project_settings.opus55",
-    "claude-fable-5-1" => "project_settings.fable51",
-    _ => return model.into(),
-  };
-  ctx.t(key)
 }
 
 /// The reviewer's connection (`kGBHZ`): the default, the connections a reviewer runs on, and those on an API provider
@@ -215,8 +180,11 @@ fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::
       .collect();
     return select(
       ctx,
-      "settings-reviewer-connection",
-      "project_settings.connection",
+      (
+        "settings-reviewer-connection",
+        "project_settings.connection",
+        CONNECTION_WIDTH,
+      ),
       &tab.connection,
       connections,
       true,
@@ -253,7 +221,7 @@ fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::
     value: tab.connection.clone(),
     open: tab.connection_open.clone(),
     choices,
-    width: page::CONTROL_WIDTH,
+    width: CONNECTION_WIDTH,
     icon_in_field: false,
     placeholder: None,
     mono: false,
@@ -263,8 +231,7 @@ fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::
 
 fn select(
   ctx: &mut Ctx,
-  id: &str,
-  key: &str,
+  (id, key, width): (&str, &str, f32),
   value: &Signal<String>,
   options: Vec<(String, Arc<str>)>,
   locked: bool,
@@ -277,6 +244,7 @@ fn select(
       .unwrap_or_else(|| value.get_untracked());
     FieldInput::new(id.to_owned(), ctx.t(key), Signal::new(text))
       .locked()
+      .width(Dimension::Px(width))
       .render(ctx)
   } else {
     SelectField::new(
@@ -288,6 +256,7 @@ fn select(
         .map(|(value, label)| SelectOption::new(value, label))
         .collect(),
     )
+    .width(Dimension::Px(width))
     .render(ctx)
   }
 }

@@ -4,7 +4,7 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use orchester_app::routes::{ConnectionsTab, ConnectionsView, NewConnection, ProjectPage, Route};
+use orchester_app::routes::{ConnectionsView, NewConnection, ProjectPage, Route};
 use orchester_core::{
   connection::mcp::McpServer,
   id::{ConnectionId, ProjectId},
@@ -53,12 +53,18 @@ impl Seeded {
     self.window.pass();
   }
 
-  /// Connections on `tab`, once the connections are read.
-  pub fn list(&mut self, tab: ConnectionsTab) {
-    self.go(ProjectPage::Connections(ConnectionsView::new(tab)));
+  /// Project settings › Connections, once the connections are read.
+  pub fn list(&mut self) {
+    self.go(ProjectPage::Connections(ConnectionsView::default()));
     self.until("the connections", |seeded| {
-      seeded.exists("connections-body") || seeded.exists("connections-empty") || seeded.exists("connections-empty-tab")
+      seeded.exists("connections-list") || seeded.exists("connections-empty")
     });
+  }
+
+  /// The page of connection `id`, once it shows.
+  pub fn open(&mut self, id: ConnectionId) {
+    self.go(ProjectPage::Connections(ConnectionsView::of(id)));
+    self.until("the connection's page", |seeded| seeded.exists("connection-inspector"));
   }
 
   /// Add connection or Add MCP server, once its fields are shown.
@@ -135,8 +141,11 @@ impl Seeded {
     }
   }
 
-  /// The row of connection `id`.
+  /// The row of connection `id` in Connections, which opens its page.
   pub fn row(id: ConnectionId) -> String {
-    format!("connection-row-{id}")
+    format!("connection-row-{id}-row")
   }
+
+  /// Why the form's Save cannot be used, if it says.
+  pub const REASON: &str = "connection-form-actions-reason";
 }

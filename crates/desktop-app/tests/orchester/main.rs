@@ -294,6 +294,7 @@ fn orchester_links_by_address_warning_on_a_remote_mismatch() {
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
+  press(&mut window, "sharing-share-open");
   shows(&mut window, "sharing-address");
   window.set("sharing-address", &format!("{}/billing", recorder.url()));
   press(&mut window, "sharing-link-button");
@@ -308,7 +309,7 @@ fn orchester_links_by_address_warning_on_a_remote_mismatch() {
     "the same remote does not warn"
   );
   press(&mut window, "sharing-link-confirm");
-  shows(&mut window, "sharing-shared");
+  shows(&mut window, "sharing-role-value");
   assert!(
     !recorder.lines().iter().any(|line| administrative(line)),
     "an admin endpoint was called: {:?}",

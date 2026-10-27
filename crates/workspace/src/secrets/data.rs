@@ -5,6 +5,7 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
+  connection::mcp::McpEnvValue,
   id::{ConnectionId, ResourceId, SecretId},
   resource::{ResourceKind, Tool},
   secret::{self, NewSecret, Secret, SecretError, SecretValue, SecretVault},
@@ -29,6 +30,9 @@ pub struct SecretUse {
   pub secret: SecretId,
   pub kind: SecretUseKind,
   pub name: Arc<str>,
+  /// The variable an MCP server's program is given the secret in; `None` for a tool, and for a server that sends
+  /// it as its authorization.
+  pub variable: Option<Arc<str>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -43,10 +47,12 @@ impl UseCounts {
   }
 }
 
-/// The project's secrets that are not archived, and their users, read together.
+/// The project's secrets that are not archived, its archived ones, and their users, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectSecrets {
   pub secrets: Arc<Vec<Secret>>,
+  /// The archived secrets, which the list shows after the active ones and nothing is given.
+  pub archived: Arc<Vec<Secret>>,
   pub uses: Arc<Vec<SecretUse>>,
 }
 
@@ -70,32 +76,47 @@ impl ProjectSecrets {
     {
       secrets.push(secret);
     }
+    let archived = store.archived_secrets()?;
     let tools = current_tools(store)?;
     let servers = store.mcp_servers()?;
-    let uses = secrets
-      .iter()
-      .flat_map(|secret| {
+    let mut ids: Vec<SecretId> = secrets.iter().map(Secret::id).collect();
+    ids.extend(
+      archived
+        .iter()
+        .map(Secret::id)
+        .filter(|id| !secrets.iter().any(|secret| secret.id() == *id)),
+    );
+    let uses = ids
+      .into_iter()
+      .flat_map(|id| {
         let tool_uses = tools
           .iter()
-          .filter(|current| secret::tool_uses(&current.body, secret.id()))
-          .map(|current| SecretUse {
-            secret: secret.id(),
+          .filter(move |current| secret::tool_uses(&current.body, id))
+          .map(move |current| SecretUse {
+            secret: id,
             kind: SecretUseKind::Tool(current.id),
             name: current.name.clone(),
+            variable: None,
           });
         let server_uses = servers
           .iter()
-          .filter(|server| server.secrets().contains(&secret.id()))
-          .map(|server| SecretUse {
-            secret: secret.id(),
+          .filter(move |server| server.secrets().contains(&id))
+          .map(move |server| SecretUse {
+            secret: id,
             kind: SecretUseKind::McpServer(server.id()),
             name: server.name().as_str().into(),
+            variable: server
+              .environment()
+              .iter()
+              .find(|(_, value)| **value == McpEnvValue::Secret(id))
+              .map(|(name, _)| name.as_str().into()),
           });
-        tool_uses.chain(server_uses)
+        tool_uses.chain(server_uses).collect::<Vec<_>>()
       })
       .collect();
     Ok(Self {
       secrets: Arc::new(secrets),
+      archived: Arc::new(archived),
       uses: Arc::new(uses),
     })
   }
@@ -113,6 +134,14 @@ impl ProjectSecrets {
     self.secrets.iter().filter(move |secret| {
       !secret.is_archived() && environment.is_none_or(|environment| secret.environment() == environment)
     })
+  }
+
+  /// Archived secrets in the selected environment, in database order.
+  pub fn archived_in(&self, environment: Option<secret::Environment>) -> impl Iterator<Item = &Secret> {
+    self
+      .archived
+      .iter()
+      .filter(move |secret| environment.is_none_or(|environment| secret.environment() == environment))
   }
 
   /// Changing credentials selected by resources may widen their access to external systems.

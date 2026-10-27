@@ -96,22 +96,29 @@ impl NumberField {
     self
   }
 
+  /// The box over its read-back; an empty read-back (nothing to say, as for a limit that is not set) leaves the box
+  /// alone.
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let read_back = match &self.error {
-      Some(error) => Text::new(error)
-        .id(format!("{}-note", self.id))
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::Danger)
-        .describe("role", "field-error"),
-      None => Text::new(&self.read_back)
-        .id(format!("{}-read-back", self.id))
-        .variant(TypographyStyle::Caption),
+      Some(error) => Some(
+        Text::new(error)
+          .id(format!("{}-note", self.id))
+          .variant(TypographyStyle::Caption)
+          .color(PaletteColor::Danger)
+          .describe("role", "field-error"),
+      ),
+      None if self.read_back.is_empty() => None,
+      None => Some(
+        Text::new(&self.read_back)
+          .id(format!("{}-read-back", self.id))
+          .variant(TypographyStyle::Caption),
+      ),
     };
     Column::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(self.read_back_alignment)
       .child(self.input.render(ctx))
-      .child(read_back)
+      .with_children(read_back)
       .into()
   }
 }

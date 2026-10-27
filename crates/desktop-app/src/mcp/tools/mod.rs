@@ -124,10 +124,14 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       insert("period", period.name());
     }
     ProjectPage::Connections(view) => {
-      insert("tab", view.tab().name());
       if let Some(connection) = view.selected() {
         insert("selected", &connection.to_string());
       }
+    }
+    ProjectPage::Settings(tab) => insert("tab", tab.name()),
+    ProjectPage::ProjectRules => {
+      insert("tab", crate::routes::ProjectSettingsTab::Runs.name());
+      insert("view", "rules");
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
@@ -153,17 +157,8 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("from", file.source().name());
       }
     }
-    ProjectPage::Files(view) => {
-      if let Some(file) = view.file() {
-        insert("file", file);
-      }
-      insert("at", &view.at().to_string());
-      if let Some(line) = view.line() {
-        insert("line", &line.to_string());
-      }
-    }
     page => {
-      for (name, value) in module_params(page) {
+      for (name, value) in module_params(page).into_iter().chain(files_params(page)) {
         insert(name, &value);
       }
     }
@@ -180,6 +175,17 @@ fn module_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
     ProjectPage::EditModule(module) => vec![("module", module.to_string()), ("view", "edit".to_owned())],
     _ => Vec::new(),
   }
+}
+
+/// The parameters `navigate` takes back for Files: the `file` shown, its version `at` and its `line`.
+fn files_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  let ProjectPage::Files(view) = page else {
+    return Vec::new();
+  };
+  let mut params: Vec<(&'static str, String)> = view.file().map(|file| ("file", file.to_owned())).into_iter().collect();
+  params.push(("at", view.at().to_string()));
+  params.extend(view.line().map(|line| ("line", line.to_string())));
+  params
 }
 
 /// The string argument `name`, if given.

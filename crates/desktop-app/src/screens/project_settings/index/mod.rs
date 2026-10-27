@@ -1,4 +1,6 @@
-//! Code index (s1K5a, QBdyL): the workspace's setting, revision list, rebuild and ripgrep install.
+//! Context › Code index (`Code index` `EORXu` in `03 · Context`; empty in `09` `mE5oU`): the workspace's setting with
+//! its switch, a row per revision's index with its state and Rebuild or Retry, and the search tool with the ripgrep
+//! install.
 mod list;
 mod search;
 
@@ -15,11 +17,10 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
-    theme::SpacingSize,
   },
-  components::Column,
+  components::Text,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::revision::Revision;
 use orchester_workspace::{
@@ -30,16 +31,18 @@ use orchester_workspace::{
 };
 
 use super::{
-  TabProps, page,
+  TabProps,
+  kit::{EmptyRow, Group, SettingRow},
   work::{self, Change, Read, Save},
 };
-use crate::ui::{
-  field::field_error,
-  form_section::{Place, section},
-  icon::Icon,
-  message::message_text,
-  notice::{Notice, NoticeTone},
-  toggle::{Toggle, ToggleKind},
+use crate::{
+  theme::ExtraTypography,
+  ui::{
+    field::field_error,
+    icon::Icon,
+    message::message_text,
+    toggle::{Toggle, ToggleKind},
+  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -116,54 +119,50 @@ impl Component for CodeIndex {
       self.stored.set(Some(read.clone()));
     }
     let Some(read) = self.stored.get() else {
-      return page::scroll(work::pending(ctx, &state, &self.revision));
+      return work::pending(ctx, &state, &self.revision);
     };
     let on = read.0.code_index.is_on();
-    let row = setting(ctx, &props, on, &list, &save);
-    let mut rows = vec![
-      page::explanation("settings-index-description", &ctx.t("project_settings.indexDetail")),
-      row,
-    ];
+    let mut group =
+      Group::new("settings-index-section", ctx.t("project_settings.indexHeading")).row(setting(ctx, &props, on, &save));
     if on {
-      rows.push(list::panel(ctx, &list, &rebuild, &props.project.open.repo_root));
-    } else {
-      rows.push(off_notice(ctx));
-    }
-    let content = Column::new()
-      .spacing(crate::theme::ExtraSpacing::Roomy.role())
-      .with_children(work::error(ctx, &save))
-      .with_children(
-        state
-          .error
-          .map(|e| field_error("settings-index-load-error", &message_text(ctx, &e))),
-      )
-      .child(
-        section(
-          "settings-index-section",
-          &ctx.t("project_settings.indexHeading"),
-          None,
-          rows,
-        )
-        .spacing(SpacingSize::Md),
-      )
-      .with_children(
-        rebuild
-          .state()
-          .get()
-          .error
-          .map(|e| field_error("settings-index-rebuild-error", &message_text(ctx, &e))),
-      )
-      .with_children(on.then(|| {
-        search::section(
+      if let Some(total) = list::total(ctx, &list) {
+        group = group.end(
+          Text::new(&total)
+            .id("settings-index-total")
+            .variant(ExtraTypography::Note.role()),
+        );
+      }
+      group = group
+        .rows(list::rows(ctx, &list, &rebuild, &props.project.open.repo_root))
+        .rows(search::rows(
           ctx,
           &check,
-          install.as_ref(),
-          &self.check_revision,
-          &self.tick,
-          &self.after_install,
-        )
-      }));
-    page::scroll(content)
+          code_index::install_state().as_ref(),
+          (&self.check_revision, &self.tick, &self.after_install),
+        ));
+    } else {
+      group = group.row(EmptyRow::new(
+        "settings-index-off",
+        Icon::CircleOff,
+        ctx.t("project_settings.indexOffTitle"),
+        ctx.t("project_settings.indexOffNote"),
+      ));
+    }
+    let errors = [
+      work::error(ctx, &save),
+      state
+        .error
+        .map(|e| field_error("settings-index-load-error", &message_text(ctx, &e)).into()),
+      rebuild
+        .state()
+        .get()
+        .error
+        .map(|e| field_error("settings-index-rebuild-error", &message_text(ctx, &e)).into()),
+    ];
+    for error in errors.into_iter().flatten() {
+      group = group.after(error);
+    }
+    group.into()
   }
 }
 impl CodeIndex {
@@ -224,18 +223,9 @@ impl CodeIndex {
       .get()
   }
 }
-fn off_notice(ctx: &Ctx) -> Element {
-  Notice::new(
-    "settings-index-off",
-    NoticeTone::Info,
-    ctx.t("project_settings.indexOffTitle"),
-  )
-  .icon(Icon::CircleOff)
-  .body(ctx.t("project_settings.indexOffNote"))
-  .into()
-}
 
-fn setting(ctx: &Ctx, props: &TabProps, on: bool, list: &FutureState<Listed, Message>, save: &Save) -> Element {
+/// *Use code index* (`Use code index` `LEaze`): its switch, saved at once.
+fn setting(ctx: &mut Ctx, props: &TabProps, on: bool, save: &Save) -> Element {
   let start = work::start(save, props.project.open.repo_root.clone(), Change::Index(!on));
   let toggle = Toggle::new(
     "settings-code-index",
@@ -246,38 +236,22 @@ fn setting(ctx: &Ctx, props: &TabProps, on: bool, list: &FutureState<Listed, Mes
     } else {
       "project_settings.indexOff"
     }),
-  );
+  )
+  .hide_label();
   let toggle = if save.state().get().is_pending() {
     toggle
   } else {
     toggle.on_change(move |_| start())
   };
-  let readback = if !on {
-    Some((Icon::CircleMinus, ctx.t("project_settings.indexDirect")))
-  } else {
-    list.data.as_ref().map(|list| {
-      (
-        Icon::Database,
-        if list.0.0.is_empty() {
-          ctx.t("project_settings.noIndexes")
-        } else {
-          ctx.t_args("project_settings.indexKept", [("count", list.0.0.len().to_string())])
-        },
-      )
-    })
-  };
-  let control = Column::new()
-    .width(Dimension::Px(page::CONTROL_WIDTH))
-    .spacing(SpacingSize::Sm)
-    .child(toggle)
-    .with_children(readback.map(|(icon, text)| page::icon_note("settings-index-kept", icon, &text)));
-  page::row(
-    ctx,
-    "settings-index-use",
-    ("project_settings.useIndex", "project_settings.indexSettingDetail"),
-    control.into(),
-    Place::Last,
-  )
+  SettingRow::new("settings-index-use", ctx.t("project_settings.useIndex"))
+    .info(ctx.t("project_settings.indexInfo"))
+    .hint(ctx.t(if on {
+      "project_settings.indexOnHint"
+    } else {
+      "project_settings.indexDirect"
+    }))
+    .control(toggle)
+    .render(ctx)
 }
 fn rebuild_action(ctx: &mut Ctx) -> Rebuild {
   ctx.future_action(|(root, revision): (PathBuf, Revision)| async move {

@@ -44,14 +44,16 @@ fn secrets_add_rotate_and_archive_remove_the_value_but_preserve_metadata_and_ref
   );
   s.bind(&secret);
   s.refresh();
-  s.until("binding", |s| s.text("secret-uses").contains("kontur-docs"));
-  s.click("secret-archive");
-  assert!(s.text("secret-inspector").contains("Archive DOCS_TOKEN?"));
-  assert!(s.text("secret-inspector").contains("1 MCP server uses"));
+  s.until("binding", |s| {
+    s.exists("secret-uses") && s.text("secret-uses").contains("kontur-docs")
+  });
+  s.ask_archive();
+  assert!(s.text("secret-archive-question").contains("Archive DOCS_TOKEN?"));
+  assert!(s.text("secret-archive-question").contains("1 MCP server uses"));
   s.click("secret-archive-cancel");
-  assert!(!s.text("secret-inspector").contains("Archive DOCS_TOKEN?"));
-  s.click("secret-archive");
-  s.click("secret-archive");
+  assert!(!s.exists("secret-archive-question"));
+  s.ask_archive();
+  s.click("secret-archive-confirm");
   s.until("archived", |s| s.exists("secret-archived"));
   assert!(s.db().secrets().expect("active secrets").is_empty());
   assert!(
@@ -62,14 +64,16 @@ fn secrets_add_rotate_and_archive_remove_the_value_but_preserve_metadata_and_ref
       .is_archived()
   );
   assert!(!s.vault.contains(&key, NEXT));
-  assert!(s.text("secret-uses").contains("MCP · kontur-docs"));
+  assert!(s.text("secret-uses").contains("kontur-docs"));
   assert!(!s.exists("secret-replace"));
-  assert!(!s.exists("secret-archive"));
+  assert!(!s.exists("secret-more"), "an archived secret offers neither");
   assert!(!s.text("app-window").contains(NEXT));
+  s.list();
   s.click("secrets-add");
+  s.until("New secret", |s| s.exists("secret-name"));
   s.set("secret-name", "DOCS_TOKEN");
   s.set("secret-value", VALUE);
-  assert!(!s.exists("secret-save-reason"), "the archived name is reusable");
+  assert!(!s.exists("secret-form-actions-reason"), "the archived name is reusable");
 }
 
 #[test]
@@ -141,7 +145,7 @@ fn secrets_used_replacement_requires_a_person_and_releases_the_input_gate() {
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Development);
   s.bind(&secret);
-  s.list();
+  s.open(&secret);
   s.click("secret-replace");
   s.set("secret-value", NEXT);
   s.click("secret-save");
@@ -176,10 +180,10 @@ fn secrets_used_replacement_requires_a_person_and_releases_the_input_gate() {
 fn secrets_archive_failure_keeps_active_metadata_and_allows_retry() {
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Development);
-  s.list();
-  s.click("secret-archive");
+  s.open(&secret);
+  s.ask_archive();
   s.vault.fail.store(true, Ordering::SeqCst);
-  s.click("secret-archive");
+  s.click("secret-archive-confirm");
   s.until("archive denied", |s| s.exists("secret-archive-error"));
   assert!(
     !s.db()
@@ -190,6 +194,6 @@ fn secrets_archive_failure_keeps_active_metadata_and_allows_retry() {
   );
   assert!(s.vault.contains(&VaultKey::new(project_id(), secret.id()), VALUE));
   s.vault.fail.store(false, Ordering::SeqCst);
-  s.click("secret-archive");
+  s.click("secret-archive-confirm");
   s.until("archive retried", |s| s.exists("secret-archived"));
 }

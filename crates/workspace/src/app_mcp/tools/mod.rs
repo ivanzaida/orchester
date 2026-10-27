@@ -316,7 +316,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "update_project_limits",
-    description: "Changes a project's limits as Project settings › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved, null for no limit.",
+    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved, null for no limit.",
     schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },

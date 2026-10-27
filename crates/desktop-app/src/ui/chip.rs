@@ -17,7 +17,7 @@ use lurq::{
 };
 
 use super::icon::{Icon, icon};
-use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ControlHeight, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// A badge's dot (`Vydkx`).
 const DOT_SIZE: f32 = 6.0;
@@ -34,6 +34,8 @@ pub struct TagChip {
   remove: Option<Remove>,
   /// The name is an identifier, in Geist Mono (`Chip · search_docs` in `XRCed`).
   mono: bool,
+  /// A form's pill under the field that adds it, 24 tall (`Pill · deepseek-v4-pro` `TnP0h`).
+  pill: bool,
 }
 
 impl TagChip {
@@ -43,6 +45,7 @@ impl TagChip {
       name: name.into(),
       remove: None,
       mono: false,
+      pill: false,
     }
   }
 
@@ -50,6 +53,13 @@ impl TagChip {
   #[must_use]
   pub const fn mono(mut self) -> Self {
     self.mono = true;
+    self
+  }
+
+  /// A form's pill: 24 tall with its name centred in it, as the values a field adds (`Pills` `TQ7md`).
+  #[must_use]
+  pub const fn pill(mut self) -> Self {
+    self.pill = true;
     self
   }
 
@@ -66,7 +76,7 @@ impl TagChip {
 impl From<TagChip> for Element {
   fn from(chip: TagChip) -> Self {
     let padding = Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Tight.role());
-    let row = Row::new()
+    let mut row = Row::new()
       .id(chip.id.clone())
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
@@ -84,6 +94,9 @@ impl From<TagChip> for Element {
           })
           .nowrap(),
       );
+    if chip.pill {
+      row = row.height(Dimension::Px(ControlHeight::Sm.value()));
+    }
     let Some(Remove { label, action }) = chip.remove else {
       return row.padding(padding).into();
     };

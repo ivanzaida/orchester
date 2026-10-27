@@ -48,7 +48,7 @@ use super::{
 };
 use crate::{
   mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -359,7 +359,7 @@ fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers:
     &format!("{}-widen-{name}", answering.id),
     WidenProps {
       id: format!("{}-widen", answering.id).into(),
-      card: true,
+      look: WidenLook::Card,
       affirming: given == Given::ApproveProject,
       automation: Guarded::ApprovalWidening,
       title: ctx.t_args(
