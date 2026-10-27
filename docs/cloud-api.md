@@ -96,11 +96,13 @@ or turned two-factor authentication on itself.
 | `DELETE /me` | device | `{ password }` | `204` | `401 invalid_credentials`, `429` |
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
+| `GET /me/sign-ins` | device | | `{ sign_ins: [{ at, device_name, platform, succeeded, two_factor }] }`: the account's own sign-ins of the last 90 days, newest first, at most 50; `two_factor`: a code was asked for. A wrong password counts only for an account that exists | |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the cloud's root key signed. The cloud makes its root at its first start and publishes a key set before it listens, so a running cloud always has one | `503 keys_unavailable` |
 | `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
+| `DELETE /servers/{id}` | device | | `204`: the owner unlinks the server. The cloud forgets its link, its members' joins and its invites, so invites in flight are refused; nothing on the server changes, and it links again with a new statement | `403 session_without_mfa` (two-factor authentication on, and this device is not a two-factor session), `404` (not linked, or not this account's), `409 conflict` (an administrator of the cloud blocked it) |
 | `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
 | `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at, needs_two_factor }] }`; `needs_two_factor`: this device could not accept it now (it is not a two-factor session) | |
 | `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
@@ -154,8 +156,9 @@ session's token that the cloud ended carries why and when (milliseconds):
 | `password_reset` | the password was reset (`/auth/reset/finish`), or changed on another device (`/auth/password`) |
 | `account_deleted` | the account was deleted (`DELETE /me`) |
 | `signed_out` | the device signed itself out (`DELETE /auth/sessions/current`) |
+| `account_disabled` | an administrator of the cloud disabled the account (since 2026-10-27). The cloud ends every token with it, refuses sign-in and issues no identity tokens for team servers until the account is enabled again; a sign-in with the right password answers `401 unauthorized` with this reason too, before any two-factor challenge |
 
-Any other `401` has no `reason`: no token, one the cloud never issued, a desktop's token that ended after 90 days
+A client that does not know `account_disabled` reads it as no reason, as below. Any other `401` has no `reason`: no token, one the cloud never issued, a desktop's token that ended after 90 days
 without use, a browser's after its 12 hours, or one revoked before migration 9. A client reads a reason it does not
 know as none and shows its general words. A revoked device keeps its reason in `devices.revoked_reason`. A deleted
 account's devices go with it, so the hashes of their tokens are kept in `ended_tokens` (the hash, the reason, when,
@@ -405,7 +408,6 @@ early. The address and network limits bound how fast a flood can add counts.
 
 ## Not built yet
 
-- Unlinking a server from the cloud's side.
 - A new email in `PATCH /me` is refused as an unknown field (`400`); the Account page shows *Changing your email is
   not available yet*, as designed.
 - Magic link, Google and GitHub sign-in come later.
