@@ -1,16 +1,14 @@
-//! The run controls at the right of the title (`Pause run` `BOdks`, `Cancel run` `AFYgp` in `lUXff`):
-//! Run for a draft that has every detail, Start run for a queued task whose run did not start, Pause run
-//! while an agent of the run works (not while it only waits for a person), Resume run while it is
-//! paused or stopped by the daily budget, Continue run while it is interrupted, Cancel run until it
-//! ends. A request shows it is under way on its button, and no second one goes out while it is; a pause
-//! stays under way until the run settled at its checkpoint, as the runner records it. A control that
-//! applies but cannot be used now stays in place with a lock: why, in short under the controls and in
-//! full in its tooltip (no runner is connected, unfinished tasks block the run, its worktree was removed,
-//! or the run cannot be read).
+//! The run controls (ORC-100: the header's one primary action, `Primary action` `xxoqb` in `j8DakG`, and rows of its
+//! *More actions* menu `JapSp`): Run for a draft that has every detail, Start run for a queued task whose run did not
+//! start, Pause run while an agent of the run works (not while it only waits for a person), Resume run while it is
+//! paused or stopped by the daily budget, Continue run while it is interrupted, Cancel run until it ends. A request
+//! shows it is under way, and no second one goes out while it is; a pause stays under way until the run settled at
+//! its checkpoint, as the runner records it. A control that applies but cannot be used now stays with a lock and says
+//! why (no runner is connected, unfinished tasks block the run, its worktree was removed, or the run cannot be read).
+//! Each control is what it offers ([`Offer`]); the header draws it as a button or as a menu row ([`control`]).
 
 mod action;
-
-use std::sync::Arc;
+pub mod control;
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::{
@@ -19,25 +17,11 @@ use orchester_core::{
 };
 use orchester_workspace::tasks::detail::{RunView, TaskDetail};
 
-pub use self::action::{ControlAction, RunControl, control_action, named_steps};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  icon::Icon,
-  message::message_text,
+pub use self::{
+  action::{ControlAction, RunControl, control_action, named_steps},
+  control::{Control, Offer, Reason},
 };
-
-/// Why a control cannot be used now: in a few words under the controls, and in full.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Reason {
-  pub short: Arc<str>,
-  pub full: Arc<str>,
-}
-
-/// A control, with why it is unavailable when it is.
-pub struct Control {
-  pub button: ActionButton,
-  pub reason: Option<Reason>,
-}
+use crate::ui::{button::ButtonKind, icon::Icon, message::message_text, pressable::Press};
 
 /// The control last pressed, with its press's serial: each press counts one more.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,58 +71,105 @@ pub struct Controls<'a> {
   pub approval_waits: bool,
 }
 
-/// The controls that apply to the task now, in order.
-pub fn controls(ctx: &Ctx, controls: &Controls) -> Vec<Control> {
-  let mut shown = Shown::default();
+/// The controls that apply to the task now.
+#[derive(Default)]
+pub struct Shown {
+  /// The one that moves the run on: Run, Start run, Resume run or Continue run.
+  pub moves: Option<Control>,
+  /// Pause run, or that it is pausing.
+  pub pause: Option<Control>,
+  pub cancel: Option<Control>,
+}
+
+/// The controls that apply to the task now.
+pub fn controls(ctx: &Ctx, controls: &Controls) -> Shown {
   let detail = controls.detail;
   if let Some(unreadable) = &detail.latest_unreadable {
     let reason = Reason {
       short: ctx.t("task.reasons.unreadable"),
       full: message_text(ctx, &unreadable.actions()),
     };
-    shown.unavailable(cancel_button(ctx), reason);
-    return shown.0;
+    return Shown {
+      cancel: Some(control(ctx, CANCEL, Offer::Unavailable(reason))),
+      ..Shown::default()
+    };
   }
   let Some(run) = &detail.run else {
-    without_run(ctx, controls, &mut shown);
-    return shown.0;
+    return Shown {
+      moves: without_run(ctx, controls),
+      ..Shown::default()
+    };
   };
   if run.run.status().is_terminal() {
-    return shown.0;
+    return Shown::default();
   }
-  if let Some((continue_run, reason)) = continue_removed(ctx, run) {
-    shown.unavailable(continue_run, reason);
-  } else if let Some((start, control, gate)) = primary(ctx, controls, run) {
-    shown.offer(ctx, controls, start, control, gate);
+  let mut shown = Shown::default();
+  if let Some(reason) = continue_removed(ctx, run) {
+    shown.moves = Some(control(ctx, CONTINUE, Offer::Unavailable(reason)));
+  } else if *run.run.status() == RunStatus::Running && run.run.pause_requested() {
+    // A pause stays under way until the run settled at its checkpoint.
+    shown.pause = Some(control(ctx, PAUSING, Offer::Pending));
+  } else if let Some((look, run_control, gate)) = primary(controls, run) {
+    let offered = offered(ctx, controls, look, run_control, gate);
+    if matches!(run_control, RunControl::Pause(_)) {
+      shown.pause = Some(offered);
+    } else {
+      shown.moves = Some(offered);
+    }
   }
-  shown.offer(
-    ctx,
-    controls,
-    cancel_button(ctx),
-    RunControl::Cancel(run.id()),
-    Gate::Runner,
-  );
-  shown.0
+  let cancel = RunControl::Cancel(run.id());
+  shown.cancel = Some(offered(ctx, controls, CANCEL, cancel, Gate::Runner));
+  shown
 }
 
 /// Run for a draft that has every detail, Start run for a queued task whose run did not start (`kh5Er` in
 /// `Xxrdy`).
-fn without_run(ctx: &Ctx, controls: &Controls, shown: &mut Shown) {
-  let Some((id, label, control)) = first_run(&controls.detail.task) else {
-    return;
-  };
-  let start = button(ctx, id, ButtonKind::Primary, (label, Icon::Play));
-  shown.offer(ctx, controls, start, control, Gate::Work);
+fn without_run(ctx: &Ctx, controls: &Controls) -> Option<Control> {
+  let (look, run_control) = first_run(&controls.detail.task)?;
+  Some(offered(ctx, controls, look, run_control, Gate::Work))
 }
 
-/// The control that starts a task's first run, its button's id and its label: none for a draft that misses
-/// details.
-fn first_run(task: &Task) -> Option<(&'static str, &'static str, RunControl)> {
+/// A control's id, words, glyph and look as a button.
+type Look = (&'static str, &'static str, Icon, ButtonKind);
+
+const RUN: Look = ("task-run", "task.controls.run", Icon::Play, ButtonKind::Primary);
+const START: Look = ("task-start-run", "task.controls.start", Icon::Play, ButtonKind::Primary);
+const CONTINUE: Look = (
+  "task-continue-run",
+  "task.controls.continue",
+  Icon::Play,
+  ButtonKind::Primary,
+);
+const RESUME: Look = (
+  "task-resume-run",
+  "task.controls.resume",
+  Icon::Play,
+  ButtonKind::Primary,
+);
+const PAUSE: Look = (
+  "task-pause-run",
+  "task.controls.pause",
+  Icon::CirclePause,
+  ButtonKind::Secondary,
+);
+const PAUSING: Look = (
+  "task-pause-run",
+  "task.controls.pausing",
+  Icon::CirclePause,
+  ButtonKind::Secondary,
+);
+const CANCEL: Look = (
+  "task-cancel-run",
+  "task.controls.cancel",
+  Icon::CircleStop,
+  ButtonKind::DangerGhost,
+);
+
+/// The control that starts a task's first run: none for a draft that misses details.
+fn first_run(task: &Task) -> Option<(Look, RunControl)> {
   match task.status() {
-    TaskStatus::Draft if task.details().missing().is_empty() => {
-      Some(("task-run", "task.controls.run", RunControl::Run(task.id())))
-    }
-    TaskStatus::Queued => Some(("task-start-run", "task.controls.start", RunControl::Start(task.id()))),
+    TaskStatus::Draft if task.details().missing().is_empty() => Some((RUN, RunControl::Run(task.id()))),
+    TaskStatus::Queued => Some((START, RunControl::Start(task.id()))),
     TaskStatus::Draft => None,
   }
 }
@@ -146,12 +177,14 @@ fn first_run(task: &Task) -> Option<(&'static str, &'static str, RunControl)> {
 /// *Start run* of the Summary before the task's first run (`kh5Er` in `Xxrdy`), as `id`: the header's control
 /// for the first run in the design's words, unavailable for the same reasons; none for a draft that misses
 /// details.
-pub fn first_start(ctx: &Ctx, controls: &Controls, id: &str) -> Option<Control> {
-  let (_, _, control) = first_run(&controls.detail.task)?;
-  let start = button(ctx, id, ButtonKind::Primary, ("task.controls.start", Icon::Play));
-  let mut shown = Shown::default();
-  shown.offer(ctx, controls, start, control, Gate::Work);
-  shown.0.pop()
+pub fn first_start(ctx: &Ctx, controls: &Controls, id: &'static str) -> Option<Control> {
+  let (_, run_control) = first_run(&controls.detail.task)?;
+  let look = (id, "task.controls.start", Icon::Play, ButtonKind::Primary);
+  Some(offered(ctx, controls, look, run_control, Gate::Work))
+}
+
+fn control(ctx: &Ctx, (id, label, glyph, kind): Look, offer: Offer) -> Control {
+  Control::new(ctx, (id, label, glyph), kind, offer)
 }
 
 /// What a control needs besides a free request: a runner, and for work, no unfinished blocking task.
@@ -161,165 +194,86 @@ enum Gate {
   Work,
 }
 
-#[derive(Default)]
-struct Shown(Vec<Control>);
-
-impl Shown {
-  fn unavailable(&mut self, button: ActionButton, reason: Reason) {
-    self.0.push(Control {
-      button: button.unavailable(reason.full.clone()),
-      reason: Some(reason),
-    });
-  }
-
-  fn push(&mut self, button: ActionButton) {
-    self.0.push(Control { button, reason: None });
-  }
-
-  /// `button` for `control`: under way while its request is, unavailable while `gate` does not hold
-  /// (blocking tasks first: they keep it unavailable with a runner too), pressable otherwise.
-  fn offer(&mut self, ctx: &Ctx, controls: &Controls, button: ActionButton, control: RunControl, gate: Gate) {
-    if controls.pending == Some(control) {
-      self.push(button.loading());
-      return;
-    }
-    let blocked = &controls.detail.blocked_by;
-    if gate == Gate::Work && !blocked.is_empty() {
-      let tasks = blocked.join(&ctx.t("task.listSeparator"));
-      let full = if blocked.len() == 1 {
-        "task.controls.blocked.one"
-      } else {
-        "task.controls.blocked.other"
-      };
-      let reason = Reason {
-        short: ctx.t_args("task.reasons.blocked", [("tasks", tasks.as_str())]),
-        full: ctx.t_args(full, [("tasks", tasks.as_str())]),
-      };
-      self.unavailable(button, reason);
-      return;
-    }
-    if !controls.online {
-      let reason = Reason {
-        short: ctx.t("task.reasons.offline"),
-        full: ctx.t("task.controls.offline"),
-      };
-      self.unavailable(button, reason);
-      return;
-    }
-    if controls.pending.is_some() {
-      self.push(button.disabled());
-      return;
-    }
+/// The control `look` for `run_control`: under way while its request is, unavailable while `gate` does not hold
+/// (blocking tasks first: they keep it unavailable with a runner too), pressable otherwise.
+fn offered(ctx: &Ctx, controls: &Controls, look: Look, run_control: RunControl, gate: Gate) -> Control {
+  let offer = if controls.pending == Some(run_control) {
+    Offer::Pending
+  } else if let Some(reason) = gated(ctx, controls, gate) {
+    Offer::Unavailable(reason)
+  } else if controls.pending.is_some() {
+    Offer::Disabled
+  } else {
     let (action, requested) = (controls.action.clone(), controls.requested.clone());
-    self.push(button.on_click(move || {
+    Offer::Ready(Press::run(move || {
       // One request at a time: a press while one is under way asks nothing.
       if action.state().get_untracked().is_pending() {
         return;
       }
       requested.update(|last| {
         let serial = last.map_or(1, |last| last.serial + 1);
-        *last = Some(Requested { control, serial });
+        *last = Some(Requested {
+          control: run_control,
+          serial,
+        });
       });
-      action.run(control);
-    }));
-  }
+      action.run(run_control);
+    }))
+  };
+  control(ctx, look, offer)
 }
 
-/// Start, Pause, Resume or Continue for `run`, which has not ended, when one applies.
-fn primary(ctx: &Ctx, controls: &Controls, run: &RunView) -> Option<(ActionButton, RunControl, Gate)> {
+/// Why `gate` does not hold now, if it does not.
+fn gated(ctx: &Ctx, controls: &Controls, gate: Gate) -> Option<Reason> {
+  let blocked = &controls.detail.blocked_by;
+  if gate == Gate::Work && !blocked.is_empty() {
+    let tasks = blocked.join(&ctx.t("task.listSeparator"));
+    let full = if blocked.len() == 1 {
+      "task.controls.blocked.one"
+    } else {
+      "task.controls.blocked.other"
+    };
+    return Some(Reason {
+      short: ctx.t_args("task.reasons.blocked", [("tasks", tasks.as_str())]),
+      full: ctx.t_args(full, [("tasks", tasks.as_str())]),
+    });
+  }
+  (!controls.online).then(|| Reason {
+    short: ctx.t("task.reasons.offline"),
+    full: ctx.t("task.controls.offline"),
+  })
+}
+
+/// Start, Pause, Resume or Continue for `run`, which has not ended and is not pausing, when one applies.
+fn primary(controls: &Controls, run: &RunView) -> Option<(Look, RunControl, Gate)> {
   let id = run.id();
-  let make = |id: &str, kind, label| button(ctx, id, kind, label);
   match run.run.status() {
-    RunStatus::Pending if run.first_run => Some((
-      make(
-        "task-start-run",
-        ButtonKind::Primary,
-        ("task.controls.start", Icon::Play),
-      ),
-      RunControl::Start(run.run.task()),
-      Gate::Work,
-    )),
-    RunStatus::Running if run.run.pause_requested() => {
-      let pausing = make(
-        "task-pause-run",
-        ButtonKind::Secondary,
-        ("task.controls.pausing", Icon::CirclePause),
-      );
-      Some((pausing.loading(), RunControl::Pause(id), Gate::Runner))
-    }
+    RunStatus::Pending if run.first_run => Some((START, RunControl::Start(run.run.task()), Gate::Work)),
     // A run recorded as running without a runner is interrupted: it continues once one is back.
-    RunStatus::Running if controls.detail.lost_its_runner(controls.online) => Some((
-      make(
-        "task-continue-run",
-        ButtonKind::Primary,
-        ("task.controls.continue", Icon::Play),
-      ),
-      RunControl::Continue(id),
-      Gate::Work,
-    )),
+    RunStatus::Running if controls.detail.lost_its_runner(controls.online) => {
+      Some((CONTINUE, RunControl::Continue(id), Gate::Work))
+    }
     // Nothing works while the run only waits for a person: there is nothing to pause.
     RunStatus::Running if run.run.waits_for_a_person() || controls.approval_waits => None,
-    RunStatus::Running => Some((
-      make(
-        "task-pause-run",
-        ButtonKind::Secondary,
-        ("task.controls.pause", Icon::CirclePause),
-      ),
-      RunControl::Pause(id),
-      Gate::Runner,
-    )),
-    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => Some((
-      make(
-        "task-resume-run",
-        ButtonKind::Primary,
-        ("task.controls.resume", Icon::Play),
-      ),
-      RunControl::Resume(id),
-      Gate::Work,
-    )),
-    RunStatus::Interrupted(_) => Some((
-      make(
-        "task-continue-run",
-        ButtonKind::Primary,
-        ("task.controls.continue", Icon::Play),
-      ),
-      RunControl::Continue(id),
-      Gate::Work,
-    )),
+    RunStatus::Running => Some((PAUSE, RunControl::Pause(id), Gate::Runner)),
+    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => {
+      Some((RESUME, RunControl::Resume(id), Gate::Work))
+    }
+    RunStatus::Interrupted(_) => Some((CONTINUE, RunControl::Continue(id), Gate::Work)),
     _ => None,
   }
 }
 
-fn button(ctx: &Ctx, id: &str, kind: ButtonKind, (label, glyph): (&str, Icon)) -> ActionButton {
-  ActionButton::new(id.to_owned(), kind, ctx.t(label)).icon(glyph)
-}
-
-fn cancel_button(ctx: &Ctx) -> ActionButton {
-  button(
-    ctx,
-    "task-cancel-run",
-    ButtonKind::Ghost,
-    ("task.controls.cancel", Icon::CircleStop),
-  )
-}
-
-/// Continue run of an interrupted run whose worktree was removed: it stays in its place, unavailable,
-/// with why; Run again starts a new run instead.
-fn continue_removed(ctx: &Ctx, run: &RunView) -> Option<(ActionButton, Reason)> {
+/// Why Continue run of an interrupted run whose worktree was removed is unavailable: it stays, with why; Run again
+/// starts a new run instead.
+fn continue_removed(ctx: &Ctx, run: &RunView) -> Option<Reason> {
   if !matches!(run.run.status(), RunStatus::Interrupted(_)) {
     return None;
   }
   run.worktree_removed?;
   let number = run.run.number().get().to_string();
-  let reason = Reason {
+  Some(Reason {
     short: ctx.t("task.reasons.worktreeRemoved"),
     full: ctx.t_args("task.controls.worktreeRemoved", [("run", number.as_str())]),
-  };
-  let continue_run = button(
-    ctx,
-    "task-continue-run",
-    ButtonKind::Primary,
-    ("task.controls.continue", Icon::Play),
-  );
-  Some((continue_run, reason))
+  })
 }

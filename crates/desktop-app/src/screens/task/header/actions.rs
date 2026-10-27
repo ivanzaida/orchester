@@ -1,8 +1,7 @@
-//! The title row (`Title row` `ZjHxm` in `lUXff`): the task's title, and at its right Edit, *Remove
-//! worktree* of the latest run once it ended, *Return to a step* of a run whose work can go back to one of its
-//! agent steps, the run controls and Run again. A locked action says why in full in its tooltip; under the
-//! actions one short line says why for all of them, except on a run that cannot be read, whose Summary says it
-//! already.
+//! The title row (`Title row` `QIedd` in `j8DakG`): the task's title in 20/600 as wide as the row leaves it, then the
+//! one primary action the task's state calls for (`header::primary`) and *More actions* (`header::more`), 12 apart.
+//! A primary action that cannot be used now says why in full in its tooltip and in a few words under it, except on
+//! a run that cannot be read, whose Summary says it already.
 
 use lurq::{
   app::{
@@ -13,78 +12,25 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::RunStatus;
-use orchester_workspace::tasks::return_work;
 
-use super::{
-  HeaderProps,
-  controls::{Control, Reason},
-};
+use super::{HeaderProps, controls::Control};
 use crate::{
-  navigation::{
-    Navigation,
-    pointed::{Pointed, PointedCard},
-    press::OpenIn,
-  },
-  routes::{ProjectPage, Route, TaskTab, TaskView},
-  screens::task::{PageState, RemovalPlace, sharing, summary},
+  screens::task::sharing,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
-    button::{ActionButton, ButtonKind},
     chip::{BadgeTone, badge},
-    icon::Icon,
     tooltip::{Tooltip, Truncated},
   },
 };
 
-/// The row with `controls` after the task's own actions ([`task_actions`]), and `more`, its *More actions* menu, last.
-pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>, more: Option<Element>) -> Element {
-  let mut reasons: Vec<Reason> = Vec::new();
-  let mut actions = task_actions(ctx, props);
-  for control in controls {
-    let Some(reason) = control.reason else {
-      actions.push(control.button.into());
-      continue;
-    };
-    let id = format!("task-action-tooltip-{}", actions.len());
-    actions.push(Tooltip::new(id, reason.full.clone()).wrap(ctx, control.button));
-    if !reasons.contains(&reason) {
-      reasons.push(reason);
-    }
-  }
-  actions.extend(more);
-  // A run that cannot be read says why on its Summary; the line would say it twice.
-  let line = (!reasons.is_empty() && props.task.detail.latest_unreadable.is_none()).then(|| {
-    let shorts: Vec<&str> = reasons.iter().map(|reason| &*reason.short).collect();
-    Text::new(&shorts.join(&ctx.t("task.reasons.join")))
-      .id("task-action-reasons")
-      .variant(TypographyStyle::Caption)
-      .nowrap()
-      .describe("role", "unavailable-reason")
-  });
+/// The row with `primary`, the header's one primary action, if any, and `more`, its *More actions*, last.
+pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, primary: Option<Control>, more: Element) -> Element {
   let title = Truncated::new(
     "task-title",
     props.task.detail.task.details().title.as_str().to_owned(),
     TypographyStyle::Heading,
   )
   .render(ctx);
-  // After the title: *Not shared* for a task kept here, *was KON-12* for one that went up with another key.
-  let after = if props.task.detail.not_shared() {
-    Some(Element::from(badge(
-      "task-not-shared-badge",
-      BadgeTone::Neutral,
-      &ctx.t("task.notShared.badge"),
-    )))
-  } else {
-    sharing::former_key(&props.task).map(|former| {
-      Text::new(&ctx.t_args("task.formerKey", [("key", former)]))
-        .id("task-former-key")
-        .variant(ExtraTypography::MonoKey.role())
-        .color(PaletteColor::TextMuted)
-        .nowrap()
-        .into()
-    })
-  };
   let title = Row::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -96,141 +42,62 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>, mor
         .min_width(Dimension::Px(0.0))
         .child(title),
     )
-    .with_children(after);
+    .with_children(after_title(ctx, props));
   Row::new()
     .id("task-title-row")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+    .spacing(SpacingSize::Md)
     .align_items(Alignment::Start)
     .child(title)
-    .child(
-      Column::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::End)
-        .child(
-          Row::new()
-            .id("task-actions")
-            .spacing(SpacingSize::Sm)
-            .align_items(Alignment::Center)
-            .with_children(actions),
-        )
-        .with_children(line),
-    )
+    .with_children(primary.map(|primary| primary_action(ctx, props, &primary)))
+    .child(Row::new().id("task-actions").child(more))
     .into()
 }
 
-/// Edit, *Remove worktree*, *Return to a step* and *Share task*, those that apply.
-fn task_actions(ctx: &mut Ctx, props: &HeaderProps) -> Vec<Element> {
-  edit_button(ctx, props)
-    .into_iter()
-    .chain(remove_button(ctx, props))
-    .chain(return_button(ctx, props))
-    .chain(share_button(ctx, props))
-    .map(Element::from)
-    .collect()
-}
-
-/// Edit, while the task can be edited; locked, with why, while it is kept *Not shared* (`R4elt`).
-fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
+/// After the title: *Not shared* for a task kept here, *was KON-12* for one that went up with another key.
+fn after_title(ctx: &Ctx, props: &HeaderProps) -> Option<Element> {
   if props.task.detail.not_shared() {
-    let key = props.task.detail.task.key().to_string();
     return Some(
-      ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
-        .icon(Icon::Pencil)
-        .unavailable(ctx.t_args("task.notShared.locked", [("task", key)])),
+      badge(
+        "task-not-shared-badge",
+        BadgeTone::Neutral,
+        &ctx.t("task.notShared.badge"),
+      )
+      .into(),
     );
   }
-  if !props.task.detail.editable() {
-    return None;
-  }
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(
-    props.task.project.open.project.id(),
-    ProjectPage::EditTask(props.task.detail.task.key().clone()),
-  );
-  Some(
-    ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
-      .icon(Icon::Pencil)
-      .opens(navigation.to(route)),
-  )
+  sharing::former_key(&props.task).map(|former| {
+    Text::new(&ctx.t_args("task.formerKey", [("key", former)]))
+      .id("task-former-key")
+      .variant(ExtraTypography::MonoKey.role())
+      .color(PaletteColor::TextMuted)
+      .nowrap()
+      .into()
+  })
 }
 
-/// *Share task* of a task kept *Not shared*, which asks in place over the Summary (`TfVtK`); pressed while it asks.
-fn share_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  if !props.task.detail.not_shared() {
-    return None;
-  }
-  let share = PageState::of(ctx).share;
-  let button =
-    ActionButton::new("task-share", ButtonKind::Primary, ctx.t("task.notShared.share")).icon(Icon::CloudUpload);
-  if share.get() {
-    return Some(button.disabled());
-  }
-  Some(button.on_click(move || share.set(true)))
-}
-
-/// *Remove worktree* of the latest run, once it has no live work and still has worktrees: it opens the
-/// confirmation under the header. Older runs have theirs in their rows.
-fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  let detail = &props.task.detail;
-  let run = detail.run.as_ref()?;
-  let record = detail.history.iter().find(|record| record.id == run.id())?;
-  record.without_live_work()?;
-  let left = props.task.left.of(run.id())?.ok()?;
-  if left.worktrees.is_empty() {
-    return None;
-  }
-  let button =
-    ActionButton::new("task-remove-worktree", ButtonKind::Ghost, ctx.t("task.removeWorktree")).icon(Icon::FolderX);
-  if props.task.jobs.run(run.id()).removing() {
-    return Some(button.loading());
-  }
-  let state = PageState::of(ctx);
-  let busy = detail
-    .history
-    .iter()
-    .any(|record| props.task.jobs.run(record.id).busy());
-  // Busy with another run, or its confirmation is open already.
-  if busy || state.removal.get().run == Some(run.id()) {
-    return Some(button.disabled());
-  }
-  let job = props.task.project.feed.jobs.of(run.id());
-  let id = run.id();
-  Some(button.on_click(move || {
-    job.clear_failed_removal();
-    state.open_removal(id, RemovalPlace::Header);
-  }))
-}
-
-/// *Return to a step* of the latest run, while its work can go back to one of its agent steps: a run that ended and
-/// was not merged, or one that waits for the person's decision. It opens the Summary at the card that returns it,
-/// which it brings into view and rings: *Return the work to an earlier step* above *Run details*, or the decision
-/// of a waiting run. The card is where the person picks the step and writes the note, and says when it cannot be
-/// returned now.
-fn return_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  let detail = &props.task.detail;
-  let run = detail.run.as_ref()?;
-  if detail.latest_unreadable.is_some() || detail.not_shared() || return_work::targets(run).is_empty() {
-    return None;
-  }
-  let card = match run.run.status() {
-    RunStatus::WaitingForPerson(_) => PointedCard::Retries,
-    _ => {
-      summary::returnable(&props.task)?;
-      PointedCard::Return
-    }
+/// The primary action, and when it cannot be used now why in a few words under it, its whole reason in its tooltip.
+fn primary_action(ctx: &mut Ctx, props: &HeaderProps, primary: &Control) -> Element {
+  let button: Element = match primary.reason() {
+    Some(reason) => Tooltip::new("task-action-tooltip-0", reason.full.clone()).wrap(ctx, primary.button()),
+    None => primary.button().into(),
   };
-  let project = props.task.project.open.project.id();
-  let route = Route::Project(project, props.task.page(TaskView::of(TaskTab::Summary)));
-  let pointed = Pointed {
-    project,
-    task: props.task.key.clone(),
-    card,
-  };
-  let navigation = Navigation::of(ctx);
-  Some(
-    ActionButton::new("task-return-to-step", ButtonKind::Ghost, ctx.t("task.returnToStep"))
-      .icon(Icon::CornerDownLeft)
-      .on_click(move || navigation.open_to_card(&route, OpenIn::ActiveTab, pointed.clone())),
-  )
+  // A run that cannot be read says why on its Summary; the line would say it twice.
+  let line = primary
+    .reason()
+    .filter(|_| props.task.detail.latest_unreadable.is_none())
+    .map(|reason| {
+      Text::new(&reason.short)
+        .id("task-action-reasons")
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .describe("role", "unavailable-reason")
+    });
+  Column::new()
+    .id("task-primary")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::End)
+    .child(button)
+    .with_children(line)
+    .into()
 }

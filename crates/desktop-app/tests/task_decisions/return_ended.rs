@@ -1,8 +1,9 @@
 //! Returning the work of a run that ended from its task page (the project task ORC-44 · Return a finished run to an
-//! earlier step): *Return the work to an earlier step* above *Run details* of a succeeded and of a failed run, with
-//! the agent steps the run executed and the note their agent reads; *Return to a step* in the header opens the Summary
-//! at it and rings it, and at the decision of a run that waits for the person. A merged run offers neither; one whose
-//! worktree was removed says why. No runner is connected here: the return waits, and says why.
+//! earlier step): *Return the work to an earlier step* at the top of the Summary of a succeeded and of a failed run,
+//! with the agent steps the run executed and the note their agent reads; *Return to a step* in the header's *More
+//! actions* opens the Summary at it and rings it, and at the decision of a run that waits for the person. A merged run
+//! offers neither; one whose worktree was removed says why. No runner is connected here: the return waits, and says
+//! why.
 
 use std::path::Path;
 
@@ -45,7 +46,7 @@ fn return_ended_a_succeeded_run_goes_back_with_a_note_from_its_summary_and_heade
   assert_eq!(page.text("task-return-ended-reason"), OFFLINE);
 
   assert!(!pointed(&mut page, "task-return-ended"));
-  page.click("task-return-to-step");
+  page.choose_more("task-return-to-step");
   page.window.until("the card rings", |window| {
     window
       .tree
@@ -59,7 +60,7 @@ fn return_ended_a_failed_run_goes_back_and_a_removed_worktree_says_why() {
   let mut page = Page::seeded("task-states");
   page.open("failed", "task-return-ended");
   shows_the_choice(&mut page);
-  assert!(page.has("task-return-to-step"));
+  assert!(page.in_more("task-return-to-step"));
   assert_eq!(page.text("task-return-ended-reason"), OFFLINE);
 
   let key = key_of(&page, "failed");
@@ -75,21 +76,21 @@ fn return_ended_a_failed_run_goes_back_and_a_removed_worktree_says_why() {
 fn return_ended_a_merged_run_and_a_running_one_offer_no_return() {
   let mut page = Page::seeded("task-states");
   page.open("merged", "task-notice");
-  page.window.until("the run details", |window| {
-    window.texts("task-run-details-title").is_some()
-  });
+  page
+    .window
+    .until("the run's facts", |window| window.texts("task-facts-title").is_some());
   assert!(!page.has("task-return-ended"));
-  assert!(!page.has("task-return-to-step"));
-  page.open("running", "task-notice");
+  assert!(!page.in_more("task-return-to-step"));
+  page.open("running", "task-event");
   assert!(!page.has("task-return-ended"));
-  assert!(!page.has("task-return-to-step"));
+  assert!(!page.in_more("task-return-to-step"));
 }
 
 #[test]
 fn return_ended_the_header_points_at_a_waiting_runs_decision() {
   let mut page = Page::seeded("decisions");
   page.open("waits unverified after Review", "task-retry-decision");
-  page.click("task-return-to-step");
+  page.choose_more("task-return-to-step");
   page.window.until("the decision rings", |window| {
     window
       .tree

@@ -1,7 +1,8 @@
 //! The toolbar over the files (`Changes toolbar` `lX6yt`, 44 high, 32 from the sides, a `border` line under
 //! it): the run's base branch and revision, an arrow, its latest checkpoint with the step it followed and
-//! its time and the *Checkpointed* badge, and at the end how large the checkpointed changes are. Before
-//! the first checkpoint it says there is none yet.
+//! its time and the *Checkpointed* badge, and at the end how large the checkpointed changes are and *Try locally*
+//! (ORC-100, `G2Vq3` in `03 · Changes`), which opens Local integration. Before the first checkpoint it says there is
+//! none yet.
 
 use lurq::{
   app::{
@@ -22,6 +23,7 @@ use super::grouped;
 use crate::{
   theme::IconSize,
   ui::{
+    button::ActionButton,
     chip::{BadgeTone, badge},
     icon::{Icon, icon},
   },
@@ -30,7 +32,7 @@ use crate::{
 /// Height of the toolbar (`lX6yt`).
 const TOOLBAR_HEIGHT: f32 = 44.0;
 
-pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed) -> Element {
+pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed, try_locally: ActionButton) -> Element {
   let base = short_revision(run.run.base().as_str());
   let base = match run.run.base_branch() {
     Some(branch) => ctx.t_args(
@@ -57,7 +59,13 @@ pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed) -> Element
     )
     .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted));
   let (head, size) = match checkpointed {
-    Checkpointed::NoCheckpoint => return row.child(detail(&ctx.t("changes.toolbar.noCheckpoint"))).into(),
+    Checkpointed::NoCheckpoint => {
+      return row
+        .child(detail(&ctx.t("changes.toolbar.noCheckpoint")))
+        .child(Row::new().flex(1.0))
+        .child(try_locally)
+        .into();
+    }
     Checkpointed::Read { head, changes } => {
       let diff = &changes.diff;
       let files = u32::try_from(diff.files().len()).expect("a diff Orchester reads has at most MAX_DIFF_FILES files");
@@ -93,6 +101,7 @@ pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed) -> Element
         .color(PaletteColor::TextMuted)
         .nowrap(),
     )
+    .child(try_locally)
     .into()
 }
 

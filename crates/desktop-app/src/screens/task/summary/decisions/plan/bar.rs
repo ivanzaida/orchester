@@ -1,18 +1,16 @@
-//! The decision bar under the Summary's column (`Decision bar` `G5378f`): the note for the step's agent
-//! (`Note` `c2mWh`), *Request changes*, which waits for a note, and *Approve plan & continue*; under them
-//! what each does, and why the runner refused the last decision. Both decide the plan that waits.
+//! The plan's decision at the end of its card (`Note field` `LhP81` and `Actions` `v2yVwo` in `Decision · plan`
+//! `x0PVdp`): the note for the step's agent (`Note` `c2mWh`), *Request changes*, which waits for a note, and *Approve
+//! plan & continue*; under them what each does, and why the runner refused the last decision. Both decide the plan
+//! that waits.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::run::{PlanDecision, ReviewNote};
 use orchester_ipc::Command;
@@ -28,7 +26,7 @@ use super::super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, answerer},
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
@@ -111,16 +109,7 @@ impl DecisionBar<'_> {
     Column::new()
       .id("plan-review-bar")
       .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Md)
-          .bottom(ExtraSpacing::Inset.role())
-          .left(SpacingSize::Section)
-          .right(SpacingSize::Section),
-      )
       .spacing(SpacingSize::Sm)
-      .background(PaletteColor::SurfacePanel)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(row)
       .child(hints)
       .with_children(self.person_only.get().then(|| {

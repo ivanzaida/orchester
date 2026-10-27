@@ -107,8 +107,8 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
   let recorder = joined(&mut window, &server, &kontur);
   let project = support::project_id();
 
-  // From the list's Not shared filter, the row opens the kept task's own page, on its Details; its Summary says it is
-  // kept Not shared.
+  // From the list's Not shared filter, the row opens the kept task's own page, on its Summary, which says it is kept
+  // Not shared.
   let kept = |view| Route::Project(project, ProjectPage::KeptTask("KON-2".parse().expect("key"), view));
   harness::go(
     &mut window,
@@ -119,10 +119,9 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
     "task-row-KON-2",
   );
   press(&mut window, "task-row-KON-2");
-  window.until("the kept task's details", |window| {
-    window.navigation().route_now() == kept(TaskView::Details)
+  window.until("the kept task's summary", |window| {
+    window.navigation().route_now() == kept(TaskView::Summary)
   });
-  press(&mut window, "task-tab-summary");
   shows(&mut window, "task-not-shared");
   assert_eq!(window.text("task-title"), "Retry exports");
 

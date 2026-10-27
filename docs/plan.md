@@ -946,6 +946,29 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-100 · Task page redesign: one header, three tabs, Summary gathers the task's info · branch `orchester/orc-100-run-1`
+(implemented 2026-10-26; pipeline Check, Review and Verify follow). Design: `Task page · redesign` `C3wC8` (`01 ·
+Summary` `AsE7R`, `01b` `HvPSr`, `01c` `SaKMC`, `Decision cards` `CqVv3`, `02` `XIBg8`, `03` `X5ZKG`).
+- **Header** (`screens/task/header`, `Task header` `j8DakG`): back row `← Tasks / KEY`, the title with one primary
+  action the state calls for (`primary.rs`: Share task; Approve, Answer, Review or Merge while a card waits, left out on
+  the card's own tab; else Run, Start run, Resume run or Continue run) and *More actions* (`more.rs`, `JapSp`) with
+  every other: Edit task (E), Copy link, Open worktree in Files, Memory for this task, Pause run, Run again, Return to
+  a step, closing, then Remove worktree, Cancel run and Delete task in `danger`; unavailable rows keep their reason.
+  The status line reads "Interrupted at 03 Implement" and the run's number, attempt and start.
+- **Tabs**: Summary · Conversation · Changes (count). Details, the run's Summary and Artifacts became the new Summary;
+  Memory and Local integration are views of Summary and Changes (`?view=memory`, `?view=local-integration`, MCP
+  `navigate`'s `view`), opened by the properties' memory link and Changes' *Try locally*. Links naming the former tabs
+  open where they went; `navigate` refuses them with `unknown_tab`. A task's `link` is `/summary`.
+- **Summary** (`screens/task/summary`): a waiting decision's card first (every decision view kept its logic and
+  controls), the run (rail of steps, per-step tokens and time in their tooltips, the last event in one bordered line),
+  Brief with its version chip, Acceptance criteria, Output, Runs (rows 36 high with their `…` menus); beside them the
+  properties (Status, Priority, Pipeline, Tags, Depends on, Limits, Branch, Created; a run-captured value that differs
+  says so), the run's facts (`Run N · this run`/`ended`, the rest behind a disclosure) and the memory link.
+Tests: `orchester-app --test task_summary`, `--test task_details`, `--test task_decisions`, `--test links`, `--test
+mcp_tools navigate`, `--test changes changes_try_locally`, `--test memory`.
+**Open:** Output lists the run's step reports only (runs keep no other artifacts yet); the run row's *when* has no
+duration; the macOS build was not cross-checked here.
+
 ORC-79 · The Orchestrator chat makes and publishes skills: `save_skill_draft` and `publish_skill` · branch
 `orchester/orc-79-run-1` (implemented 2026-10-23; pipeline Check, Review and Verify follow). Spec:
 `docs/design/orchestrator-toolset.md`, decision 3 and the Skills row.
