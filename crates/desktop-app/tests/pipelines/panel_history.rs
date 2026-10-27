@@ -92,7 +92,7 @@ fn pipelines_a_steps_pages_are_places_of_their_own() {
     id,
     PipelineView::StepPage(added.clone(), StepPage::Permissions),
   );
-  assert!(editor.text("step-page-back").contains("01 New step"));
+  assert!(editor.text("step-page-back").contains("01 New step 1"));
   assert!(editor.exists("step-ask-tools"));
   editor.click("step-page-back");
   at(&editor, id, PipelineView::Step(added.clone()));

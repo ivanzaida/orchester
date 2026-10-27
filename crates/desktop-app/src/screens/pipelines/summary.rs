@@ -75,8 +75,7 @@ impl Component for Summary {
     self.locked.set(props.locked);
     let editing = props.state.get();
     let imported = imported_sections(ctx, &editing);
-    let pipeline = self.pipeline_group(ctx, &props, &editing);
-    Column::new()
+    let column = Column::new()
       .id("pipeline-summary")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
@@ -84,19 +83,20 @@ impl Component for Summary {
         Text::new(&ctx.t("pipelines.pipelineSection"))
           .id("pipeline-summary-title")
           .variant(TypographyStyle::Title),
-      )
+      );
+    let unpublished = editing.opened.latest.is_none();
+    // An imported pipeline not published yet shows only what its import did (`06b` `ky5kJ`); its name,
+    // description and slug stay on the Settings tab.
+    if unpublished && !imported.is_empty() {
+      return column.with_children(imported).child(unpublished_notice(ctx));
+    }
+    let pipeline = self.pipeline_group(ctx, &props, &editing);
+    column
       .with_children(imported)
       .child(pipeline)
       .child(versions_group(ctx, &editing))
-      .child(if editing.opened.latest.is_none() {
-        Element::from(
-          Notice::new(
-            "pipeline-unpublished-note",
-            NoticeTone::Info,
-            ctx.t("pipelines.notAvailableTitle"),
-          )
-          .body(ctx.t("pipelines.notAvailableDetail")),
-        )
+      .child(if unpublished {
+        unpublished_notice(ctx)
       } else {
         note("pipeline-versions-note", &ctx.t("pipelines.versionsExplanation")).into()
       })
@@ -132,6 +132,17 @@ impl Summary {
       .row(GroupRow::new("pipeline-slug", ctx.t("pipelines.slug")).mono_value(&editing.opened.slug))
       .row(GroupRow::new("pipeline-starts", ctx.t("pipelines.starts")).value(&ctx.t("pipelines.onTaskStart")))
   }
+}
+
+/// That New task lists only published pipelines (`Notice` in `06c` and `06b`).
+fn unpublished_notice(ctx: &Ctx) -> Element {
+  Notice::new(
+    "pipeline-unpublished-note",
+    NoticeTone::Info,
+    ctx.t("pipelines.notAvailableTitle"),
+  )
+  .body(ctx.t("pipelines.notAvailableDetail"))
+  .into()
 }
 
 fn versions_group(ctx: &Ctx, editing: &Editing) -> RowGroup {
@@ -233,7 +244,7 @@ pub fn published(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
 pub fn draft(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
   let number = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  if editing.opened.draft_saved_at.is_none() && !editing.dirty() {
+  if editing.opened.draft_saved_at.is_none() && !editing.unsaved() {
     return ctx.t_args("pipelines.noDraftNext", [("version", number)]);
   }
   if !editing.edit.steps().is_empty() && editing.opened.latest.is_some() && editing.edit.validate().is_err() {
@@ -249,7 +260,7 @@ pub fn draft(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
 }
 
 /// What the draft holds, without its number: *no steps yet* or *2 changes since v3*; `None` for a first draft with
-/// steps, or one that does not validate.
+/// steps, one that does not validate, or one that changes nothing yet.
 pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>> {
   if editing.edit.steps().is_empty() {
     return Some(ctx.t("pipelines.noStepsYet"));
@@ -257,6 +268,9 @@ pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>>
   let latest = editing.opened.latest.as_ref()?;
   let body = editing.edit.validate().ok()?;
   let changes = orchester_core::resource::changes(&latest.body, &body).len();
+  if changes == 0 {
+    return None;
+  }
   Some(ctx.t_args(
     if changes == 1 {
       "pipelines.oneChangeSince"

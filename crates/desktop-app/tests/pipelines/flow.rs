@@ -178,6 +178,11 @@ fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
     "the error is said once, under the field"
   );
   assert_eq!(editor.text("pipeline-save-status"), "Unsaved changes");
+  assert_eq!(
+    editor.text("pipeline-version-detail"),
+    "Draft v2 · used by 0 tasks",
+    "an unsaved, invalid draft is named by its number alone"
+  );
   assert!(editor.exists("pipeline-save"), "Save draft stays in the header");
   editor.click("pipeline-save");
   editor.arm();

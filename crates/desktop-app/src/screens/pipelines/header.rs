@@ -113,10 +113,18 @@ fn version_line(ctx: &Ctx, editing: &Editing) -> Row {
       PaletteColor::Success,
       ctx.t_args("pipelines.published", [("version", latest.number.get().to_string())]),
       if editing.has_draft() {
+        // The draft's number and what it changes, without the summary's own wording.
+        let draft = match super::summary::draft_detail(ctx, editing) {
+          Some(detail) => ctx.t_args(
+            "pipelines.draftWith",
+            [("version", next), ("detail", detail.to_string())],
+          ),
+          None => ctx.t_args("pipelines.version", [("version", next)]),
+        };
         ctx.t_args(
           "pipelines.versionLine",
           [
-            ("draft", super::summary::draft(ctx, editing).to_string()),
+            ("draft", draft.to_string()),
             ("tasks", editing.opened.used_by.to_string()),
           ],
         )
@@ -134,7 +142,7 @@ fn version_line(ctx: &Ctx, editing: &Editing) -> Row {
       if editing.edit.steps().is_empty() {
         ctx.t("pipelines.publishEmpty")
       } else {
-        ctx.t("pipelines.notPublishedHint")
+        ctx.t("pipelines.notUsed")
       },
     ),
   };

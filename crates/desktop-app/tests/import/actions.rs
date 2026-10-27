@@ -188,6 +188,17 @@ fn import_opens_the_copy_with_what_its_import_did() {
   );
   assert_eq!(import.text("pipeline-imported-missing-meta"), "1");
   assert_eq!(import.text("pipeline-imported-missing-0"), "Codex · Personal website");
+  // Until its first publish the column shows only what the import did (`06b` `ky5kJ`).
+  assert!(import.exists("pipeline-unpublished-note"));
+  for gone in [
+    "pipeline-summary-pipeline",
+    "pipeline-summary-versions",
+    "pipeline-summary-history",
+    "pipeline-summary-settings",
+  ] {
+    assert!(!import.exists(gone), "{gone} waits for the first publish");
+  }
+  assert_eq!(import.text("pipeline-version-detail"), "No tasks yet");
   import.click(&format!("pipeline-imported-link-{builder}"));
   assert_eq!(
     import.route(),
