@@ -162,6 +162,16 @@
           "keep": "Keep in review",
           "confirm": "Mark as done"
         },
+        "bulkQueue": {
+          "one": "Queue {{tasks}}? They start now: 1 agent slot is free.",
+          "other": "Queue {{tasks}}? They start now: {{count}} agent slots are free.",
+          "detail": "Each runs on its pipeline from its first step; those without a free slot wait their turn.",
+          "keep": "Keep as drafts"
+        },
+        "bulkUnmerged": {
+          "title": "Mark {{count}} tasks as done without merging?",
+          "detail": "Ready to merge: {{unmerged}}. Marking the tasks as done leaves those changes unmerged in their branches."
+        },
         "delete": {
           "title": "Delete {{count}} tasks?",
           "detail": "{{tasks}} are deleted with their runs, conversations and worktrees. This can't be undone.",

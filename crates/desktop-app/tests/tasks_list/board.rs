@@ -1,10 +1,11 @@
 //! The Tasks board (ORC-105) on the QA seed's Kontur: the List/Board switch, kept for the project; what a card dropped
-//! on a column does by the person's rules (a draft goes to Todo only when complete and is queued there, a queued task
-//! that never ran returns to draft in Backlog, a task with a run stays out of Backlog, a run that has not ended moves
-//! only through the stop confirmation, a run that ended is offered Run again, Done asks first for work that waits to be
-//! merged, In progress changes the status only, columns by pipeline refuse every drop); a canceled card's line; quick
-//! add in Backlog; and bulk moves that leave the cards that cannot go with why. No runner serves the project, so no
-//! agent slot is free and queuing never asks first here. `cargo test -p orchester-app --test tasks_list tasks_board_`.
+//! on a column does by the person's rules (an incomplete draft is refused by Todo, a queued task that never ran returns
+//! to draft in Backlog, a task with a run stays out of Backlog, a run that has not ended moves only through the stop
+//! confirmation, which says why it failed, a run that ended is offered Run again, Done asks first for work that waits
+//! to be merged, In progress changes the status only, columns by pipeline refuse every drop); a canceled card's line;
+//! quick add in Backlog; and bulk moves and closes that leave the cards that cannot go with why and ask as single moves
+//! do. No runner serves the project, so no agent slot is free and queuing never asks first here; `mcp_domain`'s `board`
+//! queues a complete draft and asks with the real runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
 
 use orchester_app::routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
@@ -270,4 +271,81 @@ fn tasks_board_a_bulk_move_leaves_the_cards_that_cannot_go_and_says_why() {
     status(seeded, "KON-15") == WorkflowStatus::Backlog
   });
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress, "KON-12 stays");
+}
+
+#[test]
+fn tasks_board_ready_to_merge_on_done_asks_first() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  // KON-9's run passed every step with work nobody merged.
+  seeded.drag("KON-9", "done");
+  seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-keep"));
+  assert_eq!(
+    seeded.text("tasks-board-ask-title"),
+    "Mark KON-9 as done without merging?"
+  );
+  press(&mut seeded, "tasks-board-ask-keep");
+  assert!(!seeded.shows("tasks-board-ask"));
+  assert_eq!(status(&seeded, "KON-9"), WorkflowStatus::InReview, "kept in review");
+
+  seeded.drag("KON-9", "done");
+  press(&mut seeded, "tasks-board-ask-confirm");
+  seeded.until("KON-9 Done", |seeded| status(seeded, "KON-9") == WorkflowStatus::Done);
+}
+
+#[test]
+fn tasks_board_cancel_of_a_run_that_has_not_ended_goes_through_the_stop_confirmation_and_says_why_it_failed() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  seeded.hover("task-card-KON-12");
+  press(&mut seeded, "task-more-KON-12");
+  press(&mut seeded, "task-menu-KON-12-cancel");
+  seeded.until("the stop confirmation", |seeded| {
+    seeded.laid_out("tasks-close-stop-confirm")
+  });
+  assert_eq!(seeded.text("tasks-close-stop-title"), "Stop the run of KON-12?");
+  // No runner serves the project: the run cannot be stopped, the confirmation says why and the task stays.
+  press(&mut seeded, "tasks-close-stop-confirm");
+  seeded.until("why it failed", |seeded| seeded.laid_out("tasks-close-stop-error"));
+  let said = seeded.text("tasks-close-stop-error");
+  assert!(said.contains("runner"), "{said}");
+  assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
+}
+
+#[test]
+fn tasks_board_bulk_mark_as_done_asks_for_work_waiting_to_be_merged_and_for_runs_not_ended() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  seeded.shift_click("task-card-KON-9");
+  seeded.shift_click("task-card-KON-15");
+  press(&mut seeded, "tasks-board-bulk-done");
+  seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-keep"));
+  assert_eq!(
+    seeded.text("tasks-board-ask-title"),
+    "Mark 2 tasks as done without merging?"
+  );
+  assert!(
+    seeded
+      .text("tasks-board-ask-text")
+      .starts_with("Ready to merge: KON-9.")
+  );
+  press(&mut seeded, "tasks-board-ask-keep");
+  assert_eq!(status(&seeded, "KON-9"), WorkflowStatus::InReview, "nothing changed");
+  assert_eq!(status(&seeded, "KON-15"), WorkflowStatus::Todo);
+
+  // A run that has not ended is stopped only once the person says so, as a single card's close asks.
+  seeded.shift_click("task-card-KON-9");
+  seeded.shift_click("task-card-KON-12");
+  press(&mut seeded, "tasks-board-bulk-cancel");
+  seeded.until("the stop question", |seeded| seeded.laid_out("tasks-board-ask-keep"));
+  assert_eq!(seeded.text("tasks-board-ask-title"), "Stop 1 runs and cancel 2 tasks?");
+  press(&mut seeded, "tasks-board-ask-keep");
+  assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
+  assert_eq!(status(&seeded, "KON-15"), WorkflowStatus::Todo);
+
+  // KON-9 and KON-15 again: the person's yes closes both, KON-9 unmerged.
+  seeded.shift_click("task-card-KON-12");
+  seeded.shift_click("task-card-KON-9");
+  press(&mut seeded, "tasks-board-bulk-done");
+  press(&mut seeded, "tasks-board-ask-confirm");
+  seeded.until("both Done", |seeded| {
+    status(seeded, "KON-9") == WorkflowStatus::Done && status(seeded, "KON-15") == WorkflowStatus::Done
+  });
 }

@@ -2,9 +2,11 @@
 //! a card, and while any is selected a bar floats at the board's foot, `surface_raised` in a `border_strong` stroke,
 //! radius 10: *3 selected*, Move to, Priority, Tags, Mark as done, Cancel task and Delete…, then Esc's cap and the
 //! cross that clears the selection. Each asks or refuses as a single card's move does: Move to moves the cards that
-//! can go and says which stay and why (a card whose run has not ended moves only to Done or Canceled); Mark as done
-//! and Cancel task ask once to stop the runs that have not ended, naming them, then close every card; Delete… asks
-//! once over the columns, by a person only, and is unavailable on a shared project.
+//! can go and says which stay and why (a card whose run has not ended moves only to Done or Canceled), and asks first
+//! when queuing drafts on Todo starts them at once; Mark as done asks first when work of a card waits to be merged;
+//! Mark as done and Cancel task ask once to stop the runs that have not ended, naming them, then close every card;
+//! Delete… asks once over the columns, by a person only, and is unavailable on a shared project. A read-only card
+//! (`Dropping::locked`) is never selected.
 
 use std::sync::Arc;
 
@@ -12,7 +14,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle},
   },
   components::{Column, Placement, Popup, Row, Text},
@@ -20,7 +21,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, task::organization::ChangeActor};
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
@@ -35,7 +36,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  actions::{Ask, Failed, Selected, actor_now},
+  actions::{Ask, BoardState, Failed, Selected, actor_now},
   card::CardModel,
   drop::Dropping,
 };
@@ -70,7 +71,8 @@ pub enum Bulk {
 
 pub type BulkAction = FutureAction<Bulk, (), Failed>;
 
-/// Carries out bulk commands; the tasks are read again after each, and the selection clears once it is done.
+/// Carries out bulk commands; the tasks are read again after each, and the selection clears once it is done. Who asks
+/// is read as the command is given, in the click or key that gave it: lurq takes any later work for the person's.
 pub fn bulk_action(
   ctx: &mut Ctx,
   (project, feed): (OpenProject, ProjectFeed),
@@ -80,7 +82,7 @@ pub fn bulk_action(
   ctx.future_action(move |bulk: Bulk| {
     let (project, feed, services) = (project.clone(), feed.clone(), services.clone());
     let (asked, failed, selected) = (asked.clone(), failed.clone(), selected.clone());
-    let person = !is_synthetic_input();
+    let actor = actor_now();
     async move {
       let done = match bulk {
         Bulk::Prepare(closing, tasks) => {
@@ -89,10 +91,10 @@ pub fn bulk_action(
             asked.set(Some(Ask::BulkClose { closing, tasks, runs }));
             return Ok(());
           }
-          close_all(&project, &services, (closing, &tasks, &[])).await
+          close_all(&project, &services, (closing, &tasks, &[]), actor).await
         }
-        Bulk::Close(closing, tasks, runs) => close_all(&project, &services, (closing, &tasks, &runs)).await,
-        Bulk::Delete(tasks) if person => delete_all(&project, &services, &tasks).await,
+        Bulk::Close(closing, tasks, runs) => close_all(&project, &services, (closing, &tasks, &runs), actor).await,
+        Bulk::Delete(tasks) if actor == ChangeActor::Person => delete_all(&project, &services, &tasks).await,
         Bulk::Delete(tasks) => Err(Failed {
           key: keys(&tasks),
           message: moves::delete_person_only(),
@@ -106,6 +108,16 @@ pub fn bulk_action(
       done
     }
   })
+}
+
+/// Closes the selected `tasks` as `closing`; marking them as done asks first, as a single card's Done does, when the
+/// work of `unmerged` of them waits to be merged.
+pub fn close_selected(state: &BoardState, closing: Closing, (tasks, unmerged): (Vec<Subject>, Vec<Subject>)) {
+  if closing == Closing::Done && !unmerged.is_empty() {
+    state.asked.set(Some(Ask::BulkUnmerged { tasks, unmerged }));
+  } else {
+    state.bulk.run(Bulk::Prepare(closing, tasks));
+  }
 }
 
 /// The keys of `tasks`, joined as identifiers are.
@@ -137,14 +149,14 @@ async fn active_runs(project: &OpenProject, tasks: &[Subject]) -> Result<Vec<(Su
   })
 }
 
-/// Closes every task, stopping first the run the person confirmed stopping (one that started since is not stopped,
-/// and its task stays); the first that does not close says why.
+/// Closes every task for `actor`, stopping first the run the person confirmed stopping (one that started since is not
+/// stopped, and its task stays); the first that does not close says why.
 async fn close_all(
   project: &OpenProject,
   services: &Services,
   (closing, tasks, runs): (Closing, &[Subject], &[(Subject, RunId)]),
+  actor: ChangeActor,
 ) -> Result<(), Failed> {
-  let actor = actor_now();
   for task in tasks {
     let shown = runs.iter().find(|(held, _)| held.id == task.id).map(|(_, run)| *run);
     close_in(
@@ -237,6 +249,11 @@ impl BulkBar {
     let state = &dropping.state;
     let busy = state.busy() || state.bulk.state().get().is_pending() || dropping.closer.busy();
     let subjects: Vec<Subject> = cards.iter().map(|card| dropping.subject(card)).collect();
+    let unmerged: Vec<Subject> = cards
+      .iter()
+      .filter(|card| moves::leaves_unmerged(&card.row))
+      .map(|card| dropping.subject(card))
+      .collect();
     let opener = |name: &str, (label, glyph): (&str, Icon), which: BarMenu, anchor: &ElementRef| {
       let menu = self.menu.clone();
       let button = ActionButton::new(format!("tasks-board-bulk-{name}"), ButtonKind::Ghost, ctx.t(label))
@@ -253,8 +270,8 @@ impl BulkBar {
       if busy {
         return button.disabled();
       }
-      let (bulk, tasks) = (state.bulk.clone(), subjects.clone());
-      button.on_click(move || bulk.run(Bulk::Prepare(closing, tasks.clone())))
+      let (state, tasks, unmerged) = (state.clone(), subjects.clone(), unmerged.clone());
+      button.on_click(move || close_selected(&state, closing, (tasks.clone(), unmerged.clone())))
     };
     let delete = delete_button(ctx, dropping, busy, &subjects);
     let selected = state.selected.clone();

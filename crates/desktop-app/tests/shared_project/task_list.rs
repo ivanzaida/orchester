@@ -1,7 +1,8 @@
 //! The shared task list says where it lives (`Xr4Wb`, `aocsw`), and once the person is no longer a member it is
 //! read-only with a notice that offers *Check again* and *Make local…* (`sErKV`); Sharing then says so too, with the
-//! members as last read and *Make local* without *Leave* (`xLeTJ`). Its board is read-only too: cards do not lift and
-//! quick add is locked, while More actions stays (`15 Not a member` `kMKKv`).
+//! members as last read and *Make local* without *Leave* (`xLeTJ`). Its board is read-only too: cards neither lift nor
+//! move or are selected by the keys or Shift+click, and quick add is locked, while More actions stays with Open and
+//! Copy key (`15 Not a member` `kMKKv`).
 
 use lurq::app::events::MouseButton;
 use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
@@ -145,8 +146,80 @@ fn shared_project_board_of_a_former_member_is_read_only_with_more_actions_kept()
   window.pass();
   assert!(window.tree.get_element_by_id("tasks-board-hint").is_none());
 
-  // More actions stays: the pointer over the card brings it up.
+  // More actions stays: the pointer over the card brings it up, with Open and Copy key and no change.
   window.tree.mouse_move(x0, y0);
   window.pass();
   shows(&mut window, &format!("task-more-{key}"));
+  press(&mut window, &format!("task-more-{key}"));
+  shows(&mut window, &format!("task-menu-{key}-copy"));
+  for change in ["move", "priority", "tags", "done", "cancel", "delete"] {
+    assert!(
+      window
+        .tree
+        .get_element_by_id(&format!("task-menu-{key}-{change}"))
+        .is_none(),
+      "no {change} for a former member"
+    );
+  }
+  key_down(&mut window, "Escape");
+  neither_selected_nor_moved(&mut window, &key, (x0, y0));
+}
+
+/// Neither Shift+click on the card of `key` at (`x`, `y`) nor the board's keys select or move it.
+fn neither_selected_nor_moved(window: &mut crate::support::Window, key: &str, (x, y): (f32, f32)) {
+  // Shift+click selects nothing, so no selection bar offers changes.
+  window.tree.mouse_move_with_meta(x, y, true, false, false, false);
+  window
+    .tree
+    .mouse_down_with_meta(x, y, MouseButton::Left, true, false, false, false);
+  window
+    .tree
+    .mouse_up_with_meta(x, y, MouseButton::Left, true, false, false, false);
+  window.pass();
+  assert!(
+    window.tree.get_element_by_id("tasks-board-bulk").is_none(),
+    "nothing selected"
+  );
+
+  // The keys reach the card (`.` opens its menu) but neither move nor select it, nor open a list to change it.
+  key_down(window, "ArrowDown");
+  key_down(window, ".");
+  shows(window, &format!("task-menu-{key}-copy"));
+  key_down(window, "Escape");
+  let before = column_of(window, key);
+  assert!(before.is_some(), "the card is in a column");
+  for typed in ["]", "[", "x", "m"] {
+    key_down(window, typed);
+  }
+  assert_eq!(column_of(window, key), before, "the keys moved nothing");
+  assert!(
+    window.tree.get_element_by_id("tasks-board-bulk").is_none(),
+    "X selects nothing"
+  );
+  assert!(
+    window
+      .tree
+      .get_element_by_id(&format!("task-menu-{key}-back"))
+      .is_none(),
+    "M opens no Move to"
+  );
+}
+
+/// A key pressed without a modifier.
+fn key_down(window: &mut crate::support::Window, key: &str) {
+  window
+    .tree
+    .key_down(key.to_owned(), key.to_owned(), false, false, false);
+  window.pass();
+}
+
+/// The board's status column that shows the card of `key`.
+fn column_of(window: &mut crate::support::Window, key: &str) -> Option<&'static str> {
+  ["backlog", "todo", "in_progress", "in_review", "done"]
+    .into_iter()
+    .find(|column| {
+      window
+        .texts(&format!("tasks-board-column-{column}"))
+        .is_some_and(|texts| texts.iter().any(|text| text == key))
+    })
 }

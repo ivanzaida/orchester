@@ -1,8 +1,8 @@
 //! A card as the board mounts it: a click opens its task, by a browser's rules as a row's press does; Shift+click
 //! selects it; a drag lifts it only once the pointer moved [`LIFT`] with the button held, so a click never moves a
 //! card (`02 Dragging` `Yyeme`). While the pointer is on it, its age gives way to *More actions* (`07 Card actions and
-//! keys` `pXzH8`). A card of a read-only list (not a member any more, or kept *Not shared*) does not lift, and a *Not
-//! shared* one has no menu.
+//! keys` `pXzH8`). A card of a read-only list (not a member any more, or kept *Not shared*) neither lifts nor is
+//! selected, and a *Not shared* one has no menu.
 
 use lurq::{
   app::{
@@ -113,9 +113,10 @@ impl Component for CardView {
 }
 
 impl CardView {
-  /// The card that opens its task, selects on Shift+click, and lifts on a drag.
+  /// The card that opens its task, selects on Shift+click unless it is read-only, and lifts on a drag.
   fn pressable(&self, ctx: &mut Ctx, props: &CardProps, frame: Column) -> Element {
     let state = BoardState::of(ctx);
+    let dropping = Dropping::of(ctx);
     let key = props.card.row.key.clone();
     let task: TaskKey = key.parse().expect("a task's key reads back as a task key");
     let page = if props.card.row.not_shared {
@@ -130,6 +131,7 @@ impl CardView {
       state.focused.clone(),
       props.card.row.id,
     );
+    let selects = !dropping.locked(&props.card);
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     let button = Button::empty()
       .id(format!("task-card-{key}"))
@@ -149,6 +151,9 @@ impl CardView {
         event.stop_propagation();
         let press = LinkPress::of(&event);
         if press.shift && !press.command {
+          if !selects {
+            return;
+          }
           focused.set(Focused(Some(id)));
           selected.update(|selected| {
             if !selected.0.remove(&id) {
@@ -171,7 +176,6 @@ impl CardView {
     if !props.lifts {
       return button.into();
     }
-    let dropping = Dropping::of(ctx);
     let (card, place, frame_ref) = (props.card.clone(), props.place.clone(), self.frame.clone());
     let started = state.clone();
     button

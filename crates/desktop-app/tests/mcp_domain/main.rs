@@ -10,6 +10,7 @@ mod api_providers;
 mod automation_permissions;
 mod base_moved;
 mod basics;
+mod board;
 mod cloud_accounts;
 mod completion;
 mod connections_window;

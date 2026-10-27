@@ -8,8 +8,9 @@
 //! it, as the screen draws them (`super::TasksScreen::top`). lurq's drag events carry the drag; the lifted card, the
 //! drop slot and the columns' look are drawn here, hit-tested against the columns as laid out (`actions`).
 //!
-//! The board is read-only where the list is: a project the person is no longer a member of lifts no card and locks
-//! quick add, its menus kept; the *Not shared* tasks lift no card and have no menu.
+//! The board is read-only where the list is: a project the person is no longer a member of lifts, moves and selects no
+//! card and locks quick add, its menus kept with Open and Copy key; the *Not shared* tasks lift, move and select no
+//! card and have no menu (`Dropping::locked`).
 
 mod actions;
 mod ask;
@@ -207,6 +208,7 @@ impl Component for Board {
       lanes: display.lanes,
       free: props.free,
       shared: props.shared,
+      read_only: props.read_only.is_some(),
       tags: props.tags.clone(),
     };
     ctx.provide(state.clone());
@@ -315,14 +317,15 @@ impl Board {
       parts.push(foot(lines::hint(ctx, &drag)));
       return parts;
     }
+    // A read-only card is never acted on together: one selected before the list became read-only is left out.
     let selected = state.selected.get();
-    if !selected.0.is_empty() {
-      let cards: Vec<CardModel> = props
-        .cards
-        .iter()
-        .filter(|card| selected.0.contains(&card.row.id))
-        .cloned()
-        .collect();
+    let cards: Vec<CardModel> = props
+      .cards
+      .iter()
+      .filter(|card| selected.0.contains(&card.row.id) && props.read_only.is_none() && !card.row.not_shared)
+      .cloned()
+      .collect();
+    if !cards.is_empty() {
       parts.push(foot(
         ctx.mount_keyed::<bulk::BulkBar>("tasks-board-bulk", bulk::BarProps { cards }),
       ));

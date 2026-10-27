@@ -32,6 +32,8 @@ pub struct Dropping {
   pub free: Option<usize>,
   /// The project is shared on a team server.
   pub shared: bool,
+  /// The person is no longer a member of the shared project: every card is read-only.
+  pub read_only: bool,
   /// The project's tags, by id and name.
   pub tags: Arc<Vec<(orchester_core::id::TagId, Arc<str>)>>,
 }
@@ -43,8 +45,17 @@ impl Dropping {
       .expect("the board provides how its drops go before mounting its cards")
   }
 
-  /// Drops `card` on `target`.
+  /// Whether `card` is read-only here, as it is in the list: the person is no longer a member of the project, or the
+  /// task is kept *Not shared*. It does not move, is not selected and its menu changes nothing.
+  pub fn locked(&self, card: &CardModel) -> bool {
+    self.read_only || card.row.not_shared
+  }
+
+  /// Drops `card` on `target`; a read-only card stays.
   pub fn drop_card(&self, card: &CardModel, target: &Target) {
+    if self.locked(card) {
+      return;
+    }
     self.state.refused.set(None);
     let lane = self.lane_change(card, target);
     let changes = match &target.column {
@@ -101,6 +112,7 @@ impl Dropping {
           Some(after) => self.state.asked.set(Some(Ask::RunAgain {
             task: subject,
             after,
+            revision: card.revision,
             pipeline: card.pipeline.clone(),
           })),
           None => self.refuse(card, target, Refusal::HasRun),

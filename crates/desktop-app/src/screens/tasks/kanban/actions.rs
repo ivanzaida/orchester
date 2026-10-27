@@ -16,6 +16,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{IdempotencyKey, ModuleId, RunId, TagId, TaskId},
+  sharing::TaskRevision,
   task::organization::{ChangeActor, Priority, WorkflowStatus},
 };
 use orchester_workspace::{
@@ -87,14 +88,27 @@ pub enum Ask {
     free: usize,
     pipeline: Arc<str>,
   },
-  /// The task whose latest run `after` ended runs again.
+  /// The task whose latest run `after` ended runs again, as it is at `revision`.
   RunAgain {
     task: Subject,
     after: RunId,
+    revision: Option<TaskRevision>,
     pipeline: Arc<str>,
   },
   /// Done closes the task whose work waits to be merged without merging it; its branch stays.
   Unmerged(Subject),
+  /// Moving the selected cards queues the drafts `queued`, which start at once: `free` agent slots are free. The
+  /// person's yes makes `changes`, the whole move.
+  BulkQueue {
+    queued: Vec<Subject>,
+    free: usize,
+    changes: Vec<Change>,
+  },
+  /// Marking the selected `tasks` as done closes `unmerged` of them, whose work waits to be merged, without merging.
+  BulkUnmerged {
+    tasks: Vec<Subject>,
+    unmerged: Vec<Subject>,
+  },
   /// Closing the selected `tasks` stops `runs` of them first, which have not ended.
   BulkClose {
     closing: orchester_workspace::tasks::close::Closing,
@@ -120,9 +134,11 @@ pub enum ChangeKind {
   Status(WorkflowStatus),
   Queue,
   ReturnToDraft,
-  /// Runs the task again after its latest run `after`, of the pipeline named `pipeline`.
+  /// Runs the task again after its latest run `after`, of the pipeline named `pipeline`, only as it is at `revision`
+  /// (the runner refuses a task changed since, as MCP `run_task` has it).
   RunAgain {
     after: RunId,
+    revision: Option<TaskRevision>,
     pipeline: Arc<str>,
   },
   Priority(Priority),
@@ -322,7 +338,11 @@ fn change_action(
 async fn make(project: &OpenProject, services: &Services, change: &Change, actor: ChangeActor) -> Result<(), Message> {
   let (root, servers, task) = (project.repo_root.clone(), services.servers.clone(), change.task);
   let blocking = match change.kind.clone() {
-    ChangeKind::RunAgain { after, pipeline } => return run_again(project, services, (task, after), &pipeline).await,
+    ChangeKind::RunAgain {
+      after,
+      revision,
+      pipeline,
+    } => return run_again(project, services, (task, after, revision), &pipeline).await,
     ChangeKind::Status(status) => {
       background::run(move || write::set_status_in(&root, &servers, task, (status, actor))).await
     }
@@ -342,12 +362,12 @@ async fn make(project: &OpenProject, services: &Services, change: &Change, actor
   blocking.and_then(|done| done)
 }
 
-/// Runs `task` again after its latest run `after`, under a shared task's claim; the runner checks Run again's rule and
-/// says why it refuses.
+/// Runs `task` again after its latest run `after`, as it is at `revision`, under a shared task's claim; the runner
+/// checks Run again's rule and says why it refuses.
 async fn run_again(
   project: &OpenProject,
   services: &Services,
-  (task, after): (TaskId, RunId),
+  (task, after, revision): (TaskId, RunId, Option<TaskRevision>),
   pipeline: &str,
 ) -> Result<(), Message> {
   let claim = services
@@ -357,7 +377,7 @@ async fn run_again(
     .map_err(|refusal| refusal.message())?;
   match services
     .runners
-    .run_again_in(project, IdempotencyKey::generate(), (task, after, None))
+    .run_again_in(project, IdempotencyKey::generate(), (task, after, revision))
     .await
   {
     Ok(_) => Ok(()),

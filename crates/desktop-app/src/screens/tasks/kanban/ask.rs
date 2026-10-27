@@ -1,10 +1,10 @@
 //! What a drop or a command asks in place, over the columns, before anything changes (`12 Moves and confirmations`
 //! `aUNO8`, `13 Menus, bulk and header` `CdMab`): queuing a draft that starts at once (*Queue KON-27? It starts now: 1
 //! agent slot is free.* with Keep as draft and Queue), running a task again, marking work that waits to be merged as
-//! done, closing several tasks whose runs have not ended, and deleting several. A card `surface_raised` in a stroke of
-//! its weight, radius 6, 12 over and under its parts, 14 at its sides: a 15 mark, the question in 13/600 and what it
-//! does in 12.5 `text_secondary`; then *Enter confirms · Esc keeps it* and its two buttons at the end. Enter and Esc
-//! answer it too.
+//! done, and for several selected tasks the same questions, closing those whose runs have not ended, and deleting
+//! them. A card `surface_raised` in a stroke of its weight, radius 6, 12 over and under its parts, 14 at its sides: a
+//! 15 mark, the question in 13/600 and what it does in 12.5 `text_secondary`; then *Enter confirms · Esc keeps it* and
+//! its two buttons at the end. Enter and Esc answer it too.
 
 use std::sync::Arc;
 
@@ -128,10 +128,22 @@ pub fn answer(state: &BoardState, closer: &Closer, asked: &Ask) {
   state.asked.set(None);
   match asked.clone() {
     Ask::StartsNow { task, .. } => state.change(vec![change(&task, ChangeKind::Queue)]),
-    Ask::RunAgain { task, after, pipeline } => {
-      state.change(vec![change(&task, ChangeKind::RunAgain { after, pipeline })])
-    }
+    Ask::RunAgain {
+      task,
+      after,
+      revision,
+      pipeline,
+    } => state.change(vec![change(
+      &task,
+      ChangeKind::RunAgain {
+        after,
+        revision,
+        pipeline,
+      },
+    )]),
     Ask::Unmerged(task) => closer.close(task, Closing::Done),
+    Ask::BulkQueue { changes, .. } => state.change(changes),
+    Ask::BulkUnmerged { tasks, .. } => state.bulk.run(Bulk::Prepare(Closing::Done, tasks)),
     Ask::BulkClose { closing, tasks, runs } => state.bulk.run(Bulk::Close(closing, tasks, runs)),
     Ask::BulkDelete(tasks) => state.bulk.run(Bulk::Delete(tasks)),
   }
@@ -176,14 +188,43 @@ fn words(ctx: &Ctx, asked: &Ask) -> Words {
       ),
       ("tasks.board.ask.runAgain.keep", "tasks.board.ask.runAgain.confirm"),
     ),
-    Ask::Unmerged(task) => Words {
-      glyph: Icon::GitMerge,
-      tone: PaletteColor::Warning,
-      title: ctx.t_args("tasks.board.ask.unmerged.title", [("task", &*task.key)]),
-      detail: ctx.t_args("tasks.board.ask.unmerged.detail", [("task", &*task.key)]),
-      keep: ctx.t("tasks.board.ask.unmerged.keep"),
-      confirm: ctx.t("tasks.board.ask.unmerged.confirm"),
-      danger: false,
+    Ask::Unmerged(task) => unmerged(ctx, task),
+    Ask::BulkQueue { queued, free, .. } => neutral(
+      match queued.as_slice() {
+        [task] => ctx.t_args(
+          if *free == 1 {
+            "tasks.board.ask.startsNow.one"
+          } else {
+            "tasks.board.ask.startsNow.other"
+          },
+          [("task", task.key.to_string()), ("count", free.to_string())],
+        ),
+        _ => ctx.t_args(
+          if *free == 1 {
+            "tasks.board.ask.bulkQueue.one"
+          } else {
+            "tasks.board.ask.bulkQueue.other"
+          },
+          [("tasks", listed(ctx, queued.iter())), ("count", free.to_string())],
+        ),
+      },
+      ctx.t("tasks.board.ask.bulkQueue.detail"),
+      ("tasks.board.ask.bulkQueue.keep", "tasks.board.ask.startsNow.confirm"),
+    ),
+    Ask::BulkUnmerged { tasks, unmerged: held } => match tasks.as_slice() {
+      [task] => unmerged(ctx, task),
+      _ => Words {
+        title: ctx.t_args(
+          "tasks.board.ask.bulkUnmerged.title",
+          [("count", tasks.len().to_string())],
+        ),
+        detail: ctx.t_args(
+          "tasks.board.ask.bulkUnmerged.detail",
+          [("unmerged", listed(ctx, held.iter()))],
+        ),
+        keep: ctx.t("tasks.board.ask.bulkKeep"),
+        ..unmerged(ctx, &tasks[0])
+      },
     },
     Ask::BulkClose { closing, tasks, runs } => bulk_close(ctx, *closing, tasks, runs),
     Ask::BulkDelete(tasks) => Words {
@@ -195,6 +236,19 @@ fn words(ctx: &Ctx, asked: &Ask) -> Words {
       confirm: ctx.t_args("tasks.board.ask.delete.confirm", [("count", tasks.len().to_string())]),
       danger: true,
     },
+  }
+}
+
+/// *Mark KON-14 as done without merging?* (`12 Moves and confirmations` `aUNO8`).
+fn unmerged(ctx: &Ctx, task: &Subject) -> Words {
+  Words {
+    glyph: Icon::GitMerge,
+    tone: PaletteColor::Warning,
+    title: ctx.t_args("tasks.board.ask.unmerged.title", [("task", &*task.key)]),
+    detail: ctx.t_args("tasks.board.ask.unmerged.detail", [("task", &*task.key)]),
+    keep: ctx.t("tasks.board.ask.unmerged.keep"),
+    confirm: ctx.t("tasks.board.ask.unmerged.confirm"),
+    danger: false,
   }
 }
 

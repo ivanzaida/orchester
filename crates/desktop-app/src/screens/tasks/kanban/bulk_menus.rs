@@ -1,6 +1,8 @@
 //! The lists the selection bar opens (`Bulk move menu` in `Bulk Move to refuses those cards` `Y27GJ`): the columns by
 //! status, each taking the selected cards that can go there and saying which stay and why, or unavailable with why
-//! when none can; the priorities; and the project's tags, a tag every selected card has taken off them all.
+//! when none can; the priorities; and the project's tags, a tag every selected card has taken off them all. A move
+//! asks first where a single card's drop asks: queuing drafts that start at once, and marking as done work that waits
+//! to be merged.
 
 use lurq::app::ctx::Ctx;
 use orchester_core::task::organization::{Priority, WorkflowStatus};
@@ -10,9 +12,9 @@ use orchester_workspace::tasks::{
 };
 
 use super::{
-  actions::{Change, ChangeKind},
+  actions::{Ask, Change, ChangeKind},
   ask::listed,
-  bulk::Bulk,
+  bulk::close_selected,
   card::CardModel,
   drop::Dropping,
   refusal::reason_key,
@@ -26,12 +28,14 @@ use crate::{
   },
 };
 
-/// What a move of the selected cards to a column comes to: the changes it makes, the cards it closes, and the cards
-/// that stay with why.
+/// What a move of the selected cards to a column comes to: the changes it makes and the drafts among them it queues,
+/// the cards it closes and those of them whose work waits to be merged, and the cards that stay with why.
 #[derive(Default)]
 pub struct BulkMove {
   pub moving: Vec<Change>,
+  pub queued: Vec<Subject>,
   pub closing: Vec<Subject>,
+  pub unmerged: Vec<Subject>,
   pub staying: Vec<(Subject, moves::Refusal)>,
 }
 
@@ -44,14 +48,35 @@ pub fn bulk_move(dropping: &Dropping, cards: &[CardModel], status: WorkflowStatu
     match moves::decide(&card.row, status) {
       Decision::Stay => {}
       Decision::Refused(refusal) => found.staying.push((subject, refusal)),
-      Decision::Move(Move::Close(_)) => found.closing.push(subject),
-      Decision::Move(Move::Queue) => found.moving.push(change(card, ChangeKind::Queue)),
+      Decision::Move(Move::Close(_)) => {
+        if moves::leaves_unmerged(&card.row) {
+          found.unmerged.push(subject.clone());
+        }
+        found.closing.push(subject);
+      }
+      Decision::Move(Move::Queue) => {
+        found.queued.push(subject);
+        found.moving.push(change(card, ChangeKind::Queue));
+      }
       Decision::Move(Move::ReturnToDraft) => found.moving.push(change(card, ChangeKind::ReturnToDraft)),
       Decision::Move(Move::Status(status)) => found.moving.push(change(card, ChangeKind::Status(status))),
       Decision::Move(Move::RunAgain) => found.staying.push((subject, moves::Refusal::HasRun)),
     }
   }
   found
+}
+
+/// Makes the changes of a move, asking first, as a single draft's drop on Todo does, when it queues drafts that start
+/// at once: agent slots are free and new starts are not held.
+fn change_or_ask(dropping: &Dropping, (moving, queued): (Vec<Change>, Vec<Subject>)) {
+  match dropping.free.filter(|free| *free > 0) {
+    Some(free) if !queued.is_empty() => dropping.state.asked.set(Some(Ask::BulkQueue {
+      queued,
+      free,
+      changes: moving,
+    })),
+    _ => dropping.state.change(moving),
+  }
 }
 
 /// The columns by status.
@@ -63,7 +88,9 @@ pub fn move_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec<Men
       let (label, glyph) = (ctx.t(workflow_key(status)), workflow_look(status).0);
       let BulkMove {
         moving,
+        queued,
         closing,
+        unmerged,
         staying,
       } = bulk_move(dropping, cards, status);
       if moving.is_empty() && closing.is_empty() {
@@ -73,7 +100,7 @@ pub fn move_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec<Men
         );
         return MenuItem::unavailable(id, label, reason).icon(glyph).without_lock();
       }
-      let state = dropping.state.clone();
+      let dropping = dropping.clone();
       let item = MenuItem::new(id, label, move || {
         if !closing.is_empty() {
           let closing_as = if status == WorkflowStatus::Done {
@@ -81,9 +108,9 @@ pub fn move_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec<Men
           } else {
             Closing::Canceled
           };
-          state.bulk.run(Bulk::Prepare(closing_as, closing.clone()));
+          close_selected(&dropping.state, closing_as, (closing.clone(), unmerged.clone()));
         }
-        state.change(moving.clone());
+        change_or_ask(&dropping, (moving.clone(), queued.clone()));
       })
       .icon(glyph);
       match staying.first() {

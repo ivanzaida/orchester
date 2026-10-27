@@ -4,7 +4,8 @@
 //! (Cmd+C on macOS) copies its key, and Esc sets a lifted card down, keeps what is asked, or clears the selection.
 //! None clashes with the window's shortcuts (`navigation::shortcuts`: Alt+←/→ and Cmd+[ / Cmd+] are Back and
 //! Forward, Ctrl+T a new tab): the board's take no modifier but Ctrl+C / Cmd+C, and step aside while a text field has
-//! the keys.
+//! the keys. A read-only card (`Dropping::locked`) is opened and its key copied, but the keys neither move nor select
+//! it, nor open its menu's lists.
 
 use std::sync::Arc;
 
@@ -173,9 +174,14 @@ fn step(keys: &KeyContext, (across, down): (isize, isize)) -> bool {
   }
 }
 
-/// Moves the focused card a column left (`-1`) or right (`1`), as a drop there does.
+/// The focused card, unless it is read-only (`Dropping::locked`).
+fn changeable(keys: &KeyContext) -> Option<CardModel> {
+  focused(keys).filter(|card| !keys.dropping.locked(card))
+}
+
+/// Moves the focused card a column left (`-1`) or right (`1`), as a drop there does; a read-only card stays.
 fn shift(keys: &KeyContext, by: isize) -> bool {
-  let Some(card) = focused(keys) else {
+  let Some(card) = changeable(keys) else {
     return false;
   };
   let Some((column, _)) = place(keys, card.row.id) else {
@@ -192,10 +198,12 @@ fn shift(keys: &KeyContext, by: isize) -> bool {
   true
 }
 
+/// Selects the focused card, or no longer; a read-only card is never selected.
 fn select(keys: &KeyContext) -> bool {
-  let Some(id) = keys.dropping.state.focused.get_untracked().0 else {
+  let Some(card) = changeable(keys) else {
     return false;
   };
+  let id = card.row.id;
   keys.dropping.state.selected.update(|selected| {
     if !selected.0.remove(&id) {
       selected.0.insert(id);
@@ -204,10 +212,15 @@ fn select(keys: &KeyContext) -> bool {
   true
 }
 
+/// Opens the focused card's menu at `page`: a *Not shared* card has none, and a read-only card's has no lists to
+/// change it with.
 fn menu(keys: &KeyContext, page: MenuPage) -> bool {
   let Some(card) = focused(keys).filter(|card| !card.row.not_shared) else {
     return false;
   };
+  if page != MenuPage::Commands && keys.dropping.locked(&card) {
+    return false;
+  }
   keys.dropping.state.menu.set(OpenMenu(Some((card.row.id, page))));
   true
 }

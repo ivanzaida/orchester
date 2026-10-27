@@ -21,6 +21,8 @@ use orchester_core::{
   connection::AgentProvider,
   id::{ProjectId, RunId, TaskId},
   run::TaskPhase,
+  sharing::TaskRevision,
+  task::Task,
   time::Timestamp,
 };
 use orchester_workspace::tasks::{
@@ -79,6 +81,8 @@ pub struct CardModel {
   pub highlighted: bool,
   /// Its latest run, when it can be read: Run again runs after it.
   pub latest_run: Option<RunId>,
+  /// The task as read, for a task that has run: Run again runs it only as it is now.
+  pub revision: Option<TaskRevision>,
   /// Its pipeline's name, as a refusal of Run again names it.
   pub pipeline: Arc<str>,
 }
@@ -119,6 +123,11 @@ impl CardModel {
         .get(&row.id)
         .and_then(|latest| latest.run())
         .map(|run| run.id),
+      revision: row
+        .has_run
+        .then(|| source.tasks.tasks.iter().find(|task| task.id() == row.id))
+        .flatten()
+        .map(Task::revision),
       pipeline: match &row.pipeline {
         PipelineLabel::Published { name, .. } => name.clone(),
         other => message_text(ctx, &other.message()),

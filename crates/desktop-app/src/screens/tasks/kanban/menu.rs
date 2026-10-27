@@ -3,7 +3,8 @@
 //! or Reopen task as its status allows, and Delete task…, which asks over the columns (unavailable on a shared
 //! project). Move to lists the columns, each one a card cannot go to unavailable with why, as a drop refuses it
 //! (`Move to for a card whose run has not ended` `kn5MV`). While a change is under way the menu's changes wait
-//! (`Menu while a change is under way` `ogTTt`).
+//! (`Menu while a change is under way` `ogTTt`). Once the person is no longer a member of the project, the menu is
+//! kept with Open and Copy key only.
 
 use std::sync::Arc;
 
@@ -78,12 +79,12 @@ fn opens(
   }
 }
 
+/// The menu's commands; a read-only card's (`Dropping::locked`) only opens its task and copies its key.
 fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
   let dropping = Dropping::of(ctx);
   let busy = state.busy() || dropping.closer.busy();
   let id = |name: &str| format!("task-menu-{}-{name}", card.row.key);
-  let key = card.row.key.clone();
-  let task: TaskKey = key.parse().expect("a task's key reads back as a task key");
+  let task: TaskKey = card.row.key.parse().expect("a task's key reads back as a task key");
   let navigation = Navigation::of(ctx);
   let route = Route::Project(card.project, ProjectPage::Task(task, TaskView::default()));
   let open_task = MenuItem::new(id("open"), ctx.t("tasks.board.menu.open"), move || {
@@ -99,6 +100,10 @@ fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<b
     MenuItem::new(id(name), label, opens(state, open, card, page)).icon(glyph)
   };
   let mut rows: Vec<Element> = vec![open_task.render(ctx, open), separator(ctx)];
+  if dropping.locked(card) {
+    rows.push(copy_key(ctx, card, open));
+    return rows;
+  }
   for (name, key, glyph, page, shortcut) in [
     (
       "move",
@@ -126,26 +131,33 @@ fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<b
     let row = changing(name, label, glyph, page).shortcut(keys);
     rows.push(row.render(ctx, open));
   }
-  let clipboard = ctx.use_context::<Clipboard>().unwrap_or_default();
-  let copied = key;
-  rows.push(
-    MenuItem::new(id("copy"), ctx.t("tasks.board.menu.copyKey"), move || {
-      if !clipboard.copy(&copied) {
-        tracing::warn!("the task's key was not copied");
-      }
-    })
-    .icon(Icon::Copy)
-    .shortcut(ctx.t(if cfg!(target_os = "macos") {
-      "tasks.board.keys.copyMac"
-    } else {
-      "tasks.board.keys.copy"
-    }))
-    .render(ctx, open),
-  );
+  rows.push(copy_key(ctx, card, open));
   rows.extend(run_again(ctx, card, (&dropping, busy), open));
   rows.push(separator(ctx));
   rows.extend(closing(ctx, card, (&dropping, busy), open));
   rows
+}
+
+/// Copy key, with its keys.
+fn copy_key(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Element {
+  let clipboard = ctx.use_context::<Clipboard>().unwrap_or_default();
+  let copied = card.row.key.clone();
+  MenuItem::new(
+    format!("task-menu-{}-copy", card.row.key),
+    ctx.t("tasks.board.menu.copyKey"),
+    move || {
+      if !clipboard.copy(&copied) {
+        tracing::warn!("the task's key was not copied");
+      }
+    },
+  )
+  .icon(Icon::Copy)
+  .shortcut(ctx.t(if cfg!(target_os = "macos") {
+    "tasks.board.keys.copyMac"
+  } else {
+    "tasks.board.keys.copy"
+  }))
+  .render(ctx, open)
 }
 
 /// Run again, for a task whose latest run ended: asked over the columns first, as a drop on Todo asks.
