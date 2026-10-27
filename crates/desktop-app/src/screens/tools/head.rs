@@ -23,11 +23,20 @@ use crate::{
 pub(super) fn crumb(ctx: &mut Ctx, p: &EditorProps) -> Element {
   let tools = Navigation::of(ctx).to(Route::Project(p.project.open.project.id(), ProjectPage::Tools));
   let new = ctx.t("tools.newTitle");
-  page_head::crumb("tool-crumbs", (&ctx.t("hub.tabs.tools"), tools), p.entry.is_none().then_some(&*new))
+  page_head::crumb(
+    "tool-crumbs",
+    (&ctx.t("hub.tabs.tools"), tools),
+    p.entry.is_none().then_some(&*new),
+  )
 }
 
 /// The head: `title`, then the kind, whether it runs and how many steps call it.
-pub(super) fn head(ctx: &mut Ctx, p: &EditorProps, (entry, title): (Option<&ToolEntry>, &str), more: Option<More>) -> Element {
+pub(super) fn head(
+  ctx: &mut Ctx,
+  p: &EditorProps,
+  (entry, title): (Option<&ToolEntry>, &str),
+  more: Option<More>,
+) -> Element {
   let (glyph, sub) = match entry {
     Some(entry) => {
       let (kind, glyph) = words::kind(&entry.tool);
@@ -46,7 +55,11 @@ pub(super) fn head(ctx: &mut Ctx, p: &EditorProps, (entry, title): (Option<&Tool
       };
       let sub = ctx.t_args(
         "tools.pageSub",
-        [("kind", ctx.t(kind).to_string()), ("standing", standing.to_string()), ("used", used.to_string())],
+        [
+          ("kind", ctx.t(kind).to_string()),
+          ("standing", standing.to_string()),
+          ("used", used.to_string()),
+        ],
       );
       (glyph, sub)
     }
@@ -56,7 +69,12 @@ pub(super) fn head(ctx: &mut Ctx, p: &EditorProps, (entry, title): (Option<&Tool
 }
 
 /// What the bar says about the tool now, with its actions.
-pub(super) fn bar(ctx: &Ctx, entry: Option<&ToolEntry>, (status, unchanged): (Arc<str>, bool), actions: Vec<Element>) -> Element {
+pub(super) fn bar(
+  ctx: &Ctx,
+  entry: Option<&ToolEntry>,
+  (status, unchanged): (Arc<str>, bool),
+  actions: Vec<Element>,
+) -> Element {
   let standing = match entry.map(|e| e.state) {
     Some(VersionState::Published(_)) if unchanged => Standing::Published,
     Some(VersionState::StaleDraft { .. }) => Standing::Attention,

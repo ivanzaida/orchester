@@ -94,7 +94,10 @@ fn skills_visual_found_in_this_repository_counts_and_opens_the_import() {
   fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
   s.go(ProjectPage::Skills(Default::default()));
   assert!(s.text("skills-repository-settings").contains("4 items"));
-  assert!(s.text("skills-found-import").contains("Import shows each item with a preview"));
+  assert!(
+    s.text("skills-found-import")
+      .contains("Import shows each item with a preview")
+  );
   s.click("skills-found-import-open");
   s.window.until("the import page", |w| {
     w.tree.get_element_by_id("skills-import-review").is_some()

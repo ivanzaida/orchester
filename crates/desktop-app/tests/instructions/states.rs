@@ -247,7 +247,9 @@ fn instructions_new_rule_chooses_its_scope_and_the_next_starts_fresh() {
   screen.click("instruction-create");
   screen.until("created role", |s| s.exists("instruction-publish"));
   screen.click("instructions-new");
-  screen.until("a fresh new rule", |s| s.exists("instruction-scope-project") && s.exists("instruction-create"));
+  screen.until("a fresh new rule", |s| {
+    s.exists("instruction-scope-project") && s.exists("instruction-create")
+  });
   assert_eq!(screen.value("instruction-name"), "");
 }
 #[test]

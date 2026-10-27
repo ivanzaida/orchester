@@ -127,10 +127,13 @@ impl From<Question> for Element {
       .background(fill)
       .border_inside(BorderSize::Sm, stroke)
       .rounded(RadiusSize::Lg)
-      .describe("weight", match question.weight {
-        Weight::Loses => "loses",
-        Weight::Neutral => "neutral",
-      })
+      .describe(
+        "weight",
+        match question.weight {
+          Weight::Loses => "loses",
+          Weight::Neutral => "neutral",
+        },
+      )
       .child(
         Text::new(&question.title)
           .id(format!("{}-title", question.id))

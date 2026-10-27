@@ -277,7 +277,13 @@ fn agents_delayed_folder_add_preserves_removal_and_saved_permissions() {
       s.click("agent-confirm-confirm");
     }
     let saved = s.listed().profile(id).expect("profile").profile.clone();
-    saved.permissions().writable_folders().entries().iter().map(|f| f.as_str()).eq([".orchester/build-b"])
+    saved
+      .permissions()
+      .writable_folders()
+      .entries()
+      .iter()
+      .map(|f| f.as_str())
+      .eq([".orchester/build-b"])
   });
   let saved = screen.listed().profile(id).expect("profile").profile.clone();
   let folders: Vec<_> = saved

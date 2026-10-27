@@ -246,7 +246,13 @@ impl Editor {
   }
 
   /// The crumb, the head, and the draft bar or what is asked in its place.
-  fn top(&self, ctx: &mut Ctx, props: &Props, saved: Option<&InstructionEntry>, (dirty, busy, invalid): (bool, bool, bool)) -> Element {
+  fn top(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    saved: Option<&InstructionEntry>,
+    (dirty, busy, invalid): (bool, bool, bool),
+  ) -> Element {
     let name = self.fields.name.get();
     let title = if name.trim().is_empty() {
       ctx.t("instructions.new")
@@ -304,8 +310,16 @@ impl Editor {
       && entry.state.published().is_some()
     {
       let ask = self.ask.clone();
-      let discard = ActionButton::new("instruction-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
-      actions.push(if busy || dirty { discard.disabled() } else { discard.on_click(move || ask.set(Ask::Discard)) }.into());
+      let discard =
+        ActionButton::new("instruction-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
+      actions.push(
+        if busy || dirty {
+          discard.disabled()
+        } else {
+          discard.on_click(move || ask.set(Ask::Discard))
+        }
+        .into(),
+      );
     }
     actions.push(self.action_button(ctx, saved, dirty, busy).into());
     actions
@@ -322,14 +336,18 @@ impl Editor {
         .ok()
         .and_then(|body| Name::new(&self.fields.name.get()).ok().map(|name| (name, body)));
       let valid = candidate.is_some();
-      let save = ActionButton::new("instruction-create", ButtonKind::Primary, ctx.t("instructions.createDraft"))
-        .icon(Icon::Check)
-        .on_click(move || {
-          if let Some((name, body)) = &candidate {
-            // Work::run tells whether an MCP client's input wrote it or presses Create.
-            work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
-          }
-        });
+      let save = ActionButton::new(
+        "instruction-create",
+        ButtonKind::Primary,
+        ctx.t("instructions.createDraft"),
+      )
+      .icon(Icon::Check)
+      .on_click(move || {
+        if let Some((name, body)) = &candidate {
+          // Work::run tells whether an MCP client's input wrote it or presses Create.
+          work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
+        }
+      });
       return if busy {
         save.loading()
       } else if valid {
@@ -340,9 +358,13 @@ impl Editor {
     };
     if !dirty && !state.has_draft() {
       let panel = self.panel.clone();
-      return ActionButton::new("instruction-preview-prompt", ButtonKind::Secondary, ctx.t("instructions.previewPrompt"))
-        .icon(Icon::Eye)
-        .on_click(move || panel.choose(Panel::Preview));
+      return ActionButton::new(
+        "instruction-preview-prompt",
+        ButtonKind::Secondary,
+        ctx.t("instructions.previewPrompt"),
+      )
+      .icon(Icon::Eye)
+      .on_click(move || panel.choose(Panel::Preview));
     }
     let (entry, gate) = (entry.clone(), self.gate.clone());
     let publish = ActionButton::new(

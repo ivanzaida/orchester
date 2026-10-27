@@ -77,7 +77,10 @@ fn line(ctx: &Ctx, profile: &orchester_core::resource::AgentProfile, connection:
     [
       ("connection", connection.name().as_str().to_owned()),
       ("model", model.to_string()),
-      ("access", access(ctx, profile.permissions(), connection.provider()).to_string()),
+      (
+        "access",
+        access(ctx, profile.permissions(), connection.provider()).to_string(),
+      ),
     ],
   )
 }

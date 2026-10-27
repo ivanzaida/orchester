@@ -73,7 +73,10 @@ pub(crate) fn read_failure(
   failed: Option<(Message, bool)>,
   retry: impl Fn() + Send + Sync + 'static,
 ) -> Option<Failure> {
-  project.feed.mark_hub_unread(tab.bit(), failed.as_ref().is_some_and(|(error, _)| !is_transient(error)));
+  project.feed.mark_hub_unread(
+    tab.bit(),
+    failed.as_ref().is_some_and(|(error, _)| !is_transient(error)),
+  );
   let (error, retrying) = failed?;
   Some(
     Failure::new(id, what, error)
@@ -107,7 +110,12 @@ impl Head {
 
 /// The hub on `tab` of `project`, with `head` at the head's right and `body` under the tabs; the body takes the rest
 /// of the page and lays itself out ([`list_body`], [`item_body`]).
-pub(crate) fn page(ctx: &mut Ctx, project: &ShownProject, (tab, head): (HubTab, Head), body: impl Into<Element>) -> Element {
+pub(crate) fn page(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  (tab, head): (HubTab, Head),
+  body: impl Into<Element>,
+) -> Element {
   let title = Row::new()
     .id("agents-hub-head")
     .width(Dimension::Pct(100.0))

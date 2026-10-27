@@ -61,7 +61,10 @@ pub fn render(ctx: &mut Ctx, props: &Props, blocked: Option<&'static str>) -> El
       [
         ("pipelines", pipelines.to_string()),
         ("steps", steps.len().to_string()),
-        ("overrides", steps.iter().filter(|s| s.model_overridden).count().to_string()),
+        (
+          "overrides",
+          steps.iter().filter(|s| s.model_overridden).count().to_string(),
+        ),
       ],
     );
     section = section.child(quiet(&counts).id("agent-use-counts"));
@@ -73,7 +76,12 @@ pub fn render(ctx: &mut Ctx, props: &Props, blocked: Option<&'static str>) -> El
   section.into()
 }
 
-fn use_row(ctx: &mut Ctx, props: &Props, (index, step): (usize, &PipelineUse), blocked: Option<&'static str>) -> Element {
+fn use_row(
+  ctx: &mut Ctx,
+  props: &Props,
+  (index, step): (usize, &PipelineUse),
+  blocked: Option<&'static str>,
+) -> Element {
   let position = format!("{:02}", step.position);
   let title = ctx.t_args(
     if step.draft {
@@ -113,18 +121,35 @@ fn detail(ctx: &Ctx, step: &PipelineUse) -> Arc<str> {
       ("model", model.to_string()),
       (
         "source",
-        ctx.t(if step.model_overridden { "agents.override" } else { "agents.fromProfile" }).to_string(),
+        ctx
+          .t(if step.model_overridden {
+            "agents.override"
+          } else {
+            "agents.fromProfile"
+          })
+          .to_string(),
       ),
       (
         "permissions",
-        ctx.t(if step.narrowed { "agents.narrowed" } else { "agents.samePermissions" }).to_string(),
+        ctx
+          .t(if step.narrowed {
+            "agents.narrowed"
+          } else {
+            "agents.samePermissions"
+          })
+          .to_string(),
       ),
       ("runs", runs.to_string()),
     ],
   )
 }
 
-fn open_pipeline(ctx: &mut Ctx, props: &Props, (index, step): (usize, &PipelineUse), blocked: Option<&'static str>) -> Element {
+fn open_pipeline(
+  ctx: &mut Ctx,
+  props: &Props,
+  (index, step): (usize, &PipelineUse),
+  blocked: Option<&'static str>,
+) -> Element {
   let button = ActionButton::new(
     format!("agent-use-open-{index}"),
     ButtonKind::Ghost,

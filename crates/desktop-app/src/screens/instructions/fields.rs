@@ -197,7 +197,11 @@ impl Fields {
       None,
     );
     // A new rule chooses its scope above these fields ([`super::scope_choice`]).
-    let scope_fields = if existing { self.scope_fields(ctx, data) } else { Vec::new() };
+    let scope_fields = if existing {
+      self.scope_fields(ctx, data)
+    } else {
+      Vec::new()
+    };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)

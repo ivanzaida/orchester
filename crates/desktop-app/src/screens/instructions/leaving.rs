@@ -47,7 +47,12 @@ pub fn question(ctx: &mut Ctx, selection: &Selection, guard: &LeaveGuard) -> Opt
   Some(
     Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::new().left(HubSpacing::Side.role()).right(HubSpacing::Side.role()).top(HubSpacing::BodyTop.role()))
+      .padding(
+        Padding::new()
+          .left(HubSpacing::Side.role())
+          .right(HubSpacing::Side.role())
+          .top(HubSpacing::BodyTop.role()),
+      )
       .child(question)
       .into(),
   )

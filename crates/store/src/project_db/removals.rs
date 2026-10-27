@@ -4,7 +4,7 @@
 use orchester_core::{
   id::ResourceId,
   resource::{
-    Draft, Pipeline, RemoveMode, Removal, ResourceBody, ResourceKind, Version, VersionNumber, pipeline_step_users,
+    Draft, Pipeline, Removal, RemoveMode, ResourceBody, ResourceKind, Version, VersionNumber, pipeline_step_users,
   },
   time::Timestamp,
 };
@@ -73,11 +73,7 @@ pub(super) fn remove(
     for pipeline in pipelines {
       let draft = load_draft::<Pipeline>(&transaction, pipeline.id())?;
       let latest = latest::<Pipeline>(&transaction, pipeline.id())?;
-      let found = pipeline_step_users(
-        (pipeline.id(), pipeline.name()),
-        (draft.as_ref(), latest.as_ref()),
-        id,
-      );
+      let found = pipeline_step_users((pipeline.id(), pipeline.name()), (draft.as_ref(), latest.as_ref()), id);
       if found.is_empty() {
         continue;
       }

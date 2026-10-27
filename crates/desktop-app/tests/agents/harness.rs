@@ -120,10 +120,12 @@ impl Agents {
   /// Waits until the edits so far are saved as the draft: the profile's page saves on its own once they rest.
   pub fn saved(&mut self) {
     self.until("the draft saved on its own", |s| {
-      s.exists("agent-save-status") && {
-        let status = s.text("agent-save-status");
-        !status.contains("Unsaved") && !status.contains("Saving")
-      } && !s.exists("agent-saving")
+      s.exists("agent-save-status")
+        && {
+          let status = s.text("agent-save-status");
+          !status.contains("Unsaved") && !status.contains("Saving")
+        }
+        && !s.exists("agent-saving")
     });
   }
   pub fn set(&mut self, id: &str, text: &str) {

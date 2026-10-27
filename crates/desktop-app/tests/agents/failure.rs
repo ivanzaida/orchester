@@ -33,7 +33,9 @@ fn failed_list(screen: &mut Agents) {
 /// Presses Try again and waits until the read under way ends again.
 fn try_again(screen: &mut Agents, tries: &str) {
   screen.click("agents-load-error-retry");
-  screen.until(tries, |s| s.exists("agents-load-error-tries") && s.text("agents-load-error-tries").contains(tries));
+  screen.until(tries, |s| {
+    s.exists("agents-load-error-tries") && s.text("agents-load-error-tries").contains(tries)
+  });
 }
 
 #[test]
@@ -46,15 +48,23 @@ fn failure_page_says_what_and_why_hides_the_count_and_tries_again_in_place() {
   failed_list(&mut screen);
   let card = screen.text("agents-load-error");
   assert!(card.contains("Agent profiles couldn’t be read"), "{card}");
-  assert!(card.contains("The project's database couldn't be read"), "why in plain words: {card}");
+  assert!(
+    card.contains("The project's database couldn't be read"),
+    "why in plain words: {card}"
+  );
   assert!(card.contains("Runs keep going"), "what still works: {card}");
   assert!(screen.exists("agents-load-error-log"), "Open log");
-  assert!(screen.exists("agents-hub-tabs") && screen.exists("agents-hub-title"), "the head and tabs stay");
+  assert!(
+    screen.exists("agents-hub-tabs") && screen.exists("agents-hub-title"),
+    "the head and tabs stay"
+  );
   screen.until("no stale count", |s| !s.text("agents-hub-tab-profiles").contains('1'));
   db.execute("UPDATE resource_drafts SET body = ?1", [&body])
     .expect("restore fixture");
   screen.click("agents-load-error-retry");
-  screen.until("the profiles in its place", |s| s.exists("agents-new") && !s.exists("agents-load-error"));
+  screen.until("the profiles in its place", |s| {
+    s.exists("agents-new") && !s.exists("agents-load-error")
+  });
   screen.until("counted again", |s| s.text("agents-hub-tab-profiles").contains('1'));
 }
 
@@ -67,7 +77,10 @@ fn failure_details_show_the_error_and_the_tries() {
   assert!(!screen.exists("agents-load-error-details"), "Details start closed");
   screen.click("agents-load-error-details-toggle");
   let details = screen.text("agents-load-error-details");
-  assert!(details.contains("errors.storage · The data could not be read or written."), "{details}");
+  assert!(
+    details.contains("errors.storage · The data could not be read or written."),
+    "{details}"
+  );
   assert!(details.contains("Tried once · at"), "{details}");
   assert!(screen.exists("agents-load-error-copy"), "Copy details");
   try_again(&mut screen, "Tried 2 times");

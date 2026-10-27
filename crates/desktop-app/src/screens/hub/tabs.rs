@@ -30,7 +30,13 @@ pub(crate) enum HubTab {
 }
 
 impl HubTab {
-  pub(crate) const ALL: [Self; 5] = [Self::Profiles, Self::Instructions, Self::Skills, Self::Tools, Self::Memory];
+  pub(crate) const ALL: [Self; 5] = [
+    Self::Profiles,
+    Self::Instructions,
+    Self::Skills,
+    Self::Tools,
+    Self::Memory,
+  ];
 
   /// The tab's name in its element id and the hub's `tab` description.
   pub(crate) const fn name(self) -> &'static str {

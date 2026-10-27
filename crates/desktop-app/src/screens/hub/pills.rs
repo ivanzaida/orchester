@@ -41,7 +41,11 @@ impl From<Pill> for Element {
       Text::new(&count.to_string())
         .id(format!("{}-count", pill.id))
         .variant(HubText::Hint.role())
-        .color(if waits { PaletteColor::Warning } else { PaletteColor::TextMuted })
+        .color(if waits {
+          PaletteColor::Warning
+        } else {
+          PaletteColor::TextMuted
+        })
     });
     let row = Row::new()
       .height(Dimension::Px(HEIGHT))

@@ -43,7 +43,11 @@ pub fn crumb(ctx: &Ctx, selection: &Selection, new: bool) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(back)
-    .with_children(new.then(|| Text::new(&ctx.t("instructions.crumbNew")).variant(HubText::Crumb.role()).color(PaletteColor::TextSecondary)))
+    .with_children(new.then(|| {
+      Text::new(&ctx.t("instructions.crumbNew"))
+        .variant(HubText::Crumb.role())
+        .color(PaletteColor::TextSecondary)
+    }))
     .into()
 }
 
@@ -84,7 +88,11 @@ pub fn head(ctx: &mut Ctx, (title, sub): (&str, &str), more: Option<More>) -> El
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Fine.role())
-        .child(Text::new(title).id("instruction-title").variant(HubText::PageTitle.role()))
+        .child(
+          Text::new(title)
+            .id("instruction-title")
+            .variant(HubText::PageTitle.role()),
+        )
         .child(Text::new(sub).id("instruction-sub").variant(HubText::Hint.role())),
     )
     .with_children(menu)
@@ -120,7 +128,12 @@ pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
       VersionState::Draft { .. } => {
         let saved = now.saved_at.map_or_else(
           || ctx.t("instructions.savedPlain"),
-          |at| ctx.t_args("instructions.savedAt", [("time", orchester_workspace::display::clock(at))]),
+          |at| {
+            ctx.t_args(
+              "instructions.savedAt",
+              [("time", orchester_workspace::display::clock(at))],
+            )
+          },
         );
         (
           Standing::Draft,

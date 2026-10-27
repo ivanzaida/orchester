@@ -151,7 +151,12 @@ impl Component for InstructionsScreen {
       page = page.child(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .padding(Padding::new().left(HubSpacing::Side.role()).right(HubSpacing::Side.role()).top(HubSpacing::BodyTop.role()))
+          .padding(
+            Padding::new()
+              .left(HubSpacing::Side.role())
+              .right(HubSpacing::Side.role())
+              .top(HubSpacing::BodyTop.role()),
+          )
           .child(failure.page(ctx)),
       );
     }
@@ -186,7 +191,13 @@ impl InstructionsScreen {
     ])
   }
 
-  fn content(&self, ctx: &mut Ctx, (project, view): (ShownProject, View), data: ProjectInstructions, reading: bool) -> Element {
+  fn content(
+    &self,
+    ctx: &mut Ctx,
+    (project, view): (ShownProject, View),
+    data: ProjectInstructions,
+    reading: bool,
+  ) -> Element {
     let created = self.selection.created.get().0;
     if created.as_ref().is_some_and(|entry| data.entry(entry.id).is_some()) {
       self.selection.created.set(state::Saved::default());

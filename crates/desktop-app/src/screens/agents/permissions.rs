@@ -115,7 +115,13 @@ pub(super) fn option_row(
     _ => message_text(ctx, &Message::new(option_detail(option, provider))),
   };
   let value = fields.permissions.clone();
-  let toggle = Toggle::new(format!("agent-option-{option:?}"), ToggleKind::Radio, selected, title.clone()).hide_label();
+  let toggle = Toggle::new(
+    format!("agent-option-{option:?}"),
+    ToggleKind::Radio,
+    selected,
+    title.clone(),
+  )
+  .hide_label();
   let toggle = if available {
     toggle.on_change(move |_| {
       value.update(|p| match option {
@@ -148,7 +154,11 @@ pub(super) fn option_row(
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
         .child(Text::new(&title).variant(ExtraTypography::Strong.role()))
-        .child(Text::new(&detail).variant(HubText::Hint.role()).width(Dimension::Pct(100.0)))
+        .child(
+          Text::new(&detail)
+            .variant(HubText::Hint.role())
+            .width(Dimension::Pct(100.0)),
+        )
         .with_children((!available).then(|| {
           reason_line(
             &format!("agent-option-{option:?}-reason"),
@@ -159,7 +169,12 @@ pub(super) fn option_row(
     .into()
 }
 
-fn repository(ctx: &mut Ctx, context: &Context<'_>, provider: Option<AgentProvider>, asked: Option<Element>) -> Element {
+fn repository(
+  ctx: &mut Ctx,
+  context: &Context<'_>,
+  provider: Option<AgentProvider>,
+  asked: Option<Element>,
+) -> Element {
   let folders = ctx.mount_keyed::<FolderList>("agent-folder-list", folders::props(context));
   let mut rows = vec![
     option_row(ctx, context.fields, provider, PermissionOption::ReadOnly),
@@ -228,7 +243,11 @@ fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Eleme
     .child(row)
     .with_children((!available).then(|| {
       Row::new()
-        .padding(Padding::new().left(HubSpacing::Row.role()).bottom(HubSpacing::FieldY.role()))
+        .padding(
+          Padding::new()
+            .left(HubSpacing::Row.role())
+            .bottom(HubSpacing::FieldY.role()),
+        )
         .child(reason_line(
           "agent-network-reason",
           &super::enforcement::unavailable(ctx, provider, target),
@@ -295,7 +314,13 @@ fn mcp(ctx: &mut Ctx, context: &Context<'_>, provider: Option<AgentProvider>, as
     let id = server.id();
     let signal = fields.servers.clone();
     let on = selected.ids().contains(&id);
-    let toggle = Toggle::new(format!("agent-mcp-{id}"), ToggleKind::Switch, on, server.name().as_str()).hide_label();
+    let toggle = Toggle::new(
+      format!("agent-mcp-{id}"),
+      ToggleKind::Switch,
+      on,
+      server.name().as_str(),
+    )
+    .hide_label();
     let toggle = if on || (server.enabled() && selected.ids().len() < McpServerSelection::MAX) {
       toggle.on_change(move |on| {
         let mut ids = signal.get().0.ids().to_vec();
@@ -312,7 +337,15 @@ fn mcp(ctx: &mut Ctx, context: &Context<'_>, provider: Option<AgentProvider>, as
       toggle
     };
     let detail = server_detail(ctx, server);
-    rows.push(field(&format!("agent-mcp-{id}-row"), server.name().as_str(), Some(&detail), toggle).into());
+    rows.push(
+      field(
+        &format!("agent-mcp-{id}-row"),
+        server.name().as_str(),
+        Some(&detail),
+        toggle,
+      )
+      .into(),
+    );
   }
   if rows.is_empty() {
     rows.push(empty_mcp(ctx, context));
@@ -330,7 +363,8 @@ fn mcp(ctx: &mut Ctx, context: &Context<'_>, provider: Option<AgentProvider>, as
     .spacing(SpacingSize::Sm)
     .child(section("agent-mcp", (&ctx.t("agents.mcp"), Some(&count)), rows))
     .with_children(
-      (selected.ids().len() >= McpServerSelection::MAX).then(|| note("agent-mcp-limit", Icon::Info, &ctx.t("agents.mcpLimit"))),
+      (selected.ids().len() >= McpServerSelection::MAX)
+        .then(|| note("agent-mcp-limit", Icon::Info, &ctx.t("agents.mcpLimit"))),
     )
     .child(note("agent-mcp-note", Icon::Info, &ctx.t("agents.mcpNote")))
     .into()
@@ -364,7 +398,10 @@ fn server_detail(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer)
     ctx
       .t_args(
         "agents.mcpTurnedOff",
-        [("transport", transport.to_string()), ("off", ctx.t("agents.mcpDisabled").to_string())],
+        [
+          ("transport", transport.to_string()),
+          ("off", ctx.t("agents.mcpDisabled").to_string()),
+        ],
       )
       .to_string()
   }

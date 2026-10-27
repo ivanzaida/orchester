@@ -82,11 +82,15 @@ impl AgentsNav {
       Route::Project(_, ProjectPage::NewAgent(tab) | ProjectPage::Agent(_, tab)) => tab,
       _ => AgentTab::default(),
     };
-    self.navigation.replace(Route::Project(self.project, Shown::Edit(id, tab).page()));
+    self
+      .navigation
+      .replace(Route::Project(self.project, Shown::Edit(id, tab).page()));
   }
   /// The list, in place of a profile that was removed.
   pub fn removed(&self) {
-    self.navigation.replace(Route::Project(self.project, Shown::List.page()));
+    self
+      .navigation
+      .replace(Route::Project(self.project, Shown::List.page()));
   }
 }
 

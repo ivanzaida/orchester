@@ -15,7 +15,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ResourceId,
-  resource::{RemoveMode, Removal, ResourceKind, StepUser, StepVersion},
+  resource::{Removal, RemoveMode, ResourceKind, StepUser, StepVersion},
 };
 use orchester_workspace::{
   background,
@@ -24,7 +24,11 @@ use orchester_workspace::{
 };
 
 use super::question::{Question, Weight};
-use crate::{project::ShownProject, services::Services, ui::icon::Icon, ui::message::message_text};
+use crate::{
+  project::ShownProject,
+  services::Services,
+  ui::{icon::Icon, message::message_text},
+};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -83,15 +87,17 @@ impl Component for RemoveQuestion {
     let found = ctx.signal(None);
     let (changes, project, kind) = (Services::of(ctx).changes, props.project.open.project.id(), props.kind);
     let (seen, removed) = (found.clone(), props.on_removed.clone());
-    ctx.watch(&work.state(), move |state| match state.data.clone().filter(|_| state.is_fulfilled()) {
-      Some(Removed(Removal::Removed)) => {
-        for change in removal::changed_by_removal(kind) {
-          changes.record(project, *change);
+    ctx.watch(&work.state(), move |state| {
+      match state.data.clone().filter(|_| state.is_fulfilled()) {
+        Some(Removed(Removal::Removed)) => {
+          for change in removal::changed_by_removal(kind) {
+            changes.record(project, *change);
+          }
+          removed();
         }
-        removed();
+        Some(Removed(Removal::InUse(users))) => seen.set(Some(Found(users))),
+        None => {}
       }
-      Some(Removed(Removal::InUse(users))) => seen.set(Some(Found(users))),
-      None => {}
     });
     Self { work, found }
   }
@@ -197,7 +203,9 @@ fn lines(ctx: &Ctx, users: &Users) -> Vec<(Icon, Arc<str>)> {
     Users::Reach(reached) => reached
       .iter()
       .map(|reached| match reached {
-        Reached::Profile { name, by_role: true } => (Icon::Bot, ctx.t_args("hub.remove.reachRole", [("name", &**name)])),
+        Reached::Profile { name, by_role: true } => {
+          (Icon::Bot, ctx.t_args("hub.remove.reachRole", [("name", &**name)]))
+        }
         Reached::Profile { name, by_role: false } => {
           (Icon::Bot, ctx.t_args("hub.remove.reachProject", [("name", &**name)]))
         }

@@ -44,7 +44,11 @@ pub fn list(ctx: &mut Ctx, data: &ProjectInstructions, selection: &Selection) ->
     .id("instruction-library")
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Groups.role())
-    .child(note("instructions-order-note", Icon::ListOrdered, &ctx.t("instructions.orderNote")));
+    .child(note(
+      "instructions-order-note",
+      Icon::ListOrdered,
+      &ctx.t("instructions.orderNote"),
+    ));
   for group_of in groups {
     pane = pane.child(section(ctx, (data, &project), &group_of, selection));
   }
@@ -60,7 +64,12 @@ const fn tab(part: PromptPart) -> Tab {
   }
 }
 
-fn section(ctx: &Ctx, (data, project): (&ProjectInstructions, &str), group_of: &Group, selection: &Selection) -> Element {
+fn section(
+  ctx: &Ctx,
+  (data, project): (&ProjectInstructions, &str),
+  group_of: &Group,
+  selection: &Selection,
+) -> Element {
   let tab = tab(group_of.part);
   let id = format!("instructions-group-{}", tab.name());
   let title = ctx.t(tab.key());
@@ -80,16 +89,33 @@ fn section(ctx: &Ctx, (data, project): (&ProjectInstructions, &str), group_of: &
       .map(|(index, line)| line_row(ctx, (data, tab), (index, line), selection))
       .collect()
   };
-  group(&id, head(&id, &title, count.as_deref(), None), boxed(&format!("{id}-rows"), rows)).into()
+  group(
+    &id,
+    head(&id, &title, count.as_deref(), None),
+    boxed(&format!("{id}-rows"), rows),
+  )
+  .into()
 }
 
-fn line_row(ctx: &Ctx, (data, tab): (&ProjectInstructions, Tab), (index, line): (usize, &Line), selection: &Selection) -> Element {
+fn line_row(
+  ctx: &Ctx,
+  (data, tab): (&ProjectInstructions, Tab),
+  (index, line): (usize, &Line),
+  selection: &Selection,
+) -> Element {
   match line {
-    Line::Head { label, count, overrides } => head_row(ctx, (tab, index), label, (*count, *overrides)),
+    Line::Head {
+      label,
+      count,
+      overrides,
+    } => head_row(ctx, (tab, index), label, (*count, *overrides)),
     Line::Step { label } => Row::new()
       .id(format!("instructions-step-{}-{index}", tab.name()))
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(HubSpacing::Groups.role(), ExtraSpacing::Loose.role()))
+      .padding(Padding::symmetric(
+        HubSpacing::Groups.role(),
+        ExtraSpacing::Loose.role(),
+      ))
       .spacing(lurq::app::theme::SpacingSize::Sm)
       .align_items(Alignment::Center)
       .child(icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::TextMuted))
@@ -121,12 +147,22 @@ fn head_row(ctx: &Ctx, (tab, index): (Tab, usize), label: &str, (count, override
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfacePanel)
-    .child(Text::new(label).variant(HubText::GroupTitle.role()).color(PaletteColor::TextPrimary))
+    .child(
+      Text::new(label)
+        .variant(HubText::GroupTitle.role())
+        .color(PaletteColor::TextPrimary),
+    )
     .child(Text::new(&ctx.t_args(key, [("count", count.to_string())])).variant(HubText::Hint.role()))
     .into()
 }
 
-fn rule_row(ctx: &Ctx, data: &ProjectInstructions, entry: &InstructionEntry, selection: &Selection, orphan: bool) -> Element {
+fn rule_row(
+  ctx: &Ctx,
+  data: &ProjectInstructions,
+  entry: &InstructionEntry,
+  selection: &Selection,
+  orphan: bool,
+) -> Element {
   let events = Events::of(entry.body.events());
   let scope = entry.body.scope();
   let hint: Arc<str> = if orphan {
@@ -160,12 +196,18 @@ fn rule_row(ctx: &Ctx, data: &ProjectInstructions, entry: &InstructionEntry, sel
 }
 
 /// Who a rule reaches, as its row says it: the role or the pipeline it belongs to, or the agents it selects.
-fn where_it_applies(ctx: &Ctx, data: &ProjectInstructions, scope: &InstructionScope, entry: &InstructionEntry) -> Arc<str> {
+fn where_it_applies(
+  ctx: &Ctx,
+  data: &ProjectInstructions,
+  scope: &InstructionScope,
+  entry: &InstructionEntry,
+) -> Arc<str> {
   match scope {
     InstructionScope::AgentRole { role } => role.as_str().into(),
-    InstructionScope::Pipeline { pipeline } => data
-      .pipeline(*pipeline)
-      .map_or_else(|| words::targets(ctx, entry.body.targets(), data), |p| Arc::from(&*p.name)),
+    InstructionScope::Pipeline { pipeline } => data.pipeline(*pipeline).map_or_else(
+      || words::targets(ctx, entry.body.targets(), data),
+      |p| Arc::from(&*p.name),
+    ),
     InstructionScope::Project | InstructionScope::Step { .. } => words::targets(ctx, entry.body.targets(), data),
   }
 }
@@ -187,12 +229,15 @@ fn empty_row(ctx: &Ctx, tab: Tab, project: &str) -> Element {
     Tab::Pipelines => ("instructions.emptyPipelines", "instructions.emptyPipelinesDetail"),
     Tab::Steps => ("instructions.emptySteps", "instructions.emptyStepsDetail"),
   };
-  Entry::new(format!("instructions-empty-{}", tab.name()), ctx.t_args(title, [("project", project)]))
-    .tile(match tab {
-      Tab::Roles => Icon::Bot,
-      Tab::Project => Icon::BookOpen,
-      Tab::Pipelines | Tab::Steps => Icon::Workflow,
-    })
-    .hint(ctx.t(detail))
-    .into()
+  Entry::new(
+    format!("instructions-empty-{}", tab.name()),
+    ctx.t_args(title, [("project", project)]),
+  )
+  .tile(match tab {
+    Tab::Roles => Icon::Bot,
+    Tab::Project => Icon::BookOpen,
+    Tab::Pipelines | Tab::Steps => Icon::Workflow,
+  })
+  .hint(ctx.t(detail))
+  .into()
 }

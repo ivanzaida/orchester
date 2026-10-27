@@ -19,8 +19,18 @@ fn instructions_list_follows_the_prompts_order() {
     .key
     .clone();
   // Made in the reverse of the order prompts take them.
-  screen.rule("Step rule", "Step text", InstructionScope::Step { pipeline, step }, true);
-  screen.rule("Pipeline rule", "Pipeline text", InstructionScope::Pipeline { pipeline }, true);
+  screen.rule(
+    "Step rule",
+    "Step text",
+    InstructionScope::Step { pipeline, step },
+    true,
+  );
+  screen.rule(
+    "Pipeline rule",
+    "Pipeline text",
+    InstructionScope::Pipeline { pipeline },
+    true,
+  );
   screen.rule("Project rule", "Project text", InstructionScope::Project, true);
   screen.list();
   screen.until("listed", |s| s.text("instruction-library").contains("Step rule"));
@@ -64,7 +74,11 @@ fn instructions_a_removed_rule_leaves_a_removed_line_in_its_group() {
   screen.click("instruction-more");
   screen.click("instruction-remove");
   screen.until("asked in place", |s| s.exists("hub-remove-confirm"));
-  assert!(screen.text("hub-remove").contains("No agent gets it"), "{}", screen.text("hub-remove"));
+  assert!(
+    screen.text("hub-remove").contains("No agent gets it"),
+    "{}",
+    screen.text("hub-remove")
+  );
   // Remove takes the press once the question has read who uses the rule.
   screen.until("removed, with its line", |s| {
     if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
@@ -86,7 +100,9 @@ fn instructions_discard_draft_returns_to_the_published_version() {
   screen.click(&format!("instruction-{id}"));
   screen.until("the rule's page", |s| s.exists("instruction-prompt"));
   screen.set("instruction-prompt", "A draft to throw away");
-  screen.until("draft saved", |s| s.entry(id).state.has_draft() && s.exists("instruction-discard"));
+  screen.until("draft saved", |s| {
+    s.entry(id).state.has_draft() && s.exists("instruction-discard")
+  });
   screen.until("asked in place", |s| {
     if let Some(mut discard) = s.window.tree.get_element_by_id_mut("instruction-discard") {
       discard.click();

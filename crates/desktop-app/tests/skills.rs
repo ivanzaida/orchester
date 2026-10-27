@@ -117,7 +117,10 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   s.go(ProjectPage::Skills(Default::default()));
   assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
   let found = s.text("skills-repository-settings");
-  assert!(found.contains("3 items") && found.contains("2 instructions, 1 skill"), "{found}");
+  assert!(
+    found.contains("3 items") && found.contains("2 instructions, 1 skill"),
+    "{found}"
+  );
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("nothing to import"));
   s.click("skill-import-preview-2");
@@ -153,8 +156,7 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   );
   s.click("skills-back");
   s.window.until("library after import", |w| {
-    w.texts("skills-list")
-      .is_some_and(|t| t.join(" ").contains("Draft v1"))
+    w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Draft v1"))
   });
   s.click(&format!("skill-row-{}", entries.entries[0].id));
   assert!(s.text("skill-inspector").contains("notes.md"));
@@ -233,7 +235,11 @@ fn skills_remove_is_asked_in_place_and_the_skill_leaves_the_library() {
     w.tree.tick_futures();
     w.tree.get_element_by_id("hub-remove-confirm").is_some()
   });
-  assert!(s.text("hub-remove").contains("No agent gets this skill now"), "{}", s.text("hub-remove"));
+  assert!(
+    s.text("hub-remove").contains("No agent gets this skill now"),
+    "{}",
+    s.text("hub-remove")
+  );
   let root = s.repo.clone();
   // Remove takes the press once the question has read who the skill reaches.
   s.window.until("removed", move |w| {

@@ -65,63 +65,27 @@ impl Component for Empty {
     let root = props.project.open.repo_root.clone();
     let read = ctx
       .future((root, self.again.get()), |(root, _)| async move {
-        background::run(move || repository::scan(&root)).await?.map_err(|error| {
-          tracing::error!(%error, "instruction repository findings could not be read");
-          messages::repository_unreadable()
-        })
+        background::run(move || repository::scan(&root))
+          .await?
+          .map_err(|error| {
+            tracing::error!(%error, "instruction repository findings could not be read");
+            messages::repository_unreadable()
+          })
       })
       .state()
       .get();
     let failed = self.failure.follow(&read);
-    let (new, import) = (props.selection.clone(), props.selection.clone());
-    let tab = props.tab;
-    let title = if props.all_empty {
-      ctx.t_args(
-        "instructions.emptyTitle",
-        [("project", props.project.open.project.name().as_str())],
-      )
-    } else {
-      ctx.t_args(
-        "instructions.emptyScope",
-        [
-          ("project", props.project.open.project.name().as_str()),
-          ("scope", &ctx.t(tab.key())),
-        ],
-      )
-    };
-    let mut empty = EmptyState::new(
-      "instructions-empty",
-      Icon::BookOpen,
-      title,
-      ctx.t("instructions.emptyDetail"),
-    )
-    .wide()
-    .unframed()
-    .note(ctx.t("instructions.emptyTabDetail"))
-    .action(
-      ActionButton::new(
-        "instructions-empty-import",
-        ButtonKind::Primary,
-        ctx.t("instructions.import"),
-      )
-      .icon(Icon::FolderOpen)
-      .opens(import.to(View::Import)),
-    )
-    .action(
-      ActionButton::new(
-        "instructions-empty-new",
-        ButtonKind::Secondary,
-        ctx.t("instructions.new"),
-      )
-      .icon(Icon::Plus)
-      .opens(new.to(View::new_rule(tab))),
-    );
+    let mut empty = empty_state(ctx, &props);
     if let Some((error, retrying)) = failed {
       // The findings' box holds one row in place of its rows; the rest of the page works.
       let again = self.again.clone();
-      let row = Failure::new("instructions-repository-error", ctx.t("instructions.importReadFailed"), error)
-        .retry(retrying, move || again.update(|n| *n += 1))
-        .section(ctx);
+      let row = Failure::new(
+        "instructions-repository-error",
+        ctx.t("instructions.importReadFailed"),
+        error,
+      )
+      .retry(retrying, move || again.update(|n| *n += 1))
+      .section(ctx);
       empty = empty.child(
         Column::new()
           .width(Dimension::Pct(100.0))
@@ -142,6 +106,47 @@ impl Component for Empty {
     .flex(1.0)
     .min_height(Dimension::Px(0.0))
   }
+}
+/// The empty state with its title for the scope shown, Import and New instruction.
+fn empty_state(ctx: &Ctx, props: &Props) -> EmptyState {
+  let (new, import) = (props.selection.clone(), props.selection.clone());
+  let tab = props.tab;
+  let project = props.project.open.project.name().as_str();
+  let title = if props.all_empty {
+    ctx.t_args("instructions.emptyTitle", [("project", project)])
+  } else {
+    ctx.t_args(
+      "instructions.emptyScope",
+      [("project", project), ("scope", &ctx.t(tab.key()))],
+    )
+  };
+  EmptyState::new(
+    "instructions-empty",
+    Icon::BookOpen,
+    title,
+    ctx.t("instructions.emptyDetail"),
+  )
+  .wide()
+  .unframed()
+  .note(ctx.t("instructions.emptyTabDetail"))
+  .action(
+    ActionButton::new(
+      "instructions-empty-import",
+      ButtonKind::Primary,
+      ctx.t("instructions.import"),
+    )
+    .icon(Icon::FolderOpen)
+    .opens(import.to(View::Import)),
+  )
+  .action(
+    ActionButton::new(
+      "instructions-empty-new",
+      ButtonKind::Secondary,
+      ctx.t("instructions.new"),
+    )
+    .icon(Icon::Plus)
+    .opens(new.to(View::new_rule(tab))),
+  )
 }
 fn finding(glyph: Icon, source: &str, detail: &str) -> Element {
   Row::new()

@@ -23,9 +23,16 @@ pub(super) fn inputs(ctx: &Ctx, entry: &ToolEntry) -> Element {
   let exit = Entry::new("tool-output-exit", ctx.t("tools.outputExit"))
     .hint(ctx.t_args(
       "tools.outputExitDetail",
-      [("codes", codes.join(", ")), ("timeout", command.timeout().secs().to_string())],
+      [
+        ("codes", codes.join(", ")),
+        ("timeout", command.timeout().secs().to_string()),
+      ],
     ))
-    .end(status("tool-output-exit-decides", Tone::Muted, &ctx.t("tools.outputDecides")));
+    .end(status(
+      "tool-output-exit-decides",
+      Tone::Muted,
+      &ctx.t("tools.outputDecides"),
+    ));
   let output = Entry::new("tool-output-text", ctx.t("tools.outputText"))
     .hint(ctx.t_args(
       "tools.outputTextDetail",

@@ -49,14 +49,15 @@ pub(super) fn write_error(editor: &Editor, ctx: &Ctx, pane: Column) -> Column {
   let (retry, gate) = (editor.work.clone(), editor.gate.clone());
   let candidate = editor.work.retry(&editor.fields);
   let valid = candidate.is_some();
-  let retry = ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(move || {
-    let Some(candidate) = &candidate else {
-      return;
-    };
-    if !matches!(candidate.change(), Some(Change::Publish(..))) || may_publish(gate.as_ref()) {
-      retry.run(candidate.clone());
-    }
-  });
+  let retry =
+    ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(move || {
+      let Some(candidate) = &candidate else {
+        return;
+      };
+      if !matches!(candidate.change(), Some(Change::Publish(..))) || may_publish(gate.as_ref()) {
+        retry.run(candidate.clone());
+      }
+    });
   let (title, explanation) = if editor.work.publication_failed() {
     words::publication_failure(
       ctx,
@@ -120,9 +121,13 @@ pub(super) fn reload(
     return pane;
   }
   let (work, id, fields) = (editor.work.clone(), entry.id, editor.fields.clone());
-  let reload = ActionButton::new("instruction-reload", ButtonKind::Secondary, ctx.t("instructions.reload"))
-    .icon(Icon::RotateCcw)
-    .on_click(move || work.run(Write::Reload(id, fields.snapshot())));
+  let reload = ActionButton::new(
+    "instruction-reload",
+    ButtonKind::Secondary,
+    ctx.t("instructions.reload"),
+  )
+  .icon(Icon::RotateCcw)
+  .on_click(move || work.run(Write::Reload(id, fields.snapshot())));
   pane.child(
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -136,11 +141,21 @@ pub(super) fn reload(
 }
 
 /// Discard draft, asked in place of the draft bar.
-pub(super) fn question(editor: &Editor, ctx: &mut Ctx, props: &Props, saved: Option<&InstructionEntry>) -> Option<Element> {
+pub(super) fn question(
+  editor: &Editor,
+  ctx: &mut Ctx,
+  props: &Props,
+  saved: Option<&InstructionEntry>,
+) -> Option<Element> {
   let entry = saved.filter(|_| editor.ask.get() == Ask::Discard)?;
   let published = entry.state.published().map_or(0, |v| v.get());
   let (root, id, expected) = (props.project.open.repo_root.clone(), entry.id, entry.body.clone());
-  let (keep, done, work, fields) = (editor.ask.clone(), editor.ask.clone(), editor.work.clone(), editor.fields.clone());
+  let (keep, done, work, fields) = (
+    editor.ask.clone(),
+    editor.ask.clone(),
+    editor.work.clone(),
+    editor.fields.clone(),
+  );
   Some(discard::question(
     ctx,
     discard::DiscardProps {
@@ -161,7 +176,12 @@ pub(super) fn question(editor: &Editor, ctx: &mut Ctx, props: &Props, saved: Opt
 }
 
 /// Remove, asked under the head; a removed rule leaves a *Removed* line in its group of the list.
-pub(super) fn remove_question(editor: &Editor, ctx: &mut Ctx, props: &Props, saved: Option<&InstructionEntry>) -> Option<Element> {
+pub(super) fn remove_question(
+  editor: &Editor,
+  ctx: &mut Ctx,
+  props: &Props,
+  saved: Option<&InstructionEntry>,
+) -> Option<Element> {
   let entry = saved.filter(|_| editor.ask.get() == Ask::Remove)?;
   let (keep, selection) = (editor.ask.clone(), props.selection.clone());
   let (part, name) = (PromptPart::of(entry.body.scope()), entry.name.clone());

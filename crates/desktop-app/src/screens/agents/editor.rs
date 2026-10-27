@@ -243,7 +243,11 @@ impl Editor {
       Some((section, question)) => (Some(section), Some(question)),
       None => (None, None),
     };
-    let connection_asked = if section == Some(Section::Connection) { asked.take() } else { None };
+    let connection_asked = if section == Some(Section::Connection) {
+      asked.take()
+    } else {
+      None
+    };
     // A change that wasn't saved stays in its field, which says so.
     let unsaved = self
       .save_failure()
@@ -352,7 +356,10 @@ impl Editor {
           .permissions
           .get()
           .0
-          .enforced_on(connection.provider(), orchester_core::connection::invocation::Platform::current())
+          .enforced_on(
+            connection.provider(),
+            orchester_core::connection::invocation::Platform::current(),
+          )
           .is_ok()
     })
   }
@@ -364,8 +371,16 @@ impl Editor {
     let mut actions = Vec::new();
     if entry.state.has_draft() && entry.state.published().is_some() {
       let ask = self.ask.clone();
-      let discard = ActionButton::new("agent-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
-      actions.push(if state.busy { discard.disabled() } else { discard.on_click(move || ask.set(Ask::Discard)) }.into());
+      let discard =
+        ActionButton::new("agent-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
+      actions.push(
+        if state.busy {
+          discard.disabled()
+        } else {
+          discard.on_click(move || ask.set(Ask::Discard))
+        }
+        .into(),
+      );
     }
     if entry.state.has_draft() {
       actions.push(self.publish_button(ctx, props, (state, entry)).into());
@@ -414,7 +429,12 @@ impl Editor {
     {
       return publish.disabled();
     }
-    let (pending, work, gate, allowed) = (self.pending.clone(), self.work.clone(), self.gate.clone(), self.allowed.clone());
+    let (pending, work, gate, allowed) = (
+      self.pending.clone(),
+      self.work.clone(),
+      self.gate.clone(),
+      self.allowed.clone(),
+    );
     let (entry, stale) = (entry.clone(), matches!(entry.state, VersionState::StaleDraft { .. }));
     publish.on_click(move || {
       let request = Request {
@@ -451,9 +471,15 @@ impl Editor {
     if let Err(errors) = &state.checked
       && (state.saved.is_some() || self.tried.get())
     {
-      for error in [&errors.role, &errors.instructions, &errors.connection, &errors.model, &errors.effort]
-        .into_iter()
-        .flatten()
+      for error in [
+        &errors.role,
+        &errors.instructions,
+        &errors.connection,
+        &errors.model,
+        &errors.effort,
+      ]
+      .into_iter()
+      .flatten()
       {
         notices.push(field_error("agent-validation-error", &message_text(ctx, error)).into());
       }
@@ -467,7 +493,11 @@ impl Editor {
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Sm)
           .child(field_error(
-            if state.changed_outside { "agent-outside-change" } else { "agent-save-error" },
+            if state.changed_outside {
+              "agent-outside-change"
+            } else {
+              "agent-save-error"
+            },
             &text,
           ))
           .child(

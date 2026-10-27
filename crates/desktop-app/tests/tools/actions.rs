@@ -104,10 +104,14 @@ fn tools_discard_draft_returns_to_the_published_version() {
   t.window.until("discarded", |w| {
     w.tree.tick_futures();
     w.pass();
-    w.texts("tool-draft-bar-status").is_some_and(|s| s.join(" ").contains("Published v1"))
+    w.texts("tool-draft-bar-status")
+      .is_some_and(|s| s.join(" ").contains("Published v1"))
   });
   assert!(t.db().draft::<Tool>(id).expect("draft read").is_none());
-  assert_eq!(command_text(&t.entry(id).tool).timeout, command_text(&super::harness::command()).timeout);
+  assert_eq!(
+    command_text(&t.entry(id).tool).timeout,
+    command_text(&super::harness::command()).timeout
+  );
 }
 
 #[test]
@@ -144,10 +148,16 @@ fn tools_page_tabs_show_inputs_outputs_access_and_usage() {
   t.wait_for("tool-inputs-outputs");
   assert_eq!(
     t.window.navigation().route_now(),
-    Route::Project(super::support::project_id(), ProjectPage::Tool(id, ToolTab::InputsOutputs))
+    Route::Project(
+      super::support::project_id(),
+      ProjectPage::Tool(id, ToolTab::InputsOutputs)
+    )
   );
   let shown = t.text("tool-inputs-outputs");
-  assert!(shown.contains("No inputs") && shown.contains("Exit code") && shown.contains("Output"), "{shown}");
+  assert!(
+    shown.contains("No inputs") && shown.contains("Exit code") && shown.contains("Output"),
+    "{shown}"
+  );
   t.click("tool-tab-usage_log");
   t.wait_for("tool-usage-unavailable");
   t.click("tool-tab-configuration");

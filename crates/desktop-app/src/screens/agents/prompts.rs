@@ -30,12 +30,18 @@ pub fn render(ctx: &mut Ctx, listed: &ProjectAgents, (id, role): (ResourceId, &N
   } else {
     ctx.t_args(
       "agents.promptsRole",
-      [("names", names(&prompts.role_rules)), ("role", role.as_str().to_owned())],
+      [
+        ("names", names(&prompts.role_rules)),
+        ("role", role.as_str().to_owned()),
+      ],
     )
   };
   let mut skills = Vec::new();
   if !prompts.project_skills.is_empty() {
-    skills.push(ctx.t_args("agents.promptsSkillsProject", [("names", names(&prompts.project_skills))]));
+    skills.push(ctx.t_args(
+      "agents.promptsSkillsProject",
+      [("names", names(&prompts.project_skills))],
+    ));
   }
   if !prompts.role_skills.is_empty() {
     skills.push(ctx.t_args("agents.promptsSkillsRole", [("names", names(&prompts.role_skills))]));
@@ -43,7 +49,12 @@ pub fn render(ctx: &mut Ctx, listed: &ProjectAgents, (id, role): (ResourceId, &N
   let skills: Arc<str> = if skills.is_empty() {
     none
   } else {
-    skills.iter().map(|part| part.to_string()).collect::<Vec<_>>().join("; ").into()
+    skills
+      .iter()
+      .map(|part| part.to_string())
+      .collect::<Vec<_>>()
+      .join("; ")
+      .into()
   };
   let navigation = Navigation::of(ctx);
   let project = ctx.props::<super::editor::Props>().project.open.project.id();

@@ -161,7 +161,10 @@ fn instructions_role_and_step_editors_show_their_injection_explanations() {
   );
   screen.list();
   let list = screen.text("instruction-library");
-  assert!(list.contains("Feature delivery v1") && list.contains("01 Implement"), "{list}");
+  assert!(
+    list.contains("Feature delivery v1") && list.contains("01 Implement"),
+    "{list}"
+  );
   screen.click("instruction-tab-1");
   screen.until("role editor", |s| s.exists("instruction-role"));
   assert!(

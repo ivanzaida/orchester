@@ -89,12 +89,7 @@ fn import(ctx: &Ctx, id: &str, nav: &AgentsNav) -> ActionButton {
 fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let open_connections = || {
-    navigation.to(Route::Project(
-      id,
-      ProjectPage::Connections(ConnectionsView::default()),
-    ))
-  };
+  let open_connections = || navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())));
   let name = project.open.project.name().as_str();
   let intro = Column::new()
     .id("agents-empty")
@@ -115,18 +110,19 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
       .tile(Icon::Plug)
       .hint(ctx.t("agents.noConnections"))
       .end(
-        ActionButton::new("agents-open-connections", ButtonKind::Secondary, ctx.t("agents.openConnections"))
-          .icon(Icon::ArrowUpRight)
-          .opens(open_connections()),
+        ActionButton::new(
+          "agents-open-connections",
+          ButtonKind::Secondary,
+          ctx.t("agents.openConnections"),
+        )
+        .icon(Icon::ArrowUpRight)
+        .opens(open_connections()),
       )
   } else {
-    Entry::new(
-      "agents-none",
-      ctx.t_args("agents.noProfiles", [("project", name)]),
-    )
-    .tile(Icon::Bot)
-    .hint(ctx.t("agents.firstNote"))
-    .end(new_button(ctx, "agents-empty-new", ButtonKind::Secondary, listed, nav))
+    Entry::new("agents-none", ctx.t_args("agents.noProfiles", [("project", name)]))
+      .tile(Icon::Bot)
+      .hint(ctx.t("agents.firstNote"))
+      .end(new_button(ctx, "agents-empty-new", ButtonKind::Secondary, listed, nav))
   };
   let mut pane = Column::new()
     .width(Dimension::Pct(100.0))
@@ -138,9 +134,13 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
       boxed("agents-rows", [first.into()]),
     ));
   if !listed.connections.is_empty() {
-    let link = ActionButton::new("agents-connections-open", ButtonKind::Ghost, ctx.t("agents.openConnections"))
-      .icon(Icon::ArrowUpRight)
-      .opens(open_connections());
+    let link = ActionButton::new(
+      "agents-connections-open",
+      ButtonKind::Ghost,
+      ctx.t("agents.openConnections"),
+    )
+    .icon(Icon::ArrowUpRight)
+    .opens(open_connections());
     pane = pane.child(connections(ctx, (name, listed), link));
   }
   pane
@@ -160,15 +160,18 @@ fn connections(ctx: &Ctx, (name, listed): (&str, &ProjectAgents), link: ActionBu
       Said::Muted | Said::Busy => Tone::Muted,
     };
     let provider = ctx.t(crate::screens::connections::words::provider_key(connection.provider()));
-    Entry::new(format!("agents-connection-{}", connection.id()), connection.name().as_str())
-      .tile(entries::provider_glyph(Some(connection)))
-      .hint(provider)
-      .end(status(
-        &format!("agents-connection-status-{}", connection.id()),
-        tone,
-        &ctx.t(shown.key),
-      ))
-      .into()
+    Entry::new(
+      format!("agents-connection-{}", connection.id()),
+      connection.name().as_str(),
+    )
+    .tile(entries::provider_glyph(Some(connection)))
+    .hint(provider)
+    .end(status(
+      &format!("agents-connection-status-{}", connection.id()),
+      tone,
+      &ctx.t(shown.key),
+    ))
+    .into()
   });
   group(
     "agents-connections",

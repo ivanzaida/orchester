@@ -26,7 +26,7 @@ use crate::{
   pull_request::{PullRequest, SyncAttempt, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
-    CommandEnvironment, Draft, DraftSaved, ModelId, RemoveMode, Removal, Resource, ResourceBody, ResourceKind, Slug,
+    CommandEnvironment, Draft, DraftSaved, ModelId, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug,
     Version, VersionNumber,
   },
   revision::Revision,

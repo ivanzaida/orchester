@@ -55,7 +55,11 @@ impl Kind {
     match self {
       Self::Project => ("project", "instructions.scopeProject", "instructions.scopeProjectHint"),
       Self::Role => ("role", "instructions.scopeRole", "instructions.scopeRoleHint"),
-      Self::Pipeline => ("pipeline", "instructions.scopePipeline", "instructions.scopePipelineHint"),
+      Self::Pipeline => (
+        "pipeline",
+        "instructions.scopePipeline",
+        "instructions.scopePipelineHint",
+      ),
       Self::Step => ("step", "instructions.scopeStep", "instructions.scopeStepHint"),
     }
   }
@@ -76,27 +80,16 @@ pub fn render(ctx: &mut Ctx, fields: &Fields, data: &ProjectInstructions, locked
   .into()
 }
 
-fn row(ctx: &mut Ctx, fields: &Fields, data: &ProjectInstructions, (kind, chosen, locked): (Kind, bool, bool)) -> Element {
-  let (name, title, hint) = kind.words();
-  let scope = fields.scope.clone();
-  let toggle = Toggle::new(format!("instruction-scope-{name}"), ToggleKind::Radio, chosen, ctx.t(title)).hide_label();
-  let toggle = if locked {
-    toggle
-  } else {
-    toggle.on_change(move |_| {
-      if Kind::of(&scope.get_untracked()) != kind {
-        scope.set(kind.empty());
-      }
-    })
-  };
-  let select = match kind {
+/// Which role, pipeline or step the scope means; the project needs no choice.
+fn options(ctx: &Ctx, data: &ProjectInstructions, kind: Kind) -> Option<Vec<SelectOption<ScopeChoice>>> {
+  match kind {
     Kind::Project => None,
     Kind::Role => Some(
       data
         .roles()
         .into_iter()
         .map(|role| SelectOption::new(ScopeChoice::AgentRole(Some(role.clone())), role.as_str()))
-        .collect::<Vec<_>>(),
+        .collect(),
     ),
     Kind::Pipeline => Some(
       data
@@ -109,9 +102,7 @@ fn row(ctx: &mut Ctx, fields: &Fields, data: &ProjectInstructions, (kind, chosen
       data
         .pipelines
         .iter()
-        .flat_map(|p| {
-          p.steps.iter().map(move |s| (p, s))
-        })
+        .flat_map(|p| p.steps.iter().map(move |s| (p, s)))
         .map(|(p, s)| {
           let step = ctx.t_args(
             "instructions.stepLabel",
@@ -119,13 +110,42 @@ fn row(ctx: &mut Ctx, fields: &Fields, data: &ProjectInstructions, (kind, chosen
           );
           SelectOption::new(
             ScopeChoice::Step(Some(p.id), Some(s.key.clone())),
-            ctx.t_args("instructions.scopeStepOption", [("pipeline", p.name.to_string()), ("step", step.to_string())]),
+            ctx.t_args(
+              "instructions.scopeStepOption",
+              [("pipeline", p.name.to_string()), ("step", step.to_string())],
+            ),
           )
         })
         .collect(),
     ),
+  }
+}
+
+fn row(
+  ctx: &mut Ctx,
+  fields: &Fields,
+  data: &ProjectInstructions,
+  (kind, chosen, locked): (Kind, bool, bool),
+) -> Element {
+  let (name, title, hint) = kind.words();
+  let scope = fields.scope.clone();
+  let toggle = Toggle::new(
+    format!("instruction-scope-{name}"),
+    ToggleKind::Radio,
+    chosen,
+    ctx.t(title),
+  )
+  .hide_label();
+  let toggle = if locked {
+    toggle
+  } else {
+    toggle.on_change(move |_| {
+      if Kind::of(&scope.get_untracked()) != kind {
+        scope.set(kind.empty());
+      }
+    })
   };
-  let select = select.map(|options| {
+  let select = options(ctx, data, kind).map(|options| {
     let field = SelectField::new(
       format!("instruction-scope-{name}-select"),
       ctx.t(title),

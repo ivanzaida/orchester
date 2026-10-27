@@ -96,7 +96,10 @@ impl Component for FolderList {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let permissions = props.fields.permissions.get().0;
-    let mut chips = Row::new().width(Dimension::Pct(100.0)).wrap().spacing(ExtraSpacing::Snug.role());
+    let mut chips = Row::new()
+      .width(Dimension::Pct(100.0))
+      .wrap()
+      .spacing(ExtraSpacing::Snug.role());
     for (index, entry) in permissions.writable_folders().entries().iter().enumerate() {
       let (entry, signal) = (entry.clone(), props.fields.permissions.clone());
       chips = chips.child(

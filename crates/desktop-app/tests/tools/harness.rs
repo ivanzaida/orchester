@@ -112,13 +112,15 @@ impl Tools {
     self.window.until("program check", |w| {
       w.tree.tick_futures();
       w.pass();
-      w.texts("tool-program-note").is_some_and(|t| t.join(" ").contains(words))
+      w.texts("tool-program-note")
+        .is_some_and(|t| t.join(" ").contains(words))
     });
   }
   pub fn wait_state(&mut self, state: &str) {
     self.window.until("editor state", |w| {
       w.tree.tick_futures();
-      w.texts("tool-draft-bar-status").is_some_and(|t| t.join(" ").contains(state))
+      w.texts("tool-draft-bar-status")
+        .is_some_and(|t| t.join(" ").contains(state))
     });
   }
   pub fn wait_for(&mut self, id: &str) {

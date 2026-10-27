@@ -34,7 +34,11 @@ pub(crate) fn crumb(id: &str, (list, back): (&str, Open), here: Option<&str>) ->
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(back)
-    .with_children(here.map(|here| Text::new(here).variant(HubText::Crumb.role()).color(PaletteColor::TextSecondary)))
+    .with_children(here.map(|here| {
+      Text::new(here)
+        .variant(HubText::Crumb.role())
+        .color(PaletteColor::TextSecondary)
+    }))
     .into()
 }
 
@@ -79,7 +83,11 @@ pub(crate) fn head(ctx: &mut Ctx, id: &str, (glyph, title, sub): (Icon, &str, &s
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Fine.role())
-        .child(Text::new(title).id(format!("{id}-title")).variant(HubText::PageTitle.role()))
+        .child(
+          Text::new(title)
+            .id(format!("{id}-title"))
+            .variant(HubText::PageTitle.role()),
+        )
         .child(Text::new(sub).id(format!("{id}-sub")).variant(HubText::Hint.role())),
     )
     .with_children(menu)

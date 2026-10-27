@@ -4,8 +4,7 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    Draft, DraftSaved, RemoveMode, Removal, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
-    publish,
+    Draft, DraftSaved, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber, publish,
   },
   store::ResourceStore,
   time::Timestamp,

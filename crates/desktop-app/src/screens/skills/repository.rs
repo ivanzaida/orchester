@@ -263,8 +263,12 @@ impl Component for Found {
       })
     };
     // `Off ●` at the row's end (03): the setting's state in words, then its switch.
-    let state = hub_parts::quiet(&ctx.t(if on { "skills.repositoryStateOn" } else { "skills.repositoryStateOff" }))
-      .id("skill-repository-files-state");
+    let state = hub_parts::quiet(&ctx.t(if on {
+      "skills.repositoryStateOn"
+    } else {
+      "skills.repositoryStateOff"
+    }))
+    .id("skill-repository-files-state");
     let control = Row::new()
       .spacing(SpacingSize::Sm)
       .align_items(lurq::layout::Alignment::Center)
@@ -288,7 +292,12 @@ impl Component for Found {
     let count = ctx.t_args("skills.repositoryCount", [("count", items.len().to_string())]);
     let mut panel = hub_parts::group(
       "skills-repository-settings",
-      hub_parts::head("skills-repository-settings", &ctx.t("skills.repositoryTitle"), Some(&count), None),
+      hub_parts::head(
+        "skills-repository-settings",
+        &ctx.t("skills.repositoryTitle"),
+        Some(&count),
+        None,
+      ),
       hub_parts::boxed("skills-repository-rows", [files.into(), import.into()]),
     );
     if self.asking.get() {

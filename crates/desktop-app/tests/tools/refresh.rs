@@ -44,7 +44,11 @@ fn tools_refresh_failure_and_retry_preserve_unsaved_fields() {
     w.tree.get_element_by_id("tools-load-error").is_none() && w.tree.get_element_by_id("tool-changed").is_some()
   });
   assert_fields(&mut t, &local);
-  assert_eq!(command_text(&t.entry(id).tool).description, "Saved elsewhere", "nothing saves over it");
+  assert_eq!(
+    command_text(&t.entry(id).tool).description,
+    "Saved elsewhere",
+    "nothing saves over it"
+  );
   t.click("tool-reload");
   t.window.until("explicit reload replaces the local values", |w| {
     w.tree.get_element_by_id("tool-editor").is_some() && w.tree.get_element_by_id("tool-changed").is_none()

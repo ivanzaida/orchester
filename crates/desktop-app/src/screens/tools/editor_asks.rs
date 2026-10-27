@@ -114,7 +114,8 @@ impl ToolEditor {
       ctx.t_args("tools.publish", [("version", v.get().to_string())])
     });
     let publish = ActionButton::new("tool-publish", ButtonKind::Primary, label).icon(Icon::Upload);
-    let edit = (publish_reason(ctx, Some(&entry), unchanged).is_none() && !outside).then(|| Edit::Publish(entry.clone()));
+    let edit =
+      (publish_reason(ctx, Some(&entry), unchanged).is_none() && !outside).then(|| Edit::Publish(entry.clone()));
     let button = self.action_button(p, publish, edit);
     actions.push(match publish_reason(ctx, Some(&entry), unchanged) {
       Some(reason) if !busy => button.unavailable_with_icon(reason).into(),
@@ -154,7 +155,13 @@ impl ToolEditor {
     self.question(ctx, "tool-widen", (edit, reasons), self.asking.clone())
   }
 
-  fn question(&self, ctx: &mut Ctx, id: &str, (edit, reasons): (Edit, Vec<Message>), asking: Signal<Asking>) -> Element {
+  fn question(
+    &self,
+    ctx: &mut Ctx,
+    id: &str,
+    (edit, reasons): (Edit, Vec<Message>),
+    asking: Signal<Asking>,
+  ) -> Element {
     let mut words: Vec<Arc<str>> = reasons.iter().map(|r| message_text(ctx, r)).collect();
     words.push(ctx.t("tools.execution"));
     let starter = self.starter(&ctx.props::<EditorProps>().clone());
@@ -211,7 +218,9 @@ impl ToolEditor {
     let start = self.action_button(p, start, enabled.then(|| Edit::StartLatest(entry.clone())));
     let keep = self.action_button(p, keep, enabled.then(|| Edit::KeepDraft(entry.clone())));
     let baseline = based_on.map_or(ctx.t("tools.noBaseline").to_string(), |v| {
-      ctx.t_args("tools.compactVersion", [("version", v.get().to_string())]).to_string()
+      ctx
+        .t_args("tools.compactVersion", [("version", v.get().to_string())])
+        .to_string()
     });
     Some(
       Notice::new("tool-stale", NoticeTone::Warning, ctx.t("tools.staleTitle"))

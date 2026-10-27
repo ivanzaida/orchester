@@ -28,10 +28,19 @@ use crate::{
 
 pub(super) fn section(ctx: &Ctx, failure: &Failure) -> Element {
   let retry = failure.retry.clone().map(|retry| {
-    let button = ActionButton::new(format!("{}-retry", failure.id), ButtonKind::Ghost, ctx.t("ui.failure.tryAgain"))
-      .icon(Icon::RefreshCw);
+    let button = ActionButton::new(
+      format!("{}-retry", failure.id),
+      ButtonKind::Ghost,
+      ctx.t("ui.failure.tryAgain"),
+    )
+    .icon(Icon::RefreshCw);
     if failure.retrying {
-      ActionButton::new(format!("{}-retry", failure.id), ButtonKind::Ghost, ctx.t("ui.failure.tryingAgain")).loading()
+      ActionButton::new(
+        format!("{}-retry", failure.id),
+        ButtonKind::Ghost,
+        ctx.t("ui.failure.tryingAgain"),
+      )
+      .loading()
     } else {
       button.on_click(move || retry())
     }
@@ -76,7 +85,10 @@ fn line(id: &str, glyph: Option<Icon>, (title, hint): (Text, Arc<str>), end: Opt
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(FailureSpacing::Parts.role(), FailureSpacing::DetailY.role()))
+    .padding(Padding::symmetric(
+      FailureSpacing::Parts.role(),
+      FailureSpacing::DetailY.role(),
+    ))
     .spacing(FailureSpacing::Gap.role())
     .align_items(Alignment::Center)
     .with_children(glyph.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::Danger)))

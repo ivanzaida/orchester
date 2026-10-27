@@ -18,7 +18,9 @@ fn hub_tabs_open_each_tab_on_its_own_route() {
   for (tab, page) in tabs {
     screen.click(&format!("agents-hub-tab-{tab}"));
     let route = Route::Project(project_id(), page);
-    screen.until(tab, |s| s.window.navigation().route_now() == route && s.exists("agents-hub-title"));
+    screen.until(tab, |s| {
+      s.window.navigation().route_now() == route && s.exists("agents-hub-title")
+    });
     assert_eq!(screen.text("agents-hub-title"), "Agents");
   }
 }

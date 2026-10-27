@@ -1,5 +1,5 @@
-//! What shows where a read or a save failed (`Failure states · redesign` `SsC16`). The failure replaces only what failed;
-//! the header, the tabs, the sidebar and what was read keep working:
+//! What shows where a read or a save failed (`Failure states · redesign` `SsC16`). The failure replaces only what
+//! failed; the header, the tabs, the sidebar and what was read keep working:
 //!
 //! - a page that can't be read: a card on `surface_panel` in a `border` stroke, its icon `danger` on `danger_muted` and
 //!   no other danger, saying what couldn't be read, why in plain words and what still works, with Try again, Open log
@@ -9,8 +9,8 @@
 //! - an item that can't be read: its row keeps its place and its name ([`Failure::row`]);
 //! - a change that wasn't saved: the header's save status names it ([`not_saved`]) and the field keeps the value with a
 //!   `danger` stroke and a hint ([`field_hint`]);
-//! - a wait on something that comes back (the database busy): information, not an error, and it tries again on its
-//!   own ([`is_transient`]).
+//! - a wait on something that comes back (the database busy): information, not an error, and it tries again on its own
+//!   ([`is_transient`]).
 //!
 //! Its words are `ui.failure.*`; the why comes from the workspace's typed [`Message`].
 
@@ -175,7 +175,9 @@ pub fn why(ctx: &Ctx, error: &Message) -> Arc<str> {
   match failure_kind(error) {
     FailureKind::Storage => ctx.t("ui.failure.why.storage"),
     FailureKind::Interrupted => ctx.t("ui.failure.why.interrupted"),
-    FailureKind::Busy | FailureKind::Other => ctx.t_args("ui.failure.why.other", [("reason", message_text(ctx, error))]),
+    FailureKind::Busy | FailureKind::Other => {
+      ctx.t_args("ui.failure.why.other", [("reason", message_text(ctx, error))])
+    }
   }
 }
 

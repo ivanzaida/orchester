@@ -47,7 +47,10 @@ impl Editor {
         match &e.origin {
           Some(origin) => ctx.t_args(
             "skills.pageSubImported",
-            [("scope", scope.to_string()), ("source", origin.source.as_str().to_owned())],
+            [
+              ("scope", scope.to_string()),
+              ("source", origin.source.as_str().to_owned()),
+            ],
           ),
           None => scope,
         }
@@ -84,7 +87,8 @@ impl Editor {
     let discards = entry.filter(|e| e.state.has_draft() && e.state.published().is_some());
     if discards.is_some() {
       let ask = self.ask.clone();
-      let discard = ActionButton::new("skill-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
+      let discard =
+        ActionButton::new("skill-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
       bar = bar.action(if busy || dirty {
         discard.disabled()
       } else {
@@ -94,7 +98,13 @@ impl Editor {
     bar.action(self.primary_action(ctx, p, entry, (dirty, busy))).into()
   }
 
-  fn primary_action(&self, ctx: &Ctx, p: &Props, entry: Option<&SkillEntry>, (dirty, busy): (bool, bool)) -> ActionButton {
+  fn primary_action(
+    &self,
+    ctx: &Ctx,
+    p: &Props,
+    entry: Option<&SkillEntry>,
+    (dirty, busy): (bool, bool),
+  ) -> ActionButton {
     if let Some(entry) = entry {
       let asking = self.asking.clone();
       let button = ActionButton::new(

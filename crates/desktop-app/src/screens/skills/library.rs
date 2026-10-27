@@ -58,9 +58,11 @@ impl Component for Library {
         pane = pane.child(scope_group(ctx, &p, filter, &of_scope));
       }
     }
-    pane = pane
-      .child(repository::found(ctx, &p))
-      .child(note("skills-versions-note", Icon::History, &ctx.t("skills.versionsNote")));
+    pane = pane.child(repository::found(ctx, &p)).child(note(
+      "skills-versions-note",
+      Icon::History,
+      &ctx.t("skills.versionsNote"),
+    ));
     hub::list_body("skills-list", pane)
   }
 }
@@ -117,7 +119,11 @@ fn row(ctx: &Ctx, p: &PageProps, entry: &SkillEntry) -> Element {
   Entry::new(format!("skill-row-{}", entry.id), entry.name.clone())
     .tile(Icon::GraduationCap)
     .hint(hint)
-    .end(status(&format!("skill-version-{}", entry.id), tone, &words::version(ctx, entry.state)))
+    .end(status(
+      &format!("skill-version-{}", entry.id),
+      tone,
+      &words::version(ctx, entry.state),
+    ))
     .press(Press::Open(p.view.panel.to(Panel::Edit(entry.id))))
     .into()
 }

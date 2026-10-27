@@ -8,7 +8,7 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, RemoveMode, Removal, RepositoryAccess,
+    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, Removal, RemoveMode, RepositoryAccess,
     ResourceKind, Slug, Step, StepKey, StepKind, StepVersion,
   },
   store::ResourceStore,
@@ -65,14 +65,28 @@ impl Fixture {
   fn new() -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
-    let project = Project::new(ProjectId::generate(), ProjectKey::new("ORC").expect("valid key"), name("Kontur"));
+    let project = Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("ORC").expect("valid key"),
+      name("Kontur"),
+    );
     let mut db = ProjectDb::create(repo.path(), project).expect("create project");
     let builder = db
-      .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile(""), at(1))
+      .create_resource(
+        Slug::new("builder").expect("slug"),
+        name("Builder"),
+        &profile(""),
+        at(1),
+      )
       .expect("create profile")
       .id();
-    db.publish_draft::<AgentProfile>(builder, at(2)).expect("publish profile");
-    Self { _repo: repo, db, builder }
+    db.publish_draft::<AgentProfile>(builder, at(2))
+      .expect("publish profile");
+    Self {
+      _repo: repo,
+      db,
+      builder,
+    }
   }
 
   /// A published Delivery pipeline whose implement step runs Builder.
@@ -83,7 +97,10 @@ impl Fixture {
       .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(3))
       .expect("create pipeline")
       .id();
-    self.db.publish_draft::<Pipeline>(delivery, at(4)).expect("publish pipeline");
+    self
+      .db
+      .publish_draft::<Pipeline>(delivery, at(4))
+      .expect("publish pipeline");
     delivery
   }
 
@@ -107,7 +124,10 @@ fn removals_an_unused_profile_goes_and_keeps_its_slug() {
   assert_eq!(removal, Removal::Removed);
   assert!(!fixture.listed(), "a removed profile is not listed");
   let slugs = fixture.db.slugs(ResourceKind::AgentProfile).expect("slugs");
-  assert!(slugs.iter().any(|slug| slug.as_str() == "builder"), "its slug stays taken");
+  assert!(
+    slugs.iter().any(|slug| slug.as_str() == "builder"),
+    "its slug stays taken"
+  );
 }
 
 #[test]
@@ -153,7 +173,11 @@ fn removals_remove_and_reset_clears_the_profile_from_its_steps() {
 fn removals_discard_draft_returns_to_the_published_version() {
   let mut fixture = Fixture::new();
   let changed = profile("A draft to throw away");
-  let draft = Draft::new(changed.clone(), Some(orchester_core::resource::VersionNumber::FIRST), at(5));
+  let draft = Draft::new(
+    changed.clone(),
+    Some(orchester_core::resource::VersionNumber::FIRST),
+    at(5),
+  );
   fixture.db.save_draft(fixture.builder, &draft).expect("save draft");
   let other = profile("Not the draft the editor read");
   let refused = fixture.db.discard_draft_matching(fixture.builder, &other);
@@ -163,7 +187,13 @@ fn removals_discard_draft_returns_to_the_published_version() {
     .discard_draft_matching(fixture.builder, &changed)
     .expect("discard");
   assert_eq!(version.get(), 1);
-  assert!(fixture.db.draft::<AgentProfile>(fixture.builder).expect("draft").is_none());
+  assert!(
+    fixture
+      .db
+      .draft::<AgentProfile>(fixture.builder)
+      .expect("draft")
+      .is_none()
+  );
 }
 
 #[test]

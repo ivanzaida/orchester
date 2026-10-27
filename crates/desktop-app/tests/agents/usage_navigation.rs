@@ -129,7 +129,10 @@ fn agents_used_link_waits_until_the_edit_is_saved() {
   );
   // The link opens once the page has read the saved profile again.
   screen.press_until("agent-use-open-1", "the pipeline opens", |s| {
-    matches!(s.window.navigation().route_now(), Route::Project(_, ProjectPage::Pipeline(..)))
+    matches!(
+      s.window.navigation().route_now(),
+      Route::Project(_, ProjectPage::Pipeline(..))
+    )
   });
   current_pipeline(&mut screen, pipeline);
 }

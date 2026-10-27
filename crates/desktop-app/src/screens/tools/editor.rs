@@ -211,7 +211,13 @@ impl Component for ToolEditor {
     pane = pane
       .with_children(self.failure(ctx))
       .child(head::tabs(ctx, &p))
-      .child(self.body(ctx, &p, &errors, (busy || self.asking.get().0.is_some(), read_only), widening));
+      .child(self.body(
+        ctx,
+        &p,
+        &errors,
+        (busy || self.asking.get().0.is_some(), read_only),
+        widening,
+      ));
     hub::item_body("tool-page", pane, Some(inspector::inspector(ctx, &p).into()))
   }
 }
@@ -224,7 +230,9 @@ impl ToolEditor {
     let Some(entry) = p.entry.as_ref().filter(|entry| Some(*entry) != baseline.as_ref()) else {
       return;
     };
-    let ours = baseline.as_ref().is_some_and(|b| b.id == entry.id && b.tool == entry.tool)
+    let ours = baseline
+      .as_ref()
+      .is_some_and(|b| b.id == entry.id && b.tool == entry.tool)
       || self.sent.get_untracked().0.as_ref() == Some(&entry.tool);
     if ours && !self.busy.get_untracked() {
       self.baseline.set(Baseline(Some(entry.clone())));

@@ -7,7 +7,7 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    AgentProfile, InstructionScope, Pipeline, RemoveMode, Removal, ResourceBody, ResourceKind, Skill, StepUser,
+    AgentProfile, InstructionScope, Pipeline, Removal, RemoveMode, ResourceBody, ResourceKind, Skill, StepUser,
     VersionNumber, step_users,
   },
   store::ResourceStore,
@@ -42,9 +42,15 @@ impl Users {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reached {
   /// A profile, through the project scope or its role.
-  Profile { name: Arc<str>, by_role: bool },
+  Profile {
+    name: Arc<str>,
+    by_role: bool,
+  },
   Pipeline(Arc<str>),
-  Step { pipeline: Arc<str>, step: Arc<str> },
+  Step {
+    pipeline: Arc<str>,
+    step: Arc<str>,
+  },
 }
 
 /// Who resource `id` of `kind` reaches now: what the in-place question of Remove lists. Instructions reach agents by
@@ -110,7 +116,9 @@ fn skill_reach(db: &ProjectDb, id: ResourceId) -> Result<Vec<Reached>, StoreErro
       };
       let body = match db.draft::<Pipeline>(*pipeline)? {
         Some(draft) => Some(draft.body().clone()),
-        None => db.latest_version::<Pipeline>(*pipeline)?.map(|version| version.body().clone()),
+        None => db
+          .latest_version::<Pipeline>(*pipeline)?
+          .map(|version| version.body().clone()),
       };
       Ok(
         body

@@ -211,7 +211,10 @@ impl Editor {
         "skill-reload-question",
         Weight::Loses,
         (ctx.t("skills.reloadQuestion"), ctx.t("skills.reloadDetail")),
-        ((Icon::RotateCcw, ctx.t("skills.reloadSaved")), ctx.t("skills.keepEditing")),
+        (
+          (Icon::RotateCcw, ctx.t("skills.reloadSaved")),
+          ctx.t("skills.keepEditing"),
+        ),
       )
       .button_ids("skill-reload-confirm", "skill-reload-keep")
       .on_confirm(held, move || {

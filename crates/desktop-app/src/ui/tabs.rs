@@ -202,7 +202,11 @@ fn counted_label(id: &str, label: Text, (badge, count): (Option<usize>, Option<(
         Text::new(&count.to_string())
           .id(format!("{id}-count"))
           .variant(TypographyStyle::Description)
-          .color(if waits { PaletteColor::Warning } else { PaletteColor::TextMuted })
+          .color(if waits {
+            PaletteColor::Warning
+          } else {
+            PaletteColor::TextMuted
+          })
           .nowrap(),
       )
       .into(),

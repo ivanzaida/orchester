@@ -33,7 +33,7 @@ pub use self::{
     WithoutCommits, changes, feature_delivery, takes_base_moves, takes_base_moves_by_default, weaker_than,
   },
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
-  removal::{RemoveMode, Removal, StepUser, StepVersion, pipeline_step_users, step_users},
+  removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,

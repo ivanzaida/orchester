@@ -91,7 +91,10 @@ fn content(
   let pane = pane
     .child(tabs::strip(ctx, state.project_id, (&memory, view.order), view.tab))
     .child(body(ctx, state, (project, &memory), view));
-  hub::list_body("memory-main", Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane))
+  hub::list_body(
+    "memory-main",
+    Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane),
+  )
 }
 
 /// *New record*, which opens its editor on the Active tab (`f3mwij`).

@@ -30,9 +30,7 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
   .expect("saved private draft");
   let before = screen.entry(id);
   screen.go();
-  screen.until("saved draft", |s| {
-    s.text("instruction-save-status").contains("· saved")
-  });
+  screen.until("saved draft", |s| s.text("instruction-save-status").contains("· saved"));
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("private db");
   db.execute_batch(
     "CREATE TRIGGER private_publish_failure BEFORE INSERT ON resource_versions BEGIN SELECT RAISE(FAIL, 'private publication failure'); END;"
@@ -64,7 +62,10 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
   let retry = bounds(&mut screen, "instruction-retry");
   close(notice.x, bar.x);
   close(notice.width, bar.width);
-  assert!(notice.y >= bar.y + bar.height, "under the draft bar: {notice:?} / {bar:?}");
+  assert!(
+    notice.y >= bar.y + bar.height,
+    "under the draft bar: {notice:?} / {bar:?}"
+  );
   close(glyph.x - notice.x, 14.0);
   close(glyph.y - notice.y, 12.0);
   close(title.x - glyph.x - glyph.width, 10.0);

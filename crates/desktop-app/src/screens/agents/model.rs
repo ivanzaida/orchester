@@ -68,7 +68,13 @@ pub(super) fn role(ctx: &mut Ctx, fields: &Fields, unsaved: Option<(&AgentProfil
   )
   .render(ctx);
   let rows = [
-    field("agent-role", &ctx.t("agents.role"), Some(&ctx.t("agents.roleHint")), name).into(),
+    field(
+      "agent-role",
+      &ctx.t("agents.role"),
+      Some(&ctx.t("agents.roleHint")),
+      name,
+    )
+    .into(),
     field(
       "agent-responsibility",
       &ctx.t("agents.responsibility"),
@@ -99,7 +105,12 @@ fn with_hint(input: FieldInput, hint: Option<Arc<str>>) -> FieldInput {
   }
 }
 
-pub(super) fn connection_model(ctx: &mut Ctx, fields: &Fields, listed: &ProjectAgents, asked: Option<Element>) -> Element {
+pub(super) fn connection_model(
+  ctx: &mut Ctx,
+  fields: &Fields,
+  listed: &ProjectAgents,
+  asked: Option<Element>,
+) -> Element {
   let connection = fields.connection(listed);
   let on_provider = connection.is_some_and(|c| c.api_provider().is_some());
   let (model_hint, effort_hint) = if on_provider {
@@ -111,7 +122,11 @@ pub(super) fn connection_model(ctx: &mut Ctx, fields: &Fields, listed: &ProjectA
   let readings = crate::services::plan_limits::account_readings(ctx);
   let detail = connection.map(|c| words::connection_choice(ctx, c, (&accounts, &readings)).0);
   let fallback = ctx.t("agents.connectionHint");
-  let hint = detail.as_deref().filter(|d| !d.is_empty()).unwrap_or(&fallback).to_owned();
+  let hint = detail
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .unwrap_or(&fallback)
+    .to_owned();
   let select = connection_select(ctx, fields, listed, (&accounts, &readings));
   let mut rows = vec![
     field("agent-connection", &ctx.t("agents.connection"), Some(&hint), select).into(),
@@ -128,10 +143,26 @@ pub(super) fn connection_model(ctx: &mut Ctx, fields: &Fields, listed: &ProjectA
       .mono()
       .width(Dimension::Px(CONTROL_WIDTH))
       .render(ctx);
-    rows.push(field("agent-custom-model", &ctx.t("agents.customModel"), Some(&ctx.t("agents.otherModelHint")), custom).into());
+    rows.push(
+      field(
+        "agent-custom-model",
+        &ctx.t("agents.customModel"),
+        Some(&ctx.t("agents.otherModelHint")),
+        custom,
+      )
+      .into(),
+    );
   }
   if let Some(effort) = effort_field(ctx, fields, connection) {
-    rows.push(field("agent-effort", &ctx.t("agents.effort"), Some(&ctx.t(effort_hint)), effort).into());
+    rows.push(
+      field(
+        "agent-effort",
+        &ctx.t("agents.effort"),
+        Some(&ctx.t(effort_hint)),
+        effort,
+      )
+      .into(),
+    );
   }
   rows.extend(asked);
   Column::new()
@@ -144,13 +175,18 @@ pub(super) fn connection_model(ctx: &mut Ctx, fields: &Fields, listed: &ProjectA
       boxed("agent-model-rows", rows),
     ))
     .with_children(too_old(ctx, fields, connection))
-    .with_children(
-      fields
-        .changed_connection
-        .get()
-        .then(|| note("agent-connection-reset", Icon::RotateCcw, &ctx.t("agents.connectionReset"))),
-    )
-    .child(note("agent-assignment-note", Icon::Info, &ctx.t("agents.assignmentNote")))
+    .with_children(fields.changed_connection.get().then(|| {
+      note(
+        "agent-connection-reset",
+        Icon::RotateCcw,
+        &ctx.t("agents.connectionReset"),
+      )
+    }))
+    .child(note(
+      "agent-assignment-note",
+      Icon::Info,
+      &ctx.t("agents.assignmentNote"),
+    ))
     .into()
 }
 
@@ -159,7 +195,10 @@ fn connection_select(
   ctx: &mut Ctx,
   fields: &Fields,
   listed: &ProjectAgents,
-  read: (&crate::services::accounts::Accounts, &orchester_core::connection::plan_limits::PlanReadings),
+  read: (
+    &crate::services::accounts::Accounts,
+    &orchester_core::connection::plan_limits::PlanReadings,
+  ),
 ) -> Element {
   let choices = listed
     .connections
@@ -322,12 +361,16 @@ fn too_old(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnection>)
         .on_click(move || open.set(true)),
     )
     .action(
-      ActionButton::new("agent-open-connection", ButtonKind::Primary, ctx.t("agents.openConnection"))
-        .icon(Icon::Plug)
-        .opens(nav.to(Route::Project(
-          project,
-          ProjectPage::Connections(ConnectionsView::default().with_selected(connection.id())),
-        ))),
+      ActionButton::new(
+        "agent-open-connection",
+        ButtonKind::Primary,
+        ctx.t("agents.openConnection"),
+      )
+      .icon(Icon::Plug)
+      .opens(nav.to(Route::Project(
+        project,
+        ProjectPage::Connections(ConnectionsView::default().with_selected(connection.id())),
+      ))),
     )
     .into(),
   )

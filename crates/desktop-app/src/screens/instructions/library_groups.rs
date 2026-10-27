@@ -18,9 +18,15 @@ pub(super) struct Group {
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Line {
   /// A role's or a pipeline's head, with how many rules it has.
-  Head { label: Arc<str>, count: usize, overrides: bool },
+  Head {
+    label: Arc<str>,
+    count: usize,
+    overrides: bool,
+  },
   /// A numbered step of a pipeline, with its role.
-  Step { label: Arc<str> },
+  Step {
+    label: Arc<str>,
+  },
   Rule(InstructionEntry),
   /// A rule whose pipeline or step was deleted.
   Orphan(InstructionEntry),
@@ -35,7 +41,12 @@ pub(super) fn groups(
   entries: &[InstructionEntry],
   removed: &[(PromptPart, Arc<str>)],
 ) -> Vec<Group> {
-  let mut parts = [PromptPart::Step, PromptPart::Pipeline, PromptPart::ProjectRules, PromptPart::AgentRole];
+  let mut parts = [
+    PromptPart::Step,
+    PromptPart::Pipeline,
+    PromptPart::ProjectRules,
+    PromptPart::AgentRole,
+  ];
   // The order is core's: a prompt assembles its parts in `PromptPart`'s order.
   parts.sort();
   parts
@@ -117,7 +128,9 @@ fn pipelines(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]
   rows.extend(
     entries
       .iter()
-      .filter(|e| matches!(e.body.scope(), InstructionScope::Pipeline { pipeline } if data.pipeline(*pipeline).is_none()))
+      .filter(
+        |e| matches!(e.body.scope(), InstructionScope::Pipeline { pipeline } if data.pipeline(*pipeline).is_none()),
+      )
       .cloned()
       .map(Line::Orphan),
   );
@@ -157,7 +170,10 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
             ("role", role.to_string()),
           ],
         ),
-        None => ctx.t_args("instructions.stepLabel", [("number", number), ("name", step.name.to_string())]),
+        None => ctx.t_args(
+          "instructions.stepLabel",
+          [("number", number), ("name", step.name.to_string())],
+        ),
       };
       rows.push(Line::Step { label });
       rows.extend(of_step.into_iter().map(|entry| Line::Rule((*entry).clone())));
@@ -173,7 +189,9 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
   rows.extend(
     entries
       .iter()
-      .filter(|e| matches!(e.body.scope(), InstructionScope::Step { pipeline, .. } if data.pipeline(*pipeline).is_none()))
+      .filter(
+        |e| matches!(e.body.scope(), InstructionScope::Step { pipeline, .. } if data.pipeline(*pipeline).is_none()),
+      )
       .cloned()
       .map(Line::Orphan),
   );

@@ -66,7 +66,10 @@ impl Component for CommandList {
     let CommandPermission::Allowed(list) = fields.permissions.get().0.commands().clone() else {
       return Column::new();
     };
-    let mut chips = Row::new().width(Dimension::Pct(100.0)).wrap().spacing(ExtraSpacing::Snug.role());
+    let mut chips = Row::new()
+      .width(Dimension::Pct(100.0))
+      .wrap()
+      .spacing(ExtraSpacing::Snug.role());
     for (index, command) in list.entries().iter().enumerate() {
       let (command, signal) = (command.clone(), fields.permissions.clone());
       chips = chips.child(

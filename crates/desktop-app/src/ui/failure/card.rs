@@ -1,11 +1,11 @@
 //! A page that can't be read (`Failure` `yT8TV` in `01` `urbxm`, its details `QkFmK` in `01b` `K76n04`): on
-//! `surface_panel` in a `border` stroke, radius 12, 18 over and under and 20 at its sides, its parts 14 apart. Its top is
-//! a 28 round `danger_muted` tile with a 15 `danger` circle-alert, 12 from what couldn't be read in 14/600, why in
+//! `surface_panel` in a `border` stroke, radius 12, 18 over and under and 20 at its sides, its parts 14 apart. Its top
+//! is a 28 round `danger_muted` tile with a 15 `danger` circle-alert, 12 from what couldn't be read in 14/600, why in
 //! 12.5/1.45 `text_secondary` and what still works in 12/1.45 `text_muted`, 4 apart. Its actions and details are 40 in,
 //! past the tile: Try again (secondary, *Trying again…* with the loader while it reads), Open log (ghost) and *Details*
 //! with its chevron at the end; the details are the error's kind and message in Geist Mono 11.5 on `code_bg` in a
-//! `border` stroke, then how many tries and when the last was beside Copy details. After [`STILL_AFTER`] failed tries it
-//! says *Still can't be read* and leads with Open log. A wait on something that comes back is an information notice
+//! `border` stroke, then how many tries and when the last was beside Copy details. After [`STILL_AFTER`] failed tries
+//! it says *Still can't be read* and leads with Open log. A wait on something that comes back is an information notice
 //! that tries again on its own.
 
 use std::{
@@ -92,12 +92,20 @@ impl Component for PageFailure {
       return self.transient(ctx, &failure, tries);
     }
     let still = tries >= STILL_AFTER;
-    let title = if still { ctx.t("ui.failure.still") } else { failure.what.clone() };
+    let title = if still {
+      ctx.t("ui.failure.still")
+    } else {
+      failure.what.clone()
+    };
     let text = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(SpacingSize::Xs)
-      .child(Text::new(&title).id(format!("{}-title", failure.id)).variant(FailureText::Title.role()))
+      .child(
+        Text::new(&title)
+          .id(format!("{}-title", failure.id))
+          .variant(FailureText::Title.role()),
+      )
       .child(
         Text::new(&why(ctx, &failure.error))
           .id(format!("{}-why", failure.id))
@@ -122,7 +130,10 @@ impl Component for PageFailure {
       .describe("state", if still { "still-failing" } else { "failed" })
       .describe("tries", tries.to_string())
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(FailureSpacing::CardX.role(), FailureSpacing::CardY.role()))
+      .padding(Padding::symmetric(
+        FailureSpacing::CardX.role(),
+        FailureSpacing::CardY.role(),
+      ))
       .spacing(FailureSpacing::Parts.role())
       .background(PaletteColor::SurfacePanel)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
@@ -142,10 +153,19 @@ impl PageFailure {
       (ButtonKind::Secondary, ButtonKind::Ghost)
     };
     let retry = failure.retry.clone().map(|retry| {
-      let button = ActionButton::new(format!("{}-retry", failure.id), retry_kind, ctx.t("ui.failure.tryAgain"))
-        .icon(Icon::RefreshCw);
+      let button = ActionButton::new(
+        format!("{}-retry", failure.id),
+        retry_kind,
+        ctx.t("ui.failure.tryAgain"),
+      )
+      .icon(Icon::RefreshCw);
       if failure.retrying {
-        ActionButton::new(format!("{}-retry", failure.id), retry_kind, ctx.t("ui.failure.tryingAgain")).loading()
+        ActionButton::new(
+          format!("{}-retry", failure.id),
+          retry_kind,
+          ctx.t("ui.failure.tryingAgain"),
+        )
+        .loading()
       } else {
         button.on_click(move || retry())
       }
@@ -195,7 +215,11 @@ impl PageFailure {
     let copy = ActionButton::new(
       format!("{}-copy", failure.id),
       ButtonKind::Ghost,
-      ctx.t(if self.copied.get() { "ui.copied" } else { "ui.failure.copyDetails" }),
+      ctx.t(if self.copied.get() {
+        "ui.copied"
+      } else {
+        "ui.failure.copyDetails"
+      }),
     )
     .icon(Icon::Copy)
     .on_click(move || {
@@ -206,11 +230,18 @@ impl PageFailure {
     let error = Column::new()
       .id(format!("{}-error", failure.id))
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(FailureSpacing::Gap.role(), FailureSpacing::DetailY.role()))
+      .padding(Padding::symmetric(
+        FailureSpacing::Gap.role(),
+        FailureSpacing::DetailY.role(),
+      ))
       .background(ExtraColor::CodeBackground.role())
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Md)
-      .child(Text::new(&kind).variant(FailureText::Detail.role()).width(Dimension::Pct(100.0)));
+      .child(
+        Text::new(&kind)
+          .variant(FailureText::Detail.role())
+          .width(Dimension::Pct(100.0)),
+      );
     let meta = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)

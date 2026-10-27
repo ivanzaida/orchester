@@ -30,8 +30,6 @@ fn instructions_variable_picker_replaces_selection_and_autosaves_exact_raw_bytes
   screen.key("z", "KeyZ", true, true);
   screen.until("inserted source saved", |screen| {
     screen.entry(id).body.text().as_str() == "left {{task.title}} right"
-      && screen
-        .text("instruction-save-status")
-        .contains("Based on Published v1")
+      && screen.text("instruction-save-status").contains("Based on Published v1")
   });
 }

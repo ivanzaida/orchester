@@ -90,7 +90,9 @@ impl Instructions {
       // Unsaved edits ask before the page leaves them.
       s.exists("instruction-leave-question")
         || match &name {
-          Some(name) => s.exists("instruction-prompt") && s.exists("instruction-title") && s.text("instruction-title") == *name,
+          Some(name) => {
+            s.exists("instruction-prompt") && s.exists("instruction-title") && s.text("instruction-title") == *name
+          }
           None => s.exists("instruction-library") || s.exists("instructions-empty"),
         }
     });
@@ -113,7 +115,10 @@ impl Instructions {
   }
   /// Presses `id`; `instruction-tab-N`, a scope tab before the hub, opens that scope's first rule.
   pub fn click(&mut self, id: &str) {
-    if let Some(index) = id.strip_prefix("instruction-tab-").and_then(|n| n.parse::<usize>().ok()) {
+    if let Some(index) = id
+      .strip_prefix("instruction-tab-")
+      .and_then(|n| n.parse::<usize>().ok())
+    {
       return self.open_tab(InstructionsTab::ALL[index]);
     }
     self

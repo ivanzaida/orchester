@@ -116,7 +116,8 @@ pub struct Bar<'a> {
 
 pub fn bar(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, bar: Bar<'_>) -> Element {
   let Some(entry) = bar.entry else {
-    let mut draft = DraftBar::new("agent-draft-bar", Standing::Draft, ctx.t("agents.newDraft")).sub(ctx.t("agents.newDraftSub"));
+    let mut draft =
+      DraftBar::new("agent-draft-bar", Standing::Draft, ctx.t("agents.newDraft")).sub(ctx.t("agents.newDraftSub"));
     for action in bar.actions {
       draft = draft.action(action);
     }
@@ -194,18 +195,41 @@ fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&Age
     ),
   ] {
     if from != to {
-      let empty = ctx.t(if on_provider { "agents.providerDefaultChange" } else { "agents.defaultEffort" });
+      let empty = ctx.t(if on_provider {
+        "agents.providerDefaultChange"
+      } else {
+        "agents.defaultEffort"
+      });
       let from = if from.is_empty() { empty.to_string() } else { from };
       let to = if to.is_empty() { empty.to_string() } else { to };
-      parts.push(ctx.t_args("agents.changedField", [("field", ctx.t(key).to_string()), ("from", from), ("to", to)]).to_string());
+      parts.push(
+        ctx
+          .t_args(
+            "agents.changedField",
+            [("field", ctx.t(key).to_string()), ("from", from), ("to", to)],
+          )
+          .to_string(),
+      );
     }
   }
   for (different, key) in [
     (fields.role.get() != base.role().as_str(), "agents.role"),
-    (fields.responsibility.get() != base.responsibilities(), "agents.responsibility"),
-    (fields.instructions.get() != base.instructions().as_str(), "agents.instructions"),
-    (fields.connection.get() != base.connection().to_string(), "agents.connection"),
-    (fields.permissions.get().0 != *base.permissions(), "agents.permissionsTab"),
+    (
+      fields.responsibility.get() != base.responsibilities(),
+      "agents.responsibility",
+    ),
+    (
+      fields.instructions.get() != base.instructions().as_str(),
+      "agents.instructions",
+    ),
+    (
+      fields.connection.get() != base.connection().to_string(),
+      "agents.connection",
+    ),
+    (
+      fields.permissions.get().0 != *base.permissions(),
+      "agents.permissionsTab",
+    ),
     (fields.servers.get().0 != *base.mcp_servers(), "agents.mcp"),
   ] {
     if different {

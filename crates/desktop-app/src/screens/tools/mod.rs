@@ -132,7 +132,12 @@ impl ToolsScreen {
         // What was read stays under it.
         Column::new()
           .width(Dimension::Pct(100.0))
-          .padding(Padding::new().left(HubSpacing::Side.role()).right(HubSpacing::Side.role()).top(HubSpacing::BodyTop.role()))
+          .padding(
+            Padding::new()
+              .left(HubSpacing::Side.role())
+              .right(HubSpacing::Side.role())
+              .top(HubSpacing::BodyTop.role()),
+          )
           .child(failure.page(ctx))
       }))
       .child(

@@ -38,13 +38,22 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectTools)
   let rows: Vec<Element> = if listed.tools.is_empty() {
     vec![empty(ctx, &nav, id)]
   } else {
-    listed.tools.iter().map(|entry| row(ctx, (&nav, id), listed, entry)).collect()
+    listed
+      .tools
+      .iter()
+      .map(|entry| row(ctx, (&nav, id), listed, entry))
+      .collect()
   };
   let count = listed.tools.len().to_string();
   pane = pane
     .child(group(
       "tools-list",
-      head("tools-list", &ctx.t("hub.tabs.tools"), (!listed.tools.is_empty()).then_some(&*count), None),
+      head(
+        "tools-list",
+        &ctx.t("hub.tabs.tools"),
+        (!listed.tools.is_empty()).then_some(&*count),
+        None,
+      ),
       boxed("tools-rows", rows),
     ))
     .child(note(
@@ -69,7 +78,11 @@ fn row(ctx: &Ctx, (nav, project): (&Navigation, ProjectId), listed: &ProjectTool
   });
   let hint = ctx.t_args(
     "tools.rowLine",
-    [("kind", ctx.t(kind).to_string()), ("detail", detail), ("secrets", secrets.to_string())],
+    [
+      ("kind", ctx.t(kind).to_string()),
+      ("detail", detail),
+      ("secrets", secrets.to_string()),
+    ],
   );
   let count = listed.used_by(entry.id).count();
   let used = if count == 0 {
@@ -88,9 +101,15 @@ fn row(ctx: &Ctx, (nav, project): (&Navigation, ProjectId), listed: &ProjectTool
   };
   let version = ctx.t_args(
     "tools.rowStatus",
-    [("status", standing.to_string()), ("version", words::version(ctx, entry).to_string())],
+    [
+      ("status", standing.to_string()),
+      ("version", words::version(ctx, entry).to_string()),
+    ],
   );
-  let open = nav.to(Route::Project(project, ProjectPage::Tool(entry.id, ToolTab::Configuration)));
+  let open = nav.to(Route::Project(
+    project,
+    ProjectPage::Tool(entry.id, ToolTab::Configuration),
+  ));
   Entry::new(format!("tool-row-{}", entry.id), entry.name.clone())
     .tile(glyph)
     .hint(hint)

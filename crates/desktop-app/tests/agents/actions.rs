@@ -45,9 +45,11 @@ fn agents_profile_saves_its_draft_on_its_own() {
     s.listed().profile(id).expect("profile").profile.responsibilities() == "Checks the complete change"
   });
   screen.saved();
-  screen.press_until("agent-publish", "published", |s| {
-    matches!(s.listed().profile(id).expect("profile").state, VersionState::Published(v) if v.get() == 2)
-  });
+  screen.press_until(
+    "agent-publish",
+    "published",
+    |s| matches!(s.listed().profile(id).expect("profile").state, VersionState::Published(v) if v.get() == 2),
+  );
 }
 
 #[test]
@@ -57,9 +59,23 @@ fn agents_widening_is_asked_at_its_field_and_waits_for_the_person() {
   screen.open(id);
   screen.click("agent-option-EditWorktree");
   screen.until("question at the field", |s| s.exists("agent-confirm-confirm"));
-  assert!(screen.window.link.input_gate().protecting(), "window input from MCP is locked");
-  let repository = |s: &Agents| s.listed().profile(id).expect("profile").profile.permissions().repository();
-  assert_eq!(repository(&screen), RepositoryAccess::ReadOnly, "nothing saved before the answer");
+  assert!(
+    screen.window.link.input_gate().protecting(),
+    "window input from MCP is locked"
+  );
+  let repository = |s: &Agents| {
+    s.listed()
+      .profile(id)
+      .expect("profile")
+      .profile
+      .permissions()
+      .repository()
+  };
+  assert_eq!(
+    repository(&screen),
+    RepositoryAccess::ReadOnly,
+    "nothing saved before the answer"
+  );
   screen.click("agent-confirm-keep");
   assert!(!screen.exists("agent-confirm-confirm"));
   assert!(!screen.window.link.input_gate().protecting());
@@ -73,7 +89,10 @@ fn agents_widening_is_asked_at_its_field_and_waits_for_the_person() {
   screen.until("write draft", |s| repository(s) == RepositoryAccess::Write);
   screen.saved();
   screen.press_until("agent-publish", "published without asking again", |s| {
-    assert!(!s.exists("agent-confirm-confirm"), "Publish asks nothing the field allowed");
+    assert!(
+      !s.exists("agent-confirm-confirm"),
+      "Publish asks nothing the field allowed"
+    );
     matches!(s.listed().profile(id).expect("profile").state, VersionState::Published(v) if v.get() == 2)
   });
 }
@@ -99,15 +118,22 @@ fn agents_discard_draft_is_asked_in_place() {
   let id = screen.profile(true);
   screen.open(id);
   screen.set("agent-responsibility", "A draft to throw away");
-  screen.until("draft saved", |s| s.listed().profile(id).expect("profile").state.has_draft());
+  screen.until("draft saved", |s| {
+    s.listed().profile(id).expect("profile").state.has_draft()
+  });
   screen.saved();
   screen.press_until("agent-discard", "question", |s| s.exists("hub-discard-confirm"));
   screen.click("hub-discard-keep");
-  assert!(screen.listed().profile(id).expect("profile").state.has_draft(), "Keep draft keeps it");
+  assert!(
+    screen.listed().profile(id).expect("profile").state.has_draft(),
+    "Keep draft keeps it"
+  );
   screen.press_until("agent-discard", "question", |s| s.exists("hub-discard-confirm"));
-  screen.press_until("hub-discard-confirm", "discarded", |s| {
-    matches!(s.listed().profile(id).expect("profile").state, VersionState::Published(v) if v.get() == 1)
-  });
+  screen.press_until(
+    "hub-discard-confirm",
+    "discarded",
+    |s| matches!(s.listed().profile(id).expect("profile").state, VersionState::Published(v) if v.get() == 1),
+  );
   screen.until("fields from v1", |s| {
     s.exists("agent-responsibility") && s.value("agent-responsibility") == "Builds the change"
   });
@@ -128,7 +154,11 @@ fn agents_remove_an_unused_profile() {
   assert!(menu.width < 300.0, "the … menu stays beside its button: {menu:?}");
   screen.click("agent-remove");
   screen.until("question", |s| s.exists("hub-remove-confirm"));
-  assert!(screen.text("hub-remove").contains("No pipeline step uses it"), "{}", screen.text("hub-remove"));
+  assert!(
+    screen.text("hub-remove").contains("No pipeline step uses it"),
+    "{}",
+    screen.text("hub-remove")
+  );
   screen.press_until("hub-remove-confirm", "removed", |s| {
     s.listed().profile(id).is_none() && s.exists("agents-new")
   });
@@ -216,5 +246,7 @@ fn agents_invalid_fields_and_concurrent_changes_are_visible() {
   )
   .expect("outside save");
   screen.set("agent-role", "Builder changed");
-  screen.until("conflict", |s| s.exists("agent-save-error") || s.exists("agent-outside-change"));
+  screen.until("conflict", |s| {
+    s.exists("agent-save-error") || s.exists("agent-outside-change")
+  });
 }

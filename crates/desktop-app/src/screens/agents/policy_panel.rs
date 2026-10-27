@@ -31,22 +31,66 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     return group(
       "agent-enforcement",
       head("agent-enforcement", &title, None, None),
-      note("agent-enforcement-none", Icon::Unplug, &ctx.t("agents.chooseConnection")),
+      note(
+        "agent-enforcement-none",
+        Icon::Unplug,
+        &ctx.t("agents.chooseConnection"),
+      ),
     )
     .into();
   };
-  let permissions = fields.permissions.get().0;
+  let rows = rows(ctx, connection, &fields.permissions.get().0, listed);
+  Column::new()
+    .id("agent-enforcement")
+    .width(Dimension::Pct(100.0))
+    .spacing(lurq::app::theme::SpacingSize::Sm)
+    .child(group(
+      "agent-enforcement-group",
+      head(
+        "agent-enforcement-group",
+        &title,
+        None,
+        Some(
+          Text::new(&checked(ctx, connection))
+            .variant(HubText::Hint.role())
+            .nowrap()
+            .into(),
+        ),
+      ),
+      boxed("agent-enforcement-rows", rows),
+    ))
+    .child(note(
+      "agent-enforcement-note",
+      Icon::Info,
+      &ctx.t("agents.enforcementNotes"),
+    ))
+    .into()
+}
+
+/// Each setting with what enforces it, then MCP, Approvals and the repository's agent files.
+fn rows(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  permissions: &AgentPermissions,
+  listed: &ProjectAgents,
+) -> Vec<Element> {
   let mut rows = Vec::new();
   for (key, option) in [
-    ("agents.repository", PermissionOption::of_repository(permissions.repository())),
-    ("agents.folders", PermissionOption::of_repository(permissions.repository())),
+    (
+      "agents.repository",
+      PermissionOption::of_repository(permissions.repository()),
+    ),
+    (
+      "agents.folders",
+      PermissionOption::of_repository(permissions.repository()),
+    ),
     ("agents.commands", PermissionOption::of_commands(permissions.commands())),
     ("agents.network", PermissionOption::of_network(permissions.network())),
   ] {
     let (mechanism, enforced) = if key == "agents.folders" {
-      folders(ctx, connection, &permissions)
+      folders(ctx, connection, permissions)
     } else {
-      setting(ctx, connection, &permissions, option)
+      setting(ctx, connection, permissions, option)
     };
     rows.push(row(ctx, key, &mechanism, State::Enforced(enforced)));
   }
@@ -61,7 +105,11 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
   rows.push(row(
     ctx,
     "agents.approvals",
-    &ctx.t(if available { "agents.approvalMechanism" } else { unavailable }),
+    &ctx.t(if available {
+      "agents.approvalMechanism"
+    } else {
+      unavailable
+    }),
     State::Enforced(available),
   ));
   let files = ctx.t(if listed.agent_files.is_on() {
@@ -75,22 +123,7 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     &ctx.t("agents.repositoryFilesMechanism"),
     State::Value(files),
   ));
-  Column::new()
-    .id("agent-enforcement")
-    .width(Dimension::Pct(100.0))
-    .spacing(lurq::app::theme::SpacingSize::Sm)
-    .child(group(
-      "agent-enforcement-group",
-      head(
-        "agent-enforcement-group",
-        &title,
-        None,
-        Some(Text::new(&checked(ctx, connection)).variant(HubText::Hint.role()).nowrap().into()),
-      ),
-      boxed("agent-enforcement-rows", rows),
-    ))
-    .child(note("agent-enforcement-note", Icon::Info, &ctx.t("agents.enforcementNotes")))
-    .into()
+  rows
 }
 
 /// `Claude Code · 2.1.173 · checked 16:40`.
@@ -106,12 +139,25 @@ fn checked(ctx: &Ctx, connection: &AgentConnection) -> Arc<str> {
   };
   let when = connection.last_check().map_or_else(
     || ctx.t("agents.notChecked"),
-    |check| ctx.t_args("agents.checkedAt", [("time", orchester_workspace::display::clock(check.at))]),
+    |check| {
+      ctx.t_args(
+        "agents.checkedAt",
+        [("time", orchester_workspace::display::clock(check.at))],
+      )
+    },
   );
-  ctx.t_args("agents.connectionState", [("provider", name), ("status", when.to_string())])
+  ctx.t_args(
+    "agents.connectionState",
+    [("provider", name), ("status", when.to_string())],
+  )
 }
 
-fn setting(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions, option: PermissionOption) -> (Arc<str>, bool) {
+fn setting(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  permissions: &AgentPermissions,
+  option: PermissionOption,
+) -> (Arc<str>, bool) {
   let effective = permissions.enforced_on(connection.provider(), Platform::current());
   let support = effective.as_ref().map_or_else(
     |_| support(connection.provider(), Platform::current(), option),
@@ -125,7 +171,10 @@ fn setting(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissio
   );
   match support {
     Support::Enforced(mechanism) => (enforcement::mechanism(ctx, mechanism, permissions), true),
-    _ => (enforcement::unavailable(ctx, Some(connection.provider()), option), false),
+    _ => (
+      enforcement::unavailable(ctx, Some(connection.provider()), option),
+      false,
+    ),
   }
 }
 
@@ -170,14 +219,22 @@ fn row(ctx: &Ctx, key: &str, mechanism: &str, state: State) -> Element {
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
         .child(Text::new(&ctx.t(key)).variant(ExtraTypography::Strong.role()))
-        .child(Text::new(mechanism).variant(HubText::Hint.role()).width(Dimension::Pct(100.0))),
+        .child(
+          Text::new(mechanism)
+            .variant(HubText::Hint.role())
+            .width(Dimension::Pct(100.0)),
+        ),
     )
     .child(Text::new(&end).variant(HubText::Status.role()).color(color))
     .into()
 }
 
 /// The profile's permissions and whether its connection enforces them, for the page head.
-pub fn summary(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> (Arc<str>, Option<(crate::screens::hub::parts::Tone, Arc<str>)>) {
+pub fn summary(
+  ctx: &Ctx,
+  fields: &Fields,
+  listed: &ProjectAgents,
+) -> (Arc<str>, Option<(crate::screens::hub::parts::Tone, Arc<str>)>) {
   let permissions = fields.permissions.get().0;
   let connection = fields.connection(listed);
   let summary = words::summary(ctx, &permissions, connection.map(|c| c.provider()));

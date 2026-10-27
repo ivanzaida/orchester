@@ -24,7 +24,9 @@ fn memory_tabs_lead_with_waiting_while_proposals_wait() {
   assert_eq!(page.text("memory-tab-rejected"), "Rejected 1");
   assert_eq!(page.text("memory-tab-settings"), "Settings");
   // The Agents hub's Memory tab counts what waits for the person (05).
-  page.until("the hub's counts", |window| window.texts("agents-hub-tab-memory-count").is_some());
+  page.until("the hub's counts", |window| {
+    window.texts("agents-hub-tab-memory-count").is_some()
+  });
   assert_eq!(page.text("agents-hub-tab-memory-count"), "4");
 }
 

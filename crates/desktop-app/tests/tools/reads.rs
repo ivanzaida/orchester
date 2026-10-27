@@ -52,7 +52,8 @@ fn tools_save_is_recorded_when_the_editor_leaves_before_it_ends() {
   t.window.until("the save started", |w| {
     w.tree.tick_futures();
     w.pass();
-    w.texts("tool-draft-bar-status").is_some_and(|s| s.join(" ").contains("Saving"))
+    w.texts("tool-draft-bar-status")
+      .is_some_and(|s| s.join(" ").contains("Saving"))
       || services.changes.counts(project_id()).tools == 1
   });
   // The person leaves before the save ended: the editor that started it is gone when it does.
