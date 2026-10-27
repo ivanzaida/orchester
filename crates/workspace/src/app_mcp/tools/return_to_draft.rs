@@ -1,12 +1,13 @@
-//! `return_to_draft`: takes a queued task whose run never started back to Draft, as the Tasks selection
-//! bar's *Return to drafts* does: only a task its group holds for good (after a task of the group
-//! failed, at the group's cap, refused by preflight or by the runner, blocked or canceled), with the
-//! same store rule and refusals.
+//! `return_to_draft`: takes a queued task whose run never started back to Draft and to Backlog, as a card dropped on
+//! the board's Backlog column does, through the same workspace function. A task of a reviewed group goes back only
+//! when its group holds it for good (after a task of the group failed, at the group's cap, refused by preflight or by
+//! the runner, blocked or canceled), as the Tasks selection bar's *Return to drafts* takes it.
 
-use std::collections::BTreeSet;
-
-use orchester_core::{store::TaskStore, task::TaskStatus};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_core::{
+  store::TaskStore,
+  task::{TaskStatus, organization::ChangeActor},
+};
+use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -17,8 +18,8 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
-  messages::{self, Message},
-  tasks::{data::ProjectTasks, group, outside::Outside},
+  messages::Message,
+  tasks::{data::ProjectTasks, moves::write::return_to_draft_in, outside::Outside},
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -49,13 +50,10 @@ pub async fn return_to_draft(services: &Services, args: ReturnToDraft) -> Result
     if tasks.phases.contains_key(&task.id()) {
       return Err(refused("run_recorded", "appMcp.errors.runRecorded", &key));
     }
-    if group::releasable(&tasks, &BTreeSet::from([task.id()])).is_empty() {
-      return Err(ToolError::refused("not_held", vec![Message::new("tasks.bulk.notHeld")]));
-    }
-    let mut db = ProjectDb::open(&open.repo_root)?;
-    db.release_held_tasks(&[task.id()]).map_err(release_error)?;
+    // An MCP client's change, as the board records a synthetic drop.
+    return_to_draft_in(&open.repo_root, &services.servers, task.id(), ChangeActor::Orchester).map_err(not_changed)?;
     services.changes.record(open.project.id(), Outside::Tasks);
-    let task = db
+    let task = ProjectDb::open(&open.repo_root)?
       .task(task.id())?
       .ok_or_else(|| ToolError::not_found(Missing::Task, &key))?;
     Ok(json!({
@@ -73,13 +71,14 @@ fn refused(code: &str, key: &'static str, task: &str) -> ToolError {
   ToolError::refused(code, vec![Message::new(key).with("task", task.to_owned())])
 }
 
-/// The store's refusal in the words the selection bar shows it.
-fn release_error(error: StoreError) -> ToolError {
-  match error {
-    StoreError::TaskNotHeld(_) => ToolError::refused("not_held", vec![messages::store_error(&error)]),
-    StoreError::SharedTask(_) | StoreError::SharedProject | StoreError::NotSharedTask(_) => {
-      ToolError::refused("shared_server", vec![messages::store_error(&error)])
-    }
-    other => other.into(),
-  }
+/// Why the board's move did not happen, with a stable code for each refusal it tells apart.
+fn not_changed(message: Message) -> ToolError {
+  let code = match message.key {
+    "tasks.bulk.notHeld" => "not_held",
+    "tasks.board.hasRun" => "run_recorded",
+    "tasks.conflict.changedMeanwhile" => "changed_meanwhile",
+    key if key.starts_with("sharing.") => "shared_server",
+    _ => "not_changed",
+  };
+  ToolError::refused(code, vec![message])
 }

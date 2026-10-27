@@ -13,8 +13,8 @@ use lurq::app::events::KeyboardEvent;
 use orchester_core::{id::TaskId, project::TaskKey};
 
 use super::{
-  actions::{Focused, MenuPage, OpenMenu, Selected, Target},
-  ask::answer,
+  actions::{Ask, Focused, MenuPage, OpenMenu, Selected, Target},
+  ask::{answer, pending},
   card::CardModel,
   drop::Dropping,
   model::ColumnKey,
@@ -118,14 +118,21 @@ fn escape(keys: &KeyContext) -> bool {
   false
 }
 
+/// Answers what is asked in place, or opens the focused card's task. A deletion, of one task or several, is confirmed by
+/// its button alone, and while a change is under way Enter waits as the buttons do.
 fn enter(keys: &KeyContext) -> bool {
   let (state, closer) = (&keys.dropping.state, &keys.dropping.closer);
   if let Some(asked) = state.asked.get_untracked() {
-    answer(state, closer, &asked);
+    if !matches!(asked, Ask::BulkDelete(_)) && !pending(state, closer) {
+      answer(state, closer, &asked);
+    }
     return true;
   }
-  // The stop confirmation: Enter stops the run and closes the task. A deletion is confirmed by its button alone.
-  if state.question_open.get_untracked() && closer.confirm_stop() {
+  // The stop confirmation: Enter stops the run and closes the task. Any other question open keeps the focus where it is.
+  if state.question_open.get_untracked() {
+    if !closer.busy() {
+      closer.confirm_stop();
+    }
     return true;
   }
   let Some(card) = focused(keys) else {

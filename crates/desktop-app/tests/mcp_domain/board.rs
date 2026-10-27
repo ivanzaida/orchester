@@ -1,5 +1,6 @@
 //! The Tasks board (ORC-105) with the window's MCP server: a bulk Mark as done an MCP client presses is recorded as
-//! automation's, since who asks is read in the press itself; a complete draft moved to Todo is queued there; and with
+//! automation's, since who asks is read in the press itself; `return_to_draft` takes back a queued task by the board's
+//! own Backlog rule; a complete draft moved to Todo is queued there; and with
 //! the real runner serving the project and an agent slot free, queuing a draft on Todo, alone from its card's Move to
 //! (in a popover at the card, nothing moved) or several from the selection bar, asks first that it starts now, and
 //! Keep as draft queues nothing. `cargo test -p orchester-app --test mcp_domain domain_board_`.
@@ -154,6 +155,28 @@ fn domain_board_bulk_mark_as_done_pressed_by_a_client_is_automation_s() {
     stored(&seeded.repo, "KON-15").organization().status() == WorkflowStatus::Done
   });
   assert_eq!(last_actor(&seeded.repo, "KON-15"), ChangeActor::Orchester);
+}
+
+#[test]
+fn domain_board_return_to_draft_takes_back_a_queued_task_as_the_board_s_backlog_does() {
+  let (folder, seeded) = Served::seed("tasks", None);
+  let runner = folder.path().join("no-runner").join("orchester-runner");
+  let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
+  // KON-8 is queued outside any group and its run never started: the board's Backlog takes it, and so does the tool.
+  assert_eq!(stored(&seeded.repo, "KON-8").status(), TaskStatus::Queued);
+  let returned = served.ok("return_to_draft", &json!({"project": "Kontur", "key": "kon-8"}));
+  assert_eq!(returned["task"]["key"], "KON-8");
+  assert_eq!(returned["task"]["submission"], "draft");
+  let task = stored(&seeded.repo, "KON-8");
+  assert_eq!(task.status(), TaskStatus::Draft);
+  assert_eq!(task.organization().status(), WorkflowStatus::Backlog);
+  assert_eq!(last_actor(&seeded.repo, "KON-8"), ChangeActor::Orchester);
+
+  let draft = served.refused("return_to_draft", &json!({"project": "Kontur", "key": "KON-3"}));
+  assert_eq!(draft["code"], "not_queued");
+  // KON-1 has a run: it stays out of Backlog, as on the board.
+  let ran = served.refused("return_to_draft", &json!({"project": "Kontur", "key": "KON-1"}));
+  assert_eq!(ran["code"], "run_recorded");
 }
 
 #[test]

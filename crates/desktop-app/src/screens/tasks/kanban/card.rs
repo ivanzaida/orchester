@@ -38,7 +38,7 @@ use super::{
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    agent_mark::agent_mark,
+    agent_mark::AgentMark,
     icon::{Icon, icon},
     message::message_text,
     status::{Status, priority_look},
@@ -306,7 +306,7 @@ fn run_chip(ctx: &Ctx, key: &str, run: &RunLine, agent: bool) -> Row {
       run
         .agent
         .filter(|_| agent)
-        .map(|provider| agent_mark(ctx, provider, IconSize::Md)),
+        .map(|provider| AgentMark::of(provider).render(ctx, IconSize::Md)),
     );
   if run.filled {
     chip

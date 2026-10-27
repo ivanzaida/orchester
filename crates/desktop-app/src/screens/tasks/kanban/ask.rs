@@ -36,10 +36,15 @@ struct Words {
   danger: bool,
 }
 
+/// Whether a change is under way: a question's answers wait for it, by button or by key.
+pub fn pending(state: &BoardState, closer: &Closer) -> bool {
+  state.busy() || state.bulk.state().get().is_pending() || closer.busy()
+}
+
 /// The question `asked` puts, with its answers.
 pub fn ask_panel(ctx: &Ctx, (state, closer): (&BoardState, &Closer), asked: &Ask) -> Column {
   let words = words(ctx, asked);
-  let pending = state.busy() || state.bulk.state().get().is_pending() || closer.busy();
+  let pending = pending(state, closer);
   let keep = ActionButton::new("tasks-board-ask-keep", ButtonKind::Ghost, words.keep).in_form();
   let keep = if pending {
     keep.disabled()

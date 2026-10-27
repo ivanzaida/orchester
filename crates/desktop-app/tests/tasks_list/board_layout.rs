@@ -276,3 +276,48 @@ fn tasks_board_layout_run_again_and_delete_ask_in_a_popover_at_the_card() {
   assert!(!seeded.shows("tasks-close-delete"));
   assert!(in_column(&mut seeded, "KON-15", "todo"));
 }
+
+fn enter(seeded: &mut Seeded) {
+  seeded
+    .window
+    .tree
+    .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
+  seeded.window.pass();
+}
+
+fn stored(seeded: &Seeded, key: &str) -> bool {
+  let db = ProjectDb::open(&seeded.repo).expect("the project");
+  orchester_core::store::TaskStore::tasks(&db)
+    .expect("tasks")
+    .iter()
+    .any(|task| task.key().to_string() == key)
+}
+
+#[test]
+fn tasks_board_layout_enter_never_confirms_a_deletion() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  // Several selected: *Delete 2 tasks?* waits for its button.
+  seeded.shift_click("task-card-KON-3");
+  seeded.shift_click("task-card-KON-15");
+  press(&mut seeded, "tasks-board-bulk-delete");
+  seeded.until("the delete question", |seeded| seeded.laid_out("tasks-board-ask-keep"));
+  enter(&mut seeded);
+  assert!(seeded.laid_out("tasks-board-ask"), "the question stays");
+  assert!(stored(&seeded, "KON-3") && stored(&seeded, "KON-15"), "nothing deleted");
+  escape(&mut seeded);
+  assert!(!seeded.shows("tasks-board-ask"));
+  escape(&mut seeded);
+
+  // One card's *Delete KON-15?*: Enter neither deletes nor opens the focused card's task.
+  seeded.hover("task-card-KON-15");
+  press(&mut seeded, "task-more-KON-15");
+  press(&mut seeded, "task-menu-KON-15-delete");
+  seeded.until("the delete question", |seeded| {
+    seeded.laid_out("tasks-close-delete-title")
+  });
+  enter(&mut seeded);
+  assert!(seeded.laid_out("tasks-close-delete"), "the question stays");
+  assert!(seeded.laid_out("tasks-board-columns"), "still on the board");
+  assert!(stored(&seeded, "KON-15"));
+  escape(&mut seeded);
+}
