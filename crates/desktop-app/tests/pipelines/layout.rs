@@ -237,8 +237,14 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
       .and_then(|e| e.bounds())
       .expect("settings laid out")
   });
-  assert!(strip.width > pane.width + 100.0, "strip {strip:?} spans the page, pane {pane:?}");
-  assert!(strip.y + strip.height <= pane.y, "strip {strip:?} sits above the pane {pane:?}");
+  assert!(
+    strip.width > pane.width + 100.0,
+    "strip {strip:?} spans the page, pane {pane:?}"
+  );
+  assert!(
+    strip.y + strip.height <= pane.y,
+    "strip {strip:?} sits above the pane {pane:?}"
+  );
   editor.click("pipeline-settings-undo");
   assert_eq!(editor.value("pipeline-settings-description"), "");
   editor.until("undo saved", |e| {

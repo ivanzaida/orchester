@@ -96,9 +96,7 @@ impl Component for Settings {
       .id("pipeline-settings-tab")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
-      .with_children(
-        (changed.count() > 0).then(|| strip(ctx, &props.state, (changed.count(), props.locked))),
-      )
+      .with_children((changed.count() > 0).then(|| strip(ctx, &props.state, (changed.count(), props.locked))))
       .child(pane)
   }
 }
