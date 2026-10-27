@@ -173,7 +173,10 @@ the route's params and answers the route the tab shows, for example:
 
 - `{"route": "tasks", "project": "<id>"}`, with `"tab"` `active` (the default), `backlog`, `done` or `all` (the
   list's views since ORC-99; the old workflow tab names are refused with `unknown_tab`), `"q"` (the search) or
-  `"highlight": "KON-12"`;
+  `"highlight": "KON-12"`. The List/Board switch (ORC-105) is no route param: the screen shows the layout last chosen
+  for the project; press `tasks-layout-board` or `tasks-layout-list` in the header to switch. With `hold_reads` held,
+  the screen shows the list's skeleton (`tasks-loading-rows`) or the board's (`tasks-loading-board`) after 300 ms;
+  compare them with `05 · Loading` `R1nQlx` (`Lw1Gb`) and `17 · Loading` `Z1PMlo` (`J6gQo`);
 - `{"route": "overview", "project": "<id>"}`, with `"tab"` `running`, `needs_you`, `queued` or
   `failed`;
 - `{"route": "task", "project": "<id>", "key": "KON-12"}` (Summary), with `"tab"` `conversation`

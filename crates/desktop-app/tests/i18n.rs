@@ -124,8 +124,11 @@ fn read_string(chars: &[char], from: usize) -> (String, usize) {
   (literal, at)
 }
 
+/// What a dotted literal starts with when it is a reverse-DNS name rather than a key (`"com.apple.universalaccess"`).
+const DOMAIN_ROOTS: [&str; 1] = ["com"];
+
 /// A literal that reads as a key: a first segment of lowercase letters and `_` (an area's name), then
-/// segments of letters, digits and `_`, and not a file name.
+/// segments of letters, digits and `_`, and not a file name or a reverse-DNS name.
 fn is_key_shaped(literal: &str) -> bool {
   let Some((area, rest)) = literal.split_once('.') else {
     return false;
@@ -136,6 +139,7 @@ fn is_key_shaped(literal: &str) -> bool {
     && area.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'_')
     && rest.split('.').all(segment)
     && !FILE_EXTENSIONS.contains(&last)
+    && !DOMAIN_ROOTS.contains(&area)
 }
 
 /// Every key-shaped literal in the crate's sources.

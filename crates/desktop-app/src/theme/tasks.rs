@@ -1,5 +1,8 @@
-//! The design values of the Tasks list (`Tasks · redesign` `Lw1Gb` in the new `orchester.pen`, ORC-99) and of the
-//! Modules pages that share its frame, which the UI kit's roles do not carry, registered as lurq `Extra` roles.
+//! The design values of the Tasks list (`Tasks · redesign` `Lw1Gb` in the new `orchester.pen`, ORC-99), of its board
+//! (`Tasks board · redesign` `J6gQo`, ORC-105) and of the Modules pages that share its frame, which the UI kit's roles
+//! do not carry, registered as lurq `Extra` roles.
+
+use std::time::Duration;
 
 use lurq::{
   app::theme::{SpacingSize, Theme},
@@ -9,6 +12,22 @@ use lurq::{
 /// The list's scrollbar runs in the page's 28 at the panel's right edge, 10 in from it, clear of the rows (the design
 /// draws none; the person asked for it away from the rows and near the edge).
 const LIST_SCROLL_EDGE: f32 = 10.0;
+
+/// How long the tasks are read before their skeleton shows: a fast reading never flashes one (`Reading · skeleton`
+/// `UWoGx`).
+pub const SKELETON_DELAY: Duration = Duration::from_millis(300);
+/// One gentle pulse of a skeleton, its bones dimmed to [`SKELETON_DIM`] at its middle; it stays still with reduced
+/// motion. The pulse steps through [`SKELETON_STEPS`] poses: a frame is drawn only when the pose changes.
+pub const SKELETON_PULSE: Duration = Duration::from_millis(1600);
+pub const SKELETON_STEPS: u32 = 16;
+pub const SKELETON_DIM: f32 = 0.55;
+/// The list skeleton's lower lines fade (`05 · Loading` `R1nQlx`): its last group head, then its last four rows.
+pub const SKELETON_FADE: [f32; 5] = [0.85, 0.7, 0.55, 0.4, 0.25];
+/// The last card bone of a board column of three or more (`Card bone` `vR9Ky` in `17 · Loading` `Z1PMlo`).
+pub const SKELETON_LAST_CARD: f32 = 0.55;
+/// A card that is lifted away, or whose drop waits for the person, where it was (`KON-27` in `YhQ1y`, `KON-16` in
+/// `yMirA`).
+pub const HELD_CARD_OPACITY: f32 = 0.5;
 
 /// `base`, the theme's scrollbar, placed for the Tasks list.
 pub fn list_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {

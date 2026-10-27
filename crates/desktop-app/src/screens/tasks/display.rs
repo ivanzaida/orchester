@@ -1,6 +1,7 @@
 //! The list's Display (`Display` in `Header` `AL7qv`): a ghost button that opens a menu of how the rows are ordered —
 //! the manual order, newest first, by title, by workflow status or by priority — under which it says that sorting
-//! never changes the run queue. The order belongs to the open list.
+//! never changes the run queue. The order belongs to the open list. While the board shows, it opens the board's
+//! Display options instead (`Display popover` `kQPuZ`, `kanban::options`).
 
 use lurq::{
   app::{
@@ -15,13 +16,17 @@ use lurq::{
 };
 use orchester_workspace::tasks::browse::TaskSort;
 
+use super::kanban::{
+  display::{Display, Layout},
+  options::{BoardOptions, OptionsProps},
+};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     filter::filter_group,
     icon::{Icon, icon},
-    menu::{MenuItem, menu, menu_panel, separator},
+    menu::{MenuItem, menu, menu_at_end, menu_panel, separator},
   },
 };
 
@@ -42,12 +47,14 @@ pub(super) struct DisplayProps {
   pub sort: Signal<TaskSort>,
   /// The tasks are read: until then the button cannot be pressed.
   pub ready: bool,
+  /// How the tasks are shown: the board's options while it shows.
+  pub display: Signal<Display>,
 }
 
-/// Compared by what it shows; the sort by its signal.
+/// Compared by what it shows; the sort and the display by their signals.
 impl PartialEq for DisplayProps {
   fn eq(&self, other: &Self) -> bool {
-    self.sort.id() == other.sort.id() && self.ready == other.ready
+    self.sort.id() == other.sort.id() && self.ready == other.ready && self.display.id() == other.display.id()
   }
 }
 
@@ -79,35 +86,51 @@ impl Component for DisplayControl {
     let open = self.open.clone();
     let button = button.on_click(move || open.update(|open| *open = !*open));
     let popup = self.open.get().then(|| {
-      let now = props.sort.get();
-      let items: Vec<Element> = SORTS
-        .into_iter()
-        .map(|(sort, key, name)| {
-          let chosen = props.sort.clone();
-          MenuItem::new(format!("tasks-sort-{name}"), ctx.t(key), move || chosen.set(sort))
-            .chosen(sort == now)
-            .render(ctx, &self.open)
-        })
-        .collect();
-      let note = Row::new()
-        .id("tasks-sort-note")
-        .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
-        .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role()));
-      let panel = menu_panel("tasks-display-menu")
-        .width(Dimension::Px(MENU_WIDTH))
-        .child(filter_group(
-          "tasks-display-sort",
-          Icon::ListOrdered,
-          &ctx.t("tasks.display.sort"),
-        ))
-        .with_children(items)
-        .child(separator(ctx))
-        .child(note);
-      menu(self.anchor.clone(), self.open.clone(), panel)
+      if props.display.get().layout == Layout::Board {
+        let panel = ctx.mount_keyed::<BoardOptions>(
+          "tasks-board-options",
+          OptionsProps {
+            display: props.display.clone(),
+            sort: props.sort.clone(),
+          },
+        );
+        return menu_at_end(self.anchor.clone(), self.open.clone(), panel);
+      }
+      menu(self.anchor.clone(), self.open.clone(), self.sorts(ctx, &props.sort))
     });
     Row::new().child(button).with_children(popup).into()
+  }
+}
+
+impl DisplayControl {
+  /// The list's orders, and that sorting never changes the run queue.
+  fn sorts(&self, ctx: &mut Ctx, sort: &Signal<TaskSort>) -> lurq::components::Column {
+    let now = sort.get();
+    let items: Vec<Element> = SORTS
+      .into_iter()
+      .map(|(order, key, name)| {
+        let chosen = sort.clone();
+        MenuItem::new(format!("tasks-sort-{name}"), ctx.t(key), move || chosen.set(order))
+          .chosen(order == now)
+          .render(ctx, &self.open)
+      })
+      .collect();
+    let note = Row::new()
+      .id("tasks-sort-note")
+      .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+      .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role()));
+    menu_panel("tasks-display-menu")
+      .width(Dimension::Px(MENU_WIDTH))
+      .child(filter_group(
+        "tasks-display-sort",
+        Icon::ListOrdered,
+        &ctx.t("tasks.display.sort"),
+      ))
+      .with_children(items)
+      .child(separator(ctx))
+      .child(note)
   }
 }

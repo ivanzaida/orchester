@@ -10,13 +10,13 @@ use orchester_workspace::workspace::Workspace;
 use tokio::runtime::Runtime;
 
 use crate::{
-  appearance::{Appearance, ThemeSetting, system},
+  appearance::{Appearance, ThemeSetting, motion, system},
   brand, i18n,
   mcp::{self, AppMcp, McpKind, McpLink, McpMode, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
   startup::{Launch, WindowPosition},
   system_icon, theme,
-  ui::loader,
+  ui::{loader, skeleton},
 };
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -36,6 +36,8 @@ pub fn open(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   loader::install(&mut tree);
+  skeleton::install(&mut tree);
+  hold_still(runtime);
   let link = WindowLink::default();
   link.attach_appearance(appearance.clone());
   let window_control = stored(workspace, Workspace::mcp_window_control, "window control").flatten();
@@ -133,6 +135,15 @@ fn appearance(runtime: &Runtime, workspace: Option<&Workspace>) -> Appearance {
     tracing::error!(%error, "reading the system appearance failed");
   }
   Appearance::new(theme, system, workspace.cloned())
+}
+
+/// Reads on the runtime's blocking pool whether the operating system asks for reduced motion, for the skeletons'
+/// pulse; until it is read, and when it cannot be, they pulse.
+fn hold_still(runtime: &Runtime) {
+  runtime.spawn_blocking(|| match motion::reduced() {
+    Ok(reduced) => skeleton::hold_still(reduced),
+    Err(error) => tracing::info!(%error, "cannot read whether the system asks for reduced motion"),
+  });
 }
 
 /// What `read` finds in the application database; `None`, logged, when there is no session or it

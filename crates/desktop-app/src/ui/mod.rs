@@ -5,6 +5,7 @@
 
 pub mod add_slot;
 pub mod add_source;
+pub mod agent_mark;
 pub mod attachments;
 pub mod avatar;
 pub mod breadcrumb;
@@ -55,6 +56,7 @@ pub mod rule_item;
 pub mod settings_page;
 pub mod skill_row;
 pub mod source_box;
+pub mod skeleton;
 pub mod source_row;
 pub mod state;
 pub mod status;

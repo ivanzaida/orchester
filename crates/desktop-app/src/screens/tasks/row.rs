@@ -261,7 +261,7 @@ fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
 
 /// A task's story points as a chip says them: a person's as they are (`5 pt`), Orchester's estimate marked as one
 /// (`~5 pt`).
-fn points_chip(ctx: &Ctx, estimate: &StoryEstimate) -> Arc<str> {
+pub(super) fn points_chip(ctx: &Ctx, estimate: &StoryEstimate) -> Arc<str> {
   let key = match estimate.source() {
     EstimateSource::Person => "tasks.points.person",
     EstimateSource::Automation => "tasks.points.estimated",

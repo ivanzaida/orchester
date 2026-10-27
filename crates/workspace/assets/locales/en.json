@@ -300,6 +300,10 @@
     }
   },
   "tasks": {
+    "board": {
+      "hasRun": "This task already has a run.",
+      "deletePersonOnly": "Only a person deletes tasks: input from an MCP client is not taken here."
+    },
     "queue": {
       "notInGroup": "{{task}} is in no reviewed group: hold new starts in the whole project instead.",
       "personHeld": "A person held these new starts in Tasks: only a person releases them there."

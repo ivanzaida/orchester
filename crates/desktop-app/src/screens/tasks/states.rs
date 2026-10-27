@@ -36,7 +36,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     notice::{Notice, NoticeTone},
-    state::{load_error, loading},
+    state::load_error,
     unavailable::reason_at_end,
   },
 };
@@ -101,10 +101,6 @@ pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId, read_only: Option
     .into()
 }
 
-/// The loader, saying whose tasks are read.
-pub(super) fn reading(ctx: &Ctx, project: &str) -> Row {
-  loading("tasks-loading", &ctx.t_args("tasks.loading", [("project", project)]))
-}
 
 /// The tasks cannot be read, why, and Try again, which reads them again.
 pub(super) fn failed(ctx: &Ctx, feed: &ProjectFeed, error: &Message) -> Element {

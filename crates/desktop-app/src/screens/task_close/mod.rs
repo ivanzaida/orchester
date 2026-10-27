@@ -177,8 +177,34 @@ impl Closer {
     self.action.run(Asking { request, actor });
   }
 
+  /// Closes `subject` as `closing` asks: at once, or once its run, which has not ended, is confirmed stopped in place.
+  pub fn close(&self, subject: Subject, closing: Closing) {
+    self.run(Request::Close(subject, closing, Stop::Unconfirmed));
+  }
+
+  /// Opens the closed `subject` again.
+  pub fn reopen(&self, subject: Subject) {
+    self.run(Request::Reopen(subject));
+  }
+
+  /// Whether a request is under way; a render that reads it follows it.
+  pub fn busy(&self) -> bool {
+    self.action.state().get().is_pending()
+  }
+
+  /// The task the last request closed, and how, once it did; a render that reads it follows it.
+  pub fn closed(&self) -> Option<(Subject, Closing)> {
+    let state = self.action.state().get();
+    match (state.is_pending(), state.error, state.data) {
+      (false, None, Some(Request::Close(subject, closing, _))) if self.asked.get() == Asked::Nothing => {
+        Some((subject, closing))
+      }
+      _ => None,
+    }
+  }
+
   /// Opens the delete confirmation of `subject` in place, its choice off.
-  fn ask_delete(&self, subject: Subject) {
+  pub fn ask_delete(&self, subject: Subject) {
     self.unmerged.set(false);
     self.person_only.set(false);
     self.asked.set(Asked::Delete(subject));

@@ -4,7 +4,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  connection::AgentProvider,
+  id::{ModuleId, ResourceId, TaskId},
   integration::RunMerge,
   resource::{Deliverable, VersionNumber, WithoutCommits},
   run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase, run_delivers},
@@ -126,6 +127,9 @@ pub struct LatestRun {
   pub delivers: bool,
   /// What it delivers (ORC-93): with [`Self::nothing_to_merge`], whether it is completed or flagged.
   pub deliverable: Deliverable,
+  /// Who runs the agent of [`Self::step`]: the provider of its profile's connection; `None` for a tool step, before
+  /// the first step, or when the profile or its connection cannot be found ([`super::data`] reads it).
+  pub agent: Option<AgentProvider>,
 }
 
 impl LatestRun {
@@ -173,6 +177,7 @@ impl LatestRun {
       lost_runner: false,
       delivers: run.snapshot().body().deliver().is_some(),
       deliverable: run_delivers(task, run),
+      agent: None,
     }
   }
 
@@ -222,20 +227,20 @@ impl LatestRun {
 /// A task's latest run: where it stands, or that it cannot be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Latest {
-  Run(LatestRun),
+  Run(Box<LatestRun>),
   Unreadable(Unreadable),
 }
 
 impl Latest {
   /// Where the task stands; `None` when its latest run cannot be read.
-  pub const fn phase(&self) -> Option<TaskPhase> {
+  pub fn phase(&self) -> Option<TaskPhase> {
     match self {
       Self::Run(latest) => Some(latest.phase),
       Self::Unreadable(_) => None,
     }
   }
 
-  pub const fn run(&self) -> Option<&LatestRun> {
+  pub fn run(&self) -> Option<&LatestRun> {
     match self {
       Self::Run(latest) => Some(latest),
       Self::Unreadable(_) => None,
@@ -264,7 +269,7 @@ impl Latest {
   #[must_use]
   pub fn without_runner(&self) -> Self {
     match self {
-      Self::Run(latest) => Self::Run(latest.without_runner()),
+      Self::Run(latest) => Self::Run(Box::new(latest.without_runner())),
       Self::Unreadable(_) => self.clone(),
     }
   }
@@ -398,6 +403,17 @@ pub struct TaskRow {
   pub nothing_to_merge: bool,
   /// Its story points, who set them and why; `None` while it has none.
   pub estimate: Option<orchester_core::task::estimate::StoryEstimate>,
+  /// Whether a person submitted it for running: a draft, or queued.
+  pub status: TaskStatus,
+  /// It has a run, readable or not: it no longer goes back to the drafts.
+  pub has_run: bool,
+  /// A run of it has not ended, as the store decides it ([`ProjectTasks::active`]): only closing it, after its run is
+  /// stopped, changes its workflow status by hand on the board.
+  pub run_not_ended: bool,
+  /// The module it belongs to, if any.
+  pub module: Option<ModuleId>,
+  /// Who runs the agent of its latest run's step ([`LatestRun::agent`]).
+  pub agent: Option<AgentProvider>,
 }
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
@@ -424,6 +440,7 @@ impl TaskRow {
         (readiness.message(), readiness.kind())
       }
     };
+    let has_run = latest.is_some();
     let latest = latest.and_then(Latest::run);
     Self {
       id: task.id(),
@@ -444,6 +461,11 @@ impl TaskRow {
       step: latest.and_then(|latest| latest.step.clone()),
       nothing_to_merge: latest.is_some_and(|latest| latest.nothing_to_merge),
       estimate: task.estimate().cloned(),
+      status: task.status(),
+      has_run,
+      run_not_ended: false,
+      module: task.module(),
+      agent: latest.and_then(|latest| latest.agent),
     }
   }
 }
@@ -478,7 +500,10 @@ pub fn rows(tasks: &[Task], data: &ProjectTasks, tab: TaskTab) -> Vec<TaskRow> {
   tasks
     .iter()
     .filter(|task| tab.includes(task) && waiting.as_ref().is_none_or(|waiting| waiting.contains(&task.id())))
-    .map(|task| TaskRow::new(task, &data.pipelines, data.phases.get(&task.id())))
+    .map(|task| TaskRow {
+      run_not_ended: data.active.contains(&task.id()),
+      ..TaskRow::new(task, &data.pipelines, data.phases.get(&task.id()))
+    })
     .collect()
 }
 

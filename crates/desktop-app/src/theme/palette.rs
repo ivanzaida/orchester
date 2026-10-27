@@ -79,10 +79,13 @@ pub enum ExtraColor {
   /// `chart_hatch`: a chart's stretch where nothing is known (*No data from Claude · Work* in `et35n`), and
   /// *No account*'s ground.
   ChartHatch,
+  /// `mark_claude`: the Claude mark beside a run that a Claude agent runs (`Claude` in the cards of `J6gQo`), the same
+  /// in both modes.
+  MarkClaude,
 }
 
 impl ExtraColor {
-  pub const ALL: [Self; 23] = [
+  pub const ALL: [Self; 24] = [
     Self::AccentText,
     Self::OnAccent,
     Self::PanelBorder,
@@ -106,6 +109,7 @@ impl ExtraColor {
     Self::ChartOther,
     Self::ChartNone,
     Self::ChartHatch,
+    Self::MarkClaude,
   ];
 
   pub fn role(self) -> PaletteColor {
@@ -138,6 +142,7 @@ impl ExtraColor {
       Self::ChartOther => "chart_other",
       Self::ChartNone => "chart_none",
       Self::ChartHatch => "chart_hatch",
+      Self::MarkClaude => "mark_claude",
     }
   }
 
@@ -166,6 +171,7 @@ impl ExtraColor {
       Self::ChartOther => mode.pick("#66666E", "#9A9AA2"),
       Self::ChartNone => mode.pick("#8A8A92", "#6B6B74"),
       Self::ChartHatch => mode.pick("#FFFFFF0F", "#00000012"),
+      Self::MarkClaude => mode.pick("#D97757", "#D97757"),
     }
   }
 }
