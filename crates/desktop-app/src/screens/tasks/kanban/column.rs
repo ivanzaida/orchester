@@ -1,13 +1,13 @@
 //! A column of the board (`Column · Backlog` `v6Z67H` in `01 Board` `ntozw`): its head, 28 high (the status's 13 icon
 //! in its tone, its name in 12/500 `text_secondary`, its count in 12 `text_muted`, how many of its cards need the
 //! person as an 11 `warning` hand and count, then Fold and, in Backlog alone, Add a draft), and its cards 6 apart,
-//! which scroll. While a lifted card is over it, a column that takes it is `accent_muted` in a `border_strong` stroke
-//! with the drop's slot where the card would go (`Column · Todo` in `02 Dragging` `Yyeme`); Done offers *Mark as done*
-//! at its top and, while Canceled is hidden, *Cancel task* at its foot, lit so for a card whose run has not ended
-//! wherever it is over; one that refuses it is `danger_muted` in a `danger` stroke with why (`03 Drop refused`
-//! `ZaM50`). Without cards it says why (`Empty column, no filter`
-//! `B8kYj`, `Search hides every card` `KhgzA`). A folded column is a 40 wide strip with its icon, count and name
-//! (`Collapsed · Backlog` `F7EfQ`).
+//! which scroll. Nothing a drag or a question shows moves a card: while a lifted card is over a column that takes it,
+//! the column is lit and a line shows where the card would go (`02 Dragging` `goJvp`); what refuses it, and Done's
+//! *Mark as done* and *Cancel task*, are drawn in a layer over the cards (`overlay`, `refusal`, `03 Drop refused`
+//! `bR7zd`). A move that waits for the person's answer shows its card in the column it would go to, at its top
+//! (`KON-16` `y7FQj9` in `04 Confirm in place` `ksvIz`), where the question is asked (`question`). Without cards it
+//! says why (`Empty column, no filter` `B8kYj`, `Search hides every card` `KhgzA`). A folded column is a 40 wide strip
+//! with its icon, count and name (`Collapsed · Backlog` `F7EfQ`).
 
 use std::sync::Arc;
 
@@ -16,21 +16,21 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
-  layout::{Alignment, layout_kind::Justify},
+  components::{Column, Row, ScrollVertical, Spacer, Stack, Text},
+  layout::{Alignment, StackAlignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding, transform::Transform2D},
 };
-use orchester_core::{id::TaskId, task::organization::WorkflowStatus};
+use orchester_core::task::organization::WorkflowStatus;
 
 use super::{
-  actions::{BoardState, Drag, Focused, Refusal, Refused, Selected, Target},
+  actions::{BoardState, Drag, Focused, Refused, Selected, Target},
   card::{CardLook, CardModel},
   card_view::{CardProps, CardView},
   display::Display,
-  drop::refusal_of,
   model::{ColumnKey, ColumnModel},
+  overlay::{self, Insertion, Lit},
+  question::AskedCard,
   quick_add::{QuickAdd, QuickAddProps},
-  refusal::{refusal_card, refusal_note},
 };
 use crate::{
   theme::{ExtraSpacing, IconSize},
@@ -41,13 +41,11 @@ use crate::{
   },
 };
 
-/// A column's head (`Header` `Ob9rV`), a folded column's width (`Collapsed · Backlog` `F7EfQ`), and the drop slots
-/// of Done (`Drop slot · Done` `reJKk`).
+/// A column's head (`Header` `Ob9rV`), and a folded column's width (`Collapsed · Backlog` `F7EfQ`).
 const HEAD_HEIGHT: f32 = 28.0;
 const STRIP_WIDTH: f32 = 40.0;
 /// The room of a folded column's name, turned on its side.
 const STRIP_LABEL_ROOM: f32 = 96.0;
-const SLOT_HEIGHT: f32 = 44.0;
 
 /// What every column of a render shares.
 pub struct Shared<'a> {
@@ -56,8 +54,8 @@ pub struct Shared<'a> {
   pub focused: Focused,
   pub drag: Option<&'a Drag>,
   pub refused: Option<&'a Refused>,
-  /// The task whose drop waits for the person's answer.
-  pub waiting: Option<TaskId>,
+  /// The card a question is asked at, and the column its move waits in.
+  pub asked: Option<&'a AskedCard>,
   /// Cards lift, and have a menu.
   pub lifts: bool,
   pub menus: bool,
@@ -86,23 +84,13 @@ pub fn column(
     Some(lane) => format!("tasks-board-column-{name}-{lane}"),
     None => format!("tasks-board-column-{name}"),
   };
-  // A card whose run has not ended goes only to Done or Canceled: Done offers both wherever it is over (`ZaM50`).
-  let closes = shared.drag.filter(|drag| {
-    drag.card.row.run_not_ended
-      && column.key == ColumnKey::Status(WorkflowStatus::Done)
-      && refusal_of(&drag.card, &target).is_none()
-  });
-  let over = shared
-    .drag
-    .filter(|drag| drag.over.as_ref() == Some(&target))
-    .or(closes);
-  let refusing = over.and_then(|drag| refusal_of(&drag.card, &target));
-  let body = body(
-    ctx,
-    (state, shared),
-    (column, cards),
-    (&target, &id, over, refusing.clone()),
-  );
+  let feedback = overlay::feedback(shared, (&target, cards));
+  let body = body(ctx, (state, shared), (column, cards), (&target, feedback.insertion));
+  // The layer's own drop targets (Done's *Cancel task*) go before the column's, so a drop over them takes them.
+  let layer = feedback
+    .layer
+    .as_ref()
+    .map(|layer| overlay::layer(ctx, state, &id, layer));
   let frame = Column::new()
     .id(id.clone())
     .flex(1.0)
@@ -110,95 +98,89 @@ pub fn column(
     .spacing(ExtraSpacing::Snug.role())
     .describe("column", name)
     .ref_element(state.target_ref(target));
+  let cards = Stack::new()
+    .width(Dimension::Pct(100.0))
+    .stack_align(StackAlignment::TopStart);
   let frame = match lane {
-    Some(_) => frame.child(body),
+    Some(_) => frame.child(cards.child(body).with_children(layer)),
     None => frame
       .height(Dimension::Pct(100.0))
       .child(head(ctx, (state, shared), column, (&id, HeadIn::Column)))
-      .child(ScrollVertical::new(body).flex(1.0).width(Dimension::Pct(100.0))),
+      .child(
+        cards
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0))
+          .child(
+            ScrollVertical::new(body)
+              .width(Dimension::Pct(100.0))
+              .height(Dimension::Pct(100.0)),
+          )
+          .with_children(layer),
+      ),
   };
-  match (over, refusing) {
-    (Some(_), Some(_)) => lit(frame, PaletteColor::DangerMuted, PaletteColor::Danger).describe("drop", "refused"),
-    (Some(_), None) => lit(frame, PaletteColor::AccentMuted, PaletteColor::BorderStrong).describe("drop", "takes"),
-    _ => frame,
+  match feedback.lit {
+    Some(Lit::Refuses) => lit(frame, PaletteColor::DangerMuted, PaletteColor::Danger).describe("drop", "refused"),
+    Some(Lit::Takes) => lit(frame, PaletteColor::AccentMuted, PaletteColor::BorderStrong).describe("drop", "takes"),
+    None => frame,
   }
   .into()
 }
 
-/// The column's cards, after a refusal it says, with the lifted card's slot while the drag is over it and Backlog's
-/// foot; why it shows none, without them. The column the drag is over says why it refuses the card while it is held
-/// there (`Refusal` `q2Rtvh`), as after the drop.
+/// The column's cards (first, the card whose move to it waits for the person's answer), the insertion line among
+/// them while a lifted card is over it, and Backlog's foot; why it shows none, without them.
 fn body(
   ctx: &mut Ctx,
   (state, shared): (&BoardState, &Shared<'_>),
   (column, cards): (&ColumnModel, &[CardModel]),
-  (target, id, over, refusing): (&Target, &str, Option<&Drag>, Option<Refusal>),
+  (target, insertion): (&Target, Option<Insertion>),
 ) -> Column {
-  let mut body = Column::new()
+  let waiting = shared
+    .asked
+    .filter(|asked| target.lane.is_none() && asked.to.as_ref() == Some(&column.key));
+  Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role());
-  let held = over.zip(refusing.clone()).map(|(drag, refusal)| Refused {
-    column: column.key.clone(),
-    key: drag.card.row.key.clone(),
-    refusal,
-  });
-  if let Some(refused) = held.as_ref() {
-    body = body.child(refusal_card(ctx, refused, &column.label));
-  } else if let Some(refused) = shared.refused.filter(|refused| refused.column == column.key)
-    && shared.drag.is_none()
-  {
-    body = body.child(refusal_card(ctx, refused, &column.label));
-  } else if let (Some(drag), None) = (shared.drag, over)
-    && let Some(refusal) = refusal_of(&drag.card, target)
-  {
-    body = body.child(refusal_note(ctx, &refusal, &format!("{id}-refused")));
-  }
-  body = match over.filter(|_| refusing.is_none()) {
-    Some(drag) => body.with_children(slots(ctx, state, (shared, target), cards, drag)),
-    None => body.with_children(card_views(ctx, shared, (target, cards))),
-  };
-  body = body.with_children(foot(ctx, shared, column, target.lane.as_deref()));
-  if cards.is_empty() && shared.drag.is_none() && target.lane.is_none() {
-    body = body.child(empty(ctx, shared, column));
-  }
-  body
+    .spacing(ExtraSpacing::Snug.role())
+    .with_children(waiting.map(|asked| waiting_card(ctx, (state, shared), asked, target)))
+    .with_children(card_views(ctx, (state, shared), (target, cards), insertion))
+    .with_children(foot(ctx, shared, column, target.lane.as_deref()))
+    .with_children((cards.is_empty() && waiting.is_none() && target.lane.is_none()).then(|| empty(ctx, shared, column)))
 }
 
-/// A column the drag is over, in its tone: filled, in a stroke, 4 inside it at its sides and foot.
+/// A column the drag is over, in its tone: filled, in a stroke. Its cards keep their width.
 fn lit(frame: Column, fill: PaletteColor, stroke: PaletteColor) -> Column {
   frame
     .background(fill)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
-    .padding(
-      Padding::new()
-        .left(SpacingSize::Xs)
-        .right(SpacingSize::Xs)
-        .bottom(SpacingSize::Xs),
-    )
 }
 
-/// The cards of a column, each mounted as itself.
+/// The cards of a column, each mounted as itself, the line where a lifted card would go among them. The card a
+/// question is asked at where it is holds the question's anchor; one whose move waits elsewhere leaves its place as
+/// an outline.
 fn card_views(
   ctx: &mut Ctx,
-  shared: &Shared<'_>,
-  (place, cards): (&Target, &[super::card::CardModel]),
+  (state, shared): (&BoardState, &Shared<'_>),
+  (place, cards): (&Target, &[CardModel]),
+  insertion: Option<Insertion>,
 ) -> Vec<Element> {
+  let last = cards.len().saturating_sub(1);
   cards
     .iter()
-    .map(|card| {
+    .enumerate()
+    .map(|(at, card)| {
       let id = card.row.id;
+      let asked = shared.asked.filter(|asked| asked.card.row.id == id);
       let look = CardLook {
         selected: shared.selected.0.contains(&id),
         selecting: !shared.selected.0.is_empty(),
-        lifted: shared.drag.is_some_and(|drag| drag.card.row.id == id),
-        waiting: shared.waiting == Some(id),
+        lifted: shared.drag.is_some_and(|drag| drag.card.row.id == id) || asked.is_some_and(|asked| asked.to.is_some()),
+        waiting: asked.is_some_and(|asked| asked.to.is_none()),
         focused: shared.focused.0 == Some(id),
         acting: false,
       };
       // A task kept Not shared, or a list that is no longer the person's, does not lift.
       let lifts = shared.lifts && !card.row.not_shared;
-      ctx.mount_keyed::<CardView>(
+      let view = ctx.mount_keyed::<CardView>(
         &format!("task-card-{}-{}", card.row.key, place.column.name()),
         CardProps {
           card: card.clone(),
@@ -207,92 +189,53 @@ fn card_views(
           place: place.clone(),
           lifts,
           menu: shared.menus && !card.row.not_shared,
+          pending: false,
         },
-      )
+      );
+      let view = if look.waiting { anchored(state, view) } else { view };
+      match insertion {
+        Some(Insertion::Before(before)) if before == at => overlay::with_line(view, true),
+        Some(Insertion::After) if at == last => overlay::with_line(view, false),
+        _ => view,
+      }
     })
     .collect()
 }
 
-/// The cards with the lifted card's slot where it would go, in task number order, and Done's own slots.
-fn slots(
+/// The card whose move to this column waits for the person's answer, at the column's top, holding the question's
+/// anchor: it neither lifts nor opens, and has no menu.
+fn waiting_card(
   ctx: &mut Ctx,
-  state: &BoardState,
-  (shared, target): (&Shared<'_>, &Target),
-  cards: &[super::card::CardModel],
-  drag: &Drag,
-) -> Vec<Element> {
-  if target.column == ColumnKey::Status(WorkflowStatus::Done) {
-    let done = drop_slot(
-      ctx,
-      "tasks-board-slot-done",
-      (Icon::CircleCheck, PaletteColor::Success),
-      "task_close.menu.done",
-    );
-    let mut parts = vec![done.into()];
-    parts.extend(card_views(ctx, shared, (target, cards)));
-    if !shared.display.show_canceled {
-      let zone = Target {
-        column: ColumnKey::Status(WorkflowStatus::Canceled),
-        lane: target.lane.clone(),
-      };
-      let canceled = drop_slot(
-        ctx,
-        "tasks-board-slot-canceled",
-        (Icon::CircleX, PaletteColor::TextMuted),
-        "task_close.menu.cancel",
-      )
-      .ref_element(state.target_ref(zone));
-      parts.push(canceled.into());
-    }
-    return parts;
-  }
-  let number = key_number(&drag.card.row.key);
-  let at = cards
-    .iter()
-    .position(|card| key_number(&card.row.key) > number)
-    .unwrap_or(cards.len());
-  let mut parts = card_views(ctx, shared, (target, cards));
-  parts.insert(
-    at,
-    Column::new()
-      .id("tasks-board-slot")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(drag.size.1))
-      .rounded(RadiusSize::Md)
-      .background(crate::theme::ExtraColor::Hover.role())
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
-      .into(),
+  (state, shared): (&BoardState, &Shared<'_>),
+  asked: &AskedCard,
+  place: &Target,
+) -> Element {
+  let look = CardLook {
+    waiting: true,
+    ..CardLook::default()
+  };
+  let view = ctx.mount_keyed::<CardView>(
+    &format!("task-card-{}-{}-waiting", asked.card.row.key, place.column.name()),
+    CardProps {
+      card: asked.card.clone(),
+      display: shared.display.clone(),
+      look,
+      place: place.clone(),
+      lifts: false,
+      menu: false,
+      pending: true,
+    },
   );
-  parts
+  anchored(state, view)
 }
 
-/// Done's slot *Mark as done* or its zone *Cancel task* (`reJKk`, `dYlr8`).
-fn drop_slot(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), key: &str) -> Row {
-  Row::new()
-    .id(id.to_owned())
+/// `view` holding the anchor the board's question opens under.
+fn anchored(state: &BoardState, view: Element) -> Element {
+  Column::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(SLOT_HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .rounded(RadiusSize::Md)
-    .background(crate::theme::ExtraColor::Hover.role())
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
-    .child(icon(glyph, IconSize::Base, color))
-    .child(
-      Text::new(&ctx.t(key))
-        .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextPrimary)
-        .nowrap(),
-    )
-}
-
-/// The number of a task's key (`KON-12` is 12), its order in a column.
-fn key_number(key: &str) -> u64 {
-  key
-    .rsplit_once('-')
-    .and_then(|(_, number)| number.parse().ok())
-    .unwrap_or(u64::MAX)
+    .ref_element(state.question_anchor.clone())
+    .child(view)
+    .into()
 }
 
 /// Where a column's head is: over its own cards, or over the board's rows, where columns do not fold.

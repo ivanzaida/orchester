@@ -1,25 +1,31 @@
-//! A column's refusal of a card, at its top (`Refusal` `q2Rtvh` in `03 Drop refused` `ZaM50`, and the refusals of `12
-//! Moves and confirmations` `aUNO8`): over the column the drag is on, and after the drop, `surface_raised` in a
-//! `danger` stroke, radius 6, with *KON-16 can't move to In review* (12/600 after a 13 `danger` mark), why in 12
-//! `text_secondary`, and, for a run that has not ended, that Done or Canceled stop it after a confirmation in 12
-//! `text_muted`. While a card is lifted, every other column that would refuse it says why in a quiet note at its top
-//! (`Refused` `QMdRC`).
+//! A column's refusal of a card, drawn over its cards and never among them (`Drag overlay` `wjtLk` in `03 Drop
+//! refused` `bR7zd`, the refusals of `12 Moves and confirmations` `aUNO8`): while a card is lifted, every column that
+//! would refuse it but its own is dimmed by the `scrim` at 72 % with one compact chip near its top, *Run not ended:
+//! stop it from the task* (11 `text_primary` after an 11 `ban`, `danger` on the column under the pointer, `text_muted`
+//! on the others), on `surface_raised` in a `border_strong` stroke, radius 6, lifted by the menu's shadow; its tooltip
+//! says the whole sentence. After a refused drop, or a refused move by the keys or the menu, the column keeps the chip
+//! alone until the next move.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
-  node::{border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, HitTestBehavior, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::tasks::moves;
 
-use super::actions::{Refusal, Refused};
+use super::actions::Refusal;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
-  ui::icon::{Icon, icon},
+  theme::{DROP_SCRIM_OPACITY, ExtraColor, ExtraSpacing, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    tooltip::Tooltip,
+  },
 };
 
 /// The i18n key of why a column refuses a task, for a menu row that cannot be chosen.
@@ -31,6 +37,7 @@ pub const fn reason_key(refusal: moves::Refusal) -> &'static str {
   }
 }
 
+/// The whole sentence of a refusal, in the chip's tooltip.
 const fn words_key(refusal: &Refusal) -> &'static str {
   match refusal {
     Refusal::RunNotEnded => "tasks.board.refused.runNotEnded",
@@ -40,78 +47,82 @@ const fn words_key(refusal: &Refusal) -> &'static str {
   }
 }
 
-/// The refusal of `refused` by the column `column` names, at its top.
-pub fn refusal_card(ctx: &Ctx, refused: &Refused, column: &str) -> Column {
-  let key = &*refused.key;
-  let title = match &refused.refusal {
-    Refusal::Incomplete(_) => ctx.t_args("tasks.board.refused.queueTitle", [("task", key)]),
-    Refusal::HasRun => ctx.t_args("tasks.board.refused.backlogTitle", [("task", key)]),
-    Refusal::RunNotEnded | Refusal::Pipeline => {
-      ctx.t_args("tasks.board.refused.title", [("task", key), ("column", column)])
-    }
-  };
-  let detail = match &refused.refusal {
-    Refusal::Incomplete(missing) => Some((missing.clone(), PaletteColor::TextSecondary)),
-    Refusal::RunNotEnded => Some((ctx.t("tasks.board.refused.closeHint"), PaletteColor::TextMuted)),
-    Refusal::HasRun | Refusal::Pipeline => None,
-  };
-  Column::new()
-    .id("tasks-board-refusal")
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(ExtraSpacing::Loose.role())
-        .bottom(ExtraSpacing::Loose.role())
-        .left(ExtraSpacing::Loose.role())
-        .right(ExtraSpacing::Loose.role()),
-    )
-    .spacing(ExtraSpacing::Snug.role())
-    .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+/// The chip's few words.
+const fn chip_key(refusal: &Refusal) -> &'static str {
+  match refusal {
+    Refusal::RunNotEnded => "tasks.board.refused.chip.runNotEnded",
+    Refusal::Incomplete(_) => "tasks.board.refused.chip.incomplete",
+    Refusal::HasRun => "tasks.board.refused.chip.hasRun",
+    Refusal::Pipeline => "tasks.board.refused.chip.pipeline",
+  }
+}
+
+/// How a column says it refuses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shown {
+  /// The pointer is over this column, or the refused drop or move was to it: the chip's mark is `danger`.
+  pub hovered: bool,
+  /// A card is lifted: the column's cards are dimmed under the chip.
+  pub scrim: bool,
+}
+
+/// The layer over the cards of the column `id` that refuses for `refusal`: the scrim while a card is lifted, and the
+/// chip near its top. It lets the pointer through but for the chip, whose tooltip says why in full.
+pub fn layer(ctx: &mut Ctx, id: &str, refusal: &Refusal, shown: Shown) -> Element {
+  let chip = chip(ctx, id, refusal, shown.hovered);
+  let mut layer = Column::new()
+    .id(format!("{id}-overlay"))
+    .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
+    .hit_test(HitTestBehavior::ContentOnly);
+  if shown.scrim {
+    layer = layer.child(
+      Column::new()
+        .id(format!("{id}-scrim"))
+        .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
+        .rounded(RadiusSize::Md)
+        .background(ExtraColor::Scrim.role())
+        .opacity(DROP_SCRIM_OPACITY)
+        .hit_test(HitTestBehavior::None),
+    );
+  }
+  layer
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Start)
-        .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Danger))
-        .child(
-          Text::new(&title)
-            .id("tasks-board-refusal-title")
-            .variant(ExtraTypography::InspectorSection.role())
-            .flex(1.0),
-        ),
+        .padding(Padding::new().top(SpacingSize::Sm))
+        .justify(lurq::layout::layout_kind::Justify::Center)
+        .hit_test(HitTestBehavior::ContentOnly)
+        .child(chip),
     )
-    .child(
-      Text::new(&ctx.t(words_key(&refused.refusal)))
-        .id("tasks-board-refusal-text")
-        .variant(TypographyStyle::Description)
-        .width(Dimension::Pct(100.0)),
-    )
-    .with_children(detail.map(|(words, color)| {
-      Text::new(&words)
-        .id("tasks-board-refusal-detail")
-        .variant(TypographyStyle::Description)
-        .color(color)
-        .width(Dimension::Pct(100.0))
-    }))
+    .into()
 }
 
-/// Why a column the drag is not over would refuse the lifted card: a quiet note at its top.
-pub fn refusal_note(ctx: &Ctx, refusal: &Refusal, id: &str) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
+/// *Run not ended: stop it from the task* (`Refusal chip` `E2djZX`).
+fn chip(ctx: &mut Ctx, id: &str, refusal: &Refusal, hovered: bool) -> Element {
+  let mark = if hovered {
+    PaletteColor::Danger
+  } else {
+    PaletteColor::TextMuted
+  };
+  let words: Arc<str> = ctx.t(words_key(refusal));
+  let chip = Row::new()
+    .id(format!("{id}-refused"))
+    .padding(Padding::symmetric(ExtraSpacing::TextArea.role(), SpacingSize::Xs))
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::Ban, IconSize::Sm, PaletteColor::TextMuted))
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .box_shadow(ShadowStyle::Md)
+    .describe("a11y_name", words.clone())
+    .describe("tone", if hovered { "danger" } else { "muted" })
+    .child(icon(Icon::Ban, IconSize::Xs, mark))
     .child(
-      Text::new(&ctx.t(words_key(refusal)))
-        .variant(ExtraTypography::Note.role())
-        .flex(1.0),
-    )
+      Text::new(&ctx.t(chip_key(refusal)))
+        .id(format!("{id}-refused-text"))
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextPrimary)
+        .nowrap(),
+    );
+  Tooltip::new(format!("{id}-refused"), words).wrap(ctx, chip)
 }

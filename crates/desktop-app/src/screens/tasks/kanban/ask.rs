@@ -1,35 +1,27 @@
-//! What a drop or a command asks in place, over the columns, before anything changes (`12 Moves and confirmations`
-//! `aUNO8`, `13 Menus, bulk and header` `CdMab`): queuing a draft that starts at once (*Queue KON-27? It starts now: 1
-//! agent slot is free.* with Keep as draft and Queue), running a task again, marking work that waits to be merged as
-//! done, and for several selected tasks the same questions, closing those whose runs have not ended, and deleting
-//! them. A card `surface_raised` in a stroke of its weight, radius 6, 12 over and under its parts, 14 at its sides: a
-//! 15 mark, the question in 13/600 and what it does in 12.5 `text_secondary`; then *Enter confirms · Esc keeps it* and
-//! its two buttons at the end. Enter and Esc answer it too.
+//! What a drop or a command asks in place before anything changes, in a popover at the card or over the selection bar
+//! (`12 Moves and confirmations` `aUNO8`, `13 Menus, bulk and header` `CdMab`, drawn by `question`): queuing a draft
+//! that starts at once (*Queue KON-27? It starts now: 1 agent slot is free.* with Keep as draft and Queue), running a
+//! task again, marking work that waits to be merged as done, and for several selected tasks the same questions,
+//! closing those whose runs have not ended, and deleting them. Enter and Esc answer it too.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  },
-  components::{Column, Row, Spacer, Text},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  app::{ctx::Ctx, theme::PaletteColor},
+  components::Column,
 };
 use orchester_workspace::tasks::close::Closing;
 
 use super::{
   actions::{Ask, BoardState, Change, ChangeKind},
   bulk::Bulk,
+  question::{Parts, question},
 };
 use crate::{
   screens::task_close::{Closer, Subject},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
-    kbd::key_cap,
+    icon::Icon,
   },
 };
 
@@ -45,16 +37,9 @@ struct Words {
 }
 
 /// The question `asked` puts, with its answers.
-pub fn ask_card(ctx: &Ctx, (state, closer): (&BoardState, &Closer), asked: &Ask) -> Element {
+pub fn ask_panel(ctx: &Ctx, (state, closer): (&BoardState, &Closer), asked: &Ask) -> Column {
   let words = words(ctx, asked);
   let pending = state.busy() || state.bulk.state().get().is_pending() || closer.busy();
-  let keys = Row::new()
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(key_cap("tasks-board-ask-enter", &ctx.t("tasks.board.keys.enter")))
-    .child(note(&ctx.t("tasks.board.ask.confirms")))
-    .child(key_cap("tasks-board-ask-esc", &ctx.t("tasks.board.keys.esc")))
-    .child(note(&ctx.t("tasks.board.ask.keeps")));
   let keep = ActionButton::new("tasks-board-ask-keep", ButtonKind::Ghost, words.keep).in_form();
   let keep = if pending {
     keep.disabled()
@@ -78,49 +63,20 @@ pub fn ask_card(ctx: &Ctx, (state, closer): (&BoardState, &Closer), asked: &Ask)
     let (state, closer, asked) = (state.clone(), closer.clone(), asked.clone());
     confirm.on_click(move || answer(&state, &closer, &asked))
   };
-  Column::new()
-    .id("tasks-board-ask")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, words.tone.clone()))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Loose.role())
-        .align_items(Alignment::Start)
-        .child(icon(words.glyph, IconSize::Nav, words.tone))
-        .child(
-          Column::new()
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .spacing(SpacingSize::Xs)
-            .child(
-              Text::new(&words.title)
-                .id("tasks-board-ask-title")
-                .variant(ExtraTypography::FormSection.role()),
-            )
-            .child(
-              Text::new(&words.detail)
-                .id("tasks-board-ask-text")
-                .variant(ExtraTypography::Lead.role())
-                .width(Dimension::Pct(100.0)),
-            ),
-        ),
-    )
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(keys)
-        .child(Spacer::new().flex(1.0))
-        .child(keep)
-        .child(confirm),
-    )
-    .into()
+  question(
+    ctx,
+    Parts {
+      id: "tasks-board-ask",
+      glyph: words.glyph,
+      tone: words.tone,
+      title: words.title,
+      detail: words.detail,
+      keeps: ctx.t("tasks.board.ask.keeps"),
+      more: Vec::new(),
+      keep: keep.into(),
+      confirm: confirm.into(),
+    },
+  )
 }
 
 /// The person confirmed `asked`.
@@ -302,8 +258,4 @@ pub fn listed<'a>(ctx: &Ctx, tasks: impl Iterator<Item = &'a Subject>) -> String
       )
       .to_string(),
   }
-}
-
-fn note(words: &str) -> Text {
-  Text::new(words).variant(ExtraTypography::Note.role()).nowrap()
 }

@@ -5,7 +5,7 @@
 //! can go and says which stay and why (a card whose run has not ended moves only to Done or Canceled), and asks first
 //! when queuing drafts on Todo starts them at once; Mark as done asks first when work of a card waits to be merged;
 //! Mark as done and Cancel task ask once to stop the runs that have not ended, naming them, then close every card;
-//! Delete… asks once over the columns, by a person only, and is unavailable on a shared project. A read-only card
+//! Delete… asks once over the selection bar, by a person only, and is unavailable on a shared project. A read-only card
 //! (`Dropping::locked`) is never selected.
 
 use std::sync::Arc;
@@ -347,7 +347,7 @@ impl BulkBar {
   }
 }
 
-/// Delete… for the selection: unavailable on a shared project, asked once over the columns otherwise.
+/// Delete… for the selection: unavailable on a shared project, asked once over the selection bar otherwise.
 fn delete_button(ctx: &Ctx, dropping: &Dropping, busy: bool, subjects: &[Subject]) -> ActionButton {
   let delete = ActionButton::new(
     "tasks-board-bulk-delete",

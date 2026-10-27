@@ -336,13 +336,20 @@ impl TasksScreen {
       let name = project.open.project.name().as_str();
       not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
     });
+    // The board asks at the card, in a popover over the columns (`Popover · stop run` `XdfNz`): only why the last
+    // close failed stands over them.
+    let close = if self.display.get().layout == Layout::Board {
+      task_close::failure(ctx, &self.closer, "tasks-close")
+    } else {
+      task_close::panel(ctx, &self.closer, ("tasks-close", task_close::StopLook::Quiet))
+    };
     page
       .child(inset(views::views(ctx, (id, list), Counts::Read(counts), chip)))
       .with_children(held.flatten().map(inset))
       .with_children(filters.map(inset))
       .with_children(kept.map(inset))
       .with_children(states::outside_tasks(ctx, list.tab(), &reading.tasks).map(inset))
-      .with_children(task_close::panel(ctx, &self.closer, ("tasks-close", task_close::StopLook::Quiet)).map(inset))
+      .with_children(close.map(inset))
   }
 
   /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top, for another

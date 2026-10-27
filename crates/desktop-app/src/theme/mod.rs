@@ -94,8 +94,8 @@ pub use self::{
   task::{TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText},
   tasks::{
-    HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE, SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS,
-    TasksSpacing, list_scrollbar,
+    DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
+    SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar,
   },
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},

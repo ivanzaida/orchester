@@ -1,6 +1,6 @@
 //! A card's menu (`Card menu` `vV3BX` in `07 Card actions and keys` `pXzH8`): Open, Move to, Priority and Tags, which
 //! each open their list beside the menu (`Move to menu` `c88il`), Copy key, Run again for a task whose run ended, Mark
-//! as done, Cancel task or Reopen task as its status allows, and Delete task… in `danger`, which asks over the columns
+//! as done, Cancel task or Reopen task as its status allows, and Delete task… in `danger`, which asks at the card
 //! (unavailable on a shared project). Move to lists the columns, each one a card cannot go to faded, as a drop refuses
 //! it, and says why once in its foot (`Move to for a card whose run has not ended` `kn5MV`). While a change is under
 //! way the menu's changes wait (`Menu while a change is under way` `ogTTt`). Once the person is no longer a member of
@@ -208,7 +208,7 @@ fn copy_key(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Element {
   .render(ctx, open)
 }
 
-/// Run again, for a task whose latest run ended: asked over the columns first, as a drop on Todo asks.
+/// Run again, for a task whose latest run ended: asked at the card first, as a drop on Todo asks.
 fn run_again(
   ctx: &mut Ctx,
   card: &CardModel,

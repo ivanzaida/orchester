@@ -209,6 +209,11 @@ fn tasks_spacing_matches_the_redesign() {
       80.0,
       "the empty project's words sit 80 over the middle (GQZ6J)",
     ),
+    (
+      theme::TasksSpacing::QuestionKeys,
+      25.0,
+      "a board question's keys sit 25 in, under its words (gWRaB)",
+    ),
   ] {
     assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{why}");
   }

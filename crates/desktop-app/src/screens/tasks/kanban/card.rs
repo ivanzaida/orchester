@@ -202,9 +202,10 @@ pub struct CardLook {
   pub selected: bool,
   /// Some card is selected: every card shows its check.
   pub selecting: bool,
-  /// A drag lifted it away: its place is an outline.
+  /// A drag lifted it away, or its move waits for the person's answer in another column: its place is an outline.
   pub lifted: bool,
-  /// Its drop waits for the person's answer: it shows faded where it goes.
+  /// A question waits for the person's answer at it: faded in a `border_focus` stroke, where its move would put it
+  /// or where it stays (`KON-16` `y7FQj9`).
   pub waiting: bool,
   pub focused: bool,
   /// The pointer is on it, or its menu is open: its age gives way to *More actions*.

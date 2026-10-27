@@ -130,19 +130,22 @@
         "runNotEnded": "A run of this task has not ended. Done and Canceled stop it, after you confirm."
       },
       "refused": {
-        "title": "{{task}} can't move to {{column}}",
-        "queueTitle": "{{task}} can't be queued yet",
-        "backlogTitle": "{{task}} can't go back to Backlog",
         "runNotEnded": "A run of this task has not ended. Answer or stop it from the task, or wait for it to end.",
         "runNotEndedMenu": "A run of this task has not ended.",
         "incomplete": "Add the missing details before running the task.",
         "hasRun": "This task already has a run.",
         "pipeline": "Columns by pipeline only show where tasks are; a task's pipeline is chosen on its page.",
-        "closeHint": "Done or Canceled stop it, after you confirm."
+        "chip": {
+          "runNotEnded": "Run not ended: stop it from the task",
+          "incomplete": "Needs a brief: add it before queuing",
+          "hasRun": "Has a run: can't go back to Backlog",
+          "pipeline": "Pipelines change on the task's page"
+        }
       },
       "ask": {
         "confirms": "confirms",
         "keeps": "keeps it",
+        "keepsRunning": "keeps it running",
         "keysAnd": "{{first}} and {{last}}",
         "bulkKeep": "Keep them",
         "startsNow": {

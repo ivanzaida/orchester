@@ -45,6 +45,9 @@ pub struct CardProps {
   pub lifts: bool,
   /// It has *More actions*.
   pub menu: bool,
+  /// It is where a move that waits for the person's answer would put it, besides its place: it does nothing, and its
+  /// ids end in `-pending`.
+  pub pending: bool,
 }
 
 impl DevtoolsInspectable for CardProps {}
@@ -125,6 +128,13 @@ impl Component for CardView {
     let look = CardLook { acting, ..props.look };
     let parts = content(ctx, &props.card, (&props.display, look), more);
     let frame = frame(&props, look, parts).ref_element(self.frame.clone());
+    if props.pending {
+      return Column::new()
+        .id(format!("task-card-{key}-pending"))
+        .width(Dimension::Pct(100.0))
+        .describe("state", "pending")
+        .child(frame);
+    }
     let handles = MenuHandles {
       open: &self.open,
       anchor: &self.anchor,
@@ -161,6 +171,7 @@ impl CardView {
     );
     let selects = !dropping.locked(&props.card);
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
+    let (pressed, lifted) = (state.lifted_press.clone(), state.lifted_press.clone());
     let button = Button::empty()
       .id(format!("task-card-{key}"))
       .width(Dimension::Pct(100.0))
@@ -170,13 +181,18 @@ impl CardView {
       .describe("state", if props.look.selected { "selected" } else { "enabled" })
       .on_mouse_enter(move || enter.set(true))
       .on_mouse_leave(move || leave.set(false))
-      .on_mouse_down(|event: MouseEvent| {
+      .on_mouse_down(move |event: MouseEvent| {
+        *pressed.lock() = false;
         if event.button == MouseButton::Middle {
           event.prevent_default();
         }
       })
       .on_click(move |event: MouseEvent| {
         event.stop_propagation();
+        // A card let go where it was lifted from is set down, not opened.
+        if std::mem::take(&mut *lifted.lock()) {
+          return;
+        }
         let press = LinkPress::of(&event);
         if press.shift && !press.command {
           if !selects {
@@ -216,19 +232,20 @@ impl CardView {
 }
 
 /// The card's frame: `surface_panel` in a `border` stroke; `accent_muted` in an `accent` stroke when selected; an
-/// outline where a lifted card was; faded where a drop waits for the person; a `border_focus` stroke for the card the
-/// keys reach.
+/// outline where a lifted card was or where a card whose move waits is; faded in a `border_focus` stroke where a
+/// question waits at it (`y7FQj9`); a `border_focus` stroke for the card the keys reach.
 fn frame(props: &CardProps, look: CardLook, parts: Column) -> Column {
   let (fill, stroke) = match () {
     () if look.lifted => (None, PaletteColor::Border),
+    () if look.waiting => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderFocus),
     () if look.selected => (Some(PaletteColor::AccentMuted), PaletteColor::Accent),
-    () if look.waiting => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderStrong),
     () if look.focused => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderFocus),
     () if props.card.highlighted => (Some(PaletteColor::InfoMuted), PaletteColor::Border),
     () => (Some(PaletteColor::SurfacePanel), PaletteColor::Border),
   };
+  let pending = if props.pending { "-pending" } else { "" };
   let frame = Column::new()
-    .id(format!("task-card-frame-{}", props.card.row.key))
+    .id(format!("task-card-frame-{}{pending}", props.card.row.key))
     .width(Dimension::Pct(100.0))
     .rounded(RadiusSize::Md)
     .border(Border::inside(BorderSize::Sm, stroke))
@@ -273,6 +290,7 @@ fn moved(state: &BoardState, (card, place, frame): (&CardModel, &Target, &Elemen
   match lifted {
     None => {
       let bounds = frame.bounds();
+      *state.lifted_press.lock() = true;
       state.refused.set(None);
       state.drag.set(Some(Drag {
         card: card.clone(),

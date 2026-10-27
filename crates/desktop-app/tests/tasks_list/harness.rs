@@ -281,9 +281,15 @@ impl Seeded {
   /// Lifts the card of `key` and holds it over the column `column`, the button still down; answers where the card
   /// was taken from and where the pointer is.
   pub fn hold(&mut self, key: &str, column: &str) -> ((f32, f32), (f32, f32)) {
+    self.hold_over(key, &format!("tasks-board-column-{column}"))
+  }
+
+  /// Lifts the card of `key` and holds it over the element `id`, a little under its top, the button still down;
+  /// answers where the card was taken from and where the pointer is.
+  pub fn hold_over(&mut self, key: &str, id: &str) -> ((f32, f32), (f32, f32)) {
     let card = format!("task-card-{key}");
     self.until(&card, |seeded| seeded.laid_out(&card));
-    let (from, to) = (self.bounds(&card), self.bounds(&format!("tasks-board-column-{column}")));
+    let (from, to) = (self.bounds(&card), self.bounds(id));
     let (x0, y0) = (from.x + from.width / 2.0, from.y + from.height / 2.0);
     let (x1, y1) = (to.x + to.width / 2.0, to.y + DROP_DEPTH.min(to.height / 2.0));
     self.window.tree.mouse_move(x0, y0);

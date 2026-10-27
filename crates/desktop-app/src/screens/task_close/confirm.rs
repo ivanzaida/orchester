@@ -44,9 +44,12 @@ pub fn panel(ctx: &mut Ctx, closer: &Closer, (id, look): (&str, StopLook)) -> Op
   }
 }
 
-/// Why the last close or reopen did not happen, naming its task (the Tasks list shows it over every row), until the
-/// next request.
-fn failure(ctx: &Ctx, closer: &Closer, id: &str) -> Option<Element> {
+/// Why the last close or reopen did not happen, naming its task (the Tasks list shows it over every row, the board
+/// over its columns, which ask the rest at the card), until the next request.
+pub fn failure(ctx: &Ctx, closer: &Closer, id: &str) -> Option<Element> {
+  if closer.asked.get() != Asked::Nothing {
+    return None;
+  }
   let state = closer.action.state().get();
   let pending = state.is_pending();
   let failed = state.error.filter(|_| !pending)?;

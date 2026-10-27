@@ -79,7 +79,7 @@ pub struct Refused {
 
 impl DevtoolsInspectable for Refused {}
 
-/// What a drop or a menu asks in place, over the columns, before anything changes.
+/// What a drop or a menu asks in place, at the card (or over the selection bar), before anything changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ask {
   /// Queuing the draft starts it at once: `free` agent slots are free and new starts are not held.
@@ -200,6 +200,12 @@ pub struct BoardState {
   pub quick_open: Signal<bool>,
   pub refused: Signal<Option<Refused>>,
   pub asked: Signal<Option<Ask>>,
+  /// What is asked shows in its popover; a press outside it or Esc closes it, which keeps everything as it was.
+  pub question_open: Signal<bool>,
+  /// The card a question is asked at (where its move would put it, or where it is), and the selection bar, which the
+  /// questions about the selected cards are asked over.
+  pub question_anchor: ElementRef,
+  pub bulk_anchor: ElementRef,
   /// A task was canceled from the board: the Canceled column shows folded with its count.
   pub canceled_now: Signal<bool>,
   /// The last change that did not happen, until the next one or a dismissal.
@@ -213,6 +219,8 @@ pub struct BoardState {
   pub frame: ElementRef,
   /// A drag that Esc set down: it ends without a drop.
   pub set_down: Arc<Mutex<bool>>,
+  /// The press under way lifted its card: letting go opens nothing, wherever the card was let go.
+  pub lifted_press: Arc<Mutex<bool>>,
 }
 
 impl BoardState {
@@ -230,6 +238,9 @@ impl BoardState {
       quick_open: ctx.signal(false),
       refused: ctx.signal(None),
       asked,
+      question_open: ctx.signal(false),
+      question_anchor: ElementRef::default(),
+      bulk_anchor: ElementRef::default(),
       canceled_now: ctx.signal(false),
       failed,
       changes,
@@ -237,6 +248,7 @@ impl BoardState {
       targets: Arc::default(),
       frame: ElementRef::default(),
       set_down: Arc::default(),
+      lifted_press: Arc::default(),
     }
   }
 

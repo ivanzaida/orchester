@@ -102,8 +102,9 @@ fn escape(keys: &KeyContext) -> bool {
     state.drag.set(None);
     return true;
   }
-  if state.asked.get_untracked().is_some() {
-    state.asked.set(None);
+  // A question open: its popover closes, which keeps everything as it was.
+  if state.question_open.get_untracked() {
+    state.question_open.set(false);
     return true;
   }
   if !state.selected.get_untracked().0.is_empty() {
@@ -118,9 +119,13 @@ fn escape(keys: &KeyContext) -> bool {
 }
 
 fn enter(keys: &KeyContext) -> bool {
-  let state = &keys.dropping.state;
+  let (state, closer) = (&keys.dropping.state, &keys.dropping.closer);
   if let Some(asked) = state.asked.get_untracked() {
-    answer(state, &keys.dropping.closer, &asked);
+    answer(state, closer, &asked);
+    return true;
+  }
+  // The stop confirmation: Enter stops the run and closes the task. A deletion is confirmed by its button alone.
+  if state.question_open.get_untracked() && closer.confirm_stop() {
     return true;
   }
   let Some(card) = focused(keys) else {

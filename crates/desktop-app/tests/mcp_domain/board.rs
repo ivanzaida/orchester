@@ -1,8 +1,8 @@
 //! The Tasks board (ORC-105) with the window's MCP server: a bulk Mark as done an MCP client presses is recorded as
 //! automation's, since who asks is read in the press itself; a complete draft moved to Todo is queued there; and with
 //! the real runner serving the project and an agent slot free, queuing a draft on Todo, alone from its card's Move to
-//! or several from the selection bar, asks first that it starts now, and Keep as draft queues nothing.
-//! `cargo test -p orchester-app --test mcp_domain domain_board_`.
+//! (in a popover at the card, nothing moved) or several from the selection bar, asks first that it starts now, and
+//! Keep as draft queues nothing. `cargo test -p orchester-app --test mcp_domain domain_board_`.
 
 use std::path::Path;
 
@@ -23,6 +23,8 @@ use super::{Served, runner_programs, tools_window::text};
 
 /// Room for every card of the seed's columns.
 const TALL: (u32, u32) = (1440, 1700);
+/// A board question's width (`Popover · stop run` `XdfNz`).
+const QUESTION_WIDTH: f32 = 340.0;
 
 /// The task of `repo` with `key`, as stored.
 fn stored(repo: &Path, key: &str) -> Task {
@@ -66,6 +68,16 @@ impl Served {
       .tree
       .get_element_by_id_mut(id)
       .is_some_and(|element| element.bounds().is_some())
+  }
+
+  /// Where `id` is laid out.
+  fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self.until(id, |served| served.laid_out(id));
+    self
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} laid out"))
   }
 
   /// The middle of `id`, once it is laid out.
@@ -181,12 +193,20 @@ fn domain_board_queuing_drafts_that_start_now_asks_first_alone_and_in_bulk() {
       .is_some_and(|work| usize::try_from(work.agent_slots.get()).is_ok_and(|slots| slots > work.agents_working()))
   });
 
-  // Alone, from its card's Move to.
+  // Alone, from its card's Move to: asked in a popover at the card, which waits in Todo.
   let first = &keys[0];
+  let columns = served.bounds("tasks-board-columns");
   served.move_from_menu(first, "todo");
   served.until("the question", |served| served.laid_out("tasks-board-ask-keep"));
   let asked = text(&mut served, "tasks-board-ask-title");
   assert!(asked.starts_with(&format!("Queue {first}? It starts now: ")), "{asked}");
+  assert!((served.bounds("tasks-board-ask").width - QUESTION_WIDTH).abs() < 0.5);
+  assert!(served.laid_out(&format!("task-card-{first}-pending")));
+  assert_eq!(
+    served.bounds("tasks-board-columns").y,
+    columns.y,
+    "nothing pushed the columns"
+  );
   served.click_by_person("tasks-board-ask-keep");
   assert!(!served.shows("tasks-board-ask"));
   assert_eq!(stored(&seeded.repo, first).status(), TaskStatus::Draft, "kept as draft");

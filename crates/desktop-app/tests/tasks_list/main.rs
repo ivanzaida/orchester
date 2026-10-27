@@ -2,8 +2,9 @@
 //! counts, the search, the Filter with its chips and the sorts in Display (`query`), Active's groups and what waits
 //! outside the tasks (`needs_you`), what each row says, what the pointer brings up on it and where it leads (`rows`),
 //! what the list shows instead of rows, its skeletons among them (`states`), closing and deleting a task from a row or
-//! its page (`close`), and the board beside the list (`board`, ORC-105). No runner serves the project, so a run
-//! recorded as running reads as interrupted. Needs `git`, as the seed does.
+//! its page (`close`), and the board beside the list (`board`, ORC-105), on which nothing moves while a card is lifted
+//! or a question is open (`board_layout`). No runner serves the project, so a run recorded as running reads as
+//! interrupted. Needs `git`, as the seed does.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -15,6 +16,7 @@ mod kontur;
 mod support;
 
 mod board;
+mod board_layout;
 mod close;
 mod harness;
 mod needs_you;

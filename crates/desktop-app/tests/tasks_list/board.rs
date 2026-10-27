@@ -4,8 +4,9 @@
 //! confirmation, which says why it failed, a run that ended is offered Run again, Done asks first for work that waits
 //! to be merged, In progress changes the status only, columns by pipeline refuse every drop); a canceled card's line;
 //! quick add in Backlog; and bulk moves and closes that leave the cards that cannot go with why and ask as single moves
-//! do. No runner serves the project, so no agent slot is free and queuing never asks first here; `mcp_domain`'s `board`
-//! queues a complete draft and asks with the real runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
+//! do. Nothing a drag or a question shows moves a card (`board_layout`). No runner serves the project, so no agent slot
+//! is free and queuing never asks first here; `mcp_domain`'s `board` queues a complete draft and asks with the real
+//! runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
 
 use orchester_app::routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
@@ -31,7 +32,7 @@ fn status(seeded: &Seeded, key: &str) -> WorkflowStatus {
 }
 
 /// Whether the board shows the card of `key` in the column `column`.
-fn in_column(seeded: &mut Seeded, key: &str, column: &str) -> bool {
+pub fn in_column(seeded: &mut Seeded, key: &str, column: &str) -> bool {
   seeded
     .window
     .texts(&format!("tasks-board-column-{column}"))
@@ -48,15 +49,16 @@ fn columns(seeded: &mut Seeded) -> Vec<String> {
 }
 
 /// Presses `id` once it is laid out.
-fn press(seeded: &mut Seeded, id: &str) {
+pub fn press(seeded: &mut Seeded, id: &str) {
   seeded.until(id, |seeded| seeded.laid_out(id));
   seeded.click(id);
 }
 
-/// The words of the refusal at the column's top.
-fn refusal(seeded: &mut Seeded) -> String {
-  seeded.until("the refusal", |seeded| seeded.laid_out("tasks-board-refusal-text"));
-  seeded.text("tasks-board-refusal-text")
+/// The few words of the refusal chip over the column `column`.
+pub fn refusal(seeded: &mut Seeded, column: &str) -> String {
+  let id = format!("tasks-board-column-{column}-refused-text");
+  seeded.until("the refusal", |seeded| seeded.laid_out(&id));
+  seeded.text(&id)
 }
 
 #[test]
@@ -98,10 +100,16 @@ fn tasks_board_the_layout_switch_shows_the_columns_and_is_kept_for_the_project()
 fn tasks_board_an_incomplete_draft_is_refused_by_todo() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   seeded.drag("KON-3", "todo");
-  assert_eq!(refusal(&mut seeded), "Add the missing details before running the task.");
-  assert_eq!(seeded.text("tasks-board-refusal-title"), "KON-3 can't be queued yet");
+  assert_eq!(refusal(&mut seeded, "todo"), "Needs a brief: add it before queuing");
   assert_eq!(status(&seeded, "KON-3"), WorkflowStatus::Backlog);
   assert_eq!(stored(&seeded, "KON-3").status(), TaskStatus::Draft);
+  // The chip stays over the column, its cards where they were, until Esc.
+  seeded
+    .window
+    .tree
+    .key_down("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  seeded.window.pass();
+  assert!(!seeded.shows("tasks-board-column-todo-refused"));
 }
 
 #[test]
@@ -144,7 +152,7 @@ fn tasks_board_a_queued_task_that_never_ran_returns_to_draft_in_backlog_and_one_
   assert_eq!(status(&seeded, "KON-8"), WorkflowStatus::Backlog);
 
   seeded.drag("KON-1", "backlog");
-  assert_eq!(refusal(&mut seeded), "This task already has a run.");
+  assert_eq!(refusal(&mut seeded, "backlog"), "Has a run: can't go back to Backlog");
   assert_eq!(status(&seeded, "KON-1"), WorkflowStatus::Done);
 }
 
@@ -152,10 +160,7 @@ fn tasks_board_a_queued_task_that_never_ran_returns_to_draft_in_backlog_and_one_
 fn tasks_board_a_run_that_has_not_ended_moves_only_through_the_stop_confirmation() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   seeded.drag("KON-12", "todo");
-  assert_eq!(
-    refusal(&mut seeded),
-    "A run of this task has not ended. Answer or stop it from the task, or wait for it to end."
-  );
+  assert_eq!(refusal(&mut seeded, "todo"), "Run not ended: stop it from the task");
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
 
   seeded.drag("KON-12", "done");
@@ -165,6 +170,8 @@ fn tasks_board_a_run_that_has_not_ended_moves_only_through_the_stop_confirmation
   let asked = seeded.text("tasks-close-stop");
   assert!(asked.contains("Stop the run of KON-12?"), "{asked}");
   press(&mut seeded, "tasks-close-stop-keep");
+  assert!(!seeded.shows("tasks-close-stop"));
+  assert!(!seeded.shows("task-card-KON-12-pending"), "the card back in its place");
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress, "kept running");
 }
 
@@ -208,8 +215,8 @@ fn tasks_board_columns_by_pipeline_refuse_every_drop() {
   assert!(!in_column(&mut seeded, "KON-12", "pipeline-none"));
   seeded.drag("KON-12", "pipeline-none");
   assert_eq!(
-    refusal(&mut seeded),
-    "Columns by pipeline only show where tasks are; a task's pipeline is chosen on its page."
+    refusal(&mut seeded, "pipeline-none"),
+    "Pipelines change on the task's page"
   );
 }
 
@@ -348,40 +355,6 @@ fn tasks_board_bulk_mark_as_done_asks_for_work_waiting_to_be_merged_and_for_runs
   seeded.until("both Done", |seeded| {
     status(seeded, "KON-9") == WorkflowStatus::Done && status(seeded, "KON-15") == WorkflowStatus::Done
   });
-}
-
-#[test]
-fn tasks_board_a_card_whose_run_has_not_ended_finds_done_and_canceled_offered_wherever_it_is_held() {
-  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
-  // Held over In review, which refuses it: Done already offers Mark as done and Cancel task (`03 Drop refused`).
-  let ((x0, y0), _) = seeded.hold("KON-12", "in_review");
-  seeded.until("Done's slots", |seeded| seeded.laid_out("tasks-board-slot-done"));
-  assert!(seeded.laid_out("tasks-board-slot-canceled"));
-  assert_eq!(
-    seeded.text("tasks-board-hint-text"),
-    "KON-12 goes only to Done or Canceled"
-  );
-  // In review says why at its top while the card is held over it, before any drop.
-  let why = refusal(&mut seeded);
-  assert!(why.starts_with("A run of this task has not ended."), "{why}");
-  assert!(
-    seeded
-      .window
-      .texts("tasks-board-column-in_review")
-      .is_some_and(|texts| texts.contains(&why)),
-    "the refusal is in the column under the pointer"
-  );
-  // Let go where it was taken from: nothing changes.
-  seeded.window.tree.mouse_move(x0, y0);
-  seeded.window.pass();
-  seeded
-    .window
-    .tree
-    .mouse_up(x0, y0, lurq::app::events::MouseButton::Left);
-  seeded.window.pass();
-  assert!(!seeded.shows("tasks-board-slot-done"), "the slots go with the drag");
-  assert!(!seeded.shows("tasks-board-refusal"), "so does the held refusal");
-  assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
 }
 
 #[test]

@@ -2,11 +2,12 @@
 //! in columns by workflow status (Backlog, Todo, In progress, In review and Done; Canceled once Display shows it), or
 //! by priority, module or pipeline, in rows by module or priority when Display asks (`model`). A card opens its task;
 //! a drag moves it to another column by the person's rules (`drop`, `orchester_workspace::tasks::moves`): refused
-//! with why in the column, asked first in place over the columns, or closed through the screen's closer, whose
-//! confirmation stops a run that has not ended. Its menu, the keys and the selection bar do the same (`menu`, `keys`,
-//! `bulk`). Backlog adds drafts (`quick_add`). The list's header, views, filters, notices and close panel stand over
-//! it, as the screen draws them (`super::TasksScreen::top`). lurq's drag events carry the drag; the lifted card, the
-//! drop slot and the columns' look are drawn here, hit-tested against the columns as laid out (`actions`).
+//! with why over the column, asked first in a popover at the card (`question`), or closed through the screen's
+//! closer, whose confirmation stops a run that has not ended and is asked at the card too. Its menu, the keys and the
+//! selection bar do the same (`menu`, `keys`, `bulk`). Backlog adds drafts (`quick_add`). The list's header, views,
+//! filters and notices stand over it, as the screen draws them (`super::TasksScreen::top`). lurq's drag events carry
+//! the drag; the lifted card, the insertion line and the overlays over the columns are drawn here, hit-tested against
+//! the columns as laid out (`actions`). Nothing a drag or a question shows moves a card.
 //!
 //! The board is read-only where the list is: a project the person is no longer a member of lifts, moves and selects no
 //! card and locks quick add, its menus kept with Open and Copy key; the *Not shared* tasks lift, move and select no
@@ -27,6 +28,8 @@ mod lines;
 mod menu;
 mod model;
 pub mod options;
+mod overlay;
+mod question;
 mod quick_add;
 mod refusal;
 pub mod skeleton;
@@ -60,6 +63,7 @@ use self::{
   drop::Dropping,
   keys::{Grid, KeyContext, on_key},
   model::{ColumnKey, Source},
+  question::{AskedCard, Asking},
 };
 use crate::{
   navigation::Navigation,
@@ -175,9 +179,19 @@ impl Component for Board {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<BoardProps>().clone();
-    Self {
-      state: BoardState::new(ctx, (props.project.open, props.project.feed), props.display),
-    }
+    let state = BoardState::new(ctx, (props.project.open, props.project.feed), props.display);
+    // Esc or a press outside closed the question: everything stays as it was, the card back in its place.
+    let (asked, closer) = (state.asked.clone(), Closer::of(ctx));
+    ctx.watch(&state.question_open, move |open: &bool| {
+      if *open {
+        return;
+      }
+      if asked.get_untracked().is_some() {
+        asked.set(None);
+      }
+      closer.keep();
+    });
+    Self { state }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -214,7 +228,10 @@ impl Component for Board {
     ctx.provide(state.clone());
     ctx.provide(dropping.clone());
     state.clear_targets();
-    let body = self.body(ctx, (&props, &display), (&columns, lanes.as_deref()));
+    let (asking, asked) = self.asking(&props, &closer, (&display, &columns, lanes.is_some()));
+    let body = self.body(ctx, (&props, &display), (&columns, lanes.as_deref()), asked.as_ref());
+    let bulk = self.bulk_cards(&props);
+    let (popover, inline) = self.question(ctx, &closer, asking, (asked.is_some(), !bulk.is_empty()));
     let lines = top_lines(ctx, (&state, &closer), canceled.as_ref());
     let keys = KeyContext {
       dropping,
@@ -222,7 +239,7 @@ impl Component for Board {
       navigation: Navigation::of(ctx),
       clipboard: ctx.use_context::<Clipboard>().unwrap_or_default(),
     };
-    let floating = self.floating(ctx, &props, &display);
+    let floating = self.floating(ctx, &display, bulk);
     Stack::new()
       .id("tasks-board")
       .width(Dimension::Pct(100.0))
@@ -238,28 +255,79 @@ impl Component for Board {
           .padding(lurq::node::padding::Padding::new().right(TasksSpacing::Sides.role()))
           .spacing(ExtraSpacing::Loose.role())
           .with_children(lines)
+          .with_children(inline)
           .child(body),
       )
       .with_children(floating)
+      .with_children(popover)
   }
 }
 
 impl Board {
+  /// What the board asks now and where, with the card it is asked at; the question's popover opens while it is asked.
+  /// A move waits in its column only where the board shows that column unfolded, by status and without rows.
+  fn asking(
+    &self,
+    props: &BoardProps,
+    closer: &Closer,
+    (display, columns, lanes): (&Display, &[model::ColumnModel], bool),
+  ) -> (Option<Asking>, Option<AskedCard>) {
+    let shows = |key: &ColumnKey| {
+      !lanes
+        && display.columns == Columns::Status
+        && !folded(display, key)
+        && columns.iter().any(|column| column.key == *key)
+    };
+    let asking = question::asking(&self.state, closer, &shows);
+    let asked = match &asking {
+      Some(Asking::Card { task, to }) => props
+        .cards
+        .iter()
+        .find(|card| card.row.id == *task)
+        .map(|card| AskedCard {
+          card: card.clone(),
+          to: to.clone(),
+        }),
+      _ => None,
+    };
+    let open = &self.state.question_open;
+    if open.get_untracked() != asking.is_some() {
+      open.set(asking.is_some());
+    }
+    (asking, asked)
+  }
+
+  /// The question in its popover at the card or over the selection bar, or, about a card the board does not show or
+  /// a selection whose bar is gone, over the columns instead: `(popover, over the columns)`.
+  fn question(
+    &self,
+    ctx: &mut Ctx,
+    closer: &Closer,
+    asking: Option<Asking>,
+    (card_shown, bar_shown): (bool, bool),
+  ) -> (Option<Element>, Option<Element>) {
+    let state = &self.state;
+    let anchored = match &asking {
+      Some(Asking::Card { .. }) => card_shown,
+      Some(Asking::Bulk) => bar_shown && state.drag.get().is_none(),
+      None => false,
+    };
+    let panel = asking.as_ref().and_then(|_| question::panel(ctx, (state, closer)));
+    match (asking, panel) {
+      (Some(asking), Some(panel)) if anchored => (Some(question::at_anchor(state, &asking, panel)), None),
+      (_, panel) => (None, panel),
+    }
+  }
   /// The columns, or the rows of columns.
   fn body(
     &self,
     ctx: &mut Ctx,
     (props, display): (&BoardProps, &Display),
     (columns, lanes): (&[model::ColumnModel], Option<&[model::LaneModel]>),
+    asked: Option<&AskedCard>,
   ) -> Element {
     let state = &self.state;
     let (drag, refused, selected) = (state.drag.get(), state.refused.get(), state.selected.get());
-    let waiting = match state.asked.get() {
-      Some(
-        actions::Ask::StartsNow { task, .. } | actions::Ask::RunAgain { task, .. } | actions::Ask::Unmerged(task),
-      ) => Some(task.id),
-      _ => None,
-    };
     let quick_add =
       (display.columns == Columns::Status && !props.not_shared).then(|| props.read_only.clone().map_or(Ok(()), Err));
     let shared = Shared {
@@ -268,7 +336,7 @@ impl Board {
       focused: state.focused.get(),
       drag: drag.as_ref(),
       refused: refused.as_ref(),
-      waiting,
+      asked,
       lifts: props.read_only.is_none() && !props.not_shared,
       menus: !props.not_shared,
       quick_add,
@@ -282,10 +350,7 @@ impl Board {
     let parts: Vec<Element> = columns
       .iter()
       .map(|column_model| {
-        // Canceled shows folded until Display shows it: a task canceled from the board does not vanish.
-        let folded = display.collapsed.contains(&column_model.key.name())
-          || (column_model.key == ColumnKey::Status(WorkflowStatus::Canceled) && !display.show_canceled);
-        if folded {
+        if folded(display, &column_model.key) {
           strip(ctx, state, column_model, lurq::app::theme::PaletteColor::Border)
         } else {
           column(ctx, (state, &shared), (column_model, &column_model.cards), None)
@@ -302,8 +367,20 @@ impl Board {
       .into()
   }
 
+  /// The selected cards the selection bar acts on. A read-only card is never acted on together: one selected before the
+  /// list became read-only is left out.
+  fn bulk_cards(&self, props: &BoardProps) -> Vec<CardModel> {
+    let selected = self.state.selected.get();
+    props
+      .cards
+      .iter()
+      .filter(|card| selected.0.contains(&card.row.id) && props.read_only.is_none() && !card.row.not_shared)
+      .cloned()
+      .collect()
+  }
+
   /// What floats over the columns: the lifted card under the pointer, and the hint or the selection bar at the foot.
-  fn floating(&self, ctx: &mut Ctx, props: &BoardProps, display: &Display) -> Vec<Element> {
+  fn floating(&self, ctx: &mut Ctx, display: &Display, cards: Vec<CardModel>) -> Vec<Element> {
     let state = &self.state;
     let mut parts = Vec::new();
     if let Some(drag) = state.drag.get() {
@@ -317,30 +394,30 @@ impl Board {
       parts.push(foot(lines::hint(ctx, &drag)));
       return parts;
     }
-    // A read-only card is never acted on together: one selected before the list became read-only is left out.
-    let selected = state.selected.get();
-    let cards: Vec<CardModel> = props
-      .cards
-      .iter()
-      .filter(|card| selected.0.contains(&card.row.id) && props.read_only.is_none() && !card.row.not_shared)
-      .cloned()
-      .collect();
     if !cards.is_empty() {
-      parts.push(foot(
-        ctx.mount_keyed::<bulk::BulkBar>("tasks-board-bulk", bulk::BarProps { cards }),
-      ));
+      let bar = ctx.mount_keyed::<bulk::BulkBar>("tasks-board-bulk", bulk::BarProps { cards });
+      parts.push(foot(Column::new().ref_element(state.bulk_anchor.clone()).child(bar)));
     }
     parts
   }
 }
 
-/// `part` floating at the board's foot.
-fn foot(part: impl Into<Element>) -> Element {
-  Column::new().padding(lines::foot_room()).child(part).into()
+/// Whether the column `key` shows folded: folded by the person, or Canceled until Display shows it (a task canceled
+/// from the board does not vanish).
+fn folded(display: &Display, key: &ColumnKey) -> bool {
+  display.collapsed.contains(&key.name())
+    || (*key == ColumnKey::Status(WorkflowStatus::Canceled) && !display.show_canceled)
 }
 
-/// What stands over the columns: why the last change did not happen, where a canceled task went, and what is asked in
-/// place.
+/// `part` floating at the board's foot, centred over the columns (`Hint` `n5NsV`).
+fn foot(part: impl Into<Element>) -> Element {
+  Column::new()
+    .padding(lines::foot_room().right(TasksSpacing::Sides.role()))
+    .child(part)
+    .into()
+}
+
+/// What stands over the columns: why the last change did not happen, and where a canceled task went.
 fn top_lines(
   ctx: &mut Ctx,
   (state, closer): (&BoardState, &Closer),
@@ -352,9 +429,6 @@ fn top_lines(
   }
   if let Some(task) = canceled {
     lines.push(lines::canceled(ctx, (state, closer), task));
-  }
-  if let Some(asked) = state.asked.get() {
-    lines.push(ask::ask_card(ctx, (state, closer), &asked));
   }
   lines
 }

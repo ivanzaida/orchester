@@ -28,6 +28,10 @@ pub const SKELETON_LAST_CARD: f32 = 0.55;
 /// A card that is lifted away, or whose drop waits for the person, where it was (`KON-27` in `YhQ1y`, `KON-16` in
 /// `yMirA`).
 pub const HELD_CARD_OPACITY: f32 = 0.5;
+/// The `scrim` over a column's cards that refuses a lifted card (`Scrim` `s9cdh` in the drag overlay `wjtLk`).
+pub const DROP_SCRIM_OPACITY: f32 = 0.72;
+/// The `surface_base` veil of one of Done's drop zones over its cards (`Veil` `JW4vw` in `GdDT9`).
+pub const DROP_VEIL_OPACITY: f32 = 0.82;
 
 /// `base`, the theme's scrollbar, placed for the Tasks list.
 pub fn list_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
@@ -50,10 +54,20 @@ pub enum TasksSpacing {
   GroupTop,
   /// 80: under the empty project's words, lifting them over the middle of the panel (`Empty` `GQZ6J`).
   EmptyLift,
+  /// 25: a board question's keys, in from its start under its words, past its mark and their gap (`Keys` `gWRaB` in
+  /// `Popover · stop run` `XdfNz`).
+  QuestionKeys,
 }
 
 impl TasksSpacing {
-  pub const ALL: [Self; 5] = [Self::Page, Self::Sides, Self::Stack, Self::GroupTop, Self::EmptyLift];
+  pub const ALL: [Self; 6] = [
+    Self::Page,
+    Self::Sides,
+    Self::Stack,
+    Self::GroupTop,
+    Self::EmptyLift,
+    Self::QuestionKeys,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -66,6 +80,7 @@ impl TasksSpacing {
       Self::Stack => "tasks_stack",
       Self::GroupTop => "tasks_group_top",
       Self::EmptyLift => "tasks_empty_lift",
+      Self::QuestionKeys => "tasks_question_keys",
     }
   }
 
@@ -76,6 +91,7 @@ impl TasksSpacing {
       Self::Stack => 14.0,
       Self::GroupTop => 10.0,
       Self::EmptyLift => 80.0,
+      Self::QuestionKeys => 25.0,
     }
   }
 }
