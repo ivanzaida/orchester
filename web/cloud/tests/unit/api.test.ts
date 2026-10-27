@@ -12,15 +12,15 @@ import { seeOther } from "@/lib/server/redirect";
 
 import { ACCOUNT, RIGHT_PASSWORD, startFakeApi } from "../fake-api/server";
 
-const PORT = 4197;
 const SECRET = Buffer.alloc(32, 9).toString("base64");
 let server: Server;
+let origin: string;
 
-beforeAll(() => {
+beforeAll(async () => {
+  ({ server, origin } = await startFakeApi());
   process.env.ORCHESTER_CLOUD_PUBLIC_URL = "http://localhost:4100";
-  process.env.ORCHESTER_CLOUD_API_URL = `http://127.0.0.1:${PORT}`;
+  process.env.ORCHESTER_CLOUD_API_URL = origin;
   process.env.ORCHESTER_CLOUD_WEB_SECRET = SECRET;
-  server = startFakeApi(PORT);
 });
 
 afterAll(() => {
@@ -30,7 +30,7 @@ afterAll(() => {
 const device = webDevice(null);
 
 async function recorded(): Promise<{ path: string; forwardedFor: string | null; authorization: string | null }[]> {
-  const response = await fetch(`http://127.0.0.1:${PORT}/__fake/requests`);
+  const response = await fetch(`${origin}/__fake/requests`);
   return (await response.json()) as { path: string; forwardedFor: string | null; authorization: string | null }[];
 }
 
