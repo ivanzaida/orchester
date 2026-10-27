@@ -118,8 +118,9 @@ impl VerifiedKeySet {
   }
 
   /// [`Self::verify_token`], also taking a token issued by `former`: the issuer an earlier key set of the same root
-  /// named, before the cloud moved to another public URL (`docs/cloud-hosting.md`, "Moving the cloud"). The newest key
-  /// set names the cloud's new URL while tokens issued just before the move still name the former one.
+  /// named, before the cloud moved to another public URL (`docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`,
+  /// "Moving the cloud"). The newest key set names the cloud's new URL while tokens issued just before the move still
+  /// name the former one.
   pub fn verify_token_also_from(
     &self,
     token: &str,

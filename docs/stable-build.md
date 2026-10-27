@@ -153,7 +153,7 @@ runtime linked in so the programs start without the Visual C++ Redistributable. 
 for a test cloud). Releases before the cloud's move (2026-10-25) have
 `https://orchester-cloud.lurq.dev` built in, which keeps answering while they are in use; a newer
 release moves what an install stored with that address to the new one at its first start and stays
-signed in. When to release in the move: [cloud-hosting.md](cloud-hosting.md), "Moving the cloud".
+signed in. When to release in the move: `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the cloud".
 
 **Your data on install, upgrade and uninstall.** The app keeps `orchester.db` (with its `-wal`
 and `-shm` files), `orchester.lock`, `orchester.lock.holder` and `logs\` in its install folder.
@@ -516,7 +516,7 @@ branch changed since it left `master` (committed or not), and of the workspace c
 `cargo test -p <crate> --test <binary>` after the other. orchester-app counts as depending on orchester-runner and
 orchester-cloud too, as its tests start their programs, so a change in the runner, the agent or the cloud runs the
 orchester-app tests as well. A file outside the crates counts for the crates whose sources include it
-(`include_str!`), for example `docs/cloud-hosting.md` for orchester-cloud. Without `-Tests` `tools/check.ps1` runs
+(`include_str!`), for example `docs/cloud-hosting.md` in `ivanzaida/orchester-cloud` for orchester-cloud. Without `-Tests` `tools/check.ps1` runs
 no test, so the check agents run by hand stays fast; when clippy fails the tests are skipped, as they would not
 build. A failing test listed in `tools/check-tests-known-failures.txt` (each with its reason) is reported and does
 not fail the step; any other failing test fails it, as do a binary that fails without naming a test, one that runs

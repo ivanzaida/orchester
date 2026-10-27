@@ -5,5 +5,3 @@
 .agents/
 __pycache__/
 
-# Orchester Cloud deployment secrets (docs/cloud-hosting.md).
-deploy/cloud/.env
