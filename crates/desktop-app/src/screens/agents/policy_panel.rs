@@ -51,17 +51,17 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     rows.push(row(ctx, key, &mechanism, State::Enforced(enforced)));
   }
   let available = !connection.provider().is_native();
-  let unavailable = ctx.t("agents.nativeUnavailable");
+  let unavailable = "agents.nativeUnavailable";
   rows.push(row(
     ctx,
     "agents.mcp",
-    &if available { ctx.t("agents.mcpLoading") } else { unavailable.clone() },
+    &ctx.t(if available { "agents.mcpLoading" } else { unavailable }),
     State::Enforced(available),
   ));
   rows.push(row(
     ctx,
     "agents.approvals",
-    &if available { ctx.t("agents.approvalMechanism") } else { unavailable },
+    &ctx.t(if available { "agents.approvalMechanism" } else { unavailable }),
     State::Enforced(available),
   ));
   let files = ctx.t(if listed.agent_files.is_on() {

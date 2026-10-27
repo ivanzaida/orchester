@@ -118,7 +118,7 @@ impl Component for FolderList {
       input = input.error(message_text(ctx, &error));
     }
     let input = input.render(ctx);
-    let (add, typed, root) = (self.add.clone(), self.typed.clone(), props.root.clone());
+    let (add, typed, root) = (self.add.clone(), self.typed.clone(), props.root);
     let button = ActionButton::new("agent-add-folder", ButtonKind::Ghost, ctx.t("agents.addFolder")).icon(Icon::Plus);
     let button = if add.state().get().is_pending() {
       button.loading()

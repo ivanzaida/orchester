@@ -87,7 +87,7 @@ impl Component for CommandList {
       .mono()
       .width(Dimension::Px(FIELD_WIDTH))
       .render(ctx);
-    let (value, typed, error) = (fields.permissions.clone(), self.typed.clone(), self.error.clone());
+    let (value, typed, error) = (fields.permissions, self.typed.clone(), self.error.clone());
     let add = ActionButton::new("agent-add-command", ButtonKind::Ghost, ctx.t("agents.addCommand"))
       .icon(Icon::Plus)
       .on_click(move || {

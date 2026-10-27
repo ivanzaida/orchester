@@ -286,7 +286,7 @@ fn unavailable_section(ctx: &Ctx, id: &str, title: &str) -> Element {
 
 fn mcp(ctx: &mut Ctx, context: &Context<'_>, provider: Option<AgentProvider>, asked: Option<Element>) -> Element {
   let (fields, listed) = (context.fields, context.listed);
-  if !provider.is_some_and(|p| !p.is_native()) {
+  if provider.is_none_or(|p| p.is_native()) {
     return unavailable_section(ctx, "agent-mcp", &ctx.t("agents.mcp"));
   }
   let selected = fields.servers.get().0;

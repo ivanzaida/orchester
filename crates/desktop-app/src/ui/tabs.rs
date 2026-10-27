@@ -169,33 +169,7 @@ impl PageTab {
       .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" });
-    let button = match (self.badge, self.count) {
-      (Some(count), _) => button.child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(label)
-          .child(count_badge(&format!("{}-badge", self.id), count)),
-      ),
-      (None, Some((count, waits))) => button.child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(label)
-          .child(
-            Text::new(&count.to_string())
-              .id(format!("{}-count", self.id))
-              .variant(TypographyStyle::Description)
-              .color(if waits {
-                PaletteColor::Warning
-              } else {
-                PaletteColor::TextMuted
-              })
-              .nowrap(),
-          ),
-      ),
-      (None, None) => button.child(label),
-    };
+    let button = button.child(counted_label(&self.id, label, (self.badge, self.count)));
     let button = if self.explanation.is_some() {
       button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
     } else {
@@ -212,6 +186,27 @@ impl PageTab {
       Some(reason) => Tooltip::new(self.id, reason).wrap(ctx, button),
       None => button,
     }
+  }
+}
+
+/// A tab's label with its badge, or its quiet count (in `warning` when it counts what waits for the person).
+fn counted_label(id: &str, label: Text, (badge, count): (Option<usize>, Option<(usize, bool)>)) -> Element {
+  let row = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(label);
+  match (badge, count) {
+    (Some(count), _) => row.child(count_badge(&format!("{id}-badge"), count)).into(),
+    (None, Some((count, waits))) => row
+      .child(
+        Text::new(&count.to_string())
+          .id(format!("{id}-count"))
+          .variant(TypographyStyle::Description)
+          .color(if waits { PaletteColor::Warning } else { PaletteColor::TextMuted })
+          .nowrap(),
+      )
+      .into(),
+    (None, None) => row.into(),
   }
 }
 

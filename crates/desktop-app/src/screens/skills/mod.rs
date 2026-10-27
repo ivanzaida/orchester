@@ -129,37 +129,7 @@ impl SkillsScreen {
         _ => crate::routes::SkillsFilter::default(),
       },
     };
-    let content = match panel {
-      Panel::Library(_) => ctx.mount_keyed::<library::Library>("skills-library", props),
-      Panel::Import => ctx.mount_keyed::<repository::Import>("skills-import", props),
-      panel => {
-        let entry = match panel {
-          Panel::Edit(id) => {
-            let Some(entry) = props.data.listed.entry(id).cloned() else {
-              return frame
-                .child(if reading.is_pending() {
-                  Element::from(loading("skill-loading", &ctx.t("skills.reading")))
-                } else {
-                  crate::ui::notice::Notice::new(
-                    "skill-missing",
-                    crate::ui::notice::NoticeTone::Danger,
-                    ctx.t("skills.notFound"),
-                  )
-                  .into()
-                })
-                .into();
-            };
-            Some(entry)
-          }
-          _ => None,
-        };
-        let key = entry.as_ref().map_or_else(
-          || format!("skill-new-{read_reset}"),
-          |e| format!("skill-editor-{}-{read_reset}", e.id),
-        );
-        ctx.mount_keyed::<editor::Editor>(&key, editor::Props { page: props, entry })
-      }
-    };
+    let content = Self::content(ctx, &panel, props, (read_reset, reading.is_pending()));
     frame
       .child(
         Column::new()
@@ -169,6 +139,32 @@ impl SkillsScreen {
           .child(content),
       )
       .into()
+  }
+
+  /// The list, the import page or a skill's page, as `panel` names it; a skill no longer there says so.
+  fn content(ctx: &mut Ctx, panel: &Panel, props: PageProps, (read_reset, pending): (u64, bool)) -> Element {
+    let entry = match *panel {
+      Panel::Library(_) => return ctx.mount_keyed::<library::Library>("skills-library", props),
+      Panel::Import => return ctx.mount_keyed::<repository::Import>("skills-import", props),
+      Panel::Edit(id) => match props.data.listed.entry(id).cloned() {
+        Some(entry) => Some(entry),
+        None if pending => return loading("skill-loading", &ctx.t("skills.reading")).into(),
+        None => {
+          return crate::ui::notice::Notice::new(
+            "skill-missing",
+            crate::ui::notice::NoticeTone::Danger,
+            ctx.t("skills.notFound"),
+          )
+          .into();
+        }
+      },
+      Panel::New => None,
+    };
+    let key = entry.as_ref().map_or_else(
+      || format!("skill-new-{read_reset}"),
+      |e| format!("skill-editor-{}-{read_reset}", e.id),
+    );
+    ctx.mount_keyed::<editor::Editor>(&key, editor::Props { page: props, entry })
   }
 }
 impl SkillsScreen {

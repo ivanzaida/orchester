@@ -141,38 +141,43 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
     let link = ActionButton::new("agents-connections-open", ButtonKind::Ghost, ctx.t("agents.openConnections"))
       .icon(Icon::ArrowUpRight)
       .opens(open_connections());
-    let rows = listed.connections.iter().map(|connection| {
-      use crate::screens::connections::words::{Tone as Said, connection_status};
-      let shown = connection_status(connection, connection.status());
-      let tone = match shown.tone {
-        Said::Success => Tone::Success,
-        Said::Warning => Tone::Warning,
-        Said::Danger => Tone::Danger,
-        Said::Muted | Said::Busy => Tone::Muted,
-      };
-      let provider = ctx.t(crate::screens::connections::words::provider_key(connection.provider()));
-      Entry::new(format!("agents-connection-{}", connection.id()), connection.name().as_str())
-        .tile(entries::provider_glyph(Some(connection)))
-        .hint(provider)
-        .end(status(
-          &format!("agents-connection-status-{}", connection.id()),
-          tone,
-          &ctx.t(shown.key),
-        ))
-        .into()
-    });
-    pane = pane.child(group(
-      "agents-connections",
-      group_head(
-        "agents-connections",
-        &ctx.t_args("agents.connections", [("project", name)]),
-        None,
-        Some(link.into()),
-      ),
-      boxed("agents-connection-rows", rows),
-    ));
+    pane = pane.child(connections(ctx, (name, listed), link));
   }
   pane
     .child(note("agents-version-note", Icon::History, &ctx.t("agents.versionNote")))
     .into()
+}
+
+/// The project's connections, each with its status, under no profile yet (06).
+fn connections(ctx: &Ctx, (name, listed): (&str, &ProjectAgents), link: ActionButton) -> Column {
+  let rows = listed.connections.iter().map(|connection| {
+    use crate::screens::connections::words::{Tone as Said, connection_status};
+    let shown = connection_status(connection, connection.status());
+    let tone = match shown.tone {
+      Said::Success => Tone::Success,
+      Said::Warning => Tone::Warning,
+      Said::Danger => Tone::Danger,
+      Said::Muted | Said::Busy => Tone::Muted,
+    };
+    let provider = ctx.t(crate::screens::connections::words::provider_key(connection.provider()));
+    Entry::new(format!("agents-connection-{}", connection.id()), connection.name().as_str())
+      .tile(entries::provider_glyph(Some(connection)))
+      .hint(provider)
+      .end(status(
+        &format!("agents-connection-status-{}", connection.id()),
+        tone,
+        &ctx.t(shown.key),
+      ))
+      .into()
+  });
+  group(
+    "agents-connections",
+    group_head(
+      "agents-connections",
+      &ctx.t_args("agents.connections", [("project", name)]),
+      None,
+      Some(link.into()),
+    ),
+    boxed("agents-connection-rows", rows),
+  )
 }

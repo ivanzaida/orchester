@@ -159,7 +159,7 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
         ),
         None => ctx.t_args("instructions.stepLabel", [("number", number), ("name", step.name.to_string())]),
       };
-      rows.push(Line::Step { label: label.into() });
+      rows.push(Line::Step { label });
       rows.extend(of_step.into_iter().map(|entry| Line::Rule((*entry).clone())));
     }
     // A pipeline draft can remove a step while its instructions still need a new place.
