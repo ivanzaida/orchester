@@ -52,8 +52,9 @@ use crate::{background, secrets::Vault, workspace::Workspace};
 /// The public Orchester Cloud (`docs/architecture/server.md`, row 59).
 pub const PUBLIC_ADDRESS: &str = "https://orchester.cloud";
 
-/// The public cloud's address until 2026-10-25, which still answers while people update (`docs/cloud-hosting.md`,
-/// "Moving the cloud"): what this computer stored with it moves to [`PUBLIC_ADDRESS`] at the start ([`moved`]).
+/// The public cloud's address until 2026-10-25, which still answers while people update (`docs/cloud-hosting.md` in
+/// `ivanzaida/orchester-cloud`, "Moving the cloud"): what this computer stored with it moves to [`PUBLIC_ADDRESS`] at
+/// the start ([`moved`]).
 const FORMER_PUBLIC_ADDRESS: &str = "https://orchester-cloud.lurq.dev";
 
 /// Where Orchester Cloud runs for this build: `ORCHESTER_CLOUD_URL` at build time, or the public cloud.

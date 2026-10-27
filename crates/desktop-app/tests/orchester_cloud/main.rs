@@ -1,14 +1,14 @@
-//! N1 in the window against Orchester Cloud and a team server built from this tree, on loopback: the cloud on a
-//! PostgreSQL of its own (`real_cloud`), the team server presenting its own certificate and linked to the cloud as
-//! its admin links it. An invite by email reaches the app through the cloud and is accepted there, which joins the
-//! server at the address and with the certificate the cloud's registry has for it; another is declined; a person who
-//! signed out joins again with the account. Linking, codes, signing out with projects and the check that the app
-//! never calls an admin endpoint run against the same team server in `tests/orchester`.
+//! N1 in the window against Orchester Cloud (built from its private repository) and a team server built from this tree,
+//! on loopback: the cloud on a PostgreSQL of its own (`real_cloud`), the team server presenting its own certificate and
+//! linked to the cloud as its admin links it. An invite by email reaches the app through the cloud and is accepted
+//! there, which joins the server at the address and with the certificate the cloud's registry has for it; another is
+//! declined; a person who signed out joins again with the account. Linking, codes, signing out with projects and the
+//! check that the app never calls an admin endpoint run against the same team server in `tests/orchester`.
 //!
 //! The tests need a PostgreSQL whose user may create databases, named by `ORCHESTER_CLOUD_TEST_DATABASE_URL`
 //! (`postgres://user:password@host:port`); without it they are ignored, never passed:
-//! `cargo test -p orchester-app --test orchester_cloud orchester_cloud -- --ignored`, after
-//! `cargo build -p orchester-cloud`.
+//! `cargo test -p orchester-app --test orchester_cloud orchester_cloud -- --ignored`, with `ORCHESTER_CLOUD_PROGRAM`
+//! naming the `orchester-cloud` program built in `ivanzaida/orchester-cloud` (`cargo build -p orchester-cloud` there).
 
 #![allow(
   clippy::print_stderr,

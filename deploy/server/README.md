@@ -74,7 +74,7 @@ The cloud ran at `https://orchester-cloud.lurq.dev` until 2026-10-25: a `.env` t
 that address answers; change it to `https://orchester.cloud` and restart the admin (`docker compose up -d admin`).
 A server linked before the move stays linked and needs nothing else: it pinned the cloud's root key, not its address,
 and from this release it takes identity tokens of both the cloud's former and new address
-([docs/cloud-hosting.md](../../docs/cloud-hosting.md), "Moving the cloud").
+(`docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the cloud").
 The owner controls the link on the host at any time:
 
 ```sh
