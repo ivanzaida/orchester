@@ -1,10 +1,10 @@
-//! A card's facts (`Facts` `THNwH` in `b55NqO`, the cards of `UKgrR` and `Ee2JE`): rows 6 apart of a key, 72 wide in
-//! 11.5 `text_muted`, then 12 on its links (12.5/500 `accent_text` over a 1 `text_muted` line) and values (12.5
-//! `text_secondary`, a branch or command in Geist Mono 11.5) and what it adds in 12 `text_muted`; and, under them,
-//! *What changes* over the draft's diff (`WLVSI`): its lines 20 high on `code_bg` inside a `border` stroke, radius 8,
-//! 4 over and under them, each with its numbers before and after (44 wide, Geist Mono 11 `text_muted`, at their end),
-//! its sign (24 wide, centred, `−` in `danger`, `+` in `success`) and its text (Geist Mono 12), removed lines on
-//! `diff_remove`, added ones on `diff_add`.
+//! A decision card's facts (`Facts` in `3 · Decisions` `bxJZp`): rows 4 apart of a key, 96 wide in 12 `text_muted`,
+//! then 10 on its links (12/500 `accent_text` over a 1 `text_muted` line) and values (12 `text_secondary`, a branch,
+//! revision or command in Geist Mono 12) and what it adds in 12 `text_muted`; the first three show, the rest behind
+//! *Show details*. While a draft waits, *What changes* over its diff: its lines 20 high on `code_bg` inside a
+//! `border` stroke, radius 8, 4 over and under them, each with its numbers before and after (44 wide, Geist Mono 11
+//! `text_muted`, at their end), its sign (24 wide, centred, `−` in `danger`, `+` in `success`) and its text (Geist
+//! Mono 12), removed lines on `diff_remove`, added ones on `diff_add`.
 
 use std::sync::Arc;
 
@@ -14,6 +14,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -29,16 +30,17 @@ use orchester_workspace::{
   orchestrator::facts::{Detail, Facts, LineChange, Place, Publication, RunFacts, Stands, TextDiff, TextLine},
 };
 
-use super::{widens, words::View};
+use super::{
+  super::decision::{FACT_KEY_WIDTH as KEY_WIDTH, SHOWN_FACTS, details_toggle},
+  widens,
+  words::View,
+};
 use crate::{
   navigation::Navigation,
   routes::{AgentTab, InstructionsView, PipelinePanel, ProjectPage, Route, TaskTab, TaskView, ToolTab},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
   ui::pressable::opening,
 };
-
-/// A fact's key column (`u5vGv`).
-const KEY_WIDTH: f32 = 72.0;
 /// A diff line (`kzMBc`).
 const LINE_HEIGHT: f32 = 20.0;
 /// A diff line's numbers before and after (`ey7iM`, `DbWq7`).
@@ -55,35 +57,54 @@ pub(super) enum Part {
   Aside(Arc<str>),
 }
 
-/// The facts of card `id`, read as `view` shows them, in project `project`.
-pub(super) fn rows(ctx: &mut Ctx, id: &str, view: &View, project: ProjectId) -> Option<Column> {
-  let rows: Vec<(Arc<str>, Vec<Part>)> = match view.facts? {
-    Facts::Publication(publication) => publication_rows(ctx, view, publication, project),
-    Facts::Run(run) => run_rows(ctx, view, run, project),
-  };
-  Some(column(ctx, id, rows))
+/// A fact: its key and the parts of its value.
+pub(super) type Fact = (Arc<str>, Vec<Part>);
+
+/// The facts of a card, read as `view` shows them, in project `project`.
+pub(super) fn rows(ctx: &Ctx, view: &View, project: ProjectId) -> Vec<Fact> {
+  match view.facts {
+    Some(Facts::Publication(publication)) => publication_rows(ctx, view, publication, project),
+    Some(Facts::Run(run)) => run_rows(ctx, view, run, project),
+    None => Vec::new(),
+  }
 }
 
-/// The facts `rows` of card `id`, each a key and the parts of its value.
-pub(super) fn column(ctx: &mut Ctx, id: &str, rows: Vec<(Arc<str>, Vec<Part>)>) -> Column {
+/// The facts `rows` of card `id`: the first [`SHOWN_FACTS`], and the rest while `details` is open, behind *Show
+/// details*; nothing without facts.
+pub(super) fn column(ctx: &mut Ctx, id: &str, rows: Vec<Fact>, details: &Signal<bool>) -> Option<Column> {
+  if rows.is_empty() {
+    return None;
+  }
   let navigation = Navigation::of(ctx);
-  Column::new()
-    .id(format!("{id}-facts"))
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .with_children(
-      rows
-        .into_iter()
-        .enumerate()
-        .map(|(index, (key, parts))| row(&format!("{id}-fact-{index}"), &key, parts, &navigation)),
-    )
+  let more = rows.len() > SHOWN_FACTS;
+  let open = details.get();
+  let shown = rows
+    .into_iter()
+    .enumerate()
+    .filter(|(index, _)| open || *index < SHOWN_FACTS)
+    .map(|(index, (key, parts))| row(&format!("{id}-fact-{index}"), &key, parts, &navigation));
+  Some(
+    Column::new()
+      .id(format!("{id}-facts"))
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Xs)
+      .with_children(shown)
+      // Under the values, past the keys' column.
+      .with_children(more.then(|| {
+        Row::new()
+          .spacing(ExtraSpacing::Loose.role())
+          .align_items(Alignment::Center)
+          .child(Row::new().width(Dimension::Px(KEY_WIDTH)).flex_shrink(0.0))
+          .child(details_toggle(ctx, id, details))
+      })),
+  )
 }
 
 fn row(id: &str, key: &str, parts: Vec<Part>, navigation: &Navigation) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
+    .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(
       Text::new(key)
@@ -190,10 +211,14 @@ fn publication_rows(
       .iter()
       .map(|reason| widens::compact(ctx, reason).to_string())
       .collect();
-    rows.push((
-      ctx.t("orchestrator.change.facts.widens"),
-      vec![Part::Value(widens.join(&separator).into())],
-    ));
+    // Right under the draft's name, so it is among the facts shown without *Show details*.
+    rows.insert(
+      1,
+      (
+        ctx.t("orchestrator.change.facts.widens"),
+        vec![Part::Value(widens.join(&separator).into())],
+      ),
+    );
   }
   rows
 }
@@ -315,6 +340,18 @@ fn run_rows(ctx: &Ctx, view: &View, run: &RunFacts, project: ProjectId) -> Vec<(
     Some(Change::Merge { .. }) => rows.extend(merge_rows(ctx, run, project)),
     Some(Change::Continue { step, why, choice, .. }) => {
       rows.extend(super::continuation::rows(ctx, (step.as_ref(), *why), choice));
+    }
+    // What the question asks comes first (`Asked` in `bxJZp`).
+    Some(Change::Answer { .. }) => {
+      if let Some(asked) = &run.asked {
+        rows.insert(
+          0,
+          (
+            ctx.t("orchestrator.change.facts.asked"),
+            vec![Part::Value(asked.as_str().into())],
+          ),
+        );
+      }
     }
     _ => {}
   }

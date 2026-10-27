@@ -1,4 +1,5 @@
-//! The Orchestrator's own type roles and spacing (`TrG83`, `Xir64`), and its replies' links (`agv8r`).
+//! The Orchestrator's own type roles and spacing (`hujxu`, `zuvUi` in the new orchester.pen; `Xir64`), and its
+//! replies' links (`agv8r`).
 use super::*;
 
 #[test]
@@ -6,13 +7,22 @@ fn orchestrator_roles_follow_the_design() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
   for (role, size, line, weight, family) in [
-    (OrchestratorText::PanelTitle, 13.0, 1.3, FontWeight::SemiBold, "Geist"),
+    // The header's title (`B9kNtt`), *What should we plan?* (`gOmoZ`).
+    (OrchestratorText::HeaderTitle, 14.0, 1.3, FontWeight::SemiBold, "Geist"),
+    (OrchestratorText::StartTitle, 24.0, 1.3, FontWeight::SemiBold, "Geist"),
     (OrchestratorText::Emphasis, 12.5, 1.35, FontWeight::Medium, "Geist"),
-    (OrchestratorText::Eyebrow, 11.0, 1.3, FontWeight::Normal, "Geist Mono"),
+    // A day's label in History (`wpZj3`).
+    (OrchestratorText::Eyebrow, 10.5, 1.3, FontWeight::Normal, "Geist Mono"),
     (OrchestratorText::Suggestion, 12.0, 1.4, FontWeight::Normal, "Geist"),
-    (OrchestratorText::ContextLink, 11.0, 1.4, FontWeight::Medium, "Geist"),
-    // A proposal, wait or run end card's title (`gQKlW`, `J9n4q4`, `ExRt1`).
-    (OrchestratorText::CardTitle, 12.5, 1.5, FontWeight::SemiBold, "Geist"),
+    // What an event line tells (`VGbU7`), what a decision card asks (`bxJZp`).
+    (OrchestratorText::Line, 12.5, 1.3, FontWeight::Normal, "Geist"),
+    (OrchestratorText::Question, 13.0, 1.3, FontWeight::SemiBold, "Geist"),
+    // A plan's use in the runs-on picker (`qSIt9`).
+    (OrchestratorText::PlanUse, 10.5, 1.3, FontWeight::Normal, "Geist Mono"),
+    (OrchestratorText::FactKey, 12.0, 1.3, FontWeight::Normal, "Geist"),
+    // A History row's meta (`r9TeH`), the composer's message (`lB97V`).
+    (OrchestratorText::HistoryMeta, 11.0, 1.3, FontWeight::Normal, "Geist"),
+    (OrchestratorText::Message, 13.0, 1.3, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -28,7 +38,11 @@ fn orchestrator_roles_follow_the_design() {
   for (spacing, value) in [
     (OrchestratorSpacing::Start, 20.0),
     (OrchestratorSpacing::PageSide, 40.0),
-    (OrchestratorSpacing::HistoryDay, 18.0),
+    (OrchestratorSpacing::Items, 18.0),
+    (OrchestratorSpacing::Nested, 46.0),
+    (OrchestratorSpacing::Report, 36.0),
+    // A new conversation's message over its composer's bar (`QcfyZ`).
+    (OrchestratorSpacing::StartComposer, 28.0),
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

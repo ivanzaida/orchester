@@ -69,6 +69,8 @@ fn orchestrator_mcp_server_card_is_applied_only_by_a_person() {
   });
   let card = proposed(&mut screen, &arguments);
   assert_eq!(screen.text(&format!("{card}-title")), "Add the MCP server pencil?");
+  // The first three facts show; the rest behind *Show details*.
+  screen.click(&format!("{card}-details"));
   let facts = screen.text(&format!("{card}-facts"));
   for shown in [
     "pencil",

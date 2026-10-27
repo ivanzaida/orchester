@@ -6,8 +6,10 @@
 //! automation change agent permissions* is off; canceling a run waits for the person; in auto mode a run starts at
 //! once, kept with its *Auto mode* chip.
 
+use std::time::{Duration, Instant};
+
 use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::OrchestratorChat;
+use orchester_app::{routes::OrchestratorChat, ui::tooltip::TOOLTIP_DELAY};
 use orchester_core::{
   id::ResourceId,
   orchestrator::{ActionOutcome, ChatAction, EntryKind, change::Change},
@@ -154,11 +156,12 @@ fn orchestrator_publication_waits_for_the_person_with_its_facts_and_diff() {
   screen.until("the publication", |screen| {
     actions(screen)[0].outcome == ActionOutcome::Applied
   });
-  screen.until("the published card", |screen| {
+  // Decided, the card folds into its line.
+  screen.until("the published line", |screen| {
     screen
       .text(&format!("{card}-title"))
       .contains("Published Review checklist v2")
-      && screen.text(&format!("{card}-state")).contains("Published by you")
+      && screen.text(&format!("{card}-target")) == "by you"
   });
   assert!(
     !screen.exists(&format!("{card}-diff")),
@@ -205,8 +208,34 @@ fn orchestrator_person_publishes_what_widens_and_dismisses() {
   });
   assert_eq!(screen.pipeline_version(delivery), 2, "nothing was published");
   assert!(
-    screen.exists(&format!("{card}-open-0")),
-    "the draft opens from the card"
+    screen.exists(&format!("{card}-open")),
+    "the draft opens from the dismissed line"
+  );
+}
+
+#[test]
+fn orchestrator_widening_card_shows_what_it_widens_without_details() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let builder = screen.builder();
+  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
+  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
+  // Let the Orchestrator publish drafts stays off: the card still warns that the draft widens.
+  screen.go(OrchestratorChat::New);
+  call(&mut screen, PUBLISH_PIPELINE, 1);
+  let card = proposal_card(&screen);
+  screen.until("the warning", |screen| screen.exists(&format!("{card}-widens")));
+  assert!(
+    screen
+      .text(&format!("{card}-widens"))
+      .contains("This draft widens what Delivery may do."),
+    "{}",
+    screen.text(&format!("{card}-widens"))
+  );
+  // Right under the draft's name, among the facts shown without Show details.
+  let fact = screen.text(&format!("{card}-fact-1"));
+  assert!(
+    fact.starts_with("Widens"),
+    "the second fact says what it widens: {fact}"
   );
 }
 
@@ -227,10 +256,10 @@ fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
     matches!(&actions(screen)[0].outcome, ActionOutcome::Refused { code, .. } if code == "changed_since_proposed")
   });
   assert_eq!(screen.pipeline_version(delivery), 1, "nothing was published");
-  screen.until("the refused card", |screen| {
+  screen.until("the refused line", |screen| {
     screen.text(&format!("{card}-title")).contains("· not done")
   });
-  // When the draft changed, as the person reads the time on its card.
+  // When the draft changed, as the person reads it under the refused line.
   let saved = screen
     .db()
     .draft::<orchester_core::resource::Pipeline>(delivery)
@@ -241,7 +270,10 @@ fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
     "The draft changed at {}, after this proposal.",
     orchester_workspace::display::clock(saved)
   );
-  assert!(screen.text(&card).contains(&changed), "{}", screen.text(&card));
+  screen.click(&format!("{card}-line"));
+  screen.until("the reason", |screen| {
+    screen.text(&format!("{card}-reason")).contains(&changed)
+  });
 }
 
 #[test]
@@ -253,19 +285,18 @@ fn orchestrator_publishes_itself_once_the_person_lets_it() {
   call(&mut screen, PUBLISH_INSTRUCTION, 1);
   assert_eq!(actions(&screen)[0].outcome, ActionOutcome::Done);
   let card = proposal_card(&screen);
-  screen.until("the card", |screen| {
-    screen.text(&format!("{card}-state")).contains("Confirmed")
-      && screen
-        .text(&format!("{card}-title"))
-        .contains("Published Review checklist v2")
-  });
-  assert!(screen.text(&card).contains("so the chat published it without asking"));
-  assert!(
+  screen.until("the line", |screen| {
     screen
-      .text(&format!("{card}-open-1"))
-      .contains("What automation may do"),
-    "the card leads to the switch"
-  );
+      .text(&format!("{card}-title"))
+      .contains("Published Review checklist v2")
+  });
+  // Done by the chat itself: its line says why on hover and once opened.
+  screen.click(&format!("{card}-line"));
+  screen.until("why", |screen| {
+    screen
+      .text(&format!("{card}-reason"))
+      .contains("so the chat published it without asking")
+  });
 }
 
 #[test]
@@ -327,12 +358,27 @@ fn orchestrator_profile_publication_says_what_the_profile_keeps_and_widens() {
   });
   let facts = screen.text(&format!("{card}-facts"));
   assert!(facts.contains("network: on"), "the short form of what widens: {facts}");
+  // What publishing does is the question's tooltip, not a paragraph (`bxJZp`).
+  assert!(!screen.exists(&format!("{card}-effect")), "{}", screen.text(&card));
+  let title = screen.bounds(&format!("{card}-title"));
+  screen
+    .window
+    .tree
+    .mouse_move(title.x + title.width / 2.0, title.y + title.height / 2.0);
+  screen.window.pass();
+  screen
+    .window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  screen.window.pass();
+  let tip = format!("{card}-why-tooltip");
+  assert!(screen.exists(&tip), "the question's tooltip shows");
   assert!(
     screen
-      .text(&card)
+      .text(&tip)
       .contains("Nothing is published yet. Builder keeps v1 until you publish v2."),
     "{}",
-    screen.text(&card)
+    screen.text(&tip)
   );
 }
 
@@ -353,8 +399,8 @@ fn orchestrator_starts_in_auto_mode_and_cancel_waits_for_the_person() {
   assert!(started.auto_mode && started.started.is_some(), "{started:?}");
   assert_eq!(runs(&screen, &key), 1);
   let card = proposal_card(&screen);
-  screen.until("the started card", |screen| {
-    screen.exists(&format!("{card}-auto-mode"))
+  screen.until("the started line", |screen| {
+    screen.text(&format!("{card}-chip")) == "auto mode"
       && screen
         .text(&format!("{card}-title"))
         .contains(&format!("Started {key} on Delivery"))
@@ -387,8 +433,9 @@ fn orchestrator_starts_in_auto_mode_and_cancel_waits_for_the_person() {
   screen.until("the canceled run", |screen| {
     *run_of(screen, &key).status() == RunStatus::Cancelled
   });
-  screen.until("the cancelled card", |screen| {
-    screen.text(&format!("{card}-state")).contains("Cancelled by you")
+  screen.until("the cancelled line", |screen| {
+    screen.text(&format!("{card}-title")).starts_with("Cancelled run #1")
+      && screen.text(&format!("{card}-target")).ends_with("by you")
   });
 }
 
