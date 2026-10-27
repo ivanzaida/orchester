@@ -183,7 +183,7 @@ fn chain(ctx: &Ctx, entry: &LibraryEntry) -> Arc<str> {
     .into()
 }
 
-/// The version state over its tasks and age (`State` `T5CHp`).
+/// The version state over its tasks and age, both at the row's end (`State` `T5CHp`).
 fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
   let (words, glyph, color) = match entry.state {
     VersionState::DraftOnly => (ctx.t("pipelines.draftOnly"), Icon::Pencil, PaletteColor::TextMuted),
@@ -216,6 +216,7 @@ fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
   Column::new()
     .id(format!("{id}-state"))
     .width(lurq::node::dimension::Dimension::Px(STATE_WIDTH))
+    .align_items(Alignment::End)
     .spacing(ExtraSpacing::Tight.role())
     .child(
       Row::new()

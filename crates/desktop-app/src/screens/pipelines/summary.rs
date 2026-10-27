@@ -229,34 +229,45 @@ pub fn published(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
     },
   )
 }
+/// The draft with its number: *v4 · 2 changes since v3*, *Draft v1*, or that the next edit starts one.
 pub fn draft(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {
   let number = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
   if editing.opened.draft_saved_at.is_none() && !editing.dirty() {
     return ctx.t_args("pipelines.noDraftNext", [("version", number)]);
   }
-  if editing.edit.steps().is_empty() {
-    return ctx.t_args("pipelines.draftNoSteps", [("version", number)]);
-  }
-  let Some(latest) = &editing.opened.latest else {
-    return ctx.t_args("pipelines.draftVersion", [("version", number)]);
-  };
-  let Ok(body) = editing.edit.validate() else {
+  if !editing.edit.steps().is_empty() && editing.opened.latest.is_some() && editing.edit.validate().is_err() {
     return ctx.t("pipelines.unsaved");
-  };
+  }
+  match draft_detail(ctx, editing) {
+    Some(detail) => ctx.t_args(
+      "pipelines.draftWith",
+      [("version", number), ("detail", detail.to_string())],
+    ),
+    None => ctx.t_args("pipelines.draftVersion", [("version", number)]),
+  }
+}
+
+/// What the draft holds, without its number: *no steps yet* or *2 changes since v3*; `None` for a first draft with
+/// steps, or one that does not validate.
+pub fn draft_detail(ctx: &Ctx, editing: &Editing) -> Option<std::sync::Arc<str>> {
+  if editing.edit.steps().is_empty() {
+    return Some(ctx.t("pipelines.noStepsYet"));
+  }
+  let latest = editing.opened.latest.as_ref()?;
+  let body = editing.edit.validate().ok()?;
   let changes = orchester_core::resource::changes(&latest.body, &body).len();
-  ctx.t_args(
+  Some(ctx.t_args(
     if changes == 1 {
-      "pipelines.draftOneChange"
+      "pipelines.oneChangeSince"
     } else {
-      "pipelines.draftChanges"
+      "pipelines.changesSince"
     },
     [
-      ("version", number),
       ("count", changes.to_string()),
       ("base", latest.number.get().to_string()),
     ],
-  )
+  ))
 }
 pub fn steps(ctx: &Ctx, shown: &orchester_core::resource::PipelineEdit) -> String {
   let gates = shown.steps().iter().filter(|s| s.approval_gate).count();

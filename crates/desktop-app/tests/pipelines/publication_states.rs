@@ -252,6 +252,25 @@ fn pipelines_unsupported_database_is_distinct_from_runnable_commands() {
   assert!(editor.text("step-tool-unavailable").contains("Database actions"));
   assert!(!editor.text("step-tool-unavailable").contains("pull request"));
   assert!(editor.text("step-model").contains("Not used by tools"));
+  // The Executor menu (`03d`): *Choose a profile* first, then every profile and tool with its icon; the tool that
+  // cannot run says why.
+  assert!(editor.exists("step-executor-icon"), "the box shows the tool's icon");
+  editor.click("step-executor");
+  assert_eq!(editor.text("step-executor-option-0-label"), "Choose a profile");
+  let mut unavailable = 0;
+  for index in 1.. {
+    let option = format!("step-executor-option-{index}");
+    if !editor.exists(&option) {
+      assert!(index > 1, "the menu lists the profiles and tools");
+      break;
+    }
+    assert!(editor.exists(&format!("{option}-icon")), "{option} has its icon");
+    if editor.text(&option).contains("This tool cannot run as a pipeline step") {
+      unavailable += 1;
+    }
+  }
+  assert_eq!(unavailable, 1, "the database tool says why it cannot be chosen");
+  editor.click("step-executor");
   editor.open(command);
   let step = editor
     .db()

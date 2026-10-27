@@ -294,6 +294,24 @@ fn pipelines_permissions_turning_ask_off_asks_before_saving_with_its_reason() {
     editor.exists("step-ask-tools"),
     "the question sits beside the Permissions page"
   );
+  let rect = |editor: &mut Editor, id: &str| {
+    editor
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.bounds())
+      .unwrap_or_else(|| panic!("laid out: {id}"))
+  };
+  let (column, title, question) = (
+    rect(&mut editor, "pipeline-step-column"),
+    rect(&mut editor, "step-page-title"),
+    rect(&mut editor, "pipeline-save-question"),
+  );
+  assert!(
+    question.x >= column.x && question.x + question.width <= column.x + column.width + 0.5,
+    "the question sits in the step column, not across the page: {question:?} in {column:?}"
+  );
+  assert!(question.y >= title.y + title.height, "under the Permissions title");
   editor.click("pipeline-save-question-keep");
   assert!(!editor.exists("pipeline-save-question"));
   editor.click("pipeline-save");

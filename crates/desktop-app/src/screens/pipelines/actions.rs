@@ -32,6 +32,26 @@ pub struct Writes {
   pub asking: Signal<bool>,
 }
 
+/// The page's writes, provided to the Steps tab's column, which asks the save question in place (`02e` `T46Jq`).
+#[derive(Clone)]
+pub struct ColumnWrites(pub Writes);
+
+impl lurq::app::component::DevtoolsInspectable for ColumnWrites {}
+
+/// Whether the save question shows in the column rather than under the header: on the Steps tab of the draft.
+pub fn asks_in_column(editing: &Editing) -> bool {
+  editing.view.tab() == super::state::Tab::Steps && editing.viewing.is_none() && editing.view != View::Publish
+}
+
+/// *Saving needs your approval* where the column asks it: under its title.
+pub fn column_question(ctx: &mut Ctx) -> Option<Element> {
+  let writes = ctx.use_context::<ColumnWrites>()?.0;
+  if !writes.asking.get() || !asks_in_column(&writes.state.get()) {
+    return None;
+  }
+  Some(writes.save_question(ctx))
+}
+
 impl Writes {
   /// *Save draft* while edits are unsaved; it asks first when the draft would be weaker.
   pub fn save_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> Option<ActionButton> {

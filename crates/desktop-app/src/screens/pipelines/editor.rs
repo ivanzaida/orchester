@@ -127,6 +127,7 @@ impl Component for Editor {
       root: props.project.open.repo_root.clone(),
       asking: self.confirm_save.clone(),
     };
+    ctx.provide(super::actions::ColumnWrites(writes.clone()));
     let head = super::header::header(
       ctx,
       &self.state,
@@ -134,7 +135,8 @@ impl Component for Editor {
         writes.save_button(ctx, &editing, busy),
         writes.publish_button(ctx, &editing, busy),
       ),
-      busy,
+      // While the save question waits, nothing is being saved: the status says the changes are unsaved.
+      writing || props.loading || reading_version,
     );
     let notices = self.notices(ctx, &props, (&writes, writing));
     let content = self.content(ctx, &props, (&writes, (locked, busy)));
@@ -171,7 +173,8 @@ impl Editor {
       writing,
       editing.name.as_str(),
     ));
-    if self.confirm_save.get() {
+    // On the Steps tab the column asks it, under its title (`02e` `T46Jq`).
+    if self.confirm_save.get() && !super::actions::asks_in_column(&editing) {
       notices.push(writes.save_question(ctx));
     }
     notices.extend(super::publication::problems(ctx, &self.state));

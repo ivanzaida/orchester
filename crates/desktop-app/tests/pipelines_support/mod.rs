@@ -104,20 +104,27 @@ impl Editor {
       other => panic!("pipeline route: {other:?}"),
     }
   }
+  /// Chooses `label` in the select `id`, or in the menu the field `id` opens (the step's Executor).
   pub fn choose(&mut self, id: &str, label: &str) {
-    let mut select = self
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|e| e.as_select())
-      .expect("select");
-    let index = select
-      .labels()
-      .iter()
-      .position(|option| &**option == label)
-      .expect("option");
-    select.commit(index);
-    self.window.pass();
+    if let Some(mut select) = self.window.tree.get_element_by_id_mut(id).and_then(|e| e.as_select()) {
+      let index = select
+        .labels()
+        .iter()
+        .position(|option| &**option == label)
+        .expect("option");
+      select.commit(index);
+      self.window.pass();
+      return;
+    }
+    self.click(id);
+    for index in 0.. {
+      let option = format!("{id}-option-{index}");
+      assert!(self.exists(&option), "option {label} in {id}");
+      if self.text(&format!("{option}-label")) == label {
+        self.click(&option);
+        return;
+      }
+    }
   }
   pub fn profile(&self) {
     use orchester_core::{

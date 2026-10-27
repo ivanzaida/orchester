@@ -30,7 +30,7 @@ use crate::{
   },
 };
 
-/// The header of `state`'s page; `busy` while a write runs, a question holds the page or a version is read.
+/// The header of `state`'s page; `busy` while a write runs, the page reloads or a version is read.
 pub fn header(
   ctx: &mut Ctx,
   state: &State,

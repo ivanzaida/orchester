@@ -372,9 +372,12 @@ fn none_body(ctx: &Ctx, props: &DeliverProps) -> Element {
     .into()
 }
 
-/// The words of the Deliver card: its mode and method.
+/// The words of the Deliver card: its mode and method, as the method's field names it (`Merge commit`).
 pub(super) fn executor_words(ctx: &Ctx, deliver: &DeliverStep) -> Arc<str> {
-  let method = crate::screens::merge_queue::words::method(ctx, deliver.method());
+  let method = ctx.t(match deliver.method() {
+    MergeMethod::MergeCommit => "delivery.step.mergeCommit",
+    MergeMethod::Squash => "delivery.step.squash",
+  });
   match deliver.mode() {
     DeliverMode::ApproveToMerge => ctx.t_args("delivery.step.cardApprove", [("method", method)]),
     DeliverMode::AutoMerge => ctx.t_args("delivery.step.cardAuto", [("method", method)]),

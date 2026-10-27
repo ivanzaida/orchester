@@ -75,10 +75,12 @@ impl Component for StepColumn {
       .spacing(SpacingSize::Lg);
     let Some(page) = page else {
       let heading = self.heading(ctx, &props, &number);
+      let question = super::actions::column_question(ctx);
       let fields = ctx.mount_keyed::<Fields>("step-fields", props.clone());
       let access = super::step_access::group(ctx, &props);
       return column
         .child(heading)
+        .with_children(question)
         .child(fields)
         .child(access)
         .with_children(executor_error(ctx, &props));
@@ -86,7 +88,10 @@ impl Component for StepColumn {
     let back_words = format!("{number} {}", props.step.name);
     // The Sources page draws its own head: its counts wait for the project's sources.
     if page == StepPage::Sources {
-      return column.child(super::sources::step_section(ctx, &props, back_words));
+      let question = super::actions::column_question(ctx);
+      return column
+        .with_children(question)
+        .child(super::sources::step_section(ctx, &props, back_words));
     }
     let views = props.state.get().views;
     let key = props.step.key.clone();
@@ -96,7 +101,11 @@ impl Component for StepColumn {
       Press::run(move || views.choose(View::Step(key.clone()))),
     );
     let (title, meta) = page_words(ctx, &props, page);
-    let column = column.child(parts::sub_head("step-page-title", back, &title, meta.as_deref()));
+    // *Saving needs your approval* under the page's title (`02e` `T46Jq`).
+    let question = super::actions::column_question(ctx);
+    let column = column
+      .child(parts::sub_head("step-page-title", back, &title, meta.as_deref()))
+      .with_children(question);
     match page {
       StepPage::Permissions => column.with_children(super::step_permissions::page(ctx, &props)),
       StepPage::Sources | StepPage::Instructions => {

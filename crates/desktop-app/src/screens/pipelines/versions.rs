@@ -188,28 +188,26 @@ fn counted(ctx: &Ctx, count: usize, (one, many): (&str, &str)) -> String {
   }
 }
 
-/// The draft's row, which leads back to editing it.
+/// The draft's row, which leads back to editing it; its title says the version, so its hint does not again.
 fn draft_row(ctx: &Ctx, state: &State) -> GroupRow {
   let editing = state.get();
   let version = orchester_workspace::pipelines::write::next_version(&editing.opened)
     .map_or_else(String::new, |v| v.get().to_string());
-  let hint = match editing.opened.draft_saved_at {
-    Some(at) => ctx.t_args(
+  let detail = super::summary::draft_detail(ctx, &editing);
+  let saved = editing.opened.draft_saved_at.map(|at| {
+    ctx.t_args(
+      "pipelines.draftSavedAt",
+      [("age", super::library::age(ctx, at).to_string())],
+    )
+  });
+  let hint = match (detail, saved) {
+    (Some(detail), Some(saved)) => ctx.t_args(
       "pipelines.draftRowHint",
-      [
-        ("draft", super::summary::draft(ctx, &editing).to_string()),
-        (
-          "saved",
-          ctx
-            .t_args(
-              "pipelines.draftSavedAt",
-              [("age", super::library::age(ctx, at).to_string())],
-            )
-            .to_string(),
-        ),
-      ],
+      [("draft", detail.to_string()), ("saved", saved.to_string())],
     ),
-    None => super::summary::draft(ctx, &editing),
+    (None, Some(saved)) => saved,
+    (Some(detail), None) => detail,
+    (None, None) => super::summary::draft(ctx, &editing),
   };
   let views = editing.views;
   GroupRow::new(

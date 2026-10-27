@@ -14,7 +14,10 @@ use orchester_workspace::pipelines::{
   fields::{self, Executor, ModelChoice},
 };
 
-use super::step_fields::{FIELD_WIDTH, Props, locked_options};
+use super::{
+  executor_menu::{Entry, ExecutorField, Tone},
+  step_fields::{FIELD_WIDTH, Props, locked_options},
+};
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   field::SelectField,
@@ -46,22 +49,26 @@ pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> (Group
   let row = if props.viewing {
     row.value(&executor_name(ctx, props))
   } else {
-    let options = executor_options(ctx, props, draft.as_ref());
-    let select = SelectField::new(
-      "step-executor",
-      ctx.t("pipelines.executor"),
-      value,
-      locked_options(options, props.locked),
-    )
-    .width(Dimension::Px(FIELD_WIDTH));
-    let select = if missing {
-      select.invalid()
+    let (profiles, tools) = executor_entries(ctx, props, draft.as_ref());
+    let tone = if missing {
+      Tone::Invalid
     } else if draft.is_some() {
-      select.warning()
+      Tone::Warning
     } else {
-      select
+      Tone::Normal
     };
-    row.end(select.render(ctx))
+    let field = ExecutorField {
+      id: "step-executor".into(),
+      name: ctx.t("pipelines.executor"),
+      value,
+      unset: ctx.t("pipelines.chooseProfile"),
+      profiles,
+      tools,
+      width: FIELD_WIDTH,
+      tone,
+      locked: props.locked,
+    };
+    row.end(field.render(ctx))
   };
   let row = match (missing, &draft) {
     (true, _) => row.toned_hint(ctx.t("pipelines.missingProfile"), HintTone::Warning),
@@ -110,11 +117,6 @@ fn notices(ctx: &mut Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> 
   if let StepKind::Tool { tool: Some(id) } = props.step.kind
     && let Some(tool) = editing.opened.assignables.tool(id).filter(|tool| !tool.runnable)
   {
-    let reason = match tool.kind {
-      ToolKind::Database => "pipelines.databaseUnavailable",
-      ToolKind::Http => "pipelines.httpUnavailable",
-      ToolKind::Command => "pipelines.toolAccessUnavailable",
-    };
     notices.push(
       Notice::new(
         "step-tool-unavailable",
@@ -122,7 +124,7 @@ fn notices(ctx: &mut Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> 
         ctx.t("pipelines.toolUnavailable"),
       )
       .icon(Icon::Lock)
-      .body(ctx.t(reason))
+      .body(ctx.t(tool_reason(tool.kind)))
       .into(),
     );
   }
@@ -179,36 +181,57 @@ fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) ->
     .into()
 }
 
-/// The profiles, then the tools; a draft profile and a tool that cannot run are listed, not chosen.
-fn executor_options(ctx: &Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> Vec<SelectOption<Executor>> {
+/// The profiles, and the tools; a draft profile and a tool that cannot run are listed with why, not chosen.
+fn executor_entries(ctx: &Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> (Vec<Entry>, Vec<Entry>) {
   let editing = props.state.get();
-  let mut options = vec![SelectOption::new(Executor::Unset, ctx.t("pipelines.chooseProfile"))];
-  options.extend(
-    editing
-      .opened
-      .assignables
-      .profiles
-      .iter()
-      .map(|p| SelectOption::new(Executor::Profile(p.id), p.name.clone())),
-  );
-  if let Some(profile) = &draft {
-    options.push(
-      SelectOption::new(
-        Executor::Profile(profile.id),
-        ctx.t_args("pipelines.profileDraft", [("name", profile.name.as_ref())]),
-      )
-      .disabled(true),
-    );
+  let assignables = &editing.opened.assignables;
+  let mut profiles: Vec<Entry> = assignables
+    .profiles
+    .iter()
+    .map(|p| Entry {
+      value: Executor::Profile(p.id),
+      label: p.name.clone(),
+      icon: Icon::Bot,
+      unavailable: None,
+    })
+    .collect();
+  if let Some(profile) = draft {
+    profiles.push(Entry {
+      value: Executor::Profile(profile.id),
+      label: ctx.t_args("pipelines.profileDraft", [("name", profile.name.as_ref())]),
+      icon: Icon::Bot,
+      unavailable: Some(ctx.t("pipelines.profileUnpublished")),
+    });
   }
-  options.extend(editing.opened.assignables.tools.iter().map(|t| {
-    let option = SelectOption::new(Executor::Tool(t.id), t.name.clone());
-    if t.runnable {
-      option
-    } else {
-      option.detail(ctx.t("pipelines.toolUnavailable")).disabled(true)
-    }
-  }));
-  options
+  let tools = assignables
+    .tools
+    .iter()
+    .map(|t| Entry {
+      value: Executor::Tool(t.id),
+      label: t.name.clone(),
+      icon: tool_icon(t.kind),
+      unavailable: (!t.runnable).then(|| ctx.t("pipelines.toolUnavailable")),
+    })
+    .collect();
+  (profiles, tools)
+}
+
+/// A tool's kind, as the Tools screen draws it.
+const fn tool_icon(kind: ToolKind) -> Icon {
+  match kind {
+    ToolKind::Command => Icon::Terminal,
+    ToolKind::Http => Icon::Globe,
+    ToolKind::Database => Icon::Database,
+  }
+}
+
+/// Why a tool of `kind` cannot run as a step.
+const fn tool_reason(kind: ToolKind) -> &'static str {
+  match kind {
+    ToolKind::Database => "pipelines.databaseUnavailable",
+    ToolKind::Http => "pipelines.httpUnavailable",
+    ToolKind::Command => "pipelines.toolAccessUnavailable",
+  }
 }
 
 pub(super) fn unavailable_tool(props: &Props) -> Option<orchester_workspace::pipelines::data::ToolChoice> {
