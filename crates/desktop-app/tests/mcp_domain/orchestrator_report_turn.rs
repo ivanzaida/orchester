@@ -10,6 +10,7 @@ use orchester_core::{
   time::Timestamp,
   usage::local_date,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   app_mcp::ToolError,
@@ -27,7 +28,8 @@ use super::{
 /// the conversation.
 pub(super) fn report_turn(db: &mut ProjectDb, scope: &ChatScope) -> ChatId {
   let now = Timestamp::now();
-  let built = build_in(&scope.root, Vec::new(), (local_date(now), now)).expect("built");
+  let programs = Programs::processes();
+  let built = build_in((&scope.root, &programs), Vec::new(), (local_date(now), now)).expect("built");
   let report = DailyReport {
     automatic: true,
     ..built
