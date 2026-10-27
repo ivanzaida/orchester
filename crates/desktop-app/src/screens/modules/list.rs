@@ -45,6 +45,8 @@ use crate::{
 
 /// The search's width (`Search` `cm8xD`).
 const SEARCH_WIDTH: f32 = 240.0;
+/// The empty state's column, which its explanation fills (`Column` `yJdJ9`).
+const EMPTY_MEASURE: f32 = 420.0;
 
 #[derive(Clone, PartialEq)]
 pub struct ListProps {
@@ -290,6 +292,8 @@ fn empty(ctx: &mut Ctx, project: &ShownProject) -> Element {
     ctx.t("modules.empty.body"),
   )
   .unframed()
+  .centered()
+  .measure(EMPTY_MEASURE)
   .action(new);
   Column::new()
     .id("modules-empty-page")

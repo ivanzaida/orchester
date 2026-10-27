@@ -230,6 +230,15 @@ fn modules_page_says_when_the_module_is_gone() {
   seeded.open(ProjectPage::Module(gone, ModuleTab::Summary), "module-not-found");
   assert!(seeded.text("module-not-found").contains("This module no longer exists"));
   assert!(seeded.shows("module-back"), "the way back stays");
+  let state = seeded.bounds("module-not-found");
+  let middle = state.x + state.width / 2.0;
+  for part in ["module-not-found-glyph", "module-not-found-title"] {
+    let bounds = seeded.bounds(part);
+    assert!(
+      (bounds.x + bounds.width / 2.0 - middle).abs() < 1.0,
+      "{part} is centered: {bounds:?} in {state:?}"
+    );
+  }
 }
 
 #[test]

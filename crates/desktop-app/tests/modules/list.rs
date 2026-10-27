@@ -89,6 +89,15 @@ fn modules_list_without_modules_or_closed_ones_says_so() {
   seeded.open(ProjectPage::Modules(ModuleListTab::Open), "modules-empty");
   assert!(seeded.text("modules-empty").contains("No modules yet"));
   assert!(!seeded.shows("modules-search"), "nothing to search");
+  let page = seeded.bounds("modules-empty-page");
+  let middle = page.x + page.width / 2.0;
+  for part in ["modules-empty-glyph", "modules-empty-title", "modules-empty-new"] {
+    let bounds = seeded.bounds(part);
+    assert!(
+      (bounds.x + bounds.width / 2.0 - middle).abs() < 1.0,
+      "{part} is centered in the panel: {bounds:?} in {page:?}"
+    );
+  }
   seeded.click("modules-empty-new");
   assert_eq!(seeded.route(), Route::Project(seeded.project, ProjectPage::NewModule));
 

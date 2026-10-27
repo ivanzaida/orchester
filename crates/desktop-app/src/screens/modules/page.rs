@@ -45,6 +45,9 @@ use crate::{
   },
 };
 
+/// The not-found state's text column, which its explanation fills (`Text` `v4Pmi`).
+const MISSING_MEASURE: f32 = 420.0;
+
 #[derive(Clone, PartialEq)]
 pub struct PageProps {
   pub project: ShownProject,
@@ -286,6 +289,8 @@ fn missing(ctx: &Ctx) -> Element {
     ctx.t("modules.page.notFoundBody"),
   )
   .unframed()
+  .centered()
+  .measure(MISSING_MEASURE)
   .into()
 }
 
