@@ -74,7 +74,10 @@ impl ToolName {
   /// What the model is told the tool does.
   pub const fn description(self) -> &'static str {
     match self {
-      Self::ReadFile => "Read a text file as numbered lines. Read a file before you edit or replace it.",
+      Self::ReadFile => {
+        "Read a text file as numbered lines. Read a file before you edit or replace it. Images are not shown to \
+         native agents yet: a PNG, JPEG or WebP file is only named with its size."
+      }
       Self::ListFiles => "List files, respecting .gitignore. Sorted, at most 1000 entries.",
       Self::Search => "Search file contents with ripgrep. At most 200 matches.",
       Self::EditFile => {

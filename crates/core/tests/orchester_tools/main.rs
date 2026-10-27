@@ -3,6 +3,7 @@
 //! or Orchester's own state, answers cut to a size, and how each CLI is told about them.
 
 mod app;
+mod images;
 mod index;
 mod input;
 mod lines;

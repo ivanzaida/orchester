@@ -1,17 +1,21 @@
 //! An agent of the project waits for a message, and the Orchestrator follows it (ORC-42): the wait is kept in the
 //! conversation and, with *Let the Orchestrator answer agents* on, starts one Orchestrator turn by itself, which the
 //! runner answers to its end, however the conversation and the runs change meanwhile. The end of a run the chat
-//! started shows in its conversation as a card that opens the task's Summary.
+//! started shows in its conversation as a card that opens the task's Summary, and no longer waits once Orchester
+//! merged the run.
 
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route, TaskView};
 use orchester_core::{
-  id::ChatMessageId,
+  id::{ChatMessageId, RunId},
+  integration::{MergeKind, RunMerge},
   orchestrator::{EntryKind, RunEnd, TurnState, WaitKind},
-  run::{StepStatus, WaitReason},
-  store::{RunStore, TaskStore},
+  revision::Revision,
+  run::{BranchName, StepStatus, WaitReason},
+  store::{MergeStore, RunStore, TaskStore},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::workspace::OrchestratorConsent;
+use orchester_workspace::{tasks::outside::Outside, workspace::OrchestratorConsent};
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -129,18 +133,79 @@ fn orchestrator_run_end_lands_in_the_conversation_that_started_the_run() {
   let (seq, end) = ends(&screen.db())[0];
   assert_eq!(end, RunEnd::Succeeded);
   let card = format!("orchestrator-wait-wait-{seq}");
-  screen.until("its card", |screen| screen.exists(&card));
+  screen.until("its line", |screen| screen.exists(&card));
   let shown = screen.text(&card);
   for part in [
-    format!("of {key} is ready to merge"),
-    "It waits for you on the task's Summary".to_owned(),
+    "Ready to merge".to_owned(),
+    format!("{key} · #1"),
+    "Review ↗".to_owned(),
   ] {
     assert!(shown.contains(&part), "{part} in {shown}");
   }
+  // What happens with it is said once the line is opened.
+  screen.click(&format!("{card}-line"));
+  screen.until("what happens with it", |screen| {
+    screen
+      .text(&format!("{card}-reason"))
+      .contains("It waits for you on the task's Summary")
+  });
   screen.click(&format!("{card}-open"));
   assert!(
     matches!(screen.route(), Route::Project(_, ProjectPage::Task(task, TaskView::Summary)) if task.to_string() == key),
     "{:?}",
     screen.route()
   );
+}
+
+/// The run of the end kept as entry `seq` in the project's latest conversation.
+fn run_of(db: &ProjectDb, seq: i64) -> RunId {
+  let chat = db.latest_chat().expect("read").expect("a conversation");
+  db.chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .find_map(|entry| match entry.kind {
+      EntryKind::Wait { wait, .. } if entry.seq == seq => Some(wait.run),
+      _ => None,
+    })
+    .expect("the end's entry")
+}
+
+#[test]
+fn orchestrator_run_end_merged_in_orchester_no_longer_waits() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.auto_mode(true);
+  let delivery = screen.delivery();
+  let key = screen.draft_on(delivery, "Read the changelog");
+  screen.go(OrchestratorChat::New);
+  screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
+  screen.until("the run's end", |screen| !ends(&screen.db()).is_empty());
+  let (seq, _) = ends(&screen.db())[0];
+  let card = format!("orchestrator-wait-wait-{seq}");
+  screen.until("its line, ready to merge", |screen| {
+    screen.exists(&card) && screen.text(&card).contains("Review ↗")
+  });
+  // Merged in Orchester, as automation merges: the open conversation reads the end again.
+  let run = run_of(&screen.db(), seq);
+  screen
+    .db()
+    .save_run_merge(&RunMerge {
+      run,
+      into: BranchName::new("main").expect("branch"),
+      revision: Revision::new(&"b".repeat(40)).expect("revision"),
+      kind: MergeKind::FastForward,
+      merged_at: Timestamp::now(),
+    })
+    .expect("merged");
+  let services = screen.window.launch.services().expect("launched services");
+  services.changes.record(screen.project, Outside::Tasks);
+  screen.until("the line no longer waiting", |screen| {
+    let shown = screen.text(&card);
+    shown.contains("Summary ↗") && !shown.contains("Review ↗")
+  });
+  screen.click(&format!("{card}-line"));
+  screen.until("what became of the run", |screen| {
+    screen
+      .text(&format!("{card}-reason"))
+      .contains("Orchester merged the run")
+  });
 }

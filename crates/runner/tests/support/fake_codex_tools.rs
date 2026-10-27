@@ -136,7 +136,7 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
   };
   eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
   if prompt.contains("Call the run app") {
-    fake_app_tools::exercise(worktree, |tool, arguments| {
+    fake_app_tools::exercise(worktree, false, |tool, arguments| {
       server.call_result(tool, arguments).expect("relay")
     });
     return;

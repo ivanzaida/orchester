@@ -51,18 +51,15 @@ fn orchestrator_answers_a_message_and_keeps_the_new_conversation() {
     "the route names the conversation once it is kept"
   );
   assert_eq!(screen.text("orchestrator-title"), "What is running?");
-  assert!(
-    screen
-      .text("orchestrator-meta")
-      .starts_with("Project conversation · started")
-  );
+  let meta = screen.text("orchestrator-meta");
+  assert!(meta.starts_with("· today "), "when it started, after the title: {meta}");
   assert_eq!(
     screen.text("orchestrator-input"),
-    "Message Orchestrator…",
+    "Message the Orchestrator…",
     "the draft is done with: the field shows its placeholder"
   );
   let answer = screen.text(&format!("orchestrator-answer-{turn}"));
-  assert!(answer.starts_with("Orchestrator haiku ·"), "{answer}");
+  assert!(answer.starts_with("Orchestrator "), "{answer}");
   let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent ran");
   assert!(
     log.contains("--tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("),
@@ -75,18 +72,13 @@ fn orchestrator_acts_through_the_tools_as_any_client_of_the_app() {
   let mut screen = Orchestrator::new(Setup::Ready);
   screen.go(OrchestratorChat::New);
   screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
-  screen.until("the created task's card", |screen| {
+  screen.until("the created task's line", |screen| {
     screen
       .text("orchestrator-conversation")
-      .contains("Created KON-1 as a draft")
+      .contains("Created a draft KON-1")
   });
   let task = screen.db().tasks().expect("tasks").remove(0);
   assert_eq!(task.key().to_string(), "KON-1");
-  assert!(
-    screen
-      .text("orchestrator-conversation")
-      .contains("Checked like the same action in the app")
-  );
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 
   // A draft without a pipeline does not run: the tool refuses it as it refuses any client, with its reasons.
@@ -234,7 +226,6 @@ fn orchestrator_stops_an_answer_and_asks_again() {
       .text("orchestrator-thinking")
       .contains("Orchestrator is thinking")
   );
-  assert!(screen.text("orchestrator-stop-note").contains("ends this answer only"));
   screen.click("orchestrator-stop");
   screen.until("the stopped answer", |screen| screen.exists("orchestrator-stopped"));
   let label = screen.text("orchestrator-stopped-label");
@@ -291,12 +282,16 @@ fn orchestrator_names_a_cli_that_is_not_signed_in_and_where_to_fix_it() {
 fn orchestrator_on_codex_acts_through_the_same_tools_confined() {
   let mut screen = Orchestrator::new(Setup::Codex);
   screen.go(OrchestratorChat::New);
-  assert!(screen.text("orchestrator-runs-on").contains("Codex · Kontur"));
+  let runs_on = screen.text("orchestrator-runs-on");
+  assert!(
+    runs_on.starts_with("Codex · ") && runs_on.ends_with(" · gpt-5.5"),
+    "the chip names the CLI and the model: {runs_on}"
+  );
   screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
-  screen.until("the created task's card", |screen| {
+  screen.until("the created task's line", |screen| {
     screen
       .text("orchestrator-conversation")
-      .contains("Created KON-1 as a draft")
+      .contains("Created a draft KON-1")
   });
   assert_eq!(screen.db().tasks().expect("tasks").remove(0).key().to_string(), "KON-1");
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));

@@ -146,6 +146,21 @@ pub fn person_side_message(
         .variant(TypographyStyle::Caption)
         .nowrap()
     }));
+  message_column(id, Some(head), body, (attached, delivery))
+}
+
+/// The person's message without its *You* and time (`Your message` in the Orchestrator's `01 Conversation`
+/// `wRSL4`): the bubble with `body` as written, the files attached to it and `delivery` under it; `id` names it.
+pub fn own_bubble(id: &str, body: &Arc<str>, (attached, delivery): (Option<Element>, Option<Element>)) -> Column {
+  message_column(id, None, body, (attached, delivery))
+}
+
+fn message_column(
+  id: &str,
+  head: Option<Row>,
+  body: &Arc<str>,
+  (attached, delivery): (Option<Element>, Option<Element>),
+) -> Column {
   // As the person wrote it, so the bubble hugs its words up to its widest (`pCzqz`): lurq's Markdown always
   // fills its parent's width.
   let bubble = (!body.trim().is_empty()).then(|| {
@@ -174,7 +189,7 @@ pub fn person_side_message(
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::End)
-    .child(head)
+    .with_children(head)
     .with_children(bubble)
     .with_children(attached)
     .with_children(delivery)

@@ -5,6 +5,7 @@
 
 pub mod add_slot;
 pub mod add_source;
+pub mod agent_mark;
 pub mod attachments;
 pub mod avatar;
 pub mod breadcrumb;

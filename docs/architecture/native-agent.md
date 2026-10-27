@@ -470,6 +470,9 @@ as an error result so the model can recover. It never ends the loop, except the 
 - `offset` is the 1-based start line and `limit` is the number of lines. The defaults are line 1 and 2000 lines.
 - Output is numbered lines; each line is cut at 2000 characters.
 - Binary files (a NUL byte in the first 8 KiB) return `binary file, N bytes`.
+- A PNG, JPEG or WebP file (told by its signature) returns `This is a PNG image (W×H). Images are not shown to native
+  agents yet.` Orchester's own `read_file` for Claude Code sends it as an MCP image block instead: re-encoded as PNG
+  without metadata, at most 1568 px on its long side, beside a line with both sizes.
 - Readable scope only. The read records a **read stamp**: path, length, modified time and a content hash.
 
 ### 4.2 `list_files`

@@ -79,11 +79,13 @@ impl OrchesterTool {
         "Build and start a QA copy of the app from this worktree on a seeded scenario (tools/qa-app.ps1), off-screen and without focus, and make it the app call_run_app calls when you leave out its pid. As many QA apps run on this computer at once as the project's setting QA apps at once allows: while other runs' QA apps hold every slot, the call waits until one is free. Starting again replaces this step's QA app; Orchester stops it when your turn ends or waits for a person. A person may be asked first. Never start tools/qa-app.ps1 yourself."
       }
       Self::CallRunApp => {
-        "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved under .tmp/ and returned as relative paths. Use this instead of tools/lurq-mcp-client.py."
+        "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved under .tmp/ and returned as relative paths: open one with read_file to see it. Use this instead of tools/lurq-mcp-client.py."
       }
       Self::ReadFile => {
         "Read a text file of the worktree as numbered lines. Read a file before you edit it: edit_file needs this \
-         read."
+         read. On Claude Code connections a PNG, JPEG or WebP file (told by its content) is shown as the image, at \
+         most 1568 pixels on its long side; start_line and length do not apply to it. Elsewhere an image is only \
+         named with its size."
       }
       Self::ListFiles => NativeTool::ListFiles.description(),
       Self::SearchFile => {
