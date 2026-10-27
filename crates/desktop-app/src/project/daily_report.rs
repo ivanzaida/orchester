@@ -86,10 +86,10 @@ async fn deliver_due(services: &Services, i18n: &I18n, open: &OpenProject) -> Re
         [("day", day.format("%Y-%m-%d").to_string())],
       )
       .to_string();
-    let (root, accounts) = (open.repo_root.clone(), accounts.clone());
+    let (root, programs, accounts) = (open.repo_root.clone(), services.programs.clone(), accounts.clone());
     let delivery = {
       let _keeping = super::waits::KEEPING.lock().await;
-      background::run(move || report::deliver_in(&root, (accounts, answers), (day, now), &title)).await??
+      background::run(move || report::deliver_in((&root, &programs), (accounts, answers), (day, now), &title)).await??
     };
     if delivery == Delivery::Kept {
       kept += 1;
