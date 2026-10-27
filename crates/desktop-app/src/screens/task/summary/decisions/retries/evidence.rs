@@ -1,28 +1,20 @@
-//! What the decision rests on (`Evidence` `oXmm0`, `What Review reported` `OjW9a`): the latest attempt's
-//! steps with the commit its work ended at, what the failing step reported (`Report` `cLh0O`: who, the
-//! step, its attempt and time, and the words), and that the run's changes and messages are kept, with
-//! links to them (`Preserved` `v133z`).
+//! What the decision rests on (`Evidence` `oXmm0`, `What Review reported` `OjW9a`): what the failing step reported
+//! (`Report` `cLh0O`: who, the step, its attempt and time, and the words), and that the run's changes and messages
+//! are kept, with links to them (`Preserved` `v133z`). The latest attempt's steps are the Summary's rail (ORC-100).
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  resource::StepKey,
-  run::{StepFailure, StepStatus},
-  time::Timestamp,
-};
+use orchester_core::{resource::StepKey, run::StepFailure};
 use orchester_workspace::{display, tasks::detail::RunView};
 
-use super::super::{
-  super::{TaskContext, steps},
-  step_label, tab_link,
-};
+use super::super::{super::TaskContext, step_label, tab_link};
 use crate::{
   routes::TaskTab,
   theme::{DecisionText, ExtraSpacing, IconSize, TaskText},
@@ -35,11 +27,10 @@ use crate::{
 /// The reporter's tile (`Avatar` `y8dMj3`).
 const AVATAR: f32 = 22.0;
 
-pub fn sections(ctx: &mut Ctx, props: &TaskContext, run: &RunView, failed: &StepKey, now: Timestamp) -> Vec<Element> {
-  let mut parts = vec![latest_attempt(ctx, run, now)];
+pub fn sections(ctx: &mut Ctx, props: &TaskContext, run: &RunView, failed: &StepKey) -> Vec<Element> {
   let report = report(ctx, run, failed);
   let preserved = preserved(ctx, props, run);
-  parts.push(
+  vec![
     Column::new()
       .id("task-retry-evidence")
       .width(Dimension::Pct(100.0))
@@ -47,61 +38,7 @@ pub fn sections(ctx: &mut Ctx, props: &TaskContext, run: &RunView, failed: &Step
       .with_children(report.into_iter().flatten())
       .child(preserved)
       .into(),
-  );
-  parts
-}
-
-/// *Latest attempt* with the commit its work ended at, and its steps that ran (`Attempt steps` `Nogci`).
-fn latest_attempt(ctx: &mut Ctx, run: &RunView, now: Timestamp) -> Element {
-  let ran = |key: &str| {
-    run.steps.iter().any(|view| {
-      let current = view.execution.is_some_and(|execution| {
-        run
-          .run
-          .current_attempt()
-          .is_some_and(|attempt| attempt.execution(execution).is_some())
-      });
-      view.key.as_str() == key && current && matches!(view.status, Some(StepStatus::Passed | StepStatus::Failed))
-    })
-  };
-  let rows: Vec<steps::StepRow> = steps::rows(run, false, &[], now)
-    .into_iter()
-    .filter(|row| ran(row.key()))
-    .collect();
-  let revision = run
-    .run
-    .last_checkpoint()
-    .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).to_owned());
-  let head = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t("decisions.retries.latestAttempt")).variant(TaskText::SectionTitle.role()))
-    .child(Spacer::new().flex(1.0))
-    .with_children(revision.map(|revision| {
-      Text::new(&revision)
-        .id("task-retry-revision")
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary)
-    }));
-  let list = Column::new()
-    .id("task-retry-attempt")
-    .width(Dimension::Pct(100.0))
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip()
-    .with_children(
-      rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| steps::step_row(ctx, row, index > 0, now)),
-    );
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Loose.role())
-    .child(head)
-    .child(list)
-    .into()
+  ]
 }
 
 /// *What Review reported* and the report, when the failing step left one.

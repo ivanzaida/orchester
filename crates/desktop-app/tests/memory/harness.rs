@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use orchester_app::routes::{MemoryTab, ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::routes::{MemoryTab, ProjectPage, Route, TaskView};
 use orchester_core::{
   id::{MemoryId, ProjectId, SecretId},
   memory::{Memory, MemoryFilter, MemoryStore, ScopeFilter},
@@ -113,21 +113,21 @@ impl Page {
       .expect("stored");
   }
 
-  /// Opens the Memory tab of task `key` and waits until its records are read.
+  /// Opens the memory of task `key`, the view its Summary's properties link to, and waits until its records are read.
   pub fn task_memory(&mut self, key: &str) {
-    let page = ProjectPage::Task(key.parse().expect("a task key"), TaskView::of(TaskTab::Memory));
+    let page = ProjectPage::Task(key.parse().expect("a task key"), TaskView::Memory);
     self.window.navigation().go(Route::Project(self.project, page));
     self.window.until(&format!("the memory of {key}"), |window| {
       window.texts("memory-list").is_some() || window.texts("memory-load-error").is_some()
     });
   }
 
-  /// Opens the Artifacts tab of task `key`.
-  pub fn task_artifacts(&mut self, key: &str) {
-    let page = ProjectPage::Task(key.parse().expect("a task key"), TaskView::of(TaskTab::Artifacts));
+  /// Opens the Summary of task `key` and waits until its properties end in the link to its memory.
+  pub fn task_summary(&mut self, key: &str) {
+    let page = ProjectPage::Task(key.parse().expect("a task key"), TaskView::Summary);
     self.window.navigation().go(Route::Project(self.project, page));
-    self.window.until(&format!("the artifacts of {key}"), |window| {
-      window.texts("artifacts-empty").is_some()
+    self.window.until(&format!("the summary of {key}"), |window| {
+      window.texts("task-memory-link-label").is_some()
     });
   }
 

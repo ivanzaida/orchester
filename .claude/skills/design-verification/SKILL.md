@@ -179,7 +179,9 @@ the route's params and answers the route the tab shows, for example:
   `failed`;
 - `{"route": "task", "project": "<id>", "key": "KON-12"}` (Summary), with `"tab"` `conversation`
   or `changes`; on changes `"file": "src/webhooks/sender.rs"` with `"from"` `checkpoint` or
-  `worktree`;
+  `worktree`; `"view": "memory"` opens the task's memory (from Summary's properties) and
+  `"view": "local-integration"` Local integration (Changes' *Try locally*). The former tabs
+  `details`, `artifacts`, `memory` and `local-integration` are refused with `unknown_tab`;
 - `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`;
 - `{"route": "settings", "tab": "<tab>"}`, `tab` `automation` (the default), `general`, `notifications`,
   `accounts`, `orchester` (Orchester Cloud), `connect` or `invite`, and what the tab opens on, without a click:

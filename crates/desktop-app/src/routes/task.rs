@@ -5,43 +5,33 @@ use super::{
 
 const FILE: &str = "file";
 const FROM: &str = "from";
+/// The view a tab opens in its place, in the query of the tab's path: the page keeps its frame, as it does when its
+/// tabs switch.
+const VIEW: &str = "view";
+/// The task's memory, under its Summary (`/tasks/KON-12/summary?view=memory`): the Summary's properties link to it.
+const MEMORY: &str = "memory";
+/// Local integration, under Changes (`/tasks/KON-12/changes?view=local-integration`): *Try locally* opens it.
+const LOCAL_INTEGRATION: &str = "local-integration";
 
-/// A tab of a task's page, in the page's order (ORC-51): Details first, the one a task opens on, then
-/// Conversation, Changes, Local integration while it is shown, Summary, and Artifacts and Memory last (`ogMzT`
-/// in `a0PLO`). The design (`Page tabs` `L9OIIZ` in `lUXff`, `vShIt`) still draws Summary first.
+/// A tab of a task's page, in the page's order (ORC-100, `Tabs` `QFr7g` in `Task header` `j8DakG`): Summary, the
+/// one a task opens on, then Conversation and Changes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskTab {
   #[default]
-  Details,
+  Summary,
   Conversation,
   Changes,
-  LocalIntegration,
-  Summary,
-  Artifacts,
-  Memory,
 }
 
 impl TaskTab {
-  pub const ALL: [Self; 7] = [
-    Self::Details,
-    Self::Conversation,
-    Self::Changes,
-    Self::LocalIntegration,
-    Self::Summary,
-    Self::Artifacts,
-    Self::Memory,
-  ];
+  pub const ALL: [Self; 3] = [Self::Summary, Self::Conversation, Self::Changes];
 
-  /// The tab's name: the last segment of its path, and its name in the app's MCP tools.
+  /// The tab's name: its segment in a path, and its name in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
       Self::Summary => "summary",
-      Self::Details => "details",
       Self::Conversation => "conversation",
       Self::Changes => "changes",
-      Self::LocalIntegration => "local-integration",
-      Self::Artifacts => "artifacts",
-      Self::Memory => "memory",
     }
   }
 
@@ -53,67 +43,91 @@ impl TaskTab {
   pub const fn title_key(self) -> &'static str {
     match self {
       Self::Summary => "task.tabs.summary",
-      Self::Details => "task.tabs.details",
       Self::Conversation => "task.tabs.conversation",
       Self::Changes => "task.tabs.changes",
-      Self::LocalIntegration => "local_integration.title",
-      Self::Artifacts => "task.tabs.artifacts",
-      Self::Memory => "task.tabs.memory",
     }
   }
 }
 
-/// What a task's page shows: a tab, and on Changes the file chosen in its list, if one is. The default is the
-/// tab a task opens on, Details.
+/// What a task's page shows: a tab, on Changes the file chosen in its list, if one is, and the two views a tab
+/// opens in its place: the task's memory from the Summary, Local integration from Changes. The default is the tab
+/// a task opens on, Summary.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskView {
   #[default]
-  Details,
+  Summary,
+  /// The task's memory, which the Summary's properties link to; under the Summary's tab.
+  Memory,
   Conversation,
   Changes(Option<ChangedFile>),
+  /// Local integration, which *Try locally* on Changes opens; under the Changes tab.
   LocalIntegration,
-  Summary,
-  Artifacts,
-  Memory,
 }
 
 impl TaskView {
+  /// The views a tab opens in its place, by their names in a path and in the app's MCP tools.
+  pub const SUB_VIEWS: [&'static str; 2] = [MEMORY, LOCAL_INTEGRATION];
+
   /// `tab`, on no particular file.
   pub const fn of(tab: TaskTab) -> Self {
     match tab {
       TaskTab::Summary => Self::Summary,
-      TaskTab::Details => Self::Details,
       TaskTab::Conversation => Self::Conversation,
       TaskTab::Changes => Self::Changes(None),
-      TaskTab::LocalIntegration => Self::LocalIntegration,
-      TaskTab::Artifacts => Self::Artifacts,
-      TaskTab::Memory => Self::Memory,
     }
   }
 
+  /// The view `name` (one of [`Self::SUB_VIEWS`]) of `tab`; `None` when the tab has no such view.
+  pub fn sub_view(tab: TaskTab, name: &str) -> Option<Self> {
+    match (tab, name) {
+      (TaskTab::Summary, MEMORY) => Some(Self::Memory),
+      (TaskTab::Changes, LOCAL_INTEGRATION) => Some(Self::LocalIntegration),
+      _ => None,
+    }
+  }
+
+  /// The tab the view is under, which the page's tabs show as chosen.
   pub const fn tab(&self) -> TaskTab {
     match self {
-      Self::Summary => TaskTab::Summary,
-      Self::Details => TaskTab::Details,
+      Self::Summary | Self::Memory => TaskTab::Summary,
       Self::Conversation => TaskTab::Conversation,
-      Self::Changes(_) => TaskTab::Changes,
-      Self::LocalIntegration => TaskTab::LocalIntegration,
-      Self::Artifacts => TaskTab::Artifacts,
-      Self::Memory => TaskTab::Memory,
+      Self::Changes(_) | Self::LocalIntegration => TaskTab::Changes,
+    }
+  }
+
+  /// The name of the view a tab opens in its place, while it shows one.
+  pub const fn sub_name(&self) -> Option<&'static str> {
+    match self {
+      Self::Memory => Some(MEMORY),
+      Self::LocalIntegration => Some(LOCAL_INTEGRATION),
+      Self::Summary | Self::Conversation | Self::Changes(_) => None,
+    }
+  }
+
+  /// The same view on no particular file: what the page's frame shows.
+  #[must_use]
+  pub const fn without_file(&self) -> Self {
+    match self {
+      Self::Summary => Self::Summary,
+      Self::Memory => Self::Memory,
+      Self::Conversation => Self::Conversation,
+      Self::Changes(_) => Self::Changes(None),
+      Self::LocalIntegration => Self::LocalIntegration,
     }
   }
 
   pub const fn file(&self) -> Option<&ChangedFile> {
     match self {
       Self::Changes(file) => file.as_ref(),
-      Self::Summary | Self::Details | Self::Conversation | Self::LocalIntegration | Self::Artifacts | Self::Memory => {
-        None
-      }
+      Self::Summary | Self::Memory | Self::Conversation | Self::LocalIntegration => None,
     }
   }
 
   pub(super) fn path(&self, task: &str) -> String {
     let path = format!("{task}/{}", self.tab().name());
+    if let Some(sub) = self.sub_name() {
+      return with_query(path, &[(VIEW, Some(sub))]);
+    }
     match self.file() {
       Some(file) => {
         let from = (file.source != ChangeSource::default()).then(|| file.source.name());
@@ -123,16 +137,31 @@ impl TaskView {
     }
   }
 
-  /// The view the segment after a task's path names, its tab, with its file from the query on Changes. A path
-  /// without the tab, as links are written by hand (`/tasks/ORC-24`), is the tab a task opens on, Details; the
-  /// app writes the tab.
+  /// The view the segment after a task's path names, its tab, with the view the tab opens in its place, or its file
+  /// on Changes, from the query. A path without the tab, as links are written by hand (`/tasks/ORC-24`), is the tab a
+  /// task opens on, Summary; the app writes the tab. The tabs a task had before ORC-100 still read, as links in
+  /// messages and notifications name them: Details and Artifacts are on the Summary now, Memory and Local
+  /// integration views of their tabs.
   pub(super) fn parse(segments: &[&str], params: &mut Params) -> Result<Self, RouteError> {
     let name = match segments {
       [] => return Ok(Self::default()),
-      [name] => name,
+      [name] => *name,
       _ => return Err(RouteError::NoScreen),
     };
-    let tab = TaskTab::from_name(name).ok_or(RouteError::NoScreen)?;
+    let Some(tab) = TaskTab::from_name(name) else {
+      return match name {
+        "details" | "artifacts" => Ok(Self::Summary),
+        MEMORY => Ok(Self::Memory),
+        LOCAL_INTEGRATION => Ok(Self::LocalIntegration),
+        _ => Err(RouteError::NoScreen),
+      };
+    };
+    if let Some(view) = params.take(VIEW)? {
+      return Self::sub_view(tab, &view).ok_or(RouteError::InvalidParam {
+        param: VIEW.to_owned(),
+        value: view,
+      });
+    }
     if tab != TaskTab::Changes {
       return Ok(Self::of(tab));
     }

@@ -192,6 +192,7 @@ icons! {
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
   Monitor => '\u{e11d}',
+  MonitorPlay => '\u{e485}',
   Moon => '\u{e11e}',
   MousePointerClick => '\u{e120}',
   OctagonPause => '\u{e21b}',

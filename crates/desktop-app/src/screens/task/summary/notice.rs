@@ -1,13 +1,11 @@
-//! Where the task stands and what that means, at the top of the Summary (`Notice · Implement is running
-//! · attempt 2` `uqbUH` in `lUXff`, stopped at the token limit in `oTzJZ`, waits after retries in
-//! `DVuXu`, ready for review in `F2LtFn`): one notice per phase of the task's latest run, with Open
-//! conversation where the conversation is where the person looks or answers.
+//! Where the task stands and what that means, as the run's last event on the Summary says it (`Last event` `TGEq8`
+//! in `01 · Summary`): one sentence per phase of the task's latest run.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  id::StepExecutionId,
+  id::{RunId, StepExecutionId},
   resource::WithoutCommits,
   run::{PauseReason, RunFailure, RunLimit, RunStatus, RunnerFailure, Stuck},
   task::TaskStatus,
@@ -26,21 +24,14 @@ use orchester_workspace::{
   },
 };
 
-use crate::ui::{
-  icon::Icon,
-  message::message_text,
-  notice::{Notice, NoticeTone},
-  status::Status,
-};
+use crate::ui::{icon::Icon, message::message_text, notice::NoticeTone, status::Status};
 
-/// What the notice says, before its action.
+/// What the run's last event says, before its action.
 pub struct Said {
   pub tone: NoticeTone,
   pub icon: Icon,
   pub title: Arc<str>,
   pub body: Arc<str>,
-  /// The conversation is where to look or answer.
-  pub conversation: bool,
 }
 
 impl Said {
@@ -50,21 +41,32 @@ impl Said {
       icon,
       title,
       body,
-      conversation: false,
     }
   }
+}
 
-  fn in_conversation(mut self) -> Self {
-    self.conversation = true;
-    self
-  }
+/// A decision's own title and body for the run's last event, for the run `run` at its event `sequence`: words read for
+/// an earlier moment are not said.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventWords {
+  pub run: RunId,
+  pub sequence: u64,
+  pub title: Arc<str>,
+  pub body: Arc<str>,
+}
 
-  pub fn notice(self) -> Notice {
-    Notice::new("task-notice", self.tone, self.title)
-      .icon(self.icon)
-      .body(self.body)
+impl EventWords {
+  /// `said` in these words, while they are of `run` as it stands.
+  pub fn apply(&self, run: &RunView, mut said: Said) -> Said {
+    if self.run == run.id() && self.sequence == run.run.last_sequence().get() {
+      said.title = self.title.clone();
+      said.body = self.body.clone();
+    }
+    said
   }
 }
+
+impl lurq::app::component::DevtoolsInspectable for EventWords {}
 
 /// The notice of `detail`. `runner`: the project's runner, while a run recorded as running lost it;
 /// `approval`: a tool request of the run that waits for the person.
@@ -170,7 +172,7 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
     )
   };
   let body = ctx.t_args("summary.notice.runningBody", args);
-  Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body)).in_conversation()
+  Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body))
 }
 
 /// The step the run's work was returned to, to resolve a merge's conflicts, while it works on them (board 5 of
@@ -211,7 +213,7 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
       ctx.t_args("summary.notice.askingTitle", [("agent", agent.as_str())]),
       ctx.t_args("summary.notice.askingBody", [("step", step.as_str())]),
     );
-    return Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation());
+    return Some(Said::new(NoticeTone::Warning, Icon::Hand, text));
   }
   let planned = run.run.awaiting_plan().first().copied()?;
   let (_, agent) = step_words(ctx, run.step_of(planned));
@@ -243,7 +245,7 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
     ctx.t_args("summary.notice.planTitle", [("version", version.to_string())]),
     body,
   );
-  Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation())
+  Some(Said::new(NoticeTone::Warning, Icon::Hand, text))
 }
 
 fn waits_for_approval(ctx: &Ctx, run: &RunView, approval: &ShownApproval) -> Said {
@@ -259,7 +261,7 @@ fn waits_for_approval(ctx: &Ctx, run: &RunView, approval: &ShownApproval) -> Sai
       [("step", step.as_str()), ("time", time.as_str())],
     ),
   );
-  Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation()
+  Said::new(NoticeTone::Warning, Icon::Hand, text)
 }
 
 /// The short revision of the run's last checkpoint.

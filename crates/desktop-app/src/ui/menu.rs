@@ -4,7 +4,8 @@
 //! is 28 high, radius 4, 8 at its sides: a 14 `text_secondary` icon, the label in 12 `text_primary` and
 //! a shortcut in Geist Mono 11 `text_muted` at its end, 8 apart; a row with a detail (`Menu item/detail`
 //! `j6ZUhL`) is 6 over and under its label and the detail in 11 `text_muted` 2 under it, and a chosen
-//! row ends in a 14 check. Rows take the `hover` fill under the pointer. A row that cannot be chosen
+//! row ends in a 14 check. A row that destroys has its icon and label in `danger` (`Cancel run` `Z1Uvbo` in
+//! `JapSp`). Rows take the `hover` fill under the pointer. A row that cannot be chosen
 //! is faded, ends in a lock and says why as its detail. Groups are split by a 1 `border` line with 4
 //! over and under it (`Menu separator` `UoDdI`).
 
@@ -98,6 +99,8 @@ pub struct MenuItem {
   lock: bool,
   /// The label is an identifier, in Geist Mono.
   mono: bool,
+  /// The row destroys: its icon and label in `danger`.
+  danger: bool,
   focus: Focus,
   choice: Choice,
 }
@@ -129,9 +132,17 @@ impl MenuItem {
       chosen: false,
       lock: true,
       mono: false,
+      danger: false,
       focus: Focus::Pointer,
       choice,
     }
+  }
+
+  /// The row destroys: its icon and label in `danger` (`Cancel run` `Z1Uvbo` in `JapSp`).
+  #[must_use]
+  pub const fn danger(mut self) -> Self {
+    self.danger = true;
+    self
   }
 
   pub fn icon(mut self, icon: Icon) -> Self {
@@ -191,7 +202,7 @@ impl MenuItem {
       TypographyStyle::Description
     };
     let label = Truncated::new(format!("{}-label", self.id), self.label.clone(), style)
-      .color(PaletteColor::TextPrimary)
+      .color(self.content_color(PaletteColor::TextPrimary))
       .render(ctx);
     Column::new()
       .flex(1.0)
@@ -211,6 +222,11 @@ impl MenuItem {
           detail
         }
       }))
+  }
+
+  /// The color of the row's icon or label, `color` unless the row destroys.
+  fn content_color(&self, color: PaletteColor) -> PaletteColor {
+    if self.danger { PaletteColor::Danger } else { color }
   }
 
   fn trailing(&self) -> Option<Element> {
@@ -247,11 +263,9 @@ impl MenuItem {
       } else {
         Alignment::Center
       })
-      .with_children(
-        self
-          .icon
-          .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextSecondary).id(format!("{}-icon", self.id))),
-      )
+      .with_children(self.icon.map(|glyph| {
+        icon(glyph, IconSize::Md, self.content_color(PaletteColor::TextSecondary)).id(format!("{}-icon", self.id))
+      }))
       .child(self.text(ctx, detail.as_deref()))
       .with_children(self.trailing());
     let surface = |row: Row| {

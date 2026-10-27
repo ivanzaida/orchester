@@ -1,15 +1,24 @@
-//! The Memory screens with no record (`tasks` scenario): the task's tab says what agents keep and which step works
-//! (`Empty · no records yet` `e8oWP4`), with no toolbar, as its own *New record* stands in the state; each tab of the
-//! project's page says it has no records (`ejSHj`); and a task's Artifacts tab says runs keep no artifacts yet.
+//! The Memory screens with no record (`tasks` scenario): the task's memory says what agents keep and which step works
+//! (`Empty · no records yet` `e8oWP4`), with no toolbar, as its own *New record* stands in the state, and its Summary's
+//! link says it has no notes; each tab of the project's page says it has no records (`ejSHj`); and a task's Summary
+//! says in its Output that runs keep no artifacts yet.
 
 use orchester_app::routes::MemoryTab;
 
 use super::harness::Page;
 
 #[test]
-fn memory_empty_task_tab_says_what_agents_keep() {
+fn memory_empty_task_memory_says_what_agents_keep() {
   let mut page = Page::seeded("tasks");
-  page.task_memory("KON-12");
+  page.task_summary("KON-12");
+  // The link counts the task's notes once they are read.
+  page.until("the count of the task's notes", |window| {
+    window
+      .texts("task-memory-link-label")
+      .is_some_and(|texts| texts.join(" ") == "No memory notes")
+  });
+  page.window.press("task-memory-link");
+  page.until("the task's memory", |window| window.texts("memory-list").is_some());
   let empty = page.text("memory-empty");
   assert!(empty.starts_with("No memory for this task yet"), "{empty}");
   assert!(empty.contains("03 Implement is working"), "{empty}");
@@ -18,7 +27,6 @@ fn memory_empty_task_tab_says_what_agents_keep() {
     "no toolbar while there is nothing to search or count"
   );
   assert!(page.has("memory-empty-new"));
-  assert_eq!(page.text("task-tab-memory"), "Memory");
   assert!(page.text("memory-next").contains("Nothing to give yet"));
   page.window.press("memory-empty-new");
   page.until("the new record's editor", |window| {
@@ -48,20 +56,10 @@ fn memory_empty_project_tabs_say_they_have_no_records() {
 }
 
 #[test]
-fn memory_artifacts_tab_says_runs_keep_none_yet() {
-  let mut page = Page::seeded("memory");
-  page.task_artifacts("KON-12");
-  assert_eq!(page.text("artifacts-count"), "0 artifacts");
-  let run = page.text("artifacts-run");
-  assert!(run.starts_with("Run ") && run.ends_with(" · latest"), "{run}");
-  assert!(page.text("artifacts-empty-title").starts_with("No artifacts in Run "));
-  assert!(
-    page
-      .text("artifacts-empty-body")
-      .contains("Runs don't keep artifacts yet")
-  );
-  page.window.press("artifacts-run");
-  page.until("the run menu", |window| window.texts("artifacts-run-menu").is_some());
-  let runs = page.text("artifacts-run-menu");
-  assert_eq!(runs.matches("Run ").count(), 3, "KON-12's three runs: {runs}");
+fn memory_summary_output_says_runs_keep_no_artifacts_yet() {
+  let mut page = Page::seeded("tasks");
+  page.task_summary("KON-12");
+  assert_eq!(page.text("task-output-head"), "Output 0");
+  let none = page.text("task-output-none");
+  assert!(none.contains("runs keep no other artifacts yet"), "{none}");
 }

@@ -1,14 +1,16 @@
-//! The row under the title (`Organization` `foLAM` in `lUXff`): where the task's run stands as a status
-//! (`Status · Running · 03 Implement` `tjx4l`), the task's story points beside it (ORC-49, no design frame yet: who
-//! set them and Orchester's reason in its tooltip), and at its end the run line (`Run line` `vKpQg`): "Run
-//! 128 · attempt 2 · Feature delivery v3 · started 16:20". The organization pickers that the design
-//! puts before the status come later (agreed deviation D4).
+//! The status line under the title (`Status line` `g9ufW` in `j8DakG`): where the task's run stands, its 13 icon and
+//! its words in 12/500 in the status's tone (`Interrupted at 03 Implement`), then in 12 `text_muted` the run it is
+//! about (`Run 8 · attempt 2 · started 15:04`), 8 apart; the task's story points after them (ORC-49, no design frame
+//! yet: who set them and Orchester's reason in its tooltip).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
-  components::{Row, Spacer, Text},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
+  },
+  components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -29,7 +31,6 @@ use orchester_workspace::{
 
 use crate::{
   screens::task::TaskContext,
-  theme::{ControlHeight, ExtraTypography},
   ui::{
     chip::TagChip,
     status::{Status, StatusChip},
@@ -37,32 +38,42 @@ use crate::{
   },
 };
 
-pub fn status_row(ctx: &mut Ctx, task: &TaskContext) -> Element {
+/// What a status is about, after its word.
+enum About {
+  /// The step it stands at: "Interrupted at 03 Implement".
+  Step(Arc<str>),
+  /// Why the run waits for the person, or why its merge failed: "Needs input · retries used".
+  Reason(Arc<str>),
+}
+
+pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Element {
   let detail = &task.detail;
-  let (status, detail_words) = chip_words(ctx, task);
-  let mut chip = StatusChip::new("task-status", status);
-  if let Some(words) = detail_words {
-    chip = chip.detail(words);
-  }
+  let (status, about) = chip_words(ctx, task);
+  let chip = StatusChip::new("task-status", status);
+  let chip = match about {
+    Some(About::Step(step)) => {
+      let words = ctx.t_args("task.status.at", [("status", ctx.t(status.key())), ("step", step)]);
+      chip.words(words)
+    }
+    Some(About::Reason(reason)) => chip.detail(reason),
+    None => chip,
+  };
   let points = detail.task.estimate().map(|estimate| points(ctx, estimate));
-  let status = Row::new()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(chip.render(ctx))
-    .with_children(points);
   Row::new()
     .id("task-status-row")
     .width(Dimension::Pct(100.0))
-    .min_height(Dimension::Px(ControlHeight::Md.value()))
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(status)
-    .child(Spacer::new().flex(1.0))
+    .child(chip.render(ctx))
     .child(
       Text::new(&run_line(ctx, detail))
         .id("task-run-line")
-        .variant(ExtraTypography::Note.role())
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
         .nowrap(),
     )
+    .with_children(points)
     .into()
 }
 
@@ -93,12 +104,12 @@ fn points(ctx: &mut Ctx, estimate: &StoryEstimate) -> Element {
 
 /// The task's status and what it is about: the step it stands at, why the run waits for the person's decision
 /// ([`stuck_words`]), or why a merge failed ("conflict").
-fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
+fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<About>) {
   let detail = &task.detail;
   let lost = task.lost();
   if !lost && detail.phase() == TaskPhase::Stuck {
     let words = detail.run.as_ref().and_then(|run| stuck_words(&run.run));
-    return (Status::NeedsInput, words.map(|key| ctx.t(key)));
+    return (Status::NeedsInput, words.map(|key| About::Reason(ctx.t(key))));
   }
   // A request the run's agent waits on: the run needs the person, as its notice and steps say.
   if let Some(approval) = task.waiting_approval() {
@@ -106,14 +117,14 @@ fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
       .run
       .as_ref()
       .and_then(|run| run.step_of(approval.approval.execution));
-    return (Status::NeedsInput, step.map(|step| step_label(ctx, step)));
+    return (Status::NeedsInput, step.map(|step| About::Step(step_label(ctx, step))));
   }
   if let Some(conflict) = merge_failed(task) {
-    let words = conflict.then(|| ctx.t("task.status.conflict"));
+    let words = conflict.then(|| About::Reason(ctx.t("task.status.conflict")));
     return (Status::NotMerged, words);
   }
   let (status, step) = status(detail, lost);
-  (status, step.map(|step| step_label(ctx, step)))
+  (status, step.map(|step| About::Step(step_label(ctx, step))))
 }
 
 /// Why a run waits for the person's decision: its step used up its retries or broke again ("retries used", as the
@@ -192,6 +203,7 @@ fn step_label(ctx: &Ctx, step: &StepView) -> Arc<str> {
   )
 }
 
+/// "Run 8 · attempt 2 · started 15:04": the run the status is about.
 fn run_line(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
   if let Some(unreadable) = &detail.latest_unreadable {
     return match unreadable.number {
@@ -210,19 +222,18 @@ fn run_line(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
     .current_attempt()
     .map(|attempt| attempt.number().get())
     .filter(|number| *number > 1);
-  let args = [
-    ("run", run.run.number().get().to_string()),
-    ("attempt", attempt.map(|number| number.to_string()).unwrap_or_default()),
-    ("pipeline", run.pipeline.to_string()),
-    ("version", run.version.to_string()),
-    ("when", when(ctx, run).map(|when| when.to_string()).unwrap_or_default()),
-  ];
-  let key = match (attempt.is_some(), when(ctx, run).is_some()) {
+  let when = when(ctx, run);
+  let key = match (attempt.is_some(), when.is_some()) {
     (true, true) => "task.runLine.attemptWhen",
     (true, false) => "task.runLine.attempt",
     (false, true) => "task.runLine.when",
     (false, false) => "task.runLine.run",
   };
+  let args = [
+    ("run", run.run.number().get().to_string()),
+    ("attempt", attempt.map(|number| number.to_string()).unwrap_or_default()),
+    ("when", when.map(|when| when.to_string()).unwrap_or_default()),
+  ];
   ctx.t_args(key, args)
 }
 
