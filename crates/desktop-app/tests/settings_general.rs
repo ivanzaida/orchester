@@ -36,9 +36,15 @@ fn settings_general_shows_its_sections_with_the_save_state() {
     assert!(texts.iter().any(|text| text == words), "{words} in {texts:?}");
   }
   assert_eq!(window.text("settings-save-state"), "All changes saved");
+  // The version and which build it is (`EwNQ3`).
+  let build = if cfg!(debug_assertions) {
+    "development"
+  } else {
+    "release"
+  };
   assert_eq!(
     window.text("settings-version-value"),
-    format!("v{}", env!("CARGO_PKG_VERSION"))
+    format!("v{} · {build}", env!("CARGO_PKG_VERSION"))
   );
   let database = window.data.database();
   assert!(
@@ -52,6 +58,34 @@ fn settings_general_shows_its_sections_with_the_save_state() {
     !window.link.input_gate().protecting(),
     "nothing on General is a person's alone"
   );
+}
+
+/// A long path is cut beside its label rather than laid over it (Verify, attempt 3).
+#[test]
+fn settings_general_keeps_a_path_rows_label_beside_a_long_path() {
+  let mut window = general();
+  window.until("the log path", |window| window.texts("settings-log-path").is_some());
+  for id in ["settings-data", "settings-log"] {
+    let mut bounds = |part: &str| {
+      window
+        .tree
+        .get_element_by_id_mut(&format!("{id}{part}"))
+        .and_then(|element| element.bounds())
+        .unwrap_or_else(|| panic!("{id}{part} is laid out"))
+    };
+    let label = bounds("-label");
+    let path = bounds("-path");
+    let row = bounds("-row");
+    assert!(label.width > 30.0, "{id}'s label keeps its width: {label:?}");
+    assert!(
+      path.x >= label.x + label.width,
+      "{id}'s path starts after its label: {label:?} {path:?}"
+    );
+    assert!(
+      path.x + path.width <= row.x + row.width,
+      "{id}'s path stays in its row: {path:?} {row:?}"
+    );
+  }
 }
 
 #[test]

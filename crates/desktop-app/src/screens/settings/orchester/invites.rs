@@ -1,18 +1,19 @@
-//! *Waiting invites* (`Invites` `s25gc8` in `Cu20b`; accepting and declining in `jUMAF`): the invites accepted here
-//! whose join did not finish ([`super::accepted`]), then who invited the person to what, with *Decline* and *Accept*.
+//! *Invites* (`Invites` `QZ6IM` in `05 · Orchester Cloud`; a waiting invite, declining and accepting in `ZUuMT`): a
+//! row per invite — who invited the person to what, when it expires, *Accept* and *Decline* at its end — and under the
+//! rows the invites accepted here whose join did not finish ([`super::accepted`]) and what the last answer came to.
 //! Accepting connects this computer to the invite's server, trusting exactly the certificate the cloud's registry
-//! names, so there is no check code to compare; *Decline* asks in place first. An invite that needs two-factor
-//! authentication first says so under its top line, with the step that fixes it ([`super::two_factor`]).
+//! names, so there is no check code to compare; *Decline* asks in place of the row's actions first. An invite that
+//! needs two-factor authentication first says so under the row, with the step that fixes it ([`super::two_factor`]).
 
 use lurq::{
   app::{
     ctx::{Ctx, FutureState},
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_api::{
   InviteKind, MemberRole,
@@ -23,61 +24,63 @@ use orchester_core::time::Timestamp;
 pub(super) use super::answers::{Answers, Asked, Outcome};
 use super::{
   Invites, Kept, Said, accepted,
-  parts::{paragraph, section as part, section_title},
   two_factor::{self, Need},
   words::{counted, day, shown_address},
 };
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
+  theme::IconSize,
   ui::{
-    avatar::{initials, person_avatar},
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
     field::field_error,
     icon::{Icon, icon},
-    inspector,
+    notice::NoticeTone,
+    setting_notice::{SettingNotice, status_line},
+    setting_rows::{SettingGroup, SettingRow, group_note, row_tile},
   },
 };
 
-/// The section, as `invites` stand, for an account whose two-factor authentication is `status`.
+/// The group, as `invites` stand, for an account whose two-factor authentication is `status`.
 pub(super) fn waiting(
   ctx: &mut Ctx,
   (invites, kept, status): (&Invites, &Kept, Option<&TwoFactorStatus>),
   answers: &Answers,
 ) -> Element {
-  let meta = (invites.waiting() > 0).then(|| {
-    counted(
+  let mut group = SettingGroup::new("orchester-invites", ctx.t("cloud.invites.group"));
+  if invites.waiting() > 0 {
+    group = group.meta(counted(
       ctx,
       ("cloud.invites.waiting.one", "cloud.invites.waiting.other"),
       invites.waiting(),
-    )
-  });
-  let mut parts: Vec<Element> = vec![paragraph("orchester-invites-lead", &ctx.t("cloud.invites.lead")).into()];
-  parts.extend(outcome(ctx, answers, false));
-  parts.extend(super::ended::found(ctx, answers));
-  parts.extend(accepted::kept(ctx, (kept, status), answers));
+    ));
+  }
+  let mut parts: Vec<Element> = Vec::new();
   match invites {
     Invites::SignedOut => {}
     Invites::Failed(reason) => parts.push(field_error("orchester-invites-failed", &reason.text(ctx)).into()),
     Invites::Listed(listed) if listed.is_empty() => {
-      parts.push(inspector::note("orchester-invites-none", Icon::Mail, &ctx.t("cloud.invites.none")).into());
+      group = group.row(
+        SettingRow::new("orchester-invites-none", ctx.t("cloud.invites.none"))
+          .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+          .render(ctx),
+      );
     }
     Invites::Listed(listed) => {
       for invite in listed.iter() {
-        parts.push(card(ctx, invite, (status, answers)));
+        group = group.row(card(ctx, invite, (status, answers)));
       }
     }
   }
-  part(
-    "orchester-invites",
-    section_title(
-      "orchester-invites-title",
-      &ctx.t("cloud.invites.title"),
-      meta.as_deref(),
-    ),
-    parts,
-  )
-  .into()
+  parts.extend(outcome(ctx, answers, false));
+  parts.extend(super::ended::found(ctx, answers));
+  parts.extend(accepted::kept(ctx, (kept, status), answers));
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(group)
+    .with_children(parts)
+    .child(group_note("orchester-invites-lead", &ctx.t("cloud.invites.lead")))
+    .into()
 }
 
 /// What the last accept, ask again or decline came to. `waiting`: whether to say that a join waits for approval,
@@ -203,9 +206,10 @@ const fn role_key(role: MemberRole) -> &'static str {
   }
 }
 
-/// An invite (`Invite · Billing` `JgJbd`): the inviter's initials, what it is to, its address and expiry, and the
-/// answers; *Decline the invite?* in place under it while asked; *Connecting…* while it is accepted. While it needs
-/// two-factor authentication, its answers are under its top line (`i679x9`, `d3OtB`, `JwJIL`).
+/// An invite's row (`Dana Koval invited you to Kontur…` `Ec1re` in `ZUuMT`): a mail tile, what it is to, when it
+/// expires (its address in the tooltip), and *Accept* and *Decline*; *Decline the invite?* in place of the actions
+/// while asked; *Connecting…* while it is accepted. While it needs two-factor authentication, the step that fixes it
+/// is under the row in place of its actions.
 fn card(ctx: &mut Ctx, invite: &CloudInvite, (status, answers): (Option<&TwoFactorStatus>, &Answers)) -> Element {
   let id = format!("orchester-invite-{}", invite.id);
   let address = invite
@@ -217,97 +221,52 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, (status, answers): (Option<&TwoFact
     "cloud.invites.expires",
     [("expires", day(ctx, Timestamp::from_unix_millis(invite.expires_at)))],
   );
-  let text = Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Tight.role())
-    .child(
-      Text::new(&title(ctx, invite))
-        .id(format!("{id}-title"))
-        .variant(OrchesterText::InviteTitle.role())
-        .width(Dimension::Pct(100.0)),
-    )
-    .child(
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(shown_address(&address))
-            .variant(OrchesterText::Address.role())
-            .nowrap(),
-        )
-        .child(Text::new(&ctx.t("cloud.factSeparator")).variant(ExtraTypography::Note.role()))
-        .child(Text::new(&dates).variant(ExtraTypography::Note.role()).nowrap()),
-    );
   let accepting = answers.connecting() && answers.accepting.get().0 == Some(invite.id);
   let declining = answers.declining.get().0 == Some(invite.id);
   let need = two_factor::need((invite.id, invite.needs_two_factor), status, answers);
-  let top = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .align_items(Alignment::Center)
-    .child(person_avatar(
-      &format!("{id}-avatar"),
-      &initials(&invite.inviter_display_name),
-    ))
-    .child(text)
-    .with_children((!accepting && !declining && need == Need::Accept).then(|| buttons(ctx, &id, invite, answers)));
-  let mut card = Column::new()
-    .id(id.clone())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(
-      crate::theme::AccountsSpacing::Edge.role(),
-      SpacingSize::Md,
-    ))
-    .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .child(top);
+  let mut row = SettingRow::new(format!("{id}-entry"), title(ctx, invite))
+    .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+    .hint(dates.to_string())
+    .info(shown_address(&address).to_owned());
+  if !accepting && !declining && need == Need::Accept {
+    row = row.control(buttons(ctx, &id, invite, answers));
+  }
   if accepting {
-    card = card.child(connecting(ctx, &id, invite, answers));
+    row = row.below(connecting(ctx, &id, invite, answers));
   }
   if !accepting && !declining {
-    card = card.with_children(two_factor::below(ctx, &id, invite, (need, answers)));
+    row = row.below_all(two_factor::below(ctx, &id, invite, (need, answers)));
   }
-  card = card.with_children(answers.person.reason(ctx, &format!("{id}-accept")));
-  if !declining {
-    return card.into();
+  if declining {
+    row = row.below(decline_question(ctx, &id, invite, answers));
   }
+  row = row.below_all(answers.person.reason(ctx, &format!("{id}-accept")));
   Column::new()
+    .id(id)
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Section.role())
-    .child(card)
-    .child(decline_question(ctx, &id, invite, answers))
+    .child(row.render(ctx))
     .into()
 }
 
-/// *Connecting to Kontur team…* with *Cancel* under it (`Accepting` in `jUMAF`).
+/// *Connecting to Kontur team…* with *Cancel* under it (`Accepting · the invite row while it joins` `at7XI`).
 fn connecting(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Column {
   let answers = answers.clone();
   Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(
-      Row::new()
-        .id(format!("{id}-connecting"))
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextSecondary))
-        .child(
-          Text::new(&ctx.t_args("cloud.invites.connecting", [("server", invite.server.name.as_str())]))
-            .variant(ExtraTypography::Lead.role())
-            .flex(1.0),
-        ),
-    )
+    .child(status_line(
+      &format!("{id}-connecting"),
+      Icon::LoaderCircle,
+      &ctx.t_args("cloud.invites.connecting", [("server", invite.server.name.as_str())]),
+    ))
     .child(
       ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, ctx.t("cloud.invites.cancel"))
         .on_click(move || answers.stop()),
     )
 }
 
+/// *Accept* and *Decline* at the row's end.
 fn buttons(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Row {
   let decline = two_factor::decline(ctx, id, invite, answers);
   let busy = answers.connecting();
@@ -315,8 +274,7 @@ fn buttons(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Row 
     format!("{id}-accept"),
     ButtonKind::Primary,
     ctx.t("cloud.invites.accept"),
-  )
-  .icon(Icon::Check);
+  );
   let accept_button = if busy {
     accept_button.disabled()
   } else {
@@ -326,11 +284,11 @@ fn buttons(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Row 
   Row::new()
     .flex_shrink(0.0)
     .spacing(SpacingSize::Sm)
-    .child(decline)
     .child(accept_button)
+    .child(decline)
 }
 
-/// *Decline the invite to Kontur?* in place (`Decline · confirmed in place` in `jUMAF`).
+/// *Decline the invite to Kontur?* in place of the invite's actions (`Decline` `DqgtJ` in `ZUuMT`).
 pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Element {
   let target = invite
     .project
@@ -339,7 +297,7 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
   let (answers_now, invite_id) = (answers.clone(), invite.id);
   let pending = answers.decline.state().get().is_pending();
   let button = format!("{id}-decline-confirm");
-  let confirm = ActionButton::new(button.clone(), ButtonKind::Danger, ctx.t("cloud.invites.decline")).icon(Icon::X);
+  let confirm = ActionButton::new(button.clone(), ButtonKind::Danger, ctx.t("cloud.invites.decline"));
   let confirm = if pending {
     confirm.loading()
   } else {
@@ -347,33 +305,19 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
     confirm.on_click(move || answers_now.decline(&button, invite_id))
   };
   let keep = answers.declining.clone();
-  Column::new()
-    .id(format!("{id}-decline-question"))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-    .rounded(ExtraRadius::Tile.role())
-    .child(
-      Text::new(&ctx.t_args("cloud.invites.declineQuestion", [("target", target)]))
-        .variant(ExtraTypography::FormSection.role())
-        .width(Dimension::Pct(100.0)),
-    )
-    .child(
-      Text::new(&ctx.t_args(
-        "cloud.invites.declineBody",
-        [("inviter", invite.inviter_display_name.as_str())],
-      ))
-      .variant(ExtraTypography::Lead.role())
-      .width(Dimension::Pct(100.0)),
-    )
-    .child(
-      Row::new().spacing(SpacingSize::Sm).child(confirm).child(
-        ActionButton::new(format!("{id}-keep"), ButtonKind::Secondary, ctx.t("cloud.invites.keep"))
-          .on_click(move || keep.set(Asked(None))),
-      ),
-    )
-    .with_children(answers.person.reason(ctx, &button))
-    .into()
+  let notice = SettingNotice::new(format!("{id}-decline-question"), NoticeTone::Warning)
+    .title(ctx.t_args("cloud.invites.declineQuestion", [("target", target)]))
+    .body(ctx.t_args(
+      "cloud.invites.declineBody",
+      [("inviter", invite.inviter_display_name.as_str())],
+    ))
+    .action(confirm)
+    .action(
+      ActionButton::new(format!("{id}-keep"), ButtonKind::Ghost, ctx.t("cloud.invites.keep"))
+        .on_click(move || keep.set(Asked(None))),
+    );
+  match answers.person.reason(ctx, &button) {
+    Some(reason) => notice.part(reason).into(),
+    None => notice.into(),
+  }
 }

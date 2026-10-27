@@ -1,21 +1,21 @@
-//! *Advanced · cloud address* (`Ii4SE` in `Cu20b`, `Advanced · cloud address` in `Aowlk`): closed, the line with
-//! *default* or the cloud in use at its end; open, the address field and the API address field under it with *Use
-//! this address* and *Back to the default*, and *Using a test cloud* while another cloud than the build's is set. An
-//! empty API address is a cloud whose API is at `/api/v1` on its address, as an older self-run cloud's
+//! The cloud's address: *Advanced* in Settings › Orchester Cloud (`Advanced` `RSwbo` in `vPV73`, open in `VQBYk` of
+//! `ZUuMT`), the row with the cloud in use and *Change*; open, the address field and the API address field under it
+//! with *Use this address* and *Back to the default*, and *Using a test cloud* while another cloud than the build's is
+//! set. An empty API address is a cloud whose API is at `/api/v1` on its address, as an older self-run cloud's
 //! (`docs/cloud-api.md`, "Base"). Changing it signs out of Orchester Cloud; team servers keep working. The sign-in gate
-//! shows the same section (`Advanced · open` `cUVrD` in `S8aPFV`) without the line over it, with *test cloud* in
-//! `warning` at the line's end and no callout: the gate's footer names the test cloud. There the line and the buttons
-//! are stops of the gate's Tab order, and Enter in an address field does *Use this address*.
+//! shows the same fields (`Advanced · open` `cUVrD` in `S8aPFV`) under a line of its own with *default* or *test cloud*
+//! in `warning` at its end and no notice: the gate's footer names the test cloud. There the line and the buttons are
+//! stops of the gate's Tab order, and Enter in an address field does *Use this address*.
 
 use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Form, FormProps, Row, Spacer, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_api::client::{CloudAddress, ServerAddress};
 use orchester_workspace::sharing::cloud::CloudInUse;
@@ -26,10 +26,12 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
     icon::{Icon, icon},
+    notice::NoticeTone,
     pressable::{Focus, pressable},
+    setting_notice::SettingNotice,
+    setting_rows::{SettingGroup, SettingRow, mono_value},
   },
 };
 
@@ -38,17 +40,6 @@ use crate::{
 pub(crate) enum Place {
   Settings,
   Gate,
-}
-
-impl Place {
-  /// How the section's line takes a press: on the gate it is a stop of the gate's Tab order with a link's ring, since
-  /// it is only words; its buttons are the open section's form controls there.
-  const fn focus(self) -> Focus {
-    match self {
-      Self::Settings => Focus::Pointer,
-      Self::Gate => Focus::Link,
-    }
-  }
 }
 
 /// What the person typed: the cloud's address and its API address, empty for none.
@@ -103,44 +94,83 @@ fn parse(web: &str, api: &str) -> Result<CloudAddress, Said> {
   Ok(CloudAddress::new(web, api))
 }
 
-pub(crate) fn section(ctx: &mut Ctx, address: &CloudInUse, advanced: &Advanced, place: Place) -> Element {
-  let open = advanced.open.get();
-  let toggle = {
-    let flag = advanced.open.clone();
-    let fields = (advanced.address.clone(), advanced.api.clone());
-    let current = (
-      address.address.web().as_str().to_owned(),
-      address
-        .address
-        .api()
-        .map(|api| api.as_str().to_owned())
-        .unwrap_or_default(),
-    );
-    move || {
-      if !flag.get() {
-        fields.0.set(current.0.clone());
-        fields.1.set(current.1.clone());
-      }
-      flag.update(|open| *open = !*open);
+/// Opens or closes the address fields, starting them at the addresses in use.
+fn toggle(address: &CloudInUse, advanced: &Advanced) -> impl Fn() + Send + Sync + 'static {
+  let flag = advanced.open.clone();
+  let fields = (advanced.address.clone(), advanced.api.clone());
+  let current = (
+    address.address.web().as_str().to_owned(),
+    // No API address of its own: the field stays empty.
+    address
+      .address
+      .api()
+      .map(|api| api.as_str().to_owned())
+      .unwrap_or_default(),
+  );
+  move || {
+    if !flag.get() {
+      fields.0.set(current.0.clone());
+      fields.1.set(current.1.clone());
     }
-  };
-  let (meta, meta_color) = match (address.default, place) {
-    (true, _) => (ctx.t("cloud.advanced.default").to_string(), PaletteColor::TextMuted),
-    (false, Place::Settings) => (address.address.web().authority(), PaletteColor::TextMuted),
-    (false, Place::Gate) => (
+    flag.update(|open| *open = !*open);
+  }
+}
+
+/// *Advanced* in Settings (`Advanced` `RSwbo` in `05 · Orchester Cloud`, open in `VQBYk` of `ZUuMT`): the row *Cloud
+/// address* with the cloud's host and *Change*, the fields and their answers under it while open, and *Using a test
+/// cloud* while another cloud than the build's is set.
+fn settings_group(ctx: &mut Ctx, address: &CloudInUse, advanced: &Advanced) -> Element {
+  let open = advanced.open.get();
+  let change = ActionButton::new("orchester-advanced", ButtonKind::Ghost, ctx.t("cloud.advanced.change"))
+    .icon(Icon::Pencil)
+    .small()
+    .held(open)
+    .on_click(toggle(address, advanced));
+  let value = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(mono_value(
+      "orchester-advanced-meta",
+      &address.address.web().authority(),
+    ))
+    .child(change);
+  let mut row = SettingRow::new("orchester-advanced-address-row", ctx.t("cloud.advanced.row"))
+    .hint(ctx.t("cloud.advanced.rowHint"))
+    .control(value);
+  if open {
+    row = row.below(form(ctx, advanced, Place::Settings));
+  }
+  if !address.default {
+    row = row.below(
+      SettingNotice::new("orchester-test-cloud", NoticeTone::Info)
+        .icon(Icon::FlaskConical)
+        .title(ctx.t("cloud.advanced.testCloud.title"))
+        .body(ctx.t_args("cloud.advanced.testCloud.body", [("host", default_host())])),
+    );
+  }
+  SettingGroup::new("orchester-advanced-section", ctx.t("cloud.advanced.group"))
+    .row(row.render(ctx))
+    .into()
+}
+
+pub(crate) fn section(ctx: &mut Ctx, address: &CloudInUse, advanced: &Advanced, place: Place) -> Element {
+  if place == Place::Settings {
+    return settings_group(ctx, address, advanced);
+  }
+  let open = advanced.open.get();
+  let (meta, meta_color) = if address.default {
+    (ctx.t("cloud.advanced.default").to_string(), PaletteColor::TextMuted)
+  } else {
+    (
       ctx.t("cloud.advanced.testCloudState").to_string(),
       PaletteColor::Warning,
-    ),
+    )
   };
-  let line = place
-    .focus()
-    .apply(pressable(toggle))
+  // On the gate the line is a stop of the gate's Tab order with a link's ring, since it is only words.
+  let line = Focus::Link
+    .apply(pressable(toggle(address, advanced)))
     .id("orchester-advanced")
     .width(Dimension::Pct(100.0))
-    .padding(match place {
-      Place::Settings => Padding::new().top(SpacingSize::Md),
-      Place::Gate => Padding::new(),
-    })
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .describe("state", if open { "open" } else { "closed" })
@@ -158,31 +188,16 @@ pub(crate) fn section(ctx: &mut Ctx, address: &CloudInUse, advanced: &Advanced, 
         .variant(ExtraTypography::Note.role())
         .color(meta_color),
     );
-  let mut column = Column::new()
+  // The line's ring shows past the section's top and bottom.
+  Column::new()
     .id("orchester-advanced-section")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md);
-  column = match place {
-    Place::Settings => column.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-    // The line's ring shows past the section's top and bottom (`Focus::Link`).
-    Place::Gate => column.padding(Padding::horizontal(SpacingSize::Xs)).overflow_visible(),
-  };
-  column = column.child(line);
-  if open {
-    column = column.child(form(ctx, advanced, place));
-  }
-  if !address.default && place == Place::Settings {
-    column = column.child(
-      Callout::new(
-        "orchester-test-cloud",
-        CalloutTone::Warning,
-        ctx.t("cloud.advanced.testCloud.title"),
-      )
-      .icon(Icon::FlaskConical)
-      .body(ctx.t_args("cloud.advanced.testCloud.body", [("host", default_host())])),
-    );
-  }
-  column.into()
+    .spacing(SpacingSize::Md)
+    .padding(Padding::horizontal(SpacingSize::Xs))
+    .overflow_visible()
+    .child(line)
+    .with_children(open.then(|| form(ctx, advanced, place)))
+    .into()
 }
 
 /// The build's own cloud, as its host names it: `orchester.cloud`.

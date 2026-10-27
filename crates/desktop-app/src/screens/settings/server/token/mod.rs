@@ -1,10 +1,11 @@
-//! *Access token* (`Form row/stacked` `WXgjE` with a `Masked value` `DShSq`, `lye6f`; its states `eM8tB`): where it
-//! is kept, the token masked, and *Show*, *Copy* and *Rotate token*, each on a person's click only. Shown, the token
-//! is sensitive text (lurq keeps it out of the element tree and greys it in MCP screenshots), the server refuses
-//! screenshots and the window's text meanwhile, and it hides again after 30 seconds (`reveal`). *Rotate token* asks
-//! in place under the row (`In-place confirmation` `RWODj`), then says the new token is in use, or that the secret
-//! store refused it and the old one stays (`rotation`). While the server is off the row reads the token off the UI
-//! thread first, and says so with *Try again* if it cannot.
+//! *Access token* (`Access token` `v8hHM` in `04 · Automation`; its states on `shpsk`): where it is kept, the token
+//! masked, and *Show*, Copy and *Rotate*, each on a person's click only. Shown, the token is sensitive text (lurq keeps
+//! it out of the element tree and greys it in MCP screenshots), the line under the label counts down until it hides
+//! again after 30 seconds, and the server refuses screenshots and the window's text meanwhile (`reveal`). *Rotate*
+//! asks in place under the row, then says the new token is in use, or that the secret store refused it and the old
+//! one stays (`rotation`). While the server is off the row reads the token off the UI thread first, and says so with
+//! *Try again* if it cannot; while the server cannot read it, a notice under the row says why, with *Try again* and
+//! *Rotate token*.
 
 mod reveal;
 mod rotation;
@@ -15,12 +16,12 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
-    theme::{PaletteColor, SpacingSize},
+    theme::SpacingSize,
   },
-  components::{Column, Row},
+  components::Row,
   core::Signal,
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 
 use self::reveal::{Read, Reveal, ready, value};
@@ -30,13 +31,12 @@ use crate::{
   mcp::{AppMcp, ServerState, input_gate::InputGate},
   screens::settings::save_state::{Outcome, SaveState},
   services::Services,
-  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    form_section::{Label, Place, stacked_row},
     icon::Icon,
-    inspector::note,
+    icon_button::IconButton,
+    setting_rows::SettingRow,
   },
 };
 
@@ -49,22 +49,28 @@ pub const STORE_KEY: &str = "settings.automation.server.store.windows";
 const WHERE_KEY: &str = "settings.automation.server.token.whereMacos";
 #[cfg(not(target_os = "macos"))]
 const WHERE_KEY: &str = "settings.automation.server.token.whereWindows";
+#[cfg(target_os = "macos")]
+const KEPT_KEY: &str = "settings.automation.server.token.keptMacos";
+#[cfg(not(target_os = "macos"))]
+const KEPT_KEY: &str = "settings.automation.server.token.keptWindows";
 
 #[derive(Clone)]
 pub struct Props {
   pub server: Option<AppMcp>,
   pub state: ServerState,
+  /// The route asks *Rotate the token?*: the question opens in place once it does.
+  pub rotation: bool,
 }
 
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.state == other.state && self.server.is_some() == other.server.is_some()
+    self.state == other.state && self.server.is_some() == other.server.is_some() && self.rotation == other.rotation
   }
 }
 
 impl DevtoolsInspectable for Props {}
 
-/// What came of the last *Copy*.
+/// What came of the last Copy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Copied {
   Not,
@@ -82,6 +88,8 @@ pub struct TokenRow {
   /// Raised by *Try again* when the token could not be read.
   read_again: Signal<u32>,
   confirming: Signal<bool>,
+  /// Whether the route asked *Rotate the token?* when the row last rendered: it opens the question once each time.
+  asked: parking_lot::Mutex<bool>,
   /// Whether this row rotated the token since it showed.
   rotated: Signal<bool>,
   copied: Signal<Copied>,
@@ -113,6 +121,7 @@ impl Component for TokenRow {
       _tick: tick,
       read_again: ctx.signal(0),
       confirming: ctx.signal(false),
+      asked: parking_lot::Mutex::new(false),
       rotated: ctx.signal(false),
       copied: ctx.signal(Copied::Not),
       blocked: ctx.signal(false),
@@ -121,33 +130,40 @@ impl Component for TokenRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    self.follow_route(&props);
+    // Hooks in the same order on every render.
     let rotate: Change<()> = change(ctx, props.server.clone(), |server, ()| server.rotate_token());
+    let again: Change<()> = change(ctx, props.server.clone(), |server, ()| {
+      server.try_again();
+      Ok(())
+    });
     if let Some(saves) = SaveState::of(ctx) {
       saves.report("settings-mcp-rotate", Outcome::of(&rotate.state().get()));
     }
     let read = ready(ctx, &props, self.read_again.get());
     let shown = self.reveal.token();
-    let value = value(ctx, shown.as_ref());
-    let buttons = self.buttons(ctx, &props, &read, (shown.is_some(), &rotate));
-    let mut lines: Vec<Element> = Vec::new();
-    if shown.is_some() {
-      lines.push(
-        note(
-          "settings-mcp-token-shown-for",
-          Icon::Timer,
-          &ctx.t_args(
-            "settings.automation.server.token.shownFor",
-            [("seconds", self.left.get().to_string())],
-          ),
-        )
-        .into(),
-      );
-    }
-    lines.extend(self.not_read(ctx, &read));
-    lines.extend(self.copy_line(ctx));
-    lines.extend(self.rotation_lines(ctx, &rotate));
+    let control = Row::new()
+      .id("settings-mcp-token-control")
+      .flex_shrink(1.0)
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(value(ctx, shown.as_ref()))
+      .with_children(self.buttons(ctx, &props, &read, (shown.is_some(), &rotate)));
+    let hint = if shown.is_some() {
+      ctx.t_args(
+        "settings.automation.server.token.shownFor",
+        [("seconds", self.left.get().to_string())],
+      )
+    } else {
+      ctx.t(KEPT_KEY)
+    };
+    let mut below: Vec<Element> = Vec::new();
+    below.extend(self.unreadable(ctx, &props, again, &rotate));
+    below.extend(self.not_read(ctx, &read));
+    below.extend(self.copy_line(ctx));
+    below.extend(self.rotation_lines(ctx, &rotate));
     if self.blocked.get() {
-      lines.push(
+      below.push(
         field_error(
           "settings-mcp-token-blocked",
           &ctx.t("settings.automation.server.blocked"),
@@ -155,23 +171,12 @@ impl Component for TokenRow {
         .into(),
       );
     }
-    let control = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Loose.role())
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .align_items(Alignment::Center)
-          .child(value)
-          .with_children(buttons),
-      )
-      .with_children(lines);
-    let row = stacked_row(
-      Label::new("settings-mcp-token", ctx.t("settings.automation.server.token.title")).description(ctx.t(WHERE_KEY)),
-      control,
-      Place::Within,
-    );
+    let row = SettingRow::new("settings-mcp-token", ctx.t("settings.automation.server.token.title"))
+      .hint(hint)
+      .info(ctx.t(WHERE_KEY))
+      .control(control)
+      .below_all(below)
+      .render(ctx);
     // This render no longer draws a token that was hidden: clients may read the window again once it is shown.
     if shown.is_none() {
       self.reveal.done_hiding();
@@ -181,7 +186,7 @@ impl Component for TokenRow {
 }
 
 impl TokenRow {
-  /// *Show* or *Hide*, *Copy* and *Rotate token*.
+  /// *Show* or *Hide*, Copy and *Rotate*.
   fn buttons(&self, ctx: &mut Ctx, props: &Props, read: &Read, (shown, rotate): (bool, &Change<()>)) -> Vec<Element> {
     let gate = ctx
       .use_context::<InputGate>()
@@ -189,12 +194,12 @@ impl TokenRow {
     let runtime = Services::of(ctx).runtime;
     let readable = props.server.clone().filter(|_| read.readable);
     let show = self.show_slot(ctx, readable.clone(), &gate, shown);
-    let copy = ActionButton::new(
+    let copy = IconButton::new(
       "settings-mcp-token-copy",
-      ButtonKind::Ghost,
+      Icon::Copy,
       ctx.t("settings.automation.server.token.copy"),
     )
-    .icon(Icon::Copy);
+    .small();
     let copy = match readable {
       Some(server) => {
         let (copied, blocked) = (self.copied.clone(), self.blocked.clone());
@@ -208,52 +213,64 @@ impl TokenRow {
           copied.set(if done { Copied::Done } else { Copied::Failed });
         })
       }
-      None => copy.disabled(),
+      None => copy,
     };
-    vec![show, copy.into(), self.rotate_button(ctx, props, read, rotate)]
+    vec![show, copy.render(ctx), self.rotate_button(ctx, props, read, rotate)]
   }
 
-  /// *Rotate token*: available once the token was read, or when it cannot be (a new one replaces it), never while a
-  /// read or a rotation runs.
+  /// *Rotate*: available once the token was read, or when it cannot be (a new one replaces it), never while a read or
+  /// a rotation runs.
   fn rotate_button(&self, ctx: &Ctx, props: &Props, read: &Read, rotate: &Change<()>) -> Element {
     let button = ActionButton::new(
       "settings-mcp-token-rotate",
-      ButtonKind::Secondary,
-      ctx.t("settings.automation.server.token.rotate"),
+      ButtonKind::Ghost,
+      ctx.t("settings.automation.server.token.rotateShort"),
     )
     .icon(Icon::RefreshCw);
-    let unreadable = read.failure.is_some() || matches!(props.state, ServerState::TokenUnreadable { .. });
-    if props.server.is_none()
-      || !(read.readable || unreadable)
-      || self.confirming.get()
-      || rotate.state().get().is_pending()
-    {
+    if !self.can_rotate(props, read, rotate) {
       return button.disabled().into();
     }
-    let (confirming, blocked, rotated) = (self.confirming.clone(), self.blocked.clone(), self.rotated.clone());
-    button
-      .on_click(move || {
-        if !refused(&blocked) {
-          rotated.set(false);
-          confirming.set(true);
-        }
-      })
-      .into()
+    button.on_click(self.ask_rotate()).into()
   }
 
-  /// What came of the last *Copy*.
+  fn can_rotate(&self, props: &Props, read: &Read, rotate: &Change<()>) -> bool {
+    let unreadable = read.failure.is_some() || matches!(props.state, ServerState::TokenUnreadable { .. });
+    props.server.is_some()
+      && (read.readable || unreadable)
+      && !self.confirming.get()
+      && !rotate.state().get().is_pending()
+  }
+
+  /// Opens the question under the row, unless synthetic input brought the press.
+  fn ask_rotate(&self) -> impl Fn() + Send + Sync + 'static {
+    let (confirming, blocked, rotated) = (self.confirming.clone(), self.blocked.clone(), self.rotated.clone());
+    move || {
+      if !refused(&blocked) {
+        rotated.set(false);
+        confirming.set(true);
+      }
+    }
+  }
+
+  /// Opens the question when the route starts asking it, as a press would; only a person's answer rotates.
+  fn follow_route(&self, props: &Props) {
+    let asks = props.rotation && props.server.is_some();
+    let mut asked = self.asked.lock();
+    if asks && !*asked {
+      self.rotated.set(false);
+      self.confirming.set(true);
+    }
+    *asked = asks;
+  }
+
+  /// What came of the last Copy.
   fn copy_line(&self, ctx: &Ctx) -> Option<Element> {
     match self.copied.get() {
       Copied::Not => None,
-      Copied::Done => Some(
-        outcome(
-          "settings-mcp-token-copied",
-          Icon::ClipboardCheck,
-          PaletteColor::Success,
-          &ctx.t("settings.automation.server.token.copied"),
-        )
-        .into(),
-      ),
+      Copied::Done => Some(outcome(
+        "settings-mcp-token-copied",
+        &ctx.t("settings.automation.server.token.copied"),
+      )),
       Copied::Failed => Some(
         field_error(
           "settings-mcp-token-copied",

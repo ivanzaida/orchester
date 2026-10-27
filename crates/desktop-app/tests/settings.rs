@@ -169,38 +169,27 @@ fn press_element(window: &mut Window, id: &str) {
 /// The switch of *Let the Orchestrator continue interrupted runs*, the section's last.
 const CONTINUE: &str = "settings-continue-interrupted";
 
-/// The Orchestrator's switches: each one's element id, its title, and the consent it saves.
+/// The Orchestrator's switches: each one's element id, its label under *The Orchestrator may*, and the consent it
+/// saves.
 const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 6] = [
-  (
-    PUBLISH,
-    "Let the Orchestrator publish drafts",
-    OrchestratorConsent::PublishDrafts,
-  ),
+  (PUBLISH, "Publish drafts", OrchestratorConsent::PublishDrafts),
   (
     "settings-answer-agents",
-    "Let the Orchestrator answer agents",
+    "Answer agents",
     OrchestratorConsent::AnswerAgents,
   ),
-  (
-    "settings-merge-runs",
-    "Let the Orchestrator merge runs",
-    OrchestratorConsent::MergeRuns,
-  ),
+  ("settings-merge-runs", "Merge runs", OrchestratorConsent::MergeRuns),
   (
     "settings-merge-finished",
-    "Let the Orchestrator merge finished runs on its own",
+    "Merge finished runs on its own",
     OrchestratorConsent::MergeFinished,
   ),
   (
     CONTINUE,
-    "Let the Orchestrator continue interrupted runs",
+    "Continue interrupted runs",
     OrchestratorConsent::ContinueInterrupted,
   ),
-  (
-    "settings-write-git",
-    "Let the Orchestrator write with git",
-    OrchestratorConsent::WriteGit,
-  ),
+  ("settings-write-git", "Write with git", OrchestratorConsent::WriteGit),
 ];
 
 #[test]
@@ -299,14 +288,14 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   assert!(bottom(&mut window, CONTINUE) <= 600.0, "scrolled into the window");
 }
 
-/// The switch of the Orchestrator's daily report, the section's last row.
+/// The switch of the Orchestrator's daily report, on Settings › Notifications.
 const DAILY_REPORT: &str = "settings-daily-report";
 
 #[test]
 fn settings_daily_report_is_off_until_turned_on_and_comes_at_six_by_default() {
   let mut window = Window::open();
   let workspace = window.launch.workspace().expect("session").clone();
-  window.navigation().go(Route::Settings);
+  window.navigation().go(Route::Notifications);
   window.until("the report's row", |window| {
     window.texts(&format!("{DAILY_REPORT}-row")).is_some()
   });
@@ -327,7 +316,7 @@ fn settings_daily_report_is_off_until_turned_on_and_comes_at_six_by_default() {
   window.until("its time to show", |window| {
     window.tree.get_element_by_id(&format!("{DAILY_REPORT}-time")).is_some()
   });
-  let texts = window.texts(&format!("{DAILY_REPORT}-at")).expect("the time's row");
+  let texts = window.texts(&format!("{DAILY_REPORT}-at-row")).expect("the time's row");
   assert!(texts.iter().any(|text| text == "Deliver at"), "{texts:?}");
 }
 

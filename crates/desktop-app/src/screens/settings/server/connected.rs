@@ -1,26 +1,30 @@
-//! *Agents connected* (`lye6f`, `eM8tB`): the clients that connected since the app started, or since the token
-//! changed, as each named itself, with *connected now* or when it last asked something. The list is the server's,
-//! in memory: nothing is stored.
+//! *Agents connected* (`Agents connected` `PBBUM` and its list `J8KUDH` in `04 · Automation`): the clients that
+//! connected since the app started, or since the token changed, listed under the row as each named itself, with the
+//! maker's mark of a CLI Orchester knows by that name, its version, and *connected now* or when it last asked
+//! something. The list is the server's, in memory: nothing is stored, and no time it connected is known.
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, SpacingSize},
+  },
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::display;
 
-use super::dotted;
 use crate::{
   mcp::{McpStatus, SeenClient},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    form_section::{Label, Place, stacked_row},
+    agent_mark::{AgentMark, mark_icon},
     icon::{Icon, icon},
+    setting_rows::{SettingRow, status},
   },
 };
 
-pub fn connected(ctx: &Ctx, status: &McpStatus) -> Element {
+pub fn connected(ctx: &mut Ctx, status: &McpStatus) -> Element {
   let (description, none) = if status.rotated {
     (
       "settings.automation.connected.descriptionRotated",
@@ -35,58 +39,68 @@ pub fn connected(ctx: &Ctx, status: &McpStatus) -> Element {
   let list: Element = if status.clients.is_empty() {
     Text::new(&ctx.t(none))
       .id("settings-mcp-connected-none")
-      .variant(ExtraTypography::Prose.role())
+      .variant(ExtraTypography::Note.role())
       .into()
   } else {
+    let rows: Vec<Element> = status
+      .clients
+      .iter()
+      .enumerate()
+      .map(|(index, client)| client_row(ctx, index, client))
+      .collect();
     Column::new()
       .id("settings-mcp-connected-list")
       .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Loose.role())
-      .with_children(
-        status
-          .clients
-          .iter()
-          .enumerate()
-          .map(|(index, client)| client_row(ctx, index, client)),
-      )
+      .with_children(rows)
       .into()
   };
-  stacked_row(
-    Label::new("settings-mcp-connected", ctx.t("settings.automation.connected.title")).description(ctx.t(description)),
-    list,
-    Place::Last,
-  )
+  SettingRow::new("settings-mcp-connected", ctx.t("settings.automation.connected.title"))
+    .hint(ctx.t(description))
+    .below(list)
+    .render(ctx)
 }
 
-/// *claude-code 2.1.296 · ● connected now*.
+/// *✳ claude-code 2.1.296 · ● connected now* (`Claude Code` `KC73f`).
 fn client_row(ctx: &Ctx, index: usize, client: &SeenClient) -> Element {
-  let name = ctx.t_args(
-    "settings.automation.connected.client",
-    [("name", client.name.as_str()), ("version", client.version.as_str())],
-  );
-  let (color, when) = if client.connected {
-    (PaletteColor::Success, ctx.t("settings.automation.connected.now"))
+  let (colors, when) = if client.connected {
+    (
+      (PaletteColor::Success, PaletteColor::Success),
+      ctx.t("settings.automation.connected.now"),
+    )
   } else {
     (
-      PaletteColor::TextMuted,
+      (PaletteColor::TextMuted, PaletteColor::TextMuted),
       ctx.t_args(
         "settings.automation.connected.lastSeen",
         [("time", display::clock_time(client.last_request))],
       ),
     )
   };
+  let mark = AgentMark::of_client(&client.name).map_or_else(
+    || icon(Icon::Plug, IconSize::Md, PaletteColor::TextMuted).into(),
+    |mark| mark_icon(ctx, mark, IconSize::Md.size()),
+  );
   Row::new()
     .id(format!("settings-mcp-client-{index}"))
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
+    .padding(Padding::vertical(ExtraSpacing::Snug.role()))
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Plug, IconSize::Sm, PaletteColor::TextMuted))
-    .child(Text::new(&name).variant(ExtraTypography::PropertyMono.role()).nowrap())
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(mark)
+    .child(
+      Text::new(&client.name)
+        .id(format!("settings-mcp-client-{index}-name"))
+        .variant(ExtraTypography::OptionTitle.role())
+        .nowrap(),
+    )
+    .child(
+      Text::new(&client.version)
+        .id(format!("settings-mcp-client-{index}-version"))
+        .variant(ExtraTypography::Note.role())
+        .nowrap(),
+    )
     .child(Spacer::new().flex(1.0))
-    .child(dotted(
-      &format!("settings-mcp-client-{index}-state"),
-      color,
-      Text::new(&when).variant(ExtraTypography::Prose.role()),
-    ))
+    .child(status(&format!("settings-mcp-client-{index}-state"), colors, &when))
     .into()
 }

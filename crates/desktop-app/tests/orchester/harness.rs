@@ -98,6 +98,12 @@ pub fn press(window: &mut Window, id: &str) {
   window.press(id);
 }
 
+/// Opens a team server page's *…* and presses *Sign out…*, which asks in place (`zNDt4`).
+pub fn sign_out_of_server(window: &mut Window) {
+  press(window, "orchester-server-more");
+  press(window, "orchester-server-sign-out");
+}
+
 /// The services' runtime runs `work`.
 pub fn block_on<T>(window: &Window, work: impl Future<Output = T>) -> T {
   window.data.runtime.block_on(work)

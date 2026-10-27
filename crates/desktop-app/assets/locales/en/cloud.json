@@ -61,12 +61,19 @@
         "devicesNotBuilt": "Your Orchester Cloud devices aren't in this version of the app yet"
       },
       "signedInAs": "Signed in as",
+      "emailAt": "{{email}} · {{host}}",
       "displayName": "Display name",
       "nameValue": "{{name}} · shown on your invites and to teammates",
+      "thisComputer": "This computer",
       "thisDevice": "This device",
+      "device": "Device",
       "deviceValue": "Orchester on {{device}}",
       "signedInAt": "Signed in",
+      "signedInHint": "Works offline; checks the sign-in when it reaches the cloud",
       "signedInValue": "{{when}} on this computer",
+      "otherDevices": "Other devices",
+      "otherDevicesHint": "Seen and signed out on the cloud's account page",
+      "notInAppYet": "Not in this app yet",
       "address": "Cloud address",
       "signingOut": "Signing out",
       "signingOutText": "Sign out ends this computer's session with Orchester Cloud and locks Orchester until you sign in again. Projects, tasks and runs on this computer are not touched, and team servers keep this computer's own sign-in.",
@@ -82,13 +89,14 @@
         "stay": "Stay signed in"
       },
       "twoFactor": {
-        "on": "Two-factor: on",
+        "on": "Two-factor on",
         "off": "Two-factor: off",
         "turnOn": "Turn on…"
       }
     },
     "invites": {
       "title": "Waiting invites",
+      "group": "Invites",
       "waiting": {
         "one": "1 waiting",
         "other": "{{count}} waiting"
@@ -166,6 +174,10 @@
     },
     "advanced": {
       "title": "Advanced · cloud address",
+      "group": "Advanced",
+      "row": "Cloud address",
+      "rowHint": "For a test or self-run cloud; changing it signs you out",
+      "change": "Change",
       "default": "default",
       "label": "Orchester Cloud address",
       "hint": "For a test cloud. Changing it signs you out of Orchester Cloud; team servers you joined keep working.",
@@ -187,11 +199,13 @@
       "runs": "Orchester server {{version}}, API {{api}}",
       "api": "API {{api}}",
       "signOut": "Sign out…",
+      "more": "More",
       "facts": {
         "address": "Address",
         "certificate": "Certificate",
         "checked": "Checked · {{code}}",
         "youThere": "You there",
+        "signedInAs": "Signed in as",
         "you": "{{name}} · {{username}} · {{role}}",
         "admin": "admin",
         "member": "member",
@@ -223,7 +237,10 @@
         "offline": "{{server}} can't be reached, so your projects there can't be read now. The ones linked on this computer are listed below.",
         "offlineNoneHere": "{{server}} can't be reached, so your projects there can't be read now. None of them is linked on this computer.",
         "signedOutNoneHere": "Join again to read your projects there. None of them is linked on this computer.",
-        "link": "Link a checkout…"
+        "link": "Link a checkout…",
+        "linkedTo": "Linked to {{path}}",
+        "linkedRole": "{{role}} · linked to {{path}}",
+        "notHereRole": "{{role}} · not on this computer"
       },
       "computers": {
         "title": "Your other computers",
