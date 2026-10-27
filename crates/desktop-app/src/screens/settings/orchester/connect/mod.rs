@@ -29,7 +29,7 @@ use orchester_workspace::{
 use super::{Said, words::server_client};
 use crate::{
   navigation::Navigation,
-  routes::{OrchesterView, Route},
+  routes::{ConnectStep, OrchesterView, Route},
   screens::settings::frame,
   services::Services,
   ui::button::{ActionButton, ButtonKind},
@@ -39,6 +39,8 @@ use crate::{
 pub struct Props {
   /// The server whose address the page starts with: joining it again with a code.
   pub server: Option<ServerId>,
+  /// The step the page opens on: past *Address*, it asks what answers at that server's address as *Continue* does.
+  pub step: ConnectStep,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -161,15 +163,21 @@ impl Component for ConnectPage {
 }
 
 impl ConnectPage {
-  /// Starts with the address of the server the page was opened for, once the servers are read.
+  /// Starts with the address of the server the page was opened for, once the servers are read; opened at a later
+  /// step, asks what answers there at once.
   fn seed(&self, ctx: &Ctx, entries: Option<&[ServerEntry]>) {
     let Some(entries) = entries.filter(|_| !self.seeded.get()) else {
       return;
     };
     self.seeded.set(true);
-    let server = ctx.props::<Props>().server;
-    if let Some(entry) = entries.iter().find(|entry| Some(entry.stored.id) == server) {
-      self.address.set(entry.address.as_str().to_owned());
+    let Props { server, step } = *ctx.props::<Props>();
+    let Some(entry) = entries.iter().find(|entry| Some(entry.stored.id) == server) else {
+      return;
+    };
+    let address = entry.address.as_str().to_owned();
+    self.address.set(address.clone());
+    if step != ConnectStep::Address {
+      self.reach.run((address, false));
     }
   }
 

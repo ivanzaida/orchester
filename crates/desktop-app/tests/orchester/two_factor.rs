@@ -86,7 +86,7 @@ fn orchester_two_factor_off_offers_turning_it_on() {
     Route::Orchester(OrchesterView::default()),
     &format!("{card}-sign-in-again"),
   );
-  assert_eq!(window.text("orchester-cloud-two-factor"), "Two-factor: on");
+  assert_eq!(window.text("orchester-cloud-two-factor"), "Two-factor on");
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn orchester_two_factor_signs_in_again_with_a_code_and_accepts() {
   let services = window.launch.services().expect("services").clone();
   let card = format!("orchester-invite-{invite}");
   shows(&mut window, &format!("{card}-accept"));
-  assert_eq!(window.text("orchester-cloud-two-factor"), "Two-factor: on");
+  assert_eq!(window.text("orchester-cloud-two-factor"), "Two-factor on");
   // Signed in before two-factor authentication was turned on: the listing above is from before.
   cloud.session_without_two_factor();
   cloud.require_codes();

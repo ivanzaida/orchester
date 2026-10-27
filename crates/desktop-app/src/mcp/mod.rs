@@ -80,15 +80,14 @@ pub fn config(
   i18n: &I18n,
 ) -> McpConfig {
   link.input_gate().bind_window_control(settings.window_control());
-  let hold = session.map(|services| services.hold.clone());
-  let cloud = session.map(|services| services.cloud.clone());
-  if let Some(cloud) = &cloud {
-    link
-      .input_gate()
-      .bind_cloud(cloud.clone(), input_gate::signed_out::looks_on_gate(Build::this()));
+  if let Some(services) = session {
+    link.input_gate().bind_cloud(
+      services.cloud.clone(),
+      input_gate::signed_out::looks_on_gate(Build::this()),
+    );
   }
   let domain = session.map(|services| domain::tools(services, i18n.clone()));
-  tools::all(link, appearance, settings, (hold, cloud))
+  tools::all(link, appearance, settings, session)
     .into_iter()
     .chain(domain.into_iter().flatten())
     .fold(

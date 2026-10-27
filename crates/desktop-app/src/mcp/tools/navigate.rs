@@ -12,21 +12,34 @@ use orchester_workspace::{
 };
 use serde_json::{Map, Value, json};
 
-use super::{ToolError, WindowLink, object, reply, route_json, string};
+use super::{
+  ToolError, WindowLink, object, reply, route_json,
+  settings_route::{self, Lookup},
+  string,
+};
 use crate::{
   navigation::Navigation,
   routes::{
-    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, InstructionsView,
-    MemoryTab, NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route,
-    Screen, SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, InstructionsView, MemoryTab,
+    NewConnection, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route, Screen, SecretsView,
+    SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
-  other argument; settings takes `tab` only (automation, general, notifications, accounts, orchester for Orchester \
-  Cloud, connect for Connect a server); every other screen takes `project`, the project's id (a UUID, as app_state \
-  reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
+  other argument; settings takes `tab` (automation, general, notifications, accounts, orchester for Orchester \
+  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \
+  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
+  without `account`; sign_in, rename or remove for that account's step 2, name field or Remove question); orchester \
+  `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign out…? under the account card, or \
+  on that server's page; decline with `invite`, an invite's id: Decline the invite?); connect `server` and `step` \
+  (address, compare, join or username: past address it asks what answers at that server's address, and a server \
+  with its own certificate stays at compare, which only a person answers); invite `server` and `project` (the \
+  project's slug there); automation `ask` rotate-token (Rotate the token?). Opening a page or a question is \
+  navigation; answering it stays a person's. Every other screen takes `project`, the project's id (a \
+  UUID, as app_state reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the \
+  search) and `highlight` (a task key, as \
   after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
   (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
@@ -40,19 +53,27 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
 
-pub fn tool(link: WindowLink) -> McpTool {
+/// The tool on `link`; `lookup` finds the accounts and team servers Settings' pages are named by.
+pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
   McpTool::new("navigate")
     .description(DESCRIPTION)
     .scope(Scope::Interact)
     .input_schema(schema())
-    .handler(move |_ctx, args| reply(link.navigation().and_then(|navigation| navigate(&navigation, &args))))
+    .handler(move |_ctx, args| {
+      reply(
+        link
+          .navigation()
+          .and_then(|navigation| navigate_with(&navigation, &args, lookup.as_ref())),
+      )
+    })
 }
 
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, general, notifications, accounts, \
-     orchester (Orchester Cloud), connect (Connect a server); overview {}; tasks {}; task {}; connections {}; \
+     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {}; tasks {}; \
+     task {}; connections {}; \
      pull_requests {}; memory {}; import_resources {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
@@ -64,7 +85,7 @@ fn schema() -> Value {
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
-  json!({
+  let mut schema = json!({
     "type": "object",
     "properties": {
       "route": { "type": "string", "enum": names },
@@ -108,18 +129,27 @@ fn schema() -> Value {
     },
     "required": ["route"],
     "additionalProperties": false,
-  })
+  });
+  if let Some(properties) = schema["properties"].as_object_mut() {
+    properties.extend(settings_route::properties());
+  }
+  schema
 }
 
 /// Takes the active tab to the route `args` name and answers the route it shows.
 pub fn navigate(navigation: &Navigation, args: &Value) -> Result<Value, ToolError> {
-  let route = target(&object(args)?)?;
+  navigate_with(navigation, args, None)
+}
+
+/// [`navigate`], finding the accounts and team servers Settings' pages are named by in `lookup`.
+pub fn navigate_with(navigation: &Navigation, args: &Value, lookup: Option<&Lookup>) -> Result<Value, ToolError> {
+  let route = target(&object(args)?, lookup)?;
   navigation.go(route);
   Ok(json!({ "route": route_json(&navigation.route_now()) }))
 }
 
 /// The route `args` name: `route`, and the parameters its screen takes.
-fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
+fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, ToolError> {
   let name = string(args, "route")?.ok_or(ToolError::Missing { param: "route" })?;
   let screen = Screen::from_name(name).ok_or_else(|| ToolError::UnknownRoute { name: name.to_owned() })?;
   let takes = params(screen);
@@ -135,7 +165,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
-    Screen::Settings => return settings(args),
+    Screen::Settings => return settings_route::route(args, lookup),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
       OverviewTab::from_name,
@@ -182,7 +212,7 @@ fn import_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
     Screen::AllProjects | Screen::AddProject => &[],
-    Screen::Settings => &["tab"],
+    Screen::Settings => settings_route::PARAMS,
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
@@ -360,31 +390,6 @@ fn tab<T: Default>(
     name: given.to_owned(),
     known: known.to_vec(),
   })
-}
-
-/// Settings at its `tab`: automation (the default), general, notifications, accounts, orchester (Orchester Cloud), or
-/// connect (*Connect a server*).
-fn settings(args: &Map<String, Value>) -> Result<Route, ToolError> {
-  const TABS: [&str; 6] = [
-    "automation",
-    "general",
-    "notifications",
-    "accounts",
-    "orchester",
-    "connect",
-  ];
-  match string(args, "tab")? {
-    None | Some("automation") => Ok(Route::Settings),
-    Some("general") => Ok(Route::General),
-    Some("notifications") => Ok(Route::Notifications),
-    Some("accounts") => Ok(Route::Accounts(AccountsView::default())),
-    Some("orchester") => Ok(Route::Orchester(OrchesterView::default())),
-    Some("connect") => Ok(Route::Orchester(OrchesterView::connect())),
-    Some(other) => Err(ToolError::UnknownTab {
-      name: other.to_owned(),
-      known: TABS.to_vec(),
-    }),
-  }
 }
 
 /// The connection id in `param`, which is required.

@@ -58,11 +58,13 @@ const KEPT_KEY: &str = "settings.automation.server.token.keptWindows";
 pub struct Props {
   pub server: Option<AppMcp>,
   pub state: ServerState,
+  /// The route asks *Rotate the token?*: the question opens in place once it does.
+  pub rotation: bool,
 }
 
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.state == other.state && self.server.is_some() == other.server.is_some()
+    self.state == other.state && self.server.is_some() == other.server.is_some() && self.rotation == other.rotation
   }
 }
 
@@ -86,6 +88,8 @@ pub struct TokenRow {
   /// Raised by *Try again* when the token could not be read.
   read_again: Signal<u32>,
   confirming: Signal<bool>,
+  /// Whether the route asked *Rotate the token?* when the row last rendered: it opens the question once each time.
+  asked: parking_lot::Mutex<bool>,
   /// Whether this row rotated the token since it showed.
   rotated: Signal<bool>,
   copied: Signal<Copied>,
@@ -117,6 +121,7 @@ impl Component for TokenRow {
       _tick: tick,
       read_again: ctx.signal(0),
       confirming: ctx.signal(false),
+      asked: parking_lot::Mutex::new(false),
       rotated: ctx.signal(false),
       copied: ctx.signal(Copied::Not),
       blocked: ctx.signal(false),
@@ -125,6 +130,7 @@ impl Component for TokenRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    self.follow_route(&props);
     // Hooks in the same order on every render.
     let rotate: Change<()> = change(ctx, props.server.clone(), |server, ()| server.rotate_token());
     let again: Change<()> = change(ctx, props.server.clone(), |server, ()| {
@@ -244,6 +250,17 @@ impl TokenRow {
         confirming.set(true);
       }
     }
+  }
+
+  /// Opens the question when the route starts asking it, as a press would; only a person's answer rotates.
+  fn follow_route(&self, props: &Props) {
+    let asks = props.rotation && props.server.is_some();
+    let mut asked = self.asked.lock();
+    if asks && !*asked {
+      self.rotated.set(false);
+      self.confirming.set(true);
+    }
+    *asked = asks;
   }
 
   /// What came of the last Copy.

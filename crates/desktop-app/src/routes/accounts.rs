@@ -31,7 +31,7 @@ pub enum AccountsPanel {
 }
 
 impl AccountsPanel {
-  const ALL: [Self; 6] = [
+  pub const ALL: [Self; 6] = [
     Self::Account,
     Self::UsedBy,
     Self::Add,
@@ -51,7 +51,7 @@ impl AccountsPanel {
     }
   }
 
-  fn from_name(name: &str) -> Option<Self> {
+  pub fn from_name(name: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|panel| panel.name() == name)
   }
 }

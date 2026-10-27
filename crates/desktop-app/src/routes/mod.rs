@@ -3,7 +3,7 @@
 //!
 //! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
 //! `/settings` the app's settings (`?tab=general`, `notifications`, `accounts` or `orchester` for Orchester Cloud;
-//! Automation without one). A project's screens start at
+//! Automation without one, and `?ask=rotate-token` asks *Rotate the token?* there). A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
@@ -77,7 +77,7 @@ pub use self::{
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
   memory::MemoryTab,
-  orchester::{OrchesterPanel, OrchesterView},
+  orchester::{ConnectStep, OrchesterAsk, OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
@@ -115,6 +115,9 @@ const NOTIFICATIONS: &str = "notifications";
 const ACCOUNTS: &str = "accounts";
 /// Settings' Orchester Cloud tab, by the id it kept from when it was named Orchester.
 const ORCHESTER: &str = "orchester";
+/// Automation's question in place: *Rotate the token?* (`shpsk`).
+const ASK: &str = "ask";
+const ROTATE_TOKEN: &str = "rotate-token";
 /// The invite landing under Settings › Orchester.
 const INVITE: &str = "invite";
 const INVITE_PATTERN: &str = "/settings/invite";
@@ -170,6 +173,9 @@ pub enum Route {
   AddProject(Option<RouteFolder>),
   /// Settings › Automation, where Settings opens.
   Settings,
+  /// Settings › Automation asking *Rotate the token?* in place under the access token (`shpsk`); only a person's
+  /// answer rotates it.
+  RotateToken,
   /// Settings › General (`l838Ty`): the theme, the plan limits' warning threshold and this computer.
   General,
   /// Settings › Notifications (`fQTFi`): what notifies, how, quiet hours and the daily report.
@@ -207,6 +213,7 @@ impl Route {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
       Self::Settings
+      | Self::RotateToken
       | Self::General
       | Self::Notifications
       | Self::Accounts(_)
@@ -229,6 +236,7 @@ impl Route {
       | Self::Usage(_)
       | Self::AddProject(_)
       | Self::Settings
+      | Self::RotateToken
       | Self::General
       | Self::Notifications
       | Self::Accounts(_)
@@ -256,6 +264,7 @@ impl Route {
         &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
       ),
       Self::Settings => format!("/{SETTINGS}"),
+      Self::RotateToken => with_query(format!("/{SETTINGS}"), &[(ASK, Some(ROTATE_TOKEN))]),
       Self::General => with_query(format!("/{SETTINGS}"), &[(TAB, Some(GENERAL))]),
       Self::Notifications => with_query(format!("/{SETTINGS}"), &[(TAB, Some(NOTIFICATIONS))]),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
@@ -306,11 +315,18 @@ impl Route {
 }
 
 impl Route {
-  /// Settings at the tab its query names: Automation, General, Notifications, Accounts with the account it shows, or
-  /// Orchester Cloud.
+  /// Settings at the tab its query names: Automation (asking *Rotate the token?* with `ask`), General,
+  /// Notifications, Accounts with the account it shows, or Orchester Cloud.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
-      None => Ok(Self::Settings),
+      None => match params.take(ASK)?.as_deref() {
+        None => Ok(Self::Settings),
+        Some(ROTATE_TOKEN) => Ok(Self::RotateToken),
+        Some(other) => Err(RouteError::InvalidParam {
+          param: ASK.to_owned(),
+          value: other.to_owned(),
+        }),
+      },
       Some(GENERAL) => Ok(Self::General),
       Some(NOTIFICATIONS) => Ok(Self::Notifications),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),

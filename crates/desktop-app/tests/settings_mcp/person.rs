@@ -52,3 +52,27 @@ fn settings_mcp_synthetic_input_changes_nothing() {
     "not moved"
   );
 }
+
+/// The route that asks *Rotate the token?* opens the question in place (`shpsk`), as a QA copy's `navigate` does; only
+/// a person's *Rotate token* answers it.
+#[test]
+fn settings_mcp_the_route_asks_to_rotate_and_only_a_person_answers() {
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", Shown::listening);
+  let token = shown.token();
+  shown
+    .link
+    .navigation()
+    .expect("the window's navigation")
+    .go(Route::RotateToken);
+  shown.until("the question", |shown| {
+    shown.says("settings-mcp-token-rotate-question", "Rotate the token?")
+  });
+  with_synthetic_input(|| shown.click("settings-mcp-token-rotate-confirm"));
+  assert!(shown.texts("settings-mcp-token-blocked").is_some(), "not taken");
+  shown.tree.tick_futures();
+  shown.pass();
+  assert_eq!(shown.token(), token, "not rotated");
+  shown.click("settings-mcp-token-rotate-keep");
+  assert!(shown.texts("settings-mcp-token-rotate-question").is_none(), "kept");
+}

@@ -9,6 +9,7 @@ mod kontur;
 mod live;
 mod pipelines;
 mod refusals;
+mod settings;
 
 use std::{
   collections::BTreeMap,
@@ -200,6 +201,7 @@ fn seed_names_every_scenario_once() {
       "pipelines",
       "pipelines-empty",
       "accounts",
+      "settings",
       "pull-requests",
       "pull-request-feedback",
       "sources",

@@ -114,7 +114,7 @@ pub(super) fn need((invite, listed): (InviteId, bool), status: Option<&TwoFactor
   }
 }
 
-/// After the account card's name: *Two-factor: on* in `success` with its shield (`2FA` `dkUDr`), or *Two-factor: off*
+/// After the account card's name: *Two-factor on* in `success` with its shield (`2FA` `flu62`), or *Two-factor: off*
 /// in `warning` with *Turn on…* ↗ (`Account card · two-factor off` `AstDs` in `ZUuMT`).
 pub(super) fn header(ctx: &mut Ctx, status: Option<&TwoFactorStatus>, answers: &Answers) -> Vec<Element> {
   let Some(status) = status else {

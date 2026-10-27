@@ -141,6 +141,7 @@ name a Codex connection that is not stored, so nothing can run.
 | `tasks-unreadable` | The project opens; its one task's stored status is unknown, so reading the task list fails with `Corrupt` | Tasks load error |
 | `decisions` | Runs ready for review (one conflicts with the moved `main`, one merges cleanly, one has no branch), one that waits after Review's retries, and *Check the empty states on screen*, whose Review could not check two states and waits unverified | Ready for review, merge conflict; waits after retries (`DVuXu`); waits unverified (no frame of its own: compare with `DVuXu`'s parts) |
 | `live` | Six drafts ready to run with the fake Codex (needs `-FakeAgents`): KON-1 ends ready for review, KON-2 asks to approve `cargo add serde`, KON-3 asks a question with options, KON-4 waits for its plan, KON-5 keeps working, KON-6 fails and waits for a person | Running, approval, question and plan states, live |
+| `settings` | App Settings with a person's data, fixture-only (`tools/qa-app.ps1` says how). Accounts: Claude Code *Work* (signed in, plan readings, a running run on it: Remove is blocked), *Personal* (unused), *Old* (Sign-in expired), Default (Not signed in); Codex *Client* (signed in, plan readings, a connection on it), *Archive* (Folder missing), Default; stand-in CLIs answer the checks the same way. Notifications: quiet hours 22:30–07:00, daily report at 18:30. Automation: the installed app's MCP rows (address, port, token, Connect an agent) on a free port with a token in memory, *claude-code* and *codex-mcp-client* connected. Orchester Cloud: an invite to Billing waiting; kept here, Mobile team's join waiting for approval and Docs team's that didn't finish; team servers *Kontur team* (Connected, Kontur linked), *Build box* (Offline about two minutes after the start; Reconnecting before), *Old office* (Certificate changed), *Design team* (signed out here, its own certificate) and *Team box* (sign-in ended) | `App settings · redesign` `iUmo3` in the new `orchester.pen`: 01–05c and the states sheets `poD7g`, `shpsk`, `ZUuMT` |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their
 running runs interrupted and ends the approvals they waited for. Capture running states of
@@ -179,7 +180,23 @@ the route's params and answers the route the tab shows, for example:
 - `{"route": "task", "project": "<id>", "key": "KON-12"}` (Summary), with `"tab"` `conversation`
   or `changes`; on changes `"file": "src/webhooks/sender.rs"` with `"from"` `checkpoint` or
   `worktree`;
-- `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`.
+- `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`;
+- `{"route": "settings", "tab": "<tab>"}`, `tab` `automation` (the default), `general`, `notifications`,
+  `accounts`, `orchester` (Orchester Cloud), `connect` or `invite`, and what the tab opens on, without a click:
+  - accounts: `"account"` (an id, a name such as `"Work"`, or `claude-default` / `codex-default`) for its page
+    (03b), with `"panel"` `rename` or `remove` for the question in place, `sign_in` for step 2; `"panel": "add"`
+    alone for *Add account* (03c);
+  - orchester: `"server"` (an id, a name such as `"Old office"`, or a host) for its page (05c); `"ask":
+    "sign-out"` for *Sign out of Orchester Cloud?*, or with `server` that server's *Sign out of …?*; `"ask":
+    "decline", "invite": "<invite id>"` (the id in the invite row's element ids) for *Decline the invite?*;
+  - connect: `"server"` and `"step"` `address`, `compare`, `join` or `username` (05b, 05b2): past the address it
+    asks what answers there; a server with its own certificate stays at *Compare the check code* (the
+    `settings` scenario's *Design team*), since only a person answers it;
+  - invite: `"server"` and `"project"` (its slug, e.g. `billing` on *Kontur team*) for the invite landing;
+  - automation: `"ask": "rotate-token"` for *Rotate the token?*.
+
+  Opening a page or a question is navigation and works while Settings refuses window input; answering it stays a
+  person's, and a synthetic press is refused.
 
 Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot`
 through `call_run_app`. Open the returned PNG path and include it in the verification report.

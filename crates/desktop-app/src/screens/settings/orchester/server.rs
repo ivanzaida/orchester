@@ -36,6 +36,8 @@ pub(super) struct Props {
   pub linked: Vec<LinkedProject>,
   /// Changes whenever the servers or the cloud account changed, so the projects are read again.
   pub revision: u64,
+  /// The route asks *Sign out of …?*: the question opens in place once it does.
+  pub sign_out: bool,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -65,6 +67,8 @@ impl DevtoolsInspectable for Presented {}
 
 pub(super) struct ServerPanel {
   pub(super) confirming: Signal<bool>,
+  /// Whether the route asked *Sign out of …?* when the page last rendered: it opens the question once each time.
+  asked: parking_lot::Mutex<bool>,
   /// Whether the pairing code the last request made shows; *Done* hides it.
   pub(super) showing: Signal<bool>,
   pub(super) sign_out: FutureAction<(), (), Said>,
@@ -155,6 +159,7 @@ impl Component for ServerPanel {
     });
     Self {
       confirming: ctx.signal(false),
+      asked: parking_lot::Mutex::new(false),
       showing: ctx.signal(false),
       sign_out,
       pairing,
@@ -168,6 +173,15 @@ impl Component for ServerPanel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    // The route opens *Sign out of …?* as *Sign out…* would, on a server signed in to; only a person's answer signs
+    // out.
+    let asks = props.sign_out && props.entry.in_use();
+    let mut asked = self.asked.lock();
+    if asks && !*asked {
+      self.confirming.set(true);
+    }
+    *asked = asks;
+    drop(asked);
     let pairing = self.pairing.state().get();
     let shown = (pairing.is_fulfilled() && self.showing.get())
       .then_some(pairing.data)

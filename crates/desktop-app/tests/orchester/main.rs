@@ -9,6 +9,7 @@
 //! `cargo test -p orchester-app --test orchester orchester_`
 
 mod accepting;
+mod asked;
 mod clipboard;
 mod design;
 mod harness;

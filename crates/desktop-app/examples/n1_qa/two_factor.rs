@@ -45,8 +45,8 @@ pub fn seed(
     project::register_kontur(workspace, folder)?;
   }
   let settings = Route::Orchester(OrchesterView {
-    server: None,
     panel: OrchesterPanel::Account,
+    ..OrchesterView::default()
   });
   let cloud = &backends.cloud;
   if state == State::FewRecoveryCodes {

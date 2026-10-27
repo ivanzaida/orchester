@@ -43,6 +43,14 @@ use crate::{
   },
 };
 
+#[derive(Clone, Copy, PartialEq)]
+pub struct Props {
+  /// The token row asks *Rotate the token?* in place, as the route asks.
+  pub rotation: bool,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Props {}
+
 /// The group; it reads the window's server from the context.
 pub struct ServerSection {
   /// While the group is mounted, the MCP server refuses window input.
@@ -50,7 +58,7 @@ pub struct ServerSection {
 }
 
 impl Component for ServerSection {
-  type Props = ();
+  type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
     let gate = ctx
@@ -62,13 +70,14 @@ impl Component for ServerSection {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let rotation = ctx.props::<Props>().rotation;
     let link = ctx
       .use_context::<McpLink>()
       .expect("the root provides the MCP server's link");
     let status = mcp_status(ctx, &link);
     let server = link.server().cloned();
     match &status.kind {
-      McpKind::Installation => installation(ctx, &status, server),
+      McpKind::Installation => installation(ctx, &status, (server, rotation)),
       McpKind::Qa { folder, .. } => {
         // From the worktree's `.tmp` on, as the status bar names it.
         let folder = from_scratch(folder);
@@ -110,8 +119,8 @@ fn group(ctx: &Ctx, meta: &str) -> SettingGroup {
   )
 }
 
-/// The installed app's rows.
-fn installation(ctx: &mut Ctx, status: &McpStatus, server: Option<AppMcp>) -> Element {
+/// The installed app's rows; the token row asks *Rotate the token?* when `rotation`.
+fn installation(ctx: &mut Ctx, status: &McpStatus, (server, rotation): (Option<AppMcp>, bool)) -> Element {
   let port = status.port.and_then(|port| NonZeroU16::new(port.get()));
   // The commands carry the token: while it cannot be read, Connect an agent says so instead.
   let commands = port.filter(|_| !matches!(status.server, ServerState::TokenUnreadable { .. }));
@@ -135,6 +144,7 @@ fn installation(ctx: &mut Ctx, status: &McpStatus, server: Option<AppMcp>) -> El
     token::Props {
       server: server.clone(),
       state: status.server.clone(),
+      rotation,
     },
   );
   let connect =

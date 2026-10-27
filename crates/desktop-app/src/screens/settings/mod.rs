@@ -81,12 +81,25 @@ impl SettingsTab {
 #[derive(Clone, Copy, PartialEq)]
 struct Props {
   tab: SettingsTab,
+  /// Automation asks *Rotate the token?* in place (`shpsk`), as its route asks.
+  rotation: bool,
 }
 
 impl DevtoolsInspectable for Props {}
 
 pub fn screen(ctx: &mut Ctx, tab: SettingsTab) -> Element {
-  ctx.mount_keyed::<SettingsScreen>("settings", Props { tab })
+  ctx.mount_keyed::<SettingsScreen>("settings", Props { tab, rotation: false })
+}
+
+/// Settings › Automation asking *Rotate the token?* under the access token.
+pub fn asking_rotation(ctx: &mut Ctx) -> Element {
+  ctx.mount_keyed::<SettingsScreen>(
+    "settings",
+    Props {
+      tab: SettingsTab::Automation,
+      rotation: true,
+    },
+  )
 }
 
 struct SettingsScreen {
@@ -110,7 +123,7 @@ impl Component for SettingsScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let tab = ctx.props::<Props>().tab;
+    let Props { tab, rotation } = *ctx.props::<Props>();
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
     let workspace = Services::of(ctx).workspace;
@@ -130,7 +143,7 @@ impl Component for SettingsScreen {
     let body = match tab {
       SettingsTab::General => general::tab(ctx),
       SettingsTab::Notifications => notifications::tab(ctx),
-      SettingsTab::Automation => automation::tab(ctx),
+      SettingsTab::Automation => automation::tab(ctx, rotation),
       SettingsTab::Orchester(view) => {
         ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view })
       }

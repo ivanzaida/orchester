@@ -22,6 +22,7 @@ use super::{
   words::cloud_error,
 };
 use crate::{
+  routes::OrchesterAsk,
   screens::settings::frame,
   services::Services,
   ui::{field::field_error, icon::Icon, setting_notice::status_line},
@@ -35,6 +36,8 @@ pub(super) struct Props {
   pub accepted: super::Kept,
   /// The account's two-factor authentication, once the cloud said.
   pub two_factor: Option<TwoFactorStatus>,
+  /// The question the route asks in place: it opens once it does.
+  pub ask: Option<OrchesterAsk>,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -45,6 +48,8 @@ pub(super) struct CloudPanel {
   pub(super) sign_out: FutureAction<(), (), Said>,
   /// *Sign out* asks before it signs out and locks.
   pub(super) asking: Signal<bool>,
+  /// What the route asked when the column last rendered: each question opens once each time it is asked.
+  asked: parking_lot::Mutex<Option<OrchesterAsk>>,
   /// Signing this computer out of the cloud is a person's (review 1, M1).
   pub(super) person: super::PersonOnly,
   /// Counts the checks of joins that wait for approval ([`super::accepted::check`]).
@@ -68,6 +73,7 @@ impl Component for CloudPanel {
         async move { cloud.sign_out().await.map_err(|error| cloud_error(&error)) }
       }),
       asking: ctx.signal(false),
+      asked: parking_lot::Mutex::new(None),
       person: super::PersonOnly::new(ctx),
       tick,
       checks,
@@ -76,6 +82,7 @@ impl Component for CloudPanel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    self.follow_route(props.ask);
     self.checks.start();
     let pane = frame::pane("orchester-cloud-details");
     let snapshot = &props.snapshot;
@@ -127,6 +134,22 @@ impl Component for CloudPanel {
       .child(servers)
       .child(advanced)
       .child(account::token_note(ctx))
+  }
+}
+
+impl CloudPanel {
+  /// Opens the question the route starts asking, as its button would: *Sign out of Orchester Cloud?* under the card,
+  /// or *Decline the invite to …?* in place of the invite's actions. Only a person's answer signs out or declines.
+  fn follow_route(&self, ask: Option<OrchesterAsk>) {
+    let mut asked = self.asked.lock();
+    if ask != *asked {
+      match ask {
+        Some(OrchesterAsk::SignOut) => self.asking.set(true),
+        Some(OrchesterAsk::Decline(invite)) => self.invites.declining.set(invites::Asked(Some(invite))),
+        None => {}
+      }
+    }
+    *asked = ask;
   }
 }
 

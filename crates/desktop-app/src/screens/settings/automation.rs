@@ -262,8 +262,9 @@ impl Consent {
   }
 }
 
-/// The tab, scrolling under the header: the MCP server's group, then the switches in their three groups.
-pub fn tab(ctx: &mut Ctx) -> Element {
+/// The tab, scrolling under the header: the MCP server's group, asking *Rotate the token?* when `rotation`, then the
+/// switches in their three groups.
+pub fn tab(ctx: &mut Ctx, rotation: bool) -> Element {
   let mut row = |key: &str, consent: Consent| ctx.mount_keyed::<ConsentRow>(key, consent);
   let window = [row("window-control", Consent::WindowControl)];
   let approvals = [
@@ -294,7 +295,7 @@ pub fn tab(ctx: &mut Ctx) -> Element {
   let only_you = |ctx: &Ctx, id: &str| marked_words(id, Icon::Hand, &ctx.t("settings.automation.onlyYou"));
   let look = window_rows::look_at_the_window(ctx);
   let pane = frame::pane("settings-automation")
-    .child(ctx.mount_keyed::<super::server::ServerSection>("mcp-server", ()))
+    .child(ctx.mount_keyed::<super::server::ServerSection>("mcp-server", super::server::Props { rotation }))
     .child(
       SettingGroup::new("settings-window", ctx.t("settings.automation.window"))
         .row(look)

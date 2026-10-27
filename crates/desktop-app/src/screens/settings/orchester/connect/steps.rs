@@ -131,7 +131,7 @@ fn boxed(rows: Vec<Row>) -> Element {
     .into()
 }
 
-/// A step: its dot, its title, and `content` under the title.
+/// A step: its dot, its title, and `content` 12 under the title, or 2 under a later step's (`GIGh7` in `MrVql`).
 fn step((id, mark, title): (&str, Mark, &str), content: Element) -> Row {
   let later = matches!(mark, Mark::Later(_));
   let title = Text::new(title)
@@ -161,7 +161,11 @@ fn step((id, mark, title): (&str, Mark, &str), content: Element) -> Row {
       Column::new()
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
-        .spacing(SpacingSize::Md)
+        .spacing(if later {
+          ExtraSpacing::Tight.role()
+        } else {
+          SpacingSize::Md
+        })
         .child(
           Row::new()
             .height(Dimension::Px(DOT))

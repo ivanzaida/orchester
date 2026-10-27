@@ -270,6 +270,7 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
   .opens(navigation.to(Route::Orchester(OrchesterView {
     server: Some(id),
     panel: OrchesterPanel::Connect,
+    ..OrchesterView::default()
   })));
   let mut notice = SettingNotice::new("orchester-server-signed-out-notice", NoticeTone::Warning)
     .title(ctx.t_args(
