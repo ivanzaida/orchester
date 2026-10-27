@@ -40,7 +40,12 @@ what is actually on screen.
    matches the design's content where the app allows it, so text lengths are comparable.
    Use a throwaway git repository under `.tmp/`, never a real project.
 3. **Look at both images** at full size, region by region — do not rely on the element tree
-   or on the code. Compare:
+   or on the code. Open each PNG with the `Read` tool, which shows images. Never use Pencil's
+   built-in browser (`mcp__pencil__browser`: load-page, return-screenshot, screenshot-to-canvas)
+   to view a PNG or the app: it is one browser shared by every agent and designer connected to
+   Pencil, it takes one capture at a time, and a capture left unfinished locks it for everyone
+   ("A capture is already running") until Pencil restarts. If `Read` can't show an image in your
+   step, say so in the report instead of reaching for the browser. Compare:
    - overall structure: which regions exist, their order, sizes and alignment; anything
      extra (borders, frames, title bars, panels, fields, notices) or missing;
    - spacing: paddings, gaps, column widths, vertical rhythm;
