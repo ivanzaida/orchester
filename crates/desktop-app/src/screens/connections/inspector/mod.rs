@@ -91,6 +91,8 @@ pub(super) struct Inspecting<'a> {
   /// The check pressed on the connection in this screen, if one was.
   pub tested: Option<Tested<'a>>,
   pub confirming: Option<Confirm>,
+  /// The question was asked since the page last rendered, so it is brought into view.
+  pub reveal: bool,
   pub now: Timestamp,
 }
 
@@ -109,6 +111,8 @@ pub(super) struct Actions {
   pub renaming: Signal<bool>,
   /// The … menu and its button.
   pub more: (Signal<bool>, ElementRef),
+  /// The question asked in place, which is scrolled into view when it is asked.
+  pub question: ElementRef,
 }
 
 /// A page's parts as a kind fills them.
@@ -126,8 +130,8 @@ pub(super) struct Parts {
   /// What the status asks for, under the head: a sentence, a command to run, a check's result, a warning.
   pub notices: Vec<Element>,
   pub groups: Vec<Element>,
-  /// The question asked in place, under the groups.
-  pub question: Option<Element>,
+  /// The question asked in place, and how many of the groups come before it.
+  pub question: Option<(usize, Element)>,
 }
 
 /// The page of `inspecting.entry`.
@@ -162,6 +166,18 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
   let failure = inspecting
     .failed
     .map(|failure| Element::from(field_error("connection-work-error", &message_text(ctx, failure))));
+  let mut groups = parts.groups;
+  if let Some((after, question)) = parts.question {
+    // A question just asked is brought into view, wherever the page was scrolled.
+    if inspecting.reveal {
+      ctx.scroll_into_view(&actions.question);
+    }
+    let question = Column::new()
+      .width(Dimension::Pct(100.0))
+      .ref_element(actions.question.clone())
+      .child(question);
+    groups.insert(after.min(groups.len()), question.into());
+  }
   Column::new()
     .id("connection-inspector")
     .width(Dimension::Pct(100.0))
@@ -171,8 +187,7 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
     .child(head)
     .with_children(failure)
     .with_children(parts.notices)
-    .with_children(parts.groups)
-    .with_children(parts.question)
+    .with_children(groups)
     .into()
 }
 

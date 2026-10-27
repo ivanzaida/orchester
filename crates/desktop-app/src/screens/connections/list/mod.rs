@@ -80,6 +80,8 @@ pub struct ConnectionsScreen {
   renaming: Signal<bool>,
   /// A connection page's … menu.
   more: (Signal<bool>, ElementRef),
+  /// A connection page's question asked in place, and the one its last render showed.
+  question: (ElementRef, Mutex<Asking>),
   /// Counts the empty page's Check again: each looks for the CLIs again.
   recheck: Signal<u64>,
   /// What the tab showed last.
@@ -98,6 +100,7 @@ impl Component for ConnectionsScreen {
       asking: ctx.signal(Asking(None)),
       renaming: ctx.signal(false),
       more: (ctx.signal(false), ctx.element_ref()),
+      question: (ctx.element_ref(), Mutex::new(Asking(None))),
       recheck: ctx.signal(0),
       shown: Mutex::new(None),
     };
@@ -260,12 +263,9 @@ impl ConnectionsScreen {
       (None, _) => Tested::Checked,
     });
     let failed = error.as_ref().filter(|_| last.is_some() && checked.is_none());
-    let confirming = self
-      .asking
-      .get()
-      .0
-      .filter(|(on, _)| *on == id)
-      .map(|(_, confirm)| confirm);
+    let asked = self.asking.get();
+    let confirming = asked.0.filter(|(on, _)| *on == id).map(|(_, confirm)| confirm);
+    let before = std::mem::replace(&mut *self.question.1.lock(), asked);
     let inspecting = Inspecting {
       listed,
       accounts,
@@ -276,6 +276,7 @@ impl ConnectionsScreen {
       failed,
       tested,
       confirming,
+      reveal: confirming.is_some() && before != asked,
       now: Services::of(ctx).clock.now(),
     };
     let actions = self.actions(ctx, project, listed, id);
@@ -304,6 +305,7 @@ impl ConnectionsScreen {
       )),
       renaming: self.renaming.clone(),
       more: self.more.clone(),
+      question: self.question.0.clone(),
     }
   }
 }

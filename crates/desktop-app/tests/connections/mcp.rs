@@ -116,8 +116,8 @@ fn connections_mcp_server_is_turned_off_and_on_in_place() {
   });
 }
 
-/// Remove, from a server's … menu, asks in place under its groups; Keep it keeps the server, Remove removes it and
-/// goes back to Connections. A server a profile chooses cannot be removed, and says which.
+/// Remove, from a server's … menu, asks in place right after *Sends* (`13` `Ptkxo`); Keep it keeps the server, Remove
+/// removes it and goes back to Connections. A server a profile chooses cannot be removed, and says which.
 #[test]
 fn connections_mcp_server_is_removed_in_place() {
   let mut seeded = Seeded::new("connections");
@@ -135,6 +135,23 @@ fn connections_mcp_server_is_removed_in_place() {
   seeded.click("connection-remove");
   assert!(seeded.text("connection-confirm").contains("Remove sentry?"));
   assert!(seeded.exists("connection-confirm-keep"), "Keep it beside the action");
+  let bounds = |seeded: &mut Seeded, id: &str| {
+    seeded
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (sends, question, tools) = (
+    bounds(&mut seeded, "connection-variables"),
+    bounds(&mut seeded, "connection-confirm"),
+    bounds(&mut seeded, "connection-tools"),
+  );
+  assert!(
+    sends.y + sends.height <= question.y && question.y + question.height <= tools.y,
+    "the question sits between Sends and the tools: {sends:?} {question:?} {tools:?}"
+  );
   seeded.click("connection-confirm-keep");
   assert!(!seeded.exists("connection-confirm"));
   assert!(seeded.server("sentry").is_some(), "Keep it keeps the server");

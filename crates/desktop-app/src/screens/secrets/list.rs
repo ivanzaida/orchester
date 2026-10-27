@@ -41,14 +41,17 @@ pub(super) fn list(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View) -> Eleme
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Roomy.role())
     .child(toolbar(ctx, view, chosen));
-  if listed.in_environment(None).next().is_none() {
+  let any = |environment| {
+    listed.in_environment(environment).next().is_some() || listed.archived_in(environment).next().is_some()
+  };
+  if !any(None) {
     column = column.child(project_empty(ctx, view, chosen));
   } else {
     let shown: Vec<Environment> = match chosen {
       Some(environment) => vec![environment],
       None => Environment::ALL
         .into_iter()
-        .filter(|environment| listed.in_environment(Some(*environment)).next().is_some())
+        .filter(|environment| any(Some(*environment)))
         .collect(),
     };
     for environment in shown {
@@ -57,7 +60,7 @@ pub(super) fn list(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View) -> Eleme
   }
   column
     .child(
-      Text::new(&ctx.t("secrets.handling"))
+      Text::new(&ctx.t("secrets.footer"))
         .id("secrets-handling")
         .variant(ProjectSettingsText::Hint.role())
         .width(Dimension::Pct(100.0)),
@@ -135,9 +138,14 @@ fn project_empty(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Element
     .into()
 }
 
-/// An environment's group: its secrets, or that the filter's environment has none.
+/// An environment's group: its secrets, then its archived ones (`OLD_FIGMA_TOKEN` in `06`), or that the filter's
+/// environment has none.
 fn group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Environment) -> Element {
-  let secrets: Vec<Secret> = listed.in_environment(Some(environment)).cloned().collect();
+  let secrets: Vec<Secret> = listed
+    .in_environment(Some(environment))
+    .chain(listed.archived_in(Some(environment)))
+    .cloned()
+    .collect();
   let count = ctx.t_args(
     if secrets.len() == 1 {
       "secrets.countOne"
@@ -188,6 +196,9 @@ fn group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Envir
 fn used_words(ctx: &Ctx, listed: &ProjectSecrets, secret: &Secret) -> Arc<str> {
   let counts = listed.use_counts(secret.id());
   if secret.is_archived() {
+    if counts.total() == 0 {
+      return ctx.t("secrets.rowArchivedUnused");
+    }
     return ctx.t_args("secrets.rowArchived", [("uses", words::uses(ctx, counts))]);
   }
   let uses: Vec<_> = listed.used_by(secret.id()).collect();

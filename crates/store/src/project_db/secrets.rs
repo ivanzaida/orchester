@@ -66,6 +66,14 @@ impl SecretStore for ProjectDb {
       [],
     )
   }
+
+  fn archived_secrets(&self) -> Result<Vec<Secret>, StoreError> {
+    load(
+      &self.connection,
+      "WHERE archived_at IS NOT NULL ORDER BY name, environment",
+      [],
+    )
+  }
 }
 
 /// Fails if another active secret has this secret's name in its environment.

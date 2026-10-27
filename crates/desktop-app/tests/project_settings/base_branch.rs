@@ -168,7 +168,7 @@ fn project_settings_base_branch_a_branch_set_that_is_gone_is_the_rows_problem() 
     page.text(HINT),
     "gone no longer exists · new runs are refused until you choose another"
   );
-  assert_eq!(chosen(&mut page), ["gone · no longer exists"]);
+  assert_eq!(chosen(&mut page), ["gone"]);
   let read = call(&page, "get_project", json!({"project":"Kontur"})).expect("read");
   assert_eq!(
     read["project"]["base_branch"],

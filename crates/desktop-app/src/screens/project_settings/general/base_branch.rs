@@ -234,19 +234,18 @@ fn kept_note(ctx: &Ctx, kept: usize) -> Option<Element> {
   Some(page::icon_note("settings-base-branch-kept", Icon::Info, &words))
 }
 
-/// The select's options: the checked-out branch, the branch set when it is gone, the local branches, then the
-/// remote-tracking ones that would create theirs.
+/// The select's options: the checked-out branch, the branch set when it is gone (by its name, as `01b` draws it; the
+/// row's hint says it is gone), the local branches, then the remote-tracking ones that would create theirs.
 fn options(ctx: &Ctx, read: &BaseBranchRead) -> Vec<SelectOption<String>> {
   let mut options = vec![SelectOption::new(
     CHECKED_OUT.to_owned(),
     ctx.t("project_settings.baseBranchCheckedOut"),
   )];
-  options.extend(read.missing().map(|branch| {
-    SelectOption::new(
-      format!("{LOCAL}{branch}"),
-      ctx.t_args("project_settings.baseBranchGone", [("branch", branch.as_str())]),
-    )
-  }));
+  options.extend(
+    read
+      .missing()
+      .map(|branch| SelectOption::new(format!("{LOCAL}{branch}"), branch.as_str())),
+  );
   options.extend(
     read
       .choices

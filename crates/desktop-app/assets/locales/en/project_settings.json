@@ -135,7 +135,6 @@
     "baseBranchDetail": "The branch new runs start from and deliver into: Merge, the merge queue, Local integration, pull requests and base-moved notices follow it. With Checked-out branch, a run takes the branch your checkout has when it starts.",
     "baseBranchCheckedOut": "Checked-out branch",
     "baseBranchRemote": "{{tracking}} · creates {{branch}}",
-    "baseBranchGone": "{{branch}} · no longer exists",
     "baseBranchMissing": "{{branch}} no longer exists in the repository, so new runs are refused. Choose another base branch.",
     "baseBranchHint": "Kept on this computer only, in a shared project too. A run keeps the branch it started from; a set branch is merged into beside your checkout when the checkout has another branch.",
     "baseBranchKept": {

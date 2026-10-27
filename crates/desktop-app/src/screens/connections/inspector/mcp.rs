@@ -2,10 +2,10 @@
 //! the head, its status with who uses it; *Server*: what the agent's CLI starts or reaches (program, arguments, folder,
 //! or endpoint and authorization); *Sends*: its variables, a secret named by its name and environment only, and the
 //! tools that run without asking; its tools, which Orchester cannot list; and the profiles that choose it. Turning a
-//! server off that profiles choose, and removing one, ask in place under the groups (`Turn off · question` `Q2LiC`);
-//! turning one on widens what agents may do, so it asks a person in place the same way (`widen`). A server profiles
-//! still choose cannot be removed, and says which they are. A variable whose secret is gone says *Secret missing* with
-//! Open Secrets.
+//! server off that profiles choose, and removing one, ask in place right after *Sends*, where `13` draws *Remove
+//! figma?*; turning one on widens what agents may do, so it asks a person in place the same way (`widen`). A server
+//! profiles still choose cannot be removed, and says which they are. A variable whose secret is gone says *Secret
+//! missing* with Open Secrets.
 
 use std::{path::Path, sync::Arc};
 
@@ -74,15 +74,16 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
   } else {
     edit.opens((actions.edit)(server.id()))
   };
+  // Asked right after *Sends*, as the design puts it, before the groups it does not draw.
   let question = inspecting
     .confirming
-    .map(|confirm| asked(ctx, server, (confirm, &users), &asks));
-  let mut groups = vec![
+    .map(|confirm| (2, asked(ctx, server, (confirm, &users), &asks)));
+  let groups = vec![
     server_group(ctx, server, inspecting),
     sends_group(ctx, server, inspecting),
     tools_group(ctx),
+    used_by_row(ctx, &users, actions, "connections.mcp.notUsed"),
   ];
-  groups.push(used_by_row(ctx, &users, actions, "connections.mcp.notUsed"));
   let off = (!server.enabled() && !users.is_empty()).then(|| {
     let key = if users.len() == 1 {
       "connections.mcp.offUsersOne"
@@ -235,7 +236,7 @@ fn stdio_rows(ctx: &mut Ctx, stdio: &StdioServer) -> Vec<Element> {
     ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeStdio")),
     false,
   )
-  .hint(ctx.t("connections.mcp.startedByCli"))
+  .info(ctx.t("connections.mcp.startedByCli"))
   .render(ctx);
   let program = display::shorten_path(Path::new(stdio.program().as_str()), PATH_CHARS);
   let mut rows = vec![
@@ -297,7 +298,7 @@ fn http_rows(ctx: &mut Ctx, http: &HttpServer, inspecting: &Inspecting<'_>) -> V
       ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeHttp")),
       false,
     )
-    .hint(ctx.t("connections.mcp.reachedByCli"))
+    .info(ctx.t("connections.mcp.reachedByCli"))
     .render(ctx),
     row(
       ctx,

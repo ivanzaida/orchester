@@ -1,9 +1,9 @@
 //! A secret's page (`06b` `famwr`): the crumb back to Secrets; its head with its kind's tile, its name, its
-//! environment, how many use it and when its value was set, Replace value and the … menu (Archive); *Replace value*
-//! asked in place under the head (`form`); *Details* (project, environment, kind, value and when it was last rotated),
-//! *Used by* (each tool and MCP server, as links), *Recent access* (which Orchester does not record yet, and says so),
-//! and *Archive …?* asked in place under them (`Archive · question` `fw0eT`). An archived secret says so, and offers
-//! neither.
+//! environment, how many use it and when its value was set, Replace value and the … menu (Copy name, Archive);
+//! *Replace value* asked in place under the head (`form`); *Details* (project, environment and when it was last
+//! rotated), *Used by* (each tool and MCP server, as links, with the variable a server is given it in), *Recent access*
+//! (which Orchester does not record yet, and says so), and *Archive …?* asked in place under them (`Archive ·
+//! question` `fw0eT`), brought into view. An archived secret says so, and offers neither.
 
 use lurq::{
   app::{
@@ -21,6 +21,7 @@ use orchester_workspace::{
   secrets::data::{ProjectSecrets, SecretUseKind},
   tasks::outside::Outside,
 };
+use parking_lot::Mutex;
 
 use super::{form, state::View, words, work};
 use crate::{
@@ -29,7 +30,7 @@ use crate::{
   routes::{ConnectionsView, ProjectPage, Route, SecretsPanel},
   screens::project_settings::kit::{EmptyRow, Group, SettingRow, back, entity_head, question, value},
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -37,6 +38,7 @@ use crate::{
     icon_button::IconButton,
     menu::{MenuItem, menu_at_end, menu_panel},
     message::message_text,
+    unavailable::reason_line,
   },
 };
 
@@ -65,6 +67,8 @@ pub(super) struct Inspector {
   action: work::Action,
   /// The … menu and its button.
   more: (Signal<bool>, ElementRef),
+  /// *Archive …?*, brought into view when it is asked, and what the page asked when it last rendered.
+  question: (ElementRef, Mutex<SecretsPanel>),
 }
 impl Component for Inspector {
   type Props = Props;
@@ -87,6 +91,7 @@ impl Component for Inspector {
     Self {
       action,
       more: (ctx.signal(false), ctx.element_ref()),
+      question: (ctx.element_ref(), Mutex::new(SecretsPanel::default())),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -108,8 +113,17 @@ impl Component for Inspector {
         },
       )
     });
-    let archive =
-      (props.panel == SecretsPanel::Archive && !props.secret.is_archived()).then(|| self.archive(ctx, &props));
+    let asked = std::mem::replace(&mut *self.question.1.lock(), props.panel);
+    let archive = (props.panel == SecretsPanel::Archive && !props.secret.is_archived()).then(|| {
+      // Asked just now: its buttons are brought into view, wherever the page was scrolled.
+      if asked != SecretsPanel::Archive {
+        ctx.scroll_into_view(&self.question.0);
+      }
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .ref_element(self.question.0.clone())
+        .child(self.archive(ctx, &props))
+    });
     Column::new()
       .id("secret-inspector")
       .width(Dimension::Pct(100.0))
@@ -173,7 +187,7 @@ impl Inspector {
     )
   }
 
-  /// The … menu: Archive, asked in place.
+  /// The … menu: Copy name, and Archive, asked in place.
   fn more(&self, ctx: &mut Ctx, props: &Props, pending: bool) -> Element {
     let (open, anchor) = self.more.clone();
     let toggle = open.clone();
@@ -181,6 +195,16 @@ impl Inspector {
       .element(anchor.clone())
       .on_click(move || toggle.update(|open| *open = !*open))
       .render(ctx);
+    let (copier, name) = (
+      crate::ui::code_box::Copier::of(ctx),
+      props.secret.name().as_str().to_owned(),
+    );
+    let copy = MenuItem::new("secret-copy-name", ctx.t("secrets.copyName"), move || {
+      if !copier.copy(&name) {
+        tracing::warn!("the clipboard did not take the secret's name");
+      }
+    })
+    .icon(Icon::Copy);
     let archive = if pending {
       MenuItem::unavailable(
         "secret-archive",
@@ -196,6 +220,7 @@ impl Inspector {
     .icon(Icon::Archive);
     let panel = menu_panel("secret-more-menu")
       .width(Dimension::Px(MENU_WIDTH))
+      .child(copy.render(ctx, &open))
       .child(archive.render(ctx, &open));
     Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
   }
@@ -259,14 +284,15 @@ impl Inspector {
   }
 }
 
-/// *Details* (`NLrZH`): the project, the environment, the kind, the value as its mask, and when it was last rotated.
+/// *Details* (`NLrZH`): the project, the environment (its kind in the (i)) and when its value was last rotated (how
+/// it is kept in the (i)), as `06b` draws them; an archived secret also says its value is gone.
 fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
   let rotated = match secret.rotated_at() {
     Some(at) => words::date(ctx, at),
-    None => ctx.t_args(
-      "secrets.neverRotated",
-      [("date", words::date(ctx, secret.created_at()))],
-    ),
+    None => {
+      let added = words::date(ctx, secret.created_at());
+      ctx.t_args("secrets.neverRotated", [("date", added)])
+    }
   };
   let mut rows = vec![
     detail(
@@ -274,19 +300,13 @@ fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
       "secret-project",
       ("secrets.project", project.open.project.name().as_str()),
     ),
-    detail(
-      ctx,
-      "secret-environment",
-      (
-        "secrets.environment",
+    SettingRow::new("secret-environment", ctx.t("secrets.environment"))
+      .info(ctx.t_args("secrets.kindInfo", [("kind", ctx.t(words::kind_key(secret.kind())))]))
+      .control(value(
+        "secret-environment-value",
         &ctx.t(words::environment_key(secret.environment())),
-      ),
-    ),
-    detail(
-      ctx,
-      "secret-kind",
-      ("secrets.kind", &ctx.t(words::kind_key(secret.kind()))),
-    ),
+      ))
+      .render(ctx),
   ];
   if secret.is_archived() {
     rows.push(
@@ -295,23 +315,13 @@ fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
         .control(value("secret-archived", &ctx.t("secrets.archived")))
         .render(ctx),
     );
-  } else {
-    let mask = Row::new()
-      .spacing(ExtraSpacing::Snug.role())
-      .child(
-        Text::new(&ctx.t("secrets.mask"))
-          .id("secret-mask")
-          .variant(ExtraTypography::Note.role()),
-      )
-      .child(icon(Icon::LockKeyhole, IconSize::Sm, PaletteColor::TextMuted));
-    rows.push(
-      SettingRow::new("secret-value", ctx.t("secrets.value"))
-        .info(ctx.t("secrets.valueHint"))
-        .control(mask)
-        .render(ctx),
-    );
   }
-  rows.push(detail(ctx, "secret-rotated", ("secrets.rotated", &rotated)));
+  rows.push(
+    SettingRow::new("secret-rotated", ctx.t("secrets.rotated"))
+      .info(ctx.t("secrets.valueHint"))
+      .control(value("secret-rotated-value", &rotated))
+      .render(ctx),
+  );
   Group::new("secret-details", ctx.t("secrets.details")).rows(rows).into()
 }
 
@@ -339,13 +349,18 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
         SecretUseKind::Tool(_) => (Icon::Wrench, ctx.t("secrets.uses.toolKind"), ProjectPage::Tools),
         SecretUseKind::McpServer(id) => (
           Icon::Server,
-          ctx.t("secrets.uses.serverKind"),
+          // The variable its program is given it in (`MCP server · variable FIGMA_API_KEY` in `06b`).
+          used.variable.as_deref().map_or_else(
+            || ctx.t("secrets.uses.serverKind"),
+            |variable| ctx.t_args("secrets.serverVariable", [("variable", variable)]),
+          ),
           ProjectPage::Connections(ConnectionsView::of(id)),
         ),
       };
       SettingRow::new(format!("secret-use-{:?}", used.kind), used.name.clone())
         .item()
         .lead(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+        .info(note.clone())
         .control(value(&format!("secret-use-{:?}-kind", used.kind), &what))
         .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted))
         .opens(navigation.to(Route::Project(project.open.project.id(), page)))
@@ -361,24 +376,15 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       note,
     ))
   } else {
-    group.rows(rows).after(
-      Text::new(&note)
-        .id("secret-use-note")
-        .variant(ProjectSettingsText::Hint.role())
-        .width(Dimension::Pct(100.0)),
-    )
+    group.rows(rows)
   };
   group.into()
 }
 
-/// *Recent access* (`O5DCl`): Orchester does not record which run read a secret yet, and says so.
+/// *Recent access* (`O5DCl`): Orchester does not record which run read a secret yet, so the group says it is
+/// unavailable, and why, instead of listing rows.
 fn recent(ctx: &Ctx) -> Element {
   Group::new("secret-recent", ctx.t("secrets.recent"))
-    .row(EmptyRow::new(
-      "secret-recent-note",
-      Icon::ScrollText,
-      ctx.t("secrets.usageTitle"),
-      ctx.t("secrets.recentHint"),
-    ))
+    .after(reason_line("secret-recent-unavailable", &ctx.t("secrets.recentHint")))
     .into()
 }

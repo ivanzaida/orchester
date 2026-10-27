@@ -1,5 +1,5 @@
 //! A linked project's Sharing (`04b Sharing · shared` `TnUGj`, *Removed from the project* in `N9NFio`): *Team server*
-//! with its address, the person's role and the repository ([`rows`]), its members read-only ([`super::members`]),
+//! with its address, the person's role, its members read-only ([`super::members`]) and the repository ([`rows`]),
 //! *What a shared project can't do yet*, its discovery file ([`discovery`]), and *Leave*. *Make local* asks in place
 //! ([`super::make_local`]); *Leave* asks in place and keeps a local copy of the tasks and this computer's connection to
 //! the server; it is done on the server, so it is unavailable, with why, while this computer is not signed in there or
@@ -155,6 +155,7 @@ impl Component for Linked {
     let team = Group::new("project-settings-sharing-team", ctx.t("sharing.team.title"))
       .row(rows::address_row(ctx, link, (entry, &server)))
       .row(role)
+      .row(members_rows(ctx, &props, &shared, &server))
       .row(rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server)));
     let discovery = ctx.mount_keyed::<discovery::DiscoveryRow>(
       "sharing-discovery-row",
@@ -190,7 +191,6 @@ impl Component for Linked {
       .with_children(joined_note)
       .with_children(notice)
       .child(team)
-      .child(members_group(ctx, &props, &shared, &server))
       .child(refused(ctx))
       .child(discovery)
       .with_children(keys)
@@ -342,8 +342,8 @@ fn role_words(ctx: &Ctx, role: Option<MemberRole>) -> String {
   .to_string()
 }
 
-/// *Members*, read-only, with who the person is there.
-fn members_group(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Element {
+/// *Members*, read-only, with who the person is there: rows of *Team server*.
+fn members_rows(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Element {
   let link = props.facts.link.as_ref();
   let entry = props.facts.linked_server();
   let account = entry.and_then(|entry| entry.stored.account.as_ref());

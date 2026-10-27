@@ -110,16 +110,18 @@ fn repository_row(
   read: &RepositoryRead,
   error: Option<Arc<str>>,
 ) -> Element {
+  // `owner/name`, as the design draws it (`acme/kontur`); the host is in the (i)'s read-back.
+  let owned = |repo: &orchester_core::repository::GitHubRepo| format!("{}/{}", repo.owner(), repo.name());
   let repository = read
     .link
     .as_ref()
-    .map(|l| l.repo().to_string())
+    .map(|l| owned(l.repo()))
     .or_else(|| {
       read
         .detection
         .as_ref()
         .and_then(|d| d.github())
-        .map(|d| d.repo().to_string())
+        .map(|d| owned(d.repo()))
     })
     .unwrap_or_else(|| ctx.t("project_settings.notLinked").to_string());
   let detection = read

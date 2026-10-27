@@ -1,9 +1,9 @@
 //! A GitHub connection's page (`14` `KItiZ`): Check again and its … menu (Rename; editing it, choosing another `gh` and
 //! changing its account or access are not built yet, and say so); what its state asks for — signed in as another
-//! account, a warning with *Use* that account (`Wrong account` `ZH4Hq`), or the state's sentence — with the `gh`
-//! command that fixes it to run in a terminal; *Connection*: its host, `gh` and its path, the account it is signed in
-//! to and its scopes, and the account and repository the project expects through it. Orchester never signs in,
-//! switches accounts or sees a token.
+//! account, a one-line warning with *Use* that account (`Wrong account` `ZH4Hq`), or the state's sentence;
+//! *Connection*: its host, `gh` and its path, the account it is signed in to (named by the status line instead when
+//! it is another) and its scopes, and the account and repository the project expects through it; then the `gh`
+//! command that fixes the state, to run in a terminal. Orchester never signs in, switches accounts or sees a token.
 
 use lurq::{
   app::{
@@ -35,6 +35,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     menu::MenuItem,
+    tooltip::Tooltip,
   },
 };
 
@@ -62,21 +63,30 @@ pub(super) fn parts(
       sentence_tone(status),
     )],
   };
+  notices.extend(result::github(ctx, connection, &state, inspecting));
+  let mut groups = vec![connection_group(ctx, connection, &state, inspecting)];
+  // The `gh` command that fixes the state, under *Connection* as `14` draws it.
   if let Some(advice) = state.advice() {
-    notices.push(command_line(
+    groups.push(command_line(
       ctx,
       "connection-gh-command",
       ctx.t("connections.runInTerminal"),
       advice.command(connection.host()),
     ));
   }
-  notices.extend(result::github(ctx, connection, &state, inspecting));
-  let detail = connection.last_check().map(|check| {
-    ctx.t_args(
-      "connections.checkedAt",
-      [("time", &*last_checked(ctx, inspecting.now, Some(check.at)))],
-    )
-  });
+  // Signed in as another account, the status line says which, as `14` draws it; else when it was checked.
+  let detail = match &state {
+    GitHubState::WrongAccount { active, expected } => Some(ctx.t_args(
+      "connections.github.signedInAs",
+      [("active", active.as_str()), ("expected", expected.as_str())],
+    )),
+    _ => connection.last_check().map(|check| {
+      ctx.t_args(
+        "connections.checkedAt",
+        [("time", &*last_checked(ctx, inspecting.now, Some(check.at)))],
+      )
+    }),
+  };
   Parts {
     glyph: GITHUB_GLYPH.into(),
     title: title_with_rename(
@@ -96,7 +106,7 @@ pub(super) fn parts(
     ],
     menu: menu(ctx, &state, (inspecting, actions)),
     notices,
-    groups: vec![connection_group(ctx, connection, &state, inspecting)],
+    groups,
     question: None,
   }
 }
@@ -133,7 +143,7 @@ fn menu(ctx: &Ctx, state: &GitHubState, (inspecting, actions): (&Inspecting<'_>,
 
 /// `gh` signed in as another account than the project expects: pull requests wait, and *Use* the signed-in account.
 fn wrong_account(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   connection: &GitHubConnection,
   (active, state): (&str, &GitHubState),
   (inspecting, actions): (&Inspecting<'_>, &Actions),
@@ -148,6 +158,14 @@ fn wrong_account(
       button.on_click(move || start(id, Work::UseActiveAccount))
     }
   };
+  // One line under the title, as `14` draws it; the accounts are in the status line, the whole of it in the (i).
+  let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id("connection-wrong-account-info");
+  let info = Tooltip::new("connection-wrong-account-info", said(ctx, state, inspecting.project)).wrap(ctx, glyph);
+  let title = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t("connections.github.wrongAccountTitle")).variant(ExtraTypography::OptionTitle.role()))
+    .child(info);
   Row::new()
     .id("connection-wrong-account")
     .width(Dimension::Pct(100.0))
@@ -162,9 +180,9 @@ fn wrong_account(
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
-        .child(Text::new(&ctx.t("connections.github.wrongAccountTitle")).variant(ExtraTypography::OptionTitle.role()))
+        .child(title)
         .child(
-          Text::new(&said(ctx, state, inspecting.project))
+          Text::new(&ctx.t("connections.github.wrongAccountShort"))
             .id("connection-inspector-sentence")
             .variant(ExtraTypography::Prose.role())
             .width(Dimension::Pct(100.0)),
@@ -219,21 +237,24 @@ fn connection_group(
       program_tone,
       Some(&path),
     ),
-    row(
+  ];
+  // Signed in as another account, the status line names it and the warning offers it (`14`).
+  if !matches!(state, GitHubState::WrongAccount { .. }) {
+    rows.push(row(
       ctx,
       "connection-account",
       ("connections.property.account", &account),
       account_tone,
       None,
-    ),
-    row(
-      ctx,
-      "connection-scopes",
-      ("connections.property.scopes", &scopes),
-      scopes_tone,
-      None,
-    ),
-  ];
+    ));
+  }
+  rows.push(row(
+    ctx,
+    "connection-scopes",
+    ("connections.property.scopes", &scopes),
+    scopes_tone,
+    None,
+  ));
   rows.extend(link_rows(ctx, connection, inspecting));
   Group::new("connection-properties", ctx.t("connections.connectionGroup"))
     .rows(rows)
@@ -274,7 +295,7 @@ fn link_rows(ctx: &mut Ctx, connection: &GitHubConnection, inspecting: &Inspecti
       "connection-repository",
       ("connections.github.repository", &repository),
       Tone::Secondary,
-      Some(&ctx.t("connections.github.toolsUnavailable")),
+      None,
     ),
   ]
 }

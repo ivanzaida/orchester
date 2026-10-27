@@ -28,8 +28,14 @@ fn secrets_list_groups_by_environment_and_a_secrets_page_shows_metadata_and_mcp_
     s.exists("secret-uses") && s.text("secret-uses").contains("kontur-docs")
   });
   assert_eq!(s.text("secret-crumb-back"), "Secrets");
-  assert!(s.text("secret-inspector").contains("Never · added"));
-  assert!(s.text("secret-inspector").contains("•••• ••••"));
+  assert!(s.text("secret-inspector").contains("Never · added today"));
+  // *Details* as `06b` draws them: no Kind or Value row; *Used by* names the variable the server is given it in.
+  assert!(!s.exists("secret-kind-value") && !s.exists("secret-value"));
+  assert!(
+    s.text("secret-uses").contains("MCP server · variable TOKEN"),
+    "{}",
+    s.text("secret-uses")
+  );
   assert!(!s.text("app-window").contains(VALUE));
   assert_eq!(
     s.vault.reads.load(Ordering::SeqCst),
@@ -82,9 +88,39 @@ fn secrets_recent_access_says_it_is_not_recorded_yet() {
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Development);
   s.list();
+  assert!(
+    s.text(&format!("secret-mask-{}", secret.id())).ends_with("set today"),
+    "a value set today says so, without its date"
+  );
   s.click(&format!("secret-row-{}-row", secret.id()));
   s.until("its page", |s| s.exists("secret-recent"));
-  assert!(s.text("secret-recent").contains("No access recorded yet"));
+  // Unavailable, with why, rather than an empty group.
+  assert!(
+    s.text("secret-recent-unavailable")
+      .contains("Access to secrets is recorded once tools can use them")
+  );
+  s.click("secret-more");
+  assert!(s.exists("secret-copy-name"), "the … menu holds Copy name");
+}
+
+/// An archived secret stays in its environment's group (`OLD_FIGMA_TOKEN` in `06`), counted, and says so.
+#[test]
+fn secrets_list_shows_archived_secrets_in_their_group() {
+  let mut s = Secrets::new();
+  s.seed("DOCS_TOKEN", Environment::Development);
+  let old = s.seed("OLD_TOKEN", Environment::Development);
+  orchester_workspace::secrets::data::archive_in(&s.repo, s.vault.as_ref(), old.id()).expect("archive");
+  s.list();
+  let row = format!("secret-row-{}-row", old.id());
+  s.until("the archived row", |s| s.exists(&row));
+  assert!(
+    s.text(&row).contains("Archived · no tool or MCP server uses it"),
+    "{}",
+    s.text(&row)
+  );
+  assert!(!s.exists(&format!("secret-mask-{}", old.id())), "no value to show");
+  assert!(s.text("secrets-group-development").contains("2 secrets"));
+  assert!(s.text("secrets-handling").contains("never shown again"));
 }
 
 #[test]

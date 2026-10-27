@@ -85,6 +85,8 @@ fn shared_project_without_its_server_says_so_and_waits_for_it() {
   window.pass();
   assert!(window.tree.get_element_by_id("sharing-leave-question").is_none());
 
+  shows(&mut window, "sharing-members-list");
+  window.press("sharing-members-list");
   shows(&mut window, "sharing-member-ivan-row");
   assert_eq!(window.text("sharing-members-count"), "2");
   assert!(
@@ -98,7 +100,9 @@ fn shared_project_members_name_the_person_once_signed_out_and_removed() {
   let mut window = harness::window(Some(KONTUR_REMOTE));
   let me = UserId::generate();
   linked_without_server(&window, me, Some(Timestamp::now()));
-  open_sharing(&mut window, "sharing-member-ivan-row");
+  open_sharing(&mut window, "sharing-members-list");
+  window.press("sharing-members-list");
+  shows(&mut window, "sharing-member-ivan-row");
   assert!(
     window.text("sharing-member-ivan-hint").contains("· you, until "),
     "the list knows which member the person was"

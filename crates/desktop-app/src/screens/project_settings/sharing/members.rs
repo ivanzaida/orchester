@@ -1,17 +1,20 @@
-//! *Members*, read-only (`Members` `R370H0` in `04b Sharing · shared` `TnUGj`; *Members · as a member* and *Members ·
-//! server offline* in `N9NFio`; `docs/architecture/server.md`, row 63): who is in the project and their roles, as the
-//! server lists them now or as last read while it cannot be reached, once this computer is signed out of it or it left
-//! the list, and once the person is no longer a member. Owners and the server's admins get *Manage*, which opens the
-//! project's page in the server admin in the browser, only on the server the project's address names; a member is
-//! told to ask an owner. The app has no member or role control.
+//! *Members*, read-only, as rows of *Team server* (`Members` in `04b Sharing · shared` `TnUGj`; *Members · as a member*
+//! and *Members · server offline* in `N9NFio`; `docs/architecture/server.md`, row 63): who is in the project, how many,
+//! and, behind the row's disclosure, each member with their role, as the server lists them now or as last read while it
+//! cannot be reached, once this computer is signed out of it or it left the list, and once the person is no longer a
+//! member. Owners and the server's admins get *Manage*, which opens the project's page in the server admin in the
+//! browser, only on the server the project's address names; a member is told to ask an owner. The app has no member or
+//! role control.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::{BorderSize, PaletteColor},
   },
+  components::Column,
   core::Signal,
-  node::Element,
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_api::MemberRole;
 use orchester_core::{id::UserId, time::Timestamp};
@@ -24,7 +27,7 @@ use orchester_workspace::sharing::{
 use crate::{
   project::ShownProject,
   screens::{
-    project_settings::kit::{Group, SettingRow, Tone, value},
+    project_settings::kit::{SettingRow, Tone, value},
     settings::orchester::{Said, day_of, moment, sharing_said, shown_address},
   },
   services::Services,
@@ -32,6 +35,7 @@ use crate::{
     avatar::{initials, person_avatar},
     button::{ActionButton, ButtonKind},
     icon::Icon,
+    icon_button::IconButton,
   },
 };
 
@@ -70,6 +74,8 @@ pub(super) struct Members {
   links: crate::services::links::Links,
   /// Why the admin did not open in the browser.
   opened: Signal<Option<Said>>,
+  /// The member list is shown under the summary.
+  listed: Signal<bool>,
 }
 
 impl Component for Members {
@@ -79,6 +85,7 @@ impl Component for Members {
     Self {
       links: Services::of(ctx).links,
       opened: ctx.signal(None),
+      listed: ctx.signal(false),
     }
   }
 
@@ -106,23 +113,35 @@ impl Component for Members {
     let title = ctx.t("sharing.members.section");
     let rows = match (&state.data, &state.error) {
       (_, Some(reason)) => vec![
-        SettingRow::new("sharing-members", title.clone())
+        SettingRow::new("sharing-members", title)
           .toned(reason.text(ctx), Tone::Danger)
           .render(ctx),
       ],
       (Some(Read(members)), None) => self.read(ctx, &props, members),
       (None, None) => vec![
-        SettingRow::new("sharing-members", title.clone())
+        SettingRow::new("sharing-members", title)
           .hint(ctx.t("sharing.members.reading"))
           .render(ctx),
       ],
     };
-    Group::new("project-settings-sharing-members", title).rows(rows)
+    // Rows of *Team server* (`Members` in `TnUGj`), each after the first under its line as the group draws them.
+    Column::new()
+      .id("project-settings-sharing-members")
+      .width(Dimension::Pct(100.0))
+      .with_children(rows.into_iter().enumerate().map(|(index, row)| {
+        let line = Column::new().width(Dimension::Pct(100.0)).child(row);
+        if index == 0 {
+          line
+        } else {
+          line.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        }
+      }))
   }
 }
 
 impl Members {
-  /// The summary with *Manage*, a row for each member, and how to come back once the person is no longer one.
+  /// The summary with *Manage* and the list's disclosure, a row for each member while the list is shown, and how to
+  /// come back once the person is no longer one.
   fn read(&self, ctx: &mut Ctx, props: &Props, members: &ProjectMembers) -> Vec<Element> {
     let removed = not_member(props, members);
     let manages = (props.owner || props.admin) && !removed;
@@ -131,14 +150,30 @@ impl Members {
     // Once this computer signed out of the server it no longer knows the person's account there; the list knows who
     // read it.
     let mine = props.me.or(members.me);
-    for member in &members.members {
-      let me = (mine == Some(member.user)).then_some(until.as_deref());
-      rows.push(member_row(ctx, member, me));
+    if self.listed.get() {
+      for member in &members.members {
+        let me = (mine == Some(member.user)).then_some(until.as_deref());
+        rows.push(member_row(ctx, member, me));
+      }
     }
     if removed {
       rows.push(removed_row(ctx, props, members));
     }
     rows
+  }
+
+  /// Shows or hides the member list under the summary.
+  fn disclosure(&self, ctx: &Ctx) -> IconButton {
+    let listed = self.listed.clone();
+    let (glyph, label) = if listed.get() {
+      (Icon::ChevronUp, ctx.t("sharing.members.hideList"))
+    } else {
+      (Icon::ChevronDown, ctx.t("sharing.members.showList"))
+    };
+    IconButton::new("sharing-members-list", glyph, label)
+      .small()
+      .in_form()
+      .on_click(move || listed.update(|shown| *shown = !*shown))
   }
 
   /// *Members* with who they are (`dana-k, ivan, olha +1`), how many, and *Manage*; what the list is and where *Manage*
@@ -187,7 +222,8 @@ impl Members {
     } else {
       row
     };
-    row.render(ctx)
+    let disclosure = self.disclosure(ctx).render(ctx);
+    row.control(disclosure).render(ctx)
   }
 
   /// *Manage*: the project's page in the server admin, in the browser; unavailable, with why, while the server cannot

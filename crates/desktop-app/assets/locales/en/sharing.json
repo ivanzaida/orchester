@@ -323,12 +323,12 @@
       "introOfflineMember": "Members as of {{time}}, when {{server}} was last reached. To add someone, ask an owner: {{owners}}.",
       "introNoServer": "Members as of {{time}}, as last read. This computer isn't signed in to {{server}} now, so the list doesn't change until it joins again.",
       "or": " or ",
-      "manage": "Manage members and invites",
+      "manage": "Manage",
       "manageOffline": "{{server}} can't be reached now; the server admin opens when it's back.",
       "manageNoServer": "This computer isn't signed in to {{server}} now; the server admin opens once it joins again.",
       "manageNoAddress": "Opens once the project's address has been read from {{server}}.",
       "manageForeign": "{{server}} names this project at {{address}}, on {{own}} rather than the address this computer connected to, so Orchester doesn't open it. If {{own}} is how your team reaches {{server}}, connect to it by that address.",
-      "manageNote": "Manage members and invites opens {{url}} in your browser, where owners and admins sign in with their Orchester account.",
+      "manageNote": "Manage opens {{url}} in your browser, where owners and admins manage members and invites, signed in with their Orchester account.",
       "openFailed": "The browser didn't open {{url}}. Open it yourself.",
       "name": "NAME",
       "role": "ROLE",
@@ -344,7 +344,9 @@
       "asOf": "{{names}} · as of {{time}}",
       "comeBackTitle": "Not a member any more",
       "memberHint": "{{username}} · added {{day}}",
-      "namedMore": "{{names}} +{{more}}"
+      "namedMore": "{{names}} +{{more}}",
+      "showList": "Show the members",
+      "hideList": "Hide the members"
     },
     "makeLocal": {
       "reading": "Reading what making it local changes…",

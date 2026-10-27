@@ -55,6 +55,8 @@ fn shared_project_task_list_says_where_it_lives_and_when_it_is_read_only() {
     window.tree.get_element_by_id("sharing-leave").is_none(),
     "nothing to leave"
   );
+  shows(&mut window, "sharing-members-list");
+  press(&mut window, "sharing-members-list");
   shows(&mut window, "sharing-member-ivan-hint");
   assert!(
     window.text("sharing-member-ivan-hint").contains("· you, until "),

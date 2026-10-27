@@ -15,8 +15,15 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
   let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
   link_kontur(&window);
 
-  // A row per member (`R370H0`); who the list is and whom to ask is in the summary's (i).
-  open_sharing(&mut window, "sharing-member-ivan-row");
+  // One Members row in Team server (`TnUGj`); a row per member behind its disclosure; who the list is and whom to
+  // ask is in the summary's (i).
+  open_sharing(&mut window, "sharing-members-list");
+  assert!(
+    window.tree.get_element_by_id("sharing-member-ivan-row").is_none(),
+    "the list waits behind its disclosure"
+  );
+  press(&mut window, "sharing-members-list");
+  shows(&mut window, "sharing-member-ivan-row");
   shows(&mut window, "sharing-member-alice-row");
   assert_eq!(window.text("sharing-member-ivan-role"), "Member");
   assert_eq!(window.text("sharing-member-alice-role"), "Owner");
