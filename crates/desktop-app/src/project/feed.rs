@@ -64,6 +64,9 @@ pub struct ProjectFeed {
   /// Counts saves of the project's tasks a screen made; the tasks are read again after each
   /// ([`ProjectFeed::saved`]).
   pub revision: Signal<u64>,
+  /// Counts every save of the project's tasks: a screen's, automation's and the merge queue's. A merge in Orchester is
+  /// one, so what tells whether a run is merged reads it again by this count.
+  pub saves: Signal<u64>,
   /// Counts answers the window sent ([`ProjectFeed::answer_sent`]): what they answer leaves the tasks at once.
   answering: Signal<u64>,
   /// Counts the changes automation made to the project through Orchester's MCP server, by kind: the
@@ -154,6 +157,7 @@ impl ProjectFeed {
       states: Signal::new(0),
       running: Signal::new(false),
       revision: Signal::new(0),
+      saves: Signal::new(0),
       answering: Signal::new(0),
       outside: Signal::new(OutsideCounts::default()),
       job_state: Signal::new(jobs.state()),
@@ -292,6 +296,7 @@ impl Component for FeedLoader {
     // Tasks automation saved count as the screens' own saves, and so does a change of the merge queue: a run it
     // merged is done, and the sidebar counts the queue.
     let saved = self.feed.revision.get() + outside.tasks + super::merge_queue::changes(ctx, &root);
+    publish(&self.feed.saves, saved);
     let hold = services.hold;
     // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
     let settled = answers(ctx, (runners.clone(), root.clone())).settled();

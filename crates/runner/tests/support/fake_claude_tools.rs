@@ -70,14 +70,21 @@ impl Fake {
       return ExitCode::from(2);
     };
     if self.prompt.contains("Call the run app") {
-      fake_app_tools::exercise(worktree, |tool, input| {
+      fake_app_tools::exercise(worktree, true, |tool, input| {
         let name = format!("mcp__Orchester__{tool}");
         assert!(fake_claude_rules::mcp(args, &name).runs(), "exact allow rule");
         eprintln!("app-permission: allow-by-rule");
         let result = server.call_result(tool, input).expect("relay");
+        // Claude Code prints a tool result's text blocks, never an image's data.
+        let mut printed = result.clone();
+        for block in printed["content"].as_array_mut().into_iter().flatten() {
+          if block["type"] == "image" {
+            block["data"] = json!("");
+          }
+        }
         self.tool_result(
           "app-call",
-          &result.to_string(),
+          &printed.to_string(),
           result["isError"].as_bool().unwrap_or(false),
         );
         result

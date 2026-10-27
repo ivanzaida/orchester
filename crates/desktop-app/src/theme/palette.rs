@@ -79,8 +79,7 @@ pub enum ExtraColor {
   /// `chart_hatch`: a chart's stretch where nothing is known (*No data from Claude · Work* in `et35n`), and
   /// *No account*'s ground.
   ChartHatch,
-  /// `mark_claude`: the Claude mark beside a run that a Claude agent runs (`Claude` in the cards of `J6gQo`), the same
-  /// in both modes.
+  /// `mark_claude`: the Claude mark's orange (`Mark/Claude` `eFnry`), the same in both modes.
   MarkClaude,
 }
 

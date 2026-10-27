@@ -305,7 +305,7 @@ fn run_chip(ctx: &Ctx, key: &str, run: &RunLine, agent: bool) -> Row {
       run
         .agent
         .filter(|_| agent)
-        .map(|provider| agent_mark(ctx, &format!("task-agent-{key}"), provider)),
+        .map(|provider| agent_mark(ctx, provider, IconSize::Md)),
     );
   if run.filled {
     chip

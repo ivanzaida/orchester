@@ -95,12 +95,15 @@ fn orchestrator_saves_a_skill_itself_and_the_person_publishes_it() {
   });
   assert_eq!(published(&screen), Some(1), "the person's Publish published v1");
   assert!(!release_notes(&screen).1, "published, nothing is marked");
-  screen.until("the published card", |screen| {
+  // Decided, the card folds into a line that says the person did it.
+  screen.until("the published line", |screen| {
     screen
       .text(&format!("{card}-title"))
       .contains("Published Release notes v1")
-      && screen.text(&format!("{card}-state")).contains("Published by you")
+      && screen.exists(&format!("{card}-target"))
+      && screen.text(&format!("{card}-target")) == "by you"
   });
+  assert!(!screen.exists(&format!("{card}-start")), "nothing is left to decide");
 }
 
 #[test]
@@ -113,10 +116,15 @@ fn orchestrator_publishes_a_skill_itself_once_the_person_lets_it() {
   assert_eq!(actions(&screen)[1].outcome, ActionOutcome::Done);
   assert_eq!(published(&screen), Some(1));
   let card = proposal_card(&screen);
-  screen.until("the card", |screen| {
-    screen.text(&format!("{card}-state")).contains("Confirmed")
+  screen.until("the line", |screen| {
+    screen.exists(&format!("{card}-title"))
       && screen
         .text(&format!("{card}-title"))
         .contains("Published Release notes v1")
   });
+  assert!(
+    !screen.exists(&format!("{card}-target")),
+    "done by the Orchestrator, not by the person"
+  );
+  assert!(!screen.exists(&format!("{card}-start")), "nothing is left to decide");
 }

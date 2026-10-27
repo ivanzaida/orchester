@@ -1,8 +1,10 @@
 //! What the agent is answered: a program's exit code and its output, cut to a size, or why the call did
-//! not run. The answer is an MCP `tools/call` result ([`ToolResult::mcp`]).
+//! not run. The answer is an MCP `tools/call` result ([`ToolResult::mcp`]); `read_file` on Claude Code answers an
+//! image file with an MCP image block beside its text ([`AnswerImage`]).
 
 use std::{fmt::Write, time::Duration};
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 
 use super::ToolCallError;
@@ -38,12 +40,39 @@ pub struct ProgramOutput {
   pub left_out: u64,
 }
 
+/// An image an answer shows: a PNG the caller re-encoded without metadata and kept within its own cap, as base64.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AnswerImage {
+  data: String,
+}
+
+impl AnswerImage {
+  pub fn png(bytes: &[u8]) -> Self {
+    Self {
+      data: STANDARD.encode(bytes),
+    }
+  }
+
+  /// The image's base64 data.
+  pub fn data(&self) -> &str {
+    &self.data
+  }
+}
+
+impl std::fmt::Debug for AnswerImage {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    // Megabytes of base64 say nothing in a log or a failed assertion.
+    write!(f, "AnswerImage({} bytes of base64)", self.data.len())
+  }
+}
+
 /// The answer to one call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToolResult {
   text: String,
   is_error: bool,
   app: Option<Value>,
+  image: Option<AnswerImage>,
 }
 
 impl ToolResult {
@@ -53,6 +82,7 @@ impl ToolResult {
       text,
       is_error: false,
       app: None,
+      image: None,
     }
   }
 
@@ -62,6 +92,7 @@ impl ToolResult {
       text: error.to_string(),
       is_error: true,
       app: None,
+      image: None,
     }
   }
 
@@ -71,6 +102,18 @@ impl ToolResult {
       text,
       is_error,
       app: None,
+      image: None,
+    }
+  }
+
+  /// The answer of a read that shows `image`, with `text` saying what it is. Only the text reaches a transcript: the
+  /// CLI's output names a tool result by its text blocks.
+  pub const fn with_image(text: String, image: AnswerImage) -> Self {
+    Self {
+      text,
+      is_error: false,
+      app: None,
+      image: Some(image),
     }
   }
 
@@ -80,6 +123,7 @@ impl ToolResult {
       text: reason.to_owned(),
       is_error: true,
       app: None,
+      image: None,
     }
   }
 
@@ -95,22 +139,12 @@ impl ToolResult {
     let output = match outcome {
       Ok(output) => output,
       Err(CommandError::TimedOut) => {
-        return Self {
-          text: format!(
-            "the program did not finish within {} seconds and was stopped",
-            timeout.as_secs()
-          ),
-          is_error: true,
-          app: None,
-        };
+        return Self::unavailable(&format!(
+          "the program did not finish within {} seconds and was stopped",
+          timeout.as_secs()
+        ));
       }
-      Err(error) => {
-        return Self {
-          text: error.to_string(),
-          is_error: true,
-          app: None,
-        };
-      }
+      Err(error) => return Self::unavailable(&error.to_string()),
     };
     let code = output
       .code
@@ -138,6 +172,7 @@ impl ToolResult {
       text,
       is_error: !output.code.is_some_and(|code| expected.contains(i64::from(code))),
       app: None,
+      image: None,
     }
   }
 
@@ -163,6 +198,7 @@ impl ToolResult {
       text,
       is_error: result["isError"].as_bool().unwrap_or(false),
       app: Some(result),
+      image: None,
     }
   }
 
@@ -172,6 +208,11 @@ impl ToolResult {
 
   pub const fn is_error(&self) -> bool {
     self.is_error
+  }
+
+  /// The image the answer shows, if any.
+  pub const fn image(&self) -> Option<&AnswerImage> {
+    self.image.as_ref()
   }
 
   /// This answer with the values of `secrets` removed.
@@ -185,15 +226,24 @@ impl ToolResult {
       text: redact_secrets(&self.text, secrets),
       is_error: self.is_error,
       app: None,
+      // The image's data is left as it is: it is base64 of pixels re-encoded without metadata, so it holds no secret
+      // as text, and replacing a run of it that happened to match a short secret would corrupt the image.
+      image: self.image,
     }
   }
 
-  /// The MCP `tools/call` result, its text within [`MAX_ANSWER_BYTES`] whatever the tool's own limit.
+  /// The MCP `tools/call` result, its text within [`MAX_ANSWER_BYTES`] whatever the tool's own limit; an image goes
+  /// after the text as an MCP image block.
   pub fn mcp(&self) -> Value {
     if let Some(app) = &self.app {
       return app.clone();
     }
-    json!({"content": [{"type": "text", "text": answer_text(&self.text)}], "isError": self.is_error})
+    let text = json!({"type": "text", "text": answer_text(&self.text)});
+    let content = match &self.image {
+      Some(image) => json!([text, {"type": "image", "data": image.data(), "mimeType": "image/png"}]),
+      None => json!([text]),
+    };
+    json!({"content": content, "isError": self.is_error})
   }
 }
 

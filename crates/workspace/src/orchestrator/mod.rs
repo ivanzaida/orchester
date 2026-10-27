@@ -24,6 +24,7 @@ pub mod recover;
 pub mod report;
 pub mod repository;
 mod run_ends;
+pub mod runs_on;
 pub mod send;
 pub mod settings;
 mod told;

@@ -38,6 +38,17 @@ impl ProjectDb {
     Ok(keys)
   }
 
+  /// The entries of `chat`'s waits, each with the key it was kept by, in the order they were kept.
+  pub fn chat_wait_keys(&self, chat: ChatId) -> Result<Vec<(i64, String)>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT seq, wait_key FROM orchestrator_entries WHERE chat_id = ?1 AND kind = 'wait' ORDER BY seq")?;
+    let keys = statement
+      .query_map([chat.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    Ok(keys)
+  }
+
   /// Keeps `wait`, known by `key`, in `chat` (stored with it when it is new) at `at`; whether it was new: a wait is
   /// kept once, whichever conversation kept it.
   pub fn keep_agent_wait(

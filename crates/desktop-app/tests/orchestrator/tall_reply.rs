@@ -120,7 +120,7 @@ fn orchestrator_tall_reply_an_answer_growing_in_parts_stays_at_its_end() {
   });
   at_end_of(
     &mut screen,
-    ("Let me look at the queue.", "Stop response"),
+    ("Let me look at the queue.", "Orchestrator is thinking"),
     "the answer started",
   );
   for part in ["First", "Second"] {

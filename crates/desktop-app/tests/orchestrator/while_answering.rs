@@ -56,9 +56,8 @@ fn turns(screen: &Orchestrator) -> Vec<TurnState> {
 fn orchestrator_while_answering_queues_a_message_and_sends_it_after_the_answer() {
   let mut screen = answering(false);
   assert!(
-    screen.text("orchestrator-keys").contains("Esc"),
-    "the keys say Esc stops the answer: {}",
-    screen.text("orchestrator-keys")
+    screen.exists("orchestrator-stop"),
+    "the working line stops the answer, as Esc in the field does"
   );
   write(&mut screen, "Then plan the release.");
   screen.key(("Enter", "Enter"), true);

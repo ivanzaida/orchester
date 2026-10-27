@@ -11,16 +11,15 @@ use orchester_core::{
   attachment::{Attachment, is_names_only},
   id::ChatMessageId,
   orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, DailyReport, EntryKind, TurnState, WaitTurn},
-  resource::ModelId,
   time::Timestamp,
 };
+use orchester_workspace::orchestrator::chat::{ChatView, EndMoved};
 
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Part {
   Reply {
     text: Arc<str>,
-    model: ModelId,
     at: Timestamp,
   },
   Action {
@@ -66,6 +65,11 @@ pub(super) struct Turn {
   pub(super) attachments: Arc<[Attachment]>,
   /// The wait that opens the row instead of a person's message.
   pub(super) wait: Option<Box<AgentWait>>,
+  /// Whether that wait still stands: its agent still waits, or its run is still where it ended. Dealt with since,
+  /// here or on its task's page, it no longer waits for anyone.
+  pub(super) stands: bool,
+  /// What became of the run of a run's end that no longer stands.
+  pub(super) moved: Option<EndMoved>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
   /// Its entry in the conversation; `None` while it is being sent.
@@ -97,6 +101,8 @@ impl Turn {
       text: Arc::from(text),
       attachments: Arc::from([]),
       wait: None,
+      stands: false,
+      moved: None,
       report: None,
       seq: None,
       at: None,
@@ -127,6 +133,8 @@ impl Turn {
       text: Arc::from(""),
       attachments: Arc::from([]),
       wait: None,
+      stands: false,
+      moved: None,
       report: None,
       seq: Some(entry.seq),
       at: Some(entry.at),
@@ -136,14 +144,6 @@ impl Turn {
       continued: false,
       answer: Vec::new(),
     }
-  }
-
-  /// The model that wrote the answer's first reply.
-  pub(super) fn model(&self) -> Option<&ModelId> {
-    self.answer.iter().find_map(|part| match part {
-      Part::Reply { model, .. } => Some(model),
-      Part::Action { .. } | Part::Event { .. } => None,
-    })
   }
 
   /// Whether the answer did something through a tool.
@@ -167,13 +167,13 @@ impl Turn {
   }
 }
 
-/// The turns of `entries`, with the files attached to the person's messages (`attached`), oldest first, and after them
-/// the messages that wait for the answer to end. What comes before the first message or wait belongs to no turn and
-/// is left out; a reply, action or event belongs to the newest row that takes it.
-pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Vec<Attachment>>) -> Vec<Turn> {
+/// The turns of conversation `shown`, oldest first, and after them the messages that wait for the answer to end; its
+/// waits stand as it read them. What comes before the first message or wait belongs to no turn and is left out; a
+/// reply, action or event belongs to the newest row that takes it.
+pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
   let mut waiting: Vec<Turn> = Vec::new();
-  for entry in entries {
+  for entry in &shown.entries {
     let part = match &entry.kind {
       EntryKind::Person {
         message,
@@ -182,7 +182,7 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         ended,
         ..
       } => {
-        let row = person(entry, (*message, text.as_str(), turn), *ended, attached);
+        let row = person(entry, (*message, text.as_str(), turn), *ended, &shown.attachments);
         if row.arrival == Arrival::Waiting {
           waiting.push(row);
         } else {
@@ -193,6 +193,8 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
       EntryKind::Wait { wait, turn } => {
         turns.push(Turn {
           wait: Some(Box::new(wait.clone())),
+          stands: shown.standing.contains(&entry.seq),
+          moved: shown.moved_of(entry.seq),
           ..Turn::opened(entry, turn.as_ref())
         });
         continue;
@@ -204,9 +206,8 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         });
         continue;
       }
-      EntryKind::Reply { text, model } => Part::Reply {
+      EntryKind::Reply { text, .. } => Part::Reply {
         text: Arc::from(text.as_str()),
-        model: model.clone(),
         at: entry.at,
       },
       EntryKind::Action(action) => Part::Action {
@@ -250,6 +251,8 @@ fn person(
     text: Arc::from(words),
     attachments,
     wait: None,
+    stands: false,
+    moved: None,
     report: None,
     seq: Some(entry.seq),
     at: Some(entry.at),

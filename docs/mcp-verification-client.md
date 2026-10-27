@@ -74,8 +74,9 @@ new app, the `mcp/<pid>.json` that `tools/qa-app.ps1` makes; for a QA profile (a
 `profile/orchester-mcp/<pid>.json` and `profile/lurq/mcp/<pid>.json`. The rest of `.tmp/` (build output,
 scratch checkouts) is never searched, and a file reached through a link is not used. Text and structured
 content are returned with the token redacted. PNG images are saved under `.tmp/run-app/`; open the relative
-path returned by the tool and cite it as the app screenshot. No Python invocation, discovery read
-or sandbox exception is needed.
+path returned by the tool with Orchester's `read_file`, which shows PNG, JPEG and WebP images on Claude Code
+connections, and cite it as the app screenshot. Never view it in Pencil's built-in browser, which every agent
+connected to Pencil shares. No Python invocation, discovery read or sandbox exception is needed.
 
 The new app (`orchester-app`) shares one embedded server for app and lurq tools; the deprecated
 desktop (`orchester`) uses the lurq server for `lurq_*` tools and its domain server for other tools.
