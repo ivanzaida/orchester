@@ -1,10 +1,16 @@
-//! How the Modules screens word a module: its dates, its state and its progress.
+//! How the Modules screens word a module: its dates, its state, its progress and its forecast (ORC-50) in a list row
+//! (`Likely Oct 30`, *after target* in `warning`) and on the status line and the Summary's burndown line (`Likely done
+//! by Oct 30 (50%) or Nov 2 (85%)`).
 
 use std::sync::Arc;
 
-use lurq::app::ctx::Ctx;
+use chrono::NaiveDate;
+use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::module::{ModuleDetails, ModuleState};
-use orchester_workspace::modules::{data::Progress, measure::WorkUnit};
+use orchester_workspace::{
+  delivery::{Forecast, Outlook},
+  modules::{data::Progress, measure::WorkUnit},
+};
 
 use crate::screens::usage::words::day;
 
@@ -46,16 +52,47 @@ pub fn progress(ctx: &Ctx, progress: Progress) -> Arc<str> {
   }
 }
 
-/// `38%`, or nothing for a module without work in scope.
-pub fn percent(ctx: &Ctx, progress: Progress) -> Option<Arc<str>> {
-  progress
-    .percent()
-    .map(|percent| ctx.t_args("modules.progress.percent", [("percent", percent.to_string().as_str())]))
-}
-
 /// What the chart counts in: *Counted in tasks*.
 pub fn unit(ctx: &Ctx, unit: WorkUnit) -> Arc<str> {
   ctx.t(match unit {
     WorkUnit::Tasks => "modules.unit.tasks",
   })
+}
+
+/// A list row's forecast and its tone: `success` by the target date, `warning` after it, `text_secondary` without
+/// one; *Not enough history* and *All done* muted.
+pub fn forecast_row(ctx: &Ctx, forecast: &Forecast, target: Option<NaiveDate>) -> (Arc<str>, PaletteColor) {
+  let Outlook::Dates { likely, .. } = &forecast.outlook else {
+    return (forecast_line(ctx, forecast), PaletteColor::TextMuted);
+  };
+  let (key, tone) = match target {
+    Some(target) if *likely > target => ("modules.forecast.afterTarget", PaletteColor::Warning),
+    Some(_) => ("modules.forecast.likely", PaletteColor::Success),
+    None => ("modules.forecast.likely", PaletteColor::TextSecondary),
+  };
+  (ctx.t_args(key, [("date", day(ctx, *likely))]), tone)
+}
+
+/// The forecast with both of its dates, or why it has none.
+pub fn forecast_line(ctx: &Ctx, forecast: &Forecast) -> Arc<str> {
+  match &forecast.outlook {
+    Outlook::Done => ctx.t("modules.forecast.done"),
+    Outlook::NotEnoughHistory => ctx.t("modules.forecast.notEnough"),
+    Outlook::Dates { likely, safe, .. } => ctx.t_args(
+      "modules.forecast.dates",
+      [("likely", day(ctx, *likely)), ("safe", day(ctx, *safe))],
+    ),
+  }
+}
+
+/// The status line after the state: `Oct 14 – Nov 1 · 8 of 12 tasks done · Likely done by …`.
+pub fn facts(ctx: &Ctx, details: &ModuleDetails, progress: Progress, forecast: &Forecast) -> Arc<str> {
+  ctx.t_args(
+    "modules.page.facts",
+    [
+      ("dates", dates(ctx, details)),
+      ("progress", self::progress(ctx, progress)),
+      ("forecast", forecast_line(ctx, forecast)),
+    ],
+  )
 }

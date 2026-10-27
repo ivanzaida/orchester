@@ -202,17 +202,35 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("from", file.source().name());
       }
     }
-    ProjectPage::Files(view) => {
-      if let Some(file) = view.file() {
-        insert("file", file);
-      }
-      insert("at", &view.at().to_string());
-      if let Some(line) = view.line() {
-        insert("line", &line.to_string());
+    page => {
+      for (name, value) in module_params(page).into_iter().chain(files_params(page)) {
+        insert(name, &value);
       }
     }
-    _ => {}
   }
+}
+
+/// The parameters `navigate` takes back for a Modules place: the list's `tab`; `module` new; a module's id with its
+/// `tab`, or with `view` edit.
+fn module_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  match page {
+    ProjectPage::Modules(tab) => vec![("tab", tab.name().to_owned())],
+    ProjectPage::NewModule => vec![("module", "new".to_owned())],
+    ProjectPage::Module(module, tab) => vec![("module", module.to_string()), ("tab", tab.name().to_owned())],
+    ProjectPage::EditModule(module) => vec![("module", module.to_string()), ("view", "edit".to_owned())],
+    _ => Vec::new(),
+  }
+}
+
+/// The parameters `navigate` takes back for Files: the `file` shown, its version `at` and its `line`.
+fn files_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  let ProjectPage::Files(view) = page else {
+    return Vec::new();
+  };
+  let mut params: Vec<(&'static str, String)> = view.file().map(|file| ("file", file.to_owned())).into_iter().collect();
+  params.push(("at", view.at().to_string()));
+  params.extend(view.line().map(|line| ("line", line.to_string())));
+  params
 }
 
 /// The string argument `name`, if given.

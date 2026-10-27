@@ -107,9 +107,18 @@ impl ServerAddress {
 
   /// The URL of `path` under the API's base path, e.g. `/server`.
   pub(crate) fn endpoint(&self, path: &str) -> Result<Url, AddressError> {
-    Url::parse(&format!("{}/api/v1{path}", self.text)).map_err(|_| AddressError::Malformed)
+    self.endpoint_under(API_BASE, path)
+  }
+
+  /// The URL of `path` under the base path `base` of the API at this address, e.g. `/v1` and `/keys`.
+  pub(crate) fn endpoint_under(&self, base: &str, path: &str) -> Result<Url, AddressError> {
+    Url::parse(&format!("{}{base}{path}", self.text)).map_err(|_| AddressError::Malformed)
   }
 }
+
+/// Where a team server's API is under its address, and an Orchester Cloud's on its web address when it has no API
+/// address of its own.
+pub(crate) const API_BASE: &str = "/api/v1";
 
 impl fmt::Debug for ServerAddress {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

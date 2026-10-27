@@ -43,6 +43,8 @@ zeroize.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+# The client's tests against a recording listener on loopback (`tests/cloud_address.rs`).
+tokio.workspace = true
 
 [[test]]
 name = "identity"
@@ -51,3 +53,7 @@ required-features = ["identity"]
 [[test]]
 name = "totp"
 required-features = ["identity"]
+
+[[test]]
+name = "cloud_address"
+required-features = ["client"]

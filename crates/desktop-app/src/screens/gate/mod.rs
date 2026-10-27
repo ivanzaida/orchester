@@ -27,7 +27,7 @@ use lurq::{
 use orchester_store::{CloudSignInEnd, EndedCloudSignIn};
 use orchester_workspace::{
   background,
-  sharing::cloud::{Cloud, CloudAddress, SignIn},
+  sharing::cloud::{Cloud, CloudInUse, SignIn},
 };
 
 use self::{ended::Head, step::Step};
@@ -98,7 +98,7 @@ impl Component for SignInGate {
         return panel(failed.into(), None);
       }
     };
-    let host = address.address.authority();
+    let host = address.address.web().authority();
     let column = Column::new()
       .id("gate-column")
       .width(Dimension::Px(COLUMN_WIDTH))
@@ -134,7 +134,7 @@ impl SignInGate {
   fn parts(
     &self,
     ctx: &mut Ctx,
-    (ended, address): (Option<&EndedCloudSignIn>, &CloudAddress),
+    (ended, address): (Option<&EndedCloudSignIn>, &CloudInUse),
     host: &str,
   ) -> Vec<Element> {
     let step = self.step.get();
@@ -191,14 +191,14 @@ fn panel(content: Element, footer: Option<Element>) -> Element {
 /// *Signing in needs the internet once…* on a first run, *Only you can sign in…* once the gate came back
 /// (`person_only`); the cloud's host at the end, in `warning` with *test cloud* while another cloud than the build's is
 /// set.
-fn footer(ctx: &mut Ctx, person_only: bool, address: &CloudAddress) -> Element {
+fn footer(ctx: &mut Ctx, person_only: bool, address: &CloudInUse) -> Element {
   let narrow = ctx.breakpoint() < Some(Breakpoint::Xl);
   let (glyph, key) = match (person_only, narrow) {
     (true, _) => (Icon::UserLock, "gate.footer.personOnly"),
     (false, false) => (Icon::Wifi, "gate.footer.offline"),
     (false, true) => (Icon::Wifi, "gate.footer.offlineShort"),
   };
-  let host = address.address.authority();
+  let host = address.address.web().authority();
   let (place, color) = if address.default {
     (host, PaletteColor::TextMuted)
   } else {
@@ -239,7 +239,7 @@ fn footer(ctx: &mut Ctx, person_only: bool, address: &CloudAddress) -> Element {
 
 /// The cloud's address this computer uses, read off the UI thread and again whenever it changes; `None` until the
 /// first read finished, an error (logged) when it could not be read.
-fn address(ctx: &mut Ctx, cloud: &Cloud) -> Result<Option<CloudAddress>, ()> {
+fn address(ctx: &mut Ctx, cloud: &Cloud) -> Result<Option<CloudInUse>, ()> {
   let revision = ctx
     .stream(cloud.clone(), |cloud, emitter: StreamEmitter<u64, ()>| async move {
       let mut changes = cloud.subscribe();

@@ -147,12 +147,22 @@ runtime linked in so the programs start without the Visual C++ Redistributable. 
   its own: it starts the runner from beside itself and cannot open a project without it.
 - `SHA256SUMS.txt`, the checksums of both.
 
-**Its Orchester Cloud** is `https://orchester.cloud`, built in (`BUILD_ADDRESS` in
-`crates/workspace/src/sharing/cloud/mod.rs`; `ORCHESTER_CLOUD_URL` at build time names another, as
-for a test cloud). Releases before the cloud's move (2026-10-25) have
+**Its Orchester Cloud** has its web pages at `https://orchester.cloud` and its API at
+`https://api.orchester.cloud/v1`, built in (`BUILD_ADDRESS` and `BUILD_API_ADDRESS` in
+`crates/workspace/src/sharing/cloud/mod.rs`; `ORCHESTER_CLOUD_URL` and `ORCHESTER_CLOUD_API_URL` at
+build time name another, as for a test cloud, whose API is at `/api/v1` on its web address when only
+`ORCHESTER_CLOUD_URL` is given). Releases before the cloud's move (2026-10-25) have
 `https://orchester-cloud.lurq.dev` built in, which keeps answering while they are in use; a newer
 release moves what an install stored with that address to the new one at its first start and stays
 signed in. When to release in the move: `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the cloud".
+
+**Releasing across the API's move to its own host.** Releases before it call the cloud's API at
+`https://orchester.cloud/api/v1`. Release the version that calls `https://api.orchester.cloud/v1`
+first: at its first start it moves what an install stored with `https://orchester.cloud` (or the
+former address) to the two addresses and stays signed in, since the device token and the issuer of
+identity tokens and key sets (`https://orchester.cloud`) do not change. Switch off
+`https://orchester.cloud/api/*` only once the installs in use have that release; until then the
+older ones still need it ([cloud-api.md](cloud-api.md), "Base").
 
 **Your data on install, upgrade and uninstall.** The app keeps `orchester.db` (with its `-wal`
 and `-shm` files), `orchester.lock`, `orchester.lock.holder` and `logs\` in its install folder.

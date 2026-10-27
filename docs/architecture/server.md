@@ -130,7 +130,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 56 | Device token expiry | A team server's device token expires after 90 days without use ([Device tokens](#device-tokens)). **Replaces 21's 30 days** | user (2026-10-15) |
 | 57 | Join approval | A team server setting, off by default: while on, a cloud join of an existing account waits until one of that account's joined devices or an admin approves it. The new-computer notice on the other devices is always shown ([The cloud's trust boundary](#the-clouds-trust-boundary)) | user (2026-10-15) |
 | 58 | Project slugs | A project's slug is fixed once created (its name can change); projects made under row 10 take their repository's name as slug ([Projects made under row 10](#projects-made-under-row-10)) | user (2026-10-15) |
-| 59 | Cloud address and configuration | The cloud runs at `orchester.cloud`, its own domain since 2026-10-25 (before, `orchester-cloud.lurq.dev`, which keeps answering while app builds and team servers from before the move call it; `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the cloud"), always taken from the environment: the public base URL, the SMTP relay and the PostgreSQL connection. Nothing is hard-coded; the SMTP relay and the database server are named at deploy time | user (2026-10-15, moved 2026-10-25) |
+| 59 | Cloud address and configuration | The cloud runs at `orchester.cloud`, its own domain since 2026-10-25 (before, `orchester-cloud.lurq.dev`, which keeps answering while app builds and team servers from before the move call it; `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the cloud"), with its API at `api.orchester.cloud/v1` (before, `orchester.cloud/api/v1`; [cloud-api.md](../cloud-api.md), "Base"), always taken from the environment: the public base URL, the SMTP relay and the PostgreSQL connection. Nothing is hard-coded; the SMTP relay and the database server are named at deploy time | user (2026-10-15, moved 2026-10-25, API host 2026-10-27) |
 | 60 | Cloud backend | Rust with `actix-web` and PostgreSQL, the person's choice. `actix-web` joins the workspace for the cloud only; team servers stay on axum. The JSON API for the desktop stays | user (2026-10-15) |
 | 61 | Cloud web front | A small Next.js server-rendered app with simple forms in Orchester's design: sign-up, sign-in, the email confirmation landing, forgot password and reset password; later account and devices. It talks to the backend's API. Its screens are designed in Pencil and approved by the person before it is built; backend work does not wait ([The cloud's web front](#the-clouds-web-front)) | user (2026-10-15) |
 | 62 | The server admin | Each team server has a web app of its own at its address, server-rendered Next.js, admin only: first setup (the setup code, then linking to the owner's cloud account), projects (create by name and slug, rename, the remote hint), members and roles per project, invites (by email through the cloud, by code without the internet), devices (revoke), and settings (join approval, the cloud link and key, the certificate check code). Sign-in through the cloud identity, or a code for an offline server. It talks to the team server's own API from its server side only ([The server admin](#the-server-admin)) | user (2026-10-15) |
@@ -1056,17 +1056,24 @@ a team server sends an invite by email only for an admin signed in through the c
 recovery codes are the only way back; nothing resets it by email, and the operator of a cloud can turn it off for an
 account with one documented statement (`docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`).
 
-**Address and configuration** (row 59). The cloud runs at `https://orchester.cloud`; until 2026-10-25 it ran at
+**Address and configuration** (row 59). The cloud's web pages are at `https://orchester.cloud` and its API at
+`https://api.orchester.cloud/v1` ([cloud-api.md](../cloud-api.md), "Base"); until 2026-10-25 it ran at
 `https://orchester-cloud.lurq.dev`, which keeps answering during the move (`docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`,
-"Moving the cloud"). Nothing about where it runs is in the code: the backend and the web front read
-`ORCHESTER_CLOUD_PUBLIC_URL` (the base of every link in an email and the issuer of key sets and tokens),
+"Moving the cloud"), and until its API moved to its own host the API was at `https://orchester.cloud/api/v1`, which
+answers until the person switches it off. Nothing about where it runs is in the code: the backend and the web front read
+`ORCHESTER_CLOUD_PUBLIC_URL` (the base of every link in an email and the issuer of key sets and tokens, which stays
+`https://orchester.cloud` whatever host the API answers on),
 `ORCHESTER_CLOUD_DATABASE_URL`, `ORCHESTER_CLOUD_SMTP_URL` and `ORCHESTER_CLOUD_SMTP_FROM`,
 `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY`, and the web front its own variables (`ORCHESTER_CLOUD_EXTRA_ORIGINS` for a
-second domain during a move). The desktop reads the cloud's address from its build configuration
-(`ORCHESTER_CLOUD_URL` at build time, defaulting to `https://orchester.cloud`) and from Settings › Orchester's
-advanced field, for a test cloud; at its start it moves an address stored with the former public URL to the new one.
+second domain during a move). The desktop reads the cloud's web and API addresses from its build configuration
+(`ORCHESTER_CLOUD_URL` and `ORCHESTER_CLOUD_API_URL` at build time, defaulting to `https://orchester.cloud` and
+`https://api.orchester.cloud`; a build that names only `ORCHESTER_CLOUD_URL` calls `/api/v1` there) and from Settings ›
+Orchester Cloud's advanced field, for a test or self-run cloud, where an empty API address means `/api/v1` on the web
+address; at its start it moves an address stored with the public cloud's former URL or its web address alone to the
+two addresses, keeping the sign-in.
 
-**API** (`/api/v1`, JSON, bearer cloud device token unless marked):
+**API** (`/v1` on the API address, or `/api/v1` on the web address of a cloud without one; JSON, bearer cloud device
+token unless marked):
 
 | Method and path | Who | Does |
 | --- | --- | --- |
@@ -1127,8 +1134,8 @@ only browser face; the desktop keeps using the JSON API.
 | Reset password | `/reset/{token}` | New password; then *Signed out of your other devices* |
 | Account | `/account` | Get started, invites (saying when accepting needs two-factor authentication), servers, devices, *Security* (two-factor authentication on with a QR code, the recovery codes shown once with copy and download, new codes, off, and *Verify* for a browser that signed in without a code), display name, password change |
 
-The desktop opens these pages in the system browser for *Create an account* and *Forgot password*; it signs in with
-`POST /api/v1/auth/sessions` itself. Emails link to them (`/confirm/…`, `/reset/…`; an invite to an unregistered
+The desktop opens these pages on the cloud's web address in the system browser for *Create an account* and *Forgot
+password*; it signs in with `POST /v1/auth/sessions` on the API address itself. Emails link to them (`/confirm/…`, `/reset/…`; an invite to an unregistered
 address links to `/signup?invite=…`).
 
 - **Who calls the API.** Only the web app's server side, over the compose network to the actix backend; the browser

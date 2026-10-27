@@ -11,7 +11,7 @@ use std::{
 
 use orchester_api::{
   Credential,
-  client::{CloudClient, ServerAddress, SignInAnswer},
+  client::{CloudAddress, CloudClient, SignInAnswer},
   cloud::{CloudSignIn, CloudSignedIn, TwoFactorSignIn},
 };
 use orchester_core::{secret::SecretValue, time::Timestamp};
@@ -40,7 +40,7 @@ pub struct Challenge {
   received: Instant,
   email: String,
   device_name: String,
-  address: ServerAddress,
+  address: CloudAddress,
 }
 
 impl Challenge {
@@ -153,7 +153,7 @@ impl Cloud {
   async fn keep_sign_in(
     &self,
     signed_in: CloudSignedIn,
-    (device_name, address): (String, &ServerAddress),
+    (device_name, address): (String, &CloudAddress),
     recovery: Option<u32>,
   ) -> Result<StoredCloudAccount, CloudError> {
     // The cloud issues `orcc_` and 64 hex characters; a blank answer is not a token.
@@ -167,7 +167,8 @@ impl Cloud {
       display_name: signed_in.account.display_name,
       device_name,
       signed_in_at: Timestamp::now(),
-      cloud_address: address.as_str().to_owned(),
+      cloud_address: address.web().as_str().to_owned(),
+      cloud_api_address: address.api().map(|api| api.as_str().to_owned()),
     };
     let (cloud, kept) = (self.clone(), account.clone());
     background::run(move || -> Result<(), CloudError> {

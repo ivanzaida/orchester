@@ -1,6 +1,9 @@
+mod modules;
+
 use std::num::NonZeroU64;
 
 use lurq::mcp::{McpTool, Scope};
+use modules::module_page;
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
@@ -22,8 +25,9 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, FilesView, ImportTab, InstructionsView, MemoryTab, NewConnection, OrchestratorChat,
-    OverviewTab, ProjectPage, Route, Screen, SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
+    ChangeSource, ChangedFile, FilesView, ImportTab, InstructionsView, MemoryTab, ModuleListTab, ModuleTab,
+    NewConnection, OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, SecretsView, SkillsFilter, TaskList,
+    TaskListTab, TaskTab, TaskView,
   },
 };
 
@@ -55,7 +59,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
-  it. A tab or kind left out is the one the screen opens on. Answers the \
+  it; modules takes `tab` (open or closed), or `module`: new for New module, a module's id for its page on `tab` \
+  (summary or burndown), with `view` edit for Edit module. A tab or kind left out is the one the screen opens on. \
+  Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -80,7 +86,7 @@ fn schema() -> Value {
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, general, notifications, accounts, \
      orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {}; tasks {}; \
-     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}.",
+     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
@@ -88,10 +94,12 @@ fn schema() -> Value {
     PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
     MemoryTab::ALL.map(MemoryTab::name).join(", "),
     ImportTab::ALL.map(ImportTab::name).join(", "),
+    ModuleListTab::ALL.map(ModuleListTab::name).join(", "),
+    ModuleTab::ALL.map(ModuleTab::name).join(", "),
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
-  let views: Vec<&str> = ["usage", "delivery", "rules"]
+  let views: Vec<&str> = ["usage", "delivery", "rules", "edit"]
     .into_iter()
     .chain(TaskView::SUB_VIEWS)
     .collect();
@@ -117,6 +125,7 @@ fn schema() -> Value {
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
+      "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list." },
       "query": {
         "type": "string",
         "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
@@ -124,7 +133,7 @@ fn schema() -> Value {
       "view": {
         "type": "string",
         "enum": views,
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run.",
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run. modules with `module`: edit opens Edit module.",
       },
       "period": {
         "type": "string",
@@ -248,7 +257,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::Usage => &["project", "query", "view", "period"],
-    Screen::Modules => &["project", "module"],
+    Screen::Modules => &["project", "module", "tab", "view"],
     Screen::ProjectSettings => &["project", "tab", "view"],
     Screen::NewTask
     | Screen::MergeQueue
@@ -270,20 +279,6 @@ fn memory_tab(args: &Map<String, Value>) -> Result<Option<MemoryTab>, ToolError>
       })
     })
     .transpose()
-}
-
-/// The Modules list, or with `module` (its id) that module's page.
-fn module_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
-  let Some(module) = string(args, "module")? else {
-    return Ok(ProjectPage::Modules);
-  };
-  module
-    .parse()
-    .map(ProjectPage::Module)
-    .map_err(|error| ToolError::InvalidParam {
-      param: "module",
-      reason: error.to_string(),
-    })
 }
 
 fn files_view(args: &Map<String, Value>) -> Result<FilesView, ToolError> {

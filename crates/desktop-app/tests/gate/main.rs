@@ -74,7 +74,7 @@ fn value(window: &mut Window, id: &str) -> String {
 /// The gate uses the stand-in cloud, as *Advanced · cloud address* sets it.
 fn use_stand_in(window: &mut Window) {
   let services = window.launch.services().expect("services").clone();
-  let address = ServerAddress::parse(&window.data.cloud.url()).expect("address");
+  let address = support::signed_in::cloud_address(&window.data.cloud);
   window
     .data
     .runtime
@@ -205,6 +205,23 @@ fn gate_synthetic_input_cannot_sign_in() {
   assert!(has(&mut window, "screen-sign-in-gate"));
 }
 
+/// Scrolls the gate until `id` shows, as a person scrolls to it: the open *Advanced* section ends below a 900 high
+/// window.
+fn scroll_to(window: &mut Window, id: &str) {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+    .scroll_into_view();
+  window.pass();
+}
+
+/// [`scroll_to`] `id`, then press it with the pointer.
+fn press_shown(window: &mut Window, id: &str) {
+  scroll_to(window, id);
+  window.press(id);
+}
+
 #[test]
 fn gate_advanced_refuses_synthetic_input() {
   let mut window = signed_out();
@@ -213,6 +230,7 @@ fn gate_advanced_refuses_synthetic_input() {
   window.press("orchester-advanced");
   shows(&mut window, "orchester-advanced-address");
   window.set("orchester-advanced-address", "http://localhost:9");
+  scroll_to(&mut window, "orchester-advanced-use");
   with_synthetic_input(|| window.press("orchester-advanced-use"));
   shows(&mut window, "orchester-advanced-use-person-only");
   assert!(
@@ -223,6 +241,7 @@ fn gate_advanced_refuses_synthetic_input() {
   use_stand_in(&mut window);
   let stand_in = services.cloud.address().expect("address");
   shows(&mut window, "orchester-advanced-reset");
+  scroll_to(&mut window, "orchester-advanced-reset");
   with_synthetic_input(|| window.press("orchester-advanced-reset"));
   shows(&mut window, "orchester-advanced-reset-person-only");
   assert_eq!(
@@ -231,4 +250,61 @@ fn gate_advanced_refuses_synthetic_input() {
     "the test cloud stays"
   );
   assert!(has(&mut window, "screen-sign-in-gate"));
+}
+
+/// Opens *Advanced*, types `web` and `api` into its fields and presses *Use this address*.
+fn use_addresses(window: &mut Window, (web, api): (&str, &str)) {
+  shows(window, "orchester-advanced");
+  press_shown(window, "orchester-advanced");
+  shows(window, "orchester-advanced-api");
+  window.set("orchester-advanced-address", web);
+  window.set("orchester-advanced-api", api);
+  press_shown(window, "orchester-advanced-use");
+}
+
+#[test]
+fn gate_advanced_takes_an_api_address_or_none() {
+  let mut window = signed_out();
+  let services = window.launch.services().expect("services").clone();
+  shows(&mut window, "orchester-advanced");
+  window.press("orchester-advanced");
+  shows(&mut window, "orchester-advanced-api");
+  let build = services.cloud.address().expect("address").address;
+  assert_eq!(value(&mut window, "orchester-advanced-address"), build.web().as_str());
+  let build_api = build.api().map(|api| api.as_str().to_owned()).unwrap_or_default();
+  assert_eq!(
+    value(&mut window, "orchester-advanced-api"),
+    build_api,
+    "the build's API address"
+  );
+  press_shown(&mut window, "orchester-advanced");
+  gone(&mut window, "orchester-advanced-api");
+
+  let stand_in = window.data.cloud.url();
+  use_addresses(&mut window, (&stand_in, "ftp://api.test"));
+  shows(&mut window, "orchester-advanced-error");
+  assert!(
+    window
+      .text("orchester-advanced-error")
+      .contains("That isn't an API address.")
+  );
+  assert!(services.cloud.address().expect("address").default, "nothing changed");
+  press_shown(&mut window, "orchester-advanced");
+  gone(&mut window, "orchester-advanced-api");
+
+  // Without an API address, the API is at the old paths on the cloud's address.
+  use_addresses(&mut window, (&stand_in, ""));
+  gone(&mut window, "orchester-advanced-api");
+  let set = services.cloud.address().expect("address").address;
+  assert_eq!(set.api_base(), format!("{stand_in}/api/v1"));
+
+  use_addresses(&mut window, (&stand_in, &stand_in));
+  gone(&mut window, "orchester-advanced-api");
+  let set = services.cloud.address().expect("address").address;
+  assert_eq!(set.api_base(), format!("{stand_in}/v1"));
+  scroll_to(&mut window, "gate-sign-in");
+  sign_in(&mut window, (EMAIL, PASSWORD));
+  shows(&mut window, "content");
+  let account = services.cloud.account().expect("account").expect("signed in");
+  assert_eq!(account.cloud_api_address, Some(stand_in));
 }
