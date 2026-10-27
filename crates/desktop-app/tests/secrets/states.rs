@@ -1,59 +1,78 @@
-//! Empty, filtered, validation and metadata-only states.
+//! Project settings › Secrets (`06 Secrets` `bVh1e`): its groups by environment and the filter, a secret's page
+//! (`06b` `famwr`), nothing yet (`08` `aalCu`), New secret's validation, and reading and its failure.
 use std::sync::atomic::Ordering;
 
 use orchester_core::secret::Environment;
 
 use super::harness::{Secrets, VALUE};
 
+/// The reason New secret's Save cannot be used, under its actions.
+const REASON: &str = "secret-form-actions-reason";
+
 #[test]
-fn secrets_list_filters_environments_and_shows_metadata_and_mcp_environment_uses() {
+fn secrets_list_groups_by_environment_and_a_secrets_page_shows_metadata_and_mcp_uses() {
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Staging);
   s.seed("DOCS_TOKEN", Environment::Development);
   s.bind(&secret);
   s.list();
-  assert!(s.text("secrets-list").contains("Staging"));
-  assert!(s.text("secrets-list").contains("1 MCP server"));
-  s.click(&format!("secret-row-{}", secret.id()));
-  s.until("selected metadata", |s| {
-    s.text("secret-inspector").contains("MCP · kontur-docs")
+  assert!(s.text("secrets-group-staging").contains("Staging"));
+  assert!(s.text("secrets-group-development").contains("Development"));
+  assert!(
+    s.text(&format!("secret-row-{}-row", secret.id()))
+      .contains("kontur-docs")
+  );
+  assert!(!s.exists("project-settings-save-status"), "Secrets saves per action");
+  s.click(&format!("secret-row-{}-row", secret.id()));
+  s.until("its page", |s| {
+    s.exists("secret-uses") && s.text("secret-uses").contains("kontur-docs")
   });
-  assert!(s.text("secret-inspector").contains("Never · added"));
-  assert!(s.text("secret-inspector").contains("•••• ••••"));
+  assert_eq!(s.text("secret-crumb-back"), "Secrets");
+  assert!(s.text("secret-inspector").contains("Never · added today"));
+  // *Details* as `06b` draws them: no Kind or Value row; *Used by* names the variable the server is given it in.
+  assert!(!s.exists("secret-kind-value") && !s.exists("secret-value"));
+  assert!(
+    s.text("secret-uses").contains("MCP server · variable TOKEN"),
+    "{}",
+    s.text("secret-uses")
+  );
   assert!(!s.text("app-window").contains(VALUE));
   assert_eq!(
     s.vault.reads.load(Ordering::SeqCst),
     0,
     "inspection never reads the vault"
   );
-  s.choose("secrets-environment", "Production");
-  assert!(s.text("secrets-empty").contains("No secrets in Production."));
-  assert!(!s.exists("secret-inspector"));
-  assert!(s.text("secrets-list").contains("NAME"));
-  assert!(!s.exists("secrets-empty-add"));
+  s.click("secret-crumb-back");
+  s.until("the list", |s| s.exists("secrets-filter"));
+  s.click("secrets-environment-production");
+  s.until("the filtered list", |s| s.exists("secrets-environment-empty"));
+  assert!(
+    s.text("secrets-environment-empty").contains("Production"),
+    "{}",
+    s.text("secrets-environment-empty")
+  );
+  assert!(!s.exists("secrets-group-staging"), "only Production's group");
   s.click("secrets-add");
+  s.until("New secret", |s| s.exists("secret-form-environment"));
   assert!(
     s.text("secret-form-environment").contains("Production"),
     "add inherits the filter"
   );
 }
 
+/// A project with no secret says so in one quiet row with Add secret and Import, and Recent access says it is not
+/// recorded yet.
 #[test]
-fn secrets_empty_project_and_usage_log_explain_what_is_available() {
+fn secrets_empty_project_offers_add_and_import() {
   let mut s = Secrets::new();
   s.list();
   assert!(s.text("secrets-empty").contains("No secrets yet"));
-  assert!(!s.exists("secrets-filter"));
+  assert!(s.exists("secrets-empty-add"));
   assert!(s.exists("secrets-empty-import"));
-  assert_eq!(s.text("secrets-tab-list"), "Secrets");
-  s.click("secrets-tab-usage");
-  assert!(s.text("secrets-usage").contains("No access recorded yet"));
-  assert!(s.text("secrets-usage").contains("Never the value"));
-  s.click("secrets-tab-list");
-  s.click("secrets-add");
+  s.click("secrets-empty-add");
+  s.until("New secret", |s| s.exists("secret-value"));
   assert!(s.exists("secret-name"));
-  assert!(s.exists("secret-value"));
-  assert!(s.exists("secret-save-reason"));
+  assert!(s.exists(REASON));
   s.click("secret-save");
   assert_eq!(
     s.vault.stores.load(Ordering::SeqCst),
@@ -65,66 +84,75 @@ fn secrets_empty_project_and_usage_log_explain_what_is_available() {
 }
 
 #[test]
+fn secrets_recent_access_says_it_is_not_recorded_yet() {
+  let mut s = Secrets::new();
+  let secret = s.seed("DOCS_TOKEN", Environment::Development);
+  s.list();
+  assert!(
+    s.text(&format!("secret-mask-{}", secret.id())).ends_with("set today"),
+    "a value set today says so, without its date"
+  );
+  s.click(&format!("secret-row-{}-row", secret.id()));
+  s.until("its page", |s| s.exists("secret-recent"));
+  // Unavailable, with why, rather than an empty group.
+  assert!(
+    s.text("secret-recent-unavailable")
+      .contains("Access to secrets is recorded once tools can use them")
+  );
+  s.click("secret-more");
+  assert!(s.exists("secret-copy-name"), "the … menu holds Copy name");
+}
+
+/// An archived secret stays in its environment's group (`OLD_FIGMA_TOKEN` in `06`), counted, and says so.
+#[test]
+fn secrets_list_shows_archived_secrets_in_their_group() {
+  let mut s = Secrets::new();
+  s.seed("DOCS_TOKEN", Environment::Development);
+  let old = s.seed("OLD_TOKEN", Environment::Development);
+  orchester_workspace::secrets::data::archive_in(&s.repo, s.vault.as_ref(), old.id()).expect("archive");
+  s.list();
+  let row = format!("secret-row-{}-row", old.id());
+  s.until("the archived row", |s| s.exists(&row));
+  assert!(
+    s.text(&row).contains("Archived · no tool or MCP server uses it"),
+    "{}",
+    s.text(&row)
+  );
+  assert!(!s.exists(&format!("secret-mask-{}", old.id())), "no value to show");
+  assert!(s.text("secrets-group-development").contains("2 secrets"));
+  assert!(s.text("secrets-handling").contains("never shown again"));
+}
+
+#[test]
 fn secrets_name_validation_and_environment_scoped_duplicates_link_the_existing_secret() {
   let mut s = Secrets::new();
   let existing = s.seed("DOCS_TOKEN", Environment::Development);
   s.list();
   s.click("secrets-add");
+  s.until("New secret", |s| s.exists("secret-value"));
   s.set("secret-value", VALUE);
   s.private();
   for name in ["bad-name".to_owned(), "A".repeat(129)] {
     s.set("secret-name", &name);
-    assert!(s.exists("secret-save-reason"));
+    assert!(s.exists(REASON));
     s.click("secret-save");
     assert_eq!(s.vault.stores.load(Ordering::SeqCst), 1);
   }
   s.set("secret-name", "DOCS_TOKEN");
-  assert!(s.text("secret-save-reason").contains("taken in Development"));
+  assert!(s.text(REASON).contains("taken in Development"));
   assert!(s.exists("secret-open-existing"));
   s.choose("secret-form-environment", "Staging");
-  assert!(!s.exists("secret-save-reason"));
+  assert!(!s.exists(REASON));
   s.choose("secret-form-environment", "Development");
   s.click("secret-open-existing");
-  s.until("existing inspector", |s| s.exists("secret-inspector-name"));
+  s.until("the existing secret's page", |s| s.exists("secret-inspector-name"));
   assert_eq!(s.text("secret-inspector-name"), existing.name().as_str());
-  assert!(!s.exists("secret-value"));
+  assert!(!s.exists("secret-value-field"));
 }
 
+/// The groups keep the page's 720 column, and how values are kept is said under them.
 #[test]
-fn secrets_wide_layout_uses_the_list_and_inline_editor_dimensions_and_close_clears_input() {
-  let mut s = Secrets::new();
-  let secret = s.seed("DOCS_TOKEN", Environment::Development);
-  s.list();
-  let bounds = |s: &mut Secrets, id: &str| {
-    s.window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"))
-  };
-  assert_eq!(bounds(&mut s, "secret-inspector").width, 360.0);
-  assert_eq!(bounds(&mut s, &format!("secret-row-{}", secret.id())).height, 48.0);
-  assert_eq!(bounds(&mut s, &format!("secret-tile-{}", secret.id())).width, 28.0);
-  assert_eq!(bounds(&mut s, "secret-inspector-tile").width, 32.0);
-  s.click("secrets-add");
-  assert_eq!(bounds(&mut s, "secret-form-close").width, 26.0);
-  assert_eq!(bounds(&mut s, "secret-value-box").height, 28.0);
-  assert_eq!(bounds(&mut s, "secret-project-avatar").width, 20.0);
-  s.set("secret-value", VALUE);
-  s.click("secret-form-close");
-  assert!(!s.exists("secret-value"));
-  s.click("secrets-add");
-  let input = s
-    .window
-    .tree
-    .get_element_by_id_mut("secret-value")
-    .and_then(|element| element.as_text_input())
-    .expect("credential input");
-  assert!(input.value().is_empty(), "closing discards the credential");
-}
-
-#[test]
-fn secrets_five_rows_fit_before_the_handling_notice() {
+fn secrets_groups_keep_the_column_with_the_handling_note_under_them() {
   let mut s = Secrets::new();
   let entries: Vec<_> = (0..5)
     .map(|index| s.seed(&format!("TOKEN_{index}"), Environment::Development))
@@ -137,15 +165,17 @@ fn secrets_five_rows_fit_before_the_handling_notice() {
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
-  let table = bounds(&mut s, "secrets-list");
-  assert_eq!(table.height, 272.0, "32px header and five 48px rows");
+  let group = bounds(&mut s, "secrets-group-development");
+  assert!(group.width <= 720.5, "{group:?}");
   for secret in entries {
-    let row = bounds(&mut s, &format!("secret-row-{}", secret.id()));
-    assert_eq!(row.height, 48.0);
-    assert!(row.y + row.height <= table.y + table.height, "every row fits");
+    let row = bounds(&mut s, &format!("secret-row-{}-row", secret.id()));
+    assert!(
+      row.y + row.height <= group.y + group.height + 0.5,
+      "every row is in its group: {row:?} in {group:?}"
+    );
   }
   let notice = bounds(&mut s, "secrets-handling");
-  assert_eq!(notice.y - table.y - table.height, 14.0);
+  assert!(notice.y >= group.y + group.height, "the note follows the groups");
 }
 
 #[test]
@@ -153,11 +183,12 @@ fn secrets_external_connection_edits_refresh_used_by_in_place() {
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Development);
   s.list();
-  assert!(s.text("secret-uses").contains("NONE"));
+  s.click(&format!("secret-row-{}-row", secret.id()));
+  s.until("its page", |s| s.exists("secret-use-none"));
   s.bind(&secret);
   s.refresh();
   s.until("updated binding", |s| {
-    s.text("secret-uses").contains("MCP · kontur-docs")
+    s.exists("secret-uses") && s.text("secret-uses").contains("kontur-docs")
   });
 }
 

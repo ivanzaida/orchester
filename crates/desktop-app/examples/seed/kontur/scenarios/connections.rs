@@ -26,11 +26,23 @@ use orchester_core::{
 use crate::kontur::{Kontur, SeedError, catalogue, name};
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed_catalogue(kontur).map(drop)
+  seeded(kontur).map(drop)
 }
 
 /// [`seed`], giving the catalogue its profiles publish, which a scenario on it runs its tasks on.
 pub(super) fn seed_catalogue(kontur: &mut Kontur) -> Result<catalogue::Catalogue, SeedError> {
+  seeded(kontur).map(|seeded| seeded.catalogue)
+}
+
+/// What [`seed`] made that other scenarios build on.
+pub(super) struct Seeded {
+  pub codex: ConnectionId,
+  pub github: ConnectionId,
+  pub catalogue: catalogue::Catalogue,
+}
+
+/// The scenario's connections, MCP servers and profile; the Codex and GitHub connections' ids and the catalogue.
+pub(super) fn seeded(kontur: &mut Kontur) -> Result<Seeded, SeedError> {
   let at = kontur.ago(4);
   let bin = kontur.repo.join(".orchester").join("qa-bin");
   fs::create_dir_all(&bin).map_err(|error| SeedError::Invalid(error.to_string()))?;
@@ -57,10 +69,14 @@ pub(super) fn seed_catalogue(kontur: &mut Kontur) -> Result<catalogue::Catalogue
   )?;
   let published = kontur.ago(7 * 24 * 60);
   let catalogue = catalogue::kontur(&mut kontur.db, codex, published)?;
-  github(kontur, program("gh")?, at)?;
+  let github = github(kontur, program("gh")?, at)?;
   let docs = mcp_servers(kontur, at)?;
   designer(kontur, (codex, docs), at)?;
-  Ok(catalogue)
+  Ok(Seeded {
+    codex,
+    github,
+    catalogue,
+  })
 }
 
 /// A CLI connection, recorded as its check found it.

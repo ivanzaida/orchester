@@ -1,6 +1,6 @@
 //! The project's connections as the screen reads them: all of them together (`ProjectConnections`), off the
-//! UI thread, again whenever the screen's revision moves; and the connections of a tab, in the order the
-//! list shows them: agent providers, GitHub, MCP servers.
+//! UI thread, again whenever the screen's revision moves; and each of them, in the order the tab's groups show
+//! them: agent providers, GitHub, MCP servers.
 
 use std::path::PathBuf;
 
@@ -15,8 +15,6 @@ use orchester_workspace::{
   connections::data::ProjectConnections,
   messages::{self, Message},
 };
-
-use crate::routes::ConnectionsTab;
 
 /// The project's connections at `repo_root`, read when the screen shows and again for each `revision`.
 pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureState<ProjectConnections, Message> {
@@ -69,14 +67,6 @@ impl<'a> Entry<'a> {
     }
   }
 
-  pub(super) const fn tab(self) -> ConnectionsTab {
-    match self {
-      Self::Agent(_) => ConnectionsTab::AgentProviders,
-      Self::GitHub(_) => ConnectionsTab::GitHub,
-      Self::Mcp(_) => ConnectionsTab::McpServers,
-    }
-  }
-
   /// When its program was last checked; an MCP server is never checked.
   pub(super) fn checked_at(self) -> Option<Timestamp> {
     match self {
@@ -87,31 +77,12 @@ impl<'a> Entry<'a> {
   }
 }
 
-/// The connections `tab` lists, agent providers first.
-pub(super) fn entries(listed: &ProjectConnections, tab: ConnectionsTab) -> Vec<Entry<'_>> {
+/// Every connection, agent providers first, then GitHub, then MCP servers.
+pub(super) fn entries(listed: &ProjectConnections) -> Vec<Entry<'_>> {
   let agents = listed.connections.iter().map(Entry::Agent);
   let github = listed.github.iter().map(Entry::GitHub);
   let mcp = listed.mcp.iter().map(Entry::Mcp);
-  agents
-    .chain(github)
-    .chain(mcp)
-    .filter(|entry| tab == ConnectionsTab::All || entry.tab() == tab)
-    .collect()
-}
-
-/// How many connections each tab lists, in the order of [`ConnectionsTab::ALL`].
-pub(super) fn counts(listed: &ProjectConnections) -> [usize; 4] {
-  let (agents, github, mcp) = (listed.connections.len(), listed.github.len(), listed.mcp.len());
-  [agents + github + mcp, agents, github, mcp]
-}
-
-/// The count of `tab` among `counts`.
-pub(super) fn count(counts: [usize; 4], tab: ConnectionsTab) -> usize {
-  let index = ConnectionsTab::ALL
-    .iter()
-    .position(|counted| *counted == tab)
-    .expect("every tab is counted");
-  counts[index]
+  agents.chain(github).chain(mcp).collect()
 }
 
 /// How a GitHub connection stands for the project: the account its repository link expects, if the link

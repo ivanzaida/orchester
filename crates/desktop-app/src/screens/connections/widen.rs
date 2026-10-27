@@ -33,10 +33,21 @@ use crate::{
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
+/// How the question is drawn where it is asked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WidenLook {
+  /// A band at a form's or an inspector's foot: `warning_muted` under a `warning` line.
+  Band,
+  /// On an approval card (`HYB5f`).
+  Card,
+  /// The question box Project settings and its tabs ask in place (`Archive · question` `fw0eT`).
+  Box,
+}
+
 #[derive(Clone)]
 pub struct WidenProps {
   pub id: Arc<str>,
-  pub card: bool,
+  pub look: WidenLook,
   /// The question confirms an approval rather than warning of a widening: its reasons and its confirm carry
   /// shield-check (`HYB5f`).
   pub affirming: bool,
@@ -53,7 +64,7 @@ pub struct WidenProps {
 impl PartialEq for WidenProps {
   fn eq(&self, other: &Self) -> bool {
     (
-      self.card,
+      self.look,
       self.affirming,
       self.automation,
       &self.id,
@@ -62,7 +73,7 @@ impl PartialEq for WidenProps {
       &self.confirm,
       &self.keep,
     ) == (
-      other.card,
+      other.look,
       other.affirming,
       other.automation,
       &other.id,
@@ -129,8 +140,13 @@ impl Component for WidenConfirm {
     } else {
       props.on_keep.clone()
     };
-    let keep = ActionButton::new(format!("{}-keep", props.id), ButtonKind::Secondary, props.keep.clone())
-      .on_click(move || keep());
+    // In the question box *Keep it* is the quiet way back after the action (`oLg02` in `fw0eT`).
+    let keep_kind = if props.look == WidenLook::Box {
+      ButtonKind::Ghost
+    } else {
+      ButtonKind::Secondary
+    };
+    let keep = ActionButton::new(format!("{}-keep", props.id), keep_kind, props.keep.clone()).on_click(move || keep());
     let confirm = ActionButton::new(
       format!("{}-confirm", props.id),
       ButtonKind::Primary,
@@ -147,17 +163,22 @@ impl Component for WidenConfirm {
     } else {
       confirm.disabled()
     };
-    if props.card {
-      card_question(&props, (keep, confirm))
-    } else {
-      question(&props, (keep, confirm))
+    match props.look {
+      WidenLook::Card => card_question(&props, (keep, confirm)),
+      WidenLook::Band => question(&props, (keep, confirm)),
+      WidenLook::Box => crate::screens::project_settings::kit::question(
+        &props.id,
+        &props.title,
+        &props.reasons,
+        vec![confirm.into(), keep.into()],
+      ),
     }
   }
 }
 
 /// Whether the question locks the window's input from MCP clients while it shows: every one but an approval card's.
 fn locks_input(props: &WidenProps) -> bool {
-  !(props.card && props.automation == Guarded::ApprovalWidening)
+  !(props.look == WidenLook::Card && props.automation == Guarded::ApprovalWidening)
 }
 
 fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -> Handler {

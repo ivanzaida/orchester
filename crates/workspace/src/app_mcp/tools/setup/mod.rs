@@ -68,7 +68,7 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "set_project_environment",
     description: "Replaces the environment variables the project adds to every agent CLI and command tool its runs \
-                  start, as Project settings › Environment does: names are letters, digits and _ (not starting with \
+                  start, as Project settings › Runs › Environment does: names are letters, digits and _ (not starting with \
                   a digit), each name once ignoring case. They are stored and shown in plain text, so never put a \
                   secret in one. Adding, changing or removing any variable but RUST_LOG, RUST_BACKTRACE, CI, \
                   NO_COLOR, FORCE_COLOR, TZ, LANG, LC_ALL, LC_CTYPE, LC_COLLATE, LC_MESSAGES, LC_MONETARY, \

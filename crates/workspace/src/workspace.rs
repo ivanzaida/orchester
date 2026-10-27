@@ -400,14 +400,19 @@ impl Workspace {
     self.approval_consent.lock().allowed = false;
   }
 
-  /// Whether Orchester estimates the story points of tasks without a person's value (*Let Orchester estimate story
-  /// points*); off until a person turns it on in the window.
-  pub fn estimates_story_points(&self) -> Result<bool, StoreError> {
-    self.db.lock().estimates_story_points()
+  /// Whether Orchester estimates the story points of the tasks of the project at `repo_root` that have no person's
+  /// value (*Let Orchester estimate story points*, Project settings › Runs): the project's own setting once a person
+  /// set it there, else the application-wide one it moved from, which was off until a person turned it on.
+  pub fn estimates_story_points(&self, repo_root: &Path) -> Result<bool, StoreError> {
+    match ProjectDb::open(repo_root)?.estimates_story_points()? {
+      Some(allowed) => Ok(allowed),
+      None => self.db.lock().estimates_story_points(),
+    }
   }
 
-  pub fn set_estimates_story_points(&self, allowed: bool) -> Result<(), StoreError> {
-    self.db.lock().set_estimates_story_points(allowed)
+  /// Sets *Let Orchester estimate story points* for the project at `repo_root`; only a person does, in the window.
+  pub fn set_estimates_story_points(&self, repo_root: &Path, allowed: bool) -> Result<(), StoreError> {
+    ProjectDb::open(repo_root)?.set_estimates_story_points(allowed)
   }
 
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.

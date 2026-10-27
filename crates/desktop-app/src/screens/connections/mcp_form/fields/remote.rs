@@ -1,8 +1,8 @@
-//! The remote server's section: its endpoint and its authorization. The Authorization select chooses the scheme;
-//! Basic asks for a user name and a custom header for its name, and every scheme but none for the project secret it
-//! sends (the token, the password, the pasted credential or the header's value), named after what it is. No design
-//! node has the scheme's fields yet: they follow the section's own rows (a stacked label over the control, its hint
-//! under the label, an error under the control).
+//! A remote server's rows: its endpoint and its authorization. The Authorization select chooses the scheme; Basic asks
+//! for a user name and a custom header for its name, and every scheme but none for the project secret it sends (the
+//! token, the password, the pasted credential or the header's value), named after what it is. No design node has the
+//! scheme's fields yet: they follow the group's own rows (the label and its hint at the start, the control after
+//! them, an error under the control).
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::SpacingSize},
@@ -14,9 +14,12 @@ use orchester_core::{id::SecretId, secret::Secret};
 use orchester_workspace::connections::mcp::{AuthorizationChoice, AuthorizationText};
 
 use super::{Fields, Shown, input};
-use crate::ui::{
-  field::{SelectField, field_error},
-  form_section::{Label, Place, section, stacked_row},
+use crate::{
+  screens::project_settings::kit::form_row,
+  ui::{
+    field::{SelectField, field_error},
+    form_section::Label,
+  },
 };
 
 /// The Authorization select's choice.
@@ -96,7 +99,8 @@ const fn secret_words(choice: AuthorizationChoice) -> (&'static str, &'static st
 }
 
 impl Fields {
-  pub(super) fn remote_section(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Element {
+  /// The endpoint, the authorization's scheme, and the fields the scheme asks for.
+  pub(super) fn remote_rows(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Vec<Element> {
     let url = input(
       ctx,
       ("connection-mcp-url", "connections.mcp.property.endpoint"),
@@ -108,12 +112,11 @@ impl Fields {
     .render(ctx);
     let choice = self.authorization.scheme.get().0;
     let mut rows = vec![
-      stacked_row(
+      form_row(
         Label::new("connection-mcp-url", ctx.t("connections.mcp.property.endpoint")),
         url,
-        Place::Within,
       ),
-      self.scheme_row(ctx, choice),
+      self.scheme_row(ctx),
     ];
     if choice == AuthorizationChoice::Basic {
       rows.push(text_row(
@@ -134,16 +137,10 @@ impl Fields {
     if choice != AuthorizationChoice::None {
       rows.push(self.secret_row(ctx, choice, errors.secret.as_deref(), secrets));
     }
-    section(
-      "connection-mcp-remote-section",
-      &ctx.t("connections.mcp.typeHttp"),
-      None,
-      rows,
-    )
-    .into()
+    rows
   }
 
-  fn scheme_row(&self, ctx: &Ctx, choice: AuthorizationChoice) -> Element {
+  fn scheme_row(&self, ctx: &Ctx) -> Element {
     let options = [
       (AuthorizationChoice::None, "connections.mcp.authorization.none"),
       (AuthorizationChoice::Bearer, "connections.mcp.authorization.bearer"),
@@ -164,19 +161,13 @@ impl Fields {
       options,
     )
     .render(ctx);
-    let place = if choice == AuthorizationChoice::None {
-      Place::Last
-    } else {
-      Place::Within
-    };
-    stacked_row(
+    form_row(
       Label::new(
         "connection-mcp-authorization",
         ctx.t("connections.property.authentication"),
       )
       .description(ctx.t("connections.mcp.dialog.authorizationHint")),
       select,
-      place,
     )
   }
 
@@ -216,10 +207,9 @@ impl Fields {
       .spacing(SpacingSize::Sm)
       .child(select.render(ctx))
       .with_children(error.map(|error| field_error("connection-mcp-secret-error", error)));
-    stacked_row(
+    form_row(
       Label::new("connection-mcp-secret", ctx.t(label)).description(ctx.t(hint)),
       control,
-      Place::Last,
     )
   }
 }
@@ -232,9 +222,5 @@ fn text_row(
   hint: &str,
 ) -> Element {
   let field = input(ctx, (id, key), value, error).mono().render(ctx);
-  stacked_row(
-    Label::new(id, ctx.t(key)).description(ctx.t(hint)),
-    field,
-    Place::Within,
-  )
+  form_row(Label::new(id, ctx.t(key)).description(ctx.t(hint)), field)
 }

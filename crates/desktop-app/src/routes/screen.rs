@@ -80,16 +80,14 @@ impl Screen {
     Self::Usage,
     Self::Files,
   ];
-  /// The sidebar's Configure section (`Section · Configure`).
-  pub const CONFIGURE: [Self; 8] = [
+  /// The sidebar's Configure section (`Section · Configure`). Secrets and Connections are tabs of Project settings.
+  pub const CONFIGURE: [Self; 6] = [
     Self::Pipelines,
     Self::Agents,
     Self::Instructions,
     Self::Memory,
     Self::Skills,
     Self::Tools,
-    Self::Secrets,
-    Self::Connections,
   ];
 
   /// The name the app's MCP tools use for the screen.

@@ -1,13 +1,11 @@
-//! The rows of a linked project's *Task list* section (`L5o9Xy`): *Project address*, read-only with the server's state
-//! under it, and *Repository*, the project's repository hint with how this checkout's `origin` compares
-//! (`Linked anyway · the mismatch stays visible` in `N9NFio`). The hint is read from the server while it is connected.
+//! The rows of a linked project's *Team server* group (`Team server` `rsQ79` in `04b Sharing · shared` `TnUGj`):
+//! *Address*, read-only with when it last synced and the server's state, *Your role*, and *Repository*, the project's
+//! repository hint with how this checkout's `origin` compares (`Linked anyway · the mismatch stays visible` in
+//! `N9NFio`). The hint is read from the server while it is connected.
 
 use lurq::{
-  app::{component::DevtoolsInspectable, ctx::Ctx, theme::PaletteColor},
-  components::{Column, Row, Text},
-  core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  app::{component::DevtoolsInspectable, ctx::Ctx},
+  node::Element,
 };
 use orchester_core::{repository::RepositoryIdentity, time::Timestamp};
 use orchester_store::SharingLink;
@@ -19,16 +17,10 @@ use orchester_workspace::{
 use super::Props;
 use crate::{
   screens::{
-    project_settings::page::CONTROL_WIDTH,
-    settings::orchester::{Said, moment, sharing_said},
+    project_settings::kit::{SettingRow, Tone, value},
+    settings::orchester::{Said, moment, sharing_said, shown_address},
   },
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
-  ui::{
-    field::FieldInput,
-    form_section::{Label, Place, side_row},
-    icon::{Icon, icon},
-  },
 };
 
 /// The linked project's repository hint as the server answered, and when.
@@ -105,22 +97,13 @@ pub(super) fn hint(ctx: &mut Ctx, link: &SharingLink, entry: Option<&ServerEntry
   }
 }
 
-/// *Project address*: the address in a read-only field, cut with an ellipsis where it is longer, and the server's name,
-/// state and certificate under it; `server` names it once it left the list.
+/// *Address* (`aou4M`): the address, *Synced 16:40* and the server's name, state and certificate; `server` names it
+/// once it left the list.
 pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (Option<&ServerEntry>, &str)) -> Element {
-  let address = link
-    .address
-    .clone()
-    .unwrap_or_else(|| ctx.t("sharing.linked.noAddress").to_string());
-  let field = FieldInput::new(
-    "sharing-address-value",
-    ctx.t("sharing.linked.address"),
-    Signal::new(address),
-  )
-  .mono()
-  .locked()
-  .cut()
-  .render(ctx);
+  let address = link.address.as_deref().map_or_else(
+    || ctx.t("sharing.linked.noAddress").to_string(),
+    |address| shown_address(address).to_owned(),
+  );
   let state = entry.map_or_else(
     || {
       ctx
@@ -129,22 +112,30 @@ pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (O
     },
     |entry| server_state(ctx, entry),
   );
-  let control = Column::new()
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(field)
-    .child(read_back(
-      "sharing-address-state",
-      (Icon::Server, PaletteColor::TextMuted),
-      &state,
-    ));
-  side_row(
-    Label::new("sharing-address", ctx.t("sharing.linked.address"))
-      .description(ctx.t("sharing.linked.addressDescription")),
-    control,
-    Place::Within,
-    true,
-  )
+  let hint = ctx.t_args(
+    "sharing.team.addressHint",
+    [("time", moment(ctx, link.last_synced_at)), ("state", state)],
+  );
+  SettingRow::new("sharing-address", ctx.t("sharing.team.address"))
+    .hint(hint)
+    .info(ctx.t("sharing.linked.addressDescription"))
+    .control(value("sharing-address-value", &address))
+    .render(ctx)
+}
+
+/// *Your role* (`Z1IkQX`): owner or member, and since when.
+pub(super) fn role_row(ctx: &mut Ctx, link: &SharingLink, role: &str) -> Element {
+  let since = ctx.t_args(
+    "sharing.team.roleHint",
+    [
+      ("key", link.key.as_str().to_owned()),
+      ("day", crate::screens::settings::orchester::day_of(ctx, link.joined_at)),
+    ],
+  );
+  SettingRow::new("sharing-role", ctx.t("sharing.team.role"))
+    .hint(since)
+    .control(value("sharing-role-value", role))
+    .render(ctx)
 }
 
 /// `Kontur team · connected · certificate checked`.
@@ -178,7 +169,7 @@ fn server_state(ctx: &Ctx, entry: &ServerEntry) -> String {
     .to_string()
 }
 
-/// *Repository*: the project's hint in a read-only field, and how this checkout's `origin` compares with it.
+/// *Repository*: the project's hint, and how this checkout's `origin` compares with it in its tone.
 pub(super) fn repository_row(
   ctx: &mut Ctx,
   props: &Props,
@@ -186,58 +177,39 @@ pub(super) fn repository_row(
   names: (&str, &str),
 ) -> Element {
   let (project, server) = names;
-  let value = match hint {
+  let shown = match hint {
     Some(Ok(Hint { hint: Some(hint), .. })) => hint.as_str().to_owned(),
     Some(Ok(Hint { hint: None, .. })) => ctx.t("sharing.linked.repository.noHint").to_string(),
-    Some(Err(_)) | None => String::new(),
+    Some(Err(_)) | None => ctx.t("sharing.linked.repository.reading").to_string(),
   };
-  let field = FieldInput::new(
-    "sharing-repository-value",
-    ctx.t("sharing.link.repository"),
-    Signal::new(value),
-  )
-  .mono()
-  .locked()
-  .cut()
-  .placeholder(ctx.t("sharing.linked.repository.reading"))
-  .render(ctx);
-  let (glyph, color, words) = compared(ctx, props, hint);
-  let control = Column::new()
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(field)
-    .child(read_back("sharing-repository-state", (glyph, color), &words));
-  side_row(
-    Label::new("sharing-repository", ctx.t("sharing.link.repository")).description(ctx.t_args(
+  let (tone, words) = compared(ctx, props, hint);
+  SettingRow::new("sharing-repository", ctx.t("sharing.link.repository"))
+    .toned(words, tone)
+    .info(ctx.t_args(
       "sharing.linked.repository.description",
       [("project", project), ("server", server)],
-    )),
-    control,
-    Place::Within,
-    true,
-  )
+    ))
+    .control(value("sharing-repository-value", &shown))
+    .render(ctx)
 }
 
-/// The read-back under the repository's field.
-fn compared(ctx: &Ctx, props: &Props, hint: Option<&Result<Hint, Said>>) -> (Icon, PaletteColor, String) {
-  let muted = |words: String| (Icon::Info, PaletteColor::TextMuted, words);
+/// How the checkout's `origin` compares with the hint, in its tone.
+fn compared(ctx: &Ctx, props: &Props, hint: Option<&Result<Hint, Said>>) -> (Tone, String) {
   let hint = match hint {
-    None => return muted(ctx.t("sharing.linked.repository.reading").to_string()),
-    Some(Err(reason)) => return muted(reason.text(ctx)),
+    None => return (Tone::Muted, ctx.t("sharing.linked.repository.reading").to_string()),
+    Some(Err(reason)) => return (Tone::Muted, reason.text(ctx)),
     Some(Ok(hint)) => hint,
   };
   let origin = props.facts.origin.as_ref();
   match remote_match(origin, hint.hint.as_ref()) {
     RemoteMatch::Same => (
-      Icon::CircleCheck,
-      PaletteColor::Success,
+      Tone::Success,
       ctx
         .t_args("sharing.linked.repository.same", [("time", moment(ctx, hint.checked))])
         .to_string(),
     ),
     RemoteMatch::Different { checkout, .. } => (
-      Icon::TriangleAlert,
-      PaletteColor::Warning,
+      Tone::Warning,
       ctx
         .t_args(
           "sharing.linked.repository.different",
@@ -248,28 +220,10 @@ fn compared(ctx: &Ctx, props: &Props, hint: Option<&Result<Hint, Said>>) -> (Ico
         )
         .to_string(),
     ),
-    RemoteMatch::NoOrigin => (
-      Icon::GitBranch,
-      PaletteColor::TextMuted,
-      ctx.t("sharing.linked.repository.noOrigin").to_string(),
+    RemoteMatch::NoOrigin => (Tone::Muted, ctx.t("sharing.linked.repository.noOrigin").to_string()),
+    RemoteMatch::NoHint => (
+      Tone::Muted,
+      ctx.t("sharing.linked.repository.nothingToCompare").to_string(),
     ),
-    RemoteMatch::NoHint => muted(ctx.t("sharing.linked.repository.nothingToCompare").to_string()),
   }
-}
-
-/// A line under a row's control: a 12 glyph and the words, 5 apart, in `color` (`Read-back` in `L5o9Xy`).
-fn read_back(id: &str, (glyph, color): (Icon, PaletteColor), words: &str) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, color.clone()))
-    .child(
-      Text::new(words)
-        .id(format!("{id}-text"))
-        .variant(ExtraTypography::Note.role())
-        .color(color)
-        .flex(1.0),
-    )
 }

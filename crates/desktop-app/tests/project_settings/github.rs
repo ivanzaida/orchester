@@ -18,6 +18,7 @@ use super::{harness::Settings, index::git};
 fn project_settings_review_github_account_save_refreshes_a_completed_check() {
   let program_dir = fixture_program();
   let mut page = Settings::new(false);
+  page.tab("general", "settings-project-name");
   git(&page.repo, &["init"]);
   git(
     &page.repo,
@@ -30,18 +31,14 @@ fn project_settings_review_github_account_save_refreshes_a_completed_check() {
   page.outside(Outside::Connections);
   page.until("wrong account", |p| p.exists("settings-use-account"));
   page.click("settings-github-check");
-  page.until("completed repository check", |p| p.exists("settings-github-detection"));
-  assert_eq!(page.value("settings-github-account"), "expected");
-  assert!(
-    page
-      .text("settings-github-account-readback")
-      .contains("expected is expected")
-  );
+  page.until("completed repository check", |p| p.exists("settings-github-repo-hint"));
+  assert!(page.text("settings-github-login-hint").contains("expected is expected"));
+  assert_eq!(page.text("settings-use-account"), "Use signed-in");
   page.click("settings-use-account");
   page.until("account saved and read back", |p| {
     p.exists("settings-github-account")
-      && p.value("settings-github-account") == "signed-in"
-      && p.text("settings-github-account-readback") == "Signed in as signed-in · matches the expected account"
+      && p.text("settings-github-account") == "signed-in"
+      && p.text("settings-github-login-hint") == "Signed in as signed-in · matches"
       && !p.exists("settings-use-account")
   });
   page.saved();

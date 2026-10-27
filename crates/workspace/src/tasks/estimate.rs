@@ -1,7 +1,8 @@
 //! Story points (`orchester_core::task::estimate`) as the screens and automation set and ask for them: a person's
 //! points from the task form, automation's through `create_task` / `update_task` (never over a person's), and
-//! Orchester's own estimate, which a project's runner makes once a task is saved, while *Let Orchester estimate story
-//! points* is on (Settings › What automation may do; off until a person turns it on).
+//! Orchester's own estimate, which a project's runner makes once a task is saved, while the project's *Let Orchester
+//! estimate story points* is on (Project settings › Runs › Estimates; a project a person has not set it for keeps the
+//! application-wide setting it moved from, off until a person turned it on).
 
 use std::path::Path;
 
@@ -88,8 +89,8 @@ impl Estimates {
   pub fn request(&self, project: OpenProject, task: TaskId) {
     let this = self.clone();
     self.runners.spawn(async move {
-      let workspace = this.workspace.clone();
-      match crate::background::run(move || workspace.estimates_story_points()).await {
+      let (workspace, repo_root) = (this.workspace.clone(), project.repo_root.clone());
+      match crate::background::run(move || workspace.estimates_story_points(&repo_root)).await {
         Ok(Ok(true)) => {}
         Ok(Ok(false)) => return,
         Ok(Err(error)) => {

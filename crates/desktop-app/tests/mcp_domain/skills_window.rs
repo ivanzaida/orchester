@@ -127,20 +127,18 @@ fn skills_window_repository_files_turn_on_by_client_input_only_under_the_persons
   assert!(db.repository_agent_files().expect("setting").is_on());
 }
 
-/// Whether the element `id`, or one inside it, says `text`.
-fn says(element: lurq::node::element::ElementRef<'_>, text: &str) -> bool {
-  element.text_content() == Some(text) || element.children().into_iter().any(|child| says(child, text))
-}
-
 #[test]
 fn project_settings_turn_on_repository_files_by_client_input_only_under_the_persons_switch() {
-  const ON: &str = "On · agents may read them";
-  const OFF: &str = "Off · Orchester's instructions and skills only";
-  // The switch shows `label` once the save before it was read back, so a press now asks for the other setting.
-  let shows_switch = |s: &mut super::Served, label: &str| {
-    s.tree
-      .get_element_by_id("settings-agent-files")
-      .is_some_and(|switch| says(switch, label))
+  const ON: bool = true;
+  const OFF: bool = false;
+  // The switch's knob is at its end once the save before it was read back, so a press now asks for the other
+  // setting; its label is hidden, its row says what it is.
+  let shows_switch = |s: &mut super::Served, on: bool| {
+    let mut bounds = |id: &str| s.tree.get_element_by_id_mut(id).and_then(|element| element.bounds());
+    let (Some(track), Some(knob)) = (bounds("settings-agent-files-mark"), bounds("settings-agent-files-knob")) else {
+      return false;
+    };
+    (knob.x + knob.width / 2.0 > track.x + track.width / 2.0) == on
   };
   let (mut s, project, repo) = controlled();
   let mut db = ProjectDb::open(&repo).expect("db");

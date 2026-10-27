@@ -148,3 +148,15 @@ fn story_points_estimates_are_off_until_a_person_turns_them_on() {
   db.set_estimates_story_points(true).expect("on");
   assert!(db.estimates_story_points().expect("read"));
 }
+
+/// The project's own setting (ORC-103) is unset until a person sets it in Project settings › Runs, so a project keeps
+/// the application-wide setting it moved from until then.
+#[test]
+fn story_points_project_setting_is_unset_until_a_person_sets_it() {
+  let (_repo, mut db, ..) = started_run();
+  assert_eq!(db.estimates_story_points().expect("read"), None);
+  db.set_estimates_story_points(true).expect("on");
+  assert_eq!(db.estimates_story_points().expect("read"), Some(true));
+  db.set_estimates_story_points(false).expect("off");
+  assert_eq!(db.estimates_story_points().expect("read"), Some(false));
+}
