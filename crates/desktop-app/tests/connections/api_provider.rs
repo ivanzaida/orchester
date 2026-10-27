@@ -36,22 +36,21 @@ fn connections_api_provider_takes_the_accounts_place_and_names_each_clis_api() {
   assert!(!seeded.exists("connection-provider-url"));
   seeded.click("connection-runs-provider");
   assert!(!seeded.exists("connection-account"), "a key runs it, on no account");
-  assert!(
-    seeded
-      .text("connection-provider-section")
-      .contains("Anthropic Messages API")
+  // The Base URL's hint line names the API the CLI speaks (`roZYg` in `10b`).
+  assert_eq!(
+    seeded.text("connection-provider-url-description"),
+    "Claude Code speaks the Anthropic Messages API"
   );
   assert!(!seeded.exists("connection-auth"), "no sign-in notice for a key");
   seeded.click("connection-kind-codex");
-  assert!(
-    seeded
-      .text("connection-provider-section")
-      .contains("OpenAI Responses API")
+  assert_eq!(
+    seeded.text("connection-provider-url-description"),
+    "Codex speaks the OpenAI Responses API"
   );
   seeded.set("connection-provider-url", "http://api.deepseek.com");
   assert!(
     seeded
-      .text("connection-provider-section")
+      .text("connection-provider-url-row")
       .contains("starts with https://")
   );
   seeded.set("connection-provider-url", "https://api.deepseek.com");
@@ -75,15 +74,15 @@ fn connections_api_provider_is_chosen_in_edit_connection_and_shown_in_the_inspec
   seeded.go(ProjectPage::EditConnection(connection.id()));
   seeded.until("the edit page", |seeded| seeded.exists("connection-runs-provider"));
   fill_deepseek(&mut seeded);
-  assert!(!seeded.exists("connection-form-reason"), "nothing keeps it from saving");
+  assert!(!seeded.exists(Seeded::REASON), "nothing keeps it from saving");
   lurq::app::events::with_synthetic_input(|| seeded.click("connection-edit-save"));
   assert!(
-    seeded.text("connection-form-reason").contains("Only a person"),
+    seeded.text(Seeded::REASON).contains("Only a person"),
     "an MCP client's click is refused, and the page says so"
   );
   assert!(claude(&seeded).api_provider().is_none(), "nothing was saved");
   seeded.click("connection-edit-save");
-  seeded.until("the inspector", |seeded| seeded.exists("connection-provider-base-url"));
+  seeded.until("the page", |seeded| seeded.exists("connection-provider-base-url-row"));
 
   let saved = claude(&seeded);
   let provider = saved.api_provider().expect("it runs on the provider");
@@ -97,24 +96,19 @@ fn connections_api_provider_is_chosen_in_edit_connection_and_shown_in_the_inspec
     "its CLI's own sign-in is not used"
   );
   assert_eq!(
-    seeded.text("connection-provider-base-url"),
-    "Base URL https://api.deepseek.com/anthropic"
+    seeded.text("connection-provider-base-url-value"),
+    "https://api.deepseek.com/anthropic"
   );
-  assert!(seeded.text("connection-provider-key").contains("SENTRY_TOKEN"));
+  assert!(seeded.text("connection-provider-key-row").contains("SENTRY_TOKEN"));
   assert!(!seeded.exists("connection-account-link"), "no account on a key");
-  assert!(
-    seeded
-      .text("connection-plan-limits")
-      .contains("Not read on an API provider")
-  );
   assert!(
     !seeded.exists("connection-refresh-models"),
     "its models are typed, not listed"
   );
   assert!(
     seeded
-      .text("connection-inspector-footer")
-      .contains("with the key from SENTRY_TOKEN")
+      .text("connection-models-section")
+      .contains("deepseek-flash, deepseek-v4-pro")
   );
 
   seeded.go(ProjectPage::EditConnection(connection.id()));
@@ -183,11 +177,20 @@ fn connections_api_provider_whose_key_was_archived_says_so_where_it_is_chosen() 
   drop(db);
   let keychain = super::support::signed_in::keychain();
   orchester_workspace::secrets::data::archive_in(&seeded.repo, keychain.get(), sentry.id()).expect("archived");
-  seeded.list(orchester_app::routes::ConnectionsTab::AgentProviders);
+  seeded.list();
   seeded.click(&Seeded::row(connection.id()));
-  seeded.until("the inspector", |seeded| seeded.exists("connection-provider-key"));
-  assert!(seeded.text("connection-provider-key").contains("Key secret missing"));
-  assert!(seeded.text("connection-inspector-footer").contains("archived or gone"));
+  seeded.until("the page", |seeded| seeded.exists("connection-provider-key-row"));
+  assert!(
+    seeded
+      .text("connection-provider-key-row")
+      .contains("Key secret missing")
+  );
+  assert!(
+    seeded
+      .text("connection-inspector-sentence")
+      .contains("archived or gone")
+  );
+  assert!(seeded.exists("connection-edit-key"), "Edit connection leads the head");
   seeded.go(ProjectPage::EditConnection(connection.id()));
   seeded.until("the edit page", |seeded| seeded.exists("connection-provider-key-error"));
   assert!(
@@ -195,17 +198,13 @@ fn connections_api_provider_whose_key_was_archived_says_so_where_it_is_chosen() 
       .text("connection-provider-key-error")
       .contains("SENTRY_TOKEN was archived")
   );
-  assert!(
-    seeded
-      .text("connection-form-reason")
-      .contains("secret holding the API key")
-  );
+  assert!(seeded.text(Seeded::REASON).contains("secret holding the API key"));
 }
 
 #[test]
 fn connections_api_provider_rows_name_the_cli_its_version_and_the_providers_host() {
   let mut seeded = Seeded::new("api-providers");
-  seeded.list(orchester_app::routes::ConnectionsTab::AgentProviders);
+  seeded.list();
   let row = |seeded: &mut Seeded, named: &str| {
     let connection = seeded
       .db()
@@ -237,13 +236,9 @@ fn connections_api_provider_rows_name_the_cli_its_version_and_the_providers_host
 fn fill_deepseek(seeded: &mut Seeded) {
   seeded.click("connection-runs-provider");
   seeded.set("connection-provider-url", "https://api.deepseek.com/anthropic");
-  assert!(
-    seeded
-      .text("connection-form-reason")
-      .contains("secret holding the API key")
-  );
+  assert!(seeded.text(Seeded::REASON).contains("secret holding the API key"));
   choose(seeded, "connection-provider-key", "SENTRY_TOKEN (Development)");
-  assert!(seeded.text("connection-form-reason").contains("at least one model"));
+  assert!(seeded.text(Seeded::REASON).contains("at least one model"));
   seeded.set("connection-provider-model", "deep seek");
   seeded.click("connection-provider-add-model");
   assert!(
@@ -337,7 +332,7 @@ fn connections_api_provider_runs_the_orchestrator_with_a_typed_model() {
 #[test]
 fn connections_api_provider_is_listed_unavailable_with_its_whole_reason_for_the_reviewer() {
   let mut seeded = Seeded::new("api-providers");
-  seeded.go(ProjectPage::Settings(Default::default()));
+  seeded.go(ProjectPage::Settings(orchester_app::routes::ProjectSettingsTab::Runs));
   seeded.until("the reviewer", |seeded| seeded.exists("settings-reviewer-connection"));
   seeded.click("settings-reviewer-connection");
   let (option, words) = menu_row(&mut seeded, "settings-reviewer-connection", "Codex · DeepSeek");

@@ -1,8 +1,8 @@
-//! *Theme* (`Row · Theme` `BDAwf` in `hUaXB`): Dark, Light or System in a segmented control (`Segmented/text`
-//! `S5Fsve`), the honest note that System keeps the appearance the operating system had when Orchester started
-//! (`Honest note` `A9YKqx`), and, when a choice could not be kept, that nothing changed (`DygwC` in `g9i0n` of
-//! `HNQBR`). The choice is kept off the UI thread through the window's [`Appearance`], which `set_theme` shares, one
-//! at a time and the newest last; the window takes its colors once one is kept.
+//! *Theme* (`Theme` `IcZES` in `01 · General`): System, Dark or Light in a segmented control with their glyphs
+//! (`Segmented` `IxNCM`), what the theme does in the row's tooltip, and, when a choice could not be kept, that nothing
+//! changed, under the row. The honest note that System keeps the appearance the operating system had when Orchester
+//! started is under the group ([`NOTE`]). The choice is kept off the UI thread through the window's [`Appearance`],
+//! which `set_theme` shares, one at a time and the newest last; the window takes its colors once one is kept.
 
 use std::sync::Arc;
 
@@ -10,11 +10,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::SpacingSize,
   },
-  components::Column,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_workspace::{
   background,
@@ -27,11 +25,10 @@ use crate::{
   theme::Mode,
   ui::{
     field::field_error,
-    form_section::{Label, Place, side_row},
     icon::Icon,
-    inspector::note,
     message::message_text,
     pressable::Focus,
+    setting_rows::SettingRow,
     tabs::{Segment, SegmentFace, segmented},
   },
 };
@@ -124,12 +121,6 @@ impl Component for ThemeRow {
       _ => current,
     };
     let control = self.control(ctx, shown);
-    let row = side_row(
-      Label::new(ID, ctx.t("settings.general.theme.title")).description(ctx.t(words::DESCRIPTION)),
-      control,
-      Place::Within,
-      false,
-    );
     let problem = match (&state.error, &self.appearance) {
       (_, None) => Some(ctx.t("settings.general.theme.unavailable").to_string()),
       (Some(NotKept::NoDatabase), _) if !busy => Some(ctx.t("settings.general.theme.noDatabase").to_string()),
@@ -143,30 +134,28 @@ impl Component for ThemeRow {
       }
       _ => None,
     };
-    Column::new().width(Dimension::Pct(100.0)).child(row).child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding_bottom(SpacingSize::Xs)
-        .spacing(SpacingSize::Sm)
-        .child(note(&format!("{ID}-note"), Icon::Info, &ctx.t(words::NOTE)))
-        .with_children(problem.map(|problem| field_error(&format!("{ID}-error"), &problem))),
-    )
+    SettingRow::new(ID, ctx.t("settings.general.theme.title"))
+      .info(ctx.t(DESCRIPTION))
+      .control(control)
+      .below_all(problem.map(|problem| field_error(&format!("{ID}-error"), &problem).into()))
+      .render(ctx)
   }
 }
 
 impl ThemeRow {
-  /// Dark · Light · System, `shown` chosen; a press keeps the theme it names.
+  /// System · Dark · Light, `shown` chosen; a press keeps the theme it names (`Segmented` `IxNCM`).
   fn control(&self, ctx: &Ctx, shown: Option<ThemeSetting>) -> Element {
-    let segments = ThemeSetting::ALL.map(|setting| {
+    let segments = [ThemeSetting::System, ThemeSetting::Dark, ThemeSetting::Light].map(|setting| {
       let (keep, chosen) = (self.keep.clone(), self.chosen.clone());
-      let label: Arc<str> = ctx.t(match setting {
-        ThemeSetting::Dark => "settings.general.theme.dark",
-        ThemeSetting::Light => "settings.general.theme.light",
-        ThemeSetting::System => "settings.general.theme.system",
-      });
+      let (key, glyph) = match setting {
+        ThemeSetting::Dark => ("settings.general.theme.dark", Icon::Moon),
+        ThemeSetting::Light => ("settings.general.theme.light", Icon::Sun),
+        ThemeSetting::System => ("settings.general.theme.system", Icon::Monitor),
+      };
+      let label: Arc<str> = ctx.t(key);
       Segment::new(
         format!("{ID}-{}", setting.name()),
-        SegmentFace::Text(label),
+        SegmentFace::Labelled(glyph, label),
         shown == Some(setting),
         move || {
           chosen.set(Chosen(Some(setting)));
@@ -178,14 +167,13 @@ impl ThemeRow {
   }
 }
 
-/// The words that name the operating system.
-mod words {
-  #[cfg(target_os = "macos")]
-  pub const DESCRIPTION: &str = "settings.general.theme.descriptionMacos";
-  #[cfg(not(target_os = "macos"))]
-  pub const DESCRIPTION: &str = "settings.general.theme.descriptionWindows";
-  #[cfg(target_os = "macos")]
-  pub const NOTE: &str = "settings.general.theme.noteMacos";
-  #[cfg(not(target_os = "macos"))]
-  pub const NOTE: &str = "settings.general.theme.noteWindows";
-}
+/// What the row says the theme does, in the operating system's name.
+#[cfg(target_os = "macos")]
+const DESCRIPTION: &str = "settings.general.theme.descriptionMacos";
+#[cfg(not(target_os = "macos"))]
+const DESCRIPTION: &str = "settings.general.theme.descriptionWindows";
+/// The honest note under *Appearance*: System follows only what the operating system had when Orchester started.
+#[cfg(target_os = "macos")]
+pub(super) const NOTE: &str = "settings.general.theme.noteMacos";
+#[cfg(not(target_os = "macos"))]
+pub(super) const NOTE: &str = "settings.general.theme.noteWindows";

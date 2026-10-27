@@ -19,7 +19,8 @@ fn project_settings_environment_field_and_helper_keep_the_drawn_bounds() {
       .get_element_by_id_mut("settings-environment-variables-box")
       .and_then(|e| e.bounds())
       .expect("field bounds");
-    assert_eq!((field.width, field.height), (720.0, 132.0));
+    // The editor runs the row's width inside its 14 sides (`Variables` `qGfsz` in `02 · Runs`).
+    assert_eq!((field.width, field.height), (692.0, 132.0));
     let helper = page
       .window
       .tree
@@ -35,7 +36,7 @@ fn project_settings_environment_field_and_helper_keep_the_drawn_bounds() {
     assert!((action.y - helper.y).abs() < 0.5, "action stays on helper row");
     assert!(
       (action.x + action.width - helper.x - helper.width).abs() < 0.5,
-      "action aligns at the right of the same 720-wide helper"
+      "action aligns at the right of the helper, as wide as the field"
     );
     assert_eq!(action.height, 22.0);
   }

@@ -298,7 +298,7 @@ impl Fields {
           .icon(Icon::Plug)
           .opens(nav.to(Route::Project(
             project,
-            ProjectPage::Connections(ConnectionsView::default().with_selected(connection)),
+            ProjectPage::Connections(ConnectionsView::of(connection)),
           ))),
         );
         Column::new()

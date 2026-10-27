@@ -10,6 +10,7 @@ mod live;
 mod orchestrator;
 mod pipelines;
 mod refusals;
+mod settings;
 
 use std::{
   collections::BTreeMap,
@@ -200,9 +201,12 @@ fn seed_names_every_scenario_once() {
       "lifecycle",
       "connections",
       "api-providers",
+      "project-settings",
+      "project-settings-shared",
       "pipelines",
       "pipelines-empty",
       "accounts",
+      "settings",
       "pull-requests",
       "pull-request-feedback",
       "sources",

@@ -6,11 +6,11 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Row, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
 use orchester_store::JoinedKey;
@@ -19,11 +19,10 @@ use orchester_workspace::workspace::Workspace;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList},
-  screens::project_settings::page,
-  theme::ExtraTypography,
+  screens::project_settings::{kit::Group, page},
+  theme::{ExtraTypography, ProjectSettingsSpacing, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
-    form_section::section,
     icon::Icon,
     notice::{Notice, NoticeTone},
   },
@@ -173,43 +172,34 @@ pub(in crate::screens::project_settings::sharing) fn keys(ctx: &Ctx, joined: &[J
   };
   let header = Row::new()
     .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(SpacingSize::Sm))
+    .padding(Padding::symmetric(ProjectSettingsSpacing::RowX.role(), SpacingSize::Sm))
     .spacing(SpacingSize::Md)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(heading(&ctx.t("sharing.mapping.before"), Some(BEFORE)))
     .child(heading(&ctx.t("sharing.mapping.now"), Some(NOW)))
     .child(heading(&ctx.t("sharing.mapping.task"), None));
-  let rows = joined.iter().map(|task| mapping_row(ctx, task));
-  section(
-    "sharing-keys",
-    &ctx.t("sharing.mapping.heading"),
-    None,
-    vec![
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::new().top(SpacingSize::Md))
-        .spacing(SpacingSize::Sm)
-        .child(
-          Text::new(&detail)
-            .id("sharing-keys-detail")
-            .variant(ExtraTypography::Prose.role())
-            .width(Dimension::Pct(100.0)),
-        )
-        .child(
-          Column::new()
-            .width(Dimension::Pct(100.0))
-            .child(header)
-            .with_children(rows),
-        )
-        .child(page::wide_note(
-          "sharing-keys-branches",
-          Icon::GitBranch,
-          &ctx.t("sharing.mapping.branches"),
-        ))
-        .into(),
-    ],
-  )
-  .into()
+  let rows = joined.iter().map(|task| Element::from(mapping_row(ctx, task)));
+  let intro = Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(
+      ProjectSettingsSpacing::RowX.role(),
+      ProjectSettingsSpacing::RowY.role(),
+    ))
+    .child(
+      Text::new(&detail)
+        .id("sharing-keys-detail")
+        .variant(ProjectSettingsText::Hint.role())
+        .width(Dimension::Pct(100.0)),
+    );
+  Group::new("sharing-keys", ctx.t("sharing.mapping.heading"))
+    .row(intro)
+    .row(header)
+    .rows(rows)
+    .after(page::wide_note(
+      "sharing-keys-branches",
+      Icon::GitBranch,
+      &ctx.t("sharing.mapping.branches"),
+    ))
+    .into()
 }
 
 fn heading(words: &str, width: Option<f32>) -> Text {
@@ -242,10 +232,9 @@ fn mapping_row(ctx: &Ctx, task: &JoinedKey) -> Row {
   Row::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(SpacingSize::Sm))
+    .padding(Padding::symmetric(ProjectSettingsSpacing::RowX.role(), SpacingSize::Sm))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
       Text::new(&task.former)
         .id(format!("{id}-before"))

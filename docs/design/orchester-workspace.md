@@ -725,11 +725,11 @@ time-out today, so a notification carries no countdown.
 - *Badge*: the taskbar button (Windows, an overlay disc with the count, `9+` past nine) or the Dock icon (macOS) shows
   the *Needs you* count of every open project, cleared as items are handled. Quiet hours and the switches do not
   change it.
-- *Settings* (app-wide, Settings › Automation › *Notifications*, switch rows like the page's others): *Needs you*,
-  *Stopped*, *Finished and info*, *Sound*, and *Quiet hours* with a start and end (22:00–08:00 when turned on): no OS
-  notifications then, the badge still updates. No design frame exists yet for this section, nor for the toast and the
-  badge: frames needed are the section's rows (with quiet hours on, and the *this build shows none* note), and the
-  taskbar overlay.
+- *Settings* (app-wide, Settings › *Notifications*, a tab of its own since ORC-104: `02 · Notifications` `fQTFi` of
+  the board `App settings · redesign` `iUmo3` in the new `orchester.pen`): *Needs you*, *Stopped*, *Finished and
+  info*, *Sound*, and *Quiet hours* with a start and end (22:00–08:00 when turned on): no OS notifications then, the
+  badge still updates; the Orchestrator's daily report with *Deliver at* is on the same tab. No design frame exists yet
+  for the toast and the badge: frames needed are the toast and the taskbar overlay.
 
 **Platforms.** Windows shows toasts under the app's AppUserModelID (`Orchester.App`, registered for the person under
 `HKCU\Software\Classes\AppUserModelId`), heard while the app runs; a toast clicked after the app closed opens nothing
@@ -1321,8 +1321,9 @@ an estimate never conflicts with a person's edit.
 - **A person's value wins.** The task form's *Story points* select (*Automatic* or a value) sets a person's points;
   automation never writes over them: the store refuses in the same statement, and `update_task` answers
   `persons_points`. *Automatic* removes only a person's value; automation's points stay until re-estimated.
-- **Orchester's estimate.** With *Let Orchester estimate story points* on (Settings › What automation may do; off until
-  a person turns it on, the person's decision of 2026-10-20), saving a task (form, Create & run, `create_task`,
+- **Orchester's estimate.** With the project's *Let Orchester estimate story points* on (Project settings › Runs ›
+  Estimates since ORC-103, a person's switch; a project nobody set it for keeps the application-wide setting it moved
+  from, off until a person turned it on, the person's decision of 2026-10-20), saving a task (form, Create & run, `create_task`,
   `update_task`) asks the project's runner (`EstimateTask`, IPC protocol 30). The runner asks nothing for a task with a
   person's points, or whose automation points or a recorded request were made from the same brief and criteria (a title
   change alone asks nothing). Otherwise it asks auto mode's reviewer's connection and model (as `get_auto_mode` names

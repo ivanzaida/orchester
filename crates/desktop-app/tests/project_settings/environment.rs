@@ -152,7 +152,7 @@ fn project_settings_environment_reload_recovers_save_failure_only_after_a_fresh_
   assert_eq!(page.value(INPUT), "RUST_LOG=debug");
   assert!(page.exists("settings-environment-save-error"));
   assert!(page.text("project-settings-save-status").starts_with("Not saved"));
-  page.click("settings-tab-limits");
+  page.click("settings-tab-general");
   assert!(page.exists(INPUT), "failed Reload cannot unlock section navigation");
   sql
     .execute_batch(

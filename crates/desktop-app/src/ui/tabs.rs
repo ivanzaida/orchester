@@ -1,8 +1,9 @@
 //! Page tabs (`Page tab/active` `loUWZ`, `Page tab/default` `NspMt`): 34 high, 2 at their sides, 20
 //! apart, on a 1 `border` line (`Workflow tabs` `bxhee`). The current tab's label is 13/500
 //! `text_primary` over a 2 `accent` underline, the others' 13 `text_secondary`; a count follows the label
-//! in its words (`All 24`), or, for what waits for the person, in a badge 6 after it: mono 11/500 `warning` on a
-//! `warning_muted` pill, 1 over and under and 6 at its sides (`Count badge` `CiYKk`). A tab not built yet is its
+//! in its words (`All 24`), or as a 12 `text_muted` number after it (Settings' *Accounts 3*), or, for what waits for
+//! the person, in a badge 6 after it: mono 11/500 `warning` on a `warning_muted` pill, 1 over and under and 6 at its
+//! sides (`Count badge` `CiYKk`). A tab not built yet is its
 //! label in 13 `text_muted` and an 11 `text_muted` lock, 5 apart, with why in its tooltip (`Page tab/locked`
 //! `Smb4t`). Tabs are pointer-only.
 //!
@@ -60,6 +61,8 @@ pub struct PageTab {
   explanation: Option<Arc<str>>,
   /// A count of what waits for the person, in a badge after the label.
   badge: Option<usize>,
+  /// How many there are, a muted number after the label.
+  count: Option<usize>,
 }
 
 impl PageTab {
@@ -71,6 +74,7 @@ impl PageTab {
       state,
       explanation: None,
       badge: None,
+      count: None,
     }
   }
 
@@ -111,6 +115,14 @@ impl PageTab {
   #[must_use]
   pub const fn badge(mut self, count: usize) -> Self {
     self.badge = Some(count);
+    self
+  }
+
+  /// How many there are, in 12 `text_muted` after the label (`mIlfH` in Settings' `Tabs`); its element id is
+  /// `<id>-count`.
+  #[must_use]
+  pub const fn count(mut self, count: usize) -> Self {
+    self.count = Some(count);
     self
   }
 
@@ -158,15 +170,22 @@ impl PageTab {
       .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" });
-    let button = match self.badge {
-      Some(count) => button.child(
+    let button = match (self.badge, self.count) {
+      (Some(count), _) => button.child(
         Row::new()
           .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
           .child(label)
           .child(count_badge(&format!("{}-badge", self.id), count)),
       ),
-      None => button.child(label),
+      (None, Some(count)) => button.child(label).child(
+        Text::new(&count.to_string())
+          .id(format!("{}-count", self.id))
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextMuted)
+          .nowrap(),
+      ),
+      (None, None) => button.child(label),
     };
     let button = if self.explanation.is_some() {
       button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
@@ -273,6 +292,8 @@ pub enum SegmentFace {
   Text(Arc<str>),
   /// A glyph; the label names it for tools.
   Icon(Icon, Arc<str>),
+  /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
+  Labelled(Icon, Arc<str>),
 }
 
 pub struct Segment {
@@ -336,17 +357,28 @@ impl Segment {
     } else {
       (PaletteColor::TextMuted, PaletteColor::TextMuted)
     };
+    let typography = if self.chosen {
+      TypographyStyle::Label
+    } else {
+      TypographyStyle::Description
+    };
     button = match self.face {
       SegmentFace::Text(label) => {
-        let typography = if self.chosen {
-          TypographyStyle::Label
-        } else {
-          TypographyStyle::Description
-        };
         let button = button
           .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .describe("a11y_name", label.clone())
+          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
+        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
+      }
+      SegmentFace::Labelled(face, label) => {
+        let button = button
+          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
+          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .describe("a11y_name", label.clone())
+          .child(icon(face, IconSize::Base, glyph))
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
       }

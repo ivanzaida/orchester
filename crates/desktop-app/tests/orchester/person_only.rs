@@ -213,6 +213,7 @@ fn orchester_person_only_linking_and_uploading() {
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
+  press(&mut window, "sharing-share-open");
   shows(&mut window, "sharing-address");
   window.set("sharing-address", &format!("{}/kontur", recorder.url()));
   let before = recorder.lines().len();
@@ -250,9 +251,9 @@ fn orchester_person_only_leaving_and_signing_out_of_a_server() {
   go(
     &mut window,
     Route::Orchester(OrchesterView::server(entry.stored.id)),
-    "orchester-server-sign-out",
+    "orchester-server-more",
   );
-  press(&mut window, "orchester-server-sign-out");
+  super::harness::sign_out_of_server(&mut window);
   refused(&mut window, "orchester-server-sign-out-confirm");
   let services = window.launch.services().expect("services");
   assert!(

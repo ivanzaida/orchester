@@ -26,6 +26,13 @@ const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCU
 /// Opens the window of `launch` on `runtime`, at `position` if one was asked for, and returns once it closed and its
 /// MCP server stopped.
 pub fn open(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>) {
+  open_showing(runtime, launch, position, None);
+}
+
+/// [`open`], with Settings and the status bar showing a server of their own that `shown` runs instead of the window's,
+/// whose tools stay on a tree of their own: the QA app's `settings` scenario shows the installed app's rows that way
+/// (a free port, a token in memory), while the window's server is the QA copy's its verifier connects to.
+pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>, shown: Option<McpMode>) {
   let workspace = launch.workspace();
   let appearance = appearance(runtime, workspace);
   let mut app = App::new();
@@ -47,6 +54,18 @@ pub fn open(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>
     source = mcp_settings.source().name(),
     "agents' control of the window"
   );
+  // Started first: the gate denies input through the tools attached last, the window's.
+  let mut elsewhere = Tree::new();
+  let shown = shown.map(|mode| {
+    let config = mcp::config(mcp_settings, &link, &appearance, None, app.i18n());
+    AppMcp::start(
+      &mut elsewhere,
+      runtime.handle(),
+      mode,
+      (config, mcp_settings),
+      &link.input_gate(),
+    )
+  });
   // Started before the root mounts, so the status bar shows its address from the first frame.
   let server = McpMode::of_build(workspace).map(|mode| {
     let config = mcp::config(mcp_settings, &link, &appearance, launch.services(), app.i18n());
@@ -58,7 +77,7 @@ pub fn open(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>
       &link.input_gate(),
     )
   });
-  let mcp = server.as_ref().map_or_else(
+  let mcp = shown.as_ref().or(server.as_ref()).map_or_else(
     // `McpMode::of_build` logged why there is none.
     || McpLink::without_server(McpStatus::unavailable(McpKind::Installation, mcp_settings)),
     McpLink::new,
@@ -73,8 +92,8 @@ pub fn open(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>
   }
 
   run(app, tree, position);
-  // `run` returns once the window has closed: the server stops and its discovery file goes.
-  if let Some(server) = server {
+  // `run` returns once the window has closed: the servers stop and the discovery file goes.
+  for server in server.into_iter().chain(shown) {
     server.shutdown();
   }
 }

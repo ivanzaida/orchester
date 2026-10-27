@@ -23,16 +23,13 @@ fn project_settings_code_index_saves_its_switch_and_checks_the_search_tool() {
   assert!(
     page
       .text("settings-no-indexes")
-      .contains("built when the next run starts")
+      .contains("Built when the next run starts")
   );
-  page.until("ripgrep checked", |p| {
-    p.text("settings-ripgrep-state").contains("not found")
-  });
-  assert!(page.exists("settings-ripgrep-install-panel"));
-  page.click("settings-ripgrep-check");
-  page.until("ripgrep rechecked", |p| {
-    p.text("settings-ripgrep-state").contains("not found")
-  });
+  // Missing, the install takes the search tool's row (`ztBqS`).
+  page.until("ripgrep checked", |p| p.exists("settings-ripgrep-install-panel-label"));
+  assert_eq!(page.text("settings-ripgrep-install-panel-label"), "ripgrep not found");
+  assert!(!page.exists("settings-ripgrep-row"));
+  assert!(page.exists("settings-ripgrep-install"));
   page.click("settings-code-index");
   page.until("index off", |p| p.exists("settings-index-off"));
   page.saved();
@@ -74,10 +71,12 @@ fn project_settings_code_index_lists_ready_and_failed_revisions_and_rebuilds() {
     page.saved();
   }
   let short = &revision.as_str()[..7];
-  let ready = format!("settings-index-{short}");
-  page.until("index list", |p| p.exists(&ready) && p.exists("settings-index-1111111"));
+  let ready = format!("settings-index-{short}-row");
+  page.until("index list", |p| {
+    p.exists(&ready) && p.exists("settings-index-1111111-row")
+  });
   assert!(page.text(&ready).contains("Ready"));
-  assert!(page.text("settings-index-1111111").contains("Failed"));
+  assert!(page.text("settings-index-1111111-row").contains("Failed"));
   let manifest = page
     .repo
     .join(".orchester/index")
@@ -114,8 +113,8 @@ fn project_settings_review_code_index_refreshes_runner_created_and_removed_index
   let feed = page.window.projects().feed(crate::support::project_id());
   // As the runner reports that the run whose index it built changed state (its agents start once it is built).
   feed.states.update(|revision| *revision += 1);
-  page.until("runner-created index", |p| p.exists("settings-index-1111111"));
-  assert!(page.text("settings-index-1111111").contains("Failed"));
+  page.until("runner-created index", |p| p.exists("settings-index-1111111-row"));
+  assert!(page.text("settings-index-1111111-row").contains("Failed"));
   fs::remove_file(page.repo.join(".orchester/index/.failures").join(revision.as_str())).expect("remove fixture index");
   feed.states.update(|revision| *revision += 1);
   page.until("runner-removed index", |p| p.exists("settings-no-indexes"));

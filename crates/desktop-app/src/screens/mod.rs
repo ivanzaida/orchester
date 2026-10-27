@@ -57,7 +57,9 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Usage(query)) => all_projects::usage_screen(ctx, *query),
     Ok(Route::AddProject(folder)) => add_project::screen(ctx, folder.map(|folder| folder.path())),
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
+    Ok(Route::RotateToken) => settings::asking_rotation(ctx),
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General),
+    Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
     Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),
@@ -131,11 +133,18 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
       skills::screen(ctx, project, page)
     }
     ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
-    ProjectPage::Secrets(view) => secrets::screen(ctx, project, *view),
-    ProjectPage::Connections(view) => connections::screen(ctx, project, *view),
-    ProjectPage::NewConnection(kind) => connections::new_connection(ctx, project, *kind),
-    ProjectPage::EditConnection(id) => connections::edit_connection(ctx, project, *id),
-    ProjectPage::Settings(tab) => project_settings::screen(ctx, project, *tab),
+    ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
+    ProjectPage::Connections(view) => {
+      project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))
+    }
+    ProjectPage::NewConnection(kind) => {
+      project_settings::screen(ctx, project, project_settings::Shown::NewConnection(*kind))
+    }
+    ProjectPage::EditConnection(id) => {
+      project_settings::screen(ctx, project, project_settings::Shown::EditConnection(*id))
+    }
+    ProjectPage::Settings(tab) => project_settings::screen(ctx, project, project_settings::Shown::Tab(*tab)),
+    ProjectPage::ProjectRules => project_settings::screen(ctx, project, project_settings::Shown::Rules),
     ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),

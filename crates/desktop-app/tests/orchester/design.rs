@@ -1,6 +1,6 @@
 //! What the design verification of N1 found, held in place: the key a first link keeps, the linked page's rows, the
 //! projects an offline server's entry still lists, the end of *Connect a server* at a server already connected, *Try
-//! again* when nothing answers, and the token note after signing out.
+//! again* when nothing answers, the token note after signing out, and the steps in their box with *Cancel* at its end.
 
 use std::net::TcpListener;
 
@@ -23,6 +23,7 @@ fn orchester_design_link_takes_the_server_projects_key() {
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
+  press(&mut window, "sharing-share-open");
   shows(&mut window, "sharing-project-billing-option");
   assert!(
     window.text("sharing-project-billing-option").contains("Empty"),
@@ -40,35 +41,32 @@ fn orchester_design_link_takes_the_server_projects_key() {
     "the confirmation names the key the tasks take: {question}"
   );
   press(&mut window, "sharing-link-confirm");
-  shows(&mut window, "sharing-shared-detail");
-  let detail = window.text("sharing-shared-detail");
-  assert!(detail.starts_with("BIL ·"), "linked under the server's key: {detail}");
-  assert!(detail.contains("synced"), "when it last synced: {detail}");
-  assert!(window.text("sharing-address-state").contains("connected"));
-  assert!(
-    window
-      .text("sharing-make-local-description")
-      .contains("BIL stays the same for everyone else")
-  );
+  // *Team server* (`rsQ79` in `04b Sharing · shared` `TnUGj`).
+  shows(&mut window, "sharing-role-hint");
+  let role = window.text("sharing-role-hint");
+  assert!(role.starts_with("Key BIL ·"), "linked under the server's key: {role}");
+  let address = window.text("sharing-address-hint");
+  assert!(address.starts_with("Synced "), "when it last synced: {address}");
+  assert!(address.contains("connected"), "{address}");
   window.until("the repository compared", |window| {
     window
-      .texts("sharing-repository-state")
+      .texts("sharing-repository-hint")
       .is_some_and(|texts| texts.join(" ").contains("doesn't match"))
   });
-  assert!(
-    window
-      .text("sharing-task-list-description")
-      .starts_with("Kontur's tasks live in Billing on"),
-    "the server project by its name: {}",
-    window.text("sharing-task-list-description")
-  );
-  assert_eq!(window.text("sharing-leave-row-label"), "Leave Billing");
+  assert_eq!(window.text("sharing-leave-row-label"), "Leave the project");
   assert!(
     window
       .text("sharing-repository-value")
       .contains("github.com/acme/billing"),
     "the project's hint: {}",
     window.text("sharing-repository-value")
+  );
+  press(&mut window, "sharing-leave");
+  shows(&mut window, "sharing-leave-question");
+  let question = window.texts("sharing-leave-question").unwrap_or_default().join(" ");
+  assert!(
+    question.contains("Billing"),
+    "the server project by its name: {question}"
   );
 }
 
@@ -88,10 +86,12 @@ fn orchester_design_offline_server_lists_the_projects_linked_here() {
       .texts("orchester-server-header-facts")
       .is_some_and(|texts| texts.join(" ").contains("Orchester server "))
   });
-  let checkout = window.text("orchester-server-project-kontur-checkout");
+  // The row's line names the checkout linked here (`quCVl` in `C6qnY`).
+  let line = window.text("orchester-server-project-kontur-entry-hint");
+  let checkout = line.rsplit("linked to ").next().unwrap_or_default();
   assert!(
     checkout.contains('…') && checkout.ends_with("repo-kontur") && checkout.chars().count() <= 40,
-    "a long checkout path is cut in its middle: {checkout}"
+    "a long checkout path is cut in its middle: {line}"
   );
   recorder.go_down();
   // The monitor asks a connected server once a minute; *Try now* asks at once.
@@ -131,11 +131,10 @@ fn orchester_design_connect_ends_at_a_server_already_connected() {
   window.set("orchester-connect-address", &recorder.url());
   press(&mut window, "orchester-connect-continue");
   shows(&mut window, "orchester-connect-already");
+  // The done *Address* step's line: the server's address, then *Change* (`Vn33B` in `MrVql`).
   let found = window.text("orchester-connect-found");
-  assert!(
-    found.contains("Orchester server ") && found.contains("API 3"),
-    "{found}"
-  );
+  assert!(recorder.url().ends_with(&found), "{found}");
+  shows(&mut window, "orchester-connect-change");
   for later in [
     "orchester-connect-step-compare",
     "orchester-connect-step-join",
@@ -171,5 +170,51 @@ fn orchester_design_connect_tries_again_when_nothing_answers() {
       .get_element_by_id("orchester-connect-address-hint")
       .is_none(),
     "the hint gives way to the error"
+  );
+}
+
+/// The steps are the rows of one box, each as wide as it, and *Cancel* ends the row under it (`A8uyj`, `qXW3I` in
+/// `MrVql`; Verify, attempt 3).
+#[test]
+fn orchester_design_connect_steps_are_rows_of_a_box_with_cancel_at_its_end() {
+  let mut window = window(None);
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::connect()),
+    "orchester-connect-address",
+  );
+  let mut bounds = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let steps = bounds("orchester-connect-steps");
+  let mut bottom = steps.y;
+  for id in [
+    "orchester-connect-step-address",
+    "orchester-connect-step-compare",
+    "orchester-connect-step-join",
+    "orchester-connect-step-username",
+  ] {
+    let step = bounds(id);
+    assert!(
+      (step.width - steps.width).abs() < 0.5,
+      "{id} spans the box: {step:?} {steps:?}"
+    );
+    assert!(step.y + 0.5 >= bottom, "{id} follows the step above: {step:?}");
+    bottom = step.y + step.height;
+  }
+  assert!(bottom <= steps.y + steps.height + 0.5, "the steps stay in their box");
+  let actions = bounds("orchester-connect-actions");
+  let cancel = bounds("orchester-connect-cancel");
+  assert!(
+    (cancel.x + cancel.width - (actions.x + actions.width)).abs() < 0.5,
+    "Cancel ends the row: {cancel:?} {actions:?}"
+  );
+  assert!(
+    (actions.x + actions.width - (steps.x + steps.width)).abs() < 0.5,
+    "the row under the box ends with it: {actions:?} {steps:?}"
   );
 }

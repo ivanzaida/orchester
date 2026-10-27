@@ -7,7 +7,7 @@ use super::*;
 fn settings_mcp_rotate_asks_in_place_then_uses_a_new_token() {
   let vault = Arc::new(MemoryVault::default());
   let mut shown = Shown::installed(free_port(), vault.clone());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let old = shown.token();
   shown.click("settings-mcp-token-rotate");
   assert!(shown.says("settings-mcp-token-rotate-question", "Rotate the token?"));
@@ -30,7 +30,7 @@ fn settings_mcp_rotate_asks_in_place_then_uses_a_new_token() {
 fn settings_mcp_rotate_refused_by_the_store_keeps_the_token_and_says_so() {
   let vault = Arc::new(MemoryVault::default());
   let mut shown = Shown::installed(free_port(), vault.clone());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let old = shown.token();
   vault.refuse_stores(true);
   shown.click("settings-mcp-token-rotate");
@@ -45,13 +45,13 @@ fn settings_mcp_rotate_refused_by_the_store_keeps_the_token_and_says_so() {
 #[test]
 fn settings_mcp_show_hides_the_window_from_clients_until_hidden() {
   let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let gate = shown.link.input_gate();
   shown.click("settings-mcp-token-show");
   assert!(gate.token_shown(), "clients stop reading the window");
   assert!(shown.says("settings-mcp-token-show", "Hide"));
   assert!(shown.says(
-    "settings-mcp-token-shown-for",
+    "settings-mcp-token-hint",
     "Hidden again in 30 s. While it shows, the MCP server refuses screenshots and the window's text, so no agent \
      reads it."
   ));
@@ -63,7 +63,7 @@ fn settings_mcp_show_hides_the_window_from_clients_until_hidden() {
 #[test]
 fn settings_mcp_leaving_settings_hides_the_token() {
   let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let gate = shown.link.input_gate();
   shown.click("settings-mcp-token-show");
   assert!(gate.token_shown());
@@ -78,7 +78,7 @@ fn settings_mcp_leaving_settings_hides_the_token() {
 }
 
 #[test]
-fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
+fn settings_mcp_token_value_and_buttons_keep_their_columns_when_shown() {
   const PARTS: [&str; 4] = [
     "settings-mcp-token-value",
     "settings-mcp-token-show",
@@ -86,13 +86,19 @@ fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
     "settings-mcp-token-rotate",
   ];
   let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let hidden = PARTS.map(|id| shown.bounds(id));
   shown.click("settings-mcp-token-show");
   assert!(shown.link.input_gate().token_shown());
   let revealed = PARTS.map(|id| shown.bounds(id));
+  // The line under the label grows while the token shows (`Token shown` `SZVNM`), so the row may grow; across it,
+  // the value and the buttons stay where they were and as wide.
   for ((id, hidden), revealed) in PARTS.iter().zip(hidden).zip(revealed) {
-    assert_eq!(hidden, revealed, "{id} moved or changed width when the token showed");
+    assert_eq!(
+      (hidden[0], hidden[2]),
+      (revealed[0], revealed[2]),
+      "{id} moved or changed width when the token showed"
+    );
   }
   let field = revealed[0];
   for label in [
@@ -104,14 +110,10 @@ fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
       "Show and Hide share a slot as wide as the wider of them: {label}"
     );
   }
-  assert!(
-    field[2] > 400.0,
-    "the field takes the room the buttons leave (lye6f: about 430): {field:?}"
-  );
   let text = shown.bounds("settings-mcp-token-text");
   assert!(
     text[0] + text[2] <= field[0] + field[2],
-    "the token stays inside its field: {text:?} in {field:?}"
+    "the token stays inside its room: {text:?} in {field:?}"
   );
 }
 
@@ -119,7 +121,7 @@ fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
 fn settings_mcp_hidden_token_keeps_clients_out_until_the_window_no_longer_draws_it() {
   const MASK: &str = "•••• •••• •••• •••• •••• •••• •••• ••••";
   let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.until("listening", Shown::listening);
   let gate = shown.link.input_gate();
   shown.click("settings-mcp-token-show");
   let start = std::time::Instant::now();

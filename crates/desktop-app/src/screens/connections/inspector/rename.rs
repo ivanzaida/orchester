@@ -1,5 +1,5 @@
-//! Renaming an agent or GitHub connection in its inspector's header: the name with a pencil that edits it in place,
-//! checked as Add connection checks a name (not blank, at most 200 characters, no other agent or GitHub connection of
+//! Renaming an agent or GitHub connection in place of its title (*Rename* in the page's … menu): the name in a field,
+//! checked as Add provider checks a name (not blank, at most 200 characters, no other agent or GitHub connection of
 //! the project has it), and Save name storing it. Profiles, pipelines and runs name a connection by its id, so they
 //! keep running on it. An MCP server's name is what agents know it by, so it is renamed in Edit MCP server instead.
 
@@ -22,23 +22,21 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::{Inspecting, title};
+use super::{Actions, Inspecting, title};
 use crate::{
   screens::connections::{add_agent::naming::problem_among, data::Saved},
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    icon::Icon,
-    icon_button::IconButton,
     message::message_text,
   },
 };
 
-/// The name of connection `id`, called `name`, as the header shows it, with its rename.
+/// The name of connection `id`, called `name`, as the head shows it, or its rename while *Rename* is open.
 pub(super) fn title_with_rename(
   ctx: &mut Ctx,
-  inspecting: &Inspecting<'_>,
+  (inspecting, actions): (&Inspecting<'_>, &Actions),
   (id, name): (ConnectionId, &str),
 ) -> Element {
   let listed = inspecting.listed;
@@ -64,19 +62,29 @@ pub(super) fn title_with_rename(
       name: name.to_owned(),
       taken: Arc::new(taken),
       busy: inspecting.running.is_some(),
+      editing: actions.renaming.clone(),
     },
   )
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub(super) struct RenameProps {
   open: OpenProject,
   connection: ConnectionId,
   name: String,
   /// The names of the project's other agent and GitHub connections.
   taken: Arc<Vec<String>>,
-  /// Other work runs on the connection (a check, a change of account): the name is not edited until it ends.
+  /// Other work runs on the connection (a check, a change of account): the name is not saved until it ends.
   busy: bool,
+  /// *Rename* is open: the page's, which its … menu opens.
+  editing: Signal<bool>,
+}
+
+impl PartialEq for RenameProps {
+  fn eq(&self, other: &Self) -> bool {
+    (&self.open, self.connection, &self.name, &self.taken, self.busy)
+      == (&other.open, other.connection, &other.name, &other.taken, other.busy)
+  }
 }
 
 impl DevtoolsInspectable for RenameProps {}
@@ -84,11 +92,12 @@ impl DevtoolsInspectable for RenameProps {}
 type RenameAction = FutureAction<(OpenProject, ConnectionId, Name), Saved, Message>;
 
 pub(super) struct Rename {
-  editing: Signal<bool>,
   draft: Signal<String>,
   /// The name Save name last tried, whose refusal is said while the field still holds it.
   tried: Signal<String>,
   save: RenameAction,
+  /// Whether the field was filled for the rename open now.
+  seeded: Signal<bool>,
 }
 
 impl Component for Rename {
@@ -96,45 +105,33 @@ impl Component for Rename {
 
   fn create(ctx: &mut Ctx) -> Self {
     let save = save_action(ctx);
-    let editing = ctx.signal(false);
-    let done = editing.clone();
+    let done = ctx.props::<RenameProps>().editing.clone();
     ctx.watch(&save.state(), move |state| {
       if state.is_fulfilled() {
         done.set(false);
       }
     });
     Self {
-      editing,
       draft: ctx.signal(String::new()),
       tried: ctx.signal(String::new()),
       save,
+      seeded: ctx.signal(false),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RenameProps>().clone();
-    if self.editing.get() {
+    if props.editing.get() {
+      if !self.seeded.get_untracked() {
+        self.seeded.set(true);
+        self.draft.set(props.name.clone());
+      }
       return self.editor(ctx, &props);
     }
-    let (editing, draft, name) = (self.editing.clone(), self.draft.clone(), props.name.clone());
-    let rename = IconButton::new("connection-rename", Icon::Pencil, ctx.t("connections.rename.action")).compact();
-    // Faded while other work runs on the connection, as Test connection is.
-    let rename = if props.busy {
-      rename
-    } else {
-      rename.on_click(move || {
-        draft.set(name.clone());
-        editing.set(true);
-      })
-    };
-    let rename = rename.render(ctx);
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Xs)
-      .align_items(Alignment::Center)
-      .child(title(&props.name).flex_shrink(1.0).min_width(Dimension::Px(0.0)))
-      .child(rename)
-      .into()
+    if self.seeded.get_untracked() {
+      self.seeded.set(false);
+    }
+    title(&props.name).into()
   }
 }
 
@@ -179,7 +176,7 @@ impl Rename {
       }
       _ => save.disabled(),
     };
-    let editing = self.editing.clone();
+    let editing = props.editing.clone();
     let cancel = ActionButton::new(
       "connection-rename-cancel",
       ButtonKind::Secondary,

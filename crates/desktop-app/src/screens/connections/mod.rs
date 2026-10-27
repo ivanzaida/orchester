@@ -1,11 +1,12 @@
-//! The project's Connections (layer `Connections` `mKKPM`): how its agents run (agent CLIs, and native
-//! connections, which this version does not run), GitHub through `gh`, and the MCP servers its agents get.
-//! The list with an inspector (`list`), Add connection for an agent CLI (`add_agent`) and Add / Edit MCP
-//! server (`mcp_form`), each a page in the Connections tab; adding is a person's action in the window, and
-//! the domain rules are `orchester_workspace::connections`', which the MCP setup tools share.
+//! Project settings › Connections (`05 Connections` `dk46o` in `Project settings · redesign`): how the project's agents
+//! run (agent CLIs, and native connections, which this version does not run), GitHub through `gh`, and the MCP servers
+//! its agents get. The groups of connections (`list`), a connection's page (`inspector`), Add provider for an agent CLI
+//! (`add_agent`) and Add / Edit MCP server (`mcp_form`), each a page under the tab with a crumb back to it; adding is
+//! a person's action in the window, and the domain rules are `orchester_workspace::connections`', which the MCP setup
+//! tools share. Project settings draws the page around them (`project_settings::page`).
 //!
 //! Edit connection of an agent CLI connection chooses its account (`edit_agent`); an agent or GitHub connection is
-//! renamed in its inspector's header, an MCP server in its form. Not built in this app yet, and visibly unavailable:
+//! renamed in place of its page's title, an MCP server in its form. Not built in this app yet, and visibly unavailable:
 //! adding or editing a GitHub connection and changing its account or access, choosing a program file other than the
 //! copies on the search path, native connections (adding, testing, their models), and listing an MCP server's tools.
 
@@ -22,10 +23,7 @@ pub(crate) mod widen;
 pub(super) mod words;
 mod work;
 
-use lurq::{
-  app::{ctx::Ctx, theme::Breakpoint},
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::id::ConnectionId;
 
 use self::{
@@ -39,12 +37,7 @@ use crate::{
   routes::{ConnectionsView, NewConnection},
 };
 
-/// Whether the window is narrow (`Connections · All connections · 960` `Halhq`, `b3aoUZ`): the list then has
-/// compact rows and the page less room at its sides.
-fn narrow(ctx: &Ctx) -> bool {
-  ctx.breakpoint() < Some(Breakpoint::Xl)
-}
-
+/// The Connections tab: its groups, or the page of the connection `view` names.
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> Element {
   let key = format!("connections-{}", project.open.project.id());
   ctx.mount_keyed::<ConnectionsScreen>(
@@ -56,6 +49,7 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> E
   )
 }
 
+/// Add provider or Add MCP server, as `kind` says.
 pub fn new_connection(ctx: &mut Ctx, project: &ShownProject, kind: NewConnection) -> Element {
   let id = project.open.project.id();
   match kind {

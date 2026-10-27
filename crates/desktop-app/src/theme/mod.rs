@@ -37,6 +37,7 @@ mod orchestrator;
 mod overview;
 mod palette;
 pub mod pipelines;
+mod project_settings;
 mod projects;
 mod pull_requests;
 mod secrets;
@@ -83,6 +84,7 @@ pub use self::{
   orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
+  project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
@@ -151,6 +153,7 @@ pub fn install(app: &mut App, mode: Mode) {
   sources::install(theme);
   delivery::install(theme);
   import::install(theme);
+  project_settings::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

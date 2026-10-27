@@ -3,6 +3,8 @@
 //! in the table.
 
 mod files;
+mod project_settings;
+mod settings;
 mod usage;
 mod views;
 
@@ -10,8 +12,8 @@ use std::num::NonZeroU64;
 
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, MemoryTab, NewConnection, OverviewTab,
-  ProjectPage, Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsView, JoinTarget, MemoryTab, NewConnection, OverviewTab, ProjectPage, Route,
+  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, FeedbackId, ProjectId},
@@ -74,6 +76,7 @@ fn every_route() -> Vec<Route> {
     Route::Settings,
     Route::General,
   ];
+  all.extend(settings::routes());
   all.extend(Screen::ALL.into_iter().filter_map(ProjectPage::of).map(at));
   all.extend(OverviewTab::ALL.map(|tab| at(ProjectPage::Overview(tab))));
   all.extend(TaskListTab::ALL.map(|tab| at(ProjectPage::Tasks(TaskList::new(tab)))));
@@ -109,11 +112,10 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::EditTask(key("KON-7"))),
     at(ProjectPage::Usage(Box::new(usage_query()))),
     at(ProjectPage::EditConnection(connection())),
-    at(ProjectPage::Connections(
-      ConnectionsView::new(ConnectionsTab::McpServers).with_selected(connection()),
-    )),
+    at(ProjectPage::Connections(ConnectionsView::default())),
+    at(ProjectPage::Connections(ConnectionsView::of(connection()))),
+    at(ProjectPage::ProjectRules),
   ]);
-  all.extend(ConnectionsTab::ALL.map(|tab| at(ProjectPage::Connections(ConnectionsView::new(tab)))));
   all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
   all.extend(files_routes());
@@ -490,41 +492,6 @@ fn a_task_and_its_forms_select_tasks_in_the_sidebar() {
   assert_eq!(Route::Settings.project(), None);
 }
 
-#[test]
-fn connections_pages_have_their_documented_paths_and_select_connections() {
-  let root = format!("/project/{PROJECT}/connections");
-  for (page, path) in [
-    (ProjectPage::Connections(ConnectionsView::default()), root.clone()),
-    (
-      ProjectPage::Connections(ConnectionsView::new(ConnectionsTab::McpServers).with_selected(connection())),
-      format!("{root}?tab=mcp_servers&selected={CONNECTION}"),
-    ),
-    (
-      ProjectPage::NewConnection(NewConnection::AgentProvider),
-      format!("{root}/new"),
-    ),
-    (
-      ProjectPage::NewConnection(NewConnection::McpServer),
-      format!("{root}/new?kind=mcp_server"),
-    ),
-    (
-      ProjectPage::EditConnection(connection()),
-      format!("{root}/{CONNECTION}/edit"),
-    ),
-  ] {
-    let route = at(page);
-    assert_eq!(route.path(), path);
-    assert_eq!(route.nav_screen(), Screen::Connections, "{route:?}");
-  }
-  assert_eq!(
-    Route::parse(&format!("{root}/not-an-id/edit")),
-    Err(RouteError::NoScreen)
-  );
-  assert!(matches!(
-    Route::parse(&format!("{root}?selected=nope")),
-    Err(RouteError::InvalidParam { .. })
-  ));
-}
 #[test]
 fn pipelines_pages_have_their_own_paths_and_select_pipelines() {
   let id = PROJECT.parse().expect("resource id");

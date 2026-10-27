@@ -114,14 +114,17 @@ fn sidebar_lists_the_project_screens_in_the_design_order_and_goes_to_them() {
     "nav-memory",
     "nav-skills",
     "nav-tools",
-    "nav-secrets",
-    "nav-connections",
   ];
   let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
   assert!(
     tops.windows(2).all(|pair| pair[0] < pair[1]),
     "{order:?} from the top: {tops:?}"
   );
+  // Secrets and Connections are tabs of Project settings, which the sidebar keeps.
+  for item in ["nav-secrets", "nav-connections"] {
+    assert!(window.texts(item).is_none(), "{item} left the sidebar");
+  }
+  assert!(window.texts("nav-project_settings").is_some());
   // Every entry opens its own screen (`tests/orchestrator/`, `tests/merge_queue.rs`, `tests/memory/`).
   for (item, screen, title) in [
     ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),

@@ -157,7 +157,21 @@ impl Secrets {
       .window
       .navigation()
       .go(Route::Project(project_id(), ProjectPage::Secrets(Default::default())));
-    self.until("secrets list", |s| s.exists("secrets-body"));
+    self.until("secrets list", |s| s.exists("secrets-list"));
+  }
+  /// The page of `secret`, opened from its row in the list.
+  pub fn open(&mut self, secret: &Secret) {
+    self.list();
+    let row = format!("secret-row-{}-row", secret.id());
+    self.until("its row", |s| s.exists(&row));
+    self.click(&row);
+    self.until("its page", |s| s.exists("secret-inspector-name"));
+  }
+  /// *Archive* from the page's … menu, which asks in place.
+  pub fn ask_archive(&mut self) {
+    self.click("secret-more");
+    self.click("secret-archive");
+    self.until("the question", |s| s.exists("secret-archive-confirm"));
   }
   pub fn seed(&self, name: &str, environment: Environment) -> Secret {
     let id = data::add_in(

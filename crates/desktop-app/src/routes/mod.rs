@@ -2,8 +2,8 @@
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
 //! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
-//! `/settings` the app's settings (`?tab=general`, `accounts` or `orchester`; Automation without one). A project's
-//! screens start at
+//! `/settings` the app's settings (`?tab=general`, `notifications`, `accounts` or `orchester` for Orchester Cloud;
+//! Automation without one, and `?ask=rotate-token` asks *Rotate the token?* there). A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
@@ -12,16 +12,18 @@
 //! its tab and read without one as its Summary, and `/project/<id>/tasks/<key>/edit` is Edit task.
 //! Modules is `/project/<id>/modules` and a module's page `/project/<id>/modules/<module id>`. The Delivery view
 //! beside Usage is `/project/<id>/usage/delivery` (`?period=` 30d, 90d or 365d).
-//! Connections is `/project/<id>/connections` (`?tab=`, `?selected=` the connection its inspector shows), Add
-//! connection `/project/<id>/connections/new` (`?kind=mcp_server` adds an MCP server) and
-//! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
+//! Project settings is `/project/<id>/settings` (`?tab=runs`, [`ProjectSettingsTab`];
+//! `?tab=runs&view=rules` its page *Approved for every run*). Its Connections tab is `/project/<id>/connections`
+//! (`?selected=` the connection whose page shows), Add provider `/project/<id>/connections/new`
+//! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP server or
+//! an agent CLI connection's account; its Secrets tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer is
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
 //! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
-//! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). Secrets, the Skills
-//! library, an agent profile, Instructions, a pipeline's editor, Memory and Project settings keep their tab,
-//! filter, item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`],
-//! [`InstructionsView`], [`PipelinePanel`], [`MemoryTab`], [`ProjectSettingsTab`]);
+//! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). The Skills
+//! library, an agent profile, Instructions, a pipeline's editor and Memory keep their tab,
+//! filter, item and panel in the query too ([`SkillsFilter`], [`AgentTab`],
+//! [`InstructionsView`], [`PipelinePanel`], [`MemoryTab`]);
 //! `/project/<id>/settings?tab=sharing&ask=make-local` opens Sharing with *Make local*'s question. A tab, source
 //! or kind left out of the query is the one the screen opens on.
 //!
@@ -70,21 +72,21 @@ use self::query::{Params, with_query};
 pub use self::{
   accounts::{AccountsPanel, AccountsView},
   agents::AgentTab,
-  connections::{ConnectionsTab, ConnectionsView, NewConnection},
+  connections::{ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
   import::ImportTab,
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
   memory::MemoryTab,
-  orchester::{OrchesterPanel, OrchesterView},
+  orchester::{ConnectStep, OrchesterAsk, OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
   pipeline::PipelinePanel,
   project_settings::ProjectSettingsTab,
   screen::Screen,
-  secrets::{SecretsPanel, SecretsTab, SecretsView},
+  secrets::{SecretsPanel, SecretsView},
   skills::SkillsFilter,
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},
@@ -109,10 +111,15 @@ const EDIT: &str = "edit";
 const TAB: &str = "tab";
 /// Settings' General tab.
 const GENERAL: &str = "general";
+/// Settings' Notifications tab.
+const NOTIFICATIONS: &str = "notifications";
 /// Settings' Accounts tab.
 const ACCOUNTS: &str = "accounts";
-/// Settings' Orchester tab.
+/// Settings' Orchester Cloud tab, by the id it kept from when it was named Orchester.
 const ORCHESTER: &str = "orchester";
+/// Automation's question in place: *Rotate the token?* (`shpsk`).
+const ASK: &str = "ask";
+const ROTATE_TOKEN: &str = "rotate-token";
 /// The invite landing under Settings › Orchester.
 const INVITE: &str = "invite";
 const INVITE_PATTERN: &str = "/settings/invite";
@@ -168,11 +175,16 @@ pub enum Route {
   AddProject(Option<RouteFolder>),
   /// Settings › Automation, where Settings opens.
   Settings,
-  /// Settings › General (`hUaXB`): the theme, the plan limits' warning threshold and this computer.
+  /// Settings › Automation asking *Rotate the token?* in place under the access token (`shpsk`); only a person's
+  /// answer rotates it.
+  RotateToken,
+  /// Settings › General (`l838Ty`): the theme, the plan limits' warning threshold and this computer.
   General,
-  /// Settings › Accounts, with the account it shows and its panel.
+  /// Settings › Notifications (`fQTFi`): what notifies, how, quiet hours and the daily report.
+  Notifications,
+  /// Settings › Accounts, the list or the page of the account it shows with its panel.
   Accounts(AccountsView),
-  /// Settings › Orchester, with the account or server it shows, or *Connect a server*.
+  /// Settings › Orchester Cloud, or the page of the team server it shows, or *Connect a server*.
   Orchester(OrchesterView),
   /// The invite landing (`xeFRB`): which local checkout to link to the project an invite was to.
   Invite(JoinTarget),
@@ -202,7 +214,13 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
-      Self::Settings | Self::General | Self::Accounts(_) | Self::Orchester(_) | Self::Invite(_) => Screen::Settings,
+      Self::Settings
+      | Self::RotateToken
+      | Self::General
+      | Self::Notifications
+      | Self::Accounts(_)
+      | Self::Orchester(_)
+      | Self::Invite(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
@@ -220,18 +238,21 @@ impl Route {
       | Self::Usage(_)
       | Self::AddProject(_)
       | Self::Settings
+      | Self::RotateToken
       | Self::General
+      | Self::Notifications
       | Self::Accounts(_)
       | Self::Orchester(_)
       | Self::Invite(_) => None,
     }
   }
 
-  /// The screen the sidebar shows as selected: a task and its forms belong to Tasks.
+  /// The screen the sidebar shows as selected: a task and its forms belong to Tasks, Connections and Secrets with
+  /// their pages to Project settings, whose tabs they are.
   pub const fn nav_screen(&self) -> Screen {
     match self.screen() {
       Screen::Task | Screen::NewTask | Screen::EditTask => Screen::Tasks,
-      Screen::NewConnection | Screen::EditConnection => Screen::Connections,
+      Screen::Connections | Screen::NewConnection | Screen::EditConnection | Screen::Secrets => Screen::ProjectSettings,
       Screen::OrchestratorSettings => Screen::Orchestrator,
       screen => screen,
     }
@@ -246,7 +267,9 @@ impl Route {
         &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
       ),
       Self::Settings => format!("/{SETTINGS}"),
+      Self::RotateToken => with_query(format!("/{SETTINGS}"), &[(ASK, Some(ROTATE_TOKEN))]),
       Self::General => with_query(format!("/{SETTINGS}"), &[(TAB, Some(GENERAL))]),
+      Self::Notifications => with_query(format!("/{SETTINGS}"), &[(TAB, Some(NOTIFICATIONS))]),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Orchester(view) => view.path(format!("/{SETTINGS}"), (TAB, ORCHESTER)),
       Self::Invite(target) => {
@@ -295,11 +318,20 @@ impl Route {
 }
 
 impl Route {
-  /// Settings at the tab its query names: Automation, General, Accounts with the account it shows, or Orchester.
+  /// Settings at the tab its query names: Automation (asking *Rotate the token?* with `ask`), General,
+  /// Notifications, Accounts with the account it shows, or Orchester Cloud.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
-      None => Ok(Self::Settings),
+      None => match params.take(ASK)?.as_deref() {
+        None => Ok(Self::Settings),
+        Some(ROTATE_TOKEN) => Ok(Self::RotateToken),
+        Some(other) => Err(RouteError::InvalidParam {
+          param: ASK.to_owned(),
+          value: other.to_owned(),
+        }),
+      },
       Some(GENERAL) => Ok(Self::General),
+      Some(NOTIFICATIONS) => Ok(Self::Notifications),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
       Some(ORCHESTER) => OrchesterView::take(params).map(Self::Orchester),
       Some(other) => Err(RouteError::InvalidParam {

@@ -1,19 +1,19 @@
-//! *Notifications* (ORC-56) under *What automation may do*: a row with a switch per group of OS notifications (*Needs
-//! you* and *Stopped* on, *Finished and info* off until changed), *Sound*, and *Quiet hours*, which, while on, has its
-//! start and end on a row of their own. No design frame draws the section yet: it takes the Settings page's switch rows
-//! (`Form row` `XaNIz`). A change shows at once, in the window's [`NotificationPrefs`], and is saved off the UI thread;
-//! one that was not saved says why under the section. A build that shows no OS notifications says so over the rows.
+//! Settings › Notifications (`02 · Notifications` `fQTFi` in the new `orchester.pen`, ORC-56): *Notify me when* with a
+//! switch per group of OS notifications (*Needs you* and *Stopped* on, *Finished and info* off until changed), *How*
+//! with *Sound* and *Quiet hours*, which, while on, has its start and end on a row of their own, and the Orchestrator's
+//! daily report (`super::daily_report`). A change shows at once, in the window's [`NotificationPrefs`], and is saved
+//! off the UI thread; one that was not saved says why under the groups. A build that shows no OS notifications says so
+//! over them.
 
 use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::SpacingSize,
   },
   components::{Column, Row, SelectOption, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::notification::{MINUTES_PER_DAY, NotificationGroup, NotificationSettings, QuietHours};
 use orchester_workspace::{
@@ -23,7 +23,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use super::{
-  automation::{row, section_title},
+  frame,
   save_state::{Outcome, SaveState},
 };
 use crate::{
@@ -35,9 +35,10 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     field::{SelectField, field_error},
-    icon::Icon,
-    inspector::note,
     message::message_text,
+    notice::NoticeTone,
+    setting_notice::SettingNotice,
+    setting_rows::{SettingGroup, SettingRow},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -47,7 +48,15 @@ const STEP: u16 = 30;
 
 type SaveAction = FutureAction<NotificationSettings, (), Message>;
 
-/// The section's rows.
+/// The tab, scrolling under the header.
+pub fn tab(ctx: &mut Ctx) -> Element {
+  let pane = frame::pane("settings-notifications-tab")
+    .child(ctx.mount_keyed::<NotificationsSection>("notifications", ()))
+    .child(ctx.mount_keyed::<super::daily_report::DailyReportSection>("daily-report", ()));
+  frame::column("settings-notifications-scroll", pane).into()
+}
+
+/// *Notify me when* and *How*.
 pub struct NotificationsSection {
   /// The quiet hours' start and end as chosen, `HH:MM`.
   start: Signal<String>,
@@ -78,28 +87,28 @@ impl Component for NotificationsSection {
     }
     let failed = state.error;
     self.follow_times(&prefs, &save, settings);
-    let switch = |ctx: &Ctx, (key, on): (&str, bool), change| switch_row(ctx, (&prefs, &save), (key, on), change);
-    let mut rows: Vec<Element> = vec![
+    let mut switch = |key, change| switch_row(ctx, (&prefs, &save), key, change);
+    let when = [
       switch(
-        ctx,
-        ("needsYou", settings.shows(NotificationGroup::NeedsYou)),
+        ("needsYou", settings.shows(NotificationGroup::NeedsYou), true),
         |settings, on| settings.with(NotificationGroup::NeedsYou, on),
       ),
       switch(
-        ctx,
-        ("stopped", settings.shows(NotificationGroup::Stopped)),
+        ("stopped", settings.shows(NotificationGroup::Stopped), true),
         |settings, on| settings.with(NotificationGroup::Stopped, on),
       ),
       switch(
-        ctx,
-        ("finished", settings.shows(NotificationGroup::Finished)),
+        ("finished", settings.shows(NotificationGroup::Finished), true),
         |settings, on| settings.with(NotificationGroup::Finished, on),
       ),
-      switch(ctx, ("sound", settings.sound), |settings, on| NotificationSettings {
+    ];
+    // Sound says all it does in its name: no hint (`Sound` `JTj9y`).
+    let mut how = vec![
+      switch(("sound", settings.sound, false), |settings, on| NotificationSettings {
         sound: on,
         ..settings
       }),
-      switch(ctx, ("quiet", settings.quiet.is_some()), |settings, on| {
+      switch(("quiet", settings.quiet.is_some(), true), |settings, on| {
         NotificationSettings {
           quiet: on.then(QuietHours::default),
           ..settings
@@ -107,20 +116,21 @@ impl Component for NotificationsSection {
       }),
     ];
     if settings.quiet.is_some() {
-      rows.push(self.times(ctx));
+      how.push(self.times(ctx));
     }
     Column::new()
       .id("settings-notifications")
       .width(Dimension::Pct(100.0))
-      .child(section_title(&ctx.t("settings.notifications.section")))
+      .spacing(crate::theme::SettingsSpacing::Page.role())
       .with_children(delivery_note(ctx))
-      .with_children(rows)
+      .child(SettingGroup::new("settings-notify-when", ctx.t("settings.notifications.when")).rows(when))
+      .child(SettingGroup::new("settings-notify-how", ctx.t("settings.notifications.how")).rows(how))
       .with_children(failed.map(|reason| {
         let reason = message_text(ctx, &reason);
-        Column::new().padding_top(SpacingSize::Sm).child(field_error(
+        field_error(
           "settings-notify-error",
           &ctx.t_args("settings.notifications.notSaved", [("reason", &*reason)]),
-        ))
+        )
       }))
   }
 }
@@ -161,55 +171,57 @@ impl NotificationsSection {
     save.run(next);
   }
 
-  /// The quiet hours' start and end (`From 22:00 to 08:00`); two same times say they are not taken.
-  fn times(&self, ctx: &Ctx) -> Element {
+  /// *From* with the quiet hours' start and end (`From 22:00 to 08:00`, `From` `HFMmS`); two same times say they are
+  /// not taken.
+  fn times(&self, ctx: &mut Ctx) -> Element {
     let select = |id: &str, name: &str, value: &Signal<String>| {
       SelectField::new(id, ctx.t(name), value.clone(), time_options())
         .width(Dimension::Px(TIME_WIDTH))
         .render(ctx)
     };
-    let same = self.start.get() == self.end.get();
-    Column::new()
+    let times = Row::new()
       .id("settings-notify-quiet-times")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::vertical(SpacingSize::Md))
+      .align_items(Alignment::Center)
       .spacing(ExtraSpacing::Snug.role())
+      .child(select(
+        "settings-notify-quiet-start",
+        "settings.notifications.quiet.start",
+        &self.start,
+      ))
       .child(
-        Row::new()
-          .align_items(Alignment::Center)
-          .spacing(SpacingSize::Sm)
-          .child(Text::new(&ctx.t("settings.notifications.quiet.from")))
-          .child(select(
-            "settings-notify-quiet-start",
-            "settings.notifications.quiet.start",
-            &self.start,
-          ))
-          .child(Text::new(&ctx.t("settings.notifications.quiet.to")))
-          .child(select(
-            "settings-notify-quiet-end",
-            "settings.notifications.quiet.end",
-            &self.end,
-          )),
+        Text::new(&ctx.t("settings.notifications.quiet.to"))
+          .variant(lurq::app::theme::TypographyStyle::Description)
+          .color(lurq::app::theme::PaletteColor::TextMuted),
       )
-      .with_children(same.then(|| {
-        field_error(
-          "settings-notify-quiet-same",
-          &ctx.t("settings.notifications.quiet.same"),
-        )
-      }))
+      .child(select(
+        "settings-notify-quiet-end",
+        "settings.notifications.quiet.end",
+        &self.end,
+      ));
+    let same = (self.start.get() == self.end.get()).then(|| {
+      field_error(
+        "settings-notify-quiet-same",
+        &ctx.t("settings.notifications.quiet.same"),
+      )
       .into()
+    });
+    SettingRow::new("settings-notify-quiet-from", ctx.t("settings.notifications.quiet.from"))
+      .control(times)
+      .below_all(same)
+      .render(ctx)
   }
 }
 
 /// The width of a time's select (`22:00` and its chevron).
-pub(super) const TIME_WIDTH: f32 = 112.0;
+pub(super) const TIME_WIDTH: f32 = 96.0;
 
-/// The row `settings-notify-{key}` with its switch, titled and described by `settings.notifications.{key}.*`; turning
-/// the switch shows the settings `change` makes at once and saves them.
+/// The row `settings-notify-{key}` with its switch, titled by `settings.notifications.{key}.title` and, when `hinted`,
+/// with the hint `….hint` under it, what it covers in its tooltip; turning the switch shows the settings `change`
+/// makes at once and saves them.
 fn switch_row(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   (prefs, save): (&NotificationPrefs, &SaveAction),
-  (key, on): (&str, bool),
+  (key, on, hinted): (&str, bool, bool),
   change: fn(NotificationSettings, bool) -> NotificationSettings,
 ) -> Element {
   let id = format!("settings-notify-{key}");
@@ -223,17 +235,21 @@ fn switch_row(
       prefs.set(next);
       save.run(next);
     });
-  row(&id, (&title, &description), toggle).into()
+  let row = SettingRow::new(id, title).info(description).control(toggle);
+  let row = if hinted {
+    row.hint(ctx.t(&format!("settings.notifications.{key}.hint")))
+  } else {
+    row
+  };
+  row.render(ctx)
 }
 
-/// What a build that shows no OS notifications says over the rows.
-fn delivery_note(ctx: &Ctx) -> Option<Row> {
+/// What a build that shows no OS notifications says over the groups.
+fn delivery_note(ctx: &Ctx) -> Option<Element> {
   (Delivery::of_build() == Delivery::Silent).then(|| {
-    note(
-      "settings-notify-silent",
-      Icon::Info,
-      &ctx.t_args("settings.notifications.silent", [("variable", VARIABLE)]),
-    )
+    SettingNotice::new("settings-notify-silent", NoticeTone::Info)
+      .body(ctx.t_args("settings.notifications.silent", [("variable", VARIABLE)]))
+      .into()
   })
 }
 

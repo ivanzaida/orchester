@@ -1,10 +1,8 @@
 //! Tabs that live in a screen's route, each a place of its own and so an entry of the tab's history: they open by a
-//! browser's rules too. One of each kind of screen on the QA seed's project: All projects | Usage, Project settings,
-//! Secrets' List | Usage and Instructions' scope tabs.
+//! browser's rules too. One of each kind of screen on the QA seed's project: All projects | Usage, Project settings'
+//! own tabs and its Secrets tab, and Instructions' scope tabs.
 
-use orchester_app::routes::{
-  InstructionsTab, InstructionsView, OverviewTab, ProjectPage, ProjectSettingsTab, Route, SecretsTab, SecretsView,
-};
+use orchester_app::routes::{InstructionsTab, InstructionsView, OverviewTab, ProjectPage, ProjectSettingsTab, Route};
 
 use crate::{harness::Seeded, support::link_press::control_opens_by_browser_rules};
 
@@ -20,24 +18,18 @@ fn all_projects_usage_tab_opens_by_browser_rules() {
 fn a_project_settings_tab_opens_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   let page = |tab| Route::Project(seeded.project, ProjectPage::Settings(tab));
-  let (general, limits) = (page(ProjectSettingsTab::General), page(ProjectSettingsTab::Limits));
+  let (general, runs) = (page(ProjectSettingsTab::General), page(ProjectSettingsTab::Runs));
   seeded.window.navigation().go(general);
-  control_opens_by_browser_rules(&mut seeded.window, "settings-tab-limits", &limits);
+  control_opens_by_browser_rules(&mut seeded.window, "settings-tab-runs", &runs);
 }
 
 #[test]
-fn a_secrets_tab_opens_by_browser_rules() {
+fn the_project_settings_secrets_tab_opens_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
-  let page = |tab| {
-    let view = SecretsView {
-      tab,
-      ..SecretsView::default()
-    };
-    Route::Project(seeded.project, ProjectPage::Secrets(view))
-  };
-  let (list, usage) = (page(SecretsTab::List), page(SecretsTab::Usage));
-  seeded.window.navigation().go(list);
-  control_opens_by_browser_rules(&mut seeded.window, "secrets-tab-usage", &usage);
+  let general = Route::Project(seeded.project, ProjectPage::Settings(ProjectSettingsTab::General));
+  let secrets = Route::Project(seeded.project, ProjectPage::Secrets(Default::default()));
+  seeded.window.navigation().go(general);
+  control_opens_by_browser_rules(&mut seeded.window, "settings-tab-secrets", &secrets);
 }
 
 #[test]

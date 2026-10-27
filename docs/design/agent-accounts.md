@@ -7,6 +7,12 @@ able to set them up somehow*. Not approved yet; the open decisions are at the en
 frames is illustrative fixture data (Ana, `ana@example.com`, Work, Personal, Freelance, Client, Kontur, Atlas,
 Orbit), never a default or shipped data.
 
+**Layout since ORC-104.** Settings › Accounts follows the board `App settings · redesign` (`iUmo3`) of the new
+`orchester.pen`: the accounts are grouped by CLI in one column (`03 · Accounts` `t8i6m`), an account opens as a page
+of its own with its crumb back (`03b` `xN1Jy`; *Rename* and *Remove* in its *…* menu, asked in place), and *Add
+account* is a page too (`03c` `XAm8i`), followed by the sign-in step. The states are on the sheet `poD7g`. The panels
+and frames named below describe the earlier list-beside-details layout; their words and rules still apply.
+
 ## What exists today (checked in the code on 2026-10-12)
 
 - A project **connection** is a program on this computer (`crates/core/src/connection/mod.rs`, `Connection`): kind,
