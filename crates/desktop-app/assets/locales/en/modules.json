@@ -5,19 +5,18 @@
     "newModule": "New module",
     "reading": "Reading the modules…",
     "readFailed": "The modules couldn't be read",
+    "openEmpty": "No module is open. Make one with New module, or reopen one from Closed.",
+    "closedEmpty": "No module is closed yet. A module moves here when its state is Closed.",
+    "search": {
+      "label": "Search modules",
+      "placeholder": "Search modules",
+      "clear": "Clear search",
+      "keys": "/",
+      "noMatch": "No module matches “{{query}}”."
+    },
     "empty": {
       "title": "No modules yet",
       "body": "Make a module to group tasks and follow how its work burns down."
-    },
-    "columns": {
-      "name": "NAME",
-      "dates": "DATES",
-      "state": "STATE",
-      "tasks": "TASKS",
-      "progress": "PROGRESS",
-      "key": "KEY",
-      "task": "TASK",
-      "status": "STATUS"
     },
     "state": {
       "open": "Open",
@@ -31,21 +30,27 @@
     },
     "progress": {
       "tasks": "{{done}} of {{scope}} tasks done",
-      "none": "Nothing in scope",
-      "percent": "{{percent}}%"
+      "none": "Nothing in scope"
+    },
+    "forecast": {
+      "likely": "Likely {{date}}",
+      "afterTarget": "Likely {{date}} · after target",
+      "notEnough": "Not enough history",
+      "done": "All done",
+      "dates": "Likely done by {{likely}} (50%) or {{safe}} (85%)"
     },
     "unit": {
       "tasks": "Counted in tasks"
     },
     "form": {
       "newTitle": "New module",
-      "editTitle": "Edit module",
       "name": "Name",
+      "namePlaceholder": "Module name",
       "description": "Description",
       "descriptionPlaceholder": "What this module delivers",
       "start": "Start date",
       "target": "Target date",
-      "datePlaceholder": "YYYY-MM-DD",
+      "noDate": "None",
       "state": "State",
       "create": "Create module",
       "save": "Save changes",
@@ -54,11 +59,34 @@
     "page": {
       "back": "Modules",
       "edit": "Edit",
+      "newTask": "New task in module",
+      "more": "More actions",
+      "close": "Close module",
+      "reopen": "Reopen module",
+      "facts": "{{dates}} · {{progress}} · {{forecast}}",
       "reading": "Reading the module…",
       "notFound": "This module no longer exists",
       "notFoundBody": "It may have been removed from this project's data.",
       "tasks": "Tasks",
-      "noTasks": "No task is in this module yet. Choose it as a task's module on the task form or the task's page."
+      "noTasks": "No task is in this module yet. Choose it as a task's module on the task form or the task's page.",
+      "tabs": {
+        "summary": "Summary",
+        "burndown": "Burndown"
+      }
+    },
+    "summary": {
+      "description": "Description",
+      "noDescription": "No description yet.",
+      "remaining": "{{count}} remaining",
+      "toBurndown": "Burndown →",
+      "toggleGroup": "Show or hide {{group}}"
+    },
+    "properties": {
+      "state": "State",
+      "start": "Start date",
+      "target": "Target date",
+      "created": "Created",
+      "notSet": "Not set"
     },
     "burndown": {
       "title": "Burndown",

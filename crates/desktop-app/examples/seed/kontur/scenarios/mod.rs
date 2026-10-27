@@ -18,6 +18,7 @@ mod lifecycle;
 mod live;
 mod long_chats;
 mod memory;
+mod modules;
 mod pipelines;
 mod pull_requests;
 mod sources;
@@ -72,7 +73,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 36] = [
+pub const ALL: [Scenario; 39] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -109,6 +110,9 @@ pub const ALL: [Scenario; 36] = [
   Scenario::of("usage-empty", usage::no_runs_today),
   Scenario::of("usage-bare", usage::bare),
   Scenario::of("import", import::seed),
+  Scenario::of("modules", modules::seed),
+  Scenario::of("modules-short", modules::short),
+  Scenario::of("modules-none", modules::none),
 ];
 
 /// The scenario called `name`.

@@ -10,7 +10,9 @@
 //! `/project/<id>/tasks/<key>/<tab>` (the key as in `KON-12`; `summary`, `conversation` or `changes`, with
 //! `?file=` a changed file and `&from=worktree` for its change that is not checkpointed), written always with
 //! its tab and read without one as its Summary, and `/project/<id>/tasks/<key>/edit` is Edit task.
-//! Modules is `/project/<id>/modules` and a module's page `/project/<id>/modules/<module id>`. The Delivery view
+//! Modules is `/project/<id>/modules` (`?tab=closed`), New module `/project/<id>/modules/new`, a module's page
+//! `/project/<id>/modules/<module id>` (its Summary; `/burndown` after it its Burndown) and Edit module
+//! `/project/<id>/modules/<module id>/edit` ([`ModuleListTab`], [`ModuleTab`]). The Delivery view
 //! beside Usage is `/project/<id>/usage/delivery` (`?period=` 30d, 90d or 365d).
 //! Connections is `/project/<id>/connections` (`?tab=`, `?selected=` the connection its inspector shows), Add
 //! connection `/project/<id>/connections/new` (`?kind=mcp_server` adds an MCP server) and
@@ -45,6 +47,7 @@ mod import;
 mod instructions;
 mod join;
 mod memory;
+mod modules;
 mod orchester;
 mod orchestrator;
 mod overview;
@@ -77,6 +80,7 @@ pub use self::{
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
   memory::MemoryTab,
+  modules::{ModuleListTab, ModuleTab},
   orchester::{OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
@@ -126,9 +130,11 @@ const FILE_PATTERN: &str = "/project/:project/files/**path";
 /// A file's route under the code viewer's layout (`table`): [`FILE_PATTERN`] after the screen's own.
 const FILE_REST: &str = "/**path";
 const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
-/// The Modules list's segment (`orchester_workspace::links::MODULES`), and a module's page under it.
+/// The Modules list's segment (`orchester_workspace::links::MODULES`); New module and a module's page without its tab
+/// under it, and a module's page on its tab and Edit module under that.
 const MODULES: &str = orchester_workspace::links::MODULES;
 const MODULE_PATTERN: &str = "/project/:project/modules/:module";
+const MODULE_TAB_PATTERN: &str = "/project/:project/modules/:module/:tab";
 /// The Delivery view beside a project's Usage (`orchester_workspace::links::delivery_path`).
 const DELIVERY_PATTERN: &str = "/project/:project/usage/delivery";
 /// A task kept Not shared, by its kept key, on its tab.
@@ -190,7 +196,10 @@ impl Route {
       Self::Project(_, ProjectPage::PullRequest(..) | ProjectPage::PullRequestFeedback(..)) => {
         PULL_REQUEST_PATTERN.to_owned()
       }
-      Self::Project(_, ProjectPage::Module(_)) => MODULE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::NewModule | ProjectPage::Module(_, ModuleTab::Summary)) => {
+        MODULE_PATTERN.to_owned()
+      }
+      Self::Project(_, ProjectPage::Module(..) | ProjectPage::EditModule(_)) => MODULE_TAB_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Delivery(_)) => DELIVERY_PATTERN.to_owned(),
       Self::Invite(_) => INVITE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::KeptTask(..)) => KEPT_TASK_PATTERN.to_owned(),

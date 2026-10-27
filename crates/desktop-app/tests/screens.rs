@@ -28,8 +28,9 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, NewConnection, OrchestratorChat,
-    OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, ModuleListTab, ModuleTab,
+    NewConnection, OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
+    routes,
   },
   services::Services,
   shell::needs_you::PanelOpen,
@@ -342,15 +343,17 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   all
 }
 
-/// The Modules list, a module's page (ORC-48) and the Delivery view beside Usage (ORC-50); `tests/modules` reads what
-/// they show.
-fn module_screens() -> [(Route, Vec<&'static str>); 3] {
+/// The Modules list, a module's page on both tabs, New and Edit module (ORC-48, ORC-112) and the Delivery view beside
+/// Usage (ORC-50); `tests/modules` reads what they show.
+fn module_screens() -> [(Route, Vec<&'static str>); 7] {
+  let module = || CONNECTION.parse().expect("a module id");
   [
-    (at(ProjectPage::Modules), Vec::new()),
-    (
-      at(ProjectPage::Module(CONNECTION.parse().expect("a module id"))),
-      Vec::new(),
-    ),
+    (at(ProjectPage::Modules(ModuleListTab::Open)), Vec::new()),
+    (at(ProjectPage::Modules(ModuleListTab::Closed)), Vec::new()),
+    (at(ProjectPage::Module(module(), ModuleTab::Summary)), Vec::new()),
+    (at(ProjectPage::Module(module(), ModuleTab::Burndown)), Vec::new()),
+    (at(ProjectPage::NewModule), Vec::new()),
+    (at(ProjectPage::EditModule(module())), Vec::new()),
     (
       at(ProjectPage::Delivery(
         orchester_workspace::delivery::DeliveryPeriod::Quarter,

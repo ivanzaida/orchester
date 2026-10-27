@@ -18,6 +18,7 @@ mod code;
 mod composer;
 mod connections;
 mod conversation;
+mod date_picker;
 mod decisions;
 mod delivery;
 mod files;
@@ -31,6 +32,7 @@ mod local_integration;
 mod markdown;
 mod memory;
 mod metrics;
+mod modules;
 mod needs_you;
 mod orchester;
 mod orchestrator;
@@ -67,6 +69,7 @@ pub use self::{
   composer::{ComposerColor, ComposerRadius},
   connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
+  date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
   files::{FilesRadius, FilesText},
@@ -78,6 +81,7 @@ pub use self::{
   markdown::blank_line_between_blocks,
   memory::{MemorySpacing, MemoryText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{OrchestratorSpacing, OrchestratorText},
@@ -148,6 +152,7 @@ pub fn install(app: &mut App, mode: Mode) {
   sources::install(theme);
   delivery::install(theme);
   import::install(theme);
+  modules::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

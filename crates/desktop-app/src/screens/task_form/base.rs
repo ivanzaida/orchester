@@ -143,6 +143,9 @@ impl TaskForm {
         None => self.start_from(&stored),
       }
     }
+    if let Some(module) = props.starts_in.filter(|_| props.subject.is_new()) {
+      self.fields.module.set(ModuleChoice(Some(module)));
+    }
     self.seeded.set(true);
     true
   }
