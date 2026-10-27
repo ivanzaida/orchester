@@ -3,7 +3,8 @@
 //! step's [`FileScope`]; and of Orchester's file tools for agent CLIs, which read the same way and edit by line range
 //! ([`lines`]), search for literal text file by file ([`term`]), also in a folder outside the worktree. A failure is
 //! an error result the model can recover from, never a failed loop. Results are plain text within the tool's limits,
-//! with a note when they were cut.
+//! with a note when they were cut; only Orchester's `read_file` for Claude Code answers an image file with the image
+//! ([`image`]).
 //!
 //! Reads record a read stamp (length, modified time, content hash) per file; an edit, or a write that
 //! replaces a file, needs a stamp that still matches the file, so that the agent never changes a file
@@ -15,6 +16,7 @@
 #[doc(hidden)]
 pub mod entry;
 mod glob;
+pub mod image;
 mod limits;
 mod lines;
 mod listing;
@@ -44,7 +46,8 @@ use orchester_core::{
 };
 use thiserror::Error;
 
-use self::stamp::Stamps;
+pub use self::read::ReadAnswer;
+use self::{image::ImageError, stamp::Stamps};
 
 /// Why a file tool call failed. The message is the error result the model gets.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -95,6 +98,8 @@ pub(crate) enum FileError {
   Appeared(String),
   #[error("ripgrep failed: {0}")]
   Ripgrep(String),
+  #[error("{path}: {error}")]
+  Image { path: String, error: ImageError },
 }
 
 /// The file tools of one native invocation.

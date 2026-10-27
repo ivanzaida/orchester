@@ -101,6 +101,9 @@ pub struct RunFacts {
   pub into: Option<String>,
   /// What its last checkpoint changed over its base: files, lines added and removed.
   pub changes: Option<(usize, u64, u64)>,
+  /// What the question an answer answers asks, each of its questions on its own line; `None` for another action, or
+  /// a request no longer kept.
+  pub asked: Option<String>,
 }
 
 /// Where a run stands.
@@ -138,9 +141,16 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
         version,
         saved,
       } => publication::read(&db, (*of, *resource), (*version, *saved)).map(|found| found.map(Facts::Publication)),
+      // An answer shows what its question asks.
+      Change::Answer { run, request, .. } => run::read(root, &db, programs, *run).and_then(|found| {
+        let Some(mut found) = found else {
+          return Ok(None);
+        };
+        found.asked = asked(&db, *run, request)?;
+        Ok(Some(Facts::Run(found)))
+      }),
       Change::Cancel { run, .. }
       | Change::Merge { run, .. }
-      | Change::Answer { run, .. }
       | Change::Message { run, .. }
       | Change::Continue { run, .. }
       | Change::Pause { run, .. }
@@ -153,4 +163,22 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
     (None, None) => Ok(None),
   };
   facts.map_err(|error| messages::store_error(&error))
+}
+
+/// What request `request` of run `run` asks, its questions one to a line; `None` once it is no longer kept.
+fn asked(db: &ProjectDb, run: RunId, request: &str) -> Result<Option<String>, orchester_store::StoreError> {
+  Ok(
+    db.questions(run)?
+      .into_iter()
+      .find(|asked| asked.request.id() == request)
+      .map(|asked| {
+        asked
+          .request
+          .questions()
+          .iter()
+          .map(|question| question.text())
+          .collect::<Vec<_>>()
+          .join("\n")
+      }),
+  )
 }

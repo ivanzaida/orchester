@@ -7,6 +7,7 @@ mod agents;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod orchestrator;
 mod pipelines;
 mod refusals;
 
@@ -183,6 +184,8 @@ fn seed_names_every_scenario_once() {
       "task-states",
       "conversation",
       "long-chats",
+      "orchestrator",
+      "orchestrator-not-set-up",
       "changes",
       "cards",
       "decisions",

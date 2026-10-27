@@ -90,12 +90,14 @@ impl WorkingTools {
          file: give the lines to replace and, as expected, exactly what they hold now), mcp__Orchester__create_file \
          (new files only), mcp__Orchester__delete_file and mcp__Orchester__move_file (one file each, never a \
          folder). Claude Code's own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or \
-         change files through the shell: no `cat`, `sed`, `awk`, heredocs, `rm` or `mv`."
+         change files through the shell: no `cat`, `sed`, `awk`, heredocs, `rm` or `mv`. \
+         mcp__Orchester__read_file shows a PNG, JPEG or WebP file as the image: open screenshots with it."
       }
       (Cli::ClaudeCode, false) => {
         "Read and search files only with Orchester's file tools: mcp__Orchester__read_file, \
          mcp__Orchester__list_files and mcp__Orchester__search_file. Claude Code's own Read, Grep and Glob are not \
-         available; do not read files through the shell (`cat`, `sed`, `awk`)."
+         available; do not read files through the shell (`cat`, `sed`, `awk`). mcp__Orchester__read_file shows a \
+         PNG, JPEG or WebP file as the image: open screenshots with it."
       }
       (Cli::Codex, true) => {
         "Read, search and change files with the read_file, list_files, search_file, edit_file (after read_file: give \

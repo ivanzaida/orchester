@@ -36,8 +36,8 @@ use crate::{
   ui::icon::{Icon, glyph as icon_glyph},
 };
 
-/// `Title bar` height, on Windows and macOS alike.
-const TITLE_BAR_HEIGHT: f32 = 36.0;
+/// `Title bar` height, on Windows and macOS alike: what the content's top is under.
+pub const TITLE_BAR_HEIGHT: f32 = 36.0;
 
 /// The window around `screen`, with the tabs in its title bar; `closing` while the closing panel holds
 /// the window.

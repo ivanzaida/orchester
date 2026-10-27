@@ -101,11 +101,11 @@ fn orchestrator_run_waits_for_the_person_and_only_a_person_starts_it() {
   screen.click(&start);
   screen.until("the start", |screen| outcomes(screen)[0] == ActionOutcome::Done);
   assert_eq!(runs(&screen, &key), 1, "the person's Start started the run");
-  screen.until("the started card", |screen| {
-    screen
-      .text(&format!("{card}-title"))
-      .contains(&format!("Started {key}"))
+  // The decided card folds into its line: what happened, then the task.
+  screen.until("the started line", |screen| {
+    screen.text(&format!("{card}-title")) == "Started" && screen.text(&format!("{card}-target")).contains(&key)
   });
+  assert!(!screen.exists(&format!("{card}-start")), "nothing is left to decide");
 }
 
 #[test]
@@ -163,8 +163,14 @@ fn orchestrator_start_refuses_a_task_rewritten_after_it_was_proposed() {
     matches!(outcomes(screen).first(), Some(ActionOutcome::Refused { code, .. }) if code == "changed_since_proposed")
   });
   assert_eq!(runs(&screen, &key), 0, "nothing started");
-  screen.until("the reason on the card", |screen| {
-    screen.text(&card).contains("changed after it was proposed")
+  // The card folded into its refused line, whose reason opens under it.
+  screen.until("the refused line", |screen| screen.exists(&format!("{card}-line")));
+  assert!(screen.text(&format!("{card}-title")).contains("· not done"));
+  screen.click(&format!("{card}-line"));
+  screen.until("the reason under the line", |screen| {
+    screen
+      .text(&format!("{card}-reason"))
+      .contains("changed after it was proposed")
   });
 }
 

@@ -1,6 +1,7 @@
 //! What the Orchestrator screen reads: what the Orchestrator runs on, History's conversations, the conversation
 //! shown and the names of the projects the app knows (for what a link to another project's place says), each again
-//! whenever the project's runner or the chat's tools change a conversation.
+//! whenever the project's runner or the chat's tools change a conversation; the conversation shown also whenever a
+//! run changes state or the project's tasks are saved (a merge in Orchester among them), which may end a wait it keeps.
 
 use std::path::{Path, PathBuf};
 
@@ -15,6 +16,7 @@ use orchester_workspace::{
   },
   runner::Runners,
 };
+use tokio::sync::watch;
 
 use crate::{project::hold::ReadHold, routes::OrchestratorChat, services::Services, ui::chat::names::ProjectNames};
 
@@ -44,7 +46,7 @@ pub(super) enum Shown {
   Failed(Message),
   /// The route names a conversation the project does not keep.
   Missing,
-  Chat(ChatView),
+  Chat(Box<ChatView>),
 }
 
 /// Everything the screen read.
@@ -58,10 +60,13 @@ pub(super) struct Reads {
   pub(super) names: ProjectNames,
 }
 
-/// Reads what the screen of the project at `root` shows for `chat`.
-pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads {
+/// Reads what the screen of the project at `root` shows for `chat`, its tasks saved `saves` times so far.
+pub(super) fn read(ctx: &mut Ctx, (root, saves): (&Path, u64), chat: OrchestratorChat) -> Reads {
   let services = Services::of(ctx);
   let revision = revision(ctx, &services.runners, root);
+  // A run that changes state, or that Orchester merged (a save of the tasks), may end a wait the conversation keeps:
+  // it is read again to say so.
+  let states = counted(ctx, (&services.runners, root), Runners::states_of) + saves;
   let hold = services.hold;
   let setup = read_with(ctx, (root.to_path_buf(), revision), &hold, |root| {
     OrchestratorSetup::load_in(&root)
@@ -76,7 +81,7 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
       .map(|listing| listing.chat.id()),
   };
   // Read on every pass, a new conversation's too, so the screen's hooks keep their order.
-  let read = conversation(ctx, (root.to_path_buf(), target, revision), &hold);
+  let read = conversation(ctx, (root.to_path_buf(), target, (revision, states)), &hold);
   let names = ProjectNames::read(ctx, services.workspace, revision);
   let shown = match (chat, target) {
     (OrchestratorChat::Latest, None) if matches!(history, Read::Loading) => Shown::Loading,
@@ -94,10 +99,15 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
 
 /// How often the project's conversations changed; a task's conversation reads the chat's proposals again by it too.
 pub(in crate::screens) fn revision(ctx: &mut Ctx, runners: &Runners, root: &Path) -> u64 {
+  counted(ctx, (runners, root), Runners::chats_of)
+}
+
+/// The count of project `root`'s changes that `of` follows, whenever it changes.
+fn counted(ctx: &mut Ctx, (runners, root): (&Runners, &Path), of: fn(&Runners, &Path) -> watch::Receiver<u64>) -> u64 {
   let count = ctx.stream(
     (runners.clone(), root.to_path_buf()),
-    |(runners, root), emitter: StreamEmitter<u64, ()>| async move {
-      let mut updates = runners.chats_of(&root);
+    move |(runners, root), emitter: StreamEmitter<u64, ()>| async move {
+      let mut updates = of(&runners, &root);
       loop {
         let revision = *updates.borrow_and_update();
         if !emitter.emit(revision) || updates.changed().await.is_err() {
@@ -140,8 +150,9 @@ where
   }
 }
 
-/// Conversation `id` of the project at `root`; nothing is read for a new one (`None`).
-fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, Option<ChatId>, u64), hold: &ReadHold) -> Shown {
+/// Conversation `id` of the project at `root`, read again whenever `revision` (the conversations' and the runs'
+/// states') changes; nothing is read for a new one (`None`).
+fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, Option<ChatId>, (u64, u64)), hold: &ReadHold) -> Shown {
   let hold = hold.clone();
   let state = ctx
     .future((root, id, revision), move |(root, id, _)| {
@@ -162,7 +173,7 @@ fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, Option<ChatId>, u
   match (state.data, state.error) {
     (_, Some(error)) if rejected => Shown::Failed(error),
     // A conversation read before stays while it is read again; another one's does not.
-    (Some(Some(view)), _) if Some(view.chat.id()) == id => Shown::Chat(view),
+    (Some(Some(view)), _) if Some(view.chat.id()) == id => Shown::Chat(Box::new(view)),
     (Some(None), _) if !pending && id.is_some() => Shown::Missing,
     (None, Some(error)) => Shown::Failed(error),
     _ => Shown::Loading,

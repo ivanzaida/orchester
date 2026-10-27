@@ -15,6 +15,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
+use super::runs_on::RunsOn;
 use crate::{
   agents::form::{ModelOption, effort_options, model_options},
   messages::{self, Message},
@@ -176,6 +177,22 @@ impl OrchestratorSetup {
   pub fn provider(&self) -> Option<AgentProvider> {
     let settings = self.settings.as_ref()?;
     Some(self.connection(settings.connection())?.provider())
+  }
+
+  /// What `connection`'s CLI runs on; `None` for a connection the project does not have.
+  pub fn runs_on(&self, connection: ConnectionId) -> Option<RunsOn> {
+    let found = self.connection(connection)?;
+    if let Some(provider) = found.api_provider() {
+      return Some(RunsOn::ApiProvider {
+        base_url: provider.base_url().clone(),
+        key: provider.key(),
+      });
+    }
+    Some(if found.api().is_some() {
+      RunsOn::Native
+    } else {
+      RunsOn::SignIn(found.account().clone())
+    })
   }
 
   fn connection(&self, id: ConnectionId) -> Option<&AgentConnection> {

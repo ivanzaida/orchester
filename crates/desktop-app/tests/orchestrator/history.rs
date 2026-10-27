@@ -48,8 +48,8 @@ fn orchestrator_history_lists_conversations_by_day_and_opens_one() {
   assert!(
     screen
       .text(&format!("orchestrator-history-{newer}"))
-      .contains("This conversation · 2 messages"),
-    "{listed}"
+      .ends_with(" · 2 messages"),
+    "when and how many messages: {listed}"
   );
   screen.set("orchestrator-history-search", "auth");
   screen.until("the search", |screen| {
@@ -104,7 +104,7 @@ fn orchestrator_opening_a_conversation_never_looks_like_a_new_one() {
       || screen.text("screen-orchestrator").contains("Loading conversation")
   });
   assert_eq!(screen.text("orchestrator-title"), "Order of the auth work");
-  assert_eq!(screen.text("orchestrator-meta"), "Opening from History");
+  assert_eq!(screen.text("orchestrator-meta"), "· opening from History");
   hold.set(false);
   screen.until("the older conversation", |screen| {
     screen.text("orchestrator-conversation").contains("Auth first.")

@@ -71,6 +71,7 @@ macro_rules! markers {
     impl $inspect for crate::orchestrator::queue::WhileAnswering {}
     impl $inspect for crate::orchestrator::send::Outgoing {}
     impl $inspect for crate::orchestrator::send::SendError {}
+    impl $inspect for crate::orchestrator::runs_on::ProviderUse {}
     impl $inspect for crate::orchestrator::settings::OrchestratorSetup {}
     impl $inspect for crate::orchestrator::settings::Saving {}
     impl $inspect for crate::pipelines::data::OpenedPipeline {}

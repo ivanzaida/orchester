@@ -13,8 +13,8 @@ use super::{
   history::kept,
 };
 
-/// What an existing conversation's empty field shows.
-const PLACEHOLDER: &str = "Message Orchestrator…";
+/// What an empty field shows, a new conversation's too.
+const PLACEHOLDER: &str = "Message the Orchestrator…";
 
 /// Leaves the Orchestrator for the Tasks list.
 pub(super) fn leave(screen: &mut Orchestrator) {
@@ -61,7 +61,7 @@ fn orchestrator_each_conversation_keeps_its_own_draft() {
   screen.set("orchestrator-input", "For KON-12");
   screen.go(OrchestratorChat::New);
   screen.until("a new conversation's empty field", |screen| {
-    screen.text("orchestrator-input").starts_with("Describe what you want")
+    screen.exists("orchestrator-start") && screen.text("orchestrator-input") == PLACEHOLDER
   });
   screen.set("orchestrator-input", "Something new");
   open(&mut screen, OrchestratorChat::Chat(older), "For the auth work");
@@ -107,7 +107,7 @@ fn orchestrator_a_new_conversation_sent_and_kept_leaves_no_draft_behind() {
   open(&mut screen, OrchestratorChat::Chat(chat), PLACEHOLDER);
   screen.go(OrchestratorChat::New);
   screen.until("a new conversation's empty field", |screen| {
-    screen.text("orchestrator-input").starts_with("Describe what you want")
+    screen.exists("orchestrator-start") && screen.text("orchestrator-input") == PLACEHOLDER
   });
 }
 
