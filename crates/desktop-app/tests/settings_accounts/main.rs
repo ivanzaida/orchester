@@ -81,6 +81,22 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
         joined(window, "account-head-title").contains("Codex · Work")
       });
       assert!(joined(&mut window, "account-fact-checked-with-row").contains("codex 0.159.2 on the PATH"));
+      // A long folder path keeps to its width, so the label and its hint keep theirs (`c0L3F` in `xN1Jy`).
+      let mut bounds = |id: &str| {
+        window
+          .tree
+          .get_element_by_id_mut(id)
+          .and_then(|element| element.bounds())
+          .unwrap_or_else(|| panic!("{id} is laid out"))
+      };
+      let (folder, path, hint) = (
+        bounds("account-fact-folder-row"),
+        bounds("account-fact-folder-path"),
+        bounds("account-fact-folder-hint"),
+      );
+      assert!(path.width <= 325.5, "{path:?}");
+      assert!(hint.height < 20.0, "the hint is one line: {hint:?}");
+      assert!(folder.height < 70.0, "{folder:?}");
       assert!(joined(&mut window, "account-fact-method-row").contains("ChatGPT"));
       assert!(joined(&mut window, "account-facts-note").contains("codex login status"));
       assert!(shown(&mut window, "settings-tab-general") && shown(&mut window, "settings-tab-orchester"));

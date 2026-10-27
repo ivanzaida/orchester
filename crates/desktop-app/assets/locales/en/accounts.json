@@ -2,10 +2,10 @@
   "accounts": {
     "addAccount": "Add account",
     "add": {
-      "title": "Add account",
+      "title": "Add an account",
       "sub": "An account is a folder where a CLI keeps its own sign-in. Name it and choose its folder; next you sign in with the CLI's own login.",
-      "step1": "1. Name and folder",
-      "step2": "2. Sign in with the CLI",
+      "step1": "1 · Name and folder",
+      "step2": "2 · Sign in with the CLI",
       "step1Created": "{{name}} · folder created",
       "step1Brought": "{{name}} · your folder",
       "cli": "CLI",
@@ -13,6 +13,7 @@
       "codexDetail": "You sign in with codex login.",
       "name": "Name",
       "nameShown": "Shown as {{cli}} · {{name}}",
+      "nameShownEmpty": "Shown as {{cli}} · …",
       "nameHint": "Shown in connections, runs and plan limits, as {{cli}} · {{name}}. Each account of a CLI has its own name.",
       "nameHintEmpty": "Shown in connections, runs and plan limits. Each account of a CLI has its own name.",
       "folder": "Folder",

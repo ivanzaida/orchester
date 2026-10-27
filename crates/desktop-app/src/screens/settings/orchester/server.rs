@@ -4,6 +4,8 @@
 //! sign-in to join again; *You there*; the person's projects there with their checkouts here; *Add a computer*; and
 //! *Sign in to the admin* (a pairing code). The pairing code shows once.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -13,9 +15,11 @@ use lurq::{
   node::Element,
 };
 use orchester_api::certificate::CertificatePin;
+use orchester_core::time::Timestamp;
 use orchester_workspace::sharing::{
   Connection, LinkedProject, PresentedCertificate, ServerEntry, ServerProject, cloud::ServerJoin,
 };
+use parking_lot::Mutex;
 
 use super::{
   Said,
@@ -34,7 +38,7 @@ use crate::{
 pub(super) struct Props {
   pub entry: ServerEntry,
   pub linked: Vec<LinkedProject>,
-  /// Changes whenever the servers or the cloud account changed, so the projects are read again.
+  /// Changes whenever the servers or the cloud account changed, so the page renders again.
   pub revision: u64,
   /// The route asks *Sign out of …?*: the question opens in place once it does.
   pub sign_out: bool,
@@ -80,6 +84,7 @@ pub(super) struct ServerPanel {
   pub(super) person: super::PersonOnly,
   /// The head's *…* menu: whether it is open, and the button it opens at.
   pub(super) more: (Signal<bool>, ElementRef),
+  projects_read: Arc<Mutex<ProjectsRead>>,
 }
 
 /// How joining again with the cloud account ended.
@@ -168,6 +173,7 @@ impl Component for ServerPanel {
       opened: ctx.signal(None),
       person: super::PersonOnly::new(ctx),
       more: (ctx.signal(false), ElementRef::default()),
+      projects_read: Arc::default(),
     }
   }
 
@@ -191,7 +197,7 @@ impl Component for ServerPanel {
     let runs = version(ctx, entry);
     // A future belongs to its place among the render's futures: the projects' is asked only while the server is in
     // use and connected, so it comes after those asked in every render.
-    let projects = projects(ctx, &props);
+    let projects = projects(ctx, &props, &self.projects_read);
     let navigation = Navigation::of(ctx);
     let crumb = frame::crumb(
       "orchester-server-crumb",
@@ -225,9 +231,21 @@ impl Component for ServerPanel {
   }
 }
 
-/// The person's projects on the server, read while it is connected. An offline server is not asked: its entry changes
-/// with every attempt to reach it, and the projects linked here show without it.
-fn projects(ctx: &mut Ctx, props: &Props) -> Option<Result<Projects, Said>> {
+/// When the projects were last read, and the server's answer the read follows.
+#[derive(Default)]
+struct ProjectsRead {
+  /// When the last read finished.
+  done: Option<Timestamp>,
+  /// The answer of the server the read follows: one after the last read finished is the monitor's or a *Try again*'s,
+  /// and reads the projects again; the read's own answer comes before it finished and does not, or every read would
+  /// start the next.
+  follows: Option<Timestamp>,
+}
+
+/// The person's projects on the server, read while it is connected, again when the server answered since and when the
+/// checkouts linked here changed. An offline server is not asked: its entry changes with every attempt to reach it,
+/// and the projects linked here show without it.
+fn projects(ctx: &mut Ctx, props: &Props, read: &Arc<Mutex<ProjectsRead>>) -> Option<Result<Projects, Said>> {
   let entry = &props.entry;
   // The words say the projects linked here are listed below only when there are some.
   let none_here = props.linked.is_empty();
@@ -253,24 +271,37 @@ fn projects(ctx: &mut Ctx, props: &Props) -> Option<Result<Projects, Said>> {
     Some(Connection::Checking) | None => return None,
     Some(Connection::Connected | Connection::SignedOut) => {}
   }
+  let follows = {
+    let mut read = read.lock();
+    if entry.last_reached > read.done {
+      read.follows = entry.last_reached;
+    }
+    read.follows
+  };
   let servers = Services::of(ctx).servers;
+  let read = Arc::clone(read);
   let state = ctx
     .future(
-      (props.revision, entry.stored.id, servers),
-      |(_, server, servers)| async move {
-        let entries = servers.clone();
-        let entry = orchester_workspace::background::run(move || entries.entries())
-          .await
-          .map_err(|_| Said::new("cloud.errors.local"))?
-          .map_err(|error| sharing_error(&error))?
-          .into_iter()
-          .find(|entry| entry.stored.id == server)
-          .ok_or_else(|| Said::new("cloud.errors.local"))?;
-        servers
-          .server_projects(&entry)
-          .await
-          .map(Projects)
-          .map_err(|error| sharing_error(&error))
+      (follows, props.linked.clone(), entry.stored.id, servers),
+      move |(_, _, server, servers)| {
+        let finished = Arc::clone(&read);
+        async move {
+          let entries = servers.clone();
+          let entry = orchester_workspace::background::run(move || entries.entries())
+            .await
+            .map_err(|_| Said::new("cloud.errors.local"))?
+            .map_err(|error| sharing_error(&error))?
+            .into_iter()
+            .find(|entry| entry.stored.id == server)
+            .ok_or_else(|| Said::new("cloud.errors.local"))?;
+          let projects = servers
+            .server_projects(&entry)
+            .await
+            .map(Projects)
+            .map_err(|error| sharing_error(&error));
+          finished.lock().done = Some(Timestamp::now());
+          projects
+        }
       },
     )
     .state()

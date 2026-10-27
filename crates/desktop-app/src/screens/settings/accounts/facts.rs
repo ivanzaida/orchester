@@ -8,7 +8,7 @@ use lurq::{
   clipboard::copy_to_clipboard,
   components::Row,
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   account::{AccountCheckResult, AccountState, AgentAccount},
@@ -22,14 +22,20 @@ use super::{
   words::{folder, method_key, plan, status_command, t, ta},
 };
 use crate::{
+  screens::task::changes::files::middle_cut,
   theme::ExtraSpacing,
   ui::{
     icon::Icon,
     icon_button::IconButton,
     message::message_text,
     setting_rows::{SettingGroup, SettingRow, mono_value, value},
+    tooltip::Tooltip,
   },
 };
+
+/// The folder path's widest (`Text` `p6mfQ` in `03b · Account`), and the Geist Mono 12 characters that fit in it.
+const PATH_WIDTH: f32 = 325.0;
+const PATH_CHARS: usize = 45;
 
 pub(super) fn group(ctx: &mut Ctx, account: &AgentAccount) -> Element {
   let check = account.last_check();
@@ -120,16 +126,30 @@ fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
   };
   let control = Row::new()
     .id("account-fact-folder-value")
-    .flex_shrink(1.0)
+    .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(mono_value("account-fact-folder-path", &text))
+    .child(folder_path(ctx, &text))
     .with_children(buttons);
   SettingRow::new("account-fact-folder", t(ctx, "accounts.details.folder"))
     .hint(t(ctx, "accounts.details.folderHint"))
     .info(runs_get(ctx, account))
     .control(control)
     .render(ctx)
+}
+
+/// The folder's path in at most [`PATH_WIDTH`] (`Text` `p6mfQ`), cut near its middle when longer, with the whole path
+/// in its tooltip; the label and hint keep their room.
+fn folder_path(ctx: &mut Ctx, text: &str) -> Element {
+  let shown = middle_cut(text, PATH_CHARS);
+  let path = mono_value("account-fact-folder-path", &shown).max_width(Dimension::Px(PATH_WIDTH));
+  if shown == text {
+    path.into()
+  } else {
+    Tooltip::new("account-fact-folder-path", text.to_owned())
+      .mono()
+      .wrap(ctx, path)
+  }
 }
 
 /// Copy and *Open folder* for the folder at `path`.

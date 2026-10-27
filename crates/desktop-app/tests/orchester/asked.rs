@@ -115,6 +115,22 @@ fn orchester_connect_opens_at_the_check_code_and_stops_there() {
     };
     go(&mut window, Route::Orchester(view), "orchester-connect-check-code-text");
     assert_eq!(window.text("orchester-connect-check-code-text"), check);
+    // The done *Address* step is one line, 50 high, and the code is Geist Mono 16 (`Vn33B`, `UWPnK` in `IBnMu`).
+    let mut height = |id: &str| {
+      window
+        .tree
+        .get_element_by_id_mut(id)
+        .and_then(|element| element.bounds())
+        .unwrap_or_else(|| panic!("{id} is laid out"))
+        .height
+    };
+    let address = height("orchester-connect-step-address");
+    assert!(
+      (address - 50.0).abs() < 1.0,
+      "{step:?}: the done address step is {address} high"
+    );
+    let code = height("orchester-connect-check-code-text");
+    assert!(code < 24.0, "{step:?}: the check code is {code} high");
     assert!(
       window.tree.get_element_by_id("orchester-connect-code").is_none(),
       "{step:?}: Join waits for a person to compare the code"

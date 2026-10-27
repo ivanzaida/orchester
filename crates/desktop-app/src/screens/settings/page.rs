@@ -15,7 +15,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{AccountsView, OrchesterPanel, OrchesterView, Route, Screen},
-  ui::tabs::{PageTab, counted, page_tabs},
+  ui::tabs::{PageTab, page_tabs},
 };
 
 /// Settings on `tab`, showing `body`, with what its saves did (`saved`) on a tab whose changes save as they are made;
@@ -39,11 +39,6 @@ pub(super) fn page(
 }
 
 fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &Navigation) -> Element {
-  let accounts_label = ctx.t("settings.tabs.accounts");
-  let accounts_label = match accounts {
-    Some(count) => counted(ctx, &accounts_label, count),
-    None => accounts_label,
-  };
   // Each tab is a place of its own. The current one opens nothing, unless a sub-page of it shows: then it goes back.
   let tab_to = |id: &str, label: Arc<str>, (current, at_tab): (bool, bool), route: Route| {
     if current && at_tab {
@@ -51,6 +46,20 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
     } else {
       PageTab::to(id.to_owned(), label, current, navigation.to(route))
     }
+  };
+  // How many accounts there are, once read, is a muted number after the tab's label (`mIlfH`).
+  let accounts_tab = tab_to(
+    "settings-tab-accounts",
+    ctx.t("settings.tabs.accounts"),
+    match tab {
+      SettingsTab::Accounts(view) => (true, view == AccountsView::default()),
+      _ => (false, true),
+    },
+    Route::Accounts(AccountsView::default()),
+  );
+  let accounts_tab = match accounts {
+    Some(count) => accounts_tab.count(count),
+    None => accounts_tab,
   };
   let tabs = [
     tab_to(
@@ -65,15 +74,7 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
       (tab == SettingsTab::Notifications, true),
       Route::Notifications,
     ),
-    tab_to(
-      "settings-tab-accounts",
-      accounts_label,
-      match tab {
-        SettingsTab::Accounts(view) => (true, view == AccountsView::default()),
-        _ => (false, true),
-      },
-      Route::Accounts(AccountsView::default()),
-    ),
+    accounts_tab,
     tab_to(
       "settings-tab-automation",
       ctx.t("settings.tabs.automation"),

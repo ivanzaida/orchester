@@ -1,8 +1,8 @@
-//! *Add account* as a page of its own (`03c · Add account` `XAm8i`): the crumb back to Accounts, the title and what an
-//! account is, then *1. Name and folder* — the CLI, the name and the folder, a new one Orchester creates in its
-//! application data or one the person already uses, which must stay outside every project and repository — and
-//! *2. Sign in with the CLI*, what comes next. *Create folder and sign in* saves the account and goes on to its
-//! sign-in (`sign_in`); a brought folder is checked at once instead.
+//! *Add an account* as a page of its own (`03c · Add account` `XAm8i`): the crumb back to Accounts, the title and what
+//! an account is, then *1 · Name and folder* — the CLI, the name (with how it will read under it) and the folder, a new
+//! one Orchester creates in its application data or one the person already uses, which must stay outside every project
+//! and repository — and *2 · Sign in with the CLI*, what comes next. *Create folder and sign in* saves the account and
+//! goes on to its sign-in (`sign_in`); a brought folder is checked at once instead.
 
 use std::path::PathBuf;
 
@@ -185,7 +185,7 @@ fn cli_row(ctx: &mut Ctx, draft: &Draft, chosen: AccountCli) -> Element {
   row.render(ctx)
 }
 
-/// *Name*: how the account will read, and the rest of what the name is for in the tooltip.
+/// *Name*: how the account will read under it (`e4MUb`), and the rest of what the name is for in the tooltip.
 fn name_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
   let typed = draft.name.get();
   let typed = typed.trim();
@@ -193,10 +193,12 @@ fn name_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
     .width(Dimension::Px(NAME_WIDTH))
     .render(ctx);
   let row = SettingRow::new("account-add-name-row", t(ctx, "accounts.add.name")).control(field);
+  let cli = t(ctx, cli_key(cli));
   let row = if typed.is_empty() {
-    row.info(t(ctx, "accounts.add.nameHintEmpty"))
+    row
+      .hint(ta(ctx, "accounts.add.nameShownEmpty", [("cli", cli)]))
+      .info(t(ctx, "accounts.add.nameHintEmpty"))
   } else {
-    let cli = t(ctx, cli_key(cli));
     row
       .hint(ta(
         ctx,

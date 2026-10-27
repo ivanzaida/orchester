@@ -25,9 +25,10 @@ pub enum OrchesterText {
   StepTitle,
   /// 10.5/600: the number in a step's dot (`oCb5r`), `text_inverse` on the current one, `text_muted` on a later one.
   StepNumber,
-  /// Geist Mono 24/500, tracking 3: a check code or a pairing code to read out (`Nqehl` in `zxe2P`, `H8RW-2NCE` in
-  /// `Aowlk`).
+  /// Geist Mono 24/500, tracking 3: a pairing code to read out (`H8RW-2NCE` in `Aowlk`).
   Code,
+  /// Geist Mono 16/500 `text_primary`: a server's check code to compare (`UWPnK` in `IBnMu`, `oyvby` in `ZUuMT`).
+  CheckCode,
   /// 13/500 `text_primary`, 1.45: who invited the person to what (`Mc4yA` in `Cu20b`).
   InviteTitle,
   /// Geist Mono 11.5 `text_secondary`: a project's address in an invite or a project row (`kPNV8` in `Cu20b`).
@@ -37,12 +38,13 @@ pub enum OrchesterText {
 }
 
 impl OrchesterText {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 9] = [
     Self::FormTitle,
     Self::PageTitle,
     Self::StepTitle,
     Self::StepNumber,
     Self::Code,
+    Self::CheckCode,
     Self::InviteTitle,
     Self::Address,
     Self::CardTitle,
@@ -59,6 +61,7 @@ impl OrchesterText {
       Self::StepTitle => "orchester_step_title",
       Self::StepNumber => "orchester_step_number",
       Self::Code => "orchester_code",
+      Self::CheckCode => "orchester_check_code",
       Self::InviteTitle => "orchester_invite_title",
       Self::Address => "orchester_address",
       Self::CardTitle => "orchester_card_title",
@@ -72,6 +75,7 @@ impl OrchesterText {
       Self::StepTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::StepNumber => style(10.5, FontWeight::SemiBold, 1.0, 0.0, palette.text_inverse),
       Self::Code => mono(style(24.0, FontWeight::Medium, 1.3, 3.0, palette.text_primary)),
+      Self::CheckCode => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
       Self::InviteTitle => style(13.0, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
       Self::Address => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
       Self::CardTitle => style(12.5, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),

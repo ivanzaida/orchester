@@ -133,11 +133,10 @@ fn orchester_design_connect_ends_at_a_server_already_connected() {
   window.set("orchester-connect-address", &recorder.url());
   press(&mut window, "orchester-connect-continue");
   shows(&mut window, "orchester-connect-already");
+  // The done *Address* step's line: the server's address, then *Change* (`Vn33B` in `MrVql`).
   let found = window.text("orchester-connect-found");
-  assert!(
-    found.contains("Orchester server ") && found.contains("API 3"),
-    "{found}"
-  );
+  assert!(recorder.url().ends_with(&found), "{found}");
+  shows(&mut window, "orchester-connect-change");
   for later in [
     "orchester-connect-step-compare",
     "orchester-connect-step-join",

@@ -6,17 +6,17 @@
       "silent": "This build shows no notifications: only the installed app does, or a build started with {{variable}}=1. The counts on the app's icon still update.",
       "needsYou": {
         "title": "Needs you",
-        "hint": "An agent or a plan waits for your answer or decision",
+        "hint": "An agent asks, a plan or a run waits for you",
         "description": "An agent waits for your approval, an answer or a message, or a plan or a run waits for your decision."
       },
       "stopped": {
         "title": "Stopped",
-        "hint": "A run stops at a limit or is interrupted, a runner goes offline",
+        "hint": "A run stops at a limit, a runner goes offline",
         "description": "A run stopped at a limit or was interrupted, a project's runner is offline, or a merge stopped."
       },
       "finished": {
         "title": "Finished and info",
-        "hint": "A run is ready to merge, merged or failed",
+        "hint": "A run ends or fails, a merge lands",
         "description": "A run is ready to merge, was merged or failed, a plan limit reached 90% or was reset, or the Orchestrator proposes something."
       },
       "sound": {
@@ -25,7 +25,7 @@
       },
       "quiet": {
         "title": "Quiet hours",
-        "hint": "No notifications between these times",
+        "hint": "No sound and no banners between these times",
         "description": "No notifications between these times each day. The count on the app's icon still updates.",
         "from": "From",
         "to": "to",
@@ -38,7 +38,7 @@
     "dailyReport": {
       "group": "Daily report",
       "title": "Daily report from the Orchestrator",
-      "hint": "What was done and what waits, in each project's Orchestrator chat",
+      "hint": "What was done, what waits and tokens, in its chat",
       "description": "Each day at this time, every open project's Orchestrator conversation gets a report of what was done that day: merges, runs, what waits for you, what the Orchestrator did and the day's tokens. A day without activity gets none; a report missed while the app was closed comes at its next start. With Let the Orchestrator answer agents on, the Orchestrator adds a summary that only proposes.",
       "at": "Deliver at",
       "time": "Daily report time",
