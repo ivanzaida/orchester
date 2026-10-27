@@ -100,26 +100,25 @@ fn chat_approval_merges_the_run_the_person_approved_and_the_card_says_so() {
     seeded.project,
     orchester_app::routes::ProjectPage::Orchestrator(orchester_app::routes::OrchestratorChat::Chat(scope.chat)),
   ));
+  // Applied, the card folds into its line, which says how it was applied and, opened, quotes the approval.
   let card = format!("orchestrator-action-{turn}-0");
-  served.until("the card's note of the approval", |served| {
-    served.tree.get_element_by_id(&format!("{card}-in-chat")).is_some()
+  served.until("the card's line", |served| {
+    served
+      .tree
+      .get_element_by_id(&format!("{card}-target"))
+      .is_some_and(|target| holds(target, "by you in the chat"))
   });
-  let state = served
+  served
     .tree
-    .get_element_by_id(&format!("{card}-state"))
-    .expect("the card's state");
-  assert!(
-    holds(state, "Applied by you in the chat"),
-    "the card says how it was applied"
-  );
-  let note = served
-    .tree
-    .get_element_by_id(&format!("{card}-in-chat"))
-    .expect("the note");
-  assert!(
-    holds(note, "“merge it”"),
-    "the note quotes the message that approved it"
-  );
+    .get_element_by_id_mut(&format!("{card}-line"))
+    .expect("the line")
+    .click();
+  served.until("the quoted approval", |served| {
+    served
+      .tree
+      .get_element_by_id(&format!("{card}-reason"))
+      .is_some_and(|note| holds(note, "“merge it”"))
+  });
 }
 
 #[test]

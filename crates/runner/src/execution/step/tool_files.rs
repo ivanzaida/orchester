@@ -8,15 +8,16 @@
 //! definitions up in it, `search_file` for a name lists its definitions before the files that hold it, and
 //! `list_files` answers from the index's file list and the files changed in the worktree since the base
 //! revision. A definition in a changed file is marked, as its line may have moved. The index holds no file
-//! contents, so `read_file` always reads the file on disk. `find_references` lists a name's definitions from the
-//! index, then the worktree's files that use it as a whole word, and says when the index is off.
+//! contents, so `read_file` always reads the file on disk; for Claude Code it answers a PNG, JPEG or WebP file with the
+//! image ([`ToolFiles::with_images`]). `find_references` lists a name's definitions from the index, then the
+//! worktree's files that use it as a whole word, and says when the index is off.
 
 use std::{
   collections::HashSet,
   path::{Path, PathBuf},
 };
 
-use orchester_agent::FileTools;
+use orchester_agent::{FileTools, files::ReadAnswer};
 use orchester_core::{
   connection::stream::RunnerProblem,
   native::{
@@ -25,8 +26,8 @@ use orchester_core::{
     tools::ListFiles,
   },
   orchester_tools::{
-    CodeIndex, DEFAULT_LIMIT_FILES, FileCall, FindSymbol, OutsideReads, Revision, SearchTerm, SymbolHit, ToolContext,
-    ToolResult, changed_files, shown_hits,
+    AnswerImage, CodeIndex, DEFAULT_LIMIT_FILES, FileCall, FindSymbol, OutsideReads, Revision, SearchTerm, SymbolHit,
+    ToolContext, ToolResult, changed_files, shown_hits,
   },
   resource::RepositoryAccess,
 };
@@ -50,6 +51,8 @@ const CHANGED_CAP: usize = 4 * 1024 * 1024;
 pub(super) struct ToolFiles {
   files: FileTools,
   index: Option<(CodeIndex, Revision)>,
+  /// `read_file` answers an image file with the image: the agent is Claude Code, which shows MCP image blocks.
+  images: bool,
 }
 
 impl ToolFiles {
@@ -80,7 +83,15 @@ impl ToolFiles {
     Ok(Self {
       files: FileTools::new(scope, ripgrep),
       index,
+      images: false,
     })
+  }
+
+  /// These tools, `read_file` answering an image file with the image.
+  #[must_use]
+  pub(super) fn with_images(mut self) -> Self {
+    self.images = true;
+    self
   }
 
   /// Whether the tools use the code index.
@@ -91,6 +102,10 @@ impl ToolFiles {
   /// Runs the worktree file tool call `call` in `context`, blocking on the file system.
   pub(super) fn run(&self, call: &FileCall, context: &ToolContext<'_>) -> ToolResult {
     let outcome = match call {
+      FileCall::Read(input) if self.images => match self.files.read_shown(input) {
+        ReadAnswer::Image(image) => return ToolResult::with_image(image.line(), AnswerImage::png(image.png())),
+        ReadAnswer::Text(outcome) => outcome,
+      },
       FileCall::Read(input) => self.files.read_lines(input),
       FileCall::List(input) => return self.list(input, context),
       FileCall::Search(input) => return self.search(input, context),

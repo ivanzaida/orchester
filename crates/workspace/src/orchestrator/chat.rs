@@ -1,12 +1,17 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
-//! with the files the person attached to their messages.
+//! with the files the person attached to their messages, which of its waits still stand and what became of the runs
+//! whose ends no longer do.
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+  collections::{BTreeMap, HashMap, HashSet},
+  path::Path,
+};
 
 use orchester_core::{
   attachment::Attachment,
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, ChatEntry, TurnState},
+  run::RunStatus,
 };
 use orchester_store::{ChatListing, ProjectDb};
 
@@ -33,6 +38,49 @@ pub struct ChatView {
   pub entries: Vec<ChatEntry>,
   /// The files attached to the person's messages, by message, in the order they were attached.
   pub attachments: BTreeMap<ChatMessageId, Vec<Attachment>>,
+  /// The entries of its waits and runs' ends that still stand as they were read: an agent that still waits, a run
+  /// still where it ended. The others were dealt with since, here or elsewhere.
+  pub standing: HashSet<i64>,
+  /// What became of the runs whose ends no longer stand, by entry.
+  pub moved: HashMap<i64, EndMoved>,
+}
+
+/// What became of a run since an end of it a conversation keeps, once that end no longer stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EndMoved {
+  /// Orchester merged it.
+  Merged,
+  /// It works again, or waits to.
+  Working,
+  /// It stopped for a person's decision on how it goes on.
+  Stopped,
+  /// It is paused.
+  Paused,
+  /// It was interrupted.
+  Interrupted,
+  /// It succeeded.
+  Succeeded,
+  /// It failed.
+  Failed,
+  /// It was canceled.
+  Cancelled,
+  /// The project no longer keeps it.
+  Gone,
+}
+
+impl EndMoved {
+  /// A run that stands at `status` now.
+  pub(super) const fn of(status: &RunStatus) -> Self {
+    match status {
+      RunStatus::Pending | RunStatus::Running => Self::Working,
+      RunStatus::Paused(_) => Self::Paused,
+      RunStatus::WaitingForPerson(_) => Self::Stopped,
+      RunStatus::Interrupted(_) => Self::Interrupted,
+      RunStatus::Succeeded => Self::Succeeded,
+      RunStatus::Failed(_) => Self::Failed,
+      RunStatus::Cancelled => Self::Cancelled,
+    }
+  }
 }
 
 impl ChatView {
@@ -46,11 +94,20 @@ impl ChatView {
     let attachments = db
       .chat_attachments(chat)
       .map_err(|error| messages::store_error(&error))?;
+    let (standing, moved) =
+      super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
       entries,
       attachments,
+      standing,
+      moved,
     }))
+  }
+
+  /// What became of the run of the end kept as entry `seq`, once that end no longer stands.
+  pub fn moved_of(&self, seq: i64) -> Option<EndMoved> {
+    self.moved.get(&seq).copied()
   }
 
   /// The files attached to the person's message `message`.

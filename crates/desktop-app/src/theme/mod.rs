@@ -84,7 +84,7 @@ pub use self::{
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
-  orchestrator::{OrchestratorSpacing, OrchestratorText},
+  orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},

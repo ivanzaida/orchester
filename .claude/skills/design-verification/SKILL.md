@@ -40,7 +40,18 @@ what is actually on screen.
    matches the design's content where the app allows it, so text lengths are comparable.
    Use a throwaway git repository under `.tmp/`, never a real project.
 3. **Look at both images** at full size, region by region — do not rely on the element tree
-   or on the code. Compare:
+   or on the code.
+   - Open each PNG to look at it. In an Orchester run, open it with Orchester's `read_file`
+     (`mcp__Orchester__read_file`; Claude Code's own `Read` is not available there). Outside
+     Orchester, use the `Read` tool.
+   - Never use Pencil's built-in browser (`mcp__pencil__browser`: load-page, return-screenshot,
+     screenshot-to-canvas) to view a PNG or the app. It is one browser shared by every agent and
+     designer connected to Pencil, it takes one capture at a time, and a capture left unfinished
+     locks it for everyone ("A capture is already running") until Pencil restarts.
+   - If no tool in your step shows an image, say so in the report, and compare from the element
+     tree and pixel samples only as a stated fallback.
+
+   Compare:
    - overall structure: which regions exist, their order, sizes and alignment; anything
      extra (borders, frames, title bars, panels, fields, notices) or missing;
    - spacing: paddings, gaps, column widths, vertical rhythm;
@@ -141,6 +152,8 @@ name a Codex connection that is not stored, so nothing can run.
 | `tasks-unreadable` | The project opens; its one task's stored status is unknown, so reading the task list fails with `Corrupt` | Tasks load error |
 | `decisions` | Runs ready for review (one conflicts with the moved `main`, one merges cleanly, one has no branch), one that waits after Review's retries, and *Check the empty states on screen*, whose Review could not check two states and waits unverified | Ready for review, merge conflict; waits after retries (`DVuXu`); waits unverified (no frame of its own: compare with `DVuXu`'s parts) |
 | `live` | Six drafts ready to run with the fake Codex (needs `-FakeAgents`): KON-1 ends ready for review, KON-2 asks to approve `cargo add serde`, KON-3 asks a question with options, KON-4 waits for its plan, KON-5 keeps working, KON-6 fails and waits for a person | Running, approval, question and plan states, live |
+| `orchestrator` | The Orchestrator on *Claude · Work* (Opus 5.5, high). Sign-ins for the runs-on picker: Claude Code *Work* (Max, 42 % of 5 h used), *Personal* (Pro, 5-hour limit reached for 80 more minutes), Codex *Client* (signed out), each with a connection; DeepSeek API providers. *Plan the webhook retry work* (opens first): a digest *4 waiting for you* of waits that stand (KON-5's question, KON-6 … KON-8 interrupted), then a turn with actions. *Every card* (History): a run's end that stands (KON-1, ready to merge), waits *Answered by the Orchestrator*, *Answered by you*, *Waits for you* (KON-2's plan) and *Orchestrator is reading* (KON-3's question), waiting decision cards (start KON-4, merge KON-1, cancel KON-2, publish Builder v2 with network on, add the MCP server `figma`: 6 facts, 3 shown and *Show details*; an answer, a release), folded decisions, a hold, a daily report, a stopped and a failed turn | Orchestrator · redesign 01, 03, 04, 05, 05b; Orchestrator cards · redesign and 06 |
+| `orchestrator-not-set-up` | `orchestrator` with nothing chosen for the Orchestrator | Orchestrator · redesign 02 |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their
 running runs interrupted and ends the approvals they waited for. Capture running states of
@@ -161,7 +174,8 @@ reading discovery or escalating a script outside the sandbox.
 For example, call `call_run_app` with `{"tool":"app_state","arguments":{}}` for the QA app, or
 `{"pid":12345,"tool":"app_state","arguments":{}}` for one the script started.
 Every embedded tool uses this same relay, including `navigate`, `lurq_resize` and `lurq_screenshot`.
-PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open and cite.
+PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open with `read_file`
+(step 3) and cite.
 
 `app_state` must answer `"mcp": {"window_control": true, …}` before you drive the window.
 

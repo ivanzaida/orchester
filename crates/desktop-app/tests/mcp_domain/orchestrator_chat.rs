@@ -521,12 +521,21 @@ fn chat_keeps_the_waits_of_a_project_it_opens_with_their_cards() {
     seeded.project,
     orchester_app::routes::ProjectPage::Orchestrator(orchester_app::routes::OrchestratorChat::Chat(chat)),
   ));
-  let card = format!("orchestrator-wait-wait-{seq}");
-  served.until("the wait's card", |served| {
-    served.tree.get_element_by_id(&card).is_some()
+  // Waits for the person kept one after another gather into a digest; one alone is a line of its own.
+  let (line, item) = (
+    format!("orchestrator-wait-wait-{seq}"),
+    format!("orchestrator-digest-item-wait-{seq}"),
+  );
+  served.until("the wait's line", |served| {
+    served.tree.get_element_by_id(&line).is_some() || served.tree.get_element_by_id(&item).is_some()
   });
+  let shown = if served.tree.get_element_by_id(&line).is_some() {
+    line
+  } else {
+    item
+  };
   assert!(
-    served.tree.get_element_by_id(&format!("{card}-open")).is_some(),
-    "the card opens the task's conversation"
+    served.tree.get_element_by_id(&format!("{shown}-open")).is_some(),
+    "the line opens the task's conversation"
   );
 }

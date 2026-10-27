@@ -26,6 +26,11 @@ use orchester_core::{
 use crate::kontur::{Kontur, SeedError, catalogue, name};
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed_catalogue(kontur).map(drop)
+}
+
+/// [`seed`], giving the catalogue its profiles publish, which a scenario on it runs its tasks on.
+pub(super) fn seed_catalogue(kontur: &mut Kontur) -> Result<catalogue::Catalogue, SeedError> {
   let at = kontur.ago(4);
   let bin = kontur.repo.join(".orchester").join("qa-bin");
   fs::create_dir_all(&bin).map_err(|error| SeedError::Invalid(error.to_string()))?;
@@ -51,10 +56,11 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     at,
   )?;
   let published = kontur.ago(7 * 24 * 60);
-  catalogue::kontur(&mut kontur.db, codex, published)?;
+  let catalogue = catalogue::kontur(&mut kontur.db, codex, published)?;
   github(kontur, program("gh")?, at)?;
   let docs = mcp_servers(kontur, at)?;
-  designer(kontur, (codex, docs), at)
+  designer(kontur, (codex, docs), at)?;
+  Ok(catalogue)
 }
 
 /// A CLI connection, recorded as its check found it.

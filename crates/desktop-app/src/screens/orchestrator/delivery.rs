@@ -22,11 +22,12 @@ use super::{send::QueuedChange, timeline::TurnRow, turns::Arrival};
 use crate::ui::{
   attachments,
   button::{ActionButton, ButtonKind},
-  chat::{delivery_line, person_message},
+  chat::{delivery_line, own_bubble},
   icon::Icon,
 };
 
-/// The person's message that opens `row`'s turn, keyed `key`, with the files attached to it and where it stands.
+/// The person's message that opens `row`'s turn, keyed `key`, with the files attached to it and where it stands; the
+/// delivery line under it says when.
 pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
   let delivery = delivery(ctx, row);
   let id = format!("orchestrator-message-{key}");
@@ -36,7 +37,7 @@ pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Elemen
     .align_items(Alignment::End)
     .child(delivery)
     .with_children(queued_actions(ctx, row));
-  person_message(ctx, &id, (&row.turn.text, row.turn.at), (attached, Some(under.into()))).into()
+  own_bubble(&id, &row.turn.text, (attached, Some(under.into()))).into()
 }
 
 /// Where the message stands: its glyph, its color and its words.

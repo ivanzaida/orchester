@@ -1,28 +1,36 @@
-//! The project's Orchestrator chat (`Orchestrator` `TrG83`; `docs/design/orchester-workspace.md`, "Project
-//! orchestrator conversation") and its settings (`Orchestrator settings` `Xir64`, [`settings`]). The chat talks with
-//! an agent CLI the project's runner starts read-only in the project folder, which acts through Orchester's domain
-//! tools with the same checks as the app (`orchester_workspace::orchestrator`). The screen shows the conversation the
-//! route names, the latest one by default, or a new one (`start`); its header (`header`), the turns (`timeline`),
-//! the composer (`composer`) and History beside them (`history`). Each conversation's draft is kept for as long as
-//! the app runs (`draft`). Sending keeps the draft until its message is kept, and a failed send keeps it with
-//! *Retry*, which sends the same message once.
+//! The project's Orchestrator chat (`Orchestrator · redesign` `hujxu` in the new orchester.pen;
+//! `docs/design/orchester-workspace.md`, "Project orchestrator conversation") and its settings (`Orchestrator
+//! settings` `Xir64`, [`settings`]). The chat talks with an agent CLI the project's runner starts read-only in the
+//! project folder, which acts through Orchester's domain tools with the same checks as the app
+//! (`orchester_workspace::orchestrator`). The screen shows the conversation the route names, the latest one by
+//! default, or a new one (`start`); its one-line header (`header`), the turns (`timeline`) in a 760 column, the
+//! composer with what the Orchestrator runs on (`composer`, `runs_on`), and History over the chat's right edge
+//! (`history`). Each conversation's draft is kept for as long as the app runs (`draft`). Sending keeps the draft until
+//! its message is kept, and a failed send keeps it with *Retry*, which sends the same message once.
 
 mod action;
+mod answer;
 mod body;
 pub(in crate::screens) mod card;
 pub(in crate::screens) mod change;
 mod composer;
 pub(in crate::screens) mod data;
+mod decision;
 mod delivery;
+mod digest;
 mod draft;
+mod ending;
+mod env;
 mod failure;
 mod header;
 mod held;
 mod history;
+mod line;
 mod page;
 mod proposal;
 mod report;
 mod run_end;
+mod runs_on;
 mod send;
 mod send_menu;
 mod settings;
@@ -39,8 +47,9 @@ use lurq::{
     ctx::Ctx,
     events::{KeyboardEvent, is_synthetic_input},
   },
-  components::{Column, Row},
+  components::{Column, Stack},
   core::{ElementRef, Signal},
+  layout::StackAlignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -59,7 +68,7 @@ use orchester_workspace::{
 use self::{
   data::Shown,
   draft::Conversation,
-  header::{Head, Named},
+  header::Named,
   send::{QueuedAction, SendAction, Sending, Sent, StopAction},
 };
 use crate::{
@@ -109,6 +118,8 @@ struct View {
   how: Signal<Option<WhileAnswering>>,
   history: Signal<bool>,
   search: Signal<String>,
+  /// The composer's runs-on picker is open.
+  runs_on: Signal<bool>,
   /// Set to put the focus in the message field.
   focus: Signal<bool>,
   /// The message field has the focus.
@@ -143,6 +154,7 @@ impl Component for OrchestratorScreen {
       how: ctx.signal(None),
       history: ctx.signal(false),
       search: ctx.signal(String::new()),
+      runs_on: ctx.signal(false),
       focus: ctx.signal(false),
       focused: ctx.signal(false),
       input: ElementRef::new(),
@@ -207,12 +219,12 @@ impl Component for OrchestratorScreen {
       ctx.focus(&view.input);
       view.focus.set(false);
     }
-    let reads = data::read(ctx, &props.project.open.repo_root, props.chat);
+    let saves = props.project.feed.saves.get();
+    let reads = data::read(ctx, (&props.project.open.repo_root, saves), props.chat);
     // Until History says which conversation is the latest, the screen shows none.
     if reads.target.is_some() || reads.shown != Shown::Loading {
       view.hold_draft_of(props.project.open.project.id(), reads.target.into());
     }
-    let readiness = reads.setup.ready().map(|setup| setup.readiness());
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat),
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
@@ -222,26 +234,18 @@ impl Component for OrchestratorScreen {
       })),
       Shown::New | Shown::Failed(_) | Shown::Missing => Named::New,
     };
-    let head = header::header(
-      ctx,
-      view,
-      &Head {
-        project: &props.project,
-        chat,
-        readiness: readiness.as_ref(),
-      },
-    );
-    let main = body::main(ctx, view, (&props.project, &reads, readiness.as_ref()));
+    let head = header::header(ctx, view, (&props.project, chat));
+    let main = body::main(ctx, view, (&props.project, &reads));
+    // History opens over the chat's right edge, under the header.
     let panel = view.history.get().then(|| {
-      let open = &props.project.open.project;
       let chats = reads
         .history
         .ready()
         .map_or(&[][..], |history| history.chats.as_slice());
       history::panel(
         ctx,
-        (&view.history, &view.search),
-        (open.id(), open.name().as_str()),
+        &view.search,
+        props.project.open.project.id(),
         (chats, reads.target),
       )
     });
@@ -258,10 +262,11 @@ impl Component for OrchestratorScreen {
       })
       .child(head)
       .child(
-        Row::new()
+        Stack::new()
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .min_height(Dimension::Px(0.0))
+          .stack_align(StackAlignment::TopEnd)
           .child(main)
           .with_children(panel),
       )
@@ -277,12 +282,19 @@ impl View {
   }
 
   /// Words typed and files attached before the screen knew which conversation it shows become that one's draft when
-  /// it has none.
+  /// it has none. A new conversation's composer takes the focus. The runs-on picker closes: its room was measured over
+  /// the chip where the other conversation had it.
   fn load_draft(&self, project: ProjectId, of: Conversation) {
     let unknown = self.of.get_untracked().is_none();
     let typed = unknown.then(|| self.draft.get_untracked());
     let given = unknown.then(|| self.attached.held());
     self.of.set(Some(of));
+    if self.runs_on.get_untracked() {
+      self.runs_on.set(false);
+    }
+    if of == Conversation::New {
+      self.focus.set(true);
+    }
     let mut kept = draft::draft(project, of);
     if let Some(typed) = typed.filter(|typed| !typed.is_empty())
       && kept.is_empty()
@@ -423,7 +435,17 @@ fn sender() -> Answerer {
 
 /// The local date of `at` as History and the header say it (*Oct 8*).
 pub(super) fn date(ctx: &Ctx, at: Timestamp) -> Arc<str> {
-  let (month, day) = display::month_day(at);
+  month_day(ctx, display::month_day(at))
+}
+
+/// The calendar day `day` as History and the header say a date (*Oct 8*).
+pub(super) fn day(ctx: &Ctx, day: chrono::NaiveDate) -> Arc<str> {
+  use chrono::Datelike;
+  month_day(ctx, (day.month0() as usize, day.day()))
+}
+
+/// The `month` (a [`display::MONTH_KEYS`] index) and `day` of a date, as *Oct 8*.
+fn month_day(ctx: &Ctx, (month, day): (usize, u32)) -> Arc<str> {
   let month = ctx.t_ns(orchester_workspace::i18n::NAMESPACE, display::MONTH_KEYS[month]);
   ctx.t_args(
     "orchestrator.date",

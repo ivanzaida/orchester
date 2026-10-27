@@ -143,6 +143,13 @@ impl ToolHost {
     self
   }
 
+  /// This host, its `read_file` answering an image file with the image, for an agent CLI that shows MCP image blocks.
+  #[must_use]
+  fn with_images(mut self) -> Self {
+    self.files = self.files.with_images();
+    self
+  }
+
   /// This host, also removing `secrets` from its answers.
   #[must_use]
   pub(super) fn with_secrets(mut self, secrets: Vec<SecretVariable>) -> Self {
@@ -322,7 +329,8 @@ impl RunTask {
   /// The Orchester tools of step execution `execution` with `permissions`, the MCP servers of `setup` and `skills`,
   /// for invocation `invocation` working in `folders` with the project's `environment`; and Claude Code's permission
   /// prompt, whose relay serves them to a Claude Code agent. The tools' answers leave out the MCP servers' secrets and
-  /// `provider_key`, the key of the API provider the agent runs on.
+  /// `provider_key`, the key of the API provider the agent runs on. Only Claude Code's `read_file` shows images; Codex
+  /// reads an image's name and size.
   pub(super) fn step_tools(
     &self,
     (permissions, setup, skills): (&AgentPermissions, &McpSetup, StepSkills),
@@ -330,7 +338,10 @@ impl RunTask {
     (environment, provider_key): (&CommandEnvironment, Option<SecretVariable>),
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
-    let host = self.tool_host((permissions, skills), (execution, folders), environment)?;
+    let mut host = self.tool_host((permissions, skills), (execution, folders), environment)?;
+    if matches!(setup, McpSetup::Claude(_)) {
+      host = host.with_images();
+    }
     let qa = self.step_qa(execution, invocation, worktree)?;
     let secrets = setup.secrets().into_iter().chain(provider_key).collect();
     let tools = Arc::new(host.with_secrets(secrets).with_qa(qa));

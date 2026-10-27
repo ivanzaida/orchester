@@ -5,6 +5,7 @@
 //! `cargo test -p orchester-agent --test file_tools files_`
 
 mod edit;
+mod images;
 mod line_edits;
 mod links;
 mod listing;

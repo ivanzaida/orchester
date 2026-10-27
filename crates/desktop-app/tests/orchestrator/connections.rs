@@ -1,18 +1,32 @@
 //! The connections of the Orchestrator tests' project: a checked, signed-in CLI connection with its provider's own
-//! models, and a native agent connection, which the Orchestrator does not run on.
+//! models, one on an API provider with its typed models, and a native agent connection, which the Orchestrator does not
+//! run on.
 
 use std::path::Path;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, CatalogModel, CatalogSource, CheckResult, ConnectionCheck,
-    EndpointPreset, ModelCatalog, SignIn,
+    AgentConnection, AgentProvider, ApiEndpoint, ApiProvider, BaseUrl, CatalogModel, CatalogSource, CheckResult,
+    ConnectionCheck, EndpointPreset, ModelCatalog, SignIn,
   },
   id::{ConnectionId, SecretId},
   name::Name,
   resource::ModelId,
   time::Timestamp,
 };
+
+/// A Claude Code connection named `name` that runs `program` on DeepSeek's API, its one model typed.
+pub fn api_provider(name: &str, program: &Path) -> AgentConnection {
+  let mut connection = cli(AgentProvider::ClaudeCodeCli, name, program);
+  let provider = ApiProvider::new(
+    BaseUrl::new("https://api.deepseek.com/anthropic").expect("url"),
+    SecretId::generate(),
+    vec![ModelId::new("deepseek-v4-pro").expect("model")],
+  )
+  .expect("a provider");
+  connection.set_api_provider(Some(provider)).expect("on the provider");
+  connection
+}
 
 /// The models a CLI's connection lists, each with its efforts: Claude Code's `haiku` and `opus`, Codex's `gpt-5.5`
 /// and `gpt-5.5-mini`.

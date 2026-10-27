@@ -1,8 +1,12 @@
-//! A start the Orchestrator's agent proposed (`orchester_workspace::orchestrator::proposal`): nothing ran, and it
-//! waits for the person, in the action card's frame (`Action card` `nQIhx`): *Start <task> on <pipeline>?*, that
-//! nothing started, and *Dismiss* and *Start*. Only a person starts it: lurq's synthetic input (an MCP client driving
-//! the window) is refused in the handler, visibly, as the other person-only controls refuse it; *Dismiss* starts
-//! nothing and stays open to automation.
+//! A start the Orchestrator's agent proposed (`orchester_workspace::orchestrator::proposal`; `Start KON-31 on Feature
+//! delivery v3?` in `3 · Decisions` `bxJZp`): nothing ran, and it waits for the person as a decision card
+//! ([`super::decision`]): *Start <task> on <pipeline>?* with the task, the task's title and the opening of its brief,
+//! its acceptance criteria behind *Show them*, and *Start*, *Dismiss* and *Open <task>*. Only a person starts it:
+//! lurq's synthetic input (an MCP client driving the window) is refused in the handler, visibly, as the other
+//! person-only controls refuse it; *Dismiss* starts nothing and stays open to automation. While a person's start is
+//! carried out it is an event line with the loader.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -22,13 +26,19 @@ use orchester_workspace::{
   orchestrator::{proposal::Decision, tools::ChatScope},
 };
 
-use super::card::{self, DecideAction, Deciding, State};
+use super::{
+  card::{self, DecideAction, Deciding},
+  decision,
+  line::{Chip, ChipTone, Line, Tone},
+};
 use crate::{
+  navigation::Navigation,
   theme::{ExtraSpacing, ExtraTypography, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     message::message_text,
+    tinted_note::{person_only, tinted_note},
   },
 };
 
@@ -78,83 +88,49 @@ impl Component for StartProposal {
         ("pipeline", props.start.pipeline.as_str()),
       ],
     );
-    let state_now = if props.applying {
-      applying(ctx, props.at)
-    } else {
-      waits(ctx, props.at)
-    };
-    let head = card::head(id, (Icon::Play, &title), None, state_now);
-    let refused = self.refused.get().then(|| {
-      card::note(
-        id,
-        "person-only",
-        (Icon::Hand, PaletteColor::Warning),
-        &ctx.t("orchestrator.proposal.personOnly"),
-      )
-    });
+    let time = display::clock(props.at);
+    if props.applying {
+      return Line::new(id, (Icon::LoaderCircle, Tone::Plain), title)
+        .outcome("applying")
+        .target(Some(props.task.as_str().into()))
+        .chip(Some(Chip::new(ctx.t("orchestrator.line.applying"), ChipTone::Working)))
+        .time(Some(time))
+        .render(ctx);
+    }
+    let refused = self
+      .refused
+      .get()
+      .then(|| person_only(format!("{id}-person-only"), &ctx.t("orchestrator.proposal.personOnly")));
     let failed = state.error.as_ref().map(|error| {
-      card::note(
-        id,
-        "error",
+      tinted_note(
+        format!("{id}-error"),
         (Icon::CircleAlert, PaletteColor::Danger),
         &message_text(ctx, error),
       )
     });
-    card::frame(id, "proposed")
-      .child(head)
+    let actions = self.actions(ctx, &props, state.is_pending());
+    decision::frame(id, "proposed", false)
+      .child(decision::head(ctx, id, (Icon::Play, &title), Some(&props.task), &time))
       .child(asked(ctx, id, (&props.task, &props.start)))
       .with_children(self.criteria(ctx, id, &props.start.criteria))
-      .with_children(super::action::open_task(
-        ctx,
-        id,
-        props.scope.project,
-        Some(&props.task),
-      ))
-      .child(
-        Text::new(&ctx.t("orchestrator.proposal.effect"))
-          .id(format!("{id}-effect"))
-          .variant(TypographyStyle::Body)
-          .width(Dimension::Pct(100.0)),
-      )
       .with_children(refused)
       .with_children(failed)
-      .child(self.buttons(ctx, &props, state.is_pending() || props.applying))
-  }
-}
-
-/// That the proposal made at `at` waits for the person.
-pub(super) fn waits(ctx: &Ctx, at: Timestamp) -> State {
-  State {
-    glyph: Icon::Hourglass,
-    color: PaletteColor::Warning,
-    words: ctx.t_args("orchestrator.proposal.waits", [("time", display::clock(at).as_str())]),
-  }
-}
-
-/// That a person's decision on the proposal made at `at` is being carried out.
-pub(super) fn applying(ctx: &Ctx, at: Timestamp) -> State {
-  State {
-    glyph: Icon::LoaderCircle,
-    color: PaletteColor::TextSecondary,
-    words: ctx.t_args("orchestrator.change.applying", [("time", display::clock(at).as_str())]),
+      .child(actions)
+      .into()
   }
 }
 
 impl StartProposal {
-  /// *Start* and *Dismiss*, at the card's start as the action card's actions are; neither while a decision is being
-  /// taken.
-  fn buttons(&self, ctx: &Ctx, props: &ProposalProps, pending: bool) -> Row {
+  /// *Start*, *Dismiss* and *Open <task>*, with *Only you can apply*; neither takes a press while a decision is
+  /// being taken.
+  fn actions(&self, ctx: &mut Ctx, props: &ProposalProps, pending: bool) -> Row {
     let id = props.id.as_str();
     let deciding = |decision| Deciding {
       scope: props.scope.clone(),
       seq: props.seq,
       decision,
     };
-    let dismiss = ActionButton::new(
-      format!("{id}-dismiss"),
-      ButtonKind::Secondary,
-      ctx.t("orchestrator.proposal.dismiss"),
-    );
+    let dismiss = decision::dismiss_button(ctx, id);
     let start = ActionButton::new(
       format!("{id}-start"),
       ButtonKind::Primary,
@@ -181,15 +157,20 @@ impl StartProposal {
       });
       (dismiss, start)
     };
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(start)
-      .child(dismiss)
+    let mut buttons: Vec<Element> = vec![start.into(), dismiss.into()];
+    if let Some(route) = super::action::task_route(props.scope.project, &props.task) {
+      let label = ctx.t_args("orchestrator.action.openTask", [("task", props.task.as_str())]);
+      let navigation = Navigation::of(ctx);
+      buttons.push(
+        decision::open_button(format!("{id}-open"), label)
+          .opens(navigation.to(route))
+          .into(),
+      );
+    }
+    decision::actions(ctx, id, buttons)
   }
 
-  /// The task's acceptance criteria, behind *Show N acceptance criteria*; nothing when it has none.
+  /// The task's acceptance criteria as a fact, *N · Show them*, and the list once open; nothing when it has none.
   fn criteria(&self, ctx: &Ctx, id: &str, criteria: &[String]) -> Option<Column> {
     if criteria.is_empty() {
       return None;
@@ -221,35 +202,45 @@ impl StartProposal {
             .width(Dimension::Pct(100.0))
         }))
     });
+    let fact = Row::new()
+      .id(format!("{id}-fact-criteria"))
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Loose.role())
+      .align_items(Alignment::Center)
+      .child(
+        Text::new(&ctx.t("orchestrator.proposal.criteria"))
+          .variant(OrchestratorText::FactKey.role())
+          .width(Dimension::Px(decision::FACT_KEY_WIDTH))
+          .flex_shrink(0.0),
+      )
+      .child(button);
     Some(
       Column::new()
+        .id(format!("{id}-facts"))
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Fine.role())
-        .child(Row::new().child(button))
+        .spacing(SpacingSize::Xs)
+        .child(fact)
         .with_children(listed),
     )
   }
 }
 
-/// The task the person is asked to start: its title, the opening of its brief when it has one, and that it goes on
-/// when it does.
+/// What the person is asked to start: the task's title and the opening of its brief, and that the brief goes on when
+/// it does.
 fn asked(ctx: &Ctx, id: &str, (task, start): (&str, &ProposedStart)) -> Column {
+  let about: Arc<str> = if start.brief.is_empty() {
+    start.title.as_str().into()
+  } else {
+    ctx.t_args(
+      "orchestrator.proposal.about",
+      [("title", start.title.as_str()), ("brief", start.brief.as_str())],
+    )
+  };
   Column::new()
     .id(format!("{id}-task"))
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Fine.role())
-    .child(
-      Text::new(&start.title)
-        .id(format!("{id}-task-title"))
-        .variant(OrchestratorText::Emphasis.role())
-        .width(Dimension::Pct(100.0)),
-    )
-    .with_children((!start.brief.is_empty()).then(|| {
-      Text::new(&start.brief)
-        .id(format!("{id}-brief"))
-        .variant(TypographyStyle::Description)
-        .width(Dimension::Pct(100.0))
-    }))
+    .child(decision::body(id, &about))
     .with_children(start.brief_cut.then(|| {
       Text::new(&ctx.t_args("orchestrator.proposal.briefCut", [("task", task)]))
         .id(format!("{id}-brief-cut"))

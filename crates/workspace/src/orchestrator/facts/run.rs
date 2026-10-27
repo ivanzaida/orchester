@@ -57,6 +57,7 @@ pub(super) fn read(
     branch: run.own_branch().map(|branch| branch.as_str().to_owned()),
     into: run.base_branch().map(|branch| branch.as_str().to_owned()),
     changes,
+    asked: None,
   }))
 }
 
