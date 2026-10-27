@@ -52,3 +52,54 @@ fn instructions_a_new_rule_chooses_its_scope_on_its_page() {
       .any(|e| &*e.name == "Delivery rule" && *e.body.scope() == InstructionScope::Pipeline { pipeline })
   });
 }
+
+#[test]
+fn instructions_a_removed_rule_leaves_a_removed_line_in_its_group() {
+  let mut screen = Instructions::new();
+  let id = screen.rule("Old rule", "Old text", InstructionScope::Project, true);
+  screen.list();
+  screen.until("listed", |s| s.text("instruction-library").contains("Old rule"));
+  screen.click(&format!("instruction-{id}"));
+  screen.until("the rule's page", |s| s.exists("instruction-more"));
+  screen.click("instruction-more");
+  screen.click("instruction-remove");
+  screen.until("asked in place", |s| s.exists("hub-remove-confirm"));
+  assert!(screen.text("hub-remove").contains("No agent gets it"), "{}", screen.text("hub-remove"));
+  // Remove takes the press once the question has read who uses the rule.
+  screen.until("removed, with its line", |s| {
+    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
+      confirm.click();
+    }
+    s.window.pass();
+    s.exists("instruction-library") && s.text("instruction-library").contains("Removed Old rule")
+  });
+  assert!(screen.listed().entry(id).is_none(), "the rule is no longer listed");
+  assert!(!screen.exists("hub-remove-confirm"), "no other prompt");
+}
+
+#[test]
+fn instructions_discard_draft_returns_to_the_published_version() {
+  let mut screen = Instructions::new();
+  let id = screen.rule("Kept rule", "Published text", InstructionScope::Project, true);
+  screen.list();
+  screen.until("listed", |s| s.text("instruction-library").contains("Kept rule"));
+  screen.click(&format!("instruction-{id}"));
+  screen.until("the rule's page", |s| s.exists("instruction-prompt"));
+  screen.set("instruction-prompt", "A draft to throw away");
+  screen.until("draft saved", |s| s.entry(id).state.has_draft() && s.exists("instruction-discard"));
+  screen.until("asked in place", |s| {
+    if let Some(mut discard) = s.window.tree.get_element_by_id_mut("instruction-discard") {
+      discard.click();
+    }
+    s.window.pass();
+    s.exists("hub-discard-confirm")
+  });
+  screen.until("discarded", |s| {
+    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-discard-confirm") {
+      confirm.click();
+    }
+    s.window.pass();
+    let entry = s.entry(id);
+    !entry.state.has_draft() && entry.body.text().as_str() == "Published text"
+  });
+}

@@ -153,9 +153,9 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   );
   s.click("skills-back");
   s.window.until("library after import", |w| {
-    w.tree.get_element_by_id("skills-list").is_some()
+    w.texts("skills-list")
+      .is_some_and(|t| t.join(" ").contains("Draft v1"))
   });
-  assert!(s.text("skills-list").contains("Draft v1"));
   s.click(&format!("skill-row-{}", entries.entries[0].id));
   assert!(s.text("skill-inspector").contains("notes.md"));
   assert!(s.text("skill-origin-source").contains(".claude/skills/checks"));
@@ -221,6 +221,50 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
     &original
   );
   assert!(s.entry(id).state.has_draft());
+}
+#[test]
+fn skills_remove_is_asked_in_place_and_the_skill_leaves_the_library() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  s.go(ProjectPage::Skill(id));
+  s.click("skill-more");
+  s.click("skill-remove");
+  s.window.until("asked in place", |w| {
+    w.tree.tick_futures();
+    w.tree.get_element_by_id("hub-remove-confirm").is_some()
+  });
+  assert!(s.text("hub-remove").contains("No agent gets this skill now"), "{}", s.text("hub-remove"));
+  let root = s.repo.clone();
+  // Remove takes the press once the question has read who the skill reaches.
+  s.window.until("removed", move |w| {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-remove-confirm") {
+      confirm.click();
+    }
+    ProjectSkills::load_in(&root).expect("skills").entry(id).is_none()
+  });
+}
+#[test]
+fn skills_discard_draft_returns_to_the_published_version() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  s.go(ProjectPage::Skill(id));
+  s.set("skill-description", "A draft to throw away.");
+  s.settle(id, "A draft to throw away.");
+  s.click("skill-discard");
+  s.window.until("asked in place", |w| {
+    w.tree.tick_futures();
+    w.tree.get_element_by_id("hub-discard-confirm").is_some()
+  });
+  let root = s.repo.clone();
+  s.window.until("discarded", move |w| {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-discard-confirm") {
+      confirm.click();
+    }
+    ProjectSkills::load_in(&root)
+      .expect("skills")
+      .entry(id)
+      .is_some_and(|e| !e.state.has_draft() && e.body.description() == "Run checks before handing over.")
+  });
 }
 #[test]
 fn skills_duplicate_name_is_not_saved_and_unsaved_departure_asks_in_place() {

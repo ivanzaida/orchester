@@ -1,6 +1,16 @@
 //! A profile's page saves its draft on its own; a widening change is asked at its field before it is saved, and
 //! Publish asks again only for what was not allowed yet; Discard draft and Remove are asked in place.
-use orchester_core::resource::RepositoryAccess;
+use std::collections::BTreeSet;
+
+use orchester_core::{
+  id::ResourceId,
+  name::Name,
+  permission::StepPermissions,
+  resource::{Pipeline, PromptText, RepositoryAccess, Slug, Step, StepKey, StepKind},
+  store::ResourceStore,
+  time::Timestamp,
+};
+use orchester_store::ProjectDb;
 use orchester_workspace::agents::data::VersionState;
 
 use super::harness::Agents;
@@ -109,12 +119,87 @@ fn agents_remove_an_unused_profile() {
   let id = screen.profile(true);
   screen.open(id);
   screen.click("agent-more");
+  let menu = screen
+    .window
+    .tree
+    .get_element_by_id_mut("agent-more-menu")
+    .and_then(|e| e.bounds())
+    .expect("menu laid out");
+  assert!(menu.width < 300.0, "the … menu stays beside its button: {menu:?}");
   screen.click("agent-remove");
   screen.until("question", |s| s.exists("hub-remove-confirm"));
   assert!(screen.text("hub-remove").contains("No pipeline step uses it"), "{}", screen.text("hub-remove"));
   screen.press_until("hub-remove-confirm", "removed", |s| {
     s.listed().profile(id).is_none() && s.exists("agents-new")
   });
+}
+
+#[test]
+fn agents_remove_and_reset_a_profile_a_pipeline_step_uses() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(true);
+  let pipeline = assigned_pipeline(&screen, id);
+  screen.open(id);
+  screen.click("agent-more");
+  screen.click("agent-remove");
+  screen.until("question with its users", |s| {
+    s.exists("hub-remove-confirm") && s.text("hub-remove").contains("Delivery v1 · 01 Implement")
+  });
+  assert!(screen.text("hub-remove-confirm").contains("Remove and reset"));
+  screen.click("hub-remove-keep");
+  assert!(!screen.exists("hub-remove-confirm"), "Keep it closes the question");
+  assert!(screen.listed().profile(id).is_some(), "Keep it keeps the profile");
+  screen.click("agent-more");
+  screen.click("agent-remove");
+  screen.until("asked again", |s| {
+    s.exists("hub-remove") && s.text("hub-remove").contains("Delivery v1")
+  });
+  screen.press_until("hub-remove-confirm", "removed", |s| {
+    s.listed().profile(id).is_none() && s.exists("agents-new")
+  });
+  let db = ProjectDb::open(&screen.root).expect("database");
+  let draft = db.draft::<Pipeline>(pipeline).expect("draft").expect("the reset draft");
+  assert!(
+    matches!(&draft.body().steps()[0].kind, StepKind::Agent { profile: None, .. }),
+    "the step lost its profile"
+  );
+  let published = db.latest_version::<Pipeline>(pipeline).expect("latest").expect("v1");
+  assert!(
+    matches!(&published.body().steps()[0].kind, StepKind::Agent { profile: Some(p), .. } if *p == id),
+    "v1 stays as it ran"
+  );
+}
+
+/// A published pipeline whose one step runs `profile`.
+fn assigned_pipeline(screen: &Agents, profile: ResourceId) -> ResourceId {
+  let pipeline = Pipeline::new(vec![Step {
+    key: StepKey::new("implement").expect("step key"),
+    name: Name::new("Implement").expect("step name"),
+    kind: StepKind::Agent {
+      profile: Some(profile),
+      repository: RepositoryAccess::ReadOnly,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new("Implement.").expect("instructions"),
+    depends_on: BTreeSet::new(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  }])
+  .expect("pipeline");
+  let mut db = ProjectDb::open(&screen.root).expect("database");
+  let resource = db
+    .create_resource(
+      Slug::new("delivery").expect("slug"),
+      Name::new("Delivery").expect("name"),
+      &pipeline,
+      Timestamp::now(),
+    )
+    .expect("pipeline saves");
+  db.publish_draft::<Pipeline>(resource.id(), Timestamp::now())
+    .expect("pipeline v1");
+  resource.id()
 }
 
 #[test]

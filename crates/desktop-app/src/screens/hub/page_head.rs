@@ -38,6 +38,9 @@ pub(crate) fn crumb(id: &str, (list, back): (&str, Open), here: Option<&str>) ->
     .into()
 }
 
+/// The … menu's width, as wide as the app menu's: without one its panel spans the window.
+pub(crate) const MORE_MENU_WIDTH: f32 = 208.0;
+
 /// The … menu: Remove.
 pub(crate) struct More {
   pub open: Signal<bool>,
@@ -58,9 +61,12 @@ pub(crate) fn head(ctx: &mut Ctx, id: &str, (glyph, title, sub): (Icon, &str, &s
       .element(more.anchor.clone())
       .on_click(move || open.update(|open| *open = !*open))
       .render(ctx);
+    let panel = menu_panel(&format!("{id}-more-menu"))
+      .width(Dimension::Px(MORE_MENU_WIDTH))
+      .child(item);
     Column::new()
       .child(button)
-      .child(menu_at_end(more.anchor, more.open, menu_panel(&format!("{id}-more-menu")).child(item)))
+      .child(menu_at_end(more.anchor, more.open, panel))
   });
   Row::new()
     .id(format!("{id}-page-head"))

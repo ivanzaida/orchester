@@ -18,6 +18,7 @@ use super::{AgentsNav, Shown, entries, fields::Fields, policy_panel};
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
+    page_head::MORE_MENU_WIDTH,
     parts::{status, tile},
   },
   theme::{ExtraSpacing, HubText, IconSize},
@@ -78,9 +79,12 @@ pub fn head(ctx: &mut Ctx, (fields, listed): (&Fields, &ProjectAgents), more: Op
       .element(more.anchor.clone())
       .on_click(move || open.update(|open| *open = !*open))
       .render(ctx);
+    let panel = menu_panel("agent-more-menu")
+      .width(Dimension::Px(MORE_MENU_WIDTH))
+      .child(item);
     Column::new()
       .child(button)
-      .child(menu_at_end(more.anchor, more.open, menu_panel("agent-more-menu").child(item)))
+      .child(menu_at_end(more.anchor, more.open, panel))
   });
   Row::new()
     .id("agent-page-head")
