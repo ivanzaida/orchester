@@ -35,7 +35,7 @@ use crate::{
   screens::hub::{
     self,
     draft_bar::{DraftBar, Standing},
-    import_preview,
+    import_preview, import_result,
     import_rows::{Review, Unchosen, Viewed},
     page_head, parts as hub_parts,
   },
@@ -116,7 +116,21 @@ impl Component for Import {
     let p = ctx.props::<PageProps>().clone();
     let state = self.work.state().get();
     if let Some(created) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-      return super::import_result::result(ctx, &p, &created.drafts, created.total);
+      let back = p.view.panel.clone();
+      let skills = ctx.t("hub.tabs.skills");
+      let page = import_result::Outcome {
+        root: "skills-import-result",
+        id: REVIEW,
+        project: p.project.open.project.id(),
+        back: (&skills, back.to(back.library())),
+        created: &created.drafts,
+        items: &p.data.repository.items,
+        total: created.total,
+        detail: item_summary,
+        agent_files: Some(p.data.agent_files),
+      }
+      .page(ctx);
+      return hub::item_body("skills-import-page", page, None);
     }
     let items = &p.data.repository.items;
     let pending = state.is_pending();
@@ -365,7 +379,7 @@ impl Import {
     let button = ActionButton::new(
       "skill-import-create",
       ButtonKind::Primary,
-      ctx.t_args("skills.importAction", [("count", chosen.len().to_string())]),
+      super::words::create_drafts(ctx, chosen.len()),
     )
     .icon(Icon::FilePlus);
     let button = if chosen.is_empty() || pending {

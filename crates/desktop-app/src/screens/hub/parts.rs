@@ -101,6 +101,11 @@ pub(crate) fn boxed(id: &str, rows: impl IntoIterator<Item = Element>) -> Column
 
 /// A tile with `glyph`, 28 beside a list row's label or 36 in a page head.
 pub(crate) fn tile(glyph: Icon, page: bool) -> Row {
+  tile_in(glyph, page, PaletteColor::TextSecondary)
+}
+
+/// [`tile`] with its glyph in `color`, e.g. an import result's check in `success` (`zEejx` in 03c).
+pub(crate) fn tile_in(glyph: Icon, page: bool, color: PaletteColor) -> Row {
   let side = if page { PAGE_TILE } else { TILE };
   Row::new()
     .width(Dimension::Px(side))
@@ -111,11 +116,7 @@ pub(crate) fn tile(glyph: Icon, page: bool) -> Row {
     .background(PaletteColor::SurfaceRaised)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Md)
-    .child(icon(
-      glyph,
-      if page { IconSize::Xl } else { IconSize::Md },
-      PaletteColor::TextSecondary,
-    ))
+    .child(icon(glyph, if page { IconSize::Xl } else { IconSize::Md }, color))
 }
 
 /// A sub-head inside a group's rows: a role's, a pipeline's or, indented with its glyph, a step's (`ksfLm`, `mwisw`

@@ -1,19 +1,22 @@
 //! Import from repository (`02c` `P21bwh`), one page under the hub's tabs reached from Instructions and Skills: the
 //! crumb, the page's title and where it read, the notice that it only creates drafts, then one group per kind with a
-//! row per item found, and the bar with what is chosen, Cancel and Create; beside them the opened item's preview. It
-//! reads repository files and creates only the chosen drafts.
+//! row per item found, and the bar with what is chosen, Cancel and Create; beside them the opened item's preview;
+//! then what it created (`03c` `cC55E`). It reads repository files and creates only the chosen drafts.
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, TypographyStyle},
+    theme::PaletteColor,
   },
   components::{Column, Text},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  agent_files::import::{Candidate, ImportItem, ItemKind, Unimportable},
+  agent_files::{
+    RepositoryAgentFiles,
+    import::{Candidate, ImportItem, ItemKind, Unimportable},
+  },
   id::IdempotencyKey,
   resource::ResourceKind,
 };
@@ -21,20 +24,25 @@ use orchester_workspace::{
   background,
   instructions::repository::{self, CreatedDraft, RepositoryScan},
   messages::Message,
+  project_settings,
+  skills::repository::ImportFailure,
   tasks::outside::Outside,
 };
 
 use super::state::Selection;
 use crate::{
   project::ShownProject,
-  screens::hub::{
-    self,
-    draft_bar::{DraftBar, Standing},
-    import_preview,
-    import_rows::{Review, Unchosen, Viewed},
-    page_head,
+  screens::{
+    hub::{
+      self,
+      draft_bar::{DraftBar, Standing},
+      import_preview, import_result,
+      import_rows::{Review, Unchosen, Viewed},
+      page_head,
+    },
+    skills::words,
   },
-  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
+  theme::{ExtraSpacing, HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -53,8 +61,9 @@ impl PartialEq for Props {
   }
 }
 impl DevtoolsInspectable for Props {}
+/// The drafts an import created, of how many items, and the project's Repository agent files when they could be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Imported(Vec<CreatedDraft>);
+struct Imported(Vec<CreatedDraft>, usize, Option<RepositoryAgentFiles>);
 impl DevtoolsInspectable for Imported {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ImportError {
@@ -63,7 +72,7 @@ enum ImportError {
   Background(Message),
 }
 impl DevtoolsInspectable for ImportError {}
-type Action = FutureAction<Vec<ImportItem>, Imported, ImportError>;
+type Action = FutureAction<(Vec<ImportItem>, usize), Imported, ImportError>;
 pub struct Import {
   unchosen: Signal<Unchosen>,
   viewed: Signal<Viewed>,
@@ -75,24 +84,31 @@ impl Component for Import {
     let props = ctx.props::<Props>().clone();
     let root = props.project.open.repo_root.clone();
     let key = IdempotencyKey::generate();
-    let action = ctx.future_action(move |chosen: Vec<ImportItem>| {
+    let action = ctx.future_action(move |(chosen, total): (Vec<ImportItem>, usize)| {
       let root = root.clone();
       async move {
-        background::run(move || repository::create_drafts_in(&root, key, &chosen))
-          .await
-          .map_err(ImportError::Background)?
-          .map(Imported)
-          .map_err(|error| {
-            tracing::error!(%error,"repository import failed");
-            ImportError::Write
-          })
+        background::run(move || {
+          let created = repository::create_drafts_in(&root, key, &chosen)?;
+          // The result says whether the repository's own files still reach agents; a failed read leaves that out.
+          let files = project_settings::load_in(&root)
+            .inspect_err(|error| tracing::warn!(%error, "repository agent files could not be read"))
+            .ok()
+            .map(|settings| settings.agent_files);
+          Ok::<_, ImportFailure>(Imported(created, total, files))
+        })
+        .await
+        .map_err(ImportError::Background)?
+        .map_err(|error| {
+          tracing::error!(%error,"repository import failed");
+          ImportError::Write
+        })
       }
     });
     let changes = crate::services::Services::of(ctx).changes;
     let id = props.project.open.project.id();
     ctx.watch(&action.state(), move |result| {
       props.selection.busy.set(result.is_pending());
-      if let Some(Imported(created)) = result.data.as_ref().filter(|_| result.is_fulfilled()) {
+      if let Some(Imported(created, ..)) = result.data.as_ref().filter(|_| result.is_fulfilled()) {
         // Every screen that shows the instructions reads them again, this one too.
         changes.record(id, Outside::Instructions);
         // The Skills screen reads its library again when the import made skill drafts too.
@@ -152,8 +168,22 @@ const PAGE: &str = "instruction-import-page";
 impl Import {
   fn loaded(&self, ctx: &mut Ctx, props: &Props, scan: &RepositoryScan, mut page: Column) -> Element {
     let state = self.action.state().get();
-    if let Some(Imported(created)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-      return hub::item_body(PAGE, self.created(ctx, props, created, page), None);
+    if let Some(Imported(created, total, files)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
+      let back = &props.selection;
+      let list = ctx.t("instructions.title");
+      let result = import_result::Outcome {
+        root: "instruction-import-result",
+        id: "instruction-import",
+        project: props.project.open.project.id(),
+        back: (&list, back.to(back.opened_from())),
+        created,
+        items: &scan.items,
+        total: *total,
+        detail: item_detail,
+        agent_files: *files,
+      }
+      .page(ctx);
+      return hub::item_body(PAGE, result, None);
     }
     page = page.child(
       Notice::new(
@@ -197,25 +227,6 @@ impl Import {
     );
     hub::item_body(PAGE, page, Some(side))
   }
-  fn created(&self, ctx: &Ctx, props: &Props, created: &[CreatedDraft], mut page: Column) -> Column {
-    page = page.child(
-      Text::new(&ctx.t_args("instructions.imported", [("count", created.len().to_string())]))
-        .id("instruction-import-result")
-        .variant(ExtraTypography::Strong.role()),
-    );
-    for draft in created {
-      page = page.child(Text::new(draft.resource.name().as_str()).variant(TypographyStyle::Description));
-    }
-    let selection = &props.selection;
-    page.child(
-      ActionButton::new(
-        "instruction-import-back",
-        ButtonKind::Primary,
-        ctx.t("instructions.back"),
-      )
-      .opens(selection.to(selection.opened_from())),
-    )
-  }
   /// What is chosen, then Cancel and Create (`Draft bar` `KxTuA`).
   fn footer(&self, ctx: &Ctx, props: &Props, scan: &RepositoryScan, busy: bool) -> Element {
     let chosen = self.chosen(scan);
@@ -228,12 +239,14 @@ impl Import {
     )
     .on_click(move || cancel.close(cancel.opened_from()));
     let status = ctx.t_args(
-      "instructions.importSelection",
+      "skills.importSelected",
       [
         ("selected", chosen.len().to_string()),
         ("total", scan.items.len().to_string()),
-        ("instructions", instructions.to_string()),
-        ("skills", (chosen.len() - instructions).to_string()),
+        (
+          "types",
+          words::types(ctx, instructions, chosen.len() - instructions).to_string(),
+        ),
       ],
     );
     // `instruction-import-selection`: the bar keeps the id the import gave what is chosen.
@@ -246,14 +259,15 @@ impl Import {
     let chosen = self.chosen(scan);
     let empty = chosen.is_empty();
     let action = self.action.clone();
+    let total = scan.items.len();
     let button = ActionButton::new(
       "instruction-import-create",
       ButtonKind::Primary,
-      ctx.t_args("instructions.importCreate", [("count", chosen.len().to_string())]),
+      words::create_drafts(ctx, chosen.len()),
     )
     .icon(Icon::FilePlus)
     .on_click(move || {
-      action.run_if_idle(chosen.clone());
+      action.run_if_idle((chosen.clone(), total));
     });
     if busy {
       button.loading()

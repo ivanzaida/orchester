@@ -1,13 +1,12 @@
 //! Skills, the Agents hub's third tab (`03 Skills` `w0NiG0`): the skills by scope with what this repository holds, a
 //! skill's page (`03b` `QbDWX`), and importing the repository's files with its result (`03c` `cC55E`).
 mod editor;
-mod import_result;
 mod inspector;
 mod library;
 mod repository;
 mod scope;
 mod state;
-mod words;
+pub(crate) mod words;
 mod work;
 use lurq::{
   app::{

@@ -142,10 +142,21 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   s.window.until("import result", |w| {
     w.tree.get_element_by_id("skills-import-result").is_some()
   });
-  assert!(s.text("skills-import-result").contains("2 drafts created"));
+  // 03c: the page head counts the drafts, of how many items; what made no draft says why.
+  assert!(s.text("skill-import-result-title").contains("2 drafts created"));
   assert!(
-    s.text("skill-result-footer")
+    s.text("skill-import-result-sub")
       .contains("2 of 3 items imported · 1 instruction, 1 skill")
+  );
+  assert!(s.text("skill-import-omitted").contains("CLAUDE.md"));
+  let on = orchester_workspace::project_settings::load_in(&s.repo)
+    .expect("settings")
+    .agent_files
+    .is_on();
+  let state = if on { "On" } else { "Off" };
+  assert!(
+    s.text("skill-import-agent-files")
+      .contains(&format!("Repository agent files · {state}"))
   );
   let entries = ProjectSkills::load_in(&s.repo).expect("read");
   assert_eq!(entries.entries.len(), 1);
@@ -155,7 +166,7 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
     fs::read_to_string(s.repo.join("AGENTS.md")).expect("file"),
     "Read the project rules."
   );
-  s.click("skills-back");
+  s.click("skill-import-review-skills");
   s.window.until("library after import", |w| {
     w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Draft v1"))
   });

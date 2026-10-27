@@ -50,36 +50,41 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
   s.window.until("actual import result", |w| {
     w.tree.get_element_by_id("skills-import-result").is_some()
   });
+  // 03c: the page head, the lead line, the drafts in one group with Open draft each, then the actions.
+  assert!(s.text("skill-import-result-title").contains("3 drafts created"));
   assert!(
-    s.text("skills-import-result")
-      .contains("CREATED · 1 INSTRUCTION, 2 SKILLS")
-  );
-  assert!(s.text("skills-import-result").contains("Draft skill v1 · 1 file"));
-  assert!(s.text("skills-import-result").contains("No agent gets a draft"));
-  assert!(s.text("skills-import-result").contains("Review skills"));
-  assert!(
-    s.text("skill-result-footer")
+    s.text("skill-import-result-sub")
       .contains("3 of 3 items imported · 1 instruction, 2 skills")
   );
-  let result = bounds(&mut s, "skills-import-result");
-  let first = bounds(&mut s, "skill-created-row-0");
   assert!(
-    (first.x - result.x - 24.0).abs() < 0.1,
-    "created list has the designed body inset: {first:?}"
+    s.text("skill-import-created-title")
+      .contains("Created · 1 instruction, 2 skills")
   );
-  let footer = bounds(&mut s, "skill-result-footer");
-  assert!((footer.y + footer.height - result.y - result.height).abs() < 0.1);
-  for i in 1..=2 {
-    let name = bounds(&mut s, &format!("skill-created-name-{i}"));
-    let source = bounds(&mut s, &format!("skill-created-source-{i}"));
-    let row = bounds(&mut s, &format!("skill-created-row-{i}"));
-    assert!(name.width > 200.0 && source.width > 200.0);
-    assert!(source.y >= name.y + name.height - 0.1, "name and origin do not overlap");
+  assert!(s.text("skills-import-result").contains("Draft skill v1 · 1 file"));
+  assert!(s.text("skill-import-lead").contains("No agent gets a draft"));
+  assert!(s.text("skill-import-review-skills").contains("Review skills"));
+  assert!(s.text("skill-import-open-instructions").contains("Open Instructions"));
+  assert!(s.window.tree.get_element_by_id("skill-import-omitted").is_none());
+  let pane = bounds(&mut s, "skills-import-page-pane");
+  assert!((pane.width - 720.0).abs() < 0.5, "the result is the 720 pane: {pane:?}");
+  for i in 0..=2 {
+    let open = bounds(&mut s, &format!("skill-import-open-{i}"));
+    let label = bounds(&mut s, &format!("skill-import-created-{i}-label"));
+    let hint = bounds(&mut s, &format!("skill-import-created-{i}-hint"));
+    let row = bounds(&mut s, &format!("skill-import-created-{i}"));
+    assert!(label.width > 200.0 && hint.width > 200.0);
+    assert!(hint.y >= label.y + label.height - 0.1, "name and origin do not overlap");
     assert!(
-      row.y + row.height >= source.y + source.height - 0.1,
+      row.y + row.height >= hint.y + hint.height - 0.1,
       "row contains the full origin"
     );
+    assert!(open.x >= hint.x + hint.width - 0.1, "Open draft sits at the row's end");
   }
+  // Open draft opens the draft it names.
+  s.click("skill-import-open-1");
+  s.window.until("opened draft", |w| {
+    matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(_)))
+  });
   assert_eq!(
     fs::read_to_string(reference).expect("unchanged source"),
     "Private reference content"

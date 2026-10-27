@@ -1,6 +1,7 @@
 //! Instructions findings/import use the accepted shared bounded, owned-object scanner.
 use std::fs;
 
+use orchester_app::routes::{InstructionsView, ProjectPage, Route};
 use orchester_core::{resource::InstructionScope, store::ResourceStore};
 use orchester_store::ProjectDb;
 
@@ -75,8 +76,43 @@ fn instructions_import_stays_drafts_only_with_both_screen_registrations() {
   screen.go();
   screen.click("instructions-import");
   screen.until("owned review", |s| s.exists("instruction-import-create"));
+  // One item is counted as one: *Create 1 draft*, *1 instruction, 0 skills*.
+  assert!(screen.text("instruction-import-create").contains("Create 1 draft"));
+  assert!(
+    screen
+      .text("instruction-import-selection")
+      .contains("1 of 1 selected · 1 instruction, 0 skills")
+  );
   screen.click("instruction-import-create");
   screen.until("draft created", |s| s.exists("instruction-import-result"));
+  // 03c: the page head, the draft's row with what it is and where from, the notice on the repository's own files.
+  assert!(
+    screen
+      .text("instruction-import-result-title")
+      .contains("1 draft created")
+  );
+  assert!(
+    screen
+      .text("instruction-import-result-sub")
+      .contains("1 of 1 items imported · 1 instruction, 0 skills")
+  );
+  assert!(
+    screen
+      .text("instruction-import-created-0-hint")
+      .contains("Draft project instruction v1 · from AGENTS.md")
+  );
+  // The notice says how the project's Repository agent files stand.
+  let on = orchester_workspace::project_settings::load_in(&screen.root)
+    .expect("settings")
+    .agent_files
+    .is_on();
+  let files = screen.text("instruction-import-agent-files");
+  let state = if on { "On" } else { "Off" };
+  assert!(files.contains(&format!("Repository agent files · {state}")), "{files}");
+  assert!(
+    !screen.exists("instruction-import-result-note"),
+    "no skill drafts, no note on their scope"
+  );
   let entry = screen.listed().entries[0].clone();
   assert_eq!(entry.body.scope(), &InstructionScope::Project);
   assert_eq!(entry.body.text().as_str(), "Owned instruction");
@@ -92,6 +128,15 @@ fn instructions_import_stays_drafts_only_with_both_screen_registrations() {
     fs::read_to_string(screen.root.join("AGENTS.md")).expect("source"),
     "Owned instruction"
   );
+  // Open draft opens the instruction it created.
+  screen.click("instruction-import-open-0");
+  let id = entry.id;
+  screen.until("opened draft", move |s| {
+    matches!(
+      s.window.navigation().route_now(),
+      Route::Project(_, ProjectPage::Instructions(InstructionsView::Rule(_, Some(rule), _))) if rule == id
+    )
+  });
 }
 #[test]
 fn instructions_import_with_skills_tells_the_skills_screen() {

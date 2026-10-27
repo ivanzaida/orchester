@@ -14,10 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  memory::{MemoryLimits, MemorySettings, WritePolicy},
-  tokens::compact_tokens,
-};
+use orchester_core::memory::{MemoryLimits, MemorySettings, WritePolicy};
 
 use super::{Scope, SettingsProps, SettingsTab, Status};
 use crate::{
@@ -292,7 +289,8 @@ fn tokens_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
         "memory.settings.tokensReadBack"
       };
       let [min, max] = range;
-      ctx.t_args(key, [("tokens", compact_tokens(u64::from(tokens))), min, max])
+      // `= 3,000 tokens` as 05d writes it, grouped like the range after it.
+      ctx.t_args(key, [("tokens", tab.grouped(tokens)), min, max])
     }
     Err(_) => ctx.t_args("memory.settings.tokensRange", range),
   };
