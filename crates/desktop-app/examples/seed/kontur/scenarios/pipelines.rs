@@ -11,8 +11,8 @@ use orchester_core::{
   },
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeliverStep, DeniedBehavior, Draft,
-    HttpAuth, HttpMethod, HttpRequest, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings, RepositoryAccess,
-    Slug, StepKind, Tool, ToolAction,
+    HttpAuth, HttpMethod, HttpRequest, MergeMethod, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings,
+    RepositoryAccess, Slug, StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},
 };
@@ -56,6 +56,46 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   problems(kontur)?;
   narrowed(kontur)?;
   variants(kontur)
+}
+
+/// Publishing that asks for approval (`02b` `fXnX2`): Feature delivery v3 with a saved draft v4 in which Implement runs
+/// on another model and Deliver squashes, so *Publish v4* opens the review with *Publishing needs your approval*.
+/// Reaching it otherwise takes saving a weaker draft, whose question only a person answers.
+pub fn publish(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let id = catalogue.feature_delivery.id();
+  let latest = kontur
+    .db
+    .latest_version::<Pipeline>(id)?
+    .expect("the catalogue publishes Feature delivery");
+  let mut edit = PipelineEdit::new(latest.body().clone());
+  let implement = latest
+    .body()
+    .steps()
+    .iter()
+    .find(|step| step.name.as_str() == "Implement")
+    .expect("the starter implements")
+    .key
+    .clone();
+  edit.update(&implement, |step| {
+    if let StepKind::Agent { model, .. } = &mut step.kind {
+      *model = Some(ModelId::new("gpt-5.5-pro").expect("fixture model"));
+    }
+  });
+  let deliver = latest.body().deliver().cloned().expect("the catalogue delivers");
+  edit.set_deliver(Some(deliver.with_method(MergeMethod::Squash)));
+  let saved = orchester_core::time::Timestamp::from_unix_millis(kontur.now.unix_millis() - 5 * 60_000);
+  kontur.db.save_draft(
+    id,
+    &Draft::new(
+      edit
+        .validate()
+        .expect("a model and a merge method keep the draft valid"),
+      Some(latest.number()),
+      saved,
+    ),
+  )?;
+  Ok(())
 }
 
 fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceId, SeedError> {

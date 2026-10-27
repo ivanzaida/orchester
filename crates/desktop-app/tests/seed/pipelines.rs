@@ -79,6 +79,29 @@ fn seed_pipelines_empty_has_no_library_entries() {
 }
 
 #[test]
+fn seed_pipelines_publish_saves_a_draft_whose_publishing_asks() {
+  let seed = Seed::of("pipelines-publish");
+  let db = seed.db();
+  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let id = rows
+    .iter()
+    .find(|r| r.name().as_str() == "Feature delivery")
+    .unwrap()
+    .id();
+  let opened = OpenedPipeline::load_in(seed.repo(), id).unwrap();
+  assert!(opened.draft_saved_at.is_some(), "a saved draft");
+  let latest = opened.latest.as_ref().expect("published");
+  assert_eq!(latest.number.get(), 3);
+  let reasons = orchester_workspace::pipelines::widening::publish_reasons(Some(&latest.body), &opened.body);
+  assert_eq!(reasons.len(), 1, "Implement runs on another model: {reasons:?}");
+  assert_eq!(
+    orchester_core::resource::changes(&latest.body, &opened.body).len(),
+    2,
+    "Implement and Deliver changed"
+  );
+}
+
+#[test]
 fn seed_import_done_has_an_imported_pipeline_with_a_secret_missing() {
   let db = Seed::of("import-done").db();
   let rows = db.resources(ResourceKind::Pipeline).unwrap();

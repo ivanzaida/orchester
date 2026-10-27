@@ -208,6 +208,7 @@ fn seed_names_every_scenario_once() {
       "project-settings-shared",
       "pipelines",
       "pipelines-empty",
+      "pipelines-publish",
       "accounts",
       "settings",
       "pull-requests",
