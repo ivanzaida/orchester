@@ -1,4 +1,4 @@
-//! New secret and Replace value, in the inline inspector (YGy5i, yTCmk).
+//! New secret, a page under Secrets (`YGy5i`), and Replace value, asked in place on a secret's page (`yTCmk`).
 mod fields;
 use std::sync::Arc;
 
@@ -22,13 +22,12 @@ use orchester_workspace::{
 use zeroize::Zeroize;
 
 use super::{
-  inspector,
   state::{EnvironmentChoice, KindChoice, View},
   work,
 };
 use crate::{
   project::ShownProject,
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   services::Services,
 };
 
@@ -109,13 +108,12 @@ impl Component for SecretForm {
         .0
         .expect("the form always selects an environment"),
     );
-    let header = match &props.secret {
-      Some(secret) => inspector::header(ctx, secret),
-      None => fields::new_header(ctx, &props, self.cancel(&props), state.is_pending()),
-    };
     let body = self.fields(ctx, &props, &check, state.is_pending());
     let footer = self.footer(ctx, &props, &check, &action);
-    inspector::frame(header, body, footer)
+    match &props.secret {
+      Some(_) => fields::replace_box(ctx, body, footer),
+      None => fields::new_page(ctx, &props, body, footer),
+    }
   }
 }
 impl Drop for SecretForm {
@@ -188,7 +186,7 @@ impl SecretForm {
       "secret-confirm-replacement",
       WidenProps {
         id: "secret-confirm-replacement".into(),
-        card: false,
+        look: WidenLook::Box,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::WideningQuestion,
         title: ctx.t("secrets.rotation.question"),

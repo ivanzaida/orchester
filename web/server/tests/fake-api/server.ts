@@ -2,7 +2,8 @@
  * A stand-in for the team server's private API (`/api/v1`) and for Orchester Cloud, on loopback, for the page tests
  * and the screenshots. The states are listed in `web/server/README.md`. Run: `node tests/fake-api/server.ts 4210 4220`.
  */
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 
 import { cloudRoute } from "./cloud.ts";
 import { scenario } from "./fixtures.ts";
@@ -96,7 +97,23 @@ function fake(request: IncomingMessage, response: ServerResponse, text: string):
   return false;
 }
 
-export function startFakeApi(port: number) {
+export interface Started {
+  server: Server;
+  /** `http://127.0.0.1:<port>`, with the port the server got. */
+  origin: string;
+}
+
+// Port 0 lets the system pick a free one, so test runs side by side never share a fake.
+function listening(server: Server, port: number): Promise<Started> {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      resolve({ server, origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}` });
+    });
+  });
+}
+
+export function startFakeApi(port = 0): Promise<Started> {
   const server = createServer((request, response) => {
     void readText(request).then((text) => {
       if (!fake(request, response, text)) {
@@ -104,11 +121,10 @@ export function startFakeApi(port: number) {
       }
     });
   });
-  server.listen(port, "127.0.0.1");
-  return server;
+  return listening(server, port);
 }
 
-export function startFakeCloud(port: number) {
+export function startFakeCloud(port = 0): Promise<Started> {
   const server = createServer((request, response) => {
     void readText(request).then((text) => {
       if (!cloudRoute(request, response, text)) {
@@ -116,14 +132,11 @@ export function startFakeCloud(port: number) {
       }
     });
   });
-  server.listen(port, "127.0.0.1");
-  return server;
+  return listening(server, port);
 }
 
 if (process.argv[1]?.endsWith("server.ts") === true) {
-  const apiPort = Number(process.argv[2] ?? "4210");
-  const cloudPort = Number(process.argv[3] ?? "4220");
-  startFakeApi(apiPort);
-  startFakeCloud(cloudPort);
-  console.log(`fake team server API on http://127.0.0.1:${apiPort}/api/v1, fake cloud on http://127.0.0.1:${cloudPort}`);
+  void Promise.all([startFakeApi(Number(process.argv[2] ?? "4210")), startFakeCloud(Number(process.argv[3] ?? "4220"))]).then(([api, cloud]) => {
+    console.log(`fake team server API on ${api.origin}/api/v1, fake cloud on ${cloud.origin}`);
+  });
 }

@@ -6,7 +6,7 @@ use std::num::NonZeroU32;
 
 use orchester_app::routes::{
   AgentTab, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, ProjectPage, ProjectSettingsTab, Route,
-  SecretsPanel, SecretsTab, SecretsView, SkillsFilter, StepPage,
+  SecretsPanel, SecretsView, SkillsFilter, StepPage,
 };
 use orchester_core::{
   resource::{StepKey, VersionNumber},
@@ -27,22 +27,19 @@ pub(super) fn view_routes() -> Vec<Route> {
   let id = CONNECTION.parse().expect("a resource id");
   let secret = CONNECTION.parse().expect("a secret id");
   let mut all = Vec::new();
-  for tab in [SecretsTab::List, SecretsTab::Usage] {
-    for panel in [
-      SecretsPanel::Inspect,
-      SecretsPanel::Add,
-      SecretsPanel::Replace,
-      SecretsPanel::Archive,
-    ] {
-      for environment in [None, Some(Environment::Staging)] {
-        for chosen in [None, Some(secret)] {
-          all.push(at(ProjectPage::Secrets(SecretsView {
-            tab,
-            environment,
-            secret: chosen,
-            panel,
-          })));
-        }
+  for panel in [
+    SecretsPanel::Inspect,
+    SecretsPanel::Add,
+    SecretsPanel::Replace,
+    SecretsPanel::Archive,
+  ] {
+    for environment in [None, Some(Environment::Staging)] {
+      for chosen in [None, Some(secret)] {
+        all.push(at(ProjectPage::Secrets(SecretsView {
+          environment,
+          secret: chosen,
+          panel,
+        })));
       }
     }
   }
@@ -94,16 +91,8 @@ fn views_have_their_documented_paths() {
         environment: Some(Environment::Production),
         secret: Some(CONNECTION.parse().expect("a secret id")),
         panel: SecretsPanel::Replace,
-        ..SecretsView::default()
       })),
       format!("{root}/secrets?environment=production&secret={id}&panel=replace"),
-    ),
-    (
-      at(ProjectPage::Secrets(SecretsView {
-        tab: SecretsTab::Usage,
-        ..SecretsView::default()
-      })),
-      format!("{root}/secrets?tab=usage"),
     ),
     (at(ProjectPage::Skills(SkillsFilter::All)), format!("{root}/skills")),
     (
@@ -160,16 +149,12 @@ fn views_have_their_documented_paths() {
 }
 
 #[test]
-fn project_settings_tabs_have_their_documented_paths() {
+fn project_settings_questions_have_their_documented_paths() {
   let settings = format!("/project/{PROJECT}/settings");
   for (route, path) in [
     (
-      at(ProjectPage::Settings(ProjectSettingsTab::CodeIndex)),
-      format!("{settings}?tab=code_index"),
-    ),
-    (
-      at(ProjectPage::Settings(ProjectSettingsTab::Sharing)),
-      format!("{settings}?tab=sharing"),
+      at(ProjectPage::Settings(ProjectSettingsTab::Context)),
+      format!("{settings}?tab=context"),
     ),
     (
       at(ProjectPage::MakeLocal),

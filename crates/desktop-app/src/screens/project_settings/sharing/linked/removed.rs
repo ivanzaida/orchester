@@ -2,25 +2,18 @@
 //! notice over the page with *Check again* and *Make local…*, and the task list's state, read-only since the server
 //! said so. The server answers a non-member like no project, so nobody is named as who removed them.
 
-use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  components::{Column, Row, Text},
-  core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
-};
+use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_store::SharingLink;
 use orchester_workspace::sharing::Servers;
 
 use crate::{
   screens::{
-    project_settings::page::{self, CONTROL_WIDTH},
+    project_settings::kit::{SettingRow, Tone, value},
     settings::orchester::{day_of, moment},
   },
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
+    icon::Icon,
     notice::{Notice, NoticeTone},
   },
 };
@@ -87,32 +80,23 @@ pub(super) fn notice(
   .into()
 }
 
-/// *Not a member of Kontur · read-only*, with the key, when it joined and was last synced.
-pub(super) fn state(ctx: &Ctx, link: &SharingLink, shared: &str) -> Column {
-  Column::new()
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .spacing(ExtraSpacing::Hair.role())
-    .child(
-      Row::new()
-        .id("sharing-shared")
-        .spacing(ExtraSpacing::Pair.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::UserX, IconSize::Sm, PaletteColor::Warning))
-        .child(
-          Text::new(&ctx.t_args("sharing.linked.removed.state", [("project", shared)]))
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::Warning),
-        ),
+/// *Your role* once the person is no longer a member: *Not a member of Kontur · read-only*, in `warning`, with the key,
+/// when it joined and was last synced in its (i).
+pub(super) fn role_row(ctx: &mut Ctx, link: &SharingLink, shared: &str) -> Element {
+  let detail = ctx.t_args(
+    "sharing.linked.removed.detail",
+    [
+      ("key", link.key.as_str().to_owned()),
+      ("day", day_of(ctx, link.joined_at)),
+      ("synced", moment(ctx, link.last_synced_at)),
+    ],
+  );
+  SettingRow::new("sharing-role", ctx.t("sharing.team.role"))
+    .toned(
+      ctx.t_args("sharing.linked.removed.state", [("project", shared)]),
+      Tone::Warning,
     )
-    .child(page::note(
-      "sharing-shared-detail",
-      &ctx.t_args(
-        "sharing.linked.removed.detail",
-        [
-          ("key", link.key.as_str().to_owned()),
-          ("day", day_of(ctx, link.joined_at)),
-          ("synced", moment(ctx, link.last_synced_at)),
-        ],
-      ),
-    ))
+    .info(detail)
+    .control(value("sharing-role-value", &ctx.t("sharing.linked.noRole")))
+    .render(ctx)
 }

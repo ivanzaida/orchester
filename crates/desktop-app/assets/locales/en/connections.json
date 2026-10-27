@@ -55,7 +55,9 @@
       "githubSignedIn": "gh · {{host}} · signed in as {{account}}",
       "withAccount": "{{line}} · account {{account}}",
       "apiProvider": "{{program}} · {{host}}",
-      "apiProviderVersion": "{{program}} {{version}} · {{host}}"
+      "apiProviderVersion": "{{program}} {{version}} · {{host}}",
+      "githubFor": "{{line}} · pull requests and pushes for {{repository}}",
+      "usedBy": "{{line}} · used by {{usage}}"
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
@@ -193,26 +195,32 @@
       "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
       "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
       "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
-      "nativeUnavailable": "Native agents are not available in this version of Orchester."
+      "nativeUnavailable": "Native agents are not available in this version of Orchester.",
+      "claudeShort": "{{program}}, signed in here",
+      "codexShort": "{{program}}, signed in here",
+      "nativeShort": "native · not in this version"
     },
     "dialog": {
       "addTitle": "Add connection",
+      "addProviderTitle": "Add an agent provider",
+      "addProviderLead": "It runs the agents of the profiles that choose it.",
       "description": "Project: {{project}}. An agent provider runs the agents of the profiles that choose it.",
       "notSaved": "Not saved yet",
       "saving": "Saving…",
       "connection": "Connection",
       "name": "Name",
-      "nameHint": "Shown in agent profiles, pipelines and runs.",
+      "nameHint": "Shown in agent profiles, pipelines and runs",
       "nameTaken": "Another connection of this project already has this name.",
       "suggestedName": "{{provider}} · {{project}}",
       "suggestedNameNumbered": "{{provider}} · {{project}} {{number}}",
       "program": "Program",
       "programHint": "The {{program}} program this connection runs.",
+      "programInfo": "{{about}} {{choose}}",
       "notFoundOnPath": "Not found on PATH",
       "chooseFile": "Choose file…",
       "chooseFileUnavailable": "Only a copy found on the PATH can be chosen in this app; choosing another program file is not built yet.",
-      "programMissing": "{{program}} was not found on the PATH. Install it, then recheck.",
-      "programFoundOne": "Found on the PATH.",
+      "programMissing": "{{program}} was not found on the PATH. Install it, then check again.",
+      "programFoundOne": "Found on the PATH",
       "programFoundMany": "Found {{count}} on the PATH; the first is used unless you choose another.",
       "check": "Check",
       "detectingWord": "Detecting",
@@ -222,10 +230,10 @@
       "signedIn": "Signed in",
       "notSignedIn": "Not signed in",
       "verifiedSignedIn": "{{program}} {{version}} · signed in",
-      "verifiedSignedOut": "{{program}} {{version}} · not signed in: sign in with the CLI, then recheck",
+      "verifiedSignedOut": "{{program}} {{version}} · not signed in: sign in with the CLI, then check again",
       "verifiedSignInUnknown": "{{program}} {{version}} · sign-in status unknown",
       "notRecognized": "The program did not answer as the {{program}}.",
-      "runToSignIn": "Run this in a terminal, then recheck.",
+      "runToSignIn": "Run this in a terminal, then check again.",
       "authTitle": "Uses the {{program}} sign-in",
       "authDetail": "Orchester runs the CLI on this computer with the chosen account's folder and stores no credentials. This connection belongs to {{project}}; other projects need their own.",
       "nextStep": "After saving, select this connection in an agent profile and choose its model.",
@@ -237,7 +245,8 @@
         "name": "Save unavailable: {{reason}}",
         "noProgram": "Save is available once the program is found on the PATH.",
         "notRecognized": "The program was not recognized as the chosen CLI, so the connection cannot be saved."
-      }
+      },
+      "addCrumb": "Add provider"
     },
     "github": {
       "add": "Add GitHub connection",
@@ -268,13 +277,18 @@
       "usedByProject": "Used by {{project}}",
       "expectedAccount": "Expected account",
       "repository": "Repository",
-      "repositoryName": "{{owner}} / {{name}}",
+      "repositoryName": "{{owner}}/{{name}}",
       "remote": "Remote",
       "useAccount": "Use this account ({{account}})",
       "chooseProgram": "Choose program…",
       "changeAccount": "Change account or access",
       "usedByTool": "Used by tool",
-      "toolsUnavailable": "Not listed in this app yet"
+      "programFound": "gh {{version}} · found on the PATH",
+      "repositoryFrom": "{{repository}} · from {{remote}}",
+      "wrongAccountTitle": "Pull requests wait while gh is signed in as another account",
+      "wrongAccountShort": "Orchester never switches gh accounts. Run gh auth switch, or use the signed-in account here.",
+      "signedInAs": "Signed in as {{active}} · {{expected}} is expected",
+      "emptyShort": "Pull requests need gh signed in on this computer; Orchester uses it as it is."
     },
     "mcp": {
       "add": "Add MCP server",
@@ -300,8 +314,8 @@
       "typeStdio": "Program on this computer",
       "typeHttp": "Remote MCP",
       "theWorktree": "The worktree",
-      "startedByCli": "The agent’s CLI, with each agent",
-      "reachedByCli": "The agent’s CLI, over HTTP",
+      "startedByCli": "Each agent’s CLI starts it when the agent starts.",
+      "reachedByCli": "Each agent’s CLI reaches it over HTTP.",
       "bearer": "Bearer token from {{secret}}",
       "basic": "Basic, user {{username}}, password from {{secret}}",
       "basicCredential": "Basic credential from {{secret}}",
@@ -395,13 +409,47 @@
         "goneTitle": "This MCP server is no longer here",
         "goneDetail": "It was removed from the project. Connections lists the servers it has.",
         "widenTitle": "Saving widens what agents may do",
-        "keepEditing": "Keep editing"
+        "keepEditing": "Keep editing",
+        "addCrumb": "Add MCP server",
+        "editHere": "Edit {{name}}",
+        "programHere": "A program here",
+        "remoteServer": "A remote server (HTTP)",
+        "addServerTitle": "Add an MCP server",
+        "addServer": "Add server",
+        "lead": "The agent’s CLI starts or reaches it with each agent that gets it.",
+        "nameHintShort": "Agents know the server and its tools by it",
+        "programHintShort": "On the PATH, or an absolute path outside the repository",
+        "argumentsHintShort": "One per line, passed as written",
+        "folderHintShort": "A folder in the worktree, or an absolute path",
+        "variablesHintShort": "NAME=value per line; ${secret:NAME@environment} takes a project secret",
+        "variablesInfo": "{{hint}}\n\n{{title}}: {{detail}}",
+        "runWithoutAsking": "Run without asking",
+        "runWithoutAskingHint": "When the profile asks before MCP actions, these still run",
+        "addToolPlaceholder": "Add a tool name",
+        "toolsNote": "Tool names as the server names them; every other call asks.",
+        "removeTool": "Remove tool",
+        "widensProgram": "This widens what agents may do: they run this program with what it is sent. Check where it comes from before you add it.",
+        "widensRemote": "This widens what agents may do: they send this server what its tools are given. Check where it comes from before you add it."
       },
       "offUsersOne": "Turned off: {{profiles}} works without it until it is turned on.",
       "confirmOn": {
         "title": "Turn on {{name}}?",
         "keep": "Keep it off"
-      }
+      },
+      "editShort": "Edit",
+      "emptyDetailShort": "A program on this computer or a remote server that agents may use.",
+      "noVariables": "None",
+      "notUsedShort": "no profile chooses it yet",
+      "openSecrets": "Open Secrets",
+      "removeServer": "Remove server",
+      "rowUnused": "{{what}} · no profile chooses it yet",
+      "rowUsed": "{{what}} · used by {{profiles}}",
+      "runsAs": "Runs as",
+      "sendsGroup": "Sends",
+      "serverGroup": "Server",
+      "usedByShort": "used by {{profiles}}",
+      "variableSecret": "{{name}} from secret {{secret}}",
+      "variableText": "{{name}}={{value}}"
     },
     "account": {
       "label": "Account",
@@ -444,7 +492,8 @@
         "cliMissing": "CLI not found · install it, then check again in Settings",
         "folderMissing": "folder missing · runs won't start · choose it in Settings",
         "unsupported": "not supported on macOS yet"
-      }
+      },
+      "withLimits": "{{detail}} · {{limits}}"
     },
     "apiProvider": {
       "label": "Runs on",
@@ -476,6 +525,14 @@
       "sentTo": "Prompts, repository content and command output are sent to {{host}}",
       "sentToDetail": "Under the provider’s terms and data policy, with this key. The MCP servers the CLI starts don’t get the key. Codex keeps variables whose names contain KEY, SECRET or TOKEN, the key among them, out of the commands the agent runs; Claude Code documents that it keeps variables whose names or values look like credentials out of them. Commands that need such a project variable, such as NPM_TOKEN or a DATABASE_URL with a password, fail on this connection.",
       "notSupported": "On an API provider Orchester reads no plan limits and counts tokens only where the provider reports them. The Orchestrator and auto mode’s reviewer don’t run on it.",
+      "sentToShort": "Prompts, repository content and command output are sent to {{host}}, under its terms and data policy, with this key. Orchester reads no plan limits there.",
+      "sentToInfo": "{{detail}}\n\n{{limits}}",
+      "interfaceClaudeShort": "Claude Code speaks the Anthropic Messages API",
+      "interfaceCodexShort": "Codex speaks the OpenAI Responses API",
+      "keyHintShort": "A project secret holds it; only the CLI process gets it",
+      "orNewSecret": "or New secret…",
+      "modelsHintShort": "The ids the provider serves; profiles choose from them",
+      "modelsNote": "Enter adds it; × removes one.",
       "theHost": "the provider",
       "interface": "Interface",
       "wireClaude": "Anthropic Messages API",
@@ -509,6 +566,37 @@
         "staging": "Staging",
         "production": "Production"
       }
+    },
+    "agentsLink": "Agents",
+    "busy": "Unavailable while other work runs on this connection.",
+    "checkedAt": "checked {{time}}",
+    "connectionGroup": "Connection",
+    "listedMore": "{{names}} +{{more}}",
+    "modelsItLists": "Models it lists",
+    "more": "More",
+    "ownSignIn": "Its own sign-in",
+    "programRunsWith": "{{path}} · run by {{runner}}",
+    "runsOn": "Runs on",
+    "runsOnHint": "Its own sign-in, or an API provider with a key",
+    "statusWith": "{{status}} · {{detail}}",
+    "usedByHint": "Agent profiles that choose this connection",
+    "usedByHintNone": "No agent profile chooses it yet",
+    "empty": {
+      "title": "Connect an agent",
+      "lead": "Tasks run on a CLI on this computer or on a model API with a project key. Each agent profile then chooses its connection and model.",
+      "looking": "Looking for it on the search path…",
+      "found": "Found on the search path · sign in with one of your accounts",
+      "notFound": "Not found on the PATH · install it, then Check again",
+      "apiProvider": "A CLI on an API provider",
+      "apiProviderDetail": "Claude Code or Codex on a compatible API such as DeepSeek's, with a key from Secrets"
+    },
+    "groups": {
+      "add": "Add",
+      "addMcp": "Add MCP server",
+      "addProvider": "Add provider",
+      "agentProviders": "Agent providers",
+      "github": "GitHub",
+      "mcpServers": "MCP servers"
     }
   }
 }

@@ -38,7 +38,7 @@ use self::groups::{group, inherited, subhead, summary};
 use super::chips::{ChipState, Look, PropertyChip};
 use crate::{
   mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     add_source::{AddSource, AddSourceProps, Asked, Layout},
@@ -366,7 +366,7 @@ impl TaskSources {
       "task-form-sources-confirm",
       WidenProps {
         id: "task-form-sources-question".into(),
-        card: false,
+        look: WidenLook::Band,
         affirming: false,
         automation: Guarded::PermissionWidening,
         title: ctx.t("task_form.sources.question"),

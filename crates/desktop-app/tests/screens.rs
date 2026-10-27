@@ -28,8 +28,8 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, NewConnection, OrchestratorChat,
-    OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, NewConnection, OrchestratorChat, OverviewTab,
+    ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
   shell::needs_you::PanelOpen,
@@ -313,9 +313,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets(Default::default())), placeholder("Secrets")),
     (
-      at(ProjectPage::Connections(ConnectionsView::new(
-        ConnectionsTab::McpServers,
-      ))),
+      at(ProjectPage::Connections(ConnectionsView::default())),
       placeholder("Connections"),
     ),
     (

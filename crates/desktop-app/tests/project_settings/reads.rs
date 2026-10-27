@@ -28,6 +28,7 @@ fn settle(page: &mut Settings) {
 #[test]
 fn project_settings_save_reads_the_settings_once() {
   let mut page = Settings::new(false);
+  page.tab("general", "settings-agent-files");
   settle(&mut page);
   let reads = Reads::count();
   let before = page.db().repository_agent_files().expect("setting").is_on();
@@ -64,6 +65,7 @@ fn recorded_off_the_window(page: &Settings) {
 #[test]
 fn project_settings_save_is_recorded_when_the_tab_leaves_before_it_ends() {
   let mut page = Settings::new(false);
+  page.tab("general", "settings-agent-files");
   settle(&mut page);
   let before = page.db().repository_agent_files().expect("setting").is_on();
   page.click("settings-agent-files");
@@ -84,6 +86,7 @@ fn project_settings_save_is_recorded_when_the_tab_leaves_before_it_ends() {
 #[test]
 fn project_settings_save_does_not_take_a_change_made_while_it_ran() {
   let mut page = Settings::new(false);
+  page.tab("general", "settings-agent-files");
   settle(&mut page);
   let reads = Reads::count();
   page.click("settings-agent-files");

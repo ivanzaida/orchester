@@ -14,7 +14,7 @@ use super::{
   work::{Action, Work},
 };
 use crate::{
-  screens::connections::widen::{WidenNotice, WidenProps},
+  screens::connections::widen::{WidenLook, WidenNotice, WidenProps},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -140,7 +140,7 @@ impl Writes {
       "pipeline-save-question",
       WidenProps {
         id: "pipeline-save-question".into(),
-        card: false,
+        look: WidenLook::Band,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("pipelines.saveWeaker"),
@@ -190,7 +190,7 @@ impl Writes {
       "pipeline-publish-question",
       WidenProps {
         id: "pipeline-publish-question".into(),
-        card: false,
+        look: WidenLook::Band,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("pipelines.publishWeaker"),

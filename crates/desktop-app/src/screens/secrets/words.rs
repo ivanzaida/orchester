@@ -57,9 +57,21 @@ pub(super) fn archive_impact(ctx: &Ctx, counts: UseCounts) -> Arc<str> {
   };
   ctx.t_args(key, [("count", counts.total().to_string())])
 }
-pub(super) fn date(ctx: &Ctx, at: Timestamp) -> Arc<str> {
+/// The day `at` as the list says it (`set Oct 24`, `set today` in `06` `bVh1e`): *today*, the month and day in this
+/// year, or with the year before it.
+pub(super) fn date(ctx: &mut Ctx, at: Timestamp) -> Arc<str> {
   let (month, day, year) = display::calendar_date(at);
+  let now = display::calendar_date(crate::services::Services::of(ctx).clock.now());
+  if (month, day, year) == now {
+    return ctx.t("secrets.today");
+  }
   let month = ctx.t_ns(orchester_workspace::i18n::NAMESPACE, display::MONTH_KEYS[month]);
+  if year == now.2 {
+    return ctx.t_args(
+      "secrets.dateThisYear",
+      [("month", month.to_string()), ("day", day.to_string())],
+    );
+  }
   ctx.t_args(
     "secrets.date",
     [

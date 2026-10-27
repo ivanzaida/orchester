@@ -11,7 +11,7 @@ use orchester_workspace::accounts::AccountUses;
 use super::words::{t, ta};
 use crate::{
   navigation::Navigation,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route},
+  routes::{ConnectionsView, ProjectPage, Route},
   theme::ExtraTypography,
   ui::{
     icon::Icon,
@@ -85,7 +85,7 @@ pub(super) fn list(ctx: &mut Ctx, uses: Option<&AccountUses>) -> Element {
   for used in &uses.connections {
     let label = label(ctx, used);
     let (project, connection) = (used.project, used.connection);
-    let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(connection);
+    let view = ConnectionsView::of(connection);
     let open = navigation.to(Route::Project(project, ProjectPage::Connections(view)));
     list = list.child(used_by_link(
       &format!("account-used-by-{connection}"),
