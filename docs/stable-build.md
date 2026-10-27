@@ -338,6 +338,14 @@ deprecated desktop's above: only you can read it, a `<pid>.lock` beside it, remo
 therefore never take the installed app's port, and they can run beside it. The runs' `call_run_app` relay drives
 only an app whose program is inside the run's worktree, whatever discovery file it finds.
 
+**QA copies' scenarios.** `tools/qa-app.ps1 -Scenario <name>` seeds the QA project with the seed example
+(`crates/desktop-app/examples/seed`), which checks the name against its registry, the only list of scenarios (`ALL`
+in `examples/seed/kontur/scenarios/mod.rs`). An unknown name exits non-zero with the known ones, sorted, and writes
+nothing; the script then stops before starting the app, with the seed's message. `cargo run -p orchester-app
+--example seed -- --list-scenarios` prints the names, one per line. A new scenario is added only in the seed's
+registry, never in `tools/qa-app.ps1`: the script names no scenarios, so its git blob, which the project rule
+*Approve for every run of this project* for `start_qa_app` is kept to, does not change with each new scenario.
+
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn
 it on again. *Address* shows the address with *Copy*. Enter another port (1024 to 65535) and choose *Use port*: the
