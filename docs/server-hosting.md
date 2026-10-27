@@ -176,7 +176,7 @@ Neither the server nor the cloud needs a change for this; a changed compose file
 one and `docker compose up -d admin`. Nothing else changes for a linked server: it pinned the cloud's root key, and
 from this release it takes identity tokens naming either address as their issuer (it keeps the issuer of the key set
 it held before a newer one named another; schema 8). The order of the whole move is in
-[cloud-hosting.md](cloud-hosting.md), "Moving the cloud".
+`docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the cloud".
 
 ## Projects
 
@@ -249,7 +249,7 @@ is fetched at run time (the admin bundles its fonts and loads nothing from the i
 `ORCHESTER_ADMIN_CLOUD_URL` out: setup stops after the first admin, people join with codes and admins sign in with a
 pairing code from their Orchester or an account code from the host (`orchester-server account-code <username>`). Codes
 need two-factor authentication the server can check: pin Orchester Cloud's root on the host without linking
-(`orchester-server cloud pin <root public key>`, the public key the cloud names in its log and in `docs/cloud-hosting.md`,
+(`orchester-server cloud pin <root public key>`, the public key the cloud names in its log and in `docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`,
 "Keys"). Pinning also lets people join with their cloud identity; `orchester-server cloud off` stops that and still
 checks the tokens codes carry. Each person's Orchester then reaches the cloud once per code, signed in with two-factor
 authentication, and carries its token and key set to the server. An admin makes invites from a browser signed in with a pairing code their

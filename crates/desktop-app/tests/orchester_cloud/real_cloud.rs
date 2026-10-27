@@ -1,8 +1,8 @@
-//! Orchester Cloud from this tree on loopback: the `orchester-cloud` program (`cargo build -p orchester-cloud`), run
-//! as its own process so the app's tests do not link the cloud's web stack, on a database of its own in the PostgreSQL
-//! that `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, sending its mail to an SMTP stub, configured as an operator
-//! configures it: the cloud makes its root key and key set itself. The process is stopped and the database dropped at
-//! the end.
+//! Orchester Cloud on loopback: the `orchester-cloud` program built from its private repository and named by
+//! `ORCHESTER_CLOUD_PROGRAM`, run as its own process so the app's tests do not link the cloud's web stack, on a
+//! database of its own in the PostgreSQL that `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, sending its mail to an SMTP
+//! stub, configured as an operator configures it: the cloud makes its root key and key set itself. The process is
+//! stopped and the database dropped at the end.
 
 use std::{
   net::{SocketAddr, TcpListener},
@@ -211,14 +211,16 @@ impl Drop for RealCloud {
   }
 }
 
-/// The program built from this tree, beside the test binaries' folder (`target/<profile>/`).
+/// The `orchester-cloud` program built from its private repository (`ivanzaida/orchester-cloud`), named by
+/// `ORCHESTER_CLOUD_PROGRAM`.
 fn program() -> PathBuf {
-  let deps = std::env::current_exe().expect("the test binary");
-  let profile = deps.parent().and_then(|deps| deps.parent()).expect("target/<profile>");
-  let program = profile.join(format!("orchester-cloud{}", std::env::consts::EXE_SUFFIX));
+  let program = std::env::var_os("ORCHESTER_CLOUD_PROGRAM").map(PathBuf::from).expect(
+    "ORCHESTER_CLOUD_PROGRAM names the orchester-cloud program built from ivanzaida/orchester-cloud \
+     (cargo build -p orchester-cloud there)",
+  );
   assert!(
     program.is_file(),
-    "build the cloud first: cargo build -p orchester-cloud ({} is missing)",
+    "ORCHESTER_CLOUD_PROGRAM names no file: {}",
     program.display()
   );
   program
