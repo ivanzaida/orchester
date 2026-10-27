@@ -50,6 +50,12 @@ async fn exercise(provider: AgentProvider) {
   );
   assert!(db.pending_tool_approvals(id).expect("approvals").is_empty());
   let reports = reported(&db, id, "app-relay: ");
+  // Only Claude Code is shown images: Codex reads the saved screenshot's name and size.
+  let read = if provider == AgentProvider::ClaudeCodeCli {
+    "screenshot read as an image block"
+  } else {
+    "screenshot named without its image"
+  };
   assert_eq!(
     reports,
     [
@@ -61,6 +67,7 @@ async fn exercise(provider: AgentProvider) {
       "navigate structured and redacted",
       "crowded .tmp and other layouts ignored",
       "screenshot saved",
+      read,
       "errors redacted and invalid PNG refused",
       "redirect refused",
       "the program orchester called",
@@ -70,7 +77,7 @@ async fn exercise(provider: AgentProvider) {
     ]
   );
   if provider == AgentProvider::ClaudeCodeCli {
-    assert_eq!(reported(&db, id, "app-permission: ").len(), 15);
+    assert_eq!(reported(&db, id, "app-permission: ").len(), 16);
   }
   // The fake app echoes its token. Neither its answers nor the persisted transcript may contain it.
   let transcript = reported(&db, id, "");

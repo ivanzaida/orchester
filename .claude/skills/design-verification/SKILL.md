@@ -40,7 +40,18 @@ what is actually on screen.
    matches the design's content where the app allows it, so text lengths are comparable.
    Use a throwaway git repository under `.tmp/`, never a real project.
 3. **Look at both images** at full size, region by region — do not rely on the element tree
-   or on the code. Compare:
+   or on the code.
+   - Open each PNG to look at it. In an Orchester run, open it with Orchester's `read_file`
+     (`mcp__Orchester__read_file`; Claude Code's own `Read` is not available there). Outside
+     Orchester, use the `Read` tool.
+   - Never use Pencil's built-in browser (`mcp__pencil__browser`: load-page, return-screenshot,
+     screenshot-to-canvas) to view a PNG or the app. It is one browser shared by every agent and
+     designer connected to Pencil, it takes one capture at a time, and a capture left unfinished
+     locks it for everyone ("A capture is already running") until Pencil restarts.
+   - If no tool in your step shows an image, say so in the report, and compare from the element
+     tree and pixel samples only as a stated fallback.
+
+   Compare:
    - overall structure: which regions exist, their order, sizes and alignment; anything
      extra (borders, frames, title bars, panels, fields, notices) or missing;
    - spacing: paddings, gaps, column widths, vertical rhythm;
@@ -161,7 +172,8 @@ reading discovery or escalating a script outside the sandbox.
 For example, call `call_run_app` with `{"tool":"app_state","arguments":{}}` for the QA app, or
 `{"pid":12345,"tool":"app_state","arguments":{}}` for one the script started.
 Every embedded tool uses this same relay, including `navigate`, `lurq_resize` and `lurq_screenshot`.
-PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open and cite.
+PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open with `read_file`
+(step 3) and cite.
 
 `app_state` must answer `"mcp": {"window_control": true, …}` before you drive the window.
 
