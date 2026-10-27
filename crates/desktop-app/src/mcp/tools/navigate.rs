@@ -26,7 +26,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
   reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
-  after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; project_settings \
+  after Create); edit_task `key`; task `key`, `tab` (summary, conversation or changes), `view` for what a tab opens in \
+  its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
+  from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \
   run). Connections and Secrets are tabs of Project settings with routes of their own: connections takes `selected` \
   (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
@@ -69,6 +71,10 @@ fn schema() -> Value {
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
+  let views: Vec<&str> = ["usage", "delivery", "rules"]
+    .into_iter()
+    .chain(TaskView::SUB_VIEWS)
+    .collect();
   json!({
     "type": "object",
     "properties": {
@@ -97,8 +103,8 @@ fn schema() -> Value {
       },
       "view": {
         "type": "string",
-        "enum": ["usage", "delivery", "rules"],
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. project_settings with tab runs: rules, the page Approved for every run.",
+        "enum": views,
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run.",
       },
       "period": {
         "type": "string",
@@ -202,7 +208,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
-    Screen::Task => &["project", "key", "tab", "file", "from"],
+    Screen::Task => &["project", "key", "tab", "view", "file", "from"],
     Screen::Connections => &["project", "selected"],
     Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
@@ -495,10 +501,14 @@ fn task_list(args: &Map<String, Value>) -> Result<TaskList, ToolError> {
   Ok(list)
 }
 
-/// The task's tab, and on Changes the file `file` and `from` name; a file alone opens Changes.
+/// The task's tab, the view `view` names in its place, and on Changes the file `file` and `from` name; a file alone
+/// opens Changes.
 fn task_view(args: &Map<String, Value>) -> Result<TaskView, ToolError> {
   let (file, from) = (string(args, "file")?, string(args, "from")?);
   let tab = tab(args, TaskTab::from_name, &TaskTab::ALL.map(TaskTab::name))?;
+  if let Some(view) = string(args, "view")? {
+    return task_sub_view(args, tab, view);
+  }
   let Some(path) = file else {
     if from.is_some() {
       return Err(ToolError::InvalidParam {
@@ -530,6 +540,32 @@ fn task_view(args: &Map<String, Value>) -> Result<TaskView, ToolError> {
   })?;
   Ok(TaskView::Changes(Some(file)))
 }
+
+/// The view `name` opens in place of its tab: memory under summary, local-integration under changes. Left without a
+/// tab, the view opens its own; a file goes with no view.
+fn task_sub_view(args: &Map<String, Value>, tab: TaskTab, name: &str) -> Result<TaskView, ToolError> {
+  if args.contains_key("file") {
+    return Err(ToolError::InvalidParam {
+      param: "view",
+      reason: "a file is shown on the changes tab itself, not in a view".to_owned(),
+    });
+  }
+  let tabs = if args.contains_key("tab") {
+    vec![tab]
+  } else {
+    TaskTab::ALL.to_vec()
+  };
+  tabs
+    .into_iter()
+    .find_map(|tab| TaskView::sub_view(tab, name))
+    .ok_or_else(|| ToolError::InvalidParam {
+      param: "view",
+      reason: format!(
+        "`{name}` names no view there: the task's views are memory, on summary, and local-integration, on changes"
+      ),
+    })
+}
+
 fn orchestrator_chat(args: &Map<String, Value>) -> Result<OrchestratorChat, ToolError> {
   match string(args, "chat")? {
     None => Ok(OrchestratorChat::Latest),

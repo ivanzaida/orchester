@@ -101,7 +101,7 @@ fn tasks_the_pointer_brings_up_a_waiting_task_s_action_and_its_menu() {
 fn tasks_a_row_opens_the_task_s_details_and_new_task_opens_the_form() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
   seeded.click("task-row-KON-9");
-  let details = ProjectPage::Task("KON-9".parse().expect("a task key"), TaskView::of(TaskTab::Details));
+  let details = ProjectPage::Task("KON-9".parse().expect("a task key"), TaskView::of(TaskTab::Summary));
   assert_eq!(
     seeded.window.navigation().route_now(),
     Route::Project(seeded.project, details)

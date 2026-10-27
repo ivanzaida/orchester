@@ -217,6 +217,30 @@ impl Page {
       .is_some_and(|glyph| glyph == Icon::Lock.glyph().to_string())
   }
 
+  /// Opens the header's *More actions*, unless it is open.
+  fn open_more(&mut self) {
+    if !self.has("task-more-panel") {
+      self.click("task-more");
+    }
+    self
+      .window
+      .until("More actions", |window| window.texts("task-more-panel").is_some());
+  }
+
+  /// Whether *More actions* holds the row `id`; the menu is closed again after.
+  fn in_more(&mut self, id: &str) -> bool {
+    self.open_more();
+    let holds = self.has(id);
+    self.click("task-more");
+    holds
+  }
+
+  /// Chooses the row `id` of *More actions*.
+  fn choose_more(&mut self, id: &str) {
+    self.open_more();
+    self.click(id);
+  }
+
   /// Waits until the element `id` says `words`.
   fn until_says(&mut self, id: &str, words: &str) {
     self.window.until(&format!("{id} to say {words}"), |window| {
@@ -263,9 +287,11 @@ fn decision_plan_review_lists_versions_and_request_changes_needs_a_note() {
     page.text("plan-review-criteria"),
     format!("Acceptance criteria of {key} 1 The change is covered by tests. 2 Nothing changes for existing users.")
   );
-  assert!(page.has("task-stages"), "the run's stages in place of its step rows");
-  assert!(!page.has("task-steps"), "no step rows");
-  assert!(!page.has("task-brief"), "the plan's card holds what the task asks for");
+  // The card takes the top of the Summary; the run's rail and what the task asks for stay below it.
+  assert!(page.has("task-steps"), "the run's rail");
+  assert!(page.has("task-brief"), "the brief");
+  let (card, rail) = (page.bounds("task-decision"), page.bounds("task-steps"));
+  assert!(card.y < rail.y, "the card is first: {card:?} {rail:?}");
   page.choose("plan-review-version", "v1 · changes requested");
   page.until_says("plan-review-title", "Plan v1");
   assert_eq!(
@@ -343,7 +369,7 @@ fn decision_raise_reads_back_the_new_limit_and_asks_the_runner() {
 #[test]
 fn decision_daily_budget_allows_only_resume() {
   let mut page = Page::seeded("task-states");
-  page.open("stopped by the daily budget", "task-notice");
+  page.open("stopped by the daily budget", "task-event");
   page
     .window
     .until("the run controls", |window| window.texts("task-resume-run").is_some());
@@ -364,15 +390,15 @@ fn decision_after_retries_allows_a_retry_returns_with_a_note_and_stops() {
   assert_eq!(page.text("task-retry-decision-title"), "Decide how the run continues");
   assert_eq!(page.text("task-retry-reported-head"), "What Review reported");
   assert!(page.has("task-retry-report-text"));
-  assert!(page.has("task-retry-attempt"), "the latest attempt's steps");
+  assert!(page.has("task-steps"), "the latest attempt's steps, on the run's rail");
   let options = page.options("task-return-step");
   assert!(options.contains(&"03 Implement · default".to_owned()), "{options:?}");
-  let title = page.text("task-notice-title");
+  let event = page.text("task-event-text");
   assert!(
-    title.starts_with("Review still fails after ") && (title.ends_with(" retries") || title.ends_with(" retry")),
-    "{title}"
+    event.starts_with("Review still fails after ") && (event.contains(" retries. ") || event.contains(" retry. ")),
+    "{event}"
   );
-  assert!(page.text("task-notice").contains("sent the work back to Implement"));
+  assert!(event.contains("sent the work back to Implement"), "{event}");
   // Each decision goes to the runner, which is not connected here: they wait, and say why.
   page.set("task-return-note", "Sample more than ten delays.");
   for button in ["task-allow-retry", "task-return-with-note", "task-stop-run"] {

@@ -79,30 +79,29 @@ pub enum Link {
   Orchestrator(ProjectId, ChatId),
 }
 
-/// The tab of a task's page a link opens.
+/// The tab of a task's page a link opens (ORC-100: Summary, Conversation, Changes), or a view a tab opens in its place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TaskPage {
-  /// The task itself, its description and acceptance criteria: the tab a task opens on, for a link to the task.
-  Details,
+  /// Where the task stands: its brief and acceptance criteria, its run and the decision it waits for, its runs. The
+  /// tab a task opens on, for a link to the task, a run or a decision on one.
+  Summary,
   /// The agents' conversation, with the cards of what waits for a person: approvals, questions, plans.
   Conversation,
   /// What the task's latest run changed.
   Changes,
-  /// Where the task stands, with its runs: for a link to a run or a decision on one.
-  Summary,
-  /// Merging the latest run's work beside the person's uncommitted work, where a merge that stopped carries on.
+  /// Merging the latest run's work beside the person's uncommitted work, where a merge that stopped carries on: the
+  /// view *Try locally* opens under Changes.
   LocalIntegration,
 }
 
 impl TaskPage {
-  /// The tab's segment, as the router names it.
+  /// The path after the task's, as the router names it: the tab, with the view the tab opens in its place in its query.
   pub const fn name(self) -> &'static str {
     match self {
-      Self::Details => "details",
+      Self::Summary => "summary",
       Self::Conversation => "conversation",
       Self::Changes => "changes",
-      Self::Summary => "summary",
-      Self::LocalIntegration => "local-integration",
+      Self::LocalIntegration => "changes?view=local-integration",
     }
   }
 }

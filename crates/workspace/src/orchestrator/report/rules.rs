@@ -138,7 +138,7 @@ fn report_task(project: ProjectId, task: &Task) -> ReportTask {
   ReportTask {
     task: task.key().to_string(),
     title: task.details().title.as_str().to_owned(),
-    link: Link::Task(project, task.key().clone(), TaskPage::Details).path(),
+    link: Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   }
 }
 

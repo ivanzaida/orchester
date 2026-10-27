@@ -79,7 +79,7 @@ impl Page {
 fn decision_plan_limit_offers_the_reset_and_no_other_account_without_one() {
   let mut page = Page::with_codex(false);
   page.open("stopped at its account's plan limit", "plan-limit-choice");
-  let notice = page.text("task-notice");
+  let notice = page.text("task-event-text");
   assert!(notice.starts_with("Stopped at Default's plan limit"), "{notice}");
   assert_eq!(page.text("plan-limit-title"), "Continue this run");
   assert!(page.text("plan-limit-account").starts_with("Default"));

@@ -1,12 +1,11 @@
-//! A task's Details and its Summary before the first run, headless on the QA seed's `task-states` and `tasks`
-//! scenarios: a task opened without a tab opens on Details, the first of its tabs, Summary the last; Details
-//! shows the whole title, description and every criterion of a task in each state, unscored;
-//! the version picker offers only the versions kept, falls back honestly for an older task, keeps its choice as
-//! the tabs switch and the task is read again, and shows the run's setup apart from the task's organization; in a
-//! 960 window the side sections go under the requirements. Before the first run the Summary says there are no
-//! runs yet, with Start run unavailable for its real reason and View task details; a run that cannot be read, or
-//! one a teammate ran of a shared task ([`shared`]), is never taken for none. No runner is connected (its program
-//! does not exist). Needs `git`.
+//! What a task asks for and its properties, on its Summary (ORC-100: the Details tab went into it), headless on the QA
+//! seed's `task-states` and `tasks` scenarios: a task opened without a tab opens on its Summary, its tabs Summary,
+//! Conversation and Changes; the brief and every criterion of a task in each state show whole and unscored; the
+//! brief's version chip offers only the versions kept, falls back honestly for an older task, keeps its choice as the
+//! tabs switch and the task is read again; the properties show what the latest run started with and say when the task
+//! has changed since. Before the first run the Summary says there are no runs yet over the brief, with Start run
+//! unavailable for its real reason; a run that cannot be read, or one a teammate ran of a shared task ([`shared`]), is
+//! never taken for none. No runner is connected (its program does not exist). Needs `git`.
 //!
 //! `cargo test -p orchester-app --test task_details <filter>`
 
@@ -26,8 +25,9 @@ use orchester_app::{
 use orchester_core::{
   id::ProjectId,
   store::TaskStore,
-  task::{Task, TaskDetails},
+  task::{Task, TaskDetails, TaskLimits},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::outside::Outside;
@@ -122,32 +122,42 @@ impl Page {
     self.window.tree.get_element_by_id(id).is_some()
   }
 
-  fn select(&mut self, id: &str) -> (Vec<String>, Vec<String>) {
-    let select = self
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.as_select())
-      .unwrap_or_else(|| panic!("{id} is a select"));
-    let all = select.labels().iter().map(ToString::to_string).collect();
-    let chosen = select.selected_labels().iter().map(ToString::to_string).collect();
-    (all, chosen)
+  /// The versions the brief's chip offers, as its menu lists them; the menu closes again.
+  fn versions(&mut self) -> Vec<String> {
+    self.window.press("task-brief-version");
+    self.window.until("the version menu", |window| {
+      window.texts("task-brief-version-menu").is_some()
+    });
+    let mut versions = Vec::new();
+    while let Some(texts) = self.window.texts(&format!("task-brief-version-{}", versions.len())) {
+      versions.push(texts.join(" "));
+    }
+    self.window.press("task-brief-version");
+    self.window.pass();
+    versions
   }
 
-  fn choose(&mut self, id: &str, label: &str) {
-    let mut select = self
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.as_select())
-      .unwrap_or_else(|| panic!("{id} is a select"));
-    let index = select
-      .labels()
+  /// The version the brief shows, as its chip names it.
+  fn version(&mut self) -> String {
+    self.text("task-brief-version-label")
+  }
+
+  /// Picks `label` in the brief's version menu.
+  fn choose(&mut self, label: &str) {
+    let index = self
+      .versions()
       .iter()
-      .position(|option| &**option == label)
-      .unwrap_or_else(|| panic!("an option {label}"));
-    select.commit(index);
-    self.window.pass();
+      .position(|version| version == label)
+      .unwrap_or_else(|| panic!("a version {label}"));
+    self.window.press("task-brief-version");
+    self.window.until("the version menu", |window| {
+      window.texts("task-brief-version-menu").is_some()
+    });
+    self.window.press(&format!("task-brief-version-{index}"));
+    let label = label.to_owned();
+    self.window.until("the version chosen", |window| {
+      window.texts("task-brief-version-label") == Some(vec![label.clone()])
+    });
   }
 
   fn locked(&mut self, id: &str) -> bool {
@@ -159,15 +169,6 @@ impl Page {
       .is_some_and(|glyph| glyph == orchester_app::ui::icon::Icon::Lock.glyph().to_string())
   }
 
-  fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
-    self
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"))
-  }
-
   /// Tells the page that the project's tasks were changed outside it, as automation's changes do.
   fn changed_outside(&mut self) {
     let services = self.window.launch.services().expect("the session started").clone();
@@ -175,27 +176,26 @@ impl Page {
   }
 }
 
-/// The Details show `details` whole: its title, its description and each criterion, numbered and read as
-/// Markdown, and nothing else in the criteria list.
+/// The Summary shows `details` whole: its brief and each criterion, numbered and read as Markdown, and nothing else in
+/// the criteria list.
 fn assert_shows(page: &mut Page, details: &TaskDetails, what: &str) {
-  assert_eq!(page.text("task-details-title-text"), details.title.as_str(), "{what}");
-  let description = page.text("task-details-description-text");
+  let brief = page.text("task-brief-text");
   for line in details.brief.lines().filter(|line| !line.trim().is_empty()) {
     let words = line.trim_start_matches(['#', '-', '*', ' ']);
     let first = words.split_whitespace().next().unwrap_or_default();
-    assert!(description.contains(first), "{what}: {description} has {line}");
+    assert!(brief.contains(first), "{what}: {brief} has {line}");
   }
   let count = details.acceptance_criteria.len();
   assert_eq!(
-    page.text("task-details-criteria-head"),
-    format!("Acceptance criteria · {count}"),
+    page.text("task-criteria-head"),
+    format!("Acceptance criteria {count}"),
     "{what}"
   );
   let mut expected = Vec::new();
   let mut shown = Vec::new();
   for (number, criterion) in (1..).zip(&details.acceptance_criteria) {
     expected.push(format!("{number:02} {}", plain_text(criterion)));
-    let row = format!("task-details-criterion-{number}");
+    let row = format!("task-criterion-{number}");
     let words = page
       .window
       .texts(&format!("{row}-text"))
@@ -205,7 +205,7 @@ fn assert_shows(page: &mut Page, details: &TaskDetails, what: &str) {
   }
   if count > 0 {
     let squeezed = |text: String| text.split_whitespace().collect::<String>();
-    let list = page.window.texts("task-details-criteria-list").expect("the criteria");
+    let list = page.window.texts("task-criteria-list").expect("the criteria");
     assert_eq!(
       squeezed(list.concat()),
       squeezed(shown.concat()),
@@ -216,7 +216,7 @@ fn assert_shows(page: &mut Page, details: &TaskDetails, what: &str) {
 }
 
 #[test]
-fn details_show_every_requirement_in_each_state_without_results() {
+fn details_the_summary_shows_every_requirement_in_each_state_without_results() {
   let mut page = Page::seeded("task-states");
   for state in [
     "running",
@@ -228,10 +228,10 @@ fn details_show_every_requirement_in_each_state_without_results() {
     "queued, run not started",
   ] {
     let key = page.key(state);
-    page.open(&key, TaskTab::Details, "task-details-requirements");
+    page.open(&key, TaskTab::Summary, "task-criteria");
     let task = page.task(&key);
     assert_shows(&mut page, task.details(), state);
-    let shown = page.text("task-details-requirements");
+    let shown = page.text("task-criteria");
     for result in ["Passed", "PASS", "Failed", "✓"] {
       assert!(
         !shown.contains(result),
@@ -241,20 +241,12 @@ fn details_show_every_requirement_in_each_state_without_results() {
     for markup in ["**", "`", "]("] {
       assert!(!shown.contains(markup), "{state}: Markdown is rendered: {shown}");
     }
-    assert_eq!(
-      page.text("task-details-provenance"),
-      "Read-only · original task saved at creation"
-    );
-    assert_eq!(
-      page.select("task-details-source").1,
-      vec!["At task creation".to_owned()],
-      "{state}"
-    );
+    assert_eq!(page.version(), "As created", "{state}");
   }
 }
 
 #[test]
-fn details_the_picker_switches_versions_and_keeps_its_choice() {
+fn details_the_version_chip_switches_versions_and_keeps_its_choice() {
   let mut page = Page::seeded("task-states");
   let key = page.key("failed");
   let created = page.task(&key);
@@ -269,90 +261,68 @@ fn details_the_picker_switches_versions_and_keeps_its_choice() {
     .saved()
     .expect("saved as read");
   drop(db);
-  page.open(&key, TaskTab::Details, "task-details-requirements");
-  let (options, chosen) = page.select("task-details-source");
-  let number = options[1]
-    .trim_start_matches("Run #")
+  page.open(&key, TaskTab::Summary, "task-criteria");
+  let versions = page.versions();
+  let number = versions[1]
+    .trim_start_matches("As run #")
     .split(' ')
     .next()
     .unwrap_or_default()
     .to_owned();
   assert_eq!(
-    options,
+    versions,
     vec![
-      "At task creation".to_owned(),
-      format!("Run #{number} · at start"),
+      "As created".to_owned(),
+      format!("As run #{number} started"),
       "Current task".to_owned()
     ]
   );
-  assert_eq!(chosen, vec!["At task creation".to_owned()]);
-  assert_shows(&mut page, created.details(), "at creation");
-  page.choose("task-details-source", &format!("Run #{number} · at start"));
-  assert_eq!(
-    page.text("task-details-provenance"),
-    format!("Read-only · requirements given to Run #{number}")
-  );
+  assert_eq!(page.version(), "As created");
+  assert_shows(&mut page, created.details(), "as created");
+  page.choose(&format!("As run #{number} started"));
   assert_shows(&mut page, created.details(), "as the run started");
-  page.choose("task-details-source", "Current task");
-  assert_eq!(
-    page.text("task-details-provenance"),
-    format!("Current task · edited after Run #{number}")
-  );
+  page.choose("Current task");
   assert_shows(&mut page, &edited, "now");
-  assert!(
-    page
-      .text("task-details-setup-title")
-      .starts_with(&format!("Run #{number} setup"))
-  );
-  assert_eq!(page.text("task-details-setup-note"), "Captured for this run");
-  assert_eq!(
-    page.text("task-details-organization-note"),
-    "Current values · not a historical snapshot"
-  );
   // The choice stays as the tabs switch and the task is read again.
+  page.window.press("task-tab-conversation");
+  page
+    .window
+    .until("the Conversation", |window| window.texts("task-criteria").is_none());
   page.window.press("task-tab-summary");
   page
     .window
-    .until("the Summary", |window| window.texts("task-notice-title").is_some());
-  page.window.press("task-tab-details");
-  page.window.until("the Details", |window| {
-    window.texts("task-details-requirements").is_some()
-  });
-  assert_eq!(page.select("task-details-source").1, vec!["Current task".to_owned()]);
+    .until("the Summary", |window| window.texts("task-criteria").is_some());
+  assert_eq!(page.version(), "Current task");
   page.changed_outside();
-  page.window.until("the task read again", |window| {
-    window.texts("task-details-requirements").is_some()
-  });
-  assert_eq!(page.select("task-details-source").1, vec!["Current task".to_owned()]);
+  page
+    .window
+    .until("the task read again", |window| window.texts("task-criteria").is_some());
+  assert_eq!(page.version(), "Current task");
   assert_shows(&mut page, &edited, "read again");
 }
 
 #[test]
-fn details_a_task_opens_on_its_details_its_tabs_from_details_to_summary() {
+fn details_a_task_opens_on_its_summary_its_tabs_summary_conversation_changes() {
   let mut page = Page::seeded("task-states");
   let key = page.key("failed");
   let route = Route::parse(&format!("/project/{}/tasks/{key}", page.project)).expect("a task's page");
   page.window.navigation().go(route);
-  page.window.until("the Details", |window| {
-    window.texts("task-details-requirements").is_some()
-  });
-  let tabs = page.window.texts("task-tabs").expect("the page tabs");
-  let at = |label: &str| {
-    tabs
-      .iter()
-      .position(|text| text.starts_with(label))
-      .unwrap_or_else(|| panic!("{label} in {tabs:?}"))
-  };
-  let order = ["Details", "Conversation", "Changes", "Local integration", "Summary"].map(at);
-  assert!(order.is_sorted(), "Details first, Summary last: {tabs:?}");
-  page.window.press("task-tab-summary");
-  let summary = Route::Project(
-    page.project,
-    ProjectPage::Task(key.parse().expect("a task key"), TaskView::Summary),
-  );
   page
     .window
-    .until("the Summary", |window| window.navigation().route_now() == summary);
+    .until("the Summary", |window| window.texts("task-criteria").is_some());
+  let tabs = page.window.texts("task-tabs").expect("the page tabs");
+  assert_eq!(tabs.len(), 3, "three tabs: {tabs:?}");
+  assert_eq!(tabs[0], "Summary");
+  assert_eq!(tabs[1], "Conversation");
+  assert!(tabs[2].starts_with("Changes"), "{tabs:?}");
+  for gone in [
+    "task-tab-details",
+    "task-tab-artifacts",
+    "task-tab-memory",
+    "task-tab-local-integration",
+  ] {
+    assert!(!page.has(gone), "no {gone}");
+  }
 }
 
 #[test]
@@ -365,52 +335,68 @@ fn details_an_older_task_says_its_creation_version_was_not_recorded() {
     .execute_batch("DROP TRIGGER task_creation_snapshots_no_delete; DELETE FROM task_creation_snapshots;")
     .expect("as before creation versions");
   drop(connection);
-  page.open(&key, TaskTab::Details, "task-details-requirements");
-  let (options, chosen) = page.select("task-details-source");
-  assert_eq!(options.len(), 2, "no creation version is offered: {options:?}");
-  assert!(chosen[0].ends_with("· at start"), "{chosen:?}");
+  page.open(&key, TaskTab::Summary, "task-criteria");
+  let versions = page.versions();
+  assert_eq!(versions.len(), 2, "no creation version is offered: {versions:?}");
+  assert!(page.version().ends_with("started"), "{}", page.version());
   assert_eq!(
-    page.text("task-details-fallback-title"),
-    "Creation version not recorded"
-  );
-  assert_eq!(
-    page.text("task-details-fallback-text"),
-    "This older task has no creation snapshot. The saved run-start version is shown instead."
+    page.text("task-brief-fallback-text"),
+    "Creation version not recorded. This older task has no creation snapshot; the version its latest run started with \
+     is shown instead."
   );
   assert_shows(&mut page, task.details(), "the run's start version");
-  page.choose("task-details-source", "Current task");
+  page.choose("Current task");
   assert!(
-    !page.has("task-details-fallback"),
+    !page.has("task-brief-fallback"),
     "the current task stands in for nothing"
   );
 }
 
 #[test]
-fn details_go_under_the_requirements_in_a_narrow_window() {
+fn details_the_properties_say_what_the_run_started_with_and_what_changed_since() {
   let mut page = Page::seeded("task-states");
-  let key = page.key("ready for review");
-  page.open(&key, TaskTab::Details, "task-details-requirements");
-  let (requirements, side) = (
-    page.bounds("task-details-requirements"),
-    page.bounds("task-details-side"),
+  let key = page.key("failed");
+  page.open(&key, TaskTab::Summary, "task-properties");
+  for (property, key) in [
+    ("task-property-status-key", "Status"),
+    ("task-property-priority-key", "Priority"),
+    ("task-property-pipeline-key", "Pipeline"),
+    ("task-property-tags-key", "Tags"),
+    ("task-property-depends-key", "Depends on"),
+    ("task-property-limits-key", "Limits"),
+    ("task-property-branch-key", "Branch"),
+    ("task-property-created-key", "Created"),
+  ] {
+    assert_eq!(page.text(property), key);
+  }
+  assert!(
+    page.text("task-property-pipeline").starts_with("Feature delivery "),
+    "the pinned pipeline and its version"
   );
-  assert!(side.x >= requirements.x + requirements.width - 1.0, "beside at 1440");
-  page.window.tree.resize(960, 900);
-  page.window.until("the narrow layout", |window| {
-    window.texts("task-details-side").is_some()
-  });
-  page.window.pass();
-  let (requirements, side) = (
-    page.bounds("task-details-requirements"),
-    page.bounds("task-details-side"),
-  );
-  assert!(side.y >= requirements.y + requirements.height - 1.0, "under at 960");
+  assert!(!page.has("task-property-limits-changed"));
+  // The task's limits change after its run: the run's stay, said changed.
   let task = page.task(&key);
-  assert_shows(&mut page, task.details(), "at 960");
+  let mut changed = task.details().clone();
+  changed.limits = TaskLimits::new(Some(TokenBudget::new(123_000).expect("above zero")), None).expect("limits");
+  let mut db = ProjectDb::open(&page.repo).expect("the project");
+  db.update_task(task.id(), task.revision(), changed)
+    .expect("edit")
+    .saved()
+    .expect("saved as read");
+  drop(db);
+  page.changed_outside();
+  page.window.until("the limits said changed", |window| {
+    window.texts("task-property-limits-changed").is_some()
+  });
+  assert_eq!(page.text("task-property-limits-changed"), "· changed");
+  assert!(
+    !page.text("task-property-limits-value").contains("123k"),
+    "the run's limits, not the task's now"
+  );
 }
 
 #[test]
-fn summary_before_the_first_run_has_no_runs_yet() {
+fn summary_before_the_first_run_has_no_runs_yet_over_the_brief() {
   let mut page = Page::seeded("task-states");
   let key = page.key("draft, ready to queue");
   page.open(&key, TaskTab::Summary, "task-summary-empty");
@@ -425,20 +411,11 @@ fn summary_before_the_first_run_has_no_runs_yet() {
     page.text("task-empty-start-reason"),
     "The runner is not connected; the run's controls return once it is online."
   );
-  for nothing in [
-    "task-steps",
-    "task-run-rows",
-    "task-this-run",
-    "task-run-details",
-    "task-remove-worktree",
-  ] {
+  for nothing in ["task-run-head", "task-output", "task-runs", "task-facts"] {
     assert!(!page.has(nothing), "no {nothing} before the first run");
   }
-  page.window.press("task-empty-details");
-  page.window.until("the Details", |window| {
-    window.texts("task-details-requirements").is_some()
-  });
-  assert_eq!(page.text("task-details-setup-title"), "First run setup");
+  let task = page.task(&key);
+  assert_shows(&mut page, task.details(), "before the first run");
   let key = page.key("draft, missing details");
   page.open(&key, TaskTab::Summary, "task-summary-empty");
   assert!(page.locked("task-empty-start"));
@@ -466,6 +443,7 @@ fn summary_a_blocked_task_before_its_first_run_says_what_blocks_it() {
     page.text("task-empty-start-reason"),
     format!("Unavailable until {blocker} finishes.")
   );
+  assert_eq!(page.text("task-property-depends"), blocker);
 }
 
 #[test]
@@ -474,23 +452,19 @@ fn summary_a_run_that_cannot_be_read_is_not_taken_for_no_runs() {
   let key = page.key("latest run unreadable");
   page.open(&key, TaskTab::Summary, "task-notice-title");
   assert!(!page.has("task-summary-empty"));
-  page.open(&key, TaskTab::Details, "task-details-requirements");
-  assert_eq!(page.text("task-details-setup-title"), "Run setup");
-  assert_eq!(page.text("task-details-setup-pipeline"), "Not recorded");
+  assert_eq!(page.text("task-property-pipeline"), "Not recorded");
+  assert_eq!(page.text("task-property-limits"), "Not recorded");
 }
 
 #[test]
 fn details_never_leak_another_tasks_choice() {
   let mut page = Page::seeded("task-states");
   let failed = page.key("failed");
-  page.open(&failed, TaskTab::Details, "task-details-requirements");
-  page.choose("task-details-source", "Current task");
+  page.open(&failed, TaskTab::Summary, "task-criteria");
+  page.choose("Current task");
   let merged = page.key("merged");
-  page.open(&merged, TaskTab::Details, "task-details-requirements");
-  assert_eq!(
-    page.select("task-details-source").1,
-    vec!["At task creation".to_owned()]
-  );
+  page.open(&merged, TaskTab::Summary, "task-criteria");
+  assert_eq!(page.version(), "As created");
   let task = page.task(&merged);
   assert_shows(&mut page, task.details(), "the other task");
 }
@@ -503,11 +477,8 @@ fn details_roles_follow_the_design() {
   theme::install(&mut app, Mode::Dark);
   let theme = app.theme();
   for (role, size, weight, line_height) in [
-    (TaskText::DetailsHeading, 15.0, FontWeight::SemiBold, 1.6),
-    (TaskText::DetailsTitle, 16.0, FontWeight::Normal, 1.6),
-    (TaskText::DetailsBody, 12.0, FontWeight::Normal, 1.6),
-    (TaskText::DetailsNote, 11.0, FontWeight::Normal, 1.6),
-    (TaskText::DetailsNoticeHeading, 12.0, FontWeight::Medium, 1.6),
+    (TaskText::SectionTitle, 13.0, FontWeight::SemiBold, 1.3),
+    (TaskText::Brief, 13.0, FontWeight::Normal, 1.6),
     (TaskText::EmptyGlyph, 32.0, FontWeight::Normal, 1.0),
     (TaskText::EmptyTitle, 20.0, FontWeight::SemiBold, 1.25),
     (TaskText::EmptyText, 13.0, FontWeight::Normal, 1.6),

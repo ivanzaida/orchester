@@ -112,10 +112,9 @@ fn usage_queries() -> [UsageQuery; 2] {
   [every, today]
 }
 
-/// Each tab of a task, with the route its link names.
+/// Each tab of a task, and Local integration under Changes, with the route its link names.
 fn task_links(project: ProjectId) -> Vec<(Link, Route)> {
   [
-    (TaskPage::Details, TaskView::Details),
     (TaskPage::Summary, TaskView::Summary),
     (TaskPage::Conversation, TaskView::Conversation),
     (TaskPage::Changes, TaskView::Changes(None)),
@@ -342,11 +341,11 @@ fn links_pull_requests_are_numbered_from_one() {
 }
 
 #[test]
-fn links_written_without_a_tasks_tab_open_its_details() {
+fn links_written_without_a_tasks_tab_open_its_summary() {
   let path = format!("/project/{PROJECT}/tasks/ORC-24");
   let route = Route::parse(&path).expect("a task's page");
-  assert_eq!(route, at(ProjectPage::Task(key(), TaskView::Details)));
-  assert_eq!(route.path(), Link::Task(project(), key(), TaskPage::Details).path());
+  assert_eq!(route, at(ProjectPage::Task(key(), TaskView::Summary)));
+  assert_eq!(route.path(), Link::Task(project(), key(), TaskPage::Summary).path());
   let chain = routes().resolve(&path);
   let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
   assert_eq!(
@@ -362,4 +361,48 @@ fn links_naming_a_tasks_summary_still_open_it() {
   let path = format!("/project/{PROJECT}/tasks/ORC-24/summary");
   assert_eq!(Route::parse(&path), Ok(at(ProjectPage::Task(key(), TaskView::Summary))));
   assert_eq!(path, Link::Task(project(), key(), TaskPage::Summary).path());
+}
+
+/// Links written before ORC-100 named the task's Details, Artifacts, Memory and Local integration tabs: they still
+/// open where those went.
+#[test]
+fn links_naming_a_tasks_former_tabs_open_where_they_went() {
+  for (tab, view) in [
+    ("details", TaskView::Summary),
+    ("artifacts", TaskView::Summary),
+    ("memory", TaskView::Memory),
+    ("local-integration", TaskView::LocalIntegration),
+  ] {
+    let path = format!("/project/{PROJECT}/tasks/ORC-24/{tab}");
+    assert_eq!(Route::parse(&path), Ok(at(ProjectPage::Task(key(), view))), "{tab}");
+  }
+}
+
+/// The task's memory and Local integration are views of the Summary and Changes, named in the tab's query: the page
+/// keeps its frame as it does when its tabs switch.
+#[test]
+fn a_tasks_memory_and_local_integration_are_views_of_their_tabs() {
+  let memory = format!("/project/{PROJECT}/tasks/ORC-24/summary?view=memory");
+  let local = format!("/project/{PROJECT}/tasks/ORC-24/changes?view=local-integration");
+  assert_eq!(
+    Route::parse(&memory),
+    Ok(at(ProjectPage::Task(key(), TaskView::Memory)))
+  );
+  assert_eq!(
+    Route::parse(&local),
+    Ok(at(ProjectPage::Task(key(), TaskView::LocalIntegration)))
+  );
+  assert_eq!(at(ProjectPage::Task(key(), TaskView::Memory)).path(), memory);
+  let wrong = format!("/project/{PROJECT}/tasks/ORC-24/conversation?view=memory");
+  assert!(
+    matches!(Route::parse(&wrong), Err(RouteError::InvalidParam { .. })),
+    "the conversation has no memory view"
+  );
+  // The router matches the path without its query.
+  for path in [memory, local] {
+    let (address, _) = path.split_once('?').expect("a view in the query");
+    let chain = routes().resolve(address);
+    let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
+    assert_eq!(leaf.pattern_raw(), "/project/:project/tasks/:key/:tab", "{path}");
+  }
 }

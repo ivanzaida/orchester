@@ -97,7 +97,6 @@
         "ended": "{{label}} last ended on this same revision without passing, and nothing has changed since, so running it again would find the same. The run waits for your decision; nothing runs until you choose."
       },
       "unverifiedHeading": "What {{step}} could not check",
-      "latestAttempt": "Latest attempt",
       "reported": "What {{step}} reported",
       "reportedAt": "{{step}} · attempt {{attempt}} · {{time}}",
       "preserved": "Changes and messages are preserved on {{branch}}",

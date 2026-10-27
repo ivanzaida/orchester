@@ -15,6 +15,7 @@
       "copied": "C"
     },
     "toolbar": {
+      "tryLocally": "Try locally",
       "base": "{{branch}} · {{revision}}",
       "noCheckpoint": "no checkpoint yet",
       "checkpointAfter": "checkpoint after {{number}} {{step}} · {{time}}",

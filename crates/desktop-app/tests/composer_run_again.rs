@@ -63,6 +63,15 @@ fn icon_is(window: &mut Window, id: &str, icon: Icon) -> bool {
     .is_some_and(|glyph| glyph == icon.glyph().to_string())
 }
 
+/// Whether the header's *More actions* shows the row `id` ready to choose: its label alone, without a reason; the menu
+/// is opened first while it is closed.
+fn ready_in_menu(window: &mut Window, id: &str) -> bool {
+  if window.tree.get_element_by_id("task-more-panel").is_none() {
+    click(window, "task-more");
+  }
+  window.texts(id).is_some_and(|texts| texts.len() == 1)
+}
+
 /// Types `words` into the composer, a key at a time; only lays the window out.
 fn write(window: &mut Window, words: &str) {
   click(window, "composer-input");
@@ -101,13 +110,20 @@ fn composer_run_again_of_a_task_changed_since_the_page_read_it_keeps_the_message
     window.tree.get_element_by_id("task-run-icon").is_some() && !icon_is(window, "task-run-icon", Icon::Lock)
   });
   click(&mut window, "task-run");
+  // Pause run, Cancel run and Run again are rows of the header's *More actions*.
   wait(&mut window, "the agent at work", |window| {
-    window.texts("task-pause-run").is_some()
+    ready_in_menu(window, "task-pause-run")
   });
   click(&mut window, "task-cancel-run");
   wait(&mut window, "Run again", |window| {
-    icon_is(window, "task-run-again-icon", Icon::RotateCcw)
+    ready_in_menu(window, "task-run-again")
   });
+  // The menu closes again, or it would take the composer's clicks.
+  click(&mut window, "task-more");
+  assert!(
+    window.tree.get_element_by_id("task-more-panel").is_none(),
+    "the menu closed"
+  );
   window.navigation().go(page(TaskView::of(TaskTab::Conversation)));
   wait(&mut window, "the composer's Run again", |window| {
     window

@@ -141,7 +141,7 @@ fn decision_merge_into_main_merges_beside_unrelated_uncommitted_work() {
   assert!(page.locked("task-ask-agent"), "Ask agent waits for the composer");
   page.until_says("task-ready-changes-figure", "1 file");
   assert!(page.has("task-ready-check-review"), "Review verified the work");
-  assert!(page.has("task-run-details"));
+  assert!(page.has("task-facts"), "the run's facts beside the card");
   page.merge_until(("task-merge", "task-notice-title"), "Merged into main");
   assert!(page.text("task-notice").contains("main got merge commit"));
   assert!(
@@ -211,14 +211,8 @@ fn decision_merge_at_a_dirty_path_says_why_and_offers_local_integration() {
   page.window.until("Local integration", |window| {
     window.tree.get_element_by_id("task-local-integration").is_some()
   });
-  assert!(
-    page
-      .window
-      .navigation()
-      .route_now()
-      .path()
-      .ends_with("/local-integration")
-  );
+  let path = page.window.navigation().route_now().path();
+  assert!(path.ends_with("/changes?view=local-integration"), "{path}");
 }
 
 #[test]
@@ -250,7 +244,7 @@ fn decision_merge_is_unavailable_without_a_branch_and_merged_says_where() {
   let mut page = Page::seeded("task-states");
   page.open("merged", "task-notice");
   assert_eq!(page.text("task-notice-title"), "Merged into main");
-  assert!(page.has("task-stages"));
+  assert!(page.has("task-steps"), "the run's rail under the card");
   assert!(!page.has("task-merge"));
   assert!(!page.has("task-review-pull-request"));
 }
@@ -271,9 +265,10 @@ fn decision_ready_work_merged_with_git_reads_merged_without_a_merge_action() {
       run.branch().as_str(),
     ],
   );
-  page.open("ready for review, merges cleanly", "task-notice");
-  assert_eq!(page.text("task-notice-title"), "Merged");
-  assert!(page.text("task-notice").contains("merged without Orchester"));
+  page.open("ready for review, merges cleanly", "task-event");
+  let event = page.text("task-event-text");
+  assert!(event.starts_with("Merged. "), "{event}");
+  assert!(event.contains("merged without Orchester"), "{event}");
   assert!(!page.has("task-merge"), "nothing waits to be merged");
 }
 

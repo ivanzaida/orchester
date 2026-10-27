@@ -1,4 +1,4 @@
-//! The Summary's brief and criteria read as Markdown, as Details shows them.
+//! The Summary's brief and criteria read as Markdown.
 
 use lurq::layout::quad::QuadContent;
 
@@ -17,7 +17,7 @@ fn summary_brief_and_criteria_read_as_markdown() {
   // A paragraph per list item, each after its marker, and the link pressable on its own.
   assert_eq!(brief.iter().filter(|text| *text == "-").count(), 2, "{brief:?}");
   assert!(brief.iter().any(|text| text == "retry guide"), "{brief:?}");
-  assert!(page.text("task-criterion-1").starts_with("1 Deliveries that fail"));
+  assert!(page.text("task-criterion-1").starts_with("01 Deliveries that fail"));
   // Bold and code are spans of their own, and the link shows the host it opens after its words, as Details
   // and the chat draw a web link.
   page.window.pass();
@@ -40,7 +40,7 @@ fn summary_brief_and_criteria_read_as_markdown() {
   ] {
     assert!(drawn.iter().any(|text| text == span), "{span} in {drawn:?}");
   }
-  // The brief stays 8 under its head (`Gt4az`).
+  // The brief stays 10 under its head (`Brief` in `01 · Summary`).
   let mut bounds = |id: &str| {
     page
       .window
@@ -50,5 +50,8 @@ fn summary_brief_and_criteria_read_as_markdown() {
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
   let (head, text) = (bounds("task-brief-head"), bounds("task-brief-text"));
-  assert!((text.y - (head.y + head.height) - 8.0).abs() < 0.5, "{head:?} {text:?}");
+  assert!(
+    (text.y - (head.y + head.height) - 10.0).abs() < 0.5,
+    "{head:?} {text:?}"
+  );
 }
