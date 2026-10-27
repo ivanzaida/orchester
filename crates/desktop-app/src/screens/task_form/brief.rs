@@ -30,8 +30,9 @@ pub struct BriefFields<'a> {
   pub title_input: &'a ElementRef,
 }
 
-/// `typography` resolved as a text input draws it: its text in `color`, then its placeholder muted.
-fn text_styles(
+/// `typography` resolved as a text input draws it: its text in `color`, then its placeholder muted. New module and
+/// Edit module type their name and description so too.
+pub(in crate::screens) fn text_styles(
   ctx: &Ctx,
   typography: TypographyStyle,
   color: PaletteColor,

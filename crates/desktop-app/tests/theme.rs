@@ -9,6 +9,8 @@ mod import;
 mod instructions;
 #[path = "theme/local_integration.rs"]
 mod local_integration;
+#[path = "theme/modules.rs"]
+mod modules;
 #[path = "theme/orchester.rs"]
 mod orchester;
 #[path = "theme/orchestrator.rs"]
@@ -188,11 +190,6 @@ fn tasks_spacing_matches_the_redesign() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
   for (role, value, why) in [
-    (
-      theme::TasksSpacing::Page,
-      40.0,
-      "the Modules pages keep 40 at each side (fW8Mg)",
-    ),
     (
       theme::TasksSpacing::Sides,
       28.0,

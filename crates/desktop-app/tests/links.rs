@@ -8,8 +8,8 @@ use std::num::NonZeroU64;
 use chrono::NaiveDate;
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  AccountsPanel, AccountsView, ConnectionsView, FilesView, OrchestratorChat, OverviewTab, ProjectPage, Route,
-  RouteError, TaskView, ToolTab, routes,
+  AccountsPanel, AccountsView, ConnectionsView, FilesView, ModuleListTab, ModuleTab, OrchestratorChat, OverviewTab,
+  ProjectPage, Route, RouteError, TaskView, ToolTab, routes,
 };
 use orchester_core::{
   connection::AgentProvider,
@@ -171,8 +171,11 @@ fn every_link() -> Vec<(Link, Route)> {
       Link::PullRequests(project, PullRequestTab::NeedsReview),
       at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
     ),
-    (Link::Modules(project), at(ProjectPage::Modules)),
-    (Link::Module(project, id()), at(ProjectPage::Module(id()))),
+    (Link::Modules(project), at(ProjectPage::Modules(ModuleListTab::Open))),
+    (
+      Link::Module(project, id()),
+      at(ProjectPage::Module(id(), ModuleTab::Summary)),
+    ),
     (
       Link::Orchestrator(project, id()),
       at(ProjectPage::Orchestrator(OrchestratorChat::Chat(id()))),

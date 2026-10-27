@@ -23,7 +23,7 @@ mod memory;
 mod orchestrated;
 mod read;
 mod sharing;
-mod summary;
+pub(crate) mod summary;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},

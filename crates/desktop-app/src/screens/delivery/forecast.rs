@@ -10,7 +10,7 @@ use orchester_workspace::delivery::{Delivery, Work, WorkForecast};
 use super::words::{history, outlook};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route},
+  routes::{ModuleTab, ProjectPage, Route},
   screens::usage::{
     card::{Card, footnote},
     table::{Cell, Density, Width, column, opening, row, table},
@@ -44,7 +44,10 @@ pub fn card(ctx: &mut Ctx, project: ProjectId, delivery: &Delivery) -> Element {
       );
       match &forecast.work {
         Work::Queued => line.into(),
-        Work::Module { id, .. } => opening(line, navigation.to(Route::Project(project, ProjectPage::Module(*id)))),
+        Work::Module { id, .. } => {
+          let page = ProjectPage::Module(*id, ModuleTab::default());
+          opening(line, navigation.to(Route::Project(project, page)))
+        }
       }
     })
     .collect();
