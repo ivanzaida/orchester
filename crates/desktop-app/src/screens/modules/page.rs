@@ -108,16 +108,19 @@ impl Component for ModuleScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let PageProps { project, module, tab } = ctx.props::<PageProps>().clone();
-    // Read again whenever the project's tasks are read again, which every save and run change does.
+    // Read again whenever the project's tasks are read again, which every run change does, and after every save: a
+    // save of the module alone (its state, its dates) leaves the tasks as they were, and the feed does not publish
+    // tasks equal to the ones it holds.
     let revision = match project.feed.tasks.get() {
       TasksState::Ready(tasks) => Arc::as_ptr(&tasks.tasks) as usize,
       TasksState::Loading | TasksState::Failed(_) => 0,
     };
+    let saves = project.feed.saves.get();
     let read = read(
       ctx,
       project.open.repo_root.clone(),
       module,
-      (revision, self.retry.get()),
+      (revision, saves, self.retry.get()),
     );
     let id = project.open.project.id();
     // A failed read keeps the page read before it: it is not shown (nor edited) as if it were current.

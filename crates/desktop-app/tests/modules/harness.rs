@@ -129,9 +129,10 @@ impl Seeded {
     self.window.pass();
   }
 
-  /// Delivers what the window's futures finished until `done` holds.
+  /// Delivers what the window's futures finished until `done` holds. The deadline leaves room for the binary's
+  /// tests seeding their repositories side by side, which slows every reading of a project's tasks.
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
       self.window.tree.tick_futures();
       self.window.pass();
