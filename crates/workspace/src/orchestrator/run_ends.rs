@@ -190,6 +190,23 @@ fn merged(db: &ProjectDb, reading: &Reading, (run, ended): (&Run, &EndedRun)) ->
   ))
 }
 
+/// Whether the end `end` of `wait`'s run, kept before, still stands: the run is still where an end of that kind put
+/// it and, for a success, Orchester has not merged it. Git is not asked here about a merge outside Orchester.
+pub(super) fn end_stands(db: &ProjectDb, wait: &AgentWait, end: RunEnd) -> Result<bool, StoreError> {
+  let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
+    return Ok(false);
+  };
+  let stands = matches!(
+    (run.status(), end),
+    (RunStatus::Succeeded, RunEnd::Succeeded)
+      | (RunStatus::Failed(_), RunEnd::Failed)
+      | (RunStatus::WaitingForPerson(_), RunEnd::Stopped { .. })
+      | (RunStatus::Paused(PauseReason::LimitReached(_)), RunEnd::Limit { .. })
+      | (RunStatus::Interrupted(_), RunEnd::Interrupted)
+  );
+  Ok(stands && (end != RunEnd::Succeeded || db.run_merge(run.id())?.is_none()))
+}
+
 /// The key of the batch `run` is one of when the daily budget or its group's budget stopped it: those it stopped on
 /// the day `ended` happened; `None` for an end of its own.
 fn batch_key(db: &ProjectDb, run: &Run, end: RunEnd, ended: &EndedRun) -> Result<Option<String>, StoreError> {

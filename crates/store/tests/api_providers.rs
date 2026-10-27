@@ -201,3 +201,36 @@ fn api_providers_an_invocation_keeps_the_provider_it_started_on() {
     "a damaged row is reported"
   );
 }
+
+#[test]
+fn api_providers_tokens_of_a_provider_are_summed_from_a_time_on() {
+  use orchester_core::{connection::stream::AgentEvent, run::TokenUsage, store::ActivityStore};
+  let (_repo, mut db, run, execution) = support::started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &support::model(), at(10))
+    .expect("an invocation");
+  let url = BaseUrl::new("https://api.deepseek.com/anthropic").expect("valid");
+  let key = SecretId::generate();
+  db.save_invocation_provider(invocation.id, &url, key).expect("recorded");
+  let turn = |input, cached_input, output| AgentEvent::TurnCompleted {
+    usage: TokenUsage {
+      input,
+      cached_input,
+      output,
+    },
+  };
+  db.append_activity(
+    &invocation,
+    &[
+      (at(100), turn(12_000, 9_000, 500)),
+      (at(200), AgentEvent::TurnStarted),
+      (at(300), turn(20_000, 0, 1_000)),
+    ],
+  )
+  .expect("append");
+  let spent = |since, key| db.api_provider_tokens_since((&url, key), since).expect("read");
+  assert_eq!(spent(at(0), key), 24_500, "every completed turn counts");
+  assert_eq!(spent(at(150), key), 21_000, "only from the time on");
+  assert_eq!(spent(at(301), key), 0);
+  assert_eq!(spent(at(0), SecretId::generate()), 0, "another key is another provider");
+}

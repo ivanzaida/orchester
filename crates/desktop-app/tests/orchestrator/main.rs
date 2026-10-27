@@ -34,6 +34,7 @@ mod runs_on;
 mod scroll;
 mod settings;
 mod skills;
+mod standing;
 mod start;
 #[path = "../support/mod.rs"]
 mod support;

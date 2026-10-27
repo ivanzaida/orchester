@@ -230,14 +230,16 @@
         "waits": "Waits for you",
         "reading": "Orchestrator is reading",
         "answered": "Answered by the Orchestrator",
-        "answeredByYou": "Answered by you"
+        "answeredByYou": "Answered by you",
+        "gone": "No longer waits"
       },
       "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
       "effectOwn": "The agent asks again after the Orchestrator's own answer, so it waits for you: the Orchestrator doesn't answer it by itself.",
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
-      "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes."
+      "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
+      "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
     },
     "held": {
       "projectTitle": "New starts held in {{project}}",

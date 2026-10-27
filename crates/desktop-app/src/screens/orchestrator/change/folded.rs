@@ -2,7 +2,8 @@
 //! lines` `VGbU7`): being carried out (the loader and *Being carried out*), applied by the person (*Applied by you*,
 //! with the task), done by the chat itself (its chip when auto mode or *merge on its own* made it), dismissed or not
 //! done (`ban` in `danger`, the tool's reason on hover and once pressed), or merged without Orchester. What it did is
-//! said on hover too; the line's link is the first place it opens.
+//! said on hover too; the line's link is the first place it opens, and the others show under what it did once the line
+//! is pressed.
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_workspace::messages::Message;
@@ -55,10 +56,11 @@ pub(super) fn line(
     (_, None, None) => Some(words.effect.clone()),
   };
   let navigation = Navigation::of(ctx);
-  let link = opens.into_iter().next().map(|(_, label, route)| LineLink {
+  let mut links = opens.into_iter().map(|(_, label, route)| LineLink {
     label: ctx.t_args("orchestrator.line.link", [("label", &*label)]),
     press: Press::Open(navigation.to(route)),
   });
+  let link = links.next();
   Line::new(id, (glyph, tone), words.title.clone())
     .outcome(view.phase().name())
     .target(target)
@@ -66,6 +68,7 @@ pub(super) fn line(
     .time((!listed).then(|| view.time()))
     .link(link)
     .detail(detail)
+    .more(links.collect())
     .render(ctx)
 }
 

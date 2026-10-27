@@ -1,7 +1,8 @@
 //! The chat's cards in their new sizes (`Orchestrator cards · redesign` `zuvUi`): an agent's wait as a line with its
-//! status chip in each status, what the Orchestrator did with it nested under it; waits for the person kept one after
-//! another gathered into one digest that counts them; an action refused as a danger line whose reason opens under
-//! it; and a proposal as a decision card that, decided, folds into its line.
+//! status chip in each status, what the Orchestrator did with it nested under it, and *No longer waits* once the
+//! person dealt with it on its task's page; waits for the person kept one after another gathered into one digest that
+//! counts those that still wait; an action refused as a danger line whose reason opens under it; and a proposal as a
+//! decision card that, decided, folds into its line.
 
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
@@ -16,7 +17,10 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::harness::{Orchestrator, Setup};
+use super::{
+  harness::{Orchestrator, Setup},
+  standing::{answered_on_task_page, entry_of, follow, waiting},
+};
 
 /// A wait of `kind` of task `task`'s run `#number`, by agent *Builder*, answered by the Orchestrator itself when
 /// `automatic`.
@@ -109,9 +113,16 @@ fn row(screen: &Orchestrator, (chat, seq): (ChatId, i64)) -> String {
 fn orchestrator_wait_line_says_each_status_and_nests_the_answer() {
   // No runner: nothing answers the seeded turns but the store.
   let mut screen = Orchestrator::new(Setup::NoRunner);
+  let delivery = screen.delivery();
+  let still = waiting(&screen, delivery, "Sign in");
+  let mut elsewhere = waiting(&screen, delivery, "Sign out");
+  follow(&screen);
+  let (waits, gone) = (entry_of(&screen, &still.0), entry_of(&screen, &elsewhere.0));
+  // The person answers the second on its task's page: the conversation keeps it, but its agent no longer waits.
+  answered_on_task_page(&screen, &mut elsewhere);
   let mut db = screen.db();
-  let chat = Chat::named(ChatId::generate(), "Waits", Timestamp::now());
-  let waits = keep(&mut db, &chat, &wait(WaitKind::Question, ("KON-1", 1), false));
+  let latest = db.latest_chat().expect("read").expect("the waits' conversation");
+  let chat = db.chat(latest).expect("read").expect("the conversation");
   let by_it = keep(&mut db, &chat, &wait(WaitKind::Question, ("KON-1", 2), true));
   answered(&mut db, (chat.id(), by_it), (2, ActionOutcome::Done));
   let by_you = keep(&mut db, &chat, &wait(WaitKind::Message, ("KON-1", 3), true));
@@ -121,19 +132,21 @@ fn orchestrator_wait_line_says_each_status_and_nests_the_answer() {
     db.start_wait_turn((chat.id(), reading), ChatMessageId::generate())
       .expect("started")
   );
-  let [waits, by_it, by_you, reading] = [waits, by_it, by_you, reading].map(|seq| row(&screen, (chat.id(), seq)));
+  let [waits, gone, by_it, by_you, reading] =
+    [waits, gone, by_it, by_you, reading].map(|seq| row(&screen, (chat.id(), seq)));
   screen.go(OrchestratorChat::Latest);
   screen.until("the waits", |screen| screen.exists(&reading));
   for (line, status) in [
     (&waits, "Waits for you"),
+    (&gone, "No longer waits"),
     (&by_it, "Answered by the Orchestrator"),
     (&by_you, "Answered by you"),
     (&reading, "Orchestrator is reading"),
   ] {
-    assert_eq!(screen.text(&format!("{line}-chip")), status);
+    assert_eq!(screen.text(&format!("{line}-chip")), status, "{line}");
   }
   let shown = screen.text(&waits);
-  for part in ["Builder asks a question", "KON-1 · #1", "Open ↗"] {
+  for part in ["Builder waits for a reply", " · #1", "Open ↗"] {
     assert!(shown.contains(part), "{part} in {shown}");
   }
   let line = screen.bounds(&by_it);
@@ -153,15 +166,16 @@ fn orchestrator_wait_line_says_each_status_and_nests_the_answer() {
 #[test]
 fn orchestrator_waits_for_the_person_gather_into_a_digest_that_counts_them() {
   let mut screen = Orchestrator::new(Setup::NoRunner);
-  let mut db = screen.db();
-  let chat = Chat::named(ChatId::generate(), "While you were away", Timestamp::now());
-  let first = keep(&mut db, &chat, &wait(WaitKind::Message, ("KON-13", 9), false));
-  let seqs = [
-    first,
-    keep(&mut db, &chat, &wait(WaitKind::Question, ("KON-12", 8), false)),
-    keep(&mut db, &chat, &wait(WaitKind::Plan, ("KON-16", 11), false)),
-  ];
+  let delivery = screen.delivery();
+  let runs = ["Sign in", "Sign out", "Reset password"].map(|title| waiting(&screen, delivery, title));
+  let mut elsewhere = waiting(&screen, delivery, "Remember me");
+  follow(&screen);
+  let seqs = runs.each_ref().map(|(run, _)| entry_of(&screen, run));
+  let gone = entry_of(&screen, &elsewhere.0);
+  // Answered on its task's page, the last no longer waits for the person: it is not counted.
+  answered_on_task_page(&screen, &mut elsewhere);
   screen.go(OrchestratorChat::Latest);
+  let first = seqs[0];
   let digest = format!("orchestrator-digest-wait-{first}");
   screen.until("the digest", |screen| screen.exists(&digest));
   assert_eq!(screen.text(&format!("{digest}-title")), "3 waiting for you");
@@ -174,6 +188,14 @@ fn orchestrator_waits_for_the_person_gather_into_a_digest_that_counts_them() {
       "not a line of its own"
     );
   }
+  assert!(
+    !screen.exists(&format!("orchestrator-digest-item-wait-{gone}")),
+    "a wait dealt with elsewhere is not in the digest"
+  );
+  assert_eq!(
+    screen.text(&format!("orchestrator-wait-wait-{gone}-chip")),
+    "No longer waits"
+  );
   screen.click(&format!("{digest}-head"));
   screen.until("the digest folded", |screen| {
     !screen.exists(&format!("orchestrator-digest-item-wait-{first}"))
@@ -265,6 +287,50 @@ fn orchestrator_decided_proposal_folds_into_its_line() {
   assert!(
     (screen.bounds(&applied).height - 32.0).abs() < 0.5,
     "decided, the card is a line"
+  );
+}
+
+#[test]
+fn orchestrator_folded_line_keeps_every_place_it_opens() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let refused = ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: String::new(),
+      change: Change::Release {
+        task: Some("KON-19".to_owned()),
+      },
+    })),
+    ..ChatAction::new(
+      "release_queue",
+      Some("KON-19".to_owned()),
+      ActionOutcome::Refused {
+        code: "not_held".to_owned(),
+        reason: "Nothing is held.".to_owned(),
+      },
+    )
+  };
+  let (chat, line) = with_action(&screen, "Release KON-19?", &refused);
+  screen.go(chat);
+  screen.until("the refused line", |screen| screen.exists(&line));
+  assert!(
+    screen.text(&format!("{line}-open")).contains("KON-19"),
+    "its one link opens the task"
+  );
+  assert!(
+    !screen.exists(&format!("{line}-more-0")),
+    "the other places wait for the line to open"
+  );
+  screen.click(&format!("{line}-line"));
+  screen.until("the other places", |screen| screen.exists(&format!("{line}-more-0")));
+  assert!(screen.text(&format!("{line}-more-0")).contains("Open queue"));
+  screen.click(&format!("{line}-more-0"));
+  assert!(
+    matches!(
+      screen.route(),
+      orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Tasks(_))
+    ),
+    "{:?}",
+    screen.route()
   );
 }
 

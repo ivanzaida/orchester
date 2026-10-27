@@ -1,7 +1,10 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
-//! with the files the person attached to their messages.
+//! with the files the person attached to their messages and which of its waits still stand.
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+  collections::{BTreeMap, HashSet},
+  path::Path,
+};
 
 use orchester_core::{
   attachment::Attachment,
@@ -33,6 +36,9 @@ pub struct ChatView {
   pub entries: Vec<ChatEntry>,
   /// The files attached to the person's messages, by message, in the order they were attached.
   pub attachments: BTreeMap<ChatMessageId, Vec<Attachment>>,
+  /// The entries of its waits and runs' ends that still stand as they were read: an agent that still waits, a run
+  /// still where it ended. The others were dealt with since, here or elsewhere.
+  pub standing: HashSet<i64>,
 }
 
 impl ChatView {
@@ -46,10 +52,12 @@ impl ChatView {
     let attachments = db
       .chat_attachments(chat)
       .map_err(|error| messages::store_error(&error))?;
+    let standing = super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
       entries,
       attachments,
+      standing,
     }))
   }
 

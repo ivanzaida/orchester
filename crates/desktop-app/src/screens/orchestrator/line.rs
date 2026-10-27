@@ -111,6 +111,8 @@ pub(super) struct Line {
   pub(super) link: Option<LineLink>,
   /// Why it was refused: on hover, and under the line once pressed.
   pub(super) detail: Option<Arc<str>>,
+  /// The other places it opens, beyond its one link: under its detail once pressed.
+  pub(super) more: Vec<LineLink>,
 }
 
 impl Line {
@@ -127,6 +129,7 @@ impl Line {
       time: None,
       link: None,
       detail: None,
+      more: Vec::new(),
     }
   }
 
@@ -172,6 +175,12 @@ impl Line {
     self
   }
 
+  #[must_use]
+  pub(super) fn more(mut self, more: Vec<LineLink>) -> Self {
+    self.more = more;
+    self
+  }
+
   /// The line, mounted so a pressed detail stays open while the chat changes.
   pub(super) fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("line-{}", self.id);
@@ -204,6 +213,11 @@ impl PartialEq for LineProps {
         two.link.as_ref().map(|link| &link.label),
         &two.detail,
       )
+      && one
+        .more
+        .iter()
+        .map(|link| &link.label)
+        .eq(two.more.iter().map(|link| &link.label))
   }
 }
 
@@ -237,13 +251,32 @@ impl Component for LineView {
       .width(Dimension::Pct(100.0))
       .child(row(ctx, &line));
     let row = Tooltip::new(format!("{id}-why"), detail.clone()).wrap(ctx, row);
+    let more = (open && !line.more.is_empty()).then(|| more(&id, line.more.clone()));
     Element::from(
       Column::new()
         .width(Dimension::Pct(100.0))
         .child(row)
-        .with_children(open.then(|| quote(&format!("{id}-reason"), &detail))),
+        .with_children(open.then(|| quote(&format!("{id}-reason"), &detail)))
+        .with_children(more),
     )
   }
+}
+
+/// The other places line `id` opens, in a row under its detail, 46 in.
+fn more(id: &str, links: Vec<LineLink>) -> Element {
+  let links = links
+    .into_iter()
+    .enumerate()
+    .map(|(index, link)| link_element(&format!("{id}-more-{index}"), link));
+  nested(
+    &format!("{id}-more"),
+    Column::new().width(Dimension::Pct(100.0)).child(
+      Row::new()
+        .spacing(ExtraSpacing::Loose.role())
+        .align_items(Alignment::Center)
+        .with_children(links),
+    ),
+  )
 }
 
 /// The line's row.

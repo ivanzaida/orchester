@@ -2,7 +2,8 @@
 //! cards · redesign` `zuvUi`; `docs/design/orchestrator-toolset.md`, "Decisions" 5): the event line of what the agent
 //! waits for (a question, a reply, a plan to decide), the task and the run, when it was noticed and *Open ↗* its card
 //! on the task's Conversation, with a status chip: *Waits for you*, *Orchestrator is reading* (the loader), *Answered
-//! by the Orchestrator* or *Answered by you*. What the Orchestrator said or did with it nests under it as a quote
+//! by the Orchestrator*, *Answered by you*, or *No longer waits* once it was dealt with elsewhere (the workspace reads
+//! which waits still stand). What the Orchestrator said or did with it nests under it as a quote
 //! (`super::timeline`). Whether *Let the Orchestrator answer agents* answers it is the chip's tooltip. Deciding a plan
 //! stays the person's: its chip says it waits for them, and the Orchestrator's reading nests as its recommendation.
 //! The end of a task's run is a wait of its own kind, with its own line ([`super::run_end`]).
@@ -39,17 +40,19 @@ pub(super) enum Status {
   Answered,
   /// The person answered it, applying what the Orchestrator proposed.
   AnsweredByYou,
+  /// It was dealt with elsewhere, on its task's page: its agent no longer waits.
+  Gone,
 }
 
 impl Status {
-  /// Where `wait` stands, by the turn it started (`turn`, `None` for one that started none) and what that turn's
-  /// answer did (`answer`).
-  pub(super) fn of(wait: &AgentWait, turn: Option<&TurnState>, answer: &[Part]) -> Self {
+  /// Where `wait` stands, by whether it still `stands` (its agent still waits), the turn it started (`turn`, `None`
+  /// for one that started none) and what that turn's answer did (`answer`).
+  pub(super) fn of(wait: &AgentWait, stands: bool, turn: Option<&TurnState>, answer: &[Part]) -> Self {
     let thinking = matches!(turn, Some(TurnState::Thinking));
     if wait.kind == WaitKind::Plan {
-      return Self::Waits;
+      return if stands { Self::Waits } else { Self::Gone };
     }
-    if thinking || (turn.is_none() && wait.automatic) {
+    if thinking {
       return Self::Reading;
     }
     let answered = answer.iter().find_map(|part| match part {
@@ -67,7 +70,13 @@ impl Status {
       }
       _ => None,
     });
-    answered.unwrap_or(Self::Waits)
+    match answered {
+      Some(answered) => answered,
+      // The Orchestrator takes up only a wait that still waits.
+      None if !stands => Self::Gone,
+      None if turn.is_none() && wait.automatic => Self::Reading,
+      None => Self::Waits,
+    }
   }
 
   /// The name tools read.
@@ -77,6 +86,7 @@ impl Status {
       Self::Reading => "reading",
       Self::Answered => "answered",
       Self::AnsweredByYou => "answered_by_you",
+      Self::Gone => "gone",
     }
   }
 
@@ -86,6 +96,7 @@ impl Status {
       Self::Reading => ("orchestrator.wait.status.reading", ChipTone::Working),
       Self::Answered => ("orchestrator.wait.status.answered", ChipTone::Success),
       Self::AnsweredByYou => ("orchestrator.wait.status.answeredByYou", ChipTone::Neutral),
+      Self::Gone => ("orchestrator.wait.status.gone", ChipTone::Neutral),
     };
     Chip::new(ctx.t(key), tone)
   }
@@ -102,8 +113,14 @@ pub(super) fn line(
   let named = wait.agent.as_deref().or(wait.step.as_deref());
   let (glyph, key) = look(wait.kind, named.is_some());
   let what = ctx.t_args(key, [("agent", named.unwrap_or_default())]);
-  let chip = status.chip(ctx).tip(ctx.t(effect(wait, turned)));
-  Line::new(id, (glyph, Tone::Warning), what)
+  // A wait dealt with elsewhere says so, and is no longer a warning.
+  let (tip, tone) = if status == Status::Gone {
+    ("orchestrator.wait.effectGone", Tone::Plain)
+  } else {
+    (effect(wait, turned), Tone::Warning)
+  };
+  let chip = status.chip(ctx).tip(ctx.t(tip));
+  Line::new(id, (glyph, tone), what)
     .outcome(kind_name(wait.kind))
     .status(status.name())
     .target(Some(run_target(ctx, wait)))

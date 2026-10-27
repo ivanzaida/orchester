@@ -5,7 +5,10 @@
 //! (*Send now*) goes on with that answer: what the answer said after it shows under it, and so does how the answer
 //! ended. The messages that wait for the answer to end, queued or handed to it, show after every turn, in order.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+  collections::{BTreeMap, HashSet},
+  sync::Arc,
+};
 
 use orchester_core::{
   attachment::{Attachment, is_names_only},
@@ -64,6 +67,9 @@ pub(super) struct Turn {
   pub(super) attachments: Arc<[Attachment]>,
   /// The wait that opens the row instead of a person's message.
   pub(super) wait: Option<Box<AgentWait>>,
+  /// Whether that wait still stands: its agent still waits, or its run is still where it ended. Dealt with since,
+  /// here or on its task's page, it no longer waits for anyone.
+  pub(super) stands: bool,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
   /// Its entry in the conversation; `None` while it is being sent.
@@ -95,6 +101,7 @@ impl Turn {
       text: Arc::from(text),
       attachments: Arc::from([]),
       wait: None,
+      stands: false,
       report: None,
       seq: None,
       at: None,
@@ -125,6 +132,7 @@ impl Turn {
       text: Arc::from(""),
       attachments: Arc::from([]),
       wait: None,
+      stands: false,
       report: None,
       seq: Some(entry.seq),
       at: Some(entry.at),
@@ -158,9 +166,14 @@ impl Turn {
 }
 
 /// The turns of `entries`, with the files attached to the person's messages (`attached`), oldest first, and after them
-/// the messages that wait for the answer to end. What comes before the first message or wait belongs to no turn and
-/// is left out; a reply, action or event belongs to the newest row that takes it.
-pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Vec<Attachment>>) -> Vec<Turn> {
+/// the messages that wait for the answer to end; the waits whose entries are among `standing` still stand. What comes
+/// before the first message or wait belongs to no turn and is left out; a reply, action or event belongs to the newest
+/// row that takes it.
+pub(super) fn turns(
+  entries: &[ChatEntry],
+  attached: &BTreeMap<ChatMessageId, Vec<Attachment>>,
+  standing: &HashSet<i64>,
+) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
   let mut waiting: Vec<Turn> = Vec::new();
   for entry in entries {
@@ -183,6 +196,7 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
       EntryKind::Wait { wait, turn } => {
         turns.push(Turn {
           wait: Some(Box::new(wait.clone())),
+          stands: standing.contains(&entry.seq),
           ..Turn::opened(entry, turn.as_ref())
         });
         continue;
@@ -239,6 +253,7 @@ fn person(
     text: Arc::from(words),
     attachments,
     wait: None,
+    stands: false,
     report: None,
     seq: Some(entry.seq),
     at: Some(entry.at),

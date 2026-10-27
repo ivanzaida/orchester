@@ -174,10 +174,11 @@ pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>, note: Opt
     .into()
 }
 
-/// A row that goes in a digest: a wait or a run's end for the person that started no turn.
+/// A row that goes in a digest: a wait or a run's end for the person that started no turn and still stands; one dealt
+/// with since keeps its own line.
 fn digested(row: &TurnRow) -> Option<Waited> {
   let wait = row.turn.wait.as_deref()?;
-  (row.turn.state.is_none() && for_the_person(wait)).then(|| Waited {
+  (row.turn.state.is_none() && row.turn.stands && for_the_person(wait)).then(|| Waited {
     key: row.turn.key(),
     wait: wait.clone(),
     at: row.turn.at,
@@ -286,7 +287,7 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
           (line, super::answer::answer(ctx, row))
         }
         _ => {
-          let status = Status::of(wait, row.turn.state.as_ref(), &row.turn.answer);
+          let status = Status::of(wait, row.turn.stands, row.turn.state.as_ref(), &row.turn.answer);
           let line = super::wait::line(ctx, &id, (wait, row.turn.at, turned), (status, row.env.project));
           (line, super::answer::nested(ctx, row))
         }

@@ -282,7 +282,7 @@ fn sending_state(
 /// holds it: as a turn of its own, or as it will wait while the Orchestrator answers.
 fn all_turns(view: &View, shown: Option<&ChatView>, pending: Option<&str>) -> Vec<Turn> {
   let mut all = shown
-    .map(|shown| turns(&shown.entries, &shown.attachments))
+    .map(|shown| turns(&shown.entries, &shown.attachments, &shown.standing))
     .unwrap_or_default();
   let kept = view.outgoing.get().map(|outgoing| outgoing.message);
   if let Some(text) = pending
