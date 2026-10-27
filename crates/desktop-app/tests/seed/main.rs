@@ -7,6 +7,7 @@ mod agents;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod orchestrator;
 mod pipelines;
 mod refusals;
 

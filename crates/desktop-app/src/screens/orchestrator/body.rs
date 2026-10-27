@@ -105,7 +105,7 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
       conversation(
         ctx,
         view,
-        (project, Some(shown), pending.as_deref()),
+        (project, Some(&**shown), pending.as_deref()),
         (&foot, [problem, queued, unread]),
       )
     }
@@ -281,9 +281,7 @@ fn sending_state(
 /// The turns of `shown` (none for a new conversation), and the message being sent (`pending`) until the conversation
 /// holds it: as a turn of its own, or as it will wait while the Orchestrator answers.
 fn all_turns(view: &View, shown: Option<&ChatView>, pending: Option<&str>) -> Vec<Turn> {
-  let mut all = shown
-    .map(|shown| turns(&shown.entries, &shown.attachments, &shown.standing))
-    .unwrap_or_default();
+  let mut all = shown.map(turns).unwrap_or_default();
   let kept = view.outgoing.get().map(|outgoing| outgoing.message);
   if let Some(text) = pending
     && !all.iter().any(|turn| turn.message.is_some() && turn.message == kept)

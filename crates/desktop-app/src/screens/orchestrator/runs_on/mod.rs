@@ -3,7 +3,8 @@
 //! sides, 6 apart: a 12 `waypoints`, *CLI · account · model* or *provider · model* in 11.5 `text_secondary`, and a
 //! chevron; on the `pressed` fill while its picker is open; *Not set up* in `warning` on `warning_muted` until the
 //! Orchester can answer) says what the next answer runs on; its tooltip, how the Orchestrator's actions are checked.
-//! It opens the picker over it: 360 wide on `surface_raised` in a `border_strong` stroke, radius 10, 6 inside, its
+//! It opens the picker over it, never under it, and no taller than the room over it (what does not fit scrolls, its
+//! foot stays): 360 wide on `surface_raised` in a `border_strong` stroke, radius 10, 6 inside, its
 //! rows 2 apart, lifted by the `lg` shadow: the connections ([`rows`]), a line, the model and the reasoning effort
 //! ([`select`]), on an API provider where prompts and code go, and at its foot that another account starts a new
 //! session and *Settings ↗*. Choosing publishes the next version of the Orchestrator's settings with *Publish vN*, as
@@ -19,10 +20,10 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::{CollisionStrategy, Ctx, FutureAction, Placement},
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Popup, Row, ScrollVertical, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -50,7 +51,6 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    popover::{PopoverSide, popover},
     pressable::pressable,
     tooltip::Tooltip,
   },
@@ -144,16 +144,23 @@ impl Component for RunsOnPicker {
     self.pending.seed(setup);
     let panel = self.panel(ctx, (&props, &sources));
     let chip = self.chip(ctx, &props, Some(&label));
-    Row::new()
-      .child(chip)
-      .child(popover(
-        self.anchor.clone(),
-        props.open.clone(),
-        PopoverSide::Above,
-        panel,
-      ))
-      .into()
+    // Over the chip, 6 away from it, and never flipped under it, where it would cover the status bar: it is as tall
+    // as the room over the chip lets it be, and its connections and choices scroll inside.
+    let gap = ExtraSpacing::Snug.value();
+    let picker = Popup::new(self.anchor.clone(), panel)
+      .open(props.open.clone())
+      .placement(Placement::TopStart)
+      // Over its anchor, lurq counts the offset away from it.
+      .offset(0.0, gap)
+      .collision(CollisionStrategy::Clamp);
+    Row::new().child(chip).child(picker).into()
   }
+}
+
+/// How tall the picker over the chip `anchor` may be: the room between the window's top, kept `margin` clear, and the
+/// chip, `gap` under the picker; `None` before the chip was laid out.
+fn room_over(anchor: &ElementRef, (gap, margin): (f32, f32)) -> Option<f32> {
+  (anchor.height() > 0.0).then(|| (anchor.y() - gap - margin).max(0.0))
 }
 
 impl RunsOnPicker {
@@ -237,15 +244,9 @@ impl RunsOnPicker {
         )
     });
     let apply = choose::apply(ctx, (props, sources.setup), &self.pending, &self.publish);
-    Column::new()
-      .id("orchestrator-runs-on-menu")
-      .width(Dimension::Px(WIDTH))
-      .padding(ExtraSpacing::Snug.role())
+    let body = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Tight.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-      .rounded(RadiusSize::Lg)
-      .box_shadow(ShadowStyle::Lg)
       .with_children(groups)
       .child(
         Row::new()
@@ -261,9 +262,28 @@ impl RunsOnPicker {
       )
       .with_children(choices)
       .with_children(sent_to)
-      .with_children(apply)
-      .child(choose::foot(ctx, props))
-      .into()
+      .with_children(apply);
+    let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
+    let menu = Column::new()
+      .id("orchestrator-runs-on-menu")
+      .width(Dimension::Px(WIDTH))
+      .padding(ExtraSpacing::Snug.role())
+      .spacing(ExtraSpacing::Tight.role())
+      .background(PaletteColor::SurfaceRaised)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .rounded(RadiusSize::Lg)
+      .box_shadow(ShadowStyle::Lg)
+      .child(
+        ScrollVertical::new(body)
+          .id("orchestrator-runs-on-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex_shrink(1.0),
+      )
+      .child(choose::foot(ctx, props));
+    match room_over(&self.anchor, (ExtraSpacing::Snug.value(), margin)) {
+      Some(room) => menu.max_height(Dimension::Px(room)).into(),
+      None => menu.into(),
+    }
   }
 }
 

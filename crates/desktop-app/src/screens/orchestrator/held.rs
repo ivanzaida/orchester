@@ -169,11 +169,11 @@ impl Component for HeldCard {
 }
 
 impl HeldCard {
-  /// *Resume new starts*; it takes no press while the release is under way.
+  /// *Resume new starts*, primary (`zxw1l`); it takes no press while the release is under way.
   fn resume_button(&self, ctx: &Ctx, props: &HeldProps) -> ActionButton {
     let resume = ActionButton::new(
       format!("{}-resume", props.id),
-      ButtonKind::Secondary,
+      ButtonKind::Primary,
       ctx.t("orchestrator.held.resume"),
     )
     .icon(Icon::Play)

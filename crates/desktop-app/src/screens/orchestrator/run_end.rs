@@ -4,7 +4,9 @@
 //! one link that acts on it, to the task's Summary: *Review ↗* a run ready to merge, *Raise ↗* a limit, *Continue ↗*
 //! an interrupted run, else *Summary ↗*. What happens with it (the Orchestrator takes it up by itself while *Let the
 //! Orchestrator answer agents* is on, and merges a run that succeeded on its own while *merge finished runs on its
-//! own* is on too, else it waits for the person) is said on hover and once pressed.
+//! own* is on too, else it waits for the person) is said on hover and once pressed. An end dealt with since (the run
+//! merged, went on, or ended otherwise) no longer waits: its line turns neutral, says what became of the run instead,
+//! and links to the Summary.
 
 use std::sync::Arc;
 
@@ -16,7 +18,7 @@ use orchester_core::{
   run::RunLimit,
   time::Timestamp,
 };
-use orchester_workspace::display;
+use orchester_workspace::{display, orchestrator::chat::EndMoved};
 
 use super::{
   line::{Line, LineLink, Tone},
@@ -29,12 +31,13 @@ use crate::{
 };
 
 /// The line of `wait`, the end `end` of its run, kept at `at`, which started an Orchestrator turn by itself when
-/// `turned`; in project `project`; `id` names it.
+/// `turned`, and what became of the run since when that end no longer stands (`moved`); in project `project`; `id`
+/// names it.
 pub(super) fn line(
   ctx: &mut Ctx,
   id: &str,
   (wait, end, at, turned): (&AgentWait, RunEnd, Option<Timestamp>, bool),
-  project: ProjectId,
+  (moved, project): (Option<EndMoved>, ProjectId),
 ) -> Element {
   let (glyph, tone) = look(end);
   let step = step_label(ctx, wait);
@@ -42,13 +45,38 @@ pub(super) fn line(
     what(end, (wait.step.is_some(), wait.others > 0)),
     [("step", &*step), ("count", &wait.others.to_string())],
   );
-  Line::new(id, (glyph, tone), what)
+  let line = Line::new(id, (glyph, tone), what)
     .outcome(name(end))
     .target(Some(run_target(ctx, wait)))
-    .time(at.map(display::clock))
-    .link(open_summary(ctx, end, project, &wait.task))
-    .detail(Some(effect(ctx, wait, end, turned)))
-    .render(ctx)
+    .time(at.map(display::clock));
+  match moved {
+    None => line
+      .link(open_summary(ctx, end, project, &wait.task))
+      .detail(Some(effect(ctx, wait, end, turned))),
+    Some(moved) => Line {
+      tone: Tone::Plain,
+      ..line
+    }
+    .status("moved")
+    .link(summary(ctx, "orchestrator.line.summary", project, &wait.task))
+    .detail(Some(ctx.t(moved_words(moved)))),
+  }
+  .render(ctx)
+}
+
+/// What the line of an end that no longer stands says became of its run.
+const fn moved_words(moved: EndMoved) -> &'static str {
+  match moved {
+    EndMoved::Merged => "orchestrator.end.moved.merged",
+    EndMoved::Working => "orchestrator.end.moved.working",
+    EndMoved::Stopped => "orchestrator.end.moved.stopped",
+    EndMoved::Paused => "orchestrator.end.moved.paused",
+    EndMoved::Interrupted => "orchestrator.end.moved.interrupted",
+    EndMoved::Succeeded => "orchestrator.end.moved.succeeded",
+    EndMoved::Failed => "orchestrator.end.moved.failed",
+    EndMoved::Cancelled => "orchestrator.end.moved.cancelled",
+    EndMoved::Gone => "orchestrator.end.moved.gone",
+  }
 }
 
 /// The icon of `end` and its tone.
@@ -143,15 +171,20 @@ fn left_words(ctx: &Ctx, why: &MergeLeft) -> Arc<str> {
 
 /// The link to the task's Summary, where the person decides what comes next, in the words of what it does for `end`.
 pub(super) fn open_summary(ctx: &mut Ctx, end: RunEnd, project: ProjectId, task: &str) -> Option<LineLink> {
-  let key: TaskKey = task.parse().ok()?;
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)));
   let label = match end {
     RunEnd::Succeeded => "orchestrator.line.review",
     RunEnd::Limit { .. } => "orchestrator.line.raise",
     RunEnd::Interrupted => "orchestrator.line.continue",
     RunEnd::Failed | RunEnd::Stopped { .. } => "orchestrator.line.summary",
   };
+  summary(ctx, label, project, task)
+}
+
+/// The link to task `task`'s Summary in project `project`, in the words of `label`.
+fn summary(ctx: &mut Ctx, label: &str, project: ProjectId, task: &str) -> Option<LineLink> {
+  let key: TaskKey = task.parse().ok()?;
+  let navigation = Navigation::of(ctx);
+  let route = Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)));
   Some(LineLink {
     label: ctx.t(label),
     press: Press::Open(navigation.to(route)),

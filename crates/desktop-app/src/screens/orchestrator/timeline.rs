@@ -283,7 +283,8 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
       let turned = row.turn.state.is_some();
       match wait.kind {
         WaitKind::Ended(end) => {
-          let line = super::run_end::line(ctx, &id, (wait, end, row.turn.at, turned), row.env.project);
+          let ended = (&**wait, end, row.turn.at, turned);
+          let line = super::run_end::line(ctx, &id, ended, (row.turn.moved, row.env.project));
           (line, super::answer::answer(ctx, row))
         }
         _ => {

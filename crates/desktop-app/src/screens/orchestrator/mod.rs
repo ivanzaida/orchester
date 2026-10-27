@@ -219,7 +219,8 @@ impl Component for OrchestratorScreen {
       ctx.focus(&view.input);
       view.focus.set(false);
     }
-    let reads = data::read(ctx, &props.project.open.repo_root, props.chat);
+    let saves = props.project.feed.saves.get();
+    let reads = data::read(ctx, (&props.project.open.repo_root, saves), props.chat);
     // Until History says which conversation is the latest, the screen shows none.
     if reads.target.is_some() || reads.shown != Shown::Loading {
       view.hold_draft_of(props.project.open.project.id(), reads.target.into());

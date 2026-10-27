@@ -42,7 +42,8 @@ use orchester_store::{KeptWait, ProjectDb, StoreError};
 pub use super::run_ends::{MergeChecks, SucceededAt};
 use super::{
   auto_merge::{completes_in, merging_in},
-  run_ends::{Reading, current_ends, end_stands, merge_checks},
+  chat::EndMoved,
+  run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
 };
 use crate::{
@@ -356,9 +357,14 @@ fn last_exchanged(messages: &[TaskMessage], execution: StepExecutionId) -> Optio
 }
 
 /// The entries of conversation `chat` (its `entries`) whose waits still stand: the waits of agents that still wait,
-/// and the ends of runs still where they ended ([`end_stands`]). A wait the person dealt with elsewhere, on its task's
-/// page, stays kept in the conversation but no longer stands. Blocks on SQLite.
-pub(super) fn standing(db: &ProjectDb, chat: ChatId, entries: &[ChatEntry]) -> Result<HashSet<i64>, StoreError> {
+/// and the ends of runs still where they ended ([`end_moved`]); and, for the ends that no longer stand, what became of
+/// their runs. A wait the person dealt with elsewhere, on its task's page, stays kept in the conversation but no
+/// longer stands. Blocks on SQLite.
+pub(super) fn standing(
+  db: &ProjectDb,
+  chat: ChatId,
+  entries: &[ChatEntry],
+) -> Result<(HashSet<i64>, HashMap<i64, EndMoved>), StoreError> {
   let waits: Vec<(i64, &AgentWait)> = entries
     .iter()
     .filter_map(|entry| match &entry.kind {
@@ -376,17 +382,23 @@ pub(super) fn standing(db: &ProjectDb, chat: ChatId, entries: &[ChatEntry]) -> R
     HashSet::new()
   };
   let keys: HashMap<i64, String> = db.chat_wait_keys(chat)?.into_iter().collect();
-  let mut standing = HashSet::new();
+  let (mut standing, mut moved) = (HashSet::new(), HashMap::new());
   for (seq, wait) in waits {
     let stands = match wait.kind {
-      WaitKind::Ended(end) => end_stands(db, wait, end)?,
+      WaitKind::Ended(end) => match end_moved(db, wait, end)? {
+        Some(what) => {
+          moved.insert(seq, what);
+          false
+        }
+        None => true,
+      },
       _ => keys.get(&seq).is_some_and(|key| now.contains(key)),
     };
     if stands {
       standing.insert(seq);
     }
   }
-  Ok(standing)
+  Ok((standing, moved))
 }
 
 /// What the agents of the latest runs of project `project`'s tasks wait for now, each by the key it is kept by: the

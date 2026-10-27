@@ -15,12 +15,17 @@ use orchester_core::{
 };
 
 use super::connections;
-use crate::kontur::{Kontur, SeedError, name};
+use crate::kontur::{Kontur, SeedError, catalogue::Catalogue, name};
 
 const MODELS: [&str; 2] = ["deepseek-v4-flash", "deepseek-v4-pro"];
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  connections::seed(kontur)?;
+  seed_catalogue(kontur).map(drop)
+}
+
+/// [`seed`], giving the catalogue of the `connections` scenario it builds on.
+pub(super) fn seed_catalogue(kontur: &mut Kontur) -> Result<Catalogue, SeedError> {
+  let catalogue = connections::seed_catalogue(kontur)?;
   let at = kontur.ago(3);
   let key = key_secret(kontur, "DEEPSEEK_API_KEY", None, at)?;
   let old = key_secret(kontur, "OLD_GATEWAY_KEY", Some(at), kontur.ago(30))?;
@@ -48,7 +53,8 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   )?;
   on_provider(kontur, old_gateway, ("https://gateway.example.com", old, &MODELS[..1]))?;
   gateway(kontur, program("claude"), key, at)?;
-  researcher(kontur, codex, at)
+  researcher(kontur, codex, at)?;
+  Ok(catalogue)
 }
 
 /// A secret of kind API key in Development, archived at `archived` when given; a record only.

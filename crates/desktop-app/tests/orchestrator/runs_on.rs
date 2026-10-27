@@ -146,6 +146,13 @@ fn orchestrator_picker_shows_each_accounts_plan_use_its_limit_and_a_signed_out_o
     !screen.exists(&format!("orchestrator-runs-on-{signed_out}-plan")),
     "no plan is read of an account not signed in"
   );
+  // Over its chip, never over it nor under it, where the status bar is, and inside the window.
+  let (menu, chip) = (
+    screen.bounds("orchestrator-runs-on-menu"),
+    screen.bounds("orchestrator-runs-on-chip"),
+  );
+  assert!(menu.y >= 0.0, "inside the window: {menu:?}");
+  assert!(menu.y + menu.height <= chip.y, "over the chip: {menu:?} {chip:?}");
   // A faded row cannot be chosen: pressing it changes nothing.
   screen.press(&format!("orchestrator-runs-on-{signed_out}"));
   assert!(!screen.exists("orchestrator-runs-on-publish"), "nothing chosen");

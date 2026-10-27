@@ -751,7 +751,18 @@
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
-      "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you."
+      "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you.",
+      "moved": {
+        "merged": "No longer waits: Orchester merged the run.",
+        "working": "No longer waits: the run is at work again.",
+        "stopped": "No longer waits here: the run went on and has stopped for your decision since. Its Summary shows where it is.",
+        "paused": "No longer waits here: the run is paused now. Its Summary shows why.",
+        "interrupted": "No longer waits here: the run went on and was interrupted since. Its Summary shows where it is.",
+        "succeeded": "No longer waits here: the run went on and succeeded since.",
+        "failed": "No longer waits here: the run went on and failed since.",
+        "cancelled": "No longer waits: the run was canceled.",
+        "gone": "No longer waits: the project no longer keeps this run."
+      }
     },
     "report": {
       "title": "Daily report · {{day}}",

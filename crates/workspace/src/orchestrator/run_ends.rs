@@ -26,6 +26,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::{EndedRun, ProjectDb, StoreError};
 
+use super::chat::EndMoved;
 use crate::{
   links::{Link, TaskPage},
   tasks::{
@@ -190,21 +191,26 @@ fn merged(db: &ProjectDb, reading: &Reading, (run, ended): (&Run, &EndedRun)) ->
   ))
 }
 
-/// Whether the end `end` of `wait`'s run, kept before, still stands: the run is still where an end of that kind put
-/// it and, for a success, Orchester has not merged it. Git is not asked here about a merge outside Orchester.
-pub(super) fn end_stands(db: &ProjectDb, wait: &AgentWait, end: RunEnd) -> Result<bool, StoreError> {
+/// What became of the run of `wait`, whose end `end` was kept before, once that end no longer stands; `None` while it
+/// stands: the run is still where an end of that kind put it and, for a success, Orchester has not merged it. Git is
+/// not asked here about a merge outside Orchester.
+pub(super) fn end_moved(db: &ProjectDb, wait: &AgentWait, end: RunEnd) -> Result<Option<EndMoved>, StoreError> {
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
-    return Ok(false);
+    return Ok(Some(EndMoved::Gone));
   };
+  let status = run.status();
+  if end == RunEnd::Succeeded && *status == RunStatus::Succeeded && db.run_merge(run.id())?.is_some() {
+    return Ok(Some(EndMoved::Merged));
+  }
   let stands = matches!(
-    (run.status(), end),
+    (status, end),
     (RunStatus::Succeeded, RunEnd::Succeeded)
       | (RunStatus::Failed(_), RunEnd::Failed)
       | (RunStatus::WaitingForPerson(_), RunEnd::Stopped { .. })
       | (RunStatus::Paused(PauseReason::LimitReached(_)), RunEnd::Limit { .. })
       | (RunStatus::Interrupted(_), RunEnd::Interrupted)
   );
-  Ok(stands && (end != RunEnd::Succeeded || db.run_merge(run.id())?.is_none()))
+  Ok((!stands).then(|| EndMoved::of(status)))
 }
 
 /// The key of the batch `run` is one of when the daily budget or its group's budget stopped it: those it stopped on
