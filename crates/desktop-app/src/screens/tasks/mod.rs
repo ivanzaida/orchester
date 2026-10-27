@@ -342,7 +342,7 @@ impl TasksScreen {
       .with_children(filters.map(inset))
       .with_children(kept.map(inset))
       .with_children(states::outside_tasks(ctx, list.tab(), &reading.tasks).map(inset))
-      .with_children(task_close::panel(ctx, &self.closer, "tasks-close").map(inset))
+      .with_children(task_close::panel(ctx, &self.closer, ("tasks-close", task_close::StopLook::Quiet)).map(inset))
   }
 
   /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top, for another

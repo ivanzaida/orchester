@@ -125,10 +125,12 @@
         "runAgain": "Run again",
         "back": "Back",
         "noTags": "No tags yet",
-        "noTagsReason": "Create tags on a task's page first."
+        "noTagsReason": "Create tags on a task's page first.",
+        "reason": "{{columns}}: {{reason}}",
+        "runNotEnded": "A run of this task has not ended. Done and Canceled stop it, after you confirm."
       },
       "refused": {
-        "title": "{{task}} can't go to {{column}}",
+        "title": "{{task}} can't move to {{column}}",
         "queueTitle": "{{task}} can't be queued yet",
         "backlogTitle": "{{task}} can't go back to Backlog",
         "runNotEnded": "A run of this task has not ended. Answer or stop it from the task, or wait for it to end.",
@@ -136,7 +138,7 @@
         "incomplete": "Add the missing details before running the task.",
         "hasRun": "This task already has a run.",
         "pipeline": "Columns by pipeline only show where tasks are; a task's pipeline is chosen on its page.",
-        "closeHint": "Drop it on Done or Canceled to stop its run."
+        "closeHint": "Done or Canceled stop it, after you confirm."
       },
       "ask": {
         "confirms": "confirms",
@@ -220,21 +222,21 @@
       "hint": {
         "move": "Drop to move {{task}}",
         "refused": "{{task}} can't go here",
-        "onlyClose": "{{task}}'s run has not ended: drop it on Done or Canceled",
+        "onlyClose": "{{task}} goes only to Done or Canceled",
         "queue": "Drop to queue {{task}}",
         "draft": "Drop to return {{task}} to draft",
         "runAgain": "Drop to run {{task}} again",
         "done": "Drop to mark {{task}} as done",
         "cancel": "Drop to cancel {{task}}",
-        "cancels": "cancels the move"
+        "cancels": "cancels"
       },
       "quickAdd": {
         "open": "Add a draft",
         "label": "Title",
         "placeholder": "Task title",
-        "add": "adds",
-        "cancel": "cancels",
-        "draft": "Added as a draft",
+        "add": "add",
+        "cancel": "cancel",
+        "draft": "Draft",
         "tooLong": "A title has at most {{count}} characters.",
         "failed": "Not added: {{reason}}"
       },

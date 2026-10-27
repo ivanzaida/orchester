@@ -37,7 +37,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-pub use self::confirm::panel;
+pub use self::confirm::{StopLook, panel};
 use crate::{
   navigation::{Navigation, press::OpenIn},
   project::ProjectFeed,

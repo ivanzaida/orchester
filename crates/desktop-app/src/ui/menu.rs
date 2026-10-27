@@ -101,6 +101,10 @@ pub struct MenuItem {
   mono: bool,
   /// The row destroys: its icon and label in `danger`.
   danger: bool,
+  /// The row opens a list beside the menu: a 12 `text_muted` chevron at its end.
+  submenu: bool,
+  /// An unavailable row's reason is said elsewhere, in the menu's foot: the row is only faded.
+  reason_below: bool,
   focus: Focus,
   choice: Choice,
 }
@@ -133,6 +137,8 @@ impl MenuItem {
       lock: true,
       mono: false,
       danger: false,
+      submenu: false,
+      reason_below: false,
       focus: Focus::Pointer,
       choice,
     }
@@ -142,6 +148,23 @@ impl MenuItem {
   #[must_use]
   pub const fn danger(mut self) -> Self {
     self.danger = true;
+    self
+  }
+
+  /// The row opens a list beside the menu: a chevron at its end, after its keys (`Item · Move to` in `Card menu`
+  /// `vV3BX`).
+  #[must_use]
+  pub const fn submenu(mut self) -> Self {
+    self.submenu = true;
+    self
+  }
+
+  /// An unavailable row that is only faded, 28 high, its reason said once in the menu's foot (`Reason` in `Move to
+  /// menu` `c88il`); tools still read the reason on the row.
+  #[must_use]
+  pub const fn reason_below(mut self) -> Self {
+    self.reason_below = true;
+    self.lock = false;
     self
   }
 
@@ -246,9 +269,10 @@ impl MenuItem {
 
   /// The row of the menu that `open` shows: a choice closes it.
   pub fn render(self, ctx: &mut Ctx, open: &Signal<bool>) -> Element {
-    let detail = match &self.choice {
-      Choice::Unavailable(reason) => Some(reason.clone()),
-      Choice::Action(_) => self.detail.clone(),
+    let (detail, reason) = match &self.choice {
+      Choice::Unavailable(reason) if self.reason_below => (None, Some(reason.clone())),
+      Choice::Unavailable(reason) => (Some(reason.clone()), None),
+      Choice::Action(_) => (self.detail.clone(), None),
     };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
@@ -267,7 +291,12 @@ impl MenuItem {
         icon(glyph, IconSize::Md, self.content_color(PaletteColor::TextSecondary)).id(format!("{}-icon", self.id))
       }))
       .child(self.text(ctx, detail.as_deref()))
-      .with_children(self.trailing());
+      .with_children(self.trailing())
+      .with_children(
+        self
+          .submenu
+          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted)),
+      );
     let surface = |row: Row| {
       Button::empty()
         .id(self.id.clone())
@@ -303,10 +332,15 @@ impl MenuItem {
           .hovered_style(Style::new().background(ExtraColor::Hover.role()))
           .into()
       }
-      Choice::Unavailable(_) => inert(surface(row))
-        .describe("state", "unavailable")
-        .opacity(DISABLED_OPACITY)
-        .into(),
+      Choice::Unavailable(_) => {
+        let faded = inert(surface(row))
+          .describe("state", "unavailable")
+          .opacity(DISABLED_OPACITY);
+        match reason {
+          Some(reason) => faded.describe("reason", reason).into(),
+          None => faded.into(),
+        }
+      }
     }
   }
 }

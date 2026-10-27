@@ -293,9 +293,11 @@ pub fn layout_switch(ctx: &Ctx, display: &Signal<Display>, id: &str, words: bool
     } else {
       SegmentFace::Icon(glyph, label)
     };
-    Segment::new(format!("{id}-{name}"), face, now == layout, move || {
+    let segment = Segment::new(format!("{id}-{name}"), face, now == layout, move || {
       display.update(|display| display.layout = layout);
-    })
+    });
+    // In the panel the two words share its width equally.
+    if words { segment.fill() } else { segment }
   };
   let switch = segmented(
     id,

@@ -3,8 +3,9 @@
 //! person as an 11 `warning` hand and count, then Fold and, in Backlog alone, Add a draft), and its cards 6 apart,
 //! which scroll. While a lifted card is over it, a column that takes it is `accent_muted` in a `border_strong` stroke
 //! with the drop's slot where the card would go (`Column · Todo` in `02 Dragging` `Yyeme`); Done offers *Mark as done*
-//! at its top and, while Canceled is hidden, *Cancel task* at its foot; one that refuses it is `danger_muted` in a
-//! `danger` stroke with why (`03 Drop refused` `ZaM50`). Without cards it says why (`Empty column, no filter`
+//! at its top and, while Canceled is hidden, *Cancel task* at its foot, lit so for a card whose run has not ended
+//! wherever it is over; one that refuses it is `danger_muted` in a `danger` stroke with why (`03 Drop refused`
+//! `ZaM50`). Without cards it says why (`Empty column, no filter`
 //! `B8kYj`, `Search hides every card` `KhgzA`). A folded column is a 40 wide strip with its icon, count and name
 //! (`Collapsed · Backlog` `F7EfQ`).
 
@@ -85,7 +86,16 @@ pub fn column(
     Some(lane) => format!("tasks-board-column-{name}-{lane}"),
     None => format!("tasks-board-column-{name}"),
   };
-  let over = shared.drag.filter(|drag| drag.over.as_ref() == Some(&target));
+  // A card whose run has not ended goes only to Done or Canceled: Done offers both wherever it is over (`ZaM50`).
+  let closes = shared.drag.filter(|drag| {
+    drag.card.row.run_not_ended
+      && column.key == ColumnKey::Status(WorkflowStatus::Done)
+      && refusal_of(&drag.card, &target).is_none()
+  });
+  let over = shared
+    .drag
+    .filter(|drag| drag.over.as_ref() == Some(&target))
+    .or(closes);
   let refusing = over.and_then(|drag| refusal_of(&drag.card, &target));
   let body = body(
     ctx,
@@ -104,7 +114,7 @@ pub fn column(
     Some(_) => frame.child(body),
     None => frame
       .height(Dimension::Pct(100.0))
-      .child(head(ctx, (state, shared), column, &id))
+      .child(head(ctx, (state, shared), column, (&id, HeadIn::Column)))
       .child(ScrollVertical::new(body).flex(1.0).width(Dimension::Pct(100.0))),
   };
   match (over, refusing) {
@@ -277,16 +287,32 @@ fn key_number(key: &str) -> u64 {
     .unwrap_or(u64::MAX)
 }
 
-/// The column's head: its look, name and counts, Fold, and Backlog's Add a draft.
-pub(super) fn head(ctx: &mut Ctx, (state, shared): (&BoardState, &Shared<'_>), column: &ColumnModel, id: &str) -> Row {
+/// Where a column's head is: over its own cards, or over the board's rows, where columns do not fold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum HeadIn {
+  Column,
+  Lanes,
+}
+
+/// The column's head: its look, name and counts, Fold over its own cards (not over rows, `Heads` in `10 Swimlanes`
+/// `i96kI`), and Backlog's Add a draft.
+pub(super) fn head(
+  ctx: &mut Ctx,
+  (state, shared): (&BoardState, &Shared<'_>),
+  column: &ColumnModel,
+  (id, place): (&str, HeadIn),
+) -> Row {
   let name = column.key.name();
-  let fold = IconButton::new(
-    format!("{id}-fold"),
-    Icon::FoldHorizontal,
-    ctx.t_args("tasks.board.column.fold", [("column", &*column.label)]),
-  )
-  .small()
-  .on_click(fold_toggle(state, &name));
+  let fold = (place == HeadIn::Column).then(|| {
+    IconButton::new(
+      format!("{id}-fold"),
+      Icon::FoldHorizontal,
+      ctx.t_args("tasks.board.column.fold", [("column", &*column.label)]),
+    )
+    .small()
+    .on_click(fold_toggle(state, &name))
+    .render(ctx)
+  });
   // A locked quick add says why as its label, which its tooltip shows (`Add task` in `15 Not a member` `kMKKv`).
   let add = (lane_is_backlog(column) && shared.quick_add.is_some()).then(|| {
     match shared.quick_add.clone().and_then(Result::err) {
@@ -326,7 +352,7 @@ pub(super) fn head(ctx: &mut Ctx, (state, shared): (&BoardState, &Shared<'_>), c
     )
     .with_children((column.needs_you > 0).then(|| needs_you(ctx, column.needs_you, &format!("{id}-needs-you"))))
     .child(Spacer::new().flex(1.0))
-    .child(fold.render(ctx))
+    .with_children(fold)
     .with_children(add)
 }
 

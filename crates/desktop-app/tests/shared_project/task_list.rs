@@ -199,7 +199,7 @@ fn neither_selected_nor_moved(window: &mut crate::support::Window, key: &str, (x
   assert!(
     window
       .tree
-      .get_element_by_id(&format!("task-menu-{key}-back"))
+      .get_element_by_id(&format!("task-menu-{key}-list"))
       .is_none(),
     "M opens no Move to"
   );

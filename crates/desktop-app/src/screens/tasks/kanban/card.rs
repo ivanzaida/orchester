@@ -219,6 +219,8 @@ pub fn content(
   more: Option<Element>,
 ) -> Column {
   let key = &card.row.key;
+  let blocked =
+    (display.shows(Property::Blocked) && card.row.readiness == ReadinessKind::Blocked).then(|| blocked_flag(ctx, key));
   let top = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOP_HEIGHT))
@@ -231,6 +233,7 @@ pub fn content(
         .variant(ExtraTypography::MonoNote.role())
         .nowrap()
     }))
+    .with_children(blocked)
     .child(Spacer::new().flex(1.0))
     .with_children(match more {
       Some(more) => Some(more),
@@ -346,10 +349,6 @@ fn chips(ctx: &Ctx, card: &CardModel, display: &Display) -> Option<Row> {
         .map(|(index, tag)| word_chip(format!("task-tag-{key}-{index}"), (tag, None), false).into()),
     );
   }
-  if display.shows(Property::Blocked) && card.row.readiness == ReadinessKind::Blocked {
-    let blocked = ctx.t(Status::Blocked.key());
-    chips.push(word_chip(format!("task-blocked-{key}"), (&blocked, Some(Icon::Ban)), false).into());
-  }
   (!chips.is_empty()).then(|| {
     Row::new()
       .id(format!("task-chips-{key}"))
@@ -361,6 +360,22 @@ fn chips(ctx: &Ctx, card: &CardModel, display: &Display) -> Option<Row> {
   })
 }
 
+/// *Blocked* after the key: an 11 ban and the word in 11/500 `text_secondary`, 3 apart (`Blocked` `a0u3wX`).
+fn blocked_flag(ctx: &Ctx, key: &str) -> Row {
+  Row::new()
+    .id(format!("task-blocked-{key}"))
+    .flex_shrink(0.0)
+    .spacing(ExtraSpacing::Fine.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Ban, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t(Status::Blocked.key()))
+        .id(format!("task-blocked-{key}-label"))
+        .variant(TypographyStyle::FieldLabel)
+        .color(PaletteColor::TextSecondary)
+        .nowrap(),
+    )
+}
 fn chip(id: String, padding: Padding) -> Row {
   Row::new()
     .id(id)

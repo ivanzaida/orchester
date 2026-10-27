@@ -113,10 +113,16 @@ pub fn canceled(ctx: &Ctx, (state, closer): (&BoardState, &Closer), task: &Subje
 /// What dropping `drag`'s card where it is over does, and that Esc cancels.
 pub fn hint(ctx: &Ctx, drag: &Drag) -> Element {
   let key = &*drag.card.row.key;
+  let refusing = drag
+    .over
+    .as_ref()
+    .is_some_and(|target| refusal_of(&drag.card, target).is_some());
   let words = match drag.over.as_ref() {
+    // A card whose run has not ended goes only to Done or Canceled, wherever it is over (`Hint` `BxPEs` in `ZaM50`).
     None if drag.card.row.run_not_ended => ctx.t_args("tasks.board.hint.onlyClose", [("task", key)]),
+    Some(_) if refusing && drag.card.row.run_not_ended => ctx.t_args("tasks.board.hint.onlyClose", [("task", key)]),
     None => ctx.t_args("tasks.board.hint.move", [("task", key)]),
-    Some(target) if refusal_of(&drag.card, target).is_some() => ctx.t_args("tasks.board.hint.refused", [("task", key)]),
+    Some(_) if refusing => ctx.t_args("tasks.board.hint.refused", [("task", key)]),
     Some(target) => match &target.column {
       ColumnKey::Status(status) => match moves::decide(&drag.card.row, *status) {
         Decision::Move(Move::Queue) => ctx.t_args("tasks.board.hint.queue", [("task", key)]),

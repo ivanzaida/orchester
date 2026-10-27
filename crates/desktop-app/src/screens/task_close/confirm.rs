@@ -24,12 +24,22 @@ use crate::{
   },
 };
 
+/// How the stop confirmation's buttons look where it is shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StopLook {
+  /// Under the task page's header: *Stop run…* primary, *Keep it running* secondary.
+  Primary,
+  /// Over the Tasks screen's rows or columns: *Stop run…* secondary, *Keep it running* ghost (`Confirm · stop run`
+  /// `MBtXE` in `04 Confirm in place` `yMirA`).
+  Quiet,
+}
+
 /// What waits in place for the person, or why their last request did not happen; nothing otherwise. Its parts' ids
 /// start with `id`.
-pub fn panel(ctx: &mut Ctx, closer: &Closer, id: &str) -> Option<Element> {
+pub fn panel(ctx: &mut Ctx, closer: &Closer, (id, look): (&str, StopLook)) -> Option<Element> {
   match closer.asked.get() {
     Asked::Nothing => failure(ctx, closer, id),
-    Asked::StopRun { task, closing, run } => Some(stop_run(ctx, closer, id, (&task, closing, run))),
+    Asked::StopRun { task, closing, run } => Some(stop_run(ctx, closer, (id, look), (&task, closing, run))),
     Asked::Delete(task) => Some(delete::confirmation(ctx, closer, &task, id)),
   }
 }
@@ -49,7 +59,7 @@ fn failure(ctx: &Ctx, closer: &Closer, id: &str) -> Option<Element> {
 fn stop_run(
   ctx: &Ctx,
   closer: &Closer,
-  id: &str,
+  (id, look): (&str, StopLook),
   (task, closing, run): (&Subject, Closing, orchester_core::id::RunId),
 ) -> Element {
   let state = closer.action.state().get();
@@ -59,23 +69,22 @@ fn stop_run(
     Closing::Done => ("task_close.stop.done", "task_close.stop.confirmDone"),
     Closing::Canceled => ("task_close.stop.canceled", "task_close.stop.confirmCanceled"),
   };
+  let (keep_kind, stop_kind) = match look {
+    StopLook::Primary => (ButtonKind::Secondary, ButtonKind::Primary),
+    StopLook::Quiet => (ButtonKind::Ghost, ButtonKind::Secondary),
+  };
   let error = state
     .error
     .filter(|failed| !pending && failed.task == task.id)
     .map(|failed| field_error(&format!("{id}-stop-error"), &message_text(ctx, &failed.message)));
-  let keep = ActionButton::new(
-    format!("{id}-stop-keep"),
-    ButtonKind::Secondary,
-    ctx.t("task_close.stop.keep"),
-  )
-  .in_form();
+  let keep = ActionButton::new(format!("{id}-stop-keep"), keep_kind, ctx.t("task_close.stop.keep")).in_form();
   let keep = if pending {
     keep.disabled()
   } else {
     let asked = closer.asked.clone();
     keep.on_click(move || asked.set(Asked::Nothing))
   };
-  let stop = ActionButton::new(format!("{id}-stop-confirm"), ButtonKind::Primary, ctx.t(confirm))
+  let stop = ActionButton::new(format!("{id}-stop-confirm"), stop_kind, ctx.t(confirm))
     .icon(Icon::CircleStop)
     .in_form();
   let stop = if pending {

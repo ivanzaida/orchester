@@ -1,18 +1,21 @@
 //! A card's menu (`Card menu` `vV3BX` in `07 Card actions and keys` `pXzH8`): Open, Move to, Priority and Tags, which
-//! each open their list in the menu's place, Copy key, Run again for a task whose run ended, Mark as done, Cancel task
-//! or Reopen task as its status allows, and Delete task…, which asks over the columns (unavailable on a shared
-//! project). Move to lists the columns, each one a card cannot go to unavailable with why, as a drop refuses it
-//! (`Move to for a card whose run has not ended` `kn5MV`). While a change is under way the menu's changes wait
-//! (`Menu while a change is under way` `ogTTt`). Once the person is no longer a member of the project, the menu is
-//! kept with Open and Copy key only.
+//! each open their list beside the menu (`Move to menu` `c88il`), Copy key, Run again for a task whose run ended, Mark
+//! as done, Cancel task or Reopen task as its status allows, and Delete task… in `danger`, which asks over the columns
+//! (unavailable on a shared project). Move to lists the columns, each one a card cannot go to faded, as a drop refuses
+//! it, and says why once in its foot (`Move to for a card whose run has not ended` `kn5MV`). While a change is under
+//! way the menu's changes wait (`Menu while a change is under way` `ogTTt`). Once the person is no longer a member of
+//! the project, the menu is kept with Open and Copy key only.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
-  components::{Placement, Popup},
+  app::{
+    ctx::{Ctx, OutsidePress},
+    theme::{PaletteColor, SpacingSize},
+  },
+  components::{Column, Placement, Popup, Text},
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   project::TaskKey,
@@ -30,7 +33,7 @@ use super::{
 use crate::{
   navigation::{Navigation, press::OpenIn},
   routes::{ProjectPage, Route, TaskView},
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     clipboard::Clipboard,
     icon::Icon,
@@ -39,11 +42,23 @@ use crate::{
   },
 };
 
-/// The menu's width (`vV3BX`), and its lists' (`c88il`).
+/// The menu's width (`vV3BX`) and its lists' (`c88il`); a list opens 8 past the end of the row that opens it and 9
+/// over its top, so its first row sits beside that row.
 const MENU_WIDTH: f32 = 220.0;
+const LIST_WIDTH: f32 = 200.0;
+const LIST_OFFSET: (f32, f32) = (8.0, -9.0);
 
-/// The menu of `card`, open while `open` holds, beside `anchor`.
-pub fn card_menu(ctx: &mut Ctx, card: &CardModel, (open, anchor): (&Signal<bool>, &ElementRef)) -> Popup {
+/// What a card's menu opens from: whether it is open and what it opens beside, and the same for its list, which opens
+/// beside the row that opens it.
+pub struct MenuHandles<'a> {
+  pub open: &'a Signal<bool>,
+  pub anchor: &'a ElementRef,
+  pub list_open: &'a Signal<bool>,
+  pub list_anchor: &'a ElementRef,
+}
+
+/// The menu of `card`, open while `handles.open` holds, beside `handles.anchor`, with the list it opened beside it.
+pub fn card_menu(ctx: &mut Ctx, card: &CardModel, handles: &MenuHandles<'_>) -> Popup {
   let state = BoardState::of(ctx);
   let page = state
     .menu
@@ -52,20 +67,37 @@ pub fn card_menu(ctx: &mut Ctx, card: &CardModel, (open, anchor): (&Signal<bool>
     .filter(|(task, _)| *task == card.row.id)
     .map_or(MenuPage::Commands, |(_, page)| page);
   let id = format!("task-menu-{}", card.row.key);
-  let rows = match page {
-    MenuPage::Commands => commands(ctx, card, &state, open),
-    MenuPage::MoveTo => move_to(ctx, card, &state, open),
-    MenuPage::Priority => priorities(ctx, card, &state, open),
-    MenuPage::Tags => tags(ctx, card, &state, open),
+  let open = handles.open;
+  let rows = commands(ctx, card, &state, (open, page, handles.list_anchor));
+  let list = match page {
+    MenuPage::Commands => None,
+    MenuPage::MoveTo => Some(move_to(ctx, card, open)),
+    MenuPage::Priority => Some(priorities(ctx, card, &state, open)),
+    MenuPage::Tags => Some(tags(ctx, card, &state, open)),
   };
-  let panel = menu_panel(&id).width(Dimension::Px(MENU_WIDTH)).with_children(rows);
-  Popup::new(anchor.clone(), panel)
+  // A press elsewhere in the menu closes the list and reaches the row it is on.
+  let list = list.map(|rows| {
+    let panel = menu_panel(&format!("{id}-list"))
+      .width(Dimension::Px(LIST_WIDTH))
+      .with_children(rows);
+    Popup::new(handles.list_anchor.clone(), panel)
+      .open(handles.list_open.clone())
+      .placement(Placement::RightStart)
+      .offset(LIST_OFFSET.0, LIST_OFFSET.1)
+      .outside_press(OutsidePress::PassThrough)
+      .switch_on_anchor_press(false)
+  });
+  let panel = menu_panel(&id)
+    .width(Dimension::Px(MENU_WIDTH))
+    .with_children(rows)
+    .with_children(list);
+  Popup::new(handles.anchor.clone(), panel)
     .open(open.clone())
     .placement(Placement::BottomEnd)
     .offset(0.0, ExtraSpacing::Snug.value())
 }
 
-/// Opens the list `page` of `card`'s menu in its place.
+/// Opens the list `page` of `card`'s menu beside it.
 fn opens(
   state: &BoardState,
   open: &Signal<bool>,
@@ -79,8 +111,14 @@ fn opens(
   }
 }
 
-/// The menu's commands; a read-only card's (`Dropping::locked`) only opens its task and copies its key.
-fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
+/// The menu's commands; a read-only card's (`Dropping::locked`) only opens its task and copies its key. The row of the
+/// open list `page` is what that list opens beside.
+fn commands(
+  ctx: &mut Ctx,
+  card: &CardModel,
+  state: &BoardState,
+  (open, page, list_anchor): (&Signal<bool>, MenuPage, &ElementRef),
+) -> Vec<Element> {
   let dropping = Dropping::of(ctx);
   let busy = state.busy() || dropping.closer.busy();
   let id = |name: &str| format!("task-menu-{}-{name}", card.row.key);
@@ -93,18 +131,20 @@ fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<b
   .icon(Icon::ArrowUpRight)
   .shortcut(ctx.t("tasks.board.keys.enter"));
   let waiting = ctx.t("task_close.menu.busy");
-  let changing = |name: &str, label: Arc<str>, glyph: Icon, page: MenuPage| {
+  let changing = |name: &str, label: Arc<str>, glyph: Icon, list: MenuPage| {
     if busy {
       return MenuItem::unavailable(id(name), label, waiting.clone()).icon(glyph);
     }
-    MenuItem::new(id(name), label, opens(state, open, card, page)).icon(glyph)
+    MenuItem::new(id(name), label, opens(state, open, card, list))
+      .icon(glyph)
+      .submenu()
   };
   let mut rows: Vec<Element> = vec![open_task.render(ctx, open), separator(ctx)];
   if dropping.locked(card) {
     rows.push(copy_key(ctx, card, open));
     return rows;
   }
-  for (name, key, glyph, page, shortcut) in [
+  for (name, key, glyph, list, shortcut) in [
     (
       "move",
       "tasks.board.menu.moveTo",
@@ -128,8 +168,16 @@ fn commands(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<b
     ),
   ] {
     let (label, keys) = (ctx.t(key), ctx.t(shortcut));
-    let row = changing(name, label, glyph, page).shortcut(keys);
-    rows.push(row.render(ctx, open));
+    let row = changing(name, label, glyph, list).shortcut(keys).render(ctx, open);
+    rows.push(if list == page {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .ref_element(list_anchor.clone())
+        .child(row)
+        .into()
+    } else {
+      row
+    });
   }
   rows.push(copy_key(ctx, card, open));
   rows.extend(run_again(ctx, card, (&dropping, busy), open));
@@ -187,7 +235,8 @@ fn run_again(
   vec![separator(ctx), row.icon(Icon::RotateCcw).render(ctx, open)]
 }
 
-/// Mark as done and Cancel task, or Reopen task for a closed one, and Delete task…, through the screen's closer.
+/// Mark as done and Cancel task, or Reopen task for a closed one, and Delete task… in `danger`, through the screen's
+/// closer.
 fn closing(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool), open: &Signal<bool>) -> Vec<Element> {
   let subject = dropping.subject(card);
   let id = |name: &str| format!("task-menu-{}-{name}", card.row.key);
@@ -240,16 +289,21 @@ fn closing(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool),
     .into_iter()
     .enumerate()
     .map(|(index, item)| {
-      let item = if index == last { item.icon(Icon::Trash2) } else { item };
+      let item = if index == last {
+        item.icon(Icon::Trash2).danger()
+      } else {
+        item
+      };
       item.render(ctx, open)
     })
     .collect()
 }
 
-/// The columns by status, each one the card cannot go to unavailable with why.
-fn move_to(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
+/// The columns by status, each one the card cannot go to faded, and why in the list's foot.
+fn move_to(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Vec<Element> {
   let dropping = Dropping::of(ctx);
-  let mut rows: Vec<Element> = vec![back(ctx, card, state, open)];
+  let mut rows: Vec<Element> = Vec::new();
+  let mut refused: Vec<(Arc<str>, moves::Refusal)> = Vec::new();
   for status in WorkflowStatus::ALL {
     if status == WorkflowStatus::Canceled {
       rows.push(separator(ctx));
@@ -259,7 +313,10 @@ fn move_to(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bo
     let glyph = workflow_look(status).0;
     let item = match moves::decide(&card.row, status) {
       Decision::Stay => MenuItem::new(id, label, || {}).chosen(true),
-      Decision::Refused(refusal) => MenuItem::unavailable(id, label, ctx.t(reason_key(refusal))).without_lock(),
+      Decision::Refused(refusal) => {
+        refused.push((label.clone(), refusal));
+        MenuItem::unavailable(id, label, ctx.t(reason_key(refusal))).reason_below()
+      }
       Decision::Move(_) => {
         let (dropping, card) = (dropping.clone(), card.clone());
         MenuItem::new(id, label, move || {
@@ -273,12 +330,62 @@ fn move_to(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bo
     };
     rows.push(item.icon(glyph).render(ctx, open));
   }
+  if !refused.is_empty() {
+    rows.push(separator(ctx));
+    rows.push(reasons(ctx, card, &refused));
+  }
   rows
 }
 
+/// Why the faded columns of Move to refuse the card, once for each reason: *Backlog, Todo: This task already has a
+/// run.*, or for a run that has not ended that Done and Canceled stop it (`Reason` `G1SqVJ`, `eTnYg`).
+fn reasons(ctx: &Ctx, card: &CardModel, refused: &[(Arc<str>, moves::Refusal)]) -> Element {
+  let mut seen: Vec<moves::Refusal> = Vec::new();
+  for (_, refusal) in refused {
+    if !seen.contains(refusal) {
+      seen.push(*refusal);
+    }
+  }
+  let separator = ctx.t("tasks.listSeparator");
+  let lines = seen.into_iter().map(|refusal| {
+    let words = if refusal == moves::Refusal::RunNotEnded {
+      ctx.t("tasks.board.menu.runNotEnded")
+    } else {
+      let columns: Vec<&str> = refused
+        .iter()
+        .filter(|(_, held)| *held == refusal)
+        .map(|(label, _)| &**label)
+        .collect();
+      ctx.t_args(
+        "tasks.board.menu.reason",
+        [
+          ("columns", columns.join(&separator)),
+          ("reason", ctx.t(reason_key(refusal)).to_string()),
+        ],
+      )
+    };
+    Text::new(&words)
+      .variant(ExtraTypography::Note.role())
+      .color(PaletteColor::TextMuted)
+      .width(Dimension::Pct(100.0))
+  });
+  Column::new()
+    .id(format!("task-menu-{}-move-reason", card.row.key))
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(ExtraSpacing::Tight.role())
+        .bottom(ExtraSpacing::Snug.role())
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm),
+    )
+    .with_children(lines)
+    .into()
+}
+
 fn priorities(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
-  let mut rows: Vec<Element> = vec![back(ctx, card, state, open)];
   let now = card.row.organization.priority();
+  let mut rows: Vec<Element> = Vec::new();
   for priority in Priority::ALL {
     let (glyph, key, _) = priority_look(priority);
     let id = format!(
@@ -304,9 +411,8 @@ fn priorities(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal
 /// The project's tags, each chosen while the task has it; a choice adds or takes it off.
 fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
   let dropping = Dropping::of(ctx);
-  let mut rows: Vec<Element> = vec![back(ctx, card, state, open)];
   if dropping.tags.is_empty() {
-    rows.push(
+    return vec![
       MenuItem::unavailable(
         format!("task-menu-{}-tags-none", card.row.key),
         ctx.t("tasks.board.menu.noTags"),
@@ -314,10 +420,10 @@ fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>
       )
       .without_lock()
       .render(ctx, open),
-    );
-    return rows;
+    ];
   }
   let held = card.row.organization.tags().to_vec();
+  let mut rows: Vec<Element> = Vec::new();
   for (index, (tag, name)) in dropping.tags.iter().enumerate() {
     let chosen = held.contains(tag);
     let mut next = held.clone();
@@ -343,15 +449,4 @@ fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>
     rows.push(item.render(ctx, open));
   }
   rows
-}
-
-/// Back to the menu's commands.
-fn back(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Element {
-  MenuItem::new(
-    format!("task-menu-{}-back", card.row.key),
-    ctx.t("tasks.board.menu.back"),
-    opens(state, open, card, MenuPage::Commands),
-  )
-  .icon(Icon::ChevronLeft)
-  .render(ctx, open)
 }

@@ -22,7 +22,7 @@ use super::{
   card::{CardLook, CardModel, content},
   display::Display,
   drop::Dropping,
-  menu::card_menu,
+  menu::{MenuHandles, card_menu},
 };
 use crate::{
   navigation::{Navigation, press::LinkPress},
@@ -53,6 +53,9 @@ pub struct CardView {
   hovered: Signal<bool>,
   open: Signal<bool>,
   anchor: ElementRef,
+  /// The menu's list (Move to, Priority or Tags) is open, beside the row that opened it.
+  list_open: Signal<bool>,
+  list_anchor: ElementRef,
   frame: ElementRef,
 }
 
@@ -61,17 +64,31 @@ impl Component for CardView {
 
   fn create(ctx: &mut Ctx) -> Self {
     let open = ctx.signal(false);
+    let list_open = ctx.signal(false);
     // The menu closed by a choice, a press outside or Esc: the board no longer holds it open.
     let (menu, task) = (BoardState::of(ctx).menu, ctx.props::<CardProps>().card.row.id);
+    let listed = menu.clone();
     ctx.watch(&open, move |open: &bool| {
       if !*open && menu.get_untracked().0.is_some_and(|(held, _)| held == task) {
         menu.set(OpenMenu(None));
+      }
+    });
+    // The list closed by a press outside it or Esc: the menu shows its commands alone.
+    ctx.watch(&list_open, move |open: &bool| {
+      let listing = listed
+        .get_untracked()
+        .0
+        .is_some_and(|(held, page)| held == task && page != MenuPage::Commands);
+      if !*open && listing {
+        listed.set(OpenMenu(Some((task, MenuPage::Commands))));
       }
     });
     Self {
       hovered: ctx.signal(false),
       open,
       anchor: ElementRef::default(),
+      list_open,
+      list_anchor: ElementRef::default(),
       frame: ElementRef::default(),
     }
   }
@@ -81,9 +98,14 @@ impl Component for CardView {
     let state = BoardState::of(ctx);
     let key = props.card.row.key.clone();
     let task = props.card.row.id;
-    let held = props.menu && state.menu.get().0.is_some_and(|(held, _)| held == task);
+    let shown = state.menu.get().0.filter(|(held, _)| props.menu && *held == task);
+    let held = shown.is_some();
     if held != self.open.get_untracked() {
       self.open.set(held);
+    }
+    let listing = shown.is_some_and(|(_, page)| page != MenuPage::Commands);
+    if listing != self.list_open.get_untracked() {
+      self.list_open.set(listing);
     }
     let acting = props.menu && (self.hovered.get() || held);
     let more = acting.then(|| {
@@ -103,7 +125,13 @@ impl Component for CardView {
     let look = CardLook { acting, ..props.look };
     let parts = content(ctx, &props.card, (&props.display, look), more);
     let frame = frame(&props, look, parts).ref_element(self.frame.clone());
-    let menu = held.then(|| card_menu(ctx, &props.card, (&self.open, &self.anchor)));
+    let handles = MenuHandles {
+      open: &self.open,
+      anchor: &self.anchor,
+      list_open: &self.list_open,
+      list_anchor: &self.list_anchor,
+    };
+    let menu = held.then(|| card_menu(ctx, &props.card, &handles));
     let card = self.pressable(ctx, &props, frame);
     Column::new()
       .width(Dimension::Pct(100.0))

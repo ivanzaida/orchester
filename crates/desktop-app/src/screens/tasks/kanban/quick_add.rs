@@ -12,9 +12,9 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
     events::KeyboardEvent,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextInput},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -30,9 +30,9 @@ use super::actions::BoardState;
 use crate::{
   project::ShownProject,
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraSpacing, IconSize},
+  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    field::{FieldInput, field_error},
+    field::field_error,
     icon::{Icon, icon},
     kbd::key_cap,
     message::message_text,
@@ -40,8 +40,9 @@ use crate::{
   },
 };
 
-/// The foot's height (`New task` `WwXjA`).
+/// The foot's height (`New task` `WwXjA`), and the inline title's (`Field` `WWenE`).
 const FOOT_HEIGHT: f32 = 28.0;
+const FIELD_HEIGHT: f32 = 18.0;
 
 #[derive(Clone, PartialEq)]
 pub struct QuickAddProps {
@@ -127,7 +128,7 @@ impl Component for QuickAdd {
 }
 
 impl QuickAdd {
-  /// The open field: the title, the keys that add and cancel, and why the last Enter did not add a draft.
+  /// The open field: the title typed inline, the keys that add and cancel, and why the last Enter did not add a draft.
   fn field(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Column {
     let state = self.add.state().get();
     let pending = state.is_pending();
@@ -136,14 +137,24 @@ impl QuickAdd {
       .filter(|_| !pending)
       .map(|error| message_text(ctx, &error))
       .or_else(|| self.invalid.get());
-    let input = FieldInput::new(
-      "tasks-board-quick-add-title",
-      ctx.t("tasks.board.quickAdd.label"),
-      self.title.clone(),
-    )
-    .placeholder(ctx.t("tasks.board.quickAdd.placeholder"))
-    .element(self.input.clone())
-    .render(ctx);
+    let theme = ctx.theme();
+    let [typed, placeholder] = [PaletteColor::TextPrimary, PaletteColor::TextMuted].map(|color| {
+      FormTextRole {
+        typography: ExtraTypography::Strong.role(),
+        color,
+      }
+      .resolve(&theme.typography(), &theme.palette())
+    });
+    let input = TextInput::styled(self.title.clone(), typed)
+      .placeholder_style(placeholder)
+      .placeholder(&ctx.t("tasks.board.quickAdd.placeholder"))
+      .id("tasks-board-quick-add-title")
+      .describe("a11y_name", ctx.t("tasks.board.quickAdd.label"))
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(FIELD_HEIGHT))
+      .caret_color(PaletteColor::TextPrimary)
+      .ref_element(self.input.clone())
+      .single_line();
     let keys = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Pair.role())

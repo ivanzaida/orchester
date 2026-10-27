@@ -16,7 +16,7 @@ use lurq::{
 
 use super::{
   actions::BoardState,
-  column::{Shared, column, head, needs_you},
+  column::{HeadIn, Shared, column, head, needs_you},
   model::{ColumnModel, LaneModel},
 };
 use crate::{
@@ -43,10 +43,12 @@ pub fn lanes(
     .spacing(ExtraSpacing::Loose.role())
     .with_children(columns.iter().map(|column| {
       let id = format!("tasks-board-column-{}", column.key.name());
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .child(head(ctx, (state, shared), column, &id))
+      Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(head(
+        ctx,
+        (state, shared),
+        column,
+        (&id, HeadIn::Lanes),
+      ))
     }));
   let mut rows = Column::new()
     .width(Dimension::Pct(100.0))

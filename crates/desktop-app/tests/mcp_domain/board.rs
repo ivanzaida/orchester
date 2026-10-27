@@ -156,10 +156,11 @@ fn domain_board_a_complete_draft_moved_to_todo_is_queued() {
   served.board(seeded.project);
   assert_eq!(stored(&seeded.repo, &key).status(), TaskStatus::Draft);
   served.move_from_menu(&key, "todo");
-  served.until("the draft queued", |_| {
-    stored(&seeded.repo, &key).status() == TaskStatus::Queued
+  // Queuing writes the run's queue first and Todo after it: wait for both.
+  served.until("the draft queued in Todo", |_| {
+    let task = stored(&seeded.repo, &key);
+    task.status() == TaskStatus::Queued && task.organization().status() == WorkflowStatus::Todo
   });
-  assert_eq!(stored(&seeded.repo, &key).organization().status(), WorkflowStatus::Todo);
   assert!(!served.shows("tasks-board-ask"), "nothing starts now: nothing asked");
   assert_eq!(last_actor(&seeded.repo, &key), ChangeActor::Person);
 }

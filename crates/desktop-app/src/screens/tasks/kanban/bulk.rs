@@ -54,9 +54,11 @@ use crate::{
   },
 };
 
-/// The bar (`Bulk bar` `vTiQj`), its dividers (`TE0rm`) and a bulk menu's width (`Y27GJ`).
+/// The bar (`Bulk bar` `vTiQj`), its dividers (`TE0rm`), its gaps after the count and before Esc (`Gap`), and a bulk
+/// menu's width (`Y27GJ`).
 const BAR_HEIGHT: f32 = 40.0;
 const DIVIDER: (f32, f32) = (1.0, 20.0);
+const BAR_GAPS: (f32, f32) = (8.0, 6.0);
 const MENU_WIDTH: f32 = 260.0;
 
 /// What a bulk command asks of the project.
@@ -285,6 +287,7 @@ impl BulkBar {
           .variant(ExtraTypography::InspectorSection.role())
           .nowrap(),
       )
+      .child(gap(BAR_GAPS.0))
       .child(divider())
       .child(opener(
         "move",
@@ -316,6 +319,7 @@ impl BulkBar {
       ))
       .child(delete)
       .child(divider())
+      .child(gap(BAR_GAPS.1))
       .child(key_cap("tasks-board-bulk-esc", &ctx.t("tasks.board.keys.esc")))
       .child(clear.render(ctx))
   }
@@ -384,4 +388,9 @@ fn divider() -> Column {
     .width(Dimension::Px(DIVIDER.0))
     .height(Dimension::Px(DIVIDER.1))
     .background(PaletteColor::BorderStrong)
+}
+
+/// Room of `width` beside the bar's 2 between its parts (`Gap` in `vTiQj`).
+fn gap(width: f32) -> Column {
+  Column::new().width(Dimension::Px(width)).flex_shrink(0.0)
 }

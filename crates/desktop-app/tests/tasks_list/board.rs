@@ -349,3 +349,68 @@ fn tasks_board_bulk_mark_as_done_asks_for_work_waiting_to_be_merged_and_for_runs
     status(seeded, "KON-9") == WorkflowStatus::Done && status(seeded, "KON-15") == WorkflowStatus::Done
   });
 }
+
+#[test]
+fn tasks_board_a_card_whose_run_has_not_ended_finds_done_and_canceled_offered_wherever_it_is_held() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  // Held over In review, which refuses it: Done already offers Mark as done and Cancel task (`03 Drop refused`).
+  let ((x0, y0), _) = seeded.hold("KON-12", "in_review");
+  seeded.until("Done's slots", |seeded| seeded.laid_out("tasks-board-slot-done"));
+  assert!(seeded.laid_out("tasks-board-slot-canceled"));
+  assert_eq!(
+    seeded.text("tasks-board-hint-text"),
+    "KON-12 goes only to Done or Canceled"
+  );
+  // Let go where it was taken from: nothing changes.
+  seeded.window.tree.mouse_move(x0, y0);
+  seeded.window.pass();
+  seeded
+    .window
+    .tree
+    .mouse_up(x0, y0, lurq::app::events::MouseButton::Left);
+  seeded.window.pass();
+  assert!(!seeded.shows("tasks-board-slot-done"), "the slots go with the drag");
+  assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
+}
+
+#[test]
+fn tasks_board_move_to_opens_beside_the_menu_and_says_once_why_columns_are_faded() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  seeded.hover("task-card-KON-12");
+  press(&mut seeded, "task-more-KON-12");
+  press(&mut seeded, "task-menu-KON-12-move");
+  seeded.until("the list", |seeded| seeded.laid_out("task-menu-KON-12-list"));
+  assert!(
+    seeded.laid_out("task-menu-KON-12-copy"),
+    "the menu stays beside its list"
+  );
+  assert_eq!(
+    seeded.text("task-menu-KON-12-move-backlog"),
+    "Backlog",
+    "no reason on the row"
+  );
+  assert_eq!(
+    seeded.text("task-menu-KON-12-move-reason"),
+    "A run of this task has not ended. Done and Canceled stop it, after you confirm."
+  );
+  press(&mut seeded, "task-menu-KON-12-move-done");
+  seeded.until("the stop confirmation", |seeded| {
+    seeded.laid_out("tasks-close-stop-keep")
+  });
+  assert!(
+    !seeded.shows("task-menu-KON-12"),
+    "a choice closes the menu and its list"
+  );
+  press(&mut seeded, "tasks-close-stop-keep");
+  assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
+
+  // A task with a run: Backlog alone is faded, named in the reason.
+  seeded.hover("task-card-KON-1");
+  press(&mut seeded, "task-more-KON-1");
+  press(&mut seeded, "task-menu-KON-1-move");
+  seeded.until("the list", |seeded| seeded.laid_out("task-menu-KON-1-move-reason"));
+  assert_eq!(
+    seeded.text("task-menu-KON-1-move-reason"),
+    "Backlog: This task already has a run."
+  );
+}

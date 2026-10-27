@@ -281,6 +281,8 @@ pub struct Segment {
   chosen: bool,
   choose: Arc<dyn Fn() + Send + Sync>,
   element: Option<ElementRef>,
+  /// The segments share the control's width equally.
+  fill: bool,
 }
 
 impl Segment {
@@ -296,6 +298,7 @@ impl Segment {
       chosen,
       choose: Arc::new(choose),
       element: None,
+      fill: false,
     }
   }
 
@@ -303,6 +306,13 @@ impl Segment {
   /// another open dropdown, only when the pressed segment is the popup's anchor itself.
   pub fn element(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
+    self
+  }
+
+  /// The segment takes an equal share of a control as wide as its place (`Layout` `O1Xwma` in `J0ncJ`).
+  #[must_use]
+  pub const fn fill(mut self) -> Self {
+    self.fill = true;
     self
   }
 
@@ -317,6 +327,9 @@ impl Segment {
       .describe("state", if self.chosen { "chosen" } else { "enabled" });
     if let Some(element) = self.element {
       button = button.ref_element(element);
+    }
+    if self.fill {
+      button = button.flex(1.0).min_width(Dimension::Px(0.0));
     }
     let (text, glyph) = if self.chosen {
       (PaletteColor::TextPrimary, PaletteColor::TextPrimary)
