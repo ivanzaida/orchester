@@ -38,13 +38,13 @@ fn shared_project_first_link_uploads_the_tasks_with_their_numbers() {
   );
   assert!(window.text("sharing-upload-title").starts_with("Link Kontur to "));
   press(&mut window, "sharing-link-confirm");
-  shows(&mut window, "sharing-shared");
+  shows(&mut window, "sharing-role-value");
 
   assert_eq!(server.task_keys(&kontur), ["KON-1", "KON-2", "KON-3"]);
   assert_eq!(local_keys(&window), ["KON-1", "KON-2", "KON-3"]);
   let written = fs::read_to_string(kontur_root(&window).join("orchester.toml")).expect("orchester.toml");
   assert_eq!(written, format!("project = \"{}/kontur\"\n", recorder.url()));
-  shows(&mut window, "sharing-discovery-file");
+  super::discovery_written(&mut window);
   no_admin_endpoint(&recorder);
 }
 
@@ -66,7 +66,7 @@ fn shared_project_later_checkouts_get_the_tasks_or_new_numbers() {
   assert_eq!(empty.text("sharing-upload-what-title"), "What comes down");
   assert_eq!(empty.text("sharing-link-confirm"), "Link");
   press(&mut empty, "sharing-link-confirm");
-  shows(&mut empty, "sharing-shared");
+  shows(&mut empty, "sharing-role-value");
   assert_eq!(local_keys(&empty), ["KON-1", "KON-2", "KON-3"]);
   no_admin_endpoint(&recorder);
 
@@ -148,7 +148,7 @@ fn shared_project_first_link_is_a_person_s_and_reviewed_again_when_the_tasks_cha
   assert!(window.tree.get_element_by_id("sharing-upload-changed").is_none());
   assert_eq!(window.text("sharing-link-confirm"), "Link and upload 3 tasks");
   press(&mut window, "sharing-link-confirm");
-  shows(&mut window, "sharing-shared");
+  shows(&mut window, "sharing-role-value");
   assert_eq!(server.task_keys(&kontur), ["KON-1", "KON-2", "KON-3"]);
   assert!(
     kontur_root(&window).join("orchester.toml").is_file(),
@@ -162,9 +162,9 @@ fn shared_project_link_page_says_when_its_server_cannot_be_reached() {
   let (server, kontur) = server();
   let mut window = harness::window(Some(KONTUR_REMOTE));
   let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
-  open_sharing(&mut window, "sharing-server-state");
+  open_sharing(&mut window, "sharing-server-hint");
   assert_eq!(
-    window.text("sharing-server-state"),
+    window.text("sharing-server-hint"),
     "Connected · another server: Settings › Orchester"
   );
 
@@ -173,7 +173,7 @@ fn shared_project_link_page_says_when_its_server_cannot_be_reached() {
   services.servers.retry_now(entry(&window).stored.id);
   window.until("the server's state under it", |window| {
     window
-      .texts("sharing-server-state")
+      .texts("sharing-server-hint")
       .is_some_and(|texts| texts.join(" ").starts_with("Reconnecting · try "))
   });
 }

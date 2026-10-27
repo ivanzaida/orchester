@@ -1,14 +1,14 @@
-//! Add connection for an agent provider (`Connections · Add connection · Claude Code CLI · full page · dark`
-//! `cEJy4`, the program and check states of `l2kjVF`): a page in the Connections tab, never a dialog. The
-//! person chooses the CLI (the native kinds are not available yet), names the connection, and gets the
-//! program found on the search path, which Orchester checks at once (its version, sign-in and models).
-//! Only a copy found on the search path is offered: choosing another file is not built in this app.
-//! Save connection waits for a check that recognized the CLI; one that is not signed in may be saved and
-//! reads Sign-in required. The CLI runs on its own sign-in, on an account, or on an API provider with a key
-//! ([`super::provider_form`]), which only a person chooses. The first reason it cannot be saved stays under the
-//! actions.
+//! Add provider (`10 · Add provider · own sign-in` `LaTB4`, `10b · on an API provider` `hc1vS`): a page in the
+//! Connections tab, never a dialog. The person chooses the kind (the native kinds are not available yet), names the
+//! connection, and gets the program found on the search path, which Orchester checks at once (its version, sign-in and
+//! models); the check says what it found under the program. Only a copy found on the search path is offered:
+//! choosing another file is not built in this app. Save connection waits for a check that recognized the CLI; one that
+//! is not signed in may be saved and reads Sign-in required. The CLI runs on its own sign-in, on an account, or on an
+//! API provider with a key ([`super::provider_form`]), which only a person chooses. The first reason it cannot be
+//! saved stays before the actions, or what comes after saving once it can be.
 
 mod check;
+mod kinds;
 pub(super) mod naming;
 
 use std::{path::PathBuf, sync::Arc};
@@ -17,11 +17,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureHandle, FutureState},
-    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Text},
   core::Signal,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::Element,
 };
 use orchester_core::{
   connection::{AgentProvider, ConnectionAccount, ConnectionCheck},
@@ -41,33 +39,29 @@ use orchester_workspace::{
 };
 
 use self::{
-  check::{Checked, check_row, program_row},
+  check::{Checked, program_row},
   naming::{name_problem, suggest, suggested_name},
 };
 use super::{
   data::{self, Saved},
-  page::{Head, action_bar, page},
+  page::{Head, action_bar_noted, page},
   provider_form::ProviderForm,
 };
 use crate::{
   mcp::input_gate::InputGate,
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
+  routes::{ConnectionsView, ProjectPage, Route, Screen},
+  screens::project_settings::kit::{FormField, Tone, form_group},
   services::{
     Services,
     accounts::{self, Accounts},
   },
-  theme::ExtraTypography,
   ui::{
-    breadcrumb::Crumb,
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    form_section::{Label, Place, section, stacked_row},
     icon::Icon,
     message::message_text,
-    notice::{Notice, NoticeTone},
-    option_card::OptionCard,
   },
 };
 
@@ -114,7 +108,7 @@ pub struct AddAgent {
   /// The copy chosen among those found, by its path as shown: the first once they are found, and again whenever
   /// the CLI changes; empty while none is found.
   program: Signal<String>,
-  /// Counts Recheck presses: each looks for the program and checks it again.
+  /// Counts Check presses: each looks for the program and checks it again.
   recheck: Signal<u64>,
   /// The account chosen, by id; empty while it is the CLI's Default.
   account: Signal<String>,
@@ -142,7 +136,7 @@ impl Component for AddAgent {
     let changes = Services::of(ctx).changes;
     ctx.watch(&save.state(), move |state| {
       if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
-        let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
+        let view = ConnectionsView::of(id);
         navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
         // After the form leaves: every screen that shows the project's connections reads them again, the
         // status bar's accounts too.
@@ -171,16 +165,12 @@ impl Component for AddAgent {
       .or_else(|| self.provider.reason(ctx, &known));
     let mut sections = vec![
       self.kind_section(ctx, listed.data.as_ref(), props.project.open.project.name().as_str()),
-      self.connection_section(ctx, listed.data.as_ref(), (&found, &state), &accounts),
-      self.provider.section(ctx, provider, &known),
+      self.connection_section(ctx, (listed.data.as_ref(), &known), (&found, &state), &accounts),
     ];
-    sections.push(match self.provider.on() {
-      true => ProviderForm::next_step(ctx),
-      false => after(ctx, provider, props.project.open.project.name().as_str()),
-    });
+    sections.extend(self.provider.warning(ctx));
     let runs_on = self.provider.runs_on(&known, account);
     let bar = self.bar(ctx, &props, (&save, program, &state, runs_on), reason.as_deref());
-    let head = head(ctx, &props, &save.state().get());
+    let head = head(ctx, &props, self.provider.on());
     page(ctx, Screen::NewConnection, head, sections, bar)
   }
 }
@@ -241,7 +231,7 @@ impl AddAgent {
     state.save_reason(ctx)
   }
 
-  /// Cancel and Save connection.
+  /// Cancel and Save connection, after why Save cannot be used or, once it can, what comes after saving.
   fn bar(
     &self,
     ctx: &mut Ctx,
@@ -252,13 +242,14 @@ impl AddAgent {
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
     let cancel =
-      ActionButton::new("connection-cancel", ButtonKind::Secondary, ctx.t("connections.cancel")).on_click(move || {
+      ActionButton::new("connection-cancel", ButtonKind::Ghost, ctx.t("connections.cancel")).on_click(move || {
         navigation.go(Route::Project(
           project,
           ProjectPage::Connections(ConnectionsView::default()),
         ))
       });
-    let button = ActionButton::new("connection-save", ButtonKind::Primary, ctx.t("connections.dialog.save"));
+    let button =
+      ActionButton::new("connection-save", ButtonKind::Primary, ctx.t("connections.dialog.save")).icon(Icon::Check);
     let draft = match (program, state.check(), Name::new(&self.name.get()), runs_on) {
       (Some(executable), Some(check), Ok(name), Some(runs_on)) if reason.is_none() => Some((
         ConnectionDraft {
@@ -286,91 +277,23 @@ impl AddAgent {
       (false, None) => button.disabled(),
     };
     let refusal = self.provider.refusal(ctx);
-    action_bar(vec![cancel.into(), button.into()], refusal.as_deref().or(reason))
+    let next = match self.provider.on() {
+      true => ctx.t("connections.apiProvider.nextStep"),
+      false => ctx.t("connections.dialog.nextStep"),
+    };
+    let note = match refusal.as_deref().or(reason) {
+      Some(reason) => (reason.to_owned(), Tone::Muted),
+      None => (next.to_string(), Tone::Success),
+    };
+    action_bar_noted(vec![cancel.into(), button.into()], Some((note.0.as_str(), note.1)))
   }
 
-  /// The kinds; choosing another CLI suggests its name, unless the person typed one.
-  fn kind_section(&self, ctx: &Ctx, listed: Option<&ProjectConnections>, project: &str) -> Element {
-    let card = |provider: AgentProvider, (id, glyph, detail): (&str, Icon, &str)| -> Element {
-      let (kind, program) = (self.kind.clone(), self.program.clone());
-      let (name, suggested) = (self.name.clone(), self.suggested.clone());
-      let suggestion = listed.map(|listed| suggested_name(ctx.i18n(), listed, provider, project));
-      let card = OptionCard::new(
-        id.to_owned(),
-        (glyph, ctx.t(super::words::provider_key(provider))),
-        ctx.t(detail),
-        self.kind.get().0 == provider,
-        move || {
-          program.set(String::new());
-          kind.set(Kind(provider));
-          if let Some(new) = suggestion.clone() {
-            suggest(&name, &suggested, new);
-          }
-        },
-      );
-      match provider.is_native() {
-        true => card.unavailable(ctx.t("connections.kind.nativeUnavailable")).into(),
-        false => card.into(),
-      }
-    };
-    let pair = |left: Element, right: Element| {
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Md)
-        .child(Column::new().flex(1.0).child(left))
-        .child(Column::new().flex(1.0).child(right))
-    };
-    let cards = Column::new()
-      .id("connection-kinds")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::new().top(crate::theme::ExtraSpacing::Inset.role()))
-      .spacing(SpacingSize::Md)
-      .child(pair(
-        card(
-          AgentProvider::CodexCli,
-          ("connection-kind-codex", Icon::Terminal, "connections.kind.codexDetail"),
-        ),
-        card(
-          AgentProvider::ClaudeCodeCli,
-          (
-            "connection-kind-claude",
-            Icon::Terminal,
-            "connections.kind.claudeDetail",
-          ),
-        ),
-      ))
-      .child(pair(
-        card(
-          AgentProvider::AnthropicApi,
-          (
-            "connection-kind-anthropic",
-            Icon::Cpu,
-            "connections.kind.anthropicDetail",
-          ),
-        ),
-        card(
-          AgentProvider::OpenAiApi,
-          ("connection-kind-openai", Icon::Cpu, "connections.kind.openaiDetail"),
-        ),
-      ))
-      .child(
-        Text::new(&ctx.t("connections.kind.nativeHint"))
-          .variant(ExtraTypography::Prose.role())
-          .color(PaletteColor::TextMuted),
-      );
-    section(
-      "connection-kind-section",
-      &ctx.t("connections.kind.label"),
-      None,
-      vec![cards.into()],
-    )
-    .into()
-  }
-
+  /// The Connection group (`Connection` `H3e3OD`): the name, the program with its check, what it runs on, and the
+  /// account on its own sign-in or the provider's fields.
   fn connection_section(
     &self,
     ctx: &mut Ctx,
-    listed: Option<&ProjectConnections>,
+    (listed, known): (Option<&ProjectConnections>, &ProjectConnections),
     (found, state): (&FutureState<Copies, Message>, &Checked),
     accounts: &Accounts,
   ) -> Element {
@@ -380,36 +303,40 @@ impl AddAgent {
     if let Some(error) = &name_error {
       input = input.error(error.clone());
     }
-    let name = stacked_row(
-      Label::new("connection-name", ctx.t("connections.dialog.name")).description(ctx.t("connections.dialog.nameHint")),
-      input.render(ctx),
-      Place::Within,
+    let input = input.render(ctx);
+    let name = FormField::new("connection-name", ctx.t("connections.dialog.name"))
+      .hint(ctx.t("connections.dialog.nameHint"))
+      .render(ctx, input);
+    let program = program_row(
+      ctx,
+      (provider, self.provider.on()),
+      (found, &self.program),
+      (state, &self.recheck),
     );
-    let program = program_row(ctx, provider, (found, &self.program));
     let mut rows = vec![name, program];
-    // A connection on an API provider runs on its key, on no account of the CLI.
+    let mut runs_on = self.provider.rows(ctx, provider, known);
+    // A connection on an API provider runs on its key, on no account of the CLI: the account follows *Runs on*.
     if !self.provider.on() {
-      rows.push(super::account::add_row(ctx, accounts, provider, &self.account));
+      runs_on.push(super::account::add_row(ctx, accounts, provider, &self.account));
     }
-    rows.push(check_row(ctx, (provider, self.provider.on()), state, &self.recheck));
-    section(
+    rows.extend(runs_on);
+    form_group(
       "connection-section",
       &ctx.t("connections.dialog.connection"),
       None,
       rows,
     )
-    .into()
   }
 }
 
-/// The CLI's copies found on the search path, newest first, looked for again at each Recheck.
+/// The CLI's copies found on the search path, newest first, looked for again at each Check.
 fn found(ctx: &mut Ctx, provider: AgentProvider, recheck: u64) -> FutureHandle<Copies, Message> {
   ctx.future((Kind(provider), recheck), |(Kind(provider), _)| async move {
     background::run(move || Copies(Arc::new(probe::detect_agent(provider)))).await
   })
 }
 
-/// The check of `program` as `provider`'s CLI, again at each Recheck; none without a program.
+/// The check of `program` as `provider`'s CLI, again at each Check; none without a program.
 fn checked(
   ctx: &mut Ctx,
   (provider, program, account): (AgentProvider, Option<PathBuf>, ConnectionAccount),
@@ -445,61 +372,18 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   )
 }
 
-fn head(ctx: &mut Ctx, props: &AddAgentProps, saving: &FutureState<Saved, Message>) -> Head {
+/// The crumb back to Connections, *Add an agent provider*, and what a provider does while it runs on its own sign-in
+/// (`Head` `mHwXV`; `10b` draws none on an API provider, whose warning line says it).
+fn head(ctx: &mut Ctx, props: &AddAgentProps, on_provider: bool) -> Head {
   let navigation = Navigation::of(ctx);
   let project = props.project.open.project.id();
-  let status = if saving.is_pending() {
-    (
-      Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
-      ctx.t("connections.dialog.saving"),
-    )
-  } else {
-    (
-      Icon::CircleDashed,
-      PaletteColor::TextMuted,
-      ctx.t("connections.dialog.notSaved"),
-    )
-  };
   Head {
-    crumbs: vec![
-      Crumb::to(
-        ctx.t("connections.title"),
-        navigation.to(Route::Project(
-          project,
-          ProjectPage::Connections(ConnectionsView::default()),
-        )),
-      ),
-      Crumb::here(ctx.t("connections.dialog.addTitle")),
-    ],
-    title: ctx.t("connections.dialog.addTitle"),
-    description: ctx.t_args(
-      "connections.dialog.description",
-      [("project", props.project.open.project.name().as_str())],
-    ),
-    status,
+    back: navigation.to(Route::Project(
+      project,
+      ProjectPage::Connections(ConnectionsView::default()),
+    )),
+    here: ctx.t("connections.dialog.addCrumb"),
+    title: ctx.t("connections.dialog.addProviderTitle"),
+    description: (!on_provider).then(|| ctx.t("connections.dialog.addProviderLead")),
   }
-}
-
-/// How the connection signs in, and what comes after saving.
-fn after(ctx: &Ctx, provider: AgentProvider, project: &str) -> Element {
-  let program = provider.program_name().unwrap_or_default();
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(
-      Notice::new(
-        "connection-auth",
-        NoticeTone::Info,
-        ctx.t_args("connections.dialog.authTitle", [("program", program)]),
-      )
-      .icon(Icon::ShieldCheck)
-      .body(ctx.t_args("connections.dialog.authDetail", [("project", project)])),
-    )
-    .child(
-      Text::new(&ctx.t("connections.dialog.nextStep"))
-        .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextMuted),
-    )
-    .into()
 }

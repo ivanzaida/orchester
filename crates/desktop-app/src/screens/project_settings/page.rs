@@ -1,5 +1,8 @@
-//! Project settings' tabs in the page they share with Settings (`ui::settings_page`), a tab's form under them, and
-//! the pages a tab opens of its own (rsQ7o, ZZRcn, tqYNS), centred [`WIDTH`] wide.
+//! Project settings' page (`01 · General` `hz6eK`): the title in 20/600 with the save status at its right (`Header`
+//! `N4G7h`: 24 over it, 12 under it, 28 at its sides), the six tabs on their line 28 from the sides (`Tabs` `A5Sf0Q`),
+//! and under them the open tab's column of groups, [`WIDTH`] wide from the content's left edge, 28 between its groups
+//! and scrolling under the tabs (`Body` `mBTu6`, `Pane` `YsyE9`). The join review (`AiCwO`) is a page of its own over
+//! Sharing, centred.
 use lurq::{
   app::{
     ctx::Ctx,
@@ -11,77 +14,107 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use super::{Status, Tab};
+use super::{Section, Shown, Status};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route},
-  theme::{ExtraSpacing, ExtraTypography, TaskFormSpacing},
+  routes::{Route, Screen},
+  theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
-    form_section::{Label, Place, side_row},
     icon::{Icon, icon},
-    notice::{Notice, NoticeTone},
-    settings_page::{SettingsPage, form_scroll, form_scroll_with},
     tabs::{PageTab, page_tabs},
   },
 };
 pub const WIDTH: f32 = 720.0;
 pub const CONTROL_WIDTH: f32 = 300.0;
 
-/// Project settings on `tab`, showing `body`, with the save state at the right of the title (`Save state` `uTF2N`).
+/// Project settings showing `shown` with `body` under its tabs; the save status `status` says at the title's right on
+/// a tab that saves as it is edited.
 pub fn settings(
   ctx: &mut Ctx,
-  (project, tab): (&ShownProject, Tab),
+  (project, shown): (&ShownProject, Shown),
   status: &Signal<Status>,
   body: Element,
 ) -> Element {
-  let save_status = save_status(ctx, status);
+  let section = shown.section();
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let tab_for = |ctx: &Ctx, choice: Tab| {
-    if tab != choice && status.get() != Status::Saved {
-      return PageTab::unavailable(
-        format!("settings-tab-{}", choice.element()),
-        ctx.t(choice.key()),
-        ctx.t("project_settings.finishEditing"),
-      );
-    }
-    let (element, label) = (format!("settings-tab-{}", choice.element()), ctx.t(choice.key()));
-    if tab == choice {
-      return PageTab::current(element, label);
-    }
-    PageTab::to(
-      element,
-      label,
-      false,
-      navigation.to(Route::Project(id, ProjectPage::Settings(choice))),
-    )
-  };
-  let tabs = Tab::BEFORE_MEMORY
+  let saved = !section.autosaves() || status.get() == Status::Saved;
+  let tabs = Section::ALL
     .into_iter()
-    .map(|choice| tab_for(ctx, choice))
-    .chain([
-      PageTab::unavailable(
-        "settings-tab-memory",
-        ctx.t("project_settings.memory"),
-        ctx.t("project_settings.outOfScope"),
-      ),
-      tab_for(ctx, Tab::Sharing),
-    ])
+    .map(|choice| {
+      let (element, label) = (format!("settings-tab-{}", choice.element()), ctx.t(choice.key()));
+      if choice != section && !saved {
+        return PageTab::unavailable(element, label, ctx.t("project_settings.finishEditing"));
+      }
+      // A tab's own page is where it stays; under a page of the tab, the tab leads back to it.
+      if choice == section && at_root(shown) {
+        return PageTab::current(element, label);
+      }
+      PageTab::to(
+        element,
+        label,
+        choice == section,
+        navigation.to(Route::Project(id, choice.root().page())),
+      )
+    })
     .collect::<Vec<_>>();
-  let tabs = page_tabs(ctx, "project-settings-tabs", tabs);
-  let name = project.open.project.name().as_str();
-  SettingsPage::new(
-    "screen-project_settings",
-    ctx.t("project_settings.title"),
-    ctx.t_args(tab.description(), [("project", name)]),
-  )
-  .action(Some(save_status.into()))
-  .tabs(tabs)
-  .body(body)
-  .into()
+  let save = section.autosaves().then(|| save_status(ctx, status));
+  let header = Row::new()
+    .id("project-settings-header")
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(ProjectSettingsSpacing::HeaderTop.role())
+        .bottom(SpacingSize::Md)
+        .left(ProjectSettingsSpacing::Side.role())
+        .right(ProjectSettingsSpacing::Side.role()),
+    )
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(&ctx.t("project_settings.title"))
+        .id("settings-title")
+        .variant(TypographyStyle::Heading)
+        .flex(1.0),
+    )
+    .with_children(save);
+  Column::new()
+    .id(format!("screen-{}", root_screen(shown).name()))
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(header)
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_horizontal(ProjectSettingsSpacing::Side.role())
+        .child(page_tabs(ctx, "project-settings-tabs", tabs)),
+    )
+    .child(body)
+    .into()
 }
-/// A page a tab opens of its own: its `header` over its `content`.
+
+/// Whether `shown` is its tab's own page rather than one under it; a filter of Secrets' list keeps it its own.
+const fn at_root(shown: Shown) -> bool {
+  match shown {
+    Shown::Tab(_) => true,
+    Shown::Connections(view) => view.selected().is_none(),
+    Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
+    Shown::Rules | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
+  }
+}
+
+/// The screen the page's root is named by: Secrets and Connections keep their own, the pages under Connections name
+/// theirs inside.
+const fn root_screen(shown: Shown) -> Screen {
+  match shown {
+    Shown::Secrets(_) => Screen::Secrets,
+    Shown::Connections(_) => Screen::Connections,
+    _ => Screen::ProjectSettings,
+  }
+}
+
+/// A page the join review shows of its own: its `header` over its `content`.
 pub fn screen(header: Element, content: Element) -> Element {
   Column::new()
     .id("screen-project_settings")
@@ -91,13 +124,38 @@ pub fn screen(header: Element, content: Element) -> Element {
     .child(content)
     .into()
 }
-/// A tab's form, scrolling under the tabs.
+/// A tab's column of groups, scrolling under the tabs.
 pub fn scroll(content: impl Into<Element>) -> Element {
-  form_scroll(SCROLL, content).into()
+  column_scroll(content).into()
 }
 /// [`scroll`] kept by `state`, which the tab moves.
 pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element {
-  form_scroll_with(SCROLL, content, state).into()
+  column_scroll(content).with_scroll_state(state.clone()).into()
+}
+fn column_scroll(content: impl Into<Element>) -> ScrollVertical {
+  ScrollVertical::new(
+    Column::new()
+      .id("settings-form")
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(ProjectSettingsSpacing::BodyTop.role())
+          .bottom(SpacingSize::Xl)
+          .left(ProjectSettingsSpacing::Side.role())
+          .right(ProjectSettingsSpacing::Side.role()),
+      )
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .max_width(Dimension::Px(WIDTH))
+          .spacing(ExtraSpacing::Roomy.role())
+          .child(content),
+      ),
+  )
+  .id(SCROLL)
+  .width(Dimension::Pct(100.0))
+  .flex(1.0)
+  .min_height(Dimension::Px(0.0))
 }
 /// A page of its own's content, centred [`WIDTH`] wide under its [`screen`] header.
 pub fn page_scroll(content: impl Into<Element>) -> Element {
@@ -130,14 +188,6 @@ fn scroller(content: impl Into<Element>, width: f32) -> ScrollVertical {
   .id("project-settings-scroll")
   .flex(1.0)
 }
-pub fn row(ctx: &Ctx, id: &str, keys: (&str, &str), control: Element, place: Place) -> Element {
-  side_row(
-    Label::new(id, ctx.t(keys.0)).description(ctx.t(keys.1)),
-    control,
-    place,
-    true,
-  )
-}
 pub fn icon_note(id: &str, glyph: Icon, words: &str) -> Element {
   Row::new()
     .id(id.to_owned())
@@ -158,32 +208,11 @@ pub fn wide_note(id: &str, glyph: Icon, words: &str) -> Element {
     .child(Text::new(words).variant(ExtraTypography::Note.role()).flex(1.0))
     .into()
 }
-pub fn explanation(id: &str, words: &str) -> Element {
-  Text::new(words)
-    .id(id.to_owned())
-    .variant(ExtraTypography::Prose.role())
-    .width(Dimension::Pct(100.0))
-    .into()
-}
 pub fn note(id: &str, words: &str) -> Element {
   Text::new(words)
     .id(id.to_owned())
     .variant(TypographyStyle::Caption)
     .width(Dimension::Pct(100.0))
-    .into()
-}
-pub fn review_notice(ctx: &mut Ctx, environment: bool) -> Element {
-  let keys = if environment {
-    (
-      "project_settings.environmentChanges",
-      "project_settings.environmentChangesDetail",
-    )
-  } else {
-    ("project_settings.changesTitle", "project_settings.changesDetail")
-  };
-  Notice::new("settings-changes-notice", NoticeTone::Info, ctx.t(keys.0))
-    .icon(Icon::History)
-    .body(ctx.t(keys.1))
     .into()
 }
 fn save_status(ctx: &Ctx, status: &Signal<Status>) -> Row {
@@ -201,14 +230,17 @@ fn save_status(ctx: &Ctx, status: &Signal<Status>) -> Row {
     Status::Unsaved => (Icon::CircleAlert, PaletteColor::TextSecondary),
     Status::Invalid | Status::Failed => (Icon::CircleAlert, PaletteColor::Danger),
   };
+  // `Saved` `p7Rfc`: a 12 icon and the words in 12 `text_muted`, 6 apart.
   Row::new()
+    .flex_shrink(0.0)
     .align_items(Alignment::Center)
-    .spacing(SpacingSize::Sm)
+    .spacing(ExtraSpacing::Snug.role())
     .child(icon(glyph, crate::theme::IconSize::Sm, tone.clone()))
     .child(
       Text::new(&ctx.t(key))
         .id("project-settings-save-status")
-        .variant(TypographyStyle::Caption)
-        .color(tone),
+        .variant(crate::theme::ProjectSettingsText::Hint.role())
+        .color(tone)
+        .nowrap(),
     )
 }

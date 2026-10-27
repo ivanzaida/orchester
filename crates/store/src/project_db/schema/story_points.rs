@@ -47,3 +47,12 @@ CREATE TABLE task_effort (
   CHECK ((points IS NULL) = (source IS NULL))
 ) STRICT;
 ";
+
+pub(super) const SETTING_MIGRATION: &str = r"
+-- Let Orchester estimate story points, the project's own setting (ORC-103, Project settings › Runs › Estimates). No
+-- row until a person sets it here: the project then reads the application-wide setting it moved from.
+CREATE TABLE project_estimates (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  allowed INTEGER NOT NULL CHECK (allowed IN (0, 1))
+) STRICT;
+";

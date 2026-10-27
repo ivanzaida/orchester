@@ -138,7 +138,8 @@ fn link_kontur(window: &Window) {
   .expect("linked");
 }
 
-/// Project settings › Sharing of the window's Kontur, once `id` shows.
+/// Project settings › Sharing of the window's Kontur, once `id` shows; a local project's *Share…* opens the page that
+/// links it (`04c Share` `JeXKt`) when `id` is there.
 fn open_sharing(window: &mut Window, id: &str) {
   harness::go(
     window,
@@ -146,7 +147,23 @@ fn open_sharing(window: &mut Window, id: &str) {
     "settings-tab-sharing",
   );
   press(window, "settings-tab-sharing");
+  window.until("the Sharing tab", |window| {
+    window.tree.get_element_by_id(id).is_some() || window.tree.get_element_by_id("sharing-share-open").is_some()
+  });
+  if window.tree.get_element_by_id(id).is_none() {
+    press(window, "sharing-share-open");
+  }
   shows(window, id);
+}
+
+/// `orchester.toml` written: its row says so, with nothing left to write.
+fn discovery_written(window: &mut Window) {
+  window.until("orchester.toml written", |window| {
+    window.tree.get_element_by_id("sharing-discovery-write").is_none()
+      && window
+        .texts("sharing-discovery-hint")
+        .is_some_and(|texts| texts.join(" ").starts_with("orchester.toml"))
+  });
 }
 
 /// No request through `recorder` named an endpoint only the server admin calls.

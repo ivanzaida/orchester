@@ -11,11 +11,11 @@
 //! server's approval tools refuse (`automation_not_allowed`); while *change agent permissions* is off, its setup tools
 //! refuse whatever would widen what agents may do (`person_only`), including matching window confirmations; while one
 //! of the Orchestrator's is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted or
-//! finished run, leaves it to the person. *Let Orchester estimate story points* (ORC-49, same row, no design frame
-//! yet) lets Orchester's estimator size tasks on auto mode's reviewer, spending tokens. A setting is read and saved off
-//! the UI thread; while either runs, its switch cannot be flipped. While a row is mounted, the app's MCP server refuses
-//! window input (`mcp::input_gate`), and the row refuses lurq's synthetic input, so only a person flips it. The section
-//! ends with the Orchestrator's daily report and its time (`super::daily_report`).
+//! finished run, leaves it to the person. *Let Orchester estimate story points* is a project's own setting now, in
+//! Project settings › Runs › Estimates. A setting is read and saved off the UI thread; while either runs, its switch
+//! cannot be flipped. While a row is mounted, the app's MCP server refuses window input (`mcp::input_gate`), and the
+//! row refuses lurq's synthetic input, so only a person flips it. The section ends with the Orchestrator's daily report
+//! and its time (`super::daily_report`).
 
 use lurq::{
   app::{
@@ -68,8 +68,6 @@ pub enum Consent {
   /// *Let the Orchestrator publish drafts*, *answer agents*, *merge runs*, *merge finished runs on its own*,
   /// *continue interrupted runs* or *write with git*.
   Orchestrator(OrchestratorConsent),
-  /// *Let Orchester estimate story points* (ORC-49): off until a person turns it on.
-  EstimatePoints,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Consent {}
@@ -96,7 +94,6 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::MergeFinished) => "settings-merge-finished",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "settings-continue-interrupted",
       Self::Orchestrator(OrchestratorConsent::WriteGit) => "settings-write-git",
-      Self::EstimatePoints => "settings-estimate-points",
     }
   }
 
@@ -165,13 +162,6 @@ impl Consent {
         not_saved: "settings.automation.writeGit.notSaved",
         blocked: "settings.automation.writeGit.blocked",
       },
-      Self::EstimatePoints => Words {
-        title: "settings.automation.estimatePoints.title",
-        description: "settings.automation.estimatePoints.description",
-        unreadable: "settings.automation.estimatePoints.unreadable",
-        not_saved: "settings.automation.estimatePoints.notSaved",
-        blocked: "settings.automation.estimatePoints.blocked",
-      },
     }
   }
 
@@ -187,7 +177,6 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::MergeFinished) => "Let the Orchestrator merge finished runs on its own",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "Let the Orchestrator continue interrupted runs",
       Self::Orchestrator(OrchestratorConsent::WriteGit) => "Let the Orchestrator write with git",
-      Self::EstimatePoints => "Let Orchester estimate story points",
     }
   }
 
@@ -198,7 +187,6 @@ impl Consent {
       Self::AnswerApprovals => workspace.automation_answers_approvals(),
       Self::ChangePermissions => workspace.automation_changes_permissions(),
       Self::Orchestrator(consent) => workspace.orchestrator_allows(consent),
-      Self::EstimatePoints => workspace.estimates_story_points(),
     }
   }
 
@@ -209,7 +197,6 @@ impl Consent {
       Self::AnswerApprovals => workspace.set_automation_answers_approvals(allowed),
       Self::ChangePermissions => workspace.set_automation_changes_permissions(allowed),
       Self::Orchestrator(consent) => workspace.set_orchestrator_allows(consent, allowed),
-      Self::EstimatePoints => workspace.set_estimates_story_points(allowed),
     }
   }
 }
@@ -238,7 +225,6 @@ pub fn section(ctx: &mut Ctx) -> Element {
       Consent::Orchestrator(OrchestratorConsent::ContinueInterrupted),
     ),
     ("write-git", Consent::Orchestrator(OrchestratorConsent::WriteGit)),
-    ("estimate-points", Consent::EstimatePoints),
   ];
   let rows: Vec<Element> = rows
     .into_iter()
@@ -412,8 +398,6 @@ impl ConsentRow {
           Consent::AnswerApprovals => workspace.revoke_automation_approval_consent(),
           Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
           Consent::Orchestrator(consent) => workspace.revoke_orchestrator_consent(consent),
-          // Read as stored before each estimate: off holds once it is saved.
-          Consent::EstimatePoints => {}
           // Read when the app starts: this run keeps what it started with, as the row's hint says.
           Consent::WindowControl => {}
         }

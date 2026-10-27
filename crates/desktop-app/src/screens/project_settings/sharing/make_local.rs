@@ -25,14 +25,13 @@ use super::confirm::{QUESTION_KEY, pair, question};
 use crate::{
   project::ShownProject,
   screens::{
-    project_settings::page::{self, CONTROL_WIDTH},
+    project_settings::{kit::SettingRow, page},
     settings::orchester::{PersonOnly, Said, moment, sharing_said},
   },
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    form_section::{Label, Place, side_row},
     icon::Icon,
     notice::{Notice, NoticeTone},
   },
@@ -109,41 +108,29 @@ impl Component for MakeLocal {
     let props = ctx.props::<Props>().clone();
     let local = props.project.open.project.name().as_str().to_owned();
     let asking = props.asking.get();
-    let mut control = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(SpacingSize::Sm);
-    if !asking {
-      let open = props.asking.clone();
-      control = control.child(
-        Row::new().child(
-          ActionButton::new(
-            "sharing-make-local-button",
-            ButtonKind::Secondary,
-            ctx.t("sharing.linked.makeLocalButton"),
-          )
-          .icon(Icon::Unplug)
-          .on_click(move || open.set(true)),
-        ),
-      );
-    }
-    let row = side_row(
-      Label::new("sharing-make-local", ctx.t("sharing.linked.makeLocal")).description(ctx.t_args(
+    let row = SettingRow::new("sharing-make-local", ctx.t("sharing.linked.makeLocal"))
+      .hint(ctx.t("sharing.linked.makeLocalHint"))
+      .info(ctx.t_args(
         "sharing.linked.makeLocalDescription",
         [("project", local.as_str()), ("key", props.key.as_str())],
-      )),
-      control,
-      Place::Within,
-      true,
-    );
-    let mut column = Column::new()
-      .id("sharing-make-local-part")
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .child(row);
-    if asking {
-      column = column.child(self.question(ctx, &props));
-    }
-    column
+      ));
+    let row = if asking {
+      let question = self.question(ctx, &props);
+      row.under(question)
+    } else {
+      let open = props.asking.clone();
+      row.control(
+        ActionButton::new(
+          "sharing-make-local-button",
+          ButtonKind::Secondary,
+          ctx.t("sharing.linked.makeLocalButton"),
+        )
+        .icon(Icon::Unplug)
+        .in_form()
+        .on_click(move || open.set(true)),
+      )
+    };
+    row.render(ctx)
   }
 }
 

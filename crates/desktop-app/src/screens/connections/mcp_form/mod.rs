@@ -118,8 +118,10 @@ impl Component for McpForm {
 
 /// `content` as the page while there is no form to show.
 fn framed(screen: Screen, content: Element) -> Element {
-  Column::new()
-    .id(format!("screen-{}", screen.name()))
-    .child(content)
-    .into()
+  crate::screens::project_settings::kit::scroll(
+    Column::new()
+      .id(format!("screen-{}", screen.name()))
+      .width(lurq::node::dimension::Dimension::Pct(100.0))
+      .child(content),
+  )
 }

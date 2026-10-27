@@ -369,7 +369,7 @@ fn too_old(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnection>)
       .icon(Icon::Plug)
       .opens(nav.to(Route::Project(
         project,
-        ProjectPage::Connections(ConnectionsView::default().with_selected(connection.id())),
+        ProjectPage::Connections(ConnectionsView::of(connection.id())),
       ))),
     )
     .into(),

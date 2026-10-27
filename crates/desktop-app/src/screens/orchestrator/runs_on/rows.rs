@@ -43,7 +43,7 @@ use crate::{
   services::accounts::{Accounts, account_name, plan_name},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
-    agent_mark::agent_mark,
+    agent_mark::AgentMark,
     icon::{Icon, icon},
     meter::{MeterTone, meter},
     pressable::{inert, pressable},
@@ -125,7 +125,7 @@ pub(super) fn groups(
       .collect();
     if !rows.is_empty() {
       // The CLI's maker's mark (`Mark` `PDVXx`, `FW7qZ`).
-      let mark = agent_mark(ctx, provider, IconSize::Sm);
+      let mark = AgentMark::of(provider).render(ctx, IconSize::Sm);
       parts.push(heading(
         ctx,
         &format!("orchestrator-runs-on-{}", key_suffix(provider)),

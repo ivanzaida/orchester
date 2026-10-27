@@ -153,7 +153,7 @@ fn every_link() -> Vec<(Link, Route)> {
     (Link::Secrets(project), at(ProjectPage::Secrets(Default::default()))),
     (
       Link::Connection(project, id()),
-      at(ProjectPage::Connections(ConnectionsView::default().with_selected(id()))),
+      at(ProjectPage::Connections(ConnectionsView::of(id()))),
     ),
     (
       Link::Account(id()),

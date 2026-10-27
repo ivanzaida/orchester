@@ -1,5 +1,5 @@
-//! The parts of a local project's Sharing around the link: its task list, where projects are made, and what linking
-//! sends.
+//! The parts of a local project's Sharing around the link: the project as local with *Share…* (`04 Sharing · local`
+//! `bSZdW`), where projects are made, and what linking sends.
 
 use lurq::{
   app::{
@@ -14,10 +14,13 @@ use orchester_workspace::sharing::ServerEntry;
 
 use super::Props;
 use crate::{
-  screens::project_settings::page::{self, CONTROL_WIDTH},
+  screens::project_settings::{
+    kit::{Group, SettingRow, value},
+    page,
+  },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
-    form_section::{Label, Place, section, side_row},
+    button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
   },
 };
@@ -25,32 +28,39 @@ use crate::{
 /// The label column of *What linking sends* (`Shared with members` in `Fy5KW`).
 const SENDS_LABEL: f32 = 180.0;
 
-/// The local task list (`Task list` in `bWD9q`): only on this computer, with its key and tasks.
-pub(super) fn task_list(ctx: &Ctx, props: &Props) -> Element {
+/// The project as local (`Local project` `bIi5a`: its tasks only on this computer, with its key and how many) and
+/// *Share on a team server* with *Share…*, which opens the page that links it.
+pub(super) fn local(ctx: &mut Ctx, props: &Props, share: impl Fn() + Send + Sync + 'static) -> Element {
   let name = props.project.open.project.name().as_str();
   let key = props.project.open.project.key().as_str();
   let tasks = ctx.t_args(
     "sharing.link.localTasks",
     [("key", key.to_owned()), ("count", props.facts.tasks.to_string())],
   );
-  let state = Column::new()
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .spacing(ExtraSpacing::Hair.role())
-    .child(page::icon_note(
-      "sharing-local",
-      Icon::Monitor,
-      &ctx.t("sharing.link.localOnly"),
-    ))
-    .child(page::note("sharing-local-tasks", &tasks));
-  let label = Label::new("sharing-task-list", ctx.t("sharing.link.taskList"))
-    .description(ctx.t_args("sharing.link.taskListDescription", [("project", name), ("key", key)]));
-  section(
-    "project-settings-sharing-task-list",
-    &ctx.t("sharing.link.taskList"),
-    None,
-    vec![side_row(label, state, Place::Last, true)],
-  )
-  .into()
+  let only_you = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
+    .child(value("sharing-local", &ctx.t("sharing.share.onlyYou")));
+  let local = SettingRow::new("sharing-task-list", ctx.t("sharing.share.localProject"))
+    .hint(tasks)
+    .info(ctx.t_args("sharing.link.taskListDescription", [("project", name), ("key", key)]))
+    .control(only_you)
+    .render(ctx);
+  let share = SettingRow::new("sharing-share", ctx.t("sharing.share.onServer"))
+    .hint(ctx.t("sharing.share.onServerHint"))
+    .info(ctx.t("sharing.link.hint"))
+    .control(
+      ActionButton::new("sharing-share-open", ButtonKind::Secondary, ctx.t("sharing.share.open"))
+        .icon(Icon::CloudUpload)
+        .in_form()
+        .on_click(share),
+    )
+    .render(ctx);
+  Group::new("project-settings-sharing-task-list", ctx.t("project_settings.sharing"))
+    .row(local)
+    .row(share)
+    .into()
 }
 
 /// *No project for this yet?* Projects are made in the server admin.

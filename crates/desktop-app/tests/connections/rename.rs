@@ -2,7 +2,7 @@
 //! in Edit MCP server. A name is checked as on adding (not blank, no other connection of the project has it), and what
 //! uses the connection names it by its id, so it keeps using it.
 
-use orchester_app::routes::{ConnectionsTab, ConnectionsView, ProjectPage};
+use orchester_app::routes::ProjectPage;
 use orchester_core::{
   connection::{AgentProvider, ConnectionKind},
   id::ConnectionId,
@@ -42,9 +42,10 @@ fn uses(seeded: &Seeded, id: ConnectionId) -> usize {
     .count()
 }
 
-/// Opens the rename of connection `id` on `tab`.
-fn rename(seeded: &mut Seeded, tab: ConnectionsTab, id: ConnectionId) {
-  seeded.go(ProjectPage::Connections(ConnectionsView::new(tab).with_selected(id)));
+/// Opens the rename of connection `id` from its page's … menu.
+fn rename(seeded: &mut Seeded, id: ConnectionId) {
+  seeded.open(id);
+  seeded.click("connection-more");
   seeded.until("the rename", |seeded| seeded.exists("connection-rename"));
   seeded.click("connection-rename");
   seeded.until("the name field", |seeded| seeded.exists("connection-rename-name"));
@@ -56,7 +57,7 @@ fn connections_agent_connection_is_renamed_in_its_inspector_and_keeps_its_profil
   let codex = seeded_connection(&seeded, &ConnectionKind::Agent(AgentProvider::CodexCli));
   let profiles = uses(&seeded, codex);
   assert!(profiles > 0, "the seed's profiles run on Codex");
-  rename(&mut seeded, ConnectionsTab::AgentProviders, codex);
+  rename(&mut seeded, codex);
   seeded.set("connection-rename-name", "Claude · Kontur");
   assert!(
     seeded
@@ -72,9 +73,11 @@ fn connections_agent_connection_is_renamed_in_its_inspector_and_keeps_its_profil
   assert!(!seeded.exists("connection-rename-name-note"));
   seeded.click("connection-rename-save");
   seeded.until("the new name stored", |seeded| name_of(seeded, codex) == "Codex · main");
-  seeded.until("the inspector to show it", |seeded| {
+  seeded.until("the page to show it", |seeded| {
     seeded.exists("connection-inspector-title") && seeded.text("connection-inspector-title") == "Codex · main"
   });
+  seeded.list();
+  seeded.until("its row", |seeded| seeded.exists(&Seeded::row(codex)));
   assert!(seeded.text(&Seeded::row(codex)).contains("Codex · main"));
   assert_eq!(uses(&seeded, codex), profiles, "its profiles still run on it");
 }
@@ -83,7 +86,7 @@ fn connections_agent_connection_is_renamed_in_its_inspector_and_keeps_its_profil
 fn connections_rename_is_cancelled_without_storing() {
   let mut seeded = Seeded::new("connections");
   let codex = seeded_connection(&seeded, &ConnectionKind::Agent(AgentProvider::CodexCli));
-  rename(&mut seeded, ConnectionsTab::AgentProviders, codex);
+  rename(&mut seeded, codex);
   seeded.set("connection-rename-name", "Codex · elsewhere");
   seeded.click("connection-rename-cancel");
   assert!(!seeded.exists("connection-rename-name"));
@@ -102,7 +105,7 @@ fn connections_github_connection_is_renamed_in_its_inspector() {
     .find(|connection| matches!(connection.kind(), ConnectionKind::GitHub { .. }))
     .expect("the seed's GitHub connection")
     .id();
-  rename(&mut seeded, ConnectionsTab::GitHub, github);
+  rename(&mut seeded, github);
   seeded.set("connection-rename-name", "Codex · Kontur");
   assert!(
     seeded.exists("connection-rename-name-note"),
@@ -127,7 +130,7 @@ fn connections_mcp_server_is_renamed_in_its_form_and_keeps_its_profiles() {
   seeded.go(ProjectPage::EditConnection(docs.id()));
   seeded.until("the form", |seeded| seeded.exists("connection-mcp-name"));
   seeded.set("connection-mcp-name", "postgres-dev");
-  assert!(seeded.exists("connection-form-reason"), "another server has the name");
+  assert!(seeded.exists(Seeded::REASON), "another server has the name");
   seeded.set("connection-mcp-name", "kontur-handbook");
   seeded.click("connection-save");
   seeded.until("the server saved", |seeded| {

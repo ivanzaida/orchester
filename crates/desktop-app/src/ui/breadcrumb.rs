@@ -30,7 +30,7 @@ use crate::{
 const ANCESTOR_MAX_WIDTH: f32 = 160.0;
 
 /// The task page's separator: a mark, the same in every language.
-const SLASH: &str = "/";
+pub(crate) const SLASH: &str = "/";
 
 /// What stands between two crumbs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

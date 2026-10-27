@@ -73,6 +73,10 @@ impl SecretStore for MemoryStore {
   fn secrets(&self) -> Result<Vec<Secret>, StoreFailed> {
     Ok(self.rows.iter().filter(|row| !row.is_archived()).cloned().collect())
   }
+
+  fn archived_secrets(&self) -> Result<Vec<Secret>, StoreFailed> {
+    Ok(self.rows.iter().filter(|row| row.is_archived()).cloned().collect())
+  }
 }
 
 /// A keychain in memory. It keeps what it is given, so tests can check the value arrived.

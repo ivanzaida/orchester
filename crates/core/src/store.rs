@@ -309,6 +309,9 @@ pub trait SecretStore {
 
   /// The project's secrets that are not archived, ordered by name, then environment.
   fn secrets(&self) -> Result<Vec<Secret>, Self::Error>;
+
+  /// The project's archived secrets, ordered by name, then environment.
+  fn archived_secrets(&self) -> Result<Vec<Secret>, Self::Error>;
 }
 
 /// The project's link to its GitHub repository; a project has at most one. Written by the

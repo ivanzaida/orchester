@@ -4,7 +4,7 @@
 # digests and the quick start, and publishes the self-hosting guide (deploy/server/DOCKERHUB.md with the compose files
 # inlined, tools/dockerhub-description.ps1) as both image repositories' Docker Hub description. The repository is
 # private: that page is the guide self-hosters see.
-# Orchester Cloud's images are not here: they stay private on GHCR (cloud-images.yml).
+# Orchester Cloud's images are not here: they are built in the private repository `ivanzaida/orchester-cloud`.
 #
 # Settings: the secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (an access token with Read & Write), the variable
 # DOCKERHUB_NAMESPACE (default: the username), and the secret DOCKERHUB_DESCRIPTION_TOKEN (Read, Write & Delete, which

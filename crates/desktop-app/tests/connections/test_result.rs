@@ -5,10 +5,7 @@
 
 use std::path::Path;
 
-use orchester_app::{
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage},
-  ui::icon::Icon,
-};
+use orchester_app::ui::icon::Icon;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
   id::ConnectionId,
@@ -22,7 +19,7 @@ use super::{
   harness::Seeded,
 };
 
-/// A Codex connection named `name` whose program is `program`, never checked, in the inspector.
+/// A Codex connection named `name` whose program is `program`, never checked, on its page.
 fn inspect(seeded: &mut Seeded, name: &str, program: std::path::PathBuf) -> ConnectionId {
   let connection = AgentConnection::new(
     ConnectionId::generate(),
@@ -37,9 +34,8 @@ fn inspect(seeded: &mut Seeded, name: &str, program: std::path::PathBuf) -> Conn
     .db()
     .create_connection(&connection.into_connection())
     .expect("created");
-  let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
-  seeded.go(ProjectPage::Connections(view));
-  seeded.until("the inspector", |seeded| seeded.exists("connection-test"));
+  seeded.open(id);
+  seeded.until("the page", |seeded| seeded.exists("connection-test"));
   id
 }
 
@@ -135,6 +131,7 @@ fn connections_rename_waits_while_a_test_runs() {
   let mut seeded = Seeded::new("connections");
   let folder = tempfile::tempdir().expect("a temporary folder");
   test_slowly(&mut seeded, folder.path(), "Codex · slow");
+  seeded.click("connection-more");
   seeded.click("connection-rename");
   assert!(
     !seeded.exists("connection-rename-name"),
@@ -143,6 +140,9 @@ fn connections_rename_waits_while_a_test_runs() {
   seeded.until("the test to pass", |seeded| {
     seeded.text("connection-test-result-heading") == "Test passed"
   });
+  if !seeded.exists("connection-rename") {
+    seeded.click("connection-more");
+  }
   seeded.click("connection-rename");
   seeded.until("the name field", |seeded| seeded.exists("connection-rename-name"));
 }

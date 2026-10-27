@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
   mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenProps},
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   ui::message::message_text,
 };
 
@@ -54,7 +54,7 @@ pub fn widening(ctx: &mut Ctx, asking: &Asking) -> Option<(Section, Element)> {
   let (keep, confirm) = (asking.pending.clone(), asking.clone());
   let question = WidenProps {
     id: "agent-confirm".into(),
-    card: true,
+    look: WidenLook::Card,
     affirming: false,
     automation,
     title: ctx.t("agents.widenTitle"),
@@ -85,7 +85,7 @@ pub fn stale(ctx: &mut Ctx, asking: &Asking) -> Option<Element> {
   let (keep, confirm) = (asking.pending.clone(), asking.clone());
   let question = WidenProps {
     id: "agent-confirm".into(),
-    card: true,
+    look: WidenLook::Card,
     affirming: false,
     automation: Guarded::WideningQuestion,
     title: ctx.t("agents.keepTitle"),

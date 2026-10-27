@@ -13,6 +13,16 @@ use serde_json::json;
 use super::{domain::call, harness::Settings};
 
 const SELECT: &str = "settings-base-branch-select";
+/// The row's one hint line, in danger while the branch set is gone.
+const HINT: &str = "settings-base-branch-setting-hint";
+
+/// Whether the row says the branch set is gone.
+fn missing(page: &mut Settings) -> bool {
+  page
+    .window
+    .texts(HINT)
+    .is_some_and(|hint| hint.join(" ").contains("no longer exists"))
+}
 
 fn git(page: &Settings, args: &[&str]) -> String {
   let output = Command::new("git")
@@ -28,6 +38,7 @@ fn git(page: &Settings, args: &[&str]) -> String {
 /// The project's folder as a repository on `main`, with `staging` and a remote-tracking `origin/release`; the row
 /// reads it again.
 fn repository(page: &mut Settings) {
+  page.tab("general", "settings-base-branch-setting-row");
   git(page, &["init", "--quiet", "--initial-branch=main"]);
   git(page, &["config", "user.name", "Orchester Test"]);
   git(page, &["config", "user.email", "test@orchester.invalid"]);
@@ -91,12 +102,8 @@ fn project_settings_base_branch_defaults_to_the_checked_out_branch_and_saves_a_b
   assert_eq!(chosen(&mut page), ["Checked-out branch"]);
   assert_eq!(setting(&page), BaseBranchSetting::CheckedOut);
   assert!(page.text("settings-base-branch-setting-row").contains("Base branch"));
-  assert!(
-    page
-      .text("settings-base-branch-hint")
-      .contains("Kept on this computer only")
-  );
-  assert!(!page.exists("settings-base-branch-missing"));
+  assert_eq!(page.text(HINT), "Runs branch from it and merge into it");
+  assert!(!missing(&mut page));
 
   {
     let mut db = page.db();
@@ -156,12 +163,12 @@ fn project_settings_base_branch_a_branch_set_that_is_gone_is_the_rows_problem() 
     .save_base_branch_setting(&BaseBranchSetting::Branch(branch("gone")))
     .expect("set");
   page.outside(Outside::ProjectSettings);
-  page.until("the problem shown", |p| p.exists("settings-base-branch-missing"));
+  page.until("the problem shown", missing);
   assert_eq!(
-    page.text("settings-base-branch-missing"),
-    "gone no longer exists in the repository, so new runs are refused. Choose another base branch."
+    page.text(HINT),
+    "gone no longer exists · new runs are refused until you choose another"
   );
-  assert_eq!(chosen(&mut page), ["gone · no longer exists"]);
+  assert_eq!(chosen(&mut page), ["gone"]);
   let read = call(&page, "get_project", json!({"project":"Kontur"})).expect("read");
   assert_eq!(
     read["project"]["base_branch"],
@@ -172,7 +179,7 @@ fn project_settings_base_branch_a_branch_set_that_is_gone_is_the_rows_problem() 
   page.until("main saved", |p| {
     setting(p) == BaseBranchSetting::Branch(branch("main"))
   });
-  page.until("the problem gone", |p| !p.exists("settings-base-branch-missing"));
+  page.until("the problem gone", |p| !missing(p));
   let read = call(&page, "get_project", json!({"project":"Kontur"})).expect("read");
   assert_eq!(
     read["project"]["base_branch"],

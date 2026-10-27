@@ -1,44 +1,44 @@
-//! An agent provider's inspector. A CLI (`VIpsx`, the states of `uBsQM`): its provider, program file and what
-//! starts it, version, where it runs, how it signs in and when it was checked; the models its check listed,
-//! a model it is too old for (`Claude Code 2.1.89 can't run …`); the profiles that run on it; and in the
-//! footer what its status means, the sign-in command to run in a terminal, Test connection and Edit
-//! connection. A native connection (`cC6TI`) says that native agents are not available yet and shows its
-//! endpoint, key and models, its test and editing unavailable. A CLI on an API provider shows the provider
+//! An agent provider's page (`05b` `PGwka`): a CLI's Check again, its … menu (Rename, Edit connection), what its
+//! status asks for (the sign-in command to run in a terminal, a model it is too old for, the account to sign in again
+//! in Settings), *Runs on* (its program and version, that it runs on its own sign-in, its account), the models its
+//! check listed with Refresh, and the profiles that use it. A native connection says native agents are not available
+//! yet, its endpoint, key and models, its check and editing unavailable. A CLI on an API provider shows the provider
 //! ([`super::provider`]) instead of an account.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Row, Text},
+  components::{Column, Row},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::connection::{
-  AgentConnection, AgentProvider, ApiEndpoint, CatalogSource, ConnectionStatus, EndpointPreset,
+  AgentConnection, AgentProvider, ApiEndpoint, CatalogSource, ConnectionAccount, ConnectionStatus, EndpointPreset,
 };
 use orchester_exec::launch::{Launch, Via};
 use orchester_workspace::{connections::data::sign_in_command, display};
 
 use super::{
-  Actions, Inspecting, Parts, check_button, footer, footer_action, last_checked, rename::title_with_rename, result,
-  shown, titled_header, used_by,
+  Actions, Inspecting, Parts, check_button, detail_row, last_checked, rename::title_with_rename, rename_item, result,
+  sentence, sentence_tone, shown, used_by_row,
 };
 use crate::{
-  screens::connections::words::{agent_glyph, checked_version, connection_status, provider_key},
-  theme::{ExtraSpacing, ExtraTypography},
+  screens::{
+    connections::words::{agent_glyph, checked_version, connection_status, provider_key},
+    project_settings::kit::{Group, SettingRow, Tone, command_line, value},
+  },
   ui::{
     button::{ActionButton, ButtonKind},
-    chip::{BadgeTone, TagChip, badge},
-    code_box::CodeBox,
     icon::Icon,
-    inspector::{self, PropertyValue, property},
+    menu::MenuItem,
     notice::{Notice, NoticeTone},
-    unavailable::reason_line,
   },
 };
 
-/// The longest path a property shows in full (`C:\…\npm\claude.cmd`).
-const PATH_CHARS: usize = 26;
+/// The longest path a row shows in full (`C:\…\npm\claude.cmd`).
+const PATH_CHARS: usize = 40;
+/// How many models a row names before it counts the rest.
+const MODELS_SHOWN: usize = 3;
 /// Product names of the programs that start a launcher script; identifiers, not translated.
 const NODE: &str = "Node.js";
 const CMD: &str = "cmd.exe";
@@ -49,12 +49,6 @@ pub(super) fn parts(
   inspecting: &Inspecting<'_>,
   actions: &Actions,
 ) -> Parts {
-  let status = shown(
-    inspecting,
-    connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
-  );
-  let title = title_with_rename(ctx, inspecting, (connection.id(), connection.name().as_str()));
-  let header = titled_header(ctx, (agent_glyph(connection.provider()), title), status, None);
   let uses: Vec<String> = inspecting
     .listed
     .used_by(connection.id())
@@ -67,209 +61,202 @@ pub(super) fn parts(
         .to_string()
     })
     .collect();
-  let used = used_by(ctx, uses, actions, "connections.notUsed");
+  let used = used_by_row(ctx, &uses, actions, "connections.notUsed");
   match connection.api() {
-    Some(api) => native(ctx, connection, api, (header, used), inspecting),
-    None => cli(ctx, connection, (header, used), inspecting, actions),
+    Some(api) => native(ctx, connection, api, used, (inspecting, actions)),
+    None => match connection.api_provider() {
+      Some(api) => super::provider::parts(ctx, (connection, api), used, inspecting, actions),
+      None => cli(ctx, connection, used, (inspecting, actions)),
+    },
   }
+}
+
+/// Rename and Edit connection, the … menu of an agent connection; Edit chooses a CLI connection's account.
+pub(super) fn menu(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  (inspecting, actions): (&Inspecting<'_>, &Actions),
+) -> Vec<MenuItem> {
+  let edit = MenuItem::opens(
+    "connection-edit",
+    ctx.t("connections.edit"),
+    (actions.edit)(connection.id()),
+  )
+  .icon(Icon::Pencil);
+  vec![rename_item(ctx, inspecting, actions), edit]
 }
 
 fn cli(
   ctx: &mut Ctx,
   connection: &AgentConnection,
-  (header, used): (Element, Element),
-  inspecting: &Inspecting<'_>,
-  actions: &Actions,
+  used: Element,
+  (inspecting, actions): (&Inspecting<'_>, &Actions),
 ) -> Parts {
-  if let Some(api) = connection.api_provider() {
-    return super::provider::parts(ctx, (connection, api), (header, used), inspecting, actions);
-  }
-  let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
-  body.push(properties(ctx, connection, inspecting).into());
-  body.push(super::super::account::inspector_rows(
-    ctx,
-    inspecting.accounts,
-    connection,
-  ));
-  body.push(models(ctx, connection, inspecting, actions));
-  body.push(used);
   let status = connection.status_with(&inspecting.listed.secrets);
+  let shown_status = shown(inspecting, connection_status(connection, status));
+  let mut notices: Vec<Element> = too_old(ctx, connection).into_iter().collect();
+  notices.extend(what_to_do(ctx, connection, status, shown_status, inspecting));
+  notices.extend(result::agent(ctx, connection, inspecting));
+  let runs_on = Group::new("connection-runs-on", ctx.t("connections.runsOn"))
+    .rows(program_rows(ctx, connection, inspecting))
+    .row(
+      SettingRow::new("connection-authentication", ctx.t("connections.runsOn"))
+        .hint(ctx.t("connections.runsOnHint"))
+        .control(value(
+          "connection-authentication-value",
+          &ctx.t("connections.ownSignIn"),
+        ))
+        .render(ctx),
+    )
+    .row(super::super::account::account_row(ctx, inspecting.accounts, connection));
+  Parts {
+    glyph: agent_glyph(connection),
+    title: title_with_rename(
+      ctx,
+      (inspecting, actions),
+      (connection.id(), connection.name().as_str()),
+    ),
+    status: shown_status,
+    status_detail: checked_detail(ctx, connection, inspecting),
+    actions: vec![
+      check_button(
+        inspecting,
+        ("connection-test", ctx.t("connections.checkAgain")),
+        actions,
+      )
+      .into(),
+    ],
+    menu: menu(ctx, connection, (inspecting, actions)),
+    notices,
+    groups: vec![runs_on.into(), models(ctx, connection, inspecting, actions), used],
+    question: None,
+  }
+}
+
+/// *checked 2 min ago* after the status, once a check ran.
+pub(super) fn checked_detail(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>) -> Option<Arc<str>> {
+  let at = connection.last_check()?.at;
+  Some(ctx.t_args(
+    "connections.checkedAt",
+    [("time", &*last_checked(ctx, inspecting.now, Some(at)))],
+  ))
+}
+
+/// What the status asks for: a CLI on no account chooses one in Edit connection; one signed out on a person's account
+/// signs in again in Settings › Accounts; one whose CLI is signed out runs its sign-in command in a terminal; any other
+/// status that asks for something says what.
+fn what_to_do(
+  ctx: &mut Ctx,
+  connection: &AgentConnection,
+  status: ConnectionStatus,
+  shown: crate::screens::connections::words::Shown,
+  inspecting: &Inspecting<'_>,
+) -> Vec<Element> {
+  if connection.account() == &ConnectionAccount::Unassigned {
+    return vec![sentence(
+      "connection-inspector-sentence",
+      &ctx.t("connections.detail.noAccount"),
+      sentence_tone(shown),
+    )];
+  }
   let account = inspecting
     .accounts
     .of_connection(connection.account(), connection.provider());
-  // Edit connection chooses the connection's account (`M42rM`); its program is not edited here, and the header renames
-  // it.
-  let (edit, id) = (actions.edit.clone(), connection.id());
-  let edit = footer_action(
-    inspecting,
-    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")),
-    Icon::Pencil,
-  )
-  .opens(edit(id));
-  // Refresh models checks the connection in every state: what it found shows above the actions.
-  let tested: Vec<Element> = result::agent(ctx, connection, inspecting).into_iter().collect();
-  // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
-  // chooses one.
-  if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
-    let sentence = ctx.t("connections.detail.noAccount");
-    return Parts {
-      header,
-      body,
-      footer: Some(footer(
-        ctx,
-        inspecting,
-        (&sentence, tested),
-        (vec![vec![edit.into()]], Vec::new()),
-      )),
-    };
-  }
-  // Signed out on one of the person's accounts: the fix is in Settings › Accounts, not a command here (`M42rM`).
   if let Some(account) = account.filter(|_| status == ConnectionStatus::SignInRequired) {
-    let sentence = signed_out_sentence(ctx, account);
-    let open = footer_action(inspecting, open_in_settings(ctx, account), Icon::ArrowUpRight);
-    let buttons = vec![open.into(), edit.into()];
-    return Parts {
-      header,
-      body,
-      footer: Some(footer(
-        ctx,
-        inspecting,
-        (&sentence, tested),
-        (vec![buttons], Vec::new()),
-      )),
-    };
+    let words = signed_out_sentence(ctx, account);
+    let open = open_in_settings(ctx, account);
+    // The sentence wraps at the column's width, whatever the account's name; *Open … in Settings* under it.
+    return vec![
+      Column::new()
+        .id("connection-inspector-sentence-row")
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .child(sentence("connection-inspector-sentence", &words, sentence_tone(shown)))
+        .child(Row::new().child(open))
+        .into(),
+    ];
   }
-  let command = (status == ConnectionStatus::SignInRequired)
-    .then(|| sign_in_command(connection.provider()).map(str::to_owned))
-    .flatten()
-    .map(|command| {
-      CodeBox::new(
-        "connection-sign-in-command",
-        ctx.t("connections.runInTerminal"),
-        command,
-      )
-      .render(ctx)
-    });
-  let buttons = vec![
-    footer_action(
-      inspecting,
-      check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions),
-      Icon::PlugZap,
-    )
-    .into(),
-    edit.into(),
-  ];
-  let more = command.into_iter().chain(tested).collect();
-  let reasons = Vec::new();
-  let sentence = ctx.t(detail_key(status, connection.provider()));
-  Parts {
-    header,
-    body,
-    footer: Some(footer(ctx, inspecting, (&sentence, more), (vec![buttons], reasons))),
-  }
-}
-
-pub(super) fn properties(
-  ctx: &Ctx,
-  connection: &AgentConnection,
-  inspecting: &Inspecting<'_>,
-) -> lurq::components::Column {
-  let status = connection.status_with(&inspecting.listed.secrets);
-  let mut rows = vec![property(
-    "connection-provider",
-    &ctx.t("connections.property.provider"),
-    &ctx.t(provider_key(connection.provider())),
-    PropertyValue::Plain,
-  )];
-  if let Some(program) = connection.executable() {
-    let kind = if status == ConnectionStatus::ExecutableMissing {
-      PropertyValue::MonoDanger
-    } else {
-      PropertyValue::Mono
-    };
-    rows.push(property(
-      "connection-program",
-      &ctx.t("connections.property.programFile"),
-      &display::shorten_path(program, PATH_CHARS),
-      kind,
-    ));
-  }
-  rows.extend(launch(ctx, inspecting.listed.launch_of(connection.id())));
-  let (version, kind) = match (checked_version(connection), connection.last_check()) {
-    (Some(version), _) => (version.into(), PropertyValue::Plain),
-    (None, Some(_)) => (ctx.t("connections.unknown"), PropertyValue::Muted),
-    (None, None) => (ctx.t("connections.notCheckedYet"), PropertyValue::Muted),
-  };
-  rows.push(property(
-    "connection-version",
-    &ctx.t("connections.property.version"),
-    &version,
-    kind,
-  ));
-  rows.push(property(
-    "connection-execution",
-    &ctx.t("connections.property.execution"),
-    &ctx.t("connections.thisComputer"),
-    PropertyValue::Plain,
-  ));
-  let authentication = match connection.api_provider() {
-    Some(_) => "connections.apiProvider.authentication",
-    None => "connections.cliLogin",
-  };
-  rows.push(property(
-    "connection-authentication",
-    &ctx.t("connections.property.authentication"),
-    &ctx.t(authentication),
-    PropertyValue::Plain,
-  ));
-  if connection.api_provider().is_some() {
-    rows.push(property(
-      "connection-plan-limits",
-      &ctx.t("connections.account.planLimits"),
-      &ctx.t("connections.apiProvider.planLimits"),
-      PropertyValue::Muted,
-    ));
-  }
-  let (checked, kind) = last_checked(ctx, inspecting.now, connection.last_check().map(|check| check.at));
-  rows.push(property(
-    "connection-checked",
-    &ctx.t("connections.property.lastChecked"),
-    &checked,
-    kind,
-  ));
-  lurq::components::Column::new()
-    .id("connection-properties")
-    .width(Dimension::Pct(100.0))
-    .with_children(rows)
-}
-
-/// *Runs with* and *Script*, when what starts is not the program file itself: `cmd.exe` for a command
-/// script, Node.js and its script for an npm launcher of one, the program an npm launcher starts in its
-/// place.
-fn launch(ctx: &Ctx, launch: Option<&Launch>) -> Vec<Row> {
-  let Some(launch) = launch else {
+  if matches!(status, ConnectionStatus::Connected | ConnectionStatus::NotChecked) {
     return Vec::new();
+  }
+  let mut said = vec![sentence(
+    "connection-inspector-sentence",
+    &ctx.t(detail_key(status, connection.provider())),
+    sentence_tone(shown),
+  )];
+  if let Some(command) = (status == ConnectionStatus::SignInRequired)
+    .then(|| sign_in_command(connection.provider()))
+    .flatten()
+  {
+    said.push(command_line(
+      ctx,
+      "connection-sign-in-command",
+      ctx.t("connections.runInTerminal"),
+      command.to_owned(),
+    ));
+  }
+  said
+}
+
+/// *Program*: the program file and what starts it in its hint, its version as the value; *Script* when a launcher
+/// runs one.
+pub(super) fn program_rows(ctx: &mut Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>) -> Vec<Element> {
+  let status = connection.status_with(&inspecting.listed.secrets);
+  let launch = inspecting.listed.launch_of(connection.id());
+  let path = connection
+    .executable()
+    .map(|program| display::shorten_path(program, PATH_CHARS))
+    .unwrap_or_default();
+  let hint = match launch.map(Launch::via) {
+    Some(Via::CommandScript) => ctx.t_args(
+      "connections.programRunsWith",
+      [("path", path.as_str()), ("runner", CMD)],
+    ),
+    Some(Via::NodeScript { .. }) => ctx.t_args(
+      "connections.programRunsWith",
+      [("path", path.as_str()), ("runner", NODE)],
+    ),
+    Some(Via::LauncherProgram) => ctx.t_args(
+      "connections.programRunsWith",
+      [
+        ("path", path.as_str()),
+        (
+          "runner",
+          &display::shorten_path(launch.map_or(std::path::Path::new(""), Launch::program), PATH_CHARS),
+        ),
+      ],
+    ),
+    _ => path.as_str().into(),
   };
-  let runs = ctx.t("connections.property.runsWith");
-  match launch.via() {
-    Via::Direct => Vec::new(),
-    Via::CommandScript => vec![property("connection-runs-with", &runs, CMD, PropertyValue::Plain)],
-    Via::LauncherProgram => vec![property(
-      "connection-runs-with",
-      &runs,
-      &display::shorten_path(launch.program(), PATH_CHARS),
-      PropertyValue::Mono,
-    )],
-    Via::NodeScript { script } => vec![
-      property("connection-runs-with", &runs, NODE, PropertyValue::Plain),
-      property(
-        "connection-script",
+  let (version, tone) = match (checked_version(connection), connection.last_check()) {
+    (Some(version), _) => (version.into(), Tone::Muted),
+    (None, Some(_)) => (ctx.t("connections.unknown"), Tone::Muted),
+    (None, None) => (ctx.t("connections.notCheckedYet"), Tone::Muted),
+  };
+  let hint_tone = if status == ConnectionStatus::ExecutableMissing {
+    Tone::Danger
+  } else {
+    tone
+  };
+  let mut rows = vec![
+    SettingRow::new("connection-program", ctx.t("connections.property.program"))
+      .toned(hint, hint_tone)
+      .info(ctx.t(provider_key(connection.provider())))
+      .control(value("connection-version", &version))
+      .render(ctx),
+  ];
+  if let Some(Via::NodeScript { script }) = launch.map(Launch::via) {
+    rows.push(detail_row(
+      ctx,
+      "connection-script",
+      (
         &ctx.t("connections.property.script"),
         &display::shorten_path(script, PATH_CHARS),
-        PropertyValue::Mono,
       ),
-    ],
+      true,
+    ));
   }
+  rows
 }
 
 /// That the CLI is too old for one of its models, as a run found when the provider refused it.
@@ -294,35 +281,28 @@ fn too_old(ctx: &Ctx, connection: &AgentConnection) -> Option<Element> {
   )
 }
 
-/// The models the last check listed, a model the CLI is too old for marked, where the list came from, and
-/// Refresh models.
+/// *Models* (`OWJtS`): the models the last check listed (a model the CLI is too old for marked) in the row's hint,
+/// where the list came from in its (i), and Refresh; a CLI on an API provider types its models in Edit connection.
 pub(super) fn models(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   connection: &AgentConnection,
   inspecting: &Inspecting<'_>,
   actions: &Actions,
 ) -> Element {
-  let chips = Row::new()
-    .id("connection-models")
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .wrap()
-    .with_children(connection.models().iter().enumerate().map(|(index, model)| -> Element {
-      let id = format!("connection-model-{index}");
-      match connection.cannot_run(model.id()) {
-        Some(too_old) => {
-          let word = ctx.t_args(
-            "connections.modelNeeds",
-            [("model", model.id().as_str()), ("required", too_old.required.as_str())],
-          );
-          badge(&id, BadgeTone::Warning, &word).into()
-        }
-        // An API provider's model ids are typed: shown as written, in Geist Mono (`y2qhJ`).
-        None if connection.api_provider().is_some() => TagChip::new(id, model.id().as_str()).mono().into(),
-        None => TagChip::new(id, model.id().as_str()).into(),
-      }
-    }));
-  let note = match connection.catalog().map(|catalog| catalog.source()) {
+  let names: Vec<String> = connection
+    .models()
+    .iter()
+    .map(|model| match connection.cannot_run(model.id()) {
+      Some(too_old) => ctx
+        .t_args(
+          "connections.modelNeeds",
+          [("model", model.id().as_str()), ("required", too_old.required.as_str())],
+        )
+        .to_string(),
+      None => model.id().as_str().to_owned(),
+    })
+    .collect();
+  let source = match connection.catalog().map(|catalog| catalog.source()) {
     _ if connection.api_provider().is_some() => "connections.modelSource.apiProvider",
     _ if connection.models().is_empty() && connection.last_check().is_some_and(|check| check.result.is_verified()) => {
       "connections.noModelsListed"
@@ -332,33 +312,59 @@ pub(super) fn models(
     Some(CatalogSource::ProviderAndCurrentIds) => "connections.modelSource.providerAndCurrentIds",
     None => "connections.modelsAfterCheck",
   };
-  let refresh = check_button(
-    inspecting,
-    ("connection-refresh-models", ctx.t("connections.refreshModels")),
-    actions,
-  )
-  .icon(Icon::RefreshCw);
-  inspector::section("connection-models-section", SpacingSize::Sm)
-    .child(inspector::section_title(
-      "connection-models-title",
-      &ctx.t("connections.availableModels"),
-      None,
-    ))
-    .with_children((!connection.models().is_empty()).then_some(chips))
-    .child(Text::new(&ctx.t(note)).variant(ExtraTypography::Note.role()))
-    // An API provider's models are typed in Edit connection; a check of the CLI lists none of them.
-    .with_children(connection.api_provider().is_none().then(|| Row::new().child(refresh)))
+  let too_old = connection
+    .models()
+    .iter()
+    .any(|model| connection.cannot_run(model.id()).is_some());
+  let hint = if names.is_empty() {
+    ctx.t(source)
+  } else {
+    listed(ctx, &names)
+  };
+  let row = SettingRow::new("connection-models", ctx.t("connections.modelsItLists"))
+    .toned(hint, if too_old { Tone::Warning } else { Tone::Muted })
+    .info(ctx.t(source));
+  // An API provider's models are typed in Edit connection; a check of the CLI lists none of them.
+  let row = if connection.api_provider().is_none() {
+    row.control(
+      check_button(
+        inspecting,
+        ("connection-refresh-models", ctx.t("connections.refreshModels")),
+        actions,
+      )
+      .compact(),
+    )
+  } else {
+    row
+  };
+  Group::new("connection-models-section", ctx.t("connections.models"))
+    .row(row.render(ctx))
     .into()
 }
 
+/// `names`, the first few and how many more.
+fn listed(ctx: &Ctx, names: &[String]) -> Arc<str> {
+  if names.len() <= MODELS_SHOWN {
+    return names.join(", ").into();
+  }
+  ctx.t_args(
+    "connections.listedMore",
+    [
+      ("names", names[..MODELS_SHOWN].join(", ")),
+      ("more", (names.len() - MODELS_SHOWN).to_string()),
+    ],
+  )
+}
+
 fn native(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   connection: &AgentConnection,
   api: &ApiEndpoint,
-  (header, used): (Element, Element),
-  inspecting: &Inspecting<'_>,
+  used: Element,
+  (inspecting, actions): (&Inspecting<'_>, &Actions),
 ) -> Parts {
   let provider = ctx.t(provider_key(connection.provider()));
+  let reason: Arc<str> = ctx.t("connections.native.testUnavailable");
   let unavailable = Notice::new(
     "connection-native-unavailable",
     NoticeTone::Info,
@@ -369,53 +375,56 @@ fn native(
   )
   .icon(Icon::Lock)
   .body(ctx.t("connections.nativeNotAvailable.detail"));
-  let rows = native_properties(ctx, connection, api, inspecting);
-  let models = native_models(ctx, api);
-  let reason: Arc<str> = ctx.t("connections.native.testUnavailable");
-  let buttons = vec![
-    footer_action(
-      inspecting,
-      ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test")),
-      Icon::PlugZap,
-    )
-    .unavailable(reason.clone())
-    .into(),
-    footer_action(
-      inspecting,
-      ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")),
-      Icon::Pencil,
-    )
-    .unavailable(reason.clone())
-    .into(),
-  ];
+  let rows = native_rows(ctx, connection, api, inspecting);
+  let models: Vec<String> = api
+    .models()
+    .models()
+    .iter()
+    .map(|model| model.id().as_str().to_owned())
+    .collect();
+  let models = Group::new("connection-models-section", ctx.t("connections.models")).row(
+    SettingRow::new("connection-models", ctx.t("connections.models"))
+      .hint(listed(ctx, &models))
+      .info(ctx.t("connections.native.modelsUnavailable"))
+      .render(ctx),
+  );
+  let test = ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test"))
+    .icon(Icon::PlugZap)
+    .unavailable(reason.clone());
+  let edit = MenuItem::unavailable("connection-edit", ctx.t("connections.edit"), reason).icon(Icon::Pencil);
   Parts {
-    header,
-    body: vec![
-      unavailable.into(),
-      lurq::components::Column::new()
-        .id("connection-properties")
-        .width(Dimension::Pct(100.0))
-        .with_children(rows)
+    glyph: agent_glyph(connection),
+    title: title_with_rename(
+      ctx,
+      (inspecting, actions),
+      (connection.id(), connection.name().as_str()),
+    ),
+    status: shown(
+      inspecting,
+      connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
+    ),
+    status_detail: checked_detail(ctx, connection, inspecting),
+    actions: vec![test.into()],
+    menu: vec![rename_item(ctx, inspecting, actions), edit],
+    notices: vec![unavailable.into()],
+    groups: vec![
+      Group::new("connection-properties", ctx.t("connections.connectionGroup"))
+        .rows(rows)
         .into(),
       models.into(),
       used,
     ],
-    footer: Some(footer(
-      ctx,
-      inspecting,
-      (&reason, Vec::new()),
-      (vec![buttons], Vec::new()),
-    )),
+    question: None,
   }
 }
 
-/// A native connection's provider, preset, endpoint, key, where it runs and when it was checked.
-fn native_properties(
-  ctx: &Ctx,
+/// A native connection's provider, preset, endpoint, key and where it runs.
+fn native_rows(
+  ctx: &mut Ctx,
   connection: &AgentConnection,
   api: &ApiEndpoint,
   inspecting: &Inspecting<'_>,
-) -> [Row; 6] {
+) -> Vec<Element> {
   let provider = ctx.t(provider_key(connection.provider()));
   let key = inspecting
     .listed
@@ -434,74 +443,37 @@ fn native_properties(
         )
       },
     );
-  let (checked, kind) = last_checked(ctx, inspecting.now, connection.last_check().map(|check| check.at));
-  [
-    property(
-      "connection-provider",
-      &ctx.t("connections.property.provider"),
-      &provider,
-      PropertyValue::Plain,
-    ),
-    property(
+  let rows = [
+    ("connection-provider", "connections.property.provider", provider, false),
+    (
       "connection-preset",
-      &ctx.t("connections.property.preset"),
-      &ctx.t(preset_key(api.preset())),
-      PropertyValue::Plain,
+      "connections.property.preset",
+      ctx.t(preset_key(api.preset())),
+      false,
     ),
-    property(
+    (
       "connection-endpoint",
-      &ctx.t("connections.property.endpoint"),
-      api.base_url().as_str(),
-      PropertyValue::Mono,
+      "connections.property.endpoint",
+      api.base_url().as_str().into(),
+      true,
     ),
-    property(
+    (
       "connection-authentication",
-      &ctx.t("connections.property.authentication"),
-      &key,
-      PropertyValue::Plain,
+      "connections.property.authentication",
+      key,
+      false,
     ),
-    property(
+    (
       "connection-execution",
-      &ctx.t("connections.property.execution"),
-      &ctx.t("connections.native.execution"),
-      PropertyValue::Plain,
+      "connections.property.execution",
+      ctx.t("connections.native.execution"),
+      false,
     ),
-    property(
-      "connection-checked",
-      &ctx.t("connections.property.lastChecked"),
-      &checked,
-      kind,
-    ),
-  ]
-}
-
-/// A native connection's models, which this version neither edits nor fetches.
-fn native_models(ctx: &Ctx, api: &ApiEndpoint) -> lurq::components::Column {
-  inspector::section("connection-models-section", SpacingSize::Sm)
-    .child(inspector::section_title(
-      "connection-models-title",
-      &ctx.t("connections.models"),
-      None,
-    ))
-    .child(
-      Row::new()
-        .id("connection-models")
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .wrap()
-        .with_children(
-          api
-            .models()
-            .models()
-            .iter()
-            .enumerate()
-            .map(|(index, model)| TagChip::new(format!("connection-model-{index}"), model.id().as_str()).mono()),
-        ),
-    )
-    .child(reason_line(
-      "connection-models-reason",
-      &ctx.t("connections.native.modelsUnavailable"),
-    ))
+  ];
+  rows
+    .into_iter()
+    .map(|(id, label, shown, mono)| detail_row(ctx, id, (&ctx.t(label), &shown), mono))
+    .collect()
 }
 
 const fn preset_key(preset: EndpointPreset) -> &'static str {
@@ -534,7 +506,7 @@ const fn detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'stat
 }
 
 /// What a connection signed out on `account` means and where to fix it (`M42rM`).
-fn signed_out_sentence(ctx: &Ctx, account: &orchester_core::account::AgentAccount) -> std::sync::Arc<str> {
+fn signed_out_sentence(ctx: &Ctx, account: &orchester_core::account::AgentAccount) -> Arc<str> {
   let name = crate::services::accounts::account_name(ctx, account);
   let expired = account.state(orchester_core::connection::invocation::Platform::current())
     == orchester_core::account::AccountState::Expired;
@@ -557,6 +529,7 @@ fn open_in_settings(ctx: &mut Ctx, account: &orchester_core::account::AgentAccou
     ButtonKind::Secondary,
     ctx.t_args("connections.account.openInSettings", [("account", name.as_str())]),
   )
+  .icon(Icon::ArrowUpRight)
   .bounded_label()
   .opens(
     navigation.to(crate::routes::Route::Accounts(crate::routes::AccountsView::of(

@@ -26,7 +26,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
   screens::{
-    connections::widen::{WidenConfirm, WidenProps},
+    connections::widen::{WidenConfirm, WidenLook, WidenProps},
     hub::{discard, removal},
   },
   ui::{
@@ -175,7 +175,7 @@ impl ToolEditor {
       id,
       WidenProps {
         id: id.into(),
-        card: true,
+        look: WidenLook::Card,
         affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("tools.confirmTitle"),
