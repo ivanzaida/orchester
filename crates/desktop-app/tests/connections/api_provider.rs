@@ -36,22 +36,21 @@ fn connections_api_provider_takes_the_accounts_place_and_names_each_clis_api() {
   assert!(!seeded.exists("connection-provider-url"));
   seeded.click("connection-runs-provider");
   assert!(!seeded.exists("connection-account"), "a key runs it, on no account");
-  assert!(
-    seeded
-      .text("connection-provider-section")
-      .contains("Anthropic Messages API")
+  // The Base URL's hint line names the API the CLI speaks (`roZYg` in `10b`).
+  assert_eq!(
+    seeded.text("connection-provider-url-description"),
+    "Claude Code speaks the Anthropic Messages API"
   );
   assert!(!seeded.exists("connection-auth"), "no sign-in notice for a key");
   seeded.click("connection-kind-codex");
-  assert!(
-    seeded
-      .text("connection-provider-section")
-      .contains("OpenAI Responses API")
+  assert_eq!(
+    seeded.text("connection-provider-url-description"),
+    "Codex speaks the OpenAI Responses API"
   );
   seeded.set("connection-provider-url", "http://api.deepseek.com");
   assert!(
     seeded
-      .text("connection-provider-section")
+      .text("connection-provider-url-row")
       .contains("starts with https://")
   );
   seeded.set("connection-provider-url", "https://api.deepseek.com");

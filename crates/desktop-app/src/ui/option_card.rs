@@ -49,6 +49,7 @@ pub struct OptionCard {
   inline_summary: bool,
   /// The description is a path or a command: in mono.
   mono: bool,
+  compact: bool,
 }
 
 impl OptionCard {
@@ -70,8 +71,17 @@ impl OptionCard {
       content: Vec::new(),
       inline_summary: false,
       mono: false,
+      compact: false,
       choice: Choice::Choose(Arc::new(choose)),
     }
+  }
+
+  /// A compact card, one of a few side by side (`Claude Code CLI` `qzI86` in `10 · Add provider`): no dot, its mark
+  /// and title over one short line in 11.5 `text_muted`, 10 over and under and 12 at its sides; off it has no fill.
+  /// One that cannot be chosen keeps its strength and shows a lock at its title's end; why is its `reason`.
+  pub fn compact(mut self) -> Self {
+    self.compact = true;
+    self
   }
 
   /// Additional details, such as starter steps or a source-version picker.
@@ -174,31 +184,32 @@ impl OptionCard {
   }
 }
 
-impl From<OptionCard> for Element {
-  fn from(mut card: OptionCard) -> Self {
-    let glyph = if card.chosen {
+impl OptionCard {
+  /// The card as drawn, and how it can be chosen.
+  fn frame(mut self) -> (Button, Choice) {
+    let glyph = if self.chosen {
       PaletteColor::TextPrimary
     } else {
       PaletteColor::TextSecondary
     };
-    let reason = match &card.choice {
+    let reason = match &self.choice {
       Choice::Unavailable(reason) => Some(
         Text::new(reason)
-          .id(format!("{}-reason", card.id))
+          .id(format!("{}-reason", self.id))
           .variant(ExtraTypography::Prose.role())
           .color(PaletteColor::TextMuted),
       ),
       Choice::Choose(_) | Choice::Waiting => None,
     };
-    let mark = card.mark.take();
-    let text = card.text(glyph, mark).with_children(reason);
-    let (fill, stroke) = if card.chosen {
+    let mark = self.mark.take();
+    let text = self.text(glyph, mark).with_children(reason);
+    let (fill, stroke) = if self.chosen {
       (PaletteColor::SurfaceRaised, PaletteColor::Accent)
     } else {
       (PaletteColor::SurfaceInput, PaletteColor::Border)
     };
     let frame = Button::empty()
-      .id(card.id.clone())
+      .id(self.id.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
@@ -207,15 +218,78 @@ impl From<OptionCard> for Element {
       .background(fill)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
-      .describe("chosen", if card.chosen { "true" } else { "false" })
-      .describe("a11y_name", card.title.clone())
+      .describe("chosen", if self.chosen { "true" } else { "false" })
+      .describe("a11y_name", self.title.clone())
       .child(
         Column::new()
           .padding(Padding::new().top(ExtraSpacing::Hair.role()))
-          .child(card.dot()),
+          .child(self.dot()),
       )
-      .child(text.with_children(card.content));
-    match card.choice {
+      .child(text.with_children(self.content));
+    (frame, self.choice)
+  }
+
+  /// The compact card as drawn, and how it can be chosen.
+  fn compact_frame(mut self) -> (Button, Choice) {
+    let lead = self
+      .mark
+      .take()
+      .unwrap_or_else(|| icon(self.icon, IconSize::Md, PaletteColor::TextPrimary).into());
+    let locked = matches!(self.choice, Choice::Unavailable(_));
+    let head = Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(lead)
+      .child(
+        Text::new(&self.title)
+          .id(format!("{}-title", self.id))
+          .variant(ExtraTypography::OptionTitle.role())
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .nowrap(),
+      )
+      .with_children(locked.then(|| icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted)));
+    let text = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(head)
+      .child(
+        Text::new(&self.description)
+          .id(format!("{}-detail", self.id))
+          .variant(ExtraTypography::Note.role()),
+      );
+    let stroke = if self.chosen {
+      PaletteColor::Accent
+    } else {
+      PaletteColor::Border
+    };
+    let frame = Button::empty()
+      .id(self.id.clone())
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+      .align_items(Alignment::Start)
+      .border(Border::inside(BorderSize::Sm, stroke))
+      .rounded(RadiusSize::Md)
+      .describe("chosen", if self.chosen { "true" } else { "false" })
+      .describe("a11y_name", self.title.clone())
+      .child(text);
+    let frame = if self.chosen {
+      frame.background(PaletteColor::SurfaceRaised)
+    } else {
+      frame
+    };
+    (frame, self.choice)
+  }
+}
+
+impl From<OptionCard> for Element {
+  fn from(card: OptionCard) -> Self {
+    let compact = card.compact;
+    let (frame, choice) = if compact { card.compact_frame() } else { card.frame() };
+    match choice {
       Choice::Choose(choose) => Focus::Keyboard
         .apply(frame)
         .cursor(CursorIcon::Pointer)
@@ -224,6 +298,8 @@ impl From<OptionCard> for Element {
           choose();
         })
         .into(),
+      // A compact card that cannot be chosen keeps its strength: its lock and its line say so (`HvtFb`).
+      Choice::Unavailable(reason) if compact => inert(frame.describe("reason", reason)).into(),
       Choice::Unavailable(reason) => inert(frame.describe("reason", reason)).opacity(DISABLED_OPACITY).into(),
       Choice::Waiting => inert(frame).opacity(DISABLED_OPACITY).into(),
     }

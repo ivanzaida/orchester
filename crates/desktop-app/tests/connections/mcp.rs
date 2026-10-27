@@ -28,7 +28,10 @@ fn connections_mcp_server_is_added_with_its_tools_that_run_without_asking() {
   let program = std::env::current_exe().expect("the test program");
   seeded.set("connection-mcp-program", &program.to_string_lossy());
   seeded.set("connection-mcp-arguments", "--app\ndesktop\n--agent\ncodexCLI");
-  seeded.set("connection-mcp-exempt-tools", TOOLS);
+  // Several tool names at once, then each as a pill under the field.
+  seeded.set("connection-mcp-exempt-tools", &TOOLS.replace('\n', " "));
+  seeded.click("connection-mcp-exempt-tools-add");
+  assert_eq!(seeded.text("connection-mcp-tool-8-label"), "export_nodes");
   assert!(
     !seeded.exists("connection-form-actions-reason"),
     "nothing keeps it from being saved"
@@ -70,7 +73,9 @@ fn connections_mcp_server_edits_keep_what_is_not_changed() {
   seeded.go(ProjectPage::EditConnection(docs.id()));
   seeded.until("the form", |seeded| seeded.exists("connection-mcp-exempt-tools"));
   assert_eq!(seeded.text("connection-form-actions-reason"), "Nothing changed yet.");
-  seeded.set("connection-mcp-exempt-tools", "search_docs");
+  // Its tools are pills: removing get_page keeps search_docs.
+  assert_eq!(seeded.text("connection-mcp-tool-1-label"), "get_page");
+  seeded.click("connection-mcp-tool-1-remove");
   assert!(
     !seeded.exists("connection-form-actions-reason"),
     "a change can be saved"

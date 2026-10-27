@@ -51,15 +51,17 @@ fn add_codex() {
   seeded.until("the check", |seeded| {
     seeded.exists("connection-check") && seeded.text("connection-check").contains(VERSION)
   });
+  // What checking found is one line under the program (`Note` `mvJ49`).
   assert_eq!(
     seeded.text("connection-check-detail"),
-    format!("Codex CLI {VERSION} · signed in")
+    format!("codex {VERSION} · signed in")
   );
+  assert!(seeded.text("connection-program-description").contains("on the PATH"));
   // On an API provider the CLI's own sign-in is not used, and the check says so (`virfc`).
   seeded.click("connection-runs-provider");
   assert_eq!(
     seeded.text("connection-check-detail"),
-    format!("Codex CLI {VERSION} · runs on the API provider; its own sign-in is not used")
+    format!("codex {VERSION} · runs on the API provider; its own sign-in is not used")
   );
   seeded.click("connection-runs-sign-in");
   seeded.until("the completed check leaves the window settled", |s| {
@@ -70,7 +72,7 @@ fn add_codex() {
   seeded.click("connection-kind-claude");
   seeded.click("connection-kind-codex");
   seeded.until("the current provider's check", |seeded| {
-    seeded.text("connection-check-detail") == format!("Codex CLI {VERSION} · signed in")
+    seeded.text("connection-check-detail") == format!("codex {VERSION} · signed in")
   });
   assert_eq!(value(&mut seeded, "connection-name"), "Codex · Kontur 2");
   seeded.until("the selected provider settles", |s| !s.window.tree.needs_redraw());
@@ -80,7 +82,7 @@ fn add_codex() {
   write_codex(&folder, "999.0.1");
   seeded.click("connection-recheck");
   seeded.until("the refreshed program's actual version", |seeded| {
-    seeded.text("connection-check-detail") == "Codex CLI 999.0.1 · signed in"
+    seeded.text("connection-check-detail") == "codex 999.0.1 · signed in"
   });
   seeded.until("Recheck leaves the window settled", |s| !s.window.tree.needs_redraw());
   seeded.set("connection-name", "Claude · Kontur");

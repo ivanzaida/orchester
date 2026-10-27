@@ -1,36 +1,33 @@
-//! The Program and Check rows of Add connection (`Row · Program` `f02h67`, `Row · Check` `FX1WS` and the
-//! states of `l2kjVF`). Program shows the copy found on the search path (a choice when there are several);
-//! Choose file… is not built in this app, so it stays locked with why. The check row says what checking
-//! found, an icon and a word with a sentence after it (`Check row` `nL8Cy`), with Recheck at its end; a CLI
-//! that is not signed in shows the command that signs it in, to run in a terminal.
+//! The Program row of Add provider (`Program` `lzSGF` in `10 · Add provider`): the copy found on the search path (a
+//! choice when there are several), whether it was found in the row's hint line, *Check* beside it, and under it what
+//! checking found in its tone (`Note` `mvJ49`); a CLI that is not signed in shows the command that signs it in, to run
+//! in a terminal. Only a copy on the search path can be chosen; the (i) says so.
 
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{
-    ctx::{Ctx, FutureState},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
+  app::ctx::{Ctx, FutureState},
   components::{Column, Row, SelectOption, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::connection::{AgentProvider, CheckResult, ConnectionCheck, SignIn};
 use orchester_workspace::{connections::data::sign_in_command, messages::Message};
 
 use super::{Copies, Found};
 use crate::{
-  screens::{connections::words::provider_key, project_settings::kit::form_row},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  screens::{
+    connections::words::provider_key,
+    project_settings::kit::{FormField, Tone},
+  },
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     code_box::CodeBox,
     field::{FieldInput, SelectField},
-    form_section::Label,
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
-    unavailable::reason_line,
   },
 };
 
@@ -92,16 +89,19 @@ impl Checked {
   }
 }
 
-/// The program found on the search path, or a choice of the copies found; Choose file… locked.
+/// The program found on the search path, or a choice of the copies found, with *Check* beside it and what checking
+/// found under it. On an API provider (`on_provider`) the CLI's own sign-in is not used, so a CLI found reads Found
+/// whatever its sign-in (`virfc`).
 pub(super) fn program_row(
   ctx: &mut Ctx,
-  provider: AgentProvider,
+  (provider, on_provider): (AgentProvider, bool),
   (found, chosen): (&FutureState<Copies, Message>, &Signal<String>),
+  (state, recheck): (&Checked, &Signal<u64>),
 ) -> Element {
   let program = provider.program_name().unwrap_or_default();
   let copies: &[PathBuf] = found.data.as_ref().map_or(&[], |copies| copies.0.as_slice());
   let label = ctx.t("connections.dialog.program");
-  let control: Element = match copies {
+  let field: Element = match copies {
     [] | [_] => FieldInput::new("connection-program", label.clone(), chosen.clone())
       .placeholder(ctx.t("connections.dialog.notFoundOnPath"))
       .mono()
@@ -117,222 +117,180 @@ pub(super) fn program_row(
         .render(ctx)
     }
   };
-  let choose_reason = ctx.t("connections.dialog.chooseFileUnavailable");
-  let line = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(Column::new().flex(1.0).child(control))
-    .child(
-      ActionButton::new(
-        "connection-choose-file",
-        ButtonKind::Secondary,
-        ctx.t("connections.dialog.chooseFile"),
-      )
-      .icon(Icon::FolderOpen)
-      .unavailable(choose_reason.clone()),
-    );
-  let (hint, color) = match copies.len() {
-    _ if found.is_pending() => (ctx.t("connections.dialog.detecting"), PaletteColor::TextMuted),
-    0 => (
-      ctx.t_args("connections.dialog.programMissing", [("program", program)]),
-      PaletteColor::Warning,
-    ),
-    1 => (ctx.t("connections.dialog.programFoundOne"), PaletteColor::TextMuted),
-    count => (
-      ctx.t_args("connections.dialog.programFoundMany", [("count", count.to_string())]),
-      PaletteColor::TextMuted,
-    ),
-  };
-  let control = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(line)
-    .child(
-      Text::new(&hint)
-        .id("connection-program-hint")
-        .variant(ExtraTypography::Note.role())
-        .color(color),
-    )
-    .child(reason_line("connection-choose-file-reason", &choose_reason));
-  let description = ctx.t_args("connections.dialog.programHint", [("program", program)]);
-  form_row(
-    Label::new("connection-program", label).description(description),
-    control,
-  )
-}
-
-/// The check row, and the sign-in command under it while the CLI is not signed in. On an API provider (`on_provider`)
-/// the CLI's own sign-in is not used, so a CLI found reads Found whatever its sign-in (`virfc`).
-pub(super) fn check_row(
-  ctx: &mut Ctx,
-  (provider, on_provider): (AgentProvider, bool),
-  state: &Checked,
-  recheck: &Signal<u64>,
-) -> Element {
-  let cli = ctx.t(provider_key(provider));
-  let (glyph, tone, word, detail) = shown_on(ctx, &cli, state, on_provider);
   let busy = matches!(state, Checked::Detecting | Checked::Checking);
-  let again =
-    ActionButton::new("connection-recheck", ButtonKind::Ghost, ctx.t("connections.recheck")).icon(Icon::RefreshCw);
+  let again = ActionButton::new(
+    "connection-recheck",
+    ButtonKind::Secondary,
+    ctx.t("connections.dialog.check"),
+  )
+  .icon(Icon::RefreshCw)
+  .in_form();
   let again = if busy {
     again.disabled()
   } else {
     let recheck = recheck.clone();
     again.on_click(move || recheck.update(|count| *count += 1))
   };
-  let word_color = match tone {
-    PaletteColor::Warning | PaletteColor::Danger => tone.clone(),
-    _ => PaletteColor::TextSecondary,
+  let (hint, tone) = match copies.len() {
+    _ if found.is_pending() => (ctx.t("connections.dialog.detecting"), Tone::Muted),
+    0 => (
+      ctx.t_args("connections.dialog.programMissing", [("program", program)]),
+      Tone::Warning,
+    ),
+    1 => (ctx.t("connections.dialog.programFoundOne"), Tone::Success),
+    count => (
+      ctx.t_args("connections.dialog.programFoundMany", [("count", count.to_string())]),
+      Tone::Muted,
+    ),
   };
-  let row = Row::new()
-    .id("connection-check")
+  let control = Column::new()
     .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(SpacingSize::Sm)
-        .bottom(SpacingSize::Sm)
-        .left(SpacingSize::Md)
-        .right(SpacingSize::Sm),
-    )
-    .spacing(SpacingSize::Md)
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .describe("state", word.clone())
+    .spacing(ExtraSpacing::Snug.role())
     .child(
       Row::new()
-        .flex_shrink(0.0)
-        .spacing(ExtraSpacing::Pair.role())
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(glyph, IconSize::Base, tone))
-        .child(
-          Text::new(&word)
-            .variant(TypographyStyle::Label)
-            .color(word_color)
-            .nowrap(),
-        ),
+        .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(field))
+        .child(again),
     )
+    .child(check_line(ctx, provider, state, on_provider))
+    .with_children(sign_in(ctx, provider, state, on_provider));
+  let info = ctx.t_args(
+    "connections.dialog.programInfo",
+    [
+      (
+        "about",
+        ctx.t_args("connections.dialog.programHint", [("program", program)]),
+      ),
+      ("choose", ctx.t("connections.dialog.chooseFileUnavailable")),
+    ],
+  );
+  FormField::new("connection-program", label)
+    .toned(hint, tone)
+    .info(info)
+    .render(ctx, control)
+}
+
+/// What checking found, one line in its tone under the program (`connection-check`, its words
+/// `connection-check-detail`, its state word for tools).
+fn check_line(ctx: &Ctx, provider: AgentProvider, state: &Checked, on_provider: bool) -> Element {
+  let (tone, word, detail) = shown_on(ctx, provider, state, on_provider);
+  Row::new()
+    .id("connection-check")
+    .width(Dimension::Pct(100.0))
+    .describe("state", word)
     .child(
       Text::new(&detail)
         .id("connection-check-detail")
-        .variant(ExtraTypography::Prose.role())
+        .variant(ExtraTypography::Note.role())
+        .color(tone.color())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
-    .child(again);
-  let command = match state {
+    .into()
+}
+
+/// The command that signs the CLI in, to run in a terminal, while it is not signed in and runs on its own sign-in.
+fn sign_in(ctx: &mut Ctx, provider: AgentProvider, state: &Checked, on_provider: bool) -> Option<Element> {
+  let signed_out = matches!(
+    state,
     Checked::Done(ConnectionCheck {
       result: CheckResult::Available {
         sign_in: SignIn::SignedOut,
         ..
       },
       ..
-    }) if !on_provider => sign_in_command(provider).map(|command| {
-      CodeBox::new(
-        "connection-sign-in-command",
-        ctx.t("connections.dialog.runToSignIn"),
-        command,
-      )
-      .render(ctx)
-    }),
-    _ => None,
-  };
-  let control = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(row)
-    .with_children(command);
-  form_row(
-    Label::new("connection-check", ctx.t("connections.dialog.check")),
-    control,
+    })
+  );
+  if !signed_out || on_provider {
+    return None;
+  }
+  let command = sign_in_command(provider)?;
+  Some(
+    CodeBox::new(
+      "connection-sign-in-command",
+      ctx.t("connections.dialog.runToSignIn"),
+      command,
+    )
+    .render(ctx),
   )
 }
 
-/// The check row's icon, its color, word and sentence.
-/// What the check row shows: on an API provider a CLI found reads Found whatever its own sign-in (`virfc`).
-fn shown_on(ctx: &Ctx, cli: &str, state: &Checked, on_provider: bool) -> (Icon, PaletteColor, Arc<str>, Arc<str>) {
+/// The check line's tone, its state word and its sentence: on an API provider a CLI found reads Found whatever its own
+/// sign-in (`virfc`).
+fn shown_on(ctx: &Ctx, provider: AgentProvider, state: &Checked, on_provider: bool) -> (Tone, Arc<str>, Arc<str>) {
+  let program = provider.program_name().unwrap_or_default();
   match state {
     Checked::Done(ConnectionCheck {
       result: CheckResult::Available { version, .. },
       ..
     }) if on_provider => (
-      Icon::CircleCheck,
-      PaletteColor::Success,
+      Tone::Success,
       ctx.t("connections.apiProvider.found"),
       ctx.t_args(
         "connections.apiProvider.checkFound",
-        [("program", cli), ("version", version.as_str())],
+        [("program", program), ("version", version.as_str())],
       ),
     ),
-    _ => shown(ctx, cli, state),
+    _ => shown(ctx, (program, &ctx.t(provider_key(provider))), state),
   }
 }
 
-fn shown(ctx: &Ctx, cli: &str, state: &Checked) -> (Icon, PaletteColor, Arc<str>, Arc<str>) {
-  let line = |key: &str, version: &str| ctx.t_args(key, [("program", cli), ("version", version)]);
+/// `program` is the CLI's program (`claude`), `cli` its name (*Claude Code CLI*).
+fn shown(ctx: &Ctx, (program, cli): (&str, &str), state: &Checked) -> (Tone, Arc<str>, Arc<str>) {
+  let line = |key: &str, version: &str| ctx.t_args(key, [("program", program), ("version", version)]);
   match state {
     Checked::Detecting => (
-      Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
+      Tone::Muted,
       ctx.t("connections.dialog.detectingWord"),
       ctx.t("connections.dialog.detecting"),
     ),
     Checked::Checking => (
-      Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
+      Tone::Muted,
       ctx.t("connections.status.checking"),
       ctx.t("connections.dialog.checking"),
     ),
     Checked::NoProgram => (
-      Icon::Circle,
-      PaletteColor::TextMuted,
+      Tone::Muted,
       ctx.t("connections.status.notChecked"),
       ctx.t("connections.dialog.noProgramToCheck"),
     ),
     Checked::Failed(error) => (
-      Icon::CircleAlert,
-      PaletteColor::Danger,
+      Tone::Danger,
       ctx.t("connections.status.couldNotRun"),
       message_text(ctx, error),
     ),
     Checked::Done(check) => match &check.result {
       CheckResult::Available { version, sign_in, .. } => match sign_in {
         SignIn::SignedIn => (
-          Icon::CircleCheck,
-          PaletteColor::Success,
+          Tone::Success,
           ctx.t("connections.dialog.signedIn"),
           line("connections.dialog.verifiedSignedIn", version),
         ),
         SignIn::SignedOut => (
-          Icon::CircleAlert,
-          PaletteColor::Warning,
+          Tone::Warning,
           ctx.t("connections.dialog.notSignedIn"),
           line("connections.dialog.verifiedSignedOut", version),
         ),
         SignIn::Unknown => (
-          Icon::CircleHelp,
-          PaletteColor::TextSecondary,
+          Tone::Secondary,
           ctx.t("connections.unknown"),
           line("connections.dialog.verifiedSignInUnknown", version),
         ),
       },
       CheckResult::ExecutableMissing => (
-        Icon::CircleAlert,
-        PaletteColor::Danger,
+        Tone::Danger,
         ctx.t("connections.status.notFound"),
         ctx.t("connections.detail.executableMissing"),
       ),
       CheckResult::NotRecognized => (
-        Icon::CircleAlert,
-        PaletteColor::Danger,
+        Tone::Danger,
         ctx.t("connections.status.notRecognized"),
-        line("connections.dialog.notRecognized", ""),
+        ctx.t_args("connections.dialog.notRecognized", [("program", cli)]),
       ),
       _ => (
-        Icon::CircleAlert,
-        PaletteColor::Danger,
+        Tone::Danger,
         ctx.t("connections.status.couldNotRun"),
         ctx.t("connections.detail.couldNotRun"),
       ),

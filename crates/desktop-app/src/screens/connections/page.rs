@@ -14,7 +14,7 @@ use lurq::{
 use crate::{
   navigation::link::Open,
   routes::Screen,
-  screens::project_settings::kit::{self, back, form_actions, page_head},
+  screens::project_settings::kit::{self, Tone, back, form_actions, form_actions_noted, page_head},
   theme::ExtraSpacing,
 };
 
@@ -53,4 +53,10 @@ pub(super) fn page(ctx: &mut Ctx, screen: Screen, head: Head, sections: Vec<Elem
 /// The page's actions: `actions` at the end, and why the last cannot be used before them.
 pub(super) fn action_bar(actions: Vec<Element>, reason: Option<&str>) -> Element {
   form_actions("connection-form-actions", actions, reason)
+}
+
+/// The page's actions after a line in its tone: why the last cannot be used, or what comes after it (`Actions`
+/// `cUKmf`).
+pub(super) fn action_bar_noted(actions: Vec<Element>, note: Option<(&str, Tone)>) -> Element {
+  form_actions_noted("connection-form-actions", actions, note)
 }

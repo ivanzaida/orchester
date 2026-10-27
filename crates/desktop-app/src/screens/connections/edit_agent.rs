@@ -181,6 +181,8 @@ impl EditConnection {
         value("connection-edit-program-value", &program).variant(ExtraTypography::PropertyMono.role()),
       ),
     ];
+    rows.extend(self.provider.rows(ctx, provider, known));
+    // On its own sign-in the account follows *Runs on*, as Add provider has it.
     if !self.provider.on() {
       rows.push(account::add_row(ctx, &accounts, provider, &self.chosen));
     }
@@ -195,7 +197,7 @@ impl EditConnection {
         )
         .into(),
     ];
-    sections.push(self.provider.section(ctx, provider, known));
+    sections.extend(self.provider.warning(ctx));
     if let Some(current) = connection.api_provider().filter(|_| !self.provider.on()) {
       let secret = known
         .secrets

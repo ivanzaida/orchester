@@ -219,12 +219,14 @@ impl Component for AccountPicker {
   }
 }
 
-/// The *Account* row of Add connection, after *Program*: the accounts of `provider`'s CLI, `chosen` by id (empty:
-/// Default).
+/// The *Account* row of Add provider, after *Runs on* (`Account` `GS9Dj`): the accounts of `provider`'s CLI, `chosen`
+/// by id (empty: Default); the hint line says who is signed in on the one chosen, or what is wrong with it.
 pub(super) fn add_row(ctx: &mut Ctx, accounts: &Accounts, provider: AgentProvider, chosen: &Signal<String>) -> Element {
+  use crate::screens::project_settings::kit::{FormField, Tone};
   let readings = crate::services::plan_limits::account_readings(ctx);
-  let current =
-    chosen_account(accounts, provider, &chosen.get()).map_or_else(String::new, |account| account.id().to_string());
+  let account = chosen_account(accounts, provider, &chosen.get());
+  let current = account.map_or_else(String::new, |account| account.id().to_string());
+  let hint = account.map(|account| detail(ctx, account, accounts, readings.of_account(account.id())));
   let setter = chosen.clone();
   let picker = ctx.mount_keyed::<AccountPicker>(
     "connection-account-picker",
@@ -237,11 +239,14 @@ pub(super) fn add_row(ctx: &mut Ctx, accounts: &Accounts, provider: AgentProvide
       on_choose: Arc::new(move |chosen| setter.set(chosen)),
     },
   );
-  crate::screens::project_settings::kit::form_row(
-    crate::ui::form_section::Label::new("connection-account", ctx.t("connections.account.label"))
-      .description(ctx.t("connections.account.description")),
-    picker,
-  )
+  let row = FormField::new("connection-account", ctx.t("connections.account.label"))
+    .info(ctx.t("connections.account.description"));
+  match hint {
+    Some((hint, true)) => row.toned(hint, Tone::Warning),
+    Some((hint, false)) => row.hint(hint),
+    None => row,
+  }
+  .render(ctx, picker)
 }
 
 /// The account of `provider`'s CLI with the id `chosen`, else its Default.

@@ -1,11 +1,16 @@
 //! The parts of Context › Sources: the group's heading with its count, a row per source (`E:\docs\api` `waZCD`: its
 //! path, whether it is a folder or a file, and Remove; a source runs cannot read now says why in `warning` with Check
 //! again and Remove), the empty row (`Empty · No sources yet` `JKOnV`), a removed source with Undo, *Add a folder or
-//! file* (`GzqFE`, its Add opening the path box under it), and what agents may do outside the worktree.
+//! file* (`GzqFE`, its Add opening the path box under it), and what agents may do outside the worktree in the
+//! heading's (i).
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, core::Signal, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::PaletteColor},
+  core::Signal,
+  node::Element,
+};
 use orchester_core::source::SourcePath;
 use orchester_workspace::sources::{
   check::Kind,
@@ -15,15 +20,16 @@ use orchester_workspace::sources::{
 
 use super::Read;
 use crate::{
-  screens::project_settings::kit::{EmptyRow, Group, SettingRow, Tone, value},
-  theme::ProjectSettingsText,
+  screens::project_settings::kit::{EmptyRow, Group, SettingRow, Tone},
+  theme::IconSize,
   ui::{
     add_source::{AddSource, AddSourceProps, Layout},
     button::{ActionButton, ButtonKind},
     enforcement_row::Held,
-    icon::Icon,
+    icon::{Icon, icon},
     icon_button::IconButton,
     message::message_text,
+    tooltip::Tooltip,
   },
 };
 
@@ -218,10 +224,9 @@ pub(super) fn add(
   row.under(box_).render(ctx)
 }
 
-/// What agents may do outside the worktree (each row's element id and its keys), and what holds it.
-const OUTSIDE: [(&str, [&str; 3], Held); 5] = [
+/// What agents may do outside the worktree (its keys: what, the rule, what holds it), and whether Orchester holds it.
+const OUTSIDE: [([&str; 3], Held); 5] = [
   (
-    "settings-sources-read",
     [
       "project_settings.sourcesTab.readSource",
       "project_settings.sourcesTab.readSourceRule",
@@ -230,7 +235,6 @@ const OUTSIDE: [(&str, [&str; 3], Held); 5] = [
     Held::Enforced,
   ),
   (
-    "settings-sources-elsewhere",
     [
       "project_settings.sourcesTab.readElsewhere",
       "project_settings.sourcesTab.readElsewhereRule",
@@ -239,7 +243,6 @@ const OUTSIDE: [(&str, [&str; 3], Held); 5] = [
     Held::Enforced,
   ),
   (
-    "settings-sources-change",
     [
       "project_settings.sourcesTab.change",
       "project_settings.sourcesTab.changeRule",
@@ -248,7 +251,6 @@ const OUTSIDE: [(&str, [&str; 3], Held); 5] = [
     Held::Enforced,
   ),
   (
-    "settings-sources-refused",
     [
       "project_settings.sourcesTab.refused",
       "project_settings.sourcesTab.refusedRule",
@@ -257,7 +259,6 @@ const OUTSIDE: [(&str, [&str; 3], Held); 5] = [
     Held::Enforced,
   ),
   (
-    "settings-sources-commands",
     [
       "project_settings.sourcesTab.commands",
       "project_settings.sourcesTab.commandsRule",
@@ -267,27 +268,25 @@ const OUTSIDE: [(&str, [&str; 3], Held); 5] = [
   ),
 ];
 
-/// What agents may do outside the worktree: each rule with what holds it in its (i), *Enforced* at its end when
-/// Orchester holds it.
-pub(super) fn outside(ctx: &mut Ctx) -> Element {
-  let enforced = ctx.t("project_settings.sourcesTab.enforced");
-  let rows = OUTSIDE
+/// What agents may do outside the worktree, which the design leaves out of the tab (`03 · Context` `ux0Kh`): the
+/// Sources heading's (i), each rule on a line of its own with what holds it, *Enforced* where Orchester holds it.
+pub(super) fn outside_info(ctx: &mut Ctx) -> Element {
+  let lines = OUTSIDE
     .iter()
-    .map(|(id, [setting, rule, how], held)| {
-      let row = SettingRow::new(*id, ctx.t(setting)).hint(ctx.t(rule)).info(ctx.t(how));
-      let row = match held {
-        Held::Enforced => {
-          row.control(value(&format!("{id}-held"), &enforced).variant(ProjectSettingsText::Hint.role()))
-        }
-        Held::Elsewhere => row,
+    .map(|([setting, rule, how], held)| {
+      let key = match held {
+        Held::Enforced => "project_settings.sourcesTab.outsideEnforced",
+        Held::Elsewhere => "project_settings.sourcesTab.outsideLine",
       };
-      row.render(ctx)
+      ctx
+        .t_args(
+          key,
+          [("setting", ctx.t(setting)), ("rule", ctx.t(rule)), ("how", ctx.t(how))],
+        )
+        .to_string()
     })
     .collect::<Vec<_>>();
-  Group::new(
-    "settings-sources-outside",
-    ctx.t("project_settings.sourcesTab.outsideTitle"),
-  )
-  .rows(rows)
-  .into()
+  let text = ctx.t_args("project_settings.sourcesTab.outsideInfo", [("rules", lines.join("\n"))]);
+  let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id("settings-sources-outside-info");
+  Tooltip::new("settings-sources-outside-info", text).wrap(ctx, glyph)
 }

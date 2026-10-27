@@ -1,17 +1,15 @@
-//! The *Runs on* section as drawn (`virfc`, `UW2bO`, `VvWpe`, `FsIt3`): the two choices, and on an API provider its
-//! Base URL with the API the CLI speaks, the API key (a secret, an archived one said so, or *New secret…* with its
-//! name and key under it), the models as removable chips, where requests go and what a provider does not give; and the
-//! notice Edit connection shows when saving takes a connection off its provider.
-
-use std::sync::Arc;
+//! The *Runs on* rows as drawn (`Runs on` `KcPFk` in `10 · Add provider`, `Base URL` `roZYg`, `API key` `s7DEcn` and
+//! `Models` `ZgOvN` in `10b`): the two choices as radio options, and on an API provider its Base URL with the API the
+//! CLI speaks, the API key (a secret, an archived one said so, or *New secret…* with its name and key under it), the
+//! models as removable pills under the field that adds them, and the warning line of where requests go (`Sent to`
+//! `s4sjZm`), what a provider does not give in its (i); and the notice Edit connection shows when saving takes a
+//! connection off its provider.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, SelectOption, Text},
-  node::{Element, dimension::Dimension, padding::Padding},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   connection::AgentProvider,
@@ -21,106 +19,106 @@ use orchester_workspace::connections::{api_provider::base_url, data::ProjectConn
 
 use super::{KeyChoice, OnProvider, ProviderForm, active, name_problem};
 use crate::{
-  screens::project_settings::kit::{form_group, form_row},
-  theme::{ExtraSpacing, ExtraTypography},
+  screens::project_settings::kit::{FormField, warning_line},
+  theme::{ExtraSpacing, ExtraTypography, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::TagChip,
     field::{FieldInput, SelectField, field, field_error},
-    form_section::Label,
     icon::Icon,
-    list_entry,
     message::message_text,
     notice::{Notice, NoticeTone},
-    option_card::OptionCard,
+    pressable::pressable,
+    toggle::{Toggle, ToggleKind},
   },
 };
 
 impl ProviderForm {
-  /// The group: what the CLI runs on, and the provider's fields while it is chosen; where the provider sends what it
-  /// gets under the group.
-  pub(in super::super) fn section(&self, ctx: &mut Ctx, cli: AgentProvider, listed: &ProjectConnections) -> Element {
+  /// The rows of the Connection group: what the CLI runs on, and the provider's fields while it is chosen.
+  pub(in super::super) fn rows(&self, ctx: &mut Ctx, cli: AgentProvider, listed: &ProjectConnections) -> Vec<Element> {
     let mut rows = vec![self.choices(ctx, cli)];
-    let mut notice = None;
     if self.on() {
       rows.push(self.url_row(ctx, cli));
       rows.push(self.key_row(ctx, listed));
       rows.push(self.models_row(ctx));
-      notice = Some(self.notice(ctx));
     }
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .child(form_group(
-        "connection-provider-section",
-        &ctx.t("connections.apiProvider.label"),
-        None,
-        rows,
-      ))
-      .with_children(notice)
-      .into()
+    rows
   }
 
-  /// What comes after saving a connection on a provider (`virfc`).
-  pub(in super::super) fn next_step(ctx: &Ctx) -> Element {
-    Text::new(&ctx.t("connections.apiProvider.nextStep"))
-      .id("connection-provider-next")
-      .variant(ExtraTypography::Prose.role())
-      .color(PaletteColor::TextMuted)
-      .into()
-  }
-
-  /// *Runs on* (`KcPFk`): its own sign-in, or an API provider, one over the other.
-  fn choices(&self, ctx: &Ctx, cli: AgentProvider) -> Element {
-    let card = |id: &str, glyph: Icon, (title, detail): (&str, Arc<str>), provider: bool| -> Element {
-      let on = self.on.clone();
-      OptionCard::new(
-        id.to_owned(),
-        (glyph, ctx.t(title)),
-        detail,
-        self.on() == provider,
-        move || on.set(OnProvider(provider)),
-      )
-      .into()
-    };
-    let sign_in = card(
-      "connection-runs-sign-in",
-      Icon::User,
-      (
-        "connections.apiProvider.signIn",
-        ctx.t("connections.apiProvider.signInDetail"),
-      ),
-      false,
-    );
+  /// *Runs on* (`KcPFk`): its own sign-in, or an API provider, one radio option over the other, each with what it
+  /// means under its title.
+  fn choices(&self, ctx: &mut Ctx, cli: AgentProvider) -> Element {
     let detail = match cli {
       AgentProvider::CodexCli => "connections.apiProvider.apiDetailCodex",
       _ => "connections.apiProvider.apiDetailClaude",
     };
-    let provider = card(
-      "connection-runs-provider",
-      Icon::Globe,
-      ("connections.apiProvider.api", ctx.t(detail)),
-      true,
-    );
-    let cards = Column::new()
+    let options = Column::new()
       .id("connection-runs-on")
       .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(self.choice(
+        ctx,
+        "connection-runs-sign-in",
+        ("connections.apiProvider.signIn", "connections.apiProvider.signInDetail"),
+        false,
+      ))
+      .child(self.choice(
+        ctx,
+        "connection-runs-provider",
+        ("connections.apiProvider.api", detail),
+        true,
+      ));
+    FormField::new("connection-runs-on-field", ctx.t("connections.runsOn")).render(ctx, options)
+  }
+
+  /// One radio option of *Runs on* (`Its own sign-in` `sFKyN`): the radio, its title in 12.5, 500 while chosen, and
+  /// what it means in 11.5 `text_muted`; a press anywhere on it chooses it.
+  fn choice(&self, ctx: &Ctx, id: &str, (title, detail): (&str, &str), provider: bool) -> Element {
+    let chosen = self.on() == provider;
+    let title = ctx.t(title);
+    let (on, on_radio) = (self.on.clone(), self.on.clone());
+    let radio = Toggle::new(format!("{id}-radio"), ToggleKind::Radio, chosen, title.clone())
+      .hide_label()
+      .on_change(move |_| on_radio.set(OnProvider(provider)));
+    let title = Text::new(&title).id(format!("{id}-title"));
+    let title = if chosen {
+      title.variant(ExtraTypography::OptionTitle.role())
+    } else {
+      title
+        .variant(ProjectSettingsText::Value.role())
+        .color(lurq::app::theme::PaletteColor::TextPrimary)
+    };
+    pressable(move || on.set(OnProvider(provider)))
+      .id(id.to_owned())
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .child(sign_in)
-      .child(provider);
-    form_row(
-      Label::new("connection-runs-on-field", ctx.t("connections.runsOn")),
-      cards,
-    )
+      .align_items(Alignment::Start)
+      .describe("chosen", if chosen { "true" } else { "false" })
+      .child(radio)
+      .child(
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .spacing(ExtraSpacing::Hair.role())
+          .child(title)
+          .child(
+            Text::new(&ctx.t(detail))
+              .variant(ExtraTypography::Note.role())
+              .width(Dimension::Pct(100.0)),
+          ),
+      )
+      .into()
   }
 
   fn url_row(&self, ctx: &mut Ctx, cli: AgentProvider) -> Element {
-    let (interface, placeholder) = match cli {
+    let (interface, more, placeholder) = match cli {
       AgentProvider::CodexCli => (
+        "connections.apiProvider.interfaceCodexShort",
         "connections.apiProvider.interfaceCodex",
         "connections.apiProvider.urlPlaceholderCodex",
       ),
       _ => (
+        "connections.apiProvider.interfaceClaudeShort",
         "connections.apiProvider.interfaceClaude",
         "connections.apiProvider.urlPlaceholderClaude",
       ),
@@ -137,10 +135,11 @@ impl ProviderForm {
     {
       url = url.error(message_text(ctx, &problem));
     }
-    form_row(
-      Label::new("connection-provider-url", ctx.t("connections.apiProvider.url")).description(ctx.t(interface)),
-      url.render(ctx),
-    )
+    let url = url.render(ctx);
+    FormField::new("connection-provider-url", ctx.t("connections.apiProvider.url"))
+      .hint(ctx.t(interface))
+      .info(ctx.t(more))
+      .render(ctx, url)
   }
 
   /// The key's secret: the project's, the archived one the connection still names, or a new one with its name and
@@ -196,11 +195,10 @@ impl ProviderForm {
         field_error("connection-provider-key-error", &text)
       }))
       .with_children(self.new_secret_fields(ctx, &listed.secrets));
-    form_row(
-      Label::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
-        .description(ctx.t("connections.apiProvider.keyHint")),
-      control,
-    )
+    FormField::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
+      .hint(ctx.t("connections.apiProvider.keyHintShort"))
+      .info(ctx.t("connections.apiProvider.keyHint"))
+      .render(ctx, control)
   }
 
   /// The name and key of a new key secret, while *New secret…* is chosen.
@@ -247,25 +245,28 @@ impl ProviderForm {
     ]
   }
 
-  /// The models as removable chips, and the field and button that add more (as allowed commands are added).
+  /// The field and *Add* that add model ids (`Entry row` `w12Vx`), and the models added as removable pills under them
+  /// (`Pills` `TQ7md`).
   fn models_row(&self, ctx: &mut Ctx) -> Element {
-    let mut chips = Row::new()
-      .width(Dimension::Pct(100.0))
-      .wrap()
-      .spacing(ExtraSpacing::Snug.role())
-      .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()));
     let listed = self.models.get().0;
-    for (index, model) in listed.iter().enumerate() {
-      let (model, models, error) = (model.clone(), self.models.clone(), self.model_error.clone());
-      chips = chips.child(
-        TagChip::new(format!("connection-provider-model-{index}"), model.as_str())
-          .mono()
-          .removable(ctx.t("connections.apiProvider.removeModel"), move || {
-            models.update(|models| models.0.retain(|kept| *kept != model));
-            error.set(None);
-          }),
-      );
-    }
+    let pills = (!listed.is_empty()).then(|| {
+      Row::new()
+        .id("connection-provider-models")
+        .width(Dimension::Pct(100.0))
+        .wrap()
+        .spacing(ExtraSpacing::Snug.role())
+        .with_children(listed.iter().enumerate().map(|(index, model)| {
+          let (model, models, error) = (model.clone(), self.models.clone(), self.model_error.clone());
+          Element::from(
+            TagChip::new(format!("connection-provider-model-{index}"), model.as_str())
+              .mono()
+              .removable(ctx.t("connections.apiProvider.removeModel"), move || {
+                models.update(|models| models.0.retain(|kept| *kept != model));
+                error.set(None);
+              }),
+          )
+        }))
+    });
     // Only the current problem: one about ids the field no longer holds is gone (`UW2bO`).
     let draft = self.model.get();
     let problem = self
@@ -287,54 +288,48 @@ impl ProviderForm {
     let add = ActionButton::new(
       "connection-provider-add-model",
       ButtonKind::Secondary,
-      ctx.t("connections.apiProvider.addModel"),
+      ctx.t("connections.groups.add"),
     )
     .icon(Icon::Plus)
+    .in_form()
     .on_click(move || Self::add_typed_models(&models, &typed, &error));
     let control = Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .with_children((!listed.is_empty()).then(|| list_entry::list_surface("connection-provider-models").child(chips)))
+      .spacing(ExtraSpacing::Snug.role())
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
+          .spacing(ExtraSpacing::Snug.role())
           .child(Column::new().flex(1.0).child(input))
           .child(add),
       )
       .with_children(
         problem.map(|problem| field_error("connection-provider-model-error", &message_text(ctx, &problem.message))),
-      );
-    form_row(
-      Label::new("connection-provider-models", ctx.t("connections.apiProvider.models"))
-        .description(ctx.t("connections.apiProvider.modelsHint")),
-      control,
-    )
+      )
+      .with_children(pills);
+    FormField::new("connection-provider-models", ctx.t("connections.apiProvider.models"))
+      .hint(ctx.t("connections.apiProvider.modelsHintShort"))
+      .info(ctx.t("connections.apiProvider.modelsHint"))
+      .render(ctx, control)
   }
 
-  /// Where the agents' requests go, who holds the key, and what a provider does not give.
-  fn notice(&self, ctx: &Ctx) -> Element {
+  /// Where the agents' requests go, as a warning line under the group (`Sent to` `s4sjZm`), while the CLI runs on a
+  /// provider; who holds the key and what a provider does not give in its (i).
+  pub(in super::super) fn warning(&self, ctx: &mut Ctx) -> Option<Element> {
+    if !self.on() {
+      return None;
+    }
     let host =
       base_url(&self.url.get()).map_or_else(|_| ctx.t("connections.apiProvider.theHost"), |url| url.host().into());
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .child(
-        Notice::new(
-          "connection-provider-notice",
-          NoticeTone::Info,
-          ctx.t_args("connections.apiProvider.sentTo", [("host", &*host)]),
-        )
-        .icon(Icon::Globe)
-        .body(ctx.t("connections.apiProvider.sentToDetail")),
-      )
-      .child(
-        Text::new(&ctx.t("connections.apiProvider.notSupported"))
-          .id("connection-provider-not-supported")
-          .variant(ExtraTypography::Prose.role())
-          .color(PaletteColor::TextMuted),
-      )
-      .into()
+    let words = ctx.t_args("connections.apiProvider.sentToShort", [("host", &*host)]);
+    let info = ctx.t_args(
+      "connections.apiProvider.sentToInfo",
+      [
+        ("detail", ctx.t("connections.apiProvider.sentToDetail")),
+        ("limits", ctx.t("connections.apiProvider.notSupported")),
+      ],
+    );
+    Some(warning_line(ctx, "connection-provider-notice", &words, Some(info)))
   }
 }
 

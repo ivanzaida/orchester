@@ -1,17 +1,17 @@
 //! The fields of Add / Edit MCP server as signals the page types into, and its groups (`Server` `YiaYW`, `Approvals`
 //! `yg3Oz` in `11 · Add MCP server`): the name, what it runs as (a program here or a remote server, which the agent's
-//! CLI starts or reaches), a program's command, folder, arguments and variables, or a remote server's endpoint and
-//! authorization (`remote`), and the tools that run without asking. A variable can take its value from a project
-//! secret: *Add a variable from a secret…* appends `NAME=${secret:NAME@environment}` (`euVYY`).
+//! CLI starts or reaches), a program's command, arguments, folder and variables, or a remote server's endpoint and
+//! authorization (`remote`), and the tools that run without asking (`tools`); each row with one short hint line, the
+//! rest in its (i). A variable can take its value from a project secret: *Add a variable from a secret…* appends
+//! `NAME=${secret:NAME@environment}` (`euVYY`). Adding a server says what it widens in a warning line (`Widens`
+//! `tXVIh`).
 
 mod remote;
+mod tools;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
-  components::{Column, Placement, Popup, Row, Text},
+  app::ctx::Ctx,
+  components::{Column, Placement, Popup, Row},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
@@ -26,16 +26,14 @@ use orchester_workspace::{
 
 use self::remote::AuthorizationFields;
 use crate::{
-  screens::project_settings::kit::{form_group, form_row},
-  theme::{ExtraSpacing, ExtraTypography},
+  screens::project_settings::kit::{FormField, form_group, warning_line},
+  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    form_section::Label,
     icon::Icon,
     menu::{MenuItem, menu_panel},
     message::message_text,
-    notice::{Notice, NoticeTone},
     pressable::Focus,
     tabs::{Segment, SegmentFace, segmented},
   },
@@ -56,6 +54,8 @@ pub(super) struct Fields {
   url: Signal<String>,
   authorization: AuthorizationFields,
   exempt_tools: Signal<String>,
+  /// The tool name being typed into *Run without asking*.
+  tool: Signal<String>,
   /// The secrets menu of Variables.
   secrets_open: Signal<bool>,
   secrets_anchor: ElementRef,
@@ -74,6 +74,7 @@ impl Fields {
       url: ctx.signal(text.url.clone()),
       authorization: AuthorizationFields::new(ctx, &text.authorization),
       exempt_tools: ctx.signal(text.exempt_tools.clone()),
+      tool: ctx.signal(String::new()),
       secrets_open: ctx.signal(false),
       secrets_anchor: ctx.element_ref(),
     }
@@ -94,14 +95,14 @@ impl Fields {
     }
   }
 
-  /// The page's groups; an error shows under a field that holds something, and under every field once a save was
-  /// `tried`.
+  /// The page's groups, and the warning line of what adding a server widens (`adding`); an error shows under a field
+  /// that holds something, and under every field once a save was `tried`.
   pub(super) fn sections(
     &self,
     ctx: &mut Ctx,
     (listed, errors): (&ProjectConnections, &McpServerErrors),
     tried: bool,
-    project: &str,
+    adding: bool,
   ) -> Vec<Element> {
     let shown = |value: &Signal<String>, error: &Option<Message>| {
       error
@@ -127,11 +128,12 @@ impl Fields {
       exempt_tools: shown(&self.exempt_tools, &errors.exempt_tools),
     };
     let mut rows = self.server_rows(ctx, &errors);
-    rows.extend(match self.transport.get() {
+    let transport = self.transport.get();
+    rows.extend(match transport {
       TransportChoice::Stdio => self.program_rows(ctx, &errors, &listed.secrets),
       TransportChoice::Http => self.remote_rows(ctx, &errors, &listed.secrets),
     });
-    vec![
+    let mut sections = vec![
       form_group(
         "connection-mcp-server",
         &ctx.t("connections.mcp.dialog.server"),
@@ -139,8 +141,15 @@ impl Fields {
         rows,
       ),
       self.approvals_section(ctx, &errors),
-      closing(ctx, project),
-    ]
+    ];
+    if adding {
+      let words = match transport {
+        TransportChoice::Stdio => ctx.t("connections.mcp.dialog.widensProgram"),
+        TransportChoice::Http => ctx.t("connections.mcp.dialog.widensRemote"),
+      };
+      sections.push(warning_line(ctx, "connection-mcp-widens", &words, None));
+    }
+    sections
   }
 
   /// The name, and what the server runs as (`Runs as` `HQZg7`), which the agent's CLI starts or reaches.
@@ -154,11 +163,10 @@ impl Fields {
     .placeholder(ctx.t("connections.mcp.dialog.namePlaceholder"))
     .mono()
     .render(ctx);
-    let name = form_row(
-      Label::new("connection-mcp-name", ctx.t("connections.mcp.dialog.name"))
-        .description(ctx.t("connections.mcp.dialog.nameHint")),
-      name,
-    );
+    let name = FormField::new("connection-mcp-name", ctx.t("connections.mcp.dialog.name"))
+      .hint(ctx.t("connections.mcp.dialog.nameHintShort"))
+      .info(ctx.t("connections.mcp.dialog.nameHint"))
+      .render(ctx, name);
     let chosen = self.transport.get();
     let segment = |choice: TransportChoice, (id, key): (&str, &str)| {
       let transport = self.transport.clone();
@@ -183,27 +191,17 @@ impl Fields {
       ],
       Focus::Keyboard,
     );
-    let (by, detail) = match chosen {
-      TransportChoice::Stdio => ("connections.mcp.startedByCli", "connections.mcp.dialog.stdioDetail"),
-      TransportChoice::Http => ("connections.mcp.reachedByCli", "connections.mcp.dialog.httpDetail"),
+    let detail = match chosen {
+      TransportChoice::Stdio => "connections.mcp.dialog.stdioDetail",
+      TransportChoice::Http => "connections.mcp.dialog.httpDetail",
     };
-    let kind = form_row(
-      Label::new("connection-mcp-type", ctx.t("connections.mcp.runsAs")).description(ctx.t(by)),
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(kinds)
-        .child(
-          Text::new(&ctx.t(detail))
-            .id("connection-mcp-type-detail")
-            .variant(ExtraTypography::Note.role())
-            .width(Dimension::Pct(100.0)),
-        ),
-    );
+    let kind = FormField::new("connection-mcp-type", ctx.t("connections.mcp.runsAs"))
+      .info(ctx.t(detail))
+      .render(ctx, Row::new().child(kinds));
     vec![name, kind]
   }
 
-  /// A program's command, its folder, its arguments and its variables.
+  /// A program's command, its arguments, its folder and its variables.
   fn program_rows(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Vec<Element> {
     let program = input(
       ctx,
@@ -229,25 +227,20 @@ impl Fields {
       &self.arguments,
       errors.arguments.clone(),
     )
-    .text_area()
+    .compact_text_area()
     .mono()
     .render(ctx);
     vec![
-      form_row(
-        Label::new("connection-mcp-program", ctx.t("connections.mcp.property.program"))
-          .description(ctx.t("connections.mcp.dialog.programHint")),
-        program,
-      ),
-      form_row(
-        Label::new("connection-mcp-arguments", ctx.t("connections.mcp.property.arguments"))
-          .description(ctx.t("connections.mcp.dialog.argumentsHint")),
-        arguments,
-      ),
-      form_row(
-        Label::new("connection-mcp-folder", ctx.t("connections.mcp.property.folder"))
-          .description(ctx.t("connections.mcp.dialog.folderHint")),
-        folder,
-      ),
+      FormField::new("connection-mcp-program", ctx.t("connections.mcp.property.program"))
+        .hint(ctx.t("connections.mcp.dialog.programHintShort"))
+        .render(ctx, program),
+      FormField::new("connection-mcp-arguments", ctx.t("connections.mcp.property.arguments"))
+        .hint(ctx.t("connections.mcp.dialog.argumentsHintShort"))
+        .render(ctx, arguments),
+      FormField::new("connection-mcp-folder", ctx.t("connections.mcp.property.folder"))
+        .hint(ctx.t("connections.mcp.dialog.folderHintShort"))
+        .info(ctx.t("connections.mcp.dialog.folderHint"))
+        .render(ctx, folder),
       self.variables_row(ctx, errors, secrets),
     ]
   }
@@ -259,7 +252,7 @@ impl Fields {
       &self.variables,
       errors.variables.clone(),
     )
-    .text_area()
+    .compact_text_area()
     .mono()
     .render(ctx);
     let add = self.add_secret(ctx, secrets);
@@ -268,11 +261,18 @@ impl Fields {
       .spacing(ExtraSpacing::Snug.role())
       .child(area)
       .child(Row::new().child(add));
-    form_row(
-      Label::new("connection-mcp-variables", ctx.t("connections.mcp.variables"))
-        .description(ctx.t("connections.mcp.dialog.variablesHint")),
-      control,
-    )
+    let info = ctx.t_args(
+      "connections.mcp.dialog.variablesInfo",
+      [
+        ("hint", ctx.t("connections.mcp.dialog.variablesHint")),
+        ("title", ctx.t("connections.mcp.dialog.secretsTitle")),
+        ("detail", ctx.t("connections.mcp.dialog.secretsDetail")),
+      ],
+    );
+    FormField::new("connection-mcp-variables", ctx.t("connections.mcp.variables"))
+      .hint(ctx.t("connections.mcp.dialog.variablesHintShort"))
+      .info(info)
+      .render(ctx, control)
   }
 
   /// *Add a variable from a secret…*: a menu of the project's secrets, each appending its reference.
@@ -333,20 +333,7 @@ impl Fields {
   }
 
   fn approvals_section(&self, ctx: &mut Ctx, errors: &Shown) -> Element {
-    let tools = input(
-      ctx,
-      ("connection-mcp-exempt-tools", "connections.mcp.exemptTools"),
-      &self.exempt_tools,
-      errors.exempt_tools.clone(),
-    )
-    .text_area()
-    .mono()
-    .render(ctx);
-    let row = form_row(
-      Label::new("connection-mcp-exempt-tools", ctx.t("connections.mcp.exemptTools"))
-        .description(ctx.t("connections.mcp.dialog.exemptToolsHint")),
-      tools,
-    );
+    let row = self.tools_row(ctx, errors.exempt_tools.clone());
     form_group(
       "connection-mcp-approvals",
       &ctx.t("connections.mcp.dialog.approvals"),
@@ -377,26 +364,4 @@ fn input(ctx: &Ctx, (id, key): (&str, &str), value: &Signal<String>, error: Opti
     Some(error) => field.error(error),
     None => field,
   }
-}
-
-/// Where secret values go (`Widens` `tXVIh`), and what comes after saving.
-fn closing(ctx: &Ctx, project: &str) -> Element {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(
-      Notice::new(
-        "connection-mcp-secrets-notice",
-        NoticeTone::Info,
-        ctx.t("connections.mcp.dialog.secretsTitle"),
-      )
-      .icon(Icon::ShieldCheck)
-      .body(ctx.t("connections.mcp.dialog.secretsDetail")),
-    )
-    .child(
-      Text::new(&ctx.t_args("connections.mcp.dialog.nextStep", [("project", project)]))
-        .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextMuted),
-    )
-    .into()
 }

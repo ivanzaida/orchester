@@ -13,9 +13,8 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
   },
-  components::Column,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{source::SourcePath, time::Timestamp};
 use orchester_workspace::{
@@ -34,7 +33,6 @@ use crate::{
   mcp::input_gate::Guarded,
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   services::Services,
-  theme::ExtraSpacing,
   ui::{
     add_source::Asked,
     field::field_error,
@@ -144,12 +142,7 @@ impl Component for Sources {
     if let Some(error) = self.save.state().get().error {
       group = group.after(field_error("settings-sources-save-error", &message_text(ctx, &error)));
     }
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Roomy.role())
-      .child(group)
-      .child(view::outside(ctx))
-      .into()
+    group.into()
   }
 }
 
@@ -213,7 +206,13 @@ impl Sources {
       Arc::new(move || revision.update(|revision| *revision += 1))
     };
     let asking = self.asking.get();
-    let mut group = view::heading(ctx, read).rows(view::rows(ctx, read, (remove, check_again), busy, &self.adding));
+    let mut group = view::heading(ctx, read).end(view::outside_info(ctx)).rows(view::rows(
+      ctx,
+      read,
+      (remove, check_again),
+      busy,
+      &self.adding,
+    ));
     if let Some(removed) = self.removed.get() {
       let (ask, path) = (self.asking.clone(), removed.path.clone());
       group = group.row(view::removed(ctx, &removed, move || {

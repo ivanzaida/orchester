@@ -35,14 +35,18 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsView, ProjectPage, Route, Screen},
-  screens::connections::{
-    data::Saved,
-    page::{Head, action_bar, page},
-    widen::{WidenConfirm, WidenLook, WidenProps},
+  screens::{
+    connections::{
+      data::Saved,
+      page::{Head, action_bar_noted, page},
+      widen::{WidenConfirm, WidenLook, WidenProps},
+    },
+    project_settings::kit::Tone,
   },
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
+    icon::Icon,
     message::message_text,
   },
 };
@@ -123,12 +127,9 @@ impl Component for McpEditor {
       .map(|errors| (**errors).clone())
       .unwrap_or_default();
     let unchanged = text == props.text && props.stored.is_some();
-    let sections = self.fields.sections(
-      ctx,
-      (&props.listed, &errors),
-      self.tried.get(),
-      props.project.open.project.name().as_str(),
-    );
+    let sections = self
+      .fields
+      .sections(ctx, (&props.listed, &errors), self.tried.get(), props.stored.is_none());
     let reason = reason(ctx, (&checked, &errors), unchanged, &save.state().get());
     let bar = self.bar(ctx, &props, (&save, checked.ok()), reason.as_deref());
     let head = head(ctx, &props);
@@ -161,9 +162,14 @@ impl McpEditor {
       Some(server) => ConnectionsView::of(server.id()),
       None => ConnectionsView::default(),
     };
-    let cancel = ActionButton::new("connection-cancel", ButtonKind::Secondary, ctx.t("connections.cancel"))
+    let cancel = ActionButton::new("connection-cancel", ButtonKind::Ghost, ctx.t("connections.cancel"))
       .on_click(move || navigation.go(Route::Project(project, ProjectPage::Connections(back))));
-    let button = ActionButton::new("connection-save", ButtonKind::Primary, ctx.t("connections.dialog.save"));
+    // Adding says *Add server* (`Add server` `JVoJL`); editing saves the connection.
+    let label = match props.stored {
+      Some(_) => ctx.t("connections.dialog.save"),
+      None => ctx.t("connections.mcp.dialog.addServer"),
+    };
+    let button = ActionButton::new("connection-save", ButtonKind::Primary, label).icon(Icon::Check);
     let tried = self.tried.clone();
     let button = match (save.state().get().is_pending(), start) {
       (true, _) => button.loading(),
@@ -181,7 +187,13 @@ impl McpEditor {
       (false, None) if !self.tried.get() => button.on_click(move || tried.set(true)),
       (false, None) => button.disabled(),
     };
-    action_bar(vec![cancel.into(), button.into()], reason)
+    // Once it can be saved, what comes after it.
+    let next = ctx.t("connections.mcp.dialog.nextStep");
+    let note = match reason {
+      Some(reason) => (reason, Tone::Muted),
+      None => (&*next, Tone::Success),
+    };
+    action_bar_noted(vec![cancel.into(), button.into()], Some(note))
   }
 
   /// What saving widens, for a person to confirm in place of the actions. The question's handlers outlive renders
@@ -285,17 +297,14 @@ fn head(ctx: &mut Ctx, props: &EditorProps) -> Head {
     None => (
       ConnectionsView::default(),
       ctx.t("connections.mcp.dialog.addCrumb"),
-      ctx.t("connections.mcp.dialog.addTitle"),
+      ctx.t("connections.mcp.dialog.addServerTitle"),
     ),
   };
   Head {
     back: navigation.to(Route::Project(project, ProjectPage::Connections(back))),
     here,
     title,
-    description: Some(ctx.t_args(
-      "connections.mcp.dialog.description",
-      [("project", props.project.open.project.name().as_str())],
-    )),
+    description: Some(ctx.t("connections.mcp.dialog.lead")),
   }
 }
 

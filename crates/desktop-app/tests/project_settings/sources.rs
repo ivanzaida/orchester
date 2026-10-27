@@ -29,7 +29,7 @@ fn checked(page: &mut Settings, path: &str, hint: &str) {
 
 /// Context, with *Add a folder or file*'s path box open: the empty row's Add, or the row's own, opens it.
 fn adding(page: &mut Settings) {
-  page.tab("context", "settings-sources-read-row");
+  page.tab("context", "settings-sources-title");
   if !page.exists(PATH) {
     let add = if page.exists("settings-sources-empty-add") {
       "settings-sources-empty-add"
@@ -44,7 +44,12 @@ fn adding(page: &mut Settings) {
 #[test]
 fn project_settings_sources_are_added_only_once_a_person_confirms_in_place() {
   let mut page = Settings::new(false);
-  page.tab("context", "settings-sources-read-row");
+  page.tab("context", "settings-sources-title");
+  assert!(
+    !page.exists("settings-sources-outside"),
+    "what agents may do outside the worktree is in the heading's (i), not a group"
+  );
+  assert!(page.exists("settings-sources-outside-info"));
   assert!(
     !page.exists("settings-sources-add-row-row"),
     "the empty row's Add opens it"
