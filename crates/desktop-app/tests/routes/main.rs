@@ -3,6 +3,7 @@
 //! in the table.
 
 mod files;
+mod project_settings;
 mod settings;
 mod usage;
 mod views;
@@ -75,6 +76,7 @@ fn every_route() -> Vec<Route> {
     Route::Settings,
     Route::General,
   ];
+  all.extend(settings::routes());
   all.extend(Screen::ALL.into_iter().filter_map(ProjectPage::of).map(at));
   all.extend(OverviewTab::ALL.map(|tab| at(ProjectPage::Overview(tab))));
   all.extend(TaskListTab::ALL.map(|tab| at(ProjectPage::Tasks(TaskList::new(tab)))));

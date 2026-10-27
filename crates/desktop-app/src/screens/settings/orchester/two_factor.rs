@@ -1,10 +1,11 @@
-//! Two-factor authentication in Settings › Orchester and the All projects notice (layer `uyO5v`: `hC11x`, `rPG8h` and
-//! board `qwDH9`). It is turned on and off on the cloud's security page, never here: the account header says whether it
-//! is on, with *Turn on…* ↗ while it is off. Accepting an invite needs it on the account and a sign-in with a code on
-//! this computer: an invite the cloud says needs it, or whose accept it refused, says which one is missing and offers
-//! the one step that fixes it, *Turn on two-factor authentication* ↗ or *Sign in again*, which signs out and locks so
-//! the person signs in at the gate with the code (the designer's decision, `Nq3Mf`). After a sign-in with a recovery
-//! code that leaves few, a warning says to make new ones; no frame draws it, so it is the UI kit's warning callout.
+//! Two-factor authentication in Settings › Orchester Cloud and the All projects notice (`Account card · two-factor
+//! off` `AstDs` and `Accept needs two-factor` `g0GfK` in `ZUuMT`). It is turned on and off on the cloud's security
+//! page, never here: the account card says whether it is on, with *Turn on…* ↗ while it is off. Accepting an invite
+//! needs it on the account and a sign-in with a code on this computer: an invite the cloud says needs it, or whose
+//! accept it refused, says which one is missing and offers the one step that fixes it, *Turn on two-factor
+//! authentication* ↗ or *Sign in again*, which signs out and locks so the person signs in at the gate with the code
+//! (the designer's decision, `Nq3Mf`). After a sign-in with a recovery code that leaves few, a warning says to make new
+//! ones; no frame draws it, so it is the UI kit's warning callout.
 
 use lurq::{
   app::{
@@ -23,8 +24,7 @@ use orchester_workspace::sharing::cloud::{Cloud, FEW_RECOVERY_CODES, WebPage};
 
 use super::{
   invites::{Answers, Asked},
-  list::state_line,
-  words::{Look, counted},
+  words::counted,
 };
 use crate::{
   services::Services,
@@ -34,13 +34,12 @@ use crate::{
     callout::{Callout, CalloutTone},
     field::field_error,
     icon::{Icon, icon},
-    pressable::{Focus, pressable},
+    notice::NoticeTone,
+    setting_notice::SettingNotice,
+    setting_rows::status as status_dot,
     unavailable::reason_line,
   },
 };
-
-/// An invite card's avatar (`T8devG`): what is under its top line starts past it.
-const AVATAR: f32 = 22.0;
 
 /// The account's two-factor authentication as the cloud reported it, for a future's answer.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -115,47 +114,42 @@ pub(super) fn need((invite, listed): (InviteId, bool), status: Option<&TwoFactor
   }
 }
 
-/// *Two-factor: on*, or *Two-factor: off* with *Turn on…* ↗, after the account header's state (`WH6nX`, `vWLuG`).
+/// After the account card's name: *Two-factor on* in `success` with its shield (`2FA` `flu62`), or *Two-factor: off*
+/// in `warning` with *Turn on…* ↗ (`Account card · two-factor off` `AstDs` in `ZUuMT`).
 pub(super) fn header(ctx: &mut Ctx, status: Option<&TwoFactorStatus>, answers: &Answers) -> Vec<Element> {
   let Some(status) = status else {
     return Vec::new();
   };
-  let look = if status.enabled {
-    Look {
-      icon: Icon::ShieldCheck,
-      icon_color: PaletteColor::Success,
-      key: "cloud.account.twoFactor.on",
-      color: PaletteColor::TextSecondary,
-      name: "two-factor-on",
-    }
-  } else {
-    Look {
-      icon: Icon::ShieldOff,
-      icon_color: PaletteColor::TextMuted,
-      key: "cloud.account.twoFactor.off",
-      color: PaletteColor::TextSecondary,
-      name: "two-factor-off",
-    }
-  };
-  let mut parts: Vec<Element> = vec![state_line(ctx, "orchester-cloud-two-factor", &look).into()];
-  if !status.enabled {
-    let label = ctx.t("cloud.account.twoFactor.turnOn");
-    let link = Focus::Link
-      .apply(pressable(opener(ctx, answers, TURN_ON_HEADER)))
-      .id(TURN_ON_HEADER)
+  if status.enabled {
+    let on = Row::new()
+      .id("orchester-cloud-two-factor")
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)
-      .describe("a11y_name", label.to_string())
+      .describe("state", "two-factor-on")
+      .child(icon(Icon::ShieldCheck, IconSize::Xs, PaletteColor::Success))
       .child(
-        Text::new(&label)
-          .variant(ExtraTypography::NoteStrong.role())
-          .color(PaletteColor::TextSecondary)
+        Text::new(&ctx.t("cloud.account.twoFactor.on"))
+          .variant(ExtraTypography::Note.role())
+          .color(PaletteColor::Success)
           .nowrap(),
-      )
-      .child(icon(Icon::ExternalLink, IconSize::Sm, PaletteColor::TextMuted));
-    parts.push(link.into());
+      );
+    return vec![on.into()];
   }
-  parts
+  let off = status_dot(
+    "orchester-cloud-two-factor",
+    (PaletteColor::Warning, PaletteColor::Warning),
+    &ctx.t("cloud.account.twoFactor.off"),
+  )
+  .describe("state", "two-factor-off");
+  let turn_on = ActionButton::new(
+    TURN_ON_HEADER,
+    ButtonKind::Ghost,
+    ctx.t("cloud.account.twoFactor.turnOn"),
+  )
+  .icon(Icon::ExternalLink)
+  .small()
+  .on_click(opener(ctx, answers, TURN_ON_HEADER));
+  vec![off.into(), turn_on.into()]
 }
 
 /// Opens the cloud's security page in the browser when a person pressed `id`; says so in place when it cannot.
@@ -261,24 +255,25 @@ pub(super) fn reason(ctx: &Ctx, id: &str, need: Need) -> Option<Element> {
   Some(reason_line(&format!("{id}-two-factor"), &ctx.t(key)).into())
 }
 
-/// What a settings invite card shows under its top line while `need` keeps it from being accepted (`ZhlIn`, `ns0C8`,
-/// `VLERC`): past the avatar, why or *Sign in again to accept*, the step that fixes it with *Decline* or *Not now*, and
-/// what that step does.
+/// What an invite's row shows under itself in place of its actions while `need` keeps it from being accepted (`Accept
+/// needs two-factor` `g0GfK` in `ZUuMT`): a warning that says why or *Sign in again to accept*, the step that fixes it
+/// with *Decline* or *Not now*, and what that step does.
 pub(super) fn below(
   ctx: &mut Ctx,
   id: &str,
   invite: &CloudInvite,
   (need, answers): (Need, &Answers),
 ) -> Option<Element> {
-  let (first, buttons, note) = match need {
+  let notice = SettingNotice::new(format!("{id}-two-factor"), NoticeTone::Warning);
+  let (notice, buttons, note) = match need {
     Need::Accept => return None,
     Need::TurnOn => (
-      reason(ctx, id, need)?,
+      notice.title(ctx.t("cloud.invites.twoFactor.off")),
       (turn_on(ctx, id, answers), decline(ctx, id, invite, answers)),
       Some("cloud.invites.twoFactor.turnOnNote"),
     ),
     Need::SignInAgain => (
-      reason(ctx, id, need)?,
+      notice.title(ctx.t("cloud.invites.twoFactor.session")),
       (
         sign_in_again(ctx, id, invite_to(invite), answers),
         decline(ctx, id, invite, answers),
@@ -286,7 +281,10 @@ pub(super) fn below(
       None,
     ),
     Need::Refused => (
-      refused(ctx, id),
+      SettingNotice::new(format!("{id}-sign-in-needed"), NoticeTone::Warning)
+        .icon(Icon::ShieldAlert)
+        .title(ctx.t("cloud.invites.twoFactor.refusedTitle"))
+        .body(ctx.t("cloud.invites.twoFactor.refusedBody")),
       (
         sign_in_again(ctx, id, invite_to(invite), answers),
         not_now(ctx, id, invite, answers),
@@ -294,34 +292,17 @@ pub(super) fn below(
       Some("cloud.invites.twoFactor.signInNote"),
     ),
   };
-  let lines = Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Md)
-    .child(first)
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(buttons.0)
-        .child(buttons.1),
-    )
-    .with_children(note.map(|key| {
-      Text::new(&ctx.t(key))
-        .id(format!("{id}-two-factor-note"))
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0))
-    }))
-    .with_children(answers.person.reason(ctx, &format!("{id}-sign-in-again")))
-    .with_children(answers.person.reason(ctx, &format!("{id}-turn-on")));
-  Some(
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .child(Row::new().width(Dimension::Px(AVATAR)).flex_shrink(0.0))
-      .child(lines)
-      .into(),
-  )
+  let notice = notice.action(buttons.0).action(buttons.1);
+  let notice = match note {
+    Some(key) => notice.note(ctx.t(key)),
+    None => notice,
+  };
+  let reasons = answers
+    .person
+    .reason(ctx, &format!("{id}-sign-in-again"))
+    .into_iter()
+    .chain(answers.person.reason(ctx, &format!("{id}-turn-on")));
+  Some(reasons.fold(notice, |notice, reason| notice.part(reason)).into())
 }
 
 /// Why *Sign in again* or the security page did not go through, the parts' ids starting with `id`.

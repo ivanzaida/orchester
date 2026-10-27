@@ -1,8 +1,9 @@
 //! Page tabs (`Page tab/active` `loUWZ`, `Page tab/default` `NspMt`): 34 high, 2 at their sides, 20
 //! apart, on a 1 `border` line (`Workflow tabs` `bxhee`). The current tab's label is 13/500
 //! `text_primary` over a 2 `accent` underline, the others' 13 `text_secondary`; a count follows the label
-//! in its words (`All 24`), or, for what waits for the person, in a badge 6 after it: mono 11/500 `warning` on a
-//! `warning_muted` pill, 1 over and under and 6 at its sides (`Count badge` `CiYKk`). A tab not built yet is its
+//! in its words (`All 24`), or as a 12 `text_muted` number after it (Settings' *Accounts 3*), or, for what waits for
+//! the person, in a badge 6 after it: mono 11/500 `warning` on a `warning_muted` pill, 1 over and under and 6 at its
+//! sides (`Count badge` `CiYKk`). A tab not built yet is its
 //! label in 13 `text_muted` and an 11 `text_muted` lock, 5 apart, with why in its tooltip (`Page tab/locked`
 //! `Smb4t`). Tabs are pointer-only.
 //!
@@ -60,7 +61,7 @@ pub struct PageTab {
   explanation: Option<Arc<str>>,
   /// A count of what waits for the person, in a badge after the label.
   badge: Option<usize>,
-  /// A count in words of its own after the label, and whether it counts what waits for the person.
+  /// How many there are, a number after the label, and whether it counts what waits for the person.
   count: Option<(usize, bool)>,
 }
 
@@ -117,8 +118,9 @@ impl PageTab {
     self
   }
 
-  /// `count` 6 after the label in 12 `text_muted`, or in `warning` when it counts what `waits` for the person (the
-  /// Agents hub's tabs, `JasTq`, `Wk4e9` in `Cc3JP`); its element id is `<id>-count`.
+  /// How many there are, 6 after the label in 12 `text_muted` (`mIlfH` in Settings' `Tabs`), or in `warning` when
+  /// it counts what `waits` for the person (the Agents hub's tabs, `JasTq`, `Wk4e9` in `Cc3JP`); its element id is
+  /// `<id>-count`.
   #[must_use]
   pub const fn count(mut self, count: usize, waits: bool) -> Self {
     self.count = Some((count, waits));
@@ -300,6 +302,8 @@ pub enum SegmentFace {
   Text(Arc<str>),
   /// A glyph; the label names it for tools.
   Icon(Icon, Arc<str>),
+  /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
+  Labelled(Icon, Arc<str>),
 }
 
 pub struct Segment {
@@ -350,17 +354,28 @@ impl Segment {
     } else {
       (PaletteColor::TextMuted, PaletteColor::TextMuted)
     };
+    let typography = if self.chosen {
+      TypographyStyle::Label
+    } else {
+      TypographyStyle::Description
+    };
     button = match self.face {
       SegmentFace::Text(label) => {
-        let typography = if self.chosen {
-          TypographyStyle::Label
-        } else {
-          TypographyStyle::Description
-        };
         let button = button
           .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .describe("a11y_name", label.clone())
+          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
+        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
+      }
+      SegmentFace::Labelled(face, label) => {
+        let button = button
+          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
+          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .describe("a11y_name", label.clone())
+          .child(icon(face, IconSize::Base, glyph))
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
       }

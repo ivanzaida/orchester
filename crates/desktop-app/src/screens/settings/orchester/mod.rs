@@ -1,12 +1,14 @@
-//! Settings › Orchester (`Cu20b` signed in, `SFaAp` a team server's entry, `Aowlk` their states;
-//! layer `uyO5v`): the list of the Orchester Cloud account and the team servers on the left, and the shown one's
-//! details on the right; *Connect a server* (`zxe2P`, `bIwte`) is a page of its own ([`connect`]). Member actions only:
-//! everything administrative is in a server's admin in the browser, which the entry links to.
+//! Settings › Orchester Cloud (`05 · Orchester Cloud` `vPV73` in the new `orchester.pen`, its states on `ZUuMT`): one
+//! column with the cloud account, this computer, the invites, the team servers and the advanced cloud address
+//! ([`cloud`]); a team server opens its page under the tab (`05c` `C6qnY`, [`server`]) and *Connect a server* its
+//! steps (`05b` `MrVql`, `05b2` `IBnMu`, [`connect`]), each with its crumb back. Member actions only: everything
+//! administrative is in a server's admin in the browser, which its page links to.
 //!
 //! What the tab shows is read again whenever a server's connection or the cloud account changes; the invites are read
 //! with it while an account is signed in.
 
 mod accepted;
+mod account;
 mod advanced;
 mod answers;
 mod cloud;
@@ -20,6 +22,7 @@ mod notice;
 mod parts;
 mod person;
 mod server;
+mod server_facts;
 mod server_parts;
 mod server_projects;
 mod two_factor;
@@ -32,10 +35,8 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, StreamEmitter},
   },
-  components::{Column, Row},
   core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_api::cloud::CloudInvite;
 use orchester_core::id::ServerId;
@@ -60,11 +61,11 @@ pub use self::{
 pub struct Account(pub Option<StoredCloudAccount>);
 
 impl DevtoolsInspectable for Account {}
+use super::frame;
 use crate::{
-  routes::OrchesterView,
+  routes::{OrchesterAsk, OrchesterPanel, OrchesterView},
   services::Services,
-  theme::AccountsSpacing,
-  ui::state::{load_error, loading},
+  ui::{icon::Icon, setting_notice::status_line, state::load_error},
 };
 
 /// What the tab shows: the cloud account, the cloud's address, and the servers with their projects on this computer.
@@ -139,7 +140,7 @@ pub struct Props {
 
 impl DevtoolsInspectable for Props {}
 
-/// Settings › Orchester's list and details.
+/// Settings › Orchester Cloud: its column, a team server's page or *Connect a server*.
 pub struct OrchesterTab {
   /// Counts *Try again* after the tab could not be read.
   retry: Signal<u64>,
@@ -154,52 +155,62 @@ impl Component for OrchesterTab {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let view = ctx.props::<Props>().view;
+    if view.panel == OrchesterPanel::Connect {
+      let page = ctx.mount_keyed::<connect::ConnectPage>(
+        "settings-orchester-connect",
+        connect::Props {
+          server: view.server,
+          step: view.step,
+        },
+      );
+      return frame::column("orchester-connect-scroll", page);
+    }
     let services = Services::of(ctx);
     let revision = follow(ctx, (&services.servers, &services.cloud)) + self.retry.get();
     let loaded = snapshot(ctx, revision, (&services.servers, &services.cloud));
     let snapshot = match loaded {
       Ok(Some(snapshot)) => snapshot,
-      Ok(None) => return loading("orchester-loading", &ctx.t("cloud.reading")).into(),
+      Ok(None) => {
+        let line = status_line("orchester-loading", Icon::LoaderCircle, &ctx.t("cloud.reading"));
+        return frame::column("orchester-scroll", frame::pane("orchester-tab").child(line));
+      }
       Err(reason) => {
         let (text, retry) = (reason.text(ctx), self.retry.clone());
         let again = move || retry.update(|count| *count += 1);
-        return load_error(ctx, "orchester-load-error", (&ctx.t("cloud.loadFailed"), &text), again);
+        let failed = load_error(ctx, "orchester-load-error", (&ctx.t("cloud.loadFailed"), &text), again);
+        return frame::column("orchester-scroll", frame::pane("orchester-tab").child(failed));
       }
     };
     let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let two_factor = two_factor::read(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
-    let details = match view.server.and_then(|id| snapshot.server(id)) {
-      Some((entry, linked)) => ctx.mount_keyed::<server::ServerPanel>(
-        &format!("orchester-server-{}", entry.stored.id),
-        server::Props {
-          entry: entry.clone(),
-          linked: linked.to_vec(),
-          revision,
-        },
-      ),
-      None => ctx.mount_keyed::<cloud::CloudPanel>(
-        "orchester-cloud",
-        cloud::Props {
-          account: snapshot.account.clone(),
-          address: snapshot.address.clone(),
-          invites: invites.clone(),
-          accepted,
-          two_factor,
-          panel: view.panel,
-        },
-      ),
-    };
-    Row::new()
-      .id("orchester-tab")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .spacing(AccountsSpacing::Columns.role())
-      .align_items(Alignment::Start)
-      .child(list::column(ctx, &snapshot, (&invites, view)))
-      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(details))
-      .into()
+    match view.server.and_then(|id| snapshot.server(id)) {
+      Some((entry, linked)) => {
+        let page = ctx.mount_keyed::<server::ServerPanel>(
+          &format!("orchester-server-{}", entry.stored.id),
+          server::Props {
+            entry: entry.clone(),
+            linked: linked.to_vec(),
+            revision,
+            sign_out: view.ask == Some(OrchesterAsk::SignOut),
+          },
+        );
+        frame::column("orchester-server-scroll", page)
+      }
+      None => {
+        let page = ctx.mount_keyed::<cloud::CloudPanel>(
+          "orchester-cloud",
+          cloud::Props {
+            snapshot: snapshot.clone(),
+            invites,
+            accepted,
+            two_factor,
+            ask: view.ask,
+          },
+        );
+        frame::column("orchester-scroll", page)
+      }
+    }
   }
 }
 

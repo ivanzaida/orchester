@@ -90,7 +90,7 @@ fn gate_another_account_sees_none_of_the_first_accounts_servers() {
     ))
     .expect("Bohdan joins the team server");
   window.navigation().go(Route::Orchester(OrchesterView::default()));
-  let row = format!("orchester-row-{kontur}");
+  let row = format!("orchester-row-{kontur}-row");
   shows(&mut window, &row);
   shows(&mut window, "status-server");
 

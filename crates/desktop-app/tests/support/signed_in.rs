@@ -32,6 +32,13 @@ use self::account_cloud::{AccountCloud, EMAIL, PASSWORD};
 #[derive(Default)]
 pub struct MemoryKeychain(Mutex<HashMap<VaultKey, String>>);
 
+impl MemoryKeychain {
+  /// Every value it keeps, e.g. the one token a QA server stored in a keychain of its own.
+  pub fn values(&self) -> Vec<String> {
+    self.0.lock().values().cloned().collect()
+  }
+}
+
 impl SecretVault for MemoryKeychain {
   fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
     self.0.lock().insert(key.clone(), value.expose().to_owned());

@@ -1,8 +1,8 @@
-//! *Warning threshold* (`Row · Warning threshold` `SPJjc` in `hUaXB`): the share of a plan window at which every
+//! *Warning threshold* (`Warning threshold` `t5qdp` in `01 · General`): the share of a plan window at which every
 //! project's Usage counts its limits as nearly used, a whole percentage from 1 to 100, kept for Orchester rather than a
-//! project because limits belong to accounts. The frame draws it as planned; the person chose a working field here
-//! (2026-10-22), the same setting Usage › Plan limits' menu changes. It is read when the row shows, and a value that is
-//! a percentage saves as it is typed, off the UI thread, one save at a time and the newest last.
+//! project because limits belong to accounts; the same setting Usage › Plan limits' menu changes. It is read when the
+//! row shows, and a value that is a percentage saves as it is typed, off the UI thread, one save at a time and the
+//! newest last.
 
 use std::sync::Arc;
 
@@ -10,9 +10,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
-    theme::SpacingSize,
   },
-  components::Column,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -28,14 +26,14 @@ use crate::{
   services::Services,
   ui::{
     field::{FieldInput, field_error},
-    form_section::{Label, Place, side_row},
     message::message_text,
+    setting_rows::SettingRow,
   },
 };
 
 const ID: &str = "settings-threshold";
-/// The value's field: three digits and the unit (`Warning threshold` in `p732q`, as Usage draws it).
-const FIELD_WIDTH: f32 = 64.0;
+/// The value's field and its unit (`Box` `C8WIQw` in `01 · General`).
+const FIELD_WIDTH: f32 = 120.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Read(WarningThreshold);
@@ -140,13 +138,6 @@ impl Component for ThresholdRow {
       (true, true) => field.invalid(),
       (true, false) => field,
     };
-    let row = side_row(
-      Label::new(ID, ctx.t("settings.general.threshold.title"))
-        .description(ctx.t("settings.general.threshold.description")),
-      field.render(ctx),
-      Place::Within,
-      false,
-    );
     let problem = if self.invalid.get() {
       Some(ctx.t("settings.general.threshold.invalid").to_string())
     } else if let Some(reason) = read
@@ -164,15 +155,13 @@ impl Component for ThresholdRow {
     } else {
       None
     };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .child(row)
-      .with_children(problem.map(|problem| {
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding_bottom(SpacingSize::Sm)
-          .child(field_error(&format!("{ID}-error"), &problem))
-      }))
+    let field = field.render(ctx);
+    SettingRow::new(ID, ctx.t("settings.general.threshold.title"))
+      .hint(ctx.t("settings.general.threshold.hint"))
+      .info(ctx.t("settings.general.threshold.description"))
+      .control(field)
+      .below_all(problem.map(|problem| field_error(&format!("{ID}-error"), &problem).into()))
+      .render(ctx)
   }
 }
 

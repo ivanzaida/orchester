@@ -1,26 +1,17 @@
-//! What *What automation may do* says of the window (`oD7hy`, its states `HNQBR`): *Look at the window*, which every
-//! client with the token may always do, so its switch is on and fixed beside a lock and *Always on* (`Row · Look at
-//! the window` `baK0O`), and the hint under *Agents can control this window* (`Hint` `iqm0X`): the app reads window
-//! control when it starts, so the hint says what this run has — the build's default, the person's stored choice, a
-//! choice that applies from the next start, or what `ORCHESTER_APP_MCP_WINDOW_CONTROL` decided for this run
+//! What Settings › Automation says of the window (*The window* `GADec` in `04 · Automation`): *Look at the window*,
+//! which every client with the token may always do, so its switch is on and fixed beside a lock and *Always on*
+//! (`Look at the window` `yMdW4`), and the line under *Agents can control this window*: the app reads window control
+//! when it starts, so the line says what this run has — the build's default, the person's stored choice, a choice
+//! that applies from the next start, or what `ORCHESTER_APP_MCP_WINDOW_CONTROL` decided for this run
 //! (`McpSettings::this_run`).
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::{Row, Text},
-  layout::Alignment,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, layout::Alignment, node::Element};
 
 use crate::{
   mcp::{McpLink, McpSettings, ThisRun, settings::WINDOW_CONTROL_VARIABLE},
-  theme::{ExtraSpacing, IconSize},
   ui::{
-    form_section::{Label, Place, side_row},
-    icon::{Icon, icon},
+    icon::Icon,
+    setting_rows::{SettingRow, marked_words},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -28,27 +19,27 @@ use crate::{
 const LOOK: &str = "settings-look-at-window";
 
 /// *Look at the window*: on, and no one can turn it off.
-pub fn look_at_the_window(ctx: &Ctx) -> Element {
+pub fn look_at_the_window(ctx: &mut Ctx) -> Element {
   let title = ctx.t("settings.automation.lookAtWindow.title");
   let control = Row::new()
     .id(format!("{LOOK}-control"))
-    .spacing(ExtraSpacing::Snug.role())
+    .spacing(lurq::app::theme::SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+    .child(marked_words(
+      &format!("{LOOK}-always"),
+      Icon::Lock,
+      &ctx.t("settings.automation.lookAtWindow.always"),
+    ))
     .child(
-      Text::new(&ctx.t("settings.automation.lookAtWindow.always"))
-        .id(format!("{LOOK}-always"))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
-    .child(Toggle::new(LOOK, ToggleKind::Switch, true, title.clone()).hide_label());
-  side_row(
-    Label::new(LOOK, title).description(ctx.t("settings.automation.lookAtWindow.description")),
-    control,
-    Place::Within,
-    false,
-  )
+      Toggle::new(LOOK, ToggleKind::Switch, true, title.clone())
+        .hide_label()
+        .settled(),
+    );
+  SettingRow::new(LOOK, title)
+    .hint(ctx.t("settings.automation.lookAtWindow.hint"))
+    .info(ctx.t("settings.automation.lookAtWindow.description"))
+    .control(control)
+    .render(ctx)
 }
 
 /// What applies to this run while *Agents can control this window* shows `chosen`.

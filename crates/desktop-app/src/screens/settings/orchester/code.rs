@@ -18,7 +18,7 @@ use crate::{
   clipboard::copy_for_a_minute,
   mcp::input_gate::{InputGate, TokenShown},
   services::Services,
-  theme::{ExtraRadius, ExtraTypography, OrchesterSpacing, OrchesterText},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterSpacing, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -196,12 +196,33 @@ pub(super) fn shown_code(ctx: &mut Ctx, shown: Shown, done: impl Fn() + Send + S
   )
 }
 
-/// A code's column: the box, then what to do with it.
+/// A check code's column: the code in its box, then what to do with it.
 pub(super) fn compared(id: &str, code: &str, parts: Vec<Element>) -> Column {
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
-    .child(code_box(&format!("{id}-code"), code))
+    .child(Row::new().child(check_code_box(&format!("{id}-code"), code)))
     .with_children(parts)
+}
+
+/// A check code in its box, as wide as the code (`Code` `lZspv` in `IBnMu`): Geist Mono 16/500 on `surface_input` in a
+/// `border` stroke, radius 6, 10 over and under and 14 at its sides.
+fn check_code_box(id: &str, code: &str) -> Row {
+  Row::new()
+    .id(id.to_owned())
+    .padding(Padding::symmetric(
+      ExtraSpacing::Inset.role(),
+      ExtraSpacing::Loose.role(),
+    ))
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfaceInput)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(lurq::app::theme::RadiusSize::Md)
+    .child(
+      Text::new(code)
+        .id(format!("{id}-text"))
+        .variant(OrchesterText::CheckCode.role())
+        .nowrap(),
+    )
 }

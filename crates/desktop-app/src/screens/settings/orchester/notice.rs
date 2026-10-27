@@ -247,8 +247,8 @@ fn many(ctx: &mut Ctx, count: usize) -> Element {
       ctx.t("cloud.notice.review"),
     )
     .opens(navigation.to(Route::Orchester(OrchesterView {
-      server: None,
       panel: OrchesterPanel::Invites,
+      ..OrchesterView::default()
     }))),
   )
   .into()

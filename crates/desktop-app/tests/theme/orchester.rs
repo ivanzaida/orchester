@@ -8,7 +8,7 @@ fn orchester_roles_follow_the_design() {
   for (role, size, weight, family) in [
     (OrchesterText::FormTitle, 18.0, FontWeight::SemiBold, "Geist"),
     (OrchesterText::PageTitle, 22.0, FontWeight::SemiBold, "Geist"),
-    (OrchesterText::StepTitle, 14.0, FontWeight::SemiBold, "Geist"),
+    (OrchesterText::StepTitle, 13.0, FontWeight::SemiBold, "Geist"),
     (OrchesterText::StepNumber, 10.5, FontWeight::SemiBold, "Geist"),
     (OrchesterText::Code, 24.0, FontWeight::Medium, "Geist Mono"),
     (OrchesterText::InviteTitle, 13.0, FontWeight::Medium, "Geist"),
