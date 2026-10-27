@@ -253,8 +253,8 @@ fn pipelines_unsupported_database_is_distinct_from_runnable_commands() {
   assert!(!editor.text("step-tool-unavailable").contains("pull request"));
   assert!(editor.text("step-model").contains("Not used by tools"));
   // The Executor menu (`03d`): *Choose a profile* first, then every profile and tool with its icon; the tool that
-  // cannot run says why.
-  assert!(editor.exists("step-executor-icon"), "the box shows the tool's icon");
+  // cannot run says why. The box shows the name alone (`Select` `GRGH7`).
+  assert!(!editor.exists("step-executor-icon"), "the box shows no icon");
   editor.click("step-executor");
   assert_eq!(editor.text("step-executor-option-0-label"), "Choose a profile");
   let mut unavailable = 0;

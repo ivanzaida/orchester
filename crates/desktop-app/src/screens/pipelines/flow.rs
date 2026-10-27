@@ -173,7 +173,8 @@ fn empty(ctx: &Ctx, state: &State, busy: bool) -> Column {
 }
 
 /// *Add step*: a new step after the chosen one, or at the end, which is then chosen. It is named by the number it
-/// adds (*New step 4*, as `03b` `g6Ecy` shows), or the next free name when a step already has that one.
+/// adds (*New step 4*, as `03b` `g6Ecy` shows), or, when a step already has that name, by the next number after it
+/// that no step has.
 fn add_action(ctx: &Ctx, state: &State) -> impl Fn() + Send + Sync + 'static {
   let add_state = state.clone();
   let numbered = ctx.t("pipelines.newStepNumber");
@@ -184,7 +185,9 @@ fn add_action(ctx: &Ctx, state: &State) -> impl Fn() + Send + Sync + 'static {
         return;
       }
       let number = |n: usize| numbered.replace("{{number}}", &n.to_string());
-      let name = unused_step_name(s.edit.steps(), &number(s.edit.steps().len() + 1), number);
+      let adds = s.edit.steps().len() + 1;
+      // The fallback is counted from 2: it goes on from the step's own number, never back below it.
+      let name = unused_step_name(s.edit.steps(), &number(adds), |n| number(adds + n - 1));
       let after = s.view.step().cloned();
       added = Some(s.edit.add_step(name, after.as_ref()));
     });

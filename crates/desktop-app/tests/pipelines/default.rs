@@ -57,6 +57,13 @@ fn pipelines_duplicate_opens_new_pipeline_copying_the_row() {
   editor.until("the row's pipeline chosen to copy", |e| {
     e.text("pipeline-copy").contains("Delivery")
   });
+  // With Copy chosen, its row and the page's note say what it copies (`04b` `I49xek`).
+  assert_eq!(editor.text("pipeline-start-1-hint"), "Published version → draft v1");
+  assert!(
+    editor
+      .text("pipeline-nothing-saved-text")
+      .starts_with("Copy lists only published pipelines.")
+  );
   editor.set("pipeline-name", "Delivery copy");
   editor.click("pipeline-create");
   editor.until("the copy opened", |e| e.exists("pipeline-step-step"));

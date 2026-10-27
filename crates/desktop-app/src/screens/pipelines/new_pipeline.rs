@@ -108,10 +108,16 @@ impl Component for NewPipeline {
     let head = self.header(ctx, id, &save, collision.is_some());
     let pipeline = self.pipeline_group(ctx, id, collision.as_ref());
     let start = super::new_start::group(ctx, (&self.start, &self.copy), &copies);
+    // With Copy chosen, the note first says what Copy lists (`Ocvmg` in `04b` `I49xek`).
+    let saved = if self.start.get() == Begin::Copy {
+      "pipelines.copyCreateHint"
+    } else {
+      "pipelines.createHint"
+    };
     let mut pane = parts::pane("pipeline-new")
       .child(pipeline)
       .child(start)
-      .child(note("pipeline-nothing-saved", &ctx.t("pipelines.createHint")));
+      .child(note("pipeline-nothing-saved", &ctx.t(saved)));
     if let Some(error) = save.state().get().error.or(listed.error) {
       pane = pane.child(crate::ui::field::field_error(
         "pipeline-create-error",

@@ -26,6 +26,7 @@ pub fn question(ctx: &mut Ctx, guard: &LeaveGuard, writing: bool, name: &str) ->
       ctx.t_args("pipelines.leaveNamed", [("name", name)]),
     )
     .stacked()
+    .flat()
     .body(ctx.t("pipelines.leaveBody"))
     .action(if writing { confirm.disabled() } else { confirm })
     .action(

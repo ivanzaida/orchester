@@ -1,4 +1,5 @@
-//! Compact multi-dependency picker for LWah7; editing remains PipelineEdit's.
+//! Compact multi-dependency picker for LWah7; editing remains PipelineEdit's. A step on a cycle keeps the box's
+//! outline in `danger` (`ok2Zu` in `g6Ecy`).
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::Column,
@@ -33,6 +34,7 @@ impl Component for Dependencies {
     let trigger = ActionButton::new("step-after-picker", ButtonKind::Select, label(ctx, &shown, &props.step))
       .fill_width()
       .bounded_label()
+      .invalid(on_cycle(&shown, &props.step.key))
       .element_ref(self.anchor.clone())
       .on_click(move || open.update(|v| *v = !*v));
     let mut menu = popover_panel("step-after-menu", 260.0);
@@ -89,4 +91,9 @@ pub fn label(
   } else {
     names.join(", ")
   }
+}
+
+/// Whether the step keyed `key` waits for itself through the steps it runs after.
+pub fn on_cycle(shown: &orchester_core::resource::PipelineEdit, key: &orchester_core::resource::StepKey) -> bool {
+  shown.cycle().is_some_and(|cycle| cycle.contains(key))
 }

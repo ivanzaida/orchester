@@ -1,11 +1,76 @@
 //! Supported pipeline fixture contracts for independent native verification.
 use orchester_core::{
   permission::{StepCommands, StepNetwork},
-  resource::{AgentProfile, Pipeline, ResourceKind, StepKind},
+  resource::{AgentProfile, Pipeline, ResourceKind, StepKind, ToolKind},
   store::ResourceStore,
+};
+use orchester_store::StoreError;
+use orchester_workspace::pipelines::{
+  data::{Assignables, OpenedPipeline},
+  deliver::integrator_profiles,
+  narrowing,
 };
 
 use super::Seed;
+
+#[test]
+fn seed_pipelines_holds_the_step_variants_no_other_data_reaches() {
+  let seed = Seed::of("pipelines");
+  let db = seed.db();
+  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let opened = |name: &str| {
+    let id = rows.iter().find(|r| r.name().as_str() == name).unwrap().id();
+    OpenedPipeline::load_in(seed.repo(), id).unwrap()
+  };
+  let status = opened("Status checks");
+  let [step] = status.body.steps() else {
+    panic!("one step")
+  };
+  let StepKind::Tool { tool: Some(tool) } = step.kind else {
+    panic!("a tool step")
+  };
+  let tool = status.assignables.tool(tool).expect("a published tool");
+  assert_eq!((tool.kind, tool.runnable), (ToolKind::Http, false));
+  let review = opened("Read-only review");
+  let [first, second] = review.body.steps() else {
+    panic!("two steps")
+  };
+  assert_eq!(
+    second.depends_on,
+    [first.key.clone()].into(),
+    "a cycle is one choice away"
+  );
+  let StepKind::Agent {
+    profile: Some(profile), ..
+  } = first.kind
+  else {
+    panic!("an agent step")
+  };
+  let codex = review.assignables.profile(profile).expect("a published profile");
+  assert!(narrowing::commands(codex).is_empty(), "no command list to narrow");
+  assert!(!narrowing::can_write(codex));
+  if cfg!(windows) {
+    assert!(
+      !narrowing::can_block_network(codex),
+      "Codex cannot turn network off on Windows"
+    );
+  }
+  let deliver = review.body.deliver().expect("a Deliver step");
+  assert!(deliver.recheck() && !deliver.recheck_locked());
+  assert!(integrator_profiles(&review.body).is_empty(), "no step changes files");
+  let tools = Assignables::load(&db).unwrap();
+  assert!(tools.tools.iter().any(|t| t.kind == ToolKind::Database && !t.runnable));
+}
+
+#[test]
+fn seed_sources_unreadable_lists_a_path_no_read_takes() {
+  let db = Seed::of("sources-unreadable").db();
+  assert!(
+    matches!(db.project_sources(), Err(StoreError::Corrupt { .. })),
+    "{:?}",
+    db.project_sources()
+  );
+}
 
 #[test]
 fn seed_pipelines_empty_has_no_library_entries() {

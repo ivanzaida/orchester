@@ -4,9 +4,13 @@
 //! enforce on this platform; a choice they cannot is locked with why (`03b` `g6Ecy`). Turning Ask off asks before
 //! saving (`super::save`).
 use lurq::{
-  app::ctx::Ctx,
-  components::Column,
-  node::{Element, dimension::Dimension},
+  app::{
+    ctx::Ctx,
+    theme::{RadiusSize, SpacingSize},
+  },
+  components::{Column, Row},
+  layout::Alignment,
+  node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   permission::{StepCommands, StepNetwork, StepPermissions},
@@ -15,11 +19,14 @@ use orchester_core::{
 use orchester_workspace::pipelines::{data::ProfileChoice, narrowing};
 
 use super::{state::State, step_fields::Props};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  icon::Icon,
-  row_group::{GroupRow, RowGroup, note},
-  toggle::{Toggle, ToggleKind},
+use crate::{
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+    row_group::{GroupRow, RowGroup, note},
+    toggle::{Toggle, ToggleKind},
+  },
 };
 
 /// The page's groups under its head.
@@ -76,9 +83,12 @@ fn current(step: &Step, choice: &ProfileChoice) -> (Vec<String>, bool, bool) {
   )
 }
 
-/// The command picker's rows: one checkbox per command the profile allows.
+/// The command picker's rows (`cargo` `fK6s3` in `KFGZ7`): one checkbox per command the profile allows, the command
+/// in Geist Mono, each a menu row 28 high, 8 at its sides and 2 apart.
 pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Column {
-  let mut commands = Column::new().spacing(lurq::app::theme::SpacingSize::Xs);
+  let mut commands = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role());
   let (current, off, ask) = current(step, choice);
   for (index, command) in narrowing::commands(choice).iter().enumerate() {
     let toggle = Toggle::new(
@@ -86,7 +96,8 @@ pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, l
       ToggleKind::Checkbox,
       current.contains(command),
       command.as_str(),
-    );
+    )
+    .label_style(ExtraTypography::PropertyMono.role());
     let (edit, key, choice, chosen, current) = (
       state.clone(),
       step.key.clone(),
@@ -94,7 +105,7 @@ pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, l
       command.clone(),
       current.clone(),
     );
-    commands = commands.child(if locked {
+    let toggle = if locked {
       toggle
     } else {
       toggle.on_change(move |on| {
@@ -105,7 +116,17 @@ pub(super) fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, l
         }
         apply(&edit, &key, &choice, (Some(&only), off, ask));
       })
-    });
+    };
+    commands = commands.child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .min_height(Dimension::Px(ControlHeight::Md.value()))
+        .padding(Padding::horizontal(SpacingSize::Sm))
+        .align_items(Alignment::Center)
+        .rounded(RadiusSize::Sm)
+        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+        .child(toggle),
+    );
   }
   commands
 }

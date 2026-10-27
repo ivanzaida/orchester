@@ -56,6 +56,7 @@
     "pipeline": "PIPELINE",
     "nothingSaved": "Nothing is saved yet",
     "createHint": "Create draft v1 saves it. Tasks can use it once you publish it.",
+    "copyCreateHint": "Copy lists only published pipelines. Create draft v1 saves it; tasks can use it once you publish it.",
     "onStart": "ON TASK START",
     "addStep": "Add step",
     "newStepNumber": "New step {{number}}",

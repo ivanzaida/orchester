@@ -111,6 +111,8 @@ pub struct SelectField<T: SignalValue> {
   leading: Option<Icon>,
   /// The chosen option's label in Geist Mono: a path or an identifier.
   mono: bool,
+  /// What the box says in place of an option's label while that option is chosen.
+  shows: Option<(Arc<str>, Arc<str>)>,
   invalid: bool,
   warning: bool,
   locked: bool,
@@ -138,6 +140,7 @@ where
       width: Dimension::Pct(100.0),
       leading: None,
       mono: false,
+      shows: None,
       invalid: false,
       warning: false,
       locked: false,
@@ -165,6 +168,14 @@ where
   /// The chosen option's label in Geist Mono, e.g. a program's path (`Program` in `cEJy4`).
   pub fn mono(mut self) -> Self {
     self.mono = true;
+    self
+  }
+
+  /// While the option labelled `label` is chosen, the box says `shown` instead, e.g. the model id a pipeline step
+  /// takes from its profile, which the menu lists as *From the profile* (`DuMJh` in `IsU5u`). The box then draws
+  /// its own chevron, as with [`Self::leading`].
+  pub fn shows(mut self, label: impl Into<Arc<str>>, shown: impl Into<Arc<str>>) -> Self {
+    self.shows = Some((label.into(), shown.into()));
     self
   }
 
@@ -203,10 +214,16 @@ where
     if let Some(placeholder) = self.placeholder {
       select = select.placeholder(placeholder);
     }
-    if self.leading.is_some() || self.mono {
-      let (id, glyph, mono) = (self.id.clone(), self.leading, self.mono);
-      select =
-        select.trigger(move |state| leading_trigger(&id, (glyph, mono), state.label.as_deref().unwrap_or_default()));
+    if self.leading.is_some() || self.mono || self.shows.is_some() {
+      let (id, glyph, mono, shows) = (self.id.clone(), self.leading, self.mono, self.shows);
+      select = select.trigger(move |state| {
+        let label = state.label.as_deref().unwrap_or_default();
+        let label = match &shows {
+          Some((chosen, shown)) if **chosen == *label => &**shown,
+          _ => label,
+        };
+        leading_trigger(&id, (glyph, mono), label)
+      });
     }
     // lurq's select takes no accessible name of its own; tools read it from the select's row.
     Row::new()

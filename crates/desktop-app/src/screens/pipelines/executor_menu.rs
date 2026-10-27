@@ -1,7 +1,8 @@
 //! The Executor field and its menu (`Executor` `RodWl` in `IsU5u`, open in `03d` `a5RI7`): the box shows the chosen
-//! profile or tool with its icon; the menu opens under it with *Choose a profile* in `text_muted` first, the profiles
-//! with the agent icon, a line, then the tools with their kind's icon. A draft profile and a tool that cannot run are
-//! listed faded with a lock and say why under their name. Built from the shared menu rows (`Menu item` `mAHGP`).
+//! profile's or tool's name (`Select` `s3R8u`); the menu (`Executor list` `FHpIk`) opens under it from its end with
+//! *Choose a profile* in `text_muted` first, the profiles with the agent icon, a line, then the tools with the tool
+//! icon. A draft profile and a tool that cannot run are listed faded and say why under their name, without a lock.
+//! Built from the shared menu rows (`Menu item` `mAHGP`).
 use std::sync::Arc;
 
 use lurq::{
@@ -26,8 +27,8 @@ use crate::{
   },
 };
 
-/// The open menu's width: wide enough for a tool's reason under its name.
-const MENU_WIDTH: f32 = 280.0;
+/// The open menu's width (`Executor list` `FHpIk`).
+const MENU_WIDTH: f32 = 240.0;
 /// The most an open menu grows to before it scrolls.
 const MENU_MAX_HEIGHT: f32 = 320.0;
 
@@ -132,7 +133,7 @@ impl Field {
   fn item(&self, props: &ExecutorField, entry: &Entry, chosen: &Executor, index: usize) -> MenuItem {
     let id = format!("{}-option-{index}", props.id);
     let item = match &entry.unavailable {
-      Some(reason) => MenuItem::unavailable(id, entry.label.clone(), reason.clone()),
+      Some(reason) => MenuItem::unavailable(id, entry.label.clone(), reason.clone()).without_lock(),
       None => {
         let (value, picked) = (props.value.clone(), entry.value);
         MenuItem::new(id, entry.label.clone(), move || value.set(picked))
@@ -168,7 +169,7 @@ impl Field {
       .into()
   }
 
-  /// The box: the chosen executor's icon and name, or *Choose a profile* in `text_muted`, and the chevron.
+  /// The box: the chosen executor's name, or *Choose a profile* in `text_muted`, and the chevron.
   fn trigger(&self, props: &ExecutorField, chosen: &Executor) -> Element {
     let current = props
       .profiles
@@ -215,10 +216,6 @@ impl Field {
           stroke
         },
       ))
-      .with_children(
-        current
-          .map(|entry| icon(entry.icon, IconSize::Md, PaletteColor::TextSecondary).id(format!("{}-icon", props.id))),
-      )
       .child(
         Text::new(&label)
           .id(format!("{}-label", props.id))

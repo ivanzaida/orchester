@@ -57,8 +57,14 @@ pub fn group(ctx: &mut Ctx, (start, copy): (&Signal<Begin>, &Signal<String>), co
   .placeholder(ctx.t("pipelines.choosePipeline"))
   .width(Dimension::Px(COPY_WIDTH))
   .render(ctx);
+  // Chosen, it says in short where the copy comes from (`ZJvnT` in `04b` `I49xek`).
+  let copy_hint = if chosen == Begin::Copy {
+    "pipelines.copyVersionHint"
+  } else {
+    "pipelines.copyHint"
+  };
   let copy_row = row("pipeline-start-1", "pipelines.copy", Begin::Copy)
-    .hint(ctx.t("pipelines.copyHint"))
+    .hint(ctx.t(copy_hint))
     .end(select);
   let empty_row = row("pipeline-start-2", "pipelines.empty", Begin::Empty).hint(ctx.t("pipelines.emptyHint"));
   RowGroup::new("pipeline-start", ctx.t("pipelines.startFrom"))

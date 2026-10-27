@@ -109,6 +109,7 @@ fn notices(ctx: &mut Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> 
         ctx.t("pipelines.profileUnpublished"),
       )
       .stacked()
+      .flat()
       .body(ctx.t_args("pipelines.profileDraftHint", [("name", profile.name.as_ref())]))
       .action(profile_action(ctx, props, profile))
       .into(),
@@ -124,6 +125,7 @@ fn notices(ctx: &mut Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> 
         ctx.t("pipelines.toolUnavailable"),
       )
       .icon(Icon::Lock)
+      .flat()
       .body(ctx.t(tool_reason(tool.kind)))
       .into(),
     );
@@ -209,20 +211,12 @@ fn executor_entries(ctx: &Ctx, props: &Props, draft: Option<&DraftProfileChoice>
     .map(|t| Entry {
       value: Executor::Tool(t.id),
       label: t.name.clone(),
-      icon: tool_icon(t.kind),
+      // Every tool takes the tool icon, whatever its kind (`Checks` `I5Egi` in `FHpIk`).
+      icon: Icon::Wrench,
       unavailable: (!t.runnable).then(|| ctx.t("pipelines.toolUnavailable")),
     })
     .collect();
   (profiles, tools)
-}
-
-/// A tool's kind, as the Tools screen draws it.
-const fn tool_icon(kind: ToolKind) -> Icon {
-  match kind {
-    ToolKind::Command => Icon::Terminal,
-    ToolKind::Http => Icon::Globe,
-    ToolKind::Database => Icon::Database,
-  }
 }
 
 /// Why a tool of `kind` cannot run as a step.
@@ -248,7 +242,9 @@ pub(super) fn unavailable_tool(props: &Props) -> Option<orchester_workspace::pip
     .cloned()
 }
 
-/// The Model row: an agent step's model, or *Not used by tools* for a tool that cannot run; none for a tool step.
+/// The Model row: an agent step's model, or *Not used by tools* for a tool that cannot run; none for a tool step. The
+/// box shows a model id in Geist Mono (`DuMJh` in `IsU5u`): the step's own, or the one it takes from its profile,
+/// which its menu lists as *From the profile*.
 pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Option<GroupRow> {
   let row = GroupRow::new("step-model-row", ctx.t("pipelines.model"));
   if matches!(props.step.kind, StepKind::Tool { .. }) {
@@ -266,11 +262,16 @@ pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Option<Gr
   }
   let editing = props.state.get();
   let draft = draft_profile(props);
+  let published_model = match props.step.kind {
+    StepKind::Agent { profile: Some(id), .. } => editing.opened.assignables.profile(id).map(|p| p.model.clone()),
+    StepKind::Agent { profile: None, .. } | StepKind::Tool { .. } => None,
+  };
+  let profile_model = draft.as_ref().map(|p| p.model.clone()).or(published_model);
   let inherited = draft
     .as_ref()
     .map_or_else(|| ctx.t("pipelines.inherit"), |p| p.model.as_str().into());
   if props.viewing {
-    return Some(match value.get().0 {
+    return Some(match value.get().0.or(profile_model) {
       Some(model) => row.mono_value(model.as_str()),
       None => row.value(&inherited),
     });
@@ -279,21 +280,26 @@ pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Option<Gr
     editing.opened.assignables.profiles.iter().map(|p| &p.model),
     value.get().0.as_ref(),
   );
-  let mut options = vec![SelectOption::new(ModelChoice(None), inherited)];
+  let mut options = vec![SelectOption::new(ModelChoice(None), inherited.clone())];
   options.extend(
     models
       .into_iter()
       .map(|m| SelectOption::new(ModelChoice(Some(m.clone())), m.as_str().to_owned())),
   );
   let unset = Executor::of(&props.step) == Executor::Unset;
-  let select = SelectField::new(
+  let mut select = SelectField::new(
     "step-model",
     ctx.t("pipelines.model"),
     value.clone(),
     locked_options(options, props.locked || unset),
   )
-  .width(Dimension::Px(FIELD_WIDTH))
-  .mono();
+  .width(Dimension::Px(FIELD_WIDTH));
+  if let Some(model) = &profile_model {
+    select = select.shows(inherited, model.as_str());
+  }
+  if value.get().0.is_some() || profile_model.is_some() {
+    select = select.mono();
+  }
   let select = if unset { select.locked() } else { select }.render(ctx);
   let row = row.end(select);
   Some(match draft.filter(|_| value.get().0.is_none()) {

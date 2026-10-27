@@ -56,7 +56,8 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
 - Grouped rows (`ui::row_group`: `RowGroup`, `GroupRow`, `tag`, `note`; roles `GroupText`) draw a titled group of rows
   in one outline, as the redesigned Pipelines screens do (`Pipelines · redesign` `evQ4U` in the new `orchester.pen`):
   a row's label and hint, and at its end its control, its value or a chevron to a page; a radio row leads with
-  `toggle::radio_mark`. Pipelines' own values are `PipelinesText` / `PipelinesSpacing` (`theme/pipelines.rs`). A
+  `toggle::radio_mark`. Their notices are `ui::notice::Notice::flat` (no stroke, a 14 icon, actions under the words).
+  Pipelines' own values are `PipelinesText` / `PipelinesSpacing` (`theme/pipelines.rs`). A
   pipeline's page is one route with its tab and what its Steps column shows (`routes::PipelineView`): the canvas,
   the step inspector, the settings page and the history panel are gone.
 

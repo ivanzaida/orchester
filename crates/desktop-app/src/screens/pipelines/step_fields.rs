@@ -12,14 +12,17 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{Step, StepKey};
-use orchester_workspace::pipelines::fields::{self, Executor, ModelChoice, RouteChoice};
+use orchester_workspace::{
+  messages::Message,
+  pipelines::fields::{self, Executor, ModelChoice, RouteChoice},
+};
 
 use super::state::{State, StepPage, View};
 use crate::ui::{
   field::{FieldInput, SelectField},
   message::message_text,
   pressable::Press,
-  row_group::{GroupRow, RowGroup},
+  row_group::{GroupRow, HintTone, RowGroup},
 };
 
 /// A control's width at a row's end (`Select` `s3R8u`).
@@ -143,6 +146,13 @@ impl Fields {
       after.value(&super::dependencies::label(ctx, &shown, &props.step))
     } else {
       after.end(ctx.mount_keyed::<super::dependencies::Dependencies>("step-dependencies-picker", props.clone()))
+    };
+    // A step on a cycle says so on its Runs after row (`A cycle` `Igf5o` in `g6Ecy`).
+    let after = if super::dependencies::on_cycle(&shown, &props.step.key) {
+      let message = Message::new("pipelines.problems.cycleAt").with("step", props.step.name.as_str().to_owned());
+      after.toned_hint(message_text(ctx, &message), HintTone::Danger)
+    } else {
+      after
     };
     let failure = GroupRow::new("step-failure-row", ctx.t("pipelines.failure"));
     let failure = if props.viewing {

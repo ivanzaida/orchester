@@ -188,6 +188,7 @@ impl Editor {
     let error = self.action.state().get().error?;
     let notice = Notice::new("pipeline-write-error", NoticeTone::Danger, ctx.t("pipelines.error"))
       .stacked()
+      .flat()
       .body(message_text(ctx, &error));
     if !needs_reload(&error) {
       return Some(notice.into());

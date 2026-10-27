@@ -80,6 +80,7 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
           ctx.t("pipelines.publishBlocked"),
         )
         .stacked()
+        .flat()
         .part(links),
       )
       .into(),

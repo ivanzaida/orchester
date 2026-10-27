@@ -1,7 +1,7 @@
 //! `sources`: folders and files outside the worktree that agents may read without asking (`Sources` `XulGo`). The
 //! project lists a folder of docs, a crate's sources and a runbook that is missing; Feature delivery's next version
 //! lists design tokens for every step and a style guide on its Review step; a draft on Feature delivery lists a spec
-//! of its own. They are made beside the repository, outside it.
+//! of its own. They are made beside the repository, outside it. `sources-unreadable` damages the project's list.
 
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -74,6 +74,22 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   )?;
   kontur.db.set_task_sources(task.id(), &[source(&spec)?])?;
   kontur.seeded(&task, "draft with a source");
+  Ok(())
+}
+
+/// `sources-unreadable`: what `sources` writes, with a relative path among the project's sources, as an edit outside
+/// Orchester would leave it. No read takes it, so the store calls the list corrupt: the step and pipeline Sources
+/// pages say why they cannot be read (`Step sources · the project's can't be read` `niNNR` in `g6Ecy`).
+pub fn unreadable(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  // The store has no API for a damaged list.
+  let changed = rusqlite::Connection::open(kontur.database())?
+    .execute("INSERT INTO project_sources (position, path) VALUES (99, 'docs')", [])?;
+  if changed != 1 {
+    return Err(SeedError::Invalid(format!(
+      "damaging the project's sources changed {changed} rows"
+    )));
+  }
   Ok(())
 }
 

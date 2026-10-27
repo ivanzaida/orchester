@@ -220,6 +220,7 @@ impl StepColumn {
       ctx.t("pipelines.removeTitle"),
     )
     .stacked()
+    .flat()
     .body(ctx.t("pipelines.removeHint"))
     .action(if props.locked { confirm.disabled() } else { confirm })
     .action(

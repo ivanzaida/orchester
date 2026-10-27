@@ -141,6 +141,7 @@ fn unpublished_notice(ctx: &Ctx) -> Element {
     NoticeTone::Info,
     ctx.t("pipelines.notAvailableTitle"),
   )
+  .flat()
   .body(ctx.t("pipelines.notAvailableDetail"))
   .into()
 }

@@ -307,7 +307,8 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
   editor.choose("step-executor", "Checks");
   assert!(!editor.exists("step-model"));
   editor.choose("step-executor", "Reviewer");
-  assert!(editor.text("step-model").contains("From the profile"));
+  // Taken from the profile, the box shows the profile's model id (`DuMJh` in `IsU5u`).
+  assert_eq!(editor.text("step-model-label"), "test-model");
   editor.until("inherited model saved", |e| {
     matches!(
       e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[0].kind,
@@ -318,8 +319,8 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
       }
     )
   });
-  assert!(editor.text("step-model").contains("From the profile"));
+  assert_eq!(editor.text("step-model-label"), "test-model");
   editor.click("pipeline-start");
   editor.click("pipeline-step-step");
-  assert!(editor.text("step-model").contains("From the profile"));
+  assert_eq!(editor.text("step-model-label"), "test-model");
 }

@@ -18,7 +18,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{DeliverMode, DeliverStep, MergeMethod, StepKind};
+use orchester_core::resource::{DeliverMode, DeliverStep, MergeMethod, StepKind, ToolKind};
 use orchester_workspace::{
   merge_queue::rechecks,
   pipelines::deliver::{IntegratorChoice, integrating_step, integrator_profiles},
@@ -318,8 +318,8 @@ fn check_group(ctx: &Ctx, props: &DeliverProps, deliver: &DeliverStep) -> RowGro
   )
 }
 
-/// The names of the tools the pipeline's checking tool steps run, joined: what Check runs again
-/// (`orchester_workspace::merge_queue::rechecks`).
+/// The names of the command tools the pipeline's checking tool steps run, joined: what Check runs again
+/// (`orchester_workspace::merge_queue::rechecks`; it runs command tools only).
 fn check_tools(props: &DeliverProps) -> Option<String> {
   let editing = props.state.get();
   let names: Vec<String> = editing
@@ -332,6 +332,7 @@ fn check_tools(props: &DeliverProps) -> Option<String> {
         .opened
         .assignables
         .tool(tool)
+        .filter(|choice| choice.kind == ToolKind::Command)
         .map(|choice| choice.name.to_string()),
       _ => None,
     })

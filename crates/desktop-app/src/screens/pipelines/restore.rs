@@ -31,6 +31,7 @@ pub fn question(ctx: &Ctx, state: &State, writing: bool) -> Element {
     ctx.t_args("pipelines.replaceDraftTitle", [("version", version)]),
   )
   .stacked()
+  .flat()
   .body(ctx.t("pipelines.replaceDraftDetail"))
   .action(if writing { confirm.disabled() } else { confirm })
   .action(

@@ -203,6 +203,7 @@ fn seed_names_every_scenario_once() {
       "pull-requests",
       "pull-request-feedback",
       "sources",
+      "sources-unreadable",
       "usage",
       "usage-empty",
       "usage-bare",

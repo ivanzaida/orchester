@@ -196,3 +196,41 @@ fn pipelines_instructions_error_shows_under_its_field_and_keeps_save_draft() {
     "away from its field, the page says it"
   );
 }
+
+#[test]
+fn pipelines_flow_add_step_names_by_the_number_it_adds_and_counts_on_from_a_taken_one() {
+  let mut editor = Editor::new();
+  let id = editor.empty("Names");
+  editor.open(id);
+  editor.click("pipeline-add-step");
+  assert_eq!(editor.value("step-name"), "New step 1");
+  editor.click("pipeline-add-step");
+  assert_eq!(editor.value("step-name"), "New step 2");
+  editor.set("step-name", "New step 3");
+  editor.click("pipeline-add-step");
+  assert_eq!(
+    editor.value("step-name"),
+    "New step 4",
+    "the third step's name is taken: the next number after it, never back to a lower one"
+  );
+}
+
+#[test]
+fn pipelines_flow_a_step_on_a_cycle_says_so_on_its_runs_after_row() {
+  let mut editor = Editor::new();
+  let id = editor.empty("Cycle");
+  editor.open(id);
+  editor.click("pipeline-add-step");
+  editor.click("pipeline-add-step");
+  assert!(!editor.exists("step-dependencies-hint"));
+  editor.click("pipeline-step-step");
+  editor.click("step-after-picker");
+  editor.click("step-after-step-2");
+  // `A cycle` `Igf5o` in `g6Ecy`: the hint on the Runs after row.
+  assert_eq!(
+    editor.text("step-dependencies-hint"),
+    "New step 1 waits for itself through the steps it runs after"
+  );
+  editor.click("step-after-step-2");
+  assert!(!editor.exists("step-dependencies-hint"), "the hint goes with the cycle");
+}
