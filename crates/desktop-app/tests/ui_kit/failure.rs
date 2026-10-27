@@ -8,7 +8,7 @@ use std::sync::{
 };
 
 use lurq::{
-  app::theme::SpacingSize,
+  app::{component::DevtoolsInspectable, theme::SpacingSize},
   components::{Column, Text},
   core::Signal,
   node::dimension::Dimension,
@@ -28,6 +28,8 @@ enum Read {
   Retrying,
   Done,
 }
+
+impl DevtoolsInspectable for Read {}
 
 #[test]
 fn a_section_that_cannot_be_read_keeps_its_heading_and_the_rest_of_the_page_works() {

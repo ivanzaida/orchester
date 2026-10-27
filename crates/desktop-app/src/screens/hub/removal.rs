@@ -53,6 +53,12 @@ struct Removed(Removal);
 
 impl DevtoolsInspectable for Removed {}
 
+/// The pipeline steps the removal itself found using it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Found(Vec<StepUser>);
+
+impl DevtoolsInspectable for Found {}
+
 /// The question, mounted while it asks.
 pub(crate) fn question(ctx: &mut Ctx, props: RemoveProps) -> Element {
   ctx.mount_keyed::<RemoveQuestion>(&format!("hub-remove-{}", props.resource), props)
@@ -61,7 +67,7 @@ pub(crate) fn question(ctx: &mut Ctx, props: RemoveProps) -> Element {
 pub(crate) struct RemoveQuestion {
   work: FutureAction<RemoveMode, Removed, Message>,
   /// Who the removal found using it, when that is not who the question listed.
-  found: Signal<Option<Vec<StepUser>>>,
+  found: Signal<Option<Found>>,
 }
 
 impl Component for RemoveQuestion {
@@ -84,7 +90,7 @@ impl Component for RemoveQuestion {
         }
         removed();
       }
-      Some(Removed(Removal::InUse(users))) => seen.set(Some(users)),
+      Some(Removed(Removal::InUse(users))) => seen.set(Some(Found(users))),
       None => {}
     });
     Self { work, found }
@@ -101,7 +107,7 @@ impl Component for RemoveQuestion {
       .state()
       .get();
     let users = match (self.found.get(), read.data.clone()) {
-      (Some(found), _) => Users::Steps(found),
+      (Some(Found(found)), _) => Users::Steps(found),
       (None, Some(users)) => users,
       (None, None) => Users::Steps(Vec::new()),
     };
