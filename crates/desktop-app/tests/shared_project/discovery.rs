@@ -88,7 +88,7 @@ fn shared_project_discovery_is_written_for_a_linked_project_only_by_a_person() {
   assert!(!file.exists(), "an MCP client's press writes nothing");
 
   press(&mut window, "sharing-discovery-write");
-  shows(&mut window, "sharing-discovery-file");
+  super::discovery_written(&mut window);
   assert_eq!(
     fs::read_to_string(&file).expect("orchester.toml"),
     format!("project = \"{}/kontur\"\n", recorder.url())

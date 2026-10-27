@@ -23,6 +23,7 @@ fn orchester_design_link_takes_the_server_projects_key() {
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
+  press(&mut window, "sharing-share-open");
   shows(&mut window, "sharing-project-billing-option");
   assert!(
     window.text("sharing-project-billing-option").contains("Empty"),
@@ -40,35 +41,32 @@ fn orchester_design_link_takes_the_server_projects_key() {
     "the confirmation names the key the tasks take: {question}"
   );
   press(&mut window, "sharing-link-confirm");
-  shows(&mut window, "sharing-shared-detail");
-  let detail = window.text("sharing-shared-detail");
-  assert!(detail.starts_with("BIL ·"), "linked under the server's key: {detail}");
-  assert!(detail.contains("synced"), "when it last synced: {detail}");
-  assert!(window.text("sharing-address-state").contains("connected"));
-  assert!(
-    window
-      .text("sharing-make-local-description")
-      .contains("BIL stays the same for everyone else")
-  );
+  // *Team server* (`rsQ79` in `04b Sharing · shared` `TnUGj`).
+  shows(&mut window, "sharing-role-hint");
+  let role = window.text("sharing-role-hint");
+  assert!(role.starts_with("Key BIL ·"), "linked under the server's key: {role}");
+  let address = window.text("sharing-address-hint");
+  assert!(address.starts_with("Synced "), "when it last synced: {address}");
+  assert!(address.contains("connected"), "{address}");
   window.until("the repository compared", |window| {
     window
-      .texts("sharing-repository-state")
+      .texts("sharing-repository-hint")
       .is_some_and(|texts| texts.join(" ").contains("doesn't match"))
   });
-  assert!(
-    window
-      .text("sharing-task-list-description")
-      .starts_with("Kontur's tasks live in Billing on"),
-    "the server project by its name: {}",
-    window.text("sharing-task-list-description")
-  );
-  assert_eq!(window.text("sharing-leave-row-label"), "Leave Billing");
+  assert_eq!(window.text("sharing-leave-row-label"), "Leave the project");
   assert!(
     window
       .text("sharing-repository-value")
       .contains("github.com/acme/billing"),
     "the project's hint: {}",
     window.text("sharing-repository-value")
+  );
+  press(&mut window, "sharing-leave");
+  shows(&mut window, "sharing-leave-question");
+  let question = window.texts("sharing-leave-question").unwrap_or_default().join(" ");
+  assert!(
+    question.contains("Billing"),
+    "the server project by its name: {question}"
   );
 }
 

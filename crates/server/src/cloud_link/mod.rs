@@ -70,7 +70,8 @@ pub(crate) struct Link {
   key_set_issued_at: Option<i64>,
   key_set_expires_at: Option<i64>,
   /// The issuer an earlier key set of this root named, before a newer one named another: the cloud's former public URL
-  /// after it moved (`docs/cloud-hosting.md`, "Moving the cloud"). Tokens it issued still verify.
+  /// after it moved (`docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`, "Moving the cloud"). Tokens it issued
+  /// still verify.
   former_issuer: Option<String>,
   accepting: bool,
   linked_at: i64,

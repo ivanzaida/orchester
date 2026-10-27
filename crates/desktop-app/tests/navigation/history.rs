@@ -6,8 +6,8 @@
 use orchester_app::{
   navigation::tabs::TabSet,
   routes::{
-    AccountsView, ConnectionsTab, ConnectionsView, OrchesterView, OverviewTab, ProjectPage, Route, Screen, TaskList,
-    TaskListTab, TaskTab, TaskView,
+    AccountsView, ConnectionsView, OrchesterView, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab,
+    TaskTab, TaskView,
   },
 };
 use orchester_core::{
@@ -122,7 +122,7 @@ fn the_sidebar_on_settings_shows_the_project_the_tab_was_in_last() {
   navigation.go(Route::Settings);
   window.pass();
   assert_eq!(now(&window).nav_screen(), Screen::Settings, "Settings is selected");
-  for screen in ["overview", "tasks", "secrets", "project_settings"] {
+  for screen in ["overview", "tasks", "tools", "project_settings"] {
     assert!(
       window.texts(&format!("nav-{screen}")).is_some(),
       "nav-{screen} stays on Settings"
@@ -237,36 +237,31 @@ fn server(window: &Window, name: &str) -> ConnectionId {
 }
 
 #[test]
-fn connections_tabs_and_chosen_connections_are_history() {
+fn connections_and_opened_connections_are_history() {
   let mut window = Window::open();
   let first = server(&window, "kontur-docs");
   let second = server(&window, "kontur-search");
   let connections = |view| project(ProjectPage::Connections(view));
   window.navigation().go(connections(ConnectionsView::default()));
-  let second_row = format!("connection-row-{second}");
-  window.until("the connections", |window| window.texts(&second_row).is_some());
-  window.press(&second_row);
-  let chose_second = connections(ConnectionsView::default().with_selected(second));
-  assert_eq!(now(&window), chose_second);
-  window.press(&format!("connection-row-{first}"));
-  assert_eq!(
-    now(&window),
-    connections(ConnectionsView::default().with_selected(first))
-  );
-  window.press("connections-tab-mcp_servers");
-  assert_eq!(
-    now(&window),
-    connections(ConnectionsView::new(ConnectionsTab::McpServers))
-  );
+  let row = |id: ConnectionId| format!("connection-row-{id}-row");
+  window.until("the connections", |window| window.texts(&row(second)).is_some());
+  window.press(&row(second));
+  let opened_second = connections(ConnectionsView::of(second));
+  assert_eq!(now(&window), opened_second);
+  window.until("the connection's page", |window| {
+    window.texts("connection-crumb-back").is_some()
+  });
+  window.press("connection-crumb-back");
+  assert_eq!(now(&window), connections(ConnectionsView::default()));
+  window.until("the connections", |window| window.texts(&row(first)).is_some());
+  window.press(&row(first));
+  assert_eq!(now(&window), connections(ConnectionsView::of(first)));
   back(&mut window);
-  assert_eq!(
-    now(&window),
-    connections(ConnectionsView::default().with_selected(first))
-  );
+  assert_eq!(now(&window), connections(ConnectionsView::default()));
   back(&mut window);
-  assert_eq!(now(&window), chose_second);
+  assert_eq!(now(&window), opened_second);
   back(&mut window);
   assert_eq!(now(&window), connections(ConnectionsView::default()));
   forward(&mut window);
-  assert_eq!(now(&window), chose_second);
+  assert_eq!(now(&window), opened_second);
 }

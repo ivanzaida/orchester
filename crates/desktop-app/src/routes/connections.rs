@@ -1,63 +1,26 @@
 use orchester_core::id::ConnectionId;
 
 use super::{
-  RouteError, TAB,
+  RouteError,
   query::{Params, with_query},
 };
 
 const SELECTED: &str = "selected";
 const KIND: &str = "kind";
 
-/// A tab of Connections (`Tabs` `qVM0O` in `z4QquH`): every connection, or one kind. All connections is the
-/// one it opens on.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum ConnectionsTab {
-  #[default]
-  All,
-  AgentProviders,
-  GitHub,
-  McpServers,
-}
-
-impl ConnectionsTab {
-  pub const ALL: [Self; 4] = [Self::All, Self::AgentProviders, Self::GitHub, Self::McpServers];
-
-  /// The tab's name in a path's query and in the app's MCP tools.
-  pub const fn name(self) -> &'static str {
-    match self {
-      Self::All => "all",
-      Self::AgentProviders => "agent_providers",
-      Self::GitHub => "github",
-      Self::McpServers => "mcp_servers",
-    }
-  }
-
-  pub fn from_name(name: &str) -> Option<Self> {
-    Self::ALL.into_iter().find(|tab| tab.name() == name)
-  }
-}
-
-/// What Connections shows: its tab, and the connection whose inspector is open, if one is chosen; without
-/// one the tab's first connection is.
+/// What Project settings › Connections shows (`05 Connections` `dk46o`): the project's connections in their groups,
+/// or one connection on its own page (`05b` `PGwka`, `13` `Ptkxo`, `14` `KItiZ`) when one is chosen.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ConnectionsView {
-  tab: ConnectionsTab,
   selected: Option<ConnectionId>,
 }
 
 impl ConnectionsView {
-  pub const fn new(tab: ConnectionsTab) -> Self {
-    Self { tab, selected: None }
-  }
-
-  #[must_use]
-  pub const fn with_selected(mut self, connection: ConnectionId) -> Self {
-    self.selected = Some(connection);
-    self
-  }
-
-  pub const fn tab(self) -> ConnectionsTab {
-    self.tab
+  /// The page of `connection`.
+  pub const fn of(connection: ConnectionId) -> Self {
+    Self {
+      selected: Some(connection),
+    }
   }
 
   pub const fn selected(self) -> Option<ConnectionId> {
@@ -65,20 +28,18 @@ impl ConnectionsView {
   }
 
   pub(super) fn path(self, connections: String) -> String {
-    let tab = (self.tab != ConnectionsTab::default()).then(|| self.tab.name());
     let selected = self.selected.map(|id| id.to_string());
-    with_query(connections, &[(TAB, tab), (SELECTED, selected.as_deref())])
+    with_query(connections, &[(SELECTED, selected.as_deref())])
   }
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {
-    let mut view = Self::new(params.take_or_default(TAB, ConnectionsTab::from_name)?);
-    if let Some(id) = params.take(SELECTED)? {
-      view.selected = Some(id.parse().map_err(|_| RouteError::InvalidParam {
-        param: SELECTED.to_owned(),
-        value: id,
-      })?);
-    }
-    Ok(view)
+    let Some(id) = params.take(SELECTED)? else {
+      return Ok(Self::default());
+    };
+    id.parse().map(Self::of).map_err(|_| RouteError::InvalidParam {
+      param: SELECTED.to_owned(),
+      value: id,
+    })
   }
 }
 

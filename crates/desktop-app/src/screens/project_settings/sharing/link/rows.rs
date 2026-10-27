@@ -1,5 +1,6 @@
-//! The rows of *Link to a server project* (`bWD9q`): the offer of `orchester.toml`'s address, the server, the
-//! person's projects there or an address, and the repository compared with the project's hint.
+//! The groups of the Share page (`04c Share` `JeXKt`): the offer of `orchester.toml`'s address, *Server* (the server
+//! with its state), *Project on the server* (the person's projects there, each a radio row, or an address), and the
+//! repository compared with the project's hint (`Repository check` `n3lMzy`).
 
 use lurq::{
   app::{
@@ -20,15 +21,17 @@ use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
   screens::{
-    project_settings::page::{self, CONTROL_WIDTH},
+    project_settings::{
+      kit::{Group, SettingRow, Tone},
+      page::CONTROL_WIDTH,
+    },
     settings::orchester::{Said, moment, shown_address},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
-    field::{FieldInput, SelectField, field, field_error},
-    form_section::{Label, Place, section, side_row},
+    field::{FieldInput, SelectField},
     icon::{Icon, icon},
     pressable::pressable,
     toggle::{Toggle, ToggleKind},
@@ -36,26 +39,31 @@ use crate::{
 };
 
 impl Link {
-  pub(super) fn link_section(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
-    let mut rows: Vec<Element> = Vec::new();
-    rows.extend(self.discovery_offer(ctx, props));
-    rows.push(self.server_row(ctx, props));
-    rows.push(self.project_row(ctx, props, listed));
-    rows.push(self.repository_row(ctx, props, listed));
-    rows.push(self.link_row(ctx, props, listed));
+  /// The page's groups and what linking says under them.
+  pub(super) fn link_section(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    listed: Option<&Result<Listed, Said>>,
+  ) -> Vec<Element> {
+    let mut parts: Vec<Element> = Vec::new();
+    parts.extend(self.discovery_offer(ctx, props));
+    let server = self.server_row(ctx, props);
+    parts.push(
+      Group::new("project-settings-sharing-link", ctx.t("sharing.share.server"))
+        .row(server)
+        .into(),
+    );
+    parts.push(self.project_group(ctx, props, listed));
+    parts.push(self.repository_line(ctx, props, listed));
+    parts.push(self.link_row(ctx, props, listed));
     let resolving = self.resolve.state().get();
     let pending = resolving.is_pending();
     if let Some(Problem::NoProject(address, checked)) = resolving.error.filter(|_| !pending) {
       let again = self.choice(props, listed);
-      rows.push(self.not_member(ctx, props, (&address, checked), again));
+      parts.push(self.not_member(ctx, props, (&address, checked), again));
     }
-    section(
-      "project-settings-sharing-link",
-      &ctx.t("sharing.link.section"),
-      None,
-      rows,
-    )
-    .into()
+    parts
   }
 
   /// *orchester.toml names a project* on a connected server, with *Use this address* and *Not now*; nothing is
@@ -121,8 +129,10 @@ impl Link {
     )
   }
 
+  /// The server the project goes to, with its state; *Connect a server* when this computer has none.
   fn server_row(&self, ctx: &mut Ctx, props: &Props) -> Element {
-    let keys = ("sharing.link.server", "sharing.link.serverDescription");
+    let row =
+      SettingRow::new("sharing-server", ctx.t("sharing.link.server")).info(ctx.t("sharing.link.serverDescription"));
     if props.facts.servers.is_empty() {
       let navigation = Navigation::of(ctx);
       let connect = ActionButton::new(
@@ -131,13 +141,9 @@ impl Link {
         ctx.t("settings.connectServer"),
       )
       .icon(Icon::Plus)
+      .in_form()
       .opens(navigation.to(Route::Orchester(OrchesterView::connect())));
-      let control = Column::new()
-        .width(Dimension::Px(CONTROL_WIDTH))
-        .spacing(SpacingSize::Sm)
-        .child(page::note("sharing-no-server", &ctx.t("sharing.link.noServer")))
-        .child(Row::new().child(connect));
-      return page::row(ctx, "sharing-server", keys, control.into(), Place::Within);
+      return row.hint(ctx.t("sharing.link.noServer")).control(connect).render(ctx);
     }
     let options = props
       .facts
@@ -162,46 +168,15 @@ impl Link {
     )
     .width(Dimension::Px(CONTROL_WIDTH))
     .render(ctx);
-    let control = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(SpacingSize::Sm)
-      .child(select);
-    let control = match self.chosen_entry(props) {
-      Some(entry) => {
-        let (glyph, words) = server_hint(ctx, entry);
-        control.child(page::icon_note("sharing-server-state", glyph, &words))
-      }
-      None => control,
+    let row = match self.chosen_entry(props) {
+      Some(entry) => row.hint(server_hint(ctx, entry)),
+      None => row,
     };
-    page::row(ctx, "sharing-server", keys, control.into(), Place::Within)
+    row.control(select).render(ctx)
   }
 
-  fn project_row(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
-    let mut control = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(SpacingSize::Sm);
-    match listed {
-      None => control = control.child(page::note("sharing-projects-reading", &ctx.t("sharing.link.reading"))),
-      Some(Err(reason)) => control = control.child(field_error("sharing-projects-error", &reason.text(ctx))),
-      Some(Ok(listed)) if listed.0.is_empty() => {
-        control = control.child(page::note("sharing-projects-none", &ctx.t("sharing.link.noProjects")));
-      }
-      Some(Ok(listed)) => {
-        for project in &listed.0 {
-          control = control.child(self.project_choice(ctx, project));
-        }
-      }
-    }
-    let address = FieldInput::new("sharing-address", ctx.t("sharing.link.address"), self.address.clone())
-      .mono()
-      .placeholder(ctx.t("sharing.link.addressPlaceholder"))
-      .render(ctx);
-    control = control.child(field(
-      "sharing-address-field",
-      Some(&ctx.t("sharing.link.address")),
-      address,
-      None,
-    ));
+  /// *Project on the server*: the person's projects there, each a radio row, and an address to type instead.
+  fn project_group(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
     let server = self.chosen_entry(props).map_or_else(
       || ctx.t("sharing.connect.theServer").to_string(),
       |entry| entry.stored.name.clone(),
@@ -214,17 +189,52 @@ impl Link {
         ("count", props.facts.tasks.to_string()),
       ],
     );
-    side_row(
-      Label::new("sharing-project", ctx.t("sharing.link.project")).description(description),
-      control,
-      Place::Within,
-      true,
-    )
+    let mut rows: Vec<Element> = match listed {
+      None => vec![
+        SettingRow::new("sharing-projects-reading", ctx.t("sharing.link.reading"))
+          .label_color(PaletteColor::TextSecondary)
+          .render(ctx),
+      ],
+      Some(Err(reason)) => vec![
+        SettingRow::new("sharing-projects-error", ctx.t("sharing.link.project"))
+          .toned(reason.text(ctx), Tone::Danger)
+          .render(ctx),
+      ],
+      Some(Ok(listed)) if listed.0.is_empty() => vec![
+        SettingRow::new("sharing-projects-none", ctx.t("sharing.link.noProjects"))
+          .label_color(PaletteColor::TextSecondary)
+          .render(ctx),
+      ],
+      Some(Ok(listed)) => listed
+        .0
+        .iter()
+        .map(|project| self.project_choice(ctx, project))
+        .collect(),
+    };
+    let address = FieldInput::new("sharing-address", ctx.t("sharing.link.address"), self.address.clone())
+      .mono()
+      .placeholder(ctx.t("sharing.link.addressPlaceholder"))
+      .width(Dimension::Px(CONTROL_WIDTH))
+      .render(ctx);
+    rows.push(
+      SettingRow::new("sharing-address-field", ctx.t("sharing.link.address"))
+        .hint(ctx.t("sharing.share.addressHint"))
+        .control(address)
+        .render(ctx),
+    );
+    Group::new("sharing-project", ctx.t("sharing.share.projectOnServer"))
+      .rows(rows)
+      .after(
+        Text::new(&description)
+          .id("sharing-project-description")
+          .variant(crate::theme::ProjectSettingsText::Hint.role())
+          .width(Dimension::Pct(100.0)),
+      )
+      .into()
   }
 
-  /// A project to choose (`Project · Kontur` in `bWD9q`): the radio, and 10 from it the name in 12.5/500, the address
-  /// in mono and whether it is empty with its repository hint, 2 apart; 8 over and under and 10 at the sides, and
-  /// the chosen one on `hover` in a `border_strong` stroke, radius 6.
+  /// A project to choose (`Create kontur` `nGNTo`): the radio, its name over its address, whether it is empty and its
+  /// repository hint, the chosen one on `hover`.
   fn project_choice(&self, ctx: &Ctx, project: &ServerProject) -> Element {
     let id = project.project.id;
     let chosen = self.picked.get().0 == Some(id) && self.address.get().trim().is_empty();
@@ -270,7 +280,7 @@ impl Link {
       .child(Text::new(shown_address(&project.project.address)).variant(OrchesterText::Address.role()))
       .child(
         Text::new(&line)
-          .variant(ExtraTypography::Note.role())
+          .variant(crate::theme::ProjectSettingsText::Hint.role())
           .width(Dimension::Pct(100.0)),
       );
     if project.checkout.is_some() {
@@ -283,47 +293,51 @@ impl Link {
     let row = pressable(pick)
       .id(format!("sharing-project-{}-option", project.project.slug))
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+      .padding(Padding::symmetric(
+        crate::theme::ProjectSettingsSpacing::RowX.role(),
+        ExtraSpacing::Loose.role(),
+      ))
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Start)
-      .rounded(RadiusSize::Md)
       .child(radio)
       .child(lines);
     if chosen {
-      row
-        .background(ExtraColor::Hover.role())
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-        .into()
+      row.background(ExtraColor::Hover.role()).into()
     } else {
       row.into()
     }
   }
 
-  /// The checkout's `origin` against the chosen project's hint (`Repository` in `bWD9q`).
-  fn repository_row(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
+  /// The checkout's `origin` against the chosen project's hint, as a line in its tone; a checkout without one says so.
+  fn repository_line(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
     let picked = self.picked_project(listed);
-    let keys = ("sharing.link.repository", "sharing.link.repositoryDescription");
     if props.facts.origin.is_none() {
-      let control = Column::new()
-        .width(Dimension::Px(CONTROL_WIDTH))
-        .child(no_origin(ctx, picked));
-      return page::row(ctx, "sharing-repository", keys, control.into(), Place::Within);
+      return no_origin(ctx, picked);
     }
     let (glyph, color, words) = remote_words(ctx, props, picked);
-    let control = Row::new()
+    let fill = match color {
+      PaletteColor::Success => Some(PaletteColor::SuccessMuted),
+      PaletteColor::Warning => Some(PaletteColor::WarningMuted),
+      _ => None,
+    };
+    let line = Row::new()
       .id("sharing-remote")
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(ExtraSpacing::Pair.role())
-      .align_items(Alignment::Start)
-      .child(icon(glyph, IconSize::Sm, color.clone()))
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .rounded(RadiusSize::Md)
+      .child(icon(glyph, IconSize::Base, color))
       .child(
         Text::new(&words)
           .id("sharing-remote-text")
-          .variant(ExtraTypography::Note.role())
-          .color(color)
+          .variant(crate::theme::ExtraTypography::Prose.role())
           .flex(1.0),
       );
-    page::row(ctx, "sharing-repository", keys, control.into(), Place::Within)
+    match fill {
+      Some(fill) => line.background(fill).into(),
+      None => line.border(Border::inside(BorderSize::Sm, PaletteColor::Border)).into(),
+    }
   }
 
   pub(super) fn picked_project<'a>(&self, listed: Option<&'a Result<Listed, Said>>) -> Option<&'a SharedProject> {
@@ -415,31 +429,24 @@ fn remote_words(ctx: &Ctx, props: &Props, picked: Option<&SharedProject>) -> (Ic
 
 /// The chosen server's state as the status bar says it (*Offline since 14:31* in `aocsw`), and where another server is
 /// added.
-fn server_hint(ctx: &Ctx, entry: &ServerEntry) -> (Icon, String) {
-  let (glyph, state) = if entry.certificate_changed {
-    (Icon::ShieldAlert, ctx.t("sharing.link.serverState.certificateChanged"))
+fn server_hint(ctx: &Ctx, entry: &ServerEntry) -> String {
+  let state = if entry.certificate_changed {
+    ctx.t("sharing.link.serverState.certificateChanged")
   } else {
     match entry.connection {
-      Some(Connection::Connected) => (Icon::CircleCheck, ctx.t("sharing.link.serverState.connected")),
-      Some(Connection::Checking) | None => (Icon::RefreshCw, ctx.t("sharing.link.serverState.checking")),
-      Some(Connection::Reconnecting { attempt, .. }) => (
-        Icon::RefreshCw,
-        ctx.t_args(
-          "sharing.link.serverState.reconnecting",
-          [("attempt", attempt.to_string())],
-        ),
+      Some(Connection::Connected) => ctx.t("sharing.link.serverState.connected"),
+      Some(Connection::Checking) | None => ctx.t("sharing.link.serverState.checking"),
+      Some(Connection::Reconnecting { attempt, .. }) => ctx.t_args(
+        "sharing.link.serverState.reconnecting",
+        [("attempt", attempt.to_string())],
       ),
-      Some(Connection::Offline { since, .. }) => (
-        Icon::CloudOff,
-        ctx.t_args("sharing.link.serverState.offline", [("time", moment(ctx, since))]),
-      ),
-      Some(Connection::SignedOut) => (Icon::CloudOff, ctx.t("sharing.link.serverState.signedOut")),
+      Some(Connection::Offline { since, .. }) => {
+        ctx.t_args("sharing.link.serverState.offline", [("time", moment(ctx, since))])
+      }
+      Some(Connection::SignedOut) => ctx.t("sharing.link.serverState.signedOut"),
     }
   };
-  (
-    glyph,
-    ctx
-      .t_args("sharing.link.serverHint", [("state", state.to_string())])
-      .to_string(),
-  )
+  ctx
+    .t_args("sharing.link.serverHint", [("state", state.to_string())])
+    .to_string()
 }

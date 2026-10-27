@@ -115,7 +115,7 @@
         "label": "Points",
         "auto": "Auto",
         "automatic": "Automatic",
-        "automaticDetail": "Orchester estimates it when allowed in Settings",
+        "automaticDetail": "Orchester estimates it when allowed in Project settings › Runs",
         "one": "1 point",
         "other": "{{count}} points",
         "estimated": "Orchester estimated {{points}}.",

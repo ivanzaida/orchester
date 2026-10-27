@@ -27,12 +27,36 @@ fn checked(page: &mut Settings, path: &str, hint: &str) {
   page.until(hint, |p| p.text(HINT) == hint);
 }
 
+/// Context, with *Add a folder or file*'s path box open: the empty row's Add, or the row's own, opens it.
+fn adding(page: &mut Settings) {
+  page.tab("context", "settings-sources-title");
+  if !page.exists(PATH) {
+    let add = if page.exists("settings-sources-empty-add") {
+      "settings-sources-empty-add"
+    } else {
+      "settings-sources-open-add"
+    };
+    page.click(add);
+  }
+  page.until("the path box", |p| p.exists(PATH));
+}
+
 #[test]
 fn project_settings_sources_are_added_only_once_a_person_confirms_in_place() {
   let mut page = Settings::new(false);
-  page.tab("sources", PATH);
-  assert_eq!(page.text("settings-sources-note"), "none");
-  assert!(page.text("settings-sources-empty").starts_with("No sources yet"));
+  page.tab("context", "settings-sources-title");
+  assert!(
+    !page.exists("settings-sources-outside"),
+    "what agents may do outside the worktree is in the heading's (i), not a group"
+  );
+  assert!(page.exists("settings-sources-outside-info"));
+  assert!(
+    !page.exists("settings-sources-add-row-row"),
+    "the empty row's Add opens it"
+  );
+  assert!(!page.exists("settings-sources-note"), "no count without sources");
+  assert_eq!(page.text("settings-sources-empty-title"), "No sources yet");
+  adding(&mut page);
   let folder = docs();
   checked(
     &mut page,
@@ -52,11 +76,10 @@ fn project_settings_sources_are_added_only_once_a_person_confirms_in_place() {
   page.window.tree.tick_futures();
   page.window.pass();
   page.click("settings-sources-question-confirm");
-  page.until("the stored source", |p| p.exists("settings-source-0"));
+  page.until("the stored source", |p| p.exists("settings-source-0-label"));
   assert_eq!(page.db().project_sources().expect("read"), [source(folder.path())]);
-  assert_eq!(page.text("settings-sources-note"), "1");
-  assert_eq!(page.text("settings-source-0-status"), "Available");
-  assert_eq!(page.text("settings-source-0-meta"), "Folder");
+  assert_eq!(page.text("settings-sources-note"), "1 source");
+  assert_eq!(page.text("settings-source-0-hint"), "Folder");
   assert!(!page.window.link.input_gate().protecting());
   page.saved();
 }
@@ -64,7 +87,7 @@ fn project_settings_sources_are_added_only_once_a_person_confirms_in_place() {
 #[test]
 fn project_settings_sources_say_in_place_why_a_path_is_not_added() {
   let mut page = Settings::new(false);
-  page.tab("sources", PATH);
+  adding(&mut page);
   std::fs::create_dir_all(page.repo.join("docs")).expect("a project folder");
   let inside = page.repo.join("docs").to_string_lossy().into_owned();
   page.set(PATH, &inside);
@@ -96,22 +119,21 @@ fn project_settings_sources_a_missing_one_says_runs_start_without_it_and_is_remo
     .db()
     .set_project_sources(&[source(folder.path()), source(&gone)])
     .expect("listed");
-  page.tab("sources", PATH);
-  page.until("the list", |p| p.exists("settings-source-1"));
+  page.tab("context", "settings-source-1-label");
   assert_eq!(page.text("settings-sources-note"), "2 · 1 missing");
-  assert_eq!(page.text("settings-source-1-status"), "Missing");
   assert_eq!(
-    page.text("settings-source-1-note"),
+    page.text("settings-source-1-hint"),
     "Not found. Runs start without it; a read there asks you."
   );
-  assert!(page.text("settings-source-1-meta").starts_with("Checked "));
+  assert!(page.exists("settings-source-1-info"), "when it was checked, in its (i)");
   std::fs::write(&gone, "steps").expect("the runbook is back");
   page.click("settings-source-1-check");
-  page.until("found again", |p| p.text("settings-source-1-status") == "Available");
+  page.until("found again", |p| p.text("settings-source-1-hint") == "File");
+  assert!(!page.exists("settings-source-1-check"));
   page.click("settings-source-0-remove");
-  page.until("the notice", |p| p.exists("settings-sources-removed"));
+  page.until("the notice", |p| p.exists("settings-sources-removed-label"));
   assert_eq!(page.db().project_sources().expect("read"), [source(&gone)]);
-  assert_eq!(page.text("settings-sources-removed-body"), "New runs start without it.");
+  assert_eq!(page.text("settings-sources-removed-hint"), "New runs start without it.");
   page.click("settings-sources-undo");
   page.until("asked again", |p| p.exists("settings-sources-question"));
   assert!(page.window.link.input_gate().protecting());
@@ -141,7 +163,7 @@ fn project_settings_sources_a_failed_read_says_why_with_try_again_never_the_list
   let mut page = Settings::new(false);
   let folder = docs();
   page.db().set_project_sources(&[source(folder.path())]).expect("listed");
-  page.tab("sources", "settings-source-0");
+  page.tab("context", "settings-source-0-label");
   unreadable(&page, true);
   // A change made elsewhere reads them again, which fails now.
   page.outside(orchester_workspace::tasks::outside::Outside::ProjectSettings);
@@ -151,11 +173,11 @@ fn project_settings_sources_a_failed_read_says_why_with_try_again_never_the_list
       .text("settings-sources-load-error")
       .starts_with("The sources couldn't be read")
   );
-  assert!(!page.exists("settings-source-0"), "the list read before is gone");
+  assert!(!page.exists("settings-source-0-label"), "the list read before is gone");
   assert!(!page.exists(PATH));
   unreadable(&page, false);
   page.click("settings-sources-load-error-retry");
-  page.until("read again", |p| p.exists("settings-source-0"));
+  page.until("read again", |p| p.exists("settings-source-0-label"));
   assert!(!page.exists("settings-sources-load-error"));
 }
 

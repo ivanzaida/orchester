@@ -8,6 +8,7 @@ mod app_state;
 mod error;
 mod hold_reads;
 mod navigate;
+mod project_settings_route;
 mod set_theme;
 mod settings_route;
 mod sign_in_state;
@@ -168,10 +169,14 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       insert("period", period.name());
     }
     ProjectPage::Connections(view) => {
-      insert("tab", view.tab().name());
       if let Some(connection) = view.selected() {
         insert("selected", &connection.to_string());
       }
+    }
+    ProjectPage::Settings(tab) => insert("tab", tab.name()),
+    ProjectPage::ProjectRules => {
+      insert("tab", crate::routes::ProjectSettingsTab::Runs.name());
+      insert("view", "rules");
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),

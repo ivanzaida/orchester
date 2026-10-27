@@ -213,6 +213,7 @@ fn orchester_person_only_linking_and_uploading() {
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
+  press(&mut window, "sharing-share-open");
   shows(&mut window, "sharing-address");
   window.set("sharing-address", &format!("{}/kontur", recorder.url()));
   let before = recorder.lines().len();

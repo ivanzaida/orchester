@@ -1,18 +1,17 @@
-//! Search-tool readback and the existing workspace install lifecycle, including both OS installers.
+//! *Search tool* (`Search tool` `voy5E` in `03 · Context`; missing in `09` `ztBqS`): ripgrep as found, with where it
+//! came from in the row's (i) and Check again; when it is missing, the row says so in `warning` with *Install ripgrep*,
+//! the installer's command with Copy under it, and the install's progress, output, failure or cancel in the row's hint.
 use std::sync::{
   Arc,
   atomic::{AtomicBool, Ordering},
 };
 
 use lurq::{
-  app::{
-    ctx::{Ctx, FutureState},
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
+  app::ctx::{Ctx, FutureState},
+  components::Row,
   core::Signal,
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_exec::ripgrep::{
   Source,
@@ -26,91 +25,109 @@ use orchester_workspace::{
 
 use super::Checked;
 use crate::{
-  screens::project_settings::page,
-  theme::{ExtraRadius, IconSize},
+  screens::project_settings::kit::{SettingRow, Tone, command_line, outlined_tile, value},
+  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, field_error},
-    form_section::{Place, section as form_section},
-    icon::{Icon, icon},
+    icon::Icon,
+    icon_button::IconButton,
     message::message_text,
   },
 };
 
-pub fn section(
+/// The search tool's rows: the tool, and while it is missing or installed, the install.
+pub fn rows(
   ctx: &mut Ctx,
   state: &FutureState<Checked, Message>,
   install: Option<&Install>,
-  revision: &Signal<u64>,
-  tick: &Signal<u64>,
-  after_install: &Arc<AtomicBool>,
-) -> Element {
+  (revision, tick, after_install): (&Signal<u64>, &Signal<u64>, &Arc<AtomicBool>),
+) -> Vec<Element> {
   let running = matches!(install, Some(Install::Running { .. }));
-  let (glyph, title, detail) = readback(ctx, state, install);
-  let check = {
-    let revision = revision.clone();
-    let button = ActionButton::new(
-      "settings-ripgrep-check",
-      ButtonKind::Secondary,
-      ctx.t("project_settings.checkAgain"),
-    )
-    .icon(Icon::RefreshCw)
-    .in_form();
-    if state.is_pending() || running {
-      button.disabled()
-    } else {
-      button.on_click(move || revision.update(|r| *r += 1))
-    }
-  };
-  let control = Column::new()
-    .width(Dimension::Px(page::CONTROL_WIDTH))
-    .spacing(SpacingSize::Sm)
-    .child(
-      Row::new()
-        .align_items(Alignment::Center)
-        .spacing(SpacingSize::Xs)
-        .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
-        .child(
-          Text::new(&title)
-            .variant(TypographyStyle::Description)
-            .id("settings-ripgrep-state"),
-        ),
-    )
-    .child(page::note("settings-ripgrep-source", &detail))
-    .child(check);
-  let row = page::row(
-    ctx,
-    "settings-ripgrep",
-    ("project_settings.ripgrep", "project_settings.ripgrepDetail"),
-    control.into(),
-    Place::Last,
-  );
-  let mut rows = vec![row];
-  if let Some(error) = &state.error {
-    rows.push(field_error("settings-ripgrep-error", &message_text(ctx, error)).into());
+  let missing = state
+    .data
+    .as_ref()
+    .is_some_and(|check| matches!(check.0.tool, SearchTool::NotFound));
+  if (missing || running)
+    && let Some(check) = &state.data
+  {
+    return vec![install_row(ctx, &check.0.install, install, (tick, after_install))];
   }
-  if let Some(check) = &state.data {
-    let missing = matches!(check.0.tool, SearchTool::NotFound);
-    if missing || running {
-      rows.push(install_panel(ctx, &check.0.install, install, tick, after_install));
-    }
-  }
-  form_section(
-    "settings-search-tool",
-    &ctx.t("project_settings.searchTool"),
-    None,
-    rows,
-  )
-  .into()
+  vec![tool_row(ctx, state, revision)]
 }
-fn readback(ctx: &Ctx, state: &FutureState<Checked, Message>, install: Option<&Install>) -> (Icon, Arc<str>, Arc<str>) {
-  if let Some(Install::Running { installer, started, .. }) = install {
-    return (
-      Icon::LoaderCircle,
+
+/// ripgrep as found, or that it is being looked for, with Check again.
+fn tool_row(ctx: &mut Ctx, state: &FutureState<Checked, Message>, revision: &Signal<u64>) -> Element {
+  let (hint, tone, source) = match &state.data {
+    None if state.error.is_some() => (ctx.t("project_settings.rgCheckFailed"), Tone::Danger, None),
+    None => (ctx.t("project_settings.rgChecking"), Tone::Muted, None),
+    Some(check) => match &check.0.tool {
+      SearchTool::Found { version, source } => (
+        version
+          .as_ref()
+          .map(|version| ctx.t_args("project_settings.rgFoundHint", [("version", version.as_str())]))
+          .unwrap_or_else(|| ctx.t("project_settings.rgFoundWithoutVersionHint")),
+        Tone::Success,
+        Some(ctx.t(source_key(*source))),
+      ),
+      SearchTool::NotFound => (ctx.t("project_settings.rgMissing"), Tone::Warning, None),
+    },
+  };
+  let again = IconButton::new(
+    "settings-ripgrep-check",
+    Icon::RefreshCw,
+    ctx.t("project_settings.checkAgain"),
+  )
+  .small();
+  let again = if state.is_pending() {
+    again
+  } else {
+    let revision = revision.clone();
+    again.on_click(move || revision.update(|r| *r += 1))
+  };
+  let again = again.render(ctx);
+  let info = match source {
+    Some(source) => ctx.t_args(
+      "project_settings.ripgrepInfo",
+      [
+        ("detail", ctx.t("project_settings.ripgrepDetail").to_string()),
+        ("source", source.to_string()),
+      ],
+    ),
+    None => ctx.t("project_settings.ripgrepDetail"),
+  };
+  let mut row = SettingRow::new("settings-ripgrep", ctx.t("project_settings.searchTool"))
+    .info(info)
+    .toned(hint, tone)
+    .control(
+      Row::new()
+        .spacing(ExtraSpacing::Pair.role())
+        .align_items(Alignment::Center)
+        .child(value("settings-ripgrep-state", &ctx.t("project_settings.ripgrep")))
+        .child(again),
+    );
+  if let Some(error) = &state.error {
+    row = row.under(crate::ui::field::field_error(
+      "settings-ripgrep-error",
+      &message_text(ctx, error),
+    ));
+  }
+  row.render(ctx)
+}
+
+/// ripgrep missing: *Install ripgrep* with its command, or the install running, failed, cancelled or not finding it.
+fn install_row(
+  ctx: &mut Ctx,
+  plan: &Result<InstallPlan, InstallUnavailable>,
+  install: Option<&Install>,
+  (tick, after_install): (&Signal<u64>, &Arc<AtomicBool>),
+) -> Element {
+  let (title, tone, hint) = match install {
+    Some(Install::Running { installer, started, .. }) => (
       ctx.t_args(
         "project_settings.installRunning",
         [("installer", &*ctx.t(installer_key(*installer)))],
       ),
+      Tone::Secondary,
       ctx.t_args(
         "project_settings.installElapsed",
         [
@@ -122,31 +139,58 @@ fn readback(ctx: &Ctx, state: &FutureState<Checked, Message>, install: Option<&I
           ),
         ],
       ),
-    );
-  }
-  match &state.data {
-    None if state.error.is_some() => (
-      Icon::CircleAlert,
-      ctx.t("project_settings.rgCheckFailed"),
-      Arc::from(""),
     ),
-    None => (Icon::LoaderCircle, ctx.t("project_settings.rgChecking"), Arc::from("")),
-    Some(check) => match &check.0.tool {
-      SearchTool::Found { version, source } => (
-        Icon::CircleCheck,
-        version
-          .as_ref()
-          .map(|version| ctx.t_args("project_settings.rgFound", [("version", version.as_str())]))
-          .unwrap_or_else(|| ctx.t("project_settings.rgFoundWithoutVersion")),
-        ctx.t(source_key(*source)),
-      ),
-      SearchTool::NotFound => (
-        Icon::CircleAlert,
-        ctx.t("project_settings.rgMissing"),
-        ctx.t("project_settings.rgMissingDetail"),
-      ),
-    },
+    Some(Install::Failed { error, .. }) => (
+      ctx.t("project_settings.installFailed"),
+      Tone::Danger,
+      failure(ctx, error),
+    ),
+    Some(Install::Installed { .. }) => (
+      ctx.t("project_settings.installFailed"),
+      Tone::Danger,
+      ctx.t("project_settings.installNotFoundAfter"),
+    ),
+    None => (
+      ctx.t("project_settings.rgMissing"),
+      Tone::Warning,
+      ctx.t("project_settings.rgSlowerDetail"),
+    ),
+  };
+  let running = matches!(install, Some(Install::Running { .. }));
+  let mut row = SettingRow::new("settings-ripgrep-install-panel", title)
+    .label_color(tone.color())
+    .info(ctx.t(if code_index::ends_with_the_app() {
+      "project_settings.installEndsWithApp"
+    } else {
+      "project_settings.installContinues"
+    }))
+    .hint(hint)
+    .item()
+    .lead(outlined_tile(Icon::Search))
+    .controls(actions(ctx, plan, running, (tick, after_install)));
+  let line = match install {
+    Some(Install::Running { line, .. } | Install::Failed { line, .. }) => Some(line.clone()),
+    _ => plan.as_ref().ok().map(InstallPlan::command_line),
+  };
+  if let Some(line) = line {
+    row = row.under(command_line(
+      ctx,
+      "settings-ripgrep-command",
+      ctx.t("project_settings.installCommand"),
+      line,
+    ));
   }
+  if let Some(Install::Running {
+    last_output: Some(line),
+    ..
+  }) = install
+  {
+    row = row.under(crate::screens::project_settings::page::note(
+      "settings-ripgrep-output",
+      &ctx.t_args("project_settings.installOutput", [("line", line.as_str())]),
+    ));
+  }
+  row.render(ctx)
 }
 fn source_key(source: Source) -> &'static str {
   match source {
@@ -171,91 +215,13 @@ fn unavailable(ctx: &Ctx, reason: &InstallUnavailable) -> Arc<str> {
     ),
   }
 }
-fn install_panel(
-  ctx: &mut Ctx,
-  plan: &Result<InstallPlan, InstallUnavailable>,
-  install: Option<&Install>,
-  tick: &Signal<u64>,
-  after_install: &Arc<AtomicBool>,
-) -> Element {
-  let running = matches!(install, Some(Install::Running { .. }));
-  let (title, detail) = match install {
-    Some(Install::Running { installer, .. }) => (
-      ctx.t_args(
-        "project_settings.installRunning",
-        [("installer", &*ctx.t(installer_key(*installer)))],
-      ),
-      ctx.t(if code_index::ends_with_the_app() {
-        "project_settings.installEndsWithApp"
-      } else {
-        "project_settings.installContinues"
-      }),
-    ),
-    Some(Install::Failed { error, .. }) => (ctx.t("project_settings.installFailed"), failure(ctx, error)),
-    Some(Install::Installed { .. }) => (
-      ctx.t("project_settings.installFailed"),
-      ctx.t("project_settings.installNotFoundAfter"),
-    ),
-    None => (
-      ctx.t("project_settings.rgSlowerTitle"),
-      ctx.t("project_settings.rgSlowerDetail"),
-    ),
-  };
-  let mut panel = Column::new()
-    .id("settings-ripgrep-install-panel")
-    .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
-    .rounded(ExtraRadius::Tile.role())
-    .padding(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&title).variant(crate::theme::ExtraTypography::Strong.role()))
-    .child(page::note("settings-ripgrep-install-detail", &detail));
-  let line = match install {
-    Some(Install::Running { line, .. } | Install::Failed { line, .. }) => Some(line.clone()),
-    _ => plan.as_ref().ok().map(InstallPlan::command_line),
-  };
-  if let Some(line) = line {
-    panel = panel
-      .child(page::note(
-        "settings-ripgrep-command-label",
-        &ctx.t("project_settings.installCommand"),
-      ))
-      .child(
-        FieldInput::new(
-          "settings-ripgrep-command",
-          ctx.t("project_settings.installCommand"),
-          Signal::new(line),
-        )
-        .locked()
-        .mono()
-        .render(ctx),
-      );
-  }
-  if let Some(Install::Running {
-    last_output: Some(line),
-    ..
-  }) = install
-  {
-    panel = panel.child(page::note(
-      "settings-ripgrep-output",
-      &ctx.t_args("project_settings.installOutput", [("line", line.as_str())]),
-    ));
-  }
-  if let Err(why) = plan {
-    panel = panel.child(page::note(
-      "settings-ripgrep-install-unavailable",
-      &unavailable(ctx, why),
-    ));
-  }
-  panel.child(actions(ctx, plan, running, tick, after_install)).into()
-}
+/// *Install ripgrep*, unavailable with why when there is no installer, and Cancel while it runs.
 fn actions(
   ctx: &Ctx,
   plan: &Result<InstallPlan, InstallUnavailable>,
   running: bool,
-  tick: &Signal<u64>,
-  after_install: &Arc<AtomicBool>,
-) -> Element {
+  (tick, after_install): (&Signal<u64>, &Arc<AtomicBool>),
+) -> Vec<Element> {
   let button = ActionButton::new(
     "settings-ripgrep-install",
     ButtonKind::Secondary,
@@ -279,10 +245,10 @@ fn actions(
       Err(why) => button.unavailable(unavailable(ctx, why)),
     }
   };
-  let mut actions = Row::new().spacing(SpacingSize::Sm).child(button);
+  let mut actions = vec![button.into()];
   if running {
     let tick = tick.clone();
-    actions = actions.child(
+    actions.push(
       ActionButton::new(
         "settings-ripgrep-cancel",
         ButtonKind::Ghost,
@@ -292,10 +258,11 @@ fn actions(
       .on_click(move || {
         code_index::cancel_install();
         tick.update(|r| *r += 1);
-      }),
+      })
+      .into(),
     );
   }
-  actions.into()
+  actions
 }
 fn failure(ctx: &Ctx, error: &InstallError) -> Arc<str> {
   match error {

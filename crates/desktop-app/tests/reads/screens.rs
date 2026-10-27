@@ -37,7 +37,7 @@ fn reads_the_code_index_again_on_its_own_changes_not_on_lines() {
   // No run runs.
   let mut index = Counted::open("empty");
   index.show(ProjectPage::Settings(Default::default()), "screen-project_settings");
-  index.window.press("settings-tab-codeIndex");
+  index.window.press("settings-tab-context");
   index.settle();
   index.report(false);
   assert_eq!(index.settle(), counts(&[]), "a transcript line reads nothing");
@@ -151,7 +151,7 @@ fn reads_the_code_index_on_a_line_while_a_run_runs() {
   // KON-12 runs: its runner may start building an index the tab does not know of yet.
   let mut index = Counted::open("conversation");
   index.show(ProjectPage::Settings(Default::default()), "screen-project_settings");
-  index.window.press("settings-tab-codeIndex");
+  index.window.press("settings-tab-context");
   index.settle();
   index.report(false);
   let line = index.settle();

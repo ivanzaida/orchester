@@ -2,7 +2,6 @@
 //! CLI connection runs on, the inspector as a link to it in Settings, and choosing another one in Edit connection
 //! stores it and checks the connection there.
 
-use orchester_app::routes::{ConnectionsTab, ConnectionsView, ProjectPage};
 use orchester_core::{
   account::{AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AgentAccount, CheckedProgram},
   connection::{
@@ -43,19 +42,18 @@ fn connections_name_their_account_and_a_person_chooses_another_in_edit_connectio
     .into_iter()
     .find(|connection| connection.kind() == &ConnectionKind::Agent(AgentProvider::CodexCli))
     .expect("the seed's Codex connection");
-  let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(codex.id());
-  seeded.go(ProjectPage::Connections(view));
-  seeded.until("the account row", |seeded| seeded.exists("connection-account-row"));
-  assert!(seeded.text("connection-account-row").contains("Default"));
-  assert!(
-    seeded
-      .text(&format!("connection-row-{}", codex.id()))
-      .contains("account Default")
-  );
+  seeded.list();
+  let row = format!("connection-row-{}-row", codex.id());
+  seeded.until("its row", |seeded| seeded.exists(&row));
+  assert!(seeded.text(&row).contains("account Default"));
+  seeded.open(codex.id());
+  seeded.until("the account row", |seeded| seeded.exists("connection-account-row-row"));
+  assert!(seeded.text("connection-account-row-row").contains("Default"));
   assert!(
     seeded.exists("connection-account-link"),
     "the account opens in Settings"
   );
+  seeded.click("connection-more");
   seeded.click("connection-edit");
   seeded.until("Edit connection", |seeded| seeded.exists("connection-account"));
   seeded.click("connection-account");
@@ -80,9 +78,9 @@ fn connections_name_their_account_and_a_person_chooses_another_in_edit_connectio
       .expect("read")
       .is_some_and(|connection| connection.account() == &ConnectionAccount::of(&client))
   });
-  // The inspector reads the connection again after Save: its account row is gone for a moment.
-  seeded.until("the inspector to say so", |seeded| {
-    seeded.exists("connection-account-row") && seeded.text("connection-account-row").contains("Client")
+  // The page reads the connection again after Save: its account row is gone for a moment.
+  seeded.until("the page to say so", |seeded| {
+    seeded.exists("connection-account-row-row") && seeded.text("connection-account-row-row").contains("Client")
   });
 }
 
@@ -177,14 +175,9 @@ fn connections_on_a_signed_out_account_send_the_person_to_settings_and_show_its_
   let mut seeded = Seeded::new("accounts");
   let (freelance, id) = signed_out_freelance(&seeded);
   report_windows(&seeded, &freelance);
-  let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
-  seeded.go(ProjectPage::Connections(view));
+  seeded.open(id);
   seeded.until("the account row", |seeded| seeded.exists("connection-account-link"));
-  assert!(
-    seeded
-      .text("connection-account-link")
-      .contains("Freelance · not signed in")
-  );
+  assert!(seeded.text("connection-account-link").contains("Freelance"));
   seeded.until("Open in Settings", |seeded| seeded.exists("connection-open-account"));
   assert!(
     seeded
@@ -195,13 +188,15 @@ fn connections_on_a_signed_out_account_send_the_person_to_settings_and_show_its_
     !seeded.exists("connection-sign-in-command"),
     "the fix is in Settings, not a command here"
   );
-  assert!(seeded.exists("connection-edit"));
-  seeded.until("its plan limits", |seeded| seeded.exists("connection-plan-limits"));
-  assert!(
+  seeded.click("connection-more");
+  assert!(seeded.exists("connection-edit"), "Edit connection in the … menu");
+  seeded.click("connection-more");
+  seeded.until("its plan limits", |seeded| {
     seeded
-      .text("connection-plan-limits")
-      .contains("5-hour 12% · weekly 41%")
-  );
+      .window
+      .texts("connection-account-row-hint")
+      .is_some_and(|hint| hint.join(" ").contains("5-hour 12% · weekly 41%"))
+  });
 }
 
 /// The bounds of `id` as laid out.
@@ -215,24 +210,21 @@ fn bounds(seeded: &mut Seeded, id: &str) -> lurq::core::ElementRect {
 }
 
 #[test]
-fn connections_signed_out_footer_keeps_both_buttons_inside_it_whatever_the_account_name() {
+fn connections_signed_out_row_keeps_its_button_inside_it_whatever_the_account_name() {
   for account in [
     "Freelance",
     "Freelance work for the northern region clients and their many projects",
   ] {
     let mut seeded = Seeded::new("accounts");
     let (_, id) = signed_out(&seeded, account);
-    let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
-    seeded.go(ProjectPage::Connections(view));
+    seeded.open(id);
     seeded.until("Open in Settings", |seeded| seeded.exists("connection-open-account"));
-    let row = bounds(&mut seeded, "connection-inspector-actions-0");
-    for button in ["connection-open-account", "connection-edit"] {
-      let inside = bounds(&mut seeded, button);
-      assert!(
-        inside.x >= row.x && inside.x + inside.width <= row.x + row.width + 0.5,
-        "{button} of {account} at {inside:?} runs past the footer's actions {row:?}"
-      );
-    }
+    let row = bounds(&mut seeded, "connection-inspector-sentence-row");
+    let inside = bounds(&mut seeded, "connection-open-account");
+    assert!(
+      inside.x >= row.x && inside.x + inside.width <= row.x + row.width + 0.5,
+      "Open in Settings of {account} at {inside:?} runs past its row {row:?}"
+    );
   }
 }
 
@@ -266,24 +258,19 @@ fn connections_on_no_account_say_so_whatever_their_last_check() {
     .db()
     .create_connection(&connection.into_connection())
     .expect("created");
-  let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
-  seeded.go(ProjectPage::Connections(view));
-  seeded.until("the inspector", |seeded| seeded.exists("connection-inspector-footer"));
-  for shown in [format!("connection-row-{id}"), "connection-inspector".to_owned()] {
-    let text = seeded.text(&shown);
-    assert!(
-      text.contains("No account · choose one") && !text.contains("Connected"),
-      "{shown}: {text}"
-    );
-  }
+  seeded.list();
+  let row = format!("connection-row-{id}-row");
+  seeded.until("its row", |seeded| seeded.exists(&row));
+  let text = seeded.text(&row);
+  assert!(text.contains("No account") && !text.contains("Connected"), "{text}");
+  seeded.open(id);
+  let text = seeded.text("connection-inspector-header");
+  assert!(text.contains("No account") && !text.contains("Connected"), "{text}");
   assert!(
     seeded
       .text("connection-inspector-sentence")
       .contains("runs on no account")
   );
-  assert!(
-    !seeded.exists("connection-test"),
-    "a check would answer for Default's folder"
-  );
+  seeded.click("connection-more");
   assert!(seeded.exists("connection-edit"));
 }

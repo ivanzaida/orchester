@@ -115,7 +115,7 @@ describe("the cause of a failed call to the cloud", () => {
 describe("delivering an invite when this host cannot reach the cloud", () => {
   it("answers unreachable with the cause, and logs it without the signed invite", async () => {
     const origin = `http://127.0.0.1:${await freePort()}`;
-    process.env.ORCHESTER_ADMIN_SERVER_URL = "http://127.0.0.1:4296";
+    process.env.ORCHESTER_ADMIN_SERVER_URL = `http://127.0.0.1:${await freePort()}`;
     process.env.ORCHESTER_ADMIN_SECRET = Buffer.alloc(32, 9).toString("base64");
     process.env.ORCHESTER_ADMIN_CLOUD_URL = origin;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);

@@ -74,7 +74,7 @@ fn link(ctx: &mut Ctx, id: &str, key: &str, route: Route) -> Element {
 
 /// What the task gets from the project and, once a pipeline is chosen, from its pipeline, read-only.
 pub(super) fn inherited(ctx: &mut Ctx, props: &SourcesProps, inherited: &Inherited) -> Vec<Element> {
-  let settings = Route::Project(props.project, ProjectPage::Settings(ProjectSettingsTab::Sources));
+  let settings = Route::Project(props.project, ProjectPage::Settings(ProjectSettingsTab::Context));
   let edit = link(
     ctx,
     "task-form-sources-settings",

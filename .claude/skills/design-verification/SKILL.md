@@ -107,7 +107,7 @@ app and compare the rest.
 `{"scenario": "<scenario>", "fake_agents": null, "no_runner": null}`. Orchester runs the worktree's
 `tools/qa-app.ps1` for you on the scenario, in `.tmp/qa/run-<number>-<step>/`, and answers the copy's pid.
 As many QA apps run on the computer at once as the project's *QA apps at once* allows (Project settings ›
-Limits, default 2): while other runs' QA apps hold every QA slot, the call waits and the run's transcript
+Runs › Limits, default 2): while other runs' QA apps hold every QA slot, the call waits and the run's transcript
 says *Waiting for a QA slot*; never write lease, ACK or hold notes, and never
 start the script yourself. Calling it again replaces your QA app; Orchester stops it, and frees the slot,
 when your turn ends, and also while your turn waits for a person (a tool approval, a question): start it
@@ -154,6 +154,8 @@ name a Codex connection that is not stored, so nothing can run.
 | `live` | Six drafts ready to run with the fake Codex (needs `-FakeAgents`): KON-1 ends ready for review, KON-2 asks to approve `cargo add serde`, KON-3 asks a question with options, KON-4 waits for its plan, KON-5 keeps working, KON-6 fails and waits for a person | Running, approval, question and plan states, live |
 | `orchestrator` | The Orchestrator on *Claude · Work* (Opus 5.5, high). Sign-ins for the runs-on picker: Claude Code *Work* (Max, 42 % of 5 h used), *Personal* (Pro, 5-hour limit reached for 80 more minutes), Codex *Client* (signed out), each with a connection; DeepSeek API providers. *Plan the webhook retry work* (opens first): a digest *4 waiting for you* of waits that stand (KON-5's question, KON-6 … KON-8 interrupted), then a turn with actions. *Every card* (History): a run's end that stands (KON-1, ready to merge), waits *Answered by the Orchestrator*, *Answered by you*, *Waits for you* (KON-2's plan) and *Orchestrator is reading* (KON-3's question), waiting decision cards (start KON-4, merge KON-1, cancel KON-2, publish Builder v2 with network on, add the MCP server `figma`: 6 facts, 3 shown and *Show details*; an answer, a release), folded decisions, a hold, a daily report, a stopped and a failed turn | Orchestrator · redesign 01, 03, 04, 05, 05b; Orchestrator cards · redesign and 06 |
 | `orchestrator-not-set-up` | `orchestrator` with nothing chosen for the Orchestrator | Orchestrator · redesign 02 |
+| `project-settings` | `connections`, plus `acme/kontur` linked and expecting `dana-k` while `gh` is signed in as `ivanzaida`; base branch `release/2.4`, which is gone; secrets in Development, Staging and Production (`DEEPSEEK_API_KEY` used by the tool `deploy-preview`, `FIGMA_TOKEN` rotated and used by the MCP server `figma`, `GITHUB_APP_KEY` unused, `OLD_FIGMA_TOKEN` archived), records only; `figma` on with `FIGMA_API_KEY` from `FIGMA_TOKEN`, two tools run without asking and the profile Design reviewer using it | Project settings `XGtkg`: 01b, 05, 06, 06b (open `FIGMA_TOKEN`), 13 (open `figma`), 14 (open GitHub) |
+| `project-settings-shared` | `project-settings` linked as owner to `orchester.example.com/kontur` with four members as last read; no server answers and this computer's server list lacks it, so the address says so and *Leave* is unavailable with why | 04b Sharing · shared (its address hint and *Leave* differ from the frame, which draws a connected server) |
 | `settings` | App Settings with a person's data, fixture-only (`tools/qa-app.ps1` says how). Accounts: Claude Code *Work* (signed in, plan readings, a running run on it: Remove is blocked), *Personal* (unused), *Old* (Sign-in expired), Default (Not signed in); Codex *Client* (signed in, plan readings, a connection on it), *Archive* (Folder missing), Default; stand-in CLIs answer the checks the same way. Notifications: quiet hours 22:30–07:00, daily report at 18:30. Automation: the installed app's MCP rows (address, port, token, Connect an agent) on a free port with a token in memory, *claude-code* and *codex-mcp-client* connected. Orchester Cloud: an invite to Billing waiting; kept here, Mobile team's join waiting for approval and Docs team's that didn't finish; team servers *Kontur team* (Connected, Kontur linked), *Build box* (Offline about two minutes after the start; Reconnecting before), *Old office* (Certificate changed), *Design team* (signed out here, its own certificate) and *Team box* (sign-in ended) | `App settings · redesign` `iUmo3` in the new `orchester.pen`: 01–05c and the states sheets `poD7g`, `shpsk`, `ZUuMT` |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their
@@ -197,6 +199,11 @@ the route's params and answers the route the tab shows, for example:
   `"view": "local-integration"` Local integration (Changes' *Try locally*). The former tabs
   `details`, `artifacts`, `memory` and `local-integration` are refused with `unknown_tab`;
 - `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`;
+- `{"route": "project_settings", "project": "<id>"}` (General), with `"tab"` `runs`, `context`, `connections`,
+  `secrets` or `sharing`, and with tab `runs` `"view": "rules"` (*Approved for every run*). Connections and Secrets
+  keep their own routes, which open those tabs: `connections` with `"selected"` (a connection's id) opens its page,
+  `new_connection` with `"kind"` `agent_provider` or `mcp_server` the add pages, `edit_connection` with
+  `"connection"` an MCP server's form;
 - `{"route": "settings", "tab": "<tab>"}`, `tab` `automation` (the default), `general`, `notifications`,
   `accounts`, `orchester` (Orchester Cloud), `connect` or `invite`, and what the tab opens on, without a click:
   - accounts: `"account"` (an id, a name such as `"Work"`, or `claude-default` / `codex-default`) for its page

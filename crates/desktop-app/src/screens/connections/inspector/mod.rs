@@ -1,9 +1,9 @@
-//! The inspector beside the list (`Inspector · Claude · Kontur` `VIpsx`): the connection's header
-//! (`Connection inspector header` `GOSxB`: a 32 glyph tile, its name in 14/600 and its status, with an action
-//! at the end for an MCP server), its details in a body that scrolls, and a footer pinned under them that says
-//! what its status means and holds its actions. Each kind fills it: an agent provider (`agent`), GitHub
-//! (`github`), an MCP server (`mcp`). An agent or GitHub connection is renamed in its header (`rename`), and a
-//! check pressed here says how it goes and what it found above the actions (`result`).
+//! A connection's page under Project settings › Connections (`05b` `PGwka`, an MCP server `13` `Ptkxo`, GitHub `14`
+//! `KItiZ`): the crumb back to Connections, its head (a 36 tile, its name in 16/600 over its status, its actions and a
+//! … menu at the end), what its status asks for, its details as groups of rows, and a question asked in place under
+//! them. Each kind fills it: an agent provider (`agent`, on an API provider `provider`), GitHub (`github`), an MCP
+//! server (`mcp`). An agent or GitHub connection is renamed in place of its title (`rename`), and a check pressed here
+//! says how it goes and what it found under the head (`result`).
 
 mod agent;
 mod github;
@@ -17,15 +17,17 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::{Column, Row, Text},
+  core::{ElementRef, Signal},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ConnectionId, time::Timestamp};
 use orchester_workspace::{connections::data::ProjectConnections, display, messages::Message, workspace::OpenProject};
 
+pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
 use super::{
   data::Entry,
   words::{CHECKING, Shown},
@@ -33,28 +35,27 @@ use super::{
 };
 use crate::{
   navigation::link::Open,
-  theme::{ConnectionsText, ExtraSpacing, ExtraTypography, IconSize},
+  screens::project_settings::kit::{Glyph, SettingRow, back, entity_head},
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    inspector,
+    icon_button::IconButton,
+    menu::{MenuItem, menu_at_end, menu_panel},
     message::message_text,
   },
 };
 
-/// The inspector's width (`VIpsx`), in a narrow window (`Inspector · Claude · DeepSeek` `KGweN` in `b3aoUZ`), and
-/// its glyph tile (`Glyph` `O38ZPI`).
-const INSPECTOR_WIDTH: f32 = 360.0;
-const NARROW_INSPECTOR_WIDTH: f32 = 300.0;
-const GLYPH_TILE: f32 = 32.0;
+/// The … menu's width (`Menu` in `05b` `PGwka`).
+const MENU_WIDTH: f32 = 220.0;
 
-/// A question the inspector asks in place before it acts.
+/// A question the page asks in place before it acts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Confirm {
-  /// Turn off an MCP server that profiles choose (`Confirm · Turn off` `D2FVJJ`).
+  /// Turn off an MCP server that profiles choose.
   TurnOff,
-  /// Remove an MCP server.
+  /// Remove an MCP server (`Turn off · question` `Q2LiC`).
   Remove,
   /// Turn on an MCP server, which widens what the agents of the profiles that choose it get (`widen`).
   TurnOn,
@@ -62,8 +63,7 @@ pub(super) enum Confirm {
 
 impl lurq::app::component::DevtoolsInspectable for Confirm {}
 
-/// Where the check last pressed in this screen on the inspected connection (Test connection, Refresh models, Check
-/// again) stands.
+/// Where the check last pressed in this screen on the connection (Check again, Refresh models) stands.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Tested<'a> {
   /// It runs, or what it stored is not read back yet.
@@ -76,7 +76,7 @@ pub(super) enum Tested<'a> {
   Unread(&'a Message),
 }
 
-/// What the inspector shows about the work on its connection.
+/// What the page shows about the work on its connection.
 pub(super) struct Inspecting<'a> {
   pub listed: &'a ProjectConnections,
   /// The person's agent accounts, which a CLI connection runs on one of.
@@ -91,12 +91,12 @@ pub(super) struct Inspecting<'a> {
   /// The check pressed on the connection in this screen, if one was.
   pub tested: Option<Tested<'a>>,
   pub confirming: Option<Confirm>,
+  /// The question was asked since the page last rendered, so it is brought into view.
+  pub reveal: bool,
   pub now: Timestamp,
-  /// The window is narrow: the inspector is narrower and its footer's actions have no icons.
-  pub narrow: bool,
 }
 
-/// What the inspector's actions do.
+/// What the page's actions do.
 #[derive(Clone)]
 pub(super) struct Actions {
   pub start: Arc<dyn Fn(ConnectionId, Work) + Send + Sync>,
@@ -105,110 +105,133 @@ pub(super) struct Actions {
   pub edit: Arc<dyn Fn(ConnectionId) -> Open + Send + Sync>,
   /// Opens the Agents screen, where a profile chooses its connection and servers.
   pub agents: Open,
+  /// What opens Connections itself, the crumb's way back.
+  pub back: Open,
+  /// The name is edited in place of the title.
+  pub renaming: Signal<bool>,
+  /// The … menu and its button.
+  pub more: (Signal<bool>, ElementRef),
+  /// The question asked in place, which is scrolled into view when it is asked.
+  pub question: ElementRef,
 }
 
-/// The inspector of `inspecting.entry`.
-pub(super) fn inspector(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions) -> Element {
+/// A page's parts as a kind fills them.
+pub(super) struct Parts {
+  pub glyph: Glyph,
+  /// The name, or its rename in place.
+  pub title: Element,
+  pub status: Shown,
+  /// What the status line says after the status's word, e.g. when it was checked or who uses it.
+  pub status_detail: Option<Arc<str>>,
+  /// The head's actions, before the … menu.
+  pub actions: Vec<Element>,
+  /// The … menu's choices; without any, no menu.
+  pub menu: Vec<MenuItem>,
+  /// What the status asks for, under the head: a sentence, a command to run, a check's result, a warning.
+  pub notices: Vec<Element>,
+  pub groups: Vec<Element>,
+  /// The question asked in place, and how many of the groups come before it.
+  pub question: Option<(usize, Element)>,
+}
+
+/// The page of `inspecting.entry`.
+pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions) -> Element {
   let parts = match inspecting.entry {
     Entry::Agent(connection) => agent::parts(ctx, connection, inspecting, actions),
     Entry::GitHub(connection) => github::parts(ctx, connection, inspecting, actions),
     Entry::Mcp(server) => mcp::parts(ctx, server, inspecting, actions),
   };
-  let body = Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-    .spacing(SpacingSize::Md)
-    .with_children(parts.body);
+  let crumb = back(
+    "connection-crumb",
+    (&ctx.t("project_settings.connections"), None),
+    actions.back.clone(),
+  );
+  let status = status_line(
+    ctx,
+    "connection-inspector-status",
+    parts.status,
+    parts.status_detail.as_deref(),
+  );
+  let mut head_actions = parts.actions;
+  if !parts.menu.is_empty() {
+    head_actions.push(more_menu(ctx, actions, parts.menu));
+  }
+  let head = entity_head(
+    ctx,
+    "connection-inspector-header",
+    (parts.glyph, parts.title),
+    status.into(),
+    head_actions,
+  );
+  let failure = inspecting
+    .failed
+    .map(|failure| Element::from(field_error("connection-work-error", &message_text(ctx, failure))));
+  let mut groups = parts.groups;
+  if let Some((after, question)) = parts.question {
+    // A question just asked is brought into view, wherever the page was scrolled.
+    if inspecting.reveal {
+      ctx.scroll_into_view(&actions.question);
+    }
+    let question = Column::new()
+      .width(Dimension::Pct(100.0))
+      .ref_element(actions.question.clone())
+      .child(question);
+    groups.insert(after.min(groups.len()), question.into());
+  }
   Column::new()
     .id("connection-inspector")
-    .width(Dimension::Px(if inspecting.narrow {
-      NARROW_INSPECTOR_WIDTH
-    } else {
-      INSPECTOR_WIDTH
-    }))
-    .height(Dimension::Pct(100.0))
-    .flex_shrink(0.0)
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Roomy.role())
     .describe("connection", inspecting.entry.id().to_string())
-    .child(parts.header)
-    .child(
-      ScrollVertical::new(body)
-        .id("connection-inspector-body")
-        .width(Dimension::Pct(100.0))
-        .flex(1.0),
-    )
-    .with_children(parts.footer)
+    .child(crumb)
+    .child(head)
+    .with_children(failure)
+    .with_children(parts.notices)
+    .with_children(groups)
     .into()
 }
 
-/// An inspector's parts as a kind fills them.
-pub(super) struct Parts {
-  pub header: Element,
-  pub body: Vec<Element>,
-  pub footer: Option<Element>,
+/// The … button and the menu it opens at its end.
+fn more_menu(ctx: &mut Ctx, actions: &Actions, items: Vec<MenuItem>) -> Element {
+  let (open, anchor) = actions.more.clone();
+  let toggle = open.clone();
+  let button = IconButton::new("connection-more", Icon::Ellipsis, ctx.t("connections.more"))
+    .element(anchor.clone())
+    .on_click(move || toggle.update(|open| *open = !*open))
+    .render(ctx);
+  let panel = items.into_iter().fold(
+    menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)),
+    |panel, item| panel.child(item.render(ctx, &open)),
+  );
+  Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
 }
 
-/// The header: the glyph tile, the name and the status, and `action` at the end, if any.
-fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<Element>) -> Element {
-  titled_header(ctx, (glyph, title(name).into()), status, action)
-}
-
-/// The connection's name as the header shows it.
+/// The connection's name as the head shows it.
 fn title(name: &str) -> Text {
   Text::new(name)
     .id("connection-inspector-title")
-    .variant(ConnectionsText::InspectorTitle.role())
+    .variant(ProjectSettingsText::PageTitle.role())
 }
 
-/// The header with `title` in place of the name, e.g. the name with its rename (`rename`).
-fn titled_header(ctx: &Ctx, (glyph, title): (Icon, Element), status: Shown, action: Option<Element>) -> Element {
-  let tile = Row::new()
-    .width(Dimension::Px(GLYPH_TILE))
-    .height(Dimension::Px(GLYPH_TILE))
-    .flex_shrink(0.0)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary));
-  let text = Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Fine.role())
-    .child(title)
-    .child(status_line(
-      ctx,
-      "connection-inspector-status",
-      status,
-      (IconSize::Sm, TypographyStyle::Label),
-    ));
-  Row::new()
-    .id("connection-inspector-header")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(tile)
-    .child(text)
-    .with_children(action)
-    .into()
-}
-
-/// A status as an icon of `size` and its word in `text`, 5 apart (`Status line` `YUNCc`).
-pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, (size, text): (IconSize, TypographyStyle)) -> Row {
+/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`).
+pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
   let word = ctx.t(status.key);
+  let said = match detail {
+    Some(detail) => ctx.t_args("connections.statusWith", [("status", &*word), ("detail", detail)]),
+    None => word.clone(),
+  };
   Row::new()
     .id(id.to_owned())
-    .spacing(ExtraSpacing::Pair.role())
+    .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .describe("status", word.clone())
-    .child(icon(status.icon, size, status.tone.color()))
-    .child(Text::new(&word).variant(text).color(status.tone.word_color()).nowrap())
+    .describe("status", word)
+    .child(icon(status.icon, IconSize::Sm, status.tone.color()))
+    .child(
+      Text::new(&said)
+        .variant(TypographyStyle::Description)
+        .color(status.tone.word_color())
+        .nowrap(),
+    )
 }
 
 /// The status a connection shows: checking while its check runs.
@@ -220,54 +243,19 @@ fn shown(inspecting: &Inspecting<'_>, status: Shown) -> Shown {
   }
 }
 
-/// The footer: what the status means, `more` under it, the rows of actions, and why one cannot be used.
-fn footer(
-  ctx: &Ctx,
-  inspecting: &Inspecting<'_>,
-  (sentence, more): (&str, Vec<Element>),
-  (rows, reasons): (Vec<Vec<Element>>, Vec<Element>),
-) -> Element {
-  let failure = inspecting
-    .failed
-    .map(|failure| field_error("connection-work-error", &message_text(ctx, failure)));
-  Column::new()
-    .id("connection-inspector-footer")
+/// What the status means and what to do about it, under the head, in `tone`.
+fn sentence(id: &str, words: &str, tone: PaletteColor) -> Element {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(ProjectSettingsText::Hint.role())
+    .color(tone)
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(
-      Text::new(sentence)
-        .id("connection-inspector-sentence")
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0)),
-    )
-    .with_children(more)
-    .with_children(failure)
-    .with_children(rows.into_iter().enumerate().map(|(index, actions)| {
-      // Buttons that don't fit side by side go on below (a long account name in *Open … in Settings*).
-      Row::new()
-        .id(format!("connection-inspector-actions-{index}"))
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .wrap()
-        .with_children(actions)
-    }))
-    .with_children(reasons)
     .into()
 }
 
-/// `button` of the footer with `icon`, which a narrow window leaves out so two actions fit side by side in the
-/// narrower inspector (`Test connection` `u9IRO`, `Edit connection` `C6jmkO` in `b3aoUZ`).
-fn footer_action(inspecting: &Inspecting<'_>, button: ActionButton, icon: Icon) -> ActionButton {
-  if inspecting.narrow { button } else { button.icon(icon) }
-}
-
-/// Test connection, Check again or Refresh models on `id`, without its icon: checking while it runs, unavailable
-/// while other work does.
+/// Check again or Refresh models on `id`: checking while it runs, unavailable while other work does.
 fn check_button(inspecting: &Inspecting<'_>, (id, label): (&str, Arc<str>), actions: &Actions) -> ActionButton {
-  let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label);
+  let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label).icon(Icon::RefreshCw);
   match inspecting.running {
     Some(Work::Check) => button.loading(),
     Some(_) => button.disabled(),
@@ -278,43 +266,72 @@ fn check_button(inspecting: &Inspecting<'_>, (id, label): (&str, Arc<str>), acti
   }
 }
 
+/// *Rename* in the … menu: the title becomes a field; unavailable while other work runs on the connection.
+fn rename_item(ctx: &Ctx, inspecting: &Inspecting<'_>, actions: &Actions) -> MenuItem {
+  if inspecting.running.is_some() {
+    return MenuItem::unavailable(
+      "connection-rename",
+      ctx.t("connections.rename.action"),
+      ctx.t("connections.busy"),
+    )
+    .icon(Icon::Pencil);
+  }
+  let renaming = actions.renaming.clone();
+  MenuItem::new("connection-rename", ctx.t("connections.rename.action"), move || {
+    renaming.set(true)
+  })
+  .icon(Icon::Pencil)
+}
+
 /// When the connection was last checked, or that it was not.
-fn last_checked(ctx: &Ctx, now: Timestamp, at: Option<Timestamp>) -> (Arc<str>, inspector::PropertyValue) {
+fn last_checked(ctx: &Ctx, now: Timestamp, at: Option<Timestamp>) -> Arc<str> {
   match at {
-    Some(at) => (
-      message_text(ctx, &display::elapsed(now, at)),
-      inspector::PropertyValue::Plain,
-    ),
-    None => (ctx.t("connections.notCheckedYet"), inspector::PropertyValue::Muted),
+    Some(at) => message_text(ctx, &display::elapsed(now, at)),
+    None => ctx.t("connections.notCheckedYet"),
   }
 }
 
-/// The profiles that use a connection, as links to the Agents screen, with how many there are; or that
-/// none does.
-fn used_by(ctx: &Ctx, labels: Vec<String>, actions: &Actions, none_key: &str) -> Element {
-  let count = labels.len();
-  let meta = match count {
-    1 => ctx.t("connections.usage.one"),
-    _ => ctx.t_args("connections.usage.other", [("count", count.to_string())]),
+/// *Used by* (`Used by` `k0X4BW`): the profiles that choose the connection, with Agents ↗; or that none does.
+fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &str) -> Element {
+  let (label, hint) = if labels.is_empty() {
+    (ctx.t(none_key), ctx.t("connections.usedByHintNone"))
+  } else {
+    (labels.join(", ").into(), ctx.t("connections.usedByHint"))
   };
-  let section = inspector::section("connection-used-by", ExtraSpacing::Snug.role()).child(inspector::section_title(
-    "connection-used-by-title",
-    &ctx.t("connections.usedBy"),
-    (count > 0).then_some(&*meta),
-  ));
-  if labels.is_empty() {
-    return section
-      .child(Text::new(&ctx.t(none_key)).variant(ExtraTypography::Note.role()))
-      .into();
-  }
-  section
-    .with_children(labels.into_iter().enumerate().map(|(index, label)| {
-      inspector::link(
-        &format!("connection-used-by-{index}"),
-        Icon::Bot,
-        &label,
-        Some(actions.agents.clone()),
-      )
-    }))
+  let agents = ActionButton::new(
+    "connection-open-agents",
+    ButtonKind::Ghost,
+    ctx.t("connections.agentsLink"),
+  )
+  .icon(Icon::ArrowUpRight)
+  .compact()
+  .opens(actions.agents.clone());
+  let row = SettingRow::new("connection-used-by", label)
+    .hint(hint)
+    .control(agents)
+    .render(ctx);
+  crate::screens::project_settings::kit::Group::new("connection-used-by-group", ctx.t("connections.usedBy"))
+    .row(row)
     .into()
+}
+
+/// A row of a page's details: its label, its value at the end, in Geist Mono for a path or a command.
+fn detail_row(ctx: &mut Ctx, id: &str, (label, value): (&str, &str), mono: bool) -> Element {
+  let value = crate::screens::project_settings::kit::value(&format!("{id}-value"), value);
+  let value = if mono {
+    value
+      .variant(crate::theme::ExtraTypography::PropertyMono.role())
+      .color(PaletteColor::TextSecondary)
+  } else {
+    value
+  };
+  SettingRow::new(id.to_owned(), label).control(value).render(ctx)
+}
+
+/// The tone a page's sentence is said in: `warning` for a status that asks for something, else `text_muted`.
+fn sentence_tone(status: Shown) -> PaletteColor {
+  match status.tone {
+    super::words::Tone::Warning | super::words::Tone::Danger => PaletteColor::Warning,
+    _ => PaletteColor::TextMuted,
+  }
 }

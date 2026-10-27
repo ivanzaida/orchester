@@ -133,11 +133,18 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
       skills::screen(ctx, project, page)
     }
     ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
-    ProjectPage::Secrets(view) => secrets::screen(ctx, project, *view),
-    ProjectPage::Connections(view) => connections::screen(ctx, project, *view),
-    ProjectPage::NewConnection(kind) => connections::new_connection(ctx, project, *kind),
-    ProjectPage::EditConnection(id) => connections::edit_connection(ctx, project, *id),
-    ProjectPage::Settings(tab) => project_settings::screen(ctx, project, *tab),
+    ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
+    ProjectPage::Connections(view) => {
+      project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))
+    }
+    ProjectPage::NewConnection(kind) => {
+      project_settings::screen(ctx, project, project_settings::Shown::NewConnection(*kind))
+    }
+    ProjectPage::EditConnection(id) => {
+      project_settings::screen(ctx, project, project_settings::Shown::EditConnection(*id))
+    }
+    ProjectPage::Settings(tab) => project_settings::screen(ctx, project, project_settings::Shown::Tab(*tab)),
+    ProjectPage::ProjectRules => project_settings::screen(ctx, project, project_settings::Shown::Rules),
     ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),

@@ -4,7 +4,7 @@
 //! code, linking a local project by address with and without a remote mismatch, a pairing code for a second computer,
 //! signing out naming the projects it affects, the server's version kept while its projects are read again, and that
 //! the app never calls an endpoint of the server admin. The sign-in against the real cloud is in
-//! `crates/cloud/tests/cloud/desktop.rs`.
+//! `crates/cloud/tests/cloud/desktop.rs` in `ivanzaida/orchester-cloud`.
 //!
 //! `cargo test -p orchester-app --test orchester orchester_`
 
@@ -297,6 +297,7 @@ fn orchester_links_by_address_warning_on_a_remote_mismatch() {
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
+  press(&mut window, "sharing-share-open");
   shows(&mut window, "sharing-address");
   window.set("sharing-address", &format!("{}/billing", recorder.url()));
   press(&mut window, "sharing-link-button");
@@ -311,7 +312,7 @@ fn orchester_links_by_address_warning_on_a_remote_mismatch() {
     "the same remote does not warn"
   );
   press(&mut window, "sharing-link-confirm");
-  shows(&mut window, "sharing-shared");
+  shows(&mut window, "sharing-role-value");
   assert!(
     !recorder.lines().iter().any(|line| administrative(line)),
     "an admin endpoint was called: {:?}",

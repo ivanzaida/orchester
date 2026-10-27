@@ -9,7 +9,7 @@ use orchester_workspace::accounts::{AccountUses, ConnectionUse};
 use super::words::{t, ta};
 use crate::{
   navigation::Navigation,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route},
+  routes::{ConnectionsView, ProjectPage, Route},
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -64,7 +64,7 @@ pub(super) fn group(ctx: &mut Ctx, uses: Option<&AccountUses>) -> Element {
     .iter()
     .map(|used| {
       let (project, connection) = (used.project, used.connection);
-      let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(connection);
+      let view = ConnectionsView::of(connection);
       let open = ActionButton::new(
         format!("account-used-by-{connection}-open"),
         ButtonKind::Ghost,
