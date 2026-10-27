@@ -29,8 +29,8 @@ use crate::{
 pub enum StopLook {
   /// Under the task page's header: *Stop run…* primary, *Keep it running* secondary.
   Primary,
-  /// Over the Tasks screen's rows or columns: *Stop run…* secondary, *Keep it running* ghost (`Confirm · stop run`
-  /// `MBtXE` in `04 Confirm in place` `yMirA`).
+  /// Over the Tasks screen's rows or columns: *Stop run…* secondary, *Keep it running* ghost, on `surface_raised` in
+  /// a `warning` stroke (`Confirm · stop run` `MBtXE` in `04 Confirm in place` `yMirA`).
   Quiet,
 }
 
@@ -69,9 +69,9 @@ fn stop_run(
     Closing::Done => ("task_close.stop.done", "task_close.stop.confirmDone"),
     Closing::Canceled => ("task_close.stop.canceled", "task_close.stop.confirmCanceled"),
   };
-  let (keep_kind, stop_kind) = match look {
-    StopLook::Primary => (ButtonKind::Secondary, ButtonKind::Primary),
-    StopLook::Quiet => (ButtonKind::Ghost, ButtonKind::Secondary),
+  let (keep_kind, stop_kind, surface) = match look {
+    StopLook::Primary => (ButtonKind::Secondary, ButtonKind::Primary, CardSurface::Decision),
+    StopLook::Quiet => (ButtonKind::Ghost, ButtonKind::Secondary, CardSurface::Attention),
   };
   let error = state
     .error
@@ -93,7 +93,7 @@ fn stop_run(
     let (closer, task) = (closer.clone(), task.clone());
     stop.on_click(move || closer.run(Request::Close(task.clone(), closing, Stop::Confirmed(Some(run)))))
   };
-  card(&format!("{id}-stop"), CardSurface::Decision)
+  card(&format!("{id}-stop"), surface)
     .spacing(SpacingSize::Md)
     .child(
       Column::new()

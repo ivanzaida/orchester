@@ -23,7 +23,7 @@ use lurq::{
 use orchester_core::{id::TaskId, task::organization::WorkflowStatus};
 
 use super::{
-  actions::{BoardState, Drag, Focused, Refused, Selected, Target},
+  actions::{BoardState, Drag, Focused, Refusal, Refused, Selected, Target},
   card::{CardLook, CardModel},
   card_view::{CardProps, CardView},
   display::Display,
@@ -101,7 +101,7 @@ pub fn column(
     ctx,
     (state, shared),
     (column, cards),
-    (&target, &id, over, refusing.is_some()),
+    (&target, &id, over, refusing.clone()),
   );
   let frame = Column::new()
     .id(id.clone())
@@ -126,18 +126,26 @@ pub fn column(
 }
 
 /// The column's cards, after a refusal it says, with the lifted card's slot while the drag is over it and Backlog's
-/// foot; why it shows none, without them.
+/// foot; why it shows none, without them. The column the drag is over says why it refuses the card while it is held
+/// there (`Refusal` `q2Rtvh`), as after the drop.
 fn body(
   ctx: &mut Ctx,
   (state, shared): (&BoardState, &Shared<'_>),
   (column, cards): (&ColumnModel, &[CardModel]),
-  (target, id, over, refusing): (&Target, &str, Option<&Drag>, bool),
+  (target, id, over, refusing): (&Target, &str, Option<&Drag>, Option<Refusal>),
 ) -> Column {
   let mut body = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role());
-  if let Some(refused) = shared.refused.filter(|refused| refused.column == column.key)
-    && (over.is_some() || shared.drag.is_none())
+  let held = over.zip(refusing.clone()).map(|(drag, refusal)| Refused {
+    column: column.key.clone(),
+    key: drag.card.row.key.clone(),
+    refusal,
+  });
+  if let Some(refused) = held.as_ref() {
+    body = body.child(refusal_card(ctx, refused, &column.label));
+  } else if let Some(refused) = shared.refused.filter(|refused| refused.column == column.key)
+    && shared.drag.is_none()
   {
     body = body.child(refusal_card(ctx, refused, &column.label));
   } else if let (Some(drag), None) = (shared.drag, over)
@@ -145,7 +153,7 @@ fn body(
   {
     body = body.child(refusal_note(ctx, &refusal, &format!("{id}-refused")));
   }
-  body = match over.filter(|_| !refusing) {
+  body = match over.filter(|_| refusing.is_none()) {
     Some(drag) => body.with_children(slots(ctx, state, (shared, target), cards, drag)),
     None => body.with_children(card_views(ctx, shared, (target, cards))),
   };

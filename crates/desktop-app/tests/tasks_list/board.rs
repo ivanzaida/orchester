@@ -361,6 +361,16 @@ fn tasks_board_a_card_whose_run_has_not_ended_finds_done_and_canceled_offered_wh
     seeded.text("tasks-board-hint-text"),
     "KON-12 goes only to Done or Canceled"
   );
+  // In review says why at its top while the card is held over it, before any drop.
+  let why = refusal(&mut seeded);
+  assert!(why.starts_with("A run of this task has not ended."), "{why}");
+  assert!(
+    seeded
+      .window
+      .texts("tasks-board-column-in_review")
+      .is_some_and(|texts| texts.contains(&why)),
+    "the refusal is in the column under the pointer"
+  );
   // Let go where it was taken from: nothing changes.
   seeded.window.tree.mouse_move(x0, y0);
   seeded.window.pass();
@@ -370,6 +380,7 @@ fn tasks_board_a_card_whose_run_has_not_ended_finds_done_and_canceled_offered_wh
     .mouse_up(x0, y0, lurq::app::events::MouseButton::Left);
   seeded.window.pass();
   assert!(!seeded.shows("tasks-board-slot-done"), "the slots go with the drag");
+  assert!(!seeded.shows("tasks-board-refusal"), "so does the held refusal");
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress);
 }
 
