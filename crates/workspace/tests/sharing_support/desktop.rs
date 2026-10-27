@@ -4,9 +4,12 @@
 
 use std::sync::Arc;
 
-use orchester_api::{Credential, client::ServerAddress};
+use orchester_api::{
+  Credential,
+  client::{CloudAddress, ServerAddress},
+};
 use orchester_core::{id::ServerId, secret::VaultKey};
-use orchester_store::AppDb;
+use orchester_store::{AppDb, StoredCloudAddress};
 use orchester_workspace::{
   secrets::Vault,
   sharing::{Servers, cloud::Cloud},
@@ -32,7 +35,16 @@ pub struct Desktop {
 }
 
 impl Desktop {
+  /// A desktop using the cloud at the web address `cloud`, its API on that address too (`/api/v1`).
   pub fn new(cloud: &str) -> Self {
+    Self::at(CloudAddress::new(
+      ServerAddress::parse(cloud).expect("cloud address"),
+      None,
+    ))
+  }
+
+  /// A desktop using the cloud at `address`.
+  pub fn at(address: CloudAddress) -> Self {
     let data = TempDir::new().expect("application data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     let vault = Arc::new(MemoryVault::default());
@@ -45,7 +57,6 @@ impl Desktop {
       runtime: Runtime::new().expect("runtime"),
       _data: data,
     };
-    let address = ServerAddress::parse(cloud).expect("cloud address");
     desktop
       .block_on(desktop.cloud.set_address(Some(address)))
       .expect("test cloud");
@@ -89,18 +100,25 @@ impl Desktop {
     db.keep_accepted_invite(invite).expect("kept");
   }
 
-  /// Records the signed-in account as signed in at the cloud at `address`, as if the account's cloud moved there.
+  /// Records the signed-in account as signed in at the cloud at the web address `address` with its API there, as an
+  /// earlier version recorded a sign-in at that address.
   pub fn move_account_to(&self, address: &str) {
     let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
     let mut account = db.cloud_account().expect("account").expect("signed in");
     account.cloud_address = address.to_owned();
+    account.cloud_api_address = None;
     db.set_cloud_account(Some(&account)).expect("moved");
   }
 
-  /// Stores `address` as Settings › Orchester › Advanced names the cloud, as an earlier version left it.
+  /// Stores the web address `address` as Settings › Orchester › Advanced names the cloud, as an earlier version left
+  /// it.
   pub fn store_cloud_address(&self, address: &str) {
     let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
-    db.set_cloud_address(Some(address)).expect("stored");
+    let stored = StoredCloudAddress {
+      web: address.to_owned(),
+      api: None,
+    };
+    db.set_cloud_address(Some(&stored)).expect("stored");
   }
 }
 
