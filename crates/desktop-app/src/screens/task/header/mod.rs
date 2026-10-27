@@ -130,7 +130,11 @@ impl Component for TaskHeader {
       .with_children(module::field(ctx, &props.task))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
       .with_children(confirmation)
-      .with_children(task_close::panel(ctx, &self.closer, "task-close"))
+      .with_children(task_close::panel(
+        ctx,
+        &self.closer,
+        ("task-close", task_close::StopLook::Primary),
+      ))
       .with_children(removal(ctx, &props))
       .child(
         Column::new()

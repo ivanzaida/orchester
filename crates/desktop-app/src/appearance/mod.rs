@@ -5,6 +5,7 @@
 //! `System` uses the appearance the operating system had when the app started ([`system::mode`]):
 //! lurq reports no later change of it, so the window keeps that mode until the app starts again.
 
+pub mod motion;
 pub mod system;
 
 use std::sync::{Arc, OnceLock};

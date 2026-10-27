@@ -274,7 +274,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "return_to_draft",
-    description: "Returns a queued task whose run never started to Draft, as the task list's Return to drafts does: only a task its group holds for good (after a task of the group failed, at the group's cap, refused by preflight or the runner, blocked or canceled). Refusals name why.",
+    description: "Returns a queued task whose run never started to Draft and to Backlog, as a card dropped on the Tasks board's Backlog does. A task of a reviewed group goes back only when its group holds it for good (after a task of the group failed, at the group's cap, refused by preflight or the runner, blocked or canceled), as the task list's Return to drafts takes it. Refusals name why: not_queued, run_recorded, not_held, shared_server, changed_meanwhile or not_changed.",
     schema: schema_for_type::<return_to_draft::ReturnToDraft>,
     read_only: false,
   },

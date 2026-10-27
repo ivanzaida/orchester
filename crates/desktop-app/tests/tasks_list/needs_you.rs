@@ -1,12 +1,13 @@
 //! Active's groups: Needs you holds exactly the tasks every *Needs you* names (the title bar's pill counts what they
 //! wait for), every Active task is in one group, and what waits and is no task's (the project's memory records) is
-//! named in a notice over the rows, whose *Open Needs you* opens the title bar's panel, which counts it.
+//! named in a notice over the rows, whose *Open Needs you* opens the title bar's panel, which counts it. The Needs you
+//! view, first, holds only what waits, on the list and on the board (ORC-105).
 
 use std::collections::BTreeSet;
 
 use orchester_app::routes::{TaskList, TaskListTab};
 
-use crate::harness::Seeded;
+use crate::{board::press, harness::Seeded};
 
 const BODY: &str = "This list shows tasks only. The Needs you panel lists everything that waits for you.";
 
@@ -127,6 +128,108 @@ fn tasks_needs_you_lists_the_waiting_tasks_and_names_the_memory_over_them() {
   );
   assert!(views.y + views.height <= notice.y, "the notice is under the views");
   assert!(notice.y + notice.height <= list.y, "the notice is over the rows");
+  seeded.go(TaskList::new(TaskListTab::NeedsYou));
+  seeded.until("the Needs you view", |seeded| seeded.rows_laid_out());
+  assert!(seeded.shows("tasks-outside-tasks"), "Needs you names it too");
   seeded.go(TaskList::new(TaskListTab::All));
-  assert!(!seeded.shows("tasks-outside-tasks"), "only Active names it");
+  assert!(
+    !seeded.shows("tasks-outside-tasks"),
+    "only Needs you and Active name it"
+  );
+}
+
+/// The keys of the seed's tasks something of waits for the person.
+fn waiting(seeded: &Seeded) -> BTreeSet<String> {
+  let tasks = seeded.shown_tasks();
+  tasks
+    .tasks
+    .iter()
+    .filter(|task| tasks.waiting_tasks().contains(&task.id()))
+    .map(|task| task.key().to_string())
+    .collect()
+}
+
+#[test]
+fn tasks_needs_you_is_the_first_view_and_holds_only_what_waits() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::NeedsYou));
+  let waiting = waiting(&seeded);
+  let views: Vec<String> = seeded
+    .ids("tasks-view-")
+    .into_iter()
+    .filter(|id| !id.trim_start_matches("tasks-view-").contains('-'))
+    .collect();
+  assert_eq!(
+    views,
+    [
+      "tasks-view-needs_you",
+      "tasks-view-active",
+      "tasks-view-backlog",
+      "tasks-view-done",
+      "tasks-view-all"
+    ],
+    "Needs you comes first"
+  );
+  assert_eq!(seeded.view("needs_you"), format!("Needs you {}", waiting.len()));
+  assert!(seeded.shows("tasks-view-needs_you-icon"), "its hand");
+  assert!(seeded.groups().is_empty(), "Needs you is flat");
+  let shown: BTreeSet<String> = seeded.keys().into_iter().collect();
+  assert_eq!(shown, waiting, "only the tasks that wait");
+}
+
+#[test]
+fn tasks_needs_you_board_shows_only_the_waiting_cards() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::NeedsYou));
+  let waiting = waiting(&seeded);
+  let tasks = seeded.shown_tasks();
+  for task in tasks.tasks.iter() {
+    let key = task.key().to_string();
+    let card = format!("task-key-{key}");
+    assert_eq!(
+      seeded.shows(&card),
+      waiting.contains(&key),
+      "{key} is on the board only while it waits"
+    );
+  }
+  assert!(
+    !seeded.shows("tasks-board-column-backlog"),
+    "a column without a waiting card stays away"
+  );
+}
+
+/// Shows the board's rows by `lanes` through Display.
+fn rows_by(seeded: &mut Seeded, lanes: &str) {
+  press(seeded, "tasks-display");
+  press(seeded, "tasks-board-options-rows");
+  press(seeded, &format!("tasks-board-options-rows-{lanes}"));
+  seeded
+    .window
+    .tree
+    .key_down("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  seeded.until("Display closed", |seeded| !seeded.shows("tasks-board-options"));
+}
+
+/// Needs you on the board when nothing waits: the empty view's words, not a board without columns.
+fn says_needs_you_is_empty(seeded: &mut Seeded, lanes: &str) {
+  seeded.go(TaskList::new(TaskListTab::NeedsYou));
+  seeded.until("the empty view", |seeded| seeded.laid_out("tasks-no-rows-title"));
+  assert_eq!(
+    seeded.text("tasks-no-rows-title"),
+    "No tasks in this view.",
+    "rows by {lanes}"
+  );
+  assert!(!seeded.shows("tasks-board-columns"), "no blank board, rows by {lanes}");
+  assert!(!seeded.shows("tasks-board-lanes"), "no blank rows, rows by {lanes}");
+  assert!(seeded.shows("tasks-outside-tasks"), "the memory record is named");
+}
+
+#[test]
+fn tasks_needs_you_board_with_nothing_waiting_says_so_with_rows_too() {
+  // The seed's one task is done: All has a column, Needs you none.
+  let mut seeded = Seeded::board("memory-only", TaskList::new(TaskListTab::All));
+  says_needs_you_is_empty(&mut seeded, "none");
+  seeded.go(TaskList::new(TaskListTab::All));
+  seeded.until("the board", |seeded| seeded.laid_out("tasks-board-columns"));
+  rows_by(&mut seeded, "module");
+  seeded.until("the rows", |seeded| seeded.laid_out("tasks-board-lanes"));
+  says_needs_you_is_empty(&mut seeded, "module");
 }
