@@ -1,15 +1,18 @@
-//! The task page's header (`Task header` `x8Dmfa` in `lUXff`): the breadcrumb, the title with its
-//! actions (`actions`) and its *More actions* menu that closes, reopens or deletes the task (`task_close`, ORC-91,
-//! no frame yet), the status and run line, the task's module (`module`, ORC-48, no frame yet), the frame's
-//! notices, Run again's, closing's and deleting's and the latest run's
-//! *Remove worktree* confirmations in place, and the page tabs (`Page tabs` `L9OIIZ`; Artifacts and Memory last,
-//! `ogMzT` in `a0PLO`). It is the same component on every tab, so a request under way or an open
-//! confirmation stays as the tabs switch.
+//! The task page's header (ORC-100, `Task header` `j8DakG`), 20 over it and 28 at its sides, its rows 10 apart: the
+//! way back to Tasks (`back`), the title with the one primary action the task's state calls for (`primary`) and
+//! *More actions* with every other (`more`), the status line (`run_line`), the task's module (`module`, ORC-48, no
+//! frame yet), the frame's notices, Run again's, closing's and deleting's and the latest run's *Remove worktree*
+//! confirmations in place, and the page tabs Summary, Conversation and Changes with the count of its files (`Tabs`
+//! `QFr7g`). It is the same component on every tab, so a request under way or an open confirmation stays as the tabs
+//! switch. E opens Edit task, as *More actions* says, unless a field has the keys.
 
 mod actions;
+mod back;
 pub(super) mod controls;
 mod module;
+mod more;
 mod notices;
+mod primary;
 mod refusal;
 pub(super) mod run_again;
 mod run_line;
@@ -17,7 +20,7 @@ mod run_line;
 use std::sync::Arc;
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  app::{component::Component, ctx::Ctx, events::KeyboardEvent, theme::SpacingSize},
   components::Column,
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -26,6 +29,7 @@ use orchester_workspace::{messages::Message, tasks::run_again::RunAgainCheck};
 
 use self::{
   controls::{Controls, RunControls, controls},
+  more::{Held, MenuPlace},
   refusal::Refusals,
   run_again::{Confirmation, Confirming, StartAction},
 };
@@ -34,21 +38,19 @@ use super::{
   summary::runs::{Runs, removal::confirm_for},
 };
 use crate::{
-  navigation::{Navigation, link::Open},
+  navigation::{Navigation, link::Open, press::OpenIn},
   routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
-  screens::task_close::{self, Closer, MenuPlace, Subject},
+  screens::task_close::{self, Closer, Subject},
   services::Services,
-  theme::ExtraSpacing,
-  ui::{
-    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
-    tabs::{PageTab, counted, page_tabs},
-  },
+  theme::{ExtraSpacing, TaskSpacing},
+  ui::tabs::{PageTab, page_tabs},
 };
 
 #[derive(Clone, PartialEq)]
 pub struct HeaderProps {
   pub task: TaskContext,
-  pub tab: TaskTab,
+  /// What the page shows: its tab is the one chosen.
+  pub view: TaskView,
   /// Why the task could not be read again; the page shows it as last read.
   pub stale: Option<Message>,
 }
@@ -63,7 +65,7 @@ pub struct TaskHeader {
   remove: Signal<bool>,
   /// Closing, reopening and deleting the task; a deleted task's page goes to the Tasks list.
   closer: Closer,
-  /// Where the *More actions* menu is open.
+  /// Where *More actions* is open.
   menu: MenuPlace,
 }
 
@@ -89,7 +91,6 @@ impl Component for TaskHeader {
     let (open, feed) = (props.task.project.open.clone(), props.task.project.feed.clone());
     let detail = props.task.detail.clone();
     let runners = (services.runners.clone(), services.servers.clone());
-    let run_controls = RunControls::of(ctx);
     let again = (
       feed.revision.get() + feed.outside.get().tasks,
       // It checks only after a run that ended; what the project's other runs used today grows with their
@@ -99,12 +100,62 @@ impl Component for TaskHeader {
     );
     let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, again);
     let start = run_again::start_action(ctx, runners, (open, feed), self.confirming.clone());
+    let latest_busy = detail
+      .run
+      .as_ref()
+      .is_some_and(|run| props.task.jobs.run(run.id()).busy());
+    let (primary, more) = self.actions(ctx, &props, check.as_ref(), latest_busy);
+    let title_row = actions::title_row(ctx, &props, primary, more);
+    let confirmation = check
+      .as_ref()
+      .and_then(|check| check.as_ref().ok())
+      .and_then(|check| self.confirmation(ctx, &props, check, (&start, latest_busy)));
+    let run_controls = RunControls::of(ctx);
     let state = run_controls.action.state().get();
-    let pending = run_controls.pending();
     let refused = self.refusals.shown(&state, run_controls.requested.get(), &detail);
-    // A task kept Not shared starts no run: its header has Edit locked and Share task only.
+    Column::new()
+      .id("task-header")
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(TaskSpacing::Header.role())
+          .left(TaskSpacing::Side.role())
+          .right(TaskSpacing::Side.role()),
+      )
+      .spacing(ExtraSpacing::Loose.role())
+      .on_key_down(edit_key(ctx, &props.task, &props.view))
+      .child(back::row(ctx, &props))
+      .child(title_row)
+      .child(run_line::status_line(ctx, &props.task))
+      .with_children(module::field(ctx, &props.task))
+      .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
+      .with_children(confirmation)
+      .with_children(task_close::panel(ctx, &self.closer, "task-close"))
+      .with_children(removal(ctx, &props))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::new().top(SpacingSize::Xs))
+          .child(tabs(ctx, &props)),
+      )
+  }
+}
+
+impl TaskHeader {
+  /// The primary action, and *More actions* with every other. A task kept *Not shared* starts no run: it has Share
+  /// task, and Edit locked in its menu.
+  fn actions(
+    &self,
+    ctx: &mut Ctx,
+    props: &HeaderProps,
+    check: Option<&Result<RunAgainCheck, Message>>,
+    latest_busy: bool,
+  ) -> (Option<controls::Control>, Element) {
+    let detail = props.task.detail.clone();
     let kept = detail.not_shared();
-    let mut shown = controls(
+    let run_controls = RunControls::of(ctx);
+    let pending = run_controls.pending();
+    let shown = controls(
       ctx,
       &Controls {
         detail: &detail,
@@ -115,53 +166,34 @@ impl Component for TaskHeader {
         approval_waits: props.task.waiting_approval().is_some(),
       },
     );
-    let latest_busy = detail
-      .run
-      .as_ref()
-      .is_some_and(|run| props.task.jobs.run(run.id()).busy());
-    shown.extend(run_again::button(
+    let primary = primary::primary(ctx, &props.task, &props.view, shown.moves.clone());
+    // The control that moves the run on goes in the menu while a card's action is the primary one.
+    let moves = shown
+      .moves
+      .filter(|moves| primary.as_ref().is_none_or(|primary| primary.id != moves.id));
+    let run_again = run_again::button(
       ctx,
-      check.as_ref(),
+      check,
       (&self.confirming, &self.remove),
       (latest_busy, props.task.online),
-    ));
-    if kept {
-      shown.clear();
-    }
-    let more = (!kept).then(|| self.more(ctx, &props.task));
-    let title_row = actions::title_row(ctx, &props, shown, more);
-    let confirmation = check
-      .as_ref()
-      .and_then(|check| check.as_ref().ok())
-      .and_then(|check| self.confirmation(ctx, &props, check, (&start, latest_busy)));
-    Column::new()
-      .id("task-header")
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Lg)
-          .left(SpacingSize::Section)
-          .right(SpacingSize::Section),
-      )
-      .spacing(SpacingSize::Sm)
-      .child(crumbs(ctx, &props))
-      .child(title_row)
-      .child(run_line::status_row(ctx, &props.task))
-      .with_children(module::field(ctx, &props.task))
-      .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
-      .with_children(confirmation)
-      .with_children(task_close::panel(ctx, &self.closer, "task-close"))
-      .with_children(removal(ctx, &props))
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::new().top(ExtraSpacing::Loose.role()))
-          .child(tabs(ctx, &props)),
-      )
+    );
+    let held = if kept {
+      Held {
+        controls: Vec::new(),
+        run_again: None,
+        closing: None,
+      }
+    } else {
+      Held {
+        controls: moves.into_iter().chain(shown.pause).chain(shown.cancel).collect(),
+        run_again,
+        closing: Some((self.closer.clone(), subject(&props.task))),
+      }
+    };
+    let more = more::more(ctx, &props.task, &self.menu, held);
+    (primary, more)
   }
-}
 
-impl TaskHeader {
   /// Run again's confirmation, while it is open and the task can run again. `busy`: git removes or
   /// merges the latest run's worktrees.
   fn confirmation(
@@ -192,47 +224,43 @@ impl TaskHeader {
       },
     ))
   }
+}
 
-  /// The *More actions* menu of the task the page shows.
-  fn more(&self, ctx: &mut Ctx, task: &TaskContext) -> Element {
-    let detail = &task.detail;
-    let subject = Subject {
-      id: detail.task.id(),
-      key: Arc::from(detail.task.key().to_string()),
-      status: detail.task.organization().status(),
-      shared: detail.shared.is_some(),
-    };
-    task_close::more_menu(ctx, (&self.closer, &self.menu), &subject, "task-more")
+/// The task as closing and deleting it name it.
+fn subject(task: &TaskContext) -> Subject {
+  let detail = &task.detail;
+  Subject {
+    id: detail.task.id(),
+    key: Arc::from(detail.task.key().to_string()),
+    status: detail.task.organization().status(),
+    shared: detail.shared.is_some(),
   }
 }
 
-fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
+/// E opens Edit task while the task can be edited, unless a field has the keys or a modifier is held. Local
+/// integration and the task's memory are editors of their own, whose editors and read-only text are no text inputs
+/// to lurq: E stays theirs there.
+fn edit_key(ctx: &mut Ctx, task: &TaskContext, view: &TaskView) -> impl Fn(KeyboardEvent) + use<> {
+  let own_editor = matches!(view, TaskView::LocalIntegration | TaskView::Memory);
+  let editable = task.detail.editable() && !task.detail.not_shared() && !own_editor;
   let navigation = Navigation::of(ctx);
-  let project = props.task.project.open.project.id();
-  let name = props.task.project.open.project.name().as_str().to_owned();
-  let mut crumbs = vec![
-    Crumb::to(
-      name,
-      navigation.to(Route::Project(project, ProjectPage::Overview(Default::default()))),
-    ),
-    Crumb::to(
-      ctx.t("task.crumbs.tasks"),
-      navigation.to(Route::Project(project, ProjectPage::Tasks(TaskList::default()))),
-    ),
-  ];
-  // A task kept Not shared is found behind the list's Not shared filter (`R4elt`).
-  if props.task.detail.not_shared() {
-    let kept = TaskList::default().with_not_shared(true);
-    crumbs.push(Crumb::to(
-      ctx.t("task.crumbs.notShared"),
-      navigation.to(Route::Project(project, ProjectPage::Tasks(kept))),
-    ));
+  let route = Route::Project(
+    task.project.open.project.id(),
+    ProjectPage::EditTask(task.detail.task.key().clone()),
+  );
+  move |event: KeyboardEvent| {
+    let plain = !(event.ctrl || event.alt || event.meta || event.shift);
+    if !editable || event.default_prevented() || event.text_input_focused || !plain {
+      return;
+    }
+    if event.key.eq_ignore_ascii_case(more::EDIT_KEY) {
+      event.prevent_default();
+      navigation.open(route.clone(), OpenIn::ActiveTab);
+    }
   }
-  crumbs.push(Crumb::here(props.task.detail.task.key().to_string()).mono());
-  breadcrumb(ctx, "task-crumbs", CrumbSeparator::Slash, crumbs).into()
 }
 
-/// The latest run's *Remove worktree* confirmation, while the header's button opened it.
+/// The latest run's *Remove worktree* confirmation, while the header's menu opened it.
 fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   let run = props.task.detail.run.as_ref()?.id();
   let removal = PageState::of(ctx).removal.get();
@@ -246,8 +274,7 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   confirm_for(ctx, &runs, run)
 }
 
-/// The tabs in [`TaskTab::ALL`]'s order: Details, Conversation, Changes with the count of the files it lists,
-/// Local integration and Summary, then Artifacts and Memory with the count of the task's active records.
+/// Summary, Conversation, and Changes with the count of the files it lists.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let changes_reads = super::changes::ChangesReads::of(ctx);
@@ -262,34 +289,21 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     Arc::new(move |at| {
       let view = match tab {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
-        TaskTab::Summary
-        | TaskTab::Details
-        | TaskTab::Conversation
-        | TaskTab::LocalIntegration
-        | TaskTab::Artifacts
-        | TaskTab::Memory => TaskView::of(tab),
+        TaskTab::Summary | TaskTab::Conversation => TaskView::of(tab),
       };
       navigation.open(Route::Project(project, ProjectPage::task(key.clone(), view, kept)), at);
     })
   };
+  let chosen = props.view.tab();
   let tab =
-    |tab: TaskTab, label: Arc<str>| PageTab::to(format!("task-tab-{}", tab.name()), label, props.tab == tab, open(tab));
+    |tab: TaskTab, label: Arc<str>| PageTab::to(format!("task-tab-{}", tab.name()), label, chosen == tab, open(tab));
   let changes = ctx.t(TaskTab::Changes.title_key());
   let count = super::changes_count(ctx, &props.task);
   let changes = super::changes::tab_label(ctx, &changes, count);
-  let memory = ctx.t(TaskTab::Memory.title_key());
-  let memory = match super::memory_count(ctx, &props.task) {
-    Some(active) if active > 0 => counted(ctx, &memory, active),
-    _ => memory,
-  };
   let tabs = vec![
-    tab(TaskTab::Details, ctx.t(TaskTab::Details.title_key())),
+    tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
-    tab(TaskTab::LocalIntegration, ctx.t(TaskTab::LocalIntegration.title_key())),
-    tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
-    tab(TaskTab::Artifacts, ctx.t(TaskTab::Artifacts.title_key())),
-    tab(TaskTab::Memory, memory),
   ];
   page_tabs(ctx, "task-tabs", tabs).into()
 }

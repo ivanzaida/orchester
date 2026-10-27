@@ -53,7 +53,7 @@ fn overview_rows_runs_and_cards_open_their_task() {
   let key = row.trim_start_matches("overview-row-").to_owned();
   assert_eq!(
     seeded.window.navigation().route_now(),
-    task(&seeded, &key, TaskTab::Details),
+    task(&seeded, &key, TaskTab::default()),
     "a row opens its task on the tab a task opens on"
   );
 

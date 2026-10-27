@@ -1,22 +1,22 @@
-//! A task's page (`Task · Summary · running · full page · dark` `lUXff`; the frame of `oTzJZ`, `DVuXu`,
-//! `F2LtFn`): one frame for every tab of the task (`/tasks/<key>/<tab>`), so switching tabs keeps it and
-//! what it holds. The frame is the header (`header`: breadcrumb, title, run controls, status and run
-//! line, the frame's notices, Run again's confirmation in place) with the page tabs, and under it the
-//! tab: the Summary (`summary`), the Details (`details`), the Conversation and Changes, which their own
-//! tasks build and mount at [`conversation_tab`] and [`changes_tab`]. The frame holds the run controls'
-//! request, so the header and the Summary share it.
+//! A task's page (ORC-100, `Task page · redesign` `C3wC8`: `01 · Summary` `AsE7R`, `02 · Conversation` `XIBg8`,
+//! `03 · Changes` `X5ZKG`): one frame for every tab of the task (`/tasks/<key>/<tab>`), so switching tabs keeps it and
+//! what it holds. The frame is the header (`header`, `Task header` `j8DakG`: the way back to Tasks, the title with
+//! the one action the task's state calls for and *More actions*, the status line, the frame's notices and
+//! confirmations in place) with the page tabs Summary, Conversation and Changes, and under it the tab: the Summary
+//! (`summary`, which holds the task's requirements, its run, its decision and its runs), the Conversation and
+//! Changes, which their own tasks build and mount at [`conversation_tab`] and [`changes_tab`]. The Summary's
+//! properties open the task's memory (`memory`) in its place, Changes' *Try locally* Local integration
+//! (`local_integration`). The frame holds the run controls' request, so the header and the Summary share it.
 //!
 //! The task is read off the UI thread (`read`) and again whenever the runner changes one of the
 //! project's runs, tasks are saved, or the person tries again after a failed reading. A failed reread shows
 //! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
-mod artifacts;
 pub(crate) mod cards;
 pub(crate) mod changes;
 mod context;
 mod conversation;
-mod details;
 mod header;
 mod local_integration;
 mod memory;
@@ -42,18 +42,17 @@ pub use self::context::TaskContext;
 pub(crate) use self::conversation::{links, step_label};
 use self::{
   changes::{ChangesReads, FileCount, Follow},
-  details::{DetailsProps, TaskDetailsTab, Version},
   header::{
     HeaderProps, TaskHeader,
     controls::{RunControls, control_action},
   },
   read::{ReadAgain, TaskRead},
-  summary::{SummaryProps, TaskSummary},
+  summary::{EventWords, SummaryProps, TaskSummary, Version},
 };
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{ProjectPage, Route, TaskView},
   services::Services,
   ui::{
     icon::Icon,
@@ -68,7 +67,7 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, (key, kept): (&TaskKey, boo
     project: project.clone(),
     key: key.clone(),
     kept,
-    tab: view.tab(),
+    view: view.without_file(),
   };
   // Keyed by the task, not the tab: the frame stays as the tabs switch.
   let place = if kept { "kept-" } else { "" };
@@ -80,7 +79,8 @@ struct PageProps {
   project: ShownProject,
   key: TaskKey,
   kept: bool,
-  tab: TaskTab,
+  /// What the page shows, on no particular file: Changes reads its file from the route itself.
+  view: TaskView,
 }
 
 impl lurq::app::component::DevtoolsInspectable for PageProps {}
@@ -121,7 +121,7 @@ impl Component for TaskPage {
       task,
       key: props.key,
       kept,
-      tab: props.tab,
+      view: props.view,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
   }
@@ -189,7 +189,7 @@ struct FrameProps {
   key: TaskKey,
   /// The task is one kept *Not shared*: its page's links keep its own address.
   kept: bool,
-  tab: TaskTab,
+  view: TaskView,
 }
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
@@ -237,13 +237,14 @@ pub struct PageState {
   pub removal: Signal<Removal>,
   /// The open removal's switch that agrees to discard uncommitted changes; off each time one opens.
   pub discard: Signal<bool>,
-  /// Where the Summary's column is scrolled, kept as the tabs switch.
+  /// Where the Summary is scrolled, kept as the tabs switch.
   pub summary_scroll: ScrollState,
-  /// The version of the task's requirements the Details show, once one was shown or chosen; kept as the
-  /// tabs switch and the task is read again.
+  /// The version of the task's requirements the Summary's brief shows, once one was shown or chosen; kept as
+  /// the tabs switch and the task is read again.
   pub requirements: Signal<Option<Version>>,
-  /// Where the Details are scrolled, kept as the tabs switch.
-  pub details_scroll: ScrollState,
+  /// A decision's own words for the run's last event, where they rest on what the decision read itself (the account
+  /// a plan limit stopped); for the run and the moment it read them.
+  pub event: Signal<Option<EventWords>>,
   /// *Share task*'s question is open over the Summary of a task kept *Not shared*.
   pub share: Signal<bool>,
   /// Run again's confirmation under the header, which the Summary of a run that committed nothing opens too (ORC-93),
@@ -299,7 +300,7 @@ impl Component for TaskFrame {
         discard: ctx.signal(false),
         summary_scroll: ScrollState::new(),
         requirements: ctx.signal(None),
-        details_scroll: ScrollState::new(),
+        event: ctx.signal(None),
         share: ctx.signal(false),
         run_again: ctx.signal(header::run_again::Confirming::default()),
         run_again_remove: ctx.signal(false),
@@ -360,7 +361,7 @@ impl Component for TaskFrame {
       .status
       .get()
       .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
-    let follow = Follow::of(&detail, online, props.tab);
+    let follow = Follow::of(&detail, online, &props.view);
     self.changes.read(ctx, &root, &detail, follow);
     let task = TaskContext {
       project: props.project.clone(),
@@ -372,17 +373,15 @@ impl Component for TaskFrame {
     };
     let header = HeaderProps {
       task: task.clone(),
-      tab: props.tab,
+      view: props.view.clone(),
       stale,
     };
-    let body = match props.tab {
-      TaskTab::Summary => ctx.mount_keyed::<TaskSummary>("task-summary", SummaryProps { task }),
-      TaskTab::Details => ctx.mount_keyed::<TaskDetailsTab>("task-details", DetailsProps { task }),
-      TaskTab::Conversation => conversation_tab(ctx, &task),
-      TaskTab::Changes => changes_tab(ctx, &task),
-      TaskTab::LocalIntegration => local_integration::tab(ctx, &task),
-      TaskTab::Artifacts => artifacts::tab(ctx, &task),
-      TaskTab::Memory => memory::tab(ctx, &task),
+    let body = match props.view {
+      TaskView::Summary => ctx.mount_keyed::<TaskSummary>("task-summary", SummaryProps { task }),
+      TaskView::Memory => memory::tab(ctx, &task),
+      TaskView::Conversation => conversation_tab(ctx, &task),
+      TaskView::Changes(_) => changes_tab(ctx, &task),
+      TaskView::LocalIntegration => local_integration::tab(ctx, &task),
     };
     Column::new()
       .id("task-frame")
@@ -432,8 +431,8 @@ pub fn changes_count(ctx: &mut Ctx, _task: &TaskContext) -> Option<FileCount> {
   changes::count(ctx)
 }
 
-/// How many active records the task's memory has, for the Memory tab's label (`Memory 10`); `None` while it is
-/// read.
+/// How many active records the task's memory has, for the Summary's link to it (`3 memory notes`); `None` while it
+/// is read.
 pub fn memory_count(ctx: &mut Ctx, task: &TaskContext) -> Option<usize> {
   memory::active_count(ctx, task)
 }

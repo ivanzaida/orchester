@@ -87,7 +87,7 @@ impl WaitingCard<'_> {
         ("connection", self.stop.connection.name().as_str().to_owned()),
       ],
     );
-    let head = card("plan-limit-waiting", CardSurface::Decision)
+    let head = card("plan-limit-waiting", CardSurface::Attention)
       .spacing(SpacingSize::Xs)
       .child(
         Row::new()

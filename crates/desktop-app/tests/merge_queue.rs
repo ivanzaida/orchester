@@ -183,7 +183,9 @@ fn merge_queue_review_before_merging_approves_and_the_queue_merges_the_run() {
   );
   assert!(seeded.shows("task-delivery-open-changes"));
   assert!(seeded.shows("task-delivery-reject"));
-  let details = seeded.window.text("task-run-details");
+  // The delivery's rows are among the run's other facts.
+  seeded.window.press("task-facts-more");
+  let details = seeded.window.text("task-facts");
   assert!(details.contains("Approve to merge"), "{details}");
   let meta = seeded.window.text("task-review-meta");
   assert!(!meta.contains("vv"), "the pipeline's version is named once: {meta}");
@@ -273,7 +275,9 @@ fn merge_queue_a_run_it_merged_says_where_its_work_went() {
       .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Merged into main")))
   });
   assert!(seeded.shows("task-stage-deliver"));
-  let details = seeded.window.text("task-run-details");
+  // The delivery's rows are among the run's other facts.
+  seeded.window.press("task-facts-more");
+  let details = seeded.window.text("task-facts");
   assert!(details.contains("Merged at"), "{details}");
 }
 

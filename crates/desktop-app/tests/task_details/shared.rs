@@ -73,23 +73,16 @@ fn summary_a_shared_task_a_teammate_ran_is_not_taken_for_no_runs() {
   let key = page.key("queued, run not started");
   let task = page.task(&key);
   ran_on_a_teammates_computer(&page, &task);
-  page.open(&key, TaskTab::Summary, "task-notice-title");
+  page.open(&key, TaskTab::Summary, "task-event-text");
   assert!(!page.has("task-summary-empty"), "the task had a run");
-  assert_eq!(
-    page.text("task-notice-title"),
-    "Run #7 on Alice Moreau’s computer · Running · Implement"
+  assert!(
+    page
+      .text("task-event-text")
+      .starts_with("Run #7 on Alice Moreau’s computer · Running · Implement."),
+    "{}",
+    page.text("task-event-text")
   );
-  page.open(&key, TaskTab::Details, "task-details-requirements");
-  assert_eq!(page.text("task-details-setup-title"), "Run #7 setup");
-  assert_eq!(
-    page.text("task-details-setup-note"),
-    "Ran on another computer · its setup is not on this one"
-  );
-  assert_eq!(page.text("task-details-setup-pipeline"), "Not recorded");
-  page.choose("task-details-source", "Current task");
-  assert_eq!(
-    page.text("task-details-provenance"),
-    "Current task · Run #7 ran on another computer, which keeps what it was given"
-  );
+  assert_eq!(page.text("task-property-pipeline"), "Not recorded");
+  page.choose("Current task");
   assert_shows(&mut page, task.details(), "a teammate's run");
 }

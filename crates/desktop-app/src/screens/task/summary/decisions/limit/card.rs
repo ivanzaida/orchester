@@ -1,7 +1,7 @@
-//! *Raise the limit* (`Raise the limit` `xHs82`): what was used (`Used` `w85KN`: the tokens with a meter,
-//! the active agent time), the new limit's field with its read-back beside what continuing does (`Input
-//! row` `SeVqB`), and the actions (`Ty1jk`): *Continue with …*, which names the new limit, *Remove the
-//! limit* and what removing does. The runner's refusal is said under them.
+//! *Raise the limit* (`Raise the limit` `xHs82`, as a decision card on `surface_raised` in a `warning` stroke, `z4nfb`
+//! in `CqVv3`): what was used (`Used` `w85KN`: the tokens with a meter, the active agent time), the new limit's field
+//! with its read-back beside what continuing does (`Input row` `SeVqB`), and the actions (`Ty1jk`): *Continue with
+//! …*, which names the new limit, *Remove the limit* and what removing does. The runner's refusal is said under them.
 
 use std::sync::Arc;
 
@@ -63,7 +63,7 @@ pub struct RaiseCard<'a> {
 
 impl RaiseCard<'_> {
   pub fn render(&self, ctx: &mut Ctx) -> Element {
-    let card = card("raise-limit", CardSurface::Decision)
+    let card = card("raise-limit", CardSurface::Attention)
       .spacing(ExtraSpacing::Inset.role())
       .child(head(ctx, self.stop.limit))
       .child(self.used(ctx));
