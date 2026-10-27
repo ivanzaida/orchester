@@ -123,6 +123,11 @@ impl ClaudeStream {
     let Ok(value) = serde_json::from_str::<Value>(line) else {
       return vec![raw()];
     };
+    // A raw line reaches the transcript, which never keeps an image's data (`read_file` shows images).
+    let raw = || AgentEvent::Raw {
+      stream,
+      line: without_image_data(&value).unwrap_or_else(|| line.to_owned()),
+    };
     let events = match value.get("type").and_then(Value::as_str) {
       // Account limits never reach the transcript; one this version cannot read is left out.
       Some("rate_limit_event") => Some(
@@ -436,7 +441,7 @@ fn file_path(input: &Value) -> Option<String> {
     .find_map(|name| text(input, name))
 }
 
-/// A tool result's content: text, or the text parts of a list of blocks.
+/// A tool result's content: text, or the text parts of a list of blocks; an image block has none.
 fn result_text(content: Option<&Value>) -> String {
   match content {
     Some(Value::String(text)) => text.clone(),
@@ -447,6 +452,36 @@ fn result_text(content: Option<&Value>) -> String {
       .join("\n"),
     _ => String::new(),
   }
+}
+
+/// What an image's data reads as once it is left out.
+const IMAGE_LEFT_OUT: &str = "[image left out]";
+
+/// `value` printed with the data of every image block in it left out; `None` when it holds no image. An MCP image
+/// block holds its base64 as `data`, the Messages API's as `source.data`.
+fn without_image_data(value: &Value) -> Option<String> {
+  fn strip(value: &mut Value) -> bool {
+    match value {
+      Value::Array(values) => values.iter_mut().fold(false, |found, value| strip(value) | found),
+      Value::Object(fields) => {
+        if fields.get("type").and_then(Value::as_str) == Some("image") {
+          let data = if matches!(fields.get("source"), Some(Value::Object(_))) {
+            fields.get_mut("source").and_then(|source| source.get_mut("data"))
+          } else {
+            fields.get_mut("data")
+          };
+          if let Some(data) = data.filter(|data| data.is_string()) {
+            *data = Value::String(IMAGE_LEFT_OUT.to_owned());
+            return true;
+          }
+        }
+        fields.values_mut().fold(false, |found, value| strip(value) | found)
+      }
+      _ => false,
+    }
+  }
+  let mut value = value.clone();
+  strip(&mut value).then(|| value.to_string())
 }
 
 /// A `usage` object of Claude Code's output: cache reads are cached input, cache writes count as input.

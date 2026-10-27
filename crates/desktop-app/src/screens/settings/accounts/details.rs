@@ -29,7 +29,7 @@ use crate::{
   routes::{AccountsPanel, AccountsView, Route},
   theme::IconSize,
   ui::{
-    agent_mark::{AgentMark, agent_mark},
+    agent_mark::{AgentMark, mark_icon},
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
     icon::Icon,
@@ -89,7 +89,7 @@ fn title(ctx: &Ctx, account: &AgentAccount) -> String {
 
 /// The mark's tile at the head (`Tile` `KG1Td`).
 fn tile(ctx: &Ctx, account: &AgentAccount) -> Element {
-  head_tile(agent_mark(ctx, AgentMark::of_cli(account.cli()), IconSize::Lg.size())).into()
+  head_tile(mark_icon(ctx, AgentMark::of_cli(account.cli()), IconSize::Lg.size())).into()
 }
 
 /// The head: the title, the state with when it was last checked, *Check again* and *…*.

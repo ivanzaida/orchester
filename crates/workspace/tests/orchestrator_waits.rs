@@ -28,7 +28,10 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::waits::{Followed, MergeChecks, Switches, check_merges_in, follow_in};
+use orchester_workspace::orchestrator::{
+  chat::ChatView,
+  waits::{Followed, MergeChecks, Switches, check_merges_in, follow_in},
+};
 use support::{Fixture, at};
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
@@ -160,6 +163,39 @@ fn orchestrator_waits_keep_one_entry_per_wait_in_a_conversation_they_open() {
   );
   assert_eq!(follow(&fixture, false), Followed::default(), "kept once");
   assert_eq!(waits(&fixture).len(), 1);
+}
+
+#[test]
+fn orchestrator_waits_kept_stand_only_while_their_agent_still_waits() {
+  let mut fixture = Fixture::new();
+  let mut run = working(&mut fixture);
+  let (execution, _) = ask(&mut fixture, &mut run);
+  assert!(follow(&fixture, false).kept);
+  let chat = ProjectDb::open(fixture.repo.path())
+    .expect("database")
+    .latest_chat()
+    .expect("read")
+    .expect("the wait's conversation");
+  let seq = |view: &ChatView| {
+    view
+      .entries
+      .iter()
+      .find(|entry| matches!(entry.kind, EntryKind::Wait { .. }))
+      .expect("the wait's entry")
+      .seq
+  };
+  let view = ChatView::load_in(fixture.repo.path(), chat)
+    .expect("read")
+    .expect("kept");
+  assert!(view.standing.contains(&seq(&view)), "the agent waits");
+  // The person answers it on the task's page: the step goes on.
+  let events = run.resume_step(execution, at(70)).expect("resumed");
+  fixture.record(&run, &events);
+  let view = ChatView::load_in(fixture.repo.path(), chat)
+    .expect("read")
+    .expect("kept");
+  assert_eq!(view.entries.len(), 1, "the conversation keeps the wait");
+  assert!(!view.standing.contains(&seq(&view)), "it no longer stands");
 }
 
 #[test]

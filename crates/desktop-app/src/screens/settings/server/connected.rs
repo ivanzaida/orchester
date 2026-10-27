@@ -18,7 +18,7 @@ use crate::{
   mcp::{McpStatus, SeenClient},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    agent_mark::{AgentMark, agent_mark},
+    agent_mark::{AgentMark, mark_icon},
     icon::{Icon, icon},
     setting_rows::{SettingRow, status},
   },
@@ -78,7 +78,7 @@ fn client_row(ctx: &Ctx, index: usize, client: &SeenClient) -> Element {
   };
   let mark = AgentMark::of_client(&client.name).map_or_else(
     || icon(Icon::Plug, IconSize::Md, PaletteColor::TextMuted).into(),
-    |mark| agent_mark(ctx, mark, IconSize::Md.size()),
+    |mark| mark_icon(ctx, mark, IconSize::Md.size()),
   );
   Row::new()
     .id(format!("settings-mcp-client-{index}"))

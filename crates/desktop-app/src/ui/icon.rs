@@ -195,6 +195,7 @@ icons! {
   MonitorPlay => '\u{e485}',
   Moon => '\u{e11e}',
   MousePointerClick => '\u{e120}',
+  Newspaper => '\u{e348}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',
   PackageCheck => '\u{e266}',
@@ -246,8 +247,11 @@ icons! {
   SkipForward => '\u{e160}',
   SlidersHorizontal => '\u{e29a}',
   Smartphone => '\u{e163}',
+  Sparkle => '\u{e47e}',
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
+  // The font's `edit`, which lucide renamed `square-pen`.
+  SquarePen => '\u{e172}',
   SquarePlus => '\u{e173}',
   SquareTerminal => '\u{e20a}',
   Sun => '\u{e178}',
@@ -269,6 +273,8 @@ icons! {
   Upload => '\u{e19e}',
   User => '\u{e19f}',
   UserLock => '\u{e660}',
+  // The font's `user-2`, which lucide renamed `user-round`.
+  UserRound => '\u{e468}',
   UserRoundCheck => '\u{e1a0}',
   UserRoundCog => '\u{e342}',
   UserX => '\u{e1a3}',

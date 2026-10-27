@@ -1,4 +1,5 @@
-//! Converts PNG blocks to run-owned files. Re-encoding discards metadata that could contain credentials.
+//! Converts PNG blocks to run-owned files. Re-encoding discards metadata that could contain credentials. The agent
+//! opens a saved file with `read_file`, which shows it on Claude Code.
 
 use std::{
   fs,
@@ -7,7 +8,8 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use image::{ImageFormat, ImageReader, Limits};
+use image::{ImageFormat, ImageReader};
+use orchester_agent::files::image::decoding_limits;
 use serde_json::{Value, json};
 
 use super::AppError;
@@ -19,7 +21,7 @@ pub(super) fn save(worktree: &Path, result: &mut Value) -> Result<(), AppError> 
       Some("text") if block["text"].is_string() => {}
       Some("image") => {
         let relative = save_png(worktree, block)?;
-        *block = json!({"type":"text","text":format!("PNG saved: {relative}")});
+        *block = json!({"type":"text","text":format!("PNG saved: {relative}; open it with read_file to see it")});
       }
       _ => return Err(AppError::Content),
     }
@@ -37,11 +39,7 @@ fn save_png(worktree: &Path, block: &Value) -> Result<String, AppError> {
   }
   let bytes = STANDARD.decode(encoded).map_err(|_| AppError::Image)?;
   let mut reader = ImageReader::with_format(Cursor::new(bytes), ImageFormat::Png);
-  let mut limits = Limits::default();
-  limits.max_alloc = Some(128 * 1024 * 1024);
-  limits.max_image_width = Some(8192);
-  limits.max_image_height = Some(8192);
-  reader.limits(limits);
+  reader.limits(decoding_limits());
   let image = reader.decode().map_err(|_| AppError::Image)?;
   let root = fs::canonicalize(worktree).map_err(|_| AppError::SaveImage)?;
   let folder = output_folder(&root)?;

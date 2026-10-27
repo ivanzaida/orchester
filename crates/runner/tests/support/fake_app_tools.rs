@@ -7,6 +7,7 @@ use std::{
   process::{Child, Command, Stdio},
 };
 
+use base64::Engine as _;
 use serde_json::{Value, json};
 
 struct App(Child);
@@ -65,7 +66,8 @@ fn start_program(program: &Path, discovery: &Path) -> App {
   app
 }
 
-pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
+/// Drives the app through `call`; `images`: the relay serves Claude Code, whose `read_file` shows images.
+pub fn exercise(worktree: &Path, images: bool, mut call: impl FnMut(&str, &Value) -> Value) {
   let (app, folder) = start(worktree, "orchester-app");
   let pid = app.0.id();
   let discovery_file = folder.join(format!("{pid}.json"));
@@ -118,12 +120,14 @@ pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
     .as_str()
     .expect("path")
     .strip_prefix("PNG saved: ")
+    .and_then(|rest| rest.strip_suffix("; open it with read_file to see it"))
     .expect("saved");
   assert!(path.starts_with(".tmp/run-app/") && path.ends_with(".png"));
   let saved = worktree.join(path);
   let image = image::open(saved).expect("PNG");
   assert_eq!((image.width(), image.height()), (2, 2));
   eprintln!("app-relay: screenshot saved");
+  read_screenshot(path, images, &mut call);
 
   let error = call("call_run_app", &json!({"pid":pid,"tool":"tool_error","arguments":{}}));
   assert_eq!(error["isError"], true);
@@ -141,6 +145,29 @@ pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
     ["navigate", "lurq_screenshot", "tool_error", "bad_image", "redirect"]
   );
   exercise_program_name(worktree, &mut call);
+}
+
+/// Opens the saved screenshot at `path` with `read_file`: an MCP image block when the relay serves Claude Code
+/// (`images`), else a note that names the image.
+fn read_screenshot(path: &str, images: bool, call: &mut impl FnMut(&str, &Value) -> Value) {
+  let read = call("read_file", &json!({"filename": path}));
+  assert_eq!(read["isError"], false, "{read}");
+  if !images {
+    assert_eq!(
+      read["content"],
+      json!([{"type": "text", "text": "This is a PNG image (2×2). Images are shown on Claude Code connections only."}])
+    );
+    eprintln!("app-relay: screenshot named without its image");
+    return;
+  }
+  assert_eq!(read["content"][0]["text"], "PNG read, 2×2, sent at 2×2");
+  assert_eq!(read["content"][1]["type"], "image");
+  assert_eq!(read["content"][1]["mimeType"], "image/png");
+  let data = read["content"][1]["data"].as_str().expect("base64");
+  let png = base64::engine::general_purpose::STANDARD.decode(data).expect("base64");
+  let shown = image::load_from_memory_with_format(&png, image::ImageFormat::Png).expect("a PNG");
+  assert_eq!((shown.width(), shown.height()), (2, 2));
+  eprintln!("app-relay: screenshot read as an image block");
 }
 
 /// The app's program `orchester` (`orchester-app` before its rename, above) is called the same way; a missing or

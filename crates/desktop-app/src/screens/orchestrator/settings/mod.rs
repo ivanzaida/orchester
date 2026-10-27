@@ -27,6 +27,7 @@ use orchester_workspace::{
   orchestrator::settings::{OrchestratorSetup, Readiness, Saving, save_in},
 };
 
+pub(super) use self::form::effort_word;
 use self::publish::{Incomplete, Publishing, Save};
 use super::page::PageHead;
 use crate::{
@@ -277,7 +278,7 @@ fn head(ctx: &mut Ctx, project: &ShownProject, (publishing, save): (Option<&Publ
         ctx.t("orchestrator.title"),
         navigation.to(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::Latest))),
       ),
-      Crumb::here(ctx.t("orchestrator.coordinator.settings")),
+      Crumb::here(ctx.t("orchestrator.settings.crumb")),
     ],
   );
   let description = Text::new(&ctx.t_args("orchestrator.settings.description", [("project", name)]))

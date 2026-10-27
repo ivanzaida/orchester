@@ -18,6 +18,7 @@ mod lifecycle;
 mod live;
 mod long_chats;
 mod memory;
+mod orchestrator;
 mod pipelines;
 mod pull_requests;
 pub mod settings;
@@ -73,7 +74,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 37] = [
+pub const ALL: [Scenario; 39] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -86,6 +87,8 @@ pub const ALL: [Scenario; 37] = [
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("long-chats", long_chats::seed),
+  Scenario::of("orchestrator", orchestrator::seed),
+  Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("decisions", decisions::seed),

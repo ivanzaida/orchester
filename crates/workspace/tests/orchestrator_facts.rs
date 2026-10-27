@@ -13,10 +13,12 @@ use orchester_core::{
     ActionOutcome, ChatAction,
     change::{Change, ProposedChange, Publishing},
   },
+  question::{Question, QuestionOption, QuestionRequest, QuestionTurn},
   resource::{
-    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Slug, StepKey,
+    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, ModelId, PromptText, ResourceKind, Slug,
+    StepKey,
   },
-  store::ResourceStore,
+  store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -134,4 +136,57 @@ fn orchestrator_facts_drop_a_draft_saved_after_the_proposal() {
     "another draft than the proposed one shows no diff"
   );
   assert!(publication.widens.is_empty());
+}
+
+#[test]
+fn orchestrator_facts_of_an_answer_say_what_its_question_asks() {
+  let mut fixture = support::Fixture::gated();
+  let task = fixture.task("Place the docs button", support::at(10));
+  let run = fixture.started_run(task, support::at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let invocation = fixture
+    .db
+    .start_invocation(
+      run.id(),
+      execution,
+      &ModelId::new("gpt-5.5").expect("model"),
+      support::at(21),
+    )
+    .expect("invocation")
+    .id;
+  let options = vec![
+    QuestionOption::new("Top bar", None),
+    QuestionOption::new("Sidebar", None),
+  ];
+  let asked = QuestionRequest::new(
+    "ask-1".to_owned(),
+    (run.id(), execution, invocation),
+    "Designer".to_owned(),
+    vec![Question::new("Where should the docs button go?", None, options, false).expect("a question")],
+    (support::at(22), QuestionTurn::InTurn),
+  )
+  .expect("a request");
+  fixture.db.ask_questions(&asked).expect("the question waits");
+  let answer = |request: &str| ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: String::new(),
+      change: Change::Answer {
+        run: run.id(),
+        number: run.number().get(),
+        request: request.to_owned(),
+        choices: vec!["Top bar".to_owned()],
+        text: None,
+      },
+    })),
+    ..ChatAction::new("answer_question", None, ActionOutcome::Waits)
+  };
+  let read = |action: &ChatAction| match load_in(fixture.repo.path(), &Programs::processes(), action) {
+    Ok(Some(Facts::Run(run))) => run.asked,
+    other => panic!("a run's facts: {other:?}"),
+  };
+  assert_eq!(
+    read(&answer("ask-1")).as_deref(),
+    Some("Where should the docs button go?")
+  );
+  assert_eq!(read(&answer("gone")), None, "a request no longer kept asks nothing");
 }
