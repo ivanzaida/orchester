@@ -14,15 +14,15 @@ import { recoveryCodesText } from "@/lib/two-factor";
 import { APP_CODE, RECOVERY_CODE, TWO_FACTOR } from "../fake-api/two-factor";
 import { ACCOUNT, RIGHT_PASSWORD, startFakeApi } from "../fake-api/server";
 
-const PORT = 4198;
 let server: Server;
 const device = webDevice(null);
 
-beforeAll(() => {
+beforeAll(async () => {
+  const started = await startFakeApi();
+  server = started.server;
   process.env.ORCHESTER_CLOUD_PUBLIC_URL = "http://localhost:4100";
-  process.env.ORCHESTER_CLOUD_API_URL = `http://127.0.0.1:${PORT}`;
+  process.env.ORCHESTER_CLOUD_API_URL = started.origin;
   process.env.ORCHESTER_CLOUD_WEB_SECRET = Buffer.alloc(32, 9).toString("base64");
-  server = startFakeApi(PORT);
 });
 
 afterAll(() => {
