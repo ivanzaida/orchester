@@ -9,6 +9,7 @@ use orchester_core::{
   time::Timestamp,
   usage::local_date,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::orchestrator::report::build_in;
 
 use super::harness::{Orchestrator, Setup};
@@ -17,7 +18,8 @@ use super::harness::{Orchestrator, Setup};
 /// report's entry.
 fn keep_report(screen: &Orchestrator, automatic: bool) -> (DailyReport, i64) {
   let now = Timestamp::now();
-  let built = build_in(&screen.root, Vec::new(), (local_date(now), now)).expect("built");
+  let programs = Programs::processes();
+  let built = build_in((&screen.root, &programs), Vec::new(), (local_date(now), now)).expect("built");
   let report = DailyReport { automatic, ..built };
   let chat = Chat::named(ChatId::generate(), "Daily report", now);
   let mut db = screen.db();
