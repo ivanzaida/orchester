@@ -16,7 +16,7 @@ fn same(a: f32, b: f32) -> bool {
 #[test]
 fn orchestrator_header_is_one_line_over_a_760_column_and_history_opens_on_the_right() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  kept(
+  let chat = kept(
     &screen,
     "Plan the GitHub app permissions",
     Timestamp::now(),
@@ -60,6 +60,11 @@ fn orchestrator_header_is_one_line_over_a_760_column_and_history_opens_on_the_ri
     same(screen.bounds("orchestrator-composer").x, composer.x),
     "History lies over the chat and moves nothing"
   );
+  let row = screen.bounds(&format!("orchestrator-history-{chat}"));
+  assert!(
+    same(row.height, 46.0),
+    "a conversation's row is 46 high (`aowsX`): {row:?}"
+  );
 }
 
 #[test]
@@ -69,6 +74,9 @@ fn orchestrator_new_conversation_starts_640_wide_with_the_composer_focused() {
   let start = screen.bounds("orchestrator-start");
   assert!(same(start.width, 640.0), "{start:?}");
   assert_eq!(screen.text("orchestrator-start-title"), "What should we plan?");
+  // 12 over the message and 28 between it and the bar (`QcfyZ`).
+  let composer = screen.bounds("orchestrator-composer");
+  assert!((composer.height - 93.0).abs() < 2.0, "{composer:?}");
   screen.until("the focus in the composer", |screen| {
     screen
       .window

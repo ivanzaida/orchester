@@ -17,7 +17,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Column, Row, Spacer, Text, TextInput},
   core::Signal,
@@ -31,7 +31,10 @@ use super::{
 };
 use crate::{
   services::attachment_picker::AttachmentPicker,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{
+    ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing,
+    OrchestratorText,
+  },
   ui::{
     attachments::tray::{self, PutBack},
     composer::message_scrollbar,
@@ -79,6 +82,9 @@ pub(super) struct ComposerBox<'a> {
   pub(super) runs_on: Element,
   /// *Set up the Orchestrator*, while it is not set up.
   pub(super) set_up: Option<Element>,
+  /// The box starts a new conversation (`Composer` `QcfyZ` in `03 New conversation`): 12 over it and 28 between the
+  /// message and its bar.
+  pub(super) starts: bool,
 }
 
 /// The box, and why the files last given were not attached under it.
@@ -88,6 +94,11 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
     (false, true) => (PaletteColor::SurfaceInput, PaletteColor::BorderFocus),
     (false, false) => (PaletteColor::SurfaceInput, PaletteColor::BorderStrong),
+  };
+  let (top, between) = if composer.starts {
+    (SpacingSize::Md, OrchestratorSpacing::StartComposer.role())
+  } else {
+    (ExtraSpacing::Loose.role(), ExtraSpacing::Loose.role())
   };
   let field = field(ctx, view, &composer, not_set_up);
   let end: Vec<Element> = match composer.set_up {
@@ -112,12 +123,12 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
-        .top(ExtraSpacing::Loose.role())
+        .top(top)
         .right(ExtraSpacing::Loose.role())
         .bottom(SpacingSize::Sm)
         .left(SpacingSize::Md),
     )
-    .spacing(ExtraSpacing::Loose.role())
+    .spacing(between)
     .background(fill)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
@@ -143,13 +154,14 @@ fn keys(ctx: &Ctx) -> Text {
   .nowrap()
 }
 
-/// The message field: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or long text attaches
-/// them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in `text_secondary`.
+/// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or
+/// long text attaches them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in
+/// `text_secondary`.
 fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
     FormTextRole {
-      typography: TypographyStyle::Body,
+      typography: OrchestratorText::Message.role(),
       color,
     }
     .resolve(&theme.typography(), &theme.palette())

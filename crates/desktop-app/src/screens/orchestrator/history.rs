@@ -16,6 +16,7 @@ use lurq::{
   },
   components::{Column, Row, Text, TextOverflow, VirtualizedList},
   core::Signal,
+  layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -32,8 +33,9 @@ use crate::{
   ui::{field::FieldInput, pressable::opening},
 };
 
-/// The panel's width (`eFI39`).
+/// The panel's width (`eFI39`) and a conversation's row's height (`aowsX`).
 const WIDTH: f32 = 300.0;
+const ROW_HEIGHT: f32 = 46.0;
 
 /// When a conversation last changed, as the list groups it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -246,10 +248,12 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
     .id(format!("orchestrator-history-{id}"))
     .describe("current", current.to_string())
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ROW_HEIGHT))
     .padding(Padding::symmetric(
       ExtraSpacing::Loose.role(),
       ExtraSpacing::TextArea.role(),
     ))
+    .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()));
   let row = if current {
@@ -277,7 +281,7 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
         )
         .child(
           Text::new(&meta)
-            .variant(TypographyStyle::Caption)
+            .variant(OrchestratorText::HistoryMeta.role())
             .nowrap()
             .text_overflow(TextOverflow::Elipsis),
         ),

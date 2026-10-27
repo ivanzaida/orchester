@@ -6,8 +6,10 @@
 //! automation change agent permissions* is off; canceling a run waits for the person; in auto mode a run starts at
 //! once, kept with its *Auto mode* chip.
 
+use std::time::{Duration, Instant};
+
 use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::OrchestratorChat;
+use orchester_app::{routes::OrchestratorChat, ui::tooltip::TOOLTIP_DELAY};
 use orchester_core::{
   id::ResourceId,
   orchestrator::{ActionOutcome, ChatAction, EntryKind, change::Change},
@@ -356,12 +358,27 @@ fn orchestrator_profile_publication_says_what_the_profile_keeps_and_widens() {
   });
   let facts = screen.text(&format!("{card}-facts"));
   assert!(facts.contains("network: on"), "the short form of what widens: {facts}");
+  // What publishing does is the question's tooltip, not a paragraph (`bxJZp`).
+  assert!(!screen.exists(&format!("{card}-effect")), "{}", screen.text(&card));
+  let title = screen.bounds(&format!("{card}-title"));
+  screen
+    .window
+    .tree
+    .mouse_move(title.x + title.width / 2.0, title.y + title.height / 2.0);
+  screen.window.pass();
+  screen
+    .window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  screen.window.pass();
+  let tip = format!("{card}-why-tooltip");
+  assert!(screen.exists(&tip), "the question's tooltip shows");
   assert!(
     screen
-      .text(&card)
+      .text(&tip)
       .contains("Nothing is published yet. Builder keeps v1 until you publish v2."),
     "{}",
-    screen.text(&card)
+    screen.text(&tip)
   );
 }
 

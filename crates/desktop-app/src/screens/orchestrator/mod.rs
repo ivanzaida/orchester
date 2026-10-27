@@ -282,12 +282,16 @@ impl View {
   }
 
   /// Words typed and files attached before the screen knew which conversation it shows become that one's draft when
-  /// it has none. A new conversation's composer takes the focus.
+  /// it has none. A new conversation's composer takes the focus. The runs-on picker closes: its room was measured over
+  /// the chip where the other conversation had it.
   fn load_draft(&self, project: ProjectId, of: Conversation) {
     let unknown = self.of.get_untracked().is_none();
     let typed = unknown.then(|| self.draft.get_untracked());
     let given = unknown.then(|| self.attached.held());
     self.of.set(Some(of));
+    if self.runs_on.get_untracked() {
+      self.runs_on.set(false);
+    }
     if of == Conversation::New {
       self.focus.set(true);
     }

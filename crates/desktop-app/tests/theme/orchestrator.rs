@@ -20,6 +20,9 @@ fn orchestrator_roles_follow_the_design() {
     // A plan's use in the runs-on picker (`qSIt9`).
     (OrchestratorText::PlanUse, 10.5, 1.3, FontWeight::Normal, "Geist Mono"),
     (OrchestratorText::FactKey, 12.0, 1.3, FontWeight::Normal, "Geist"),
+    // A History row's meta (`r9TeH`), the composer's message (`lB97V`).
+    (OrchestratorText::HistoryMeta, 11.0, 1.3, FontWeight::Normal, "Geist"),
+    (OrchestratorText::Message, 13.0, 1.3, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -38,6 +41,8 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorSpacing::Items, 18.0),
     (OrchestratorSpacing::Nested, 46.0),
     (OrchestratorSpacing::Report, 36.0),
+    // A new conversation's message over its composer's bar (`QcfyZ`).
+    (OrchestratorSpacing::StartComposer, 28.0),
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

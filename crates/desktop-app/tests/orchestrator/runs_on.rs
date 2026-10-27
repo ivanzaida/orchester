@@ -4,7 +4,7 @@
 //! their tokens and no plan limit; choosing one publishes the Orchestrator's next version as its settings page does,
 //! only once the person presses *Publish vN*.
 
-use orchester_app::routes::OrchestratorChat;
+use orchester_app::{chrome::TITLE_BAR_HEIGHT, routes::OrchestratorChat};
 use orchester_core::{
   account::{
     AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AccountIdentity, AgentAccount, CheckedProgram,
@@ -132,10 +132,13 @@ fn orchestrator_picker_shows_each_accounts_plan_use_its_limit_and_a_signed_out_o
     screen.text(&format!("orchestrator-runs-on-{at_work}-plan")),
     "42% of 5h"
   );
-  assert!(
-    screen.exists(&format!("orchestrator-runs-on-{at_work}-meter")),
-    "with its meter"
-  );
+  // The meter is an 88 track (`y5a6D`), filled to the share; a limit reached fills it.
+  let meter = screen.bounds(&format!("orchestrator-runs-on-{at_work}-meter"));
+  assert!((meter.width - 88.0).abs() < 0.5, "with its meter: {meter:?}");
+  let fill = screen.bounds(&format!("orchestrator-runs-on-{at_work}-meter-fill"));
+  assert!((fill.width - 88.0 * 0.42).abs() < 1.0, "filled to 42%: {fill:?}");
+  let full = screen.bounds(&format!("orchestrator-runs-on-{at_busy}-meter-fill"));
+  assert!((full.width - 88.0).abs() < 0.5, "a limit reached fills it: {full:?}");
   let work_row = screen.text(&format!("orchestrator-runs-on-{at_work}"));
   assert!(work_row.contains("ana@example.com · "), "{work_row}");
   let busy_row = screen.text(&format!("orchestrator-runs-on-{at_busy}"));
@@ -146,12 +149,12 @@ fn orchestrator_picker_shows_each_accounts_plan_use_its_limit_and_a_signed_out_o
     !screen.exists(&format!("orchestrator-runs-on-{signed_out}-plan")),
     "no plan is read of an account not signed in"
   );
-  // Over its chip, never over it nor under it, where the status bar is, and inside the window.
+  // Over its chip, never over it nor under it, where the status bar is, and under the title bar.
   let (menu, chip) = (
     screen.bounds("orchestrator-runs-on-menu"),
     screen.bounds("orchestrator-runs-on-chip"),
   );
-  assert!(menu.y >= 0.0, "inside the window: {menu:?}");
+  assert!(menu.y >= TITLE_BAR_HEIGHT - 0.5, "under the title bar: {menu:?}");
   assert!(menu.y + menu.height <= chip.y, "over the chip: {menu:?} {chip:?}");
   // A faded row cannot be chosen: pressing it changes nothing.
   screen.press(&format!("orchestrator-runs-on-{signed_out}"));

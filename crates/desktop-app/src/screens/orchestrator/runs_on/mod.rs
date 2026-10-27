@@ -43,6 +43,7 @@ use self::{
   rows::{Sources, cli_name},
 };
 use crate::{
+  chrome::TITLE_BAR_HEIGHT,
   services::{
     Services,
     accounts::{self, account_name},
@@ -157,10 +158,10 @@ impl Component for RunsOnPicker {
   }
 }
 
-/// How tall the picker over the chip `anchor` may be: the room between the window's top, kept `margin` clear, and the
-/// chip, `gap` under the picker; `None` before the chip was laid out.
+/// How tall the picker over the chip `anchor` may be: the room between the content's top under the title bar, kept
+/// `margin` clear, and the chip, `gap` under the picker; `None` before the chip was laid out.
 fn room_over(anchor: &ElementRef, (gap, margin): (f32, f32)) -> Option<f32> {
-  (anchor.height() > 0.0).then(|| (anchor.y() - gap - margin).max(0.0))
+  (anchor.height() > 0.0).then(|| (anchor.y() - TITLE_BAR_HEIGHT - gap - margin).max(0.0))
 }
 
 impl RunsOnPicker {

@@ -323,21 +323,26 @@ fn plan_column(ctx: &Ctx, id: &str, (used, reached): (Option<f64>, bool)) -> Ele
   } else {
     used.map_or(0, |used| used.round() as u64)
   };
-  // As wide as its words when they are longer, so none is cut.
+  // As wide as its words when they are longer, so none is cut; the meter's track is 88 wide at its end (`y5a6D`).
   Column::new()
     .id(format!("{id}-plan"))
     .min_width(Dimension::Px(PLAN_WIDTH))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Fine.role())
+    .align_items(Alignment::End)
     .child(
       Text::new(&words)
         .variant(OrchestratorText::PlanUse.role())
         .color(color)
         .text_align(TextAlign::Right)
-        .width(Dimension::Pct(100.0))
         .nowrap(),
     )
-    .child(meter(&format!("{id}-meter"), (share, 100), tone))
+    .child(
+      Row::new()
+        .width(Dimension::Px(PLAN_WIDTH))
+        .flex_shrink(0.0)
+        .child(meter(&format!("{id}-meter"), (share, 100), tone)),
+    )
     .into()
 }
 

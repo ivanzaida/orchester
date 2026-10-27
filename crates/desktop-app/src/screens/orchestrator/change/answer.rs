@@ -17,8 +17,9 @@ use super::{
 use crate::ui::{button::ButtonKind, icon::Icon};
 
 /// What a waiting card of `view`, named `id`, shows under its head, and what its question's tooltip says: an answer's
-/// or a message's words as a quote, what sending does on hover; a release of new starts nothing more than its
-/// question, what releasing does on hover; any other card `effect`, what it is about.
+/// or a message's words as a quote, what sending does on hover; a release of new starts, a merge, a publication and an
+/// MCP server's change nothing more than their question and facts (`Merge run #8?`, `Add the MCP server figma?` in
+/// `bxJZp`), what applying does on hover; any other card `effect`, what it is about.
 pub(super) fn shown(ctx: &Ctx, id: &str, view: &View, effect: &Arc<str>) -> (Option<Element>, Option<Arc<str>>) {
   match view.action.change.as_ref().map(|change| &change.change) {
     Some(Change::Answer { choices, text, .. }) => (
@@ -26,7 +27,9 @@ pub(super) fn shown(ctx: &Ctx, id: &str, view: &View, effect: &Arc<str>) -> (Opt
       Some(effect.clone()),
     ),
     Some(Change::Message { text, .. }) => (Some(decision::quote(id, text).into()), Some(effect.clone())),
-    Some(Change::Release { .. }) => (None, Some(effect.clone())),
+    Some(Change::Release { .. } | Change::Merge { .. } | Change::Publish { .. } | Change::Mcp(_)) => {
+      (None, Some(effect.clone()))
+    }
     _ => (Some(decision::body(id, effect).into()), None),
   }
 }

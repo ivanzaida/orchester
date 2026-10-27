@@ -91,7 +91,7 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
   };
   match &reads.shown {
     Shown::New if pending.is_none() => {
-      let boxed = foot.composer(ctx, view, project, ctx.t("orchestrator.composer.placeholder"));
+      let boxed = foot.composer(ctx, view, (project, true), ctx.t("orchestrator.composer.placeholder"));
       start(ctx, view, (boxed, unread.or(problem)))
     }
     Shown::New => conversation(
@@ -137,10 +137,16 @@ impl Foot<'_> {
     self.readiness.is_some_and(|readiness| !readiness.is_ready())
   }
 
-  /// The composer, saying `placeholder`, or that it can't answer yet while the Orchestrator is not set up.
-  fn composer(&self, ctx: &mut Ctx, view: &View, project: &ShownProject, placeholder: Arc<str>) -> Column {
-    let stop = None;
-    self.composer_with(ctx, view, (project, placeholder), stop)
+  /// The composer, saying `placeholder`, or that it can't answer yet while the Orchestrator is not set up; `starts` a
+  /// new conversation when it says so.
+  fn composer(
+    &self,
+    ctx: &mut Ctx,
+    view: &View,
+    (project, starts): (&ShownProject, bool),
+    placeholder: Arc<str>,
+  ) -> Column {
+    self.composer_with(ctx, view, (project, placeholder), (None, starts))
   }
 
   fn composer_with(
@@ -148,7 +154,7 @@ impl Foot<'_> {
     ctx: &mut Ctx,
     view: &View,
     (project, placeholder): (&ShownProject, Arc<str>),
-    stop: Option<super::send_menu::Press>,
+    (stop, starts): (Option<super::send_menu::Press>, bool),
   ) -> Column {
     let not_set_up = self.not_set_up();
     let placeholder = if not_set_up {
@@ -177,6 +183,7 @@ impl Foot<'_> {
         stop,
         runs_on,
         set_up,
+        starts,
       },
     )
   }
@@ -334,7 +341,8 @@ fn conversation(
     })
     .collect();
   let stop = (answering && !stopping).then(|| env.stop.clone());
-  let boxed = foot.composer_with(ctx, view, (project, ctx.t("orchestrator.composer.placeholder")), stop);
+  let placeholder = ctx.t("orchestrator.composer.placeholder");
+  let boxed = foot.composer_with(ctx, view, (project, placeholder), (stop, false));
   // Until it is set up, the chat says under its last turn that it stays readable (`02 Not set up` `Wd5CL`).
   let readable = foot.not_set_up().then(|| ctx.t("orchestrator.composer.readable"));
   let below = Column::new()
@@ -433,7 +441,7 @@ fn loading(ctx: &mut Ctx, view: &View, project: &ShownProject, reads: &Reads) ->
     reads,
   };
   let boxed = foot
-    .composer(ctx, view, project, ctx.t("orchestrator.composer.loading"))
+    .composer(ctx, view, (project, false), ctx.t("orchestrator.composer.loading"))
     .opacity(DISABLED_OPACITY);
   Column::new()
     .id("orchestrator-main")

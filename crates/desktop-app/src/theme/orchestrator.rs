@@ -64,10 +64,15 @@ pub enum OrchestratorText {
   ReportHeading,
   /// 11.5 `text_muted`: what an item of a daily report adds at its end (`HlavS` in `VZKyw`).
   ReportMeta,
+  /// 11 `text_muted`, 1.3: when a conversation in History last changed and how many messages it has (`r9TeH` in
+  /// `eFI39`).
+  HistoryMeta,
+  /// 13 `text_primary`, 1.3: the message in the composer (`lB97V` in `QcfyZ`, a 17 line).
+  Message,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 23] = [
+  pub const ALL: [Self; 25] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -91,6 +96,8 @@ impl OrchestratorText {
     Self::LinkDetail,
     Self::ReportHeading,
     Self::ReportMeta,
+    Self::HistoryMeta,
+    Self::Message,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -122,6 +129,8 @@ impl OrchestratorText {
       Self::LinkDetail => "orchestrator_link_detail",
       Self::ReportHeading => "orchestrator_report_heading",
       Self::ReportMeta => "orchestrator_report_meta",
+      Self::HistoryMeta => "orchestrator_history_meta",
+      Self::Message => "orchestrator_message",
     }
   }
 
@@ -156,6 +165,8 @@ impl OrchestratorText {
       Self::LinkDetail => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
       Self::ReportHeading => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
       Self::ReportMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::HistoryMeta => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
     }
   }
 }
@@ -177,16 +188,19 @@ pub enum OrchestratorSpacing {
   Report,
   /// 12: a labelled link's label, link and detail apart (`Link row · Task` `z7af5` in `w262B`).
   LinkColumns,
+  /// 28: a new conversation's message over its composer's bar (`Composer` `QcfyZ` in `c99rep`).
+  StartComposer,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
     Self::Nested,
     Self::Report,
     Self::LinkColumns,
+    Self::StartComposer,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -201,6 +215,7 @@ impl OrchestratorSpacing {
       Self::Nested => "orchestrator_nested",
       Self::Report => "orchestrator_report",
       Self::LinkColumns => "orchestrator_link_columns",
+      Self::StartComposer => "orchestrator_start_composer",
     }
   }
 
@@ -212,6 +227,7 @@ impl OrchestratorSpacing {
       Self::Nested => 46.0,
       Self::Report => 36.0,
       Self::LinkColumns => 12.0,
+      Self::StartComposer => 28.0,
     }
   }
 }
