@@ -166,12 +166,12 @@ fn import_opens_the_copy_with_what_its_import_did() {
     import.exists("pipeline-imported")
   });
   assert!(
-    import.text("pipeline-imported-meta").starts_with("Today "),
+    import.text("pipeline-imported-count").starts_with("Today "),
     "imported just now"
   );
   assert_eq!(import.text("pipeline-imported-from-value"), "Personal website");
   assert_eq!(import.text("pipeline-imported-source-value"), "Preview release v1");
-  assert_eq!(import.text("pipeline-imported-with-meta"), "2");
+  assert_eq!(import.text("pipeline-imported-with-count"), "2");
   let builder = import
     .kontur_resource(ResourceKind::AgentProfile, "Builder")
     .expect("Builder's copy");
@@ -179,15 +179,26 @@ fn import_opens_the_copy_with_what_its_import_did() {
     .kontur_resource(ResourceKind::Instruction, "Release rules (Personal website)")
     .expect("the rules' copy");
   assert_eq!(
-    import.text(&format!("pipeline-imported-link-{builder}")),
+    import.text(&format!("pipeline-imported-link-{builder}-label")),
     "Builder · Draft v1"
   );
   assert_eq!(
-    import.text(&format!("pipeline-imported-link-{rules}")),
+    import.text(&format!("pipeline-imported-link-{rules}-label")),
     "Release rules (Personal website) · Draft v1 · renamed"
   );
-  assert_eq!(import.text("pipeline-imported-missing-meta"), "1");
-  assert_eq!(import.text("pipeline-imported-missing-0"), "Codex · Personal website");
+  assert_eq!(import.text("pipeline-imported-missing-count"), "1");
+  assert_eq!(
+    import.text("pipeline-imported-missing-0-label"),
+    "Codex · Personal website"
+  );
+  // The groups are the redesign's outlined rows (`W1I5r6`, `pevvn`, `JqeBT` in `ky5kJ`).
+  for outline in [
+    "pipeline-imported-rows",
+    "pipeline-imported-with-rows",
+    "pipeline-imported-missing-rows",
+  ] {
+    assert!(import.exists(outline), "{outline} is one outlined group");
+  }
   // Until its first publish the column shows only what the import did (`06b` `ky5kJ`).
   assert!(import.exists("pipeline-unpublished-note"));
   for gone in [

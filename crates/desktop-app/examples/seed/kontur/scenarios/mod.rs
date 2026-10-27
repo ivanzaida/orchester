@@ -76,7 +76,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 45] = [
+pub const ALL: [Scenario; 46] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -119,6 +119,7 @@ pub const ALL: [Scenario; 45] = [
   Scenario::of("usage-empty", usage::no_runs_today),
   Scenario::of("usage-bare", usage::bare),
   Scenario::of("import", import::seed),
+  Scenario::of("import-done", import::done),
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),

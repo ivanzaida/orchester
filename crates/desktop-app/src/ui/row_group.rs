@@ -191,6 +191,8 @@ pub struct GroupRow {
   end: Vec<Element>,
   /// Only words at its end: the row is as high as the design's value rows.
   words_end: bool,
+  /// Only marks around its label, no control: 10 above and below it and 12 between its parts.
+  marked: bool,
   press: Option<Press>,
   chosen: bool,
 }
@@ -208,9 +210,17 @@ impl GroupRow {
       hint: None,
       end: Vec::new(),
       words_end: false,
+      marked: false,
       press: None,
       chosen: false,
     }
+  }
+
+  /// The row holds only marks around its label, an icon at its start and maybe one at its end, and no control:
+  /// 10 above and below and 12 between its parts (`Triager · Draft v1` `GQxqW`, `ZENDESK_TOKEN` `AEvnI` in `ky5kJ`).
+  pub const fn marked(mut self) -> Self {
+    self.marked = true;
+    self
   }
 
   /// The label is a path or an identifier, in Geist Mono (`xKL70`).
@@ -347,11 +357,12 @@ fn hint(id: &str, (hint, tone): (&str, HintTone)) -> Text {
 
 impl From<GroupRow> for Element {
   fn from(row: GroupRow) -> Self {
-    let vertical = if row.words_end && row.hint.is_none() {
+    let vertical = if (row.words_end || row.marked) && row.hint.is_none() {
       ExtraSpacing::Loose.role()
     } else {
       SpacingSize::Sm
     };
+    let between = if row.marked { SpacingSize::Md } else { SpacingSize::Lg };
     let middle = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -369,7 +380,7 @@ impl From<GroupRow> for Element {
         .id(row.id.to_string())
         .width(Dimension::Pct(100.0))
         .padding(padding)
-        .spacing(SpacingSize::Lg)
+        .spacing(between)
         .align_items(Alignment::Center)
         .with_children(row.leading)
         .child(middle)
@@ -380,7 +391,7 @@ impl From<GroupRow> for Element {
       .id(row.id.to_string())
       .width(Dimension::Pct(100.0))
       .padding(padding)
-      .spacing(SpacingSize::Lg)
+      .spacing(between)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .describe("chosen", if row.chosen { "true" } else { "false" });
     let button = if row.chosen {

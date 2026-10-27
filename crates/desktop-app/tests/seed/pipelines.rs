@@ -77,6 +77,37 @@ fn seed_pipelines_empty_has_no_library_entries() {
   let db = Seed::of("pipelines-empty").db();
   assert!(db.resources(ResourceKind::Pipeline).unwrap().is_empty());
 }
+
+#[test]
+fn seed_import_done_has_an_imported_pipeline_with_a_secret_missing() {
+  let db = Seed::of("import-done").db();
+  let rows = db.resources(ResourceKind::Pipeline).unwrap();
+  let copy = rows
+    .iter()
+    .find(|r| r.name().as_str() == "Preview release")
+    .expect("the imported copy")
+    .id();
+  assert!(
+    db.latest_version::<Pipeline>(copy).unwrap().is_none(),
+    "not published yet"
+  );
+  let imported = orchester_workspace::import::imported::imported(&db, copy)
+    .unwrap()
+    .expect("what its import did");
+  assert_eq!(imported.project, "Personal website");
+  assert!(!imported.with_it.is_empty(), "something came along");
+  let missing: Vec<(bool, &str)> = imported
+    .missing
+    .iter()
+    .map(|missing| {
+      (
+        matches!(missing.source, orchester_core::import::Entity::Secret(_)),
+        missing.name.as_str(),
+      )
+    })
+    .collect();
+  assert_eq!(missing, [(true, "PREVIEW_HOST_API_KEY")]);
+}
 #[test]
 fn seed_pipelines_reaches_saved_draft_empty_problems_and_narrowing() {
   let seed = Seed::of("pipelines");

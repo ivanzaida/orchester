@@ -1,6 +1,6 @@
-//! What a copied pipeline shows of the import that created it (`z3vhzo` in Import resources `Dzzks`): the strip
-//! under the editor's header while it is not published (`Import strip` `rmn80`), and the inspector's Imported,
-//! Imported with it and Missing sections (`diBqj`, `TyfNt`, `U5Vgf`). What it says comes from
+//! What a copied pipeline shows of the import that created it (`06b · imported pipeline` `ky5kJ`): the strip under
+//! the page's header while it is not published (`Import result` `H2g3Hs`), and the step column's Imported, Imported
+//! with it and Missing groups (`W1I5r6`, `pevvn`, `JqeBT`). What it says comes from
 //! `orchester_workspace::import::imported`.
 
 use std::sync::Arc;
@@ -8,11 +8,11 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Row, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::ProjectId,
@@ -28,22 +28,15 @@ use super::{words, work::page_of};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, GroupText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    inspector::{PropertyValue, note, property, section_title},
     plan_window,
-    pressable::opening,
+    pressable::Press,
+    row_group::{GroupRow, RowGroup, note},
   },
 };
-
-/// A resource that came along with the copy (`Link · Build preview · Draft v1` `fnKda`, a 32 high `Used-by link`).
-const LINK_HEIGHT: f32 = 32.0;
-/// A section title's row with the line over it (`Title · Imported` `FB3ig` under its section's top padding).
-const SECTION_TITLE_HEIGHT: f32 = 30.0;
-/// A missing connection or secret (`Missing · PREVIEW_HOST_API_KEY` `mVFDI`).
-const MISSING_HEIGHT: f32 = 24.0;
 
 /// The strip over the copy just imported: where it came from, what the import did, and Open Tools while
 /// something is left unresolved.
@@ -61,26 +54,22 @@ pub fn strip(ctx: &mut Ctx, project: ProjectId, imported: &Imported) -> Element 
   Row::new()
     .id("pipeline-import-strip")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(
-      ExtraSpacing::Tabs.role(),
-      ExtraSpacing::Loose.role(),
-    ))
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceRaised)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::CircleCheck, IconSize::Nav, PaletteColor::Success))
+    .rounded(RadiusSize::Md)
+    .child(icon(Icon::CircleCheck, IconSize::Md, PaletteColor::Success))
     .child(
       Text::new(&ctx.t_args("import.result.title", [("project", imported.project.as_str())]))
         .id("pipeline-import-title")
-        .variant(ExtraTypography::FormSection.role())
+        .variant(ExtraTypography::Strong.role())
         .nowrap(),
     )
     .child(
       Text::new(&ctx.t_args("import.result.summary", [("totals", &*totals(ctx, imported))]))
         .id("pipeline-import-summary")
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .variant(GroupText::Hint.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
@@ -117,7 +106,7 @@ fn totals(ctx: &Ctx, imported: &Imported) -> Arc<str> {
   words::parts(ctx, &all)
 }
 
-/// The inspector's sections on the import, in `target`, this project, by its name: Imported, then what came with
+/// The step column's groups on the import, in `target`, this project, by its name: Imported, then what came with
 /// the copy and what is missing, when there is any.
 pub fn sections(ctx: &mut Ctx, (project, target): (ProjectId, &str), imported: &Imported) -> Vec<Element> {
   let when = plan_window::when(
@@ -137,101 +126,58 @@ pub fn sections(ctx: &mut Ctx, (project, target): (ProjectId, &str), imported: &
     None => ctx.t_args("import.result.sourceDraft", [("name", imported.source.as_str())]),
   };
   let mut all: Vec<Element> = vec![
-    title("pipeline-imported", &ctx.t("import.result.imported"), Some(&when)),
-    property(
-      "pipeline-imported-from",
-      &ctx.t("import.result.from"),
-      &imported.project,
-      PropertyValue::Plain,
-    )
-    .into(),
-    property(
-      "pipeline-imported-source",
-      &ctx.t("import.result.sourceVersion"),
-      &source,
-      PropertyValue::Plain,
-    )
-    .into(),
-    note(
-      "pipeline-imported-note",
-      Icon::History,
-      &ctx.t_args("import.result.independent", [("project", imported.project.as_str())]),
-    )
-    .into(),
+    RowGroup::new("pipeline-imported", ctx.t("import.result.imported"))
+      .count(when)
+      .row(GroupRow::new("pipeline-imported-from", ctx.t("import.result.from")).value(&imported.project))
+      .row(GroupRow::new("pipeline-imported-source", ctx.t("import.result.sourceVersion")).value(&source))
+      .after(note(
+        "pipeline-imported-note",
+        &ctx.t_args("import.result.independent", [("project", imported.project.as_str())]),
+      ))
+      .into(),
   ];
   if !imported.with_it.is_empty() {
-    let count = imported.with_it.len().to_string();
-    all.push(title(
-      "pipeline-imported-with",
-      &ctx.t("import.result.withIt"),
-      Some(&count),
-    ));
-    for came in &imported.with_it {
-      all.push(link(ctx, project, came));
-    }
+    let links: Vec<GroupRow> = imported.with_it.iter().map(|came| link(ctx, project, came)).collect();
+    all.push(
+      RowGroup::new("pipeline-imported-with", ctx.t("import.result.withIt"))
+        .count(imported.with_it.len().to_string())
+        .rows(links)
+        .into(),
+    );
   }
   if !imported.missing.is_empty() {
-    let count = imported.missing.len().to_string();
-    all.push(title(
-      "pipeline-imported-missing",
-      &ctx.t_args("import.result.missing", [("project", target)]),
-      Some(&count),
-    ));
-    for (index, missing) in imported.missing.iter().enumerate() {
-      all.push(missing_row(index, missing));
-    }
     all.push(
-      note(
-        "pipeline-imported-missing-note",
-        Icon::Info,
-        &ctx.t_args("import.result.missingNote", [("project", target)]),
+      RowGroup::new(
+        "pipeline-imported-missing",
+        ctx.t_args("import.result.missing", [("project", target)]),
       )
+      .count(imported.missing.len().to_string())
+      .rows(
+        imported
+          .missing
+          .iter()
+          .enumerate()
+          .map(|(index, missing)| missing_row(index, missing)),
+      )
+      .after(note(
+        "pipeline-imported-missing-note",
+        &ctx.t_args("import.result.missingNote", [("project", target)]),
+      ))
       .into(),
     );
   }
   all
 }
 
-/// A section's title with the line over it and what it counts or when, at its end.
-fn title(id: &str, title: &str, meta: Option<&str>) -> Element {
-  section_title(id, title, meta)
-    .height(Dimension::Px(SECTION_TITLE_HEIGHT))
-    .padding(Padding::new().top(ExtraSpacing::Loose.role()))
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .into()
-}
-
 /// A resource that came along with the copy, which opens its page.
-fn link(ctx: &mut Ctx, project: ProjectId, came: &WithIt) -> Element {
-  let label = link_label(ctx, came);
+fn link(ctx: &mut Ctx, project: ProjectId, came: &WithIt) -> GroupRow {
   let page = page_of(came.id, came.content.kind(), Some(&came.content));
   let open = Navigation::of(ctx).to(Route::Project(project, page));
-  let row = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(LINK_HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(icon(glyph(&came.content), IconSize::Md, PaletteColor::TextSecondary))
-    .child(
-      Text::new(&label)
-        .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextPrimary)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
-    )
-    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::TextMuted));
-  opening(open)
-    .id(format!("pipeline-imported-link-{}", came.id))
-    .width(Dimension::Pct(100.0))
-    .describe("label", label.to_string())
-    .child(row)
-    .into()
+  GroupRow::new(format!("pipeline-imported-link-{}", came.id), link_label(ctx, came))
+    .marked()
+    .leading(icon(glyph(&came.content), IconSize::Md, PaletteColor::TextMuted))
+    .end(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::TextMuted))
+    .press(Press::Open(open))
 }
 
 fn glyph(content: &Content) -> Icon {
@@ -255,26 +201,20 @@ fn link_label(ctx: &Ctx, came: &WithIt) -> Arc<str> {
   }
 }
 
-/// A connection, MCP server or secret the copies keep naming: a secret by its name in Geist Mono.
-fn missing_row(index: usize, missing: &Missing) -> Element {
-  let style = match missing.source {
-    Entity::Secret(_) => ExtraTypography::PropertyMono.role(),
-    Entity::Resource(_) | Entity::Connection(_) | Entity::McpServer(_) => ExtraTypography::Property.role(),
+/// A connection, MCP server or secret the copies keep naming, with the glyph of what it is: a secret by its name
+/// in Geist Mono.
+fn missing_row(index: usize, missing: &Missing) -> GroupRow {
+  let glyph = match missing.source {
+    Entity::Secret(_) => Icon::KeyRound,
+    Entity::Connection(_) => Icon::Plug,
+    Entity::McpServer(_) => Icon::Server,
+    Entity::Resource(_) => Icon::CircleDashed,
   };
-  let text = Text::new(&missing.name)
-    .id(format!("pipeline-imported-missing-{index}"))
-    .variant(style)
-    .color(PaletteColor::TextSecondary)
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .nowrap()
-    .text_overflow(TextOverflow::Elipsis);
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(MISSING_HEIGHT))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(Icon::CircleDashed, IconSize::Base, PaletteColor::TextMuted))
-    .child(text)
-    .into()
+  let row = GroupRow::new(format!("pipeline-imported-missing-{index}"), missing.name.clone())
+    .marked()
+    .leading(icon(glyph, IconSize::Md, PaletteColor::TextMuted));
+  match missing.source {
+    Entity::Secret(_) => row.mono(),
+    Entity::Resource(_) | Entity::Connection(_) | Entity::McpServer(_) => row,
+  }
 }
