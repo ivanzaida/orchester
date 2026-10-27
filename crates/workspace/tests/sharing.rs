@@ -135,6 +135,7 @@ impl Desktop {
       device_name: "Laptop".into(),
       signed_in_at: orchester_core::time::Timestamp::from_unix_millis(1),
       cloud_address: "https://cloud.test".into(),
+      cloud_api_address: None,
     }))
     .expect("signed in");
   }
@@ -372,7 +373,8 @@ fn sharing_a_cloud_identity_joins_through_an_email_invite_with_the_key_set_the_a
   let desktop = Desktop::new();
   let bohdan = bohdan_identity(String::new()).account;
   desktop.sign_in_as(&bohdan);
-  let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
+  let web = ServerAddress::parse(&fake.url()).expect("cloud");
+  let client = CloudClient::new(orchester_api::client::CloudAddress::new(web, None)).expect("cloud client");
   let device = SecretValue::new("cloud device token".into()).expect("token");
   let identity = CloudIdentity {
     cloud: &client,

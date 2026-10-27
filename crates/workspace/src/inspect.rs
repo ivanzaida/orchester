@@ -107,7 +107,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::PendingPasswordChange {}
     impl $inspect for crate::sharing::Servers {}
     impl $inspect for crate::sharing::SignedIn {}
-    impl $inspect for crate::sharing::cloud::CloudAddress {}
+    impl $inspect for crate::sharing::cloud::CloudInUse {}
     impl $inspect for crate::sharing::cloud::Reach {}
     impl $inspect for crate::sharing::cloud::SignIn {}
     impl $inspect for crate::sharing::project::IdentityProblem {}

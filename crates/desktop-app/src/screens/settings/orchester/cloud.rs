@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_api::cloud::TwoFactorStatus;
 use orchester_store::StoredCloudAccount;
-use orchester_workspace::sharing::cloud::CloudAddress;
+use orchester_workspace::sharing::cloud::CloudInUse;
 
 use super::{
   Invites, Said,
@@ -44,7 +44,7 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub account: Option<StoredCloudAccount>,
-  pub address: CloudAddress,
+  pub address: CloudInUse,
   pub invites: Invites,
   /// The invites accepted here whose join did not finish.
   pub accepted: super::Kept,

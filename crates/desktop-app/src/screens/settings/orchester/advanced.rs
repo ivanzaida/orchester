@@ -1,10 +1,11 @@
 //! *Advanced · cloud address* (`Ii4SE` in `Cu20b`, `Advanced · cloud address` in `Aowlk`): closed, the line with
-//! *default* or the cloud in use at its end; open, the address field with *Use this address* and *Back to the
-//! default*, and *Using a test cloud* while another cloud than the build's is set. Changing it signs out of
-//! Orchester Cloud; team servers keep working. The sign-in gate shows the same section (`Advanced · open` `cUVrD` in
-//! `S8aPFV`) without the line over it, with *test cloud* in `warning` at the line's end and no callout: the gate's
-//! footer names the test cloud. There the line and the buttons are stops of the gate's Tab order, and Enter in the
-//! address field does *Use this address*.
+//! *default* or the cloud in use at its end; open, the address field and the API address field under it with *Use
+//! this address* and *Back to the default*, and *Using a test cloud* while another cloud than the build's is set. An
+//! empty API address is a cloud whose API is at `/api/v1` on its address, as an older self-run cloud's
+//! (`docs/cloud-api.md`, "Base"). Changing it signs out of Orchester Cloud; team servers keep working. The sign-in gate
+//! shows the same section (`Advanced · open` `cUVrD` in `S8aPFV`) without the line over it, with *test cloud* in
+//! `warning` at the line's end and no callout: the gate's footer names the test cloud. There the line and the buttons
+//! are stops of the gate's Tab order, and Enter in an address field does *Use this address*.
 
 use lurq::{
   app::{
@@ -16,8 +17,8 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_api::client::ServerAddress;
-use orchester_workspace::sharing::cloud::CloudAddress;
+use orchester_api::client::{CloudAddress, ServerAddress};
+use orchester_workspace::sharing::cloud::CloudInUse;
 
 use super::{Said, words::cloud_error};
 use crate::{
@@ -50,11 +51,15 @@ impl Place {
   }
 }
 
+/// What the person typed: the cloud's address and its API address, empty for none.
+type Typed = (String, String);
+
 pub(crate) struct Advanced {
   open: Signal<bool>,
   address: Signal<String>,
-  /// `Some(address)` sets another cloud, `None` goes back to the build's.
-  set: FutureAction<Option<String>, (), Said>,
+  api: Signal<String>,
+  /// `Some(typed)` sets another cloud, `None` goes back to the build's.
+  set: FutureAction<Option<Typed>, (), Said>,
   /// Which cloud this computer signs in to is a person's choice (review 1, M1).
   person: super::PersonOnly,
 }
@@ -69,13 +74,11 @@ impl Advanced {
     let advanced = Self {
       open: open.clone(),
       address: ctx.signal(String::new()),
-      set: ctx.future_action(move |address: Option<String>| {
+      api: ctx.signal(String::new()),
+      set: ctx.future_action(move |typed: Option<Typed>| {
         let cloud = cloud.clone();
         async move {
-          let address = address
-            .map(|text| ServerAddress::parse(&text))
-            .transpose()
-            .map_err(|_| Said::new("cloud.advanced.invalid"))?;
+          let address = typed.map(|(web, api)| parse(&web, &api)).transpose()?;
           cloud.set_address(address).await.map_err(|error| cloud_error(&error))
         }
       }),
@@ -90,21 +93,40 @@ impl Advanced {
   }
 }
 
-pub(crate) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced, place: Place) -> Element {
+/// The cloud at the typed `web` address, its API at the typed `api` address or, left empty, on `web`.
+fn parse(web: &str, api: &str) -> Result<CloudAddress, Said> {
+  let web = ServerAddress::parse(web).map_err(|_| Said::new("cloud.advanced.invalid"))?;
+  let api = match api.trim() {
+    "" => None,
+    api => Some(ServerAddress::parse(api).map_err(|_| Said::new("cloud.advanced.invalidApi"))?),
+  };
+  Ok(CloudAddress::new(web, api))
+}
+
+pub(crate) fn section(ctx: &mut Ctx, address: &CloudInUse, advanced: &Advanced, place: Place) -> Element {
   let open = advanced.open.get();
   let toggle = {
     let flag = advanced.open.clone();
-    let (field, current) = (advanced.address.clone(), address.address.as_str().to_owned());
+    let fields = (advanced.address.clone(), advanced.api.clone());
+    let current = (
+      address.address.web().as_str().to_owned(),
+      address
+        .address
+        .api()
+        .map(|api| api.as_str().to_owned())
+        .unwrap_or_default(),
+    );
     move || {
       if !flag.get() {
-        field.set(current.clone());
+        fields.0.set(current.0.clone());
+        fields.1.set(current.1.clone());
       }
       flag.update(|open| *open = !*open);
     }
   };
   let (meta, meta_color) = match (address.default, place) {
     (true, _) => (ctx.t("cloud.advanced.default").to_string(), PaletteColor::TextMuted),
-    (false, Place::Settings) => (address.address.authority(), PaletteColor::TextMuted),
+    (false, Place::Settings) => (address.address.web().authority(), PaletteColor::TextMuted),
     (false, Place::Gate) => (
       ctx.t("cloud.advanced.testCloudState").to_string(),
       PaletteColor::Warning,
@@ -231,6 +253,7 @@ fn form(ctx: &mut Ctx, advanced: &Advanced, place: Place) -> Element {
       input,
       Some(&hint),
     ))
+    .child(api_field(ctx, advanced))
     .with_children(
       state
         .error
@@ -249,13 +272,33 @@ fn form(ctx: &mut Ctx, advanced: &Advanced, place: Place) -> Element {
   }
 }
 
+/// The cloud's API address, empty for a cloud whose API is on its address.
+fn api_field(ctx: &mut Ctx, advanced: &Advanced) -> Element {
+  let input = FieldInput::new(
+    "orchester-advanced-api",
+    ctx.t("cloud.advanced.apiLabel"),
+    advanced.api.clone(),
+  )
+  .placeholder(ctx.t("cloud.advanced.apiPlaceholder"))
+  .mono()
+  .render(ctx);
+  field(
+    "orchester-advanced-api-field",
+    Some(&ctx.t("cloud.advanced.apiLabel")),
+    input,
+    Some(&ctx.t("cloud.advanced.apiHint")),
+  )
+  .into()
+}
+
 /// *Use this address*, a person's: synthetic input is refused, and the section says so under the button. Nothing
 /// happens while an address is being set.
 fn use_address(advanced: &Advanced) -> impl Fn() + Send + Sync + 'static {
-  let (set, address, person) = (advanced.set.clone(), advanced.address.clone(), advanced.person.clone());
+  let (set, person) = (advanced.set.clone(), advanced.person.clone());
+  let (address, api) = (advanced.address.clone(), advanced.api.clone());
   move || {
     if !set.state().get_untracked().is_pending() && person.allows(USE) {
-      set.run(Some(address.get_untracked()));
+      set.run(Some((address.get_untracked(), api.get_untracked())));
     }
   }
 }

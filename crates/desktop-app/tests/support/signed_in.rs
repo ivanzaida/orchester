@@ -19,7 +19,10 @@ use std::{
   sync::Arc,
 };
 
-use orchester_api::{Credential, client::ServerAddress};
+use orchester_api::{
+  Credential,
+  client::{CloudAddress, ServerAddress},
+};
 use orchester_app::{services::Services, startup::Launch};
 use orchester_core::secret::{SecretValue, SecretVault, VaultError, VaultKey};
 use orchester_workspace::secrets::Vault;
@@ -69,10 +72,17 @@ pub fn launch_signed_out(database: &Path, runner: PathBuf, runtime: &Handle) -> 
   Launch::begin_with_vault(database, runner, runtime, (None, keychain()))
 }
 
+/// The stand-in `cloud` as its web and its API address, the API at `/v1` there as the public cloud's is
+/// (`docs/cloud-api.md`, "Base").
+pub fn cloud_address(cloud: &AccountCloud) -> CloudAddress {
+  let address = ServerAddress::parse(&cloud.url()).expect("the stand-in cloud's address");
+  CloudAddress::new(address.clone(), Some(address))
+}
+
 /// Signs the session of `services` in to the stand-in `cloud`, as a person does in the gate: it uses that cloud from
 /// now on (Settings › Orchester › Advanced) and signs in with its account.
 pub fn sign_in(services: &Services, runtime: &Handle, cloud: &AccountCloud) {
-  let address = ServerAddress::parse(&cloud.url()).expect("the stand-in cloud's address");
+  let address = cloud_address(cloud);
   runtime
     .block_on(async {
       services.cloud.set_address(Some(address)).await?;

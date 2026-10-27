@@ -169,9 +169,13 @@
       "default": "default",
       "label": "Orchester Cloud address",
       "hint": "For a test cloud. Changing it signs you out of Orchester Cloud; team servers you joined keep working.",
+      "apiLabel": "API address",
+      "apiPlaceholder": "Same as the address above",
+      "apiHint": "For a cloud whose API has an address of its own, like api.orchester.cloud. Left empty, the API is at /api/v1 on the address above.",
       "use": "Use this address",
       "reset": "Back to the default",
       "invalid": "That isn't an address.",
+      "invalidApi": "That isn't an API address.",
       "testCloud": {
         "title": "Using a test cloud",
         "body": "Invites and servers from {{host}} don't show here while it's set."

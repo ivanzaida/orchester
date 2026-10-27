@@ -13,7 +13,7 @@ use reqwest::{
 };
 use serde::de::DeserializeOwned;
 
-use super::{ClientError, ServerAddress, bearer, builder};
+use super::{ClientError, CloudAddress, bearer, builder};
 use crate::cloud::{
   AccountResponse, AccountServer, CloudError, CloudInvite, CloudInvites, CloudSignIn, CloudSignInChallenge,
   CloudSignedIn, IdentityTokenIssued, IdentityTokenRequest, KeySetResponse, RegisteredServer, ServerResponse,
@@ -30,18 +30,18 @@ pub enum SignInAnswer {
   Challenged(CloudSignInChallenge),
 }
 
-/// Orchester Cloud's API at one address.
+/// Orchester Cloud's API, at the cloud's API address.
 #[derive(Clone, Debug)]
 pub struct CloudClient {
   http: reqwest::Client,
-  address: ServerAddress,
+  address: CloudAddress,
 }
 
 impl CloudClient {
   /// A client of the cloud at `address`, through the operating system's trust store; plain HTTP only to this computer
   /// (a test cloud).
-  pub fn new(address: ServerAddress) -> Result<Self, ClientError> {
-    if address.needs_opt_in() {
+  pub fn new(address: CloudAddress) -> Result<Self, ClientError> {
+    if address.api_host().needs_opt_in() {
       return Err(ClientError::PlainHttpRefused);
     }
     // reqwest's rustls takes the process's crypto provider; ring is the one the workspace builds.
@@ -51,7 +51,7 @@ impl CloudClient {
     Ok(Self { http, address })
   }
 
-  pub fn address(&self) -> &ServerAddress {
+  pub fn address(&self) -> &CloudAddress {
     &self.address
   }
 

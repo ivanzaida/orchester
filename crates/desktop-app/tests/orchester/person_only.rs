@@ -118,7 +118,7 @@ fn orchester_person_only_cloud_sign_in_and_out() {
   let cloud = AccountCloud::start();
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
-  let address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  let address = crate::support::signed_in::cloud_address(&cloud);
   // Another cloud signs out: the sign-in is the gate's.
   block_on(&window, services.cloud.set_address(Some(address))).expect("a test cloud");
   shows(&mut window, "gate-email");

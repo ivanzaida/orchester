@@ -17,12 +17,31 @@ Two kinds of client call it:
   listed in `ORCHESTER_CLOUD_TRUSTED_PROXIES`. Otherwise every browser counts as the web front's one address in the
   rate limits.
 
+## Base
+
+The cloud has two addresses: its API address, which every API call goes to, and its web address (the public URL),
+whose pages the app opens in the browser.
+
+- **API:** `https://api.orchester.cloud/v1`, for example `https://api.orchester.cloud/v1/auth/sessions`. The paths
+  below are under it.
+- **Web pages** stay on `https://orchester.cloud`: `/signup`, `/signin`, `/account`, `/forgot`, `/invites/…` and the
+  links in emails.
+- **The old base**, `https://orchester.cloud/api/v1`, is the same service. It answers while app versions from before
+  the API moved to its own host are in use, and is switched off after that. The desktop no longer calls it: what an
+  earlier version stored with the public cloud (also its former address `https://orchester-cloud.lurq.dev`,
+  `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-platform`, "Moving the cloud") moves to the
+  two addresses at the start, without signing out.
+- **Identity tokens and key sets** name the public URL, `https://orchester.cloud`, as their issuer, wherever the API
+  answers, so team servers keep verifying them as before.
+- **A test or self-run cloud** is set in the desktop's Settings › Orchester Cloud › Advanced, with its web address
+  and, when its API has an address of its own, its API address (`/v1` there). Without an API address the desktop calls
+  `/api/v1` on the web address, so a cloud with no separate API host keeps working. A build names another cloud with
+  `ORCHESTER_CLOUD_URL` and, for its API address, `ORCHESTER_CLOUD_API_URL` at build time.
+- Team servers keep `<server URL>/api/v1` ([architecture/server.md](architecture/server.md), "API").
+
 ## Conventions
 
-- Base path `<public URL>/api/v1`, for example `https://orchester.cloud/api/v1` (during the move also
-  `https://orchester-cloud.lurq.dev/api/v1`, the same service: `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the
-  cloud"). JSON bodies in UTF-8.
-  Requests are limited to 1 MiB and must arrive within 10 seconds.
+- JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.
 - Unknown request fields are refused (`400 bad_request`).
 - Endpoints marked *device* need `Authorization: Bearer <device token>`. A device token is `orcc_` followed by 64
   hex characters. It ends when the device signs out or is revoked, and when the password is reset or changed on

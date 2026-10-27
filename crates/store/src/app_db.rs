@@ -21,7 +21,7 @@ use orchester_core::{id::ProjectId, name::Name, time::Timestamp};
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub use self::{
-  cloud::StoredCloudAccount,
+  cloud::{StoredCloudAccount, StoredCloudAddress},
   cloud_ended::{CloudSignInEnd, EndedCloudSignIn},
   cloud_joins::AcceptedInvite,
   servers::{JoinedWith, ServerAccount, StoredServer},
@@ -80,6 +80,7 @@ CREATE TABLE ui_state (
   settings::STORY_POINTS_MIGRATION,
   settings::ORCHESTRATOR_MERGES_FINISHED_MIGRATION,
   settings::ORCHESTRATOR_WRITES_GIT_MIGRATION,
+  cloud::API_ADDRESS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

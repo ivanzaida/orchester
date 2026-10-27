@@ -69,7 +69,7 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
 
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
-  let cloud_address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  let cloud_address = support::signed_in::cloud_address(&cloud);
   // Another cloud signs out: the sign-in is the gate's, a person's.
   block_on(&window, services.cloud.set_address(Some(cloud_address))).expect("a test cloud");
   shows(&mut window, "gate-email");
@@ -241,7 +241,7 @@ fn signed_in(cloud: &AccountCloud) -> support::Window {
 fn signed_in_with(cloud: &AccountCloud, origin: Option<&str>) -> support::Window {
   let mut window = window(origin);
   let services = window.launch.services().expect("services").clone();
-  let cloud_address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  let cloud_address = support::signed_in::cloud_address(cloud);
   block_on(&window, services.cloud.set_address(Some(cloud_address))).expect("a test cloud");
   block_on(
     &window,

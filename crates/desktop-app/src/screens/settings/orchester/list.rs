@@ -111,7 +111,7 @@ fn group_head(id: &str, glyph: Icon, name: &str, meta: &str) -> Row {
 }
 
 fn cloud_row(ctx: &Ctx, snapshot: &Snapshot, invites: &Invites, selected: bool, navigation: &Navigation) -> Element {
-  let host = snapshot.address.address.authority();
+  let host = snapshot.address.address.web().authority();
   let (name, second, third, state) = match &snapshot.account {
     Some(account) => {
       let waiting = invites.waiting();

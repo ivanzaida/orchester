@@ -14,7 +14,7 @@ mod support;
 use std::sync::Arc;
 
 use orchester_api::{
-  client::{Client, CloudClient, ServerAddress},
+  client::{Client, CloudAddress, CloudClient, ServerAddress},
   cloud::CloudServer,
 };
 use orchester_core::{secret::SecretValue, time::Timestamp};
@@ -57,9 +57,16 @@ fn desktop(dir: &TempDir) -> Servers {
     device_name: "Laptop".into(),
     signed_in_at: Timestamp::from_unix_millis(1),
     cloud_address: "https://cloud.test".into(),
+    cloud_api_address: None,
   }))
   .expect("signed in");
   Servers::new(Workspace::new(db), Vault::with(Arc::new(MemoryVault::default())))
+}
+
+/// A client of the fake cloud at its web address, its API there too (`/api/v1`).
+fn on_web(fake: &cloud::FakeCloud) -> CloudClient {
+  let web = ServerAddress::parse(&fake.url()).expect("cloud");
+  CloudClient::new(CloudAddress::new(web, None)).expect("cloud client")
 }
 
 #[test]
@@ -69,7 +76,7 @@ fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_name
   let elsewhere = TestServer::start_tls();
   let dir = TempDir::new().expect("temporary directory");
   let servers = desktop(&dir);
-  let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
+  let client = on_web(&fake);
   let device = SecretValue::new("cloud device token".into()).expect("token");
   let identity = || CloudIdentity {
     cloud: &client,
@@ -112,7 +119,7 @@ fn cloud_join_reaches_a_self_signed_server_by_the_fingerprint_the_cloud_has() {
     .to_hex();
   let dir = TempDir::new().expect("temporary directory");
   let servers = desktop(&dir);
-  let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
+  let client = on_web(&fake);
   let device = SecretValue::new("cloud device token".into()).expect("token");
   let record = CloudServer {
     id: audience.parse().expect("server id"),
@@ -136,4 +143,40 @@ fn cloud_join_reaches_a_self_signed_server_by_the_fingerprint_the_cloud_has() {
     .block_on(servers.sessions(&entry))
     .expect("sessions over the pinned certificate");
   assert_eq!(sessions[0].via, orchester_api::JoinedVia::Cloud);
+}
+
+#[test]
+fn cloud_join_takes_identity_tokens_of_the_same_issuer_from_the_api_address() {
+  // The cloud's API on an address of its own (`/v1`), as api.orchester.cloud: its key set and identity tokens still
+  // name the cloud's web address as their issuer, which the team server pinned when it was linked.
+  let (server, fake, audience) = linked();
+  let dir = TempDir::new().expect("temporary directory");
+  let servers = desktop(&dir);
+  let address = CloudAddress::new(
+    ServerAddress::parse(server_support::test_cloud::ISSUER).expect("web address"),
+    Some(ServerAddress::parse(&fake.url()).expect("API address")),
+  );
+  let client = CloudClient::new(address).expect("cloud client");
+  let key_set = server
+    .block_on(client.key_set())
+    .expect("the key set from the API address");
+  assert_eq!(key_set.key_set, fake.key_set);
+  let device = SecretValue::new("cloud device token".into()).expect("token");
+  let record = CloudServer {
+    id: audience.parse().expect("server id"),
+    name: SERVER_NAME.into(),
+    address: server.url(),
+    fingerprint: None,
+  };
+  let identity = CloudIdentity {
+    cloud: &client,
+    device: &device,
+    account: BOHDAN.parse().expect("an account id"),
+    invite: None,
+  };
+  let joined = server
+    .block_on(servers.join_with_cloud(&record, identity, None))
+    .expect("the team server verified the token");
+  assert!(matches!(joined, CloudJoined::Joined(_)), "{joined:?}");
+  assert_eq!(fake.issued(), 1);
 }

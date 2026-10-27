@@ -85,14 +85,15 @@ fn gate_tab_goes_through_the_card_and_advanced_in_order() {
   enter(&mut window);
   shows(&mut window, "orchester-advanced-address");
   assert_eq!(
-    walk(&mut window, false, 4),
+    walk(&mut window, false, 5),
     [
       "orchester-advanced-address",
+      "orchester-advanced-api",
       "orchester-advanced-use",
       "orchester-advanced-reset",
       "gate-email"
     ],
-    "the open section's field and buttons after its line"
+    "the open section's fields and buttons after its line"
   );
 }
 

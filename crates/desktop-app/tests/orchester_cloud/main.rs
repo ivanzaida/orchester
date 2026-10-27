@@ -63,7 +63,7 @@ fn linked() -> (RealCloud, TestServer, orchester_api::SharedProject, String) {
 fn signed_in(cloud: &RealCloud, secret: Option<&[u8]>) -> support::Window {
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
-  let address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  let address = cloud.cloud_address();
   // Another cloud signs out: Bohdan signs in at the gate, as a person.
   block_on(&window, services.cloud.set_address(Some(address))).expect("the test cloud");
   shows(&mut window, "gate-email");
