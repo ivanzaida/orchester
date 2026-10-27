@@ -118,8 +118,8 @@ fn escape(keys: &KeyContext) -> bool {
   false
 }
 
-/// Answers what is asked in place, or opens the focused card's task. A deletion, of one task or several, is confirmed by
-/// its button alone, and while a change is under way Enter waits as the buttons do.
+/// Answers what is asked in place, or opens the focused card's task. A deletion, of one task or several, is confirmed
+/// by its button alone, and while a change is under way Enter waits as the buttons do.
 fn enter(keys: &KeyContext) -> bool {
   let (state, closer) = (&keys.dropping.state, &keys.dropping.closer);
   if let Some(asked) = state.asked.get_untracked() {
@@ -128,7 +128,8 @@ fn enter(keys: &KeyContext) -> bool {
     }
     return true;
   }
-  // The stop confirmation: Enter stops the run and closes the task. Any other question open keeps the focus where it is.
+  // The stop confirmation: Enter stops the run and closes the task. Any other question open keeps the focus where it
+  // is.
   if state.question_open.get_untracked() {
     if !closer.busy() {
       closer.confirm_stop();
