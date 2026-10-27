@@ -45,6 +45,8 @@ fn summary_last_event_says_where_each_task_stands() {
     page.open(state);
     let event = page.text("task-event-text");
     assert!(event.starts_with(title), "{state}: {event}");
+    // The line ends with the run's conversation in every state (`TGEq8`, `GwOnk`, `a4szY`).
+    assert_eq!(page.text("task-open-conversation"), "Conversation →", "{state}");
   }
   // Before the first run there is no run to say anything of (`Xxrdy`).
   for state in [
@@ -71,6 +73,10 @@ fn summary_last_event_says_where_each_task_stands() {
     event.contains("Approving it starts 03 Implement with Builder"),
     "{event}"
   );
+  page.click("task-open-conversation");
+  page.window.until("the Conversation", |window| {
+    window.texts("conversation-toolbar").is_some()
+  });
   let key = page.open("latest run unreadable");
   let notice = page.text("task-notice-title");
   assert!(

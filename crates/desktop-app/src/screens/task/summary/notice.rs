@@ -1,6 +1,5 @@
 //! Where the task stands and what that means, as the run's last event on the Summary says it (`Last event` `TGEq8`
-//! in `01 · Summary`): one sentence per phase of the task's latest run, with Open conversation where the
-//! conversation is where the person looks or answers.
+//! in `01 · Summary`): one sentence per phase of the task's latest run.
 
 use std::sync::Arc;
 
@@ -33,8 +32,6 @@ pub struct Said {
   pub icon: Icon,
   pub title: Arc<str>,
   pub body: Arc<str>,
-  /// The conversation is where to look or answer.
-  pub conversation: bool,
 }
 
 impl Said {
@@ -44,13 +41,7 @@ impl Said {
       icon,
       title,
       body,
-      conversation: false,
     }
-  }
-
-  fn in_conversation(mut self) -> Self {
-    self.conversation = true;
-    self
   }
 }
 
@@ -181,7 +172,7 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
     )
   };
   let body = ctx.t_args("summary.notice.runningBody", args);
-  Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body)).in_conversation()
+  Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body))
 }
 
 /// The step the run's work was returned to, to resolve a merge's conflicts, while it works on them (board 5 of
@@ -222,7 +213,7 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
       ctx.t_args("summary.notice.askingTitle", [("agent", agent.as_str())]),
       ctx.t_args("summary.notice.askingBody", [("step", step.as_str())]),
     );
-    return Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation());
+    return Some(Said::new(NoticeTone::Warning, Icon::Hand, text));
   }
   let planned = run.run.awaiting_plan().first().copied()?;
   let (_, agent) = step_words(ctx, run.step_of(planned));
@@ -254,7 +245,7 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
     ctx.t_args("summary.notice.planTitle", [("version", version.to_string())]),
     body,
   );
-  Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation())
+  Some(Said::new(NoticeTone::Warning, Icon::Hand, text))
 }
 
 fn waits_for_approval(ctx: &Ctx, run: &RunView, approval: &ShownApproval) -> Said {
@@ -270,7 +261,7 @@ fn waits_for_approval(ctx: &Ctx, run: &RunView, approval: &ShownApproval) -> Sai
       [("step", step.as_str()), ("time", time.as_str())],
     ),
   );
-  Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation()
+  Said::new(NoticeTone::Warning, Icon::Hand, text)
 }
 
 /// The short revision of the run's last checkpoint.

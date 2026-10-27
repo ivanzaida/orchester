@@ -1,8 +1,8 @@
 //! The run (`Progress` `ee0vh` in `01 · Summary`): *Run* with its pipeline and number in 12 `text_muted`, the rail of
 //! its steps (`steps`), and one bordered line with its last event (`Last event` `TGEq8`): where the task stands in a
-//! sentence or two in 12 `text_secondary`, after the event's 13 glyph in `text_muted`, and *Open conversation →* where
-//! the conversation is where the person looks or answers. 12 apart. A run this computer does not have (a teammate's
-//! of a shared task) is its last event alone.
+//! sentence or two in 12 `text_secondary`, after the event's 13 glyph in `text_muted`, and *Conversation →* 12/500 in
+//! `text_primary` at its end, in every state (`01`, `01b`, `01c`). 12 apart. A run this computer does not have (a
+//! teammate's of a shared task) is its last event alone, without the link.
 
 use std::sync::Arc;
 
@@ -55,7 +55,7 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
   } else {
     section = section.child(head);
   }
-  section.child(last_event(ctx, task)).into()
+  section.child(last_event(ctx, task, run.is_some())).into()
 }
 
 /// The rail of `run`'s steps, the one it stands at marked.
@@ -75,14 +75,15 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
   steps::rail(ctx, run, (lost, &waiting), current, now)
 }
 
-/// Where the task stands, as one line on the page's ground in a `border` stroke (`Last event` `TGEq8`).
-fn last_event(ctx: &mut Ctx, task: &TaskContext) -> Element {
+/// Where the task stands, as one line on the page's ground in a `border` stroke (`Last event` `TGEq8`); `here`: the run
+/// is on this computer, so its conversation is too.
+fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
   let said = decisions::said(ctx, task);
   let text = ctx.t_args(
     "summary.run.event",
     [("title", said.title.clone()), ("body", said.body.clone())],
   );
-  let link = said.conversation.then(|| {
+  let link = here.then(|| {
     let navigation = Navigation::of(ctx);
     let route = Route::Project(
       task.project.open.project.id(),
