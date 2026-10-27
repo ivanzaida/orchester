@@ -15,8 +15,6 @@
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
 mod drive;
-#[path = "../../tests/support/signed_in.rs"]
-mod signed_in;
 
 use std::{
   error::Error,
@@ -33,6 +31,7 @@ use orchester_app::{
   root::{Root, RootProps},
   services::Services,
   startup::{Launch, WindowPosition},
+  test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };

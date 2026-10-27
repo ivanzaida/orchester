@@ -156,7 +156,7 @@ name a Codex connection that is not stored, so nothing can run.
 | `orchestrator-not-set-up` | `orchestrator` with nothing chosen for the Orchestrator | Orchestrator · redesign 02 |
 | `project-settings` | `connections`, plus `acme/kontur` linked and expecting `dana-k` while `gh` is signed in as `ivanzaida`; base branch `release/2.4`, which is gone; secrets in Development, Staging and Production (`DEEPSEEK_API_KEY` used by the tool `deploy-preview`, `FIGMA_TOKEN` rotated and used by the MCP server `figma`, `GITHUB_APP_KEY` unused, `OLD_FIGMA_TOKEN` archived), records only; `figma` on with `FIGMA_API_KEY` from `FIGMA_TOKEN`, two tools run without asking and the profile Design reviewer using it | Project settings `XGtkg`: 01b, 05, 06, 06b (open `FIGMA_TOKEN`), 13 (open `figma`), 14 (open GitHub) |
 | `project-settings-shared` | `project-settings` linked as owner to `orchester.example.com/kontur` with four members as last read; no server answers and this computer's server list lacks it, so the address says so and *Leave* is unavailable with why | 04b Sharing · shared (its address hint and *Leave* differ from the frame, which draws a connected server) |
-| `settings` | App Settings with a person's data, fixture-only (`tools/qa-app.ps1` says how). Accounts: Claude Code *Work* (signed in, plan readings, a running run on it: Remove is blocked), *Personal* (unused), *Old* (Sign-in expired), Default (Not signed in); Codex *Client* (signed in, plan readings, a connection on it), *Archive* (Folder missing), Default; stand-in CLIs answer the checks the same way. Notifications: quiet hours 22:30–07:00, daily report at 18:30. Automation: the installed app's MCP rows (address, port, token, Connect an agent) on a free port with a token in memory, *claude-code* and *codex-mcp-client* connected. Orchester Cloud: an invite to Billing waiting; kept here, Mobile team's join waiting for approval and Docs team's that didn't finish; team servers *Kontur team* (Connected, Kontur linked), *Build box* (Offline about two minutes after the start; Reconnecting before), *Old office* (Certificate changed), *Design team* (signed out here, its own certificate) and *Team box* (sign-in ended) | `App settings · redesign` `iUmo3` in the new `orchester.pen`: 01–05c and the states sheets `poD7g`, `shpsk`, `ZUuMT` |
+| `settings` | App Settings with a person's data, fixture-only (`tools/qa-app.ps1` says how). Accounts: Claude Code *Work* (signed in, plan readings, a running run on it: Remove is blocked), *Personal* (unused), *Old* (Sign-in expired), Default (Not signed in); Codex *Client* (signed in, plan readings, a connection on it), *Archive* (Folder missing), Default; stand-in CLIs answer the checks the same way. Notifications: quiet hours 22:30–07:00, daily report at 18:30. Automation: the installed app's MCP rows (address, port, token, Connect an agent) on a free port with a token in memory, *claude-code* and *codex-mcp-client* connected. Orchester Cloud: kept here, Mobile team's join waiting for approval and Docs team's that didn't finish; no team server (the team server's states come from the QA examples `n1_qa` … `n3_qa` of the private platform repository `ivanzaida/orchester-platform`, `crates/e2e`) | `App settings · redesign` `iUmo3` in the new `orchester.pen`: 01–05c and the states sheets `poD7g`, `shpsk`, `ZUuMT` |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their
 running runs interrupted and ends the approvals they waited for. Capture running states of
@@ -209,13 +209,13 @@ the route's params and answers the route the tab shows, for example:
   - accounts: `"account"` (an id, a name such as `"Work"`, or `claude-default` / `codex-default`) for its page
     (03b), with `"panel"` `rename` or `remove` for the question in place, `sign_in` for step 2; `"panel": "add"`
     alone for *Add account* (03c);
-  - orchester: `"server"` (an id, a name such as `"Old office"`, or a host) for its page (05c); `"ask":
+  - orchester: `"server"` (an id, a name, or a host) for its page (05c); `"ask":
     "sign-out"` for *Sign out of Orchester Cloud?*, or with `server` that server's *Sign out of …?*; `"ask":
     "decline", "invite": "<invite id>"` (the id in the invite row's element ids) for *Decline the invite?*;
   - connect: `"server"` and `"step"` `address`, `compare`, `join` or `username` (05b, 05b2): past the address it
-    asks what answers there; a server with its own certificate stays at *Compare the check code* (the
-    `settings` scenario's *Design team*), since only a person answers it;
-  - invite: `"server"` and `"project"` (its slug, e.g. `billing` on *Kontur team*) for the invite landing;
+    asks what answers there; a server with its own certificate stays at *Compare the check code*, since only
+    a person answers it;
+  - invite: `"server"` and `"project"` (its slug, e.g. `billing`) for the invite landing;
   - automation: `"ask": "rotate-token"` for *Rotate the token?*.
 
   Opening a page or a question is navigation and works while Settings refuses window input; answering it stays a

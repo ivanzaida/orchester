@@ -53,8 +53,6 @@ mod resolve;
 mod return_ended;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
-#[path = "../support/signed_in.rs"]
-mod signed_in;
 mod skills_window;
 mod story_points;
 mod task_organization;
@@ -85,6 +83,7 @@ use orchester_app::{
   routes::{ProjectPage, Route, TaskList},
   services::Services,
   startup::Launch,
+  test_support::signed_in,
   theme::{self, Mode},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};

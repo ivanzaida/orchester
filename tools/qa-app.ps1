@@ -32,11 +32,11 @@
 # Archive's folder missing), quiet hours 22:30-07:00 and the daily report at 18:30, and stand-in claude and codex in
 # bin/settings-qa/ that answer as those accounts stand: the QA app runs with them first on its PATH (folders that
 # hold a real claude or codex are left out) and its home, CLAUDE_CONFIG_DIR, CODEX_HOME and ORCHESTER_ACCOUNTS_DIR
-# there, so no real CLI or sign-in is read. The QA app (--settings) sets up loopback team servers (Kontur team
-# connected with Kontur linked, Build box offline, Old office with a changed certificate, Design team signed out of,
-# Team box whose sign-in ended), an invite waiting at the stand-in cloud, two invites kept here (one waiting for
-# approval, one that didn't finish), and shows the installed app's MCP rows: that server listens on a free port with
-# a token in memory, while the window's own server stays the QA copy's for the verifier.
+# there, so no real CLI or sign-in is read. The QA app (--settings) keeps two invites here (one waiting for approval,
+# one that didn't finish) and shows the installed app's MCP rows: that server listens on a free port with a token in
+# memory, while the window's own server stays the QA copy's for the verifier. Team servers answering on loopback are
+# the private platform repository's (ivanzaida/orchester-platform, crates/e2e, the n1_qa example), where the team
+# server lives.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

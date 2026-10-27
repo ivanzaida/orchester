@@ -56,7 +56,14 @@ Workspace layout:
   and `docs/cloud-hosting.md`) moved to the private repository `ivanzaida/orchester-cloud` on 2026-10-27; docs here
   that name those paths mean that repository. Its API contract stays here: `orchester-api` and `docs/cloud-api.md`,
   which the cloud builds from by git at a pinned commit. Change the contract here first, then move the pin there.
-  `web/ui` is copied into that repository too.
+  The repository is now `ivanzaida/orchester-platform` (its folder keeps the old name). The self-hosted team server
+  (`crates/server`, `orchester-server`), its web app (`web/server`), the shared web kit `web/ui`, `deploy/server`,
+  its release workflow and `docs/server-hosting.md` moved there too, with the end-to-end tests of the desktop
+  against a real team server or cloud (its `crates/e2e`: the app's `orchester`, `orchester_cloud`, `shared_project`,
+  the workspace's sharing and cloud tests, the API client's tests, and the QA examples `n1_qa` … `n3_qa`). They
+  build this repository's crates by git, with the `test-support` features of `orchester-api` (the stand-in cloud)
+  and `orchester-app` (the headless window); a change those tests need lands here first. This repository has no
+  web apps and builds and tests without that one.
 - Add a crate only when a real boundary exists (for example the server or a runner). No empty placeholder crates.
 
 Hard requirements:

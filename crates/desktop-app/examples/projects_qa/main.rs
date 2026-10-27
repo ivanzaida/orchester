@@ -18,8 +18,6 @@ mod kontur;
 
 mod data;
 mod host;
-#[path = "../../tests/support/signed_in.rs"]
-mod signed_in;
 
 use std::{
   env,
@@ -38,6 +36,7 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{RootProps, Start},
   routes::{Route, RouteFolder},
+  test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };
