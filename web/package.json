@@ -3,7 +3,6 @@
   "private": true,
   "workspaces": [
     "ui",
-    "cloud",
     "server"
   ],
   "engines": {
@@ -11,10 +10,8 @@
   },
   "scripts": {
     "check": "npm run check --workspaces",
-    "test:pages": "npm run test:pages --workspace cloud && npm run test:pages --workspace server",
-    "tokens": "npm run tokens --workspace ui",
-    "test:pages:cloud": "npm run test:pages --workspace cloud",
-    "test:pages:server": "npm run test:pages --workspace server"
+    "test:pages": "npm run test:pages --workspace server",
+    "tokens": "npm run tokens --workspace ui"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

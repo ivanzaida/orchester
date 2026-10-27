@@ -52,6 +52,11 @@ Workspace layout:
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
   implementing core's `CommandRunner`. Platform details (hidden console window, process groups and kill, the macOS
   program search path) stay behind `cfg` here.
+- Orchester Cloud (`crates/cloud`, `web/cloud` with the orchester.cloud website, `deploy/cloud`, its image workflow
+  and `docs/cloud-hosting.md`) moved to the private repository `ivanzaida/orchester-cloud` on 2026-10-27; docs here
+  that name those paths mean that repository. Its API contract stays here: `orchester-api` and `docs/cloud-api.md`,
+  which the cloud builds from by git at a pinned commit. Change the contract here first, then move the pin there.
+  `web/ui` is copied into that repository too.
 - Add a crate only when a real boundary exists (for example the server or a runner). No empty placeholder crates.
 
 Hard requirements:

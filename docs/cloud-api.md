@@ -3,7 +3,7 @@
 The JSON API of `orchester-cloud` (`crates/cloud`): accounts, devices, identity tokens, the team server registry and
 invites in flight (C1a, with SA's linking and admin sign-in).
 The design is in [architecture/server.md](architecture/server.md), "Orchester Cloud" and "Identity tokens and keys";
-running it is in [cloud-hosting.md](cloud-hosting.md). The wire types are in `orchester-api`'s `cloud` module, and
+running it is in `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`. The wire types are in `orchester-api`'s `cloud` module, and
 the token and key set checks team servers use are in its `identity` feature.
 
 Two kinds of client call it:
@@ -20,7 +20,7 @@ Two kinds of client call it:
 ## Conventions
 
 - Base path `<public URL>/api/v1`, for example `https://orchester.cloud/api/v1` (during the move also
-  `https://orchester-cloud.lurq.dev/api/v1`, the same service: [cloud-hosting.md](cloud-hosting.md), "Moving the
+  `https://orchester-cloud.lurq.dev/api/v1`, the same service: `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`, "Moving the
   cloud"). JSON bodies in UTF-8.
   Requests are limited to 1 MiB and must arrive within 10 seconds.
 - Unknown request fields are refused (`400 bad_request`).
@@ -56,7 +56,7 @@ Two kinds of client call it:
 | `conflict` | 409 | The team server is linked by a statement as new as this one, or this statement was used; or two-factor authentication is on already (`POST /me/two-factor`) |
 | `too_many_servers` | 409 | The person owns 5 linked team servers, ownerless ones they linked included |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
-| `keys_unavailable` | 503 | No published key set lets the cloud sign now. The cloud renews its key set itself at every start and every minute while it serves (`docs/cloud-hosting.md`, "Keys"), so this means it could not, for example its database failed for weeks |
+| `keys_unavailable` | 503 | No published key set lets the cloud sign now. The cloud renews its key set itself at every start and every minute while it serves (`docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`, "Keys"), so this means it could not, for example its database failed for weeks |
 | `busy` | 503 | No password hashing slot freed within 10 seconds |
 | `internal` | 500 | |
 
@@ -227,7 +227,7 @@ statement is a compact JWS of type `orchester-link+jws` that the server signed w
   from an account they deleted (see *Deleting the account*). Linking one it owns already does not count.
 
 The answer carries what the server pins: the cloud's root key (`root_key`, base64url; the cloud makes it at its first
-start and keeps it, `docs/cloud-hosting.md`, "Keys") and the newest key set it signed, and an identity token with purpose `link` that links the admin's account on the server. A token with purpose
+start and keeps it, `docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`, "Keys") and the newest key set it signed, and an identity token with purpose `link` that links the admin's account on the server. A token with purpose
 `admin` is issued only for a linked server.
 
 **The web front's `/authorize`** takes a team server admin's request only in a form's body, `POST /authorize/start`
@@ -345,7 +345,7 @@ sign-in, and then its owner cannot finish a sign-in with a code either, a recove
 the cap trades a day of lockout for a bound on guessing. Devices already signed in stay signed in. A password reset
 does not clear the count: a reset proves only the mailbox, and clearing on it would give whoever reads the mail twenty
 guesses more each time; the owner changes the password (the intruder had it) and waits out the day, or the operator
-clears the count (`docs/cloud-hosting.md`, "Two-factor authentication for an account that lost its phone"). These limits are
+clears the count (`docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`, "Two-factor authentication for an account that lost its phone"). These limits are
 apart from the password limits: wrong codes do not block passwords, and a right password with two-factor
 authentication counts as a successful password check. A challenge also ends after 5 codes, right or wrong. Failed
 codes are audited (`two_factor_failed`). A sign-in takes its challenge in the same transaction that spends the code,
@@ -370,7 +370,7 @@ a device keeps sending invites there until an admin signs it out or the person j
 **A lost phone.** The recovery codes are the only way back; two-factor authentication is not reset by email, and a
 password reset leaves it on. On a cloud the person runs, an operator can turn it off for an account with one
 statement, which deletes the authenticator, its recovery codes and its challenges and ends every two-factor session
-with it (`docs/cloud-hosting.md`, "Two-factor authentication for an account that lost its phone").
+with it (`docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`, "Two-factor authentication for an account that lost its phone").
 
 **Someone else turned it on.** Turning it on needs only the password from a signed-in device. Whoever has both while
 it is off (a stolen password and an unlocked computer) can turn it on with their own phone and lock the person out of
