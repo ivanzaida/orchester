@@ -16,7 +16,7 @@ fn skills_visual_empty_list_and_populated_groups_are_truthful() {
   s.window.until("populated library", |w| {
     w.tree.get_element_by_id("skills-group-project").is_some()
   });
-  assert!(s.text("skills-count").contains("1 skills · 1 with unpublished drafts"));
+  assert!(s.text("skills-count").contains("1 skill · 1 with unpublished drafts"));
   assert!(s.text("skills-group-project").contains("checks"));
   assert!(s.text("skills-repository-settings").contains("Native agents"));
 }
@@ -31,9 +31,15 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
   assert!(s.text("skills-import-review").contains("1 instruction, 2 skills"));
   assert!(s.text("skill-import-create").contains("Create 3 drafts"));
   // Grouped by kind as 02c draws them: each group says what its items become.
-  assert!(s.text("skill-import-instructions").contains("each becomes a draft project instruction"));
+  assert!(
+    s.text("skill-import-instructions")
+      .contains("each becomes a draft project instruction")
+  );
   assert!(s.text("skill-import-instructions").contains("AGENTS.md"));
-  assert!(s.text("skill-import-skills").contains("Skills · each becomes a draft skill"));
+  assert!(
+    s.text("skill-import-skills")
+      .contains("Skills · each becomes a draft skill")
+  );
   s.click("skill-import-toggle-2");
   assert!(s.text("skills-import-review").contains("1 instruction, 1 skill"));
   assert!(s.text("skill-import-create").contains("Create 2 drafts"));

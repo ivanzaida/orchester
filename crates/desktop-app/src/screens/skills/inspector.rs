@@ -26,13 +26,21 @@ pub fn panel(ctx: &Ctx, page: &PageProps, entry: Option<&SkillEntry>) -> Element
     .id("skill-inspector")
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::SideSections.role())
-    .child(group(ctx, ("skill-loaded", "skills.loadedFor"), vec![loaded_for(ctx, page, entry)]))
+    .child(group(
+      ctx,
+      ("skill-loaded", "skills.loadedFor"),
+      vec![loaded_for(ctx, page, entry)],
+    ))
     .child(group(ctx, ("skill-versions", "skills.versions"), versions(ctx, entry)));
   if let Some(origin) = origin(ctx, entry) {
     side = side.child(origin);
   }
   side
-    .child(group(ctx, ("skill-active", "skills.activeRuns"), active(ctx, page, entry)))
+    .child(group(
+      ctx,
+      ("skill-active", "skills.activeRuns"),
+      active(ctx, page, entry),
+    ))
     .into()
 }
 
@@ -93,7 +101,9 @@ fn versions(ctx: &Ctx, e: &SkillEntry) -> Vec<Element> {
     ctx.t("skills.none")
   };
   vec![
-    Entry::new("skill-runs-use", ctx.t("skills.runsUse")).hint(published).into(),
+    Entry::new("skill-runs-use", ctx.t("skills.runsUse"))
+      .hint(published)
+      .into(),
     Entry::new("skill-draft", ctx.t("skills.draft")).hint(draft).into(),
   ]
 }

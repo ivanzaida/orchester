@@ -92,9 +92,8 @@ fn facts(ctx: &Ctx, id: &str, candidate: &Candidate) -> Vec<Element> {
     Candidate::Instruction { .. } => rows.push(
       Entry::new(format!("{id}-applies"), ctx.t("instructions.applies")).hint(ctx.t("instructions.importApplies")),
     ),
-    Candidate::Skill { description, .. } if !description.is_empty() => rows.push(
-      Entry::new(format!("{id}-description"), ctx.t("skills.previewDescription")).hint(description.to_string()),
-    ),
+    Candidate::Skill { description, .. } if !description.is_empty() => rows
+      .push(Entry::new(format!("{id}-description"), ctx.t("skills.previewDescription")).hint(description.to_string())),
     _ => {}
   }
   rows.push(Entry::new(format!("{id}-files"), ctx.t("instructions.referenceFiles")).hint(files));

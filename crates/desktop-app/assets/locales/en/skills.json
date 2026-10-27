@@ -51,7 +51,7 @@
     "noFiles": "No files",
     "filesCount": "{{count}} files",
     "oneFile": "1 file",
-    "count": "{{count}} skills · {{drafts}} with unpublished drafts",
+    "count": "{{skills}} · {{drafts}} with unpublished drafts",
     "columns": {
       "skill": "SKILL",
       "files": "FILES",

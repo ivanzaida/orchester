@@ -14,7 +14,11 @@ fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
   screen.until("review", |s| s.exists("instruction-import-create"));
   // A page of its own under the hub's tabs (02c): the list is not beside it, the preview is.
   assert!(!screen.exists("instruction-library") && !screen.exists("instructions-empty"));
-  assert!(screen.text("instruction-import-title").contains("Import from repository"));
+  assert!(
+    screen
+      .text("instruction-import-title")
+      .contains("Import from repository")
+  );
   assert!(
     screen
       .text("instruction-import-instructions-title")

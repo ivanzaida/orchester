@@ -10,7 +10,8 @@ use orchester_core::resource::InstructionScope;
 use orchester_workspace::{messages::Message, skills::editor::publish_reason};
 
 use super::{
-  super::words, BODY_HEIGHT, DESCRIPTION_HEIGHT, Editor, FIELD_WIDTH, Props,
+  super::words,
+  BODY_HEIGHT, DESCRIPTION_HEIGHT, Editor, FIELD_WIDTH, Props,
   files::{self, ReferenceFiles},
 };
 use crate::{

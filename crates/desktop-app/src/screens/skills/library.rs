@@ -42,10 +42,18 @@ impl Component for Library {
       pane = pane.child(empty(ctx, &p));
     } else {
       let drafts = entries.iter().filter(|e| e.state.has_draft()).count();
+      let skills = ctx.t_args(
+        if entries.len() == 1 {
+          "skills.skillOne"
+        } else {
+          "skills.skillMany"
+        },
+        [("count", entries.len().to_string())],
+      );
       pane = pane.child(
         Text::new(&ctx.t_args(
           "skills.count",
-          [("count", entries.len().to_string()), ("drafts", drafts.to_string())],
+          [("skills", skills.to_string()), ("drafts", drafts.to_string())],
         ))
         .id("skills-count")
         .variant(HubText::Hint.role()),

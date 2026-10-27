@@ -89,6 +89,7 @@ impl Component for ReferenceFiles {
       .enumerate()
       .map(|(i, file)| self.row(ctx, &p, (i, file), held))
       .collect::<Vec<_>>();
+    let count = words::files(ctx, files.len());
     let add = self.add.clone();
     let root = p.root.clone();
     let title = ctx.t("skills.chooseFile");
@@ -96,14 +97,13 @@ impl Component for ReferenceFiles {
     let button = if held {
       button.disabled()
     } else {
-      let (choosing, files) = (p.choosing.clone(), files.clone());
+      let choosing = p.choosing;
       button.on_click(move || {
         choosing.set(true);
         add.run((root.clone(), title.clone(), files.clone()));
       })
     };
     let id = "skill-files-group";
-    let count = words::files(ctx, files.len());
     let mut group = parts::group(
       id,
       parts::head(id, &ctx.t("skills.filesTitle"), Some(&count), Some(button.into())),
