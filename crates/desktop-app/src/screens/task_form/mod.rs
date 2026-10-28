@@ -85,6 +85,7 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject, module: Option<ModuleId>)
     pipelines: Some(tasks.pipelines),
     missing_pipeline: None,
     default_pipeline,
+    limits: *tasks.limits,
     modules: tasks.modules,
     shared: tasks.shared,
     starts_in: module,
@@ -122,6 +123,7 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
       .get(&task_id)
       .map(|slug| Arc::from(slug.as_str())),
     default_pipeline: None,
+    limits: *tasks.limits,
     modules: tasks.modules.clone(),
     shared: tasks.shared,
     starts_in: None,

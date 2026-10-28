@@ -2,7 +2,7 @@
 //! in 12 `text_muted`, and at its end the save status, a 12 icon and its words in 12: what the form holds and what it
 //! is doing (Not saved yet, Unsaved changes in `warning`, Draft saved locally, Queued · run not started). Only what
 //! happened is said: a task is "queued" once it is, a run "starting" while the runner is asked. Under the head a
-//! one-line note on `surface_raised` says what the person should know first (`Note` `CvMGI`): that the task already
+//! one-line note on its own fill says what the person should know first (`Note` `CvMGI`): that the task already
 //! ran, that it is queued, or where kept changes came from.
 
 use std::sync::Arc;
@@ -23,7 +23,7 @@ use super::{
   state::{Phase, Subject, View},
 };
 use crate::{
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TaskFormText},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
@@ -31,10 +31,15 @@ use crate::{
   },
 };
 
+/// The head row's height (`Crumb row` `grDKk`): its 12 words' line, which the crumbs' and the status' 18 high lines
+/// overhang evenly, so that the title sits 36 under the head's top.
+const HEAD_HEIGHT: f32 = 16.0;
+
 pub fn head(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
   Row::new()
     .id("task-form-head")
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(HEAD_HEIGHT))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
@@ -91,8 +96,8 @@ pub fn notes(ctx: &Ctx, view: &View) -> Vec<Element> {
   notes
 }
 
-/// A note under the head (`Note` `CvMGI`): a 13 icon and 12 `text_secondary` words, 8 apart, 8 over and under and 12
-/// at the sides, on `surface_raised`, radius 6.
+/// A note under the head (`Note` `CvMGI`): a 13 icon and 12 `text_secondary` words at 1.3, 8 apart, 8 over and under
+/// and 12 at the sides, 32 high for one line, on the note's fill, radius 6.
 fn note(id: &str, glyph: Icon, words: &str) -> Element {
   Row::new()
     .id(id.to_owned())
@@ -100,13 +105,13 @@ fn note(id: &str, glyph: Icon, words: &str) -> Element {
     .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(ExtraColor::Note.role())
     .rounded(RadiusSize::Md)
     .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))
-        .variant(TypographyStyle::Description)
+        .variant(TaskFormText::Note.role())
         .flex(1.0),
     )
     .into()

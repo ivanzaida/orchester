@@ -1,13 +1,13 @@
 //! A group (`Project` `nvlrw`, `Auto mode` `WSQqT`): its heading in 12/600 `text_secondary` with a count or an action
-//! at its right (`Head` `o3JUr`, `CDSyw`), 8 over its rows in a box with a 1 `border` stroke and radius 10, each row
-//! after the first under a 1 `border` line (`Rows` `V1Fos`). What a group says under its box (a question asked in
-//! place, a note) follows the box, 8 under it.
+//! at its right (`Head` `o3JUr`, `CDSyw`) or a count right after it (`Head` `I5nZS`), 8 over its rows in a box with a 1
+//! `border` stroke and radius 10, each row after the first under a 1 `border` line (`Rows` `V1Fos`). What a group says
+//! under its box (a question asked in place, a note) follows the box, 8 under it.
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  components::{Column, Row, Text},
+  components::{Column, Row, Spacer, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -17,6 +17,7 @@ use crate::theme::ProjectSettingsText;
 pub(crate) struct Group {
   id: Arc<str>,
   title: Arc<str>,
+  beside: Vec<Element>,
   end: Vec<Element>,
   rows: Vec<Element>,
   after: Vec<Element>,
@@ -28,10 +29,17 @@ impl Group {
     Self {
       id: id.into(),
       title: title.into(),
+      beside: Vec::new(),
       end: Vec::new(),
       rows: Vec::new(),
       after: Vec::new(),
     }
+  }
+
+  /// What sits right after the heading, 8 from it: a count (`4 secrets` in `06`).
+  pub(crate) fn beside(mut self, beside: impl Into<Element>) -> Self {
+    self.beside.push(beside.into());
+    self
   }
 
   /// What sits at the heading's right: a count, a note or an action.
@@ -59,17 +67,23 @@ impl Group {
 
 impl From<Group> for Element {
   fn from(group: Group) -> Self {
+    let title = Text::new(&group.title)
+      .id(format!("{}-title", group.id))
+      .variant(ProjectSettingsText::GroupTitle.role());
+    // With something beside it, the title keeps its width and the room after it goes to a spacer.
+    let (title, spacer) = if group.beside.is_empty() {
+      (title.flex(1.0), None)
+    } else {
+      (title, Some(Spacer::new().flex(1.0)))
+    };
     let heading = Row::new()
       .id(format!("{}-head", group.id))
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(
-        Text::new(&group.title)
-          .id(format!("{}-title", group.id))
-          .variant(ProjectSettingsText::GroupTitle.role())
-          .flex(1.0),
-      )
+      .child(title)
+      .with_children(group.beside)
+      .with_children(spacer)
       .with_children(group.end);
     let boxed = (!group.rows.is_empty()).then(|| {
       Column::new()

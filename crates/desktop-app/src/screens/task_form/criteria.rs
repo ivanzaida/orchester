@@ -98,14 +98,10 @@ pub fn criteria(ctx: &mut Ctx, view: &View, criteria: &Signal<Vec<Criterion>>) -
     .into()
 }
 
-/// *Acceptance criteria* with how many there are and what reviewers do with them (`Head` `c8Z6C6`).
+/// *Acceptance criteria* with how many there are and what reviewers do with them (`Head` `c8Z6C6`): 16 high over its
+/// 6 under.
 fn head(ctx: &Ctx, count: usize) -> Row {
-  let muted = |text: &str| {
-    Text::new(text)
-      .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
-      .nowrap()
-  };
+  let muted = |text: &str| Text::new(text).variant(TaskFormText::CriteriaHint.role()).nowrap();
   Row::new()
     .id("task-form-criteria-head")
     .width(Dimension::Pct(100.0))

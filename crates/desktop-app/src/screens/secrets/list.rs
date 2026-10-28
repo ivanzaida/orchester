@@ -1,8 +1,9 @@
 //! The Secrets list (`06 Secrets` `bVh1e`, nothing yet `08` `aalCu`): the environments as segments with Import from
-//! project and Add secret at their end (`Environments` `JBh7t`), then a group per environment the filter shows, each
-//! secret a row with its kind's glyph, its name, what uses it, its masked value with when it was set, and the … that
-//! opens it (`DEEPSEEK_API_KEY` `JElwG`); an archived secret says so. A project with no secret, or an environment the
-//! filter shows with none, says so in a quiet row. How values are kept is said under the groups.
+//! project and Add secret at their end (`Environments` `JBh7t`), then a group per environment the filter shows, its
+//! count after its title, each secret a row with its kind's glyph, its name, what uses it, its masked value with when
+//! it was set, and the … that opens it (`DEEPSEEK_API_KEY` `JElwG`); an archived secret says so. A project with no
+//! secret, or an environment the filter shows with none, says so in a quiet row. How values are kept is said under the
+//! groups.
 use std::sync::Arc;
 
 use lurq::{
@@ -12,7 +13,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::secret::{Environment, Secret};
@@ -25,7 +26,7 @@ use super::{
 use crate::{
   routes::SecretsPanel,
   screens::project_settings::kit::{EmptyRow, Group, SettingRow},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -158,7 +159,7 @@ fn group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Envir
     &format!("secrets-group-{}", environment.as_str()),
     ctx.t(words::environment_key(environment)),
   )
-  .end(
+  .beside(
     Text::new(&count)
       .id("secrets-count")
       .variant(ExtraTypography::Note.role()),
@@ -226,7 +227,8 @@ impl PartialEq for RowProps {
 }
 impl DevtoolsInspectable for RowProps {}
 
-/// A secret's row; a press opens its page.
+/// A secret's row; a press opens its page, where its … menu is. The row ends in that … (`More` `qvfA3`), a 14 glyph in
+/// a 24 square.
 struct SecretRow;
 impl Component for SecretRow {
   type Props = RowProps;
@@ -243,13 +245,20 @@ impl Component for SecretRow {
         .variant(ExtraTypography::Note.role())
         .nowrap()
     });
+    let more = Row::new()
+      .id(format!("secret-more-{id}"))
+      .width(Dimension::Px(ControlHeight::Sm.value()))
+      .height(Dimension::Px(ControlHeight::Sm.value()))
+      .align_items(Alignment::Center)
+      .justify(Justify::Center)
+      .child(icon(Icon::Ellipsis, IconSize::Md, PaletteColor::TextMuted));
     SettingRow::new(format!("secret-row-{id}"), secret.name().as_str())
       .item()
       .mono_label()
       .lead(icon(words::glyph(secret.kind()), IconSize::Md, PaletteColor::TextMuted))
       .hint(props.used.clone())
       .controls(masked.map(Element::from))
-      .control(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
+      .control(more)
       .opens(props.view.reveal(id, secret.environment()))
       .render(ctx)
   }

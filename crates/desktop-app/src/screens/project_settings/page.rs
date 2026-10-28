@@ -18,7 +18,7 @@ use super::{Section, Shown, Status};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{Route, Screen},
+  routes::{NewConnection, Route, Screen},
   theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
     icon::{Icon, icon},
@@ -59,7 +59,15 @@ pub fn settings(
       )
     })
     .collect::<Vec<_>>();
-  let save = section.autosaves().then(|| save_status(ctx, status));
+  let save = match shown {
+    // A provider being added says it isn't saved yet (`Saved` `v6VzvO` in `10` `LaTB4`).
+    Shown::NewConnection(NewConnection::AgentProvider) => Some(status_line(
+      ctx,
+      (Icon::CircleDashed, PaletteColor::TextMuted),
+      "project_settings.notSavedYet",
+    )),
+    _ => section.autosaves().then(|| save_status(ctx, status)),
+  };
   let header = Row::new()
     .id("project-settings-header")
     .width(Dimension::Pct(100.0))
@@ -230,7 +238,11 @@ fn save_status(ctx: &Ctx, status: &Signal<Status>) -> Row {
     Status::Unsaved => (Icon::CircleAlert, PaletteColor::TextSecondary),
     Status::Invalid | Status::Failed => (Icon::CircleAlert, PaletteColor::Danger),
   };
-  // `Saved` `p7Rfc`: a 12 icon and the words in 12 `text_muted`, 6 apart.
+  status_line(ctx, (glyph, tone), key)
+}
+
+/// `Saved` `p7Rfc`: a 12 icon and the words in 12 `text_muted`, 6 apart.
+fn status_line(ctx: &Ctx, (glyph, tone): (Icon, PaletteColor), key: &str) -> Row {
   Row::new()
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
