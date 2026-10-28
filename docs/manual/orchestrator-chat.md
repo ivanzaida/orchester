@@ -77,9 +77,11 @@ Every change, proposal and refusal is kept in the conversation. A proposal card'
 (`changed_since_proposed`); automation's synthetic click on *Apply* is refused `person_only`. A turn the Orchestrator
 started itself is marked `[Orchester]`.
 
-## Person-only switches (Settings › What automation may do)
+## Person-only switches (Settings › Automation › The Orchestrator may)
 
-All off until a person turns them on; no tool and no synthetic input can change them.
+All off until a person turns them on; no tool and no synthetic input can change them. The window labels them
+shortly (*Publish drafts*, *Answer agents*, …); their full names, used below and in the logs, are *Let the
+Orchestrator …*.
 
 | Switch | What it enables |
 |---|---|
@@ -90,8 +92,8 @@ All off until a person turns them on; no tool and no synthetic input can change 
 | **Let the Orchestrator continue interrupted runs** | `resume_run` continues interrupted runs (crash, runner gone, *Quit now*, database busy) from the last checkpoint. With *answer agents*, an interruption's turn continues it once — not again within 10 minutes (`interrupted_again`), not while more than 3 runs stopped on a busy database within 10 minutes (`storage_contention`). |
 | **Let the Orchestrator write with git** | The git write tools below (otherwise `write_off`). |
 
-Related: *Let automation change agent permissions*, *Daily report from the Orchestrator* (delivery time), *Let
-Orchester estimate story points*.
+Related: *Let automation change agent permissions* (Settings › Automation), *Daily report from the Orchestrator*
+(Settings › Notifications), *Let Orchester estimate story points* (Project settings › Runs › Estimates).
 
 ## Chat-only tools (23)
 

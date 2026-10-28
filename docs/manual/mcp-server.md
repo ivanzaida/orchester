@@ -98,7 +98,7 @@ Tools outside the granted scopes are **not listed**, and calling one answers `un
 ### Window control
 
 - Default: **on** in debug builds, **off** in release builds (including the installed app).
-- Settings › *What automation may do* › **Agents can control this window** stores a value that overrides the build
+- Settings › Automation › *The window* › **Agents can control this window** stores a value that overrides the build
   default; it applies from the next start.
 - `ORCHESTER_APP_MCP_WINDOW_CONTROL=on|1|true|off|0|false` overrides both for one run.
 - `app_state` reports `mcp.window_control` and `mcp.source` (`build`, `stored`, `environment`).
@@ -106,7 +106,7 @@ Tools outside the granted scopes are **not listed**, and calling one answers `un
 
 ### Permission gates
 
-Some actions belong to a person. Two **person-only switches** in Settings › *What automation may do* widen what
+Some actions belong to a person. Two **person-only switches** in Settings › Automation › *Approvals and permissions* widen what
 automation may do; nothing over MCP or synthetic input can flip them:
 
 | Switch | Off by default; when off… |
