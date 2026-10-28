@@ -51,6 +51,7 @@ orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
 orchester-index = { path = "crates/index" }
 orchester-ipc = { path = "crates/ipc" }
+orchester-report = { path = "crates/report" }
 orchester-store = { path = "crates/store" }
 orchester-vault = { path = "crates/vault" }
 orchester-workspace = { path = "crates/workspace" }
@@ -134,7 +135,8 @@ rustls-platform-verifier = "0.7"
 rustix = { version = "1", default-features = false, features = ["std", "process", "system"] }
 # The Sentry event protocol, which GlitchTip speaks: the error reports of the app and the runner and the scrubber
 # every report passes through (`orchester-report`, `docs/error-reports.md`). The protocol's types and its client
-# hook are not a few lines of code. Without default features: no transport and no integrations, so nothing is sent.
+# hook are not a few lines of code. Without default features: no transport and no integrations, so nothing is sent
+# unless a crate turns them on (`orchester-app`'s `error_reports`).
 sentry = { version = "0.49", default-features = false }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"

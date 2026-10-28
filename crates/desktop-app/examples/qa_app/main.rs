@@ -18,6 +18,7 @@ use std::{error::Error, fs, sync::Arc};
 
 use orchester_app::{
   app_log, clipboard,
+  error_reports::{self, Environment},
   startup::{Launch, WindowPosition},
   test_support::signed_in,
   window,
@@ -50,6 +51,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     runtime.handle(),
     (log, signed_in::keychain()),
   );
+  // A QA copy reports its panics as `qa`, though it is a debug build (the person's decision, ORC-156), once its
+  // database is open and while its setting allows; kept to the end of `main`.
+  let _reports = error_reports::start(Environment::Qa, launch.workspace());
   // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
   // `trash` beside its data instead, never to the person's own.
   if let (Some(workspace), Some(folder)) = (launch.workspace(), location.database.parent()) {

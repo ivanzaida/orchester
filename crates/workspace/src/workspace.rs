@@ -442,6 +442,12 @@ impl Workspace {
     self.db.lock().set_notification_settings(settings)
   }
 
+  /// Whether the app sends its error reports to GlitchTip (`orchester_app::error_reports`); on until a person turns
+  /// it off.
+  pub fn sends_error_reports(&self) -> Result<bool, StoreError> {
+    self.db.lock().sends_error_reports()
+  }
+
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
     self.db.lock().daily_report_schedule()

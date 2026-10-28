@@ -1,13 +1,29 @@
 # Error reports
 
 When Orchester's desktop app or its runner fails, it can describe the failure in an error report. Reports use the
-Sentry protocol, which GlitchTip speaks. Orchester does not send any reports yet. This page lists what a report
-will carry once sending is added, and what is removed before a report leaves the computer.
+Sentry protocol, which GlitchTip speaks. This page lists what a report carries, and what is removed before a report
+leaves the computer.
 
 Every report from the app and the runner goes through one scrubber first: `ReportScrubber::scrub` in the
-`orchester-report` crate (`crates/report`), which becomes the Sentry client's `before_send`. The scrubber works from
+`orchester-report` crate (`crates/report`), which is the Sentry client's `before_send`. The scrubber works from
 a list of what to keep. Anything not on that list is dropped, including fields that later versions of the protocol
 add.
+
+## When reports are sent
+
+Today only the desktop app sends reports, and only of its panics, to the GlitchTip project `desktop`
+(`orchester_app::error_reports`). The runner sends none yet.
+
+- **Only while the setting is on.** The app reads it from `orchester.db` as soon as the database is open, right after
+  the session starts and before the window opens. A panic before that point is not reported: while the log starts,
+  while the window's position is checked, and while the session opens the database.
+- **Only the installed app and QA copies.** The installed app reports as environment `production`. A QA copy that
+  `tools/qa-app.ps1` starts reports as `qa`, and so does a release build started with `ORCHESTER_APP_MCP_DISCOVERY`.
+  Other debug builds, `cargo run --release` and the tests never start the client.
+- **No other data.** The client sends no default personal data (`send_default_pii` is off), no traces and no
+  sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`.
+- **Sent before exit.** When the app exits, it waits up to two seconds for pending reports to leave. The panic is
+  still written to the app's log file.
 
 ## What a report carries
 
