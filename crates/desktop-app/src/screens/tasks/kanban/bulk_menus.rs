@@ -1,8 +1,8 @@
 //! The lists the selection bar opens (`Bulk move menu` in `Bulk Move to refuses those cards` `Y27GJ`): the columns by
 //! status, each taking the selected cards that can go there and saying which stay and why, or unavailable with why
 //! when none can; the priorities; and the project's tags, a tag every selected card has taken off them all. A move
-//! asks first where a single card's drop asks: queuing drafts that start at once, and marking as done work that waits
-//! to be merged.
+//! asks first where a single card's drop asks: tasks whose runs ended moved to Todo (Don't move, Move to Todo or Run
+//! again), queuing drafts that start at once, and marking as done work that waits to be merged.
 
 use lurq::app::ctx::Ctx;
 use orchester_core::task::organization::{Priority, WorkflowStatus};
@@ -29,18 +29,19 @@ use crate::{
 };
 
 /// What a move of the selected cards to a column comes to: the changes it makes and the drafts among them it queues,
-/// the cards it closes and those of them whose work waits to be merged, and the cards that stay with why.
+/// the tasks whose runs ended that it runs again or only moves (each with its Run again change), the cards it closes
+/// and those of them whose work waits to be merged, and the cards that stay with why.
 #[derive(Default)]
 pub struct BulkMove {
   pub moving: Vec<Change>,
   pub queued: Vec<Subject>,
+  pub ended: Vec<(Subject, Change)>,
   pub closing: Vec<Subject>,
   pub unmerged: Vec<Subject>,
   pub staying: Vec<(Subject, moves::Refusal)>,
 }
 
-/// What moving `cards` to `status` does to each, by the rules a single card's drop follows; Run again is asked one
-/// task at a time, from its own card.
+/// What moving `cards` to `status` does to each, by the rules a single card's drop follows.
 pub fn bulk_move(dropping: &Dropping, cards: &[CardModel], status: WorkflowStatus) -> BulkMove {
   let mut found = BulkMove::default();
   for card in cards {
@@ -60,23 +61,57 @@ pub fn bulk_move(dropping: &Dropping, cards: &[CardModel], status: WorkflowStatu
       }
       Decision::Move(Move::ReturnToDraft) => found.moving.push(change(card, ChangeKind::ReturnToDraft)),
       Decision::Move(Move::Status(status)) => found.moving.push(change(card, ChangeKind::Status(status))),
-      Decision::Move(Move::RunAgain) => found.staying.push((subject, moves::Refusal::HasRun)),
+      // A latest run that cannot be read is refused, as a single card's drop refuses it.
+      Decision::Move(Move::RunAgain) => match card.latest_run {
+        Some(after) => {
+          let again = ChangeKind::RunAgain {
+            after,
+            revision: card.revision,
+            pipeline: card.pipeline.clone(),
+          };
+          found.ended.push((subject, change(card, again)));
+        }
+        None => found.staying.push((subject, moves::Refusal::HasRun)),
+      },
     }
   }
   found
 }
 
-/// Makes the changes of a move, asking first, as a single draft's drop on Todo does, when it queues drafts that start
-/// at once: agent slots are free and new starts are not held.
-fn change_or_ask(dropping: &Dropping, (moving, queued): (Vec<Change>, Vec<Subject>)) {
-  match dropping.free.filter(|free| *free > 0) {
-    Some(free) if !queued.is_empty() => dropping.state.asked.set(Some(Ask::BulkQueue {
-      queued,
-      free,
-      changes: moving,
-    })),
-    _ => dropping.state.change(moving),
+/// Makes the changes of a move, asking first, as a single card's drop on Todo does, when it takes tasks whose runs
+/// ended (they run again or only move), and when it queues drafts that start at once: agent slots are free and new
+/// starts are not held. Both asked, the drafts are asked about after the answer about the tasks whose runs ended.
+fn change_or_ask(dropping: &Dropping, (moving, queued, ended): (Vec<Change>, Vec<Subject>, Vec<(Subject, Change)>)) {
+  let starts = dropping.free.filter(|free| *free > 0 && !queued.is_empty());
+  if ended.is_empty() {
+    match starts {
+      Some(free) => dropping.state.asked.set(Some(Ask::BulkQueue {
+        queued,
+        free,
+        changes: moving,
+      })),
+      None => dropping.state.change(moving),
+    }
+    return;
   }
+  // Move to Todo starts nothing: the drafts that would start wait for their own question.
+  let (queues, changes) = match starts {
+    Some(_) => moving.into_iter().partition(|change| change.kind == ChangeKind::Queue),
+    None => (Vec::new(), moving),
+  };
+  let (ended, again) = ended.into_iter().unzip();
+  dropping.state.asked.set(Some(Ask::BulkRunAgain {
+    ended,
+    again,
+    changes,
+    then: starts.map(|free| {
+      Box::new(Ask::BulkQueue {
+        queued,
+        free,
+        changes: queues,
+      })
+    }),
+  }));
 }
 
 /// The columns by status.
@@ -89,11 +124,12 @@ pub fn move_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec<Men
       let BulkMove {
         moving,
         queued,
+        ended,
         closing,
         unmerged,
         staying,
       } = bulk_move(dropping, cards, status);
-      if moving.is_empty() && closing.is_empty() {
+      if moving.is_empty() && ended.is_empty() && closing.is_empty() {
         let reason = staying.first().map_or_else(
           || ctx.t("tasks.board.bulk.allThere"),
           |(_, refusal)| ctx.t(reason_key(*refusal)),
@@ -110,7 +146,7 @@ pub fn move_rows(ctx: &Ctx, dropping: &Dropping, cards: &[CardModel]) -> Vec<Men
           };
           close_selected(&dropping.state, closing_as, (closing.clone(), unmerged.clone()));
         }
-        change_or_ask(&dropping, (moving.clone(), queued.clone()));
+        change_or_ask(&dropping, (moving.clone(), queued.clone(), ended.clone()));
       })
       .icon(glyph);
       match staying.first() {
