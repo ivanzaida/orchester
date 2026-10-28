@@ -15,7 +15,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::AccountSeries;
+use orchester_core::usage::ProviderSeries;
 
 use super::series::series_swatch;
 use crate::{
@@ -40,12 +40,12 @@ pub enum Width {
 #[derive(Clone, Debug)]
 pub struct TableColumn {
   pub heading: Arc<str>,
-  /// A line over the heading: the CLI over its account's name (`CODEX` over `CLIENT` in `FdC7Y`).
+  /// A line over the heading (`OTHER` over `2 PROVIDERS`, as `CODEX` over `CLIENT` in `FdC7Y`).
   pub over: Option<Arc<str>>,
   pub width: Width,
   pub figures: bool,
   /// The series its figures are, whose swatch goes before its heading (`CLIENT` in `FdC7Y`).
-  pub swatch: Option<AccountSeries>,
+  pub swatch: Option<ProviderSeries>,
 }
 
 pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
@@ -59,7 +59,7 @@ pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
 }
 
 impl TableColumn {
-  pub const fn swatch(mut self, series: AccountSeries) -> Self {
+  pub const fn swatch(mut self, series: ProviderSeries) -> Self {
     self.swatch = Some(series);
     self
   }

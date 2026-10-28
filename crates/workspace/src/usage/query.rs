@@ -8,13 +8,13 @@
 //! | `period` | `today`, `7d`, `30d` (not with `from`/`to`) |
 //! | `from`, `to` | a custom range of local days, `2026-10-01`, both given, at most 366 days |
 //! | `project` | a project's id, on every project's page |
-//! | `group` | `hour`, `day`, `task`, `pipeline`, `step`, `agent`, `model`, `account`; left out, `hour` for today |
+//! | `group` | `hour`, `day`, `task`, `pipeline`, `step`, `agent`, `model`, `provider`; left out, `hour` for today |
 //! | `cli` | `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api` |
 //! | `model`, `tag`, `step` | a name |
 //! | `agent`, `pipeline` | a profile's or pipeline's id, or its name |
 //! | `task` | a task's key (`KON-12`) or id |
 //! | `run` | an id |
-//! | `account` | an account's id, or `none` for usage that started on no account |
+//! | `provider` | an agent connection's id, or `earlier` for usage no record names a provider for |
 //!
 //! An empty value (`model=`) is refused, as is a range longer than [`LONGEST_DAYS`].
 
@@ -41,9 +41,9 @@ const TAG: &str = "tag";
 const TASK: &str = "task";
 const RUN: &str = "run";
 const STEP: &str = "step";
-const ACCOUNT: &str = "account";
-/// The `account` value of usage that started on no account.
-pub const NO_ACCOUNT: &str = "none";
+const PROVIDER: &str = "provider";
+/// The `provider` value of usage no record names a provider for (*Earlier runs*).
+pub const EARLIER: &str = "earlier";
 
 /// The period, the grouping and the filters. Only every project's page chooses projects: a project's page
 /// is the project's, and `get_usage` takes its project apart.
@@ -103,12 +103,12 @@ impl UsageQuery {
   }
 
   /// The query as the page shows it: the page groups *Tokens over time* by hour or by day only (*Group by*,
-  /// `diJNR`), so a grouping by task, pipeline, step, agent, model or account, which `get_usage`'s rows
+  /// `diJNR`), so a grouping by task, pipeline, step, agent, model or provider, which `get_usage`'s rows
   /// have, is by day on the page.
   pub fn on_page(&self) -> Self {
     let group = match self.group {
       GroupBy::Hour | GroupBy::Day => self.group,
-      GroupBy::Task | GroupBy::Pipeline | GroupBy::Step | GroupBy::Agent | GroupBy::Model | GroupBy::Account => {
+      GroupBy::Task | GroupBy::Pipeline | GroupBy::Step | GroupBy::Agent | GroupBy::Model | GroupBy::Provider => {
         GroupBy::Day
       }
     };
@@ -150,9 +150,9 @@ impl UsageQuery {
     }
     params.extend(filter.runs.iter().map(|run| (RUN, run.to_string())));
     params.extend(filter.steps.iter().map(|step| (STEP, step.to_string())));
-    params.extend(filter.accounts.iter().map(|account| (ACCOUNT, account.to_string())));
-    if filter.no_account {
-      params.push((ACCOUNT, NO_ACCOUNT.to_owned()));
+    params.extend(filter.providers.iter().map(|provider| (PROVIDER, provider.to_string())));
+    if filter.earlier {
+      params.push((PROVIDER, EARLIER.to_owned()));
     }
     params
   }
@@ -185,11 +185,11 @@ impl UsageQuery {
     filter.tasks = parsed(TASK, all(TASK)?, text)?;
     filter.runs = parsed(RUN, all(RUN)?, |value| value.parse().ok())?;
     filter.steps = parsed(STEP, all(STEP)?, text)?;
-    let accounts = all(ACCOUNT)?;
-    filter.no_account = accounts.iter().any(|value| value == NO_ACCOUNT);
-    filter.accounts = parsed(
-      ACCOUNT,
-      accounts.into_iter().filter(|value| value != NO_ACCOUNT).collect(),
+    let providers = all(PROVIDER)?;
+    filter.earlier = providers.iter().any(|value| value == EARLIER);
+    filter.providers = parsed(
+      PROVIDER,
+      providers.into_iter().filter(|value| value != EARLIER).collect(),
       |value| value.parse().ok(),
     )?;
     let period = period_of(period, from, to)?;
@@ -307,7 +307,7 @@ pub const fn group_name(group: GroupBy) -> &'static str {
     GroupBy::Step => "step",
     GroupBy::Agent => "agent",
     GroupBy::Model => "model",
-    GroupBy::Account => "account",
+    GroupBy::Provider => "provider",
   }
 }
 
@@ -320,7 +320,7 @@ pub fn group_of(name: &str) -> Option<GroupBy> {
     GroupBy::Step,
     GroupBy::Agent,
     GroupBy::Model,
-    GroupBy::Account,
+    GroupBy::Provider,
   ]
   .into_iter()
   .find(|group| group_name(*group) == name)

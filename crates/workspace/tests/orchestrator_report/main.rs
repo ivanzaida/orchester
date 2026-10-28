@@ -27,7 +27,7 @@ use orchester_core::{
     ActionOutcome, Chat, ChatAction, DailyReport, EntryKind, OrchestratorSettings, ReportSchedule, ReportTime, RunEnd,
     TurnState,
     change::{Change, ProposedChange},
-    report::{ActionWay, MergedBy, PersonWaitKind},
+    report::{ActionWay, MergedBy, PersonWaitKind, SharedBy},
   },
   resource::ModelId,
   revision::Revision,
@@ -147,19 +147,13 @@ fn action(tool: &str, task: &str, outcome: ActionOutcome, settled: Option<Timest
 /// The report of the day the tests tell, read at `now`.
 fn report(fixture: &Fixture, now: Timestamp) -> DailyReport {
   let programs = Programs::processes();
-  build_in((fixture.repo.path(), &programs), Vec::new(), (day(), now)).expect("built")
+  build_in((fixture.repo.path(), &programs), (day(), now)).expect("built")
 }
 
 /// Delivers the report of `day` at `now`, *answer agents* as `answers` says.
 fn deliver(fixture: &Fixture, (day, now): (NaiveDate, Timestamp), answers: bool) -> Delivery {
   let programs = Programs::processes();
-  deliver_in(
-    (fixture.repo.path(), &programs),
-    (Vec::new(), answers),
-    (day, now),
-    "Daily report",
-  )
-  .expect("delivered")
+  deliver_in((fixture.repo.path(), &programs), answers, (day, now), "Daily report").expect("delivered")
 }
 
 /// The reports the project's conversations hold, with whether each started its turn.
@@ -272,7 +266,23 @@ fn report_of_a_busy_day_tells_what_was_done_and_how_the_work_stands() {
     (read.usage.tasks[0].task.as_str(), read.usage.tasks[0].spent),
     ("ORC-4", 4_000)
   );
-  assert_eq!(read.usage.accounts.len(), 1);
+  let [provider] = read.usage.providers.as_slice() else {
+    panic!("the day's one provider: {:?}", read.usage.providers);
+  };
+  // The fixture's profile names a connection the project does not keep: it reads as a removed provider.
+  assert!(
+    matches!(
+      &provider.by,
+      SharedBy::Provider {
+        name: None,
+        removed: true,
+        ..
+      }
+    ),
+    "the connection the agent's profile names, never No account: {provider:?}"
+  );
+  assert_eq!(provider.spent, 4_000);
+  assert!(provider.link.contains("provider="), "{}", provider.link);
   assert!(
     read.usage.link.contains("from=2026-10-20&to=2026-10-20"),
     "{}",
@@ -410,7 +420,7 @@ fn report_comes_once_a_day_and_get_daily_report_reads_the_same() {
   let mut fixture = Fixture::new();
   busy_day(&mut fixture);
   let in_repo = (fixture.repo.path(), &Programs::processes());
-  let (built, delivered) = report_in(in_repo, Vec::new(), (day(), at(18))).expect("read");
+  let (built, delivered) = report_in(in_repo, (day(), at(18))).expect("read");
   assert!(!delivered, "built while the day has no report");
   assert_eq!(built, report(&fixture, at(18)));
 
@@ -422,7 +432,7 @@ fn report_comes_once_a_day_and_get_daily_report_reads_the_same() {
   );
   let [(kept, _)] = kept_reports(&fixture).try_into().expect("one report");
   assert_eq!(kept, built);
-  let (read, delivered) = report_in(in_repo, Vec::new(), (day(), at(21))).expect("read");
+  let (read, delivered) = report_in(in_repo, (day(), at(21))).expect("read");
   assert!(delivered);
   assert_eq!(read, kept, "the report as it was delivered");
 }

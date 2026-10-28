@@ -1,6 +1,8 @@
-//! How a series looks (`Chart colors` `FDC8B`, `Series hatch` `LEQ1w`): accounts 1–3 in `chart_1`–`chart_3`,
-//! Other accounts in `chart_other`, No account hatched — `chart_none` stripes and outline over `chart_hatch` —
-//! and the words of its label (*Codex · Client*, *Other accounts · 2*, *No account*).
+//! How a series looks (`Chart colors` `FDC8B`, `Series hatch` `LEQ1w`): agent providers 1–3 in `chart_1`–`chart_3`,
+//! Other providers in `chart_other`, Earlier runs hatched — `chart_none` stripes and outline over `chart_hatch` — and
+//! the words of its label (*Claude · DeepSeek* as the Connections page names it, *Other providers · 2*, *Earlier
+//! runs*). The design draws accounts in these places (`P0pTa`); providers take their look (decided 2026-10-28). *Plan
+//! limits* draws accounts, whose limits they are, in the same palette, and names them (*Codex · Client*).
 
 use std::sync::Arc;
 
@@ -12,8 +14,11 @@ use lurq::{
   components::Row,
   node::{Element, Gradient, GradientStop, border::Border, dimension::Dimension},
 };
-use orchester_core::{account::AccountCli, usage::AccountSeries};
-use orchester_workspace::usage::{AccountLabel, SeriesLabel};
+use orchester_core::{
+  account::AccountCli,
+  usage::{AccountSeries, ProviderSeries},
+};
+use orchester_workspace::usage::{AccountLabel, ProviderLabel, SeriesLabel};
 
 use super::card::{SWATCH, swatch};
 use crate::theme::{ExtraColor, ExtraRadius};
@@ -22,23 +27,28 @@ use crate::theme::{ExtraColor, ExtraRadius};
 const STRIPES: usize = 3;
 const STRIPE_SHARE: f32 = 0.35;
 
-/// The color `series` is drawn in; No account's stripes and outline.
-pub fn series_color(series: AccountSeries) -> PaletteColor {
-  match series {
-    AccountSeries::Account(place) => match place.get() {
-      0 => ExtraColor::Chart1.role(),
-      1 => ExtraColor::Chart2.role(),
-      _ => ExtraColor::Chart3.role(),
-    },
-    AccountSeries::Other => ExtraColor::ChartOther.role(),
-    AccountSeries::NoAccount => ExtraColor::ChartNone.role(),
+/// The color of the palette's place `index` (`ProviderSeries::index`): its first three, then Other's.
+fn palette(index: usize) -> PaletteColor {
+  match index {
+    0 => ExtraColor::Chart1.role(),
+    1 => ExtraColor::Chart2.role(),
+    2 => ExtraColor::Chart3.role(),
+    _ => ExtraColor::ChartOther.role(),
   }
 }
 
-/// `series`' swatch (`Swatch` `p4TazJ`): No account's hatched (`LEQ1w`).
-pub fn series_swatch(series: AccountSeries) -> Element {
+/// The color `series` is drawn in; Earlier runs' stripes and outline.
+pub fn series_color(series: ProviderSeries) -> PaletteColor {
   match series {
-    AccountSeries::NoAccount => hatched(Row::new().size(Dimension::Px(SWATCH), Dimension::Px(SWATCH)))
+    ProviderSeries::Earlier => ExtraColor::ChartNone.role(),
+    series => palette(series.index()),
+  }
+}
+
+/// `series`' swatch (`Swatch` `p4TazJ`): Earlier runs' hatched (`LEQ1w`).
+pub fn series_swatch(series: ProviderSeries) -> Element {
+  match series {
+    ProviderSeries::Earlier => hatched(Row::new().size(Dimension::Px(SWATCH), Dimension::Px(SWATCH)))
       .flex_shrink(0.0)
       .rounded(ExtraRadius::Swatch.role())
       .into(),
@@ -46,12 +56,22 @@ pub fn series_swatch(series: AccountSeries) -> Element {
   }
 }
 
-/// `part` filled as `series` is: its color, or No account's stripes over `chart_hatch`.
-pub fn series_fill(part: Row, series: AccountSeries) -> Row {
+/// `part` filled as `series` is: its color, or Earlier runs' stripes over `chart_hatch`.
+pub fn series_fill(part: Row, series: ProviderSeries) -> Row {
   match series {
-    AccountSeries::NoAccount => hatched(part),
+    ProviderSeries::Earlier => hatched(part),
     series => part.background(series_color(series)),
   }
+}
+
+/// The color of an account's plan limit lines.
+pub fn account_color(series: AccountSeries) -> PaletteColor {
+  palette(series.index())
+}
+
+/// The swatch of an account's plan limit lines.
+pub fn account_swatch(series: AccountSeries) -> Element {
+  swatch(account_color(series))
 }
 
 /// `part` hatched: `chart_none` stripes at 45° and a 1 outline over `chart_hatch` (`LEQ1w`).
@@ -74,19 +94,11 @@ fn hatched(part: Row) -> Row {
     .border(Border::inside(BorderSize::Sm, stripe))
 }
 
-/// A CLI's short name, as a series label starts with it (*Codex*, *Claude*).
+/// A CLI's short name, as an account's label starts with it (*Codex*, *Claude*).
 pub fn cli_short(ctx: &Ctx, cli: AccountCli) -> Arc<str> {
   ctx.t(match cli {
     AccountCli::Codex => "usage.cli.codex",
     AccountCli::ClaudeCode => "usage.cli.claude",
-  })
-}
-
-/// A CLI's name as a menu heads its accounts (*Codex*, *Claude Code*).
-pub fn cli_heading(ctx: &Ctx, cli: AccountCli) -> Arc<str> {
-  ctx.t(match cli {
-    AccountCli::Codex => "usage.accounts.codex",
-    AccountCli::ClaudeCode => "usage.accounts.claudeCode",
   })
 }
 
@@ -109,32 +121,33 @@ pub fn account_text(ctx: &Ctx, label: &AccountLabel) -> Arc<str> {
   }
 }
 
-/// How a series reads in a legend, a tooltip or a menu.
-pub fn series_text(ctx: &Ctx, label: &SeriesLabel) -> Arc<str> {
+/// An agent provider by its name as the Connections page shows it; one gone since by the name it had, *(removed)*.
+pub fn provider_text(ctx: &Ctx, label: &ProviderLabel) -> Arc<str> {
   match label {
-    SeriesLabel::Account(account) | SeriesLabel::OtherOne(account) => account_text(ctx, account),
-    SeriesLabel::Other(count) => ctx.t_args("usage.accounts.other", [("count", count.to_string().as_str())]),
-    SeriesLabel::NoAccount => ctx.t("usage.accounts.none"),
+    ProviderLabel::Connected { name } => name.clone(),
+    ProviderLabel::Removed { name: Some(name) } => ctx.t_args("usage.providers.removed", [("name", &**name)]),
+    ProviderLabel::Removed { name: None } => ctx.t("usage.providers.removedUnnamed"),
   }
 }
 
-/// How a series heads a table's column, in capitals: the CLI over the account (*CODEX* / *CLIENT*), *OTHER* over
-/// *2 ACCOUNTS*, or *NO ACCOUNT* alone.
+/// How a series reads in a legend, a tooltip or a menu.
+pub fn series_text(ctx: &Ctx, label: &SeriesLabel) -> Arc<str> {
+  match label {
+    SeriesLabel::Provider(provider) | SeriesLabel::OtherOne(provider) => provider_text(ctx, provider),
+    SeriesLabel::Other(count) => ctx.t_args("usage.providers.other", [("count", count.to_string().as_str())]),
+    SeriesLabel::Earlier => ctx.t("usage.providers.earlier"),
+  }
+}
+
+/// How a series heads a table's column, in capitals: the provider's name (*CLAUDE · DEEPSEEK*), *OTHER* over
+/// *2 PROVIDERS*, or *EARLIER RUNS*.
 pub fn series_heading(ctx: &Ctx, label: &SeriesLabel) -> (Option<Arc<str>>, Arc<str>) {
   let upper = |text: Arc<str>| -> Arc<str> { text.to_uppercase().into() };
   match label {
-    SeriesLabel::Account(AccountLabel::Known { cli, name })
-    | SeriesLabel::OtherOne(AccountLabel::Known { cli, name }) => (
-      Some(upper(cli_short(ctx, *cli))),
-      upper(account_name(ctx, name.as_ref())),
-    ),
-    SeriesLabel::Account(AccountLabel::Removed) | SeriesLabel::OtherOne(AccountLabel::Removed) => {
-      (None, upper(ctx.t("usage.accounts.removed")))
-    }
     SeriesLabel::Other(count) => (
-      Some(upper(ctx.t("usage.accounts.otherHeading"))),
-      upper(ctx.t_args("usage.accounts.count", [("count", count.to_string().as_str())])),
+      Some(upper(ctx.t("usage.providers.otherHeading"))),
+      upper(ctx.t_args("usage.providers.count", [("count", count.to_string().as_str())])),
     ),
-    SeriesLabel::NoAccount => (None, upper(ctx.t("usage.accounts.none"))),
+    label => (None, upper(series_text(ctx, label))),
   }
 }

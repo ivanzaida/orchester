@@ -19,7 +19,7 @@ use super::harness::{Orchestrator, Setup};
 fn keep_report(screen: &Orchestrator, automatic: bool) -> (DailyReport, i64) {
   let now = Timestamp::now();
   let programs = Programs::processes();
-  let built = build_in((&screen.root, &programs), Vec::new(), (local_date(now), now)).expect("built");
+  let built = build_in((&screen.root, &programs), (local_date(now), now)).expect("built");
   let report = DailyReport { automatic, ..built };
   let chat = Chat::named(ChatId::generate(), "Daily report", now);
   let mut db = screen.db();

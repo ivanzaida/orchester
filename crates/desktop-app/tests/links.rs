@@ -13,7 +13,7 @@ use orchester_app::routes::{
 };
 use orchester_core::{
   connection::AgentProvider,
-  id::{AgentAccountId, ProjectId, RunId},
+  id::{ConnectionId, ProjectId, RunId},
   project::TaskKey,
   revision::Revision,
   usage::{DayRange, GroupBy, Period},
@@ -102,8 +102,8 @@ fn usage_queries() -> [UsageQuery; 2] {
   filter.tasks.push("ORC-24".into());
   filter.runs.push(RunId::generate());
   filter.steps.push("Implement".into());
-  filter.accounts.push(AgentAccountId::generate());
-  filter.no_account = true;
+  filter.providers.push(ConnectionId::generate());
+  filter.earlier = true;
   let today = UsageQuery {
     period: Period::Today,
     group: GroupBy::Hour,
@@ -322,14 +322,18 @@ fn links_have_the_documented_paths() {
 }
 
 #[test]
-fn links_carry_an_account_and_no_account_and_read_back() {
+fn links_carry_a_provider_and_earlier_runs_and_read_back() {
   let mut query = UsageQuery::default();
-  query.filter.accounts.push(id());
-  query.filter.no_account = true;
+  query.filter.providers.push(id());
+  query.filter.earlier = true;
   let link = Link::UsageEverywhere(Box::new(query.clone()));
   let path = link.path();
-  assert_eq!(path, format!("/usage?account={ID}&account=none"));
+  assert_eq!(path, format!("/usage?provider={ID}&provider=earlier"));
   assert_eq!(Route::parse(&path), Ok(Route::Usage(Box::new(query))));
+  assert!(
+    Route::parse("/usage?account=none").is_err(),
+    "there is no No account to link to"
+  );
 }
 
 #[test]

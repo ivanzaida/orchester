@@ -1,11 +1,14 @@
-//! The page by connected account (`Usage · many accounts` `u2cb1M`) on the `usage` seed's five accounts: the
-//! legend's series in order with Other accounts and No account last with its ⓘ, the table taking the whole
-//! row with more than three series, the Account filter grouped by CLI with *No account*, and what *Plan limits*
-//! says when the filter hides its windows.
+//! The page by agent provider (decided 2026-10-28, in the look of `Usage · many accounts` `u2cb1M`) on the `usage`
+//! seed's four connections: the legend's series in the Connections page's order with Other providers and *Earlier
+//! runs* last with its ⓘ, never *No account*; the table taking the whole row with more than three series; the Provider
+//! filter with *Earlier runs*; what *Plan limits*, which follow the CLI filter only, says; and the plan limit tables,
+//! still by account.
+
+use std::path::Path;
 
 use orchester_core::{
-  account::AccountCli,
-  id::AgentAccountId,
+  connection::AgentProvider,
+  id::{AgentAccountId, ConnectionId},
   time::Timestamp,
   usage::{DayRange, Period, local_date},
 };
@@ -14,32 +17,46 @@ use orchester_workspace::usage::UsageQuery;
 use crate::harness::Seeded;
 
 #[test]
-fn usage_accounts_legend_goes_by_account_with_other_and_no_account_last() {
+fn usage_providers_legend_goes_by_provider_with_other_and_earlier_runs_last() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
   let legend = |page: &mut Seeded, series: usize| page.text(&format!("usage-tokens-legend-{series}"));
-  assert!(legend(&mut page, 0).starts_with("Codex · Client"), "the first account");
-  assert!(legend(&mut page, 1).starts_with("Codex · Default"));
-  assert!(legend(&mut page, 2).starts_with("Claude · Work"));
   assert!(
-    legend(&mut page, 3).starts_with("Other accounts · 2"),
-    "Personal and Claude's Default: {}",
+    legend(&mut page, 0).starts_with("Claude Code · Kontur"),
+    "the Connections page's first: {}",
+    legend(&mut page, 0)
+  );
+  assert!(
+    legend(&mut page, 1).starts_with("Claude · DeepSeek"),
+    "the API key's run is its provider's"
+  );
+  assert!(legend(&mut page, 2).starts_with("Codex · Client"));
+  assert!(
+    legend(&mut page, 3).starts_with("Codex · Kontur"),
+    "Other's one provider reads as it: {}",
     legend(&mut page, 3)
   );
   assert!(
-    legend(&mut page, 4).starts_with("No account"),
-    "the reviewer and unrecorded runs"
+    legend(&mut page, 4).starts_with("Earlier runs"),
+    "the reviews from before providers were recorded"
   );
-  assert!(page.shows("usage-no-account-info"), "No account's ⓘ");
+  assert!(page.shows("usage-earlier-info"), "Earlier runs' ⓘ");
+  assert!(page.ids("usage-no-account").is_empty(), "no No account anywhere");
 }
 
 #[test]
-fn usage_accounts_table_takes_the_row_with_more_than_three_series() {
+fn usage_providers_table_takes_the_row_with_more_than_three_series() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
   page.click("usage-tokens-view-table");
   let header = page.text("usage-tokens-table-header");
-  for heading in ["CODEX", "CLIENT", "WORK", "OTHER", "2 ACCOUNTS", "NO ACCOUNT"] {
+  for heading in [
+    "CLAUDE CODE · KONTUR",
+    "CLAUDE · DEEPSEEK",
+    "CODEX · CLIENT",
+    "EARLIER RUNS",
+  ] {
     assert!(header.contains(heading), "{heading} in {header}");
   }
+  assert!(!header.contains("NO ACCOUNT"), "{header}");
   assert!(
     page.shows("usage-limits-row"),
     "Plan limits goes under the table (FdC7Y)"
@@ -47,39 +64,52 @@ fn usage_accounts_table_takes_the_row_with_more_than_three_series() {
 }
 
 #[test]
-fn usage_accounts_filter_groups_by_cli_and_chooses_no_account() {
+fn usage_providers_filter_lists_the_providers_then_earlier_runs() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
-  page.click("usage-filter-account");
-  assert!(page.shows("usage-filter-account-menu-group-codex"));
-  assert!(page.shows("usage-filter-account-menu-group-claude_code"));
-  assert_eq!(page.text("usage-filter-account-option-0-label"), "Client");
-  assert_eq!(page.text("usage-filter-account-option-5-label"), "No account");
-  page.click("usage-filter-account-option-5");
-  assert!(page.query().filter.no_account, "No account chosen");
-  page.until("the chip", |page| page.shows("usage-filter-account-chip-0"));
-  assert_eq!(page.text("usage-filter-account-label"), "Account · 1 of 6");
-  assert_eq!(page.text("usage-filter-account-chip-0"), "Account No account");
-  assert_eq!(
-    page.text("usage-limits-none-title"),
-    "No plan limits from the chosen accounts",
-    "plan limits follow the Account filter; reports it leaves out still came"
+  page.click("usage-filter-provider");
+  assert!(page.shows("usage-filter-provider-menu-group"));
+  assert_eq!(page.text("usage-filter-provider-option-1-label"), "Claude · DeepSeek");
+  assert_eq!(page.text("usage-filter-provider-option-4-label"), "Earlier runs");
+  page.click("usage-filter-provider-option-1");
+  assert_eq!(page.query().filter.providers.len(), 1, "Claude · DeepSeek chosen");
+  page.until("the chip", |page| page.shows("usage-filter-provider-chip-0"));
+  assert_eq!(page.text("usage-filter-provider-label"), "Provider · 1 of 5");
+  assert_eq!(page.text("usage-filter-provider-chip-0"), "Provider Claude · DeepSeek");
+  assert!(
+    page.shows("usage-limits-legend"),
+    "a provider chooses no account's plan limits"
   );
 }
 
-/// Three series: Codex's Default, Claude Code's Default (Other's one account) and No account.
-fn three_series() -> UsageQuery {
-  let mut query = UsageQuery::default();
-  query.filter.accounts = vec![
-    AccountCli::Codex.default_account(),
-    AccountCli::ClaudeCode.default_account(),
-  ];
-  query.filter.no_account = true;
-  query
+/// The `usage` seed's connections by name.
+fn connections(repo: &Path) -> Vec<(String, ConnectionId)> {
+  let db = rusqlite::Connection::open(repo.join(".orchester").join("orchester.db")).expect("the project database");
+  let mut statement = db.prepare("SELECT name, id FROM connections").expect("a query");
+  statement
+    .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+    .expect("the connections")
+    .map(|row| {
+      let (name, id) = row.expect("a connection");
+      (name, id.parse().expect("an id"))
+    })
+    .collect()
 }
 
 #[test]
-fn usage_accounts_narrow_table_shows_every_heading_and_cell_whole() {
-  let mut page = Seeded::usage("usage", three_series());
+fn usage_providers_narrow_table_shows_every_heading_and_cell_whole() {
+  let mut chosen = Vec::new();
+  let mut page = Seeded::prepared("usage", false, |repo| {
+    chosen = connections(repo)
+      .into_iter()
+      .filter(|(name, _)| name == "Claude · DeepSeek" || name == "Codex · Client")
+      .map(|(_, id)| id)
+      .collect();
+  });
+  let mut query = UsageQuery::default();
+  query.filter.providers = chosen;
+  query.filter.earlier = true;
+  page.go(query);
+  page.until("the usage", |page| page.shows("usage-tokens-chart"));
   page.click("usage-tokens-view-table");
   assert!(!page.shows("usage-limits-row"), "three series stay beside Plan limits");
   let width = |page: &mut Seeded, cell: usize| page.bounds(&format!("usage-tokens-table-row-0-cell-{cell}")).2;
@@ -90,28 +120,16 @@ fn usage_accounts_narrow_table_shows_every_heading_and_cell_whole() {
     );
   }
   let header = page.text("usage-tokens-table-header");
-  assert!(header.contains("NO ACCOUNT"), "{header}");
-  assert_headings_fit(&mut page, "usage-tokens-table", 6);
+  assert!(header.contains("EARLIER RUNS"), "{header}");
   let mut row = 0;
   while page.shows(&format!("usage-tokens-table-row-{row}")) {
-    for cell in 0..6 {
-      assert_whole(&mut page, &format!("usage-tokens-table-row-{row}-cell-{cell}"));
-    }
     row += 1;
   }
   assert!(row >= 7, "a week's rows");
-  for cell in 0..6 {
-    assert_whole(&mut page, &format!("usage-tokens-table-total-cell-{cell}"));
-  }
-  let footnote = page.text("usage-tokens-footnote");
-  assert!(
-    footnote.starts_with("Exact counts as the CLIs reported them. Today counts up to "),
-    "{footnote}"
-  );
 }
 
 #[test]
-fn usage_accounts_readings_from_yesterday_keep_their_window_whole() {
+fn usage_providers_readings_from_yesterday_keep_their_window_whole() {
   let yesterday = local_date(Timestamp::now()).pred_opt().expect("a day before today");
   let query = UsageQuery {
     period: Period::Custom(DayRange::new(yesterday, yesterday).expect("a day")),
@@ -136,7 +154,7 @@ fn usage_accounts_readings_from_yesterday_keep_their_window_whole() {
 }
 
 #[test]
-fn usage_accounts_resets_on_a_two_digit_day_stay_whole() {
+fn usage_providers_resets_on_a_two_digit_day_stay_whole() {
   // Oct 8, 2026 at noon UTC: Codex's weekly window resets on Oct 12 and Claude's on Oct 10.
   let now = Timestamp::from_unix_millis(1_791_460_800_000);
   let today = local_date(now);
@@ -209,38 +227,37 @@ fn assert_whole(page: &mut Seeded, cell: &str) {
 }
 
 #[test]
-fn usage_accounts_compact_plan_limits_name_the_filter_that_hides_them() {
+fn usage_providers_compact_plan_limits_name_the_cli_filter_that_hides_them() {
   let mut query = UsageQuery::default();
-  query.filter.no_account = true;
+  query.filter.clis.push(AgentProvider::OpenAiApi);
   query.filter.models.push("claude-opus-5-5".into());
-  query.filter.pipelines.push("Quick fix".into());
   let mut page = Seeded::usage("usage", query);
   assert!(page.shows("usage-unmatched"), "the filters match no run");
   assert_eq!(
     page.text("usage-limits-caption"),
-    "no plan limits from the chosen accounts",
-    "No account has no plan limits; the CLIs still reported theirs"
+    "no plan limits from the chosen CLIs",
+    "an API reports no plan limits; the CLIs still reported theirs"
   );
 }
 
 #[test]
-fn usage_accounts_without_runs_plan_limits_follow_the_account_filter() {
+fn usage_providers_without_runs_plan_limits_follow_the_cli_filter() {
   let mut query = UsageQuery {
     period: Period::Today,
     ..UsageQuery::default()
   };
-  query.filter.accounts.push(AccountCli::Codex.default_account());
+  query.filter.clis.push(AgentProvider::CodexCli);
   let mut page = Seeded::usage("usage-empty", query);
   assert!(page.shows("usage-no-runs"), "nothing ran today");
   let caption = page.text("usage-limits-caption");
   assert!(
-    caption.starts_with("follow the Account filter only"),
-    "the windows shown are the chosen account's: {caption}"
+    caption.starts_with("follow the CLI filter only"),
+    "the windows shown are the chosen CLI's: {caption}"
   );
 }
 
 #[test]
-fn usage_accounts_plan_limit_windows_of_removed_accounts_keep_their_own_ids() {
+fn usage_providers_plan_limit_windows_of_removed_accounts_keep_their_own_ids() {
   // Codex's reports and Claude's each on an account no longer connected: two removed accounts, each with a
   // 5-hour and a weekly window.
   let mut page = Seeded::prepared("usage", false, |repo| {

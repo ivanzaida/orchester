@@ -130,22 +130,44 @@ fn domain_usage_names_values_that_match_nothing_and_rounds_rows_to_the_total() {
 }
 
 #[test]
-fn domain_usage_names_usage_on_no_account_and_filters_to_it() {
+fn domain_usage_names_each_provider_and_filters_to_it_by_name_or_id() {
   let (mut served, _) = Served::seeded("usage");
-  let accounts = served.ok("get_usage", &json!({ "project": "Kontur", "group": "account" }));
-  let rows = accounts["rows"].as_array().expect("rows");
-  let none = rows
+  let providers = served.ok("get_usage", &json!({ "project": "Kontur", "group": "provider" }));
+  let rows = providers["rows"].as_array().expect("rows");
+  assert!(
+    rows.iter().all(|row| row.get("account").is_none()),
+    "no row is an account's, and none is No account: {providers}"
+  );
+  let deepseek = rows
     .iter()
-    .find(|row| row["account"].is_null())
-    .unwrap_or_else(|| panic!("a row of usage on no account: {accounts}"));
-  let Route::Project(_, ProjectPage::Usage(query)) = routed(&none["link"]) else {
+    .find(|row| row["provider"]["name"] == "Claude · DeepSeek")
+    .unwrap_or_else(|| panic!("the API key's usage under its provider: {providers}"));
+  assert_eq!(deepseek["provider"]["removed"], false);
+  let Route::Project(_, ProjectPage::Usage(query)) = routed(&deepseek["link"]) else {
     panic!("its link opens the Usage page");
   };
-  assert!(query.filter.no_account, "the link chooses No account: {}", none["link"]);
-  let alone = served.ok("get_usage", &json!({ "project": "Kontur", "account": "none" }));
+  let id = deepseek["provider"]["id"].as_str().expect("its id");
+  assert_eq!(query.filter.providers.len(), 1, "the link chooses the provider");
+  assert_eq!(query.filter.providers[0].to_string(), id);
+  for named in [id, "claude · deepseek"] {
+    let alone = served.ok("get_usage", &json!({ "project": "Kontur", "provider": named }));
+    assert_eq!(
+      alone["total"]["tokens"]["spent"], deepseek["tokens"]["spent"],
+      "provider={named} totals what its row has"
+    );
+    assert_eq!(alone["unmatched"], json!([]));
+  }
+  let earlier = rows
+    .iter()
+    .find(|row| row["provider"]["id"] == "earlier")
+    .unwrap_or_else(|| panic!("the reviews recorded before providers were: {providers}"));
+  let alone = served.ok("get_usage", &json!({ "project": "Kontur", "provider": "earlier" }));
+  assert_eq!(alone["total"]["tokens"]["spent"], earlier["tokens"]["spent"]);
+  let refused = served.refused("get_usage", &json!({ "project": "Kontur", "provider": "No account" }));
+  assert_eq!(refused["code"], "invalid_arguments", "{refused}");
+  let refused = served.refused("get_usage", &json!({ "project": "Kontur", "account": "none" }));
   assert_eq!(
-    alone["total"]["tokens"]["spent"], none["tokens"]["spent"],
-    "account=none totals what the no-account row has"
+    refused["code"], "invalid_arguments",
+    "there is no account filter: {refused}"
   );
-  assert_eq!(alone["unmatched"], json!([]));
 }

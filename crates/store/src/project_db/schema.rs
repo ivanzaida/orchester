@@ -72,6 +72,7 @@ mod task_groups;
 mod token_budgets;
 mod tool_approvals;
 mod unverified_steps;
+mod usage_providers;
 mod worktree_not_created;
 mod worktree_removals;
 

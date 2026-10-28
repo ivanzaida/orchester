@@ -8,11 +8,11 @@ use std::sync::Arc;
 
 use chrono::{Days, NaiveDate};
 use orchester_core::{
-  id::ProjectId,
+  id::{ConnectionId, ProjectId},
   time::Timestamp,
   usage::{
-    DayRange, GroupBy, GroupKey, GroupRow, Grouped, HOURLY_DAYS, Named, Period, ProjectFacts, Summary, UsageFilter,
-    UsageQuery as ReportQuery, UsageReport, grouped, local_date,
+    DayRange, GroupBy, GroupKey, GroupRow, Grouped, HOURLY_DAYS, Named, Period, ProjectFacts, SpentOn, Summary,
+    UsageFilter, UsageQuery as ReportQuery, UsageReport, grouped, local_date,
   },
 };
 use orchester_store::ProjectDb;
@@ -26,11 +26,13 @@ use crate::{
     services::{Services, blocking},
   },
   links::Link,
-  usage::{LONGEST_DAYS, NO_ACCOUNT, Scope, UsageData, UsageQuery, group_name, group_of},
+  usage::{EARLIER, LONGEST_DAYS, Scope, UsageData, UsageQuery, group_name, group_of},
 };
 
 /// How many days a range without `from` covers, ending with `to`: the page's default *7 days*.
 const DEFAULT_DAYS: u64 = 7;
+/// The `id` of the row of command tools' time when rows group by provider.
+const COMMAND_TOOLS: &str = "command_tools";
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -46,7 +48,10 @@ pub struct GetUsage {
   #[serde(default)]
   pub to: Option<String>,
   /// What rows group by: `hour` (ranges up to 7 days), `day` (the default), `task`, `pipeline`, `step`,
-  /// `agent` (agent profile; auto mode's reviewer per model), `model` or `account`.
+  /// `agent` (agent profile; auto mode's reviewer per model), `model` or `provider` (the agent connection the
+  /// tokens were spent on, as Project settings › Connections lists it; `earlier` for usage from before the
+  /// connection was recorded whose step names none, and `command_tools` for command tools' time, which spend no
+  /// tokens).
   #[serde(default)]
   pub group: Option<String>,
   /// Only this task's runs, by its key (`KON-12`) or id.
@@ -67,22 +72,24 @@ pub struct GetUsage {
   /// Only this model.
   #[serde(default)]
   pub model: Option<String>,
-  /// Only usage that started on this CLI account, by its id, or `none` for usage on no account (native agents and
-  /// reviewers, command tools, runs and reviews from before accounts were recorded).
+  /// Only usage spent on this agent provider: a connection's id or its name as Project settings › Connections lists
+  /// it (`Claude · DeepSeek`), or `earlier` for usage no record names a provider for.
   #[serde(default)]
-  pub account: Option<String>,
+  pub provider: Option<String>,
 }
 
 pub async fn get_usage(services: &Services, args: GetUsage) -> Result<Value, ToolError> {
   let now = Timestamp::now();
   let query = query(&args, local_date(now))?;
   let project = given("project", args.project.as_ref())?.map(str::to_owned);
+  let provider = given("provider", args.provider.as_ref())?.map(str::to_owned);
   let services = services.clone();
   blocking(move || {
     let open = project.as_deref().map(|named| services.project(named)).transpose()?;
     let scope = open.as_ref().map_or(Scope::All, |open| Scope::Project(&open.repo_root));
     let range = query.range(local_date(now));
     let data = UsageData::read(&services.workspace, scope, range.start(), now)?;
+    let query = with_provider(query, provider.as_deref(), &data)?;
     // The story-point estimator's requests, a kind of usage of their own outside runs: one project's.
     let estimates = match &open {
       Some(open) => {
@@ -98,7 +105,7 @@ pub async fn get_usage(services: &Services, args: GetUsage) -> Result<Value, Too
   .await
 }
 
-/// The query the arguments ask for.
+/// The query the arguments ask for, the provider aside ([`with_provider`]).
 fn query(args: &GetUsage, today: NaiveDate) -> Result<UsageQuery, ToolError> {
   let invalid = ToolError::InvalidArguments;
   let (from, to) = (day("from", args.from.as_ref())?, day("to", args.to.as_ref())?);
@@ -125,7 +132,7 @@ fn query(args: &GetUsage, today: NaiveDate) -> Result<UsageQuery, ToolError> {
     None => GroupBy::Day,
     Some(name) => group_of(name).ok_or_else(|| {
       invalid(format!(
-        "`group` is hour, day, task, pipeline, step, agent, model or account, not `{name}`"
+        "`group` is hour, day, task, pipeline, step, agent, model or provider, not `{name}`"
       ))
     })?,
   };
@@ -164,7 +171,6 @@ fn given<'a>(name: &str, value: Option<&'a String>) -> Result<Option<&'a str>, T
 }
 
 fn filter(args: &GetUsage) -> Result<UsageFilter, ToolError> {
-  let account = given("account", args.account.as_ref())?;
   let text = |name: &str, value: &Option<String>| -> Result<Vec<_>, ToolError> {
     Ok(given(name, value.as_ref())?.map(Into::into).into_iter().collect())
   };
@@ -175,10 +181,38 @@ fn filter(args: &GetUsage) -> Result<UsageFilter, ToolError> {
     steps: text("step", &args.step)?,
     profiles: text("agent", &args.agent)?,
     models: text("model", &args.model)?,
-    accounts: ids("account", account.filter(|value| *value != NO_ACCOUNT))?,
-    no_account: account == Some(NO_ACCOUNT),
     ..UsageFilter::default()
   })
+}
+
+/// `query` with the agent provider `provider` names chosen: a connection's id, its name in any case as the Connections
+/// page lists it, or `earlier`; a name no provider of `data` has is refused.
+fn with_provider(mut query: UsageQuery, provider: Option<&str>, data: &UsageData) -> Result<UsageQuery, ToolError> {
+  let Some(provider) = provider else {
+    return Ok(query);
+  };
+  if provider == EARLIER {
+    query.filter.earlier = true;
+    return Ok(query);
+  }
+  let connection = match provider.parse::<ConnectionId>() {
+    Ok(connection) => connection,
+    Err(_) => {
+      let wanted = provider.to_lowercase();
+      data
+        .providers()
+        .find(|known| known.name.to_lowercase() == wanted)
+        .map(|known| known.id)
+        .ok_or_else(|| {
+          ToolError::InvalidArguments(format!(
+            "no agent provider is called `{provider}`: give a connection's id or its name as Project settings › \
+             Connections lists it, or `{EARLIER}`"
+          ))
+        })?
+    }
+  };
+  query.filter.providers = vec![connection];
+  Ok(query)
 }
 
 /// One of a filter's lists of names.
@@ -213,19 +247,19 @@ fn unmatched(filter: &UsageFilter, projects: &[ProjectFacts], query: ReportQuery
     };
     found.extend(alone("run", only, run.to_string()));
   }
-  for account in &filter.accounts {
+  for provider in &filter.providers {
     let only = UsageFilter {
-      accounts: vec![*account],
+      providers: vec![*provider],
       ..UsageFilter::default()
     };
-    found.extend(alone("account", only, account.to_string()));
+    found.extend(alone("provider", only, provider.to_string()));
   }
-  if filter.no_account {
+  if filter.earlier {
     let only = UsageFilter {
-      no_account: true,
+      earlier: true,
       ..UsageFilter::default()
     };
-    found.extend(alone("account", only, NO_ACCOUNT.to_owned()));
+    found.extend(alone("provider", only, EARLIER.to_owned()));
   }
   found
 }
@@ -323,7 +357,8 @@ const fn seconds(ms: u64) -> u64 {
   ms.saturating_add(500) / 1000
 }
 
-/// What a row stands for.
+/// What a row stands for. A provider row's `id` is what `provider` takes: the connection's id, `earlier` for usage no
+/// record names a provider for, or `command_tools` for command tools' time, which no filter chooses.
 fn key(key: &GroupKey, data: &UsageData) -> Value {
   let named = |named: Option<&Named>| named.map(|named| json!({ "id": named.id.to_string(), "name": &*named.name }));
   match key {
@@ -339,15 +374,18 @@ fn key(key: &GroupKey, data: &UsageData) -> Value {
     GroupKey::Agent(profile) => json!({ "agent": named(profile.as_ref()) }),
     GroupKey::Reviewer(model) => json!({ "agent": null, "reviewer_model": &**model }),
     GroupKey::Model(model) => json!({ "model": model.as_deref() }),
-    GroupKey::Account(account) => {
-      let name = account.and_then(|id| data.accounts.iter().find(|known| known.id() == id));
+    GroupKey::Provider(SpentOn::Provider(connection)) => {
+      let provider = data.provider(*connection);
       json!({
-        "account": account.map(|id| json!({
-          "id": id.to_string(),
-          "name": name.and_then(|known| known.name()).map(|name| name.as_str()),
-        })),
+        "provider": {
+          "id": connection.to_string(),
+          "name": provider.map(|provider| &*provider.name),
+          "removed": provider.is_none_or(|provider| provider.removed),
+        },
       })
     }
+    GroupKey::Provider(SpentOn::Earlier) => json!({ "provider": { "id": EARLIER, "name": null } }),
+    GroupKey::CommandTools => json!({ "provider": { "id": COMMAND_TOOLS, "name": null } }),
   }
 }
 
@@ -370,7 +408,7 @@ fn row_project(key: &GroupKey, asked: Option<ProjectId>) -> Option<ProjectId> {
 }
 
 /// `query` narrowed to what `key` stands for: one day by hour, or the row's task, pipeline, step, profile,
-/// model or account as the filter. A row that names nothing to choose keeps the query.
+/// model or provider as the filter. A row that names nothing to choose keeps the query.
 fn narrowed(query: &UsageQuery, key: &GroupKey) -> UsageQuery {
   let mut narrowed = query.clone();
   let filter = &mut narrowed.filter;
@@ -384,9 +422,13 @@ fn narrowed(query: &UsageQuery, key: &GroupKey) -> UsageQuery {
     GroupKey::Step(step) => filter.steps = vec![step.clone()],
     GroupKey::Agent(Some(profile)) => filter.profiles = vec![profile.id.to_string().into()],
     GroupKey::Model(Some(model)) => filter.models = vec![model.clone()],
-    GroupKey::Account(Some(account)) => filter.accounts = vec![*account],
-    GroupKey::Account(None) => filter.no_account = true,
-    GroupKey::Pipeline(None) | GroupKey::Agent(None) | GroupKey::Reviewer(_) | GroupKey::Model(None) => {}
+    GroupKey::Provider(SpentOn::Provider(connection)) => filter.providers = vec![*connection],
+    GroupKey::Provider(SpentOn::Earlier) => filter.earlier = true,
+    GroupKey::Pipeline(None)
+    | GroupKey::Agent(None)
+    | GroupKey::Reviewer(_)
+    | GroupKey::Model(None)
+    | GroupKey::CommandTools => {}
   }
   narrowed
 }

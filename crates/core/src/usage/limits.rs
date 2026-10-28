@@ -143,8 +143,8 @@ pub struct LimitHistory {
 }
 
 impl LimitHistory {
-  /// The history of the CLIs and accounts `filter` admits between `start` and `end`, measured at `now`: one
-  /// line per account and window. A report from before accounts were recorded is its CLI's Default account's.
+  /// The history of the CLIs `filter` admits between `start` and `end`, measured at `now`: one line per account and
+  /// window. A report from before accounts were recorded is its CLI's Default account's.
   pub fn of(
     snapshots: &[LimitSnapshot],
     (start, end): (Timestamp, Timestamp),
@@ -153,9 +153,7 @@ impl LimitHistory {
   ) -> Self {
     let mut sorted: Vec<&LimitSnapshot> = snapshots
       .iter()
-      .filter(|snapshot| {
-        filter.admits_cli(snapshot.provider) && filter.admits_account(account_of(snapshot)) && snapshot.at < end
-      })
+      .filter(|snapshot| filter.admits_cli(snapshot.provider) && snapshot.at < end)
       .collect();
     sorted.sort_by_key(|snapshot| snapshot.at);
     let mut first: Vec<(AgentProvider, Timestamp)> = Vec::new();

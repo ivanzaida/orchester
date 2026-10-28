@@ -7,7 +7,6 @@ use std::{collections::HashMap, path::Path};
 
 use chrono::NaiveDate;
 use orchester_core::{
-  account::AgentAccount,
   id::{ChatId, RunId},
   integration::{RunMerge, RunWork},
   orchestrator::ChatEntry,
@@ -65,19 +64,14 @@ pub(super) struct DayFacts {
   pub(super) questions: Vec<AskedQuestions>,
   /// Every conversation of the Orchestrator chat with its entries.
   pub(super) chats: Vec<(ChatId, Vec<ChatEntry>)>,
+  /// The day's usage, with the agent providers it names.
   pub(super) usage: ProjectFacts,
   pub(super) budget: Option<u64>,
-  /// The CLI accounts, which name the accounts of the usage.
-  pub(super) accounts: Vec<AgentAccount>,
 }
 
 impl DayFacts {
-  /// The facts of `day` in `db`, read at `now`, the accounts named by `accounts`.
-  pub(super) fn read(
-    db: &ProjectDb,
-    (day, now): (NaiveDate, Timestamp),
-    accounts: Vec<AgentAccount>,
-  ) -> Result<Self, StoreError> {
+  /// The facts of `day` in `db`, read at `now`.
+  pub(super) fn read(db: &ProjectDb, (day, now): (NaiveDate, Timestamp)) -> Result<Self, StoreError> {
     let mut tasks = Vec::new();
     for task in db.tasks()? {
       // A run whose record cannot be read is left out: nothing it holds can be told.
@@ -123,7 +117,6 @@ impl DayFacts {
         facts: db.usage_facts(since, now)?,
       },
       budget: db.project_limits()?.daily_budget_limit().map(|budget| budget.get()),
-      accounts,
     })
   }
 
