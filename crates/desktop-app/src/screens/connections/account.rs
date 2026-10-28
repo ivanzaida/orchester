@@ -16,7 +16,6 @@ use orchester_core::{
   account::{AccountState, AgentAccount},
   connection::{
     AgentProvider, ConnectionAccount,
-    invocation::Platform,
     plan_limits::{LimitReading, PlanReadings},
   },
 };
@@ -64,13 +63,12 @@ pub(super) fn named(
 
 /// What is wrong with `account` for a connection, if anything: the words a menu choice and the inspector use.
 fn state_words(ctx: &Ctx, account: &AgentAccount) -> Option<String> {
-  let key = match account.state(Platform::current()) {
+  let key = match account.state() {
     AccountState::SignedIn | AccountState::Unknown | AccountState::NotChecked => return None,
     AccountState::NotSignedIn => "connections.account.state.notSignedIn",
     AccountState::Expired => "connections.account.state.expired",
     AccountState::CliMissing => "connections.account.state.cliMissing",
     AccountState::FolderMissing => "connections.account.state.folderMissing",
-    AccountState::Unsupported => "connections.account.state.unsupported",
   };
   Some(ctx.t(key).to_string())
 }

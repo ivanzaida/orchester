@@ -20,13 +20,10 @@ use std::{
 use orchester_core::{
   account::{AccountCli, AccountState, AgentAccount},
   command::{CommandError, CommandRunner},
-  connection::{
-    invocation::Platform,
-    plan_limits::{
-      LimitReading, PlanLimits, ReadingSource,
-      read::{ReadError, claude_check_command, codex_read_command, read_claude_check, read_codex_limits},
-      schedule::{Outcome, ReadSchedule, Trigger},
-    },
+  connection::plan_limits::{
+    LimitReading, PlanLimits, ReadingSource,
+    read::{ReadError, claude_check_command, codex_read_command, read_claude_check, read_codex_limits},
+    schedule::{Outcome, ReadSchedule, Trigger},
   },
   id::AgentAccountId,
   time::Timestamp,
@@ -220,9 +217,9 @@ impl PlanReads {
     if account.cli() != AccountCli::ClaudeCode {
       return Err(Message::new("accounts.planCheck.notClaude"));
     }
-    match account.state(Platform::current()) {
+    match account.state() {
       AccountState::NotSignedIn | AccountState::Expired => return Err(Message::new("accounts.planCheck.notSignedIn")),
-      AccountState::FolderMissing | AccountState::Unsupported => {
+      AccountState::FolderMissing => {
         return Err(Message::new("accounts.planCheck.unavailable"));
       }
       AccountState::NotChecked | AccountState::SignedIn | AccountState::Unknown | AccountState::CliMissing => {}
@@ -259,7 +256,7 @@ impl PlanReads {
 fn read_on_its_own(account: &AgentAccount) -> bool {
   account.cli() == AccountCli::Codex
     && matches!(
-      account.state(Platform::current()),
+      account.state(),
       AccountState::NotChecked | AccountState::SignedIn | AccountState::Unknown
     )
 }

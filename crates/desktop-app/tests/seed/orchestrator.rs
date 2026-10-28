@@ -2,7 +2,7 @@
 //! keeps them by, so following the project keeps nothing new; and the runs-on picker's sign-ins, with their checks and
 //! plan reads, are in the application database.
 
-use orchester_core::{account::AccountState, connection::invocation::Platform, id::ChatId};
+use orchester_core::{account::AccountState, id::ChatId};
 use orchester_exec::programs::Programs;
 use orchester_store::AppDb;
 use orchester_workspace::orchestrator::{
@@ -61,7 +61,7 @@ fn seed_orchestrator_adds_the_pickers_sign_ins_with_their_plan_use() {
       .find(|account| account.name().is_some_and(|name| name.as_str() == named))
       .unwrap_or_else(|| panic!("an account {named}"));
     let read = app.last_plan_read(account.id()).expect("plan read");
-    (account.state(Platform::Windows), read.is_some())
+    (account.state(), read.is_some())
   };
   assert_eq!(state("Work"), (AccountState::SignedIn, true));
   assert_eq!(state("Personal"), (AccountState::SignedIn, true));

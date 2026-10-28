@@ -143,7 +143,6 @@
       "connectionGone": "Its connection is gone or can't run it. Choose another in Orchestrator settings.",
       "accountNone": "The connection has no account to sign in with. Your message is kept; pick another account.",
       "accountFolderMissing": "The account's folder {{folder}} is gone. Your message is kept; pick another account.",
-      "accountUnsupported": "This account can't be used on this computer yet. Your message is kept; pick another account.",
       "failed": "The answer failed",
       "failedBody": "{{reason}} · Your message is kept.",
       "retry": "Retry",

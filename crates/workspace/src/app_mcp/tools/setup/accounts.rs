@@ -5,10 +5,7 @@
 
 use orchester_core::{
   account::{AccountFolder, AgentAccount, same_sign_in},
-  connection::{
-    invocation::Platform,
-    plan_limits::{LimitBlock, LimitReading, LimitState, PlanReadings},
-  },
+  connection::plan_limits::{LimitBlock, LimitReading, LimitState, PlanReadings},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -185,7 +182,7 @@ fn account_json(account: &AgentAccount, accounts: &[AgentAccount]) -> Value {
     "cli": account.cli().as_str(),
     "name": account.name().map(|name| name.as_str().to_owned()),
     "default": account.is_default(),
-    "state": account.state(Platform::current()).as_str(),
+    "state": account.state().as_str(),
     "folder": folder,
     "same_sign_in_as": same_sign_in(account, accounts).map(|other| other.id().to_string()),
     "link": Link::Account(account.id()).path(),

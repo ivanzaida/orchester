@@ -19,7 +19,6 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountCli, FolderProblem},
-  connection::invocation::Platform,
   name::Name,
 };
 use orchester_workspace::{
@@ -45,7 +44,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::Focus,
-    setting_rows::{HintTone, SettingGroup, SettingRow},
+    setting_rows::{SettingGroup, SettingRow},
     tabs::{Segment, SegmentFace, segmented},
     toggle::{Toggle, ToggleKind},
   },
@@ -88,10 +87,7 @@ pub(super) struct Draft {
 
 impl Draft {
   pub fn new(ctx: &mut Ctx) -> Self {
-    let first = AccountCli::ALL
-      .into_iter()
-      .find(|cli| cli.supports_accounts_on(Platform::current()))
-      .unwrap_or(AccountCli::Codex);
+    let first = AccountCli::ALL[0];
     let draft = Self {
       cli: ctx.signal(CliChoice(first)),
       name: ctx.signal(String::new()),
@@ -152,14 +148,14 @@ pub(super) fn page(ctx: &mut Ctx, work: &Work) -> Column {
   };
   let second = SettingGroup::new("account-add-step-2", t(ctx, "accounts.add.step2"))
     .row(SettingRow::new("account-add-after", after).hint(hint).render(ctx));
-  let blocked = problem.is_some() || !cli.supports_accounts_on(Platform::current());
+  let blocked = problem.is_some();
   heading(ctx, frame::pane("account-add-page"))
     .child(first)
     .child(second)
     .child(footer(ctx, work, blocked))
 }
 
-/// *CLI*: Claude Code or Codex; one this computer can't add an account of says so in its hint.
+/// *CLI*: Claude Code or Codex.
 fn cli_row(ctx: &mut Ctx, draft: &Draft, chosen: AccountCli) -> Element {
   let segments = [AccountCli::ClaudeCode, AccountCli::Codex].map(|cli| {
     let signal = draft.cli.clone();
@@ -170,19 +166,9 @@ fn cli_row(ctx: &mut Ctx, draft: &Draft, chosen: AccountCli) -> Element {
       move || signal.set(CliChoice(cli)),
     )
   });
-  let row = SettingRow::new("account-add-cli", t(ctx, "accounts.add.cli")).control(segmented(
-    "account-add-cli-choice",
-    segments,
-    Focus::Keyboard,
-  ));
-  let row = if chosen.supports_accounts_on(Platform::current()) {
-    row
-  } else {
-    row
-      .toned_hint(t(ctx, "accounts.status.unsupported"), HintTone::Warning)
-      .info(t(ctx, "accounts.state.unsupported"))
-  };
-  row.render(ctx)
+  SettingRow::new("account-add-cli", t(ctx, "accounts.add.cli"))
+    .control(segmented("account-add-cli-choice", segments, Focus::Keyboard))
+    .render(ctx)
 }
 
 /// *Name*: how the account will read under it (`e4MUb`), and the rest of what the name is for in the tooltip.

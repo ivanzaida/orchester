@@ -27,12 +27,7 @@ pub use self::{
   removal::{MoveTo, Removal, RemovalError},
   sign_in::{Shell, sign_in_command},
 };
-use crate::{
-  connection::{AgentProvider, invocation::Platform},
-  id::AgentAccountId,
-  name::Name,
-  time::Timestamp,
-};
+use crate::{connection::AgentProvider, id::AgentAccountId, name::Name, time::Timestamp};
 
 /// The agent CLIs an account can be added for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -120,13 +115,6 @@ impl AccountCli {
       Self::ClaudeCode => 0x0000_0000_0000_7000_8000_0000_0000_0001,
       Self::Codex => 0x0000_0000_0000_7000_8000_0000_0000_0002,
     }))
-  }
-
-  /// Whether accounts other than Default work for the CLI on `platform`. On macOS Claude Code keeps its sign-in in
-  /// the login Keychain; whether each `CLAUDE_CONFIG_DIR` gets its own item is not verified on a Mac yet
-  /// (decision 10), so only Default is used there until it is.
-  pub const fn supports_accounts_on(self, platform: Platform) -> bool {
-    !matches!((self, platform), (Self::ClaudeCode, Platform::MacOs))
   }
 }
 
@@ -289,11 +277,8 @@ impl AgentAccount {
     self.last_check = Some(check.remembering(known));
   }
 
-  /// The account's state on `platform` (*Checking…* is the window's own, while a check runs).
-  pub fn state(&self, platform: Platform) -> AccountState {
-    if !self.is_default() && !self.cli.supports_accounts_on(platform) {
-      return AccountState::Unsupported;
-    }
+  /// The account's state (*Checking…* is the window's own, while a check runs).
+  pub fn state(&self) -> AccountState {
     self
       .last_check
       .as_ref()

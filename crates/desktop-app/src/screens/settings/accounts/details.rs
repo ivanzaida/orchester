@@ -12,7 +12,6 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountState, AgentAccount},
-  connection::invocation::Platform,
   name::Name,
 };
 use orchester_workspace::{accounts::AccountUses, display};
@@ -68,13 +67,12 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, (uses, reading): (
   } else {
     state::notice(ctx, (parts, work), account, shown)
   };
-  let limits = (shown != Shown::State(AccountState::Unsupported)).then(|| limits::group(ctx, work, account));
   pane
     .child(head)
     .with_children(state)
     .with_children(question)
     .child(facts::group(ctx, account))
-    .with_children(limits)
+    .child(limits::group(ctx, work, account))
     .child(used_by::group(ctx, uses))
 }
 
@@ -175,7 +173,7 @@ fn menu_items(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
   }
   .icon(Icon::Trash2);
   std::iter::once(rename)
-    .chain(super::state::sign_in_item(ctx, parts, work, account))
+    .chain(std::iter::once(super::state::sign_in_item(ctx, parts, work, account)))
     .chain(std::iter::once(remove))
     .collect()
 }
@@ -245,5 +243,5 @@ fn rename_head(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
 
 /// Whether the account is signed in now, as its CLI said.
 pub(super) fn signed_in(account: &AgentAccount) -> bool {
-  account.state(Platform::current()) == AccountState::SignedIn
+  account.state() == AccountState::SignedIn
 }

@@ -171,7 +171,7 @@ Parameters: `project` (string, req.), `connection` (string, req.).
 The person's agent CLI accounts on this computer (Settings › Accounts), which every project's connections can run
 on: id, `cli` (`claude_code` | `codex`), name (`null` for an unrenamed Default), whether it is the CLI's Default (its
 own folder), state (`signed_in`, `not_signed_in`, `sign_in_expired`, `sign_in_unknown`, `cli_not_found`,
-`folder_missing`, `not_supported`, `not_checked`), whether Orchester created its folder or the person brought it, the
+`folder_missing`, `not_checked`), whether Orchester created its folder or the person brought it, the
 account it shares a sign-in with, and its link. No email and no folder are listed.
 
 `plan_limits` is the latest plan-limits reading (or `null`): `source` (`turn` — reported by an agent turn; `read` —

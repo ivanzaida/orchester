@@ -12,7 +12,7 @@ use harness::{Window, add_account, click, go, in_child, joined, set, shown, sign
 use orchester_app::routes::AccountsPanel;
 use orchester_core::{
   account::{AccountCli, AccountState},
-  connection::{AgentConnection, AgentProvider, ConnectionAccount, invocation::Platform},
+  connection::{AgentConnection, AgentProvider, ConnectionAccount},
   id::{AgentAccountId, ConnectionId},
   name::Name,
   store::ConnectionStore,
@@ -170,7 +170,7 @@ fn settings_accounts_adds_a_folder_the_person_already_uses_and_refuses_one_in_a_
         .find(|account| account.name().is_some_and(|name| name.as_str() == "Client"))
         .expect("Client is stored");
       assert_eq!(added.folder().path(), Some(brought.as_path()));
-      assert_eq!(added.state(Platform::current()), AccountState::SignedIn);
+      assert_eq!(added.state(), AccountState::SignedIn);
     },
   );
 }
@@ -383,7 +383,7 @@ fn settings_accounts_offers_choose_folder_for_a_folder_that_is_gone() {
       let moved = workspace
         .choose_agent_account_folder(archive.id(), &found)
         .expect("chosen");
-      assert_eq!(moved.state(Platform::current()), AccountState::SignedIn);
+      assert_eq!(moved.state(), AccountState::SignedIn);
       assert!(matches!(
         moved.folder(),
         orchester_core::account::AccountFolder::Brought(_)
@@ -408,10 +408,6 @@ fn settings_accounts_sign_in_step_ends_at_signed_in() {
 }
 
 #[test]
-#[cfg_attr(
-  target_os = "macos",
-  ignore = "Claude Code accounts other than Default are not supported on macOS yet"
-)]
 fn settings_accounts_sign_in_step_says_the_claude_plan_and_offers_the_folder() {
   in_child(
     "settings_accounts_sign_in_step_says_the_claude_plan_and_offers_the_folder",

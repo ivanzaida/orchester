@@ -322,7 +322,6 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
       AccountStartProblem::FolderMissing { folder } => {
         step("runs.preflight.account.folderMissing", key).with("folder", folder.display().to_string())
       }
-      AccountStartProblem::Unsupported => step("runs.preflight.account.unsupported", key),
     },
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)

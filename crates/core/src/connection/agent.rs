@@ -194,14 +194,7 @@ impl AgentConnection {
       && self.api_provider().is_none()
       && self.plan_account() != account
       && self.status().is_usable()
-      && self
-        .account()
-        .start_problem(
-          provider,
-          super::invocation::Platform::current(),
-          std::path::Path::is_dir,
-        )
-        .is_none()
+      && self.account().start_problem(std::path::Path::is_dir).is_none()
   }
 
   /// The account whose plan limits the CLI's runs count against: none on an API provider, whose key runs them, nor

@@ -24,7 +24,6 @@ use orchester_core::{
   account::{AccountState, AgentAccount},
   connection::{
     AgentProvider, BaseUrl,
-    invocation::Platform,
     plan_limits::{LimitState, PlanReadings},
   },
   id::ConnectionId,
@@ -195,7 +194,7 @@ fn sign_in_row(
   );
   let signed_in = account.is_some_and(|account| {
     matches!(
-      account.state(Platform::current()),
+      account.state(),
       AccountState::SignedIn | AccountState::Unknown | AccountState::NotChecked
     )
   });

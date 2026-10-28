@@ -196,8 +196,7 @@ Options the connection's CLI cannot enforce are disabled with the reason; there 
 
 **Account.** A folder where a CLI keeps its own sign-in (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Accounts are app-wide and
 belong to the person; each CLI has a **Default** account (its own folder). A connection chooses its account; runs pin
-it. Orchester never signs in for you: it opens a terminal running the CLI's own login. On macOS, Claude Code accounts
-other than Default are not supported yet.
+it. Orchester never signs in for you: it opens a terminal running the CLI's own login.
 
 **API provider.** A Claude Code or Codex connection can *Run on: An API provider* instead of its own sign-in: a base
 URL (Claude Code: Anthropic Messages API; Codex: OpenAI Responses API), an API key from a project secret, and models

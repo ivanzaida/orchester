@@ -483,15 +483,13 @@
         "notSignedIn": "not signed in",
         "expired": "sign-in expired",
         "cliMissing": "CLI not found",
-        "folderMissing": "folder missing",
-        "unsupported": "not supported on macOS yet"
+        "folderMissing": "folder missing"
       },
       "state": {
         "notSignedIn": "not signed in · sign in from Settings",
         "expired": "sign-in expired · runs won't start · sign in from Settings",
         "cliMissing": "CLI not found · install it, then check again in Settings",
-        "folderMissing": "folder missing · runs won't start · choose it in Settings",
-        "unsupported": "not supported on macOS yet"
+        "folderMissing": "folder missing · runs won't start · choose it in Settings"
       },
       "withLimits": "{{detail}} · {{limits}}"
     },

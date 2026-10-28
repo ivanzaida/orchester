@@ -698,8 +698,7 @@
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
         "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
-        "folderMissing": "Step “{{step}}” runs on an account whose folder {{folder}} no longer exists. Remove the account or choose another one for the connection.",
-        "unsupported": "Step “{{step}}” runs on an account that is not supported on this computer yet; only Default is used for this CLI here."
+        "folderMissing": "Step “{{step}}” runs on an account whose folder {{folder}} no longer exists. Remove the account or choose another one for the connection."
       }
     },
     "start": {

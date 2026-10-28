@@ -182,10 +182,7 @@ fn usable_provider(
   if !provider.runs_agents() {
     return Err(PreflightProblem::NativeNotAvailable { step });
   }
-  if let Some(problem) = connection
-    .account()
-    .start_problem(*provider, Platform::current(), std::path::Path::is_dir)
-  {
+  if let Some(problem) = connection.account().start_problem(std::path::Path::is_dir) {
     return Err(PreflightProblem::AccountUnavailable { step, reason: problem });
   }
   let status = connection.status();

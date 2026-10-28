@@ -11,7 +11,6 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountState, AgentAccount, same_sign_in},
-  connection::invocation::Platform,
   id::AgentAccountId,
 };
 use orchester_workspace::accounts::sign_in;
@@ -103,7 +102,6 @@ pub(super) fn notice(
         titled(NoticeTone::Danger).body(body),
       ));
     }
-    AccountState::Unsupported => titled(NoticeTone::Info).body(t(ctx, "accounts.state.unsupported")),
     AccountState::NotChecked => titled(NoticeTone::Info).body(ta(
       ctx,
       "accounts.state.notChecked",
@@ -157,16 +155,13 @@ fn unknown(ctx: &Ctx, account: &AgentAccount, (program, shown): (String, String)
 /// An account not signed in or whose sign-in expired: the sign-in and *Check again*, and, never signed in, the login
 /// command to copy.
 fn signed_out(ctx: &mut Ctx, (parts, work): (&Parts, &Work), account: &AgentAccount, notice: SettingNotice) -> Element {
-  let never = account.state(Platform::current()) == AccountState::NotSignedIn;
+  let never = account.state() == AccountState::NotSignedIn;
   let notice = match never.then(|| command_row(ctx, "account-sign-in-command", &sign_in::command(account).text)) {
     Some(command) => notice.part(command),
     None => notice,
   };
-  let notice = match sign_in_button(ctx, parts, work, account) {
-    Some(button) => notice.action(button),
-    None => notice,
-  };
   notice
+    .action(sign_in_button(ctx, parts, work, account))
     .action(check_again(
       ctx,
       (parts, work),
@@ -178,7 +173,7 @@ fn signed_out(ctx: &mut Ctx, (parts, work): (&Parts, &Work), account: &AgentAcco
 
 /// The sign-in's words: *Sign in again in a terminal* for an account that was signed in.
 fn sign_in_key(account: &AgentAccount) -> &'static str {
-  let state = account.state(Platform::current());
+  let state = account.state();
   if matches!(state, AccountState::SignedIn | AccountState::Expired) {
     "accounts.actions.signInAgain"
   } else {
@@ -186,42 +181,39 @@ fn sign_in_key(account: &AgentAccount) -> &'static str {
   }
 }
 
-/// Why the sign-in can't open now: without the CLI, or while another account's terminal is open; `None` where
-/// Orchester can't sign in yet.
-fn sign_in_blocked(ctx: &Ctx, work: &Work, account: &AgentAccount) -> Option<Option<String>> {
-  match account.state(Platform::current()) {
-    AccountState::Unsupported => None,
-    AccountState::CliMissing => Some(Some(ta(
+/// Why the sign-in can't open now: without the CLI, or while another account's terminal is open.
+fn sign_in_blocked(ctx: &Ctx, work: &Work, account: &AgentAccount) -> Option<String> {
+  match account.state() {
+    AccountState::CliMissing => Some(ta(
       ctx,
       "accounts.signIn.cliMissing",
       [("program", account.cli().program())],
-    ))),
-    _ if work.another_signing_in(account.id()) => Some(Some(t(ctx, "accounts.signIn.another"))),
-    _ => Some(None),
+    )),
+    _ if work.another_signing_in(account.id()) => Some(t(ctx, "accounts.signIn.another")),
+    _ => None,
   }
 }
 
-/// *Sign in (again) in a terminal*: unavailable while the CLI is missing or another account's terminal is open; none
-/// where Orchester can't sign in yet.
-pub(super) fn sign_in_button(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Option<ActionButton> {
+/// *Sign in (again) in a terminal*: unavailable while the CLI is missing or another account's terminal is open.
+pub(super) fn sign_in_button(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> ActionButton {
   let button =
     ActionButton::new("account-sign-in", ButtonKind::Primary, t(ctx, sign_in_key(account))).icon(Icon::SquareTerminal);
   let id = account.id();
-  match sign_in_blocked(ctx, work, account)? {
-    Some(reason) => Some(button.unavailable(reason)),
-    None if parts.signing_in == Some(id) => Some(button.loading()),
+  match sign_in_blocked(ctx, work, account) {
+    Some(reason) => button.unavailable(reason),
+    None if parts.signing_in == Some(id) => button.loading(),
     None => {
       let work = work.clone();
-      Some(button.on_click(move || work.open_sign_in(id)))
+      button.on_click(move || work.open_sign_in(id))
     }
   }
 }
 
 /// The sign-in as a row of the page's *…* menu.
-pub(super) fn sign_in_item(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Option<MenuItem> {
+pub(super) fn sign_in_item(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> MenuItem {
   let label = t(ctx, sign_in_key(account));
   let id = account.id();
-  let item = match sign_in_blocked(ctx, work, account)? {
+  let item = match sign_in_blocked(ctx, work, account) {
     Some(reason) => MenuItem::unavailable("account-sign-in-item", label, reason),
     None if parts.signing_in == Some(id) => {
       MenuItem::unavailable("account-sign-in-item", label, t(ctx, "accounts.status.signingIn"))
@@ -231,7 +223,7 @@ pub(super) fn sign_in_item(ctx: &Ctx, parts: &Parts, work: &Work, account: &Agen
       MenuItem::new("account-sign-in-item", label, move || work.open_sign_in(id))
     }
   };
-  Some(item.icon(Icon::SquareTerminal))
+  item.icon(Icon::SquareTerminal)
 }
 
 /// *Check again* for `account` as a button of `kind`, busy while it is checked.
