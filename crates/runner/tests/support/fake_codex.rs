@@ -30,7 +30,8 @@
 //! the worktree, unless its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
 //!
 //! Its configuration (`config/read`) has, besides the project servers of its arguments, the user's own
-//! server `user-global`, which runs unless the thread's configuration turns it off. Its layers are the
+//! server `user-global`, which runs unless the thread's configuration turns it off, and the user's own hooks
+//! (`hooks.state` entries), turned off only while the arguments have `features.hooks=false`. Its layers are the
 //! user's, the arguments', and, when the worktree has a `.codex` folder, a project layer that is
 //! disabled only while the arguments mark the worktree untrusted (`projects={"<worktree>"=…}`), as Codex
 //! names it.
@@ -336,7 +337,10 @@ impl Session {
       .collect()
   }
 
-  /// The effective configuration: the project servers and the user's own `user-global`.
+  /// The effective configuration: the project servers, the user's own `user-global`, and the user's own hooks as
+  /// Codex 0.159.2 reported them for a person whose other agent tool installed global ones (2026-10-28): every event
+  /// with an empty list and the trust `state` of each, with `features.hooks = false` only while the arguments turn
+  /// hooks off.
   fn configuration(&self) -> Value {
     let mut servers: serde_json::Map<String, Value> = self
       .project_servers()
@@ -347,7 +351,19 @@ impl Session {
       "user-global".to_owned(),
       json!({"enabled": true, "command": "user-tool"}),
     );
-    json!({"mcp_servers": servers, "hooks": null})
+    let hooks = json!({
+      "PreToolUse": [], "PermissionRequest": [], "PostToolUse": [], "SessionStart": [], "UserPromptSubmit": [],
+      "Stop": [],
+      "state": {
+        "fake-codex-home/hooks.json:session_start:0:0": {"trusted_hash": "sha256:5e1f"},
+        "fake-codex-home/hooks.json:pre_tool_use:0:0": {"trusted_hash": "sha256:9a0c"}
+      }
+    });
+    let mut config = json!({"mcp_servers": servers, "hooks": hooks, "features": {}});
+    if self.args.iter().any(|arg| arg == "features.hooks=false") {
+      config["features"]["hooks"] = json!(false);
+    }
+    config
   }
 
   /// The configuration's layers: the user's (with `user-global`), the arguments' and, for a worktree
