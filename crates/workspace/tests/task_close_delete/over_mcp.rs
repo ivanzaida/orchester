@@ -147,3 +147,25 @@ fn task_whose_run_ended_moves_to_todo_only_and_starts_nothing_on_the_board_and_o
   assert_eq!(standing(&repo, other.id()), before, "no run, nothing queued");
   assert_eq!(row(&repo, other.id()).phase, row_now.phase);
 }
+
+#[test]
+fn task_whose_run_succeeded_with_work_to_merge_only_moves_to_todo_since_it_never_runs_again() {
+  let mut repo = Repo::new();
+  let failed = repo.task("Sign in");
+  repo.failed(&failed, false);
+  let succeeded = repo.task("Sign out");
+  repo.succeeded(&succeeded);
+
+  assert!(row(&repo, failed.id()).runs_again, "a failed run is run again");
+  let ready = row(&repo, succeeded.id());
+  assert!(
+    !ready.runs_again,
+    "its work waits to be merged: core's run_again refuses it"
+  );
+  assert!(!ready.run_not_ended);
+  // No Run again to offer: the drop on Todo is the move only, asked about by nobody.
+  assert_eq!(
+    moves::decide(&ready, WorkflowStatus::Todo),
+    Decision::Move(moves::MOVE_ONLY)
+  );
+}

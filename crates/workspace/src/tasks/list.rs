@@ -194,6 +194,17 @@ impl LatestRun {
     }
   }
 
+  /// Whether Run again may follow the run, as the runner's check of core's `run_again` reads it: it failed or was
+  /// cancelled, or it passed every step and committed nothing although its pipeline expects changes (ORC-93). An
+  /// interrupted run has not ended on the board, so its lost worktree is not asked about here.
+  pub fn runs_again(&self) -> bool {
+    match self.phase {
+      TaskPhase::Failed | TaskPhase::Cancelled => true,
+      TaskPhase::Succeeded => self.nothing_to_merge && self.deliverable.without_commits() == WithoutCommits::Flagged,
+      _ => false,
+    }
+  }
+
   /// What the run means for the task now: "Paused at 4b92ad0", "Last checkpoint 1b8e5c2".
   pub fn message(&self) -> Message {
     let with_checkpoint = |key: &'static str, without: &'static str| match &self.checkpoint {
@@ -407,6 +418,10 @@ pub struct TaskRow {
   pub status: TaskStatus,
   /// It has a run, readable or not: it no longer goes back to the drafts.
   pub has_run: bool,
+  /// Its latest run ended so that Run again may follow it, as core's `run_again` decides: it failed or was
+  /// cancelled, or it passed every step and committed nothing although its pipeline expects changes (ORC-93). A run
+  /// that succeeded with work to merge, or was merged, is never run again.
+  pub runs_again: bool,
   /// A run of it has not ended, as the store decides it ([`ProjectTasks::active`]): only closing it, after its run is
   /// stopped, changes its workflow status by hand on the board.
   pub run_not_ended: bool,
@@ -442,6 +457,7 @@ impl TaskRow {
     };
     let has_run = latest.is_some();
     let latest = latest.and_then(Latest::run);
+    let runs_again = latest.is_some_and(LatestRun::runs_again);
     Self {
       id: task.id(),
       organization: task.organization().clone(),
@@ -463,6 +479,7 @@ impl TaskRow {
       estimate: task.estimate().cloned(),
       status: task.status(),
       has_run,
+      runs_again,
       run_not_ended: false,
       module: task.module(),
       agent: latest.and_then(|latest| latest.agent),

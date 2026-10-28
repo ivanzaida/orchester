@@ -169,7 +169,7 @@
         },
         "bulkRunAgain": {
           "title": "Run {{tasks}} again?",
-          "detail": "Run again starts new runs from the first step. Move to Todo starts nothing. Don't move keeps them.",
+          "detail": "Run again starts new runs from step one. Move to Todo starts nothing. Don't move keeps them.",
           "keeps": "doesn't move them"
         },
         "unmerged": {

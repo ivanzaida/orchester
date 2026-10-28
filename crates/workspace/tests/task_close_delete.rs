@@ -236,6 +236,16 @@ impl Repo {
     run
   }
 
+  /// [`Self::working`], whose step then passed: the run succeeded with its commit to merge.
+  fn succeeded(&mut self, task: &Task) -> Run {
+    let mut run = self.working(task, false);
+    let execution = run.current_attempt().expect("attempt").executions()[0].id();
+    let events = run.complete_step(execution, at(9)).expect("pass");
+    self.db.append_events(&run, &events).expect("events");
+    assert_eq!(run.status(), &RunStatus::Succeeded);
+    run
+  }
+
   fn worktree(&self, run: &Run) -> PathBuf {
     self.root().join(".orchester/worktrees").join(run.id().to_string())
   }
