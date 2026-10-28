@@ -20,7 +20,11 @@ use std::sync::{
   atomic::{AtomicU64, Ordering},
 };
 
-use lurq::{app::ctx::Ctx, core::Signal, router::RouterHandle};
+use lurq::{
+  app::ctx::Ctx,
+  core::{ElementRef, Signal},
+  router::RouterHandle,
+};
 
 use self::{
   pointed::Pointed,
@@ -42,6 +46,10 @@ pub struct Navigation {
   pointings: Arc<AtomicU64>,
   /// The number of the last pointing a card took: a card takes each pointing once.
   taken: Arc<AtomicU64>,
+  /// Whether *Jump to* (`shell::jump`) is open over the window.
+  jump: Signal<bool>,
+  /// The content panel, which *Jump to* opens over.
+  jump_anchor: ElementRef,
 }
 
 impl Navigation {
@@ -54,6 +62,8 @@ impl Navigation {
       pointed: Signal::new(None),
       pointings: Arc::default(),
       taken: Arc::default(),
+      jump: Signal::new(false),
+      jump_anchor: ElementRef::new(),
     };
     navigation.show();
     navigation
@@ -64,6 +74,16 @@ impl Navigation {
     ctx
       .use_context::<Self>()
       .expect("the root provides the navigation before mounting the chrome and the shell")
+  }
+
+  /// Whether *Jump to* is open; the sidebar's row and Ctrl+K open it, a choice, Esc or a press outside close it.
+  pub fn jump(&self) -> Signal<bool> {
+    self.jump.clone()
+  }
+
+  /// The element *Jump to* opens over: the shell's content panel.
+  pub fn jump_anchor(&self) -> ElementRef {
+    self.jump_anchor.clone()
   }
 
   /// The tabs; reading them in a render re-renders it when they change.

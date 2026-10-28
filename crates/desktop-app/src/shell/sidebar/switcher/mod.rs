@@ -1,10 +1,10 @@
-//! The project switcher (`Project switcher` `i0xDK7`) and its menu (`Project switcher menu` `ouqOt` of
-//! `V7ngk`): the project the screen shows, by its name, its folder and its initial, or that none is open.
-//! A press opens the menu under it: *RECENT*, the five projects used last with the shown one checked
-//! (`recent`), then *All projects*, *Open folder…* — a folder that already keeps an Orchester project,
-//! chosen in the system's folder picker (`folder`), refused in place when it keeps none (`refusal`,
-//! `VrS47`) — and *Add project*. While the project opens, or
-//! when no project in the list has its id, it says only that a project is shown; its id is never shown.
+//! The project switcher (`Project switcher` `eohNt` in `Zn8dR`) and its menu (`Switcher menu` `NEHAB`): the
+//! project the screen shows, by its name, its folder and its initial, or that none is open. A press opens the
+//! menu under it: *RECENT*, the five projects used last with the shown one checked (`recent`), then the shown
+//! project's *Project settings* (Ctrl+, opens it too, Cmd+, on macOS), *All projects*, *Settings*, *Open folder…* —
+//! a folder that already keeps an Orchester project, chosen in the system's folder picker (`folder`), refused in
+//! place when it keeps none (`refusal`, `VrS47`) — and *Add project*. While the project opens, or when no project
+//! in the list has its id, it says only that a project is shown; its id is never shown.
 
 mod folder;
 mod recent;
@@ -36,7 +36,7 @@ use self::refusal::{FolderStep, Picks};
 use crate::{
   navigation::Navigation,
   project::Projects,
-  routes::{OverviewTab, ProjectPage, Route},
+  routes::{OverviewTab, ProjectPage, ProjectSettingsTab, Route},
   services::Services,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ShellText},
   ui::{
@@ -266,39 +266,64 @@ impl Switcher {
     button.into()
   }
 
-  /// The menu: *RECENT*, then All projects, Open folder… with what it found, and Add project.
+  /// The menu (`Switcher menu` `Gb7af` in `NEHAB`): *RECENT*, then the shown project's Project settings with its
+  /// keys, All projects, Settings, Open folder… with what it found, and Add project.
   fn panel(&self, ctx: &mut Ctx, project: Option<ProjectId>, picks: &Picks) -> Element {
     let recent = recent::rows(ctx, self.openings.get(), project, &self.open);
     let navigation = Navigation::of(ctx);
-    let all = MenuItem::opens(
-      "switcher-all-projects",
-      ctx.t("shell.screens.allProjects"),
-      navigation.to(Route::AllProjects),
-    )
-    .icon(Icon::Folders)
-    .detail(ctx.t("shell.switcher.allProjectsDetail"))
-    .render(ctx, &self.open);
+    let project_settings = project.map(|project| {
+      let keys = ctx.t(if cfg!(target_os = "macos") {
+        "shell.switcher.projectSettingsKeysMac"
+      } else {
+        "shell.switcher.projectSettingsKeys"
+      });
+      MenuItem::opens(
+        "switcher-project-settings",
+        ctx.t("shell.screens.projectSettings"),
+        navigation.to(Route::Project(
+          project,
+          ProjectPage::Settings(ProjectSettingsTab::default()),
+        )),
+      )
+      .icon(Icon::SlidersHorizontal)
+      .shortcut(keys)
+      .render(ctx, &self.open)
+    });
+    let opens = |ctx: &mut Ctx, (id, label, glyph): (&str, &str, Icon), route: Route| {
+      MenuItem::opens(id.to_owned(), ctx.t(label), navigation.to(route))
+        .icon(glyph)
+        .render(ctx, &self.open)
+    };
+    let all = opens(
+      ctx,
+      ("switcher-all-projects", "shell.screens.allProjects", Icon::Folders),
+      Route::AllProjects,
+    );
+    let settings = opens(
+      ctx,
+      ("switcher-settings", "shell.screens.settings", Icon::Settings),
+      Route::Settings,
+    );
     let pick = picks.clone();
     let open_folder = MenuItem::new("switcher-open-folder", ctx.t("shell.switcher.openFolder"), move || {
       pick.pick();
     })
     .icon(Icon::FolderOpen)
-    .detail(ctx.t("shell.switcher.openFolderDetail"))
     .render(ctx, &self.open);
     let found = refusal::block(ctx, &self.folder.get(), picks);
-    let add = MenuItem::opens(
-      "switcher-add-project",
-      ctx.t("shell.switcher.addProject"),
-      navigation.to(Route::AddProject(None)),
-    )
-    .icon(Icon::Plus)
-    .render(ctx, &self.open);
+    let add = opens(
+      ctx,
+      ("switcher-add-project", "shell.switcher.addProject", Icon::Plus),
+      Route::AddProject(None),
+    );
     menu_panel("project-switcher-menu")
       .width(Dimension::Px(MENU_WIDTH))
       .child(section(&ctx.t("shell.switcher.recent")))
       .with_children(recent)
       .child(separator(ctx))
+      .with_children(project_settings)
       .child(all)
+      .child(settings)
       .child(open_folder)
       .with_children(found)
       .child(add)

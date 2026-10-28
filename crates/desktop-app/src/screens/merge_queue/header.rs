@@ -1,7 +1,7 @@
-//! The head of the Merge queue screen (`Header` in `SMzTk`): *Merge queue* and what the queue does, and beside them
-//! the base branch it delivers into with its head, and how the person's checkout stands (a 6 dot: `success` when it is
-//! clean, `warning` otherwise, the box then `warning_muted` in `warning`). Under it, while delivery is blocked, the
-//! notice that says why with *Open folder* and *Retry* (`mM0HY`).
+//! The head of the Merge queue screen (`Header` in `SMzTk`): what the queue does — the Review hub's head and tab name
+//! the page (`screens::review`) — and beside it the base branch it delivers into with its head, and how the person's
+//! checkout stands (a 6 dot: `success` when it is clean, `warning` otherwise, the box then `warning_muted` in
+//! `warning`). Under it, while delivery is blocked, the notice that says why with *Open folder* and *Retry* (`mM0HY`).
 
 use std::{path::Path, sync::Arc};
 
@@ -50,8 +50,6 @@ pub(super) fn header(ctx: &Ctx, read: &QueueRead, checkout: &Arc<str>) -> Row {
       Column::new()
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(Text::new(&ctx.t("delivery.queue.title")).variant(ExtraTypography::Display.role()))
         .child(
           Text::new(&lead)
             .id("merge-queue-lead")

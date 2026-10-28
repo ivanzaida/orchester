@@ -1,4 +1,4 @@
-//! The top of the page (`Header` `w3Z3Cp`): the title and what the page shows, and at its end the
+//! The top of the page (`Header` `w3Z3Cp`): what the page shows — the Review hub's head and tab name it — and at its end the
 //! repository (`Repository label` `mhbBg`), Refresh and the sync status under them. Refresh waits while a
 //! sync runs and until a rate limit resets, and says so under itself (`Reason · Refresh` in `uuaob`).
 //! Without a linked repository there is nothing to refresh: only the status says GitHub is not connected,
@@ -42,17 +42,13 @@ pub(super) struct Linked<'a> {
 }
 
 pub(super) fn header(ctx: &mut Ctx, linked: Option<Linked<'_>>, shown: &Shown, now: Timestamp) -> Row {
+  // The Review hub's head and tab name the page (`screens::review`): what it shows leads it.
   let title = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(
-      Text::new(&ctx.t("pull_requests.title"))
-        .id("pull-requests-title")
-        .variant(ExtraTypography::Display.role()),
-    )
     .child(
       Text::new(&ctx.t("pull_requests.description"))
+        .id("pull-requests-description")
         .variant(TypographyStyle::Body)
         .color(PaletteColor::TextSecondary),
     );

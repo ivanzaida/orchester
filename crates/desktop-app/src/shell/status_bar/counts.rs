@@ -1,9 +1,9 @@
 //! The bar's right side (`sMpGe`): the project's counts — *Agents 3/4* (agents at work of the runner's
 //! agent slots, a dash unless the runner is online and reported them), *Queued 2*, *4 need you* (a hand,
-//! amber while anything waits; 0 stays visible), *3.8M / 20M today* (today's tokens against the
-//! project's daily budget) — then the app's MCP server, whether agents may control the window, and the
-//! version. Counts are plain numbers, one space after their label; a dash only means "not known yet".
-//! Agents opens Tasks, Queued and Needs you the Overview's list of them, the tokens Usage.
+//! amber while anything waits; 0 stays visible) — then the app's MCP server, whether agents may control the
+//! window, and the version. Counts are plain numbers, one space after their label; a dash only means "not known
+//! yet". Agents opens Tasks, Queued and Needs you the Overview's list of them. Today's tokens show once, in the
+//! sidebar's usage card (`Hub pages` `ZRBS5`).
 
 use lurq::{
   app::{
@@ -15,12 +15,11 @@ use lurq::{
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::tokens::compact_tokens;
 use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks};
 
 use super::{
   facts::{Dispatch, ProjectFacts, go},
-  item::{ITEM_HEIGHT, dropping, give_way, glyph, item, label, pressed},
+  item::{ITEM_HEIGHT, dropping, give_way, glyph, item, label},
   mcp::mcp_item,
 };
 use crate::{
@@ -90,8 +89,7 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       .align_items(Alignment::Center),
     Row::child,
   );
-  let usage = open(ProjectPage::Usage(Box::default()));
-  vec![group.into(), tokens(ctx, project, &unknown, usage)]
+  vec![group.into()]
 }
 
 /// One count: *Agents 3/4* (its words before its value) or *4 need you* (after it).
@@ -155,31 +153,6 @@ fn agents(project: &ProjectFacts) -> Option<String> {
     }
     _ => None,
   }
-}
-
-/// *3.8M / 20M today*; it drops out whole after the version.
-fn tokens(ctx: &Ctx, project: &ProjectFacts, unknown: &str, press: Press) -> Element {
-  let (used, budget) = project.usage.map_or_else(
-    || (unknown.to_owned(), unknown.to_owned()),
-    |usage| {
-      (
-        compact_tokens(usage.today.get()),
-        usage
-          .limits
-          .daily_budget_limit()
-          .map(|budget| compact_tokens(budget.get()))
-          .unwrap_or_else(|| ctx.t("project_settings.noLimit").to_string()),
-      )
-    },
-  );
-  let text = ctx.t_args("shell.status.tokens", [("used", used), ("budget", budget)]);
-  pressed("status-tokens", press)
-    .flex_shrink(1.0)
-    .shrink_order(give_way::TOKENS)
-    .shrink_limit(ShrinkLimit::Drop)
-    .child(glyph(Icon::Coins, PaletteColor::TextMuted))
-    .child(label(&text, PaletteColor::TextMuted).id("status-tokens-value"))
-    .into()
 }
 
 /// The app's MCP server (it never gives way), whether agents may control the window, and the version

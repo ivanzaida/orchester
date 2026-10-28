@@ -1,8 +1,10 @@
-//! What a key press asks of the window: Back, Forward and the tabs. Implemented so far: Ctrl+Tab and
-//! Ctrl+Shift+Tab switch tabs on every platform; Ctrl+T / Ctrl+W and Alt+Left / Alt+Right on Windows,
-//! Cmd+T / Cmd+W and Cmd+[ / Cmd+] on macOS. Alt+Left and Alt+Right are left to a focused text field,
-//! which moves by words with them. The rest of the design's table (`docs/design/orchester-workspace.md`,
-//! "Tabs" › "Keyboard") is not built yet.
+//! What a key press asks of the window: Back, Forward, the tabs, *Jump to* and Project settings. Implemented so
+//! far: Ctrl+Tab and Ctrl+Shift+Tab switch tabs on every platform; Ctrl+T / Ctrl+W and Alt+Left / Alt+Right on
+//! Windows, Cmd+T / Cmd+W and Cmd+[ / Cmd+] on macOS. Alt+Left and Alt+Right are left to a focused text field,
+//! which moves by words with them. Ctrl+K (Cmd+K) opens or closes *Jump to* (`aDYAX`) and Ctrl+, (Cmd+,) opens
+//! the tab's project's settings (`NEHAB`), also while a text field has the focus: neither edits text. The page
+//! keeps its own: Files' Ctrl+P and Ctrl+F (`screens::files::keys`). The rest of the design's table
+//! (`docs/design/orchester-workspace.md`, "Tabs" › "Keyboard") is not built yet.
 //!
 //! A shortcut is the key as typed: on AZERTY, Ctrl+Z (typed at the place of QWERTY's W) is not Ctrl+W,
 //! and on Dvorak Ctrl+, (typed there too) is not either. Only where the layout types no ASCII character
@@ -18,6 +20,8 @@ pub enum Shortcut {
   CloseTab,
   NextTab,
   PreviousTab,
+  JumpTo,
+  ProjectSettings,
 }
 
 /// The parts of a key press that decide the shortcut.
@@ -73,6 +77,14 @@ pub fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
     } else {
       Shortcut::NextTab
     });
+  }
+  if keys.only_command() {
+    if keys.is("k", "KeyK") {
+      return Some(Shortcut::JumpTo);
+    }
+    if keys.is(",", "Comma") {
+      return Some(Shortcut::ProjectSettings);
+    }
   }
   platform::shortcut(keys)
 }

@@ -44,7 +44,48 @@
       "unknownCount": "—"
     },
     "nav": {
-      "configure": "Configure"
+      "configure": "Configure",
+      "configureFolded": "Configure · {{count}}"
+    },
+    "usage": {
+      "today": "Tokens today",
+      "value": "{{used}} / {{budget}}",
+      "open": "Open Usage"
+    },
+    "jump": {
+      "row": "Jump to…",
+      "keys": "Ctrl K",
+      "keysMac": "⌘ K",
+      "placeholder": "Search tasks, modules, pages and actions",
+      "within": "{{page}} › {{tab}}",
+      "task": "{{key}} · {{title}}",
+      "groups": {
+        "tasks": "Tasks",
+        "modules": "Modules",
+        "pages": "Pages",
+        "actions": "Actions"
+      },
+      "actions": {
+        "newTask": "New task",
+        "newModule": "New module",
+        "newPipeline": "New pipeline",
+        "newAgent": "New agent profile",
+        "newTab": "New tab",
+        "addProject": "Add project"
+      },
+      "enter": "Enter",
+      "none": "Nothing matches “{{query}}”",
+      "count": {
+        "one": "{{count}} result",
+        "other": "{{count}} results"
+      },
+      "hints": {
+        "move": "↑↓ move",
+        "open": "Enter open",
+        "newTab": "Ctrl Enter new tab",
+        "newTabMac": "⌘ Enter new tab",
+        "close": "Esc close"
+      }
     },
     "screens": {
       "allProjects": "All projects",
@@ -62,6 +103,7 @@
       "task": "Task",
       "mergeQueue": "Merge queue",
       "pullRequests": "Pull requests",
+      "review": "Review",
       "usage": "Usage",
       "pipelines": "Pipelines",
       "agents": "Agents",
@@ -159,7 +201,6 @@
         "one": "needs you",
         "other": "need you"
       },
-      "tokens": "{{used}} / {{budget}} today",
       "unknown": "—",
       "mcpListening": "MCP {{address}}",
       "mcpPortTaken": "MCP port {{port}} taken",
@@ -228,7 +269,6 @@
     },
     "running": {
       "title": "Running",
-      "all": "All running tasks",
       "step": "{{key}} · {{step}}",
       "stopped": "{{key}} · stopped",
       "noTime": "—"
@@ -240,9 +280,9 @@
     },
     "switcher": {
       "recent": "RECENT",
-      "allProjectsDetail": "Every project Orchester knows on this computer",
+      "projectSettingsKeys": "Ctrl ,",
+      "projectSettingsKeysMac": "⌘ ,",
       "openFolder": "Open folder…",
-      "openFolderDetail": "A folder that already has an Orchester project",
       "pickTitle": "Open a folder that has an Orchester project",
       "addProject": "Add project",
       "openInNewTab": "Open in new tab",

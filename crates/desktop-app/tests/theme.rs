@@ -302,6 +302,11 @@ fn area_roles_follow_the_startup_screens_and_the_switcher() {
   assert_eq!(ShellSpacing::FolderActions.value(), 22.0);
   assert_eq!(color(ShellText::SwitcherInitial.role()), Color::from_hex("#B3B3BA"));
   assert_eq!(color(ShellText::SwitcherPath.role()), Color::from_hex("#8A8A92"));
+  // *Jump to*'s result and count (`KeDEy`, `qiz3y` in `aDYAX`).
+  check(ShellText::JumpResult.role(), (12.5, 1.35), FontWeight::Normal, "Geist");
+  check(ShellText::JumpCount.role(), (11.5, 1.35), FontWeight::Normal, "Geist");
+  assert_eq!(color(ShellText::JumpResult.role()), Color::from_hex("#EDEDF0"));
+  assert_eq!(color(ShellText::JumpCount.role()), Color::from_hex("#8A8A92"));
   for (spacing, value) in [(StartupSpacing::Block, 20.0), (StartupSpacing::Panel, 40.0)] {
     assert_eq!(spacing.value(), value, "{spacing:?}");
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
