@@ -1,6 +1,6 @@
 //! The shared projects' endpoints (`docs/architecture/server.md`, "Endpoints"): finding a project
 //! by its slug and linking a checkout to it, its members and their roles, its tasks and their changes under a revision,
-//! claims, the heartbeat and the project's tags. Every call sends the token as the bearer.
+//! claims, the run progress report, the heartbeat and the project's tags. Every call sends the token as the bearer.
 
 use orchester_core::{
   id::{ProjectId, TagId, TaskId, UserId},
@@ -11,9 +11,9 @@ use reqwest::Method;
 use super::{Client, ClientError, bearer};
 use crate::{
   ClaimTake, Heartbeat, HeartbeatResponse, Member, MemberChanges, MemberCreate, MemberResponse, Members, ProjectCreate,
-  ProjectCreated, ProjectLink, ProjectLinked, ProjectResponse, Projects, SharedProject, SharedTag, SharedTask,
-  TagMerge, TagName, TagResponse, Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated,
-  TasksImport,
+  ProjectCreated, ProjectLink, ProjectLinked, ProjectResponse, Projects, RunReport, SharedProject, SharedTag,
+  SharedTask, TagMerge, TagName, TagResponse, Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate,
+  TasksCreated, TasksImport,
 };
 
 impl Client {
@@ -173,6 +173,21 @@ impl Client {
   ) -> Result<SharedTask, ClientError> {
     let path = format!("/projects/{project}/tasks/{task}/claim");
     let response: TaskResponse = self.call(bearer(self.request(Method::DELETE, &path)?, token)).await?;
+    Ok(response.task)
+  }
+
+  /// `PUT …/tasks/{task}/run`: the holder reports their run; `merged` completes the claim and `cancelled` releases
+  /// it. `409 not_holder` names the claim of another member. A server older than the report has no such route and
+  /// answers `404 not_found` or `405 method_not_allowed`.
+  pub async fn report_run(
+    &self,
+    token: &SecretValue,
+    project: ProjectId,
+    task: TaskId,
+    report: &RunReport,
+  ) -> Result<SharedTask, ClientError> {
+    let path = format!("/projects/{project}/tasks/{task}/run");
+    let response: TaskResponse = self.call(bearer(self.json(Method::PUT, &path, report)?, token)).await?;
     Ok(response.task)
   }
 

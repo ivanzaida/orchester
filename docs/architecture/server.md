@@ -290,14 +290,27 @@ A claim says who has taken a task into work. A task has at most one; the server 
 | --- | --- |
 | *Take* (manual) | Takes the claim if the task has none: an atomic check-and-set on the server. Held by someone else: refused with the holder, since when and whether the claim is stale. Needs the server |
 | Starting work on a shared task: Create & run, Start, Run again, continuing a paused or interrupted run, Send & continue, a follow-up message | Online: the desktop takes the claim first, or confirms that this person holds it, then asks the runner. Held by someone else: nothing starts and the desktop names the holder. Offline: see *Offline* below. Pause and cancel never need the claim |
-| Heartbeat | Every 60 s while the desktop runs and is signed in, one request per server names the claimed tasks in the projects this desktop has joined. The server refreshes those the caller still holds and returns the ones they lost. The desktop records the server time of the last answered heartbeat per server |
+| Heartbeat | Every 60 s while the desktop runs and is signed in, one request per server names the claimed tasks in the projects this desktop has joined, except those whose latest run here was merged or cancelled (their claim ends). The server refreshes those the caller still holds and returns the ones they lost. The desktop records the server time of the last answered heartbeat per server |
 | Stale | No heartbeat for 15 min. Shown as stale, not as free. The server sends a `task` event when a claim becomes stale and when a stale claim is refreshed, so watchers never compute staleness from an old heartbeat ([Live updates](#live-updates)) |
 | *Take over* | Only a stale claim, after an explicit confirmation in place that names the holder and the last heartbeat. The request names the claim it saw; if that claim changed or was refreshed meanwhile, the request is refused. The takeover is recorded (from, to, when) and the old holder is told on their next connection. Needs the server |
 | *Release* | By the holder, while none of their runs of the task has an agent at work. Offline it waits in the outbox; the claim stays the person's until the server took the release |
 | Run cancelled | The claim is released (the cancelled progress is reported; waits in the outbox while offline) |
-| Run merged | The claim is completed: the task shows *Merged* with who merged it. A merged task cannot be claimed again |
+| Run merged | The claim is completed: the task shows *Merged* with who merged it. A merged task cannot be claimed again. A run whose work a person merged without Orchester counts as merged |
 | Run succeeded or failed | The claim is **kept**: review and merge, Send & continue and Run again all happen on the holder's computer, where the run's worktree is |
 | Member removed or user disabled | Their claims are released, and the release is recorded |
+
+**Ending claims on the desktop (ORC-284).** On every run change and every sync the desktop goes over the claims the
+person holds in each shared project (`sharing::project::claim_ends`) and applies core's `claim_end` to the phase of
+each task's latest run here, read as the task page reads it (a succeeded run whose work git finds merged into its base
+branch is merged): a merged one is reported with `PUT …/run` (`merged`), which completes the claim; a cancelled one
+releases it with `DELETE …/claim`; succeeded, failed and every other phase keep it. Only a claim taken before its
+run ended is that run's to end: one whose `since` is later than the run's end (the merge, the cancel, or for work merged
+without Orchester its last event), such as one the person's other computer took since, is kept, and so is one that
+work on this computer asked for after the run ended (Run again, before the runner records the new run; the desktop
+remembers when, for the session, and forgets it when that work does not start). Claims that were never ended
+before (ORC-281) end this way on the first sync of a fixed desktop. A server without `PUT …/run` answers `404` or
+`405`: the report fails as *not supported* and is logged, and the next sync tries it again; meanwhile the heartbeat
+no longer names the task, so the claim goes stale instead of staying fresh.
 
 **Offline (row 28).** Without the server, work may start on a task only when the cached claim is the person's and is
 not stale by the person's own last answered heartbeat. Core decides it with one function over explicit times:
@@ -781,6 +794,8 @@ RunStatus   { holder: UserRef, number, phase, step: { key, name }|null,         
               branch: string|null,                                                            // API 3
               pull_request: { number, url, state: "open"|"draft"|"merged"|"closed" }|null,   // API 3
               started_at, phase_since, updated_at }
+RunReport   { number, phase, step: string|null, started_at, phase_since }  // ORC-284: the body of `PUT …/run`,
+              // orchester-api's RunStatus without holder and updated_at (the server sets them); S3 adds row 29's fields
 Changes     { title?, brief?, criteria?, pipeline?, limits?, status?: "queued",
               workflow?, priority?, tags?, blocking?, blocked_reason?, module?: id|null,      // module: ORC-78
               actor?: "person"|"orchester" }
@@ -848,7 +863,7 @@ changes; the rest is built (S1a, S1b).
 | `POST /projects/{id}/tasks/{task}/claim` | member | `{ kind }` | `{ task }`; also when the caller holds it already | `409 claim_held { claim }`, `409 task_merged` | |
 | `DELETE /projects/{id}/tasks/{task}/claim` | holder | | `{ task }` | `409 not_holder { claim }`, `422 not_editable { reason: "stop_run_first" }` | |
 | `POST /projects/{id}/tasks/{task}/claim/take-over` | member | `{ claim: id }` | `{ task }` | `409 claim_not_stale { claim }`, `409 claim_changed { claim }` | |
-| `PUT /projects/{id}/tasks/{task}/run` | holder | `RunStatus` without `holder`, `updated_at` | `{ task }`; `merged` completes the claim, `cancelled` releases it | `409 not_holder { claim }`, `422 invalid` | new in 3 (S3) |
+| `PUT /projects/{id}/tasks/{task}/run` | holder | `RunReport` | `{ task }`; `merged` completes the claim, `cancelled` releases it, other phases are stored as the task's `run` | `409 not_holder { claim }`, `422 invalid` | new in 3 (S3; contract ORC-284) |
 | `POST /heartbeat` | user | `{ tasks: [id] }` (at most 256) | `{ lost: [{ task, claim: Claim\|null }] }` | `422 invalid`, `429 rate_limited` | |
 | `GET /projects/{id}/tags` | member | | `{ tags: [Tag] }`, by name | | |
 | `POST /projects/{id}/tags` | member | `{ idempotency_key, name }` | `201 { tag }`; a repeated key returns the first answer | `409 tag_exists { tag }`, `422 invalid` | key and `tag` detail in 3 |
@@ -897,7 +912,12 @@ version's publisher, with the original `published_at`.
 
 **Progress reports.** `PUT …/run` replaces the task's report. The server checks the shape (step keys unique, `step`
 among `steps`, `waiting_for` only with `waiting`, `stuck` or `stopped_at_limit`; a URL that is `https`), stores it,
-and sends the `task` event. It derives nothing else from it except the claim ends of row 15.
+and sends the `task` event. It derives nothing else from it except the claim ends of row 15. Today's contract
+(ORC-284, `orchester-api`'s `RunReport` and `Client::report_run`) carries `number`, `phase`, `step` (its name),
+`started_at` and `phase_since`; row 29's other fields come with S3. Only the holder reports (`409 not_holder` with
+the claim otherwise); `merged` completes the claim, `cancelled` releases it (as `DELETE …/claim` does), and every other
+phase is stored as the task's `run` with the claim kept. A server without the route answers `404 not_found` or
+`405 method_not_allowed`, which the desktop takes as *not supported* ([Claims](#claims)).
 
 **Rules kept from S1b.**
 

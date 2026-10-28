@@ -1,9 +1,10 @@
 use orchester_api::{
-  ClaimTake, ErrorCode, Heartbeat, MemberChanges, MemberCreate, MemberRole, ProjectCreated, SharedLimits,
+  ClaimTake, ErrorCode, Heartbeat, MemberChanges, MemberCreate, MemberRole, ProjectCreated, RunReport, SharedLimits,
   SharingErrorDetails, TagMerge, TagName, TaskChanges, TaskPatch, UploadTask,
 };
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
+  run::TaskPhase,
   secret::SecretValue,
   sharing::ClaimKind,
   task::{
@@ -266,5 +267,29 @@ async fn client_sharing_tags_are_the_project_s() {
   assert_eq!(merged.tasks[0].content.tags, [runner.id]);
   let deleted = client.delete_tag(&alice, project, runner.id).await.expect("delete");
   assert!(deleted.tags.is_empty() && deleted.tasks[0].content.tags.is_empty());
+  server.finish().await;
+}
+
+/// `report_run` sends `PUT …/tasks/{task}/run` (ORC-284). This server does not have the route yet (the team server's
+/// task implements it), so it answers as every server older than the report: `404 not_found`, which the desktop takes
+/// as not supported.
+#[tokio::test]
+async fn claim_lifecycle_a_run_report_to_a_server_without_the_route_is_not_found() {
+  let server = TestServer::start(|_| {}).await;
+  let alice = server.admin().await;
+  let client = server.client();
+  let created = create(&server, &alice, vec![upload(1, "Fix reconnect", true)]).await;
+  let report = RunReport {
+    number: 1,
+    phase: TaskPhase::Merged,
+    step: None,
+    started_at: 1,
+    phase_since: 2,
+  };
+  let refused = client
+    .report_run(&alice, created.project.id, created.tasks[0].id, &report)
+    .await
+    .expect_err("no such route");
+  assert_eq!(refused.code(), Some(ErrorCode::NotFound));
   server.finish().await;
 }

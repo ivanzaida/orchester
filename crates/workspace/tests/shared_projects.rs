@@ -30,6 +30,7 @@ use orchester_core::{
     organization::{Priority, TaskOrganization, WorkflowStatus},
   },
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::{
   sharing::{
     SharingError,
@@ -282,7 +283,8 @@ fn shared_a_heartbeat_keeps_claims_and_writes_the_lost_ones_to_the_cache() {
   assert!(claim.newly_taken());
   let me = alice.server().me().expect("signed in");
   assert_eq!(alice.db().claims_held_by(me).expect("claims"), vec![task.id()]);
-  alice.block_on(alice.servers.sync_shared(true));
+  let programs = Programs::processes();
+  alice.block_on(alice.servers.sync_shared(true, &programs));
   assert_eq!(
     alice.db().claims_held_by(me).expect("claims"),
     vec![task.id()],
@@ -300,7 +302,7 @@ fn shared_a_heartbeat_keeps_claims_and_writes_the_lost_ones_to_the_cache() {
   alice
     .block_on(client.release_claim(&token, project, task.id()))
     .expect("release elsewhere");
-  alice.block_on(alice.servers.sync_shared(true));
+  alice.block_on(alice.servers.sync_shared(true, &programs));
   assert!(alice.db().claims_held_by(me).expect("claims").is_empty());
 }
 

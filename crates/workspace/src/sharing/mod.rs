@@ -99,6 +99,9 @@ struct Inner {
   sync: watch::Sender<u64>,
   /// The projects being shared now: their tasks take no change from the screens meanwhile.
   sharing_now: Mutex<HashSet<PathBuf>>,
+  /// When work on each shared task last asked for its run claim this session, by this computer's clock: a claim
+  /// asked for after its task's latest run ended is not that run's to end (`project::claim_ends`).
+  work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -136,6 +139,7 @@ impl Servers {
         shared: watch::channel(0).0,
         sync: watch::channel(0).0,
         sharing_now: Mutex::new(HashSet::new()),
+        work_asked: Mutex::new(HashMap::new()),
       }),
     }
   }
