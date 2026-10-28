@@ -240,6 +240,25 @@ struct ProjectsRead {
   /// and reads the projects again; the read's own answer comes before it finished and does not, or every read would
   /// start the next.
   follows: Option<Timestamp>,
+  /// How many reads are under way. A read's own answer can reach the page before the read records that it finished;
+  /// while one is under way no answer is followed, so a read never starts itself again.
+  reading: usize,
+}
+
+/// A read under way, from its start until it ends or is dropped because the page reads again.
+struct Reading(Arc<Mutex<ProjectsRead>>);
+
+impl Reading {
+  fn start(read: &Arc<Mutex<ProjectsRead>>) -> Self {
+    read.lock().reading += 1;
+    Self(Arc::clone(read))
+  }
+}
+
+impl Drop for Reading {
+  fn drop(&mut self) {
+    self.0.lock().reading -= 1;
+  }
 }
 
 /// The person's projects on the server, read while it is connected, again when the server answered since and when the
@@ -273,7 +292,7 @@ fn projects(ctx: &mut Ctx, props: &Props, read: &Arc<Mutex<ProjectsRead>>) -> Op
   }
   let follows = {
     let mut read = read.lock();
-    if entry.last_reached > read.done {
+    if read.reading == 0 && entry.last_reached > read.done {
       read.follows = entry.last_reached;
     }
     read.follows
@@ -286,6 +305,7 @@ fn projects(ctx: &mut Ctx, props: &Props, read: &Arc<Mutex<ProjectsRead>>) -> Op
       move |(_, _, server, servers)| {
         let finished = Arc::clone(&read);
         async move {
+          let _reading = Reading::start(&finished);
           let entries = servers.clone();
           let entry = orchester_workspace::background::run(move || entries.entries())
             .await

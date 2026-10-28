@@ -54,11 +54,13 @@ pub(super) fn lead(ctx: &Ctx, landing: &Landing) -> Option<Arc<str>> {
   ))
 }
 
-/// The facts of the project, then its checkouts on this computer.
+/// The facts of the project, then its checkouts on this computer, and under them *Add a checkout folder…* with the
+/// page's `actions` at its end.
 pub(super) fn body(
   ctx: &mut Ctx,
   landing: &Landing,
   (picked, add): (&Signal<Picked>, &FutureAction<Arc<str>, Added, Said>),
+  actions: [Element; 2],
 ) -> Element {
   let added = match add.state().get().data {
     Some(Added::Project(project)) => Some(project),
@@ -93,7 +95,7 @@ pub(super) fn body(
   let none = !shown_choosable;
   list = list
     .with_children(adding::refused(ctx, landing, add))
-    .child(adding::add_row(ctx, landing, (add, none)));
+    .child(adding::add_row(ctx, landing, (add, none), actions));
   Column::new()
     .id("orchester-landing")
     .width(Dimension::Pct(100.0))
@@ -116,7 +118,7 @@ pub(super) fn first_match(landing: &Landing) -> Option<orchester_core::id::Proje
     .map(|checkout| checkout.id)
 }
 
-/// Project, Server, Repository hint and Your role (`Facts` in `xeFRB`).
+/// Project (by its name, `w2O9xk` in `q7dWu`), Server, Repository hint and Your role.
 fn facts(ctx: &Ctx, landing: &Landing) -> Element {
   let project = &landing.project;
   let server = ctx.t_args(
@@ -142,8 +144,8 @@ fn facts(ctx: &Ctx, landing: &Landing) -> Element {
     .child(detail_row(
       "orchester-landing-project",
       &ctx.t("sharing.landing.project"),
-      &project.address,
-      DetailValue::Mono,
+      &project.name,
+      DetailValue::Text,
     ))
     .child(detail_row(
       "orchester-landing-server",

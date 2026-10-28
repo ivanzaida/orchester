@@ -53,7 +53,7 @@ pub fn tab(ctx: &mut Ctx) -> Element {
   let pane = frame::pane("settings-notifications-tab")
     .child(ctx.mount_keyed::<NotificationsSection>("notifications", ()))
     .child(ctx.mount_keyed::<super::daily_report::DailyReportSection>("daily-report", ()));
-  frame::column("settings-notifications-scroll", pane).into()
+  frame::column("settings-notifications-scroll", pane)
 }
 
 /// *Notify me when* and *How*.

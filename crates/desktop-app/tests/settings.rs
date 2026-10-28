@@ -288,6 +288,61 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   assert!(bottom(&mut window, CONTINUE) <= 600.0, "scrolled into the window");
 }
 
+/// How far the top of `id` is under the top of the scroll `scroll` it is in.
+fn under_scroll_top(window: &mut Window, (scroll, id): (&str, &str)) -> f32 {
+  let mut top = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+      .y
+  };
+  top(id) - top(scroll)
+}
+
+#[test]
+fn settings_a_tab_opened_after_a_scrolled_one_starts_at_its_top() {
+  let mut window = Window::open();
+  window.tree.resize(1440, 600);
+  window.navigation().go(Route::Notifications);
+  window.until("Notifications", |window| {
+    window.tree.get_element_by_id("settings-notifications-tab").is_some()
+  });
+  let unscrolled = under_scroll_top(
+    &mut window,
+    ("settings-notifications-scroll", "settings-notifications-tab"),
+  );
+  window.navigation().go(Route::Settings);
+  window.until("the last switch", |window| {
+    window.tree.get_element_by_id(CONTINUE).is_some()
+  });
+  let bounds = window
+    .tree
+    .get_element_by_id_mut("settings-automation-scroll")
+    .and_then(|element| element.bounds())
+    .expect("the tab scrolls");
+  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+  window.tree.mouse_move(x, y);
+  window.tree.scroll(x, y, 0.0, -2000.0, ScrollPhase::Scroll);
+  window.pass();
+  window.pass();
+  assert!(bottom(&mut window, CONTINUE) <= 600.0, "Automation scrolled");
+  window.navigation().go(Route::Notifications);
+  window.until("Notifications again", |window| {
+    window.tree.get_element_by_id("settings-notifications-tab").is_some()
+  });
+  window.pass();
+  assert_eq!(
+    under_scroll_top(
+      &mut window,
+      ("settings-notifications-scroll", "settings-notifications-tab")
+    ),
+    unscrolled,
+    "Notifications does not take Automation's scroll"
+  );
+}
+
 /// The switch of the Orchestrator's daily report, on Settings › Notifications.
 const DAILY_REPORT: &str = "settings-daily-report";
 
