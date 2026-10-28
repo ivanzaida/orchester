@@ -48,19 +48,57 @@ fn usage_providers_table_takes_the_row_with_more_than_three_series() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
   page.click("usage-tokens-view-table");
   let header = page.text("usage-tokens-table-header");
-  for heading in [
-    "CLAUDE CODE · KONTUR",
-    "CLAUDE · DEEPSEEK",
-    "CODEX · CLIENT",
-    "EARLIER RUNS",
-  ] {
-    assert!(header.contains(heading), "{heading} in {header}");
-  }
   assert!(!header.contains("NO ACCOUNT"), "{header}");
+  // Each provider's heading on two lines, its CLI over the rest of its name (`CODEX` over `CLIENT` in FdC7Y).
+  for (column, over, words) in [
+    (1, Some("CLAUDE CODE"), "KONTUR"),
+    (2, Some("CLAUDE"), "DEEPSEEK"),
+    (3, Some("CODEX"), "CLIENT"),
+    (4, Some("CODEX"), "KONTUR"),
+    (5, None, "EARLIER RUNS"),
+  ] {
+    let heading = format!("usage-tokens-table-heading-{column}");
+    assert_eq!(page.text(&format!("{heading}-text")), words, "{heading}");
+    let shown = page.shows(&format!("{heading}-over"));
+    assert_eq!(shown, over.is_some(), "{heading}'s line over it");
+    if let Some(over) = over {
+      assert_eq!(page.text(&format!("{heading}-over")), over, "{heading}");
+    }
+  }
+  assert_tokens_headings_whole(&mut page, 5);
   assert!(
     page.shows("usage-limits-row"),
     "Plan limits goes under the table (FdC7Y)"
   );
+}
+
+/// The tokens table's series headings `1..=series` whole and apart: each line, at its column's right, leaves room
+/// at its cell's left or runs past it (*EARLIER RUNS* in an 84 column), where a cut one fills it exactly, and ends
+/// before the next heading starts.
+fn assert_tokens_headings_whole(page: &mut Seeded, series: usize) {
+  let table = "usage-tokens-table";
+  for index in 1..=series {
+    let heading = format!("{table}-heading-{index}");
+    let cell = page.bounds(&heading);
+    let next = page.bounds(&format!("{table}-heading-{}-words", index + 1));
+    for line in ["words", "over"] {
+      let id = format!("{heading}-{line}");
+      if !page.shows(&id) {
+        continue;
+      }
+      let shown = page.bounds(&id);
+      assert!(
+        shown.0 > cell.0 + 0.5 || shown.2 > cell.2 + 0.01,
+        "{id} ({}) {shown:?} fills its cell {cell:?}, so it is cut",
+        page.text(&id)
+      );
+      assert!(
+        shown.0 + shown.2 <= next.0 + 0.5,
+        "{id} ({}) {shown:?} runs into the next heading {next:?}",
+        page.text(&id)
+      );
+    }
+  }
 }
 
 #[test]
@@ -119,8 +157,8 @@ fn usage_providers_narrow_table_shows_every_heading_and_cell_whole() {
       "column {cell} is {expected} (d3lc3)"
     );
   }
-  let header = page.text("usage-tokens-table-header");
-  assert!(header.contains("EARLIER RUNS"), "{header}");
+  assert_eq!(page.text("usage-tokens-table-heading-3-text"), "EARLIER RUNS");
+  assert_tokens_headings_whole(&mut page, 3);
   let mut row = 0;
   while page.shows(&format!("usage-tokens-table-row-{row}")) {
     row += 1;

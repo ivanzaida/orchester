@@ -139,15 +139,25 @@ pub fn series_text(ctx: &Ctx, label: &SeriesLabel) -> Arc<str> {
   }
 }
 
-/// How a series heads a table's column, in capitals: the provider's name (*CLAUDE · DEEPSEEK*), *OTHER* over
-/// *2 PROVIDERS*, or *EARLIER RUNS*.
+/// How a series heads a table's column, in capitals, over two lines as *CODEX* over *CLIENT* (`FdC7Y`): a
+/// provider's name split where the Connections page joins its CLI to the rest (*CLAUDE* over *DEEPSEEK*), *OTHER*
+/// over *2 PROVIDERS*; a name with no such join, as *EARLIER RUNS*, on one line.
 pub fn series_heading(ctx: &Ctx, label: &SeriesLabel) -> (Option<Arc<str>>, Arc<str>) {
-  let upper = |text: Arc<str>| -> Arc<str> { text.to_uppercase().into() };
+  let upper = |text: &str| -> Arc<str> { text.to_uppercase().into() };
   match label {
     SeriesLabel::Other(count) => (
-      Some(upper(ctx.t("usage.providers.otherHeading"))),
-      upper(ctx.t_args("usage.providers.count", [("count", count.to_string().as_str())])),
+      Some(upper(&ctx.t("usage.providers.otherHeading"))),
+      upper(&ctx.t_args("usage.providers.count", [("count", count.to_string().as_str())])),
     ),
-    label => (None, upper(series_text(ctx, label))),
+    label => {
+      let text = series_text(ctx, label);
+      match text.split_once(NAME_JOIN) {
+        Some((over, rest)) if !over.is_empty() && !rest.is_empty() => (Some(upper(over)), upper(rest)),
+        _ => (None, upper(&text)),
+      }
+    }
   }
 }
+
+/// What joins a connection's CLI to the rest of its name (*Claude · DeepSeek*).
+const NAME_JOIN: &str = " · ";
