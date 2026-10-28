@@ -25,6 +25,8 @@ pub mod services;
 pub mod shell;
 pub mod startup;
 pub mod system_icon;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 pub mod theme;
 pub mod ui;
 pub mod window;
