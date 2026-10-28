@@ -1,0 +1,13 @@
+[package]
+name = "orchester-report"
+description = "Orchester's error reports in the Sentry protocol: the scrubber every report of the desktop app and the runner passes through."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+sentry.workspace = true
