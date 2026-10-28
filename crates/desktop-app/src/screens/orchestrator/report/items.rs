@@ -8,7 +8,7 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
   orchestrator::{
     DailyReport, RunEnd, StopReason,
-    report::{ActionWay, MergedBy, PersonWaitKind, ReportRun},
+    report::{ActionWay, MergedBy, PersonWaitKind, ReportRun, SharedBy},
   },
   run::RunLimit,
   tokens::compact_tokens,
@@ -268,19 +268,29 @@ impl Words<'_> {
       tip: None,
       link: task.link.clone(),
     });
-    let accounts = usage.accounts.iter().map(|account| Item {
-      glyph: Icon::UserRound,
+    let providers = usage.providers.iter().map(|provider| Item {
+      glyph: Icon::Bot,
       tone: PaletteColor::TextMuted,
-      text: match (&account.name, account.account) {
-        (Some(name), _) => name.as_str().into(),
-        (None, Some(id)) => id.to_string().into(),
-        (None, None) => self.ctx.t("orchestrator.report.usage.noAccount"),
+      text: match &provider.by {
+        SharedBy::Provider {
+          name: Some(name),
+          removed: false,
+          ..
+        } => name.as_str().into(),
+        SharedBy::Provider {
+          name: Some(name),
+          removed: true,
+          ..
+        } => self.t("orchestrator.report.usage.removedProvider", &[("name", name.clone())]),
+        SharedBy::Provider { name: None, .. } => self.ctx.t("orchestrator.report.usage.removedUnnamed"),
+        SharedBy::Earlier => self.ctx.t("orchestrator.report.usage.earlier"),
+        SharedBy::CommandTools => self.ctx.t("orchestrator.report.usage.commandTools"),
       },
-      meta: share(account.spent, account.active_ms),
+      meta: share(provider.spent, provider.active_ms),
       tip: None,
-      link: account.link.clone(),
+      link: provider.link.clone(),
     });
-    std::iter::once(total).chain(tasks).chain(accounts).collect()
+    std::iter::once(total).chain(tasks).chain(providers).collect()
   }
 
   fn active(&self, ms: u64) -> String {
