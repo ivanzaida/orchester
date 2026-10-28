@@ -29,6 +29,10 @@ const RAN_SINCE: &str = "invocations.started_at >= ?1 OR invocations.ended_at >=
 /// The runs whose record reads: SQLite's JSON functions fail the whole query on one snapshot that is not JSON.
 const READABLE_RUNS: &str = "(SELECT * FROM runs WHERE json_valid(snapshot))";
 
+/// The connection an invocation ran on, of `recorded`, `chosen` and `versions` as `invocations_since` joins them.
+const RAN_ON: &str =
+  "COALESCE(recorded.connection_id, chosen.connection_id, json_extract(versions.body, '$.body.connection'))";
+
 impl ProjectDb {
   /// The usage of the turns that completed from `since` on, the invocations that ran from then on
   /// and their runs; running invocations are measured to `now`.
@@ -38,6 +42,7 @@ impl ProjectDb {
       reviews: self.reviews_since(since)?,
       invocations: self.invocations_since(since, now)?,
       runs: self.runs_since(since)?,
+      providers: self.usage_providers()?,
       last_turn: self
         .connection
         .query_row(
@@ -95,22 +100,26 @@ impl ProjectDb {
   }
 
   fn invocations_since(&self, since: Timestamp, now: Timestamp) -> Result<Vec<InvocationFacts>, StoreError> {
-    // The step's name as the run's pinned pipeline has it, or its key when the snapshot lacks it.
+    // The step's name as the run's pinned pipeline has it, or its key when the snapshot lacks it. The connection an
+    // invocation started on as recorded; before that was recorded, the one a person chose for the run's step, else
+    // its profile's.
     let mut statement = self.connection.prepare(&format!(
       "SELECT invocations.id, invocations.run_id, invocations.kind, invocations.model, \
          COALESCE((SELECT json_extract(step.value, '$.name') FROM json_each(runs.snapshot, '$.body.body.steps') AS step \
            WHERE json_extract(step.value, '$.key') = executions.step_key), executions.step_key), \
          profiles.name, connections.provider, invocations.started_at, invocations.ended_at, invocations.inactive_ms, \
-         invocations.waiting_since, index_use.body, edits.body, profiles.id, accounts.account_id \
+         invocations.waiting_since, index_use.body, edits.body, profiles.id, {RAN_ON} \
        FROM invocations \
        JOIN {READABLE_RUNS} AS runs ON runs.id = invocations.run_id \
        JOIN step_executions AS executions ON executions.id = invocations.step_execution_id \
        LEFT JOIN resource_versions AS versions ON versions.id = executions.profile_version_id \
        LEFT JOIN resources AS profiles ON profiles.id = versions.resource_id \
-       LEFT JOIN connections ON connections.id = json_extract(versions.body, '$.body.connection') \
+       LEFT JOIN invocation_connections AS recorded ON recorded.invocation_id = invocations.id \
+       LEFT JOIN run_step_connections AS chosen \
+         ON chosen.run_id = invocations.run_id AND chosen.step_key = executions.step_key \
+       LEFT JOIN connections ON connections.id = {RAN_ON} \
        LEFT JOIN invocation_code_index AS index_use ON index_use.invocation_id = invocations.id \
        LEFT JOIN invocation_edit_progress AS edits ON edits.invocation_id = invocations.id \
-       LEFT JOIN invocation_accounts AS accounts ON accounts.invocation_id = invocations.id \
        WHERE {RAN_SINCE} ORDER BY invocations.started_at, invocations.rowid"
     ))?;
     let rows = statement
@@ -212,7 +221,7 @@ struct InvocationRow {
   index: Option<String>,
   edit: Option<String>,
   profile_id: Option<String>,
-  account: Option<String>,
+  connection: Option<String>,
 }
 
 impl InvocationRow {
@@ -232,7 +241,7 @@ impl InvocationRow {
       index: row.get(11)?,
       edit: row.get(12)?,
       profile_id: row.get(13)?,
-      account: row.get(14)?,
+      connection: row.get(14)?,
     })
   }
 
@@ -268,7 +277,11 @@ impl InvocationRow {
         .filter(|_| agent)
         .map(|id| parse("profile id", &id))
         .transpose()?,
-      account: self.account.map(|account| parse("account id", &account)).transpose()?,
+      connection: self
+        .connection
+        .filter(|_| agent)
+        .map(|connection| parse("connection id", &connection))
+        .transpose()?,
       step: self.step.into(),
       started_at,
       ended_at,

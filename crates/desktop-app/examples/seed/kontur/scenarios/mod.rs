@@ -33,6 +33,7 @@ mod tasks_unreadable;
 mod unreadable_db;
 mod usage;
 mod usage_accounts;
+mod usage_providers;
 
 use super::{Kontur, SeedError};
 

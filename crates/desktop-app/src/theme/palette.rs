@@ -68,16 +68,18 @@ pub enum ExtraColor {
   BrandTile,
   /// The Orchester mark's bars, the same in both modes.
   BrandMark,
-  /// `chart_1`, `chart_2`, `chart_3`: a chart's series, accounts 1–3 in series order (Usage `et35n`, `FDC8B`).
+  /// `chart_1`, `chart_2`, `chart_3`: a chart's series, agent providers 1–3 in series order, and accounts 1–3 in
+  /// *Plan limits* (Usage `et35n`, `FDC8B`).
   Chart1,
   Chart2,
   Chart3,
-  /// `chart_other`: *Other accounts*, the fourth connected account and later (`FDC8B`).
+  /// `chart_other`: *Other providers*, the fourth connected provider and later, and the fourth account and later
+  /// (`FDC8B`).
   ChartOther,
-  /// `chart_none`: *No account*'s stripes and outline over `chart_hatch` (`LEQ1w`).
+  /// `chart_none`: *Earlier runs*' stripes and outline over `chart_hatch` (`LEQ1w`).
   ChartNone,
   /// `chart_hatch`: a chart's stretch where nothing is known (*No data from Claude · Work* in `et35n`), and
-  /// *No account*'s ground.
+  /// *Earlier runs*' ground.
   ChartHatch,
   /// `mark_claude`: the Claude mark's orange (`Mark/Claude` `eFnry`), the same in both modes.
   MarkClaude,

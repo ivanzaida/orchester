@@ -835,7 +835,10 @@
         "interrupted": "Interrupted: continue it from its last checkpoint on its Summary."
       },
       "usage": {
-        "noAccount": "No account"
+        "removedProvider": "{{name}} (removed)",
+        "removedUnnamed": "Removed provider",
+        "earlier": "Earlier runs",
+        "commandTools": "Command tools"
       }
     }
   }

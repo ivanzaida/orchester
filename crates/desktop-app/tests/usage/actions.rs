@@ -11,10 +11,10 @@ use crate::harness::Seeded;
 #[test]
 fn usage_filter_menus_choose_and_chips_let_go() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
-  page.click("usage-filter-account");
-  assert!(page.shows("usage-filter-account-option-0") && page.shows("usage-filter-account-option-1"));
+  page.click("usage-filter-provider");
+  assert!(page.shows("usage-filter-provider-option-0") && page.shows("usage-filter-provider-option-1"));
   // A press outside an open menu closes it; the next one opens another.
-  page.click("usage-filter-account");
+  page.click("usage-filter-provider");
   page.click("usage-filter-model");
   assert!(page.shows("usage-filter-model-menu-search"), "Model's menu searches");
   let model = page.text("usage-filter-model-option-0-label");

@@ -16,11 +16,12 @@ mod grouped;
 mod index_use;
 pub mod limits;
 mod period;
+mod providers;
 mod report;
 mod series;
 
 pub use self::{
-  accounts::{AccountOrder, AccountPlace, AccountSeries, AccountSplit, AccountUsage, OWN_SERIES, SERIES},
+  accounts::{AccountOrder, AccountSeries},
   breakdown::{BreakdownKey, BreakdownRow, Breakdowns},
   efficiency::{EditTokens, Efficiency, FailedRuns},
   expensive::{RunCost, TaskCost},
@@ -29,12 +30,16 @@ pub use self::{
   grouped::{GroupBy, GroupKey, GroupRow, Grouped, Named, grouped},
   index_use::{IndexGroup, IndexUse},
   period::{Bucket, DayRange, DayRangeError, Grouping, HOURLY_DAYS, Period, bucket_of, day_start, local_date},
+  providers::{
+    OWN_SERIES, ProviderName, ProviderOrder, ProviderPlace, ProviderSeries, ProviderSplit, ProviderUsage, SERIES,
+    SpentOn, UsedProvider,
+  },
   report::{Summary, UsageQuery, UsageReport},
   series::{Measure, SeriesBar},
 };
 use crate::connection::AgentProvider;
 
-/// The series a CLI's tokens were drawn in before the page drew accounts ([`AccountSeries`]); kept for the
+/// The series a CLI's tokens were drawn in before the page drew providers ([`ProviderSeries`]); kept for the
 /// old app (`crates/desktop`). Color follows the CLI, never its rank: Codex, Claude Code, and a third for any
 /// other provider.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

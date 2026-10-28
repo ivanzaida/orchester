@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::wait::RunEnd;
 use crate::{
-  id::{AgentAccountId, RunId},
+  id::{ConnectionId, RunId},
   notification::MINUTES_PER_DAY,
   time::Timestamp,
 };
@@ -210,8 +210,9 @@ pub struct ReportAction {
 }
 
 /// The day's tokens (spent: input − cached input + output) and active agent time, as `get_usage` reads them, against
-/// the project's daily budget (`None`: no daily limit), by task and by account, most spent first, linking to the
-/// Usage page of the day.
+/// the project's daily budget (`None`: no daily limit), by task and by agent provider, most spent first, linking to
+/// the Usage page of the day. A report kept before providers were (decided 2026-10-28) split it by CLI account; that
+/// split is left out when it is read again.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DayUsage {
   pub spent: u64,
@@ -219,7 +220,8 @@ pub struct DayUsage {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub budget: Option<u64>,
   pub tasks: Vec<TaskShare>,
-  pub accounts: Vec<AccountShare>,
+  #[serde(default)]
+  pub providers: Vec<ProviderShare>,
   pub link: String,
 }
 
@@ -233,14 +235,29 @@ pub struct TaskShare {
   pub link: String,
 }
 
-/// An account's share of the day's usage; `account` is `None` for usage that started on no account, and `name` is
-/// the account's name when it has one.
+/// What a provider's share of the day's usage was spent on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccountShare {
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub account: Option<AgentAccountId>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub name: Option<String>,
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum SharedBy {
+  /// An agent connection, by its name as the Connections page shows it, or as it was named when last used once it is
+  /// gone (`None` when no record kept its name).
+  Provider {
+    connection: ConnectionId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    removed: bool,
+  },
+  /// Usage no record names a provider for.
+  Earlier,
+  /// Command tools, which run on no provider: their time only.
+  CommandTools,
+}
+
+/// An agent provider's share of the day's usage.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderShare {
+  pub by: SharedBy,
   pub spent: u64,
   pub active_ms: u64,
   pub link: String,
