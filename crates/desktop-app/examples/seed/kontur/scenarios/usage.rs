@@ -1,8 +1,8 @@
 //! `usage`: what the Usage page (`et35n`) charts: runs of Kontur's tasks over the last two weeks, a few
 //! today, on Feature delivery and Quick fix, with Explorer and Builder on Codex and Planner and Reviewer on
-//! Claude Code, so tokens split by CLI, model, profile · step and pipeline; runs that succeeded, merged,
-//! failed, paused and still run; auto mode's reviewer on Claude's Haiku approving a command in each
-//! finished Implement on Feature delivery; and the plan limits the CLIs reported: Codex's weekly window
+//! Claude Code, so tokens split by agent provider (`usage_providers`), CLI, model, profile · step and pipeline; runs
+//! that succeeded, merged, failed, paused and still run; auto mode's reviewer on Claude's Haiku approving a command in
+//! each finished Implement on Feature delivery; and the plan limits the CLIs reported: Codex's weekly window
 //! resetting midweek, Claude's weekly window known only from four days ago (the hatched start), and both
 //! CLIs' 5-hour windows filling up and resetting every five hours.
 //! `usage-empty` is the same project with no run today, which the page shows as *No runs in Kontur today*
@@ -26,7 +26,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::usage_accounts::SeedAccounts;
+use super::{usage_accounts::SeedAccounts, usage_providers::SeedProviders};
 use crate::kontur::{
   Kontur, SeedError,
   catalogue::{Catalogue, Published},
@@ -186,6 +186,7 @@ pub fn bare(kontur: &mut Kontur) -> Result<(), SeedError> {
 fn runs(kontur: &mut Kontur, rows: Vec<&Row>, extras: Extras) -> Result<(), SeedError> {
   let catalogue = kontur.usage_catalogue()?;
   let mut accounts = SeedAccounts::add(kontur)?;
+  let mut providers = SeedProviders::add(kontur)?;
   let mut sources = Vec::new();
   for row in rows {
     let pipeline = pipeline(&catalogue, row.pipe);
@@ -211,8 +212,9 @@ fn runs(kontur: &mut Kontur, rows: Vec<&Row>, extras: Extras) -> Result<(), Seed
       let feature = matches!(row.pipe, Pipe::Feature);
       first_edits(kontur, run, feature)?;
       accounts.record(kontur, run)?;
+      providers.record(kontur, run)?;
       if feature {
-        reviewed(kontur, run)?;
+        reviewed(kontur, run, &mut providers)?;
       }
       sources.push((run.id(), at));
     }
@@ -266,8 +268,8 @@ fn first_edits(kontur: &mut Kontur, run: &Run, indexed: bool) -> Result<(), Seed
 }
 
 /// Auto mode's reviewer on Claude's Haiku approved a command the Implement agent asked to run, once in each
-/// of its finished invocations.
-fn reviewed(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
+/// of its finished invocations, on the connection `providers` gives.
+fn reviewed(kontur: &mut Kontur, run: &Run, providers: &mut SeedProviders) -> Result<(), SeedError> {
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("a valid step key"))
     .map(|execution| execution.id());
@@ -305,6 +307,7 @@ fn reviewed(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
       approval: request.id,
       provider: AgentProvider::ClaudeCodeCli,
       account: None,
+      connection: providers.reviewer(),
       model: ModelId::new(REVIEWER_MODEL).expect("a valid model id"),
       started_at: asked,
       ended_at: answered,

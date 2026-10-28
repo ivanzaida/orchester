@@ -1,9 +1,10 @@
 //! Usage grouped one way, as a tool or a link asks for it (`docs/design/orchestrator-toolset.md`, *Usage*):
-//! tokens and active agent time per hour or day, task, pipeline, step, agent profile, model or account.
+//! tokens and active agent time per hour or day, task, pipeline, step, agent profile, model or agent provider.
 //! A turn counts in the group of the invocation it belongs to; a review of auto mode's reviewer counts
 //! under its run's task and pipeline and the step whose request it judged, as its own agent with its model,
-//! and under the account it ran on. Active time is the invocations': per hour or day it is each one's part
-//! of that stretch, as the range's is (`report::active_between`).
+//! and under the provider it ran on. Active time is the invocations': per hour or day it is each one's part
+//! of that stretch, as the range's is (`report::active_between`); by provider, command tools' time is a row of
+//! its own, with no tokens.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -11,12 +12,13 @@ use std::{
 };
 
 use super::{
+  SpentOn,
   facts::{InvocationFacts, RunFacts},
   period::{Bucket, Grouping},
   report::{Launch, Matched, Spender, Summary, Turn, UsageQuery, Within, active_between},
 };
 use crate::{
-  id::{AgentAccountId, ProjectId, ResourceId, RunId, TaskId},
+  id::{ProjectId, ResourceId, RunId, TaskId},
   run::TokenUsage,
   time::Timestamp,
 };
@@ -32,7 +34,7 @@ pub enum GroupBy {
   /// The agent profile, and auto mode's reviewer per model.
   Agent,
   Model,
-  Account,
+  Provider,
 }
 
 /// A pipeline or an agent profile, as a row names it.
@@ -62,9 +64,10 @@ pub enum GroupKey {
   Reviewer(Arc<str>),
   /// `None` for command tools.
   Model(Option<Arc<str>>),
-  /// `None` where no account was recorded: a native agent, a command tool, a native reviewer, or an
-  /// invocation or a review from before accounts were kept.
-  Account(Option<AgentAccountId>),
+  /// The agent provider the tokens were spent on, or *Earlier runs*.
+  Provider(SpentOn),
+  /// Command tools, which run on no provider: their time, no tokens.
+  CommandTools,
 }
 
 /// One group's usage in the range.
@@ -113,7 +116,7 @@ fn rows_by(within: &Within<'_>, range: super::DayRange, by: GroupBy) -> Vec<Grou
     GroupBy::Step => Facet::Step,
     GroupBy::Agent => Facet::Agent,
     GroupBy::Model => Facet::Model,
-    GroupBy::Account => Facet::Account,
+    GroupBy::Provider => Facet::Provider,
   };
   let mut rows = Rows::default();
   for turn in &within.turns {
@@ -133,7 +136,7 @@ enum Facet {
   Step,
   Agent,
   Model,
-  Account,
+  Provider,
 }
 
 fn by_bucket(within: &Within<'_>, buckets: &[Bucket]) -> Vec<GroupRow> {
@@ -205,7 +208,7 @@ fn key_of_turn(turn: &Turn<'_>, facet: Facet) -> GroupKey {
   match (facet, turn.by) {
     (Facet::Agent, Spender::Reviewer { model, .. }) => GroupKey::Reviewer(model.clone()),
     (Facet::Model, _) => GroupKey::Model(turn.model().cloned()),
-    (Facet::Account, _) => GroupKey::Account(turn.account()),
+    (Facet::Provider, _) => GroupKey::Provider(turn.spent_on()),
     _ => key_of_launch(turn.launch, facet),
   }
 }
@@ -223,7 +226,9 @@ fn key_of_launch(launch: Launch<'_>, facet: Facet) -> GroupKey {
     Facet::Step => GroupKey::Step(invocation.step.clone()),
     Facet::Agent => GroupKey::Agent(named(invocation.profile_id, invocation.profile.as_ref())),
     Facet::Model => GroupKey::Model(invocation.model.clone()),
-    Facet::Account => GroupKey::Account(invocation.account),
+    // A command tool runs no model, and so on no provider.
+    Facet::Provider if invocation.model.is_none() => GroupKey::CommandTools,
+    Facet::Provider => GroupKey::Provider(SpentOn::of(invocation.connection)),
   }
 }
 
@@ -302,6 +307,9 @@ fn label(key: &GroupKey) -> String {
     }
     GroupKey::Step(name) | GroupKey::Reviewer(name) => name.to_string(),
     GroupKey::Model(model) => model.as_deref().unwrap_or_default().to_owned(),
-    GroupKey::Account(account) => account.map_or_else(String::new, |account| account.to_string()),
+    GroupKey::Provider(on) => on
+      .connection()
+      .map_or_else(String::new, |connection| connection.to_string()),
+    GroupKey::CommandTools => String::new(),
   }
 }

@@ -26,7 +26,7 @@ use orchester_workspace::usage::{Dashboard, DashboardState};
 use super::{
   card::{Card, footnote},
   limits_chart::line_name,
-  series::series_color,
+  series::account_color,
   words,
 };
 use crate::theme::{ExtraSpacing, UsageRadius, UsageSpacing};
@@ -84,7 +84,7 @@ fn entry(ctx: &Ctx, dashboard: &Dashboard, window: &CurrentLimit, faded: bool) -
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(line_swatch(
-      &series_color(dashboard.account_series(window.account)),
+      &account_color(dashboard.account_series(window.account)),
       WindowKind::of(window.minutes) == WindowKind::FiveHour,
     ))
     .child(
@@ -182,7 +182,7 @@ pub fn compact(ctx: &Ctx, dashboard: &Dashboard, menu: Element) -> Element {
   let filtered =
     matches!(dashboard.state, DashboardState::FilteredOut { .. }) || dashboard.query.filter.chooses_limits();
   let caption = if filtered {
-    ctx.t_args("usage.limits.accountFilterOnly", [("time", &*reported)])
+    ctx.t_args("usage.limits.cliFilterOnly", [("time", &*reported)])
   } else {
     ctx.t_args("usage.limits.lastReported", [("time", &*reported)])
   };

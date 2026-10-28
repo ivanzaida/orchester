@@ -29,6 +29,7 @@ use orchester_core::{
   secret::{SecretValue, SecretVault},
   store::{ConnectionStore, SecretStore, SettingsStore},
   time::Timestamp,
+  usage::UsedProvider,
 };
 use orchester_store::{ProjectDb, StoreError};
 use tokio::{runtime::Handle, sync::watch};
@@ -49,6 +50,8 @@ pub(super) enum ReviewerSetup {
     executable: PathBuf,
     /// The account of the reviewer's connection, whose plan limits it reports.
     account: Option<AgentAccountId>,
+    /// The reviewer's connection, which its reviews' usage is spent on.
+    connection: UsedProvider,
     model: ModelId,
     effort: Option<String>,
     environment: Vec<(String, String)>,
@@ -56,6 +59,7 @@ pub(super) enum ReviewerSetup {
   /// A native connection's client.
   Native {
     client: AnthropicClient,
+    connection: UsedProvider,
     model: ModelId,
     effort: Option<String>,
   },
@@ -64,6 +68,9 @@ pub(super) enum ReviewerSetup {
   /// The project has no reviewer.
   Missing,
 }
+
+/// What a review's usage is spent on: the reviewer's CLI, its account and its connection.
+pub(super) type SpentOn = (AgentProvider, Option<AgentAccountId>, UsedProvider);
 
 /// Where a push of the run would go: its branch, its worktree, and the push URL of `origin` recorded as it
 /// started.
@@ -180,11 +187,16 @@ impl ReviewerSetup {
     done.review
   }
 
-  /// The provider and account a review with this reviewer is spent on; `None` when it asks no model.
-  pub(super) const fn provider(&self) -> Option<(AgentProvider, Option<AgentAccountId>)> {
+  /// The provider, account and connection a review with this reviewer is spent on; `None` when it asks no model.
+  pub(super) fn provider(&self) -> Option<SpentOn> {
     match self {
-      Self::Cli { kind, account, .. } => Some((kind.provider(), *account)),
-      Self::Native { .. } => Some((AgentProvider::AnthropicApi, None)),
+      Self::Cli {
+        kind,
+        account,
+        connection,
+        ..
+      } => Some((kind.provider(), *account, connection.clone())),
+      Self::Native { connection, .. } => Some((AgentProvider::AnthropicApi, None, connection.clone())),
       Self::Unreachable { .. } | Self::Missing => None,
     }
   }
@@ -217,7 +229,9 @@ impl ReviewerSetup {
     match self {
       Self::Missing => review_request(None, rules, input),
       Self::Unreachable { model } => review_request(Some(&Unreachable { model }), rules, input),
-      Self::Native { client, model, effort } => {
+      Self::Native {
+        client, model, effort, ..
+      } => {
         let reviewer = NativeReviewer {
           runtime,
           client,
@@ -231,10 +245,10 @@ impl ReviewerSetup {
       Self::Cli {
         kind,
         executable,
-        account: _,
         model,
         effort,
         environment,
+        ..
       } => {
         let place = match ReviewPlace::new() {
           Ok(place) => place,
@@ -296,8 +310,12 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
     effort,
     ..
   } = resolved;
+  let used = UsedProvider {
+    id: connection.id(),
+    name: connection.name().as_str().into(),
+  };
   if let (ReviewerKind::AnthropicApi, Some(api)) = (kind, connection.endpoint().api()) {
-    return Ok(native(db, keys, api, (model, effort)));
+    return Ok(native(db, keys, (api, used), (model, effort)));
   }
   let Some(executable) = connection.executable() else {
     return Ok(ReviewerSetup::Missing);
@@ -325,17 +343,18 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
     kind,
     executable: executable.to_path_buf(),
     account: connection.account().id(provider),
+    connection: used,
     model,
     effort,
     environment,
   })
 }
 
-/// The client of a native reviewer at `api`; unreachable when its key cannot be read.
+/// The client of a native reviewer at `api` of `connection`; unreachable when its key cannot be read.
 fn native(
   db: &ProjectDb,
   keys: &ReviewerKeys,
-  api: &ApiEndpoint,
+  (api, connection): (&ApiEndpoint, UsedProvider),
   (model, effort): (ModelId, Option<String>),
 ) -> ReviewerSetup {
   let key = match api_key(db, keys, api.key()) {
@@ -343,7 +362,12 @@ fn native(
     None => return ReviewerSetup::Unreachable { model },
   };
   match client(api, key) {
-    Ok(client) => ReviewerSetup::Native { client, model, effort },
+    Ok(client) => ReviewerSetup::Native {
+      client,
+      connection,
+      model,
+      effort,
+    },
     Err(error) => {
       tracing::warn!(%error, "cannot make the native reviewer's client");
       ReviewerSetup::Unreachable { model }

@@ -34,6 +34,7 @@ use orchester_core::{
   run::{
     AssembledPrompt, CodeIndexPrompt, InvocationEngine, InvocationPrompt, PinnedVersion, ProfileInfo, WorkingTools,
   },
+  usage::UsedProvider,
 };
 
 use self::cli::Cli;
@@ -88,6 +89,8 @@ pub(super) struct AgentStart {
   /// The API provider an agent CLI runs on, by its base URL and key secret, recorded with the invocation so a later
   /// one knows whether its session was made there; `None` on the CLI's own sign-in or for a native agent.
   pub(super) provider: Option<(BaseUrl, SecretId)>,
+  /// The agent connection it runs on, recorded with the invocation for the Usage page.
+  pub(super) connection: UsedProvider,
 }
 
 /// What starts: an agent CLI's process, or a native agent's loop.
@@ -345,7 +348,16 @@ impl RunTask {
       provider: on_provider
         .as_ref()
         .map(|on| (on.provider.base_url().clone(), on.provider.key())),
+      connection: used_provider(connection),
     })
+  }
+}
+
+/// `connection` as an invocation on it records it.
+pub(super) fn used_provider(connection: &AgentConnection) -> UsedProvider {
+  UsedProvider {
+    id: connection.id(),
+    name: connection.name().as_str().into(),
   }
 }
 

@@ -134,6 +134,7 @@ impl RunTask {
         vendor: connection.vendor(),
         effort,
       }),
+      connection: super::used_provider(connection),
     })
   }
 

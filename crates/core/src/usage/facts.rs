@@ -1,12 +1,13 @@
 //! What a project's store gives the Usage dashboard: the usage each completed turn reported with
-//! when it completed, and the invocations and runs the turns belong to. Nothing here is estimated;
-//! what the store does not know stays `None`.
+//! when it completed, the invocations and runs the turns belong to, and the agent providers they ran on.
+//! Nothing here is estimated; what the store does not know stays `None`.
 
 use std::sync::Arc;
 
+use super::providers::ProviderName;
 use crate::{
   connection::AgentProvider,
-  id::{AgentAccountId, InvocationId, ProjectId, ResourceId, RunId, TaskId},
+  id::{ConnectionId, InvocationId, ProjectId, ResourceId, RunId, TaskId},
   resource::VersionNumber,
   run::{EditProgress, RunNumber, TokenUsage},
   time::Timestamp,
@@ -20,6 +21,9 @@ pub struct UsageFacts {
   pub reviews: Vec<ReviewUsage>,
   pub invocations: Vec<InvocationFacts>,
   pub runs: Vec<RunFacts>,
+  /// The project's agent providers as the Connections page lists them, then those no longer connected that the
+  /// records name.
+  pub providers: Vec<ProviderName>,
   /// When the project's latest turn completed, at any time: the no-runs state names it.
   pub last_turn: Option<Timestamp>,
 }
@@ -41,9 +45,8 @@ pub struct ReviewUsage {
   pub invocation: InvocationId,
   /// The reviewer's provider.
   pub cli: AgentProvider,
-  /// The account the reviewer ran on; `None` for a native reviewer or a review recorded before the account was
-  /// kept.
-  pub account: Option<AgentAccountId>,
+  /// The agent connection the reviewer ran on; `None` for a review recorded before it was kept.
+  pub connection: Option<ConnectionId>,
   /// The reviewer's model.
   pub model: Arc<str>,
   pub usage: TokenUsage,
@@ -63,7 +66,7 @@ pub enum IndexGiven {
 pub struct InvocationFacts {
   pub id: InvocationId,
   pub run: RunId,
-  /// The provider of the profile's connection; `None` for a command tool, or when the connection
+  /// The provider of the connection it ran on; `None` for a command tool, or when the connection
   /// no longer exists.
   pub cli: Option<AgentProvider>,
   /// `None` for a command tool.
@@ -72,9 +75,9 @@ pub struct InvocationFacts {
   pub profile: Option<Arc<str>>,
   /// The agent profile's resource; `None` for a command tool.
   pub profile_id: Option<ResourceId>,
-  /// The CLI account it started on; `None` for a command tool, a native agent, or one started before
-  /// accounts were recorded.
-  pub account: Option<AgentAccountId>,
+  /// The agent connection it ran on, as recorded at its start or, for one started before that was recorded, as its
+  /// step's records name it; `None` for a command tool, or where no record names it.
+  pub connection: Option<ConnectionId>,
   /// The step's name in the run's pinned pipeline (*Implement*).
   pub step: Arc<str>,
   pub started_at: Timestamp,
