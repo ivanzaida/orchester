@@ -155,6 +155,10 @@ define_id!(
   MemoryId
 );
 define_id!(
+  /// A document of a project's Docs (`docs/design/docs.md`).
+  DocId
+);
+define_id!(
   /// One notice to a run that its base branch moved (`crate::base_move`).
   NoticeId
 );
