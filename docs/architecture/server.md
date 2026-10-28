@@ -1,5 +1,11 @@
 # Orchester — shared server
 
+> **Where the code is (2026-10-27).** The team server (`crates/server`), its web app (`web/server`), the shared web
+> kit (`web/ui`), `deploy/server`, `docs/server-hosting.md` and the end-to-end tests against a real server (its
+> `crates/e2e`) live in the private platform repository `ivanzaida/orchester-platform`; paths below under those
+> folders, and the tests that start a server, mean that repository. The desktop's side (`orchester-api`,
+> `orchester-workspace`'s `sharing`, `orchester-app`'s screens) stays here.
+
 Date: 2026-10-02, revised 2026-10-15 and 2026-10-22. Status: **agreed direction**. The user's decisions are recorded in
 [Decisions](#decisions). Rows 1–26 were settled on 2026-10-02/03; rows 27–30 (offline-first, offline claims, shared
 progress, shared team configuration) were added by the user on 2026-10-15 and replace or extend the rows marked in the

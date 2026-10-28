@@ -26,8 +26,6 @@ mod proposals;
 mod refused;
 mod repository;
 mod resolve;
-#[path = "../../tests/support/signed_in.rs"]
-mod signed_in;
 
 use std::{
   env,
@@ -45,6 +43,7 @@ use orchester_app::{
   root::{Root, RootProps, Start},
   routes::{OrchestratorChat, ProjectPage, Route},
   startup::WindowPosition,
+  test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };
