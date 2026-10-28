@@ -267,7 +267,6 @@ impl RunTask {
     agent: StepAgent<'_>,
   ) -> Result<AgentStart, RunnerProblem> {
     let (step, model, body, connection) = (agent.step, agent.model, agent.body, agent.connection);
-    let key = &step.key;
     let provider = connection.provider();
     let executable = cli::program(connection)?;
     let info = agent.info();
@@ -275,12 +274,12 @@ impl RunTask {
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;
-    let enforced = self.enforced(key, body, provider)?;
+    let enforced = self.enforced(&step.key, body, provider)?;
     let writable = self.writable_folders(&enforced)?;
     let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
-    let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
+    let McpServers { setup, mut left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
     let offered = self.offered_skills(&placed, (provider, worktree))?;
     let storage = self.run_storage()?;
     let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()))
@@ -331,7 +330,6 @@ impl RunTask {
       checks: &checks,
     };
     let started = self.cli_command(&cli, setup, (prompt, attached), tools)?;
-    let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
       launch: cli_launch(started, index.tools.as_deref(), (claude_approvals, claude_exemptions)),

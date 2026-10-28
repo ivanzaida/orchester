@@ -485,11 +485,9 @@ pub fn control_message(error: &RunRequestError) -> Message {
       .unwrap_or_else(|| Message::new("runs.control.failed")),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => Message::new("runs.unreadable.rejected"),
     RunRequestError::Rejected(
-      rejection @ (Rejection::DailyBudgetUsed { .. }
-      | Rejection::NoAgentSlot { .. }
-      | Rejection::LowDisk { .. }
-      | Rejection::ShuttingDown),
+      rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::LowDisk { .. }),
     ) => capacity_message(rejection),
+    RunRequestError::Rejected(rejection @ Rejection::ShuttingDown) => capacity_message(rejection),
     RunRequestError::Rejected(Rejection::LimitNotRaised { .. }) => Message::new("runs.limit.notRaised"),
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
       limit: RunLimit::Tokens,
