@@ -3,8 +3,6 @@
 //! The example-only qa_secrets MCP tool controls actual vault delay/failure and masked fixture input.
 //! The same Root, screen, workspace actions, MCP privacy and person-only gates as the app are used.
 mod fixtures;
-#[path = "../../tests/support/signed_in.rs"]
-mod signed_in;
 mod tools;
 mod vault;
 
@@ -22,6 +20,7 @@ use orchester_app::{
   root::{Ready, Root, RootProps, Start},
   routes::{ProjectPage, Route},
   services::Services,
+  test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };
