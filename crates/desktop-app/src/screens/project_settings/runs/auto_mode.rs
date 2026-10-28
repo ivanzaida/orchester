@@ -1,8 +1,10 @@
-//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch and reviewer, saved as soon as they change, like the
-//! page's other settings, and the project's approval rules. Turning it on or changing its active reviewer widens what
-//! the reviewer approves in the person's place, so only a person's input does it (or automation's under both of its
-//! opt-ins, [`Guarded::ApprovalWidening`]); such a change from other input is put back and said under the group.
+//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch, *approve everything in each run* and the reviewer,
+//! saved as soon as they change, like the page's other settings, and the project's approval rules. Turning it on or
+//! changing its active reviewer widens what the reviewer approves in the person's place, so only a person's input does
+//! it (or automation's under both of its opt-ins, [`Guarded::ApprovalWidening`]); such a change from other input is put
+//! back and said under the group.
 mod controls;
+mod everything;
 mod feedback;
 mod rules;
 
@@ -68,6 +70,8 @@ pub struct AutoMode {
   attempted: Signal<Asked>,
   failed: Signal<bool>,
   gate: Option<InputGate>,
+  /// An MCP client's input asked to turn on *approve everything in each run* and was refused.
+  everything_refused: Signal<bool>,
   /// Whether the input that made the last edit may widen auto mode, read while it was delivered.
   may_widen: Arc<AtomicBool>,
   /// A widening from input that may not make it was put back; said under the group until the next change.
@@ -89,6 +93,7 @@ impl Component for AutoMode {
       attempted: ctx.signal(Asked(None)),
       failed: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
+      everything_refused: ctx.signal(false),
       may_widen: Arc::new(AtomicBool::new(true)),
       refused: ctx.signal(false),
     };

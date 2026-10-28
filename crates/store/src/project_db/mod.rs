@@ -2,6 +2,7 @@ mod activity;
 mod agent_files;
 mod always_allow;
 mod approval_rules;
+mod approve_everything;
 mod attachments;
 mod auto_mode;
 mod automatic_status;

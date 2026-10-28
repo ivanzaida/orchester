@@ -18,6 +18,7 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
+    "approveEverythingPersonOnly": "Only a person turns on approving everything in each run: it lets every auto mode run answer its own requests. Input from an MCP client is taken only while you let automation change agent permissions.",
     "baseBranch": {
       "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
     }
