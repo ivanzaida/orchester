@@ -35,6 +35,9 @@
 //!   line of 5000 characters, 3995 `y` followed by the value of `DOCS_TOKEN` (an MCP server's secret, when the process
 //!   has it) and 1100 numbered lines (`stderr line <n>`) to standard error, then works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
+//! - "Commit the work": commits what it wrote itself (`git commit`), leaving nothing uncommitted; "Commit, then draft"
+//!   then appends `draft` to `README.md` without committing it; "Commit on a side branch" checks out a new branch,
+//!   `agent-side`, and commits there;
 //! - "Report the absolute path": reports the file change at its absolute path in the worktree, as Codex does, instead
 //!   of relative to it;
 //! - "Sign the line": appends `hello from <step>` instead of `hello`;
@@ -74,6 +77,19 @@ pub struct StepReport {
   handoff: bool,
   unverified: bool,
   unchanged: bool,
+  commit: OwnCommit,
+}
+
+/// Whether the agent commits what it wrote itself, and how.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OwnCommit {
+  No,
+  /// "Commit the work".
+  Clean,
+  /// "Commit, then draft".
+  ThenDraft,
+  /// "Commit on a side branch".
+  SideBranch,
 }
 
 /// A turn that waits for a message sent now.
@@ -312,7 +328,7 @@ pub fn finish(session: &mut Session, line: &str, result: &StepReport) -> Step {
   } else {
     append(worktree, line)
   };
-  if let Err(error) = written {
+  if let Err(error) = written.and_then(|()| commit_own(worktree, result.commit)) {
     eprintln!("cannot write {file}: {error}");
     return Step::Exit(ExitCode::from(2));
   }
@@ -477,6 +493,14 @@ fn asked_report(prompt: &str, structured: bool, worktree: &Path) -> StepReport {
   result.handoff = prompt.contains("Leave a handoff");
   result.unverified = prompt.contains("Report unverified");
   result.unchanged = prompt.contains("Change nothing");
+  result.commit = [
+    ("Commit on a side branch", OwnCommit::SideBranch),
+    ("Commit, then draft", OwnCommit::ThenDraft),
+    ("Commit the work", OwnCommit::Clean),
+  ]
+  .into_iter()
+  .find_map(|(words, commit)| prompt.contains(words).then_some(commit))
+  .unwrap_or(OwnCommit::No);
   result
 }
 
@@ -494,5 +518,34 @@ pub fn report_of(prompt: &str, structured: bool) -> StepReport {
     handoff: false,
     unverified: false,
     unchanged: false,
+    commit: OwnCommit::No,
   }
+}
+
+/// The agent's own `git commit` of what it wrote, as `commit` asks.
+fn commit_own(worktree: &Path, commit: OwnCommit) -> std::io::Result<()> {
+  let git = |args: &[&str]| {
+    let status = std::process::Command::new("git")
+      .args(args)
+      .current_dir(worktree)
+      .stdin(std::process::Stdio::null())
+      .stdout(std::process::Stdio::null())
+      .status()?;
+    if status.success() {
+      Ok(())
+    } else {
+      Err(std::io::Error::other(format!("git {args:?}: {status}")))
+    }
+  };
+  match commit {
+    OwnCommit::No => return Ok(()),
+    OwnCommit::SideBranch => git(&["checkout", "--quiet", "-b", "agent-side"])?,
+    OwnCommit::Clean | OwnCommit::ThenDraft => {}
+  }
+  git(&["add", "--all"])?;
+  git(&["commit", "--quiet", "-m", "The agent's own commit"])?;
+  if commit == OwnCommit::ThenDraft {
+    append(worktree, "draft")?;
+  }
+  Ok(())
 }
