@@ -3,8 +3,8 @@
 //! each with *Approve*, *Edit* and *Reject* in place. *Active* (05b) has the search and its *Filter* with how many are
 //! active and wait, then what reaches agents, then its records grouped by type; the others (05f) list their records in
 //! one box, *Deprecated* with a note under them. Records are pinned first, each opening its own page. A tab without
-//! records says so instead, without its search and filters (`ejSHj`); one whose search finds nothing names the tabs
-//! that hold matches (`tab_no_match`).
+//! records says so instead in one quiet row, without its search and filters (06b `VcE5a`); one whose search finds
+//! nothing names the tabs that hold matches (`tab_no_match`).
 
 use std::sync::Arc;
 
@@ -21,20 +21,22 @@ use orchester_workspace::memory::{
 };
 
 use super::{
-  centered::Centered,
   editor::{RecordEditor, opened_on},
   list::{self, ListInput},
   opened, proposal,
-  state::MemoryState,
+  state::{MemoryState, Opened},
   tab_no_match::tab_no_match,
   tabs::{self, Order},
   toolbar,
 };
 use crate::{
   routes::MemoryTab,
-  screens::hub::parts::{boxed, group, head as head_row, note},
+  screens::hub::parts::{Entry, boxed, group, head as head_row, note},
   theme::{HubSpacing, HubText},
-  ui::icon::Icon,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+  },
 };
 
 /// What a status tab shows: `tab` of `memory`, the page's tabs in `order`.
@@ -214,7 +216,8 @@ fn records(
   )
 }
 
-/// A status tab without records (`xFUjH` in `ejSHj`, `qfF5t` in `C0OJpC`).
+/// A status tab without records: one quiet row in its box, Active's with *New record* (`KVUQx`, `Och5l` in 06b
+/// `VcE5a`).
 fn empty(ctx: &Ctx, state: &MemoryState, tab: MemoryTab) -> Option<Element> {
   let (title, body) = match tab {
     MemoryTab::Waiting => ("memory.tabs.empty.waitingTitle", "memory.tabs.empty.waitingBody"),
@@ -224,14 +227,16 @@ fn empty(ctx: &Ctx, state: &MemoryState, tab: MemoryTab) -> Option<Element> {
     MemoryTab::Rejected => ("memory.tabs.empty.rejectedTitle", "memory.tabs.empty.rejectedBody"),
     MemoryTab::Settings => return None,
   };
-  Some(
-    Centered::new(
-      "memory-empty",
-      tabs::glyph(tab),
-      ctx.t(title),
-      ctx.t_args(body, [("project", &*state.project)]),
-    )
-    .empty_tab()
-    .into(),
-  )
+  let mut row = Entry::new("memory-empty", ctx.t(title))
+    .tile(tabs::glyph(tab))
+    .hint(ctx.t_args(body, [("project", &*state.project)]));
+  if tab == MemoryTab::Active {
+    let open = state.clone();
+    row = row.end(
+      ActionButton::new("memory-empty-new", ButtonKind::Secondary, ctx.t("memory.newRecord"))
+        .icon(Icon::Plus)
+        .on_click(move || open.open(Opened::New)),
+    );
+  }
+  Some(boxed("memory-empty-rows", [row.into()]).into())
 }
