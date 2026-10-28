@@ -7,8 +7,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_workspace::budget::{
-  LimitsForm, MAX_STORED_MINUTES, TIME_LIMIT_CHOICES, budget_error, qa_slots, read_agent_slots, read_budget,
-  read_minutes, read_optional_budget, read_qa_slots, time_limit_choices,
+  LimitsForm, MAX_STORED_MINUTES, TIME_LIMIT_CHOICES, budget_error, holds_defaults, qa_slots, read_agent_slots,
+  read_budget, read_minutes, read_optional_budget, read_qa_slots, time_limit_choices,
 };
 
 fn limits<'a>(default: &'a str, daily: &'a str, time: &'a str) -> LimitsForm<'a> {
@@ -74,6 +74,21 @@ fn budget_minutes_and_budgets_beyond_what_is_stored_are_too_large() {
   let error = read_budget("9223372036854775808", ",").expect_err("too large");
   assert_eq!(error.key, "tokens.errors.tooLarge");
   assert_eq!(error.args, [("max", "9,223,372,036,854,775,807".to_owned())]);
+}
+
+#[test]
+fn budget_task_limits_hold_the_project_defaults_only_when_equal() {
+  let none = ProjectLimits::DEFAULT;
+  assert!(holds_defaults(none, ("", " "), ","));
+  assert!(!holds_defaults(none, ("1,000,000", ""), ","));
+  assert!(!holds_defaults(none, ("", "30"), ","));
+  assert!(!holds_defaults(none, ("1.4M", ""), ","));
+  let set = limits("2,000,000", "30,000,000", "45").limits().expect("valid limits");
+  assert!(holds_defaults(set, ("2000000", "45"), ","));
+  assert!(holds_defaults(set, ("2,000,000", " 45 "), ","));
+  assert!(!holds_defaults(set, ("", ""), ","));
+  assert!(!holds_defaults(set, ("2,000,000", ""), ","));
+  assert!(!holds_defaults(set, ("2,000,000", "60"), ","));
 }
 
 #[test]
