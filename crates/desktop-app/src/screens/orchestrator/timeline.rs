@@ -17,10 +17,7 @@ use lurq::{
     theme::{PaletteColor, TypographyStyle},
   },
   components::{Column, Stack, Text, VirtualizedList},
-  layout::{
-    StackAlignment,
-    scrollbar::{ScrollBarPlacement, ScrollBarStyle},
-  },
+  layout::StackAlignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -37,7 +34,7 @@ use super::{
   wait::Status,
 };
 use crate::{
-  theme::OrchestratorSpacing,
+  theme::{OrchestratorSpacing, chat_scrollbar},
   ui::{
     chat::{
       follow::{Follow, jump_room},
@@ -146,11 +143,7 @@ pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>, note: Opt
   if !following {
     lines.push(Line::JumpRoom);
   }
-  // The thumb keeps a lane of its own, so it never covers a message's end.
-  let scrollbar = ScrollBarStyle {
-    placement: ScrollBarPlacement::Reserved,
-    ..ctx.theme().scrollbar().clone()
-  };
+  let scrollbar = chat_scrollbar(&ctx.theme().scrollbar());
   let list = follow
     .list(VirtualizedList::new_shared(ctx, Arc::new(lines)), arrived, reveal)
     .list_key("orchestrator-chat")
@@ -255,9 +248,10 @@ impl Component for TurnView {
       Line::Digest { digest, first } => {
         let key = digest.id.clone();
         let mounted = ctx.mount_keyed::<Digest>(&key, digest);
-        room(Column::new().width(Dimension::Pct(100.0)).child(mounted), first)
+        room(ctx, Column::new().width(Dimension::Pct(100.0)).child(mounted), first)
       }
       Line::Note(words) => room(
+        ctx,
         Column::new().width(Dimension::Pct(100.0)).child(
           Text::new(&words)
             .id("orchestrator-not-ready")
@@ -317,6 +311,7 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
     Vec::new()
   };
   room(
+    ctx,
     Column::new()
       .id(format!("orchestrator-turn-{key}"))
       .describe("turn", turn_name(row.turn.state.as_ref()))
@@ -332,14 +327,14 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
 
 /// A row's room in the scrolling turns: the chat's column, centred, 18 under it, and the chat's top room over the
 /// first.
-fn room(content: Column, first: bool) -> Element {
+fn room(ctx: &Ctx, content: Column, first: bool) -> Element {
   let padding = Padding::new().bottom(OrchestratorSpacing::Items.role());
   let padding = if first {
     padding.top(OrchestratorSpacing::Start.role())
   } else {
     padding
   };
-  super::body::turn_room(content.padding(padding)).into()
+  super::body::turn_room(ctx, content.padding(padding)).into()
 }
 
 /// The name `describe` reports a turn by, for tests and QA; `none` for a wait that started no turn.

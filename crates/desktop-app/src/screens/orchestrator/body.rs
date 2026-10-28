@@ -45,6 +45,7 @@ use crate::{
   services::Services,
   theme::{
     DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText,
+    beside_chat_lane, chat_scrollbar,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -391,14 +392,16 @@ fn composer_area(below: Column) -> Row {
     .child(below)
 }
 
-/// A turn's room in the scrolling turns: in from the chat area's sides, the column's width at most, centred.
-pub(super) fn turn_room(turn: Column) -> Row {
+/// A turn's room in the scrolling turns: in from the chat area's sides, the column's width at most, centred on the
+/// chat as the composer is: the scrollbar's lane at the right takes the place of as much of the side.
+pub(super) fn turn_room(ctx: &Ctx, turn: Column) -> Row {
+  let beside_lane = beside_chat_lane(&chat_scrollbar(&ctx.theme().scrollbar()));
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
         .left(OrchestratorSpacing::PageSide.role())
-        .right(OrchestratorSpacing::PageSide.role()),
+        .right(Dimension::Px(beside_lane)),
     )
     .justify(Justify::Center)
     .child(turn.max_width(Dimension::Px(COLUMN_WIDTH)))

@@ -205,7 +205,7 @@ fn orchestrator_waits_for_the_person_gather_into_a_digest_that_counts_them() {
 
 /// A conversation that starts with `text`, answered, and the action `action` kept in its answer; the conversation's
 /// route and the action's card.
-fn with_action(screen: &Orchestrator, text: &str, action: &ChatAction) -> (OrchestratorChat, String) {
+pub(super) fn with_action(screen: &Orchestrator, text: &str, action: &ChatAction) -> (OrchestratorChat, String) {
   let mut db = screen.db();
   let at = Timestamp::now();
   let (chat, message) = (ChatId::generate(), ChatMessageId::generate());
