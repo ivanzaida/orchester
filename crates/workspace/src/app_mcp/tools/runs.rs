@@ -102,6 +102,12 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
   });
   let decided = decided_plans(&view, &conversation);
   let usage = view.usage();
+  // Invocations whose CLI reported input but no output yet: their output is unknown, not 0.
+  let output_unreported = view
+    .invocations
+    .iter()
+    .filter(|invocation| invocation.usage.output_unreported())
+    .count();
   let reviewer = reviewer_tokens(&view.reviews);
   let run = &view.run;
   let steps: Vec<Value> = view.steps.iter().map(step).collect();
@@ -123,6 +129,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
       "input": usage.input,
       "cached_input": usage.cached_input,
       "output": usage.output,
+      "output_unreported": output_unreported,
       "reviewer": reviewer,
     },
     "time": {

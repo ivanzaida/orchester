@@ -1,9 +1,9 @@
 //! The toolbar's filters (`Filters` `N20RN`, `Usage · interactions` `p732q`): a button per filter
-//! (*Account*, *Model*, *Agent profile*, *Pipeline*, *Tag*) that says how much it chooses (*Account · 2 of 6*)
-//! and opens its menu of checkboxes, with a search where the list is long; *Account*'s groups the connected
-//! accounts by CLI, each with its series' swatch, then *No account* (`EU0ex`). Then a chip per chosen value,
-//! from a menu, a *Where tokens go* row or a link (a CLI, a task, a run or a step a link may add too), and
-//! *Clear filters*. What a menu offers and what a choice does is `orchester_workspace::usage`.
+//! (*Provider*, *Model*, *Agent profile*, *Pipeline*, *Tag*) that says how much it chooses (*Provider · 2 of 6*)
+//! and opens its menu of checkboxes, with a search where the list is long; *Provider*'s lists the agent providers
+//! as the Connections page does, each with its series' swatch, then *Earlier runs* (in the look of `EU0ex`). Then a
+//! chip per chosen value, from a menu, a *Where tokens go* row or a link (a CLI, a task, a run or a step a link may add
+//! too), and *Clear filters*. What a menu offers and what a choice does is `orchester_workspace::usage`.
 
 use std::sync::Arc;
 
@@ -17,11 +17,11 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::usage::{AccountLabel, Dashboard, Facet, FilterOption, ValueLabel};
+use orchester_workspace::usage::{Dashboard, Facet, FilterOption, ValueLabel};
 
 use super::{
   Requery,
-  series::{account_name, account_text, cli_heading, series_swatch},
+  series::{provider_text, series_swatch},
   words,
 };
 use crate::{
@@ -36,9 +36,9 @@ use crate::{
   },
 };
 
-/// A menu's width (`CLI menu` `tEymU`), with a search (`Model menu` `dcY35`), and *Account*'s (`JoCR3`).
+/// A menu's width (`CLI menu` `tEymU`), with a search (`Model menu` `dcY35`), and *Provider*'s (as `JoCR3`).
 const MENU_WIDTH: f32 = 220.0;
-const ACCOUNT_MENU_WIDTH: f32 = 260.0;
+const PROVIDER_MENU_WIDTH: f32 = 260.0;
 const SEARCH_MENU_WIDTH: f32 = 240.0;
 /// A list longer than this gets a search; *Model* always has one (`Model filter · search in a long list`).
 const SEARCH_FROM: usize = 8;
@@ -55,7 +55,7 @@ pub fn facet_name(ctx: &Ctx, facet: Facet) -> Arc<str> {
     Facet::Task => "usage.filters.task",
     Facet::Run => "usage.filters.run",
     Facet::Step => "usage.filters.step",
-    Facet::Account => "usage.filters.account",
+    Facet::Provider => "usage.filters.provider",
   })
 }
 
@@ -71,7 +71,7 @@ pub const fn facet_id(facet: Facet) -> &'static str {
     Facet::Task => "usage-filter-task",
     Facet::Run => "usage-filter-run",
     Facet::Step => "usage-filter-step",
-    Facet::Account => "usage-filter-account",
+    Facet::Provider => "usage-filter-provider",
   }
 }
 
@@ -82,14 +82,8 @@ pub fn value_text(ctx: &Ctx, label: &ValueLabel) -> Arc<str> {
     ValueLabel::Name(name) | ValueLabel::Unknown(name) => name.clone(),
     ValueLabel::Pipeline { name, version } => words::pipeline(ctx, name, *version),
     ValueLabel::Run { task, number } => words::run_label(ctx, task, number.get()),
-    ValueLabel::Account { cli, name } => account_text(
-      ctx,
-      &AccountLabel::Known {
-        cli: *cli,
-        name: name.clone(),
-      },
-    ),
-    ValueLabel::NoAccount => ctx.t("usage.accounts.none"),
+    ValueLabel::Provider(provider) => provider_text(ctx, provider),
+    ValueLabel::Earlier => ctx.t("usage.providers.earlier"),
   }
 }
 
@@ -129,8 +123,8 @@ pub fn menu(
       .child(loading(&format!("{id}-reading"), &ctx.t("usage.filters.reading")).padding(SpacingSize::Sm))
       .into();
   };
-  if facet == Facet::Account {
-    return account_menu(ctx, dashboard, &id, requery);
+  if facet == Facet::Provider {
+    return provider_menu(ctx, dashboard, &id, requery);
   }
   let options = dashboard.options(facet);
   let searchable = facet == Facet::Model || options.len() > SEARCH_FROM;
@@ -183,49 +177,37 @@ fn option_row(
   )
 }
 
-/// *Account*'s menu (`Account menu` `JoCR3`): each CLI's heading over its accounts, by name as Settings
-/// shows them, each with its series' swatch; then, past a line, *No account* and what it holds.
-fn account_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> Element {
-  let mut rows: Vec<Element> = Vec::new();
-  let mut heading = None;
-  for (index, option) in dashboard.options(Facet::Account).into_iter().enumerate() {
-    let (requery, query) = (requery.clone(), dashboard.toggled(Facet::Account, &option.value));
+/// *Provider*'s menu (in the look of `Account menu` `JoCR3`): the agent providers as the Connections page lists them,
+/// by name, each with its series' swatch; then, past a line, *Earlier runs* and what it holds.
+fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> Element {
+  let mut rows: Vec<Element> = vec![filter_group(
+    format!("{id}-group"),
+    Icon::Bot,
+    &ctx.t("usage.providers.heading"),
+  )];
+  for (index, option) in dashboard.options(Facet::Provider).into_iter().enumerate() {
+    let (requery, query) = (requery.clone(), dashboard.toggled(Facet::Provider, &option.value));
     let choose = move || requery.show(query.clone());
-    let option_id = format!("{}-option-{index}", facet_id(Facet::Account));
+    let option_id = format!("{}-option-{index}", facet_id(Facet::Provider));
     let swatch = option.series.map(series_swatch);
-    match &option.label {
-      ValueLabel::Account { cli, name } => {
-        if heading != Some(*cli) {
-          heading = Some(*cli);
-          rows.push(filter_group(
-            format!("{id}-group-{}", cli.as_str()),
-            Icon::SquareTerminal,
-            &cli_heading(ctx, *cli),
-          ));
-        }
-        let label = account_name(ctx, name.as_ref());
-        rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
-      }
-      ValueLabel::NoAccount => {
-        rows.push(separator(ctx));
-        rows.push(filter_option_explained(
-          option_id,
-          (
-            &ctx.t("usage.accounts.none"),
-            &ctx.t("usage.accounts.noneDetail"),
-            option.chosen,
-          ),
-          swatch,
-          choose,
-        ));
-      }
-      label => {
-        let label = value_text(ctx, label);
-        rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
-      }
+    if option.label == ValueLabel::Earlier {
+      rows.push(separator(ctx));
+      rows.push(filter_option_explained(
+        option_id,
+        (
+          &ctx.t("usage.providers.earlier"),
+          &ctx.t("usage.providers.earlierDetail"),
+          option.chosen,
+        ),
+        swatch,
+        choose,
+      ));
+    } else {
+      let label = value_text(ctx, &option.label);
+      rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
     }
   }
-  filter_menu_panel(id, ACCOUNT_MENU_WIDTH).with_children(rows).into()
+  filter_menu_panel(id, PROVIDER_MENU_WIDTH).with_children(rows).into()
 }
 
 /// What a menu says when it lists nothing: *No tags yet* for a project whose tasks have no tags

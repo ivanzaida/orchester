@@ -105,7 +105,7 @@ pub use self::{
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
-  task_form::{TaskFormSpacing, TaskFormText},
+  task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
     SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar,

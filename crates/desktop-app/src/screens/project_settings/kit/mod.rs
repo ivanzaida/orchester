@@ -14,8 +14,8 @@ pub(crate) use self::{
     FormField, form_actions, form_actions_noted, form_group, form_link, form_note, form_row, on_enter, warning_line,
   },
   group::Group,
-  parts::{EmptyRow, Glyph, back, command_line, entity_head, outlined_tile, page_head, question, tile},
-  row::{SettingRow, Tone, value},
+  parts::{EmptyRow, Glyph, back, command_box, command_line, entity_head, outlined_tile, page_head, question, tile},
+  row::{SettingRow, Tone, mono_value, value},
 };
 /// A tab's column of groups, scrolling under the page's tabs.
 pub(crate) use super::page::scroll;

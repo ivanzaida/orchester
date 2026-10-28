@@ -643,7 +643,7 @@ returned), **Cumulative flow**.
    repository*). A project with tasks goes through the **join review** (*Join and upload N* / *Join without
    uploading*).
 3. Tasks not uploaded stay *Not shared* (read-only; *Share task* on its page).
-4. *Leave or make local* › **Make local…** or **Leave…** to stop.
+4. *Leave* › **Leave…** or **Make local…** to stop.
 
 ## 11. Automating Orchester
 

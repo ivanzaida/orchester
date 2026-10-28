@@ -1,7 +1,8 @@
 //! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over six tabs, General,
 //! Runs, Context, Connections, Secrets and Sharing, each a 720 column of groups of rows ([`kit`]). General, Runs and
 //! Context save as a person leaves a field or flips a switch, widening changes asked in place; Connections and Secrets
-//! save per action and say nothing of a save state. Add, open and edit flows are pages inside their tab with a crumb
+//! save per action and say nothing of a save state, but Add provider says it isn't saved yet. Add, open and edit flows
+//! are pages inside their tab with a crumb
 //! back to it: a connection's, Add provider and Add MCP server under Connections, a secret's under Secrets, *Approved
 //! for every run* under Runs, and the first link (`Share`) under Sharing.
 mod context;

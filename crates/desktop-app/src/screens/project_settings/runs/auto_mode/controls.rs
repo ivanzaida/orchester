@@ -35,7 +35,7 @@ const EFFORT_WIDTH: f32 = 120.0;
 
 pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Group {
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
-  let busy = save.state().get().is_pending() || tab.asking.get().0.is_some();
+  let busy = save.state().get().is_pending();
   let on_row = switch_row(ctx, tab, props, settings, save, (options.resolved.as_ref().err(), busy));
   let reviewer = if options.connections.is_empty() {
     unavailable_reviewer(ctx, props)
@@ -56,7 +56,13 @@ fn switch_row(
   save: &Save,
   (unavailable, busy): (Option<&orchester_workspace::messages::Message>, bool),
 ) -> Element {
-  let on = settings.auto_mode.new_runs;
+  // While its save runs, the switch already shows what was chosen; a failed one reads storage back.
+  let on = tab
+    .attempted
+    .get()
+    .0
+    .filter(|_| busy)
+    .map_or(settings.auto_mode.new_runs, |asked| asked.new_runs);
   let mut toggle = Toggle::new(
     "settings-auto-new-runs",
     ToggleKind::Switch,
@@ -73,6 +79,7 @@ fn switch_row(
     toggle = toggle.on_change(move |chosen| {
       let mut asked = base.clone();
       asked.new_runs = chosen;
+      tab.note_input();
       tab.request(&props, &save, asked);
     });
   }
@@ -166,7 +173,7 @@ fn default_connection_label(ctx: &Ctx, name: Option<&str>) -> Arc<str> {
 
 /// The reviewer's connection (`kGBHZ`): the default, the connections a reviewer runs on, and those on an API provider
 /// listed faded with a lock and why, the reason wrapped, as the profile's connection menu lists them. Locked while a
-/// save or a question is under way.
+/// save is under way.
 fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::ReviewOptions, busy: bool) -> Element {
   let default = default_connection_label(ctx, options.default_connection.as_deref());
   if busy {

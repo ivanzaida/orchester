@@ -97,6 +97,6 @@ pub(super) fn role_row(ctx: &mut Ctx, link: &SharingLink, shared: &str) -> Eleme
       Tone::Warning,
     )
     .info(detail)
-    .control(value("sharing-role-value", &ctx.t("sharing.linked.noRole")))
+    .control(value("sharing-role-value", &ctx.t("sharing.linked.removed.role")))
     .render(ctx)
 }
