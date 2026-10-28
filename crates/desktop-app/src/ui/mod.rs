@@ -25,6 +25,7 @@ pub mod copied_value;
 pub mod date_picker;
 pub mod detail_row;
 pub mod enforcement_row;
+pub mod failure;
 pub mod field;
 pub mod filter;
 pub mod form_section;

@@ -52,6 +52,7 @@ mod qa_slots;
 mod questions;
 mod queue_holds;
 mod recovery;
+mod removed_resources;
 mod returned_after_end;
 mod reviewer_accounts;
 mod reviewer_usage;

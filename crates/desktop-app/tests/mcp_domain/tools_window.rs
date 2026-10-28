@@ -18,11 +18,13 @@ fn tools_window_confirmation_is_person_only_for_save_and_publish() {
     "tool-program",
     &std::env::current_exe().expect("test binary").to_string_lossy(),
   );
-  s.until("program resolution", |s| {
-    !text(s, "tool-action-reason").contains("Checking")
+  // Create draft is pressable once the program resolved; a client's press only asks.
+  s.until("protected save question", |s| {
+    if !s.shows("tool-confirm-confirm") {
+      let _ = s.click_by_client("tool-create");
+    }
+    s.shows("tool-confirm-confirm")
   });
-  s.click_by_client("tool-save").expect("client may ask");
-  s.until("protected save question", |s| s.shows("tool-confirm-confirm"));
   let refused = s
     .click_by_client("tool-confirm-confirm")
     .expect_err("client cannot confirm");
@@ -40,7 +42,7 @@ fn tools_window_confirmation_is_person_only_for_save_and_publish() {
       .any(|e| e.name.as_ref() == "Window command")
   });
   s.until("saved editor", |s| {
-    s.shows("tool-publish") && text(s, "tool-state").contains("Draft")
+    s.shows("tool-publish") && text(s, "tool-draft-bar-status").contains("Draft")
   });
   let id = ProjectTools::load(&db)
     .expect("tools")

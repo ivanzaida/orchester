@@ -3,7 +3,8 @@
 //! inside and 2 between rows (`Pipeline menu` `ClKqz`, `Tag menu` `LLIjG`). A row (`Menu item` `mAHGP`)
 //! is 28 high, radius 4, 8 at its sides: a 14 `text_secondary` icon, the label in 12 `text_primary` and
 //! a shortcut in Geist Mono 11 `text_muted` at its end, 8 apart; a row with a detail (`Menu item/detail`
-//! `j6ZUhL`) is 6 over and under its label and the detail in 11 `text_muted` 2 under it, and a chosen
+//! `j6ZUhL`) is 6 over and under its label and the detail in 11 `text_muted` 2 under it, or the detail in 12
+//! `text_muted` after the label on one line (`Item` in 01d `jGqpS`), and a chosen
 //! row ends in a 14 check. A row that destroys has its icon and label in `danger` (`Cancel run` `Z1Uvbo` in
 //! `JapSp`). Rows take the `hover` fill under the pointer. A row that cannot be chosen
 //! is faded, ends in a lock and says why as its detail. Groups are split by a 1 `border` line with 4
@@ -16,7 +17,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Placement, Popup, Row, Text},
+  components::{Button, Column, Placement, Popup, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
@@ -101,6 +102,8 @@ pub struct MenuItem {
   mono: bool,
   /// The row destroys: its icon and label in `danger`.
   danger: bool,
+  /// The detail follows the label on its line.
+  inline: bool,
   /// The row opens a list beside the menu: a 12 `text_muted` chevron at its end.
   submenu: bool,
   /// An unavailable row's reason is said elsewhere, in the menu's foot: the row is only faded.
@@ -137,6 +140,7 @@ impl MenuItem {
       lock: true,
       mono: false,
       danger: false,
+      inline: false,
       submenu: false,
       reason_below: false,
       focus: Focus::Pointer,
@@ -217,8 +221,15 @@ impl MenuItem {
     self
   }
 
-  /// The label, cut to the row's room with its whole words in a tooltip, and the detail under it.
-  fn text(&self, ctx: &mut Ctx, detail: Option<&str>) -> Column {
+  /// The detail follows the label on its line instead of under it: the row stays one line high (`Item` `RMq18` in
+  /// 01d).
+  pub fn inline_detail(mut self) -> Self {
+    self.inline = true;
+    self
+  }
+
+  /// The label, cut to the row's room with its whole words in a tooltip, and the detail under it or after it.
+  fn text(&self, ctx: &mut Ctx, detail: Option<&str>) -> Element {
     let style = if self.mono {
       ExtraTypography::PropertyMono.role()
     } else {
@@ -227,6 +238,37 @@ impl MenuItem {
     let label = Truncated::new(format!("{}-label", self.id), self.label.clone(), style)
       .color(self.content_color(PaletteColor::TextPrimary))
       .render(ctx);
+    let detail = detail.map(|detail| {
+      let detail = Text::new(detail).id(format!("{}-detail", self.id));
+      let detail = if self.inline {
+        // On the label's line the detail gives way first: it is cut, the label stays whole.
+        detail
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextMuted)
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+      } else {
+        detail.variant(TypographyStyle::Caption)
+      };
+      if self.warning {
+        detail.color(PaletteColor::Warning)
+      } else {
+        detail
+      }
+    });
+    if self.inline {
+      return Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .height(Dimension::Px(LABEL_HEIGHT))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(Row::new().flex_shrink(0.0).child(label))
+        .with_children(detail)
+        .into();
+    }
     Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -237,14 +279,8 @@ impl MenuItem {
           .align_items(Alignment::Center)
           .child(label),
       )
-      .with_children(detail.map(|detail| {
-        let detail = Text::new(detail).variant(TypographyStyle::Caption);
-        if self.warning {
-          detail.color(PaletteColor::Warning)
-        } else {
-          detail
-        }
-      }))
+      .with_children(detail)
+      .into()
   }
 
   /// The color of the row's icon or label, `color` unless the row destroys.
@@ -274,19 +310,17 @@ impl MenuItem {
       Choice::Unavailable(reason) => (Some(reason.clone()), None),
       Choice::Action(_) => (self.detail.clone(), None),
     };
+    let stacked = detail.is_some() && !self.inline;
     let row = Row::new()
       .width(Dimension::Pct(100.0))
       .min_height(Dimension::Px(ControlHeight::Md.value()))
-      .padding(match detail {
-        Some(_) => Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()),
-        None => Padding::horizontal(SpacingSize::Sm),
+      .padding(if stacked {
+        Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role())
+      } else {
+        Padding::horizontal(SpacingSize::Sm)
       })
       .spacing(SpacingSize::Sm)
-      .align_items(if detail.is_some() {
-        Alignment::Start
-      } else {
-        Alignment::Center
-      })
+      .align_items(if stacked { Alignment::Start } else { Alignment::Center })
       .with_children(self.icon.map(|glyph| {
         icon(glyph, IconSize::Md, self.content_color(PaletteColor::TextSecondary)).id(format!("{}-icon", self.id))
       }))

@@ -1,13 +1,12 @@
-//! Compact variable catalog H5rZOl / zRiUA. Expanded detail uses x5WE6i.
+//! The variable catalog (02d `JXvc0`): a group per kind of variable, its head over its rows (`Task` `mqafh`), each
+//! row the variable's `{{name}}`, what it is and its type at the end, or why it has no value here in `warning`
+//! (`QxV66`); the chosen row is filled and its detail follows the group (`Detail` `M6fbYX`).
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
-  node::{Element, Style, dimension::Dimension, padding::Padding},
+  app::{ctx::Ctx, theme::PaletteColor},
+  components::{Column, ScrollVertical, Text},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{Variable, VariableGroup, VariableType};
 use orchester_workspace::instructions::{form::Picked, preview::Resolved};
@@ -17,14 +16,11 @@ use super::{
   words,
 };
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, instructions},
-  ui::{
-    icon::{Icon, icon},
-    pressable::pressable,
-  },
+  screens::hub::parts::{self, Entry},
+  theme::{HubSpacing, HubText, instructions},
+  ui::pressable::Press,
 };
-// Variable group H5rZOl.
-const GROUP_HEIGHT: f32 = 26.0;
+/// What the detail says it shows: the value at the injection event, for the task and role chosen (`x9Cv4`).
 pub fn context(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>) -> Element {
   Text::new(&ctx.t_args(
     "instructions.variableContext",
@@ -42,9 +38,9 @@ pub fn context(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>) -> Element {
 pub fn catalog(ctx: &Ctx, state: &Panels, props: &Props, resolved: Option<&Resolved<'_>>) -> Element {
   let search = state.search.get().to_lowercase();
   let selected = state.selected.get().0;
-  let mut rows = Column::new()
+  let mut groups = Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Hair.role());
+    .spacing(HubSpacing::SideSections.role());
   for group in VariableGroup::ALL {
     let mut matching = Variable::ALL
       .into_iter()
@@ -57,116 +53,48 @@ pub fn catalog(ctx: &Ctx, state: &Panels, props: &Props, resolved: Option<&Resol
     if matching.is_empty() {
       continue;
     }
-    let expanded = !search.is_empty() || state.groups.get().iter().any(|g| g == group_name(group));
-    rows = rows.child(group_header(ctx, state, group, matching.len(), expanded));
-    if !expanded {
-      continue;
+    let id = format!("instruction-variable-group-{}", group_name(group));
+    let rows = matching.iter().map(|variable| row(ctx, state, *variable, resolved));
+    let head = parts::head(&id, &group_label(ctx, group), None, None);
+    let mut shown = parts::group(&id, head, parts::boxed(&format!("{id}-rows"), rows));
+    if matching.contains(&selected) {
+      let context = resolved.map(|resolved| context(ctx, props, resolved));
+      shown = shown.child(super::variable_detail::detail(ctx, props, selected, resolved, context));
     }
-    for variable in matching {
-      rows = rows.child(if selected == variable {
-        super::variable_detail::detail(ctx, props, variable, resolved)
-      } else {
-        row(ctx, state, variable, resolved)
-      });
-    }
+    groups = groups.child(shown);
   }
-  ScrollVertical::new(rows)
+  ScrollVertical::new(groups)
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .min_height(Dimension::Px(0.0))
     .into()
 }
-fn group_header(ctx: &Ctx, state: &Panels, group: VariableGroup, count: usize, expanded: bool) -> Element {
-  let id = group_name(group);
-  let groups = state.groups.clone();
-  pressable(move || {
-    groups.update(|groups| {
-      if groups.iter().any(|g| g == id) {
-        groups.retain(|g| g != id);
-      } else {
-        groups.push(id.to_owned());
-      }
-    })
-  })
-  .id(format!("instruction-variable-group-{id}"))
-  .width(Dimension::Pct(100.0))
-  .height(Dimension::Px(GROUP_HEIGHT))
-  .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
-  .spacing(ExtraSpacing::Snug.role())
-  .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-  .child(icon(
-    if expanded {
-      Icon::ChevronDown
-    } else {
-      Icon::ChevronRight
-    },
-    IconSize::Xs,
-    PaletteColor::TextMuted,
-  ))
-  .child(Text::new(&group_label(ctx, group).to_uppercase()).variant(instructions::overline()))
-  .child(Text::new(&count.to_string()).variant(TypographyStyle::Caption))
-  .into()
-}
 fn row(ctx: &Ctx, state: &Panels, variable: Variable, resolved: Option<&Resolved<'_>>) -> Element {
   let choose = state.selected.clone();
-  let value = summary(ctx, variable, resolved);
-  pressable(move || choose.set(Picked(variable)))
-    .id(format!("instruction-variable-{}", variable.name()))
-    .width(Dimension::Pct(100.0))
-    .rounded(ExtraRadius::Tile.role())
-    .padding(Padding::symmetric(
-      ExtraSpacing::Loose.role(),
-      ExtraSpacing::Snug.role(),
-    ))
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Tight.role())
-        .child(
-          Row::new()
-            .width(Dimension::Pct(100.0))
-            .spacing(SpacingSize::Sm)
-            .child(
-              Text::new(variable.name())
-                .variant(TypographyStyle::Mono)
-                .nowrap()
-                .flex(1.0)
-                .min_width(Dimension::Px(0.0)),
-            )
-            .child(
-              Text::new(&value_type(ctx, variable.value_type()))
-                .variant(TypographyStyle::Caption)
-                .nowrap(),
-            ),
-        )
-        .child(
-          Text::new(&value)
-            .variant(instructions::variable_value())
-            .width(Dimension::Pct(100.0))
-            .nowrap()
-            .text_overflow(TextOverflow::Elipsis),
-        ),
-    )
-    .into()
-}
-fn summary(ctx: &Ctx, variable: Variable, resolved: Option<&Resolved<'_>>) -> String {
-  if variable == Variable::TaskAcceptanceCriteria
-    && let Some(resolved) = resolved
-  {
-    return ctx
-      .t_args(
-        "instructions.criteriaCount",
-        [(
-          "count",
-          resolved.task.task.details().acceptance_criteria.len().to_string(),
-        )],
-      )
-      .to_string();
-  }
-  resolved
-    .and_then(|r| r.value(variable))
-    .unwrap_or_else(|| ctx.t("instructions.unavailable").to_string())
+  let missing = resolved.is_some_and(|resolved| resolved.value(variable).is_none());
+  let end = if missing {
+    Text::new(&ctx.t(if variable == Variable::RunRevision {
+      "instructions.unavailableCommit"
+    } else {
+      "instructions.unavailable"
+    }))
+    .variant(HubText::Hint.role())
+    .color(PaletteColor::Warning)
+    .nowrap()
+  } else {
+    parts::quiet(&value_type(ctx, variable.value_type()))
+  };
+  Entry::new(
+    format!("instruction-variable-{}", variable.name()),
+    format!("{{{{{}}}}}", variable.name()),
+  )
+  .code()
+  .hint(description(ctx, variable))
+  .end(end)
+  .chosen(state.selected.get().0 == variable)
+  .in_place()
+  .press(Press::run(move || choose.set(Picked(variable))))
+  .into()
 }
 pub(super) fn group_label(ctx: &Ctx, group: VariableGroup) -> Arc<str> {
   ctx.t(match group {

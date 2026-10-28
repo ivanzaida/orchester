@@ -19,10 +19,15 @@ fn memory_tabs_lead_with_waiting_while_proposals_wait() {
   assert_eq!(order, ALL_STATUSES_WAITING_FIRST);
   assert_eq!(shown, "waiting", "the page opens on what waits");
   assert_eq!(page.text("memory-tab-waiting"), "Waiting for approval 4");
-  assert_eq!(page.text("memory-tab-waiting-badge"), "4");
+  assert_eq!(page.text("memory-tab-waiting-count"), "4");
   assert_eq!(page.text("memory-tab-active"), "Active 10");
   assert_eq!(page.text("memory-tab-rejected"), "Rejected 1");
   assert_eq!(page.text("memory-tab-settings"), "Settings");
+  // The Agents hub's Memory tab counts what waits for the person (05).
+  page.until("the hub's counts", |window| {
+    window.texts("agents-hub-tab-memory-count").is_some()
+  });
+  assert_eq!(page.text("agents-hub-tab-memory-count"), "4");
 }
 
 #[test]
@@ -35,7 +40,7 @@ fn memory_tabs_follow_active_while_nothing_waits() {
     ["active", "waiting", "deprecated", "superseded", "rejected", "settings"]
   );
   assert_eq!(shown, "active", "the page opens on Active");
-  assert!(!page.has("memory-tab-waiting-badge"), "no badge while nothing waits");
+  assert!(!page.has("memory-tab-waiting-count"), "no count while nothing waits");
   assert_eq!(
     page.text("memory-tab-active"),
     "Active",
@@ -60,7 +65,7 @@ fn memory_waiting_tab_approves_in_place_and_the_record_moves_to_active() {
   let typed = page.record("API handlers return typed errors").id();
   let old = page.record("Handlers map domain errors").id();
   page.press_until(&format!("memory-proposal-{typed}-approve"), "the approval", |window| {
-    window.text("memory-tab-waiting-badge") == "3"
+    window.text("memory-tab-waiting-count") == "3"
   });
   assert!(
     !page.has(&format!("memory-proposal-{typed}")),
@@ -87,7 +92,7 @@ fn memory_waiting_tab_rejects_in_place_and_the_record_moves_to_rejected() {
   page.project_memory();
   let typed = page.record("API handlers return typed errors").id();
   page.press_until(&format!("memory-proposal-{typed}-reject"), "the rejection", |window| {
-    window.text("memory-tab-waiting-badge") == "3"
+    window.text("memory-tab-waiting-count") == "3"
   });
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Rejected);
   assert_eq!(page.text("memory-tab-rejected"), "Rejected 2");
@@ -158,10 +163,10 @@ fn memory_page_runs_past_no_edge_at_1440_or_960() {
     page.memory_tab(MemoryTab::Active);
     let engine = page.record("Kontur keeps its data in SQLite").id();
     page.window.press(&format!("memory-record-{engine}-select"));
-    page.until("the details", |window| window.texts("memory-details").is_some());
+    page.until("the record's page", |window| window.texts("memory-details").is_some());
     let past = page.past_right_edge("screen-memory", right);
-    assert!(past.is_empty(), "Active with a record open at {width}: {past:?}");
-    page.window.press(&format!("memory-record-{engine}-select"));
+    assert!(past.is_empty(), "a record's page at {width}: {past:?}");
+    page.window.press("memory-record-crumb");
     page.memory_tab(MemoryTab::Settings);
     let past = page.past_right_edge("screen-memory", right);
     assert!(past.is_empty(), "Settings at {width}: {past:?}");

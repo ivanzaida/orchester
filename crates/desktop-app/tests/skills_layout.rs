@@ -1,4 +1,5 @@
-//! The Skills editor keeps a visible body and a separate inspector at the task's 1440 size.
+//! The Skills editor keeps a visible body and a separate inspector at the task's 1440 size: the page scrolls, and
+//! the body's editor keeps its own height under its head (`Body` `FZ83A` in 03b).
 mod support;
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::resource::{InstructionScope, Skill};
@@ -19,11 +20,11 @@ fn skills_layout_keeps_body_and_inspector_visible_at_1440() {
   w.navigation()
     .go(Route::Project(project_id(), ProjectPage::Skill(skill.id)));
   w.until("editor", |w| w.tree.get_element_by_id("skill-body").is_some());
-  w.until("body input fills the measured viewport", |w| {
+  w.until("body input fills its editor", |w| {
     w.tree
       .get_element_by_id_mut("skill-body")
       .and_then(|e| e.bounds())
-      .is_some_and(|b| b.height > 400.0)
+      .is_some_and(|b| b.height > 180.0)
   });
   let body = w
     .tree
@@ -41,7 +42,7 @@ fn skills_layout_keeps_body_and_inspector_visible_at_1440() {
     .get_element_by_id_mut("skill-body-box")
     .and_then(|e| e.bounds())
     .expect("body area");
-  assert!(area.height > 380.0, "the editor keeps its empty body visible: {area:?}");
+  assert!(area.height > 200.0, "the editor keeps its body visible: {area:?}");
   assert!(
     body.height >= area.height - 40.0,
     "the input fills the clickable editor: body={body:?}, area={area:?}"

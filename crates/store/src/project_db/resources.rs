@@ -3,7 +3,9 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{Draft, DraftSaved, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber, publish},
+  resource::{
+    Draft, DraftSaved, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber, publish,
+  },
   store::ResourceStore,
   time::Timestamp,
 };
@@ -245,7 +247,24 @@ impl ResourceStore for ProjectDb {
   }
 
   fn resources(&self, kind: ResourceKind) -> Result<Vec<Resource>, StoreError> {
-    load_resources(&self.connection, "WHERE kind = ?1 ORDER BY slug", [kind_text(kind)])
+    load_resources(
+      &self.connection,
+      "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) ORDER BY slug",
+      [kind_text(kind)],
+    )
+  }
+
+  fn slugs(&self, kind: ResourceKind) -> Result<Vec<Slug>, StoreError> {
+    Ok(
+      load_resources(&self.connection, "WHERE kind = ?1 ORDER BY slug", [kind_text(kind)])?
+        .into_iter()
+        .map(|resource| resource.slug().clone())
+        .collect(),
+    )
+  }
+
+  fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, StoreError> {
+    super::removals::remove(&mut self.connection, id, &mode, now)
   }
 
   fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, StoreError> {
@@ -350,7 +369,7 @@ fn publish_prepared<B: ResourceBody>(
   Ok(version)
 }
 
-fn save_draft<B: ResourceBody>(
+pub(super) fn save_draft<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
   draft: &Draft<B>,
@@ -388,7 +407,7 @@ fn save_draft<B: ResourceBody>(
 }
 
 /// Fails unless `resource` exists and holds bodies of type `B`.
-fn check_kind<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<(), StoreError> {
+pub(super) fn check_kind<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<(), StoreError> {
   let kind: Option<String> = connection
     .query_row(
       "SELECT kind FROM resources WHERE id = ?1",

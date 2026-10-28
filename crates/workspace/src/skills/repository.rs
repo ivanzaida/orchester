@@ -10,7 +10,7 @@ use std::path::Path;
 use orchester_core::{
   agent_files::import::{Candidate, ImportItem, RepositoryDraftError},
   id::IdempotencyKey,
-  resource::{Resource, ResourceKind, SkillFile, Slug, VersionNumber},
+  resource::{Resource, ResourceKind, SkillFile, VersionNumber},
   store::{RepositoryImportStore, ResourceStore},
   time::Timestamp,
 };
@@ -59,16 +59,8 @@ pub fn create_drafts_in(
   chosen: &[ImportItem],
 ) -> Result<Vec<CreatedDraft>, ImportFailure> {
   let mut db = ProjectDb::open(repo_root)?;
-  let slugs = |db: &ProjectDb, kind| -> Result<Vec<Slug>, StoreError> {
-    Ok(
-      db.resources(kind)?
-        .iter()
-        .map(|resource| resource.slug().clone())
-        .collect(),
-    )
-  };
-  let mut instructions = slugs(&db, ResourceKind::Instruction)?;
-  let mut skills = slugs(&db, ResourceKind::Skill)?;
+  let mut instructions = db.slugs(ResourceKind::Instruction)?;
+  let mut skills = db.slugs(ResourceKind::Skill)?;
   let mut drafts = Vec::new();
   let mut files = Vec::new();
   for item in chosen {

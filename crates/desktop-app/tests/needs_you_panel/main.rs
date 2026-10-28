@@ -379,7 +379,7 @@ fn needs_you_panel_opens_the_memory_page_on_the_records_waiting_for_approval() {
   window.until("the records waiting for approval", |window| {
     window.texts("memory-queue").is_some()
   });
-  assert_eq!(text(&mut window, "memory-tab-waiting-badge"), "2");
+  assert_eq!(text(&mut window, "memory-tab-waiting-count"), "2");
   let queue = window.texts("memory-queue").expect("the queue");
   for record in ["Webhooks retry three times.", "Docs live in docs/."] {
     assert!(queue.iter().any(|said| said == record), "{record:?} in {queue:?}");

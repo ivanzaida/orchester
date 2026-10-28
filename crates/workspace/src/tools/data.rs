@@ -185,11 +185,7 @@ pub fn create_tool<S: ResourceStore>(
   tool: &Tool,
   now: Timestamp,
 ) -> Result<ResourceId, S::Error> {
-  let taken: Vec<Slug> = store
-    .resources(ResourceKind::Tool)?
-    .iter()
-    .map(|resource| resource.slug().clone())
-    .collect();
+  let taken: Vec<Slug> = store.slugs(ResourceKind::Tool)?;
   let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
   let slug = Slug::unique_for(name, &fallback, &taken);
   Ok(store.create_resource(slug, name.clone(), tool, now)?.id())

@@ -115,32 +115,48 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   fs::write(s.repo.join("AGENTS.md"), "Read the project rules.").expect("instructions");
   fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
   s.go(ProjectPage::Skills(Default::default()));
-  let empty = s.text("skills-empty");
-  assert!(empty.contains(".claude/skills/checks") && empty.contains("AGENTS.md"));
+  assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
+  let found = s.text("skills-repository-settings");
+  assert!(
+    found.contains("3 items") && found.contains("2 instructions, 1 skill"),
+    "{found}"
+  );
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("nothing to import"));
-  s.click("skill-import-preview-2");
-  assert!(s.text("skill-import-content").contains("Run cargo check"));
-  assert!(s.text("skill-import-preview").contains("notes.md"));
-  assert!(s.text("skill-import-preview").contains("Check the project"));
+  s.click("skill-import-item-2");
+  assert!(s.text("skill-import-source-text").contains("Run cargo check"));
+  assert!(s.text("skill-import-source").contains("notes.md"));
+  assert!(s.text("skill-import-source").contains("Check the project"));
   let preview = s
     .window
     .tree
-    .get_element_by_id_mut("skill-import-preview")
+    .get_element_by_id_mut("skill-import-source")
     .and_then(|e| e.bounds())
     .expect("preview bounds");
+  // The one import page (02c): the preview is the 384 side beside the 720 groups.
   assert!(
-    (preview.width - 732.0).abs() < 1.0 && preview.height > 400.0,
+    (preview.width - 384.0).abs() < 1.0 && preview.height > 300.0,
     "preview stays beside repository items: {preview:?}"
   );
   s.click("skill-import-create");
   s.window.until("import result", |w| {
     w.tree.get_element_by_id("skills-import-result").is_some()
   });
-  assert!(s.text("skills-import-result").contains("2 drafts created"));
+  // 03c: the page head counts the drafts, of how many items; what made no draft says why.
+  assert!(s.text("skill-import-result-title").contains("2 drafts created"));
   assert!(
-    s.text("skill-result-footer")
+    s.text("skill-import-result-sub")
       .contains("2 of 3 items imported · 1 instruction, 1 skill")
+  );
+  assert!(s.text("skill-import-omitted").contains("CLAUDE.md"));
+  let on = orchester_workspace::project_settings::load_in(&s.repo)
+    .expect("settings")
+    .agent_files
+    .is_on();
+  let state = if on { "On" } else { "Off" };
+  assert!(
+    s.text("skill-import-agent-files")
+      .contains(&format!("Repository agent files · {state}"))
   );
   let entries = ProjectSkills::load_in(&s.repo).expect("read");
   assert_eq!(entries.entries.len(), 1);
@@ -150,13 +166,14 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
     fs::read_to_string(s.repo.join("AGENTS.md")).expect("file"),
     "Read the project rules."
   );
-  s.click("skills-back");
+  s.click("skill-import-review-skills");
   s.window.until("library after import", |w| {
-    w.tree.get_element_by_id("skills-list").is_some()
+    w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Draft v1"))
   });
-  assert!(s.text("skills-list").contains("Draft v1"));
   s.click(&format!("skill-row-{}", entries.entries[0].id));
-  assert!(s.text("skill-inspector").contains("notes.md"));
+  // 03b: the reference files sit under the body, the origin beside them.
+  assert!(s.text("skill-files").contains("notes.md"));
+  assert!(s.text("skill-inspector").contains("Imported from"));
   assert!(s.text("skill-origin-source").contains(".claude/skills/checks"));
 }
 #[test]
@@ -222,6 +239,54 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   assert!(s.entry(id).state.has_draft());
 }
 #[test]
+fn skills_remove_is_asked_in_place_and_the_skill_leaves_the_library() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  s.go(ProjectPage::Skill(id));
+  s.click("skill-more");
+  s.click("skill-remove");
+  s.window.until("asked in place", |w| {
+    w.tree.tick_futures();
+    w.tree.get_element_by_id("hub-remove-confirm").is_some()
+  });
+  assert!(
+    s.text("hub-remove").contains("No agent gets this skill now"),
+    "{}",
+    s.text("hub-remove")
+  );
+  let root = s.repo.clone();
+  // Remove takes the press once the question has read who the skill reaches.
+  s.window.until("removed", move |w| {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-remove-confirm") {
+      confirm.click();
+    }
+    ProjectSkills::load_in(&root).expect("skills").entry(id).is_none()
+  });
+}
+#[test]
+fn skills_discard_draft_returns_to_the_published_version() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  s.go(ProjectPage::Skill(id));
+  s.set("skill-description", "A draft to throw away.");
+  s.settle(id, "A draft to throw away.");
+  s.click("skill-discard");
+  s.window.until("asked in place", |w| {
+    w.tree.tick_futures();
+    w.tree.get_element_by_id("hub-discard-confirm").is_some()
+  });
+  let root = s.repo.clone();
+  s.window.until("discarded", move |w| {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-discard-confirm") {
+      confirm.click();
+    }
+    ProjectSkills::load_in(&root)
+      .expect("skills")
+      .entry(id)
+      .is_some_and(|e| !e.state.has_draft() && e.body.description() == "Run checks before handing over.")
+  });
+}
+#[test]
 fn skills_duplicate_name_is_not_saved_and_unsaved_departure_asks_in_place() {
   let mut s = Skills::new();
   let id = s.seed("checks", false);
@@ -261,7 +326,7 @@ fn skills_repository_files_enabling_asks_and_off_applies_without_publishing() {
   s.window
     .until("setting on", |_| db.repository_agent_files().expect("setting").is_on());
   s.window.until("on label", |w| {
-    w.texts("skill-repository-files")
+    w.texts("skill-repository-files-state")
       .is_some_and(|t| t.join(" ").contains("On"))
   });
   s.click("skill-repository-files");
@@ -403,10 +468,9 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
   s.window.until("library reflects the saved scope", |w| {
     w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Delivery"))
   });
-  s.click("skills-tab-Project");
-  assert!(s.text("skills-list").contains("No skills in this scope"));
-  s.click("skills-tab-Pipelines");
-  assert!(s.text("skills-list").contains("Delivery"));
+  // One list, a group per scope (03): the skill is under Pipelines & steps, and no Project group is left empty.
+  assert!(s.text("skills-group-pipelines").contains("Delivery"));
+  assert!(s.window.tree.get_element_by_id("skills-group-project").is_none());
 }
 
 #[test]
@@ -521,9 +585,9 @@ fn skills_crumb_returns_to_the_library_filter_it_came_from() {
   s.window.navigation().go(library.clone());
   s.go(ProjectPage::Skill(id));
   s.window.until("the skill's crumb", |w| {
-    w.tree.get_element_by_id("skill-crumb-0").is_some()
+    w.tree.get_element_by_id("skill-crumb").is_some()
   });
-  s.click("skill-crumb-0");
+  s.click("skill-crumb");
   s.window.pass();
   assert_eq!(s.window.navigation().route_now(), library);
 }

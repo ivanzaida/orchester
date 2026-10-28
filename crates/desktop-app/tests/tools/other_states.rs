@@ -41,7 +41,6 @@ fn tools_unsupported_kind_is_listed_and_cannot_be_edited() {
   t.edit(id);
   assert!(t.exists("tool-read-only"));
   assert!(!t.exists("tool-program"));
-  t.click("tool-save");
   t.click("tool-publish");
   assert!(!t.exists("tool-confirm"));
   assert_eq!(t.entry(id).tool, tool);
@@ -70,7 +69,7 @@ fn tools_load_error_is_explicit_and_retry_reads_current_data() {
     t.exists("tools-add"),
     "the library header remains available during a read failure"
   );
-  assert!(t.text("tools-library").contains("Couldn’t load the project’s tools"));
+  assert!(t.text("tools-load-error").contains("Couldn’t load the project’s tools"));
   assert!(!t.exists("tools-empty"), "a failed read never claims an empty project");
   // The fixture's database returns to its original schema; Retry must read it again.
   sqlite
@@ -107,8 +106,7 @@ fn tools_external_change_preserves_unsaved_fields_and_requires_reload() {
   t.window.until("changed tool notice", |w| {
     w.tree.get_element_by_id("tool-changed").is_some()
   });
-  t.click("tool-save");
-  assert!(!t.exists("tool-confirm"));
+  assert!(!t.exists("tool-confirm") && !t.exists("tool-widen"));
   let value = t
     .window
     .tree
@@ -127,5 +125,5 @@ fn tools_external_change_preserves_unsaved_fields_and_requires_reload() {
     "Saved elsewhere"
   );
   t.go(ProjectPage::Tool(id, ToolTab::InputsOutputs));
-  assert!(t.exists("tool-inputs-unavailable"));
+  assert!(t.exists("tool-inputs-outputs"));
 }

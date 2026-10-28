@@ -3,11 +3,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::SpacingSize,
   },
-  components::{Column, Row, Text},
+  components::{Column, Row},
   core::Signal,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{InjectionEvent, Variable};
 use orchester_workspace::instructions::{
@@ -24,7 +24,8 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  theme::ExtraSpacing,
+  screens::hub::parts,
+  theme::HubSpacing,
   ui::{
     field::{FieldInput, field_error},
     icon::Icon,
@@ -35,8 +36,9 @@ use crate::{
   },
 };
 
-// Variables panel r8Ipz and prompt viewer's sources rail.
-pub const PANEL_WIDTH: f32 = 340.0;
+/// The panel beside a rule (`Side` `CBvLu` in 02b), wider than the hub's side column.
+const PANEL_WIDTH: f32 = 424.0;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CopyReceipt {
   pub composition: orchester_core::run::Composition,
@@ -84,7 +86,6 @@ pub struct Panels {
   pub event: Signal<Picked<InjectionEvent>>,
   pub search: Signal<String>,
   pub selected: Signal<Picked<Variable>>,
-  pub groups: Signal<Vec<String>>,
   pub copied: Signal<Copied>,
   pub source: Signal<Picked<Option<usize>>>,
 }
@@ -97,7 +98,6 @@ impl Component for Panels {
       event: ctx.signal(Picked(InjectionEvent::Start)),
       search: ctx.signal(String::new()),
       selected: ctx.signal(Picked(Variable::TaskTitle)),
-      groups: ctx.signal(vec!["task".to_owned()]),
       copied: ctx.signal(Copied::Not),
       source: ctx.signal(Picked(None)),
     }
@@ -113,10 +113,9 @@ impl Component for Panels {
     let mut frame = Column::new()
       .id("instruction-panel")
       .width(Dimension::Px(PANEL_WIDTH))
+      .flex_shrink(0.0)
       .height(Dimension::Pct(100.0))
-      .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-      .spacing(SpacingSize::Sm)
+      .spacing(HubSpacing::SideSections.role())
       .child(head);
     if let Some(error) = catalog.error.clone().filter(|_| catalog.is_rejected()) {
       return frame
@@ -137,42 +136,23 @@ impl Component for Panels {
     let resolved = catalog.resolve(&self.choice.get());
     let content = match panel {
       Panel::Variables => {
-        if let Ok(resolved) = &resolved {
-          frame = frame.child(variables::context(ctx, &props, resolved));
-        }
         frame = frame.child(self.search_field(ctx));
         variables::catalog(ctx, self, &props, resolved.as_ref().ok())
       }
       Panel::Preview => preview::panel(ctx, self, &props, &catalog),
       Panel::Hidden | Panel::Full => Column::new().into(),
     };
+    // What the runtime adds besides the rules (`l6yIDs` in 02b); in the catalog, how a missing value is handled.
+    let note = ctx.t(if panel == Panel::Preview {
+      "instructions.systemNote"
+    } else if props.availability.unavailable.contains(&self.selected.get().0) {
+      "instructions.noEmptyValue"
+    } else {
+      "instructions.missingNote"
+    });
     frame
       .child(content)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .child(crate::ui::icon::icon(
-            if panel == Panel::Preview {
-              Icon::ShieldCheck
-            } else {
-              Icon::Info
-            },
-            crate::theme::IconSize::Xs,
-            PaletteColor::TextMuted,
-          ))
-          .child(
-            Text::new(&ctx.t(if panel == Panel::Preview {
-              "instructions.secretNote"
-            } else if props.availability.unavailable.contains(&self.selected.get().0) {
-              "instructions.noEmptyValue"
-            } else {
-              "instructions.missingNote"
-            }))
-            .variant(TypographyStyle::Caption)
-            .flex(1.0),
-          ),
-      )
+      .child(parts::note("instruction-panel-note", Icon::Info, &note))
       .into()
   }
 }
@@ -189,15 +169,14 @@ impl Panels {
   }
   fn header(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let segments = [
-      (Panel::Variables, "instructions.variables"),
-      (Panel::Preview, "instructions.preview"),
+      (Panel::Preview, "preview", "instructions.preview"),
+      (Panel::Variables, "variables", "instructions.variables"),
     ]
     .into_iter()
-    .enumerate()
-    .map(|(index, (panel, key))| {
+    .map(|(panel, name, key)| {
       let chosen = props.panel.clone();
       Segment::new(
-        format!("instruction-panel-{index}"),
+        format!("instruction-panel-{name}"),
         SegmentFace::Text(ctx.t(key)),
         props.panel.get() == panel,
         move || chosen.choose(panel),
@@ -209,14 +188,13 @@ impl Panels {
       .inspector()
       .on_click(move || close.close(Panel::Hidden))
       .render(ctx);
+    // The switcher sits at the panel's end, beside Close (02b, 02d).
     Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Xs)
-      .child(
-        Row::new()
-          .flex(1.0)
-          .child(segmented("instruction-panel-tabs", segments, Focus::Pointer)),
-      )
+      .spacing(SpacingSize::Sm)
+      .align_items(lurq::layout::Alignment::Center)
+      .child(Row::new().flex(1.0))
+      .child(segmented("instruction-panel-tabs", segments, Focus::Pointer))
       .child(cross)
       .into()
   }

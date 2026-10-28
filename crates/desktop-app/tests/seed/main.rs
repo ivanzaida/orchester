@@ -177,6 +177,7 @@ fn seed_names_every_scenario_once() {
     names,
     [
       "agents",
+      "agents-library",
       "agents-empty",
       "agents-no-connections",
       "agents-unreadable",

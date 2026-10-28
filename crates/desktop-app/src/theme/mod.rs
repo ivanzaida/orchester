@@ -21,11 +21,13 @@ mod conversation;
 mod date_picker;
 mod decisions;
 mod delivery;
+mod failure;
 mod files;
 mod fonts;
 mod form;
 mod gate;
 mod groups;
+mod hub;
 mod import;
 pub mod instructions;
 mod lifecycle;
@@ -74,10 +76,12 @@ pub use self::{
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
+  failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   gate::{GateSpacing, GateText},
   groups::GroupText,
+  hub::{HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -160,6 +164,8 @@ pub fn install(app: &mut App, mode: Mode) {
   sources::install(theme);
   delivery::install(theme);
   import::install(theme);
+  hub::install(theme);
+  failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
   theme.set_shadows(shadow::shadows());

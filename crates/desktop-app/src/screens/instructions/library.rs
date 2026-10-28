@@ -1,197 +1,225 @@
-//! Virtualized scope library b1i8f, using the shared rule item zmP3o.
+//! The Instructions tab's list (`02 Instructions` `jtiqe`): the order note, then the groups in assembly order
+//! ([`super::library_groups`]), each in its box: a role's or pipeline's head row with its count, numbered step rows,
+//! and a row per rule with its agents, its event and where its version stands. An empty group says so in a quiet row
+//! (06b); a rule removed on this page leaves a *Removed* line in its group.
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text, VirtualizedList},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  app::ctx::Ctx,
+  components::Column,
+  node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::InstructionScope;
+use orchester_core::{resource::InstructionScope, run::PromptPart};
 use orchester_workspace::{
   agents::data::VersionState,
-  instructions::data::{InstructionEntry, ProjectInstructions},
+  instructions::{
+    data::{InstructionEntry, ProjectInstructions},
+    form::Events,
+  },
 };
 
 use super::{
+  library_groups::{Group, Line, groups},
   state::{Selection, Tab, View},
   words,
 };
 use crate::{
-  theme::{ExtraSpacing, IconSize, instructions},
-  ui::{
-    icon::{Icon, icon},
-    rule_item::RuleItem,
+  screens::hub::{
+    self,
+    parts::{Entry, Tone, boxed, group, head, note, status, sub_head},
   },
+  theme::HubSpacing,
+  ui::{icon::Icon, pressable::Press},
 };
-// Rule list b1i8f.
-const LIST_WIDTH: f32 = 248.0;
 
-#[derive(Clone, PartialEq)]
-pub(super) enum Item {
-  Group { name: String, count: String, role: bool },
-  Step { name: String, role: Option<String> },
-  Ownership(String),
-  Rule(InstructionEntry),
+pub fn list(ctx: &mut Ctx, data: &ProjectInstructions, selection: &Selection) -> Element {
+  let removed = selection.removed.get().0;
+  let groups = groups(ctx, data, &data.entries, &removed);
+  let project = ctx.props::<super::Props>().0.open.project.name().to_string();
+  let mut pane = Column::new()
+    .id("instruction-library")
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Groups.role())
+    .child(note(
+      "instructions-order-note",
+      Icon::ListOrdered,
+      &ctx.t("instructions.orderNote"),
+    ));
+  for group_of in groups {
+    pane = pane.child(section(ctx, (data, &project), &group_of, selection));
+  }
+  hub::list_body("instructions-list", pane)
 }
-#[derive(Clone)]
-struct Props {
-  item: Item,
-  data: ProjectInstructions,
-  tab: Tab,
-  edited: Option<orchester_core::id::ResourceId>,
-  selection: Selection,
-}
-impl PartialEq for Props {
-  fn eq(&self, other: &Self) -> bool {
-    self.item == other.item && self.data == other.data && self.tab == other.tab && self.edited == other.edited
+
+const fn tab(part: PromptPart) -> Tab {
+  match part {
+    PromptPart::AgentRole => Tab::Roles,
+    PromptPart::ProjectRules => Tab::Project,
+    PromptPart::Pipeline => Tab::Pipelines,
+    PromptPart::Step | PromptPart::Task => Tab::Steps,
   }
 }
-impl DevtoolsInspectable for Props {}
-struct LibraryItem;
-impl Component for LibraryItem {
-  type Props = Props;
-  fn create(_: &mut Ctx) -> Self {
-    Self
-  }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<Props>().clone();
-    let entry = match props.item {
-      Item::Group { name, count, role } => {
-        return Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .padding(Padding::new().top(SpacingSize::Sm).bottom(SpacingSize::Xs))
-          .child(icon(
-            if role { Icon::Bot } else { Icon::Workflow },
-            IconSize::Md,
-            PaletteColor::TextMuted,
-          ))
-          .child(Text::new(&name).variant(TypographyStyle::Label).flex(1.0))
-          .child(Text::new(&count).variant(TypographyStyle::Caption))
-          .into();
-      }
-      Item::Step { name, role } => {
-        return Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
-          .child(icon(Icon::CornerDownRight, IconSize::Md, PaletteColor::TextMuted))
-          .child(Text::new(&name).variant(TypographyStyle::Description).flex(1.0))
-          .with_children(role.map(|role| Text::new(&role).variant(TypographyStyle::Caption)))
-          .into();
-      }
-      Item::Ownership(project) => {
-        return Text::new(&ctx.t_args("instructions.ownership", [("project", project)]))
-          .variant(TypographyStyle::Caption)
-          .padding_top(SpacingSize::Md)
-          .into();
-      }
-      Item::Rule(entry) => entry,
-    };
-    let id = entry.id;
-    let meta = ctx.t_args(
-      "instructions.rowMeta",
-      [
-        ("targets", words::targets(ctx, entry.body.targets(), &props.data)),
-        (
-          "event",
-          words::event(
-            ctx,
-            orchester_workspace::instructions::form::Events::of(entry.body.events()),
-          ),
-        ),
-      ],
-    );
-    let meta = if matches!(
-      entry.body.scope(),
-      InstructionScope::AgentRole { .. } | InstructionScope::Step { .. }
-    ) {
-      words::scoped_event(
-        ctx,
-        orchester_workspace::instructions::form::Events::of(entry.body.events()),
-        matches!(entry.body.scope(), InstructionScope::AgentRole { .. }),
-      )
-    } else {
-      meta
-    };
-    let published = matches!(entry.state, VersionState::Published(_));
-    let row = RuleItem::new(
-      format!("instruction-{id}"),
-      entry.name,
-      words::version(ctx, entry.state),
-      meta,
-      props.edited == Some(id),
-      props.selection.to(View::rule(props.tab, Some(id))),
-    );
-    Element::from(if published {
-      row.published()
-    } else if entry.state.published().is_none() {
-      row.first_draft()
-    } else {
-      row
-    })
-  }
-}
-pub fn list(
-  ctx: &mut Ctx,
-  data: &ProjectInstructions,
-  tab: Tab,
-  edited: Option<&InstructionEntry>,
-  project: &str,
+
+fn section(
+  ctx: &Ctx,
+  (data, project): (&ProjectInstructions, &str),
+  group_of: &Group,
   selection: &Selection,
 ) -> Element {
-  let entries = data
-    .entries
+  let tab = tab(group_of.part);
+  let id = format!("instructions-group-{}", tab.name());
+  let title = ctx.t(tab.key());
+  let rules = group_of
+    .rows
     .iter()
-    .filter(|e| Tab::of(e.body.scope()) == tab)
-    .map(|entry| edited.filter(|e| e.id == entry.id).unwrap_or(entry).clone())
-    .collect::<Vec<_>>();
-  let mut items = super::library_groups::items(ctx, data, tab, entries);
-  items.push(Item::Ownership(project.to_owned()));
-  let (listed, selection, selected) = (data.clone(), selection.clone(), edited.map(|e| e.id));
-  let rows = VirtualizedList::new_shared(ctx, Arc::new(items))
-    .list_key("instruction-library-rows")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .min_height(Dimension::Px(0.0))
-    .mount_keyed::<LibraryItem, _, _, _>(
-      |item| match item {
-        Item::Group { name, .. } => name.clone(),
-        Item::Step { name, .. } => name.clone(),
-        Item::Ownership(_) => "ownership".to_owned(),
-        Item::Rule(e) => e.id.to_string(),
-      },
-      move |item| Props {
-        item: item.clone(),
-        data: listed.clone(),
-        tab,
-        edited: selected,
-        selection: selection.clone(),
-      },
-    );
-  Column::new()
-    .id("instruction-library")
-    .width(Dimension::Px(LIST_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Md))
-    .spacing(SpacingSize::Xs)
-    .child(
-      Text::new(
-        &ctx
-          .t(if tab == Tab::Roles {
-            "instructions.agentRoleRules"
-          } else {
-            tab.key()
-          })
-          .to_uppercase(),
-      )
-      .variant(instructions::overline()),
+    .filter(|line| matches!(line, Line::Rule(_) | Line::StepRule { .. } | Line::Orphan(_)))
+    .count();
+  let count = (tab == Tab::Project).then(|| rules.to_string());
+  let rows: Vec<Element> = if group_of.rows.is_empty() {
+    vec![empty_row(ctx, tab, project)]
+  } else {
+    group_of
+      .rows
+      .iter()
+      .enumerate()
+      .map(|(index, line)| line_row(ctx, (data, tab), (index, line), selection))
+      .collect()
+  };
+  group(
+    &id,
+    head(&id, &title, count.as_deref(), None),
+    boxed(&format!("{id}-rows"), rows),
+  )
+  .into()
+}
+
+fn line_row(
+  ctx: &Ctx,
+  (data, tab): (&ProjectInstructions, Tab),
+  (index, line): (usize, &Line),
+  selection: &Selection,
+) -> Element {
+  match line {
+    Line::Head {
+      label,
+      count,
+      overrides,
+    } => head_row(ctx, (tab, index), label, (*count, *overrides)),
+    Line::Step { label } => sub_head(&format!("instructions-step-{}-{index}", tab.name()), label, None, true).into(),
+    Line::Rule(entry) => rule_row(ctx, data, (entry, None), selection, false),
+    Line::StepRule { entry, step } => rule_row(ctx, data, (entry, Some(step)), selection, false),
+    Line::Orphan(entry) => rule_row(ctx, data, (entry, None), selection, true),
+    Line::Removed(name) => Entry::new(
+      format!("instructions-removed-{index}"),
+      ctx.t_args("hub.remove.removed", [("name", &**name)]),
     )
-    .child(rows)
-    .into()
+    .into(),
+  }
+}
+
+fn head_row(ctx: &Ctx, (tab, index): (Tab, usize), label: &str, (count, overrides): (usize, bool)) -> Element {
+  let key = match (overrides, count) {
+    (false, 0) => "instructions.ruleNone",
+    (false, 1) => "instructions.ruleOne",
+    (false, _) => "instructions.ruleMany",
+    (true, 0) => "instructions.overrideNone",
+    (true, 1) => "instructions.overrideOne",
+    (true, _) => "instructions.overrideMany",
+  };
+  let count = ctx.t_args(key, [("count", count.to_string())]);
+  sub_head(
+    &format!("instructions-head-{}-{index}", tab.name()),
+    label,
+    Some(&count),
+    false,
+  )
+  .into()
+}
+
+fn rule_row(
+  ctx: &Ctx,
+  data: &ProjectInstructions,
+  (entry, step): (&InstructionEntry, Option<&Arc<str>>),
+  selection: &Selection,
+  orphan: bool,
+) -> Element {
+  let events = Events::of(entry.body.events());
+  let scope = entry.body.scope();
+  let targets = match step {
+    // Under its step's row: the step it overrides, then when it is injected (`umbc1` in `XWrFf`).
+    Some(step) => step.clone(),
+    None => where_it_applies(ctx, data, scope, entry),
+  };
+  let hint: Arc<str> = if orphan {
+    ctx.t(if matches!(scope, InstructionScope::Step { .. }) {
+      "instructions.orphanStep"
+    } else {
+      "instructions.orphanPipeline"
+    })
+  } else {
+    ctx.t_args(
+      "instructions.rowMeta",
+      [
+        ("targets", targets),
+        (
+          "event",
+          words::scoped_event(ctx, events, matches!(scope, InstructionScope::AgentRole { .. })),
+        ),
+      ],
+    )
+  };
+  let (tone, version) = version(ctx, entry.state);
+  let tab = Tab::of(scope);
+  let row = Entry::new(format!("instruction-{}", entry.id), entry.name.clone())
+    .hint(hint)
+    .end(status(&format!("instruction-version-{}", entry.id), tone, &version))
+    .press(Press::Open(selection.to(View::rule(tab, Some(entry.id)))));
+  if step.is_some() { row.indented() } else { row }.into()
+}
+
+/// Who a rule reaches, as its row says it: the role or the pipeline it belongs to, or the agents it selects.
+fn where_it_applies(
+  ctx: &Ctx,
+  data: &ProjectInstructions,
+  scope: &InstructionScope,
+  entry: &InstructionEntry,
+) -> Arc<str> {
+  match scope {
+    InstructionScope::AgentRole { role } => role.as_str().into(),
+    InstructionScope::Pipeline { pipeline } => data.pipeline(*pipeline).map_or_else(
+      || words::targets(ctx, entry.body.targets(), data),
+      |p| Arc::from(&*p.name),
+    ),
+    InstructionScope::Project | InstructionScope::Step { .. } => words::targets(ctx, entry.body.targets(), data),
+  }
+}
+
+fn version(ctx: &Ctx, state: VersionState) -> (Tone, Arc<str>) {
+  let tone = match state {
+    VersionState::Published(_) => Tone::Success,
+    VersionState::Draft { published: None } => Tone::Muted,
+    VersionState::Draft { .. } | VersionState::StaleDraft { .. } => Tone::Warning,
+  };
+  (tone, words::version(ctx, state))
+}
+
+/// A group with no rule (06b): what it is for, in a quiet row.
+fn empty_row(ctx: &Ctx, tab: Tab, project: &str) -> Element {
+  let (title, detail) = match tab {
+    Tab::Project => ("instructions.emptyProject", "instructions.emptyProjectDetail"),
+    Tab::Roles => ("instructions.emptyRoles", "instructions.emptyRolesDetail"),
+    Tab::Pipelines => ("instructions.emptyPipelines", "instructions.emptyPipelinesDetail"),
+    Tab::Steps => ("instructions.emptySteps", "instructions.emptyStepsDetail"),
+  };
+  Entry::new(
+    format!("instructions-empty-{}", tab.name()),
+    ctx.t_args(title, [("project", project)]),
+  )
+  .tile(match tab {
+    Tab::Roles => Icon::Bot,
+    Tab::Project => Icon::BookOpen,
+    Tab::Pipelines | Tab::Steps => Icon::Workflow,
+  })
+  .hint(ctx.t(detail))
+  .into()
 }

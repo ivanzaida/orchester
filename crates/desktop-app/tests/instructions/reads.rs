@@ -17,14 +17,14 @@ fn instructions_save_reads_the_instructions_once() {
   let reads = Reads::count();
   screen.set("instruction-prompt", "New draft text");
   screen.until("draft saved", |s| {
-    s.text("instruction-save-status").contains("Draft saved")
+    s.text("instruction-save-status").contains("Based on Published v1")
   });
   screen.pump();
   let saved = reads.take();
   assert_eq!(saved.get("instructions"), Some(&1), "{saved:?}");
   assert_eq!(screen.entry(id).body.text().as_str(), "New draft text");
   assert!(
-    screen.text("screen-instructions").contains("Draft saved"),
+    screen.text("instruction-save-status").contains("Draft v2 · saved"),
     "the screen shows the saved draft"
   );
 }
@@ -34,6 +34,7 @@ fn instructions_reload_reads_the_list_again_too() {
   let mut screen = Instructions::new();
   let id = screen.rule("Standards", "Opened draft", InstructionScope::Project, false);
   screen.go();
+  screen.click("instruction-variables");
   screen.until("ready to publish", |s| s.exists("instruction-variable-insert"));
   // Written by another program: nothing tells the window.
   editor::save_in(

@@ -41,12 +41,12 @@ impl InstructionsTab {
     Self::ALL.into_iter().find(|tab| tab.name() == name)
   }
 
-  /// The panel a rule of the tab opens with: none for a role, which has no variables of a run.
+  /// The panel a rule of the tab opens with: its prompt preview (02b), none for a role, which has no variables of a
+  /// run.
   pub const fn panel(self) -> InstructionsPanel {
     match self {
       Self::Roles => InstructionsPanel::Hidden,
-      Self::Steps => InstructionsPanel::Preview,
-      Self::Project | Self::Pipelines => InstructionsPanel::Variables,
+      Self::Project | Self::Pipelines | Self::Steps => InstructionsPanel::Preview,
     }
   }
 }
@@ -103,9 +103,9 @@ impl InstructionsView {
     Self::Rule(tab, rule, tab.panel())
   }
 
-  /// A new rule in `tab`, with the tab's panel.
+  /// A new rule in `tab`, with no panel beside it until one is chosen (02e).
   pub const fn new_rule(tab: InstructionsTab) -> Self {
-    Self::New(tab, tab.panel())
+    Self::New(tab, InstructionsPanel::Hidden)
   }
 
   /// The scope tab a rule or a new rule is in; the import page has none.
@@ -146,7 +146,11 @@ impl InstructionsView {
       }
       Self::New(tab, shown) => with_query(
         instructions,
-        &[(TAB, named(tab)), (RULE, Some(NEW)), (PANEL, panel(tab, shown))],
+        &[
+          (TAB, named(tab)),
+          (RULE, Some(NEW)),
+          (PANEL, (shown != InstructionsPanel::Hidden).then(|| shown.name())),
+        ],
       ),
       Self::Import => with_query(instructions, &[(VIEW, Some(IMPORT))]),
     }

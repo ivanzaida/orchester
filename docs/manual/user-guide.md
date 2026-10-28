@@ -195,15 +195,25 @@ connection in the window is not built yet.
 Over MCP: `add_cli_connection`, `set_api_provider`, `check_connection`, `list_models`, `set_connection_account`,
 `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`, `remove_mcp_server`.
 
-### Agents (`/project/<id>/agents`)
+### Agents hub
+
+One **Agents** page with tabs **Profiles**, **Instructions**, **Skills**, **Tools** and **Memory**, each on its own
+route (`/project/<id>/agents`, `…/instructions`, `…/skills`, `…/tools`, `…/memory`); the sidebar entries open the hub at
+their tab. Each item opens as a sub-page with a back crumb. Profiles, instructions, skills and tools **autosave** their
+draft; **Discard draft** returns to the published version and **Remove** deletes the item, both asked in place. Removing
+something in use lists who uses it and offers **Remove and reset**, which clears it from every user (a pipeline step
+loses its profile, a profile loses that skill).
+
+**Profiles** (`/project/<id>/agents`):
 
 1. **New agent** (needs a connection).
-2. **Profile** tab: *Profile name* (role), *Responsibility*, *Role instructions*, *Project connection*, *Model*
-   (from the list or *Other model id…*), *Reasoning effort*.
-3. **Permissions** tab: repository access, extra writable folders, commands, network, MCP servers, approvals. Options
-   the CLI can't enforce are disabled with the reason; the *Enforced by <CLI>* panel explains each mechanism. A
-   widening change asks "Allow these changes to the agent profile?" (person-only).
-4. **Save draft**, then **Publish v1**. The *Used in pipelines* tab lists the steps that run it.
+2. The profile page: *Profile name* (role), *Responsibility*, *Role instructions*, *Project connection*, *Model* (the
+   CLI's model ids, or *Other model id…*), *Reasoning effort* (the efforts the model lists).
+3. Permissions: repository access, extra writable folders, commands, network, MCP servers, approvals. Options the CLI
+   can't enforce are disabled with the reason; *Connection enforcement* explains each mechanism. A widening change is
+   asked in place at its field before it is saved (person-only).
+4. **Publish v1**. *Also in this profile's prompts* lists the rules and skills that apply; *Used in pipelines* lists the
+   steps that run it.
 
 ### Pipelines (`/project/<id>/pipelines`)
 
@@ -235,16 +245,24 @@ starts with, marked *Default*). Header: **Import from project**, **New pipeline*
 7. **Versions** — every published version; open one read-only, *Compare* it with the draft or the published version,
    or *Restore vN as draft*.
 
-### Instructions, Skills, Tools
+### Instructions, Skills, Tools, Memory (Agents hub tabs)
 
-- **Instructions** — tabs Project, Roles, Pipelines, Steps; each rule has a target (all agents, roles, profiles),
-  *Inject at* (start, resume, both), a Markdown text with `{{variables}}` (*Variables* panel), *Preview* and *Prompt*
-  panels. Drafts autosave; **Publish vN** makes new runs use it. *Import* turns repository files into drafts.
-- **Skills** — description, `SKILL.md` body and reference files, scope; **Import from repository** reads `AGENTS.md`,
-  `.claude/skills`, `.agents/skills`. Drafts save at once; publish to reach runs.
+- **Instructions** — one list in prompt order: agent role, project rules, pipeline, step, task, grouped per role,
+  pipeline and step. **New instruction** chooses its scope (Project, Agent role, Pipeline or Step). Each rule has a
+  target (all agents, roles, profiles), *Inject at* (start, resume, both), a Markdown text with `{{variables}}`;
+  the side panel switches between *Prompt preview* and *Variables*. Drafts autosave; **Publish vN** makes new runs use
+  it. *Import from repository* turns repository files into drafts.
+- **Skills** — grouped by scope, with *Found in this repository*; description, `SKILL.md` body and reference files,
+  scope. **Import from repository** reads `AGENTS.md`, `.claude/skills`, `.agents/skills` (the same import page as
+  Instructions). Drafts save at once; publish to reach runs.
 - **Tools** — **Add tool › Command**: program, arguments (one per line), timeout, exit codes that pass, output kept,
-  environment variables; Save draft and Publish. HTTP, database, MCP-import and *Create pull request* tool kinds are
-  locked.
+  environment variables. A tool's page has tabs *Configuration*, *Access*, *Inputs & outputs* and *Usage log*.
+  Drafts autosave; **Publish vN**. HTTP, database, MCP-import and *Create pull request* tool kinds are locked.
+- **Memory** — status pills **Waiting** (first, and where the tab opens while proposals wait), **Active**,
+  **Deprecated**, **Superseded**, **Rejected** (with the withdrawn ones), then **Settings**. Search and filter by type,
+  author and tag. Approve, edit or reject proposals on their review page; a row's hover actions edit, pin, deprecate,
+  restore or delete records; a record opens as its own page; **New record**. *Settings* chooses how task and project
+  memory save and how much each agent gets. Memory changes are person-only.
 
 ### Secrets (Project settings › Secrets)
 
@@ -256,13 +274,6 @@ grouped by environment, each row with its name, what uses it and a masked value 
 - A secret's page: **Replace value** (asked in place), **…** (*Copy name*, *Archive* — removes the value), and the
   groups *Details* and *Used by*.
 - *Import from project* explains that secrets are not imported: a value stays in its own project.
-
-### Memory (`/project/<id>/memory`)
-
-Tabs **Waiting for approval**, **Active**, **Deprecated**, **Superseded**, **Rejected**, **Settings**. Search and
-filter by type, author and tag. Approve, edit or reject proposals; edit, pin, deprecate, restore or delete records;
-**New record**. The *Settings* tab chooses how task and project memory save and how much each agent gets. Memory
-changes are person-only.
 
 ### Import resources (`/project/<id>/import`)
 

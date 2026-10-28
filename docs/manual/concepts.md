@@ -164,8 +164,8 @@ Run checks and Review return to Implement on failure, at most 2 retries.
 
 **Agent profile.** A role for pipeline steps: *Profile name* (the role, e.g. *Builder*, which role-scoped
 instructions and skills match), *Responsibility*, *Role instructions* (Markdown added to every run of the profile),
-*Project connection*, *Model*, *Reasoning effort*, **permissions**, and up to 20 MCP servers. Versioned (Save draft,
-Publish vN); runs use only published versions.
+*Project connection*, *Model*, *Reasoning effort*, **permissions**, and up to 20 MCP servers. Versioned (the draft
+autosaves; Publish vN); runs use only published versions.
 
 **Permissions.**
 

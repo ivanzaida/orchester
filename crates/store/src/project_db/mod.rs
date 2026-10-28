@@ -51,6 +51,7 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
+mod removals;
 mod repository;
 mod repository_import;
 mod resolutions;

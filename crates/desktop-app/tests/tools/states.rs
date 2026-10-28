@@ -40,24 +40,24 @@ fn tools_library_reports_kind_state_version_and_published_callers() {
   let draft = t.seed("Unpublished", false);
   t.go(ProjectPage::Tools);
   let row = t.text(&format!("tool-row-{id}"));
-  for word in ["Command", "Published v1", "1 pipeline steps", "Ready"] {
+  for word in ["Command", "Published v1", "1 pipeline step", "Ready"] {
     assert!(row.contains(word), "{row} lacks {word}");
   }
+  assert!(!row.contains("1 pipeline steps"), "{row}");
   assert!(t.text(&format!("tool-row-{draft}")).contains("not published"));
   t.click(&format!("tool-row-{id}"));
   t.window
-    .until("editor", |w| w.tree.get_element_by_id("tool-uses").is_some());
-  assert!(t.text("tool-uses").contains("Delivery v1 / Run checks"));
+    .until("editor", |w| w.tree.get_element_by_id("tool-properties").is_some());
   t.click("tool-tab-access");
   assert!(t.text("tool-access-tab").contains("Exit code decides the step"));
   let access = t.text("tool-access-step-0");
-  assert!(
-    access.contains("Delivery v1") && access.contains("01 Run checks"),
-    "{access}"
-  );
+  assert!(access.contains("Delivery v1 / 01 Run checks"), "{access}");
+  assert!(t.window.tree.get_element_by_id("tool-access-open-0").is_some());
   t.click("tool-tab-inputs_outputs");
-  assert!(t.text("tool-inputs-unavailable").contains("not available yet"));
+  t.wait_for("tool-inputs-outputs");
+  assert!(t.text("tool-inputs-outputs").contains("Exit code"));
   t.click("tool-tab-usage_log");
+  t.wait_for("tool-usage-unavailable");
   assert!(t.text("tool-usage-unavailable").contains("not available yet"));
 }
 
@@ -67,8 +67,7 @@ fn tools_invalid_values_and_repository_programs_cannot_be_saved() {
   t.go(ProjectPage::NewTool);
   t.set("tool-name", "Checks");
   t.set("tool-program", "scripts/check");
-  t.ready();
-  assert!(t.text("tool-program-note").contains("search path"));
+  t.wait_note("search path");
   t.set("tool-timeout", "soon");
   t.set("tool-exitCodes", "zero");
   t.set("tool-outputLimit", "0");
@@ -81,7 +80,7 @@ fn tools_invalid_values_and_repository_programs_cannot_be_saved() {
   ] {
     assert!(t.exists(id));
   }
-  t.click("tool-save");
+  t.click("tool-create");
   assert!(!t.exists("tool-confirm"));
   assert!(
     orchester_workspace::tools::data::ProjectTools::load(&t.db())
@@ -96,8 +95,7 @@ fn tools_invalid_values_and_repository_programs_cannot_be_saved() {
   t.set("tool-outputLimit", "64");
   t.set("tool-environment", "");
   t.set("tool-program", &program.to_string_lossy());
-  t.ready();
-  assert!(t.text("tool-program-note").contains("repository"));
+  t.wait_note("repository");
 }
 
 #[test]

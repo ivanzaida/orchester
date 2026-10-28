@@ -1,12 +1,13 @@
-//! Permissions tab dAvQg and unavailable options xepKp.
-mod lists;
+//! A profile page's permissions (`01c · Profile · permissions` `WAWHr`): Repository access with its extra writable
+//! folders, Commands and network, MCP servers as switches, and Approvals. An option the connection cannot enforce here
+//! cannot be chosen and says why; a widening change is asked about inside the section that widens it.
+mod commands;
+mod folders;
+
 use lurq::{
-  app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -16,146 +17,148 @@ use orchester_core::{
     capability::{PermissionOption, support},
   },
 };
-use orchester_workspace::agents::{
-  data::ProjectAgents,
-  permissions::{option_detail, option_title},
+use orchester_workspace::{
+  agents::{
+    data::ProjectAgents,
+    permissions::{option_detail, option_title},
+  },
+  messages::Message,
 };
 
-use super::{
-  fields::{Fields, Servers, label},
-  words,
-};
+pub(super) use self::{commands::CommandList, folders::FolderList};
+use super::fields::{Fields, Servers};
 use crate::{
   project::ShownProject,
-  theme::{ExtraSpacing, IconSize},
+  screens::hub::parts::{boxed, field, group, head, note},
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
   ui::{
-    form_section::{Place, section, side_row},
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
-    option_card::OptionCard,
     toggle::{Toggle, ToggleKind},
     unavailable::reason_line,
   },
 };
 
+/// Where a widening question opens: the section of the field that widens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Section {
+  Connection,
+  Repository,
+  Commands,
+  Mcp,
+  Approvals,
+}
+
+impl Section {
+  /// The section a widening reason is about.
+  pub(super) fn of(reason: &Message) -> Self {
+    match reason.key {
+      "appMcp.widens.repository" | "appMcp.widens.writableFolder" => Self::Repository,
+      "appMcp.widens.commands" | "appMcp.widens.network" => Self::Commands,
+      "appMcp.widens.mcpServers" => Self::Mcp,
+      "appMcp.widens.toolCallsUnasked" | "appMcp.widens.autoApprove" => Self::Approvals,
+      _ => Self::Connection,
+    }
+  }
+}
+
+/// What the permission sections read.
 #[derive(Clone)]
-pub struct Props {
-  pub fields: Fields,
-  pub listed: ProjectAgents,
-  pub project: ShownProject,
+pub(super) struct Context<'a> {
+  pub fields: &'a Fields,
+  pub listed: &'a ProjectAgents,
+  pub project: &'a ShownProject,
 }
-impl PartialEq for Props {
-  fn eq(&self, other: &Self) -> bool {
-    self.listed == other.listed
-      && self.project == other.project
-      && self.fields.permissions.id() == other.fields.permissions.id()
-  }
+
+/// The four sections; `asked` opens in the one it names.
+pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Section, Element)>) -> Vec<Element> {
+  let provider = context.fields.connection(context.listed).map(|c| c.provider());
+  let (section, mut question) = match asked {
+    Some((section, question)) => (Some(section), Some(question)),
+    None => (None, None),
+  };
+  let mut take = |here: Section| if section == Some(here) { question.take() } else { None };
+  let repository = repository(ctx, context, provider, take(Section::Repository));
+  let commands = commands_network(ctx, context, provider, take(Section::Commands));
+  let mcp = mcp(ctx, context, provider, take(Section::Mcp));
+  let approvals = approvals(ctx, context.fields, provider, take(Section::Approvals));
+  vec![repository, commands, mcp, approvals]
 }
-impl DevtoolsInspectable for Props {}
-pub struct PermissionsForm;
-impl Component for PermissionsForm {
-  type Props = Props;
-  fn create(_: &mut Ctx) -> Self {
-    Self
-  }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<Props>().clone();
-    let fields = &props.fields;
-    let provider = fields.connection(&props.listed).map(|c| c.provider());
-    let lists = ctx.mount_keyed::<lists::Lists>("agent-permission-lists", props.clone());
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Roomy.role())
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .child(repository(ctx, fields, provider))
-          .child(lists),
-      )
-      .child(network(ctx, fields, provider))
-      .child(mcp(ctx, &props, provider))
-      .child(approvals(ctx, fields, provider))
-  }
+
+fn section(id: &str, (title, count): (&str, Option<&str>), rows: Vec<Element>) -> Element {
+  group(id, head(id, title, count, None), boxed(&format!("{id}-rows"), rows)).into()
 }
-fn option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, option: PermissionOption) -> Element {
+
+/// A choice of a permission as a radio row: its title with what it does under it, or why the connection cannot
+/// enforce it here.
+pub(super) fn option_row(
+  ctx: &Ctx,
+  fields: &Fields,
+  provider: Option<AgentProvider>,
+  option: PermissionOption,
+) -> Element {
   let permissions = fields.permissions.get().0;
   let selected = [
     PermissionOption::of_repository(permissions.repository()),
     PermissionOption::of_commands(permissions.commands()),
-    PermissionOption::of_network(permissions.network()),
   ]
   .contains(&option);
-  let value = fields.permissions.clone();
-  let (glyph, title, detail) = if option == PermissionOption::ReadOnly {
-    (Icon::Eye, ctx.t("agents.readOnly"), ctx.t("agents.readOnlyHint"))
-  } else {
-    (Icon::PencilLine, ctx.t("agents.writeTitle"), ctx.t("agents.writeHint"))
+  let available = provider.is_some_and(|p| support(p, Platform::current(), option).is_enforced());
+  let title = match option {
+    PermissionOption::ReadOnly => ctx.t("agents.readOnly"),
+    PermissionOption::EditWorktree => ctx.t("agents.writeTitle"),
+    _ => message_text(ctx, &Message::new(option_title(option))),
   };
-  let card = OptionCard::new(
+  let detail = match option {
+    PermissionOption::ReadOnly => ctx.t("agents.readOnlyHint"),
+    PermissionOption::EditWorktree => ctx.t("agents.writeHint"),
+    _ => message_text(ctx, &Message::new(option_detail(option, provider))),
+  };
+  let value = fields.permissions.clone();
+  let toggle = Toggle::new(
     format!("agent-option-{option:?}"),
-    (glyph, title),
-    detail,
+    ToggleKind::Radio,
     selected,
-    move || {
+    title.clone(),
+  )
+  .hide_label();
+  let toggle = if available {
+    toggle.on_change(move |_| {
       value.update(|p| match option {
         PermissionOption::ReadOnly => p.0.set_repository(RepositoryAccess::ReadOnly),
         PermissionOption::EditWorktree => p.0.set_repository(RepositoryAccess::Write),
         PermissionOption::AskBeforeCommands => p.0.set_commands(CommandPermission::AskBefore),
-        PermissionOption::AllowedCommands => p.0.set_commands(CommandPermission::Allowed(AllowedCommands::default())),
+        PermissionOption::AllowedCommands => {
+          if !matches!(p.0.commands(), CommandPermission::Allowed(_)) {
+            p.0.set_commands(CommandPermission::Allowed(AllowedCommands::default()));
+          }
+        }
         PermissionOption::AnyCommand => p.0.set_commands(CommandPermission::AnyInWorktree),
         PermissionOption::NetworkOff => p.0.set_network(NetworkAccess::Off),
         PermissionOption::NetworkOn => p.0.set_network(NetworkAccess::On),
-      })
-    },
-  );
-  if provider.is_some_and(|p| support(p, Platform::current(), option).is_enforced()) {
-    card.into()
-  } else {
-    card
-      .unavailable(super::enforcement::unavailable(ctx, provider, option))
-      .into()
-  }
-}
-fn command_option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, option: PermissionOption) -> Element {
-  let selected = PermissionOption::of_commands(fields.permissions.get().0.commands()) == option;
-  let title = message_text(ctx, &orchester_workspace::messages::Message::new(option_title(option)));
-  let detail = if option == PermissionOption::AllowedCommands
-    && !provider.is_some_and(|p| support(p, Platform::current(), option).is_enforced())
-  {
-    ctx.t("agents.allowedHint")
-  } else {
-    message_text(
-      ctx,
-      &orchester_workspace::messages::Message::new(option_detail(option, provider)),
-    )
-  };
-  let value = fields.permissions.clone();
-  let available = provider.is_some_and(|p| support(p, Platform::current(), option).is_enforced());
-  let toggle = Toggle::new(format!("agent-option-{option:?}"), ToggleKind::Radio, selected, title);
-  let toggle = if available {
-    toggle.on_change(move |_| {
-      if PermissionOption::of_commands(value.get().0.commands()) == option {
-        return;
-      }
-      value.update(|p| {
-        p.0.set_commands(match option {
-          PermissionOption::AllowedCommands => CommandPermission::Allowed(AllowedCommands::default()),
-          PermissionOption::AnyCommand => CommandPermission::AnyInWorktree,
-          _ => CommandPermission::AskBefore,
-        })
       })
     })
   } else {
     toggle
   };
-  Column::new()
-    .spacing(SpacingSize::Xs)
+  Row::new()
+    .id(format!("agent-option-{option:?}-row"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Start)
     .child(toggle)
     .child(
       Column::new()
-        .padding(Padding::new().left(SpacingSize::Xl))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(words::note(&detail))
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(Text::new(&title).variant(ExtraTypography::Strong.role()))
+        .child(
+          Text::new(&detail)
+            .variant(HubText::Hint.role())
+            .width(Dimension::Pct(100.0)),
+        )
         .with_children((!available).then(|| {
           reason_line(
             &format!("agent-option-{option:?}-reason"),
@@ -165,31 +168,47 @@ fn command_option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, o
     )
     .into()
 }
-fn repository(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Element {
-  section(
-    "agent-repository",
-    &ctx.t("agents.repository"),
-    None,
-    vec![
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::vertical(SpacingSize::Md))
-        .spacing(SpacingSize::Md)
-        .child(
-          Column::new()
-            .flex(1.0)
-            .child(option(ctx, fields, provider, PermissionOption::ReadOnly)),
-        )
-        .child(
-          Column::new()
-            .flex(1.0)
-            .child(option(ctx, fields, provider, PermissionOption::EditWorktree)),
-        )
-        .into(),
-    ],
-  )
-  .into()
+
+fn repository(
+  ctx: &mut Ctx,
+  context: &Context<'_>,
+  provider: Option<AgentProvider>,
+  asked: Option<Element>,
+) -> Element {
+  let folders = ctx.mount_keyed::<FolderList>("agent-folder-list", folders::props(context));
+  let mut rows = vec![
+    option_row(ctx, context.fields, provider, PermissionOption::ReadOnly),
+    option_row(ctx, context.fields, provider, PermissionOption::EditWorktree),
+    folders,
+  ];
+  rows.extend(asked);
+  section("agent-repository", (&ctx.t("agents.repository"), None), rows)
 }
+
+fn commands_network(
+  ctx: &mut Ctx,
+  context: &Context<'_>,
+  provider: Option<AgentProvider>,
+  asked: Option<Element>,
+) -> Element {
+  let fields = context.fields;
+  let mut allowed = Column::new()
+    .id("agent-commands")
+    .width(Dimension::Pct(100.0))
+    .child(option_row(ctx, fields, provider, PermissionOption::AllowedCommands));
+  if let CommandPermission::Allowed(_) = fields.permissions.get().0.commands() {
+    allowed = allowed.child(ctx.mount_keyed::<CommandList>("agent-command-list", commands::props(context)));
+  }
+  let mut rows = vec![
+    option_row(ctx, fields, provider, PermissionOption::AskBeforeCommands),
+    allowed.into(),
+    option_row(ctx, fields, provider, PermissionOption::AnyCommand),
+    network(ctx, fields, provider),
+  ];
+  rows.extend(asked);
+  section("agent-network-section", (&ctx.t("agents.commandsNetwork"), None), rows)
+}
+
 fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Element {
   let on =
     provider.is_some_and(|p| fields.permissions.get().0.effective_network(p, Platform::current()) == NetworkAccess::On);
@@ -200,58 +219,54 @@ fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Eleme
     PermissionOption::NetworkOn
   };
   let available = provider.is_some_and(|p| support(p, Platform::current(), target).is_enforced());
-  let toggle = Toggle::new(
-    "agent-network",
-    ToggleKind::Switch,
-    on,
-    ctx.t(if on { "agents.on" } else { "agents.off" }),
-  )
-  .hide_label();
+  let state = ctx.t(if on { "agents.on" } else { "agents.off" });
+  let toggle = Toggle::new("agent-network", ToggleKind::Switch, on, state.clone()).hide_label();
   let toggle = if available {
     toggle
       .on_change(move |on| value.update(|p| p.0.set_network(if on { NetworkAccess::On } else { NetworkAccess::Off })))
   } else {
     toggle
   };
-  section(
-    "agent-network-section",
-    &ctx.t("agents.network"),
-    None,
-    vec![
-      side_row(
-        label(ctx, "agent-network", "agents.networkAccess", "agents.networkHint"),
-        Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(words::note(&ctx.t(if on { "agents.on" } else { "agents.off" })))
-          .child(toggle),
-        Place::Last,
-        false,
-      ),
-      Column::new()
-        .with_children((!available).then(|| {
-          reason_line(
-            "agent-network-reason",
-            &super::enforcement::unavailable(ctx, provider, target),
-          )
-        }))
-        .into(),
-    ],
-  )
-  .into()
+  let control = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(Text::new(&state).variant(HubText::Status.role()))
+    .child(toggle);
+  let row = field(
+    "agent-network",
+    &ctx.t("agents.networkAccess"),
+    Some(&ctx.t("agents.networkHint")),
+    control,
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(row)
+    .with_children((!available).then(|| {
+      Row::new()
+        .padding(
+          Padding::new()
+            .left(HubSpacing::Row.role())
+            .bottom(HubSpacing::FieldY.role()),
+        )
+        .child(reason_line(
+          "agent-network-reason",
+          &super::enforcement::unavailable(ctx, provider, target),
+        ))
+    }))
+    .into()
 }
-fn approvals(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Element {
+
+fn approvals(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, asked: Option<Element>) -> Element {
   let available = provider.is_some_and(|p| !p.is_native());
+  if !available {
+    return unavailable_section(ctx, "agent-approvals", &ctx.t("agents.approvals"));
+  }
   let mut rows = Vec::new();
   for auto in [true, false] {
-    let (id, title, hint, key) = if auto {
-      ("agent-auto", "agents.whenAsked", "agents.whenAskedHint", "agents.auto")
+    let (id, title, hint) = if auto {
+      ("agent-auto", "agents.auto", "agents.whenAskedHint")
     } else {
-      (
-        "agent-ask-tools",
-        "agents.toolCalls",
-        "agents.toolCallsHint",
-        "agents.askTools",
-      )
+      ("agent-ask-tools", "agents.askTools", "agents.toolCallsHint")
     };
     let permissions = fields.permissions.get().0;
     let on = if auto {
@@ -260,9 +275,9 @@ fn approvals(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Ele
       permissions.interactive_tool_approvals()
     };
     let value = fields.permissions.clone();
-    let toggle = Toggle::new(id, ToggleKind::Checkbox, on, ctx.t(key));
-    let toggle = if available {
-      toggle.on_change(move |on| {
+    let toggle = Toggle::new(id, ToggleKind::Switch, on, ctx.t(title))
+      .hide_label()
+      .on_change(move |on| {
         value.update(|p| {
           if auto {
             p.0.set_auto_approve(on)
@@ -270,20 +285,29 @@ fn approvals(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Ele
             p.0.set_interactive_tool_approvals(on)
           }
         })
-      })
-    } else {
-      toggle
-    };
-    rows.push(side_row(label(ctx, id, title, hint), toggle, Place::Within, false));
+      });
+    rows.push(field(id, &ctx.t(title), Some(&ctx.t(hint)), toggle).into());
   }
-  if !available {
-    rows.push(reason_line("agent-approvals-unavailable", &ctx.t("agents.nativeUnavailable")).into());
-  }
-  section("agent-approvals", &ctx.t("agents.approvals"), None, rows).into()
+  rows.extend(asked);
+  section("agent-approvals", (&ctx.t("agents.approvals"), None), rows)
 }
-fn mcp(ctx: &mut Ctx, props: &Props, provider: Option<AgentProvider>) -> Element {
-  let (fields, listed) = (&props.fields, &props.listed);
-  let available = provider.is_some_and(|p| !p.is_native());
+
+/// A section the connection offers nothing of (01e, a native connection).
+fn unavailable_section(ctx: &Ctx, id: &str, title: &str) -> Element {
+  let row = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(Text::new(&ctx.t("agents.unavailable")).variant(ExtraTypography::Strong.role()))
+    .child(Text::new(&ctx.t("agents.nativeUnavailable")).variant(HubText::Hint.role()));
+  section(id, (title, None), vec![row.into()])
+}
+
+fn mcp(ctx: &mut Ctx, context: &Context<'_>, provider: Option<AgentProvider>, asked: Option<Element>) -> Element {
+  let (fields, listed) = (context.fields, context.listed);
+  if provider.is_none_or(|p| p.is_native()) {
+    return unavailable_section(ctx, "agent-mcp", &ctx.t("agents.mcp"));
+  }
   let selected = fields.servers.get().0;
   let mut rows = Vec::new();
   for server in listed.mcp.iter() {
@@ -297,7 +321,7 @@ fn mcp(ctx: &mut Ctx, props: &Props, provider: Option<AgentProvider>) -> Element
       server.name().as_str(),
     )
     .hide_label();
-    let toggle = if available && (on || (server.enabled() && selected.ids().len() < McpServerSelection::MAX)) {
+    let toggle = if on || (server.enabled() && selected.ids().len() < McpServerSelection::MAX) {
       toggle.on_change(move |on| {
         let mut ids = signal.get().0.ids().to_vec();
         ids.retain(|kept| *kept != id);
@@ -312,66 +336,73 @@ fn mcp(ctx: &mut Ctx, props: &Props, provider: Option<AgentProvider>) -> Element
     } else {
       toggle
     };
-    rows.push(mcp_row(ctx, server, toggle));
-  }
-  if rows.is_empty() {
-    rows.push(words::note(&ctx.t("agents.mcpNone")).into());
-  }
-  if !available {
-    rows.push(reason_line("agent-mcp-unavailable", &ctx.t("agents.nativeUnavailable")).into());
-  }
-  if selected.ids().len() >= McpServerSelection::MAX {
-    rows.push(words::note(&ctx.t("agents.mcpLimit")).into());
-  }
-  let nav = crate::navigation::Navigation::of(ctx);
-  let project = props.project.open.project.id();
-  if listed.mcp.is_empty() {
+    let detail = server_detail(ctx, server);
     rows.push(
-      crate::ui::button::ActionButton::new(
-        "agent-add-mcp",
-        crate::ui::button::ButtonKind::Ghost,
-        ctx.t("agents.addMcp"),
+      field(
+        &format!("agent-mcp-{id}-row"),
+        server.name().as_str(),
+        Some(&detail),
+        toggle,
       )
-      .opens(nav.to(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::NewConnection(crate::routes::NewConnection::McpServer),
-      )))
       .into(),
     );
   }
+  if rows.is_empty() {
+    rows.push(empty_mcp(ctx, context));
+  }
+  rows.extend(asked);
   let count = ctx.t_args(
-    "agents.mcpSelection",
+    "agents.mcpCount",
     [
       ("selected", selected.ids().len().to_string()),
       ("total", listed.mcp.len().to_string()),
     ],
   );
-  section("agent-mcp", &ctx.t("agents.mcp"), Some(&count), rows).into()
-}
-fn mcp_row(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer, toggle: Toggle) -> Element {
-  let (glyph, detail) = match server.transport() {
-    orchester_core::connection::mcp::McpTransport::Stdio(stdio) => (
-      Icon::Server,
-      ctx.t_args("agents.mcpStdio", [("program", stdio.program().as_str())]),
-    ),
-    orchester_core::connection::mcp::McpTransport::Http(http) => {
-      (Icon::Globe, ctx.t_args("agents.mcpHttp", [("host", http.url().host())]))
-    }
-  };
-
-  Row::new()
+  Column::new()
     .width(Dimension::Pct(100.0))
-    .padding(lurq::node::padding::Padding::vertical(SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(ExtraSpacing::Tight.role())
-        .child(Text::new(server.name().as_str()).variant(TypographyStyle::Label))
-        .child(words::note(&detail))
-        .with_children((!server.enabled()).then(|| words::note(&ctx.t("agents.mcpDisabled")))),
+    .spacing(SpacingSize::Sm)
+    .child(section("agent-mcp", (&ctx.t("agents.mcp"), Some(&count)), rows))
+    .with_children(
+      (selected.ids().len() >= McpServerSelection::MAX)
+        .then(|| note("agent-mcp-limit", Icon::Info, &ctx.t("agents.mcpLimit"))),
     )
-    .child(toggle)
+    .child(note("agent-mcp-note", Icon::Info, &ctx.t("agents.mcpNote")))
     .into()
+}
+
+/// No MCP server in the project yet, with Add an MCP server.
+fn empty_mcp(ctx: &mut Ctx, context: &Context<'_>) -> Element {
+  use crate::{
+    routes::{NewConnection, ProjectPage, Route},
+    ui::button::{ActionButton, ButtonKind},
+  };
+  let nav = crate::navigation::Navigation::of(ctx);
+  let add = ActionButton::new("agent-add-mcp", ButtonKind::Ghost, ctx.t("agents.addMcp"))
+    .icon(Icon::Plus)
+    .opens(nav.to(Route::Project(
+      context.project.open.project.id(),
+      ProjectPage::NewConnection(NewConnection::McpServer),
+    )));
+  field("agent-mcp-none", &ctx.t("agents.mcpNone"), None, add).into()
+}
+
+fn server_detail(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer) -> String {
+  use orchester_core::connection::mcp::McpTransport;
+  let transport = match server.transport() {
+    McpTransport::Stdio(stdio) => ctx.t_args("agents.mcpStdio", [("program", stdio.program().as_str())]),
+    McpTransport::Http(http) => ctx.t_args("agents.mcpHttp", [("host", http.url().host())]),
+  };
+  if server.enabled() {
+    transport.to_string()
+  } else {
+    ctx
+      .t_args(
+        "agents.mcpTurnedOff",
+        [
+          ("transport", transport.to_string()),
+          ("off", ctx.t("agents.mcpDisabled").to_string()),
+        ],
+      )
+      .to_string()
+  }
 }

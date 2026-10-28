@@ -111,6 +111,8 @@ pub struct ProjectAgents {
   /// Whether the project's agents may load the repository's own agent files (Project settings ›
   /// General), which the enforcement panel shows beside the profile's permissions.
   pub agent_files: RepositoryAgentFiles,
+  /// The published rules and skills that reach profiles by their scope; read for the screen only.
+  pub prompts: Arc<super::prompts::PromptSources>,
 }
 
 impl ProjectAgents {
@@ -130,6 +132,7 @@ impl ProjectAgents {
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
       agent_files: store.repository_agent_files()?,
+      prompts: Arc::default(),
     })
   }
 
@@ -137,11 +140,12 @@ impl ProjectAgents {
     Self::load(&ProjectDb::open(repo_root)?)
   }
 
-  /// Editor data plus draft pipeline uses and active runs for the screen's Usage tab.
+  /// Editor data plus pipeline uses, active runs and the rules and skills that reach profiles, for the screen.
   pub fn for_screen(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let mut listed = Self::load(&db)?;
     listed.usage = Arc::new(super::usage::Usage::load(&db)?);
+    listed.prompts = Arc::new(super::prompts::PromptSources::load(&db)?);
     Ok(listed)
   }
 
@@ -207,11 +211,7 @@ pub fn create_profile<S: ResourceStore>(
   profile: &AgentProfile,
   now: Timestamp,
 ) -> Result<ResourceId, S::Error> {
-  let taken: Vec<Slug> = store
-    .resources(ResourceKind::AgentProfile)?
-    .iter()
-    .map(|resource| resource.slug().clone())
-    .collect();
+  let taken: Vec<Slug> = store.slugs(ResourceKind::AgentProfile)?;
   let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
   let slug = Slug::unique_for(profile.role(), &fallback, &taken);
   let resource = store.create_resource(slug, profile.role().clone(), profile, now)?;

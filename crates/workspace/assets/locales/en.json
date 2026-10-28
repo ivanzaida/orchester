@@ -1115,6 +1115,7 @@
     "databaseLocked": "database is locked.",
     "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
+    "repositoryUnreadable": "The repository's agent files couldn't be read. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
     "dataFolderInUse": "Another Orchester window is using this data folder. Switch to that window, or close it and start Orchester again.",
     "dataFolderNotWritable": "Orchester cannot write to its data folder. The log has the system's reason.",
@@ -1159,6 +1160,7 @@
     },
     "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet.",
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
+    "neverPublished": "It was never published, so its draft is all it has. Remove it instead.",
     "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
     "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
     "effortOneWord": "A reasoning effort is one word, such as high.",
@@ -1561,7 +1563,8 @@
       "skill": "Publishing the skill gives every agent it applies to its description in the prompt and its body and reference files to read.",
       "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
       "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
-      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
+      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions.",
+      "removalPersonOnly": "Only a person removes this here: removing it changes what agents are told or which steps they run. Input from an MCP client is taken only while you let automation change agent permissions."
     }
   },
   "statusBar": {

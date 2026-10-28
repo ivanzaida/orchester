@@ -140,10 +140,12 @@ impl Made {
       asked: ctx.signal(Asked::default()),
       refused: ctx.signal(false),
     };
-    let (opened, feed) = (made.opened.clone(), feed.clone());
+    let (opened, selected, feed) = (made.opened.clone(), made.selected.clone(), feed.clone());
     ctx.watch(&made.action.state(), move |done| {
       if done.fulfilled_data().is_some() {
+        // A record's page closes too: what it showed changed.
         opened.set(Opened::Nothing);
+        selected.set(Chosen::default());
         feed.saved();
       } else if done.is_rejected() && done.error.as_ref().is_some_and(|failed| failed.stale) {
         feed.saved();
@@ -216,6 +218,21 @@ impl MemoryState {
 
   pub fn close(&self) {
     self.open(Opened::Nothing);
+  }
+
+  /// Leaves a record's page for its tab's list (the crumb, *Cancel*).
+  pub fn leave_page(&self) {
+    self.close();
+    self.selected.set(Chosen::default());
+  }
+
+  /// The record whose page the project's page shows: one opened for review, editing or deletion, else the one a
+  /// press on its row chose.
+  pub fn page_record(&self) -> Option<MemoryId> {
+    match self.opened.get() {
+      Opened::Review(id) | Opened::Edit(id) | Opened::Delete(id) => Some(id),
+      Opened::Nothing | Opened::New => self.chosen(),
+    }
   }
 
   /// Unfolds or folds `record`'s earlier versions.

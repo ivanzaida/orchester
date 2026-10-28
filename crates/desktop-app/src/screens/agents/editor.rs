@@ -1,38 +1,49 @@
-//! Profile editor gTrvs: header, persistent field values, tabs and independently scrolling body.
+//! A profile's page (`01b Profile` `acOlR`, `01c` `WAWHr`): its head and draft bar, then Role, Connection & model and
+//! the permissions, with what enforces them, what else reaches its prompts and where it is used beside them. Edits save
+//! as a draft once the fields rest ([`super::autosave`]); a widening change is asked about at its section first. A new
+//! profile is created with Create draft, and saves the same way from then on.
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::SpacingSize,
   },
-  components::{Column, Row, ScrollVertical, Text},
-  core::Signal,
+  components::{Column, Row, Text},
+  core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
-use orchester_workspace::agents::{
-  data::{ProfileEntry, ProjectAgents, VersionState},
-  editor::{Action, Request},
+use orchester_core::resource::{AgentProfile, ResourceKind};
+use orchester_workspace::{
+  agents::{
+    data::{ProfileEntry, ProjectAgents, VersionState},
+    editor::{Action, Request},
+  },
+  messages::Message,
+  tasks::outside::Outside,
 };
 
 use super::{
-  AgentsNav, Shown,
-  actions::{self, Pending},
+  AgentsNav,
+  autosave::{Autosave, Source},
   fields::Fields,
-  words,
+  list, model, page_head,
+  permissions::{self, Context, Section},
+  questions::{self, Asking},
+  side,
+  work::{self, Allowed, Asked, Follow, Pending, Saved, Work},
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::{ShownProject, own::OwnChanges},
-  routes::AgentTab,
-  theme::{ExtraSpacing, IconSize, agents::page_spacing},
+  screens::hub::{self, Head, discard, removal},
+  theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
-    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
+    failure::{Failure, field_hint, not_saved},
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
-    tabs::{PageTab, page_tabs},
   },
 };
 
@@ -41,85 +52,424 @@ pub struct Props {
   pub project: ShownProject,
   pub listed: ProjectAgents,
   pub entry: Option<ProfileEntry>,
-  /// The tab the route names.
-  pub tab: AgentTab,
   pub(super) nav: AgentsNav,
+  /// Counts the reads of the profile into its page anew: a reload, a discarded draft.
   pub revision: Signal<u64>,
   pub retry: Signal<u64>,
   /// Where a save records its change of the profiles.
   pub profiles: OwnChanges,
-  pub load_error: Option<orchester_workspace::messages::Message>,
+  pub load_error: Option<Message>,
   pub reading: bool,
-}
-impl Props {
-  /// The editor on `tab`: a new profile's, or the saved profile's.
-  pub(super) fn shown(&self, tab: AgentTab) -> Shown {
-    self
-      .entry
-      .as_ref()
-      .map_or(Shown::New(tab), |entry| Shown::Edit(entry.id, tab))
-  }
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
     self.project == other.project
       && self.listed == other.listed
       && self.entry == other.entry
-      && self.tab == other.tab
       && self.load_error == other.load_error
       && self.reading == other.reading
   }
 }
 impl DevtoolsInspectable for Props {}
+
+/// A question that opens under the head about the profile itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ask {
+  Nothing,
+  Discard,
+  Remove,
+}
+impl DevtoolsInspectable for Ask {}
+
 pub struct Editor {
-  work: actions::Work,
   fields: Fields,
-  original: Option<ProfileEntry>,
+  work: Work,
+  saved: Signal<Saved>,
   pending: Signal<Pending>,
-  busy: Signal<bool>,
+  allowed: Signal<Allowed>,
+  autosave: Autosave,
+  ask: Signal<Ask>,
+  more: Signal<bool>,
+  anchor: ElementRef,
+  /// Create draft was pressed: what keeps a new profile from being saved shows.
   tried: Signal<bool>,
   /// Who pressed Publish: what it changes in the role's prompts is a person's, or automation's under their consent.
   gate: Option<InputGate>,
 }
+
 impl Component for Editor {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
-    let editor = Self {
-      work: actions::work(ctx),
-      fields: Fields::new(ctx, &props.listed, props.entry.as_ref()),
-      original: props.entry.clone(),
-      pending: ctx.signal(Pending(None)),
-      busy: ctx.signal(false),
+    let fields = Fields::new(ctx, &props.listed, props.entry.as_ref());
+    fields.follow(ctx, props.listed.clone());
+    let pending = ctx.signal(Pending(None));
+    // Editing a field takes a question away: its fixed candidate is no longer what the fields hold.
+    let dismiss = pending.clone();
+    fields.on_edit(ctx, move || {
+      if dismiss.get_untracked().0.is_some() {
+        dismiss.set(Pending(None));
+      }
+    });
+    let work = work::work(ctx);
+    let saved = ctx.signal(Saved(props.entry.clone()));
+    let allowed = ctx.signal(Allowed::default());
+    let autosave = Autosave::new(
+      ctx,
+      Source {
+        fields: fields.clone(),
+        saved: saved.clone(),
+        pending: pending.clone(),
+        allowed: allowed.clone(),
+        work: work.clone(),
+      },
+    );
+    let again = autosave.clone();
+    work::follow(
+      ctx,
+      &work,
+      Follow {
+        saved: saved.clone(),
+        pending: pending.clone(),
+        again: std::sync::Arc::new(move || again.again()),
+      },
+    );
+    Self {
+      fields,
+      work,
+      saved,
+      pending,
+      allowed,
+      autosave,
+      ask: ctx.signal(Ask::Nothing),
+      more: ctx.signal(false),
+      anchor: ctx.element_ref(),
       tried: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
-    };
-    editor
-      .fields
-      .watch_changes(ctx, props.listed.clone(), editor.pending.clone());
-    let work = editor.work.clone();
-    actions::follow(ctx, &work, editor.pending.clone(), editor.busy.clone());
-    editor
+    }
   }
+
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let mut props = ctx.props::<Props>().clone();
-    let changed_outside = props.entry != self.original;
-    props.entry = self.original.clone();
-    let work = self.work.clone();
+    let props = ctx.props::<Props>().clone();
+    self.autosave.held.set(props.reading || props.load_error.is_some());
+    self.autosave.listed.set(Some(props.listed.clone()));
+    let state = self.state(&props);
+    let head: Head = list::head(ctx, &props.listed, &props.nav).saved(self.saved_state(ctx, &state));
+    let pane = self.pane(ctx, &props, &state);
+    let side = side::render(ctx, &props, &self.fields, self.pipeline_blocked(&props, &state));
+    let body = hub::item_body("agent-editor", pane, Some(side));
+    super::frame(ctx, &props.project, head, body)
+  }
+}
+
+/// What the page knows of the profile in this render.
+struct State {
+  saved: Option<ProfileEntry>,
+  checked: Result<AgentProfile, Box<orchester_workspace::agents::form::ProfileErrors>>,
+  dirty: bool,
+  busy: bool,
+  changed_outside: bool,
+}
+
+impl Editor {
+  fn state(&self, props: &Props) -> State {
+    let saved = self.saved.get().0;
     let checked = self.fields.profile(&props.listed);
-    let dirty = props
-      .entry
+    let dirty = saved
       .as_ref()
       .is_none_or(|entry| checked.as_ref() != Ok(&entry.profile));
-    let head = self.head(ctx, &props, dirty, &work, checked.as_ref().ok());
-    let mut page = Column::new()
-      .id("agent-editor")
+    let busy = self.work.state().get().is_pending();
+    let changed_outside = !busy && saved.is_some() && props.entry != saved;
+    State {
+      saved,
+      checked,
+      dirty,
+      busy,
+      changed_outside,
+    }
+  }
+
+  /// *Saving…*, *Draft saved* or *All changes saved* at the head's right; *A change was not saved · Try again* after a
+  /// save failed.
+  fn saved_state(&self, ctx: &Ctx, state: &State) -> Option<Element> {
+    let entry = state.saved.as_ref()?;
+    if !state.busy && !state.changed_outside && self.save_failure().is_some() {
+      let again = self.autosave.clone();
+      return Some(not_saved(ctx, "agent-save-status", move || again.retry()));
+    }
+    let (glyph, key) = if state.busy || (state.dirty && state.checked.is_ok()) {
+      (Icon::LoaderCircle, "hub.saving")
+    } else if state.dirty {
+      return None;
+    } else if entry.state.has_draft() {
+      (Icon::Check, "hub.saved")
+    } else {
+      (Icon::Check, "hub.allSaved")
+    };
+    Some(
+      Row::new()
+        .id("agent-save-status")
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(icon(glyph, IconSize::Sm, lurq::app::theme::PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t(key)).variant(HubText::Hint.role()))
+        .into(),
+    )
+  }
+
+  fn pane(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Element {
+    let more = state.saved.as_ref().map(|_| page_head::More {
+      open: self.more.clone(),
+      anchor: self.anchor.clone(),
+      remove: {
+        let ask = self.ask.clone();
+        std::sync::Arc::new(move || ask.set(Ask::Remove))
+      },
+    });
+    let top = Column::new()
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(head);
-    page = page.with_children(read_failure(ctx, &props));
-    if self.tried.get()
-      && let Err(errors) = &checked
+      .spacing(HubSpacing::Row.role())
+      .child(page_head::crumb(ctx, &props.nav))
+      .child(page_head::head(ctx, (&self.fields, &props.listed), more))
+      .with_children(self.remove_question(ctx, props, state))
+      .child(self.bar_or_question(ctx, props, state))
+      .with_children(self.notices(ctx, props, state));
+    let asking = Asking {
+      pending: self.pending.clone(),
+      allowed: self.allowed.clone(),
+      work: self.work.clone(),
+    };
+    let (section, mut asked) = match questions::widening(ctx, &asking) {
+      Some((section, question)) => (Some(section), Some(question)),
+      None => (None, None),
+    };
+    let connection_asked = if section == Some(Section::Connection) {
+      asked.take()
+    } else {
+      None
+    };
+    // A change that wasn't saved stays in its field, which says so.
+    let unsaved = self
+      .save_failure()
+      .filter(|_| !state.changed_outside)
+      .zip(state.saved.as_ref())
+      .map(|(error, entry)| (&entry.profile, field_hint(ctx, &error)));
+    let role = model::role(ctx, &self.fields, unsaved);
+    let connection = model::connection_model(ctx, &self.fields, &props.listed, connection_asked);
+    let context = Context {
+      fields: &self.fields,
+      listed: &props.listed,
+      project: &props.project,
+    };
+    let rest = permissions::sections(ctx, &context, section.zip(asked));
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(HubSpacing::Sections.role())
+      .child(top)
+      .child(role)
+      .child(connection)
+      .with_children(rest)
+      .into()
+  }
+
+  fn remove_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Option<Element> {
+    let entry = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Remove)?;
+    let (keep, nav) = (self.ask.clone(), props.nav.clone());
+    Some(removal::question(
+      ctx,
+      removal::RemoveProps {
+        project: props.project.clone(),
+        resource: entry.id,
+        kind: ResourceKind::AgentProfile,
+        name: entry.profile.role().as_str().into(),
+        on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
+        on_removed: std::sync::Arc::new(move || nav.removed()),
+      },
+    ))
+  }
+
+  /// The draft bar, or what is asked about the draft in its place.
+  fn bar_or_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Element {
+    let asking = Asking {
+      pending: self.pending.clone(),
+      allowed: self.allowed.clone(),
+      work: self.work.clone(),
+    };
+    if let Some(question) = questions::stale(ctx, &asking) {
+      return question;
+    }
+    if let Some(entry) = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Discard) {
+      return self.discard_question(ctx, props, entry);
+    }
+    let published = state
+      .saved
+      .as_ref()
+      .and_then(|entry| props.listed.published.iter().find(|p| p.id == entry.id))
+      .map(|p| &p.profile);
+    let actions = self.bar_actions(ctx, props, state);
+    page_head::bar(
+      ctx,
+      &self.fields,
+      &props.listed,
+      page_head::Bar {
+        entry: state.saved.as_ref(),
+        published,
+        saved_at: state
+          .saved
+          .as_ref()
+          .and_then(|entry| props.listed.draft_times.get(&entry.id).copied()),
+        publishable: self.publishable(props),
+        actions,
+      },
+    )
+  }
+
+  fn discard_question(&self, ctx: &mut Ctx, props: &Props, entry: &ProfileEntry) -> Element {
+    let published = entry.state.published().map_or(0, |v| v.get());
+    let (root, id, expected) = (props.project.open.repo_root.clone(), entry.id, entry.profile.clone());
+    let (keep, done, revision) = (self.ask.clone(), self.ask.clone(), props.revision.clone());
+    discard::question(
+      ctx,
+      discard::DiscardProps {
+        project: props.project.clone(),
+        versions: (published + 1, published),
+        discard: std::sync::Arc::new(move || {
+          orchester_workspace::removal::discard_in::<AgentProfile>(&root, id, &expected)
+        }),
+        change: Outside::Profiles,
+        on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
+        on_discarded: std::sync::Arc::new(move || {
+          done.set(Ask::Nothing);
+          // The page reads the published version anew into its fields.
+          revision.update(|n| *n += 1);
+        }),
+      },
+    )
+  }
+
+  /// Whether the profile's connection runs agents and enforces its permissions here.
+  fn publishable(&self, props: &Props) -> bool {
+    self.fields.connection(&props.listed).is_some_and(|connection| {
+      connection.provider().runs_agents()
+        && self
+          .fields
+          .permissions
+          .get()
+          .0
+          .enforced_on(
+            connection.provider(),
+            orchester_core::connection::invocation::Platform::current(),
+          )
+          .is_ok()
+    })
+  }
+
+  fn bar_actions(&self, ctx: &Ctx, props: &Props, state: &State) -> Vec<Element> {
+    let Some(entry) = state.saved.as_ref() else {
+      return vec![self.create_button(ctx, state).into()];
+    };
+    let mut actions = Vec::new();
+    if entry.state.has_draft() && entry.state.published().is_some() {
+      let ask = self.ask.clone();
+      let discard =
+        ActionButton::new("agent-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
+      actions.push(
+        if state.busy {
+          discard.disabled()
+        } else {
+          discard.on_click(move || ask.set(Ask::Discard))
+        }
+        .into(),
+      );
+    }
+    if entry.state.has_draft() {
+      actions.push(self.publish_button(ctx, props, (state, entry)).into());
+    }
+    actions
+  }
+
+  fn create_button(&self, ctx: &Ctx, state: &State) -> ActionButton {
+    let button = ActionButton::new("agent-create", ButtonKind::Primary, ctx.t("agents.createDraft")).icon(Icon::Check);
+    if state.busy {
+      return button.loading();
+    }
+    let (work, tried, allowed) = (self.work.clone(), self.tried.clone(), self.allowed.clone());
+    let candidate = state.checked.as_ref().ok().cloned();
+    button.on_click(move || {
+      tried.set(true);
+      if let Some(profile) = &candidate {
+        work.run(Request {
+          existing: None,
+          profile: profile.clone(),
+          action: Action::Save,
+          allowed: allowed.get().0,
+          prompt_decided: false,
+        });
+      }
+    })
+  }
+
+  fn publish_button(&self, ctx: &Ctx, props: &Props, (state, entry): (&State, &ProfileEntry)) -> ActionButton {
+    let next = entry.state.published().map_or(1, |v| v.get().saturating_add(1));
+    let publish = ActionButton::new(
+      "agent-publish",
+      ButtonKind::Primary,
+      ctx.t_args("agents.publish", [("version", next.to_string())]),
+    )
+    .icon(Icon::Upload);
+    if !self.publishable(props) {
+      return publish.unavailable(ctx.t("agents.notEnforced"));
+    }
+    if state.busy
+      || state.dirty
+      || props.reading
+      || props.load_error.is_some()
+      || state.changed_outside
+      || self.pending.get().0.is_some()
+    {
+      return publish.disabled();
+    }
+    let (pending, work, gate, allowed) = (
+      self.pending.clone(),
+      self.work.clone(),
+      self.gate.clone(),
+      self.allowed.clone(),
+    );
+    let (entry, stale) = (entry.clone(), matches!(entry.state, VersionState::StaleDraft { .. }));
+    publish.on_click(move || {
+      let request = Request {
+        existing: Some(entry.clone()),
+        profile: entry.profile.clone(),
+        action: if stale { Action::PublishStale } else { Action::Publish },
+        allowed: allowed.get().0,
+        // A stale draft waits for a person's confirmation, which no synthetic input gives; otherwise what publishing
+        // changes in the role's prompts is the person's (ORC-30), read from the input that pressed it.
+        prompt_decided: stale || input_may_decide(gate.as_ref(), Guarded::PermissionWidening),
+      };
+      if stale {
+        pending.set(Pending(Some(Asked {
+          request,
+          reasons: Vec::new(),
+        })));
+      } else {
+        work.run(request);
+      }
+    })
+  }
+
+  fn notices(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Vec<Element> {
+    let mut notices = Vec::new();
+    if let Some(error) = &props.load_error {
+      let retry = props.retry.clone();
+      notices.push(
+        Failure::new("agents-load-error", ctx.t("agents.loadFailed"), error.clone())
+          .retry(props.reading, move || retry.update(|n| *n += 1))
+          .log(props.project.open.repo_root.clone())
+          .page(ctx),
+      );
+    }
+    if let Err(errors) = &state.checked
+      && (state.saved.is_some() || self.tried.get())
     {
       for error in [
         &errors.role,
@@ -131,350 +481,52 @@ impl Component for Editor {
       .into_iter()
       .flatten()
       {
-        page = page.child(field_error("agent-validation-error", &message_text(ctx, error)));
+        notices.push(field_error("agent-validation-error", &message_text(ctx, error)).into());
       }
     }
-    if changed_outside {
+    let failure = self.save_failure();
+    if state.changed_outside || failure.is_some() {
+      let text = failure.map_or_else(|| ctx.t("agents.outsideChange"), |error| message_text(ctx, &error));
       let revision = props.revision.clone();
-      page = page
-        .child(field_error("agent-outside-change", &ctx.t("agents.outsideChange")))
-        .child(
-          ActionButton::new("agent-reload-outside", ButtonKind::Secondary, ctx.t("agents.reload"))
-            .on_click(move || revision.update(|n| *n += 1)),
-        );
-    }
-    let state = work.state().get();
-    if let Some(error) = state.error.clone().filter(|_| state.is_rejected()) {
-      let revision = props.revision.clone();
-      page = page
-        .child(field_error("agent-save-error", &message_text(ctx, &error)))
-        .child(
-          ActionButton::new("agent-reload", ButtonKind::Secondary, ctx.t("agents.reload"))
-            .on_click(move || revision.update(|n| *n += 1)),
-        );
-    }
-    if props.load_error.is_none()
-      && !props.reading
-      && let Some(question) = actions::confirm(ctx, &self.pending, &self.busy, &work)
-    {
-      page = page.child(question);
-    }
-    let body = if self.busy.get() {
-      crate::ui::state::loading("agent-saving", &ctx.t("agents.saving")).into()
-    } else {
-      self.body(ctx, &props, self.pipeline_link_blocked(&props, dirty, changed_outside))
-    };
-    page.child(
-      ScrollVertical::new(body)
-        .flex(1.0)
-        .min_height(Dimension::Px(0.0))
-        .width(Dimension::Pct(100.0)),
-    )
-  }
-}
-impl Editor {
-  fn head(
-    &self,
-    ctx: &mut Ctx,
-    props: &Props,
-    dirty: bool,
-    work: &actions::Work,
-    profile: Option<&orchester_core::resource::AgentProfile>,
-  ) -> Element {
-    let role = self.fields.role.get();
-    let title = if role.trim().is_empty() {
-      ctx.t("agents.new")
-    } else {
-      role.as_str().into()
-    };
-    let list = agents_crumb(ctx, props);
-    let crumbs = breadcrumb(
-      ctx,
-      "agent-crumbs",
-      CrumbSeparator::Chevron,
-      vec![list, Crumb::here(title.clone())],
-    );
-    let state = props
-      .entry
-      .as_ref()
-      .map_or(VersionState::Draft { published: None }, |e| e.state);
-    let actions = self.buttons(ctx, props, dirty, work, profile);
-    let tabs = self.tabs(ctx, props);
-    let status = if self.busy.get() {
-      ctx.t("agents.saving")
-    } else {
-      words::version(ctx, state, dirty)
-    };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .left(page_spacing())
-          .right(page_spacing())
-          .top(SpacingSize::Xl),
-      )
-      .spacing(SpacingSize::Md)
-      .child(crumbs)
-      .child(
-        Row::new()
+      notices.push(
+        Column::new()
           .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Md)
+          .spacing(SpacingSize::Sm)
+          .child(field_error(
+            if state.changed_outside {
+              "agent-outside-change"
+            } else {
+              "agent-save-error"
+            },
+            &text,
+          ))
           .child(
-            Column::new()
-              .flex(1.0)
-              .spacing(SpacingSize::Xs)
-              .child(Text::new(&title).variant(TypographyStyle::Heading))
-              .child(words::note(&self.fields.responsibility.get())),
+            ActionButton::new("agent-reload", ButtonKind::Secondary, ctx.t("agents.reload"))
+              .icon(Icon::RotateCcw)
+              .on_click(move || revision.update(|n| *n += 1)),
           )
-          .child(
-            Column::new()
-              .align_items(Alignment::End)
-              .spacing(ExtraSpacing::Snug.role())
-              .child(
-                Row::new()
-                  .spacing(SpacingSize::Md)
-                  .align_items(Alignment::Center)
-                  .child(save_status(&status, state, dirty))
-                  .child(actions),
-              )
-              .with_children(
-                (dirty || !matches!(state, VersionState::Draft { published: Some(_) }))
-                  .then(|| Text::new(&words::state_note(ctx, state, dirty)).variant(TypographyStyle::Caption)),
-              ),
-          ),
-      )
-      .child(super::enforcement::summary(ctx, &self.fields, &props.listed))
-      .child(page_tabs(ctx, "agent-tabs", tabs))
-      .into()
-  }
-  fn tabs(&self, ctx: &Ctx, props: &Props) -> Vec<PageTab> {
-    [
-      (AgentTab::Profile, "agent-tab-profile", ctx.t("agents.profileTab")),
-      (
-        AgentTab::Permissions,
-        "agent-tab-permissions",
-        ctx.t("agents.permissionsTab"),
-      ),
-      (
-        AgentTab::UsedBy,
-        "agent-tab-used",
-        ctx.t_args(
-          "agents.usedTab",
-          [(
-            "count",
-            props
-              .entry
-              .as_ref()
-              .map_or(0, |e| props.listed.usage.count(e.id))
-              .to_string(),
-          )],
-        ),
-      ),
-    ]
-    .into_iter()
-    .map(|(tab, id, text)| PageTab::to(id, text, props.tab == tab, props.nav.to(props.shown(tab))))
-    .collect::<Vec<_>>()
-  }
-  fn buttons(
-    &self,
-    ctx: &Ctx,
-    props: &Props,
-    dirty: bool,
-    work: &actions::Work,
-    profile: Option<&orchester_core::resource::AgentProfile>,
-  ) -> Element {
-    let state = props
-      .entry
-      .as_ref()
-      .map_or(VersionState::Draft { published: None }, |e| e.state);
-    let next = state.published().map_or(1, |v| v.get().saturating_add(1));
-    let publish = ActionButton::new(
-      "agent-publish",
-      if dirty {
-        ButtonKind::Secondary
-      } else {
-        ButtonKind::Primary
-      },
-      ctx.t_args("agents.publish", [("version", next.to_string())]),
-    )
-    .icon(Icon::Upload);
-    let connection_runs = self
-      .fields
-      .connection(&props.listed)
-      .is_some_and(|c| c.provider().runs_agents());
-    let can_publish = connection_runs && !dirty && state.has_draft() && props.entry.is_some();
-    let publish = if !connection_runs {
-      publish.unavailable(ctx.t("agents.notEnforced"))
-    } else if self.busy.get()
-      || props.reading
-      || props.load_error.is_some()
-      || !can_publish
-      || self.pending.get().0.is_some()
-    {
-      publish.disabled()
-    } else if matches!(state, VersionState::StaleDraft { .. }) {
-      let pending = self.pending.clone();
-      let request = Request {
-        existing: props.entry.clone(),
-        profile: props
-          .entry
-          .as_ref()
-          .expect("publish requires a saved profile")
-          .profile
-          .clone(),
-        action: Action::PublishStale,
-        allowed: Vec::new(),
-        // Publishing a stale draft waits for a person's confirmation, which no synthetic input gives.
-        prompt_decided: true,
-      };
-      publish.on_click(move || pending.set(Pending(Some(request.clone()))))
-    } else {
-      self.bind(publish, Action::Publish, props, work, profile)
-    };
-    let mut row = Row::new().spacing(SpacingSize::Sm).child(publish);
-    if dirty {
-      let save = ActionButton::new("agent-save", ButtonKind::Primary, ctx.t("agents.save")).icon(Icon::Save);
-      let save = if self.busy.get() || props.reading || props.load_error.is_some() || self.pending.get().0.is_some() {
-        save.disabled()
-      } else {
-        self.bind(save, Action::Save, props, work, profile)
-      };
-      row = row.child(save);
+          .into(),
+      );
     }
-    row.into()
+    notices
   }
-  fn bind(
-    &self,
-    button: ActionButton,
-    action: Action,
-    props: &Props,
-    work: &actions::Work,
-    profile: Option<&orchester_core::resource::AgentProfile>,
-  ) -> ActionButton {
-    let (work, busy, tried, gate) = (work.clone(), self.busy.clone(), self.tried.clone(), self.gate.clone());
-    let request = profile.map(|profile| Request {
-      existing: props.entry.clone(),
-      profile: profile.clone(),
-      action,
-      allowed: Vec::new(),
-      prompt_decided: false,
-    });
-    button.on_click(move || {
-      tried.set(true);
-      if busy.get() {
-        return;
-      }
-      if let Some(request) = &request {
-        busy.set(true);
-        // What publishing changes in the role's prompts is the person's (ORC-30): read from the input that pressed it.
-        let prompt_decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
-        work.run(Request {
-          prompt_decided,
-          ..request.clone()
-        });
-      }
-    })
+
+  /// Why the last save failed, while it is the last word of the page's writes.
+  fn save_failure(&self) -> Option<Message> {
+    let write = self.work.state().get();
+    write.error.clone().filter(|_| write.is_rejected())
   }
-  fn pipeline_link_blocked(&self, props: &Props, dirty: bool, changed_outside: bool) -> Option<&'static str> {
-    if self.pending.get().0.is_some() || self.busy.get() {
+
+  /// Why Open pipeline waits now.
+  fn pipeline_blocked(&self, props: &Props, state: &State) -> Option<&'static str> {
+    if self.pending.get().0.is_some() || state.busy {
       Some("agents.pipelineWait")
-    } else if dirty {
+    } else if state.dirty {
       Some("agents.pipelineSaveFirst")
-    } else if props.reading || props.load_error.is_some() || changed_outside {
+    } else if props.reading || props.load_error.is_some() || state.changed_outside {
       Some("agents.pipelineRefreshFirst")
     } else {
       None
     }
   }
-  fn body(&self, ctx: &mut Ctx, props: &Props, pipeline_blocked: Option<&str>) -> Element {
-    let body = match props.tab {
-      AgentTab::Permissions => {
-        let form = ctx.mount_keyed::<super::permissions::PermissionsForm>(
-          "agent-permissions",
-          super::permissions::Props {
-            fields: self.fields.clone(),
-            listed: props.listed.clone(),
-            project: props.project.clone(),
-          },
-        );
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Section)
-          .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(form))
-          .child(super::policy_panel::enforcement(ctx, &self.fields, &props.listed))
-          .into()
-      }
-      AgentTab::UsedBy => super::uses::render(ctx, props, pipeline_blocked),
-      AgentTab::Profile => Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Section)
-        .child(
-          Column::new()
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .child(self.fields.render(ctx, &props.listed)),
-        )
-        .child(super::panels::draft(ctx, props, &self.fields))
-        .into(),
-    };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .left(page_spacing())
-          .right(page_spacing())
-          .top(ExtraSpacing::Tabs.role())
-          .bottom(SpacingSize::Lg),
-      )
-      .child(body)
-      .into()
-  }
-}
-fn agents_crumb(ctx: &mut Ctx, props: &Props) -> Crumb {
-  Crumb::to(ctx.t("agents.title"), props.nav.to(Shown::List))
-}
-
-fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {
-  let stale = matches!(state, VersionState::StaleDraft { .. });
-  Row::new()
-    .id("agent-save-status")
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(
-      if dirty {
-        Icon::CircleDot
-      } else if stale {
-        Icon::GitBranch
-      } else {
-        match state {
-          VersionState::Published(_) => Icon::CircleCheck,
-          VersionState::Draft { published: None } => Icon::CircleDashed,
-          _ => Icon::CircleDot,
-        }
-      },
-      IconSize::Base,
-      if stale {
-        PaletteColor::Warning
-      } else if matches!(state, VersionState::Published(_)) && !dirty {
-        PaletteColor::Success
-      } else {
-        PaletteColor::TextMuted
-      },
-    ))
-    .child(words::note(status).color(if stale {
-      PaletteColor::Warning
-    } else {
-      PaletteColor::TextSecondary
-    }))
-}
-
-fn read_failure(ctx: &Ctx, props: &Props) -> Option<Element> {
-  let error = props.load_error.as_ref()?;
-  let retry = props.retry.clone();
-  Some(crate::ui::state::load_error(
-    ctx,
-    "agents-load-error",
-    (&ctx.t("agents.loadFailed"), &message_text(ctx, error)),
-    move || retry.update(|n| *n += 1),
-  ))
 }

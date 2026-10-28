@@ -165,6 +165,12 @@ impl ActionButton {
     self
   }
 
+  /// The button under another element id.
+  pub fn id(mut self, id: impl Into<Arc<str>>) -> Self {
+    self.id = id.into();
+    self
+  }
+
   /// What a press does, unless the button is loading, disabled or unavailable.
   pub fn on_click(self, handler: impl Fn() + Send + Sync + 'static) -> Self {
     self.press(Press::run(handler))

@@ -255,6 +255,8 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::sources::typography(palette))
       .chain(super::project_settings::typography(palette))
       .chain(super::import::typography(palette))
+      .chain(super::hub::typography(palette))
+      .chain(super::failure::typography(palette))
       .chain(super::groups::typography(palette))
       .chain(super::pipelines::typography(palette))
       .chain(super::date_picker::typography(palette))

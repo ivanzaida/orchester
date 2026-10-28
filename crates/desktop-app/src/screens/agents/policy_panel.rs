@@ -1,12 +1,13 @@
-//! Enforcement card VsylR: each setting carries its actual mechanism and status.
+//! Connection enforcement beside a profile's page (`Connection enforcement` `Lj9fe` in 01c): the CLI and when it was
+//! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, Approvals and the repository's
+//! agent files too, and that the limits apply to new runs after publishing.
+use std::sync::Arc;
+
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
-  },
+  app::{ctx::Ctx, theme::PaletteColor},
   components::{Column, Row, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   connection::{AgentConnection, CheckResult, invocation::Platform},
@@ -17,73 +18,117 @@ use orchester_core::{
 };
 use orchester_workspace::agents::data::ProjectAgents;
 
-use super::{fields::Fields, panels, words};
+use super::{enforcement, fields::Fields, words};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
-  ui::icon::{Icon, icon},
+  screens::hub::parts::{boxed, group, head, note},
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
+  ui::icon::Icon,
 };
 
 pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Element {
+  let title = ctx.t("agents.enforcementTitle");
   let Some(connection) = fields.connection(listed) else {
-    return panels::panel("agent-enforcement")
-      .child(panels::body().child(words::note(&ctx.t("agents.chooseConnection"))))
-      .into();
+    return group(
+      "agent-enforcement",
+      head("agent-enforcement", &title, None, None),
+      note(
+        "agent-enforcement-none",
+        Icon::Unplug,
+        &ctx.t("agents.chooseConnection"),
+      ),
+    )
+    .into();
   };
-  let permissions = fields.permissions.get().0;
-  let mut rows = Column::new()
+  let rows = rows(ctx, connection, &fields.permissions.get().0, listed);
+  Column::new()
+    .id("agent-enforcement")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::horizontal(ExtraSpacing::Inset.role()));
-  for (key, option, value) in [
+    .spacing(lurq::app::theme::SpacingSize::Sm)
+    .child(group(
+      "agent-enforcement-group",
+      head(
+        "agent-enforcement-group",
+        &title,
+        None,
+        Some(
+          Text::new(&checked(ctx, connection))
+            .variant(HubText::Hint.role())
+            .nowrap()
+            .into(),
+        ),
+      ),
+      boxed("agent-enforcement-rows", rows),
+    ))
+    .child(note(
+      "agent-enforcement-note",
+      Icon::Info,
+      &ctx.t("agents.enforcementNotes"),
+    ))
+    .into()
+}
+
+/// Each setting with what enforces it, then MCP, Approvals and the repository's agent files.
+fn rows(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  permissions: &AgentPermissions,
+  listed: &ProjectAgents,
+) -> Vec<Element> {
+  let mut rows = Vec::new();
+  for (key, option) in [
     (
       "agents.repository",
       PermissionOption::of_repository(permissions.repository()),
-      ctx.t(if permissions.repository() == RepositoryAccess::ReadOnly {
-        "agents.readOnly"
-      } else {
-        "agents.writeTitle"
-      }),
     ),
     (
-      "agents.commands",
-      PermissionOption::of_commands(permissions.commands()),
-      words::commands(ctx, &permissions),
+      "agents.folders",
+      PermissionOption::of_repository(permissions.repository()),
     ),
-    (
-      "agents.network",
-      PermissionOption::of_network(permissions.network()),
-      words::network(ctx, &permissions, Some(connection.provider())),
-    ),
+    ("agents.commands", PermissionOption::of_commands(permissions.commands())),
+    ("agents.network", PermissionOption::of_network(permissions.network())),
   ] {
-    rows = rows.child(permission_row(ctx, connection, &permissions, key, option, &value));
-    if key == "agents.repository" {
-      rows = rows.child(folders(ctx, connection, &permissions));
-    }
+    let (mechanism, enforced) = if key == "agents.folders" {
+      folders(ctx, connection, permissions)
+    } else {
+      setting(ctx, connection, permissions, option)
+    };
+    rows.push(row(ctx, key, &mechanism, State::Enforced(enforced)));
   }
-  rows = connection_settings(ctx, fields, listed, rows);
-  let notes = panels::body()
-    .spacing(SpacingSize::Sm)
-    .child(note(Icon::Server, &ctx.t("agents.mcpHint")))
-    .child(note(Icon::Info, &ctx.t("agents.localRules")))
-    .child(note(Icon::ShieldCheck, &ctx.t("agents.enforcementNote")));
-  panels::panel("agent-enforcement")
-    .child(header(ctx, connection, &permissions))
-    .child(rows)
-    .child(notes)
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(
-          ExtraSpacing::Inset.role(),
-          ExtraSpacing::Loose.role(),
-        ))
-        .background(PaletteColor::SurfaceRaised)
-        .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(note(Icon::History, &ctx.t("agents.newRuns"))),
-    )
-    .into()
+  let available = !connection.provider().is_native();
+  let unavailable = "agents.nativeUnavailable";
+  rows.push(row(
+    ctx,
+    "agents.mcp",
+    &ctx.t(if available { "agents.mcpLoading" } else { unavailable }),
+    State::Enforced(available),
+  ));
+  rows.push(row(
+    ctx,
+    "agents.approvals",
+    &ctx.t(if available {
+      "agents.approvalMechanism"
+    } else {
+      unavailable
+    }),
+    State::Enforced(available),
+  ));
+  let files = ctx.t(if listed.agent_files.is_on() {
+    "agents.agentFilesOn"
+  } else {
+    "agents.agentFilesOff"
+  });
+  rows.push(row(
+    ctx,
+    "agents.agentFiles",
+    &ctx.t("agents.repositoryFilesMechanism"),
+    State::Value(files),
+  ));
+  rows
 }
-fn connection_detail(ctx: &Ctx, connection: &AgentConnection) -> String {
-  match connection.last_check().map(|check| &check.result) {
+
+/// `Claude Code · 2.1.173 · checked 16:40`.
+fn checked(ctx: &Ctx, connection: &AgentConnection) -> Arc<str> {
+  let name = match connection.last_check().map(|check| &check.result) {
     Some(CheckResult::Available { version, .. }) => ctx
       .t_args(
         "agents.connectionVersion",
@@ -91,16 +136,28 @@ fn connection_detail(ctx: &Ctx, connection: &AgentConnection) -> String {
       )
       .to_string(),
     _ => connection.name().to_string(),
-  }
+  };
+  let when = connection.last_check().map_or_else(
+    || ctx.t("agents.notChecked"),
+    |check| {
+      ctx.t_args(
+        "agents.checkedAt",
+        [("time", orchester_workspace::display::clock(check.at))],
+      )
+    },
+  );
+  ctx.t_args(
+    "agents.connectionState",
+    [("provider", name), ("status", when.to_string())],
+  )
 }
-fn permission_row(
+
+fn setting(
   ctx: &Ctx,
   connection: &AgentConnection,
   permissions: &AgentPermissions,
-  key: &str,
   option: PermissionOption,
-  value: &str,
-) -> Element {
+) -> (Arc<str>, bool) {
   let effective = permissions.enforced_on(connection.provider(), Platform::current());
   let support = effective.as_ref().map_or_else(
     |_| support(connection.provider(), Platform::current(), option),
@@ -112,16 +169,16 @@ fn permission_row(
       }
     },
   );
-  let mechanism = match support {
-    Support::Enforced(mechanism) => super::enforcement::mechanism(ctx, mechanism, permissions),
-    _ => super::enforcement::unavailable(ctx, Some(connection.provider()), option),
-  };
-  setting(ctx, key, value, &mechanism, support.is_enforced())
+  match support {
+    Support::Enforced(mechanism) => (enforcement::mechanism(ctx, mechanism, permissions), true),
+    _ => (
+      enforcement::unavailable(ctx, Some(connection.provider()), option),
+      false,
+    ),
+  }
 }
-fn folders(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions) -> Element {
-  let count = permissions
-    .granted_folders()
-    .map_or(0, |folders| folders.entries().len());
+
+fn folders(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions) -> (Arc<str>, bool) {
   let effective = permissions.enforced_on(connection.provider(), Platform::current());
   let mechanism = effective.as_ref().ok().and_then(|p| p.writable_folders());
   let detail = mechanism.map_or_else(
@@ -132,154 +189,54 @@ fn folders(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissio
         "agents.none"
       })
     },
-    |mechanism| super::enforcement::mechanism(ctx, mechanism, permissions),
+    |mechanism| enforcement::mechanism(ctx, mechanism, permissions),
   );
-  setting(
-    ctx,
-    "agents.folders",
-    &ctx.t_args("agents.foldersCount", [("count", count.to_string())]),
-    &detail,
-    effective.is_ok(),
-  )
+  (detail, effective.is_ok())
 }
-fn setting(ctx: &Ctx, key: &str, value: &str, mechanism: &str, enforced: bool) -> Element {
-  let color = if enforced {
-    PaletteColor::Success
-  } else {
-    PaletteColor::Warning
+
+/// What a row says at its end.
+enum State {
+  Enforced(bool),
+  Value(Arc<str>),
+}
+
+fn row(ctx: &Ctx, key: &str, mechanism: &str, state: State) -> Element {
+  let (end, color) = match state {
+    State::Enforced(true) => (ctx.t("agents.enforcedState"), PaletteColor::Success),
+    State::Enforced(false) => (ctx.t("agents.enforcementUnavailable"), PaletteColor::Warning),
+    State::Value(value) => (value, PaletteColor::TextSecondary),
   };
-  Column::new()
+  let name = key.trim_start_matches("agents.");
+  Row::new()
+    .id(format!("agent-enforcement-{name}"))
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Fine.role())
-    .padding(Padding::vertical(ExtraSpacing::Loose.role()))
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::RowY.role()))
+    .spacing(lurq::app::theme::SpacingSize::Md)
+    .align_items(Alignment::Center)
     .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description).flex(1.0))
-        .child(icon(
-          if enforced { Icon::Check } else { Icon::CircleAlert },
-          IconSize::Sm,
-          color.clone(),
-        ))
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(Text::new(&ctx.t(key)).variant(ExtraTypography::Strong.role()))
         .child(
-          Text::new(&ctx.t(if enforced {
-            "agents.enforcedState"
-          } else {
-            "agents.enforcementUnavailable"
-          }))
-          .variant(ExtraTypography::Note.role())
-          .color(color),
+          Text::new(mechanism)
+            .variant(HubText::Hint.role())
+            .width(Dimension::Pct(100.0)),
         ),
     )
-    .child(words::note(value).color(PaletteColor::TextPrimary))
-    .child(Text::new(mechanism).variant(ExtraTypography::Note.role()))
+    .child(Text::new(&end).variant(HubText::Status.role()).color(color))
     .into()
 }
-fn note(glyph: Icon, text: &str) -> Row {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
-    .child(words::note(text).flex(1.0))
-}
-fn connection_settings(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, mut rows: Column) -> Column {
-  let available = fields
-    .connection(listed)
-    .is_some_and(|connection| !connection.provider().is_native());
+
+/// The profile's permissions and whether its connection enforces them, for the page head.
+pub fn summary(
+  ctx: &Ctx,
+  fields: &Fields,
+  listed: &ProjectAgents,
+) -> (Arc<str>, Option<(crate::screens::hub::parts::Tone, Arc<str>)>) {
   let permissions = fields.permissions.get().0;
-  rows = rows.child(setting(
-    ctx,
-    "agents.mcp",
-    &ctx.t_args(
-      "agents.mcpCount",
-      [
-        ("selected", fields.servers.get().0.ids().len().to_string()),
-        ("total", listed.mcp.len().to_string()),
-      ],
-    ),
-    &ctx.t(if available {
-      "agents.mcpLoading"
-    } else {
-      "agents.nativeUnavailable"
-    }),
-    available,
-  ));
-  rows = rows.child(setting(
-    ctx,
-    "agents.approvals",
-    &ctx.t(if permissions.auto_approve() {
-      "agents.approvalsAuto"
-    } else if permissions.interactive_tool_approvals() {
-      "agents.approvalsAsk"
-    } else {
-      "agents.approvalsDefault"
-    }),
-    &ctx.t(if available {
-      "agents.approvalMechanism"
-    } else {
-      "agents.nativeUnavailable"
-    }),
-    available,
-  ));
-  rows = rows.child(setting(
-    ctx,
-    "agents.agentFiles",
-    &ctx.t(if listed.agent_files.is_on() {
-      "agents.agentFilesOn"
-    } else {
-      "agents.agentFilesOff"
-    }),
-    &ctx.t("agents.repositoryFilesMechanism"),
-    true,
-  ));
-  rows
-}
-fn header(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions) -> Column {
-  let enforced = orchester_workspace::agents::permissions::fully_enforced(permissions, connection.provider());
-  let title = if enforced {
-    ctx.t_args("agents.enforced", [("provider", connection.name().as_str())])
-  } else {
-    ctx.t("agents.enforcementTitle")
-  };
-  let checked = connection.last_check().map_or_else(
-    || ctx.t("agents.notChecked"),
-    |check| {
-      ctx.t_args(
-        "agents.checkedAt",
-        [("time", orchester_workspace::display::clock(check.at))],
-      )
-    },
-  );
-  panels::body()
-    .spacing(ExtraSpacing::Snug.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(
-          if enforced { Icon::ShieldCheck } else { Icon::ShieldAlert },
-          IconSize::Md,
-          if enforced {
-            PaletteColor::Success
-          } else {
-            PaletteColor::Warning
-          },
-        ))
-        .child(Text::new(&title).variant(ExtraTypography::Strong.role())),
-    )
-    .child(
-      Text::new(&ctx.t_args(
-        "agents.connectionState",
-        [
-          ("provider", connection_detail(ctx, connection)),
-          ("status", checked.to_string()),
-        ],
-      ))
-      .variant(TypographyStyle::Caption),
-    )
+  let connection = fields.connection(listed);
+  let summary = words::summary(ctx, &permissions, connection.map(|c| c.provider()));
+  (summary, connection.map(|c| enforcement::status(ctx, &permissions, c)))
 }

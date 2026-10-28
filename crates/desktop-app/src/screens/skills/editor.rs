@@ -1,5 +1,10 @@
-//! Skill editor gJurA and the save/publish states bQqDC; no modal.
+//! A skill's page (`03b Skill` `QbDWX`), one page under the hub's tabs: the crumb, head and draft bar, then the skill's
+//! name, scope and description, its body and its reference files, with where it loads, its versions, origin and
+//! active runs beside them. An edit saves the draft on its own; publishing asks first. Questions open in place, never
+//! in a modal.
 
+mod asks;
+mod files;
 mod form;
 mod header;
 
@@ -7,34 +12,27 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
-  core::Signal,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::Column,
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{InstructionScope, Skill, SkillFile};
 use orchester_workspace::{messages::Message, skills::data::SkillEntry, tasks::outside::Outside};
 
 use super::{
-  PageProps, inspector, words,
+  PageProps, inspector,
   work::{self, Change, Saved, Work},
 };
-use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  theme::ExtraTypography,
-  ui::{
-    button::{ActionButton, ButtonKind},
-    message::message_text,
-    notice::{Notice, NoticeTone},
-  },
-};
-// gJurA: sidebar a52AMN, form xF9B8 and scope cc82c.
-const INSPECTOR_WIDTH: f32 = 340.0;
-const SCOPE_WIDTH: f32 = 380.0;
-const HEADER_HEIGHT: f32 = 52.0;
-const FOOTER_HEIGHT: f32 = 44.0;
+use crate::{screens::hub, theme::HubSpacing};
+/// A field's width in the *Skill* rows (`zalHn`, `MdHMb`) and the description's height.
+const FIELD_WIDTH: f32 = 280.0;
 const DESCRIPTION_HEIGHT: f32 = 64.0;
+/// The body's editor, in a page that scrolls.
+const BODY_HEIGHT: f32 = 240.0;
+/// The page's main column (`Pane` `FgUP6`) and its side (`Side` `jGRYJ`).
+const MAIN_WIDTH: f32 = 680.0;
+const SIDE_WIDTH: f32 = 424.0;
 #[derive(Clone)]
 pub struct Props {
   pub page: PageProps,
@@ -52,6 +50,14 @@ impl DevtoolsInspectable for Files {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Baseline(Option<SkillEntry>);
 impl DevtoolsInspectable for Baseline {}
+/// A question about the skill itself, asked in place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ask {
+  Nothing,
+  Discard,
+  Remove,
+}
+impl DevtoolsInspectable for Ask {}
 pub struct Editor {
   name: Signal<String>,
   description: Signal<String>,
@@ -67,6 +73,9 @@ pub struct Editor {
   dirty: Signal<bool>,
   leave: crate::navigation::guard::LeaveGuard,
   authorship: work::Authorship,
+  ask: Signal<Ask>,
+  more: Signal<bool>,
+  anchor: ElementRef,
 }
 impl Component for Editor {
   type Props = Props;
@@ -94,48 +103,12 @@ impl Component for Editor {
       asking: ctx.signal(false),
       submitted: ctx.signal(false),
       authorship: work::Authorship::default(),
+      ask: ctx.signal(Ask::Nothing),
+      more: ctx.signal(false),
+      anchor: ctx.element_ref(),
     };
-    // Signals change while lurq delivers the input that changed them, so a client's edit is told from a person's.
-    let authorship = editor.authorship.clone();
-    ctx.watch(&editor.name, move |_| authorship.edited());
-    let authorship = editor.authorship.clone();
-    ctx.watch(&editor.description, move |_| authorship.edited());
-    let authorship = editor.authorship.clone();
-    ctx.watch(&editor.body, move |_| authorship.edited());
-    let authorship = editor.authorship.clone();
-    ctx.watch(&editor.scope, move |_| authorship.edited());
-    let authorship = editor.authorship.clone();
-    ctx.watch(&editor.files, move |_| authorship.edited());
-    let baseline = editor.baseline.clone();
-    let (revision, skills) = (p.page.view.revision.clone(), p.page.view.skills.clone());
-    let changes = crate::services::Services::of(ctx).changes;
-    let submitted = editor.submitted.clone();
-    let dirty_state = editor.dirty.clone();
-    let navigation = p.page.view.panel.navigation.clone();
-    let project = p.page.view.panel.project;
-    let creating = p.entry.is_none();
-    let action = editor.action.clone();
-    ctx.watch(&action.state(), move |state| {
-      if state.is_pending() {
-        return;
-      }
-      submitted.set(false);
-      if state.is_fulfilled()
-        && let Some(Saved(entry)) = state.data.as_ref()
-      {
-        baseline.set(Baseline(Some(entry.clone())));
-        // Every other screen that shows the skills reads them again; this one reads them again once.
-        skills.record(&changes, project, Outside::Skills);
-        revision.update(|r| *r += 1);
-        if creating {
-          dirty_state.set(false);
-          navigation.replace(crate::routes::Route::Project(
-            project,
-            crate::routes::ProjectPage::Skill(entry.id),
-          ));
-        }
-      }
-    });
+    editor.watch_edits(ctx);
+    editor.watch_writes(ctx, &p);
     editor
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -169,52 +142,73 @@ impl Component for Editor {
     let title = baseline
       .as_ref()
       .map_or_else(|| ctx.t("skills.new"), |e| e.name.clone());
-    let header = self.header(ctx, &p, baseline.as_ref(), &title, (dirty || parsed.is_err(), busy));
-    let form = self.form(ctx, &p, parsed.as_ref().err());
-    let details = inspector::panel(
-      ctx,
-      &p.page,
-      baseline.as_ref(),
-      self.files.clone(),
-      self.choosing_file.clone(),
-      busy,
-    );
-    let leave = self.leave_question(ctx, busy);
-    let mut frame = Column::new()
+    let changed = (dirty || parsed.is_err(), busy);
+    let mut pane = Column::new()
       .id("skill-editor")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .child(header)
-      .with_children(leave);
-    frame = frame.with_children(self.failure(ctx, &p));
-    frame = frame.with_children(self.reload_question(ctx, &p, busy));
-    frame = frame.child(
-      Row::new()
-        .flex(1.0)
-        .min_height(Dimension::Px(0.0))
-        .width(Dimension::Pct(100.0))
-        .child(
-          Column::new()
-            .flex(1.0)
-            .height(Dimension::Pct(100.0))
-            .min_width(Dimension::Px(0.0))
-            .child(form)
-            .child(self.footer(ctx, baseline.as_ref(), (busy, p.page.reloading))),
-        )
-        .child(
-          ScrollVertical::new(details)
-            .width(Dimension::Px(INSPECTOR_WIDTH))
-            .height(Dimension::Pct(100.0))
-            .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-        ),
-    );
-    if self.asking.get() {
-      frame = frame.child(self.question(ctx, &p, baseline.as_ref()));
-    }
-    frame
+      .spacing(HubSpacing::Sections.role())
+      .child(self.crumb(ctx, &p, baseline.as_ref()))
+      .child(self.page_head(ctx, &p, baseline.as_ref(), &title))
+      .with_children(self.leave_question(ctx, busy))
+      .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
+    pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get()) {
+      (Some(question), _) => pane.child(question),
+      (None, true) => pane.child(self.question(ctx, &p, baseline.as_ref())),
+      (None, false) => pane.child(self.bar(ctx, &p, baseline.as_ref(), changed)),
+    };
+    pane = pane
+      .with_children(self.failure(ctx, &p))
+      .with_children(self.reload_question(ctx, &p, busy))
+      .with_children(self.form(ctx, &p, parsed.as_ref().err(), busy));
+    let side = inspector::panel(ctx, &p.page, baseline.as_ref());
+    hub::page_body("skill-page", (pane.into(), MAIN_WIDTH), (side, SIDE_WIDTH))
   }
 }
 impl Editor {
+  /// Signals change while lurq delivers the input that changed them, so a client's edit is told from a person's.
+  fn watch_edits(&self, ctx: &mut Ctx) {
+    let authorship = self.authorship.clone();
+    ctx.watch(&self.name, move |_| authorship.edited());
+    let authorship = self.authorship.clone();
+    ctx.watch(&self.description, move |_| authorship.edited());
+    let authorship = self.authorship.clone();
+    ctx.watch(&self.body, move |_| authorship.edited());
+    let authorship = self.authorship.clone();
+    ctx.watch(&self.scope, move |_| authorship.edited());
+    let authorship = self.authorship.clone();
+    ctx.watch(&self.files, move |_| authorship.edited());
+  }
+  fn watch_writes(&self, ctx: &mut Ctx, p: &Props) {
+    let baseline = self.baseline.clone();
+    let (revision, skills) = (p.page.view.revision.clone(), p.page.view.skills.clone());
+    let changes = crate::services::Services::of(ctx).changes;
+    let submitted = self.submitted.clone();
+    let dirty_state = self.dirty.clone();
+    let navigation = p.page.view.panel.navigation.clone();
+    let project = p.page.view.panel.project;
+    let creating = p.entry.is_none();
+    ctx.watch(&self.action.state(), move |state| {
+      if state.is_pending() {
+        return;
+      }
+      submitted.set(false);
+      if state.is_fulfilled()
+        && let Some(Saved(entry)) = state.data.as_ref()
+      {
+        baseline.set(Baseline(Some(entry.clone())));
+        // Every other screen that shows the skills reads them again; this one reads them again once.
+        skills.record(&changes, project, Outside::Skills);
+        revision.update(|r| *r += 1);
+        if creating {
+          dirty_state.set(false);
+          navigation.replace(crate::routes::Route::Project(
+            project,
+            crate::routes::ProjectPage::Skill(entry.id),
+          ));
+        }
+      }
+    });
+  }
   fn form_state(&self, p: &Props) -> (Result<Skill, Message>, bool) {
     let form = orchester_workspace::skills::editor::SkillForm {
       name: &self.name.get(),
@@ -239,206 +233,5 @@ impl Editor {
         by_automation: self.authorship.saving(),
       },
     ));
-  }
-  fn question(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>) -> Element {
-    let keep = self.asking.clone();
-    let confirm = self.asking.clone();
-    let action = self.action.clone();
-    let open = p.page.project.open.clone();
-    let entry = entry.cloned();
-    let submitted = self.submitted.clone();
-    let operation = self.operation.clone();
-    let gate = ctx.use_context::<InputGate>();
-    Notice::new("skill-confirm", NoticeTone::Warning, ctx.t("skills.publishQuestion"))
-      .body(ctx.t("skills.publishReason"))
-      .action(
-        ActionButton::new("skill-confirm-keep", ButtonKind::Secondary, ctx.t("skills.keepDraft"))
-          .on_click(move || keep.set(false)),
-      )
-      .action(
-        ActionButton::new(
-          "skill-confirm-confirm",
-          ButtonKind::Primary,
-          ctx.t_args(
-            "skills.publish",
-            [(
-              "version",
-              entry.as_ref().map_or(1, |e| words::next(e.state)).to_string(),
-            )],
-          ),
-        )
-        .on_click(move || {
-          // A published skill reaches agents' prompts (ORC-30): an MCP client publishes it only under the person's
-          // consent, as for an instruction.
-          if !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
-            tracing::warn!("synthetic input confirmed publishing a skill; not taken");
-            return;
-          }
-          if let Some(entry) = &entry {
-            operation.set(work::Operation::Publish);
-            submitted.set(true);
-            confirm.set(false);
-            action.run((open.clone(), Change::Publish(entry.clone())));
-          }
-        }),
-      )
-      .into()
-  }
-}
-impl Editor {
-  fn leave_question(&self, ctx: &mut Ctx, busy: bool) -> Option<Element> {
-    if !self.leave.requested() {
-      return None;
-    }
-    let keep = self.leave.clone();
-    let leave = self.leave.clone();
-    let nav = crate::navigation::Navigation::of(ctx);
-    let button = ActionButton::new("skill-leave-confirm", ButtonKind::Primary, ctx.t("skills.leave"))
-      .on_click(move || leave.leave(&nav));
-    Some(
-      Notice::new(
-        "skill-leave-question",
-        NoticeTone::Warning,
-        ctx.t("skills.leaveQuestion"),
-      )
-      .body(ctx.t("skills.leaveDetail"))
-      .action(if busy { button.disabled() } else { button })
-      .action(
-        ActionButton::new("skill-leave-keep", ButtonKind::Secondary, ctx.t("skills.keepEditing"))
-          .on_click(move || keep.keep_editing()),
-      )
-      .into(),
-    )
-  }
-}
-impl Editor {
-  fn failure(&self, ctx: &Ctx, p: &Props) -> Option<Element> {
-    let state = self.action.state().get();
-    let error = state.error.as_ref().filter(|_| !state.is_pending())?;
-    let baseline = self.baseline.get().0;
-    let title = match (self.operation.get(), baseline.as_ref()) {
-      (work::Operation::Publish, Some(entry)) => ctx.t_args(
-        "skills.publishFailed",
-        [
-          ("name", entry.name.to_string()),
-          ("version", words::next(entry.state).to_string()),
-        ],
-      ),
-      _ => ctx.t("skills.notSaved"),
-    };
-    let parsed = self.form_state(p).0;
-    let action = self.action.clone();
-    let before = baseline;
-    let name = self.name.get();
-    let body = parsed;
-    let open = p.page.project.open.clone();
-    let submitted = self.submitted.clone();
-    let operation = self.operation.clone();
-    let asking = self.asking.clone();
-    let choosing = self.choosing_file.clone();
-    let authorship = self.authorship.clone();
-    let retry = ActionButton::new("skill-retry", ButtonKind::Secondary, ctx.t("skills.retry")).on_click(move || {
-      if submitted.get_untracked() || (before.is_none() && choosing.get_untracked()) {
-        return;
-      }
-      if operation.get_untracked() == work::Operation::Publish {
-        asking.set(true);
-        return;
-      }
-      if let Ok(body) = &body {
-        submitted.set(true);
-        action.run((
-          open.clone(),
-          Change::Save {
-            before: before.clone(),
-            name: name.clone(),
-            body: body.clone(),
-            by_automation: authorship.retrying(),
-          },
-        ));
-      }
-    });
-    let request = p.page.view.reload_requested.clone();
-    let reload = ActionButton::new("skill-reload", ButtonKind::Secondary, ctx.t("skills.reload"))
-      .on_click(move || request.set(true));
-    let reload = if p.page.reloading || self.choosing_file.get() {
-      reload.disabled()
-    } else {
-      reload
-    };
-    let retry = if p.page.reloading || (self.baseline.get().0.is_none() && self.choosing_file.get()) {
-      retry.disabled()
-    } else {
-      retry
-    };
-    Some(
-      Notice::new("skill-save-error", NoticeTone::Danger, title)
-        .body(message_text(ctx, error))
-        .action(retry)
-        .action(reload)
-        .into(),
-    )
-  }
-}
-impl Editor {
-  fn footer(&self, ctx: &Ctx, entry: Option<&SkillEntry>, (busy, reloading): (bool, bool)) -> Row {
-    let effect = entry.and_then(|e| e.state.published()).map_or_else(
-      || ctx.t("skills.publishFirst"),
-      |v| ctx.t_args("skills.publishEffect", [("version", v.get().to_string())]),
-    );
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(FOOTER_HEIGHT))
-      .align_items(lurq::layout::Alignment::Center)
-      .padding(Padding::horizontal(crate::theme::skills::form_inset()))
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(Text::new(&effect).variant(TypographyStyle::Description))
-      .child(Spacer::new().flex(1.0))
-      .child(
-        Text::new(&if reloading {
-          ctx.t("skills.reading")
-        } else if busy && self.operation.get() == work::Operation::Publish {
-          ctx.t("skills.publishing")
-        } else if busy {
-          ctx.t("skills.saving")
-        } else {
-          entry.map_or_else(|| ctx.t("skills.newNote"), |e| words::saved_at(ctx, e))
-        })
-        .variant(ExtraTypography::Note.role()),
-      )
-  }
-}
-
-impl Editor {
-  fn reload_question(&self, ctx: &Ctx, p: &Props, busy: bool) -> Option<Element> {
-    if !p.page.view.reload_requested.get() {
-      return None;
-    }
-    let keep = p.page.view.reload_requested.clone();
-    let confirm = keep.clone();
-    let reset = p.page.view.reset.clone();
-    let button =
-      ActionButton::new("skill-reload-confirm", ButtonKind::Primary, ctx.t("skills.reloadSaved")).on_click(move || {
-        confirm.set(false);
-        reset.update(|r| *r += 1);
-      });
-    Some(
-      Notice::new(
-        "skill-reload-question",
-        NoticeTone::Warning,
-        ctx.t("skills.reloadQuestion"),
-      )
-      .body(ctx.t("skills.reloadDetail"))
-      .action(if busy || self.choosing_file.get() {
-        button.disabled()
-      } else {
-        button
-      })
-      .action(
-        ActionButton::new("skill-reload-keep", ButtonKind::Secondary, ctx.t("skills.keepEditing"))
-          .on_click(move || keep.set(false)),
-      )
-      .into(),
-    )
   }
 }

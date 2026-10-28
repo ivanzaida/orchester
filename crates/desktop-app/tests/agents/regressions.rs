@@ -51,10 +51,11 @@ fn agents_network_summary_reports_effective_access_in_list_header_and_panel() {
     assert!(!screen.text("agent-permission-summary").contains("Enforced by"));
     assert!(screen.text("agent-permission-summary").contains("Network stays on"));
   }
-  screen.click("agent-tab-permissions");
-  assert!(screen.text("agent-enforcement").contains(expected));
+  // The enforcement panel (01c) says, for Network, what enforces it or that nothing can.
+  let network = screen.text("agent-enforcement-network");
+  assert!(network.contains("Network"), "{network}");
   if fallback {
-    assert!(screen.text("agent-enforcement").contains("Network stays on"));
+    assert!(!network.contains("Enforced by"), "{network}");
     assert!(screen.exists("agent-network-reason"));
   }
 }
@@ -85,17 +86,12 @@ fn agents_selected_allowed_commands_keeps_prefixes_through_save() {
   );
   data::publish(&mut db, id, Timestamp::now()).expect("published prefix list");
   screen.open(id);
-  screen.click("agent-tab-permissions");
   screen.click("agent-option-AllowedCommands");
   assert!(screen.text("agent-commands").contains("cargo test"));
-  assert!(
-    !screen.exists("agent-save"),
-    "choosing the current option makes no edit"
-  );
-  screen.click("agent-tab-profile");
   screen.set("agent-responsibility", "Keep command prefixes");
-  screen.click("agent-save");
-  screen.until("saved", |s| s.exists("agent-role") && !s.exists("agent-save"));
+  screen.until("saved on its own", |s| {
+    s.listed().profile(id).expect("profile").profile.responsibilities() == "Keep command prefixes"
+  });
   assert_eq!(
     screen
       .listed()
@@ -142,16 +138,13 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
     .expect("API option");
   screen.click(&option);
   screen.set("agent-custom-model", "claude-test");
-  screen.click("agent-tab-permissions");
   assert!(
     screen
       .text("agent-approvals")
       .contains("does not offer approval switches")
   );
-  screen.click("agent-save");
-  // The saved profile opens on the tab the route names, Permissions.
-  screen.until("saved native", |s| {
-    s.exists("agent-approvals") && !s.exists("agent-save") && !s.exists("agent-saving")
+  screen.until("saved native on its own", |s| {
+    s.listed().profile(id).expect("profile").profile.connection() == native.id()
   });
   let saved = screen.listed().profile(id).expect("profile").profile.clone();
   assert_eq!(saved.connection(), native.id());
@@ -161,7 +154,7 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
 }
 
 #[test]
-fn agents_stale_draft_card_keeps_its_actual_base_version() {
+fn agents_stale_draft_bar_keeps_its_actual_base_version() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   let mut db = ProjectDb::open(&screen.root).expect("db");
@@ -178,104 +171,64 @@ fn agents_stale_draft_card_keeps_its_actual_base_version() {
   )
   .expect("stale");
   screen.open(id);
-  let card = screen.text("agent-draft-card");
-  assert!(card.contains("Based on Published v1"), "{card}");
-  assert!(!card.contains("Based on Published v2"), "{card}");
-  assert!(card.contains("CHANGES SINCE V2"), "{card}");
-  assert!(card.contains("Draft v3"), "{card}");
-}
-
-/// Withhold tick_futures to delay delivery deterministically, even when SQLite finishes quickly.
-fn assert_editing_waits(screen: &mut Agents) {
-  assert!(screen.exists("agent-saving"));
-  assert!(!screen.exists("agent-role"));
-  assert!(!screen.exists("agent-responsibility"));
-  assert!(!screen.exists("agent-instructions"));
-  assert!(!screen.exists("agent-connection"));
-  screen.click("agent-tab-permissions");
-  assert!(!screen.exists("agent-option-EditWorktree"));
-  assert!(!screen.exists("agent-option-AllowedCommands"));
-  assert!(!screen.exists("agent-command"));
-  assert!(!screen.exists("agent-network"));
-  assert!(!screen.exists("agent-auto"));
-  screen.click("agent-tab-profile");
-  assert!(!screen.exists("agent-role"));
+  let bar = screen.text("agent-draft-bar");
+  assert!(bar.contains("Draft based on v1"), "{bar}");
+  assert!(bar.contains("Published v2"), "{bar}");
+  assert!(bar.contains("Publishing v3 replaces v2’s changes"), "{bar}");
 }
 
 #[test]
-fn agents_delayed_save_keeps_candidate_and_restores_editing_after_success() {
+fn agents_editing_while_a_save_is_under_way_stays_editable_and_saves_next() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   screen.open(id);
   screen.set("agent-responsibility", "Candidate being saved");
-  screen.click("agent-save");
-  assert_editing_waits(&mut screen);
-  screen.until("saved and editable", |s| {
-    s.exists("agent-role") && !s.exists("agent-save")
+  screen.until("saved on its own", |s| {
+    s.listed().profile(id).expect("profile").profile.responsibilities() == "Candidate being saved"
   });
-  assert_eq!(
-    screen.listed().profile(id).expect("profile").profile.responsibilities(),
-    "Candidate being saved"
-  );
+  // The fields stay on the page while it saves: an edit goes on and saves after.
+  assert!(screen.exists("agent-responsibility") && screen.exists("agent-option-EditWorktree"));
   screen.set("agent-responsibility", "Next candidate");
-  assert!(screen.exists("agent-save"));
-  assert!(screen.text("agent-save-status").contains("Unsaved"));
+  screen.until("the next edit saved", |s| {
+    s.listed().profile(id).expect("profile").profile.responsibilities() == "Next candidate"
+  });
 }
 
 #[test]
-fn agents_delayed_confirmation_cannot_reinstate_an_old_candidate() {
+fn agents_a_late_confirmation_cannot_reinstate_an_old_candidate() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   screen.open(id);
-  screen.click("agent-tab-permissions");
   screen.click("agent-option-EditWorktree");
-  screen.click("agent-save");
-  assert_editing_waits(&mut screen);
   screen.until("question", |s| s.exists("agent-confirm-confirm"));
   screen.set("agent-responsibility", "New candidate after question");
-  assert!(!screen.exists("agent-confirm"));
-  assert!(!screen.window.link.input_gate().protecting());
-  screen.click("agent-save");
-  assert_editing_waits(&mut screen);
   screen.until("new question", |s| s.exists("agent-confirm-confirm"));
   screen.window.tree.tick_futures();
   screen.window.pass();
   screen.click("agent-confirm-confirm");
-  assert_editing_waits(&mut screen);
-  screen.until("confirmed and editable", |s| {
-    s.exists("agent-role") && !s.exists("agent-save")
+  screen.until("confirmed", |s| {
+    let saved = s.listed().profile(id).expect("profile").profile.clone();
+    saved.responsibilities() == "New candidate after question"
+      && saved.permissions().repository() == RepositoryAccess::Write
   });
-  let saved = screen.listed().profile(id).expect("profile").profile.clone();
-  assert_eq!(saved.responsibilities(), "New candidate after question");
-  assert_eq!(saved.permissions().repository(), RepositoryAccess::Write);
 }
 
 #[test]
-fn agents_failed_delayed_save_restores_the_unsaved_fields() {
+fn agents_failed_save_keeps_the_unsaved_fields() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   screen.open(id);
-  screen.set("agent-responsibility", "Keep this unsaved value");
   let entry = screen.listed().profile(id).expect("profile").clone();
   data::apply_in(
     &screen.root,
     ProfileChange::SaveDraft(id, super::harness::changed(&entry.profile)),
   )
   .expect("outside edit");
-  screen.click("agent-save");
-  assert_editing_waits(&mut screen);
-  screen.until("failed and editable", |s| {
-    s.exists("agent-save-error") && s.exists("agent-role")
+  screen.set("agent-responsibility", "Keep this unsaved value");
+  screen.until("failed or told", |s| {
+    (s.exists("agent-save-error") || s.exists("agent-outside-change")) && s.exists("agent-role")
   });
-  let value = screen
-    .window
-    .tree
-    .get_element_by_id_mut("agent-responsibility")
-    .and_then(|element| element.as_text_input())
-    .expect("input")
-    .value();
-  assert_eq!(value, "Keep this unsaved value");
-  assert!(screen.exists("agent-save"));
+  assert_eq!(screen.value("agent-responsibility"), "Keep this unsaved value");
 }
 
 #[test]
@@ -298,27 +251,40 @@ fn agents_delayed_folder_add_preserves_removal_and_saved_permissions() {
   );
   save_permissions(&screen, id, permissions);
   screen.open(id);
-  screen.click("agent-tab-permissions");
   screen.set("agent-folder", ".orchester/build-b");
   screen.click("agent-add-folder");
   // No tick_futures: validation cannot be delivered before the person removes A.
-  screen.click("agent-remove-folder-0");
-  assert!(!screen.text("agent-folders-row").contains(".orchester/build-a"));
+  screen.click("agent-folder-0-remove");
+  assert!(
+    !screen.text("agent-folders-row").contains(".orchester/build-a"),
+    "{}",
+    screen.text("agent-folders-row")
+  );
   screen.until("folder B added", |s| {
-    s.text("agent-folders-row").contains(".orchester/build-b") && s.exists("agent-remove-folder-0")
+    s.text("agent-folders-row").contains(".orchester/build-b") && s.exists("agent-folder-0-remove")
   });
   assert!(!screen.text("agent-folders-row").contains(".orchester/build-a"));
 
   screen.set("agent-folder", ".orchester/build-b");
   screen.click("agent-add-folder");
   screen.until("duplicate refused", |s| s.exists("agent-folder-note"));
-  assert!(!screen.exists("agent-remove-folder-1"));
-  screen.click("agent-save");
-  screen.until("widening question", |s| s.exists("agent-confirm-confirm"));
-  screen.window.tree.tick_futures();
-  screen.window.pass();
-  screen.click("agent-confirm-confirm");
-  screen.until("saved", |s| !s.exists("agent-save") && !s.exists("agent-saving"));
+  assert!(!screen.exists("agent-folder-1-remove"));
+  // The folders saved on their own, after the widening question at the field.
+  screen.until("saved", |s| {
+    if s.exists("agent-confirm-confirm") {
+      s.window.tree.tick_futures();
+      s.window.pass();
+      s.click("agent-confirm-confirm");
+    }
+    let saved = s.listed().profile(id).expect("profile").profile.clone();
+    saved
+      .permissions()
+      .writable_folders()
+      .entries()
+      .iter()
+      .map(|f| f.as_str())
+      .eq([".orchester/build-b"])
+  });
   let saved = screen.listed().profile(id).expect("profile").profile.clone();
   let folders: Vec<_> = saved
     .permissions()

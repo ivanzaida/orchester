@@ -5,6 +5,7 @@ mod design_states;
 mod discovery;
 mod events;
 mod harness;
+mod hub;
 mod insertion;
 mod library;
 mod panel_history;

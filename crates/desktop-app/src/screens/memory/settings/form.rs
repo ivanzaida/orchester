@@ -1,7 +1,7 @@
-//! The Settings tab's form (`Form` `trlre` in `U2teQq`): its note with the save state (`x1fbsp`); *Saving*, a row of
-//! two cards for task memory and one for project memory (`olUlp`); *Given to each agent*, the record and token limits
-//! with what they mean read back under them (`gHr6v`); and the two notices under them (`wxF1O`, `A1TBPd`). At most
-//! 720 wide, so it narrows with the window.
+//! The Settings tab's form (`05d Memory settings` `KwGDK`): its note with the save state (`Note` `Xklz7`); *Saving*,
+//! a row per memory with its two option cards (`Saving` `d3Dpf`); *Given to each agent*, the record and token limits
+//! beside what they mean, read back under them (`qzWNa`); and the two quiet notes under them (`BFkJm`, `MkzqV`). At
+//! most 760 wide, so it narrows with the window.
 
 use std::path::Path;
 
@@ -14,98 +14,125 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  memory::{MemoryLimits, MemorySettings, WritePolicy},
-  tokens::compact_tokens,
-};
+use orchester_core::memory::{MemoryLimits, MemorySettings, WritePolicy};
 
 use super::{Scope, SettingsProps, SettingsTab, Status};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  screens::hub::parts,
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
   ui::{
     field::{NumberField, field_error},
-    form_section::{Label, Place, section, side_row, stacked_row},
     icon::{Icon, icon},
     message::message_text,
-    notice::{Notice, NoticeTone},
     option_card::OptionCard,
     tinted_note::person_only,
   },
 };
 
-/// The form's width at most (`trlre`).
-const FORM_WIDTH: f32 = 720.0;
-/// A limit field's column (`aCIH8`).
-const CONTROL_WIDTH: f32 = 300.0;
+/// The form's width at most (`Pane` `v4enD3`).
+const FORM_WIDTH: f32 = 760.0;
+/// The limit fields' boxes with their units (`y5lYd`, `DTz3H`).
+const RECORDS_WIDTH: f32 = 141.0;
+const TOKENS_WIDTH: f32 = 138.0;
 
 pub(super) fn form(ctx: &mut Ctx, tab: &SettingsTab, (props, base): (&SettingsProps, MemorySettings)) -> Element {
   let repo = props.project.open.repo_root.clone();
   let name = props.project.open.project.name().as_str().to_owned();
-  let saving = section(
+  let saving = parts::group(
     "memory-settings-saving",
-    &ctx.t("memory.settings.savingSection"),
-    None,
-    vec![
-      stacked_row(
-        Label::new("memory-settings-task", ctx.t("memory.settings.taskMemory"))
-          .description(ctx.t("memory.settings.taskMemoryBody")),
-        policies(ctx, tab, (Scope::Task, base.task_writes), &repo),
-        Place::Within,
-      ),
-      stacked_row(
-        Label::new("memory-settings-project", ctx.t("memory.settings.projectMemory"))
-          .description(ctx.t_args("memory.settings.projectMemoryBody", [("project", name.as_str())])),
-        policies(ctx, tab, (Scope::Project, base.project_writes), &repo),
-        Place::Last,
-      ),
-    ],
+    parts::head(
+      "memory-settings-saving",
+      &ctx.t("memory.settings.savingSection"),
+      None,
+      None,
+    ),
+    parts::boxed(
+      "memory-settings-saving-rows",
+      [
+        memory_row(
+          ("memory-settings-task", &ctx.t("memory.settings.taskMemory")),
+          &ctx.t("memory.settings.taskMemoryBody"),
+          policies(ctx, tab, (Scope::Task, base.task_writes), &repo),
+        ),
+        memory_row(
+          ("memory-settings-project", &ctx.t("memory.settings.projectMemory")),
+          &ctx.t_args("memory.settings.projectMemoryBody", [("project", name.as_str())]),
+          policies(ctx, tab, (Scope::Project, base.project_writes), &repo),
+        ),
+      ],
+    ),
   );
-  let limits = section(
+  let records = records_field(ctx, tab, &repo);
+  let tokens = tokens_field(ctx, tab, &repo);
+  let limits = parts::group(
     "memory-settings-given",
-    &ctx.t("memory.settings.given"),
-    None,
-    vec![
-      side_row(
-        Label::new("memory-settings-records", ctx.t("memory.settings.records"))
-          .description(ctx.t("memory.settings.recordsBody")),
-        records_field(ctx, tab, &repo),
-        Place::Within,
-        true,
-      ),
-      side_row(
-        Label::new("memory-settings-tokens", ctx.t("memory.settings.tokens"))
-          .description(ctx.t("memory.settings.tokensBody")),
-        tokens_field(ctx, tab, &repo),
-        Place::Last,
-        true,
-      ),
-    ],
+    parts::head("memory-settings-given", &ctx.t("memory.settings.given"), None, None),
+    parts::boxed(
+      "memory-settings-given-rows",
+      [
+        parts::field(
+          "memory-settings-records",
+          &ctx.t("memory.settings.records"),
+          Some(&ctx.t("memory.settings.recordsBody")),
+          records,
+        )
+        .into(),
+        parts::field(
+          "memory-settings-tokens",
+          &ctx.t("memory.settings.tokens"),
+          Some(&ctx.t("memory.settings.tokensBody")),
+          tokens,
+        )
+        .into(),
+      ],
+    ),
   );
   Column::new()
     .id("memory-settings")
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(FORM_WIDTH))
-    .padding(Padding::new().top(SpacingSize::Sm))
-    .spacing(SpacingSize::Lg)
+    .spacing(HubSpacing::Sections.role())
     .child(head(ctx, tab.status(base), &name))
     .with_children(failure(ctx, tab))
+    .child(saving)
+    .child(limits)
+    .child(parts::note(
+      "memory-settings-next",
+      Icon::History,
+      &ctx.t("memory.settings.nextNote"),
+    ))
+    .child(parts::note(
+      "memory-settings-people",
+      Icon::Users,
+      &ctx.t("memory.settings.peopleNote"),
+    ))
+    .into()
+}
+
+/// A memory's row (`Task memory` `DSVQx`): its name and what it holds, then its two cards under them.
+fn memory_row((id, label): (&str, &str), hint: &str, cards: Row) -> Element {
+  Column::new()
+    .id(format!("{id}-row"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
+    .spacing(ExtraSpacing::Loose.role())
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Roomy.role())
-        .child(saving)
-        .child(limits)
-        .child(notice(
-          ctx,
-          ("memory-settings-next", Icon::History),
-          ("memory.settings.nextTitle", "memory.settings.nextBody"),
-        ))
-        .child(notice(
-          ctx,
-          ("memory-settings-people", Icon::Shield),
-          ("memory.settings.peopleTitle", "memory.settings.peopleBody"),
-        )),
+        .spacing(ExtraSpacing::Tight.role())
+        .child(
+          Text::new(label)
+            .id(format!("{id}-label"))
+            .variant(ExtraTypography::Strong.role()),
+        )
+        .child(
+          Text::new(hint)
+            .id(format!("{id}-hint"))
+            .variant(HubText::Hint.role())
+            .width(Dimension::Pct(100.0)),
+        ),
     )
+    .child(cards)
     .into()
 }
 
@@ -243,7 +270,8 @@ fn records_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
     tab.records.clone(),
     ctx.t("memory.settings.recordsUnit"),
     read_back,
-  );
+  )
+  .width(Dimension::Px(RECORDS_WIDTH));
   limit_field(ctx, tab, (field, tab.read_records().err()), repo)
 }
 
@@ -261,7 +289,8 @@ fn tokens_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
         "memory.settings.tokensReadBack"
       };
       let [min, max] = range;
-      ctx.t_args(key, [("tokens", compact_tokens(u64::from(tokens))), min, max])
+      // `= 3,000 tokens` as 05d writes it, grouped like the range after it.
+      ctx.t_args(key, [("tokens", tab.grouped(tokens)), min, max])
     }
     Err(_) => ctx.t_args("memory.settings.tokensRange", range),
   };
@@ -272,11 +301,12 @@ fn tokens_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
     ctx.t("memory.settings.tokensUnit"),
     read_back,
   )
-  .grouped(tab.separator.clone());
+  .grouped(tab.separator.clone())
+  .width(Dimension::Px(TOKENS_WIDTH));
   limit_field(ctx, tab, (field, tab.read_tokens().err()), repo)
 }
 
-/// A limit's field in its column, saved when it is left, saying why its value is not one in place of its read-back.
+/// A limit's field at its row's end, saved when it is left, saying why its value is not one in place of its read-back.
 fn limit_field(
   ctx: &mut Ctx,
   tab: &SettingsTab,
@@ -285,19 +315,14 @@ fn limit_field(
 ) -> Element {
   let (commit, repo) = (tab.clone(), repo.to_path_buf());
   let mut field = field
-    .width(Dimension::Px(CONTROL_WIDTH))
-    .read_back_alignment(Alignment::Start)
+    .read_back_alignment(Alignment::End)
     .on_leave(move || commit.commit_limits(repo.clone()));
   if let Some(error) = error {
     field = field.error(message_text(ctx, &error));
   }
-  field.render(ctx)
-}
-
-/// One of the notices under the form: changes apply to the next invocation (`wxF1O`), only people decide (`A1TBPd`).
-fn notice(ctx: &Ctx, (id, glyph): (&str, Icon), (title, body): (&str, &str)) -> Element {
-  Notice::new(id, NoticeTone::Info, ctx.t(title))
-    .icon(glyph)
-    .body(ctx.t(body))
+  Column::new()
+    .flex_shrink(0.0)
+    .align_items(Alignment::End)
+    .child(field.render(ctx))
     .into()
 }

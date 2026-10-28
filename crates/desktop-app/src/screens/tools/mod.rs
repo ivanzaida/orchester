@@ -1,8 +1,13 @@
-//! Project command tools, layer Tools `m8Aec`.
+//! Tools, the Agents hub's fourth tab (`04 Tools` `c05kx`): the project's tools, and a tool's page with its
+//! Configuration, Inputs & outputs, Access and Usage log tabs (`04b`–`04e`).
 mod access;
+mod add_menu;
 mod editor;
+mod editor_asks;
 mod fields;
+mod fields_rows;
 mod head;
+mod inputs;
 mod inspector;
 mod library;
 mod validation;
@@ -16,24 +21,18 @@ use lurq::{
     ctx::Ctx,
   },
   components::Column,
-  core::Signal,
-  node::{Element, dimension::Dimension},
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ResourceId;
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-  tasks::outside::Outside,
-  tools::editor::EditorData,
-};
+use orchester_workspace::{background, messages, tasks::outside::Outside, tools::editor::EditorData};
 
 use crate::{
   project::{ShownProject, own::OwnChanges},
   routes::ProjectPage,
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  screens::hub::{self, Head, HubTab},
+  theme::HubSpacing,
+  ui::{failure::LastFailure, state::loading},
 };
 
 #[derive(Clone, PartialEq)]
@@ -43,22 +42,45 @@ pub struct Props {
 }
 impl DevtoolsInspectable for Props {}
 struct ToolsScreen {
-  // Save and explicit Reload reset fields; read retries keep the editor's mount key.
+  /// Counts the reads a save or Reload asks for; read retries keep the editor's mount key.
   revision: Signal<u64>,
+  /// The revision Reload started the page over at.
+  reset_at: Signal<u64>,
   retry: Signal<u64>,
   /// The tool changes, the screen's own too.
   tools: OwnChanges,
+  /// Add tool's menu in the head.
+  menu: Signal<bool>,
+  anchor: ElementRef,
+  /// Why the tools couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
 impl Component for ToolsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       revision: ctx.signal(0),
+      reset_at: ctx.signal(0),
       retry: ctx.signal(0),
       tools: OwnChanges::new(ctx, &[Outside::Tools]),
+      menu: ctx.signal(false),
+      anchor: ctx.element_ref(),
+      failure: LastFailure::default(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let project = ctx.props::<Props>().project.clone();
+    let body = self.body(ctx);
+    let actions = add_menu::actions(ctx, project.open.project.id(), (&self.menu, &self.anchor));
+    Column::new()
+      .id("screen-tools")
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .child(hub::page(ctx, &project, (HubTab::Tools, Head::actions(actions)), body))
+  }
+}
+impl ToolsScreen {
+  fn body(&self, ctx: &mut Ctx) -> Element {
     let props = ctx.props::<Props>().clone();
     let id = match props.page {
       ProjectPage::Tool(id, _) => Some(id),
@@ -83,39 +105,54 @@ impl Component for ToolsScreen {
       )
       .state()
       .get();
-    let frame = Column::new()
-      .id("screen-tools")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0));
-    let error = reading.error.as_ref().filter(|_| !reading.is_pending());
-    if matches!(props.page, ProjectPage::Tools)
-      && let Some(error) = error
-    {
-      return frame.child(self.library(ctx, props.project, Err(error.clone())));
-    }
+    let frame = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
+    let retry = self.retry.clone();
+    let what = ctx.t("tools.loadFailed");
+    let failure = hub::read_failure(
+      ctx,
+      &props.project,
+      (HubTab::Tools, "tools-load-error", &what),
+      self.failure.follow(&reading),
+      move || retry.update(|r| *r += 1),
+    );
+    // A tool's page keeps showing while its own save is read again; after Reload it waits for the new read.
+    let reset = self.reset_at.get();
     let current = reading
       .data
-      .filter(|(read_id, read_revision, _)| *read_id == id && *read_revision == revision);
-    let Some((_, _, data)) = current else {
-      return match error {
-        Some(error) => frame.child(self.failed(ctx, error)),
-        None => frame.child(loading("tools-loading", &ctx.t("tools.reading"))),
-      };
+      .filter(|(read_id, read_revision, _)| *read_id == id && *read_revision >= reset);
+    let (failure, data) = match (failure, current) {
+      (Some(failure), current) if current.is_none() || matches!(props.page, ProjectPage::Tools) => {
+        return hub::list_body("tools-failed", failure.page(ctx));
+      }
+      (_, None) => return frame.child(loading("tools-loading", &ctx.t("tools.reading"))).into(),
+      (failure, Some((_, _, data))) => (failure, data),
     };
     let child = self.content(ctx, props, data, id);
-    frame.with_children(error.map(|error| self.failed(ctx, error))).child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .min_height(Dimension::Px(0.0))
-        .child(child),
-    )
+    frame
+      .with_children(failure.map(|failure| {
+        // What was read stays under it.
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(
+            Padding::new()
+              .left(HubSpacing::Side.role())
+              .right(HubSpacing::Side.role())
+              .top(HubSpacing::BodyTop.role()),
+          )
+          .child(failure.page(ctx))
+      }))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0))
+          .child(child),
+      )
+      .into()
   }
-}
-impl ToolsScreen {
   fn content(&self, ctx: &mut Ctx, props: Props, data: EditorData, id: Option<ResourceId>) -> Element {
     match props.page {
-      ProjectPage::Tools => self.library(ctx, props.project, Ok(data.listed)),
+      ProjectPage::Tools => library::list(ctx, &props.project, &data.listed),
       ProjectPage::NewTool | ProjectPage::Tool(..) => {
         if id.is_some_and(|id| data.listed.tool(id).is_none()) {
           return crate::ui::notice::Notice::new(
@@ -125,10 +162,11 @@ impl ToolsScreen {
           )
           .into();
         }
-        let revision = self.revision.get();
+        // A save keeps the page; Reload and Discard draft start it over.
+        let reset = self.reset_at.get();
         let entry = id.and_then(|id| data.listed.tool(id)).cloned();
         let key = format!(
-          "tool-editor-{}-{revision}",
+          "tool-editor-{}-{reset}",
           id.map_or_else(|| "new".to_owned(), |id| id.to_string())
         );
         ctx.mount_keyed::<ToolEditor>(
@@ -138,6 +176,10 @@ impl ToolsScreen {
             data,
             entry,
             revision: self.revision.clone(),
+            reload: editor::Reload {
+              revision: self.revision.clone(),
+              reset_at: self.reset_at.clone(),
+            },
             tools: self.tools.clone(),
             read_revision: self.retry.get(),
             page: props.page,
@@ -146,30 +188,6 @@ impl ToolsScreen {
       }
       _ => unreachable!("Tools mounts only its own pages"),
     }
-  }
-  fn library(
-    &self,
-    ctx: &mut Ctx,
-    project: ShownProject,
-    listed: Result<orchester_workspace::tools::data::ProjectTools, Message>,
-  ) -> Element {
-    ctx.mount_keyed::<library::Library>(
-      "tools-library",
-      library::Props {
-        project,
-        listed,
-        retry: self.retry.clone(),
-      },
-    )
-  }
-  fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
-    let retry = self.retry.clone();
-    load_error(
-      ctx,
-      "tools-load-error",
-      (&ctx.t("tools.loadFailed"), &message_text(ctx, error)),
-      move || retry.update(|r| *r += 1),
-    )
   }
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {

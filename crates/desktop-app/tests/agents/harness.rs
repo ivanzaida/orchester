@@ -97,6 +97,37 @@ impl Agents {
       .click();
     self.window.pass();
   }
+  /// Presses `id` until `done`: a button that waits on a read or a write takes the press once it is ready.
+  pub fn press_until(&mut self, id: &str, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
+    self.until(what, |s| {
+      if let Some(mut button) = s.window.tree.get_element_by_id_mut(id) {
+        button.click();
+      }
+      s.window.pass();
+      done(s)
+    });
+  }
+  /// What the person typed into the input `id`.
+  pub fn value(&mut self, id: &str) -> String {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.as_text_input())
+      .unwrap_or_else(|| panic!("{id} input"))
+      .value()
+  }
+  /// Waits until the edits so far are saved as the draft: the profile's page saves on its own once they rest.
+  pub fn saved(&mut self) {
+    self.until("the draft saved on its own", |s| {
+      s.exists("agent-save-status")
+        && {
+          let status = s.text("agent-save-status");
+          !status.contains("Unsaved") && !status.contains("Saving")
+        }
+        && !s.exists("agent-saving")
+    });
+  }
   pub fn set(&mut self, id: &str, text: &str) {
     self
       .window

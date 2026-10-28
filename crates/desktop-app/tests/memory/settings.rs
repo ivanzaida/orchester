@@ -63,7 +63,7 @@ fn memory_settings_tab_saves_a_limit_when_its_field_is_left() {
   assert_eq!(page.value("memory-settings-tokens-field"), "3,000");
   assert_eq!(
     page.text("memory-settings-tokens-field-read-back"),
-    "= 3k tokens · 500 to 20,000 · default"
+    "= 3,000 tokens · 500 to 20,000 · default"
   );
   assert_eq!(
     page.text("memory-settings-records-field-read-back"),

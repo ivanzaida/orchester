@@ -1,97 +1,103 @@
-//! Saved/published editor header from bQqDC.
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Spacer, Text},
-  node::{border::Border, dimension::Dimension},
+//! The top of a skill's page (`03b Skill` `QbDWX`): the crumb back to Skills, the head with the skill's name, scope
+//! and origin and the … menu with Remove, and the draft bar — what the skill is now (*Draft written by automation ·
+//! Published v3*), what publishing does, Discard draft and Publish (Create on a new skill).
+use std::sync::Arc;
+
+use lurq::{app::ctx::Ctx, node::Element};
+use orchester_workspace::{
+  agents::data::VersionState,
+  skills::{data::SkillEntry, editor::publish_reason},
 };
-use orchester_workspace::skills::{data::SkillEntry, editor::publish_reason};
 
 use super::{
   super::{
     words,
     work::{self, Change},
   },
-  Editor, HEADER_HEIGHT, Props,
+  Ask, Editor, Props,
 };
-use crate::ui::{
-  breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
-  button::{ActionButton, ButtonKind},
-  message::message_text,
+use crate::{
+  screens::hub::{
+    draft_bar::{DraftBar, Standing},
+    page_head::{self, More},
+  },
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+    message::message_text,
+  },
 };
+
 impl Editor {
-  pub(super) fn header(
-    &self,
-    ctx: &mut Ctx,
-    p: &Props,
-    entry: Option<&SkillEntry>,
-    title: &str,
-    (dirty, busy): (bool, bool),
-  ) -> Row {
+  pub(super) fn crumb(&self, ctx: &Ctx, p: &Props, entry: Option<&SkillEntry>) -> Element {
     let back = p.page.view.panel.clone();
-    let crumbs = breadcrumb(
-      ctx,
+    let new = ctx.t("skills.new");
+    page_head::crumb(
       "skill-crumb",
-      CrumbSeparator::Chevron,
-      vec![
-        Crumb::to(ctx.t("skills.title"), back.to(back.library())),
-        Crumb::here(title).mono(),
-      ],
-    );
-    let action = self.primary_action(ctx, p, entry, (dirty, busy));
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(HEADER_HEIGHT))
-      .padding(SpacingSize::Md)
-      .spacing(SpacingSize::Md)
-      .align_items(lurq::layout::Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(crumbs)
-      .child(
-        Column::new()
-          .width(Dimension::Px(1.0))
-          .height(Dimension::Px(16.0))
-          .background(PaletteColor::Border),
-      )
-      .child(
-        crate::ui::icon::icon(
-          if dirty {
-            crate::ui::icon::Icon::CircleAlert
-          } else if busy {
-            crate::ui::icon::Icon::LoaderCircle
-          } else if automated(p, entry) {
-            crate::ui::icon::Icon::Bot
-          } else if entry.is_some_and(|e| e.state.has_draft() && e.state.published().is_some()) {
-            crate::ui::icon::Icon::CloudCheck
-          } else if entry.is_some_and(|e| e.state.has_draft()) {
-            crate::ui::icon::Icon::FilePenLine
-          } else {
-            crate::ui::icon::Icon::CircleCheck
-          },
-          crate::theme::IconSize::Base,
-          if dirty && self.form_state(p).0.is_err() {
-            PaletteColor::Danger
-          } else {
-            PaletteColor::TextSecondary
-          },
-        )
-        .id("skill-save-icon"),
-      )
-      .child(
-        Text::new(&self.status(ctx, p, entry, (dirty, busy)))
-          .id("skill-save-status")
-          .variant(TypographyStyle::Description)
-          .color(if dirty && self.form_state(p).0.is_err() {
-            PaletteColor::Danger
-          } else {
-            PaletteColor::TextSecondary
-          }),
-      )
-      .child(Spacer::new().flex(1.0))
-      .child(action)
+      (&ctx.t("hub.tabs.skills"), back.to(back.library())),
+      entry.is_none().then_some(&*new),
+    )
   }
+
+  pub(super) fn page_head(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>, title: &str) -> Element {
+    let sub = entry.map_or_else(
+      || ctx.t("skills.newSub"),
+      |e| {
+        let scope = words::scope(ctx, &p.page.data, e.body.scope());
+        match &e.origin {
+          Some(origin) => ctx.t_args(
+            "skills.pageSubImported",
+            [
+              ("scope", scope.to_string()),
+              ("source", origin.source.as_str().to_owned()),
+            ],
+          ),
+          None => scope,
+        }
+      },
+    );
+    let more = entry.map(|_| {
+      let (ask, open) = (self.ask.clone(), self.more.clone());
+      More {
+        open: self.more.clone(),
+        anchor: self.anchor.clone(),
+        remove: Arc::new(move || {
+          open.set(false);
+          ask.set(Ask::Remove);
+        }),
+      }
+    });
+    page_head::head(ctx, "skill", (Icon::GraduationCap, title, &sub), more)
+  }
+
+  pub(super) fn bar(&self, ctx: &Ctx, p: &Props, entry: Option<&SkillEntry>, (dirty, busy): (bool, bool)) -> Element {
+    let invalid = dirty && self.form_state(p).0.is_err();
+    let standing = match entry.map(|e| e.state) {
+      _ if invalid => Standing::Attention,
+      Some(VersionState::Published(_)) if !dirty && !busy => Standing::Published,
+      Some(VersionState::StaleDraft { .. }) => Standing::Attention,
+      _ => Standing::Draft,
+    };
+    let effect = entry.and_then(|e| e.state.published()).map_or_else(
+      || ctx.t("skills.publishFirst"),
+      |v| ctx.t_args("skills.publishEffect", [("version", v.get().to_string())]),
+    );
+    // `skill-save`: its status and glyph keep the ids the skill page gave its save state (`skill-save-status`).
+    let mut bar = DraftBar::new("skill-save", standing, self.status(ctx, p, entry, (dirty, busy))).sub(effect);
+    let discards = entry.filter(|e| e.state.has_draft() && e.state.published().is_some());
+    if discards.is_some() {
+      let ask = self.ask.clone();
+      let discard =
+        ActionButton::new("skill-discard", ButtonKind::Ghost, ctx.t("hub.discard.action")).icon(Icon::Undo2);
+      bar = bar.action(if busy || dirty {
+        discard.disabled()
+      } else {
+        discard.on_click(move || ask.set(Ask::Discard))
+      });
+    }
+    bar.action(self.primary_action(ctx, p, entry, (dirty, busy))).into()
+  }
+
   fn primary_action(
     &self,
     ctx: &Ctx,
@@ -110,7 +116,7 @@ impl Editor {
           ctx.t("skills.publishPlain")
         },
       )
-      .icon(crate::ui::icon::Icon::Upload);
+      .icon(Icon::Upload);
       if busy || dirty {
         button.unavailable_with_icon(ctx.t("skills.publishWaiting"))
       } else if let Some(reason) = publish_reason(entry) {
@@ -150,13 +156,8 @@ impl Editor {
       }
     }
   }
-  fn status(
-    &self,
-    ctx: &Ctx,
-    p: &Props,
-    entry: Option<&SkillEntry>,
-    (dirty, busy): (bool, bool),
-  ) -> std::sync::Arc<str> {
+
+  fn status(&self, ctx: &Ctx, p: &Props, entry: Option<&SkillEntry>, (dirty, busy): (bool, bool)) -> Arc<str> {
     if p.page.reloading {
       ctx.t("skills.reading")
     } else if busy && self.operation.get() == work::Operation::Publish {
@@ -172,12 +173,9 @@ impl Editor {
     } else {
       let automated = automated(p, entry);
       entry.map_or_else(
-        || ctx.t("skills.notSaved"),
+        || ctx.t("skills.newNote"),
         |e| {
-          if matches!(
-            e.state,
-            orchester_workspace::agents::data::VersionState::StaleDraft { .. }
-          ) {
+          if matches!(e.state, VersionState::StaleDraft { .. }) {
             return words::version(ctx, e.state);
           }
           match (e.state.has_draft(), e.state.published(), automated) {
@@ -201,8 +199,5 @@ impl Editor {
 /// Whether `entry`'s draft, current and saved, is the one automation saved over Orchester's MCP server (ORC-79, as
 /// ORC-30 marks an instruction's): who wrote it shows before a person publishes it.
 fn automated(p: &Props, entry: Option<&SkillEntry>) -> bool {
-  entry.is_some_and(|e| {
-    matches!(e.state, orchester_workspace::agents::data::VersionState::Draft { .. })
-      && p.page.data.listed.by_automation(e)
-  })
+  entry.is_some_and(|e| matches!(e.state, VersionState::Draft { .. }) && p.page.data.listed.by_automation(e))
 }

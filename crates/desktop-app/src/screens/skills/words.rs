@@ -64,19 +64,23 @@ pub fn files(ctx: &Ctx, count: usize) -> Arc<str> {
     _ => ctx.t_args("skills.filesCount", [("count", count.to_string())]),
   }
 }
-pub fn saved_at(ctx: &Ctx, entry: &orchester_workspace::skills::data::SkillEntry) -> Arc<str> {
-  entry.draft_saved_at.map_or_else(
-    || version(ctx, entry.state),
-    |time| {
-      ctx.t_args(
-        "skills.draftSavedAt",
-        [
-          ("version", next(entry.state).to_string()),
-          ("time", orchester_workspace::display::clock(time)),
-        ],
-      )
-    },
-  )
+
+/// *Create 1 draft*, *Create 3 drafts*: an import's Create.
+pub fn create_drafts(ctx: &Ctx, count: usize) -> Arc<str> {
+  if count == 1 {
+    ctx.t("skills.importActionOne")
+  } else {
+    ctx.t_args("skills.importAction", [("count", count.to_string())])
+  }
+}
+
+/// *1 draft created*, *3 drafts created*: an import's result.
+pub fn drafts_created(ctx: &Ctx, count: usize) -> Arc<str> {
+  if count == 1 {
+    ctx.t("skills.importDoneOne")
+  } else {
+    ctx.t_args("skills.importDone", [("count", count.to_string())])
+  }
 }
 
 pub fn types(ctx: &Ctx, instructions: usize, skills: usize) -> Arc<str> {

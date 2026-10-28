@@ -1,4 +1,5 @@
-//! Empty project B5A4Ux, including real repository findings T1w9U.
+//! Empty project B5A4Ux, including real repository findings T1w9U; findings that couldn't be read are one row in their
+//! box (`SsC16`).
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -6,22 +7,24 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_workspace::{
   background,
   instructions::repository::{self, RepositoryScan},
-  messages::Message,
+  messages,
 };
 
 use super::state::{Selection, Tab, View};
 use crate::{
   project::ShownProject,
+  screens::hub::parts::boxed,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::field_error,
+    failure::{Failure, LastFailure},
     icon::Icon,
     state::EmptyState,
   },
@@ -43,83 +46,54 @@ impl PartialEq for Props {
   }
 }
 impl DevtoolsInspectable for Props {}
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum ReadError {
-  Files,
-  Background(Message),
+pub struct Empty {
+  /// Counts the person's tries to read the repository's findings again.
+  again: Signal<u64>,
+  /// Why the findings couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
-impl DevtoolsInspectable for ReadError {}
-pub struct Empty;
 impl Component for Empty {
   type Props = Props;
-  fn create(_: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      again: ctx.signal(0),
+      failure: LastFailure::default(),
+    }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let root = props.project.open.repo_root.clone();
     let read = ctx
-      .future(root, |root| async move {
+      .future((root, self.again.get()), |(root, _)| async move {
         background::run(move || repository::scan(&root))
-          .await
-          .map_err(ReadError::Background)?
+          .await?
           .map_err(|error| {
-            tracing::error!(%error,"instruction repository findings could not be read");
-            ReadError::Files
+            tracing::error!(%error, "instruction repository findings could not be read");
+            messages::repository_unreadable()
           })
       })
       .state()
       .get();
-    let (new, import) = (props.selection.clone(), props.selection.clone());
-    let tab = props.tab;
-    let title = if props.all_empty {
-      ctx.t_args(
-        "instructions.emptyTitle",
-        [("project", props.project.open.project.name().as_str())],
-      )
-    } else {
-      ctx.t_args(
-        "instructions.emptyScope",
-        [
-          ("project", props.project.open.project.name().as_str()),
-          ("scope", &ctx.t(tab.key())),
-        ],
-      )
-    };
-    let mut empty = EmptyState::new(
-      "instructions-empty",
-      Icon::BookOpen,
-      title,
-      ctx.t("instructions.emptyDetail"),
-    )
-    .wide()
-    .unframed()
-    .note(ctx.t("instructions.emptyTabDetail"))
-    .action(
-      ActionButton::new(
-        "instructions-empty-import",
-        ButtonKind::Primary,
-        ctx.t("instructions.import"),
-      )
-      .icon(Icon::FolderOpen)
-      .opens(import.to(View::Import)),
-    )
-    .action(
-      ActionButton::new(
-        "instructions-empty-new",
-        ButtonKind::Secondary,
-        ctx.t("instructions.new"),
-      )
-      .icon(Icon::Plus)
-      .opens(new.to(View::new_rule(tab))),
-    );
-    if let Some(scan) = read.data.as_ref().filter(|scan| !scan.items.is_empty()) {
-      empty = empty.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));
-    } else if read.is_rejected() {
-      empty = empty.child(field_error(
+    let failed = self.failure.follow(&read);
+    let mut empty = empty_state(ctx, &props);
+    if let Some((error, retrying)) = failed {
+      // The findings' box holds one row in place of its rows; the rest of the page works.
+      let again = self.again.clone();
+      let row = Failure::new(
         "instructions-repository-error",
-        &ctx.t("instructions.importReadFailed"),
-      ));
+        ctx.t("instructions.importReadFailed"),
+        error,
+      )
+      .retry(retrying, move || again.update(|n| *n += 1))
+      .section(ctx);
+      empty = empty.child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding_top(crate::theme::instructions::discovery_offset())
+          .child(boxed("instructions-repository-unread", [row])),
+      );
+    } else if let Some(scan) = read.data.as_ref().filter(|scan| !scan.items.is_empty()) {
+      empty = empty.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));
     }
     ScrollVertical::new(
       Column::new()
@@ -132,6 +106,47 @@ impl Component for Empty {
     .flex(1.0)
     .min_height(Dimension::Px(0.0))
   }
+}
+/// The empty state with its title for the scope shown, Import and New instruction.
+fn empty_state(ctx: &Ctx, props: &Props) -> EmptyState {
+  let (new, import) = (props.selection.clone(), props.selection.clone());
+  let tab = props.tab;
+  let project = props.project.open.project.name().as_str();
+  let title = if props.all_empty {
+    ctx.t_args("instructions.emptyTitle", [("project", project)])
+  } else {
+    ctx.t_args(
+      "instructions.emptyScope",
+      [("project", project), ("scope", &ctx.t(tab.key()))],
+    )
+  };
+  EmptyState::new(
+    "instructions-empty",
+    Icon::BookOpen,
+    title,
+    ctx.t("instructions.emptyDetail"),
+  )
+  .wide()
+  .unframed()
+  .note(ctx.t("instructions.emptyTabDetail"))
+  .action(
+    ActionButton::new(
+      "instructions-empty-import",
+      ButtonKind::Primary,
+      ctx.t("instructions.import"),
+    )
+    .icon(Icon::FolderOpen)
+    .opens(import.to(View::Import)),
+  )
+  .action(
+    ActionButton::new(
+      "instructions-empty-new",
+      ButtonKind::Secondary,
+      ctx.t("instructions.new"),
+    )
+    .icon(Icon::Plus)
+    .opens(new.to(View::new_rule(tab))),
+  )
 }
 fn finding(glyph: Icon, source: &str, detail: &str) -> Element {
   Row::new()
