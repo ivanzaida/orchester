@@ -21,6 +21,8 @@ use crate::{
 const BONE_HEIGHT: f32 = 9.0;
 const KEY_BONE: f32 = 44.0;
 const VALUE_BONES: [f32; 3] = [168.0, 132.0, 148.0];
+/// A blank line's text: no words, only a line's height.
+const BLANK: &str = " ";
 
 /// The facts a card of `view` will show, before they are read, by whether each holds a link: a merge's run (a link to
 /// its task's Summary), its branch and its changes (a link to the task's Changes); nothing for the other cards, whose
@@ -56,7 +58,7 @@ pub(super) fn column(id: &str, links: &[bool], shown: bool) -> Option<Column> {
 /// the key's and the value's bones, `value` wide, when shown.
 fn row(link: bool, value: Option<f32>) -> Row {
   let line = Column::new().width(Dimension::Px(0.0)).child(
-    Text::new(" ")
+    Text::new(BLANK)
       .variant(OrchestratorText::FactValue.role())
       .width(Dimension::Px(0.0)),
   );
