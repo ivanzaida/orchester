@@ -332,8 +332,9 @@ fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
     json!(["running", "needs_you", "queued", "failed"]),
     "the screen's own tabs"
   );
-  // The Tasks list's views replaced its workflow tabs (ORC-99): their names are refused, with no alias.
-  for old in ["needs_you", "todo", "in_progress", "in_review"] {
+  // The Tasks list's views replaced its workflow tabs (ORC-99): their names are refused, with no alias. Needs you is
+  // a view again (ORC-105).
+  for old in ["todo", "in_progress", "in_review"] {
     let refused = navigate(
       &navigation,
       &json!({ "route": "tasks", "project": PROJECT, "tab": old }),
@@ -342,7 +343,7 @@ fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
     assert_eq!(refused.code(), "unknown_tab", "{old}");
     assert_eq!(
       refused.to_json()["known"],
-      json!(["active", "backlog", "done", "all"]),
+      json!(["needs_you", "active", "backlog", "done", "all"]),
       "{old}"
     );
   }
