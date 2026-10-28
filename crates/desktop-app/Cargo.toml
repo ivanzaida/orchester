@@ -25,6 +25,10 @@ devtools = ["lurq/devtools"]
 # lurq's frame timing: profile sessions over the MCP server (`lurq_profile_start`) and in headless tests
 # (`tests/orchestrator/open_long.rs`).
 perf_profile = ["lurq/perf_profile"]
+# The window headless on a data folder of its own, signed in to a stand-in cloud (`test_support`), for the tests and QA
+# examples here and the end-to-end tests of the private platform repository, which build this crate by git. Never in
+# the app's program.
+test-support = ["dep:tempfile", "orchester-api/test-support"]
 
 [dependencies]
 # The Usage page's days (`orchester_core::usage::DayRange`) read as month, day and weekday; already built
@@ -86,6 +90,8 @@ pulldown-cmark.workspace = true
 rfd.workspace = true
 # Arguments and results of the app's MCP tools.
 serde_json.workspace = true
+# The data folder of a test's window (`test_support`, feature `test-support` only).
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 # The runtime of the app's MCP server.
 tokio.workspace = true
@@ -124,25 +130,16 @@ objc2-foundation.workspace = true
 embed-resource.workspace = true
 
 [dev-dependencies]
+# The tests' and QA examples' window and stand-in cloud (`test_support`).
+orchester-app = { workspace = true, features = ["test-support"] }
 # Counts a runner's reports in tests of what follows them, which run no runner.
 orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
-# A real team server on loopback for the tests and the QA backends of Settings › Orchester and Sharing
-# (`tests/orchester`, `examples/n1_backends`), with the cloud's identity keys their stand-in cloud signs with.
-orchester-server.workspace = true
 orchester-api = { workspace = true, features = ["client", "identity"] }
-# Set-up requests to a test server that presents its own certificate (`workspace/tests/server_support/tls.rs`).
-tokio-rustls.workspace = true
-# Creates and drops the database of N1's end-to-end tests against the `orchester-cloud` program, built from its
-# private repository and named by `ORCHESTER_CLOUD_PROGRAM` (`tests/orchester_cloud`).
-tokio-postgres.workspace = true
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
 # edit outside Orchester or a newer build would; the store has no API for either.
 rusqlite.workspace = true
-# The shared test server marks its first admin's device as a two-factor sign-in by its token's SHA-256, as the server
-# keeps it (`workspace/tests/server_support/joins.rs`).
-sha2.workspace = true
 # Tries to share the MCP server's port the way another program would (`tests/mcp_stable`).
 socket2.workspace = true
 tempfile.workspace = true

@@ -287,7 +287,11 @@ impl OptionCard {
 
 impl From<OptionCard> for Element {
   fn from(card: OptionCard) -> Self {
-    let (frame, choice) = if card.compact { card.compact_frame() } else { card.frame() };
+    let (frame, choice) = if card.compact {
+      card.compact_frame()
+    } else {
+      card.frame()
+    };
     match choice {
       Choice::Choose(choose) => Focus::Keyboard
         .apply(frame)

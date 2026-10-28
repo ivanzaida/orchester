@@ -152,8 +152,7 @@ fn wrong_account(
     }
   };
   // One line under the title, as `14` draws it; the accounts are in the status line.
-  let title =
-    Text::new(&ctx.t("connections.github.wrongAccountTitle")).variant(ExtraTypography::OptionTitle.role());
+  let title = Text::new(&ctx.t("connections.github.wrongAccountTitle")).variant(ExtraTypography::OptionTitle.role());
   Row::new()
     .id("connection-wrong-account")
     .width(Dimension::Pct(100.0))

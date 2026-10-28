@@ -9,8 +9,6 @@
 //! Controls of the section take a person's click only, so states that need one (the Codex tab, *Rotate the
 //! token?*, the token shown, Copied) are covered by `tests/settings_mcp` instead.
 
-#[path = "../../tests/support/signed_in.rs"]
-mod signed_in;
 mod vault;
 
 use std::{
@@ -28,6 +26,7 @@ use orchester_app::{
   root::{Ready, Root, RootProps, Start},
   routes::Route,
   services::Services,
+  test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };
