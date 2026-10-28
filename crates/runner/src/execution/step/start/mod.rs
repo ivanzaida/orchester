@@ -269,10 +269,9 @@ impl RunTask {
     index: AgentIndex,
     agent: StepAgent<'_>,
   ) -> Result<AgentStart, RunnerProblem> {
-    let (step, model, body, connection) = (agent.step, agent.model, agent.body, agent.connection);
+    let (step, model, body, connection, info) = (agent.step, agent.model, agent.body, agent.connection, agent.info());
     let provider = connection.provider();
     let executable = cli::program(connection)?;
-    let info = agent.info();
     let mut placed = self.place_skills(execution, step, info)?;
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);
@@ -282,9 +281,11 @@ impl RunTask {
     let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
-    let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
+    let McpServers { setup, mut left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
     let offered = self.offered_skills(&placed, (provider, worktree))?;
-    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let storage = self.run_storage()?;
+    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()))
+      .with_run_storage(&storage);
     let on_provider = self.on_provider(connection, model)?;
     let provider_key = on_provider.as_ref().map(|on| on.key_variable(provider));
     let (tools, claude_approvals) = self.step_tools(
@@ -331,7 +332,6 @@ impl RunTask {
       checks: &checks,
     };
     let started = self.cli_command(&cli, setup, (prompt, attached), tools)?;
-    let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
       launch: cli_launch(started, index.tools.as_deref(), (claude_approvals, claude_exemptions)),

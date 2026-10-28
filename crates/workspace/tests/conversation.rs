@@ -449,7 +449,7 @@ fn conversation_a_ready_run_whose_worktree_was_removed_takes_no_messages() {
   };
   let kept = Leftovers {
     worktrees: vec![run_worktree(false)],
-    branches: Vec::new(),
+    ..Leftovers::default()
   };
   let ready = Conversation::of(&detail, false, Some(&kept));
   assert_eq!(ready.state, PanelState::Ready);
@@ -457,7 +457,7 @@ fn conversation_a_ready_run_whose_worktree_was_removed_takes_no_messages() {
 
   let deleted_by_hand = Leftovers {
     worktrees: vec![run_worktree(true)],
-    branches: Vec::new(),
+    ..Leftovers::default()
   };
   for leftovers in [Leftovers::default(), deleted_by_hand] {
     let removed = Conversation::of(&detail, false, Some(&leftovers));

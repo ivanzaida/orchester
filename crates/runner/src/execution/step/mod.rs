@@ -33,7 +33,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
-  id::StepExecutionId,
+  id::{InvocationId, StepExecutionId},
   memory::MemoryStore,
   permission::LaunchPermissions,
   resource::ModelId,
@@ -201,6 +201,9 @@ impl RunTask {
     if !self.may_start() {
       return Ok(false);
     }
+    if let Some(waiting_for_slot) = self.held_back()? {
+      return Ok(waiting_for_slot);
+    }
     self.answer_questions()?;
     // An agent stopped to take changed permissions while a pause was asked for waits for it.
     let continuing: Vec<StepExecutionId> = self
@@ -257,9 +260,16 @@ impl RunTask {
       Taken::Refused => return Ok(true),
       Taken::On(judged) => judged,
     };
+    let workspace = match self.workspace(execution, start) {
+      Ok(None) => {
+        self.board.release(execution);
+        return Ok(false);
+      }
+      Ok(Some(workspace)) => Ok(workspace),
+      Err(detail) => Err(detail),
+    };
     // A person's *Try now* holds until the agent has a slot: with every slot busy, the step tries again later.
     self.try_at_plan_limit.take_if(|asked| *asked == execution);
-    let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
     let mut continuation = self.begin_step(execution)?;
     self.keep_session_on_its_account(execution, &mut continuation)?;
     continuation.notice = self.notice_for(execution)?;
@@ -273,10 +283,8 @@ impl RunTask {
     }
     let workspace = match workspace {
       Ok(workspace) => workspace,
-      Err(error) => {
-        let problem = RunnerProblem::CheckpointFailed {
-          detail: error.to_string(),
-        };
+      Err(detail) => {
+        let problem = RunnerProblem::CheckpointFailed { detail };
         self.not_started(execution, &mut invocation, problem, StepFailure::CheckpointFailed)?;
         return Ok(true);
       }
@@ -339,11 +347,7 @@ impl RunTask {
 
   /// Records what `invocation` reaches its model through and on: its connection, a native agent's engine, a CLI's
   /// account, or the API provider a CLI runs on.
-  fn record_reached(
-    &mut self,
-    invocation: orchester_core::id::InvocationId,
-    start: &start::AgentStart,
-  ) -> Result<(), ExecutionError> {
+  fn record_reached(&mut self, invocation: InvocationId, start: &start::AgentStart) -> Result<(), ExecutionError> {
     self.db.save_invocation_connection(invocation, &start.connection)?;
     if let Some(engine) = &start.engine {
       self.db.save_invocation_engine(invocation, engine)?;

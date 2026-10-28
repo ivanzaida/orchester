@@ -73,6 +73,10 @@ pub struct LeftBranch {
 pub struct Leftovers {
   pub worktrees: Vec<LeftWorktree>,
   pub branches: Vec<LeftBranch>,
+  /// The run borrows warm workspaces (ORC-114): it never had a worktree of its own, and its branch, which holds its
+  /// work, is there. Such a run goes on in a workspace it borrows.
+  #[serde(default)]
+  pub borrows: bool,
 }
 
 impl Leftovers {
@@ -103,13 +107,15 @@ impl Leftovers {
       .any(|worktree| matches!(worktree.listing, FolderListing::Unreadable { .. }))
   }
 
-  /// Whether the run's own worktree is still there. Its agent works in it when it is asked again,
-  /// so once it was removed (or its folder deleted) no agent of the run can continue.
+  /// Whether the run's own worktree is still there — or, for a run that borrows workspaces, its branch. Its agent
+  /// works there when it is asked again, so once it was removed (or its folder deleted) no agent of the run can
+  /// continue.
   pub fn keeps_run_worktree(&self) -> bool {
-    self
-      .worktrees
-      .iter()
-      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing && !worktree.forgotten)
+    self.borrows
+      || self
+        .worktrees
+        .iter()
+        .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing && !worktree.forgotten)
   }
 }
 
@@ -193,7 +199,12 @@ pub fn leftovers_of(
       }
       branches.push(LeftBranch { name, merged });
     }
-    all.push(Leftovers { worktrees, branches });
+    // Whether the run borrows workspaces is the store's to say, not git's: the reader that has it fills it in.
+    all.push(Leftovers {
+      worktrees,
+      branches,
+      borrows: false,
+    });
   }
   Ok(all)
 }

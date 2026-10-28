@@ -100,6 +100,9 @@ pub enum PauseReason {
   /// It reached this limit, its agents were stopped and its work committed: "Stopped at limit". It
   /// continues only after the limit is raised; after the daily budget, once the day has room.
   LimitReached(RunLimit),
+  /// The disk the workspaces are on fell below the free space the project keeps (ORC-114): its agents were stopped,
+  /// its work committed and its workspace given back. It goes on by itself once there is room again.
+  LowDisk,
 }
 
 /// Why automatic execution stopped and the run waits for a person to decide how it goes on: allow

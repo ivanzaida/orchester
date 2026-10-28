@@ -411,7 +411,7 @@ async fn frames_round_trip_a_forgotten_worktree() {
       after: RunId::generate(),
       remove_worktrees: Some(Leftovers {
         worktrees: vec![worktree.clone()],
-        branches: Vec::new(),
+        ..Leftovers::default()
       }),
       revision: None,
     },
@@ -454,7 +454,7 @@ async fn frames_round_trip_an_unreadable_forgotten_worktree() {
       after: RunId::generate(),
       remove_worktrees: Some(Leftovers {
         worktrees: vec![worktree],
-        branches: Vec::new(),
+        ..Leftovers::default()
       }),
       revision: None,
     },
