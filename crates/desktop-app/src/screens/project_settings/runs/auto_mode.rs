@@ -1,7 +1,8 @@
-//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch and reviewer, saved as they change, with the
-//! input-locked, person-only question asked in place under the group before a change that widens what the reviewer
-//! approves, and the project's approval rules.
+//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch, *approve everything in each run* and the reviewer,
+//! saved as they change, with the input-locked, person-only question asked in place under the group before a change
+//! that widens what the reviewer approves, and the project's approval rules.
 mod controls;
+mod everything;
 mod feedback;
 mod rules;
 
@@ -24,7 +25,10 @@ use super::super::{
   Status, TabProps,
   work::{self, Change, Save},
 };
-use crate::screens::connections::widen::{WidenConfirm, WidenLook, WidenProps};
+use crate::{
+  mcp::input_gate::InputGate,
+  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
+};
 
 #[derive(Clone)]
 pub struct Props {
@@ -61,6 +65,9 @@ pub struct AutoMode {
   asking: Signal<Asked>,
   attempted: Signal<Asked>,
   failed: Signal<bool>,
+  gate: Option<InputGate>,
+  /// An MCP client's input asked to turn on *approve everything in each run* and was refused.
+  everything_refused: Signal<bool>,
 }
 impl Component for AutoMode {
   type Props = Props;
@@ -78,6 +85,8 @@ impl Component for AutoMode {
       asking: ctx.signal(Asked(None)),
       attempted: ctx.signal(Asked(None)),
       failed: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
+      everything_refused: ctx.signal(false),
     };
     let save = tab.save.clone();
     tab.follow(ctx, &save);

@@ -1,14 +1,19 @@
 //! Auto mode through Orchester's MCP server: `get_auto_mode` reads a project's settings and which
-//! connection and model review; `set_auto_mode` changes *New runs use auto mode* and the reviewer, as
-//! Project settings does; `set_run_auto_mode` switches a run's auto mode, as its Approvals panel does.
-//! Auto mode answers requests in the person's place, so automation changes any of it only while a person
-//! lets automation answer approvals, and a run's switch only while the project has a reviewer.
+//! connection and model review; `set_auto_mode` changes *New runs use auto mode*, *approve everything in each run*
+//! and the reviewer, as Project settings does; `set_run_auto_mode` switches a run's auto mode, as its Approvals panel
+//! does. Auto mode answers requests in the person's place, so automation changes any of it only while a person
+//! lets automation answer approvals, and a run's switch only while the project has a reviewer. Turning on *approve
+//! everything in each run* widens what agents do without a person, so it also needs *Let automation change agent
+//! permissions*; turning it off alone is always taken.
 
 use orchester_core::{
   connection::{AgentConnection, Connection, moves_to_another_account},
   resource::ModelId,
-  run::review::{
-    AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, resolve_reviewer, reviewer_kind,
+  run::{
+    Answerer,
+    review::{
+      AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, resolve_reviewer, reviewer_kind,
+    },
   },
   store::ConnectionStore,
 };
@@ -25,6 +30,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
+  project_settings::approve_everything_person_only,
   tasks::{
     outside::Outside,
     run_approvals::{RunApprovalChange, apply_in, auto_mode_in, reviewer_of, unavailable_key},
@@ -59,6 +65,10 @@ pub struct SetAutoMode {
   pub project: String,
   /// Whether runs created from now on use auto mode; unchanged when left out.
   pub new_runs: Option<bool>,
+  /// *With auto mode on, approve everything in each run*: each run in auto mode answers its worktree commands, reads
+  /// and MCP calls itself, as Approve everything in this run does; unchanged when left out. Turning it on also needs
+  /// Let automation change agent permissions; turning it off is always taken.
+  pub approve_everything: Option<bool>,
   /// The reviewer; unchanged when left out.
   pub reviewer: Option<ReviewerArgument>,
 }
@@ -123,9 +133,21 @@ pub async fn get_auto_mode(services: &Services, args: GetAutoMode) -> Result<Val
 pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    gate(&services)?;
+    // Turning *approve everything in each run* off, and nothing else, narrows what automation answers: always taken.
+    let only_off = args.approve_everything == Some(false) && args.new_runs.is_none() && args.reviewer.is_none();
+    if !only_off {
+      gate(&services)?;
+    }
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
+    let everything = match args.approve_everything {
+      Some(on) => Some(
+        db.approve_everything()?
+          .changed(on, Answerer::Automation, services.workspace.automation_changes_permissions()?)
+          .map_err(|_| ToolError::refused("person_only", vec![approve_everything_person_only()]))?,
+      ),
+      None => None,
+    };
     let connections = db.connections()?;
     let reviewer = match &args.reviewer {
       Some(reviewer) => Some(chosen(&connections, reviewer)?),
@@ -141,11 +163,16 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
         allowed(&services, vec![Message::new("appMcp.widens.reviewerAccount")])?;
       }
     }
-    // Read and written in one transaction: a person's save in the window cannot slip in between.
-    db.update_auto_mode_settings(|current| AutoModeSettings {
-      new_runs: args.new_runs.unwrap_or(current.new_runs),
-      reviewer: reviewer.unwrap_or(current.reviewer),
-    })?;
+    if args.new_runs.is_some() || reviewer.is_some() {
+      // Read and written in one transaction: a person's save in the window cannot slip in between.
+      db.update_auto_mode_settings(|current| AutoModeSettings {
+        new_runs: args.new_runs.unwrap_or(current.new_runs),
+        reviewer: reviewer.unwrap_or(current.reviewer),
+      })?;
+    }
+    if let Some(everything) = everything {
+      db.save_approve_everything(everything)?;
+    }
     services.changes.record(open.project.id(), Outside::AutoMode);
     settings_json(&db)
   })
@@ -208,7 +235,12 @@ fn settings_json(db: &ProjectDb) -> Result<Value, ToolError> {
     }),
     Err(why) => json!({ "unavailable": why }),
   };
-  Ok(json!({ "auto_mode": { "new_runs": new_runs, "reviewer": resolved } }))
+  let everything = db.approve_everything()?;
+  Ok(json!({ "auto_mode": {
+    "new_runs": new_runs,
+    "approve_everything": { "on": everything.is_on(), "turned_on_by": everything.turned_on_by() },
+    "reviewer": resolved,
+  } }))
 }
 
 /// Auto mode has no reviewer, for the reason `why`.

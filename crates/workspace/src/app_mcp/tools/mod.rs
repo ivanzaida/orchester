@@ -256,13 +256,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_auto_mode",
-    description: "A project's auto mode settings: whether new runs use it, and which connection, model and effort review requests (or why auto mode has no reviewer).",
+    description: "A project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it (and who turned that on), and which connection, model and effort review requests (or why auto mode has no reviewer).",
     schema: schema_for_type::<auto_mode::GetAutoMode>,
     read_only: true,
   },
   Spec {
     name: "set_auto_mode",
-    description: "Changes a project's auto mode settings: whether new runs use it, and the reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer). Refused unless a person turned on Let automation answer approvals in the app.",
+    description: "Changes a project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it as Approve everything in this run does, and the reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer). Refused unless a person turned on Let automation answer approvals in the app; turning approve_everything on is also refused as person_only unless a person turned on Let automation change agent permissions. Turning approve_everything off alone is always taken.",
     schema: schema_for_type::<auto_mode::SetAutoMode>,
     read_only: false,
   },

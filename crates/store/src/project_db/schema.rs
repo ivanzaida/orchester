@@ -6,6 +6,7 @@ mod agent_files;
 mod agent_slots;
 mod api_providers;
 mod approval_choices;
+mod approve_everything;
 mod attachments;
 mod auto_mode;
 mod automation_answers;

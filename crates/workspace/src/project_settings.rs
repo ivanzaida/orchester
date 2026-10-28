@@ -14,7 +14,7 @@ use orchester_core::{
   limits::ProjectLimits,
   resource::ModelId,
   run::{
-    ProjectRule, ProjectRuleId,
+    Answerer, ApproveEverything, ProjectRule, ProjectRuleId,
     review::{AutoModeSettings, ReviewerChoice, default_review_model, resolve_reviewer, reviewer_kind},
   },
   store::{ConnectionStore, SettingsStore},
@@ -41,6 +41,8 @@ pub struct Settings {
   pub agent_files: RepositoryAgentFiles,
   pub code_index: CodeIndexSetting,
   pub auto_mode: AutoModeSettings,
+  /// *With auto mode on, approve everything in each run*; off until someone turns it on.
+  pub approve_everything: ApproveEverything,
   pub auto_runs: bool,
   pub connections: Vec<Connection>,
   /// The project's active approval rules, oldest first (*Approve for every run of this project*).
@@ -56,6 +58,7 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     agent_files: db.repository_agent_files()?,
     code_index: db.code_index()?,
     auto_mode: db.auto_mode_settings()?,
+    approve_everything: db.approve_everything()?,
     auto_runs: db.has_auto_mode_runs()?,
     connections: db.connections()?,
     approval_rules: db
@@ -71,6 +74,29 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
 /// runner delivers none of those still pending.
 pub fn save_base_notices_in(root: &Path, on: bool) -> Result<(), StoreError> {
   ProjectDb::open(root)?.save_tells_base_moves(on)
+}
+
+/// Turns auto mode's *approve everything in each run* `on` or off, as `by` asks ([`ApproveEverything::changed`]):
+/// turning it on is refused as a person's while automation asks and `automation_may` (a person lets automation change
+/// agent permissions) is not given. The setting saved.
+pub fn save_approve_everything_in(
+  root: &Path,
+  on: bool,
+  (by, automation_may): (Answerer, bool),
+) -> Result<ApproveEverything, Message> {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let current = db.approve_everything().map_err(|error| messages::store_error(&error))?;
+  let changed = current
+    .changed(on, by, automation_may)
+    .map_err(|_| approve_everything_person_only())?;
+  db.save_approve_everything(changed)
+    .map_err(|error| messages::store_error(&error))?;
+  Ok(changed)
+}
+
+/// Why automation's turning on of *approve everything in each run* was not taken.
+pub fn approve_everything_person_only() -> Message {
+  Message::new("projectSettings.approveEverythingPersonOnly")
 }
 
 /// Revokes the project's approval rule `rule`: the requests it answered ask again from the next one on. A rule

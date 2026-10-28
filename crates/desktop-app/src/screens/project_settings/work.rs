@@ -18,7 +18,7 @@ use lurq::{
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   limits::ProjectLimits,
-  run::{ProjectRuleId, review::AutoModeSettings},
+  run::{Answerer, ProjectRuleId, review::AutoModeSettings},
 };
 use orchester_workspace::{
   background, code_index,
@@ -58,6 +58,9 @@ pub enum Change {
     asked: AutoModeSettings,
     confirmed: bool,
   },
+  /// *With auto mode on, approve everything in each run*, turned on or off by a person or, where the window let it,
+  /// automation.
+  Everything { on: bool, by: Answerer },
   UseAccount(ConnectionId),
   /// Revokes a rule of the project's (*Approve for every run of this project*).
   Revoke(ProjectRuleId),
@@ -80,7 +83,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
       background::run(move || {
         let outside = match &change {
           Change::Limits { .. } => Outside::Limits,
-          Change::Auto { .. } | Change::Revoke(_) => Outside::AutoMode,
+          Change::Auto { .. } | Change::Everything { .. } | Change::Revoke(_) => Outside::AutoMode,
           Change::Index(_) => Outside::CodeIndex,
           Change::Files(_) | Change::BaseNotices(_) => Outside::ProjectSettings,
           Change::UseAccount(_) => Outside::Connections,
@@ -106,6 +109,10 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
           .map_err(|e| messages::store_error(&e))?,
           Change::Auto { base, asked, confirmed } => {
             project_settings::save_auto_mode_in(&root, &base, &asked, confirmed)?
+          }
+          // The window asks automation's input only where the input gate let it take a widening.
+          Change::Everything { on, by } => {
+            project_settings::save_approve_everything_in(&root, on, (by, by == Answerer::Automation)).map(|_| ())?
           }
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
           Change::Revoke(rule) => {
