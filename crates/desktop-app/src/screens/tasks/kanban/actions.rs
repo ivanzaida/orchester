@@ -88,7 +88,8 @@ pub enum Ask {
     free: usize,
     pipeline: Arc<str>,
   },
-  /// The task whose latest run `after` ended runs again, as it is at `revision`.
+  /// The task whose latest run `after` ended, dropped on Todo: it runs again, as it is at `revision`, or only moves to
+  /// Todo, or stays where it was.
   RunAgain {
     task: Subject,
     after: RunId,
@@ -102,6 +103,14 @@ pub enum Ask {
   BulkQueue {
     queued: Vec<Subject>,
     free: usize,
+    changes: Vec<Change>,
+  },
+  /// Moving the selected cards to Todo takes `ended`, tasks whose latest runs ended: they run again (`again`, one
+  /// [`ChangeKind::RunAgain`] each) or only move to Todo, and the rest of the move, `changes`, is made either way; or
+  /// nothing changes.
+  BulkRunAgain {
+    ended: Vec<Subject>,
+    again: Vec<Change>,
     changes: Vec<Change>,
   },
   /// Marking the selected `tasks` as done closes `unmerged` of them, whose work waits to be merged, without merging.
