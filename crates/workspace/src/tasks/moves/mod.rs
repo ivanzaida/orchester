@@ -4,12 +4,11 @@
 //! run ended is offered two moves on Todo (ORC-144, the person's decision of 2026-10-28): run again, or move only
 //! ([`MOVE_ONLY`]), which sets its workflow status to Todo and starts nothing; its card keeps its last run's outcome
 //! (*Run canceled*) until a person runs it again. Only a run Run again may follow ([`TaskRow::runs_again`]) offers
-//! both; after one that succeeded with work to merge, or was merged, the task only moves. A task a run of which has
-//! not ended (the store's active run,
-//! [`TaskRow::run_not_ended`]) moves only to Done or Canceled, which close it after its run is stopped
-//! ([`super::close`]); every other column refuses it. In progress and In review only change the workflow status: a
-//! drop never starts a run. Done and Canceled close the task whatever its run did. What a drop does is decided here;
-//! [`write`] makes the changes that need no runner.
+//! both; after one that succeeded with work to merge, was merged, or cannot be read, the task only moves. A task a run
+//! of which has not ended (the store's active run, [`TaskRow::run_not_ended`]) moves only to Done or Canceled, which
+//! close it after its run is stopped ([`super::close`]); every other column refuses it. In progress and In review only
+//! change the workflow status: a drop never starts a run. Done and Canceled close the task whatever its run did. What
+//! a drop does is decided here; [`write`] makes the changes that need no runner.
 
 pub mod write;
 

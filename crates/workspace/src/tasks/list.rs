@@ -8,7 +8,9 @@ use orchester_core::{
   id::{ModuleId, ResourceId, TaskId},
   integration::RunMerge,
   resource::{Deliverable, VersionNumber, WithoutCommits},
-  run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase, run_delivers},
+  run::{
+    PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase, can_run_again_after, run_delivers,
+  },
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
@@ -111,6 +113,9 @@ pub struct LatestRun {
   pub merged_into: Option<Arc<str>>,
   /// It passed every step and committed nothing, so there is nothing to merge ([`super::delivery`]).
   pub nothing_to_merge: bool,
+  /// It ended so that its task can run again after it, by core's `can_run_again_after`: it failed or was cancelled, or
+  /// it was interrupted and a person removed its worktree (ORC-63) ([`super::data`] reads the removal).
+  pub ended_for_run_again: bool,
   /// The question it waits for an answer to, if it does; the first that can be read when several do.
   pub question: Option<AwaitedQuestion>,
   /// Each of its steps that waits on a plan or for an answer, plans first, each in pipeline order.
@@ -155,6 +160,7 @@ impl LatestRun {
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
       nothing_to_merge: false,
+      ended_for_run_again: can_run_again_after(run, false),
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
@@ -195,14 +201,13 @@ impl LatestRun {
   }
 
   /// Whether Run again may follow the run, as the runner's check of core's `run_again` reads it: it failed or was
-  /// cancelled, or it passed every step and committed nothing although its pipeline expects changes (ORC-93). An
-  /// interrupted run has not ended on the board, so its lost worktree is not asked about here.
+  /// cancelled, or was interrupted and lost its worktree ([`Self::ended_for_run_again`]), or it passed every step and
+  /// committed nothing although its pipeline expects changes (ORC-93).
   pub fn runs_again(&self) -> bool {
-    match self.phase {
-      TaskPhase::Failed | TaskPhase::Cancelled => true,
-      TaskPhase::Succeeded => self.nothing_to_merge && self.deliverable.without_commits() == WithoutCommits::Flagged,
-      _ => false,
-    }
+    self.ended_for_run_again
+      || (self.phase == TaskPhase::Succeeded
+        && self.nothing_to_merge
+        && self.deliverable.without_commits() == WithoutCommits::Flagged)
   }
 
   /// What the run means for the task now: "Paused at 4b92ad0", "Last checkpoint 1b8e5c2".
@@ -418,9 +423,10 @@ pub struct TaskRow {
   pub status: TaskStatus,
   /// It has a run, readable or not: it no longer goes back to the drafts.
   pub has_run: bool,
-  /// Its latest run ended so that Run again may follow it, as core's `run_again` decides: it failed or was
-  /// cancelled, or it passed every step and committed nothing although its pipeline expects changes (ORC-93). A run
-  /// that succeeded with work to merge, or was merged, is never run again.
+  /// Its latest run ended so that Run again may follow it, as core's `run_again` decides ([`LatestRun::runs_again`]):
+  /// it failed, was cancelled, or was interrupted and lost its worktree, or it passed every step and committed nothing
+  /// although its pipeline expects changes (ORC-93). A run that succeeded with work to merge, was merged, or cannot be
+  /// read is never run again from the board.
   pub runs_again: bool,
   /// A run of it has not ended, as the store decides it ([`ProjectTasks::active`]): only closing it, after its run is
   /// stopped, changes its workflow status by hand on the board.

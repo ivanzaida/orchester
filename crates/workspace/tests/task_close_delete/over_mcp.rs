@@ -169,3 +169,29 @@ fn task_whose_run_succeeded_with_work_to_merge_only_moves_to_todo_since_it_never
     Decision::Move(moves::MOVE_ONLY)
   );
 }
+
+#[test]
+fn task_whose_interrupted_run_lost_its_worktree_is_asked_to_run_again_on_todo() {
+  let mut repo = Repo::new();
+  let interrupted = repo.task("Sign in");
+  repo.interrupted_without_worktree(&interrupted);
+  let kept = repo.task("Sign out");
+  let mut run = repo.working(&kept, false);
+  let events = run
+    .interrupt(orchester_core::run::InterruptCause::Crashed, super::at(9))
+    .expect("interrupt");
+  repo.db.append_events(&run, &events).expect("events");
+
+  // It never continues, so it no longer holds its task, and core's run_again follows it.
+  let lost = row(&repo, interrupted.id());
+  assert!(!lost.run_not_ended, "it no longer holds its task");
+  assert!(lost.runs_again, "core's can_run_again_after takes it");
+  assert_eq!(
+    moves::decide(&lost, WorkflowStatus::Todo),
+    Decision::Move(Move::RunAgain)
+  );
+  // With its worktree it continues there: not ended, the board refuses it on Todo.
+  let continues = row(&repo, kept.id());
+  assert!(continues.run_not_ended);
+  assert!(!continues.runs_again);
+}

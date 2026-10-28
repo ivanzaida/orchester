@@ -29,10 +29,10 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, RunStatus, StepFailure},
+  run::{BranchName, InterruptCause, NewRun, PublishedVersions, Run, RunSnapshot, RunStatus, StepFailure},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::MemberRole,
-  store::{ConversationStore, ResourceStore, RunStore, TaskStore},
+  store::{ConversationStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
   task::{
     Task, TaskDetails, TaskLimits,
     organization::{BlockingTask, ChangeActor, DependencyGate, Priority, TaskOrganization, WorkflowStatus},
@@ -243,6 +243,20 @@ impl Repo {
     let events = run.complete_step(execution, at(9)).expect("pass");
     self.db.append_events(&run, &events).expect("events");
     assert_eq!(run.status(), &RunStatus::Succeeded);
+    run
+  }
+
+  /// [`Self::working`], interrupted by a crash, whose worktree a person then removed: it never continues (ORC-63).
+  fn interrupted_without_worktree(&mut self, task: &Task) -> Run {
+    let mut run = self.working(task, false);
+    let events = run.interrupt(InterruptCause::Crashed, at(9)).expect("interrupt");
+    self.db.append_events(&run, &events).expect("events");
+    let worktree = self.worktree(&run);
+    git(
+      self.root(),
+      &["worktree", "remove", "--force", worktree.to_str().expect("path")],
+    );
+    self.db.save_worktree_removal(run.id(), at(10)).expect("removal");
     run
   }
 
