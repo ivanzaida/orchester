@@ -562,7 +562,7 @@ that is not measured.
 | Agents | bot · *Agents* `2/4` | agent slots in use / configured (Project settings › Limits › *Agents working at once*, as the runner reports it) | Tasks › Queue (`Z22wg`) |
 | Queued | clock · *Queued* `2` | queued task runs in the project | Tasks › Queue (`Z22wg`) |
 | Needs you | message · *Needs you* `2` | runs waiting for the user: plan approvals, questions, reviews — exactly the count of the Overview metric *Need your input* and the Overview *Needs you* heading (decided 2026-09-27). The plain number; `0` in `$subtle`, never `00` or a dash | Overview › Needs you panel |
-| Tokens | gauge · *Tokens today* `3.8M / 20M` | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | The project's [Usage dashboard](#usage-dashboard) (built 2026-10-06, ORC-72); the tooltip names the exact counts |
+| Tokens | moved to the sidebar's usage card in ORC-108 (`Hub pages` `ZRBS5`), so it shows once; see [Sidebar](#sidebar) | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | — |
 | Plan limits (`XCXvw`, proposed 2026-09-29, hidden until approved) | hourglass · *Codex* `65%` · *Claude* `42%` | the `account/rateLimits/updated` / `rate_limit_event` data each agent CLI reports with its turns, for the account it is signed in to (see [Plan limits in the status bar](#status-bar)) | Non-interactive (pointer only, no focus); the hint lists each window, its reset, and the turn the numbers came from |
 | MCP (`JaMJ7`, added 2026-09-29) | radio · *MCP* `127.0.0.1:52341` | the port the embedded MCP server bound at start (every build; loopback, a free port the OS picks) | Non-interactive (pointer only, no focus); the hint names the endpoint `http://127.0.0.1:<port>/mcp` and says clients read the access token from this process's discovery file (`lurq/mcp/<pid>.json` in the local app data folder). The token is never shown, copied or logged. Shown with and without a project |
 | Version | `v0.1.0` | application version | Non-interactive; tooltip with build info |
@@ -1972,6 +1972,33 @@ Work is counted in tasks, as the burndown counts it; nothing is money. `get_deli
 - *New module* (`/modules/new`) and *Edit module* (`/modules/<id>/edit`) are pages in the task form's style: the name as the title, the description, chips for State (Edit only), Start date and Target date, and Cancel with *Create module* or *Save changes* in the action bar. A refused save says why under the chips (another module's name, a change made meanwhile) and keeps what was typed.
 - Dates are picked, never typed, with the UI kit's date picker (`ui::date_picker`, 14): a month with ‹ ›, Monday-first weekdays, six weeks whatever the month, Today and Clear (both dates are optional); the chosen day filled, today outlined, the other end of the range tinted; days of the months around muted; on the Target date's calendar the days before the Start date are off, on the Start date's those after the Target date (core checks the order anyway). Arrows move a day or a week, PageUp and PageDown a month, Enter picks, Esc closes; the day the keyboard is on shows the focus ring. Month and weekday names are the app's words.
 - Loading and failures keep their words and Try again in the new layout; skeletons (05, 06) are ORC-110's and the failure cards (10–13) ORC-109's. MCP `navigate` takes `modules` with `tab` (open, closed), or `module` (new, or an id with `tab` summary or burndown, or `view` edit).
+
+## Sidebar
+
+Since ORC-108 (`Sidebar · redesign` `WWXmX` in the new `orchester.pen`: After `Da6IB`, Configure folded `DE34j`, Switcher
+menu `NEHAB`, Where each entry went `j3WMs9`, the window `Yx5w8`, Hub pages `ZRBS5`, Jump to `aDYAX`), the sidebar
+(`Sidebar v2` `Zn8dR`, `crates/desktop-app/src/shell/sidebar/`) holds, top to bottom: the project switcher; *Jump to…*
+with its keys; six places for daily work — Overview, Tasks (its count), Modules, Orchestrator, Review (the runs in the
+merge queue, in `warning`) and Files; the **Configure** section with Pipelines and Agents, whose head folds it per
+project (*Configure · 2* while folded); **Running**, only while runs go, with how many; and at the bottom the usage
+card, *Tokens today* with its meter against the daily budget, which opens Usage, and a ⚙ that opens Settings. Palette,
+width (240) and the switcher stay.
+
+Where the old entries went: the Merge queue and the Pull requests are the two tabs of the **Review** hub; Instructions,
+Skills, Tools and Memory are tabs of the [Agents hub](#agents-hub); Connections and Secrets are tabs of Project
+settings; Usage opens from the usage card; All projects, Project settings (Ctrl+, / Cmd+,) and Settings are in the
+switcher's menu (All projects and Settings also in the app menu). Every old route still reads and selects the place
+that holds it; a hub's tab keeps its own route, so links, history, Back and Forward and Jump to land on it. A module's
+page, its tabs and New and Edit module keep Modules selected. Files stays a single page.
+
+The Review hub (`Review` `QzjsN`) is *Review* over its tabs, Merge queue and Pull requests with their counts (the runs
+in the queue, the open pull requests), and the open tab's page under them. A pull request's own page keeps its page.
+
+**Jump to** (`aDYAX`, `crates/desktop-app/src/shell/jump/`) opens over the content panel from the row under the
+switcher or Ctrl+K anywhere (Cmd+K on macOS). It finds the tab's project's tasks by key or title, its modules by name
+with their Burndown tab, every page and hub tab (the project's and the app's), and actions (New task, New module, New
+pipeline, New agent profile, New tab, Add project). ↑ ↓ move, Enter opens, Ctrl+Enter (Cmd+Enter) opens in a new tab,
+Esc or a press outside closes it. Files' *Go to file* keeps Ctrl+P.
 
 ## Agents hub
 

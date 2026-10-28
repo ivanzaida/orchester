@@ -28,10 +28,8 @@ use orchester_app::{
 };
 use orchester_core::{
   id::{InvocationId, ProjectId, RunId, StepExecutionId, TaskId},
-  limits::ProjectLimits,
   run::{PendingToolApproval, RunNumber, SimilarUnavailable},
   time::Timestamp,
-  tokens::TokensUsed,
 };
 use orchester_ipc::WorkSummary;
 use orchester_workspace::{
@@ -41,7 +39,6 @@ use orchester_workspace::{
   tasks::{
     approvals::{AlwaysBlocked, ApprovalChoices, ShownApproval},
     data::{AutoApprovingRun, ProjectTasks},
-    usage::ProjectUsage,
   },
 };
 use parking_lot::Mutex;
@@ -171,7 +168,7 @@ fn runner(state: RunnerState) -> RunnerFacts {
   }
 }
 
-/// Kontur with `runner`, its tasks read as `tasks` and today's usage read.
+/// Kontur with `runner` and its tasks read as `tasks`.
 fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
   ProjectFacts {
     id: project_id(),
@@ -179,10 +176,6 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
     repo_root: PathBuf::from(ROOT),
     runner,
     tasks: Some(tasks),
-    usage: Some(ProjectUsage {
-      limits: ProjectLimits::default(),
-      today: TokensUsed::new(3_800_000),
-    }),
     read_failure: None,
     undecided_runs: 0,
     limits: Vec::new(),

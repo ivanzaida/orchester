@@ -112,9 +112,9 @@ fn the_sidebar_on_settings_shows_the_project_the_tab_was_in_last() {
   let mut window = Window::open();
   let navigation = window.navigation();
   navigation.go(Route::Settings);
-  window.until("Settings", |window| window.texts("nav-settings").is_some());
+  window.until("Settings", |window| window.texts("sidebar-jump").is_some());
   assert!(
-    window.texts("nav-overview").is_none(),
+    window.texts("nav-overview").is_none() && window.texts("sidebar-usage-card").is_none(),
     "a tab never in a project shows the project-less sidebar"
   );
   navigation.go(overview());
@@ -122,11 +122,8 @@ fn the_sidebar_on_settings_shows_the_project_the_tab_was_in_last() {
   navigation.go(Route::Settings);
   window.pass();
   assert_eq!(now(&window).nav_screen(), Screen::Settings, "Settings is selected");
-  for screen in ["overview", "tasks", "tools", "project_settings"] {
-    assert!(
-      window.texts(&format!("nav-{screen}")).is_some(),
-      "nav-{screen} stays on Settings"
-    );
+  for item in ["nav-overview", "nav-tasks", "nav-agents", "sidebar-usage-card"] {
+    assert!(window.texts(item).is_some(), "{item} stays on Settings");
   }
   window.press("settings-tab-orchester");
   assert!(matches!(now(&window), Route::Orchester(_)));

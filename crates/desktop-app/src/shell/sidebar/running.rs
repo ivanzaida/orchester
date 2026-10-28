@@ -1,9 +1,9 @@
-//! The sidebar's *Running* list (`Section · Running` `o0tXx` and `Run item` `mONDf` in `q9mf0k`): each
-//! task whose latest run is under way, as its key and the step its agent works on, and how long the agent
-//! has worked on the step. A run that waits for the person shows an amber hand (`C2E5Po`); while no runner
-//! looks after the project's agents, a run recorded as running is stopped, with no time (`KGpMB`). The
-//! section shows only while a run is under way; its list icon opens the Overview's Running tab, a row the
-//! task's conversation.
+//! The sidebar's *Running* list (`Running head` `veG7t` and `Running row` `MDsM7` in `Zn8dR`): its head says
+//! how many runs are under way, then each task whose latest run is under way, as its key and the step its agent
+//! works on, and how long the agent has worked on the step. A run that waits for the person shows an amber hand
+//! (`C2E5Po`); while no runner looks after the project's agents, a run recorded as running is stopped, with no time
+//! (`KGpMB`). The section shows only while a run is under way (`DE34j` has none); a row opens the task's
+//! conversation.
 
 use std::{
   path::{Path, PathBuf},
@@ -36,10 +36,10 @@ use orchester_workspace::{
   },
 };
 
-use super::section_label;
+use super::{section_gap, section_head};
 use crate::{
   navigation::Navigation,
-  routes::{OverviewTab, ProjectPage, Route, TaskView},
+  routes::{ProjectPage, Route, TaskView},
   shell::clock::{Clock, clock},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -193,32 +193,30 @@ fn read_rows(repo_root: &Path, runs: &[UnderWay]) -> Result<Vec<RunningRow>, Sto
     .collect()
 }
 
-/// The section and its rows, with the element id `running`.
+/// The section's gap, its head with how many runs are under way, and its rows, with the element id `running`.
 pub fn running_list(ctx: &mut Ctx, project: ProjectId, rows: &[RunningRow]) -> Element {
   let navigation = Navigation::of(ctx);
-  let header = section_label(&ctx.t("shell.running.title")).child(
-    opening(navigation.to(Route::Project(project, ProjectPage::Overview(OverviewTab::Running))))
-      .id("running-all")
-      .describe("a11y_name", ctx.t("shell.running.all"))
-      .rounded(RadiusSize::Sm)
-      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(Icon::List, IconSize::Sm, PaletteColor::TextMuted)),
+  let header = section_head(&ctx.t("shell.running.title"), ExtraSpacing::Snug.role()).child(
+    Text::new(&rows.len().to_string())
+      .id("running-count")
+      .variant(TypographyStyle::Caption)
+      .nowrap(),
   );
-  let list = rows.iter().fold(
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Tight.role()),
-    |list, row| list.child(running_row(ctx, &navigation, project, row)),
-  );
-  Column::new()
-    .id("running")
-    .width(Dimension::Pct(100.0))
-    .child(header)
-    .child(list)
+  rows
+    .iter()
+    .fold(
+      Column::new()
+        .id("running")
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(section_gap())
+        .child(header),
+      |list, row| list.child(running_row(ctx, &navigation, project, row)),
+    )
     .into()
 }
 
-/// A row (`Run item` `mONDf`): its state's icon, *KON-12 · Implement* and *11m*.
+/// A row (`Running row` `MDsM7`): its state's icon, *KON-12 · Implement* and *11m*.
 fn running_row(ctx: &mut Ctx, navigation: &Navigation, project: ProjectId, row: &RunningRow) -> Element {
   let (glyph, color, state) = match row.state {
     RowState::Working => (Icon::LoaderCircle, PaletteColor::TextSecondary, "working"),

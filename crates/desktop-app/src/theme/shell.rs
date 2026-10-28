@@ -22,15 +22,21 @@ pub enum ShellText {
   FolderTitle,
   /// 11.5 `text_secondary`, 1.45: what the switcher explains under it (`JHqGF`).
   FolderBody,
+  /// 12.5 `text_primary`: a result of *Jump to* (`Main` `KeDEy` in `aDYAX`).
+  JumpResult,
+  /// 11.5 `text_muted`: how many results *Jump to* shows (`Count` `qiz3y` in `aDYAX`).
+  JumpCount,
 }
 
 impl ShellText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 7] = [
     Self::SwitcherInitial,
     Self::SwitcherPath,
     Self::MenuSection,
     Self::FolderTitle,
     Self::FolderBody,
+    Self::JumpResult,
+    Self::JumpCount,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -44,6 +50,8 @@ impl ShellText {
       Self::MenuSection => "shell_menu_section",
       Self::FolderTitle => "shell_folder_title",
       Self::FolderBody => "shell_folder_body",
+      Self::JumpResult => "shell_jump_result",
+      Self::JumpCount => "shell_jump_count",
     }
   }
 
@@ -54,6 +62,8 @@ impl ShellText {
       Self::MenuSection => style(10.5, FontWeight::Medium, 1.35, 0.6, palette.text_muted),
       Self::FolderTitle => style(12.5, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
       Self::FolderBody => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
+      Self::JumpResult => style(12.5, FontWeight::Normal, 1.35, 0.0, palette.text_primary),
+      Self::JumpCount => style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted),
     }
   }
 }
