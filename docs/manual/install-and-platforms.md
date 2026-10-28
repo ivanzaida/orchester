@@ -59,7 +59,7 @@ them, and an older build then refuses them ("Orchester can't open its data").
 - **An agent CLI** — Claude Code (`claude`) and/or Codex (`codex`), installed and signed in.
 - **An Orchester Cloud account** — the app is locked until this computer signs in once.
 - Optional: **`gh`** (GitHub CLI) for GitHub detection, pull requests and the Pull requests page; **ripgrep** for the
-  code index (installable from Project settings › Code index).
+  code index (installable from Project settings › Context › Code index).
 
 ## 3. Data locations
 
@@ -112,27 +112,29 @@ The design describes more than this version implements. The following are shown 
 
 **Tasks and runs**
 
-- Selecting tasks, bulk actions, *Run selected* and scheduling review; *Create multiple*.
-- Status, priority and tag pickers and filters; *Manage tags*; Blocked / blocked-by fields in the form (all settable
-  over MCP).
+- Selecting rows in the Tasks **list** (selection and bulk actions exist on the board only); *Run selected* and the
+  scheduling review; *Create multiple*.
+- A workflow-status picker on the task page or in the form (the board moves tasks between statuses); creating tags in
+  the window and *Manage tags* (existing tags are toggled on the board; new ones only over MCP); Blocked / blocked-by
+  fields (over MCP only).
 - The run's *Approvals* section (changing a run's permissions or auto mode in the window — over MCP:
   `set_run_auto_mode`).
 - *Always allow…* on approval cards; a per-category approval policy.
-- Artifacts (the tab is always empty); *Ask agent* on the Ready card (use *Send follow-up*); the Conversation's step
-  rail, filter and search.
-- Deleting a module.
+- Run artifacts other than step reports (the Summary's *Output* lists the reports); *Ask agent* on the Ready card (use
+  *Send follow-up*); the Conversation's step rail, filter and search.
+- Deleting a module (modules can only be closed).
 
 **Configuration**
 
-- Presets; pipeline triggers (schedule, GitHub event); some pipeline settings sections; the Deliver step's *Pull
-  request* mode.
+- Presets; pipeline triggers (schedule, GitHub event — runs start only from tasks); the Deliver step's *Pull request*
+  mode.
 - HTTP, database and MCP-import tool kinds; tool access rules, inputs/outputs and usage log.
 - Native API connections (Anthropic API, OpenAI API); adding or editing a GitHub connection; choosing a CLI program
   other than the PATH copy; removing an agent connection.
 - MCP server tool discovery and OAuth.
 - Importing secrets; instruction variable fallbacks.
-- Renaming a project, changing its key or moving its folder; Project settings › Memory (use Memory › Settings).
-- Project setup steps 2 and 3; Orchestrator *Manage context* and the *Actions / Context / Conversations* settings.
+- Renaming a project, changing its key or moving its folder.
+- Project setup steps 2 and 3; Orchestrator settings' *Actions / Context / Conversations* tabs.
 
 **Shell, pull requests, cloud**
 
@@ -140,5 +142,5 @@ The design describes more than this version implements. The following are shown 
   Ctrl+PageUp/PageDown.
 - Pull request *Agent checks*, *Overview*, *Viewed* and linking an unlinked PR to a task.
 - Notifications for delivery states.
-- The Orchester Cloud *Devices* tab; member and role editing (done in the server admin); *Take*/*Release* controls for
-  shared tasks.
+- Listing your other Orchester Cloud devices (*Other devices* says "Not in this app yet"); member and role editing
+  (done in the server admin); *Take*/*Release* controls for shared tasks.

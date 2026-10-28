@@ -50,7 +50,8 @@ At the top, the **project switcher**: recent projects (with *Open in new tab*), 
 *Add project*. Then the project's screens:
 
 - **Overview, Orchestrator, Tasks, Modules, Merge queue, Pull requests, Usage, Files**
-- *Configure*: **Pipelines, Agents, Instructions, Memory, Skills, Tools, Secrets, Connections**
+- *Configure*: **Pipelines, Agents, Instructions, Memory, Skills, Tools** (Connections and Secrets are tabs of
+  Project settings)
 - A **Running** section while runs work: "<key> · <step>" with the step's live agent time; a hand when the run waits
   for you.
 - At the bottom: **All projects**, **Settings**, **Project settings**.
@@ -83,7 +84,7 @@ Conversation; memory → Memory › Waiting for approval; merge → Merge queue)
 The installed app shows OS notifications (Windows toasts, macOS UserNotifications) in three groups — *Needs you*,
 *Stopped*, *Finished and info* — only while the window isn't focused or the place isn't on screen. Events of a group
 within 30 s coalesce; a click opens the exact place. The taskbar overlay / Dock badge shows the Needs-you count.
-Configure them in Settings › Automation › Notifications.
+Configure them in Settings › Notifications.
 
 ### Closing the app
 
@@ -161,28 +162,35 @@ Over MCP: `add_project`.
 
 The order that works: **connection → agent profiles → pipeline → task**.
 
-### Connections (`/project/<id>/connections`)
+### Connections (Project settings › Connections)
 
-Tabs: All, Agent providers, GitHub, MCP servers. Selecting a row opens its inspector (status, *Test connection*,
-*Refresh models*, *Edit connection*, *Check again*).
+`/project/<id>/connections` — a tab of Project settings. Groups **Agent providers** (with **Add provider**),
+**GitHub**, and **MCP servers** (with **Add MCP server**). A row opens the connection's own page. An empty project
+offers *Connect an agent* rows for each CLI found on the PATH and *A CLI on an API provider*.
 
-**Add an agent CLI connection** (*Add connection › Agent provider*):
+**Add an agent CLI connection** (**Add provider** → *Add an agent provider*):
 
 1. Install the CLI and sign in yourself (`claude auth login`, `codex login`). Optionally add more **accounts** in
    Settings › Accounts.
-2. *Kind*: **Codex CLI** or **Claude Code CLI** (native API kinds are locked in this version).
-3. *Name*; *Program* (the copy found on the PATH); the check runs automatically ("<program> <version> · signed in").
+2. *Kind*: **Codex CLI** or **Claude Code CLI** (the native Anthropic API / OpenAI API kinds are locked in this
+   version).
+3. *Name*; *Program* (the copy found on the PATH, checked at once — "<program> <version> · signed in").
 4. *Account*: Default or one of yours.
-5. *Runs on*: **Its own sign-in** or **An API provider** (base URL, API key secret, models — person-only).
+5. *Runs on*: **Its own sign-in** or **An API provider** (base URL, an API key from a project secret or *New secret…*,
+   models as chips — person-only).
 6. **Save connection**.
 
-**Add an MCP server** (*Add connection › MCP server*): a name, then a local *program* (with arguments, working folder
-and environment — `${secret:NAME@environment}` for secrets) or a remote *URL* (with authorization), and the *Tools that
-run without asking*. Turning a server on and widening it is person-only. A server reaches only agents of profiles that
-choose it.
+An agent CLI connection's page has **Check again**, **…** (*Rename*, *Edit connection*), and the groups *Runs on*,
+*Models it lists* (*Refresh models*) and *Used by*.
 
-**GitHub**: detected at setup; the inspector offers *Check again* and *Use this account*. Adding a GitHub connection in
-the window is not built yet.
+**Add an MCP server** (**Add MCP server** → *Add an MCP server*): a name, then *A program here* (program, arguments,
+folder, variables — `${secret:NAME@environment}` for secrets) or *A remote server (HTTP)* (endpoint, authorization
+secret), and the tools that *Run without asking* → **Add server**. A server's page has an on/off switch, *Edit*, **…**
+(*Remove*), and the groups *Server*, *Sends*, its tools and *Used by*. Turning a server on and widening it is
+person-only. A server reaches only agents of profiles that choose it.
+
+**GitHub**: detected at setup; its page offers *Check again* and *Use this account*. Adding or editing a GitHub
+connection in the window is not built yet.
 
 Over MCP: `add_cli_connection`, `set_api_provider`, `check_connection`, `list_models`, `set_connection_account`,
 `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`, `remove_mcp_server`.
@@ -199,19 +207,35 @@ Over MCP: `add_cli_connection`, `set_api_provider`, `check_connection`, `list_mo
 
 ### Pipelines (`/project/<id>/pipelines`)
 
-1. **New pipeline**: *Name* and *Start from* — **Starter · Feature delivery**, **Copy a pipeline** or **Empty
-   pipeline** → *Create draft v1*.
-2. In the editor (a graph of steps): **Add step**, then in the step inspector choose the agent profile or command
-   tool, *Runs after*, *Wait for your approval*, *When changes are requested* (failure route, *Maximum retries*), *Step
-   budget*, *Repository access*, *Model for this step*, step permissions, *Merge the base branch when it moves*, and
-   the step's instructions.
-3. Optional: the **Deliver step** (mode, merge method, integrator profile, re-check) and **Pipeline settings** (*What a
-   run delivers*, sources).
-4. **Save draft**, then **Publish vN**. The publish review shows *Published now* against *After publishing*; a weaker
-   version asks for your approval. A pipeline whose profile only has a draft can't publish. *Version history* compares
-   and restores versions.
+The list groups pipelines as **Published** and **Draft only**; each row shows its steps ("Research → Plan → …"), its
+version state and the tasks using it, and a **…** menu (*Open*, *Duplicate*, **Make default** — the pipeline New task
+starts with, marked *Default*). Header: **Import from project**, **New pipeline**.
 
-### Instructions, Skills, Tools, Secrets
+1. **New pipeline** (a page): *Name*, *Slug*, *Description* and *Start from* — **Starter · Feature delivery**, **Copy
+   a pipeline** or **Empty pipeline** → **Create draft v1**.
+2. The pipeline page has tabs **Steps · Settings · Versions** and, in the header, **Save draft**, **Publish vN** (or
+   *Version history* with no draft) and *Run* (always unavailable: "Create a task to run this pipeline.").
+3. **Steps** — a **vertical flow**: *On task start*, the step cards in dependency order, steps on the same level in a
+   *Run in parallel* bracket, the Deliver card last, and **Add step**. Selecting a step opens a column beside the
+   flow:
+   - **Step** — *Executor* (a published profile or a command tool), *Model for this step*, *Instructions* (a page of
+     its own);
+   - **Flow** — *Runs after*, *When changes are requested* (failure route), *Maximum retries*, *Step budget*, *When the
+     step fails* ("Restart once, then ask");
+   - **Gate and access** — *Wait for your approval*, *Repository access* (Read-only / Can write), *Merge the base branch
+     when it moves*, *Sources* and *Permissions* (pages that can only narrow the profile: a subset of its commands,
+     network off, ask when a tool needs approval).
+   Rename a step in place; *Duplicate step*, *Remove step*.
+4. The **Deliver step** (from its card): *Mode* (*Approve to merge*, *Auto-merge*; *Pull request* coming later),
+   *Merge method* (*Merge commit* / *Squash*), *Resolve conflicts with*, *Re-run Check on the merged result*.
+5. **Settings** — *General* (name, slug, description), *Runs* (starts on task start; when a step fails), *Sources for
+   every step*, *Delivery* (*What a run delivers*), *Deliver step*.
+6. **Save draft**, then **Publish vN**. The publish review shows *Published now* against *After publishing*; a weaker
+   version asks for your approval. A pipeline whose profile only has a draft can't publish.
+7. **Versions** — every published version; open one read-only, *Compare* it with the draft or the published version,
+   or *Restore vN as draft*.
+
+### Instructions, Skills, Tools
 
 - **Instructions** — tabs Project, Roles, Pipelines, Steps; each rule has a target (all agents, roles, profiles),
   *Inject at* (start, resume, both), a Markdown text with `{{variables}}` (*Variables* panel), *Preview* and *Prompt*
@@ -221,8 +245,17 @@ Over MCP: `add_cli_connection`, `set_api_provider`, `check_connection`, `list_mo
 - **Tools** — **Add tool › Command**: program, arguments (one per line), timeout, exit codes that pass, output kept,
   environment variables; Save draft and Publish. HTTP, database, MCP-import and *Create pull request* tool kinds are
   locked.
-- **Secrets** — **Add secret** (name, environment, kind, value — kept in the OS keychain), **Replace value**,
-  **Archive secret** (removes the value). The *Usage* tab shows what uses each secret.
+
+### Secrets (Project settings › Secrets)
+
+`/project/<id>/secrets` — a tab of Project settings. Segments **All · Development · Staging · Production**; secrets are
+grouped by environment, each row with its name, what uses it and a masked value with the date it was set.
+
+- **Add secret** → *New secret*: name, type, value, environment → **Save secret**. The value goes to the OS keychain and
+  is never shown again.
+- A secret's page: **Replace value** (asked in place), **…** (*Copy name*, *Archive* — removes the value), and the
+  groups *Details* and *Used by*.
+- *Import from project* explains that secrets are not imported: a value stays in its own project.
 
 ### Memory (`/project/<id>/memory`)
 
@@ -239,41 +272,129 @@ Connections and secrets are never copied; importing never grants access.
 
 ### Project settings
 
-General (GitHub, repository agent files, base-moved notices, auto mode, base branch), Limits, Environment, Sources,
-Code index, Sharing — see [settings.md](settings.md#2-project-settings).
+**General** (project, GitHub, base branch, base-moved notices, repository agent files), **Runs** (auto mode,
+approved-for-every-run rules, story-point estimates, limits, environment), **Context** (sources, code index),
+**Connections**, **Secrets**, **Sharing** — see [settings.md](settings.md#2-project-settings-projectidsettings).
 
 ## 5. Tasks
 
-### Tasks list (`/project/<id>/tasks`)
+### Tasks list and board (`/project/<id>/tasks`)
 
-Tabs **All · Needs you · Backlog · Todo · In progress · In review · Done** (Canceled tasks appear under All). Search
-(title, key, brief), *Pipeline* and *Module* filters, *Sort* (manual order, newest, title, workflow status,
-priority — sorting never changes the run queue). Columns: ID, task and tags, pipeline, priority, workflow/run state,
-dependency/readiness ("Ready to queue", "Needs a brief", "Agent at work", "Waiting for you", "Raise the limit to
-continue", "Merged into main", …). A row opens the task on *Details*.
+**Header** (one row): **Tasks**, **Search tasks** (press `/` to focus; searches titles, keys and briefs), a **List |
+Board** switch, **Filter**, **Display**, **…** (*More actions*: *Hold new starts* / *Release new starts*; *Create
+multiple*, locked as planned) and **New task**. List or Board is remembered per project.
 
-Header actions: **Hold new starts** / *Release*, **New task**. Each row's *More actions*: Mark as done, Cancel task,
-Reopen task, Delete task….
+**Views**, each with a count:
+
+| View | Holds |
+|---|---|
+| **Needs you** | Tasks whose run waits for you |
+| **Active** (default) | Todo, In progress and In review, plus anything that waits for you |
+| **Backlog** | Backlog tasks that don't wait for you |
+| **Done** | Done and Canceled tasks |
+| **All** | Every task |
+
+While new starts are held, a *New starts on hold* chip with **Release** sits at the end of the views.
+
+**Filter** is a menu with its own search and checkbox groups **Pipeline** (with *No pipeline*), **Priority**,
+**Module** (with *No module*) and **Tag**; chosen values show as removable chips with **Clear**. There is no status
+filter — the views do that job. **Display** chooses the sort (*Manual order, Newest first, Title, Workflow status,
+Priority* — sorting never changes the run queue) and, on the board, its layout.
+
+#### List
+
+One-line rows: status icon, key, title with its first two tags, **one state phrase** saying what happens next
+("Approve `cargo add rand`", "Answer a question", "Review plan v1", "Stopped at its token limit", "Ready to merge",
+"02 Plan", "Ready to queue", "Needs a brief", "Merged into main"…), the pipeline, a priority icon and the age.
+*Active* is grouped by what happens next — **Needs you, Running, Queued, Ready to start, Stopped, Finished**; *All*
+is grouped by workflow status; group headers fold. A row opens the task on its **Summary**. On hover the row shows the
+waiting task's one action (*Review, Answer, Review plan, Decide, Raise the limit, Review & merge…*) and a **…** menu
+(*Mark as done, Cancel task, Reopen task, Delete task…*). The list has no selection.
+
+#### Board
+
+A Kanban board. **Columns** by status (Backlog, Todo, In progress, In review, Done, and Canceled when shown), or —
+from *Display options* — by priority, module or pipeline; **Rows** (swimlanes) by module or priority. The view
+chooses which status columns appear (Active: Todo, In progress, In review; All: every column). Columns and swimlanes
+fold. *Display options* also choose the **card properties** shown (key, priority, points, module, tags, run status,
+readiness, agent, age, blocked, pipeline), *Show empty columns* and *Show Canceled column*; they are saved per
+project.
+
+**Drag and drop** a card to another column to change it. Columns that refuse the card are dimmed with the reason
+("Run not ended: stop it from the task", "Needs a brief: add it before queuing", "Has a run: can't go back to
+Backlog", "Pipelines change on the task's page"), and a hint under the lifted card says what the drop will do. Order
+inside a column is always by task number. The status rules:
+
+- **In progress / In review** only change the status.
+- **Todo** queues a complete draft (asks first if it would start now); for a task whose run ended it means *Run
+  again* (asks first).
+- **Backlog** returns a queued task whose run never started to draft.
+- **Done / Canceled** close the task (a run that hasn't ended is stopped after confirmation; Done asks first when
+  work waits to be merged). The Done column offers two drop zones, *Mark as done* and *Cancel task*.
+- A task whose run hasn't ended can go only to Done or Canceled.
+- By priority or module, a drop sets the priority or module; by pipeline, drops are refused.
+
+Questions appear in a small popover at the card (Enter confirms, Esc keeps it).
+
+**Card menu** (`…`, or `.`): *Open*, *Move to*, *Priority*, *Tags* (existing project tags), *Copy key*, *Run again*,
+*Mark as done* / *Cancel task* / *Reopen task*, *Delete task…*.
+
+**Selection and bulk actions**: Shift+click or X selects cards; a bar at the board's foot offers **Move to**,
+**Priority**, **Tags**, **Mark as done**, **Cancel task** and **Delete…** (person-only).
+
+**Quick add**: Backlog's **+** (or its *New task* foot) opens a title field; Enter adds a draft and keeps the field
+open, Esc closes it.
+
+| Board key | Action |
+|---|---|
+| Arrows | Move focus between cards |
+| Enter | Open the task (or confirm a question) |
+| `[` / `]` | Move the card a column left / right |
+| X | Select |
+| `.` | Open the card menu |
+| M / P / T | Move to / Priority / Tags |
+| Ctrl+C (⌘C) | Copy the key |
+| Esc | Put down a lifted card, keep a question, or clear the selection |
 
 ### New task / Edit task
 
-1. **Brief**: *Task title*, *Describe the outcome*, *Acceptance criteria* (Enter adds one, Backspace in an empty one
-   removes it, Alt+↑/↓ moves it).
-2. **Context › Sources**: folders or files outside the worktree this task's agents may read without asking.
-3. **Pipeline** (published only) with its *Execution plan* and approval gates.
-4. **Module**, **Limits** (*Run budget*, *Time limit* — empty means no limit), **Story points** (*Automatic* or a
-   value), **Merging** (*Don't merge automatically*).
-5. **Create** (saves a draft; run it later with *Run*) or **Create & run** (queues and starts the first run, then opens
-   the Conversation).
+The form is a **composer**:
 
-Unsaved edits are kept on this computer and restored. If someone saved a newer version meanwhile, you choose per field.
-A task that already ran keeps its runs' briefs; edits apply to future runs.
+1. Type the **title** and **the outcome** ("what should change, and why?" — Markdown works) directly on the page.
+2. **Acceptance criteria** — *Add criterion*; Enter adds the next one, Backspace in an empty one removes it, Alt+↑/↓
+   moves it.
+3. **Property chips**:
+   - **Pipeline** — published pipelines with their steps and approval gates (and *Manage pipelines*); once chosen, a
+     plan line shows the steps, where approval is needed and *View pipeline ↗*.
+   - **Delivers** — *As the pipeline says, Code changes, A report, Outside the repository, Code changes or a report*.
+   - **Limits** — *Run budget*, *Time limit* (empty = no limit).
+   - **Sources** — folders or files this task's agents may read without asking (*This task*, *From the project*, *From
+     the pipeline*, *Add*).
+   - **Module** (when the project has modules), **Priority**, **Points** (*Automatic* or 1–21).
+   - **…** — *Don't merge automatically*.
+4. **Create** saves a draft and opens Tasks with the row highlighted *New*; **Create & run** (Ctrl+Enter / ⌘Enter)
+   queues and starts the first run and opens the Conversation. When editing: **Discard changes** and **Save changes**
+   (Ctrl+S / ⌘S); a draft keeps *Create & run*.
 
-### Task page (`/project/<id>/tasks/<KEY>/<tab>`)
+The bar says what is missing ("To create, add a title. To run, also the outcome, one criterion and a pipeline.").
+Unsaved edits are kept on this computer and restored; if someone saved a newer version meanwhile, you choose per field.
+A task that already ran keeps its runs' briefs; edits apply to future runs. `/tasks/new?module=<id>` starts with that
+module chosen.
 
-**Header**: breadcrumb, title, run status chip, story points, run line ("Run 128 · attempt 2 · Feature delivery v3 ·
-started 16:20"), Module select, and actions: *Edit*, *Remove worktree*, *Return to a step*, run controls, *Run again*,
-*More actions*. Locked actions say why in one line under them.
+### Task page (`/project/<id>/tasks/<KEY>`)
+
+**Header**: `← Tasks / KEY`; the title with **one primary action** for the task's state and a **…** menu; a status
+line ("Interrupted at 03 Implement · Run 8 · attempt 2 · started 15:04 · 5 pt"); the **Module** select; notices
+(Blocked, a runner refusal, a stale read) and in-place confirmations.
+
+The **primary action** is what the state calls for: *Approve* or *Answer* (opens the Conversation at the card),
+*Review* or *Merge* (opens the Summary at the decision card), *Share task* for a Not shared task, or else **Run**,
+**Start run**, **Resume run** or **Continue run**. A locked action says why in a few words under it and in full in its
+tooltip ("Runner not connected", "Blocked by KON-3", "Worktree removed", "Today's token budget is used"…).
+
+**More actions** (…): *Edit task* (key **E**), *Copy link*, *Open worktree in Files*, *Memory for this task*; *Pause
+run*, *Run again*, *Return to a step*; *Mark as done* / *Cancel task* / *Reopen task*; *Remove worktree*, *Cancel
+run*, *Delete task…*. Items that apply but can't be used stay visible, locked with why.
 
 | Control | When | Effect |
 |---|---|---|
@@ -283,22 +404,29 @@ started 16:20"), Module select, and actions: *Edit*, *Remove worktree*, *Return 
 | **Resume run** | Paused, or stopped by the daily budget | Continues in the same worktree |
 | **Continue run** | Interrupted | Continues from the last checkpoint |
 | **Cancel run** | Until the run ends | Cancels it |
-| **Run again** | Failed, canceled, or interrupted with its worktree removed | In-place confirmation, then a new run from step 1 in a new worktree |
+| **Run again** | Failed, canceled, or interrupted with its worktree removed | In-place confirmation "Run KEY again as run #N" → **Start run #N**: a new run from step 1 in a new worktree |
 
-**Tabs** (a task opens on *Details*):
+**Tabs** — a task opens on **Summary**:
 
-- **Details** — the requirements (*At task creation*, *Run #N · at start*, *Current task*), the run setup (pipeline,
-  limits) and task organization (status, priority, tags, depends on).
+- **Summary**, top to bottom:
+  - the **decision card**, if one waits — plan review, raise the limit, plan limit, retries, *Ready for your review*,
+    merge queue, *Ready to complete*, or *Return the work to an earlier step*;
+  - **Run** — the pipeline and run number, a **rail of step chips** (each chip's tooltip has the agent, state,
+    attempt, tokens and time), the last event and *Conversation →*;
+  - **Brief** (with a version chip: *As created*, *As run #N started*, *Current task*) and **Acceptance criteria**;
+  - **Output** — each step's report and the run summary;
+  - **Runs** — one row per run, each with *Open its conversation* and *Remove worktree*.
+
+  A read-only **properties column** shows Status, Priority, Pipeline, Tags, Depends on, Limits, Branch and Created
+  ("· changed" when the task differs from what the latest run started with), the run's facts (base, checkpoint,
+  tokens, active time, model, worktree — a click copies; account, cached input, duration, agents and permissions
+  behind a disclosure) and the **memory notes** link, which opens the task's **Memory** view (search, filters, *New
+  record*, what the next agent receives).
 - **Conversation** — the latest run as a live chat: agents' messages with tool groups ("Read 4 files · ran cargo
   test"), step dividers, returns and restarts, result cards, decision cards (questions, plans, approvals), and while an
   agent works "<agent> is working" with **Stop turn**. Scrolling up stops following; *Jump to latest*.
-- **Changes** — the diff of the run: *Checkpointed* (base → latest checkpoint) and *Not checkpointed* (the worktree
-  beyond it). *Open file* opens the code viewer.
-- **Local integration** — the guided integration into your checkout (see §7).
-- **Summary** — where the task stands, one progress row per step, brief and criteria, *Runs of this task*, *This run*
-  / *Run details*, and every **decision card** (plan review, raise the limit, retries, ready to merge, complete).
-- **Artifacts** — empty in this version (a report run's *Report* shows on the Summary).
-- **Memory** — the task's memory records and what the next agent receives.
+- **Changes** (with a file count) — *Checkpointed* (base → latest checkpoint) and *Not checkpointed* (the worktree
+  beyond it); *Open file* opens the code viewer; **Try locally** opens **Local integration** in the tab's place.
 
 ### The composer
 
@@ -323,51 +451,63 @@ message; the run is not paused.
 
 ### Closing and deleting tasks
 
-*More actions*: **Mark as done**, **Cancel task**, **Reopen task**, **Delete task…**. Closing a task whose run hasn't
-ended asks in place ("Stop the run of <task>?"). *Delete task…* lists everything that goes (runs, conversation, memory,
-approval rules, links); *Also remove work that is not merged* is optional. Deleting is person-only and not available
-in shared projects.
+**Mark as done**, **Cancel task**, **Reopen task** and **Delete task…** are in the task's *More actions*, a list row's
+**…**, the board's card menu and bulk bar (and dropping on Done or Canceled). Closing a task whose run hasn't ended asks
+first ("Stop the run of KEY?"). *Delete task…* lists everything that goes (runs, conversation, memory, approval rules,
+links); *Also remove work that is not merged* is optional. Deleting is person-only and not available in shared
+projects.
 
 ### Modules (`/project/<id>/modules`)
 
-**New module** (name, description, start and target dates). The list shows dates, state, task count and progress. A
-module page shows progress, a **Burndown** (remaining work per day, ideal line, forecast 50%/85%, added/removed) and
-its tasks. Put a task in a module from the task form or the header's *Module* select.
+- The list has views **Open · Closed**, **Search modules** (`/`) and **New module**. Rows show the name and
+  description, the forecast for open modules ("Likely Oct 30", "· after target", "Not enough history", "All done"),
+  the dates and "N of M tasks done".
+- **New module** and **Edit** are pages: the name as the title, the description under it, and chips for **State**,
+  **Start date** and **Target date** (a calendar date picker) → *Create module* / *Save changes*.
+- A **module page** has **New task in module**, a **…** menu (*Edit*, *Close module* / *Reopen module*), a status line
+  (state, dates, progress, forecast) and tabs:
+  - **Summary** — description, tasks grouped by status, "N remaining" with the forecast and *Burndown →*, and
+    properties (state and dates editable in place);
+  - **Burndown** — remaining work per day with the ideal line, 50%/85% forecasts and work added and removed, as a
+    chart or a table.
+- Put a task in a module with the form's *Module* chip, the task header's *Module* select, or by dropping its card on
+  the board when columns or rows are by module. Modules can't be deleted, only closed.
 
 ## 6. Following and steering a run
 
-1. After *Run*, the **Conversation** shows the agents live; the **Summary** shows step rows ("Complete · attempt 1 ·
-   41k tokens · 6 min") and *This run* (pipeline, branch, base, checkpoint, model, account, budget, cached input, time
-   limit, active agent time, permissions, worktree).
-2. **Approvals** — answer on the card or in the Needs you panel: *Approve once*, *Deny*, *Deny with a message*, or
-   more widely (*Approve similar in this run*, *Approve everything in this run*). To stop being asked: the profile's
-   *Approve automatically*, or auto mode.
-3. **Questions** — pick options or write your own answer, then *Send answer*; a plain question is answered from the
-   composer.
-4. **Plans** — on the Summary's plan review: read plan vN, then **Approve plan & continue**, or write *Changes the plan
-   needs* and **Request changes**. Earlier versions are in the *Plan version* select.
+1. After *Run*, the **Conversation** shows the agents live; the **Summary** shows the step rail, the last event and
+   the run's facts; **Changes** shows the diff.
+2. **Approvals** — the header's **Approve** opens the card. Answer there or in the Needs you panel: *Approve once*,
+   *Deny*, *Deny with a message*, or more widely (*Approve similar in this run*, *Approve everything in this run*). To
+   stop being asked: the profile's *Approve automatically*, or auto mode.
+3. **Questions** — the header's **Answer** opens the card; pick options or write your own answer, then *Send answer*.
+   A plain question is answered from the composer.
+4. **Plans** — the header's **Review** opens the Summary's plan review: read plan vN, then **Approve plan & continue**,
+   or write *Changes the plan needs* and **Request changes**. Earlier versions are in the *Plan version* select.
 
 ### Continuing a stopped run
 
 | How it stopped | What to do |
 |---|---|
-| Paused | *Resume run* (or the composer's *Resume and send*) |
-| Interrupted (crash, runner lost, *Quit now*) | *Continue run* — from the last checkpoint; once its worktree is removed only *Run again* is left |
+| Paused | **Resume run** (or the composer's *Resume and send*) |
+| Interrupted (crash, runner lost, *Quit now*) | **Continue run** — from the last checkpoint; once its worktree is removed only *Run again* is left |
 | Token or time limit | Summary › *Raise the limit*: enter a new budget/time → *Continue with N tokens / N min*, or *Remove the limit* |
 | Step budget | *Raise the step budget* → *Continue* or *Remove the limit* |
 | Daily project budget | *Resume run* once the day has room, or raise the daily budget |
 | Account plan limit | *Wait for <account>, then continue* (resumes by itself at the reset) or *Continue now on another account* |
 | Retries used up / broke again / unverified / unchanged | *Decide how the run continues*: *Allow 1 retry & continue*, *Accept <step> as it is*, *Run <step> again*, *Return to <step> with note*, *Stop and fail the run* |
-| Failed | Composer *Continue with instructions*, or *Run again* |
-| Ended, want more work | *Return to a step* with a note, or composer *Send follow-up* |
+| Failed | Composer *Continue with instructions*, or *More actions › Run again* |
+| Ended, want more work | *More actions › Return to a step* (with a note), or composer *Send follow-up* |
 
+Resume and Continue are the header's primary action when no decision card waits; otherwise they are in *More actions*.
 Over MCP: `pause_run`, `resume_run`, `cancel_run`, `continue_run`, `send_message`, `run_task`.
 
 ## 7. Merging
 
 ### Pipeline without a Deliver step
 
-The Summary shows **Ready for your review** with *What changed* and *Verification*:
+The Summary shows **Ready for your review** (the header's **Merge** or **Review** opens it) with *What changed* and
+*Verification*:
 
 - **Merge into <branch>** — merges directly (in a temporary worktree, brought in as a fast-forward). On success the
   run's worktrees and merged branches are removed and the task becomes Done. If git refuses ("Not merged into
@@ -385,14 +525,15 @@ merge*), and *Today*. With *Approve to merge*, the task's Summary shows *Ready t
 can't resolve show *Conflicts need you* → **Resolve myself** (resolve in the worktree) → *I've resolved it*. The queue
 never merges into a checkout with uncommitted changes; it continues by itself once the checkout is clean.
 
-### Local integration (task tab)
+### Local integration (Changes › Try locally)
 
-For a succeeded run whose merge would overwrite local changes or needs conflict resolution: *Review current
-identities* → *Commit selected changes* or *Temporarily preserve selected* → *Sync and run fresh Check* → tick "I
-reviewed this exact checked result." → *Approve and merge checked result* → *Restore preserved local changes* →
-*Verify local restoration*. A built-in conflict resolver shows the common ancestor, your version, the incoming version
-and an editable result. At any point: *Cancel integration*, *Pause at safe boundary*, *Reconcile actual Git state*.
-Every acknowledgement is a person's.
+A view of the **Changes** tab (`/tasks/<KEY>/changes?view=local-integration`), opened by **Try locally** or by the
+Ready card's **Local integration** after git refused the merge. For a succeeded run whose merge would overwrite local
+changes or needs conflict resolution: *Review current identities* → *Commit selected changes* or *Temporarily preserve
+selected* → *Sync and run fresh Check* → tick "I reviewed this exact checked result." → *Approve and merge checked
+result* → *Restore preserved local changes* → *Verify local restoration*. A built-in conflict resolver shows the common
+ancestor, your version, the incoming version and an editable result. At any point: *Cancel integration*, *Pause at
+safe boundary*, *Reconcile actual Git state*. Every acknowledgement is a person's.
 
 ### Report runs
 
@@ -401,21 +542,37 @@ anyway*, *Return to a step* or *Run again*.
 
 ### Removing worktrees
 
-*Remove worktree* on the header (latest run) or per run under *Runs of this task*. The in-place confirmation lists each
-worktree's uncommitted files and what happens to each branch; *Discard the uncommitted changes listed above* is needed
-when files would be lost.
+**More actions › Remove worktree** for the latest run, or a run's **…** › *Remove worktree* in the Summary's **Runs**
+section. The in-place confirmation lists each worktree's uncommitted files and what happens to each branch; *Discard
+the uncommitted changes listed above* is needed when files would be lost.
 
 ## 8. Orchestrator chat (`/project/<id>/orchestrator`)
 
-1. **Settings** (Orchestrator settings): choose the *Project connection*, *Model* and *Reasoning effort*, then
-   **Publish v1**.
-2. Write in the composer — Enter adds a line, **Ctrl+Enter (⌘Enter) sends**; *Attach* files. While it answers: *Send
-   after this answer* (default), *Send now*, *Stop and send*; Esc or **Stop response** stops the answer.
-3. It reads everything, saves drafts and runs safe actions directly; it **proposes** the rest as cards — *Start*,
-   *Publish*, *Merge into …*, *Send answer*, *Apply*… — that you apply or dismiss. You can also approve a waiting
-   proposal in words ("run it"), except click-only ones.
-4. **History** lists conversations; **New conversation** starts one.
-5. More autonomy: the person-only switches in Settings › Automation; the **daily report**.
+The page is a chat first: the conversation's title and start time, **New** and a **History** toggle in the header,
+the turns in one column, and the composer at the foot.
+
+1. **Choose what it runs on.** Until it is set up, the composer says the Orchestrator can't answer yet and offers
+   **Set up the Orchestrator**. The composer's *runs-on* chip (CLI · account · model) opens a picker: connection,
+   *Model*, *Effort*, **Publish vN**, and *Settings ↗* for the full Orchestrator settings page.
+2. **Write.** Enter adds a line, **Ctrl+Enter (⌘Enter) sends**; the paperclip attaches files. While it answers: *Send
+   after this answer* (default), *Send now*, *Stop and send*; the working line's **Stop** (or Esc) stops the answer, and
+   a stopped turn offers **Ask again**.
+3. **Read what it did.** Every action shows as one of:
+   - an **event line** — done, refused ("· not done") or dismissed, with *Open ↗*;
+   - an **agent wait line** — *Waits for you*, *Orchestrator is reading*, *Answered by the Orchestrator*, *Answered by
+     you*, *No longer waits*;
+   - a **run-end line** — with *Review ↗*, *Raise ↗*, *Continue ↗* or *Summary ↗*;
+   - a **digest** — "N waiting for you";
+   - a **decision card**, only for what a person decides: its primary button is the action (*Start*, *Publish vN*,
+     *Merge into …*, *Send answer*, *Send message*, *Cancel run*, *Allow retry*, *Return to step*, *Pause*, *Resume*,
+     *Release*, *Create repository*…), plus *Dismiss*. "Only you can apply"; a decided card folds into an event line.
+   - the **daily report** card ("Daily report · <day>").
+
+   You can also approve a waiting proposal in words ("run it"), except click-only ones.
+4. **New** starts a conversation ("What should we plan?" with four suggestions); **History** lists earlier ones (search,
+   *Today*, *Yesterday*, *Earlier*).
+5. More autonomy: the person-only switches in Settings › Automation (*The Orchestrator may*); the daily report in
+   Settings › Notifications.
 
 Details: [orchestrator-chat.md](orchestrator-chat.md).
 
@@ -453,13 +610,14 @@ returned), **Cumulative flow**.
 
 ## 10. Sharing a project with a team
 
-1. Get invited by the team server's owner (the invite arrives in Settings › Orchester › Invites and on All projects;
-   two-factor must be on), or use Settings › Orchester › **Connect a server**.
-2. Project settings › **Sharing** › *Link to a server project* → *Link and upload N tasks* (optionally *Write
-   orchester.toml into the repository*). A project with tasks goes through the **join review** (*Join and upload N* /
-   *Join without uploading*).
+1. Get invited by the team server's owner (the invite arrives in Settings › Orchester Cloud › *Invites* and on All
+   projects; two-factor must be on), or use Settings › Orchester Cloud › *Team servers* › **Connect a server**.
+2. Project settings › **Sharing** › *Share on a team server* › **Share…** → choose the server and a project there (or
+   its address) → *Link to this project…* → **Link and upload N tasks** (optionally *Write orchester.toml into the
+   repository*). A project with tasks goes through the **join review** (*Join and upload N* / *Join without
+   uploading*).
 3. Tasks not uploaded stay *Not shared* (read-only; *Share task* on its page).
-4. *Make local…* or *Leave…* to stop.
+4. *Leave or make local* › **Make local…** or **Leave…** to stop.
 
 ## 11. Automating Orchester
 

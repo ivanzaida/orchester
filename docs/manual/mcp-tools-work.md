@@ -35,7 +35,7 @@ does. Returns the new state.
 
 ### `update_project_limits` — changes data
 
-Changes a project's limits, as Project settings › Limits does. Limits left out stay as they are; invalid ones are
+Changes a project's limits, as Project settings › Runs › Limits does. Limits left out stay as they are; invalid ones are
 refused with why. There is **no maximum** for token or time limits; `null` means *no limit*. Returns the limits as
 saved.
 
@@ -125,7 +125,7 @@ history records the organization as automation's.
 | `time_limit_minutes` | integer \| null            | no   | Active agent minutes per run; `null` = none; left out = project default.                          |
 | `workflow_status`    | Workflow status \| null    | no   |                                                                                                   |
 | `priority`           | Priority \| null           | no   |                                                                                                   |
-| `story_points`       | integer \| null            | no   | 1/2/3/5/8/13/21, recorded as automation's. Left out: estimated when *Let Orchester estimate story points* is on. |
+| `story_points`       | integer \| null            | no   | 1/2/3/5/8/13/21, recorded as automation's. Left out: estimated when the project's *Let Orchester estimate story points* is on. |
 | `tags`               | array<string>              | no   | Tag names, case-insensitive; unknown names are created as tags.                                   |
 | `blocked_reason`     | string \| null             | no   | Marks it *Blocked* (informational; keeps no run from starting, but the Orchestrator chat won't start it). Must not be blank. |
 | `blocked_by`         | array<{`task`: string, `gate`?: `merge`}> | no | Blocking tasks of the same project, by key or id.                                      |

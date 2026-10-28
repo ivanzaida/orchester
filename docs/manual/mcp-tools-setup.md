@@ -12,7 +12,7 @@ Notation used in the parameter tables:
 - **Req.** — `yes` if the parameter is required. Everything else may be left out.
 - Types follow JSON Schema: `string`, `integer`, `boolean`, `array<…>`, `object`, `T | null`.
 - *Gate* — which person-only switch, if any, a call may need:
-  - **AP** = *Let automation change agent permissions* (Settings › What automation may do). Without it, a widening
+  - **AP** = *Let automation change agent permissions* (Settings › Automation › *Approvals and permissions*). Without it, a widening
     call is refused with `person_only`.
   - **AA** = *Let automation answer approvals*. Without it, the call is refused with `automation_not_allowed`.
 - No tool takes or returns a secret's value.
@@ -72,7 +72,7 @@ connect, what they trust or where tools keep their configuration.
 ### `set_repository_agent_files` — changes data · gate AP when turning on
 
 Turns on or off whether the project's agents load the repository's own agent files (`AGENTS.md`, `CLAUDE.md` and
-the like), as Project settings › General does. Applies to runs that start from now on. Turning off is always
+the like), as Project settings › General › *Repository agent files* does. Applies to runs that start from now on. Turning off is always
 accepted; turning on puts the repository's text into every agent's prompt and is `person_only` unless AP is on.
 
 | Parameter | Type    | Req. | Description                                       |

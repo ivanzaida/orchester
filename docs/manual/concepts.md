@@ -39,18 +39,21 @@ page, *Ready to merge* on the Overview), Merged, Failed, Canceled, and *Unreadab
 
 **Workflow status.** Backlog, Todo, In progress, In review, Done, Canceled — the state of *your* work, independent of
 the run label. Orchester moves it by itself: a step starting → In progress; a succeeded run → In review; a merge or
-*Complete task* → Done. New tasks start in Backlog. In the window a person changes it through *More actions* (Mark as
-done, Cancel task, Reopen task); MCP `update_task` can set any status.
+*Complete task* → Done. New tasks start in Backlog. In the window a person changes it on the **Tasks board** (drag a
+card to another column, or *Move to*), or closes and reopens a task through *More actions* (Mark as done, Cancel task,
+Reopen task); the task page shows it read-only. MCP `update_task` can set any status.
 
 **Priority.** Urgent, High, Medium, Low, No priority. Used for sorting and display only — it never changes the run
-queue. Set over MCP.
+queue. Set with the *Priority* chip of New/Edit task, on the board (card menu, bulk bar, or a drop when columns or
+rows are by priority), or over MCP.
 
 **Story points.** 1, 2, 3, 5, 8, 13, 21. Shown as "5 pt" (set by a person) or "~5 pt" (Orchester's estimate). With
-*Let Orchester estimate story points* on, Orchester estimates new and changed tasks using auto mode's reviewer model
+*Let Orchester estimate story points* on (a per-project switch in Project settings › Runs › Estimates), Orchester estimates new and changed tasks using auto mode's reviewer model
 and the project's merged tasks as examples; a person's value always wins. Points are effort sizes, not money or
 tokens: no budget reads them. Delivery metrics show them.
 
-**Tags.** Free, case-insensitive project tags. Rows show the first two plus "+N". Set over MCP.
+**Tags.** Free, case-insensitive project tags. Rows show the first two plus "+N". Existing tags are added and removed
+on the board (card menu, bulk bar); new tags are created only over MCP (`tags`).
 
 **Blocked and blocked by.** Two separate things:
 
@@ -59,7 +62,8 @@ tokens: no budget reads them. Delivery metrics show them.
 - **Blocked-by links** to other tasks (gate: *merge*) — the task cannot run, resume or continue until each linked task
   is finished; its controls lock with "Unavailable until … finishes." Cycles are refused.
 
-Both are set over MCP (`blocked_reason`, `blocked_by`).
+Both are set over MCP (`blocked_reason`, `blocked_by`); the window shows them read-only (the *Blocked* notice and
+*Depends on*).
 
 **Don't merge automatically.** A task flag: the Orchestrator never merges this task's runs on its own; it tells you
 the run is ready and the merge stays yours.
@@ -100,7 +104,7 @@ Work after the last checkpoint is never claimed as done.
 is not touched*. A worktree stays after the run ends until a person removes it, a merge cleans it up, or *Run again*
 is told to remove it.
 
-**Base branch.** The branch a run starts from and delivers into. Project settings › General › *Base branch*:
+**Base branch.** The branch a run starts from and delivers into. Project settings › General › Repository › *Base branch*:
 *Checked-out branch* (default — the run starts at the checkout's HEAD) or a named branch (every run starts from its
 tip). Each run records its own base, and merge, merge queue, local integration, pull requests and base-moved notices
 follow that record. The setting is kept per computer. A chosen branch that no longer exists refuses new runs.
@@ -235,12 +239,12 @@ shown separately and never counted. Values are what the CLI reports, never estim
 
 | Limit | Where | Default | Effect |
 |---|---|---|---|
-| Run budget | Task (default from Project settings › Limits) | no limit | Stops the run *at the token limit* at a checkpoint |
+| Run budget | Task (default from Project settings › Runs › Limits) | no limit | Stops the run *at the token limit* at a checkpoint |
 | Time limit | Task (default from Project settings) | no limit | Counts **active agent time only** (waiting, paused or stopped time doesn't count) |
 | Step budget | Pipeline step | no limit | Stops the run at the step's budget |
-| Daily project budget | Project settings › Limits | 20,000,000 tokens | Runs, the Orchestrator chat, auto-mode reviews and estimates all count; new work waits once it is used |
-| Agents working at once | Project settings › Limits | 4 (1–16) | Agent slots shared by all runs; applies at once |
-| QA apps at once | Project settings › Limits | 2 (1–16) | QA copies of the app runs may have open |
+| Daily budget | Project settings › Runs › Limits | 20,000,000 tokens | Runs, the Orchestrator chat, auto-mode reviews and estimates all count; new work waits once it is used |
+| Agents at once | Project settings › Runs › Limits | 4 (1–16) | Agent slots shared by all runs; applies at once |
+| QA apps at once | Project settings › Runs › Limits | 2 (1–16) | QA copies of the app runs may have open |
 
 There is no maximum: a raised limit only has to be above what was used. *Remove the limit* continues with none.
 Raising applies to that run only.
@@ -335,13 +339,14 @@ Dock badge with the Needs-you count.
 ## Orchester Cloud and team servers
 
 **Orchester Cloud sign-in.** The app is locked until this computer signs in to Orchester Cloud
-(`https://orchester.cloud`) with email and password (plus a TOTP or recovery code with two-factor on). After that it
+(`https://orchester.cloud`, API at `https://api.orchester.cloud`; both can be changed in Settings › Orchester
+Cloud › Advanced) with email and password (plus a TOTP or recovery code with two-factor on). After that it
 works offline. While signed out every MCP tool answers `sign_in_required` except `sign_in_state`. Only a person signs
 in.
 
 **Team servers and shared projects.** A team runs its own `orchester-server`. A computer joins through an invite
 (needs two-factor) or *Connect a server* (address, check-code comparison for self-signed certificates, then the
-Orchester account or an 8-character invite code). A project links to a server project in Project settings › Sharing.
+Orchester account or an 8-character invite code). A project links to a server project in Project settings › Sharing › *Share…*.
 
 - **Shared**: tasks' title, brief, criteria, organization, holder and short run progress; published configuration.
 - **Stays on each computer**: runs, worktrees, conversations, memory, secrets, connections, accounts and the base
