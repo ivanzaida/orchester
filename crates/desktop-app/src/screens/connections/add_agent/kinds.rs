@@ -1,6 +1,7 @@
 //! The Kind group of Add provider (`Kind` `rSMnI`): the four kinds side by side as compact cards (`Cards` `Q4AgH`),
-//! each led by its maker's mark with one short line under its name; the native kinds are locked, why in their line.
-//! Choosing another CLI suggests its name, unless the person typed one.
+//! each led by its maker's mark with one short line under its name. The OpenAI API's native kind is locked, why in its
+//! line and its reason, until the runner runs its agents ([`AgentProvider::runs_agents`]). Choosing another kind
+//! suggests its name, unless the person typed one.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -41,7 +42,7 @@ const KINDS: [(AgentProvider, &str, Icon, &str, &str); 4] = [
     "connection-kind-anthropic",
     Icon::Cpu,
     "connections.provider.anthropicApiShort",
-    "connections.kind.nativeShort",
+    "connections.kind.anthropicShort",
   ),
   (
     AgentProvider::OpenAiApi,
@@ -100,9 +101,9 @@ impl AddAgent {
     )
     .compact()
     .mark(AgentMark::of(provider).render(ctx, IconSize::Md));
-    match provider.is_native() {
-      true => card.unavailable(ctx.t("connections.kind.nativeUnavailable")).into(),
-      false => card.into(),
+    match provider.runs_agents() {
+      true => card.into(),
+      false => card.unavailable(ctx.t("connections.kind.openaiUnavailable")).into(),
     }
   }
 }

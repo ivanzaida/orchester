@@ -187,10 +187,10 @@ pub(crate) fn on_enter(add: impl Fn() + Send + Sync + 'static) -> impl Fn(Keyboa
   }
 }
 
-/// A warning line under a group (`Widens` `tXVIh`, `Sent to` `s4sjZm`): a `warning` triangle and what it warns of in
-/// 12 `text_secondary`, on `warning_muted`, radius 6, 8 over and under and 10 at its sides; what it leaves out in an
-/// (i) at its end (`<id>-info`).
-pub(crate) fn warning_line(ctx: &mut Ctx, id: &str, words: &str, info: Option<Arc<str>>) -> Element {
+/// A warning line under a group (`Widens` `tXVIh`, `Sent to` `s4sjZm`): a `warning` glyph (a triangle for what a change
+/// widens, a send arrow for where requests go) and what it warns of in 12 `text_secondary`, on `warning_muted`, radius
+/// 6, 8 over and under and 10 at its sides; what it leaves out in an (i) at its end (`<id>-info`).
+pub(crate) fn warning_line(ctx: &mut Ctx, (id, glyph): (&str, Icon), words: &str, info: Option<Arc<str>>) -> Element {
   let info = info.map(|info| {
     let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
     Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
@@ -203,7 +203,7 @@ pub(crate) fn warning_line(ctx: &mut Ctx, id: &str, words: &str, info: Option<Ar
     .align_items(Alignment::Start)
     .background(PaletteColor::WarningMuted)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::TriangleAlert, IconSize::Base, PaletteColor::Warning))
+    .child(icon(glyph, IconSize::Base, PaletteColor::Warning))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))
@@ -222,11 +222,13 @@ pub(crate) fn form_actions(id: &str, actions: Vec<Element>, reason: Option<&str>
 }
 
 /// The page's actions after a line in its tone: why the last cannot be used (`text_muted`, an info glyph,
-/// `<id>-reason`), or what comes after it (`success`, a check, `uv3UK`, `<id>-next`).
+/// `<id>-reason`), that only a person may use it (`warning`, a shield, `I2CEOh` in 10e, `<id>-reason` too), or what
+/// comes after it (`success`, a check, `uv3UK`, `<id>-next`).
 pub(crate) fn form_actions_noted(id: &str, actions: Vec<Element>, note: Option<(&str, Tone)>) -> Element {
   let reason = note.map(|(reason, tone)| {
     let (glyph, part) = match tone {
       Tone::Success => (Icon::CircleCheck, "next"),
+      Tone::Warning => (Icon::ShieldAlert, "reason"),
       _ => (Icon::Info, "reason"),
     };
     Row::new()

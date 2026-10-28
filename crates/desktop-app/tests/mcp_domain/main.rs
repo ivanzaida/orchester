@@ -31,6 +31,7 @@ mod mcp_servers;
 mod merge;
 mod merged_outside;
 mod modules;
+mod native_connections;
 mod orchestrator_approval;
 mod orchestrator_auto_merge;
 mod orchestrator_chat;

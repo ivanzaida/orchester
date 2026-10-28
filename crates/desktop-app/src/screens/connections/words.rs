@@ -87,7 +87,8 @@ pub(crate) const fn agent_status(status: ConnectionStatus) -> Shown {
     S::CouldNotRun => Shown::of(Icon::CircleAlert, C::Danger, "connections.status.couldNotRun"),
     S::KeyMissing => Shown::of(Icon::KeyRound, C::Warning, "connections.status.keyMissing"),
     S::KeyRejected => Shown::of(Icon::CircleAlert, C::Danger, "connections.status.keyRejected"),
-    S::BillingProblem => Shown::of(Icon::CircleAlert, C::Danger, "connections.status.billingProblem"),
+    // The key works; the account needs paying for (05k `EbPSP`).
+    S::BillingProblem => Shown::of(Icon::CircleAlert, C::Warning, "connections.status.billingProblem"),
     S::EndpointUnreachable => Shown::of(Icon::CircleAlert, C::Danger, "connections.status.endpointUnreachable"),
   }
 }

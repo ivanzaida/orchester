@@ -25,7 +25,7 @@ use orchester_store::{ProjectDb, StoreError};
 pub use repository::{RepositoryRead, check_repository_in, repository_in};
 
 use crate::{
-  agents::form::effort_options,
+  agents::form::{effort_options, listed_models},
   budget::{
     LimitsErrors, ReadLimits, minutes_text, read_agent_slots, read_budget, read_minutes, read_optional_budget,
     read_qa_slots,
@@ -297,9 +297,9 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
   let mut efforts = Vec::new();
   // Non-agent connections have no model or effort options; reviewer validation refuses them above.
   if let Some(agent) = selected.and_then(|c| AgentConnection::try_from(c.clone()).ok()) {
-    models = agent.models().iter().map(|m| m.id().as_str().to_owned()).collect();
+    models = listed_models(&agent).iter().map(|m| m.as_str().to_owned()).collect();
     if let Ok(id) = ModelId::new(model) {
-      efforts = effort_options(&agent, &id).to_vec();
+      efforts = effort_options(&agent, &id);
       if !models.contains(&model.to_owned()) {
         models.push(model.to_owned());
       }

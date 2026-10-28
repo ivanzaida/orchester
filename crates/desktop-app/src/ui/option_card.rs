@@ -250,6 +250,8 @@ impl OptionCard {
           .nowrap(),
       )
       .with_children(locked.then(|| icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted)));
+    // The short line stays on one line, as drawn (`u8crY` in 10c); a little wider than the room it reaches into the
+    // card's padding.
     let text = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -258,7 +260,8 @@ impl OptionCard {
       .child(
         Text::new(&self.description)
           .id(format!("{}-detail", self.id))
-          .variant(ExtraTypography::Note.role()),
+          .variant(ExtraTypography::Note.role())
+          .nowrap(),
       );
     let stroke = if self.chosen {
       PaletteColor::Accent
