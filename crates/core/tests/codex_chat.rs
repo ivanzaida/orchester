@@ -75,7 +75,6 @@ fn codex_chat_has_no_tool_of_its_own_that_reads_or_runs_anything_on_either_platf
     for off in [
       "features.shell_tool=false",
       "features.view_image=false",
-      "features.hooks=false",
       "features.skill_mcp_dependency_install=false",
       "web_search=\"disabled\"",
     ] {
@@ -84,6 +83,10 @@ fn codex_chat_has_no_tool_of_its_own_that_reads_or_runs_anything_on_either_platf
     for setting in CODEX_ISOLATION.into_iter().chain(CODEX_SUB_AGENTS_OFF) {
       assert!(overrides.contains(&setting), "{setting} on {platform:?}: {args:?}");
     }
+    assert!(
+      overrides.contains(&"features.hooks=false"),
+      "the user's own hooks are off, with every Codex step's: {args:?}"
+    );
     assert!(
       overrides.contains(&"sandbox_workspace_write.writable_roots=[]"),
       "nothing is writable: {args:?}"
