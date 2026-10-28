@@ -49,6 +49,8 @@ orchester-core.workspace = true
 orchester-exec.workspace = true
 # The daily log file (`app_log`), shared with the deprecated desktop, and how a session ended.
 orchester-ipc.workspace = true
+# The scrubber every error report passes through before it leaves (`error_reports`, `docs/error-reports.md`).
+orchester-report.workspace = true
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
@@ -88,6 +90,13 @@ parking_lot.workspace = true
 pulldown-cmark.workspace = true
 # The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.
 rfd.workspace = true
+# The ring crypto provider that the error reports' reqwest client takes (`error_reports`), as orchester-api's does;
+# already built through reqwest.
+rustls.workspace = true
+# Sends the app's panics to GlitchTip (`error_reports`): the panic hook, the stack trace, the OS and CPU contexts and
+# the HTTP transport over reqwest and rustls, which orchester-api's client already builds. A Sentry client with its
+# queue, rate limits and envelopes is not a few lines of code. Without `debug-images`, sessions, logs or metrics.
+sentry = { workspace = true, features = ["backtrace", "contexts", "panic", "reqwest", "rustls-no-provider"] }
 # Arguments and results of the app's MCP tools.
 serde_json.workspace = true
 # The data folder of a test's window (`test_support`, feature `test-support` only).
@@ -140,6 +149,8 @@ rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
 # edit outside Orchester or a newer build would; the store has no API for either.
 rusqlite.workspace = true
+# Sentry's test transport, which keeps a test's error reports instead of sending them (`tests/error_reports.rs`).
+sentry = { workspace = true, features = ["test"] }
 # Tries to share the MCP server's port the way another program would (`tests/mcp_stable`).
 socket2.workspace = true
 tempfile.workspace = true

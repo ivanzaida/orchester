@@ -176,7 +176,9 @@ const SPECS: &[Spec] = &[
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
                   state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
                   that never merge the base such as Review or Verify are left, kept_until_run_goes_on, \
-                  waits_for_follow_up, or delivered with the agent and step that read it). delivery is the run's \
+                  waits_for_follow_up, delivered with the agent and step that read it, or merged_by_runner with \
+                  merged_by_runner.before_step and merge_commit when it overlapped none of the run's changes and \
+                  Orchester merged it itself before that step started). delivery is the run's \
                   place in the project's merge queue (null when its pipeline has no Deliver step or it never joined): \
                   state queued (place: its place in line), syncing, rechecking, integrating (integrate_step, \
                   files), waiting_for_approval, blocked (blocked.why: uncommitted_changes with files, \

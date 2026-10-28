@@ -8,6 +8,7 @@
       },
       "delivered": "told {{agent}} at {{time}}",
       "followUp": "waits for a follow-up",
+      "mergedByRunner": "merged by Orchester before {{step}} at {{time}}",
       "runGoesOn": "kept until the run goes on",
       "tasks": {
         "one": "{{branch}} moved to {{revision}} · 1 task landed · merge requested · {{state}}",
