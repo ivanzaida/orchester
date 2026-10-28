@@ -1514,8 +1514,8 @@
         "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",
         "nameTaken": "Another tool is named {{name}}. Give the new tool a name of its own.",
         "notACommandTool": "{{tool}} is not a command tool; only command tools are made and changed in this version.",
-        "programInRepository": "{{program}} lies inside the project's repository, where a run's work can change it. A command tool's program is a fixed file outside it; run a script of the repository through its interpreter, e.g. program powershell with -File tools/check.ps1.",
-        "programInWorktree": "A command tool's program is a fixed file: name it as found on the search path, or by its absolute path outside the repository. A script of the repository runs through its interpreter, e.g. program powershell with -File tools/check.ps1.",
+        "programInRepository": "{{program}} lies inside the project's repository, where a run's work can change it. A command tool's program is a fixed file outside it; run a script of the repository through its interpreter, e.g. program powershell (pwsh on macOS) with -File tools/check.ps1.",
+        "programInWorktree": "A command tool's program is a fixed file: name it as found on the search path, or by its absolute path outside the repository. A script of the repository runs through its interpreter, e.g. program powershell (pwsh on macOS) with -File tools/check.ps1.",
         "programNotFound": "No program {{program}} was found on the search path or at that path.",
         "programPathNotText": "The program was found at {{program}}, a path that is not valid Unicode text, which a tool cannot store. Name a copy at another path."
       },

@@ -14,9 +14,9 @@ be added later, so domain logic must not depend on the desktop app.
 Cross-agent skill layout:
 
 - Repository skills are authored and committed only under `.claude/skills/`.
-- `.agents/skills` is a local Windows junction to `.claude/skills` so Codex and Claude load the same files. It is
-  git-ignored; run `powershell -File tools/setup-agent-skills.ps1` to recreate it. Never edit skills through the
-  junction path or add wrappers there.
+- `.agents/skills` is a local link to `.claude/skills` (a junction on Windows, a relative symbolic link on macOS) so
+  Codex and Claude load the same files. It is git-ignored; run `powershell -File tools/setup-agent-skills.ps1`
+  (`pwsh` on macOS) to recreate it. Never edit skills through the link or add wrappers there.
 - At the start of a Codex turn, if `.agents/skills` is missing, run that script. If the skill catalog was already
   initialized, read the matching `.claude/skills/<name>/SKILL.md` directly.
 - Skill files carry YAML frontmatter for Claude Code's loader; other agents ignore it and read the body.
