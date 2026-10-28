@@ -25,16 +25,20 @@ pub enum ProjectSettingsText {
   MonoLabel,
   /// 16/600 `text_primary`: a sub-page's or an opened item's title (`Title` `RYStU`, `N9Na8Q`).
   PageTitle,
+  /// Geist Mono 16/500 `text_primary`: an opened item's title that is an identifier, a secret's name (`CKPaZ` in
+  /// `06b` `uCVIP`).
+  MonoPageTitle,
 }
 
 impl ProjectSettingsText {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::GroupTitle,
     Self::Hint,
     Self::Value,
     Self::MonoValue,
     Self::MonoLabel,
     Self::PageTitle,
+    Self::MonoPageTitle,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -49,6 +53,7 @@ impl ProjectSettingsText {
       Self::MonoValue => "project_settings_mono_value",
       Self::MonoLabel => "project_settings_mono_label",
       Self::PageTitle => "project_settings_page_title",
+      Self::MonoPageTitle => "project_settings_mono_page_title",
     }
   }
 
@@ -68,6 +73,7 @@ impl ProjectSettingsText {
         palette.text_primary,
       )),
       Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::MonoPageTitle => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
     }
   }
 }

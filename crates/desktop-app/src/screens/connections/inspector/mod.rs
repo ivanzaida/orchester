@@ -193,14 +193,15 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
     .into()
 }
 
-/// The … button and the menu it opens at its end.
+/// The … button and the menu it opens at its end; while the menu is open the button shows it pressed, without its
+/// tooltip, which would show over the menu.
 fn more_menu(ctx: &mut Ctx, actions: &Actions, items: Vec<MenuItem>) -> Element {
   let (open, anchor) = actions.more.clone();
   let toggle = open.clone();
   let button = IconButton::new("connection-more", Icon::Ellipsis, ctx.t("connections.more"))
     .element(anchor.clone())
-    .on_click(move || toggle.update(|open| *open = !*open))
-    .render(ctx);
+    .on_click(move || toggle.update(|open| *open = !*open));
+  let button = if open.get() { button.active() } else { button }.render(ctx);
   let panel = items.into_iter().fold(
     menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)),
     |panel, item| panel.child(item.render(ctx, &open)),

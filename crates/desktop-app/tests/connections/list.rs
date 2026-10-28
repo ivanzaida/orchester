@@ -24,7 +24,7 @@ fn connections_groups_list_each_kind_with_its_add() {
     ),
     (
       "connections-github",
-      &["GitHub", "GitHub · github.com", "signed in as ivanzaida"][..],
+      &["GitHub", "gh · github.com", "signed in as ivanzaida"][..],
     ),
     (
       "connections-mcp",
@@ -94,7 +94,7 @@ fn connections_row_opens_the_connections_page_with_a_crumb_back() {
     .connections()
     .expect("connections read")
     .into_iter()
-    .find(|connection| connection.name().as_str() == "GitHub · github.com")
+    .find(|connection| connection.name().as_str() == "gh · github.com")
     .expect("the GitHub connection");
   seeded.open(github.id());
   let page = seeded.text("connection-inspector");

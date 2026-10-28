@@ -86,7 +86,6 @@ pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (O
     .child(mono_value("sharing-address-value", &address));
   SettingRow::new("sharing-address", ctx.t("sharing.team.address"))
     .hint(hint)
-    .info(ctx.t("sharing.linked.addressDescription"))
     .control(shown)
     .render(ctx)
 }

@@ -297,7 +297,6 @@
     "githubMatches": "Signed in as {{account}} · matches",
     "useNamedAccount": "Use {{account}}",
     "baseBranchShortHint": "Runs branch from it and merge into it",
-    "baseBranchInfo": "The branch new runs start from and deliver into: Merge, the merge queue, Local integration, pull requests and base-moved notices follow it. With Checked-out branch, a run takes the branch your checkout has when it starts. Kept on this computer only, in a shared project too.",
     "baseBranchGoneHint": "{{branch}} no longer exists · new runs are refused until you choose another",
     "baseMovedHint": "Writing agents merge the moved base early",
     "baseMovedOffHint": "Agents are not told when it moves",

@@ -154,14 +154,14 @@ impl Inspector {
         "secrets.meta",
         [
           ("environment", ctx.t(words::environment_key(secret.environment()))),
-          ("uses", words::uses(ctx, counts)),
+          ("uses", words::used_by(ctx, counts)),
           ("date", set),
         ],
       )
     };
     let title = Text::new(secret.name().as_str())
       .id("secret-inspector-name")
-      .variant(ProjectSettingsText::PageTitle.role());
+      .variant(ProjectSettingsText::MonoPageTitle.role());
     let meta = Text::new(&meta)
       .id("secret-inspector-meta")
       .variant(ProjectSettingsText::Hint.role());
@@ -188,14 +188,15 @@ impl Inspector {
     )
   }
 
-  /// The … menu: Copy name, and Archive, asked in place.
+  /// The … menu: Copy name, and Archive, asked in place. While it is open the button shows it pressed, without its
+  /// tooltip, which would show over the menu.
   fn more(&self, ctx: &mut Ctx, props: &Props, pending: bool) -> Element {
     let (open, anchor) = self.more.clone();
     let toggle = open.clone();
     let button = IconButton::new("secret-more", Icon::Ellipsis, ctx.t("secrets.more"))
       .element(anchor.clone())
-      .on_click(move || toggle.update(|open| *open = !*open))
-      .render(ctx);
+      .on_click(move || toggle.update(|open| *open = !*open));
+    let button = if open.get() { button.active() } else { button }.render(ctx);
     let (copier, name) = (
       crate::ui::code_box::Copier::of(ctx),
       props.secret.name().as_str().to_owned(),
@@ -282,10 +283,9 @@ impl Inspector {
   }
 }
 
-/// *Details* (`NLrZH`): the project, the environment (its kind in the (i)) and when its value was last rotated, at
-/// what time and by whom (`Oct 22, 14:10 · by you`, `IF2Lo`; only the person replaces a value, in this app, as
-/// *Replace value* says), how it is kept in the (i), as `06b` draws them; an archived secret also says its value is
-/// gone.
+/// *Details* (`NLrZH`): the project, the environment and when its value was last rotated, at what time and by whom
+/// (`Oct 22, 14:10 · by you`, `IF2Lo`; only the person replaces a value, in this app, as *Replace value* says), as
+/// `06b` draws them, without an (i); an archived secret also says its value is gone.
 fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
   let rotated = match secret.rotated_at() {
     Some(at) => {
@@ -307,7 +307,6 @@ fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
       ("secrets.project", project.open.project.name().as_str()),
     ),
     SettingRow::new("secret-environment", ctx.t("secrets.environment"))
-      .info(ctx.t_args("secrets.kindInfo", [("kind", ctx.t(words::kind_key(secret.kind())))]))
       .control(value(
         "secret-environment-value",
         &ctx.t(words::environment_key(secret.environment())),
@@ -324,7 +323,6 @@ fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
   }
   rows.push(
     SettingRow::new("secret-rotated", ctx.t("secrets.rotated"))
-      .info(ctx.t("secrets.valueHint"))
       .control(value("secret-rotated-value", &rotated))
       .render(ctx),
   );
@@ -339,14 +337,6 @@ fn detail(ctx: &mut Ctx, id: &str, (key, shown): (&str, &str)) -> Element {
 
 /// *Used by* (`WtpzX`): each tool and MCP server that takes the secret, opening it; or that none does.
 pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecrets, secret: &Secret) -> Element {
-  let counts = listed.use_counts(secret.id());
-  let key = match (counts.tools, counts.mcp_servers) {
-    (0, 0) => "secrets.uses.empty",
-    (0, _) => "secrets.uses.serverBindings",
-    (_, 0) => "secrets.uses.toolBindings",
-    _ => "secrets.uses.bindings",
-  };
-  let note = ctx.t_args(key, [("project", project.open.project.name().as_str())]);
   let navigation = Navigation::of(ctx);
   let rows: Vec<Element> = listed
     .used_by(secret.id())
@@ -354,7 +344,7 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       let (glyph, what, page) = match used.kind {
         SecretUseKind::Tool(_) => (Icon::Wrench, ctx.t("secrets.uses.toolKind"), ProjectPage::Tools),
         SecretUseKind::McpServer(id) => (
-          Icon::Server,
+          crate::screens::connections::words::MCP_GLYPH,
           // The variable its program is given it in (`MCP server · variable FIGMA_API_KEY` in `06b`).
           used.variable.as_deref().map_or_else(
             || ctx.t("secrets.uses.serverKind"),
@@ -366,7 +356,6 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       SettingRow::new(format!("secret-use-{:?}", used.kind), used.name.clone())
         .item()
         .lead(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
-        .info(note.clone())
         .control(value(&format!("secret-use-{:?}-kind", used.kind), &what))
         .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted))
         .opens(navigation.to(Route::Project(project.open.project.id(), page)))
@@ -379,7 +368,7 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       "secret-use-none",
       Icon::Unlink,
       ctx.t("secrets.uses.noneTitle"),
-      note,
+      ctx.t("secrets.uses.empty"),
     ))
   } else {
     group.rows(rows)

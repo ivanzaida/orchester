@@ -254,17 +254,7 @@ impl Linked {
     )
     .icon(Icon::LogOut)
     .in_form();
-    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.team.leave"))
-      .hint(ctx.t("sharing.linked.leaveHint"))
-      .info(ctx.t_args(
-        // Without the server in the list, this computer is not connected to it for anything else either.
-        if entry.is_some() {
-          "sharing.linked.leaveDescription"
-        } else {
-          "sharing.linked.leaveDescriptionNoServer"
-        },
-        [("server", server)],
-      ));
+    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.team.leave")).hint(ctx.t("sharing.linked.leaveHint"));
     let row = match &unavailable {
       Some(reason) => row
         .control(button.unavailable(reason.clone()))
@@ -327,7 +317,6 @@ fn refused(ctx: &mut Ctx) -> Element {
     .child(value("sharing-refused-count", &REFUSED.to_string()));
   let row = SettingRow::new("sharing-refused", ctx.t("sharing.team.refusedFields"))
     .toned(ctx.t("sharing.team.refusedFieldsHint"), Tone::Warning)
-    .info(ctx.t("sharing.team.refusedFieldsInfo"))
     .control(count)
     .render(ctx);
   Group::new("project-settings-sharing-refused", ctx.t("sharing.team.refused"))

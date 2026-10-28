@@ -143,14 +143,8 @@ impl Members {
     rows
   }
 
-  /// *Members* with who they are (`dana-k, ivan, olha +1`), how many, and *Manage*; what the list is and where *Manage*
-  /// leads in its (i).
+  /// *Members* with who they are (`dana-k, ivan, olha +1`), how many, and *Manage*, without an (i), as `04b` draws it.
   fn summary(&self, ctx: &mut Ctx, props: &Props, members: &ProjectMembers, manages: bool) -> Element {
-    let mut info = intro(ctx, props, members, manages);
-    if manages && let Ok((_, url)) = admin_page(ctx, props) {
-      let note = ctx.t_args("sharing.members.manageNote", [("url", shown_address(&url).to_owned())]);
-      info = format!("{info}\n\n{note}");
-    }
     let usernames: Vec<&str> = members
       .members
       .iter()
@@ -181,7 +175,6 @@ impl Members {
       .map(|reason| crate::ui::field::field_error("sharing-members-open-failed", &reason.text(ctx)).into());
     let row = SettingRow::new("sharing-members", ctx.t("sharing.members.section"))
       .hint(named)
-      .info(info)
       .control(value("sharing-members-count", &members.members.len().to_string()))
       .under_all(error);
     let row = if manages {
@@ -218,31 +211,6 @@ impl Members {
       }
     })
   }
-}
-
-/// What the list is: whose it is, who manages it and whether it is the server's answer now.
-fn intro(ctx: &Ctx, props: &Props, members: &ProjectMembers, manages: bool) -> String {
-  let owners: Vec<&str> = members.owners().map(|owner| owner.display_name.as_str()).collect();
-  let separator = ctx.t("sharing.members.or");
-  let key = match (members.read, manages) {
-    _ if not_member(props, members) => "sharing.members.introRemoved",
-    (MembersRead::Live, true) => "sharing.members.intro",
-    (MembersRead::Live, false) => "sharing.members.introMember",
-    (MembersRead::NoServer, _) => "sharing.members.introNoServer",
-    (_, true) => "sharing.members.introOffline",
-    (_, false) => "sharing.members.introOfflineMember",
-  };
-  ctx
-    .t_args(
-      key,
-      [
-        ("project", props.shared.clone()),
-        ("server", props.server.clone()),
-        ("time", moment(ctx, members.read_at)),
-        ("owners", owners.join(&separator)),
-      ],
-    )
-    .to_string()
 }
 
 /// Whether the person is no longer a member: the link says so, or the server no longer shows them the members.

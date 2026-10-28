@@ -50,6 +50,14 @@ pub(super) fn uses(ctx: &Ctx, counts: UseCounts) -> Arc<str> {
   };
   ctx.t_args(key, [("count", counts.total().to_string())])
 }
+/// How many use a secret, as its page's head says it (`used by 1` in `E7aHKZ`, `06b`).
+pub(super) fn used_by(ctx: &Ctx, counts: UseCounts) -> Arc<str> {
+  match counts.total() {
+    0 => ctx.t("secrets.uses.usedByNone"),
+    1 => ctx.t("secrets.uses.usedByOne"),
+    count => ctx.t_args("secrets.uses.usedByMany", [("count", count.to_string())]),
+  }
+}
 /// What archiving `secret` does to what uses it, naming each (`1 MCP server uses it: figma. An archived secret gives no
 /// value to what uses it.`, `WDDU4` in `06b`).
 pub(super) fn archive_impact(ctx: &Ctx, listed: &ProjectSecrets, secret: SecretId) -> Arc<str> {

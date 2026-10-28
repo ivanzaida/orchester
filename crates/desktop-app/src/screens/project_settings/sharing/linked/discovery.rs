@@ -97,10 +97,7 @@ impl Component for DiscoveryRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let local = props.project.open.project.name().as_str().to_owned();
-    let row = SettingRow::new("sharing-discovery", discovery::FILE)
-      .mono_label()
-      .info(ctx.t_args("sharing.discovery.description", [("local", local.as_str())]));
+    let row = SettingRow::new("sharing-discovery", discovery::FILE).mono_label();
     let row = match &props.discovery {
       None => row.hint(ctx.t("sharing.discovery.noAddress")),
       Some(found) => match found.state {

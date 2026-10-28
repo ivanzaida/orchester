@@ -22,7 +22,7 @@ use crate::{
   screens::{
     connections::{
       widen::{WidenConfirm, WidenLook, WidenProps},
-      words::{mcp_glyph, mcp_status},
+      words::{MCP_GLYPH, mcp_status},
       work::Work,
     },
     project_settings::kit::{Group, SettingRow, Tone, mono_value, question, value},
@@ -96,7 +96,7 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
     )
   });
   Parts {
-    glyph: mcp_glyph(server).into(),
+    glyph: MCP_GLYPH.into(),
     title: title(server.name().as_str()).into(),
     status: mcp_status(server.enabled()),
     status_detail: Some(detail),
@@ -233,7 +233,6 @@ fn stdio_rows(ctx: &mut Ctx, stdio: &StdioServer) -> Vec<Element> {
     ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeStdio")),
     false,
   )
-  .info(ctx.t("connections.mcp.startedByCli"))
   .render(ctx);
   let program = display::shorten_path(Path::new(stdio.program().as_str()), PATH_CHARS);
   let mut rows = vec![
@@ -295,7 +294,6 @@ fn http_rows(ctx: &mut Ctx, http: &HttpServer, inspecting: &Inspecting<'_>) -> V
       ("connections.mcp.runsAs", &ctx.t("connections.mcp.typeHttp")),
       false,
     )
-    .info(ctx.t("connections.mcp.reachedByCli"))
     .render(ctx),
     row(
       ctx,
@@ -335,6 +333,19 @@ fn secret_name(ctx: &Ctx, inspecting: &Inspecting<'_>, id: orchester_core::id::S
     )
 }
 
+/// The `NAME` of secret `id`, as *Variables* names it (`XP9pE`), or that the project no longer has it.
+fn secret_bare_name(ctx: &Ctx, inspecting: &Inspecting<'_>, id: orchester_core::id::SecretId) -> Arc<str> {
+  inspecting
+    .listed
+    .secrets
+    .iter()
+    .find(|secret| secret.id() == id)
+    .map_or_else(
+      || ctx.t("connections.mcp.secretGone"),
+      |secret| secret.name().as_str().into(),
+    )
+}
+
 /// *Sends* (`z6ILot`): its variables, a secret by its name, and the tools that run without asking.
 fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -> Element {
   let variables: Vec<String> = server
@@ -352,7 +363,7 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
           "connections.mcp.variableSecret",
           [
             ("name", name.as_str()),
-            ("secret", &*secret_name(ctx, inspecting, *secret)),
+            ("secret", &*secret_bare_name(ctx, inspecting, *secret)),
           ],
         )
         .to_string(),
@@ -408,8 +419,7 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
     "connection-exempt-tools",
     ("connections.mcp.exemptToolsShort", &exempt),
     false,
-  )
-  .info(ctx.t("connections.mcp.exemptToolsNote"));
+  );
   let rows = vec![variables_row.render(ctx), exempt_row.render(ctx)];
   Group::new("connection-variables", ctx.t("connections.mcp.sendsGroup"))
     .rows(rows)

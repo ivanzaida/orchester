@@ -106,14 +106,9 @@ impl Component for MakeLocal {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let local = props.project.open.project.name().as_str().to_owned();
     let asking = props.asking.get();
     let row = SettingRow::new("sharing-make-local", ctx.t("sharing.linked.makeLocal"))
-      .hint(ctx.t("sharing.linked.makeLocalHint"))
-      .info(ctx.t_args(
-        "sharing.linked.makeLocalDescription",
-        [("project", local.as_str()), ("key", props.key.as_str())],
-      ));
+      .hint(ctx.t("sharing.linked.makeLocalHint"));
     let row = if asking {
       let question = self.question(ctx, &props);
       row.under(question)

@@ -15,15 +15,15 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
   let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
   link_kontur(&window);
 
-  // One Members row in Team server (`TnUGj`): who is in the project and how many, with no list of each member and no
-  // disclosure, as the design draws it; who the list is and whom to ask is in the summary's (i).
+  // One Members row in Team server (`TnUGj`): who is in the project and how many, with no list of each member, no
+  // disclosure and no (i), as the design draws it.
   open_sharing(&mut window, "sharing-members-count");
   let named = window.text("sharing-members-hint");
   assert!(named.contains("ivan") && named.contains("alice"), "{named}");
   assert!(window.tree.get_element_by_id("sharing-members-list").is_none());
   assert!(window.tree.get_element_by_id("sharing-member-ivan-row").is_none());
   assert_eq!(window.text("sharing-members-count"), "2");
-  assert!(window.tree.get_element_by_id("sharing-members-info").is_some());
+  assert!(window.tree.get_element_by_id("sharing-members-info").is_none());
   assert!(
     window.tree.get_element_by_id("sharing-members-manage").is_none(),
     "a member manages nothing"

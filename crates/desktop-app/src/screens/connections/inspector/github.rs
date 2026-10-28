@@ -34,7 +34,6 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     menu::MenuItem,
-    tooltip::Tooltip,
   },
 };
 
@@ -47,12 +46,9 @@ pub(super) fn parts(
   let state = github_state(inspecting.listed, connection);
   let status = shown(inspecting, github_status(&state));
   let mut notices = match &state {
-    GitHubState::WrongAccount { active, .. } => vec![wrong_account(
-      ctx,
-      connection,
-      (active.as_str(), &state),
-      (inspecting, actions),
-    )],
+    GitHubState::WrongAccount { active, .. } => {
+      vec![wrong_account(ctx, connection, active.as_str(), (inspecting, actions))]
+    }
     GitHubState::SignedIn { .. } | GitHubState::NotChecked => Vec::new(),
     _ => vec![sentence(
       "connection-inspector-sentence",
@@ -85,7 +81,7 @@ pub(super) fn parts(
     }),
   };
   Parts {
-    glyph: GITHUB_GLYPH.into(),
+    glyph: GITHUB_GLYPH,
     title: title_with_rename(
       ctx,
       (inspecting, actions),
@@ -142,7 +138,7 @@ fn menu(ctx: &Ctx, state: &GitHubState, (inspecting, actions): (&Inspecting<'_>,
 fn wrong_account(
   ctx: &mut Ctx,
   connection: &GitHubConnection,
-  (active, state): (&str, &GitHubState),
+  active: &str,
   (inspecting, actions): (&Inspecting<'_>, &Actions),
 ) -> Element {
   let label = ctx.t_args("connections.github.useAccount", [("account", active)]);
@@ -155,14 +151,9 @@ fn wrong_account(
       button.on_click(move || start(id, Work::UseActiveAccount))
     }
   };
-  // One line under the title, as `14` draws it; the accounts are in the status line, the whole of it in the (i).
-  let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id("connection-wrong-account-info");
-  let info = Tooltip::new("connection-wrong-account-info", said(ctx, state, inspecting.project)).wrap(ctx, glyph);
-  let title = Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t("connections.github.wrongAccountTitle")).variant(ExtraTypography::OptionTitle.role()))
-    .child(info);
+  // One line under the title, as `14` draws it; the accounts are in the status line.
+  let title =
+    Text::new(&ctx.t("connections.github.wrongAccountTitle")).variant(ExtraTypography::OptionTitle.role());
   Row::new()
     .id("connection-wrong-account")
     .width(Dimension::Pct(100.0))
