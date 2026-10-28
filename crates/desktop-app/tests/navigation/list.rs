@@ -390,7 +390,7 @@ fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
 }
 
 #[test]
-fn the_focus_goes_to_new_tab_when_the_list_goes_away() {
+fn new_tab_does_not_take_the_focus_when_the_list_goes_away() {
   let (mut window, navigation) = narrow_window(640);
   open_list(&mut window);
   while shown(&mut window, "tab-list-button") {
@@ -398,5 +398,17 @@ fn the_focus_goes_to_new_tab_when_the_list_goes_away() {
     press(&mut window, &row(hidden), MouseButton::Middle);
     settle(&mut window);
   }
-  assert_eq!(focused(&window).as_deref(), Some("new-tab"));
+  assert_ne!(focused(&window).as_deref(), Some("new-tab"));
+}
+
+/// The Tab that comes with Alt+Tab back into the window must not land on *New tab*, where Space would open a tab.
+#[test]
+fn new_tab_is_never_a_tab_stop() {
+  let (mut window, _navigation) = crowded_window();
+  for _ in 0..40 {
+    key(&mut window, "Tab");
+    assert_ne!(focused(&window).as_deref(), Some("new-tab"));
+  }
+  press(&mut window, "new-tab", MouseButton::Left);
+  assert_ne!(focused(&window).as_deref(), Some("new-tab"), "nor after a press");
 }

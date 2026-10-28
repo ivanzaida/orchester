@@ -146,6 +146,8 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`workflow_status: done | canceled`** closes the task (*Mark as done* / *Cancel task*), whatever its latest run
   did. Refused as `stop_run_first` while a run of the task has not ended (`cancel_run` first). A closed task leaves
   *In progress*, *Needs you* and the queue. `backlog` or `todo` reopens it.
+- **`workflow_status: todo`** on a task whose latest run ended is the Tasks board's *Move to Todo*: only the status
+  changes; no run starts and nothing is queued. `run_task` runs it again.
 - **`blocked_reason`**: a string sets *Blocked*; `null` clears it.
 - **`blocked_by`** / **`tags`**: the whole list; `[]` clears.
 - **`module`**: `null` takes it out of its module.

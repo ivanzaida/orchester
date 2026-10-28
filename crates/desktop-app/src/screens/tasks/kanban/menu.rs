@@ -208,14 +208,16 @@ fn copy_key(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Element {
   .render(ctx, open)
 }
 
-/// Run again, for a task whose latest run ended: asked at the card first, as a drop on Todo asks.
+/// Run again, for a task whose latest run ended so that Run again may follow it (not one that succeeded with work to
+/// merge, or was merged): asked at the card first, as a drop on Todo asks, also for a card in Todo already, which a
+/// drop there leaves as it is.
 fn run_again(
   ctx: &mut Ctx,
   card: &CardModel,
   (dropping, busy): (&Dropping, bool),
   open: &Signal<bool>,
 ) -> Vec<Element> {
-  if !card.row.has_run || card.row.run_not_ended || card.row.not_shared {
+  if !card.row.runs_again || card.row.run_not_ended || card.row.not_shared {
     return Vec::new();
   }
   let id = format!("task-menu-{}-run-again", card.row.key);
@@ -225,11 +227,10 @@ fn run_again(
   } else {
     let (dropping, card) = (dropping.clone(), card.clone());
     MenuItem::new(id, label, move || {
-      let target = Target {
-        column: ColumnKey::Status(WorkflowStatus::Todo),
-        lane: None,
-      };
-      dropping.drop_card(&card, &target);
+      if !dropping.locked(&card) {
+        dropping.state.refused.set(None);
+        dropping.ask_run_again(&card);
+      }
     })
   };
   vec![separator(ctx), row.icon(Icon::RotateCcw).render(ctx, open)]

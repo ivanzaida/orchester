@@ -97,42 +97,56 @@ fn top(window: &mut Window, id: &str) -> f32 {
 }
 
 #[test]
-fn sidebar_lists_the_project_screens_in_the_design_order_and_goes_to_them() {
+fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them() {
   let mut window = Window::open();
   window.navigation().go(overview(project_id()));
-  window.until("the project to open", |window| window.texts("nav-memory").is_some());
+  window.until("the project to open", |window| window.texts("nav-agents").is_some());
   let order = [
+    "project-switcher",
+    "sidebar-jump",
     "nav-overview",
-    "nav-orchestrator",
     "nav-tasks",
-    "nav-merge_queue",
-    "nav-pull_requests",
-    "nav-usage",
+    "nav-modules",
+    "nav-orchestrator",
+    "nav-review",
+    "nav-files",
+    "sidebar-configure",
     "nav-pipelines",
     "nav-agents",
-    "nav-instructions",
-    "nav-memory",
-    "nav-skills",
-    "nav-tools",
+    "sidebar-usage-card",
   ];
   let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
   assert!(
     tops.windows(2).all(|pair| pair[0] < pair[1]),
     "{order:?} from the top: {tops:?}"
   );
-  // Secrets and Connections are tabs of Project settings, which the sidebar keeps.
-  for item in ["nav-secrets", "nav-connections"] {
-    assert!(window.texts(item).is_none(), "{item} left the sidebar");
+  // What the sidebar held before lives in a hub, Project settings, the switcher's menu or the usage card now.
+  for screen in [
+    "merge_queue",
+    "pull_requests",
+    "usage",
+    "instructions",
+    "memory",
+    "skills",
+    "tools",
+    "secrets",
+    "connections",
+    "project_settings",
+    "all_projects",
+    "settings",
+  ] {
+    let item = format!("nav-{screen}");
+    assert!(window.texts(&item).is_none(), "{item} left the sidebar");
   }
-  assert!(window.texts("nav-project_settings").is_some());
-  // Every entry opens its own screen (`tests/orchestrator/`, `tests/merge_queue.rs`, `tests/memory/`).
+  // Every entry opens its own screen (`tests/orchestrator/`, `tests/merge_queue.rs`, `tests/sidebar_places/`).
   for (item, screen, title) in [
     ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),
-    ("nav-merge_queue", "screen-merge_queue", "Merge queue"),
-    ("nav-memory", "screen-memory", "Memory"),
+    ("nav-review", "screen-merge_queue", "Review"),
+    ("nav-modules", "screen-modules", "Modules"),
+    ("nav-agents", "agents-hub", "Agents"),
   ] {
     assert_eq!(
-      window.texts(item).expect("the item shows").last().map(String::as_str),
+      window.texts(item).expect("the item shows").first().map(String::as_str),
       Some(title)
     );
     press(&mut window, item);
@@ -430,7 +444,7 @@ fn lined(window: &mut Window, id: &str) -> bool {
 }
 
 #[test]
-fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_keeps_the_bottom_group() {
+fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_keeps_the_usage_card() {
   const HEIGHT: f32 = 640.0;
   let (data, repo) = seeded();
   let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
@@ -438,8 +452,9 @@ fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_
   let last = format!("running-{}", runs.last().expect("the scenario has runs under way").key);
   let launch = data.launch();
   let mut window = Window::of(data, launch);
-  // Tall enough for the screens, too short once the runs under way show under them.
-  window.tree.resize(960, 800);
+  // The app's smallest window (`window.rs`): tall enough for the places, too short once the runs under way show
+  // under them.
+  window.tree.resize(960, 640);
   window.until("the runs under way to show", |window| {
     window.texts(&last).is_some() && lined(window, "sidebar-bottom-edge")
   });
@@ -447,20 +462,19 @@ fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_
     !lined(&mut window, "sidebar-top-edge"),
     "runs that came in under the screens leave the part at its top"
   );
-  // The app's smallest window (`window.rs`).
-  window.tree.resize(960, 640);
+  // The hairline over the usage card came in with the last layout: lay the sidebar out with it.
   window.pass();
   let sidebar = bounds(&mut window, "sidebar");
-  let settings = bounds(&mut window, "nav-project_settings");
+  let settings = bounds(&mut window, "sidebar-usage-card");
   assert!(
     bottom(settings) <= bottom(sidebar) && bottom(sidebar) <= HEIGHT,
-    "Project settings inside the sidebar, inside the window: {settings:?} in {sidebar:?}"
+    "the usage card inside the sidebar, inside the window: {settings:?} in {sidebar:?}"
   );
   let scroll = bounds(&mut window, "sidebar-scroll");
-  let first = bounds(&mut window, "nav-all_projects");
+  let first = settings;
   assert!(
     bottom(scroll) <= first.y,
-    "the bottom group under the scrolling part: {scroll:?}, {first:?}"
+    "the usage card under the scrolling part: {scroll:?}, {first:?}"
   );
   assert!(
     bottom(bounds(&mut window, &last)) > bottom(scroll),
@@ -482,13 +496,13 @@ fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_
     "the last run scrolled into the room: {row:?} in {scroll:?}"
   );
   assert_eq!(
-    bounds(&mut window, "nav-project_settings"),
+    bounds(&mut window, "sidebar-usage-card"),
     settings,
-    "the bottom group stays where it was"
+    "the usage card stays where it was"
   );
   assert!(
-    bottom(bounds(&mut window, "project-switcher")) <= scroll.y,
-    "the switcher stays above the scrolling part"
+    bottom(bounds(&mut window, "sidebar-jump")) <= scroll.y,
+    "the switcher and Jump to stay above the scrolling part"
   );
   assert!(
     lined(&mut window, "sidebar-top-edge") && lined(&mut window, "sidebar-bottom-edge"),
@@ -496,11 +510,11 @@ fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_
   );
   assert!(
     first.y - bottom(row) >= 4.0,
-    "room between the last run and All projects: {row:?}, {first:?}"
+    "room between the last run and the usage card: {row:?}, {first:?}"
   );
-  press(&mut window, "nav-project_settings");
-  window.until("Project settings", |window| {
-    window.texts("screen-project_settings").is_some()
+  press(&mut window, "sidebar-settings");
+  window.until("Settings", |window| {
+    window.navigation().route_now() == orchester_app::routes::Route::Settings
   });
   grow_and_shrink(&mut window, &last, overview);
 }

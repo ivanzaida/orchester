@@ -85,6 +85,8 @@ pub struct ProjectFeed {
   pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
   pub hub_unread: Signal<u8>,
+  /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
+  pub configure_folded: Signal<bool>,
   /// The tasks last read while no runner served the project, as they stand without one.
   offline: Arc<Mutex<Option<Offline>>>,
 }
@@ -178,6 +180,7 @@ impl ProjectFeed {
       pipeline_names: Signal::new(PipelineNames::default()),
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
+      configure_folded: Signal::new(false),
       offline: Arc::default(),
       jobs,
     }

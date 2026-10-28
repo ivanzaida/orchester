@@ -1,5 +1,5 @@
-//! What the status bar shows, as plain data: the active tab's project with its runner, tasks and usage,
-//! the session's activity, and the app's MCP server. The window gathers it ([`super::StatusBar`]); a test
+//! What the status bar shows, as plain data: the active tab's project with its runner and tasks, the
+//! session's activity, and the app's MCP server. The window gathers it ([`super::StatusBar`]); a test
 //! hands it over directly. What the bar's items do goes back as a [`BarAction`].
 
 use std::{
@@ -14,7 +14,7 @@ use orchester_workspace::{
   activity::{ActivityLog, OperationId},
   messages::Message,
   runner::{RunnerStatus, state::RunnerState},
-  tasks::{data::ProjectTasks, usage::ProjectUsage},
+  tasks::data::ProjectTasks,
 };
 
 use crate::{mcp::McpStatus, navigation::press::OpenIn, routes::Route, ui::pressable::Press};
@@ -54,8 +54,6 @@ pub struct ProjectFacts {
   pub runner: RunnerFacts,
   /// The tasks as they stand with the runner's state; `None` while they are read.
   pub tasks: Option<ProjectTasks>,
-  /// The limits and today's usage; `None` while they are read.
-  pub usage: Option<ProjectUsage>,
   /// Why the project's tasks could not be read, when they could not.
   pub read_failure: Option<ReadFailure>,
   /// How many runs the previous session left interrupted wait for the person to continue them or not.
