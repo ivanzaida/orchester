@@ -159,7 +159,8 @@ the older decisions and task snapshots below are historical when superseded by a
   through it.
 - Read `.pen` files only through the Pencil MCP. Never change the person's design files (`orchester2.pen`, and never
   `kontur.pen`).
-- No modals (new/import are pages, confirmations sit in place). Token and time limits are optional, and none is the
+- New/import are pages; confirmations and approvals of the person's own actions are modal dialogs, never warnings
+  inserted into the page (changed 2026-10-28: a jumping layout is worse than a modal; `orchester-ui` skill). Token and time limits are optional, and none is the
   default. Everything must work on Windows **and** macOS.
 - When Claude Code's safety classifier or a sandbox refuses something, do not work around it; tell the person.
 
