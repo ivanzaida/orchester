@@ -107,11 +107,13 @@ pub enum Ask {
   },
   /// Moving the selected cards to Todo takes `ended`, tasks whose latest runs ended: they run again (`again`, one
   /// [`ChangeKind::RunAgain`] each) or only move to Todo, and the rest of the move, `changes`, is made either way; or
-  /// nothing changes.
+  /// nothing changes. Drafts of the move that would start at once are not in `changes`: `then` asks about them after
+  /// the answer, as an [`Ask::BulkQueue`].
   BulkRunAgain {
     ended: Vec<Subject>,
     again: Vec<Change>,
     changes: Vec<Change>,
+    then: Option<Box<Ask>>,
   },
   /// Marking the selected `tasks` as done closes `unmerged` of them, whose work waits to be merged, without merging.
   BulkUnmerged {

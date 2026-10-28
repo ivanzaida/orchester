@@ -79,26 +79,39 @@ pub fn bulk_move(dropping: &Dropping, cards: &[CardModel], status: WorkflowStatu
 }
 
 /// Makes the changes of a move, asking first, as a single card's drop on Todo does, when it takes tasks whose runs
-/// ended (they run again or only move), or else when it queues drafts that start at once: agent slots are free and new
-/// starts are not held.
+/// ended (they run again or only move), and when it queues drafts that start at once: agent slots are free and new
+/// starts are not held. Both asked, the drafts are asked about after the answer about the tasks whose runs ended.
 fn change_or_ask(dropping: &Dropping, (moving, queued, ended): (Vec<Change>, Vec<Subject>, Vec<(Subject, Change)>)) {
-  if !ended.is_empty() {
-    let (ended, again) = ended.into_iter().unzip();
-    dropping.state.asked.set(Some(Ask::BulkRunAgain {
-      ended,
-      again,
-      changes: moving,
-    }));
+  let starts = dropping.free.filter(|free| *free > 0 && !queued.is_empty());
+  if ended.is_empty() {
+    match starts {
+      Some(free) => dropping.state.asked.set(Some(Ask::BulkQueue {
+        queued,
+        free,
+        changes: moving,
+      })),
+      None => dropping.state.change(moving),
+    }
     return;
   }
-  match dropping.free.filter(|free| *free > 0) {
-    Some(free) if !queued.is_empty() => dropping.state.asked.set(Some(Ask::BulkQueue {
-      queued,
-      free,
-      changes: moving,
-    })),
-    _ => dropping.state.change(moving),
-  }
+  // Move to Todo starts nothing: the drafts that would start wait for their own question.
+  let (queues, changes) = match starts {
+    Some(_) => moving.into_iter().partition(|change| change.kind == ChangeKind::Queue),
+    None => (Vec::new(), moving),
+  };
+  let (ended, again) = ended.into_iter().unzip();
+  dropping.state.asked.set(Some(Ask::BulkRunAgain {
+    ended,
+    again,
+    changes,
+    then: starts.map(|free| {
+      Box::new(Ask::BulkQueue {
+        queued,
+        free,
+        changes: queues,
+      })
+    }),
+  }));
 }
 
 /// The columns by status.

@@ -3,7 +3,8 @@
 //! that starts at once (*Queue KON-27? It starts now: 1 agent slot is free.* with Keep as draft and Queue), what a task
 //! whose run ended does on Todo (ORC-144: *Don't move*, *Move to Todo*, which only sets its status, and *Run again*),
 //! marking work that waits to be merged as done, and for several selected tasks the same questions, closing those whose
-//! runs have not ended, and deleting them. Enter and Esc answer it too: Enter as the last button, Esc as the first.
+//! runs have not ended, and deleting them; a selection moved to Todo with both kinds is asked about its drafts after
+//! its tasks whose runs ended. Enter and Esc answer it too: Enter as the last button, Esc as the first.
 
 use std::sync::Arc;
 
@@ -124,7 +125,16 @@ pub fn answer(state: &BoardState, closer: &Closer, asked: &Ask) {
     )]),
     Ask::Unmerged(task) => closer.close(task, Closing::Done),
     Ask::BulkQueue { changes, .. } => state.change(changes),
-    Ask::BulkRunAgain { again, changes, .. } => state.change(changes.into_iter().chain(again).collect()),
+    Ask::BulkRunAgain {
+      again, changes, then, ..
+    } => {
+      let taken = again.len();
+      change_then(
+        state,
+        changes.into_iter().chain(again).collect(),
+        (then.as_deref(), taken),
+      );
+    }
     Ask::BulkUnmerged { tasks, .. } => state.bulk.run(Bulk::Prepare(Closing::Done, tasks)),
     Ask::BulkClose { closing, tasks, runs } => state.bulk.run(Bulk::Close(closing, tasks, runs)),
     Ask::BulkDelete(tasks) => state.bulk.run(Bulk::Delete(tasks)),
@@ -138,10 +148,41 @@ fn move_only(state: &BoardState, asked: &Ask) {
   let to_todo = |task: &Subject| change(task, ChangeKind::Status(WorkflowStatus::Todo));
   match asked {
     Ask::RunAgain { task, .. } => state.change(vec![to_todo(task)]),
-    Ask::BulkRunAgain { ended, changes, .. } => {
-      state.change(changes.iter().cloned().chain(ended.iter().map(to_todo)).collect());
+    Ask::BulkRunAgain {
+      ended, changes, then, ..
+    } => {
+      let changes = changes.iter().cloned().chain(ended.iter().map(to_todo)).collect();
+      change_then(state, changes, (then.as_deref(), 0));
     }
     _ => {}
+  }
+}
+
+/// Makes `changes`, the answer about the selected tasks whose runs ended, then asks about the drafts of the same move
+/// that start at once (`then`), `taken` agent slots fewer free now that the answer runs tasks again; with no slot left
+/// they wait in the queue, and are queued with `changes`.
+fn change_then(state: &BoardState, mut changes: Vec<Change>, (then, taken): (Option<&Ask>, usize)) {
+  let next = match then {
+    Some(Ask::BulkQueue {
+      queued,
+      free,
+      changes: queues,
+    }) => match free.saturating_sub(taken) {
+      0 => {
+        changes.extend(queues.iter().cloned());
+        None
+      }
+      free => Some(Ask::BulkQueue {
+        queued: queued.clone(),
+        free,
+        changes: queues.clone(),
+      }),
+    },
+    _ => None,
+  };
+  state.change(changes);
+  if next.is_some() {
+    state.asked.set(next);
   }
 }
 
