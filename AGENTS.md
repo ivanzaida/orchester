@@ -68,8 +68,10 @@ Hard requirements:
    program search path, Library data location, `.app` bundle) is checked with `cargo check`/`clippy --target
    aarch64-apple-darwin` on Windows until it has been run on a Mac. Known gaps today: a macOS process group does not
    hold what leaves it on purpose (`setsid`), and agents outlive a runner that is killed with SIGKILL or aborts (no
-   kill-on-close Job Object); CLIs and tools outside the usual install folders are not found when the app is started
-   from Finder (the user's shell `PATH` is not read); the `.app` is signed ad hoc and not notarized.
+   kill-on-close Job Object), and the same holds for the Git programs of local integration, whose database and
+   `.orchester` folder macOS checks instead of holding (`docs/architecture/storage.md`); CLIs and tools outside the
+   usual install folders are not found when the app is started from Finder (the user's shell `PATH` is not read); the
+   `.app` is signed ad hoc and not notarized.
 1. Before writing or reviewing Rust code, read `.claude/skills/rust-code-quality/SKILL.md` and follow it.
 2. Before touching the visual layer (screen, panel, row, field, dialog, control, interaction, user-facing text,
    layout/text/scroll defect), read `.claude/skills/lurq-ui/SKILL.md` with its `references/`, and
