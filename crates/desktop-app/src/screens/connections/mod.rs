@@ -1,14 +1,16 @@
 //! Project settings › Connections (`05 Connections` `dk46o` in `Project settings · redesign`): how the project's agents
-//! run (agent CLIs, and native connections, which this version does not run), GitHub through `gh`, and the MCP servers
-//! its agents get. The groups of connections (`list`), a connection's page (`inspector`), Add provider for an agent CLI
-//! (`add_agent`) and Add / Edit MCP server (`mcp_form`), each a page under the tab with a crumb back to it; adding is
-//! a person's action in the window, and the domain rules are `orchester_workspace::connections`', which the MCP setup
-//! tools share. Project settings draws the page around them (`project_settings::page`).
+//! run (agent CLIs, and native connections, whose agents Orchester runs itself on a model API), GitHub through `gh`,
+//! and the MCP servers its agents get. The groups of connections (`list`), a connection's page (`inspector`), Add
+//! provider for an agent CLI or a native connection (`add_agent`, `native_form`) and Add / Edit MCP server
+//! (`mcp_form`), each a page under the tab with a crumb back to it; adding is a person's action in the window, and the
+//! domain rules are `orchester_workspace::connections`', which the MCP setup tools share. Project settings draws the
+//! page around them (`project_settings::page`).
 //!
-//! Edit connection of an agent CLI connection chooses its account (`edit_agent`); an agent or GitHub connection is
-//! renamed in place of its page's title, an MCP server in its form. Not built in this app yet, and visibly unavailable:
-//! adding or editing a GitHub connection and changing its account or access, choosing a program file other than the
-//! copies on the search path, native connections (adding, testing, their models), and listing an MCP server's tools.
+//! Edit connection of an agent CLI connection chooses its account, of a native connection its key, endpoint and models
+//! (`edit_agent`); an agent or GitHub connection is renamed in place of its page's title, an MCP server in its form.
+//! Not built in this app yet, and visibly unavailable: adding or editing a GitHub connection and changing its account
+//! or access, choosing a program file other than the copies on the search path, the OpenAI API's native agents, and
+//! listing an MCP server's tools.
 
 mod account;
 mod add_agent;
@@ -17,6 +19,7 @@ mod edit_agent;
 mod inspector;
 mod list;
 mod mcp_form;
+mod native_form;
 mod page;
 mod provider_form;
 pub(crate) mod widen;

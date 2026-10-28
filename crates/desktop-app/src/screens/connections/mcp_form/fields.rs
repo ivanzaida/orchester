@@ -147,7 +147,12 @@ impl Fields {
         TransportChoice::Stdio => ctx.t("connections.mcp.dialog.widensProgram"),
         TransportChoice::Http => ctx.t("connections.mcp.dialog.widensRemote"),
       };
-      sections.push(warning_line(ctx, "connection-mcp-widens", &words, None));
+      sections.push(warning_line(
+        ctx,
+        ("connection-mcp-widens", Icon::TriangleAlert),
+        &words,
+        None,
+      ));
     }
     sections
   }

@@ -110,17 +110,28 @@ impl ProviderForm {
       .into()
   }
 
-  fn url_row(&self, ctx: &mut Ctx, cli: AgentProvider) -> Element {
-    let (interface, more, placeholder) = match cli {
+  /// The base URL, with the API it must speak; a native connection's starts at its preset's.
+  pub(in super::super) fn url_row(&self, ctx: &mut Ctx, provider: AgentProvider) -> Element {
+    let (interface, more, placeholder) = match provider {
       AgentProvider::CodexCli => (
         "connections.apiProvider.interfaceCodexShort",
         "connections.apiProvider.interfaceCodex",
         "connections.apiProvider.urlPlaceholderCodex",
       ),
-      _ => (
+      AgentProvider::ClaudeCodeCli => (
         "connections.apiProvider.interfaceClaudeShort",
         "connections.apiProvider.interfaceClaude",
         "connections.apiProvider.urlPlaceholderClaude",
+      ),
+      AgentProvider::AnthropicApi => (
+        "connections.native.urlHintAnthropic",
+        "connections.native.urlInfo",
+        "connections.native.urlPlaceholderAnthropic",
+      ),
+      AgentProvider::OpenAiApi => (
+        "connections.native.urlHintOpenai",
+        "connections.native.urlInfo",
+        "connections.native.urlPlaceholderOpenai",
       ),
     };
     let mut url = FieldInput::new(
@@ -144,7 +155,7 @@ impl ProviderForm {
 
   /// The key's secret: the project's, the archived one the connection still names, or a new one with its name and
   /// key under the select.
-  fn key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Element {
+  pub(in super::super) fn key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Element {
     let label = |secret: &Secret| -> String {
       ctx
         .t_args(
@@ -205,9 +216,17 @@ impl ProviderForm {
       }))
       .with_children(new_secret)
       .with_children(self.new_secret_fields(ctx, &listed.secrets));
+    // Who reads the key: the CLI process Orchester starts, or Orchester's runner for a native connection.
+    let (hint, info) = match self.native {
+      true => ("connections.native.keyHintShort", "connections.native.keyHint"),
+      false => (
+        "connections.apiProvider.keyHintShort",
+        "connections.apiProvider.keyHint",
+      ),
+    };
     FormField::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
-      .hint(ctx.t("connections.apiProvider.keyHintShort"))
-      .info(ctx.t("connections.apiProvider.keyHint"))
+      .hint(ctx.t(hint))
+      .info(ctx.t(info))
       .render(ctx, control)
   }
 
@@ -257,7 +276,8 @@ impl ProviderForm {
 
   /// The field and *Add* that add model ids (`Entry row` `w12Vx`), Enter in the field as *Add*, the models added as
   /// removable pills under them (`Pills` `TQ7md`) and the note of how (`Note` `ku8BO`).
-  fn models_row(&self, ctx: &mut Ctx) -> Element {
+  pub(in super::super) fn models_row(&self, ctx: &mut Ctx) -> Element {
+    let (placeholder, hint, info) = models_words(self.native);
     let listed = self.models.get().0;
     let pills = (!listed.is_empty()).then(|| {
       Row::new()
@@ -289,7 +309,7 @@ impl ProviderForm {
       ctx.t("connections.apiProvider.model"),
       self.model.clone(),
     )
-    .placeholder(ctx.t("connections.apiProvider.modelsPlaceholder"))
+    .placeholder(ctx.t(placeholder))
     .mono();
     if problem.is_some() {
       input = input.invalid();
@@ -325,8 +345,8 @@ impl ProviderForm {
         &ctx.t("connections.apiProvider.modelsNote"),
       ));
     FormField::new("connection-provider-models", ctx.t("connections.apiProvider.models"))
-      .hint(ctx.t("connections.apiProvider.modelsHintShort"))
-      .info(ctx.t("connections.apiProvider.modelsHint"))
+      .hint(ctx.t(hint))
+      .info(ctx.t(info))
       .render(ctx, control)
   }
 
@@ -346,16 +366,38 @@ impl ProviderForm {
         ("limits", ctx.t("connections.apiProvider.notSupported")),
       ],
     );
-    Some(warning_line(ctx, "connection-provider-notice", &words, Some(info)))
+    Some(warning_line(
+      ctx,
+      ("connection-provider-notice", Icon::Send),
+      &words,
+      Some(info),
+    ))
   }
 }
 
 /// The environment's name as Secrets shows it (*Development*).
-const fn environment_key(environment: Environment) -> &'static str {
+pub(in super::super) const fn environment_key(environment: Environment) -> &'static str {
   match environment {
     Environment::Development => "connections.apiProvider.environments.development",
     Environment::Staging => "connections.apiProvider.environments.staging",
     Environment::Production => "connections.apiProvider.environments.production",
+  }
+}
+
+/// The models field's placeholder, hint and (i): a provider's models are typed, a native connection's may also come
+/// from its endpoint.
+const fn models_words(native: bool) -> (&'static str, &'static str, &'static str) {
+  match native {
+    true => (
+      "connections.native.modelsPlaceholder",
+      "connections.native.modelsHintShort",
+      "connections.native.modelsHint",
+    ),
+    false => (
+      "connections.apiProvider.modelsPlaceholder",
+      "connections.apiProvider.modelsHintShort",
+      "connections.apiProvider.modelsHint",
+    ),
   }
 }
 

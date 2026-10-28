@@ -167,6 +167,7 @@
     "asksCommands": "Asks before commands",
     "anyCommands": "Any command in the worktree",
     "enforced": "Enforced by {{provider}}",
+    "enforcedByOrchester": "Enforced by Orchester",
     "notEnforced": "Change the connection to publish",
     "enforcementNote": "Every run uses these limits. No setting or mode turns them off.",
     "newRuns": "Applies to new runs after publishing.",

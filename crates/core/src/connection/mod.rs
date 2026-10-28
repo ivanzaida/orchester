@@ -415,9 +415,7 @@ impl Connection {
   /// Points a native connection at another model API setup. The last check stays while the API and
   /// its key do; another preset, base URL or key drops it.
   pub fn set_api(&mut self, api: ApiEndpoint) -> Result<(), ConnectionError> {
-    let same_api = self.endpoint.api().is_some_and(|current| {
-      current.preset() == api.preset() && current.base_url() == api.base_url() && current.key() == api.key()
-    });
+    let same_api = self.endpoint.api().is_some_and(|current| current.same_api(&api));
     self.endpoint = fitted(self.id, &self.kind, AgentEndpoint::Api(api))?;
     if !same_api {
       self.last_check = None;

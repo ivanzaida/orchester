@@ -1,9 +1,9 @@
 //! What a run keeps of its approvals, as the task page and the status bar show it: whether Orchester
 //! auto-approves its requests (the run's own choice — *Approve everything in this run*, the run's switch,
-//! *Stop* — else whether a profile one of its steps pinned approves automatically,
-//! `orchester_core::run::auto_approves`), its rules from Approve similar and Always allow, and how its
-//! requests were answered. The desktop writes the run's choice and revokes rules; the runner reads both
-//! at each request, so a change applies from the next one.
+//! *Stop* — else whether a profile one of its steps pinned approves automatically, or auto mode's *approve
+//! everything in each run* covers it, `orchester_core::run::auto_approves`), its rules from Approve similar and
+//! Always allow, and how its requests were answered. The desktop writes the run's choice and revokes rules; the
+//! runner reads both at each request, so a change applies from the next one.
 
 use std::{path::Path, sync::Arc};
 
@@ -11,7 +11,7 @@ use orchester_core::{
   id::RunId,
   resource::{AgentProfile, ModelId},
   run::{
-    ApprovalRule, ApprovalRuleId, Run, StepExecutor, TaskPhase, auto_approves,
+    Answerer, ApprovalRule, ApprovalRuleId, Run, StepExecutor, TaskPhase, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -24,7 +24,21 @@ use super::detail::run_store_error;
 
 /// Whether `run` auto-approves now.
 pub fn auto_approving(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
-  Ok(auto_approves(db.run_auto_approve(run.id())?, profile_approves(db, run)))
+  Ok(auto_approves(
+    db.run_auto_approve(run.id())?,
+    profile_approves(db, run) || everything(db, run.id())?.is_some(),
+  ))
+}
+
+/// Who turned on auto mode's *approve everything in each run*, while it covers `run`, which uses auto mode now.
+pub fn everything(db: &ProjectDb, run: RunId) -> Result<Option<Answerer>, StoreError> {
+  let setting = db.approve_everything()?;
+  Ok(
+    setting
+      .covers(db.run_auto_mode(run)?)
+      .then(|| setting.turned_on_by())
+      .flatten(),
+  )
 }
 
 /// Whether `latest`, the latest run of `task`, is active and auto-approves: a run the status bar counts as
@@ -139,10 +153,12 @@ pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, Store
 /// What a run keeps of its approvals.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunApprovals {
-  /// The run's own auto-approval choice; `None` follows its profiles.
+  /// The run's own auto-approval choice; `None` follows its profiles and auto mode's setting.
   pub chosen: Option<bool>,
   /// A profile one of its steps pinned approves automatically.
   pub profile: bool,
+  /// Who turned on auto mode's *approve everything in each run*, while it covers the run ([`everything`]).
+  pub everything: Option<Answerer>,
   pub rules: Vec<ApprovalRule>,
   pub counts: DecisionCounts,
 }
@@ -152,6 +168,7 @@ impl RunApprovals {
     Ok(Self {
       chosen: db.run_auto_approve(run.id())?,
       profile: profile_approves(db, run),
+      everything: everything(db, run.id())?,
       rules: db.approval_rules(run.id())?,
       counts: db.decision_counts(run.id())?,
     })
@@ -159,6 +176,12 @@ impl RunApprovals {
 
   /// Whether Orchester auto-approves the run's requests now.
   pub const fn auto_approving(&self) -> bool {
-    auto_approves(self.chosen, self.profile)
+    auto_approves(self.chosen, self.profile || self.everything.is_some())
+  }
+
+  /// Who turned on auto mode's *approve everything in each run*, while it answers the run's requests: the run's own
+  /// choice (*Stop*) did not take it back.
+  pub fn approved_by_setting(&self) -> Option<Answerer> {
+    self.everything.filter(|_| self.chosen != Some(false))
   }
 }

@@ -160,7 +160,8 @@ fn connections_test_whose_result_cannot_be_stored_says_why() {
     !seeded.text("connection-test-result-detail").is_empty(),
     "why it failed is said"
   );
-  assert!(!seeded.exists("connection-test-result-time"), "nothing was stored");
+  // The time the test was pressed, at the right as drawn (`Time` `hFbL8` in 05g).
+  assert_eq!(seeded.text("connection-test-result-time"), "Just now");
 }
 
 #[test]
