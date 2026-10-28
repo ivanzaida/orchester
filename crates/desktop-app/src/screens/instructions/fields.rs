@@ -24,7 +24,7 @@ use orchester_workspace::instructions::{
 
 use super::{state::Tab, work::Author};
 use crate::{
-  screens::hub::parts::head,
+  screens::hub::parts::{head, note},
   theme::instructions,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -170,12 +170,13 @@ impl Fields {
     }
     .instruction()
   }
+  /// The prompt's head and area; a saved rule's has the note on missing and secret values under it (`fSC70` in 02b).
   pub fn prompt(
     &self,
     ctx: &Ctx,
     panel: super::state::SidePanel,
     errors: Option<&FormErrors>,
-    (locked, unavailable): (bool, &[Variable]),
+    (locked, unavailable, saved): (bool, &[Variable], bool),
   ) -> Element {
     let theme = ctx.theme();
     let text_style = FormTextRole {
@@ -230,6 +231,7 @@ impl Fields {
           .map(|error| field_error("instruction-text-error", &message_text(ctx, error))),
       )
       .with_children(self.input_error(ctx))
+      .with_children(saved.then(|| note("instruction-prompt-note", Icon::Info, &ctx.t("instructions.promptNote"))))
       .into()
   }
   fn input_error(&self, ctx: &Ctx) -> Option<Element> {

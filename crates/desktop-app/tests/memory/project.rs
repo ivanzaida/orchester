@@ -73,7 +73,16 @@ fn memory_project_page_lists_its_active_records_grouped_by_type() {
     page.text(&format!("memory-record-{}-history", engine.id())),
     "Supersedes 1 earlier version"
   );
-  assert_eq!(page.text("memory-tab-order"), "Grouped by type · pinned first");
+  // One note under the search says what reaches agents and how the list is ordered (`aivVm` in 05b).
+  assert!(
+    page
+      .text("memory-tab-note")
+      .ends_with("Grouped by type · pinned first.")
+  );
+  assert!(page.has("memory-filter"), "one Filter");
+  for filter in ["memory-filter-type", "memory-filter-author", "memory-filter-tag"] {
+    assert!(!page.has(filter), "{filter} is in the Filter's menu");
+  }
 }
 
 #[test]
@@ -101,9 +110,10 @@ fn memory_project_page_reviews_a_proposal_on_its_own_page_as_a_diff_of_the_activ
   page
     .window
     .set(&format!("{editor}-text"), "API handlers return typed errors.");
+  // Who proposed it and the person's edits head the diff box (`SGCy8` in 05e).
   assert!(
     page
-      .text(&format!("{editor}-added-meta"))
+      .text(&format!("{editor}-diff-head"))
       .ends_with("edited by you: the text")
   );
   assert!(page.has(&format!("{editor}-reject")));

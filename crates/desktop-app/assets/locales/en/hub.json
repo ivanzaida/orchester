@@ -12,6 +12,7 @@
     "saved": "Draft saved",
     "allSaved": "All changes saved",
     "more": "More actions",
+    "crumbSeparator": "/",
     "discard": {
       "action": "Discard draft",
       "title": "Discard draft v{{version}}?",

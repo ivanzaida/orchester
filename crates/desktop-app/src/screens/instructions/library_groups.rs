@@ -79,18 +79,27 @@ pub(super) fn groups(
     .collect()
 }
 
+/// Each role with its rules, the roles that have rules first (`YkHDc` in 02: Builder and Reviewer, then Planner and
+/// Explorer with *No rule*).
 fn roles(data: &ProjectInstructions, entries: &[InstructionEntry]) -> Vec<Line> {
   let mut roles = data.roles();
   roles.extend(entries.iter().filter_map(|entry| match entry.body.scope() {
     InstructionScope::AgentRole { role } => Some(role.clone()),
     _ => None,
   }));
+  let mut groups: Vec<_> = roles
+    .into_iter()
+    .map(|role| {
+      let rules: Vec<&InstructionEntry> = entries
+        .iter()
+        .filter(|e| matches!(e.body.scope(), InstructionScope::AgentRole { role: r } if *r == role))
+        .collect();
+      (role, rules)
+    })
+    .collect();
+  groups.sort_by_key(|(_, rules)| rules.is_empty());
   let mut rows = Vec::new();
-  for role in roles {
-    let rules: Vec<&InstructionEntry> = entries
-      .iter()
-      .filter(|e| matches!(e.body.scope(), InstructionScope::AgentRole { role: r } if *r == role))
-      .collect();
+  for (role, rules) in groups {
     rows.push(Line::Head {
       label: role.as_str().into(),
       count: rules.len(),

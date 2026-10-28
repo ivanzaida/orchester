@@ -93,6 +93,7 @@ fn row(ctx: &Ctx, state: &Panels, variable: Variable, resolved: Option<&Resolved
   .end(end)
   .chosen(state.selected.get().0 == variable)
   .in_place()
+  .dense()
   .press(Press::run(move || choose.set(Picked(variable))))
   .into()
 }

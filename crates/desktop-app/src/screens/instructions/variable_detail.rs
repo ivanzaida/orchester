@@ -1,26 +1,29 @@
-//! Available and missing-value detail x5WE6i / kdAW2.
+//! The chosen variable's detail in the catalog (`Detail` `M6fbYX` in 02d), and what a rule does when a variable it
+//! uses has no value at its event (`When this value is unavailable` `hPvK0`).
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::resource::Variable;
 use orchester_workspace::instructions::{form::Events, preview::Resolved};
 
-use super::{panels::Props, variables, words};
+use super::{panels::Props, words};
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, instructions},
+  screens::hub::parts::{boxed, group, head},
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize, instructions},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     toggle::{Toggle, ToggleKind},
   },
 };
-/// The chosen variable's detail under its group, `context` saying for which task and role its value is (`x9Cv4`).
+/// The chosen variable's value at the rule's event, under what it is the value for (`context`, `x9Cv4`), then Insert.
 pub fn detail(
   ctx: &Ctx,
   props: &Props,
@@ -29,79 +32,43 @@ pub fn detail(
   context: Option<Element>,
 ) -> Element {
   let value = resolved.and_then(|r| r.value(variable));
-  let missing = value.is_none();
-  let head = head(ctx, variable);
-  let box_value = value_box(ctx, props, variable, value);
-  let mut detail = Column::new()
+  let caption = context.unwrap_or_else(|| {
+    Text::new(&ctx.t_args(
+      "instructions.valueAtEvent",
+      [("event", words::event(ctx, props.events.get()).to_uppercase())],
+    ))
+    .id("instruction-variable-context")
+    .variant(instructions::overline())
+    .into()
+  });
+  let shown = match &value {
+    Some(value) => Text::new(value)
+      .id("instruction-variable-value")
+      .variant(instructions::detail_value())
+      .color(PaletteColor::TextPrimary),
+    None => Text::new(&ctx.t(if variable == Variable::RunRevision {
+      "instructions.unavailableCommit"
+    } else {
+      "instructions.unavailable"
+    }))
+    .id("instruction-variable-value")
+    .variant(HubText::Hint.role())
+    .color(PaletteColor::Warning),
+  };
+  Column::new()
     .id("instruction-variable-detail")
     .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
-    .spacing(ExtraSpacing::Inline.role())
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+    .spacing(SpacingSize::Sm)
     .background(PaletteColor::SurfaceRaised)
-    .rounded(lurq::app::theme::RadiusSize::Lg)
-    .border_inside(
-      BorderSize::Sm,
-      if missing {
-        PaletteColor::Warning
-      } else {
-        PaletteColor::Border
-      },
-    )
-    .with_children(context)
-    .child(head)
-    .child(Text::new(&variables::description(ctx, variable)).variant(instructions::detail_description()))
-    .child(box_value);
-  if missing {
-    let note = if variable == Variable::RunRevision {
-      resolved.map_or_else(
-        || ctx.t("instructions.noEmptyValue"),
-        |r| {
-          ctx.t_args(
-            "instructions.revisionExplanation",
-            [
-              ("role", r.role()),
-              (
-                "step",
-                &ctx.t_args(
-                  "instructions.stepLabel",
-                  [
-                    ("number", format!("{:02}", r.step_ordinal())),
-                    ("name", r.step.name.to_string()),
-                  ],
-                ),
-              ),
-            ],
-          )
-        },
-      )
-    } else {
-      ctx.t("instructions.noEmptyValue")
-    };
-    detail = detail.child(Text::new(&note).variant(TypographyStyle::Description));
-    if variable == Variable::RunRevision {
-      detail = detail.child(policy(ctx, props, variable));
-    }
-  } else {
-    detail = detail.child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(icon(Icon::CircleCheck, IconSize::Xs, PaletteColor::Success))
-        .child(
-          Text::new(&ctx.t_args(
-            "instructions.available",
-            [("group", variables::group_label(ctx, variable.group()).to_lowercase())],
-          ))
-          .variant(TypographyStyle::Caption)
-          .flex(1.0),
-        ),
-    );
-  }
-  // The missing revision frame offers recovery policies instead of an insertion action.
-  if missing && variable == Variable::RunRevision {
-    return detail.into();
-  }
-  detail.child(insert(ctx, props, variable)).into()
+    .rounded(RadiusSize::Lg)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
+    .child(caption)
+    .child(shown.selectable(true).width(Dimension::Pct(100.0)))
+    // A run's revision without a value is recovered under the prompt instead (`hPvK0`); any other variable can be
+    // inserted whether or not the preview's run has its value.
+    .with_children((value.is_some() || variable != Variable::RunRevision).then(|| insert(ctx, props, variable)))
+    .into()
 }
 fn insert(ctx: &Ctx, props: &Props, variable: Variable) -> Element {
   let input = props.input.clone();
@@ -109,184 +76,111 @@ fn insert(ctx: &Ctx, props: &Props, variable: Variable) -> Element {
   let expression = format!("{{{{{}}}}}", variable.name());
   let button = ActionButton::new(
     "instruction-variable-insert",
-    ButtonKind::Primary,
+    ButtonKind::Secondary,
     ctx.t_args("instructions.insert", [("expression", expression.as_str())]),
   )
-  .icon(Icon::CornerDownLeft)
+  .icon(Icon::Plus)
   .on_click(move || {
     if !frozen.get_untracked() {
       input.report(input.insert(&expression));
     }
   });
   Row::new()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
     .child(if props.frozen.get() { button.disabled() } else { button })
-    .child(
-      Text::new(&ctx.t("instructions.enter"))
-        .variant(TypographyStyle::Caption)
-        .padding(Padding::symmetric(
-          ExtraSpacing::Pair.role(),
-          ExtraSpacing::Tight.role(),
-        ))
-        .border_inside(BorderSize::Sm, PaletteColor::Border)
-        .rounded(ExtraRadius::Tile.role())
-        .opacity(crate::theme::DISABLED_OPACITY),
-    )
     .into()
 }
-fn policy(ctx: &Ctx, props: &Props, variable: Variable) -> Element {
-  let events = props.events.clone();
-  let frozen = props.frozen.clone();
-  let resume = Toggle::new(
+/// *When this value is unavailable*: Require value, which blocks the injection, Inject at Agent resume, and a fallback
+/// value that cannot be chosen yet; a radio and its words in each row (`XIcKy`).
+pub fn policy(ctx: &Ctx, (events, frozen): (&Signal<Events>, &Signal<bool>), variable: Variable) -> Element {
+  let resume = events.get() == Events::Resume;
+  let choose = |to: Events| {
+    let (events, frozen) = (events.clone(), frozen.clone());
+    move |_| {
+      if !frozen.get_untracked() {
+        events.set(to);
+      }
+    }
+  };
+  let require = Toggle::new(
+    "instruction-variable-require",
+    ToggleKind::Radio,
+    !resume,
+    ctx.t("instructions.requireValue"),
+  )
+  .hide_label()
+  .on_change(choose(Events::Start));
+  let resumed = Toggle::new(
     "instruction-variable-resume",
     ToggleKind::Radio,
-    props.events.get() == Events::Resume,
+    resume,
     ctx.t("instructions.resumePolicy"),
-  );
-  let resume = if props.frozen.get() {
-    resume
-  } else {
-    resume.on_change(move |_| {
-      if !frozen.get_untracked() {
-        events.set(Events::Resume);
-      }
-    })
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("instructions.policyTitle")).variant(TypographyStyle::FieldLabel))
-    .child(
-      Toggle::new(
-        "instruction-variable-require",
-        ToggleKind::Radio,
-        props.events.get() != Events::Resume,
-        ctx.t("instructions.requireValue"),
-      )
-      .on_change({
-        let events = props.events.clone();
-        let frozen = props.frozen.clone();
-        move |_| {
-          if !frozen.get_untracked() {
-            events.set(Events::Start);
-          }
-        }
-      }),
-    )
-    .child(
-      Text::new(&ctx.t_args("instructions.requireNote", [("variable", variable.name())]))
-        .variant(TypographyStyle::Caption),
-    )
-    .child(resume)
-    .child(Text::new(&ctx.t("instructions.resumePolicyNote")).variant(TypographyStyle::Caption))
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(
-          Toggle::new(
-            "instruction-variable-fallback",
-            ToggleKind::Radio,
-            false,
-            ctx.t("instructions.fallbackPolicy"),
-          )
-          .hide_label(),
-        )
-        .child(
-          Column::new()
-            .flex(1.0)
-            .spacing(ExtraSpacing::Tight.role())
-            .child(
-              Text::new(&ctx.t("instructions.fallbackPolicy"))
-                .variant(TypographyStyle::Description)
-                .color(PaletteColor::TextPrimary),
-            )
-            .child(
-              Row::new()
-                .spacing(ExtraSpacing::Snug.role())
-                .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
-                .child(
-                  Text::new(&ctx.t("instructions.noFallback"))
-                    .variant(TypographyStyle::Caption)
-                    .flex(1.0),
-                ),
-            ),
-        ),
-    )
-    .into()
+  )
+  .hide_label()
+  .on_change(choose(Events::Resume));
+  let fallback = Toggle::new(
+    "instruction-variable-fallback",
+    ToggleKind::Radio,
+    false,
+    ctx.t("instructions.fallbackPolicy"),
+  )
+  .hide_label();
+  let rows: Vec<Element> = vec![
+    option(
+      require.into(),
+      &ctx.t("instructions.requireValue"),
+      (
+        &ctx.t_args("instructions.requireNote", [("variable", variable.name())]),
+        false,
+      ),
+    ),
+    option(
+      resumed.into(),
+      &ctx.t("instructions.resumePolicy"),
+      (&ctx.t("instructions.resumePolicyNote"), false),
+    ),
+    option(
+      fallback.into(),
+      &ctx.t("instructions.fallbackPolicy"),
+      (&ctx.t("instructions.noFallback"), true),
+    ),
+  ];
+  let id = "instruction-variable-policy";
+  group(
+    id,
+    head(id, &ctx.t("instructions.policyTitle"), None, None),
+    boxed(&format!("{id}-rows"), rows),
+  )
+  .into()
 }
-fn head(ctx: &Ctx, variable: Variable) -> Row {
+/// A radio, then its label and what choosing it does; a locked option's words follow a lock.
+fn option(radio: Element, label: &str, (hint, locked): (&str, bool)) -> Element {
+  let hint = Text::new(hint)
+    .variant(HubText::Hint.role())
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0));
+  let hint: Element = if locked {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+      .child(hint)
+      .into()
+  } else {
+    hint.width(Dimension::Pct(100.0)).into()
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
+    .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
+    .spacing(HubSpacing::FieldGap.role())
+    .align_items(Alignment::Start)
+    .child(radio)
     .child(
-      Text::new(variable.name())
-        .variant(instructions::variable_name())
-        .color(PaletteColor::TextPrimary)
-        .nowrap(),
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(Text::new(label).variant(ExtraTypography::Strong.role()))
+        .child(hint),
     )
-    .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)))
-    .child(
-      Text::new(&ctx.t_args(
-        "instructions.variableTypeGroup",
-        [
-          ("type", variables::value_type(ctx, variable.value_type()).to_string()),
-          ("group", variables::group_label(ctx, variable.group()).to_string()),
-        ],
-      ))
-      .variant(TypographyStyle::Caption)
-      .nowrap(),
-    )
-}
-fn value_box(ctx: &Ctx, props: &Props, variable: Variable, value: Option<String>) -> Column {
-  let missing = value.is_none();
-  let value_text = value.unwrap_or_else(|| {
-    ctx
-      .t(if variable == Variable::RunRevision {
-        "instructions.unavailableCommit"
-      } else {
-        "instructions.unavailable"
-      })
-      .to_string()
-  });
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(
-      ExtraSpacing::Inline.role(),
-      ExtraSpacing::TextArea.role(),
-    ))
-    .spacing(ExtraSpacing::Fine.role())
-    .background(ExtraColor::CodeBackground.role())
-    .rounded(ExtraRadius::Tile.role())
-    .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .child(
-      Text::new(&ctx.t_args(
-        "instructions.valueAtEvent",
-        [("event", words::event(ctx, props.events.get()).to_uppercase())],
-      ))
-      .variant(instructions::overline()),
-    )
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .with_children(missing.then(|| icon(Icon::CircleHelp, IconSize::Xs, PaletteColor::Warning)))
-        .child(
-          Text::new(&value_text)
-            .id("instruction-variable-value")
-            .variant(if missing {
-              TypographyStyle::Description
-            } else {
-              instructions::detail_value()
-            })
-            .color(if missing {
-              PaletteColor::Warning
-            } else {
-              PaletteColor::TextPrimary
-            })
-            .selectable(true)
-            .flex(1.0),
-        ),
-    )
+    .into()
 }

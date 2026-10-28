@@ -10,7 +10,6 @@
     "personOnly": "Only a person changes memory here: input from an MCP client is refused, as what records say reaches every later agent. Clients can still read this page.",
     "loadFailed": "Memory couldn't be read",
     "loadStillWorks": "Agents keep working with what their prompts already hold.",
-    "order": "Grouped by type · pinned first",
     "tabs": {
       "waiting": "Waiting for approval",
       "active": "Active",
@@ -21,7 +20,8 @@
       "waitingNote": "Agents get a record from their next invocation after you approve it. Until then no agent receives it.",
       "queueTitle": "Waiting for your approval",
       "queueCount": "{{count}} · Oldest first",
-      "activeNote": "Only active records reach agents: their task's latest handoff, pinned records, decisions and warnings, then the best matches for their step.",
+      "activeNote": "Only active records reach agents: their task’s latest handoff, pinned records, decisions and warnings, then the best matches for their step. Grouped by type · pinned first.",
+      "deprecatedNote": "A record you deprecate stops reaching agents and is kept here; you can restore it.",
       "settingsNote": "How agents' records are kept in {{project}}, and how much memory each agent gets.",
       "matchInOne": "1 match in {{tab}}",
       "matchesIn": "{{count}} matches in {{tab}}",
@@ -190,6 +190,7 @@
     },
     "filters": {
       "chosen": "{{filter}} · {{value}}",
+      "name": "Filter",
       "type": {
         "name": "Type",
         "all": "All types"
@@ -339,7 +340,7 @@
       "entries": "{{count}} entries",
       "confidence": "Confidence",
       "confidenceValue": "{{confidence}} · set by {{agent}}",
-      "showEntries": "Show the entries in {{task}}'s Conversation ↗",
+      "conversation": "Conversation",
       "byYou": "By you · {{time}}",
       "history": "History",
       "edited": "You edited it · {{time}}",

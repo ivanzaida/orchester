@@ -16,6 +16,7 @@ use super::{
 };
 use crate::{
   screens::hub::parts,
+  theme::ControlHeight,
   ui::{field::FieldInput, message::message_text},
 };
 impl Editor {
@@ -40,7 +41,9 @@ impl Editor {
   /// The *Skill* group (`yhSpF`): Name, Scope and Description.
   fn skill_rows(&self, ctx: &mut Ctx, p: &Props, error: Option<&Message>, locked: bool) -> Element {
     let name_label = ctx.t("skills.name");
-    let mut name = FieldInput::new("skill-name", name_label.clone(), self.name.clone()).mono();
+    let mut name = FieldInput::new("skill-name", name_label.clone(), self.name.clone())
+      .mono()
+      .box_height(ControlHeight::Row.value());
     if let Some(error) = error {
       name = name.error(message_text(ctx, error));
     }

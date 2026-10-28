@@ -83,6 +83,7 @@
     "saveFirst": "Save the draft before publishing.",
     "noChanges": "No changes since v{{version}}.",
     "firstNote": "Pipelines can use this profile once v1 is published.",
+    "emptyNote": "Pipelines can use a profile once it is published.",
     "widenTitle": "Allow these changes to the agent profile?",
     "confirm": "Allow and continue",
     "failed": "The profile could not be saved",

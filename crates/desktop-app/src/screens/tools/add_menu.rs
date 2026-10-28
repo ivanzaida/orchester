@@ -24,8 +24,8 @@ use crate::{
   },
 };
 
-/// The menu's width (`Tc6qI`).
-const MENU_WIDTH: f32 = 392.0;
+/// The menu's width (`Add tool menu` `KDl6S`).
+const MENU_WIDTH: f32 = 320.0;
 
 /// The head's actions on the Tools tab.
 pub(super) fn actions(ctx: &mut Ctx, project: ProjectId, (menu, anchor): (&Signal<bool>, &ElementRef)) -> Vec<Element> {

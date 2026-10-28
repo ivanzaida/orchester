@@ -8,6 +8,14 @@ fn hub_tabs_open_each_tab_on_its_own_route() {
   let mut screen = Agents::new(true);
   screen.go();
   assert!(screen.exists("agents-hub-tabs"));
+  // The hub's tabs are 32 high (`Cc3JP`), not the 34 of a page's tabs.
+  let tab = screen
+    .window
+    .tree
+    .get_element_by_id_mut("agents-hub-tab-profiles")
+    .and_then(|tab| tab.bounds())
+    .expect("the Profiles tab is laid out");
+  assert!((tab.height - 32.0).abs() < 0.5, "{tab:?}");
   let tabs = [
     ("instructions", ProjectPage::Instructions(InstructionsView::default())),
     ("skills", ProjectPage::Skills(SkillsFilter::default())),

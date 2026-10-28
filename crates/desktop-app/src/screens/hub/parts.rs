@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -159,6 +159,7 @@ pub(crate) struct Entry {
   chosen: bool,
   code: bool,
   chevron: bool,
+  dense: bool,
 }
 
 impl Entry {
@@ -175,6 +176,7 @@ impl Entry {
       chosen: false,
       code: false,
       chevron: true,
+      dense: false,
     }
   }
 
@@ -193,6 +195,12 @@ impl Entry {
   /// A press chooses the row in place rather than opening something: no chevron at its end.
   pub(crate) const fn in_place(mut self) -> Self {
     self.chevron = false;
+    self
+  }
+
+  /// 8 over and under the row and 12 at its sides, as a side panel's catalog draws it (`pHCCx` in 02d, 52 high).
+  pub(crate) const fn dense(mut self) -> Self {
+    self.dense = true;
     self
   }
 
@@ -267,19 +275,20 @@ impl From<Entry> for Element {
       Icon::ChevronRight
     });
     let start = if entry.indent {
-      HubSpacing::Indent
+      HubSpacing::Indent.role()
+    } else if entry.dense {
+      SpacingSize::Md
     } else {
-      HubSpacing::Row
+      HubSpacing::Row.role()
+    };
+    let (y, end) = if entry.dense {
+      (SpacingSize::Sm, SpacingSize::Md)
+    } else {
+      (HubSpacing::RowY.role(), HubSpacing::Row.role())
     };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(HubSpacing::RowY.role())
-          .bottom(HubSpacing::RowY.role())
-          .left(start.role())
-          .right(HubSpacing::Row.role()),
-      )
+      .padding(Padding::new().top(y).bottom(y).left(start).right(end))
       .spacing(lurq::app::theme::SpacingSize::Md)
       .align_items(Alignment::Center)
       .with_children(entry.tile.map(|glyph| tile(glyph, false)))

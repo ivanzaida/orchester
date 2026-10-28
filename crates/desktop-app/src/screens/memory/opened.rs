@@ -103,16 +103,36 @@ fn subtitle(ctx: &Ctx, memory: &Memory, mode: EditorMode, origins: &Origins) -> 
 
 /// *Source* and *Agent's confidence* of a proposal.
 fn review_facts(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Vec<(Arc<str>, Arc<str>)> {
-  let Some(place) = origins.written(memory) else {
+  let Some(ReviewSource { source, confidence, .. }) = review_source(ctx, memory, origins) else {
     return Vec::new();
   };
+  vec![
+    (ctx.t("memory.editor.source"), source),
+    (ctx.t("memory.editor.confidence"), confidence),
+  ]
+}
+
+/// Where a proposal was written and what an agent said of it, as the review page's *Source* says it (`H2OVV` in 05e).
+pub struct ReviewSource {
+  /// *Written in 03 Implement*.
+  pub written: Arc<str>,
+  /// *1 event in 03 Implement*.
+  pub source: Arc<str>,
+  /// *high · set by Builder; people don't change it*.
+  pub confidence: Arc<str>,
+}
+
+/// The [`ReviewSource`] of `memory`; `None` when no agent wrote it.
+pub fn review_source(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Option<ReviewSource> {
+  let place = origins.written(memory)?;
   let step = place
     .step
     .as_ref()
     .map(|(number, name)| words::step(ctx, *number, name))
     .unwrap_or_default();
+  let written = ctx.t_args("memory.editor.sourceStep", [("step", &*step)]);
   let source = match memory.sources().len() {
-    0 => ctx.t_args("memory.editor.sourceStep", [("step", &*step)]),
+    0 => written.clone(),
     1 => ctx.t_args("memory.editor.sourceEvent", [("step", &*step)]),
     count => ctx.t_args(
       "memory.editor.sourceEvents",
@@ -127,10 +147,11 @@ fn review_facts(ctx: &Ctx, memory: &Memory, origins: &Origins) -> Vec<(Arc<str>,
       ("agent", &*agent),
     ],
   );
-  vec![
-    (ctx.t("memory.editor.source"), source),
-    (ctx.t("memory.editor.confidence"), confidence),
-  ]
+  Some(ReviewSource {
+    written,
+    source,
+    confidence,
+  })
 }
 
 /// *Author* and *Versions* of a record being edited.

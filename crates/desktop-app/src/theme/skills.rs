@@ -29,14 +29,9 @@ pub fn found_count() -> TypographyStyle {
 pub fn found_note() -> TypographyStyle {
   TypographyStyle::extra("skills_found_note")
 }
-pub fn source_line() -> SpacingSize {
-  SpacingSize::extra("skills_source_line")
-}
+/// W4o0E in IaAfU (03b): a skill's body, mono 12.5 on 21 lines.
 pub fn source() -> TypographyStyle {
   TypographyStyle::extra("skills_source")
-}
-pub fn gutter() -> TypographyStyle {
-  TypographyStyle::extra("skills_gutter")
 }
 pub fn form_inset() -> SpacingSize {
   SpacingSize::extra("skills_form_inset")
@@ -58,7 +53,6 @@ pub fn file_inset() -> SpacingSize {
 }
 pub(super) fn install(theme: &Theme) {
   theme.set_spacing_value(file_inset(), 7.0);
-  theme.set_spacing_value(source_line(), 20.0);
   theme.set_spacing_value(form_inset(), 28.0);
   theme.set_spacing_value(section_spacing(), 20.0);
   theme.set_spacing_value(cell_spacing(), 12.0);
@@ -91,19 +85,11 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
     ),
     (
       "skills_source",
-      12.0,
+      12.5,
       FontWeight::Normal,
-      20.0 / 12.0,
+      21.0 / 12.5,
       true,
       palette.text_primary,
-    ),
-    (
-      "skills_gutter",
-      11.0,
-      FontWeight::Normal,
-      20.0 / 11.0,
-      true,
-      palette.text_muted,
     ),
     ("skills_name", 13.0, FontWeight::Medium, 1.3, true, palette.text_primary),
     (

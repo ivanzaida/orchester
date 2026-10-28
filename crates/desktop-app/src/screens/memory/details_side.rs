@@ -63,11 +63,10 @@ fn source(ctx: &mut Ctx, state: &MemoryState, memory: &ProjectMemory, record: &M
       let mut source =
         Entry::new("memory-details-source", ctx.t("memory.editor.source")).hint(details::where_worked(ctx, place));
       if let (MemoryAuthor::Agent(_), Some(task)) = (record.author(), opened::source_task(record, &memory.origins)) {
-        let words = ctx.t_args("memory.inspector.showEntries", [("task", task.to_string())]);
-        source = source.end(memory_parts::conversation_link(
+        source = source.end(memory_parts::conversation_button(
           ctx,
           (state.project_id, &task),
-          ("memory-details-conversation", &words),
+          "memory-details-conversation",
         ));
       }
       rows.push(source.into());

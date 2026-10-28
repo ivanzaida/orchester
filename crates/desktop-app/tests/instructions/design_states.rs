@@ -92,7 +92,12 @@ fn instructions_preview_keeps_horizontal_actions_visible_and_viewer_is_read_only
   screen.click("instruction-panel-variables");
   screen.until("variable context", |s| s.exists("instruction-variable-context"));
   assert!(screen.text("instruction-variable-context").contains("KON-1 · Builder"));
-  assert!(screen.text("instruction-variable-detail").contains("Available"));
+  // The compact detail (`M6fbYX`): what its value is for, the value, then Insert.
+  assert!(
+    screen
+      .text("instruction-variable-detail")
+      .contains("Insert {{task.title}}")
+  );
   screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   let view = screen
@@ -191,7 +196,7 @@ fn instructions_role_and_step_editors_show_their_injection_explanations() {
 }
 
 #[test]
-fn instructions_removing_target_chips_removes_the_named_role_and_empty_selection_blocks_saving() {
+fn instructions_unchoosing_targets_removes_the_named_role_and_empty_selection_blocks_saving() {
   use orchester_core::{
     id::ConnectionId,
     name::Name,
@@ -226,12 +231,14 @@ fn instructions_removing_target_chips_removes_the_named_role_and_empty_selection
     "two roles saved",
     |s| matches!(s.entry(id).body.targets(), orchester_core::resource::AgentTargets::Roles(roles) if roles.len() == 2),
   );
-  let removed = screen.text("instruction-target-0");
-  screen.click("instruction-target-0-remove");
+  // Apply to is a select (`ofaBF`): it names what is chosen on one line, and its menu chooses again.
+  let shown = screen.text("instruction-targets-value");
+  assert!(shown.contains("Reviewer") && shown.contains("Builder"), "{shown}");
+  screen.choose("instruction-targets", "Reviewer");
   screen.until("named role removed", |s| matches!(s.entry(id).body.targets(),
-    orchester_core::resource::AgentTargets::Roles(roles) if roles.len() == 1 && !roles.iter().any(|role| role.as_str() == removed)));
+    orchester_core::resource::AgentTargets::Roles(roles) if roles.len() == 1 && !roles.iter().any(|role| role.as_str() == "Reviewer")));
   let before = screen.entry(id);
-  screen.click("instruction-target-0-remove");
+  screen.choose("instruction-targets", "Builder");
   assert!(screen.exists("instruction-settings-error"));
   assert!(screen.text("instruction-settings-error").contains("Choose the agents"));
   screen.click("instruction-publish");

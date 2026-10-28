@@ -11,10 +11,11 @@ use orchester_workspace::instructions::{data::ProjectInstructions, form::ScopeCh
 
 use super::fields::Fields;
 use crate::{
-  screens::hub::parts::{boxed, group, head},
+  screens::hub::parts::{boxed, group, head, note},
   theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
   ui::{
     field::SelectField,
+    icon::Icon,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -77,6 +78,11 @@ pub fn render(ctx: &mut Ctx, fields: &Fields, data: &ProjectInstructions, locked
     head("instruction-scope", &ctx.t("instructions.scopeTitle"), None, None),
     boxed("instruction-scope-rows", rows),
   )
+  .child(note(
+    "instruction-scope-note",
+    Icon::Info,
+    &ctx.t("instructions.scopeNote"),
+  ))
   .into()
 }
 

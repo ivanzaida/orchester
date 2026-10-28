@@ -80,11 +80,7 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
     );
     assert!(open.x >= hint.x + hint.width - 0.1, "Open draft sits at the row's end");
   }
-  // Open draft opens the draft it names.
-  s.click("skill-import-open-1");
-  s.window.until("opened draft", |w| {
-    matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(_)))
-  });
+  open_draft_opens_the_one_it_names(&mut s);
   assert_eq!(
     fs::read_to_string(reference).expect("unchanged source"),
     "Private reference content"
@@ -95,6 +91,27 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
       .entries
       .iter()
       .all(|e| e.state.published().is_none())
+  );
+}
+
+/// The second row's Open draft opens the skill draft that row names, by its id.
+fn open_draft_opens_the_one_it_names(s: &mut Skills) {
+  let named = s.text("skill-import-created-1-label");
+  let expected = ProjectSkills::load_in(&s.repo)
+    .expect("actual storage")
+    .entries
+    .iter()
+    .find(|e| e.name.to_string() == named.trim())
+    .map(|e| e.id)
+    .unwrap_or_else(|| panic!("a draft named {named}"));
+  s.click("skill-import-open-1");
+  s.window.until("opened draft", |w| {
+    matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(_)))
+  });
+  assert_eq!(
+    s.window.navigation().route_now(),
+    Route::Project(project_id(), ProjectPage::Skill(expected)),
+    "Open draft opens {named}"
   );
 }
 
@@ -110,6 +127,12 @@ fn skills_visual_found_in_this_repository_counts_and_opens_the_import() {
   assert!(
     s.text("skills-found-import")
       .contains("Import shows each item with a preview")
+  );
+  // What it holds by file and folder (`HMf2M`): the instruction file that imports, and the folders of its skills.
+  let found = s.text("skills-found-import-label");
+  assert!(
+    found.starts_with("AGENTS.md and ") && found.contains("skills folder"),
+    "{found}"
   );
   s.click("skills-found-import-open");
   s.window.until("the import page", |w| {

@@ -19,6 +19,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskView},
   theme::{ExtraRadius, ExtraSpacing, IconSize, MemoryText},
   ui::{
+    button::{ActionButton, ButtonKind},
     chip::TagChip,
     icon::{Icon, icon},
     pressable::opening,
@@ -123,6 +124,17 @@ pub fn conversation_link(ctx: &mut Ctx, (project, task): (ProjectId, &TaskKey), 
   let navigation = Navigation::of(ctx);
   let route = Route::Project(project, ProjectPage::Task(task.clone(), TaskView::Conversation));
   link(id, words, navigation.to(route))
+}
+
+/// *Conversation ↗* at a source row's end, opening the conversation of task `task` of `project` (`i14UW` in 05c,
+/// `X71XlI` in 05e).
+pub fn conversation_button(ctx: &mut Ctx, (project, task): (ProjectId, &TaskKey), id: &str) -> Element {
+  let navigation = Navigation::of(ctx);
+  let route = Route::Project(project, ProjectPage::Task(task.clone(), TaskView::Conversation));
+  ActionButton::new(id, ButtonKind::Ghost, ctx.t("memory.inspector.conversation"))
+    .icon(Icon::ArrowUpRight)
+    .opens(navigation.to(route))
+    .into()
 }
 
 /// What a link to a page not built yet says, in place of the link (*Project settings › Memory* today).

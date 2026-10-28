@@ -1,8 +1,8 @@
 //! What approving a proposal replaces, in its review editor: *Approving replaces the active decision key* and what
 //! that does, then the active record. The task's tab quotes the active text with who wrote it (`i09ZK` in
-//! `t0jt2k`); the project's page shows the change as a diff (`nbYtu` in `kq8Am`): the active text removed, with its
-//! status, who wrote it and how many invocations were given it, and the proposed text as the editor holds it now
-//! added, with who proposed it and what the person edited.
+//! `t0jt2k`); the project's page shows the change as a diff (`P4cv22` in 05e) headed by who proposed it and what the
+//! person edited: the active text removed, with its status, who wrote it and how many invocations were given it, and
+//! the proposed text as the editor holds it now added.
 
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ use orchester_workspace::memory::draft::DraftEdit;
 use super::{RecordEditor, Replaced};
 use crate::{
   screens::memory::words,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, MemoryText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, HubSpacing, IconSize, MemoryText},
   ui::icon::{Icon, icon},
 };
 
@@ -129,11 +129,22 @@ impl RecordEditor {
       let list = named.join(&ctx.t("memory.editor.editListSeparator"));
       proposed.push(ctx.t_args("memory.editor.diffEdited", [("edits", list)]).to_string());
     }
+    // Who proposed it and what the person edited heads the box (`SGCy8` in `P4cv22`, 05e).
+    let head = (!proposed.is_empty()).then(|| {
+      Text::new(&words::join(ctx, &proposed))
+        .id(format!("{id}-diff-head"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .width(Dimension::Pct(100.0))
+    });
     Column::new()
       .id(format!("{id}-diff"))
       .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(HubSpacing::Row.role(), SpacingSize::Md))
+      .spacing(SpacingSize::Xs)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Md)
+      .rounded(RadiusSize::Lg)
+      .with_children(head)
       .child(diff_line(
         ctx,
         (&format!("{id}-removed"), Side::Removed),
@@ -144,7 +155,7 @@ impl RecordEditor {
         ctx,
         (&format!("{id}-added"), Side::Added),
         &self.text.get(),
-        &words::join(ctx, &proposed),
+        "",
       ))
   }
 }
@@ -191,6 +202,7 @@ fn diff_line(ctx: &Ctx, (id, side): (&str, Side), text: &str, meta: &str) -> Row
       ExtraSpacing::Snug.role(),
     ))
     .spacing(SpacingSize::Sm)
+    .rounded(RadiusSize::Sm)
     .background(background.role())
     .child(
       Text::new(&ctx.t(sign))

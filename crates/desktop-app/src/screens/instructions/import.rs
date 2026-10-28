@@ -170,7 +170,7 @@ impl Import {
     let state = self.action.state().get();
     if let Some(Imported(created, total, files)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
       let back = &props.selection;
-      let list = ctx.t("instructions.title");
+      let list = ctx.t(back.opened_from_label());
       let result = import_result::Outcome {
         root: "instruction-import-result",
         id: "instruction-import",
@@ -179,7 +179,6 @@ impl Import {
         created,
         items: &scan.items,
         total: *total,
-        detail: item_detail,
         agent_files: *files,
       }
       .page(ctx);
@@ -289,8 +288,9 @@ fn top(ctx: &Ctx, props: &Props) -> Element {
   let back = &props.selection;
   let title = ctx.t("instructions.import");
   let crumb = page_head::crumb(
+    ctx,
     "instruction-import-crumbs",
-    (&ctx.t("instructions.title"), back.to(back.opened_from())),
+    (&ctx.t(back.opened_from_label()), back.to(back.opened_from())),
     Some(&title),
   );
   let detail = ctx.t_args(
@@ -321,8 +321,9 @@ fn top(ctx: &Ctx, props: &Props) -> Element {
     )
     .into()
 }
-/// What an item becomes, or why it cannot be imported (`Draft project instruction “AGENTS” · 84 lines`).
-pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
+/// What an item becomes, or why it cannot be imported (`Draft project instruction “AGENTS” · 84 lines`), the same
+/// whether Instructions or Skills opened the import (02c).
+pub(crate) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
   match &item.outcome {
     Err(Unimportable::OnlyImports { targets }) => ctx.t_args(
       "instructions.importOnlyPoints",
@@ -338,13 +339,17 @@ pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
         ),
       ],
     ),
-    Ok(Candidate::Instruction { name, text }) => ctx.t_args(
-      "instructions.importInstruction",
-      [
-        ("name", name.as_str().to_owned()),
-        ("lines", text.as_str().lines().count().to_string()),
-      ],
-    ),
+    Ok(Candidate::Instruction { name, text }) => {
+      let lines = text.as_str().lines().count();
+      ctx.t_args(
+        if lines == 1 {
+          "instructions.importInstructionOne"
+        } else {
+          "instructions.importInstruction"
+        },
+        [("name", name.as_str().to_owned()), ("lines", lines.to_string())],
+      )
+    }
     Ok(Candidate::Skill { name, files, .. }) => ctx.t_args(
       match files.len() {
         0 => "instructions.importSkillNone",

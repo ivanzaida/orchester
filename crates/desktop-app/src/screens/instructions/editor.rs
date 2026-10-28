@@ -242,7 +242,7 @@ impl Editor {
       ctx,
       self.panel.clone(),
       errors,
-      (busy && !dirty, &availability.unavailable),
+      (busy && !dirty, &availability.unavailable, saved.is_some()),
     );
     pane
       .child(settings)

@@ -1,18 +1,15 @@
 //! A status tab of the project's page: what the tab is and its records. *Waiting for approval* (`05 Memory` `padSP`)
 //! says when agents get a record, then lists every proposal of the project and its tasks, oldest first, in one box,
-//! each with *Approve*, *Edit* and *Reject* in place. The others have the search and the *Type*, *Author* and *Tag*
-//! filters (and on *Active* how many are active and wait) and list the project's records of their statuses, pinned
-//! first, each opening its own page, *Active* grouped by type and the rest in one box. A tab without records says so
-//! instead, without its search and filters (`ejSHj`); one whose search finds nothing names the tabs that hold matches
-//! (`tab_no_match`).
+//! each with *Approve*, *Edit* and *Reject* in place. *Active* (05b) has the search and its *Filter* with how many are
+//! active and wait, then what reaches agents, then its records grouped by type; the others (05f) list their records in
+//! one box, *Deprecated* with a note under them. Records are pinned first, each opening its own page. A tab without
+//! records says so instead, without its search and filters (`ejSHj`); one whose search finds nothing names the tabs
+//! that hold matches (`tab_no_match`).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -36,7 +33,7 @@ use super::{
 use crate::{
   routes::MemoryTab,
   screens::hub::parts::{boxed, group, head as head_row, note},
-  theme::{ExtraTypography, HubSpacing, HubText},
+  theme::{HubSpacing, HubText},
   ui::icon::Icon,
 };
 
@@ -71,23 +68,46 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
   if listed.is_empty() {
     return column.with_children(empty(ctx, state, tab));
   }
-  column = column.with_children(head(ctx, tab));
   if tab == MemoryTab::Waiting {
     // The queue is short and oldest first: it lists every proposal, without the search and filters (05).
-    return column.with_children(proposals(ctx, state, memory));
+    return column
+      .child(note("memory-tab-note", Icon::Info, &ctx.t("memory.tabs.waitingNote")))
+      .with_children(proposals(ctx, state, memory));
   }
   let filters = Filters {
     status: statuses,
     ..state.filters.get()
   };
+  // Active has the search and its Filter (05b); the other tabs list their records without them (05f), unless a search
+  // or a filter brought the person there, which they can then clear.
+  let narrowed = filters
+    != Filters {
+      status: statuses,
+      ..Filters::default()
+    };
+  if tab == MemoryTab::Active || narrowed {
+    column = column.child(bar(ctx, (memory, &listed), tab));
+  }
+  if tab == MemoryTab::Active {
+    column = column.child(note("memory-tab-note", Icon::Info, &ctx.t("memory.tabs.activeNote")));
+  }
+  match records(ctx, state, (memory, tab), &filters) {
+    Some(records) => column.child(records).with_children(
+      (tab == MemoryTab::Deprecated).then(|| note("memory-tab-foot", Icon::Info, &ctx.t("memory.tabs.deprecatedNote"))),
+    ),
+    None => column.child(tab_no_match(ctx, state, (memory, tab, shown.order), &filters)),
+  }
+}
+
+/// The search and the Filter, with how many are active and wait at the end on Active (`E3atNZ`, `NW4wY` in 05b).
+fn bar(ctx: &mut Ctx, (memory, listed): (&ProjectMemory, &[Memory]), tab: MemoryTab) -> Element {
   let bar = ctx.mount_keyed::<toolbar::FilterBar>(
     "memory-project-filters",
     toolbar::FiltersProps {
       project: true,
-      tags: listing::tags(&listed).into(),
+      tags: listing::tags(listed).into(),
     },
   );
-  // How many are active and wait, at the toolbar's end on Active (`NW4wY` in 05b).
   let count = (tab == MemoryTab::Active).then(|| {
     Text::new(&ctx.t_args(
       "memory.toolbar.counts",
@@ -100,48 +120,14 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
     .variant(HubText::Hint.role())
     .nowrap()
   });
-  column = column.child(
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(bar)
-      .child(Row::new().flex(1.0))
-      .with_children(count),
-  );
-  match records(ctx, state, (memory, tab), &filters) {
-    Some(records) => column.child(records),
-    None => column.child(tab_no_match(ctx, state, (memory, tab, shown.order), &filters)),
-  }
-}
-
-/// What the tab is and how it lists its records; only *Waiting for approval* and *Active* say it.
-fn head(ctx: &Ctx, tab: MemoryTab) -> Option<Element> {
-  match tab {
-    MemoryTab::Waiting => Some(note("memory-tab-note", Icon::Info, &ctx.t("memory.tabs.waitingNote")).into()),
-    MemoryTab::Active => Some(
-      Row::new()
-        .id("memory-tab-head")
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&ctx.t("memory.tabs.activeNote"))
-            .id("memory-tab-note")
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .variant(ExtraTypography::Prose.role()),
-        )
-        .child(
-          Text::new(&ctx.t("memory.order"))
-            .id("memory-tab-order")
-            .variant(TypographyStyle::Caption)
-            .nowrap(),
-        )
-        .into(),
-    ),
-    MemoryTab::Deprecated | MemoryTab::Superseded | MemoryTab::Rejected | MemoryTab::Settings => None,
-  }
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(bar)
+    .child(Row::new().flex(1.0))
+    .with_children(count)
+    .into()
 }
 
 /// Every proposal, oldest first, in one box under *Waiting for your approval · N · Oldest first*, each with its

@@ -1,7 +1,7 @@
 //! The search and filters of a Memory screen's records: *Search text, keys and tags…* and the *Type*, *Status* and
-//! *Author* filters on the task's tab, in its toolbar with the count and *New record* (`Memory toolbar` `yFMam`); on
-//! the project's page the *Type*, *Author* and *Tag* filters in every status tab, whose tab is the status
-//! (`Toolbar` `kjxv9`). A filter that chooses something says what (*Type · Decisions*, *Status · All*).
+//! *Author* filters on the task's tab, in its toolbar with the count and *New record* (`Memory toolbar` `yFMam`), where
+//! a filter that chooses something says what (*Type · Decisions*, *Status · All*); on the project's page one *Filter*
+//! whose menu holds the *Type*, *Author* and *Tag* choices (`Search row` `E3atNZ` in 05b), the tab being the status.
 
 use std::sync::Arc;
 
@@ -21,8 +21,10 @@ use orchester_workspace::memory::listing::{AuthorFilter, Filters, KIND_ORDER, St
 
 use super::{state::MemoryState, words};
 use crate::ui::{
+  button::{ActionButton, ButtonKind},
   field::FieldInput,
-  filter::{FilterButton, filter_menu_panel},
+  filter::{FilterButton, filter_group, filter_menu_panel},
+  icon::Icon,
   menu::{MenuItem, menu},
 };
 
@@ -80,22 +82,21 @@ impl Component for FilterBar {
       } else {
         TASK_SEARCH_WIDTH
       }));
-    let mut row = Row::new()
+    let row = Row::new()
       .id("memory-filters")
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .child(search.render(ctx));
+    if props.project {
+      return self.project_filter(ctx, &state, &filters, &props, row);
+    }
+    let mut row = row;
     let mut popups = Vec::new();
     for (facet, (open, anchor)) in FACETS.into_iter().zip(&self.menus) {
-      let shown = match facet {
-        Facet::Kind | Facet::Author => true,
-        Facet::Status => !props.project,
-        Facet::Tag => props.project,
-      };
-      if !shown {
+      if facet == Facet::Tag {
         continue;
       }
-      let (label, active) = button_label(ctx, &filters, facet, props.project);
+      let (label, active) = button_label(ctx, &filters, facet);
       row = row.child(FilterButton::new(facet_id(facet), label, open.clone(), anchor.clone()).active(active));
       let panel = if open.get() {
         self.menu(ctx, &state, (&filters, facet), &props)
@@ -124,18 +125,77 @@ impl FilterBar {
     let open = self.menus[index].0.clone();
     let id = format!("{}-menu", facet_id(facet));
     let mut panel = filter_menu_panel(&id, MENU_WIDTH);
-    for choice in choices(ctx, filters, facet, &props.tags) {
-      let (shown, change) = (state.filters.clone(), choice.change);
-      panel = panel.child(
-        MenuItem::new(format!("{id}-{}", choice.key), choice.label, move || {
-          shown.update(|filters| change(filters));
-        })
-        .chosen(choice.chosen)
-        .render(ctx, &open),
-      );
+    for item in items(ctx, state, (filters, facet), props, &open) {
+      panel = panel.child(item);
     }
     panel.into()
   }
+
+  /// The project's page has one *Filter* (`YNR09` in 05b), its menu the *Type*, *Author* and *Tag* choices under their
+  /// names; it is filled while one of them chooses something.
+  fn project_filter(
+    &self,
+    ctx: &mut Ctx,
+    state: &MemoryState,
+    filters: &Filters,
+    props: &FiltersProps,
+    row: Row,
+  ) -> Row {
+    let (open, anchor) = &self.menus[0];
+    let active = filters.kind.is_some() || filters.author != AuthorFilter::Any || filters.tag.is_some();
+    let toggle = open.clone();
+    let button = ActionButton::new(
+      "memory-filter",
+      if active {
+        ButtonKind::Secondary
+      } else {
+        ButtonKind::Ghost
+      },
+      ctx.t("memory.filters.name"),
+    )
+    .icon(Icon::ListFilter)
+    .element_ref(anchor.clone())
+    .on_click(move || toggle.update(|open| *open = !*open));
+    let panel = if open.get() {
+      let mut panel = filter_menu_panel("memory-filter-menu", MENU_WIDTH);
+      for (facet, glyph, name) in [
+        (Facet::Kind, Icon::ListFilter, "memory.filters.type.name"),
+        (Facet::Author, Icon::User, "memory.filters.author.name"),
+        (Facet::Tag, Icon::Tag, "memory.filters.tag.name"),
+      ] {
+        panel = panel.child(filter_group(format!("{}-group", facet_id(facet)), glyph, &ctx.t(name)));
+        for item in items(ctx, state, (filters, facet), props, open) {
+          panel = panel.child(item);
+        }
+      }
+      panel.into()
+    } else {
+      Element::new()
+    };
+    row.child(button).child(menu(anchor.clone(), open.clone(), panel))
+  }
+}
+
+/// `facet`'s choices as items of the menu `open` shows, the chosen one checked (`<facet>-menu-<key>`).
+fn items(
+  ctx: &mut Ctx,
+  state: &MemoryState,
+  (filters, facet): (&Filters, Facet),
+  props: &FiltersProps,
+  open: &Signal<bool>,
+) -> Vec<Element> {
+  let id = format!("{}-menu", facet_id(facet));
+  choices(ctx, filters, facet, &props.tags)
+    .into_iter()
+    .map(|choice| {
+      let (shown, change) = (state.filters.clone(), choice.change);
+      MenuItem::new(format!("{id}-{}", choice.key), choice.label, move || {
+        shown.update(|filters| change(filters));
+      })
+      .chosen(choice.chosen)
+      .render(ctx, open)
+    })
+    .collect()
 }
 
 /// What a choice of a filter's menu does to the filters.
@@ -225,17 +285,16 @@ fn facet_id(facet: Facet) -> &'static str {
   }
 }
 
-/// What `facet`'s button says, and whether it chooses something beyond the screen's default.
-fn button_label(ctx: &Ctx, filters: &Filters, facet: Facet, project: bool) -> (Arc<str>, bool) {
+/// What a filter button of the task's tab says, and whether it chooses something beyond the tab's default.
+fn button_label(ctx: &Ctx, filters: &Filters, facet: Facet) -> (Arc<str>, bool) {
   let chosen = |name: &str, value: &str| ctx.t_args("memory.filters.chosen", [("filter", name), ("value", value)]);
   match facet {
-    Facet::Kind => match (filters.kind, project) {
-      (Some(kind), _) => (
+    Facet::Kind => match filters.kind {
+      Some(kind) => (
         chosen(&ctx.t("memory.filters.type.name"), &words::kind_plural(ctx, kind)),
         true,
       ),
-      (None, true) => (ctx.t("memory.filters.type.name"), false),
-      (None, false) => (ctx.t("memory.filters.type.all"), false),
+      None => (ctx.t("memory.filters.type.all"), false),
     },
     Facet::Status => {
       let words = words::status_filter(ctx, filters.status);
@@ -245,10 +304,9 @@ fn button_label(ctx: &Ctx, filters: &Filters, facet: Facet, project: bool) -> (A
         (chosen(&ctx.t("memory.filters.status.name"), &words), true)
       }
     }
-    Facet::Author => match (filters.author, project) {
-      (AuthorFilter::Any, true) => (ctx.t("memory.filters.author.name"), false),
-      (AuthorFilter::Any, false) => (words::author_filter(ctx, AuthorFilter::Any), false),
-      (author, _) => (
+    Facet::Author => match filters.author {
+      AuthorFilter::Any => (words::author_filter(ctx, AuthorFilter::Any), false),
+      author => (
         chosen(&ctx.t("memory.filters.author.name"), &words::author_filter(ctx, author)),
         true,
       ),
