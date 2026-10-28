@@ -2,8 +2,8 @@
 
 use super::*;
 
-/// The bar at 960 with everything shown: the version and Tokens today give way, then the counts' words, then
-/// the project's name, which is still whole at 960; the hand, the counts, *Review*, *Stop* and MCP stay.
+/// The bar at 960 with everything shown: the version gives way, then the counts' words, then the project's name,
+/// which is still whole at 960; the hand, the counts, *Review*, *Stop* and MCP stay.
 #[test]
 fn status_gives_way_in_its_order_at_960() {
   let tasks = ProjectTasks {
@@ -24,13 +24,9 @@ fn status_gives_way_in_its_order_at_960() {
     ))
   };
   let mut wide = Bar::of(facts(project()));
-  for id in ["status-version", "status-tokens"] {
-    assert!(wide.width(id) > 0.0, "{id} shows at 1440");
-  }
+  assert!(wide.width("status-version") > 0.0, "the version shows at 1440");
   let mut narrow = Bar::at(960, facts(project()));
-  for id in ["status-version", "status-tokens"] {
-    assert_eq!(narrow.width(id), 0.0, "{id} gives way at 960");
-  }
+  assert_eq!(narrow.width("status-version"), 0.0, "the version gives way at 960");
   assert_eq!(
     narrow.width("status-project-text"),
     wide.width("status-project-text"),

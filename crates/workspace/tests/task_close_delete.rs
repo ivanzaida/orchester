@@ -2,9 +2,13 @@
 //! and reopened; one whose run has not ended is closed only once its run was confirmed stopped; a deleted task goes
 //! with its runs, conversation, memory records and links, its worktrees and merged branches removed and its unmerged
 //! work kept unless the person chose to remove it; a task whose run has not ended and a shared project's task are not
-//! deleted. Over MCP, update_task closes a task as the app does, and no tool deletes one.
+//! deleted. Over MCP, update_task closes a task as the app does, and no tool deletes one. A task whose run ended moved
+//! to Todo (the board's Move to Todo, or update_task) changes its status only and starts nothing (ORC-144).
 //!
 //! `cargo test -p orchester-workspace --test task_close_delete task_`
+
+#[path = "task_close_delete/over_mcp.rs"]
+mod over_mcp;
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -25,10 +29,10 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, RunStatus, StepFailure},
+  run::{BranchName, InterruptCause, NewRun, PublishedVersions, Run, RunSnapshot, RunStatus, StepFailure},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::MemberRole,
-  store::{ConversationStore, ResourceStore, RunStore, TaskStore},
+  store::{ConversationStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
   task::{
     Task, TaskDetails, TaskLimits,
     organization::{BlockingTask, ChangeActor, DependencyGate, Priority, TaskOrganization, WorkflowStatus},
@@ -39,7 +43,6 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, ProjectDb, SharingLink, StoreError};
 use orchester_workspace::{
   activity::Activity,
-  app_mcp::{self, Translate},
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
@@ -47,12 +50,9 @@ use orchester_workspace::{
     cancel_run::{Stop, StopRefused},
     close::{Closing, close_in, reopen_in},
     delete::{delete_in, preview_in},
-    integration_jobs::ProjectJobs,
-    outside::OutsideChanges,
   },
   workspace::{OpenProject, Workspace},
 };
-use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
@@ -233,6 +233,30 @@ impl Repo {
       .expect("fail");
     self.db.append_events(&run, &events).expect("events");
     assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+    run
+  }
+
+  /// [`Self::working`], whose step then passed: the run succeeded with its commit to merge.
+  fn succeeded(&mut self, task: &Task) -> Run {
+    let mut run = self.working(task, false);
+    let execution = run.current_attempt().expect("attempt").executions()[0].id();
+    let events = run.complete_step(execution, at(9)).expect("pass");
+    self.db.append_events(&run, &events).expect("events");
+    assert_eq!(run.status(), &RunStatus::Succeeded);
+    run
+  }
+
+  /// [`Self::working`], interrupted by a crash, whose worktree a person then removed: it never continues (ORC-63).
+  fn interrupted_without_worktree(&mut self, task: &Task) -> Run {
+    let mut run = self.working(task, false);
+    let events = run.interrupt(InterruptCause::Crashed, at(9)).expect("interrupt");
+    self.db.append_events(&run, &events).expect("events");
+    let worktree = self.worktree(&run);
+    git(
+      self.root(),
+      &["worktree", "remove", "--force", worktree.to_str().expect("path")],
+    );
+    self.db.save_worktree_removal(run.id(), at(10)).expect("removal");
     run
   }
 
@@ -522,61 +546,4 @@ fn task_delete_is_unavailable_in_a_shared_project() {
     Err(StoreError::SharedProject)
   ));
   assert!(db.task(task.id()).expect("read").is_some(), "the task stays");
-}
-
-/// The app's MCP tools on `repo`'s session.
-fn tools(repo: &Repo) -> app_mcp::Services {
-  app_mcp::Services::new(
-    repo.workspace.clone(),
-    repo.runners(),
-    repo.servers(),
-    Programs::processes(),
-    (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
-  )
-}
-
-fn call(repo: &Repo, services: &app_mcp::Services, name: &str, args: &Value) -> Result<Value, Value> {
-  let translate = Translate::new(|message| message.key.to_owned());
-  let Value::Object(args) = args.clone() else {
-    panic!("arguments are an object");
-  };
-  repo
-    .runtime
-    .block_on(app_mcp::call(services, &translate, name, args))
-    .expect("a tool")
-    .map_err(|error| error.to_json(|message| message.key.to_owned()))
-}
-
-#[test]
-fn task_close_over_mcp_follows_the_app_and_no_tool_deletes_a_task() {
-  let mut repo = Repo::new();
-  let failed = repo.task("Sign in");
-  repo.failed(&failed, false);
-  let working = repo.task("Sign out");
-  repo.working(&working, false);
-  let services = tools(&repo);
-
-  let closed = call(
-    &repo,
-    &services,
-    "update_task",
-    &json!({ "project": "Kontur", "key": failed.key().to_string(), "workflow_status": "canceled" }),
-  )
-  .expect("closed");
-  assert_eq!(closed["task"]["workflow_status"], "canceled");
-  for status in ["done", "canceled"] {
-    let refused = call(
-      &repo,
-      &services,
-      "update_task",
-      &json!({ "project": "Kontur", "key": working.key().to_string(), "workflow_status": status }),
-    )
-    .expect_err("its run has not ended");
-    assert_eq!(refused["error"]["code"], "stop_run_first", "{status}");
-  }
-  assert_eq!(repo.status(working.id()), WorkflowStatus::InProgress);
-  assert!(
-    app_mcp::listed().iter().all(|tool| !tool.name.contains("delete_task")),
-    "deleting a task is a person's"
-  );
 }

@@ -330,7 +330,29 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   assert_eq!(shortcut(ctrl("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(ctrl("w", "KeyW")), Some(Shortcut::CloseTab));
   assert_eq!(shortcut(ctrl("z", "KeyW")), None, "Ctrl+Z on AZERTY is not Ctrl+W");
-  assert_eq!(shortcut(ctrl(",", "KeyW")), None, "Ctrl+, on Dvorak is not Ctrl+W");
+  assert_eq!(
+    shortcut(ctrl(",", "KeyW")),
+    Some(Shortcut::ProjectSettings),
+    "Ctrl+, on Dvorak is Ctrl+, not Ctrl+W"
+  );
+  assert_eq!(shortcut(ctrl("k", "KeyK")), Some(Shortcut::JumpTo));
+  assert_eq!(
+    shortcut(Keys {
+      typing: true,
+      ..ctrl("k", "KeyK")
+    }),
+    Some(Shortcut::JumpTo),
+    "Ctrl+K opens Jump to from a text field too"
+  );
+  assert_eq!(shortcut(ctrl("p", "KeyP")), None, "Files keeps Ctrl+P for Go to file");
+  assert_eq!(
+    shortcut(Keys {
+      shift: true,
+      ..ctrl("k", "KeyK")
+    }),
+    None,
+    "Ctrl+Shift+K is no shortcut"
+  );
   assert_eq!(shortcut(alt("[", "ArrowLeft")), None, "a typed ASCII key decides");
   assert_eq!(
     shortcut(ctrl("ц", "KeyW")),
@@ -355,7 +377,13 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   assert_eq!(shortcut(cmd("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(cmd("w", "KeyW")), Some(Shortcut::CloseTab));
   assert_eq!(shortcut(cmd("z", "KeyW")), None, "Cmd+Z on AZERTY is not Cmd+W");
-  assert_eq!(shortcut(cmd(",", "KeyW")), None, "Cmd+, on Dvorak is not Cmd+W");
+  assert_eq!(
+    shortcut(cmd(",", "KeyW")),
+    Some(Shortcut::ProjectSettings),
+    "Cmd+, on Dvorak is Cmd+, not Cmd+W"
+  );
+  assert_eq!(shortcut(cmd("k", "KeyK")), Some(Shortcut::JumpTo));
+  assert_eq!(shortcut(cmd("p", "KeyP")), None, "Files keeps Cmd+P for Go to file");
   assert_eq!(
     shortcut(cmd("/", "BracketLeft")),
     None,

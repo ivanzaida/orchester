@@ -104,12 +104,14 @@ fn merge_queue_lists_runs_waiting_for_approval_left_and_merged_today_and_counts_
   assert!(left.contains("Integrate couldn't resolve 2 files"), "{left}");
   let merged = seeded.window.text("merge-queue-row-1");
   assert!(merged.contains("Merged"), "{merged}");
-  // Only the run waiting for approval is still in the queue.
-  seeded.window.until("the sidebar's count", |window| {
-    window
-      .texts("nav-merge_queue")
-      .is_some_and(|texts| texts.iter().any(|text| text == "1"))
-  });
+  // Only the run waiting for approval is still in the queue: the sidebar's Review and the hub's tab count it.
+  for counted in ["nav-review", "review-hub-tab-merge_queue"] {
+    seeded.window.until(counted, |window| {
+      window
+        .texts(counted)
+        .is_some_and(|texts| texts.iter().any(|text| text == "1"))
+    });
+  }
 }
 
 #[test]

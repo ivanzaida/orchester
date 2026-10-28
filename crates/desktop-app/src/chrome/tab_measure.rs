@@ -1,11 +1,6 @@
 //! What the strip learns from its own layout: the active tab's width as lurq laid it out, so `tab_fit`
-//! reserves its real room rather than its widest (lurq measures no text before layout), and whether the
-//! tab list held the focus, so the focus has somewhere to go when the list goes away.
-
-use std::sync::{
-  Arc,
-  atomic::{AtomicBool, Ordering},
-};
+//! reserves its real room rather than its widest (lurq measures no text before layout), and the tab list's
+//! button element.
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -75,19 +70,16 @@ impl ActiveWidth {
   }
 }
 
-/// Whether the tab list holds the focus: open, or its button focused. The list writes `open`; the strip
-/// keeps the button's element.
+/// The tab list's button element, which the strip keeps for the list's life.
 #[derive(Clone)]
 pub struct ListHold {
   pub button: ElementRef,
-  pub open: Arc<AtomicBool>,
 }
 
 impl Default for ListHold {
   fn default() -> Self {
     Self {
       button: ElementRef::new(),
-      open: Arc::new(AtomicBool::new(false)),
     }
   }
 }
@@ -102,16 +94,5 @@ impl PartialEq for ListHold {
 impl std::fmt::Debug for ListHold {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     formatter.debug_struct("ListHold").finish_non_exhaustive()
-  }
-}
-
-impl ListHold {
-  /// Whether the list held the focus as it was laid out last.
-  pub fn holds(&self) -> bool {
-    self.open.load(Ordering::Relaxed) || (self.button.is_attached() && self.button.focus_signal().get_untracked())
-  }
-
-  pub fn set_open(&self, open: bool) {
-    self.open.store(open, Ordering::Relaxed);
   }
 }

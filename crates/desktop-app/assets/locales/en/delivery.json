@@ -103,7 +103,6 @@
       "basis": "HISTORY"
     },
     "queue": {
-      "title": "Merge queue",
       "lead": "Runs that passed every step deliver into {{base}} one at a time, first finished first.",
       "leadNoBase": "Runs that passed every step deliver into their base branch one at a time, first finished first.",
       "reading": "Reading the merge queue…",
