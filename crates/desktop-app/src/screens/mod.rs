@@ -94,7 +94,8 @@ fn project_screen(ctx: &mut Ctx, project: ProjectId, page: &ProjectPage) -> Elem
 /// The screen of the open `project` that `page` names.
 fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
   match page {
-    ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
+    // The Overview shows every section on one page; a tab older links name lands on it all the same.
+    ProjectPage::Overview(_) => overview::screen(ctx, project),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::MergeQueue => {

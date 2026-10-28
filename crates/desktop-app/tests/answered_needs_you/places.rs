@@ -250,8 +250,8 @@ fn orchestrator(away: bool) {
   } else {
     let overview = Route::Project(page.project, ProjectPage::Overview(OverviewTab::default()));
     page.window.navigation().go(overview);
-    page.wait("the Overview's Needs you", |window| {
-      window.texts("overview-needs-count").is_some()
+    page.wait("the Overview's Waiting for you", |window| {
+      window.texts("overview-waits-title").is_some()
     });
   }
   let label = if away {
@@ -261,11 +261,17 @@ fn orchestrator(away: bool) {
   };
   page.answer(label, &item, |page| answer_as_the_orchestrator(page, &item));
   if !away {
-    assert_eq!(
-      page.window.text("overview-needs-count"),
-      page.count().to_string(),
-      "the Overview counts what every Needs you counts"
-    );
+    let count = page.count();
+    let shown = page.window.texts("overview-waits-title").map(|texts| texts.join(" "));
+    match count {
+      0 => assert_eq!(shown, None, "nothing waits: no digest"),
+      count => assert!(
+        shown
+          .as_deref()
+          .is_some_and(|title| title.starts_with(&format!("{count} "))),
+        "the Overview counts what every Needs you counts: {shown:?} against {count}"
+      ),
+    }
   }
   page.end();
 }
