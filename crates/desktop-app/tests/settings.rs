@@ -288,6 +288,26 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   assert!(bottom(&mut window, CONTINUE) <= 600.0, "scrolled into the window");
 }
 
+#[test]
+fn settings_merge_finished_runs_starts_further_in_than_merge_runs() {
+  let mut window = Window::open();
+  window.navigation().go(Route::Settings);
+  window.until("the Orchestrator's switches", |window| {
+    window.tree.get_element_by_id(CONTINUE).is_some()
+  });
+  let mut left = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+      .x
+  };
+  let indent = left("settings-merge-finished-label") - left("settings-merge-runs-label");
+  // `JMLwI` pads its start 40, the other rows 14.
+  assert_eq!(indent, 26.0, "Merge finished runs on its own starts 26 further in");
+}
+
 /// How far the top of `id` is under the top of the scroll `scroll` it is in.
 fn under_scroll_top(window: &mut Window, (scroll, id): (&str, &str)) -> f32 {
   let mut top = |id: &str| {

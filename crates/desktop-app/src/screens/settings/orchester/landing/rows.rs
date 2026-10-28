@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -32,8 +32,8 @@ use crate::{
   ui::{
     chip::{BadgeTone, badge},
     code_box::CodeBox,
-    detail_row::{DetailValue, detail_row},
     icon::{Icon, icon},
+    setting_rows::SettingRow,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -118,8 +118,9 @@ pub(super) fn first_match(landing: &Landing) -> Option<orchester_core::id::Proje
     .map(|checkout| checkout.id)
 }
 
-/// Project (by its name, `w2O9xk` in `q7dWu`), Server, Repository hint and Your role.
-fn facts(ctx: &Ctx, landing: &Landing) -> Element {
+/// Project (by its name, `w2O9xk` in `q7dWu`), Server, Repository hint and Your role: setting rows in one box, each
+/// label at its start and its value in 12 `text_secondary` at its end (`Rows` `L10Nc4`).
+fn facts(ctx: &mut Ctx, landing: &Landing) -> Element {
   let project = &landing.project;
   let server = ctx.t_args(
     "sharing.landing.serverValue",
@@ -133,39 +134,40 @@ fn facts(ctx: &Ctx, landing: &Landing) -> Element {
     Some(MemberRole::Owner) => ctx.t("sharing.landing.owner"),
     Some(MemberRole::Member) | None => ctx.t("sharing.landing.member"),
   };
-  Column::new()
+  let facts = [
+    (
+      "orchester-landing-project",
+      "sharing.landing.project",
+      project.name.as_str(),
+    ),
+    ("orchester-landing-server", "sharing.landing.server", &*server),
+    ("orchester-landing-hint", "sharing.landing.hint", &*hint),
+    ("orchester-landing-role", "sharing.landing.role", &*role),
+  ];
+  let mut rows = Column::new()
     .id("orchester-landing-facts")
     .width(Dimension::Pct(100.0))
-    .padding(ExtraSpacing::Inset.role())
-    .spacing(SpacingSize::Xs)
-    .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .child(detail_row(
-      "orchester-landing-project",
-      &ctx.t("sharing.landing.project"),
-      &project.name,
-      DetailValue::Text,
-    ))
-    .child(detail_row(
-      "orchester-landing-server",
-      &ctx.t("sharing.landing.server"),
-      &server,
-      DetailValue::Text,
-    ))
-    .child(detail_row(
-      "orchester-landing-hint",
-      &ctx.t("sharing.landing.hint"),
-      &hint,
-      DetailValue::Text,
-    ))
-    .child(detail_row(
-      "orchester-landing-role",
-      &ctx.t("sharing.landing.role"),
-      &role,
-      DetailValue::Text,
-    ))
-    .into()
+    .rounded(RadiusSize::Lg)
+    .clip();
+  for (index, (id, label, value)) in facts.into_iter().enumerate() {
+    let row = SettingRow::new(id, ctx.t(label))
+      .control(
+        Text::new(value)
+          .id(format!("{id}-value"))
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextSecondary)
+          .nowrap(),
+      )
+      .render(ctx);
+    let cell = Column::new().width(Dimension::Pct(100.0)).child(row);
+    rows = rows.child(if index == 0 {
+      cell
+    } else {
+      cell.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    });
+  }
+  rows.into()
 }
 
 /// A checkout: its radio, name and path, how its `origin` compares, and what the review will show.

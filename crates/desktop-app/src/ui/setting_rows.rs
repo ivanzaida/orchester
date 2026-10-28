@@ -178,6 +178,7 @@ pub struct SettingRow {
   lead: Option<Element>,
   control: Option<Element>,
   below: Vec<Element>,
+  dependent: bool,
   faded: bool,
   selected: bool,
   opens: Option<Open>,
@@ -195,6 +196,7 @@ impl SettingRow {
       lead: None,
       control: None,
       below: Vec::new(),
+      dependent: false,
       faded: false,
       selected: false,
       opens: None,
@@ -238,6 +240,12 @@ impl SettingRow {
 
   pub fn below_all(mut self, parts: impl IntoIterator<Item = Element>) -> Self {
     self.below.extend(parts);
+    self
+  }
+
+  /// A setting that needs the one above it: it starts further in (`JMLwI`).
+  pub fn dependent(mut self) -> Self {
+    self.dependent = true;
     self
   }
 
@@ -298,12 +306,15 @@ impl SettingRow {
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let text = self.text(ctx);
+    let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SettingsSpacing::RowY.role());
+    let padding = if self.dependent {
+      padding.left(SettingsSpacing::Dependent.role())
+    } else {
+      padding
+    };
     let line = Row::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(
-        ExtraSpacing::Inset.role(),
-        SettingsSpacing::RowY.role(),
-      ))
+      .padding(padding)
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .with_children(self.lead)

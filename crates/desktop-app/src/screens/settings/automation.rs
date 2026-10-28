@@ -4,7 +4,7 @@
 //! app starts, so a change applies from the next start, as the line under it says). *Approvals and permissions* holds
 //! *Let automation answer approvals* and *Let automation change agent permissions*; *The Orchestrator may* holds
 //! *publish drafts*, *answer agents*, *merge runs*, *merge finished runs on its own* (ORC-69; it needs *merge runs* and
-//! *answer agents* too, as its tooltip says), *continue interrupted runs* and *write with git*
+//! *answer agents* too, so it starts further in), *continue interrupted runs* and *write with git*
 //! (`docs/design/orchestrator-toolset.md`, "Decisions" 3, 5 and 9). Both groups are the person's alone, as the mark
 //! at their heading says. Each row says in one line what it allows; the rest, with what it needs and what it also
 //! governs, is in its (i) tooltip. *Let Orchester estimate story points* is a project's own setting now, in Project
@@ -383,6 +383,11 @@ impl Component for ConsentRow {
     let row = match hint {
       Some(hint) => row.hint(hint),
       None => row,
+    };
+    let row = if consent == Consent::Orchestrator(OrchestratorConsent::MergeFinished) {
+      row.dependent()
+    } else {
+      row
     };
     row.render(ctx)
   }

@@ -97,16 +97,19 @@ pub enum SettingsSpacing {
   Page,
   /// 20: above the column under the tabs (`Body` `EUrDy`).
   BodyTop,
+  /// 40: a row that depends on the one above it starts this far in (`Merge finished runs on its own` `JMLwI`).
+  Dependent,
 }
 
 impl SettingsSpacing {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::PanelTop,
     Self::PanelSide,
     Self::SectionTitle,
     Self::RowY,
     Self::Page,
     Self::BodyTop,
+    Self::Dependent,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -121,13 +124,14 @@ impl SettingsSpacing {
       Self::RowY => "settings_row_y",
       Self::Page => "settings_page",
       Self::BodyTop => "settings_body_top",
+      Self::Dependent => "settings_dependent",
     }
   }
 
   pub const fn value(self) -> f32 {
     match self {
       Self::PanelTop | Self::Page => 28.0,
-      Self::PanelSide => 40.0,
+      Self::PanelSide | Self::Dependent => 40.0,
       Self::SectionTitle => 10.0,
       Self::RowY => 11.0,
       Self::BodyTop => 20.0,
