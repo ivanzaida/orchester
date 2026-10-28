@@ -67,7 +67,7 @@ with its item slots overridden; actions are `Button/Size/Compact` (`SHKod`), dis
 | Queued 3 | Gone | Dot's hover card; Tasks › Queued |
 | N need you | Gone | Title bar *Needs you* |
 | Waiting requests with *Review* | Gone (open choice A) | Title bar *Needs you*; the task's Conversation |
-| Tokens today | Gone | Sidebar usage card (ORC-108) |
+| Tokens today | Gone (already built by ORC-108, merged 2026-10-28) | Sidebar usage card |
 | Plan limits | Only at the limit | Sidebar usage card, one line per CLI |
 | Runs auto-approving, *Stop* | Stays · attention | Right, first |
 | Team server | Only when not connected | Dot's hover card; Settings › Orchester |
