@@ -1,9 +1,7 @@
 name: CI
 
+# By hand only (Actions → CI → Run workflow): a push or pull request starts nothing, so CI minutes go to releases.
 on:
-  push:
-    branches: [master]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
