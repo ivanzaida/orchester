@@ -3,7 +3,8 @@
 //! `text_primary` on `code_bg` inside a `border` stroke, radius 6, 8 over and under it and 10 at its
 //! sides. The value is never shortened: it wraps, it can be selected, and past twelve lines it scrolls
 //! inside its box. Copy is a Tab stop; it says Copied for a moment once the clipboard holds the value,
-//! or that it could not copy.
+//! or that it could not copy. Inline (`Command` `SiCGv`), the box has no caption and Copy is a small
+//! icon button inside it at its end, 8 over and under and 12 at its sides; its tooltip says Copied.
 
 use std::{sync::Arc, time::Duration};
 
@@ -23,6 +24,7 @@ use lurq::{
 use super::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
+  icon_button::IconButton,
 };
 use crate::theme::{ExtraColor, ExtraSpacing};
 
@@ -85,6 +87,7 @@ pub struct CodeBox {
   label: Arc<str>,
   value: Arc<str>,
   copier: Copier,
+  inline: bool,
 }
 
 impl DevtoolsInspectable for CodeBox {}
@@ -97,12 +100,20 @@ impl CodeBox {
       label: label.into(),
       value: value.into(),
       copier: Copier::clipboard(),
+      inline: false,
     }
   }
 
   /// Copy puts the value there instead of the clipboard.
   pub fn copy_with(mut self, copier: Copier) -> Self {
     self.copier = copier;
+    self
+  }
+
+  /// One box with no caption over it, Copy a small icon button inside it at its end (`Command` `SiCGv` in `14`): 8
+  /// over and under, 12 at its sides; the label is the box's name for tools.
+  pub fn inline(mut self) -> Self {
+    self.inline = true;
     self
   }
 
@@ -136,44 +147,58 @@ impl Component for CodeBoxView {
     };
     let (copied, reset, value) = (self.copied.clone(), self.reset.clone(), props.value.clone());
     let copier = props.copier.clone();
+    let press = move || {
+      copied.set(if (copier.0)(&value) {
+        Copied::Done
+      } else {
+        Copied::Failed
+      });
+      reset.restart();
+    };
+    let text = ScrollVertical::new(
+      Text::new(&props.value)
+        .id(props.id.to_string())
+        .variant(TypographyStyle::Mono)
+        .selectable(true)
+        .width(Dimension::Pct(100.0)),
+    )
+    .max_height(Dimension::Px(VALUE_MAX_HEIGHT))
+    .flex(1.0);
+    let value = Row::new()
+      .id(format!("{}-box", props.id))
+      .width(Dimension::Pct(100.0))
+      .background(ExtraColor::CodeBackground.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .rounded(RadiusSize::Md)
+      .child(text);
+    if props.inline {
+      let copy = IconButton::new(format!("{}-copy", props.id), icon, ctx.t(key))
+        .small()
+        .in_form()
+        .on_click(press)
+        .render(ctx);
+      return Column::new().width(Dimension::Pct(100.0)).child(
+        value
+          .describe("a11y_name", props.label)
+          .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(copy),
+      );
+    }
     let copy = ActionButton::new(format!("{}-copy", props.id), ButtonKind::Ghost, ctx.t(key))
       .icon(icon)
       .in_form()
-      .on_click(move || {
-        copied.set(if (copier.0)(&value) {
-          Copied::Done
-        } else {
-          Copied::Failed
-        });
-        reset.restart();
-      });
+      .on_click(press);
     let label = Row::new()
       .width(Dimension::Pct(100.0))
       .align_items(Alignment::Center)
       .child(Text::new(&props.label).variant(TypographyStyle::FieldLabel).flex(1.0))
       .child(copy);
-    let value = Row::new()
-      .id(format!("{}-box", props.id))
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-      .background(ExtraColor::CodeBackground.role())
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Md)
-      .child(
-        ScrollVertical::new(
-          Text::new(&props.value)
-            .id(props.id.to_string())
-            .variant(TypographyStyle::Mono)
-            .selectable(true)
-            .width(Dimension::Pct(100.0)),
-        )
-        .max_height(Dimension::Px(VALUE_MAX_HEIGHT))
-        .flex(1.0),
-      );
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .child(label)
-      .child(value)
+      .child(value.padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm)))
   }
 }

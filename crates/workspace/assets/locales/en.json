@@ -1508,7 +1508,7 @@
       "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
       "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets)."
     },
-    "githubConnectionName": "GitHub · {{host}}",
+    "githubConnectionName": "gh · {{host}}",
     "projectTools": {
       "errors": {
         "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",

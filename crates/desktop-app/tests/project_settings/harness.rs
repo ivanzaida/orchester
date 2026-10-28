@@ -166,6 +166,19 @@ impl Settings {
       s.text("project-settings-save-status") == "All changes saved"
     });
   }
+  /// Whether the switch `id` shows on: its knob is in the track's right half.
+  pub fn switch_on(&mut self, id: &str) -> bool {
+    let mut bounds = |id: String| {
+      self
+        .window
+        .tree
+        .get_element_by_id_mut(&id)
+        .and_then(|element| element.bounds())
+        .unwrap_or_else(|| panic!("{id} is laid out"))
+    };
+    let (track, knob) = (bounds(format!("{id}-mark")), bounds(format!("{id}-knob")));
+    knob.x - track.x > track.width / 2.0 - knob.width / 2.0
+  }
   /// The reviewer's model as auto mode stores it; empty while none is chosen. The page says it in its (i).
   pub fn reviewer_model(&self) -> String {
     self

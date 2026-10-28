@@ -1,6 +1,6 @@
 //! A linked project's Sharing (`04b Sharing · shared` `TnUGj`, *Removed from the project* in `N9NFio`): *Team server*
-//! with its address, the person's role, its members read-only ([`super::members`]) and the repository ([`rows`]),
-//! *What a shared project can't do yet*, its discovery file ([`discovery`]), and *Leave*. *Make local* asks in place
+//! with its address and the person's role ([`rows`]) and its members read-only ([`super::members`]), *What a shared
+//! project can't do yet*, its discovery file ([`discovery`]), and *Leave*. *Make local* asks in place
 //! ([`super::make_local`]); *Leave* asks in place and keeps a local copy of the tasks and this computer's connection to
 //! the server; it is done on the server, so it is unavailable, with why, while this computer is not signed in there or
 //! it can't be reached. Once the person is no longer a member, the page says so instead of offering *Leave*, and *Make
@@ -12,9 +12,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    theme::PaletteColor,
   },
-  components::Column,
+  components::{Column, Row},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_api::MemberRole;
@@ -32,14 +34,15 @@ use super::{Facts, make_local, members};
 use crate::{
   project::ShownProject,
   screens::{
-    project_settings::kit::{Group, SettingRow, question, value},
+    project_settings::kit::{Group, SettingRow, Tone, question, value},
     settings::orchester::{PersonOnly, Said, sharing_said},
   },
   services::Services,
+  theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    icon::Icon,
+    icon::{Icon, icon},
     unavailable::reason_line,
   },
 };
@@ -138,25 +141,20 @@ impl Component for Linked {
       .map_or_else(|| missing_server(ctx, link), |entry| entry.stored.name.clone());
     let name = props.project.open.project.name().as_str().to_owned();
     let entry = props.facts.linked_server();
-    let hint = shown_hint(ctx, (&props, link, entry), &name);
     // The server project's name as the server answered; this project's own until it has (`Kontur` in both, in the
     // design).
-    let shared = match &hint {
-      Some(Ok(hint)) => hint.name().to_owned(),
-      _ => name.clone(),
-    };
+    let shared = rows::shared_name(ctx, link, entry).unwrap_or_else(|| name.clone());
     let role = match link.removed_at {
       Some(_) => removed::role_row(ctx, link, &shared),
       None => {
         let words = role_words(ctx, link.role);
-        rows::role_row(ctx, link, &words)
+        rows::role_row(ctx, &words)
       }
     };
     let team = Group::new("project-settings-sharing-team", ctx.t("sharing.team.title"))
       .row(rows::address_row(ctx, link, (entry, &server)))
       .row(role)
-      .row(members_rows(ctx, &props, &shared, &server))
-      .row(rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server)));
+      .row(members_rows(ctx, &props, &shared, &server));
     let discovery = ctx.mount_keyed::<discovery::DiscoveryRow>(
       "sharing-discovery-row",
       discovery::Props {
@@ -251,22 +249,12 @@ impl Linked {
     let unavailable = leave_unavailable(ctx, entry, server);
     let button = ActionButton::new(
       "sharing-leave",
-      ButtonKind::Secondary,
+      ButtonKind::DangerGhost,
       ctx.t("sharing.linked.leaveButton"),
     )
     .icon(Icon::LogOut)
     .in_form();
-    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.team.leave"))
-      .hint(ctx.t("sharing.linked.leaveHint"))
-      .info(ctx.t_args(
-        // Without the server in the list, this computer is not connected to it for anything else either.
-        if entry.is_some() {
-          "sharing.linked.leaveDescription"
-        } else {
-          "sharing.linked.leaveDescriptionNoServer"
-        },
-        [("server", server)],
-      ));
+    let row = SettingRow::new("sharing-leave-row", ctx.t("sharing.team.leave")).hint(ctx.t("sharing.linked.leaveHint"));
     let row = match &unavailable {
       Some(reason) => row
         .control(button.unavailable(reason.clone()))
@@ -320,12 +308,16 @@ impl Linked {
 }
 
 /// *What a shared project can't do yet* (`CkP8s`): the task fields its server refuses rather than loses, *Delivers* and
-/// *Don't merge automatically*.
+/// *Don't merge automatically*, in `warning` with a ⚠ before their count (`Q36H1I`).
 fn refused(ctx: &mut Ctx) -> Element {
+  let count = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::TriangleAlert, IconSize::Base, PaletteColor::Warning))
+    .child(value("sharing-refused-count", &REFUSED.to_string()));
   let row = SettingRow::new("sharing-refused", ctx.t("sharing.team.refusedFields"))
-    .hint(ctx.t("sharing.team.refusedFieldsHint"))
-    .info(ctx.t("sharing.team.refusedFieldsInfo"))
-    .control(value("sharing-refused-count", &REFUSED.to_string()))
+    .toned(ctx.t("sharing.team.refusedFieldsHint"), Tone::Warning)
+    .control(count)
     .render(ctx);
   Group::new("project-settings-sharing-refused", ctx.t("sharing.team.refused"))
     .row(row)
@@ -357,7 +349,6 @@ fn members_rows(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Ele
       entry: entry.cloned(),
       owner: link.is_some_and(|link| link.role == Some(MemberRole::Owner)),
       admin: account.is_some_and(|account| account.admin),
-      me: account.map(|account| account.user),
       connected: entry.is_some_and(|entry| entry.connection == Some(Connection::Connected)),
       removed: link.and_then(|link| link.removed_at),
       username: account.map(|account| account.username.clone()),
@@ -386,18 +377,5 @@ fn leave_unavailable(ctx: &Ctx, entry: Option<&ServerEntry>, server: &str) -> Op
     None | Some(Some(Connection::SignedOut)) => Some(ctx.t_args("sharing.linked.leaveNoServer", server)),
     Some(Some(Connection::Connected)) => None,
     Some(_) => Some(ctx.t_args("sharing.linked.leaveOffline", server)),
-  }
-}
-
-/// The repository hint as the server says it; while it doesn't (offline, or no longer listing the project for a
-/// removed member), the hint as last read stands, with when it was checked.
-fn shown_hint(
-  ctx: &mut Ctx,
-  (props, link, entry): (&Props, &orchester_store::SharingLink, Option<&ServerEntry>),
-  name: &str,
-) -> Option<Result<rows::Hint, Said>> {
-  match (rows::hint(ctx, link, entry), props.facts.cached_hint.as_ref()) {
-    (Some(Err(_)), Some((cached, checked))) => Some(Ok(rows::Hint::cached(name.to_owned(), cached.clone(), *checked))),
-    (live, _) => live,
   }
 }

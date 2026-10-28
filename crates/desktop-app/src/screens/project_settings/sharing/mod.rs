@@ -63,8 +63,6 @@ pub(super) struct Facts {
   pub linked_discovery: Option<LinkedDiscovery>,
   /// A linked project's server as the list holds it, signed in to or not; `None` once it left the list.
   pub linked: Option<ServerEntry>,
-  /// A linked project's repository hint as last read, and when, for while the server doesn't say.
-  pub cached_hint: Option<(Option<RepositoryIdentity>, orchester_core::time::Timestamp)>,
   /// The keys the local tasks had when the project joined, for *Keys before joining*; empty for one that didn't.
   pub joined: Vec<orchester_store::JoinedKey>,
   /// What the join left to say, until the person dismisses it.
@@ -186,11 +184,6 @@ fn read(
     .then(|| linked::joined::read(workspace, db.project().id()))
     .flatten();
   let tasks = db.tasks().map_err(local)?.len();
-  // A hint that no longer parses is left out; the row then waits for the server's.
-  let cached_hint = db
-    .remote_hint()
-    .map_err(local)?
-    .map(|(hint, checked)| (hint.and_then(|hint| RepositoryIdentity::parse(&hint).ok()), checked));
   let linked_discovery = link
     .as_ref()
     .and_then(|link| link.address.as_deref())
@@ -208,7 +201,6 @@ fn read(
     tasks,
     linked_discovery,
     linked,
-    cached_hint,
     joined,
     joined_note,
   })
