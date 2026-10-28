@@ -458,7 +458,6 @@
       "branches": "Run branches keep the names they started with. The next run of a task is named by its new key."
     },
     "landing": {
-      "crumb": "Invite to {{project}}",
       "title": "Join {{project}} on {{server}}",
       "titlePending": "Join {{project}}",
       "lead": "This computer is connected to {{server}} as {{username}}. Pick the checkout of {{project}} here; the next page shows what joining does before anything is sent.",

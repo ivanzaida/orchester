@@ -64,7 +64,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
-    Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),
+    Ok(Route::Invite(target)) => settings::invite(ctx, target),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }
