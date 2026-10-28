@@ -977,6 +977,17 @@ the other tones (Warning `warning_muted` in `warning`, Danger, Success) — `sur
 `text_muted` one (`pcNiB` keeps its `lock` mark, now in `info`). The file has no instance of `xnJyn` and no other
 stroked Info notice. Warning, Danger, Success and the callouts are unchanged. Exports: `.tmp/design/ORC-272/`.
 
+**Error reports switch (ORC-287, 2026-10-28, board `App settings · redesign` `iUmo3`, Row 2 `s2Lcr0`).** Settings ›
+General gets a group *Privacy* between *Plan limits* and *This computer*, with one row *Send error reports*: the hint
+*Errors and crashes go to Orchester's error tracker, without secrets, prompts, file contents or project names* (the same
+in both states) and under it the link *What a report carries* (`accent_text` 12/500, lucide `arrow-up-right` 12), which
+opens `docs/error-reports.md` (ORC-155). The switch is `Toggle/Switch on` `pPhPP` / `Toggle/Switch off` `WuXht` with its
+label hidden, as Automation's rows; the row is the settings row (padding 11/14, Label 13/500 `text_primary`, Hint 12
+`text_muted`). On by default. Frames: `01b · General · error reports on` `Z322E` (group `uMdRR`) and `01c · General ·
+error reports off` `mWn0J` (group `OUGvG`), copies of `01 · General` `l838Ty`, which is unchanged and does not show the
+row yet. Proposed copy namespace: `settings.general.privacy.*` (`title`, `error_reports.label`, `.hint`, `.link`).
+Exports: `.tmp/design/ORC-287/`.
+
 ## Presets
 
 Drawn 2026-10-01, not built. Group `Rg8DS` ("Presets · entry, choose, preview, finish setup, save", last in 03 / Pipelines at x 0 / y 5664, height 4264; the section is now 10024 high). It sits in 03 / Pipelines because a preset is mainly a way to get pipelines: *Add from preset* lives in the Pipelines library, presets replace the single starter of 03.A and 03.05, and the profiles and tools a preset creates exist for its pipelines. Fixture: Kontur (and Atlas in 03.D); the presets *Website content update* and *Kontur feature flow*, the dates, the commands and every count are illustrative. Proposed copy namespaces: `presets.*` (`presets.picker.*`, `presets.preview.*`, `presets.finishSetup.*`, `presets.save.*`, `presets.provenance.*`), `setup.startingPoint.*`.

@@ -5,3 +5,8 @@
 .agents/
 __pycache__/
 
+
+# The web apps moved to the private platform repository; runs and checkouts made before that keep
+# their untracked web/ folders (node_modules, builds), which must never be committed.
+/web/
+node_modules/

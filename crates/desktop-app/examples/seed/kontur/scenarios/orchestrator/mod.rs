@@ -4,8 +4,9 @@
 //! `Orchestrator cards · redesign` `zuvUi` in the new orchester.pen): *While you were away* (`01 Conversation`), four
 //! waits that still stand (an agent's question and three interrupted runs, [`live`]) gathered into one digest and a
 //! turn answered with several actions, the one the Orchestrator opens on; and *Every card* (`06 Cards in a
-//! conversation`), in History, with each card kind: event lines (done, refused, a run's end that stands), waits in
-//! each status (*Waits for you*, *Orchestrator is reading*, *Answered by the Orchestrator*, *Answered by you*),
+//! conversation`), in History, with each card kind: event lines (done, refused, a run's end that stands, and one that
+//! no longer waits because Orchester merged the run since), waits in each status (*Waits for you*, *Orchestrator is
+//! reading*, *Answered by the Orchestrator*, *Answered by you*),
 //! decision cards waiting (a start, a merge, a cancel, a publication that widens and an MCP server to add, whose facts
 //! go on behind *Show details*, [`proposals`], with an answer and a release), decided ones folded into lines, a hold
 //! of new starts, a daily report, a stopped turn and a failed one.
@@ -306,9 +307,10 @@ fn away(kontur: &mut Kontur, catalogue: &Catalogue) -> Result<(), SeedError> {
   )
 }
 
-/// The tasks *Every card* is about: a run ready to merge, one whose plan waits, one whose agent asked a question, and
-/// a draft that can start.
+/// The tasks *Every card* is about: a run Orchester merged since its end was kept, a run ready to merge, one whose
+/// plan waits, one whose agent asked a question, and a draft that can start.
 struct Cards {
+  merged: Ran,
   ready: Ran,
   planning: Ran,
   asking: Ran,
@@ -317,6 +319,15 @@ struct Cards {
 
 impl Cards {
   fn seed(kontur: &mut Kontur, catalogue: &Catalogue) -> Result<Self, SeedError> {
+    let merged = live::task_in(
+      kontur,
+      catalogue,
+      (
+        "Name the webhook sender's log",
+        "Give the webhook sender's log a name of its own.",
+      ),
+      (Shape::Merged, kontur.ago(31 * 60)),
+    )?;
     let ready = live::task_in(
       kontur,
       catalogue,
@@ -351,6 +362,7 @@ impl Cards {
       kontur.ago(27 * 60),
     )?;
     Ok(Self {
+      merged,
       ready,
       planning,
       asking,
@@ -414,9 +426,12 @@ fn refused_start() -> ChatAction {
   )
 }
 
-/// From `at`: the end of the run ready to merge, which stands; a wait the Orchestrator answered and one the person
-/// answered; the plan that waits, which the Orchestrator read; and the question it is reading (no turn yet).
+/// From `at`: the end of a run Orchester merged since, which no longer waits (its neutral line); the end of the run
+/// ready to merge, which stands; a wait the Orchestrator answered and one the person answered; the plan that waits,
+/// which the Orchestrator read; and the question it is reading (no turn yet).
 fn waits(kontur: &mut Kontur, (chat, cards): (&Chat, &Cards), at: Timestamp) -> Result<(), SeedError> {
+  let merged = live::ended(kontur, &cards.merged, (RunEnd::Succeeded, None))?;
+  keep(kontur, chat, &merged, later(at, -30))?;
   let ready = live::ended(kontur, &cards.ready, (RunEnd::Succeeded, None))?;
   keep(kontur, chat, &ready, at)?;
   let answer = |by: &str, number, outcome| {
