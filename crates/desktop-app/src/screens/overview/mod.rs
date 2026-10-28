@@ -130,18 +130,11 @@ impl Component for OverviewScreen {
       now: Timestamp::now(),
     };
     let state = project.tasks();
-    let page = Column::new()
-      .id("overview-body")
+    // The recovery notice keeps its own room under it only while it shows, so it stands outside the spaced
+    // column: an empty child there would push the header down by the column's spacing.
+    let sections = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Xl)
-          .bottom(SpacingSize::Xl)
-          .left(ExtraSpacing::Roomy.role())
-          .right(ExtraSpacing::Roomy.role()),
-      )
       .spacing(ExtraSpacing::Tabs.role())
-      .child(recovery)
       .child(header::header(ctx, &project))
       .with_children(notices::runner(ctx, &project))
       .with_children(notices::server(
@@ -162,6 +155,18 @@ impl Component for OverviewScreen {
         TasksState::Ready(tasks) => body(ctx, &project, tasks, &around),
         TasksState::Loading => reading(ctx, &project, &around),
       });
+    let page = Column::new()
+      .id("overview-body")
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(SpacingSize::Xl)
+          .bottom(SpacingSize::Xl)
+          .left(ExtraSpacing::Roomy.role())
+          .right(ExtraSpacing::Roomy.role()),
+      )
+      .child(recovery)
+      .child(sections);
     Column::new()
       .id("screen-overview")
       .width(Dimension::Pct(100.0))

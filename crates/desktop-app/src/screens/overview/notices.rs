@@ -10,11 +10,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::SpacingSize,
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row},
+  components::{Column, Row, Text},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
@@ -30,10 +30,11 @@ use crate::{
   routes::{OrchesterView, ProjectPage, Route, TaskTab, TaskView},
   services::Services,
   shell::status_bar::{ServerFacts, ServerState, server_facts},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     button::{ActionButton, ButtonKind},
     failure::Failure,
-    icon::Icon,
+    icon::{Icon, icon},
     message::message_text,
     notice::{Notice, NoticeTone},
     pressable::Press,
@@ -74,21 +75,51 @@ pub(super) fn runner(ctx: &mut Ctx, project: &ShownProject) -> Option<Element> {
       )
       .icon(Icon::FileText)
       .on_click(move || log.open_log_of(&root));
-      Some(
-        Notice::new(
-          "overview-runner-notice",
-          NoticeTone::Danger,
-          ctx.t("overview.runner.title"),
-        )
-        .icon(Icon::CircleAlert)
-        .body(body)
-        .action(restart)
-        .action(open_log)
-        .into(),
-      )
+      Some(runner_card(&ctx.t("overview.runner.title"), &body, [restart, open_log]))
     }
     _ => None,
   }
+}
+
+/// The runner that gave up restarting, as the failure card draws it (`Card` `jQyBa` in 05 `JzNRO`): on
+/// `surface_raised` in a `border` stroke, radius 12, 14 over and under and 16 at its sides, its parts 10 apart: a 14
+/// `danger` circle-alert 10 from the title in 13/600, why under it, and its actions in a row under that, 8 apart.
+fn runner_card(title: &str, body: &str, actions: [ActionButton; 2]) -> Element {
+  let id = "overview-runner-notice";
+  Column::new()
+    .id(id)
+    .describe("tone", NoticeTone::Danger.name())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+    .spacing(ExtraSpacing::Loose.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
+    .rounded(RadiusSize::Lg)
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Loose.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger).id(format!("{id}-icon")))
+        .child(
+          Text::new(title)
+            .id(format!("{id}-title"))
+            .variant(OverviewText::Section.role()),
+        ),
+    )
+    .child(
+      Text::new(body)
+        .id(format!("{id}-body"))
+        .variant(ExtraTypography::Prose.role())
+        .width(Dimension::Pct(100.0)),
+    )
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(actions),
+    )
+    .into()
 }
 
 /// The team server's notice, for a shared project whose sign-in there ended.

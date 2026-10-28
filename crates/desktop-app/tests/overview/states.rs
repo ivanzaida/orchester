@@ -258,7 +258,7 @@ fn overview_while_the_tasks_are_read_shows_heads_and_bones_never_an_empty_page()
   assert!(seeded.shows("overview-waits-bones") && seeded.shows("overview-at-work-bones"));
   assert!(!seeded.shows("overview-start") && !seeded.shows("overview-quiet"));
   hold.set(false);
-  seeded.until("the tasks", |seeded| seeded.shows("overview-landed-today"));
+  seeded.until("the tasks", |seeded| seeded.shows("overview-merge-queue"));
   assert!(!seeded.shows("overview-waits-bones"));
 }
 

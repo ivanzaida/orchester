@@ -1,8 +1,8 @@
 //! *Delivery* (`Delivery` `YkDqG` in 01 `LXhun`): each open module by target date, up to three, its target mark, name
 //! and *12 / 18 tasks*, a 4 high meter of what is done, and its forecast (*Likely Nov 2 · 85% by Nov 4*, or why there
-//! is none); then the queued work with its 85% date. *Delivery ↗* opens the Delivery view. Read off the UI thread
-//! (`orchester_workspace::overview::delivery`) when the project's tasks were saved, never per frame; a reading that
-//! fails stands in the section's place with Try again (05 `JzNRO`).
+//! is none); then the queued work with its 85% date, while any is queued. *Delivery ↗* opens the Delivery view. Read
+//! off the UI thread (`orchester_workspace::overview::delivery`) when the project's tasks were saved, never per frame;
+//! a reading that fails stands in the section's place with Try again (05 `JzNRO`).
 
 use std::path::PathBuf;
 
@@ -133,7 +133,8 @@ impl Component for DeliverySection {
         };
         item.render()
       }))
-      .child(queued(ctx, &delivery.queued))
+      // Nothing queued has nothing to forecast: no *Queued work · 0 tasks · Done* line.
+      .with_children((delivery.queued.remaining > 0).then(|| queued(ctx, &delivery.queued)))
   }
 }
 

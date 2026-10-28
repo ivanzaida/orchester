@@ -41,9 +41,10 @@ use crate::{
   },
 };
 
-/// The list's width (`Start` `ru9Gh`), its head's height (`ci1xJ`).
+/// The list's width (`Start` `ru9Gh`), its head's height (`ci1xJ`) and a step's line's (`ru9Gh`'s lines).
 const WIDTH: f32 = 720.0;
 const HEAD_HEIGHT: f32 = 36.0;
+const LINE_HEIGHT: f32 = 60.0;
 
 /// The list for `project`, which has `tasks` tasks.
 pub(super) fn start(ctx: &mut Ctx, project: &ShownProject, tasks: usize) -> Element {
@@ -152,7 +153,8 @@ fn step_line(ctx: &mut Ctx, project: ProjectId, line: &StartLine) -> Row {
     .id(id.clone())
     .describe("done", line.done.to_string())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+    .min_height(Dimension::Px(LINE_HEIGHT))
+    .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))

@@ -81,7 +81,7 @@ impl Seeded {
   pub fn shown(mut seeded: Self, tab: OverviewTab) -> Self {
     seeded.go(tab);
     seeded.until("the tasks", |seeded| {
-      seeded.shows("overview-landed-today") || seeded.shows("overview-start")
+      seeded.shows("overview-merge-queue") || seeded.shows("overview-start")
     });
     seeded
   }

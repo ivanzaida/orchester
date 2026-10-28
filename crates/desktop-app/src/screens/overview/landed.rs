@@ -61,12 +61,13 @@ pub(super) fn landed(
     ))
     .child(queue_line(ctx, project, queue));
   let count = landed.today.len();
-  let today_label = if count == 1 {
-    ctx.t("overview.landed.today.one")
-  } else {
-    ctx.t_args("overview.landed.today.other", [("count", count.to_string())])
+  // A day without a merge yet has no *Today* group: *Today · 0 merged* would say nothing.
+  let today_label = match count {
+    0 => None,
+    1 => Some(ctx.t("overview.landed.today.one")),
+    _ => Some(ctx.t_args("overview.landed.today.other", [("count", count.to_string())])),
   };
-  let mut section = section.child(sub("overview-landed-today", &today_label));
+  let mut section = section.with_children(today_label.map(|label| sub("overview-landed-today", &label)));
   for run in landed.today.iter().take(TODAY_SHOWN) {
     section = section.child(run_line(ctx, project, run, false));
   }

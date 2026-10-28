@@ -2,7 +2,7 @@
 //! its head with how many and *N of M agent slots* as the runner reports them. A line: the turning loader, the key,
 //! the title in 13/500, the step's dots and the step (`GI561`: one 10×4 dash per step, 3 apart, the steps done in
 //! `text_muted`, the current one in `text_primary`, the rest in `border`), the account and model with the maker's mark
-//! (`VJWOi`), and how long the run has run. A run that lost its runner keeps its line with a pause mark and no age.
+//! (`VJWOi`), and how long the run has run. A run that lost its runner keeps its line and its age, with a pause mark.
 //! Up to six lines; more opens Tasks on Active. A line opens its task's conversation, as the sidebar's Running does.
 
 use std::num::NonZeroU32;
@@ -92,10 +92,11 @@ fn run_line(
   } else {
     (Icon::LoaderCircle, PaletteColor::TextSecondary)
   };
-  let age = match (&at_work.work, at_work.lost) {
-    (Some(work), false) => age(ctx, work.started_at, now),
-    _ => "".into(),
-  };
+  // A run that lost its runner keeps its age, as the runner-away state draws it (05 `JzNRO`).
+  let age = at_work
+    .work
+    .as_ref()
+    .map_or_else(|| "".into(), |work| age(ctx, work.started_at, now));
   let row = line(&id, LINE_HEIGHT, SpacingSize::Md)
     .describe("lost", at_work.lost.to_string())
     .child(icon(glyph, IconSize::Md, color))
@@ -158,16 +159,21 @@ fn step(ctx: &Ctx, id: &str, at_work: &AtWorkLine) -> Row {
     .align_items(Alignment::Center)
     .child(
       Row::new()
+        .flex_shrink(0.0)
         .spacing(ExtraSpacing::Fine.role())
         .align_items(Alignment::Center)
         .with_children(dashes),
     )
+    // A long pipeline leaves the name less room than the cell: it ends in an ellipsis instead of being cut.
     .with_children(name.map(|name| {
       Text::new(&name)
+        .id(format!("{id}-step-name"))
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextSecondary)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
     }))
 }
 
