@@ -7,8 +7,9 @@
 //! in the window), the installed app's own MCP server: whether it listens, on which port, and the id of
 //! this installation that names its token in the keychain, whether the Orchestrator chat publishes drafts,
 //! answers agents, merges runs, merges finished runs on its own, continues interrupted runs and writes with git itself
-//! (each off until a person turns it on in the window), which OS notifications the app shows, and when the
-//! Orchestrator's daily report comes (off until a person turns it on).
+//! (each off until a person turns it on in the window), which OS notifications the app shows, when the
+//! Orchestrator's daily report comes (off until a person turns it on), and whether the desktop app sends error
+//! reports (on until a person turns it off).
 
 use orchester_core::{
   app_mcp::McpPort,
@@ -122,6 +123,13 @@ ALTER TABLE app_settings ADD COLUMN estimates_story_points INTEGER NOT NULL DEFA
   CHECK (estimates_story_points IN (0, 1));
 ";
 
+pub(super) const ERROR_REPORTS_MIGRATION: &str = r"
+-- Send error reports to GlitchTip (ORC-154): on until a person turns it off, in an existing database too (the
+-- person's decision, 2026-10-28).
+ALTER TABLE app_settings ADD COLUMN sends_error_reports INTEGER NOT NULL DEFAULT 1
+  CHECK (sends_error_reports IN (0, 1));
+";
+
 impl AppDb {
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
@@ -165,6 +173,25 @@ impl AppDb {
   pub fn set_estimates_story_points(&mut self, allowed: bool) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE app_settings SET estimates_story_points = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether the desktop app sends error reports to GlitchTip; on until a person turns it off.
+  pub fn sends_error_reports(&self) -> Result<bool, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT sends_error_reports FROM app_settings WHERE id = 1", [], |row| {
+          row.get(0)
+        })?,
+    )
+  }
+
+  pub fn set_sends_error_reports(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET sends_error_reports = ?1 WHERE id = 1",
       params![allowed],
     )?;
     Ok(())
