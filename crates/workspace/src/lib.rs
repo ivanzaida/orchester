@@ -37,6 +37,7 @@ pub mod messages;
 pub mod modules;
 pub mod notifications;
 pub mod orchestrator;
+pub mod overview;
 pub mod pipelines;
 pub mod plan_limits;
 pub mod project_list;

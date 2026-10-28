@@ -85,6 +85,8 @@ pub struct ModuleScreen {
   menu: more::MenuPlace,
   /// *Close module* and *Reopen module*.
   save: save::SaveAction,
+  /// What this page and its properties last wrote of the module.
+  written: save::Written,
 }
 
 impl Component for ModuleScreen {
@@ -92,17 +94,15 @@ impl Component for ModuleScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let save = save::action(ctx);
+    let written = save::Written::new(ctx);
     let feed = ctx.props::<PageProps>().project.feed.clone();
-    ctx.watch(&save.state(), move |state| {
-      if state.is_fulfilled() && state.data.is_some() {
-        feed.saved();
-      }
-    });
+    written.follow(ctx, &save, feed);
     Self {
       table: ctx.signal(false),
       retry: ctx.signal(0),
       menu: more::MenuPlace::new(ctx),
       save,
+      written,
     }
   }
 
@@ -168,7 +168,7 @@ impl ModuleScreen {
       .opens(navigation.to(Route::Project(id, ProjectPage::NewTaskInModule(page.module.id()))));
     let actions = vec![
       new_task.into(),
-      more::more(ctx, (project, page), &self.menu, &self.save),
+      more::more(ctx, (project, page), &self.menu, (&self.save, &self.written)),
     ];
     let chip = header::state_chip(ctx, "module-state", details.state());
     let facts = Text::new(&words::facts(ctx, details, page.progress, &page.forecast))
@@ -202,6 +202,7 @@ impl ModuleScreen {
         summary::SummaryProps {
           project: project.clone(),
           page: page.clone(),
+          written: self.written.clone(),
         },
       ),
       ModuleTab::Burndown => {
@@ -293,6 +294,7 @@ fn missing(ctx: &Ctx) -> Element {
   )
   .unframed()
   .centered()
+  .gap(SpacingSize::Md)
   .measure(MISSING_MEASURE)
   .into()
 }

@@ -47,6 +47,7 @@ pub struct Card {
   trailing: Vec<Element>,
   fill: bool,
   close: bool,
+  narrow: bool,
 }
 
 impl Card {
@@ -60,7 +61,14 @@ impl Card {
       trailing: Vec::new(),
       fill: false,
       close: false,
+      narrow: false,
     }
+  }
+
+  /// 16 at its sides instead of 20, as a module's Burndown (`Burndown card` `A3esT`).
+  pub fn narrow(mut self) -> Self {
+    self.narrow = true;
+    self
   }
 
   /// The smaller title of an efficiency card (`ZlfOf`).
@@ -139,7 +147,7 @@ impl Card {
           .id(format!("{}-subtitle", self.id))
           .variant(UsageText::Subtitle.role())
       }));
-    let card = frame(self.id);
+    let card = frame(self.id, self.narrow);
     let card = if self.close {
       card.spacing(ExtraSpacing::Loose.role())
     } else {
@@ -151,10 +159,15 @@ impl Card {
   }
 }
 
-/// The card's surface and padding.
-fn frame(id: &str) -> Column {
+/// The card's surface and padding, 16 at its sides when `narrow`.
+fn frame(id: &str, narrow: bool) -> Column {
+  let side = if narrow {
+    SpacingSize::Lg
+  } else {
+    UsageSpacing::CardSide.role()
+  };
   card_frame(id, CardSurface::Panel)
-    .padding(Padding::symmetric(UsageSpacing::CardSide.role(), SpacingSize::Lg))
+    .padding(Padding::symmetric(side, SpacingSize::Lg))
     .spacing(ExtraSpacing::Inset.role())
 }
 

@@ -39,7 +39,7 @@ use crate::{
     icon::Icon,
     message::message_text,
     state::{EmptyState, load_error, loading},
-    tabs::{PageTab, counted, page_tabs},
+    tabs::{PageTab, page_tabs},
   },
 };
 
@@ -225,7 +225,7 @@ impl ModulesList {
   }
 }
 
-/// Open and Closed with their counts once the modules are read.
+/// Open and Closed with their counts, 12 `text_muted` after the label (`MYsfj`), once the modules are read.
 fn tabs(
   ctx: &mut Ctx,
   project: orchester_core::id::ProjectId,
@@ -240,12 +240,12 @@ fn tabs(
         ModuleListTab::Open => "modules.state.open",
         ModuleListTab::Closed => "modules.state.closed",
       });
-      let label = match listed.filter(|listed| !listed.is_empty()) {
-        Some(listed) => counted(ctx, &word, listed.iter().filter(|summary| shows(tab, summary)).count()),
-        None => word,
-      };
       let open = navigation.to(Route::Project(project, ProjectPage::Modules(tab)));
-      PageTab::to(format!("modules-tab-{}", tab.name()), label, tab == chosen, open)
+      let page_tab = PageTab::to(format!("modules-tab-{}", tab.name()), word, tab == chosen, open);
+      match listed.filter(|listed| !listed.is_empty()) {
+        Some(listed) => page_tab.count(listed.iter().filter(|summary| shows(tab, summary)).count(), false),
+        None => page_tab,
+      }
     })
     .collect();
   page_tabs(ctx, "modules-tabs", tabs).into()
@@ -293,6 +293,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject) -> Element {
   )
   .unframed()
   .centered()
+  .gap(SpacingSize::Lg)
   .measure(EMPTY_MEASURE)
   .action(new);
   Column::new()

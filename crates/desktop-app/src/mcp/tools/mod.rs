@@ -211,13 +211,14 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
 }
 
 /// The parameters `navigate` takes back for a Modules place: the list's `tab`; `module` new; a module's id with its
-/// `tab`, or with `view` edit.
+/// `tab`, or with `view` edit; and New task in module's `module`.
 fn module_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
   match page {
     ProjectPage::Modules(tab) => vec![("tab", tab.name().to_owned())],
     ProjectPage::NewModule => vec![("module", "new".to_owned())],
     ProjectPage::Module(module, tab) => vec![("module", module.to_string()), ("tab", tab.name().to_owned())],
     ProjectPage::EditModule(module) => vec![("module", module.to_string()), ("view", "edit".to_owned())],
+    ProjectPage::NewTaskInModule(module) => vec![("module", module.to_string())],
     _ => Vec::new(),
   }
 }

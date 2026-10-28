@@ -52,6 +52,7 @@ pub fn card(ctx: &mut Ctx, page: &ModulePage, table_view: &Signal<bool>) -> Elem
     })
   };
   let card = Card::new("module-burndown", ctx.t("modules.burndown.title"))
+    .narrow()
     .note(words::unit(ctx, page.burndown.unit))
     .subtitle(ctx.t("modules.burndown.subtitle"))
     .trailing(switch);

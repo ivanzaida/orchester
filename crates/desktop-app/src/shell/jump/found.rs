@@ -16,8 +16,8 @@ use orchester_workspace::tasks::{
 
 use crate::{
   routes::{
-    AccountsView, AgentTab, ConnectionsView, ModuleTab, OrchesterView, OverviewTab, ProjectPage, ProjectSettingsTab,
-    Route, Screen, SecretsView, TaskView,
+    AccountsView, AgentTab, ConnectionsView, ModuleTab, OrchesterView, ProjectPage, ProjectSettingsTab, Route, Screen,
+    SecretsView, TaskView,
   },
   screens::{hub::HubTab, tasks::phrases},
   shell::sidebar::place::Place,
@@ -253,7 +253,7 @@ fn places(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
     .collect()
 }
 
-/// The Review hub's and the Agents hub's tabs, and the Overview's.
+/// The Review hub's and the Agents hub's tabs. The Overview has no tabs: it shows every section on one page.
 fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   let at = |page: ProjectPage| Target::Route(Route::Project(project, page));
   let review = word(ctx, "shell.screens.review");
@@ -280,23 +280,6 @@ fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
       Target::Route(tab.route(project)),
     )
   }));
-  let overview = word(ctx, "shell.screens.overview");
-  entries.extend(
-    [
-      (OverviewTab::Running, "overview.tabs.running"),
-      (OverviewTab::NeedsYou, "overview.tabs.needsYou"),
-      (OverviewTab::Queued, "overview.tabs.queued"),
-      (OverviewTab::Failed, "overview.tabs.failed"),
-    ]
-    .map(|(tab, key)| {
-      Entry::new(
-        format!("overview-{}", tab.name()),
-        Place::Overview.icon(),
-        within(ctx, &overview, key),
-        at(ProjectPage::Overview(tab)),
-      )
-    }),
-  );
   entries
 }
 

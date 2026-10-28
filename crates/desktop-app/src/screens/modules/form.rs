@@ -306,7 +306,7 @@ fn follow_save(ctx: &mut Ctx, save: &save::SaveAction, props: &FormProps) {
   let navigation = Navigation::of(ctx);
   let (feed, project) = (props.project.feed.clone(), props.project.open.project.id());
   ctx.watch(&save.state(), move |state| {
-    let Some(save::Saved(module)) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
+    let Some(save::Saved { module, .. }) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
       return;
     };
     feed.saved();
