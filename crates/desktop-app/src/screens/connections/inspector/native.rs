@@ -38,6 +38,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     message::message_text,
+    unavailable::reason_line,
   },
 };
 
@@ -71,6 +72,11 @@ pub(super) fn parts(
     })
     .into_iter()
     .collect();
+  // Why the test waits, in words as well as on its locked buttons (05k `EbPSP`).
+  if status == ConnectionStatus::KeyMissing {
+    let why = ctx.t("connections.native.testWaitsForKey");
+    notices.push(reason_line("connection-test-reason", &why).into());
+  }
   notices.extend(result::native(ctx, connection, api, inspecting));
   let connection_group = Group::new("connection-properties", ctx.t("connections.connectionGroup"))
     .rows(rows(ctx, connection, api, inspecting))
@@ -196,7 +202,7 @@ fn sent_to(ctx: &mut Ctx, api: &ApiEndpoint) -> Element {
   let words = ctx.t_args("connections.native.sentTo", [("host", api.base_url().host())]);
   warning_line(
     ctx,
-    "connection-native-sent-to",
+    ("connection-native-sent-to", Icon::Send),
     &words,
     Some(ctx.t("connections.native.sentToInfo")),
   )

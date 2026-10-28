@@ -245,6 +245,27 @@ pub fn usage(
 /// The model of the usage scenario's Claude Code profiles.
 const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
 
+/// The catalogue of the native connections' scenario (`docs/design/native-connections.md`): the design's, its Builder
+/// on the native Anthropic API connection `native` (`builder`'s model) and its Reviewer there too (`CLAUDE_MODEL`, the
+/// model 05j's refusal names), Explorer and Planner on Codex.
+pub fn native(
+  db: &mut ProjectDb,
+  (codex, native): (ConnectionId, ConnectionId),
+  builder: &'static str,
+  now: Timestamp,
+) -> Result<Catalogue, SeedError> {
+  let profiles = Profiles::publish_on(
+    db,
+    |role| match role {
+      "Builder" => (native, builder),
+      "Reviewer" => (native, CLAUDE_MODEL),
+      _ => (codex, MODEL),
+    },
+    now,
+  )?;
+  starter_catalogue(db, &profiles, now, false)
+}
+
 /// The catalogue the design shows: Feature delivery v3 (the starter pipeline: Research, Plan with plan
 /// approval, Implement, Run checks and Review, Create pull request) and Quick fix v2 (Research, Plan,
 /// Implement, Review). Its tools run `cargo test` and `gh pr create`, which the QA repository cannot

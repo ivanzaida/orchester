@@ -25,7 +25,10 @@ use super::{Inspecting, Tested};
 use crate::{
   screens::connections::words::{CHECKING, Shown, Tone, agent_status, checked_version, github_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
-  ui::{icon::icon, message::message_text},
+  ui::{
+    icon::{Icon, icon},
+    message::message_text,
+  },
 };
 
 /// The result box of an agent connection, once a check was pressed on it here.
@@ -197,11 +200,18 @@ impl Said {
         .variant(TypographyStyle::Caption)
         .nowrap()
     });
+    // The heading's glyph says how the test went (05g, 05h, 05k): passed, found a problem, or failed.
+    let glyph = match self.shown.tone {
+      Tone::Success => Icon::CircleCheck,
+      Tone::Warning => Icon::TriangleAlert,
+      Tone::Danger | Tone::Muted => Icon::CircleX,
+      Tone::Busy => self.shown.icon,
+    };
     let top = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)
-      .child(icon(self.shown.icon, IconSize::Base, self.shown.tone.color()))
+      .child(icon(glyph, IconSize::Base, self.shown.tone.color()))
       .child(
         Text::new(&self.heading)
           .id("connection-test-result-heading")

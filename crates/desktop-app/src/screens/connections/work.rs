@@ -91,10 +91,15 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
         spec,
       } = start;
       let run = async move {
-        match work {
-          Work::Test => test_in(&runners, repo_root, id).await,
-          _ => background::run(move || run(&workspace, &repo_root, (id, work))).await?,
-        }
+        let blocking = match work {
+          Work::Test => return test_in(&runners, repo_root, id).await,
+          Work::Check => Blocking::Check,
+          Work::UseActiveAccount => Blocking::UseActiveAccount,
+          Work::SetEnabled(enabled) => Blocking::SetEnabled(enabled),
+          Work::Remove => Blocking::Remove,
+          Work::SetAccount(account) => Blocking::SetAccount(account),
+        };
+        background::run(move || run(&workspace, &repo_root, (id, blocking))).await?
       };
       activity.track(spec, run).await?;
       // Every screen that shows the project's connections reads them again, the status bar's accounts too.
@@ -104,10 +109,19 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
   })
 }
 
-fn run(workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Work)) -> Result<(), Message> {
+/// The [`Work`] that blocks on the project database or a program, run off the UI thread; a native test goes
+/// through the runner instead.
+enum Blocking {
+  Check,
+  UseActiveAccount,
+  SetEnabled(bool),
+  Remove,
+  SetAccount(AgentAccountId),
+}
+
+fn run(workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Blocking)) -> Result<(), Message> {
   match work {
-    Work::Test => unreachable!("`action` has the runner test a native connection and never hands that work here"),
-    Work::SetAccount(account) => {
+    Blocking::SetAccount(account) => {
       let account = workspace
         .agent_account(account)
         .map_err(|error| messages::store_error(&error))?
@@ -117,18 +131,18 @@ fn run(workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Work)
         error.message()
       })
     }
-    Work::Check => recheck_in(repo_root, id).map_err(|error| {
+    Blocking::Check => recheck_in(repo_root, id).map_err(|error| {
       tracing::error!(%error, "cannot store the connection check");
       error.message()
     }),
-    Work::UseActiveAccount => expect_active_account_in(repo_root, id).map_err(|error| {
+    Blocking::UseActiveAccount => expect_active_account_in(repo_root, id).map_err(|error| {
       tracing::error!(%error, "cannot record the account gh uses as the expected one");
       error.message()
     }),
-    Work::SetEnabled(enabled) => set_enabled_in(repo_root, id, enabled).map_err(|error| {
+    Blocking::SetEnabled(enabled) => set_enabled_in(repo_root, id, enabled).map_err(|error| {
       tracing::error!(%error, "cannot turn the MCP server on or off");
       messages::store_error(&error)
     }),
-    Work::Remove => remove_in(repo_root, id).map_err(|error| error.message()),
+    Blocking::Remove => remove_in(repo_root, id).map_err(|error| error.message()),
   }
 }

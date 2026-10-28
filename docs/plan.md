@@ -840,9 +840,17 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58
   - **Follow-up (OpenAI API):** the runner's `Command::CheckConnection` still refuses `OpenAiApi` and native steps run
     on `AnthropicClient` only (`NativeSession`, `step/native/drive.rs`, the review worker, `NativeConversation.wire`);
     until that hookup, the OpenAI API card stays locked (`connections.kind.openaiUnavailable`).
-  - Not drawn in the new design (`XGtkg` has no native frames; `PNDQm` is not in the redesign file): the native form,
-    the native connection page with *Enforced by Orchester*, and the native command approval rows were adapted from
-    04.H to `10b` `hc1vS` and `05b` `PGwka`'s patterns.
+  - Design: ORC-166 drew the native frames in `XGtkg`, Row 8 `OyEXT` (`docs/design/native-connections.md`): 10c–10f
+    (Add provider), 05e–05i (the connection page), 05j (Edit connection), 05k (states and notes) and 15 (the
+    approval card). The screens follow them: no lead under Add provider's title (as `10b`), the *Sent to* line with a
+    send glyph, the person-only refusal in the action bar with a `warning` shield, Edit connection's borderless
+    *Cancel* and *Save connection*, the page head's status as a dot (a native page says it in `text_secondary`),
+    the test result's glyph by how it went (check, triangle, cross) and *Billing problem* as a warning.
+  - QA: `tools/qa-app.ps1 -Scenario native` (seed `scenarios/native.rs`): Anthropic API · Kontur connected (Builder
+    and Reviewer on it), · Old key (key rejected), · Archived (key missing), · New (not checked), and KON-1 waiting
+    for a native command's approval; started without a runner (`-NoRunner`) so the recorded run keeps waiting.
+  - A test whose connection's key or endpoint was saved while it ran records nothing and asks to test again
+    (`connections::native::record_tested_in`).
   - P1 items still open after ORC-148: a live run with cache reads (needs a person's key), runner-level tests of
     budgets, the time limit, cancel and resume after a runner restart for a native step, and a refusal shown as a
     problem in the new app's conversation.

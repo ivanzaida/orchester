@@ -33,13 +33,13 @@ use orchester_workspace::{connections::data::ProjectConnections, display, messag
 pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
 use super::{
   data::Entry,
-  words::{CHECKING, Shown},
+  words::{CHECKING, Shown, Tone},
   work::Work,
 };
 use crate::{
   navigation::link::Open,
   screens::project_settings::kit::{Glyph, SettingRow, back, entity_head},
-  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
+  theme::{ExtraRadius, ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -52,6 +52,8 @@ use crate::{
 
 /// The … menu's width (`Menu` in `05b` `PGwka`).
 const MENU_WIDTH: f32 = 220.0;
+/// The head status's dot (`Dot` `IY1SX` in `05b`).
+const STATUS_DOT: f32 = 6.0;
 
 /// A question the page asks in place before it acts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -149,12 +151,10 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
     (&ctx.t("project_settings.connections"), None),
     actions.back.clone(),
   );
-  let status = status_line(
-    ctx,
-    "connection-inspector-status",
-    parts.status,
-    parts.status_detail.as_deref(),
-  );
+  // A native connection's page says its status in `text_secondary` whatever its tone, its dot and the sentence
+  // under the head carrying the tone (05e–05k).
+  let native = matches!(inspecting.entry, Entry::Agent(connection) if connection.api().is_some());
+  let status = head_status(ctx, parts.status, parts.status_detail.as_deref(), native);
   let mut head_actions = parts.actions;
   if !parts.menu.is_empty() {
     head_actions.push(more_menu(ctx, actions, parts.menu));
@@ -216,8 +216,41 @@ fn title(name: &str) -> Text {
     .variant(ProjectSettingsText::PageTitle.role())
 }
 
-/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`).
+/// A status as its icon in its tone and its word, with what follows it (a list row's status cell).
 pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
+  let lead = icon(status.icon, IconSize::Sm, status.tone.color()).into();
+  said_status(ctx, (id, lead), (status, detail), status.tone.word_color())
+}
+
+/// The page head's status (`Status` `l1Gh8O`): a dot of its tone, or the turning loader while a check runs, and its
+/// word with what follows it, said in its tone when it asks for something, unless the page is a native connection's
+/// (`native`).
+fn head_status(ctx: &Ctx, status: Shown, detail: Option<&str>, native: bool) -> Row {
+  let lead = if status.tone == Tone::Busy {
+    icon(status.icon, IconSize::Sm, status.tone.color()).into()
+  } else {
+    Row::new()
+      .width(Dimension::Px(STATUS_DOT))
+      .height(Dimension::Px(STATUS_DOT))
+      .rounded(ExtraRadius::Full.role())
+      .background(status.tone.color())
+      .into()
+  };
+  let words = if native {
+    PaletteColor::TextSecondary
+  } else {
+    status.tone.word_color()
+  };
+  said_status(ctx, ("connection-inspector-status", lead), (status, detail), words)
+}
+
+/// `lead`, then the status's word with what follows it in `color`.
+fn said_status(
+  ctx: &Ctx,
+  (id, lead): (&str, Element),
+  (status, detail): (Shown, Option<&str>),
+  color: PaletteColor,
+) -> Row {
   let word = ctx.t(status.key);
   let said = match detail {
     Some(detail) => ctx.t_args("connections.statusWith", [("status", &*word), ("detail", detail)]),
@@ -228,11 +261,11 @@ pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&st
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("status", word)
-    .child(icon(status.icon, IconSize::Sm, status.tone.color()))
+    .child(lead)
     .child(
       Text::new(&said)
         .variant(TypographyStyle::Description)
-        .color(status.tone.word_color())
+        .color(color)
         .nowrap(),
     )
 }

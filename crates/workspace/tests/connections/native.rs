@@ -21,7 +21,9 @@ use orchester_workspace::{
     data::create_profile,
     form::{effort_options, first_model, listed_models},
   },
-  connections::native::{KeySecret, NativeDraft, load_in, record_check_in, save_models_in, save_native_in},
+  connections::native::{
+    KeySecret, NativeDraft, load_in, record_check_in, record_tested_in, save_models_in, save_native_in,
+  },
 };
 
 use super::{now, project_db};
@@ -183,5 +185,58 @@ fn native_connection_test_merges_the_listed_models_with_their_efforts() {
   assert_eq!(
     api.models().model(&model("claude-opus-5-5")).map(NativeModel::source),
     Some(ModelSource::Endpoint { at })
+  );
+}
+
+#[test]
+fn native_connection_test_of_a_key_saved_away_meanwhile_records_nothing() {
+  let (repo, db) = project_db();
+  let value = SecretValue::new("sk-ant-test".to_owned()).expect("a key");
+  let draft_now = draft(None, new_key(), NativeModels::default());
+  let id = save_native_in(repo.path(), &Keychain, &draft_now, Some(value)).expect("saved");
+  let tested = load_in(repo.path(), id)
+    .expect("stored")
+    .api()
+    .expect("a model API")
+    .clone();
+  // While the runner tests the old key, the person saves the connection on another one.
+  let other = KeySecret::New(NewSecret {
+    name: SecretName::new("ANTHROPIC_API_KEY_2").expect("a valid name"),
+    kind: SecretKind::ApiKey,
+    environment: Environment::NEW_SECRET,
+  });
+  let value = SecretValue::new("sk-ant-other".to_owned()).expect("a key");
+  save_native_in(
+    repo.path(),
+    &Keychain,
+    &draft(Some(id), other, NativeModels::default()),
+    Some(value),
+  )
+  .expect("saved on the other key");
+  let stale = record_tested_in(
+    repo.path(),
+    id,
+    &tested,
+    CheckResult::KeyRejected,
+    vec![manual("claude-opus-5-5")],
+  )
+  .expect_err("the result is the old key's");
+  assert_eq!(stale.key, "connections.native.testStale");
+  let connection = load_in(repo.path(), id).expect("stored");
+  let secrets = db.secrets().expect("secrets read");
+  assert_eq!(
+    connection.status_with(&secrets),
+    ConnectionStatus::NotChecked,
+    "the new key is not said to be rejected"
+  );
+  assert!(listed_models(&connection).is_empty(), "nothing was merged");
+
+  let now = connection.api().expect("a model API").clone();
+  record_tested_in(repo.path(), id, &now, CheckResult::Api { balance: None }, Vec::new())
+    .expect("a test of the stored key is recorded");
+  let secrets = db.secrets().expect("secrets read");
+  assert_eq!(
+    load_in(repo.path(), id).expect("stored").status_with(&secrets),
+    ConnectionStatus::Connected
   );
 }

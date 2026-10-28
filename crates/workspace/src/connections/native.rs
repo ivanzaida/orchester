@@ -143,16 +143,16 @@ pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) 
 
 /// *Test connection* and *Fetch models* of native connection `id` (`docs/architecture/native-agent.md` §7): the
 /// displayed project's runner reads its key and lists the model API's models, which spends no tokens, and what it
-/// found is recorded with the models it listed ([`record_check_in`]). The desktop never reads the key.
+/// found is recorded with the models it listed ([`record_tested_in`]). The desktop never reads the key.
 pub async fn test_in(runners: &Runners, repo_root: PathBuf, id: ConnectionId) -> Result<(), Message> {
   let root = repo_root.clone();
   let connection = background::run(move || load_in(&root, id)).await??;
   let api = connection.api().ok_or_else(|| Message::new("errors.storage"))?.clone();
   let (result, models) = runners
-    .check_connection(connection.provider(), api)
+    .check_connection(connection.provider(), api.clone())
     .await
     .map_err(|error| test_failure(&error))?;
-  background::run(move || record_check_in(&repo_root, id, result, models)).await?
+  background::run(move || record_tested_in(&repo_root, id, &api, result, models)).await?
 }
 
 /// Why a test through the runner did not happen.
@@ -164,6 +164,27 @@ fn test_failure(error: &RunRequestError) -> Message {
       Message::new("connections.native.testFailed")
     }
   }
+}
+
+/// [`record_check_in`] for a test of `tested`, native connection `id`'s endpoint when the test began. A test is
+/// about one key and one endpoint: when a save changed either while it ran, what it found is not the stored
+/// connection's, so nothing is recorded and the person is asked to test again.
+pub fn record_tested_in(
+  repo_root: &Path,
+  id: ConnectionId,
+  tested: &ApiEndpoint,
+  result: CheckResult,
+  fetched: Vec<NativeModel>,
+) -> Result<(), Message> {
+  let now = load_in(repo_root, id)?;
+  let same = now
+    .api()
+    .is_some_and(|api| (api.preset(), api.base_url(), api.key()) == (tested.preset(), tested.base_url(), tested.key()));
+  if !same {
+    tracing::info!(connection = %id, "the connection's endpoint changed while it was tested");
+    return Err(Message::new("connections.native.testStale"));
+  }
+  record_check_in(repo_root, id, result, fetched)
 }
 
 /// Records a test of native connection `id` (`docs/architecture/native-agent.md` §7): what it found, and

@@ -72,7 +72,8 @@ impl AddAgent {
     ];
     let reason = self.native_reason(ctx, listed.data.as_ref());
     let bar = self.native_bar(ctx, props, &known, reason.as_deref());
-    let head = head(ctx, props, false);
+    // As on an API provider (`10b`), the warning line under the group says where requests go (10c–10f draw no lead).
+    let head = head(ctx, props, true);
     page(ctx, Screen::NewConnection, head, sections, bar)
   }
 
@@ -130,11 +131,11 @@ impl AddAgent {
       }
       (false, None) => button.disabled(),
     };
-    let refusal = self.native.refusal(ctx);
     let next = ctx.t("connections.native.nextStep");
-    let note = match refusal.as_deref().or(reason) {
-      Some(reason) => (reason.to_owned(), Tone::Muted),
-      None => (next.to_string(), Tone::Success),
+    let note = match (self.native.refusal(ctx), reason) {
+      (Some(refusal), _) => (refusal.to_string(), Tone::Warning),
+      (None, Some(reason)) => (reason.to_owned(), Tone::Muted),
+      (None, None) => (next.to_string(), Tone::Success),
     };
     action_bar_noted(vec![cancel.into(), button.into()], Some((note.0.as_str(), note.1)))
   }

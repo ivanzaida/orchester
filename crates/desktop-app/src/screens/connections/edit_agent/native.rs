@@ -33,14 +33,15 @@ use crate::{
   screens::{
     connections::{
       data::Saved,
-      page::{Head, action_bar, page},
+      page::{Head, action_bar_noted, page},
     },
-    project_settings::kit::{Group, form_row, value},
+    project_settings::kit::{Group, Tone, form_row, value},
   },
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
     form_section::Label,
+    icon::Icon,
     message::message_text,
   },
 };
@@ -82,7 +83,8 @@ impl EditConnection {
     page(ctx, Screen::EditConnection, head, sections, bar)
   }
 
-  /// *Cancel* back to the connection, and *Save*, which stores what the fields hold once something changed.
+  /// *Cancel* back to the connection, borderless as in 05c and 10c–10f, and *Save connection*, which stores what the
+  /// fields hold once something changed (05j `k8IU1`).
   fn native_bar(
     &self,
     ctx: &mut Ctx,
@@ -92,22 +94,19 @@ impl EditConnection {
   ) -> Element {
     let navigation = Navigation::of(ctx);
     let (project, id) = (props.project.open.project.id(), connection.id());
-    let cancel = ActionButton::new(
-      "connection-edit-cancel",
-      ButtonKind::Secondary,
-      ctx.t("connections.cancel"),
-    )
-    .on_click(move || {
-      navigation.go(Route::Project(
-        project,
-        ProjectPage::Connections(ConnectionsView::of(id)),
-      ));
-    });
+    let cancel =
+      ActionButton::new("connection-edit-cancel", ButtonKind::Ghost, ctx.t("connections.cancel")).on_click(move || {
+        navigation.go(Route::Project(
+          project,
+          ProjectPage::Connections(ConnectionsView::of(id)),
+        ));
+      });
     let save = ActionButton::new(
       "connection-edit-save",
       ButtonKind::Primary,
       ctx.t("connections.editAgent.save"),
-    );
+    )
+    .icon(Icon::Check);
     let state = self.save_native.state().get();
     let save = match changed {
       _ if state.is_pending() => save.loading(),
@@ -134,8 +133,12 @@ impl EditConnection {
       )
     });
     let reason = failed.or_else(|| self.native.reason(ctx, known));
-    let refusal = self.native.refusal(ctx);
-    action_bar(vec![cancel.into(), save.into()], refusal.or(reason).as_deref())
+    let note = match (self.native.refusal(ctx), reason) {
+      (Some(refusal), _) => Some((refusal, Tone::Warning)),
+      (None, reason) => reason.map(|reason| (reason, Tone::Muted)),
+    };
+    let note = note.as_ref().map(|(words, tone)| (&**words, *tone));
+    action_bar_noted(vec![cancel.into(), save.into()], note)
   }
 }
 

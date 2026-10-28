@@ -58,7 +58,7 @@ pub(super) fn seed_catalogue(kontur: &mut Kontur) -> Result<Catalogue, SeedError
 }
 
 /// A secret of kind API key in Development, archived at `archived` when given; a record only.
-fn key_secret(
+pub(super) fn key_secret(
   kontur: &mut Kontur,
   named: &str,
   archived: Option<Timestamp>,

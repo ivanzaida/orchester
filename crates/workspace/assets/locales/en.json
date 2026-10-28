@@ -956,7 +956,8 @@
         "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
       },
       "testNoRunner": "The project’s runner is not running, so the connection could not be tested. Wait until it is online, then test again.",
-      "testFailed": "The runner could not test the connection. The log has the details; test again."
+      "testFailed": "The runner could not test the connection. The log has the details; test again.",
+      "testStale": "The connection’s key or endpoint changed while it was tested, so the result was not kept. Test it again."
     },
     "models": {
       "fetchInvalid": "The endpoint listed models that can’t be kept as they are; add them by hand.",

@@ -155,7 +155,7 @@ impl NativeForm {
     let words = ctx.t_args("connections.native.sentTo", [("host", &*host)]);
     warning_line(
       ctx,
-      "connection-native-notice",
+      ("connection-native-notice", Icon::Send),
       &words,
       Some(ctx.t("connections.native.sentToInfo")),
     )

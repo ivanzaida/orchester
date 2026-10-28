@@ -229,6 +229,7 @@
       "keyGone": "API key · secret missing",
       "execution": "This computer (Orchester runs the agent)",
       "testNeedsKey": "The connection needs a key secret first: choose one in Edit connection.",
+      "testWaitsForKey": "Test connection and Fetch models: The connection needs a key secret first: choose one in Edit connection.",
       "editDescription": "Its endpoint, key secret and models. A model an agent profile or a pipeline step runs on stays; rename the connection from its page in Connections.",
       "detail": {
         "notTested": "Not tested yet. Test connection asks the API for its models with the key, which spends no tokens.",

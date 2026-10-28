@@ -366,7 +366,12 @@ impl ProviderForm {
         ("limits", ctx.t("connections.apiProvider.notSupported")),
       ],
     );
-    Some(warning_line(ctx, "connection-provider-notice", &words, Some(info)))
+    Some(warning_line(
+      ctx,
+      ("connection-provider-notice", Icon::Send),
+      &words,
+      Some(info),
+    ))
   }
 }
 
