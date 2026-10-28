@@ -2,12 +2,10 @@
 //! own, refuses requests without its bearer token or from a web origin, answers tool calls from the
 //! event loop, writes its discovery file, removes it when it stops and removes the files of processes
 //! that ended, and never shows the token anywhere but the file. Each test uses a discovery folder of its
-//! own, never the user's.
+//! own, never the user's. Team servers per account through the tools, which need a real team server, are checked by
+//! the end-to-end tests of the private platform repository (`crates/e2e`, `mcp_servers_per_account`).
 
 mod http;
-#[path = "../../../workspace/tests/server_support/mod.rs"]
-mod server_support;
-mod servers_per_account;
 mod signed_out;
 #[path = "../support/mod.rs"]
 mod support;

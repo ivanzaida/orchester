@@ -4,15 +4,13 @@
 //! each reason the cloud gives brings the gate back with its notice and the email filled in; *Sign out and lock* in
 //! Settings › Orchester locks; synthetic input never signs in nor changes the cloud's address; the card and
 //! *Advanced* are forms, which Tab goes through and Enter submits ([`keyboard`]); and an account with two-factor
-//! authentication finishes its sign-in with a code ([`two_factor`]).
+//! authentication finishes its sign-in with a code ([`two_factor`]). Another account on the same computer, with a team
+//! server, is checked by the end-to-end tests of the private platform repository (`crates/e2e`, `gate_accounts`).
 //!
 //! `cargo test -p orchester-app --test gate gate_`
 
-mod accounts;
 mod came_back;
 mod keyboard;
-#[path = "../../../workspace/tests/server_support/mod.rs"]
-mod server_support;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

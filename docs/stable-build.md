@@ -128,9 +128,8 @@ GitHub Actions builds the Windows app and publishes it as a GitHub Release
 version, e.g. `0.2.0` to `0.2.1`; a version with a suffix such as `0.3.0-rc.1` is a pre-release)
 and get that change onto `master`. The push runs the workflow, which releases when neither a tag
 nor a release `app-v<version>` exists yet; any other change to that file, or a run again, releases
-nothing. The workspace's `[workspace.package]` version is the team server's (`server-v*` tags,
-`docs/server-hosting.md`): it never releases the app, and the app's version never releases the
-server. *Run workflow* on `master` releases the same way.
+nothing. The workspace's `[workspace.package]` version never releases the app; the team server and
+its releases (`server-v*` tags) are in the private platform repository `ivanzaida/orchester-platform`. *Run workflow* on `master` releases the same way.
 
 **What it builds**, on a Windows runner: `cargo build --release --locked -p orchester-app -p
 orchester-runner` as the installed app (`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/install.ps1`

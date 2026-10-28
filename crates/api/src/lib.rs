@@ -18,6 +18,8 @@ mod projects;
 mod server_admin;
 pub mod statements;
 mod tasks;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 #[cfg(feature = "identity")]
 pub mod totp;
 pub mod wire;
