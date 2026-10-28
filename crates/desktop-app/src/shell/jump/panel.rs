@@ -2,7 +2,9 @@
 //! 10. Its field is 44 high, 14 at its sides, a 14 search glass 10 before what is typed in 13 (`Field` `F2jpx`);
 //! the results, 6 inside and 2 apart, are grouped under 11/500 `text_muted` headings (`Group · Tasks` `Q1ZgAS`),
 //! each 32 high with a 14 icon 10 before its words in 12.5 `text_primary`, the current one on `hover` with an
-//! *Enter* key cap (`qFB9n`); the footer, 32 high, says how many results it shows and the keys (`Footer` `okuy2`).
+//! *Enter* key cap (`qFB9n`). A task's icon is its status in the Tasks list's tone, and where it stands follows its
+//! words in 12 `text_muted` (`Sub` `GK4TL`); a result something has keys for ends in them (`Key` `lATjR`). The
+//! footer, 32 high, says how many results it shows and the keys (`Footer` `okuy2`).
 
 use std::sync::Arc;
 
@@ -12,7 +14,7 @@ use lurq::{
     events::KeyboardEvent,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextInput},
+  components::{Column, Row, Text, TextInput, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -21,7 +23,7 @@ use lurq::{
 use super::found::{Found, Group, Target, find};
 use crate::{
   navigation::{Navigation, link::Open, press::OpenIn, shortcuts::Keys},
-  project::Projects,
+  project::{ProjectState, Projects},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
@@ -44,10 +46,15 @@ pub(super) struct State {
   pub open: Signal<bool>,
 }
 
-/// The palette with the results for what is typed, in the active tab's project.
+/// The palette with the results for what is typed, in the active tab's project, whose tasks stand as they do with
+/// its runner, as the Tasks list shows them.
 pub(super) fn palette(ctx: &mut Ctx, navigation: &Navigation, state: &State) -> Element {
   let project = navigation.tabs().active().sidebar_project();
-  let tasks = project.map(|project| Projects::of(ctx).feed(project).tasks.get());
+  let projects = Projects::of(ctx);
+  let tasks = project.and_then(|project| match projects.state(project) {
+    Some(ProjectState::Open(open)) => Some(projects.feed(project).tasks_with_runner(&open.repo_root)),
+    _ => None,
+  });
   let query = state.query.get();
   let found = find(ctx, project, tasks.as_ref().and_then(|tasks| tasks.ready()), &query);
   let current = state.at.get().min(found.len().saturating_sub(1));
@@ -185,10 +192,28 @@ fn heading(ctx: &Ctx, group: Group) -> Element {
     .into()
 }
 
-/// A result: its icon and words; the current one on `hover` with the *Enter* cap.
+/// A result: its icon in its tone, its words, the muted words of where a task stands (`Sub` `GK4TL`) and the keys
+/// that do the same (`Key` `lATjR`); the current one on `hover` with the *Enter* cap.
 fn result(ctx: &Ctx, found: &Found, current: bool, open: Open) -> Element {
+  let id = format!("jump-to-{}-{}", found.group.name(), found.id);
+  let hint = found.hint.as_ref().map(|hint| {
+    Text::new(hint)
+      .id(format!("{id}-hint"))
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .nowrap()
+      .max_width(Dimension::Pct(100.0))
+      .text_overflow(TextOverflow::Elipsis)
+  });
+  let keys = found.keys.as_ref().map(|keys| {
+    Text::new(keys)
+      .id(format!("{id}-keys"))
+      .variant(ExtraTypography::MonoNote.role())
+      .nowrap()
+      .flex_shrink(0.0)
+  });
   let row = opening(open)
-    .id(format!("jump-to-{}-{}", found.group.name(), found.id))
+    .id(id.clone())
     .describe("a11y_name", found.label.clone())
     .describe("state", if current { "current" } else { "enabled" })
     .width(Dimension::Pct(100.0))
@@ -197,13 +222,23 @@ fn result(ctx: &Ctx, found: &Found, current: bool, open: Open) -> Element {
     .spacing(ExtraSpacing::Loose.role())
     .rounded(RadiusSize::Md)
     .align_items(Alignment::Center)
-    .child(icon(found.icon, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(found.icon, IconSize::Md, found.tone.clone()).id(format!("{id}-icon")))
     .child(
       Text::new(&found.label)
         .variant(ShellText::JumpResult.role())
         .nowrap()
-        .flex(1.0),
+        .max_width(Dimension::Pct(100.0))
+        .text_overflow(TextOverflow::Elipsis),
     )
+    // The hint takes the room left, so the keys and the *Enter* cap stay at the row's end.
+    .child(
+      Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .align_items(Alignment::Center)
+        .with_children(hint),
+    )
+    .with_children(keys)
     .with_children(current.then(|| key_cap("jump-to-enter", &ctx.t("shell.jump.enter"))));
   if current {
     row.background(ExtraColor::Hover.role()).into()

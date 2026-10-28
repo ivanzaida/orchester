@@ -32,7 +32,7 @@ mod skills;
 pub(crate) mod task;
 mod task_close;
 mod task_form;
-mod tasks;
+pub(crate) mod tasks;
 mod tools;
 mod unavailable_project;
 mod usage;

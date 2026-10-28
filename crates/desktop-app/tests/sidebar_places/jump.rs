@@ -5,6 +5,7 @@
 use orchester_app::{
   routes::{ModuleTab, ProjectPage, Route, SkillsFilter, TaskView},
   shell::sidebar::place::Place,
+  ui::icon::Icon,
 };
 use orchester_core::id::ProjectId;
 
@@ -68,6 +69,50 @@ fn sidebar_jump_to_opens_a_task_a_module_a_page_and_a_hub_tab() {
     navigation.route_now(),
     Route::Project(project, ProjectPage::Skills(SkillsFilter::default()))
   );
+}
+
+/// The glyph of the icon `id`.
+fn glyph(window: &mut Window, id: &str) -> char {
+  window
+    .tree
+    .get_element_by_id(id)
+    .and_then(|element| element.text_content()?.chars().next())
+    .unwrap_or_else(|| panic!("{id} is an icon"))
+}
+
+/// Closes *Jump to* with Esc.
+fn close(window: &mut Window) {
+  key(window, ("Escape", "Escape"));
+  window.until("Jump to to close", |window| window.texts("jump-to").is_none());
+}
+
+#[test]
+fn sidebar_jump_to_says_where_a_task_stands_and_offers_every_place() {
+  let (mut window, _) = seeded("tasks");
+  // A task's status icon and where it stands, as its row in the Tasks list says them (`tasks_list::rows`).
+  for (task, phrase, mark) in [
+    ("KON-12", "Approve cargo add rand", Icon::Hand),
+    ("KON-19", "Blocked · KON-18 unfinished", Icon::Ban),
+  ] {
+    search(&mut window, task);
+    let row = format!("jump-to-tasks-task-{task}");
+    window.until(&row, |window| window.texts(&row).is_some());
+    let said = window.text(&format!("{row}-hint"));
+    assert!(said.starts_with(phrase), "{task}: {said}");
+    assert_eq!(glyph(&mut window, &format!("{row}-icon")), mark.glyph(), "{task}: {said}");
+    close(&mut window);
+  }
+  // With nothing typed, every place of the sidebar, the hubs too.
+  search(&mut window, "");
+  for place in Place::DAILY.into_iter().chain(Place::CONFIGURE) {
+    let id = format!("jump-to-pages-{}", place.name());
+    assert!(window.texts(&id).is_some(), "{id} is offered");
+  }
+  // An action with keys of its own says them.
+  window.set("jump-to-field", "new tab");
+  window.until("New tab", |window| window.texts("jump-to-actions-new-tab").is_some());
+  let keys = if cfg!(target_os = "macos") { "⌘ T" } else { "Ctrl T" };
+  assert_eq!(window.text("jump-to-actions-new-tab-keys"), keys);
 }
 
 #[test]

@@ -10,7 +10,7 @@ use std::{
 
 use orchester_core::id::TaskId;
 use orchester_workspace::tasks::{
-  attention::{self, NeedItem},
+  attention::NeedItem,
   browse::{Facets, TaskSort},
   data::ProjectTasks,
   list::TaskRow,
@@ -18,7 +18,7 @@ use orchester_workspace::tasks::{
 };
 use parking_lot::Mutex;
 
-use super::views::list_view;
+use super::{phrase, views::list_view};
 use crate::routes::TaskListTab;
 
 /// What one reading of the tasks gives the list.
@@ -33,15 +33,9 @@ pub(super) struct Reading {
 
 impl Reading {
   fn of(tasks: ProjectTasks) -> Self {
-    let mut needs = HashMap::new();
-    for item in attention::items(&tasks) {
-      if let Some(task) = item.task() {
-        needs.entry(task.id).or_insert(item);
-      }
-    }
     Self {
       waiting: tasks.waiting_tasks(),
-      needs,
+      needs: phrase::needs(&tasks),
       tasks,
     }
   }

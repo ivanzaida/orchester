@@ -71,6 +71,8 @@
         "newPipeline": "New pipeline",
         "newAgent": "New agent profile",
         "newTab": "New tab",
+        "newTabKeys": "Ctrl T",
+        "newTabKeysMac": "⌘ T",
         "addProject": "Add project"
       },
       "enter": "Enter",

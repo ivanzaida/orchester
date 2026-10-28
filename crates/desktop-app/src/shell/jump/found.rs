@@ -1,26 +1,33 @@
 //! What *Jump to* finds for what is typed (`Results` `GMyYy` in `aDYAX`), in four groups: the tab's project's
-//! tasks by key or title, its modules by name with each module's own tabs, every page and hub tab (the project's
-//! and the app's), and actions. A task whose key starts with what is typed comes first. With nothing typed it
-//! offers the pages and the actions. Each group shows a few results at most.
+//! tasks by key or title, each with its status icon and where it stands as the Tasks list says it, its modules by
+//! name with each module's own tabs, every page and hub tab (the project's and the app's), and actions. A task whose
+//! key starts with what is typed comes first. With nothing typed it offers the pages and the actions. Each group
+//! shows a few results at most.
 
-use lurq::app::ctx::Ctx;
-use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::data::ProjectTasks;
+use std::sync::Arc;
+
+use lurq::app::{ctx::Ctx, theme::PaletteColor};
+use orchester_core::{id::ProjectId, project::TaskKey};
+use orchester_workspace::tasks::{
+  browse::{self, Facets, TaskSort},
+  data::ProjectTasks,
+  list::TaskRow,
+};
 
 use crate::{
   routes::{
     AccountsView, AgentTab, ConnectionsView, ModuleTab, OrchesterView, OverviewTab, ProjectPage, ProjectSettingsTab,
     Route, Screen, SecretsView, TaskView,
   },
-  screens::hub::HubTab,
+  screens::{hub::HubTab, tasks::phrases},
   shell::sidebar::place::Place,
   ui::icon::{Icon, screen_icon},
 };
 
-/// How many results each group shows at most.
+/// How many results each group shows at most: every place with nothing typed.
 const TASKS_SHOWN: usize = 5;
 const MODULES_SHOWN: usize = 4;
-const PAGES_SHOWN: usize = 6;
+const PAGES_SHOWN: usize = 8;
 const ACTIONS_SHOWN: usize = 4;
 
 /// A group of results, in the palette's order.
@@ -62,13 +69,20 @@ pub enum Target {
   NewTab,
 }
 
-/// A result: its group, its element id's part, its icon, its words and where it goes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A result: its group, its element id's part, its icon in its tone, its words, the muted words after them, the keys
+/// that do the same from anywhere, and where it goes.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Found {
   pub group: Group,
   pub id: String,
   pub icon: Icon,
+  /// A task's status icon is in the tone the Tasks list gives it (`I3Hrfe`); the others are `text_secondary`.
+  pub tone: PaletteColor,
   pub label: String,
+  /// Where a task stands (`Sub` `GK4TL`).
+  pub hint: Option<Arc<str>>,
+  /// The keys that do the same from anywhere (`Key` `lATjR`).
+  pub keys: Option<Arc<str>>,
   pub target: Target,
 }
 
@@ -77,6 +91,7 @@ struct Entry {
   id: String,
   icon: Icon,
   label: String,
+  keys: Option<Arc<str>>,
   target: Target,
 }
 
@@ -86,7 +101,15 @@ impl Entry {
       id: id.into(),
       icon,
       label,
+      keys: None,
       target,
+    }
+  }
+
+  fn keys(self, keys: Arc<str>) -> Self {
+    Self {
+      keys: Some(keys),
+      ..self
     }
   }
 }
@@ -139,39 +162,50 @@ fn matching(group: Group, entries: Vec<Entry>, query: &str, shown: usize) -> imp
       group,
       id: entry.id,
       icon: entry.icon,
+      tone: PaletteColor::TextSecondary,
       label: entry.label,
+      hint: None,
+      keys: entry.keys,
       target: entry.target,
     })
 }
 
-/// The tasks whose key or title holds `query`: those whose key starts with it first.
+/// The tasks whose key or title holds `query`, those whose key starts with it first, each with its status icon and
+/// where it stands as the Tasks list's row says them.
 fn task_results(ctx: &Ctx, project: ProjectId, tasks: &ProjectTasks, query: &str) -> Vec<Found> {
-  let mut hits: Vec<(bool, Found)> = tasks
-    .tasks
-    .iter()
-    .filter_map(|task| {
-      let key = task.key().to_string();
-      let title = task.details().title.as_str();
-      let lower = key.to_lowercase();
-      let by_key = lower.starts_with(query);
-      if !by_key && !lower.contains(query) && !title.to_lowercase().contains(query) {
-        return None;
-      }
-      let page = ProjectPage::task(task.key().clone(), TaskView::default(), false);
-      let label = ctx.t_args("shell.jump.task", [("key", key.as_str()), ("title", title)]);
-      let found = Found {
-        group: Group::Tasks,
-        id: format!("task-{key}"),
-        icon: screen_icon(Screen::Task),
-        label: label.to_string(),
-        target: Target::Route(Route::Project(project, page)),
-      };
-      Some((by_key, found))
+  let separator = ctx.t("tasks.listSeparator");
+  // The list's search finds briefs too; *Jump to* keeps the keys and titles among what it finds.
+  let mut hits: Vec<(bool, TaskRow)> = browse::faceted(tasks, (query, &separator), &Facets::default(), TaskSort::Manual)
+    .into_iter()
+    .filter_map(|row| {
+      let key = row.key.to_lowercase();
+      let by_key = key.starts_with(query);
+      (by_key || key.contains(query) || row.title.to_lowercase().contains(query)).then_some((by_key, row))
     })
     .collect();
   // A stable sort: the tasks keep the list's order within each kind of match.
   hits.sort_by_key(|(by_key, _)| !*by_key);
-  hits.into_iter().take(TASKS_SHOWN).map(|(_, found)| found).collect()
+  let rows: Vec<TaskRow> = hits.into_iter().take(TASKS_SHOWN).map(|(_, row)| row).collect();
+  let phrases = phrases(ctx, tasks, &rows);
+  rows
+    .into_iter()
+    .zip(phrases)
+    .map(|(row, phrase)| {
+      let task: TaskKey = row.key.parse().expect("a task's key reads back as a task key");
+      let page = ProjectPage::task(task, TaskView::default(), row.not_shared);
+      let label = ctx.t_args("shell.jump.task", [("key", &*row.key), ("title", &*row.title)]);
+      Found {
+        group: Group::Tasks,
+        id: format!("task-{}", row.key),
+        icon: phrase.glyph,
+        tone: phrase.glyph_color,
+        label: label.to_string(),
+        hint: Some(phrase.words),
+        keys: None,
+        target: Target::Route(Route::Project(project, page)),
+      }
+    })
+    .collect()
 }
 
 /// Each module's page, and its other tabs as *Module › Burndown*.
@@ -196,32 +230,26 @@ fn module_entries(ctx: &Ctx, project: ProjectId, tasks: &ProjectTasks) -> Vec<En
   entries
 }
 
-/// The sidebar's places other than the hubs, and Usage.
+/// The sidebar's places in its order, the hubs on their first tab, and Usage.
 fn places(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
-  [
-    Place::Overview,
-    Place::Tasks,
-    Place::Modules,
-    Place::Orchestrator,
-    Place::Files,
-    Place::Pipelines,
-  ]
-  .into_iter()
-  .map(|place| {
-    Entry::new(
-      place.name(),
-      place.icon(),
-      word(ctx, place.title_key()),
-      Target::Route(place.route(project)),
-    )
-  })
-  .chain([Entry::new(
-    "usage",
-    screen_icon(Screen::Usage),
-    word(ctx, "shell.screens.usage"),
-    Target::Route(Route::Project(project, ProjectPage::Usage(Box::default()))),
-  )])
-  .collect()
+  Place::DAILY
+    .into_iter()
+    .chain(Place::CONFIGURE)
+    .map(|place| {
+      Entry::new(
+        place.name(),
+        place.icon(),
+        word(ctx, place.title_key()),
+        Target::Route(place.route(project)),
+      )
+    })
+    .chain([Entry::new(
+      "usage",
+      screen_icon(Screen::Usage),
+      word(ctx, "shell.screens.usage"),
+      Target::Route(Route::Project(project, ProjectPage::Usage(Box::default()))),
+    )])
+    .collect()
 }
 
 /// The Review hub's and the Agents hub's tabs, and the Overview's.
@@ -271,9 +299,14 @@ fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   entries
 }
 
-/// Project settings' tabs, Connections and Secrets among them.
+/// Project settings' tabs, Connections and Secrets among them; Ctrl+, (Cmd+,) opens its first.
 fn settings_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   let settings = word(ctx, "shell.screens.projectSettings");
+  let keys = ctx.t(if cfg!(target_os = "macos") {
+    "shell.switcher.projectSettingsKeysMac"
+  } else {
+    "shell.switcher.projectSettingsKeys"
+  });
   [
     (
       "general",
@@ -308,12 +341,14 @@ fn settings_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   ]
   .into_iter()
   .map(|(id, key, page)| {
-    Entry::new(
+    let first = page == ProjectPage::Settings(ProjectSettingsTab::General);
+    let entry = Entry::new(
       format!("project-settings-{id}"),
       screen_icon(page.screen()),
       within(ctx, &settings, key),
       Target::Route(Route::Project(project, page)),
-    )
+    );
+    if first { entry.keys(keys.clone()) } else { entry }
   })
   .collect()
 }
@@ -395,8 +430,19 @@ fn actions(ctx: &Ctx, project: Option<ProjectId>) -> Vec<Entry> {
       Target::Route(Route::AddProject(None)),
     ),
   ]);
+  let new_tab_keys = ctx.t(if cfg!(target_os = "macos") {
+    "shell.jump.actions.newTabKeysMac"
+  } else {
+    "shell.jump.actions.newTabKeys"
+  });
   entries
     .into_iter()
-    .map(|(id, icon, key, target)| Entry::new(id, icon, word(ctx, key), target))
+    .map(|(id, icon, key, target)| {
+      let entry = Entry::new(id, icon, word(ctx, key), target);
+      match entry.target {
+        Target::NewTab => entry.keys(new_tab_keys.clone()),
+        Target::Route(_) => entry,
+      }
+    })
     .collect()
 }
