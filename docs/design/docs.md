@@ -146,8 +146,9 @@ Drawn 2026-10-28 (ORC-198), waiting for the person's review. Board `Docs · rede
 
 | Row | Frame | Node | Shows |
 | --- | --- | --- | --- |
-| Parts `WaFwh` | Docs/Tree row | `DlJLA` (examples `R4FI4O`) | Folder, doc, chosen, hover with the drag handle, waiting proposal (blue dot and count) |
+| Parts `WaFwh` | Docs/Tree row | `DlJLA` (examples `R4FI4O`) | Folder, doc, chosen, hover with the drag handle (at the row's end), waiting proposal (blue dot and count) |
 | | Docs/Draft bar | `uvZbM` (`Lpyfn`) | *Draft · not committed*, saved time and base version, *Discard draft*, *Commit…* |
+| | Docs/Text style popover | `L40C1Q` (`c9QxF`) | Bold, italic, code, link over selected text |
 | Row 1 `xrodh` | 01 · Reading | `yHt6C` | Tree (*New doc*, *New folder*, find field, *Import from the repository…*), the doc rendered (headings, paragraph, list, table, code, image, links to `KON-18`, a file path and a doc), version line, *History*, *Edit*, outline |
 | | 01L · Reading · light | `rvtFt` | The same in the light theme |
 | | 02 · History | `xR3rK` | Versions with message and author (person; agent with run and step), v4 chosen, its diff against v3 |
@@ -158,6 +159,8 @@ Drawn 2026-10-28 (ORC-198), waiting for the person's review. Board `Docs · rede
 | | 04b · Editing · / block menu | `xVO24` | `/` on an empty block: the block menu with Markdown shortcuts |
 | | 04c · Editing · link to a task | `p4l4J` | Typing `KON-1` offers tasks |
 | | 04d · Editing · link to a doc | `gRIbQ` | `[[ret` offers docs and headings |
+| | 04e · Editing · text styling | `VbKgm` | Text selected in the focused block: the style popover (`BkNaS`) over it, *Bold* pressed for a bold selection, *Italic* hovered with its tooltip *Ctrl I* |
+| | 04f · Editing · link from the popover | `SbgVw` | *Link* opens a field over the selection (`YPCRO`): paste an address, or find a doc, heading, task or file |
 | Row 3 `h2le9s` | 05 · Commit in place | `MVgME` | Message (optional) and *Commit v5* under the draft bar |
 | | 05b · Commit refused · newer version | `mMeuc` | Refusal notice in place, *Show v5*, *Merge with v5* |
 | | 05c · Merge block by block | `zTwTt` | Each block both changed: yours and theirs, *Keep mine / Keep theirs / Keep both*; *Commit v6* waits for every choice |
@@ -170,7 +173,13 @@ Drawn 2026-10-28 (ORC-198), waiting for the person's review. Board `Docs · rede
 | | 10 · Sidebar · Docs entry | `g1yWog` | Docs after Files, chosen and not, with the reasons |
 | | 10b · Task · Sources names a doc | `p3vV4b` | Copy of `Task form · redesign` 03 with a *Docs* group in Sources |
 | | 10c · Run · Save as doc | `pXvBW` | Copy of `Task page · redesign` 01d with *Save as doc* on the Report row (its hover tooltip turned off) |
-| Row 7 `B40Mcf` | What the design decides, Open choices | `K5qL0`, `i1XG73` | Notes |
+| Row 7 `POUPg` | 11 · New doc · naming in the tree | `LlwPp` | *New doc* adds a row in the chosen folder with its name field focused (`wIqG2`), *Enter opens it to write · Esc cancels* |
+| | 11b · New doc · empty in the editor | `pvjQ8` | The new doc chosen in the tree, its name as title, the first block focused (*Type, or / for blocks*), draft bar *nothing committed yet · discarding removes the doc*, *History* dimmed, *New doc · no versions yet* |
+| | 11c · New doc · first commit | `DoAca` | Written doc, message under the draft bar, *Commit v1* |
+| | 11d · New doc · committed as v1 | `DeGZn` | Reading view: *v1 · committed by Ivan · just now* |
+| | 11e · New folder · naming in the tree | `JBK6G` | *New folder* adds a top-level folder with its name field focused (`KmGVB`), *Enter keeps it · Esc cancels* |
+| | 11f · First doc · from Empty | `Q8mu3F` | *New doc* on the empty page: the first doc named at the top of the tree |
+| Row 8 `B40Mcf` | What the design decides, Open choices | `K5qL0`, `i1XG73` | Notes |
 
 Decisions the design makes:
 
@@ -178,7 +187,15 @@ Decisions the design makes:
   documents); Tasks keeps its place second and the work places keep their order. No count on the entry.
 - **No modals:** quick open drops from the tree's find field; text search, history, merge and import take the doc
   pane; commit, refusal and discard happen under the draft bar.
-- **Editor:** only the focused block is a field; its Markdown markers show only next to the caret.
+- **Editor:** only the focused block is a field; its Markdown markers show only next to the caret. Selecting text
+  shows the style popover (bold, italic, code, link) over it; a mark already on the selection is pressed, the
+  shortcut is in the hover tooltip; *Link* turns the popover into a field that takes an address or finds a doc,
+  heading, task or file.
+- **New doc and folder:** named in place in the tree (the chosen folder, or the top level); *Enter* opens a new doc in
+  the editor with its name as the title. Nobody else sees it until its first commit, v1; *Discard draft* on a
+  never-committed doc removes it.
+- **Tree:** a folder row's chevron starts where the find field's icon does; a doc keeps the chevron's place empty so
+  icons line up; each level indents by 16 (`$spacing_lg`); the drag handle shows on hover at the row's end.
 - **Proposals:** shown with the same bar as a draft (Docs/Draft bar), with the agent, run and step; the tree marks docs
   and folders with waiting proposals with a blue dot and count.
 - **Profile row:** *Docs: commit without asking* sits in the profile's Approvals group.
@@ -190,10 +207,12 @@ New words (not in locales yet): *Find a doc*, *On this page*, *Draft · not comm
 *Merge with v5*, *Merging with v5*, *Keep mine*, *Keep theirs*, *Keep both*, *Proposed by Builder · Run #57 · 03
 Implement*, *Import from the repository*, *Folder of the checkout*, *Show its files*, *Change folder*, *Lands in docs
 as*, *Skip*, *Import as a new version*, *Import 4 docs*, *Imported 4 docs from docs/*, *No docs yet*, *Docs: commit
-without asking*, *Save as doc*, *Add a doc*.
+without asking*, *Save as doc*, *Add a doc*, *Bold*, *Italic*, *Code*, *Link*, *Enter links the selection · Esc
+closes*, *Enter opens it to write · Esc cancels*, *Enter keeps it · Esc cancels*, *Type, or / for blocks*, *New doc ·
+no versions yet*, *nothing committed yet*, *discarding removes the doc*, *Commit v1*.
 
-Not drawn yet (see the Notes row): proposals in Needs you, where *Save as doc* lands, naming a new doc or folder in
-the tree and the drop line while dragging, archiving, narrow windows.
+Not drawn yet (see the Notes row): proposals in Needs you, where *Save as doc* lands, the drop line while dragging,
+archiving, narrow windows.
 
 ## Open questions for review
 
