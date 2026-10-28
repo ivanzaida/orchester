@@ -507,3 +507,36 @@ fn servers_keep_how_this_computer_joined_them() {
   assert_eq!(servers[0].joined_with, Some(JoinedWith::Cloud(audience)));
   assert_eq!(servers[1].joined_with, Some(JoinedWith::Code));
 }
+
+#[test]
+fn error_reports_are_on_until_turned_off_and_kept() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("create");
+  assert!(db.sends_error_reports().expect("read"), "on in a new database");
+  db.set_sends_error_reports(false).expect("turn off");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(!db.sends_error_reports().expect("read"), "off is kept");
+  db.set_sends_error_reports(true).expect("turn on");
+  drop(db);
+  let db = AppDb::open(&path).expect("reopen");
+  assert!(db.sends_error_reports().expect("read"), "on is kept");
+}
+
+/// The schema before error reports (29).
+const BEFORE_ERROR_REPORTS: u32 = 28;
+
+#[test]
+fn error_reports_are_on_in_a_database_that_never_stored_them() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let raw = AppDb::create_at_version(&path, BEFORE_ERROR_REPORTS).expect("the schema before error reports");
+  raw
+    .execute("UPDATE app_settings SET estimates_story_points = 1", [])
+    .expect("a setting of that schema");
+  drop(raw);
+  let db = AppDb::open(&path).expect("migrate");
+  assert!(db.estimates_story_points().expect("kept"));
+  assert!(db.sends_error_reports().expect("read"), "on until turned off");
+}

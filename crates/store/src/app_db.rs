@@ -81,6 +81,7 @@ CREATE TABLE ui_state (
   settings::ORCHESTRATOR_MERGES_FINISHED_MIGRATION,
   settings::ORCHESTRATOR_WRITES_GIT_MIGRATION,
   cloud::API_ADDRESS_MIGRATION,
+  settings::ERROR_REPORTS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
