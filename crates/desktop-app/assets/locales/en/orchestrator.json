@@ -72,10 +72,10 @@
       "settings": "Settings ↗"
     },
     "suggestions": {
-      "plan": "Plan work from a scope file: tasks with briefs and acceptance criteria.",
-      "running": "What's running, what's waiting and what's blocked right now?",
-      "order": "Suggest an order for the Todo tasks and which can run in parallel.",
-      "idea": "Talk through an idea before it becomes a task."
+      "plan": "Plan tasks from a scope file",
+      "running": "What's running, waiting or blocked?",
+      "order": "Suggest an order for the Todo tasks",
+      "idea": "Talk through an idea before it's a task"
     },
     "delivery": {
       "sending": "Sending…",

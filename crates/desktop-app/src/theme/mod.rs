@@ -91,7 +91,7 @@ pub use self::{
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
-  orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText},
+  orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   pipelines::{PipelinesSpacing, PipelinesText},

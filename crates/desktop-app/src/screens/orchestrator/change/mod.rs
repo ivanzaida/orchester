@@ -16,6 +16,7 @@ mod folded;
 mod git;
 mod mcp;
 mod opens;
+mod reading;
 mod repository;
 mod widens;
 mod words;
@@ -23,7 +24,7 @@ mod words;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
+    ctx::{Ctx, Timeout},
     events::is_synthetic_input,
   },
   components::Row,
@@ -53,6 +54,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   services::Services,
+  theme::SKELETON_DELAY,
   ui::{
     button::ActionButton,
     icon::Icon,
@@ -101,16 +103,25 @@ pub(super) struct ChangeCard {
   refused: Signal<bool>,
   /// The facts after the first three are shown.
   details: Signal<bool>,
+  /// The facts' reading took [`SKELETON_DELAY`]: their bones show.
+  slow: Signal<bool>,
+  _delay: Timeout,
 }
 
 impl Component for ChangeCard {
   type Props = ChangeProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let slow = ctx.signal(false);
+    let show = slow.clone();
+    let delay = ctx.create_timeout(SKELETON_DELAY, move || show.set(true));
+    delay.start();
     Self {
       decide: card::decide_action(ctx),
       refused: ctx.signal(false),
       details: ctx.signal(false),
+      slow,
+      _delay: delay,
     }
   }
 
@@ -149,7 +160,11 @@ impl ChangeCard {
   ) -> Element {
     let id = props.id.as_str();
     let (rows, boxes) = self.content(ctx, props, view);
-    let facts = facts::column(ctx, id, rows, &self.details);
+    // Until they are read, the facts keep their room, so the card does not grow when they arrive.
+    let facts = match (read, unread) {
+      (None, None) => reading::column(id, &reading::shape(view), self.slow.get()),
+      _ => facts::column(ctx, id, rows, &self.details),
+    };
     let warnings = warnings(ctx, id, (view, read));
     let widens = warnings.iter().any(|(widening, _)| *widening);
     // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
