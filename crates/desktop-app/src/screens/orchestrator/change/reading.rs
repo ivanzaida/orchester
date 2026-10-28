@@ -44,7 +44,8 @@ pub(super) fn column(id: &str, links: &[bool], shown: bool) -> Option<Column> {
   let rows = links
     .iter()
     .zip(VALUE_BONES.iter().cycle())
-    .map(|(link, value)| row(*link, shown.then_some(*value)));
+    .enumerate()
+    .map(|(index, (link, value))| row(format!("{id}-facts-bone-{index}"), *link, shown.then_some(*value)));
   let room = Column::new()
     .id(format!("{id}-facts-reading"))
     .describe("state", if shown { "skeleton" } else { "waiting" })
@@ -55,8 +56,8 @@ pub(super) fn column(id: &str, links: &[bool], shown: bool) -> Option<Column> {
 }
 
 /// One fact's room: an empty line of a fact's text, with a link's underline under it for a `link`, holds its height;
-/// the key's and the value's bones, `value` wide, when shown.
-fn row(link: bool, value: Option<f32>) -> Row {
+/// the key's and the value's bones, `value` wide, when shown, the value's named `bone_id`.
+fn row(bone_id: String, link: bool, value: Option<f32>) -> Row {
   let line = Column::new().width(Dimension::Px(0.0)).child(
     Text::new(BLANK)
       .variant(OrchestratorText::FactValue.role())
@@ -78,6 +79,6 @@ fn row(link: bool, value: Option<f32>) -> Row {
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(key)
-    .with_children(value.map(|value| bone(value, BONE_HEIGHT)))
+    .with_children(value.map(|value| bone(value, BONE_HEIGHT).id(bone_id)))
     .child(line)
 }

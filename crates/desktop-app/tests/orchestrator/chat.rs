@@ -327,8 +327,9 @@ fn orchestrator_turns_scroll_across_the_whole_chat_area() {
   assert!(row.width <= 800.0, "a turn keeps to the column: {row:?}");
   let centre = |x: f32, width: f32| x + width / 2.0;
   assert!(
-    // Centred in what the scrollbar's own lane leaves, a few pixels left of the area's middle.
-    (centre(row.x, row.width) - centre(main.x, main.width)).abs() < 8.0,
+    // The scrollbar's lane takes the place of as much of the right side: the column is centred on the chat, at the
+    // design's x, as the composer's is, not the lane's few pixels to the left.
+    (centre(row.x, row.width) - centre(main.x, main.width)).abs() < 1.0,
     "the column is centred: {row:?} in {main:?}"
   );
 }
