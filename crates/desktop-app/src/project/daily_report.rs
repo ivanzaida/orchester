@@ -65,12 +65,11 @@ async fn deliver_due(services: &Services, i18n: &I18n, open: &OpenProject) -> Re
     Ok::<_, StoreError>((
       workspace.daily_report_schedule()?,
       workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents)?,
-      workspace.agent_accounts()?,
     ))
   })
   .await?
   .map_err(|error| messages::store_error(&error))?;
-  let (Some(schedule), answers, accounts) = read else {
+  let (Some(schedule), answers) = read else {
     return Ok(0);
   };
   let now = Timestamp::now();
@@ -86,10 +85,10 @@ async fn deliver_due(services: &Services, i18n: &I18n, open: &OpenProject) -> Re
         [("day", day.format("%Y-%m-%d").to_string())],
       )
       .to_string();
-    let (root, programs, accounts) = (open.repo_root.clone(), services.programs.clone(), accounts.clone());
+    let (root, programs) = (open.repo_root.clone(), services.programs.clone());
     let delivery = {
       let _keeping = super::waits::KEEPING.lock().await;
-      background::run(move || report::deliver_in((&root, &programs), (accounts, answers), (day, now), &title)).await??
+      background::run(move || report::deliver_in((&root, &programs), answers, (day, now), &title)).await??
     };
     if delivery == Delivery::Kept {
       kept += 1;

@@ -572,7 +572,7 @@ fn report(kontur: &mut Kontur, chat: &Chat, at: Timestamp) -> Result<(), SeedErr
       active_ms: 3 * 60 * 60 * 1_000,
       budget: None,
       tasks: Vec::new(),
-      accounts: Vec::new(),
+      providers: Vec::new(),
       link: "/usage".to_owned(),
     },
     queued: Vec::new(),

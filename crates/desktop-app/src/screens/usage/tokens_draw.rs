@@ -1,15 +1,15 @@
-//! Draws *Tokens over time* (`Plot` `cgGn2`): one bar per hour or day, stacked by account series from the
-//! bottom (accounts 1–3, Other accounts, No account), 24 wide at most, the parts 2 apart and the top one
-//! rounded 4 (`Bar` `umBAa`); No account's part hatched, `chart_none` stripes and outline over `chart_hatch`
-//! (`LEQ1w`); on a grid in compact tokens; the hovered bar's slot gets the `hover` band. Each bar is a canvas
-//! item too, so automation and screen readers find and read it.
+//! Draws *Tokens over time* (`Plot` `cgGn2`): one bar per hour or day, stacked by agent provider series from the
+//! bottom (providers 1–3, Other providers, Earlier runs), 24 wide at most, the parts 2 apart and the top one
+//! rounded 4 (`Bar` `umBAa`); Earlier runs' part hatched, `chart_none` stripes and outline over `chart_hatch`
+//! (`LEQ1w`, the look the design gives usage without a series of its own); on a grid in compact tokens; the hovered
+//! bar's slot gets the `hover` band. Each bar is a canvas item too, so automation and screen readers find and read it.
 
 use std::sync::Arc;
 
 use lurq::canvas::{CanvasHandle, CanvasItem, Context2D};
 use orchester_core::{
   tokens::compact_tokens,
-  usage::{AccountSeries, SERIES},
+  usage::{ProviderSeries, SERIES},
 };
 
 use super::plot::{self, AxisName, AxisText, Frame, XLabel};
@@ -21,14 +21,14 @@ const BAR_FILL: f32 = 0.6;
 /// Between the stacked parts of a bar, and the rounding of its top.
 const BAR_GAP: f32 = 2.0;
 const BAR_RADIUS: f32 = 4.0;
-/// No account's stripes (`LEQ1w`): 1 wide, 4 apart.
+/// Earlier runs' stripes (`LEQ1w`): 1 wide, 4 apart.
 const STRIPE_WIDTH: f32 = 1.0;
 const STRIPE_PITCH: f32 = 4.0;
 
 /// What the chart draws.
 #[derive(Clone)]
 pub struct TokenPlot {
-  /// Each bar's parts, bottom first, by account series (`AccountSeries::index`).
+  /// Each bar's parts, bottom first, by provider series (`ProviderSeries::index`).
   pub bars: Vec<[u64; SERIES]>,
   /// Each bar's x axis label; `None` where labels would crowd.
   pub labels: Vec<Option<AxisName>>,
@@ -98,7 +98,7 @@ fn stacked(
     let height = frame.bottom - frame.y(*value as f64, top as f64);
     let gap = if position > 0 { BAR_GAP } else { 0.0 };
     let y = base - gap - height;
-    let none = *series == AccountSeries::NoAccount.index();
+    let none = *series == ProviderSeries::Earlier.index();
     let rounded = position + 1 == shown.len();
     context.set_fill_style(if none { style.hatch } else { style.series[*series] });
     part_path(context, (x, y, width, height), rounded);
@@ -111,7 +111,7 @@ fn stacked(
   base
 }
 
-/// No account's stripes, 45° and `STRIPE_PITCH` apart, and its 1 outline, over its ground; both inside the
+/// Earlier runs' stripes, 45° and `STRIPE_PITCH` apart, and its 1 outline, over its ground; both inside the
 /// part's rounded top when it is the bar's top part.
 fn hatch_part(
   context: &Context2D,
