@@ -70,3 +70,9 @@ tracing-subscriber.workspace = true
 orchester-server.workspace = true
 # Set-up requests to a test server that presents its own certificate from the start (`tests/server_support/tls.rs`).
 tokio-rustls.workspace = true
+# A team server with the run progress report in front of the test server, which has none yet
+# (`tests/sharing_support/run_reports.rs`): axum serves it, hyper passes every other request through. Both are built
+# for orchester-server already.
+axum.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true

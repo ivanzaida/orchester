@@ -130,6 +130,11 @@ impl Person {
 
   /// `username`, joined to `server` from this computer with `code`, with the project in `repo`.
   pub fn with_repo(server: &TestServer, person: (&str, &str, &Credential), repo: TempDir) -> Self {
+    Self::with_repo_at(server, &server.url(), person, repo)
+  }
+
+  /// [`Self::with_repo`], joined through `url`, e.g. a server in front of the test server.
+  pub fn with_repo_at(server: &TestServer, url: &str, person: (&str, &str, &Credential), repo: TempDir) -> Self {
     let data = TempDir::new().expect("application data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(MemoryVault::default())));
@@ -141,13 +146,13 @@ impl Person {
       repo,
       _data: data,
     };
-    desktop.join(server, person);
+    desktop.join(server, url, person);
     desktop
   }
 
-  /// Joins as `username`, called `display_name`, with `code`.
-  fn join(&self, server: &TestServer, (username, display_name, code): (&str, &str, &Credential)) {
-    let address = ServerAddress::parse(&server.url()).expect("address");
+  /// Joins through `url` as `username`, called `display_name`, with `code`.
+  fn join(&self, server: &TestServer, url: &str, (username, display_name, code): (&str, &str, &Credential)) {
+    let address = ServerAddress::parse(url).expect("address");
     let request = CodeRequest {
       code: Credential::new(code.expose().into()),
       username: Some(username.into()),

@@ -185,14 +185,19 @@ fn refusal(error: &ClientError, server: Option<ServerAddress>) -> WorkRefusal {
 }
 
 impl ProjectServer {
-  async fn release_claim(&self, task: TaskId) -> Result<(), SharingError> {
+  pub(super) async fn release_claim(&self, task: TaskId) -> Result<(), SharingError> {
     let released = self
       .call(|client, token, project| async move { client.release_claim(&token, project, task).await })
       .await?;
+    self.cache_answer(released).await
+  }
+
+  /// Writes `task`, as the server answered a change of its claim, to the cache.
+  pub(super) async fn cache_answer(&self, task: orchester_api::SharedTask) -> Result<(), SharingError> {
     let server = self.clone();
     background::run(move || -> Result<(), SharingError> {
       let db = orchester_store::ProjectDb::open(server.repo_root())?;
-      RemoteTaskStore::new(db, server)?.cache(std::slice::from_ref(&released), None)
+      RemoteTaskStore::new(db, server)?.cache(std::slice::from_ref(&task), None)
     })
     .await??;
     self.servers.shared_changed();

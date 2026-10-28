@@ -1,9 +1,10 @@
 //! The shared projects' background work, a task of the application's runtime beside the connection
 //! monitor (`docs/architecture/server.md`, "Claims", "Live updates"): every minute, one heartbeat
 //! request per server names the claims the person holds in the projects this computer shares there,
-//! and what they lost is written to the cache; then each shared project's cache is read again. A
-//! request to sync now (opening a project, *Try now*, *Check again*, after Share) reads the caches
-//! at once without a heartbeat, which keeps to the server's limit of 12 heartbeats a minute.
+//! and what they lost is written to the cache; then each shared project's cache is read again, and
+//! the claims of runs that ended are ended ([`super::claim_ends`]). A request to sync now (opening a
+//! project, *Try now*, *Check again*, after Share) reads the caches at once without a heartbeat,
+//! which keeps to the server's limit of 12 heartbeats a minute.
 
 use std::{
   collections::{BTreeMap, HashMap},
@@ -12,13 +13,14 @@ use std::{
 
 use orchester_api::Heartbeat;
 use orchester_core::id::{CloudAccountId, ServerId, TaskId};
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use tokio::{
   sync::watch,
   time::{sleep, sleep_until},
 };
 
-use super::{ProjectServer, convert};
+use super::{ProjectServer, claim_ends, convert};
 use crate::{
   background,
   sharing::{Servers, SharingError},
@@ -37,8 +39,9 @@ const RUN_SETTLE: Duration = Duration::from_secs(1);
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it
 /// drops. `runs` changes whenever a runner reports a run change: the workflow statuses runs reached
-/// are sent then, between the minute's syncs.
-pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>) {
+/// are sent then, between the minute's syncs, and the claims of runs that ended are ended. Git,
+/// through `programs`, tells which runs a person merged without Orchester.
+pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Programs) {
   let mut requests = servers.subscribe_sync();
   let mut last_heartbeat: Option<Instant> = None;
   let mut runs_open = true;
@@ -48,7 +51,7 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>) {
     if beat {
       last_heartbeat = Some(Instant::now());
     }
-    servers.sync_shared(beat).await;
+    servers.sync_shared(beat, &programs).await;
     let next = tokio::time::Instant::now() + INTERVAL;
     loop {
       tokio::select! {
@@ -62,6 +65,7 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>) {
           sleep(RUN_SETTLE).await;
           runs.borrow_and_update();
           servers.send_automatic_statuses().await;
+          servers.end_claims(&programs).await;
         }
       }
     }
@@ -70,8 +74,8 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>) {
 
 impl Servers {
   /// One round over every shared project of the workspace, by server: the heartbeat when `beat`,
-  /// then each project's sync.
-  pub async fn sync_shared(&self, beat: bool) {
+  /// then each project's sync and the end of the claims whose runs ended.
+  pub async fn sync_shared(&self, beat: bool, programs: &Programs) {
     let servers = self.clone();
     let Ok(projects) = background::run(move || shared_projects(&servers)).await else {
       // The blocking pool is shutting down with the window.
@@ -83,11 +87,12 @@ impl Servers {
     }
     for projects in by_server.values() {
       if beat {
-        self.heartbeat(projects).await;
+        self.heartbeat(projects, programs).await;
       }
       for project in projects {
         match project.sync().await {
-          Ok(()) | Err(SharingError::Offline | SharingError::SignedOut) => {}
+          Ok(()) => claim_ends::end_claims_of(project, programs).await,
+          Err(SharingError::Offline | SharingError::SignedOut) => {}
           Err(error) => tracing::warn!(%error, project = %project.link().project, "cannot read the shared project"),
         }
       }
@@ -95,8 +100,9 @@ impl Servers {
   }
 
   /// One heartbeat request (more for more than 256 claims) for the claims the person holds in
-  /// `projects`, which share one server; a claim the server reports lost is written to the cache.
-  async fn heartbeat(&self, projects: &[ProjectServer]) {
+  /// `projects`, which share one server, except those whose run ended; a claim the server reports
+  /// lost is written to the cache.
+  async fn heartbeat(&self, projects: &[ProjectServer], programs: &Programs) {
     let Some(first) = projects.first() else {
       return;
     };
@@ -104,7 +110,8 @@ impl Servers {
       return;
     };
     let roots: Vec<_> = projects.iter().map(|project| project.repo_root().to_owned()).collect();
-    let held = background::run(move || held_claims(&roots, me)).await;
+    let programs = programs.clone();
+    let held = background::run(move || held_claims(&roots, me, &programs)).await;
     let held: HashMap<TaskId, usize> = match held {
       Ok(Ok(held)) => held,
       Ok(Err(error)) => {
@@ -207,14 +214,17 @@ fn shared_projects_of(servers: &Servers, owner: Option<&CloudAccountId>) -> Vec<
     .collect()
 }
 
-/// The tasks whose claim `me` holds in the projects at `roots`, with the index of their project.
+/// The tasks whose claim `me` holds in the projects at `roots` and that the claim's run did not end
+/// ([`claim_ends::HeldClaims`]), with the index of their project: a claim that ended is not kept
+/// fresh, also while the server has not taken its end.
 fn held_claims(
   roots: &[std::path::PathBuf],
   me: orchester_core::id::UserId,
+  programs: &Programs,
 ) -> Result<HashMap<TaskId, usize>, orchester_store::StoreError> {
   let mut held = HashMap::new();
   for (index, root) in roots.iter().enumerate() {
-    for task in ProjectDb::open(root)?.claims_held_by(me)? {
+    for task in claim_ends::HeldClaims::read(root, me, programs)?.kept {
       held.insert(task, index);
     }
   }

@@ -328,7 +328,11 @@ fn per_account_sync_keeps_a_hidden_accounts_projects_in_step_and_shows_nothing()
   server.retitle(&kontur_there, &kontur_key, "Fix reconnect after sleep");
   let notes_key = server.task_keys(&notes_there).remove(0);
   server.retitle(&notes_there, &notes_key, "Write the notes again");
-  desktop.block_on(desktop.servers.sync_shared(true));
+  desktop.block_on(
+    desktop
+      .servers
+      .sync_shared(true, &orchester_exec::programs::Programs::processes()),
+  );
   assert_eq!(
     title(&kontur),
     "Fix reconnect after sleep",
