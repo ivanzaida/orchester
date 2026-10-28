@@ -389,7 +389,12 @@ fn decision_after_retries_allows_a_retry_returns_with_a_note_and_stops() {
   page.open("waits after Review's retries", "task-retry-decision");
   assert_eq!(page.text("task-retry-decision-title"), "Decide how the run continues");
   assert_eq!(page.text("task-retry-reported-head"), "What Review reported");
-  assert!(page.has("task-retry-report-text"));
+  // What Review wrote is read as Markdown, as the Conversation reads it: no marks of it are shown as text.
+  let report = page.text("task-retry-report-text");
+  assert!(report.contains("Criterion 2 is still not met."), "{report}");
+  assert!(report.contains("parse_retry_after takes only digits."), "{report}");
+  assert!(report.contains("An HTTP date reads as 0"), "{report}");
+  assert!(!report.contains("**") && !report.contains('`'), "{report}");
   assert!(page.has("task-steps"), "the latest attempt's steps, on the run's rail");
   let options = page.options("task-return-step");
   assert!(options.contains(&"03 Implement · default".to_owned()), "{options:?}");
