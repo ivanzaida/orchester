@@ -3,10 +3,14 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
+  id::SecretId,
   secret::{Environment, SecretKind},
   time::Timestamp,
 };
-use orchester_workspace::{display, secrets::data::UseCounts};
+use orchester_workspace::{
+  display,
+  secrets::data::{ProjectSecrets, UseCounts},
+};
 
 use crate::ui::icon::Icon;
 
@@ -46,7 +50,10 @@ pub(super) fn uses(ctx: &Ctx, counts: UseCounts) -> Arc<str> {
   };
   ctx.t_args(key, [("count", counts.total().to_string())])
 }
-pub(super) fn archive_impact(ctx: &Ctx, counts: UseCounts) -> Arc<str> {
+/// What archiving `secret` does to what uses it, naming each (`1 MCP server uses it: figma. An archived secret gives no
+/// value to what uses it.`, `WDDU4` in `06b`).
+pub(super) fn archive_impact(ctx: &Ctx, listed: &ProjectSecrets, secret: SecretId) -> Arc<str> {
+  let counts = listed.use_counts(secret);
   let key = match (counts.tools, counts.mcp_servers) {
     (0, 0) => "secrets.archiving.unused",
     (1, 0) => "secrets.archiving.tool",
@@ -55,7 +62,11 @@ pub(super) fn archive_impact(ctx: &Ctx, counts: UseCounts) -> Arc<str> {
     (0, _) => "secrets.archiving.servers",
     _ => "secrets.archiving.mixed",
   };
-  ctx.t_args(key, [("count", counts.total().to_string())])
+  let names: Vec<&str> = listed.used_by(secret).map(|used| used.name.as_ref()).collect();
+  ctx.t_args(
+    key,
+    [("count", counts.total().to_string()), ("names", names.join(", "))],
+  )
 }
 /// The day `at` as the list says it (`set Oct 24`, `set today` in `06` `bVh1e`): *today*, the month and day in this
 /// year, or with the year before it.

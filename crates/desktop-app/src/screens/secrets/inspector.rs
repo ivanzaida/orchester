@@ -18,6 +18,7 @@ use lurq::{
 use orchester_core::secret::Secret;
 use orchester_workspace::{
   activity::operations,
+  display,
   secrets::data::{ProjectSecrets, SecretUseKind},
   tasks::outside::Outside,
 };
@@ -225,22 +226,19 @@ impl Inspector {
     Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
   }
 
-  /// *Archive …?* in place: what it does to what uses the secret, Archive and Keep it.
+  /// *Archive …?* in place: what uses the secret and that it gets no value once archived, in one sentence as `06b`
+  /// draws it (`WDDU4`), Archive and Keep it.
   fn archive(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let state = self.action.state().get();
     let title = ctx.t_args("secrets.archiving.title", [("name", props.secret.name().as_str())]);
-    let impact = words::archive_impact(ctx, props.listed.use_counts(props.secret.id()));
-    let explanation = ctx.t_args(
-      "secrets.archiving.explanation",
-      [("project", props.project.open.project.name().as_str())],
-    );
+    let impact = words::archive_impact(ctx, &props.listed, props.secret.id());
     let go = ActionButton::new(
       "secret-archive-confirm",
       ButtonKind::Danger,
       ctx.t(if state.is_pending() {
         "secrets.archiving.running"
       } else {
-        "secrets.archive"
+        "secrets.archiving.confirm"
       }),
     )
     .icon(Icon::Archive);
@@ -274,7 +272,7 @@ impl Inspector {
     let mut asked = question(
       "secret-archive-question",
       &title,
-      &[impact, explanation],
+      &[impact],
       vec![go.into(), keep.into()],
     );
     if let Some(error) = &state.error {
@@ -284,11 +282,19 @@ impl Inspector {
   }
 }
 
-/// *Details* (`NLrZH`): the project, the environment (its kind in the (i)) and when its value was last rotated (how
-/// it is kept in the (i)), as `06b` draws them; an archived secret also says its value is gone.
+/// *Details* (`NLrZH`): the project, the environment (its kind in the (i)) and when its value was last rotated, at
+/// what time and by whom (`Oct 22, 14:10 · by you`, `IF2Lo`; only the person replaces a value, in this app, as
+/// *Replace value* says), how it is kept in the (i), as `06b` draws them; an archived secret also says its value is
+/// gone.
 fn details(ctx: &mut Ctx, project: &ShownProject, secret: &Secret) -> Element {
   let rotated = match secret.rotated_at() {
-    Some(at) => words::date(ctx, at),
+    Some(at) => {
+      let date = words::date(ctx, at);
+      ctx.t_args(
+        "secrets.rotatedAt",
+        [("date", date.to_string()), ("time", display::clock(at))],
+      )
+    }
     None => {
       let added = words::date(ctx, secret.created_at());
       ctx.t_args("secrets.neverRotated", [("date", added)])

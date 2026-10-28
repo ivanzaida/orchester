@@ -1,10 +1,10 @@
 //! *Members*, read-only, as rows of *Team server* (`Members` in `04b Sharing · shared` `TnUGj`; *Members · as a member*
-//! and *Members · server offline* in `N9NFio`; `docs/architecture/server.md`, row 63): who is in the project, how many,
-//! and, behind the row's disclosure, each member with their role, as the server lists them now or as last read while it
-//! cannot be reached, once this computer is signed out of it or it left the list, and once the person is no longer a
-//! member. Owners and the server's admins get *Manage*, which opens the project's page in the server admin in the
-//! browser, only on the server the project's address names; a member is told to ask an owner. The app has no member or
-//! role control.
+//! and *Members · server offline* in `N9NFio`; `docs/architecture/server.md`, row 63): who is in the project and how
+//! many, as the server lists them now or as last read while it cannot be reached, once this computer is signed out of
+//! it or it left the list, and once the person is no longer a member. Owners and the server's admins get *Manage*,
+//! which opens the project's page in the server admin in the browser, only on the server the project's address names; a
+//! member is told to ask an owner. The app has no member or role control, and no list of each member: the design draws
+//! none (the person's answer in ORC-128).
 
 use lurq::{
   app::{
@@ -16,9 +16,7 @@ use lurq::{
   core::Signal,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_api::MemberRole;
-use orchester_core::{id::UserId, time::Timestamp};
-use orchester_store::SharedMember;
+use orchester_core::time::Timestamp;
 use orchester_workspace::sharing::{
   ProjectAddress, ServerEntry, SharingError,
   project::{MembersRead, ProjectMembers},
@@ -28,14 +26,12 @@ use crate::{
   project::ShownProject,
   screens::{
     project_settings::kit::{SettingRow, Tone, value},
-    settings::orchester::{Said, day_of, moment, sharing_said, shown_address},
+    settings::orchester::{Said, moment, sharing_said, shown_address},
   },
   services::Services,
   ui::{
-    avatar::{initials, person_avatar},
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    icon_button::IconButton,
   },
 };
 
@@ -53,7 +49,6 @@ pub(super) struct Props {
   pub entry: Option<ServerEntry>,
   pub owner: bool,
   pub admin: bool,
-  pub me: Option<UserId>,
   /// Whether the server answers now; the members are read again when it changes.
   pub connected: bool,
   /// Since when the person is no longer a member: the list stays as last read.
@@ -74,8 +69,6 @@ pub(super) struct Members {
   links: crate::services::links::Links,
   /// Why the admin did not open in the browser.
   opened: Signal<Option<Said>>,
-  /// The member list is shown under the summary.
-  listed: Signal<bool>,
 }
 
 impl Component for Members {
@@ -85,7 +78,6 @@ impl Component for Members {
     Self {
       links: Services::of(ctx).links,
       opened: ctx.signal(None),
-      listed: ctx.signal(false),
     }
   }
 
@@ -140,40 +132,15 @@ impl Component for Members {
 }
 
 impl Members {
-  /// The summary with *Manage* and the list's disclosure, a row for each member while the list is shown, and how to
-  /// come back once the person is no longer one.
+  /// The summary with *Manage*, and how to come back once the person is no longer a member.
   fn read(&self, ctx: &mut Ctx, props: &Props, members: &ProjectMembers) -> Vec<Element> {
     let removed = not_member(props, members);
     let manages = (props.owner || props.admin) && !removed;
     let mut rows = vec![self.summary(ctx, props, members, manages)];
-    let until = removed.then(|| moment(ctx, members.read_at));
-    // Once this computer signed out of the server it no longer knows the person's account there; the list knows who
-    // read it.
-    let mine = props.me.or(members.me);
-    if self.listed.get() {
-      for member in &members.members {
-        let me = (mine == Some(member.user)).then_some(until.as_deref());
-        rows.push(member_row(ctx, member, me));
-      }
-    }
     if removed {
       rows.push(removed_row(ctx, props, members));
     }
     rows
-  }
-
-  /// Shows or hides the member list under the summary.
-  fn disclosure(&self, ctx: &Ctx) -> IconButton {
-    let listed = self.listed.clone();
-    let (glyph, label) = if listed.get() {
-      (Icon::ChevronUp, ctx.t("sharing.members.hideList"))
-    } else {
-      (Icon::ChevronDown, ctx.t("sharing.members.showList"))
-    };
-    IconButton::new("sharing-members-list", glyph, label)
-      .small()
-      .in_form()
-      .on_click(move || listed.update(|shown| *shown = !*shown))
   }
 
   /// *Members* with who they are (`dana-k, ivan, olha +1`), how many, and *Manage*; what the list is and where *Manage*
@@ -222,8 +189,7 @@ impl Members {
     } else {
       row
     };
-    let disclosure = self.disclosure(ctx).render(ctx);
-    row.control(disclosure).render(ctx)
+    row.render(ctx)
   }
 
   /// *Manage*: the project's page in the server admin, in the browser; unavailable, with why, while the server cannot
@@ -329,37 +295,5 @@ fn removed_row(ctx: &mut Ctx, props: &Props, members: &ProjectMembers) -> Elemen
   };
   SettingRow::new("sharing-members-come-back", ctx.t("sharing.members.comeBackTitle"))
     .hint(text)
-    .render(ctx)
-}
-
-/// A member (`sharing-member-<username>`): the avatar, name, username and the day they were added (`· you` for the
-/// person, `· you, until 09:12` once they are no longer one), and the role.
-fn member_row(ctx: &mut Ctx, member: &SharedMember, me: Option<Option<&str>>) -> Element {
-  let id = format!("sharing-member-{}", member.username);
-  let mut hint = ctx
-    .t_args(
-      "sharing.members.memberHint",
-      [
-        ("username", member.username.clone()),
-        ("day", day_of(ctx, member.added_at)),
-      ],
-    )
-    .to_string();
-  if let Some(until) = me {
-    let you = match until {
-      Some(time) => ctx.t_args("sharing.members.youUntil", [("time", time)]),
-      None => ctx.t("sharing.members.you"),
-    };
-    hint = format!("{hint} {you}");
-  }
-  let role = ctx.t(match member.role {
-    MemberRole::Owner => "sharing.members.owner",
-    MemberRole::Member => "sharing.members.member",
-  });
-  SettingRow::new(id.clone(), member.display_name.clone())
-    .item()
-    .lead(person_avatar(&format!("{id}-avatar"), &initials(&member.display_name)))
-    .hint(hint)
-    .control(value(&format!("{id}-role"), &role))
     .render(ctx)
 }

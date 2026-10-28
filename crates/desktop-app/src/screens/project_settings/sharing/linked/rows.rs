@@ -2,7 +2,12 @@
 //! *Address*, read-only with when it last synced and the server's state, and *Your role*. The server project's name is
 //! read from the server while it is connected.
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::PaletteColor},
+  components::Row,
+  layout::Alignment,
+  node::Element,
+};
 use orchester_store::SharingLink;
 use orchester_workspace::{
   background,
@@ -11,10 +16,12 @@ use orchester_workspace::{
 
 use crate::{
   screens::{
-    project_settings::kit::{SettingRow, value},
+    project_settings::kit::{SettingRow, mono_value, value},
     settings::orchester::{Said, moment, sharing_said, shown_address},
   },
   services::Services,
+  theme::{ExtraSpacing, IconSize},
+  ui::icon::{Icon, icon},
 };
 
 /// The server project's name as the server answers it while `entry` is connected; `None` until it has, and while it
@@ -53,8 +60,8 @@ pub(super) fn shared_name(ctx: &mut Ctx, link: &SharingLink, entry: Option<&Serv
     .data
 }
 
-/// *Address* (`aou4M`): the address, *Synced 16:40* and the server's name, state and certificate; `server` names it
-/// once it left the list.
+/// *Address* (`aou4M`): the server's glyph and the address in Geist Mono (`BOqHG`), *Synced 16:40* and the server's
+/// name, state and certificate; `server` names it once it left the list.
 pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (Option<&ServerEntry>, &str)) -> Element {
   let address = link.address.as_deref().map_or_else(
     || ctx.t("sharing.linked.noAddress").to_string(),
@@ -72,24 +79,21 @@ pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (O
     "sharing.team.addressHint",
     [("time", moment(ctx, link.last_synced_at)), ("state", state)],
   );
+  let shown = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Server, IconSize::Base, PaletteColor::TextMuted))
+    .child(mono_value("sharing-address-value", &address));
   SettingRow::new("sharing-address", ctx.t("sharing.team.address"))
     .hint(hint)
     .info(ctx.t("sharing.linked.addressDescription"))
-    .control(value("sharing-address-value", &address))
+    .control(shown)
     .render(ctx)
 }
 
-/// *Your role* (`Z1IkQX`): owner or member, and since when.
-pub(super) fn role_row(ctx: &mut Ctx, link: &SharingLink, role: &str) -> Element {
-  let since = ctx.t_args(
-    "sharing.team.roleHint",
-    [
-      ("key", link.key.as_str().to_owned()),
-      ("day", crate::screens::settings::orchester::day_of(ctx, link.joined_at)),
-    ],
-  );
+/// *Your role* (`Z1IkQX`): owner or member.
+pub(super) fn role_row(ctx: &mut Ctx, role: &str) -> Element {
   SettingRow::new("sharing-role", ctx.t("sharing.team.role"))
-    .hint(since)
     .control(value("sharing-role-value", role))
     .render(ctx)
 }

@@ -15,20 +15,13 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
   let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
   link_kontur(&window);
 
-  // One Members row in Team server (`TnUGj`); a row per member behind its disclosure; who the list is and whom to
-  // ask is in the summary's (i).
-  open_sharing(&mut window, "sharing-members-list");
-  assert!(
-    window.tree.get_element_by_id("sharing-member-ivan-row").is_none(),
-    "the list waits behind its disclosure"
-  );
-  press(&mut window, "sharing-members-list");
-  shows(&mut window, "sharing-member-ivan-row");
-  shows(&mut window, "sharing-member-alice-row");
-  assert_eq!(window.text("sharing-member-ivan-role"), "Member");
-  assert_eq!(window.text("sharing-member-alice-role"), "Owner");
-  assert!(window.text("sharing-member-ivan-hint").ends_with("· you"));
-  assert!(!window.text("sharing-member-alice-hint").contains("you"));
+  // One Members row in Team server (`TnUGj`): who is in the project and how many, with no list of each member and no
+  // disclosure, as the design draws it; who the list is and whom to ask is in the summary's (i).
+  open_sharing(&mut window, "sharing-members-count");
+  let named = window.text("sharing-members-hint");
+  assert!(named.contains("ivan") && named.contains("alice"), "{named}");
+  assert!(window.tree.get_element_by_id("sharing-members-list").is_none());
+  assert!(window.tree.get_element_by_id("sharing-member-ivan-row").is_none());
   assert_eq!(window.text("sharing-members-count"), "2");
   assert!(window.tree.get_element_by_id("sharing-members-info").is_some());
   assert!(
@@ -57,7 +50,7 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
       .texts("sharing-members-hint")
       .is_some_and(|texts| texts.join(" ").contains(" · as of "))
   });
-  shows(&mut window, "sharing-member-alice-row");
+  assert!(window.text("sharing-members-hint").contains("alice"));
   assert_eq!(
     window.text("sharing-leave-unavailable"),
     "Kontur team can't be reached now; Leave works when it's back."

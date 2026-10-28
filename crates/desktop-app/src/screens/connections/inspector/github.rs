@@ -1,9 +1,9 @@
 //! A GitHub connection's page (`14` `KItiZ`): Check again and its … menu (Rename; editing it, choosing another `gh` and
 //! changing its account or access are not built yet, and say so); what its state asks for — signed in as another
 //! account, a one-line warning with *Use* that account (`Wrong account` `ZH4Hq`), or the state's sentence;
-//! *Connection*: its host, `gh` and its path, the account it is signed in to (named by the status line instead when
-//! it is another) and its scopes, and the account and repository the project expects through it; then the `gh`
-//! command that fixes the state, to run in a terminal. Orchester never signs in, switches accounts or sees a token.
+//! *Connection*: its host, `gh`, the account it is signed in to (named by the status line instead when it is another)
+//! and its scopes, and the account and repository the project expects through it; then the `gh` command that fixes
+//! the state, to run in a terminal. Orchester never signs in, switches accounts or sees a token.
 
 use lurq::{
   app::{
@@ -15,7 +15,6 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::connection::{GitHubCheckResult, GitHubConnection, GitHubState, REQUIRED_SCOPE};
-use orchester_workspace::display;
 
 use super::{
   Actions, Inspecting, Parts, check_button, last_checked, rename::title_with_rename, rename_item, result, sentence,
@@ -28,7 +27,7 @@ use crate::{
       words::{GITHUB_GLYPH, github_status},
       work::Work,
     },
-    project_settings::kit::{Group, SettingRow, Tone, command_line, value},
+    project_settings::kit::{Group, SettingRow, Tone, command_box, mono_value, value},
   },
   theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
   ui::{
@@ -38,8 +37,6 @@ use crate::{
     tooltip::Tooltip,
   },
 };
-
-const PATH_CHARS: usize = 40;
 
 pub(super) fn parts(
   ctx: &mut Ctx,
@@ -65,9 +62,9 @@ pub(super) fn parts(
   };
   notices.extend(result::github(ctx, connection, &state, inspecting));
   let mut groups = vec![connection_group(ctx, connection, &state, inspecting)];
-  // The `gh` command that fixes the state, under *Connection* as `14` draws it.
+  // The `gh` command that fixes the state, under *Connection* with its Copy inside, as `14` draws it.
   if let Some(advice) = state.advice() {
-    groups.push(command_line(
+    groups.push(command_box(
       ctx,
       "connection-gh-command",
       ctx.t("connections.runInTerminal"),
@@ -194,8 +191,8 @@ fn wrong_account(
     .into()
 }
 
-/// *Connection* (`MqOPV`): the host, `gh` and its path, the account and scopes it is signed in with, and the account
-/// and repository the project expects through it.
+/// *Connection* (`MqOPV`): the host, `gh`, the account and scopes it is signed in with, and the account and repository
+/// the project expects through it.
 fn connection_group(
   ctx: &mut Ctx,
   connection: &GitHubConnection,
@@ -203,7 +200,6 @@ fn connection_group(
   inspecting: &Inspecting<'_>,
 ) -> Element {
   let check = connection.last_check();
-  let path = display::shorten_path(connection.executable(), PATH_CHARS);
   let (program, program_tone) = match check.map(|check| &check.result) {
     Some(GitHubCheckResult::Available { version, .. }) => (
       ctx.t_args("connections.github.programFound", [("version", version.as_str())]),
@@ -230,14 +226,14 @@ fn connection_group(
       "connection-host",
       ("connections.property.host", connection.host().as_str()),
       Tone::Secondary,
-      None,
+      false,
     ),
     row(
       ctx,
       "connection-program",
       ("connections.property.program", &program),
       program_tone,
-      Some(&path),
+      false,
     ),
   ];
   // Signed in as another account, the status line names it and the warning offers it (`14`).
@@ -247,7 +243,7 @@ fn connection_group(
       "connection-account",
       ("connections.property.account", &account),
       account_tone,
-      None,
+      false,
     ));
   }
   rows.push(row(
@@ -255,7 +251,7 @@ fn connection_group(
     "connection-scopes",
     ("connections.property.scopes", &scopes),
     scopes_tone,
-    None,
+    false,
   ));
   rows.extend(link_rows(ctx, connection, inspecting));
   Group::new("connection-properties", ctx.t("connections.connectionGroup"))
@@ -263,7 +259,8 @@ fn connection_group(
     .into()
 }
 
-/// The account and repository the project expects through the connection, when a repository is linked to it.
+/// The account and repository the project expects through the connection, when a repository is linked to it; both in
+/// Geist Mono (`nHCTJ`, `vlI5C`).
 fn link_rows(ctx: &mut Ctx, connection: &GitHubConnection, inspecting: &Inspecting<'_>) -> Vec<Element> {
   let Some(link) = inspecting.listed.link_of(connection.id()) else {
     return Vec::new();
@@ -290,27 +287,29 @@ fn link_rows(ctx: &mut Ctx, connection: &GitHubConnection, inspecting: &Inspecti
       "connection-expected-account",
       ("connections.github.expectedAccount", link.expected_login().as_str()),
       Tone::Secondary,
-      None,
+      true,
     ),
     row(
       ctx,
       "connection-repository",
       ("connections.github.repository", &repository),
       Tone::Secondary,
-      None,
+      true,
     ),
   ]
 }
 
-/// A row with its value at the end in `tone`, and what it leaves out in its hint.
-fn row(ctx: &mut Ctx, id: &str, (label, shown): (&str, &str), tone: Tone, hint: Option<&str>) -> Element {
-  let row =
-    SettingRow::new(id.to_owned(), ctx.t(label)).control(value(&format!("{id}-value"), shown).color(tone.color()));
-  match hint {
-    Some(hint) => row.hint(hint.to_owned()),
-    None => row,
-  }
-  .render(ctx)
+/// A row with its value at the end in `tone`, in Geist Mono when it is an identifier.
+fn row(ctx: &mut Ctx, id: &str, (label, shown): (&str, &str), tone: Tone, mono: bool) -> Element {
+  let id_of_value = format!("{id}-value");
+  let shown = if mono {
+    mono_value(&id_of_value, shown)
+  } else {
+    value(&id_of_value, shown)
+  };
+  SettingRow::new(id.to_owned(), ctx.t(label))
+    .control(shown.color(tone.color()))
+    .render(ctx)
 }
 
 fn account(ctx: &Ctx, state: &GitHubState) -> (std::sync::Arc<str>, Tone) {

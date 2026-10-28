@@ -311,7 +311,7 @@
         "reachedBy": "Reached by",
         "endpoint": "Endpoint"
       },
-      "typeStdio": "Program on this computer",
+      "typeStdio": "A program here",
       "typeHttp": "Remote MCP",
       "theWorktree": "The run's worktree",
       "startedByCli": "Each agent’s CLI starts it when the agent starts.",
@@ -337,6 +337,7 @@
       },
       "variables": "Variables",
       "exemptTools": "Tools that run without asking",
+      "exemptToolsShort": "Run without asking",
       "exemptToolsNone": "None. When a profile asks before MCP actions, every tool of this server asks.",
       "exemptToolsNote": "Only these tools of this server, and only for agent profiles that ask before MCP actions. Every other tool still asks.",
       "tools": "Discovered tools",

@@ -18,6 +18,9 @@ pub enum ProjectSettingsText {
   Hint,
   /// 12.5 `text_secondary`: a read-only value at a row's end (`Text` `IxKWi`).
   Value,
+  /// Geist Mono 12.5 `text_secondary`: a read-only value that is an identifier, a path or an address (`boX03`,
+  /// `W2lRBk`, `U5AlRd` in `01b` `VwkMw`).
+  MonoValue,
   /// Geist Mono 12.5/500 `text_primary`: an identifier as a row's label, a secret's name (`Name` `HaAqu`).
   MonoLabel,
   /// 16/600 `text_primary`: a sub-page's or an opened item's title (`Title` `RYStU`, `N9Na8Q`).
@@ -25,10 +28,11 @@ pub enum ProjectSettingsText {
 }
 
 impl ProjectSettingsText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::GroupTitle,
     Self::Hint,
     Self::Value,
+    Self::MonoValue,
     Self::MonoLabel,
     Self::PageTitle,
   ];
@@ -42,6 +46,7 @@ impl ProjectSettingsText {
       Self::GroupTitle => "project_settings_group_title",
       Self::Hint => "project_settings_hint",
       Self::Value => "project_settings_value",
+      Self::MonoValue => "project_settings_mono_value",
       Self::MonoLabel => "project_settings_mono_label",
       Self::PageTitle => "project_settings_page_title",
     }
@@ -54,6 +59,7 @@ impl ProjectSettingsText {
       // item's row is 54 with them.
       Self::Hint => style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted),
       Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::MonoValue => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
       Self::MonoLabel => mono(style(
         12.5,
         FontWeight::Medium,

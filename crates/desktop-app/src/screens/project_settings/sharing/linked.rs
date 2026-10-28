@@ -12,9 +12,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    theme::PaletteColor,
   },
-  components::Column,
+  components::{Column, Row},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_api::MemberRole;
@@ -32,14 +34,15 @@ use super::{Facts, make_local, members};
 use crate::{
   project::ShownProject,
   screens::{
-    project_settings::kit::{Group, SettingRow, question, value},
+    project_settings::kit::{Group, SettingRow, Tone, question, value},
     settings::orchester::{PersonOnly, Said, sharing_said},
   },
   services::Services,
+  theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    icon::Icon,
+    icon::{Icon, icon},
     unavailable::reason_line,
   },
 };
@@ -145,7 +148,7 @@ impl Component for Linked {
       Some(_) => removed::role_row(ctx, link, &shared),
       None => {
         let words = role_words(ctx, link.role);
-        rows::role_row(ctx, link, &words)
+        rows::role_row(ctx, &words)
       }
     };
     let team = Group::new("project-settings-sharing-team", ctx.t("sharing.team.title"))
@@ -315,12 +318,17 @@ impl Linked {
 }
 
 /// *What a shared project can't do yet* (`CkP8s`): the task fields its server refuses rather than loses, *Delivers* and
-/// *Don't merge automatically*.
+/// *Don't merge automatically*, in `warning` with a ⚠ before their count (`Q36H1I`).
 fn refused(ctx: &mut Ctx) -> Element {
+  let count = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::TriangleAlert, IconSize::Base, PaletteColor::Warning))
+    .child(value("sharing-refused-count", &REFUSED.to_string()));
   let row = SettingRow::new("sharing-refused", ctx.t("sharing.team.refusedFields"))
-    .hint(ctx.t("sharing.team.refusedFieldsHint"))
+    .toned(ctx.t("sharing.team.refusedFieldsHint"), Tone::Warning)
     .info(ctx.t("sharing.team.refusedFieldsInfo"))
-    .control(value("sharing-refused-count", &REFUSED.to_string()))
+    .control(count)
     .render(ctx);
   Group::new("project-settings-sharing-refused", ctx.t("sharing.team.refused"))
     .row(row)
@@ -352,7 +360,6 @@ fn members_rows(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Ele
       entry: entry.cloned(),
       owner: link.is_some_and(|link| link.role == Some(MemberRole::Owner)),
       admin: account.is_some_and(|account| account.admin),
-      me: account.map(|account| account.user),
       connected: entry.is_some_and(|entry| entry.connection == Some(Connection::Connected)),
       removed: link.and_then(|link| link.removed_at),
       username: account.map(|account| account.username.clone()),

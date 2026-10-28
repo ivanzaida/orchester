@@ -25,9 +25,8 @@ use crate::{
       words::{mcp_glyph, mcp_status},
       work::Work,
     },
-    project_settings::kit::{Group, SettingRow, Tone, question, value},
+    project_settings::kit::{Group, SettingRow, Tone, mono_value, question, value},
   },
-  theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -210,15 +209,13 @@ fn server_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) 
     .into()
 }
 
-/// A row with its value at the end, in Geist Mono for a path, a command or an address.
+/// A row with its value at the end, in Geist Mono for a path, a command, an address or variables (`bQd0j`, `XP9pE`).
 fn row(ctx: &mut Ctx, id: &str, (label, shown): (&str, &str), mono: bool) -> SettingRow {
-  let value = value(&format!("{id}-value"), shown);
+  let id_of_value = format!("{id}-value");
   let value = if mono {
-    value
-      .variant(ExtraTypography::PropertyMono.role())
-      .color(lurq::app::theme::PaletteColor::TextSecondary)
+    mono_value(&id_of_value, shown)
   } else {
-    value
+    value(&id_of_value, shown)
   };
   SettingRow::new(id.to_owned(), ctx.t(label)).control(value)
 }
@@ -374,7 +371,7 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
     ctx,
     "connection-variables",
     ("connections.mcp.variables", &shown),
-    false,
+    !variables.is_empty(),
   );
   if missing {
     let open = Navigation::of(ctx).to(Route::Project(
@@ -409,7 +406,7 @@ fn sends_group(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -
   let exempt_row = row(
     ctx,
     "connection-exempt-tools",
-    ("connections.mcp.exemptTools", &exempt),
+    ("connections.mcp.exemptToolsShort", &exempt),
     false,
   )
   .info(ctx.t("connections.mcp.exemptToolsNote"));

@@ -271,3 +271,9 @@ pub(crate) fn entity_head(
 pub(crate) fn command_line(ctx: &mut Ctx, id: &str, label: Arc<str>, command: impl Into<Arc<str>>) -> Element {
   CodeBox::new(id.to_owned(), label, command).render(ctx)
 }
+
+/// A command to run in a terminal in one box with its Copy icon inside it (`Command` `SiCGv` in `14`); `label` names
+/// the box for tools.
+pub(crate) fn command_box(ctx: &mut Ctx, id: &str, label: Arc<str>, command: impl Into<Arc<str>>) -> Element {
+  CodeBox::new(id.to_owned(), label, command).inline().render(ctx)
+}

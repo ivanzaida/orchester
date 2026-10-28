@@ -36,7 +36,7 @@ use super::{
 use crate::{
   navigation::link::Open,
   screens::project_settings::kit::{Glyph, SettingRow, back, entity_head},
-  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
+  theme::{ExtraRadius, ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -49,6 +49,8 @@ use crate::{
 
 /// The … menu's width (`Menu` in `05b` `PGwka`).
 const MENU_WIDTH: f32 = 220.0;
+/// A status's dot (`Dot` `IY1SX` in `05b`, `Vqfat` in `05`).
+const STATUS_DOT: f32 = 6.0;
 
 /// A question the page asks in place before it acts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,19 +215,32 @@ fn title(name: &str) -> Text {
     .variant(ProjectSettingsText::PageTitle.role())
 }
 
-/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`).
+/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`, the 6 `Dot` `IY1SX`); a check
+/// under way keeps its turning loader instead.
 pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
   let word = ctx.t(status.key);
   let said = match detail {
     Some(detail) => ctx.t_args("connections.statusWith", [("status", &*word), ("detail", detail)]),
     None => word.clone(),
   };
+  let mark: Element = if status.tone == super::words::Tone::Busy {
+    icon(status.icon, IconSize::Sm, status.tone.color()).into()
+  } else {
+    Row::new()
+      .id(format!("{id}-dot"))
+      .width(Dimension::Px(STATUS_DOT))
+      .height(Dimension::Px(STATUS_DOT))
+      .flex_shrink(0.0)
+      .rounded(ExtraRadius::Full.role())
+      .background(status.tone.color())
+      .into()
+  };
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("status", word)
-    .child(icon(status.icon, IconSize::Sm, status.tone.color()))
+    .child(mark)
     .child(
       Text::new(&said)
         .variant(TypographyStyle::Description)
@@ -306,7 +321,9 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
   .icon(Icon::ArrowUpRight)
   .compact()
   .opens(actions.agents.clone());
+  // A list longer than the row ends in an ellipsis (`i4ZYXi`).
   let row = SettingRow::new("connection-used-by", label)
+    .cut_label()
     .hint(hint)
     .control(agents)
     .render(ctx);

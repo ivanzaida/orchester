@@ -42,9 +42,16 @@ fn orchester_design_link_takes_the_server_projects_key() {
   );
   press(&mut window, "sharing-link-confirm");
   // *Team server* (`rsQ79` in `04b Sharing · shared` `TnUGj`): Address, Your role and Members, no Repository row.
-  shows(&mut window, "sharing-role-hint");
-  let role = window.text("sharing-role-hint");
-  assert!(role.starts_with("Key BIL ·"), "linked under the server's key: {role}");
+  shows(&mut window, "sharing-role-value");
+  let link = orchester_store::ProjectDb::open(&window.data.repo("repo-kontur"))
+    .and_then(|db| db.sharing())
+    .expect("the link")
+    .expect("linked");
+  assert_eq!(link.key.as_str(), "BIL", "linked under the server's key");
+  assert!(
+    window.tree.get_element_by_id("sharing-role-hint").is_none(),
+    "the role has no line under it (`BsDal`)"
+  );
   assert_eq!(
     window.text("sharing-role-value"),
     "Member",

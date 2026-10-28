@@ -1,8 +1,7 @@
 //! Sharing when this computer's list of servers no longer has the project's server (linked from another computer's
 //! list, or the server was removed from Settings › Orchester): the page names the server by its address's host, says
 //! it is no longer in Settings › Orchester, and *Write orchester.toml* and *Leave* are unavailable with why before any
-//! press (`Manage` in `q8DIyg`); the members show as last read, with when, and the person among them, also once they
-//! are no longer one.
+//! press (`Manage` in `q8DIyg`); the members show as last read, with when.
 
 use std::collections::HashMap;
 
@@ -85,27 +84,10 @@ fn shared_project_without_its_server_says_so_and_waits_for_it() {
   window.pass();
   assert!(window.tree.get_element_by_id("sharing-leave-question").is_none());
 
-  shows(&mut window, "sharing-members-list");
-  window.press("sharing-members-list");
-  shows(&mut window, "sharing-member-ivan-row");
+  shows(&mut window, "sharing-members-count");
   assert_eq!(window.text("sharing-members-count"), "2");
   assert!(
     window.text("sharing-members-hint").contains(" · as of "),
     "a list not read now says when it was"
   );
-}
-
-#[test]
-fn shared_project_members_name_the_person_once_signed_out_and_removed() {
-  let mut window = harness::window(Some(KONTUR_REMOTE));
-  let me = UserId::generate();
-  linked_without_server(&window, me, Some(Timestamp::now()));
-  open_sharing(&mut window, "sharing-members-list");
-  window.press("sharing-members-list");
-  shows(&mut window, "sharing-member-ivan-row");
-  assert!(
-    window.text("sharing-member-ivan-hint").contains("· you, until "),
-    "the list knows which member the person was"
-  );
-  assert!(!window.text("sharing-member-alice-hint").contains("you"));
 }
