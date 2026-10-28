@@ -30,6 +30,21 @@ fn task_form_roles_follow_the_composer() {
       1.3,
       PaletteColor::TextPrimary,
     ),
+    // The criteria head's count and hint (`KrVl9`, `ZndIB`), a pipeline's steps in its menu (`H1NsU`).
+    (
+      TaskFormText::CriteriaHint,
+      12.0,
+      FontWeight::Normal,
+      1.3,
+      PaletteColor::TextMuted,
+    ),
+    (
+      TaskFormText::OptionMeta,
+      11.5,
+      FontWeight::Normal,
+      1.3,
+      PaletteColor::TextMuted,
+    ),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -39,7 +54,11 @@ fn task_form_roles_follow_the_composer() {
     );
   }
   assert_eq!(theme.typography_style(TaskFormText::Title.role()).letter_spacing, -0.4);
-  for (spacing, value) in [(TaskFormSpacing::Side, 28.0), (TaskFormSpacing::Composer, 20.0)] {
+  for (spacing, value) in [
+    (TaskFormSpacing::Side, 28.0),
+    (TaskFormSpacing::Composer, 20.0),
+    (TaskFormSpacing::MenuOption, 7.0),
+  ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
 }

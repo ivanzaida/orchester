@@ -2,11 +2,12 @@
 //! on a press outside or Esc (`Run permissions popover` `ojhrZ`): `surface_raised` inside a
 //! `border_strong` stroke, radius 10, 14 over and under its content and 16 at its sides, its parts 12
 //! apart, lifted by the `lg` shadow. It opens 6 under its control, or over it where the design puts it
-//! above; one for a control at a card's end opens under it from the control's end.
+//! above; one for a control at a card's end opens under it from the control's end; one that must stay in its
+//! column opens under its control and inside the column (`Sources popover` `B56QE`).
 
 use lurq::{
   app::{
-    ctx::Ctx,
+    ctx::{CollisionStrategy, Ctx},
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
   },
   components::{Column, Placement, Popup},
@@ -14,7 +15,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use crate::theme::ExtraSpacing;
+use crate::{shell::status_bar::STATUS_BAR_HEIGHT, theme::ExtraSpacing};
 
 /// Where a popover opens: under its control or over it, from the control's start, or under it from its end.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +50,32 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
     .open(open)
     .placement(placement)
     .offset(0.0, offset)
+}
+
+/// `panel`, `width` wide, opened under `anchor` from its start while `open` holds, moved back just enough that it ends
+/// no further than `frame` does (a column it belongs in), as both were last laid out. It never flips over its anchor:
+/// give it [`room_under`] as its most height.
+pub fn popover_inside(
+  (anchor, frame): (&ElementRef, &ElementRef),
+  open: Signal<bool>,
+  width: f32,
+  panel: impl Into<Element>,
+) -> Popup {
+  let past = (anchor.x() + width) - (frame.x() + frame.width());
+  Popup::new(anchor.clone(), panel)
+    .open(open)
+    .placement(Placement::BottomStart)
+    .offset(-past.max(0.0), ExtraSpacing::Snug.value())
+    .collision(CollisionStrategy::Clamp)
+}
+
+/// How tall a popover under `anchor` may be: the room between it, the popover's gap under it, and the status bar,
+/// kept 12 clear; `None` before the anchor was laid out.
+pub fn room_under(ctx: &Ctx, anchor: &ElementRef) -> Option<f32> {
+  let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
+  let bottom = ctx.window().info().logical_height() - STATUS_BAR_HEIGHT - margin;
+  let top = anchor.y() + anchor.height() + ExtraSpacing::Snug.value();
+  (anchor.height() > 0.0).then(|| (bottom - top).max(0.0))
 }
 
 /// `panel` opened by the status bar item `item` while `open` holds, placed over the status bar `bar` (the MCP

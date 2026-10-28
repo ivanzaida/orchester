@@ -31,10 +31,15 @@ use crate::{
   },
 };
 
+/// The head row's height (`Crumb row` `grDKk`): its 12 words' line, which the crumbs' and the status' 18 high lines
+/// overhang evenly, so that the title sits 36 under the head's top.
+const HEAD_HEIGHT: f32 = 16.0;
+
 pub fn head(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
   Row::new()
     .id("task-form-head")
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(HEAD_HEIGHT))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))

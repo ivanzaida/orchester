@@ -1,9 +1,10 @@
 //! The Sources chip (`Sources` `K39411`) and its popover (`Sources popover` `B56QE` in `03` `jsySh`): the chip counts
 //! the sources a run of the task starts with; the popover says what sources are, adds one (path, choose folder, Add),
 //! then lists the task's own, removable, and what it gets from the project and from the pipeline version it runs,
-//! read-only, and how many a run starts with. A new task keeps its sources on the form until Create stores them with
-//! it; a stored task's are saved as they change. Adding one is asked in place first (`connections::widen`); the rules
-//! are `orchester_workspace::sources::task`.
+//! read-only, and how many a run starts with. It opens under the chip and stays inside the composer's column, and
+//! never flips over the chip: what does not fit under it scrolls. A new task keeps its sources on the form until
+//! Create stores them with it; a stored task's are saved as they change. Adding one is asked in place first
+//! (`connections::widen`); the rules are `orchester_workspace::sources::task`.
 
 mod groups;
 
@@ -15,8 +16,8 @@ use lurq::{
     ctx::{Ctx, FutureAction, FutureState},
     theme::SpacingSize,
   },
-  components::{Column, Text},
-  core::Signal,
+  components::{Column, ScrollVertical, Text},
+  core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -45,7 +46,7 @@ use crate::{
     field::field_error,
     icon::Icon,
     message::message_text,
-    popover::popover_panel,
+    popover::{popover_panel, room_under},
     source_row::SourceRow,
     state::load_error,
   },
@@ -74,6 +75,8 @@ pub struct SourcesProps {
   /// A new task's sources, stored when it is created.
   pub drafted: Signal<Drafted>,
   pub locked: bool,
+  /// The composer's column, which the popover stays inside.
+  pub column: ElementRef,
 }
 
 impl PartialEq for SourcesProps {
@@ -182,6 +185,7 @@ impl Component for TaskSources {
       (ctx.t("task_form.sources.label"), value),
       Look::Empty,
     )
+    .inside(props.column.clone(), WIDTH)
     .render(&self.chip, panel)
   }
 }
@@ -227,14 +231,8 @@ impl TaskSources {
     read: &FutureState<Read, Message>,
     shown: Option<&Read>,
   ) -> Element {
-    let panel = popover_panel("task-form-sources-popover", WIDTH)
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Md)
-          .bottom(ExtraSpacing::Loose.role())
-          .left(SpacingSize::Md)
-          .right(SpacingSize::Md),
-      )
+    let body = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Loose.role())
       .child(
         Column::new()
@@ -248,13 +246,34 @@ impl TaskSources {
               .width(Dimension::Pct(100.0)),
           ),
       );
-    if let Some(error) = read.error.clone().filter(|_| read.is_rejected()) {
-      return panel.child(self.load_failed(ctx, &error)).into();
-    }
-    let Some(read) = shown else {
-      return panel.into();
+    let body = match (read.error.clone().filter(|_| read.is_rejected()), shown) {
+      (Some(error), _) => body.child(self.load_failed(ctx, &error)),
+      (None, Some(read)) => self.sources(ctx, props, read, body),
+      (None, None) => body,
     };
-    self.sources(ctx, props, read, panel).into()
+    self.frame(ctx, body)
+  }
+
+  /// The popover's frame around `body`, as tall as the room under the chip lets it be: what does not fit scrolls.
+  fn frame(&self, ctx: &Ctx, body: Column) -> Element {
+    let panel = popover_panel("task-form-sources-popover", WIDTH)
+      .padding(
+        Padding::new()
+          .top(SpacingSize::Md)
+          .bottom(ExtraSpacing::Loose.role())
+          .left(SpacingSize::Md)
+          .right(SpacingSize::Md),
+      )
+      .child(
+        ScrollVertical::new(body)
+          .id("task-form-sources-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex_shrink(1.0),
+      );
+    match room_under(ctx, &self.chip.anchor) {
+      Some(room) => panel.max_height(Dimension::Px(room)).into(),
+      None => panel.into(),
+    }
   }
 
   /// The add row, the groups and the summary, once the sources are read.

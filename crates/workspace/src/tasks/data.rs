@@ -6,11 +6,12 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{ResourceId, RunId, StepExecutionId, TaskId},
+  limits::ProjectLimits,
   memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
-  store::{ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore},
   task::Task,
   task_group::GroupHold,
   time::Timestamp,
@@ -91,6 +92,8 @@ pub struct ProjectTasks {
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// The project's default pipeline (Pipelines › *Make default*), which New task starts with.
   pub default_pipeline: Option<ResourceId>,
+  /// The project's limits, whose default run budget and time limit New task starts with.
+  pub limits: Arc<ProjectLimits>,
   /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
   pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
   /// Why each task of a reviewed group that holds its work waits.
@@ -276,6 +279,7 @@ impl ProjectTasks {
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(db)?),
       default_pipeline: db.default_pipeline()?,
+      limits: Arc::new(db.project_limits()?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
