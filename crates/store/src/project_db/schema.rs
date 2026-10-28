@@ -73,6 +73,7 @@ mod token_budgets;
 mod tool_approvals;
 mod unverified_steps;
 mod worktree_not_created;
+mod workspaces;
 mod worktree_removals;
 
 pub(super) use self::list::MIGRATIONS;

@@ -9,7 +9,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{IdempotencyKey, ResourceId, StepExecutionId, TaskId},
   integration::{
     base::{BaseBranchSetting, RunBaseError, set_branch_tip},
     checked_out_branch,
@@ -21,7 +21,7 @@ use orchester_core::{
     WorktreeFailure, preflight,
   },
   sharing::TaskRevision,
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
+  store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorkspaceStore, WorktreeStore},
   task::{Task, TaskStatus},
   time::Timestamp,
 };
@@ -39,12 +39,21 @@ const GIT_TIMEOUT: Duration = Duration::from_secs(30);
 pub(super) struct Prepared {
   pub(super) run: Run,
   pub(super) task: Task,
-  pub(super) worktree: PathBuf,
+  pub(super) folder: RunFolder,
   /// `false` when an earlier request with the same key already started the run.
   pub(super) execute: bool,
   /// A step a person asked to start on its account now, though the account's last reading says its plan limit
   /// holds: it starts once, and stops again if the CLI refuses.
   pub(super) try_at_plan_limit: Option<StepExecutionId>,
+}
+
+/// Where a run works.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum RunFolder {
+  /// Its own worktree, `.orchester/worktrees/<run>`, made before workspaces (ORC-114): it works there until it ends.
+  Own(PathBuf),
+  /// A warm workspace it borrows when its next step starts and gives back when it waits or ends.
+  Borrowed,
 }
 
 pub(super) fn prepare_first(
@@ -185,7 +194,12 @@ pub(super) fn resume_recorded(
 
 fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) -> Result<Prepared, Rejection> {
   let worktrees = Worktrees::new(root).map_err(|error| failed("cannot find the worktrees", &error))?;
-  let worktree = worktrees.path(run.id());
+  let own = worktrees.path(run.id());
+  let folder = if own.is_dir() {
+    RunFolder::Own(own)
+  } else {
+    RunFolder::Borrowed
+  };
   if let RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) = run.status() {
     return Err(Rejection::RunNotStarted {
       run: run.id(),
@@ -196,18 +210,22 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     return Ok(Prepared {
       run,
       task,
-      worktree,
+      folder,
       execute: false,
       try_at_plan_limit: None,
     });
   }
   check_readiness(db, run.task())?;
-  match worktree_branch(&worktrees, &run, worktree.is_dir()) {
+  match run_branch(&worktrees, &run, &folder) {
     Ok(branch) => record_branch(db, &mut run, branch)?,
     Err(reason) => return Err(fail_to_start(db, run, reason)),
   }
   db.record_run_origin(run.id(), origin_push_url(root).as_deref())
     .map_err(|error| failed("cannot record the run's origin", &error))?;
+  if folder == RunFolder::Borrowed {
+    db.set_run_borrows(run.id(), true)
+      .map_err(|error| failed("cannot record that the run borrows workspaces", &error))?;
+  }
   let events = run
     .start(Timestamp::now())
     .map_err(|error| failed("cannot start the run", &error))?;
@@ -216,24 +234,22 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
   Ok(Prepared {
     run,
     task,
-    worktree,
+    folder,
     execute: true,
     try_at_plan_limit: None,
   })
 }
 
-/// The branch of the pending run's worktree, which is created now unless an earlier request did
-/// (`exists`); why there is none, when it cannot be. Only the runner's log has git's full answer.
-fn worktree_branch(worktrees: &Worktrees, run: &Run, exists: bool) -> Result<BranchName, WorktreeFailure> {
-  let branch = if exists {
-    worktrees.branch_of(run.id())
-  } else {
-    worktrees
-      .create(run.id(), run.branch().as_str(), run.base().as_str())
-      .map(|created| created.branch().to_owned())
+/// The branch of the pending run: the one its own worktree, which an earlier request made before workspaces, is on;
+/// else one made now, which it borrows a workspace for. Why there is none, when it cannot be. Only the runner's log
+/// has git's full answer.
+fn run_branch(worktrees: &Worktrees, run: &Run, folder: &RunFolder) -> Result<BranchName, WorktreeFailure> {
+  let branch = match folder {
+    RunFolder::Own(_) => worktrees.branch_of(run.id()),
+    RunFolder::Borrowed => worktrees.create_branch(run.branch().as_str(), run.base().as_str()),
   }
   .map_err(|error| {
-    tracing::error!(run = %run.id(), %error, "cannot create the run's worktree");
+    tracing::error!(run = %run.id(), %error, "cannot create the run's branch");
     error.failure()
   })?;
   BranchName::new(&branch).map_err(|error| {
@@ -289,8 +305,8 @@ fn check_readiness(db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {
 }
 
 impl Prepared {
-  /// A recorded run that continues in its existing worktree: resumed or with raised limits. A run
-  /// whose worktree a person removed never continues, even should a folder of its name be back.
+  /// A recorded run that continues where it works: resumed or with raised limits. A run whose worktree a person
+  /// removed never continues, even should a folder of its name be back.
   pub(super) fn continuing(db: &ProjectDb, root: &Path, run: Run) -> Result<Self, Rejection> {
     check_readiness(db, run.task())?;
     if db
@@ -305,11 +321,11 @@ impl Prepared {
       .task_for_run(run.task(), run.id())
       .map_err(|error| failed("cannot read the run's task", &error))?
       .ok_or(Rejection::TaskNotFound)?;
-    let worktree = existing_worktree(root, run.id())?;
+    let folder = existing_folder(db, root, &run)?;
     Ok(Self {
       run,
       task,
-      worktree,
+      folder,
       execute: true,
       try_at_plan_limit: None,
     })
@@ -322,17 +338,28 @@ impl Prepared {
   }
 }
 
-/// The worktree of `run`, which continues in it; refused when it was removed, as a person can once
-/// the run ended, or its folder was deleted.
-pub(super) fn existing_worktree(root: &Path, run: RunId) -> Result<PathBuf, Rejection> {
-  let worktree = Worktrees::new(root)
+/// Where `run`, which continues, works: its own worktree while it is there, for a run made before workspaces; a
+/// workspace it borrows, on its branch, for a run made since. Refused when a run of the first kind lost its worktree,
+/// and when a borrowing run's branch, which holds all its work, is gone.
+pub(super) fn existing_folder(db: &ProjectDb, root: &Path, run: &Run) -> Result<RunFolder, Rejection> {
+  let own = Worktrees::new(root)
     .map_err(|error| failed("cannot find the worktrees", &error))?
-    .path(run);
-  if !worktree.is_dir() {
-    tracing::warn!(%run, worktree = %worktree.display(), "the run's worktree was removed; its agent cannot continue");
+    .path(run.id());
+  if own.is_dir() {
+    return Ok(RunFolder::Own(own));
+  }
+  let borrows = db
+    .run_borrows(run.id())
+    .map_err(|error| failed("cannot read whether the run borrows workspaces", &error))?;
+  let branch = format!("refs/heads/{}", run.branch());
+  let kept = Git::new(root)
+    .succeeds(&["show-ref", "--verify", "--quiet", &branch])
+    .map_err(|error| failed("cannot read the run's branch", &error))?;
+  if !borrows || !kept {
+    tracing::warn!(run = %run.id(), "the run's worktree or branch is gone; its agent cannot continue");
     return Err(Rejection::WorktreeRemoved);
   }
-  Ok(worktree)
+  Ok(RunFolder::Borrowed)
 }
 
 fn preflight_failed(problem: PreflightProblem) -> Rejection {

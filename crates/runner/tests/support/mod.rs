@@ -5,6 +5,7 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+pub mod disk;
 pub mod hold;
 pub mod native;
 pub mod pending;
@@ -53,6 +54,7 @@ use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 
+pub use self::disk::run_folder;
 use self::vault::MemoryVault;
 
 pub const FAKE_CODEX: &str = env!("CARGO_BIN_EXE_orchester-fake-codex");
@@ -416,18 +418,37 @@ pub fn queue_another_task(root: &Path) -> TaskId {
   task.id()
 }
 
+/// A scheduler whose runs get a worktree of their own, `.orchester/worktrees/<run>`, as runs made before warm
+/// workspaces (ORC-114) have and go on with: what most tests here check does not depend on where a run works.
 pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   scheduler_with(root, Arc::new(MemoryVault::default()))
 }
 
-/// A scheduler that reads secret values from `vault`. Its QA apps take QA slots of the project's own, in
-/// `.orchester/qa-slots/`, never the computer's.
+/// A scheduler whose runs borrow warm workspaces (ORC-114), on `disk`.
+pub fn pooled_scheduler(root: &Path, disk: disk::TestDisk) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
+  let (scheduler, events) = scheduler_on(root, Arc::new(MemoryVault::default()), disk);
+  (scheduler, events)
+}
+
+/// A scheduler of runs with worktrees of their own that reads secret values from `vault`. Its QA apps take QA slots
+/// of the project's own, in `.orchester/qa-slots/`, never the computer's, and its disk guard reads a disk with
+/// plenty of room.
 pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
+  let (scheduler, events) = scheduler_on(root, vault, disk::TestDisk::default());
+  (scheduler.with_own_worktrees(), events)
+}
+
+/// A scheduler of runs that borrow workspaces, reading secret values from `vault` and free space from `disk`.
+pub fn scheduler_on(
+  root: &Path,
+  vault: Arc<MemoryVault>,
+  disk: disk::TestDisk,
+) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   let (sender, events) = mpsc::unbounded_channel();
   let relay = PathBuf::from(env!("CARGO_BIN_EXE_orchester-runner"));
   let slots = QaSlots::in_folder(&root.join(".orchester").join("qa-slots"));
   (
-    Scheduler::new(root, Notifier::new(sender), vault, (Some(relay), slots)),
+    Scheduler::new(root, Notifier::new(sender), vault, (Some(relay), slots)).with_disks(Arc::new(disk)),
     events,
   )
 }

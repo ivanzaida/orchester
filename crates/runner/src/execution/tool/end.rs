@@ -30,6 +30,7 @@ impl RunTask {
       // The execution stays open: its command runs again once the run continues.
       Some(StopCause::Limit(_)) => self.save(execution, &active, "work in progress at a limit"),
       Some(StopCause::Paused) => self.save(execution, &active, "work in progress at a pause"),
+      Some(StopCause::LowDisk) => self.save(execution, &active, "work in progress at low disk space"),
       // Carried out once every agent and command has ended; *Stop turn* never stops a command.
       Some(StopCause::Requested | StopCause::Abandoned | StopCause::Permissions | StopCause::TurnStopped) => Ok(()),
       None => {

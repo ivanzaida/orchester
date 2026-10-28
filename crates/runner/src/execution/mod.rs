@@ -28,10 +28,15 @@ mod environment;
 mod estimate;
 mod halt;
 mod handoff;
+mod held;
 mod idle;
+mod low_disk;
+#[cfg(feature = "test-agent")]
+mod own_worktrees;
 mod permissions;
 mod plan;
 mod plan_limit;
+mod pool;
 mod prepare;
 mod question;
 mod record;
@@ -63,6 +68,7 @@ use orchester_core::{
   secret::SecretVault,
   store::RunStore,
   tokens::TokenBudget,
+  workspaces::DiskSpace,
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, RunStoreError};
@@ -137,11 +143,16 @@ struct Inner {
   plan_waits: plan_limit::PlanWaits,
   /// The turns of the Orchestrator chat under way.
   chats: chat::Chats,
+  /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
+  disks: Arc<dyn DiskSpace>,
+  disk_watch: low_disk::DiskWatch,
+  /// Runs get a worktree of their own, as before workspaces: set only by tests (`own_worktrees`).
+  own_worktrees: AtomicBool,
 }
 
 impl Scheduler {
   /// The scheduler of the project at `project_root`; its agents' QA apps take `qa_slots` ([`QaSlots::machine`]
-  /// outside tests).
+  /// outside tests). The disk guard reads this computer's disks unless [`Scheduler::with_disks`] says otherwise.
   pub fn new(
     project_root: &Path,
     notifier: Notifier,
@@ -165,8 +176,20 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
+        disks: Arc::new(orchester_exec::disk_space::LocalDisks),
+        disk_watch: low_disk::DiskWatch::default(),
+        own_worktrees: AtomicBool::new(false),
       }),
     }
+  }
+
+  /// This scheduler reading free space through `disks`, before it is shared: what tests give the disk guard.
+  #[must_use]
+  pub fn with_disks(mut self, disks: Arc<dyn DiskSpace>) -> Self {
+    if let Some(inner) = Arc::get_mut(&mut self.inner) {
+      inner.disks = disks;
+    }
+    self
   }
 
   fn plan_waits(&self) -> &plan_limit::PlanWaits {
@@ -443,7 +466,7 @@ impl Scheduler {
   }
 
   /// Whether new or continued work may start: the runner is not stopping, an agent slot is
-  /// free and today's token budget has room.
+  /// free, the disk has the free space the project keeps and today's token budget has room.
   fn admit(&self, db: &ProjectDb) -> Result<(), Rejection> {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
@@ -455,6 +478,7 @@ impl Scheduler {
     {
       return Err(Rejection::NoAgentSlot { slots });
     }
+    self.check_disk(db)?;
     idle::check_daily_budget(db)
   }
 
@@ -513,6 +537,8 @@ impl Scheduler {
   /// Starts the task that executes `prepared`. A run another task still executes is refused rather
   /// than left to that task, which does not know the change just recorded.
   fn spawn(&self, db: ProjectDb, prepared: Prepared) -> Result<(), Rejection> {
+    #[cfg(feature = "test-agent")]
+    let prepared = self.own_worktree_for_tests(prepared)?;
     let mut active = self.inner.active.lock();
     let run = prepared.run.id();
     if active.get(&run).is_some_and(|active| !active.ended()) {
@@ -530,14 +556,17 @@ impl Scheduler {
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),
+      disks: self.inner.disks.clone(),
       controls,
       settled: settled.clone(),
     };
     let scheduler = self.clone();
     let task = tokio::spawn(async move {
       RunTask::new(db, prepared, context).drive().await;
-      // A run its task stopped at a plan limit continues at the reset.
+      // A run its task stopped at a plan limit continues at the reset, and one it paused for low disk space once
+      // the disk has room.
       scheduler.wait_for_plan_resets();
+      scheduler.watch_disk();
     });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())

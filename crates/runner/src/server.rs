@@ -61,6 +61,10 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
     Arc::new(KeychainVault),
     (relay, QaSlots::machine()),
   );
+  // A runner built with the tests' stand-in agents never ships: its disk guard sees room unless a debug build's free
+  // space override says otherwise, so the tests and QA copies do not depend on the disk of the computer they run on.
+  #[cfg(feature = "test-agent")]
+  let scheduler = scheduler.with_disks(Arc::new(crate::test_disk::Roomy));
   let endpoint = Endpoint::for_project(project_root)?;
   tracing::info!("listening on {}", endpoint.name());
   let stream = tokio::select! {

@@ -282,7 +282,9 @@ impl RunTask {
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
     let offered = self.offered_skills(&placed, (provider, worktree))?;
-    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let storage = self.run_storage()?;
+    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()))
+      .with_run_storage(&storage);
     let on_provider = self.on_provider(connection, model)?;
     let provider_key = on_provider.as_ref().map(|on| on.key_variable(provider));
     let (tools, claude_approvals) = self.step_tools(

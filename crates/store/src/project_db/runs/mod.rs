@@ -231,6 +231,14 @@ impl RunStore for ProjectDb {
     )?)
   }
 
+  fn low_disk_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
+    Ok(load_runs(
+      &self.connection,
+      "WHERE status = 'paused' AND status_reason = ?1 ORDER BY number",
+      ["low_disk"],
+    )?)
+  }
+
   fn runs_by_pipeline_version(
     &self,
     pipeline: ResourceId,

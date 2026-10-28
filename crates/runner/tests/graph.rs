@@ -33,6 +33,11 @@ fn failures(run: &Run) -> Vec<(String, StepFailure)> {
     .collect()
 }
 
+/// Whether an agent's `argv` works in the run's own worktree, `.orchester/worktrees/<run>`: its run storage,
+/// `.orchester/runs/<run>`, which every step of the run may write to, names the run too.
+fn in_run_worktree(argv: &str, run: orchester_core::id::RunId) -> bool {
+  argv.contains(&format!("worktrees\\{run}")) || argv.contains(&format!("worktrees/{run}"))
+}
 fn problems(db: &ProjectDb, run: &Run) -> Vec<RunnerProblem> {
   db.activity(run.id(), 0)
     .expect("activity")
@@ -78,8 +83,7 @@ async fn graph_parallel_steps_work_in_their_own_worktrees_and_merge_back() {
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, run.id(), "argv: ");
   assert_eq!(argv.len(), 3);
-  let run_worktree = run.id().to_string();
-  let beside: Vec<&String> = argv.iter().filter(|argv| !argv.contains(&run_worktree)).collect();
+  let beside: Vec<&String> = argv.iter().filter(|argv| !in_run_worktree(argv, run.id())).collect();
   assert_eq!(beside.len(), 2, "{argv:?}");
   assert_eq!(git(root, &["branch", "--list", &format!("{branch}--*")]), "");
   let worktrees = root.join(".orchester").join("worktrees");
@@ -241,9 +245,8 @@ async fn graph_agent_slots_bound_the_steps_that_run_at_once() {
   // Checks and Review were both ready, so the first worked beside the other in a worktree of its
   // own; the second then ran alone in the run's worktree.
   let argv = reported(&db, id, "argv: ");
-  let run_worktree = id.to_string();
-  assert!(!argv[1].contains(&run_worktree), "{argv:?}");
-  assert!(argv[2].contains(&run_worktree), "{argv:?}");
+  assert!(!in_run_worktree(&argv[1], id), "{argv:?}");
+  assert!(in_run_worktree(&argv[2], id), "{argv:?}");
   for file in ["implement.txt", "checks.txt", "review.txt"] {
     assert_eq!(git(root, &["show", &format!("{}:{file}", run.branch())]), "hello");
   }

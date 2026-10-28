@@ -13,3 +13,4 @@ mod merged;
 mod recorded;
 mod resolve;
 mod support;
+mod workspace;

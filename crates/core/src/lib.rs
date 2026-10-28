@@ -47,3 +47,4 @@ pub mod task_selection;
 pub mod time;
 pub mod tokens;
 pub mod usage;
+pub mod workspaces;

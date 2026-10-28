@@ -91,6 +91,16 @@ impl Run {
     })
   }
 
+  /// Records that the run paused because the disk ran low: its agents were ended and their work committed, so it
+  /// waits with nothing at work and goes on with a plain [`Run::resume`] once the disk has room.
+  pub fn pause_for_low_disk(&mut self, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::Paused {
+        reason: PauseReason::LowDisk,
+      })
+    })
+  }
+
   /// Records that the run reached `limit`: its agent was ended and its work committed as a
   /// checkpoint, so the run waits as "Stopped at limit" until the limit is raised.
   pub fn stop_at_limit(&mut self, limit: RunLimit, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {

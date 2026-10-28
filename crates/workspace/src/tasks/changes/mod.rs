@@ -49,6 +49,48 @@ pub fn run_worktree(repo_root: &Path, run: RunId) -> PathBuf {
   repo_root.join(WORKTREES_DIR).join(run.to_string())
 }
 
+/// The folder where `run` of the repository at `repo_root` works or worked last: its own worktree from before
+/// workspaces, else the workspace it holds (ORC-114), else the one it worked in last, while no other run took it
+/// since. `None` when it has none: its work is on its branch.
+pub fn run_folder(db: &ProjectDb, repo_root: &Path, run: RunId) -> Option<PathBuf> {
+  use orchester_core::{store::WorkspaceStore, workspaces::Holder};
+  let own = run_worktree(repo_root, run);
+  if own.is_dir() {
+    return Some(own);
+  }
+  let records = db
+    .workspaces()
+    .inspect_err(|error| tracing::warn!(%run, %error, "the workspaces cannot be read"))
+    .ok()?;
+  let held = records
+    .iter()
+    .find(|record| record.holder == Some(Holder::Run { run }))
+    .or_else(|| {
+      records
+        .iter()
+        .find(|record| record.holder.is_none() && record.last_run == Some(run))
+    })?;
+  Some(held.number.path(repo_root)).filter(|path| path.is_dir())
+}
+
+/// Whether the work of `run` in the repository at `repo_root` of `db` is still there for it to go on with: its own
+/// worktree, for a run made before workspaces, or, for a run that borrows workspaces (ORC-114), its branch. What
+/// cannot be told counts as there: a removal is never recorded on a guess.
+pub fn run_work_present(db: &ProjectDb, repo_root: &Path, run: &Run) -> bool {
+  use orchester_core::store::WorkspaceStore;
+  let borrows = db.run_borrows(run.id()).unwrap_or_else(|error| {
+    tracing::warn!(run = %run.id(), %error, "cannot read whether the run borrows workspaces");
+    true
+  });
+  let runner = orchester_exec::ProcessRunner::new(std::time::Duration::from_secs(30));
+  orchester_core::integration::workspace::Workspaces::new(&runner, Path::new(GIT), repo_root)
+    .run_work_present(run, borrows)
+    .unwrap_or_else(|error| {
+      tracing::warn!(run = %run.id(), %error, "cannot tell whether the run's work is still there");
+      true
+    })
+}
+
 /// A diff as read, parsed, with the key that tells its content apart from other diffs.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ReadChanges {

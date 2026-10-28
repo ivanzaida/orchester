@@ -62,6 +62,8 @@ pub(in super::super) struct ToolFolders<'a> {
   pub(in super::super) code_index: Option<&'a Path>,
   /// The step's skills, read-only, when it has any.
   pub(in super::super) skills: Option<&'a Path>,
+  /// The run's own storage, which every step reads (ORC-114).
+  pub(in super::super) run_storage: Option<&'a Path>,
 }
 
 impl<'a> ToolFolders<'a> {
@@ -75,7 +77,14 @@ impl<'a> ToolFolders<'a> {
       writable,
       code_index,
       skills,
+      run_storage: None,
     }
+  }
+
+  /// These folders with the run's own storage `storage`, which must exist.
+  pub(in super::super) const fn with_run_storage(mut self, storage: &'a Path) -> Self {
+    self.run_storage = Some(storage);
+    self
   }
 }
 
@@ -88,6 +97,8 @@ pub(in super::super) struct ToolHost {
   worktree: PathBuf,
   /// The project's repository, which holds the worktrees.
   repository: PathBuf,
+  /// The run's own storage, where `call_run_app` saves the app's screenshots (ORC-114).
+  artifacts: PathBuf,
   git_dir: PathBuf,
   /// The run's base revision, which a QA app's approval names the build scripts changed since.
   base: String,
@@ -251,7 +262,12 @@ impl ToolHost {
       Ok(ToolWork::Progress(progress)) => self.records.report_progress(&progress, &self.secrets),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
-      Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call, self.qa.as_ref()),
+      Ok(ToolWork::App(call)) => super::run_app::call(
+        &self.processes,
+        (&self.worktree, &self.artifacts),
+        &call,
+        self.qa.as_ref(),
+      ),
       Ok(ToolWork::QaApp(start)) => match &self.qa {
         Some(qa) => {
           // The latest look at this start is what was asked about; earlier ones were denied or never run.
@@ -395,6 +411,7 @@ impl RunTask {
       tools,
       worktree: worktree.to_path_buf(),
       repository: self.root.clone(),
+      artifacts: orchester_core::workspaces::artifacts_folder(&self.root, self.run.id()),
       git_dir: self.worktree_git_dir(worktree)?,
       base: self.run.base().as_str().to_owned(),
       hooks,

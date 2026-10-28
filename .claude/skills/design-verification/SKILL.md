@@ -24,8 +24,9 @@ what is actually on screen.
 
 1. **Design screenshot.** Take it from the live design, not from `docs/design/previews/`
    (previews can be stale): `pencil` MCP → `get_editor_state` (with schema, once), then
-   `get_screenshot` for the screen node, or `export_nodes` at scale 1 into
-   `.tmp/verify/<screen>/design.png`. Never Read or Grep the `.pen` file, and never edit it.
+   `get_screenshot` for the screen node, or `export_nodes` at scale 1 into the run's own storage,
+   `$ORCHESTER_RUN_STORAGE/verify/<screen>/design.png` (`.orchester/runs/<run>/`; outside a run, `.tmp/verify/`).
+   Never Read or Grep the `.pen` file, and never edit it.
 2. **App screenshot in the same state.** For orchester-app, follow "orchester-app: start,
    connect, reach the state" below. For the deprecated desktop, build and run the implementation with
    `cargo run -p orchester-desktop` (every build includes the embedded MCP server; set
@@ -183,8 +184,9 @@ reading discovery or escalating a script outside the sandbox.
 For example, call `call_run_app` with `{"tool":"app_state","arguments":{}}` for the QA app, or
 `{"pid":12345,"tool":"app_state","arguments":{}}` for one the script started.
 Every embedded tool uses this same relay, including `navigate`, `lurq_resize` and `lurq_screenshot`.
-PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open with `read_file`
-(step 3) and cite.
+PNG images are saved in the run's own storage, `.orchester/runs/<run>/screenshots/` (the folder
+`ORCHESTER_RUN_STORAGE` names), which the task page lists under Artifacts and cleaning or reusing a workspace never
+removes; the answer gives its absolute path to open with `read_file` (step 3) and cite.
 
 `app_state` must answer `"mcp": {"window_control": true, …}` before you drive the window.
 

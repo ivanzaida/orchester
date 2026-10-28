@@ -357,7 +357,10 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     RunRequestError::Rejected(Rejection::TaskGroupWaiting { hold }) => super::group::hold_messages(hold),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => vec![Message::new("runs.unreadable.rejected")],
     RunRequestError::Rejected(
-      rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
+      rejection @ (Rejection::DailyBudgetUsed { .. }
+      | Rejection::NoAgentSlot { .. }
+      | Rejection::LowDisk { .. }
+      | Rejection::ShuttingDown),
     ) => {
       vec![capacity_message(rejection)]
     }
@@ -482,7 +485,10 @@ pub fn control_message(error: &RunRequestError) -> Message {
       .unwrap_or_else(|| Message::new("runs.control.failed")),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => Message::new("runs.unreadable.rejected"),
     RunRequestError::Rejected(
-      rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
+      rejection @ (Rejection::DailyBudgetUsed { .. }
+      | Rejection::NoAgentSlot { .. }
+      | Rejection::LowDisk { .. }
+      | Rejection::ShuttingDown),
     ) => capacity_message(rejection),
     RunRequestError::Rejected(Rejection::LimitNotRaised { .. }) => Message::new("runs.limit.notRaised"),
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
@@ -570,12 +576,15 @@ const fn person_only_key(ask: AutoAsk) -> &'static str {
   }
 }
 
-/// Why no run starts or continues now: today's budget is used, every agent slot is taken or the
+/// Why no run starts or continues now: today's budget is used, every agent slot is taken, the disk is low or the
 /// runner is stopping.
 fn capacity_message(rejection: &Rejection) -> Message {
   match rejection {
     Rejection::DailyBudgetUsed { .. } => Message::new("runs.capacity.dailyBudgetUsed"),
     Rejection::NoAgentSlot { slots } => Message::new("runs.capacity.noAgentSlot").with("slots", slots.to_string()),
+    Rejection::LowDisk { free_gb, needed_gb } => Message::new("runs.capacity.lowDisk")
+      .with("free", free_gb.to_string())
+      .with("needed", needed_gb.to_string()),
     Rejection::ShuttingDown => Message::new("runs.capacity.shuttingDown"),
     other => {
       tracing::error!(?other, "not a capacity rejection");

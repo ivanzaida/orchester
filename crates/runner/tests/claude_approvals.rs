@@ -107,12 +107,7 @@ async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: 
 }
 
 fn readme(root: &Path, run: RunId) -> String {
-  std::fs::read_to_string(
-    root
-      .join(".orchester/worktrees")
-      .join(run.to_string())
-      .join("README.md"),
-  )
+  std::fs::read_to_string(support::run_folder(root, run).join("README.md"))
   .expect("README")
 }
 
@@ -132,7 +127,7 @@ async fn claude_approvals_run_an_approved_command_once() {
   assert!(request.command);
   assert_eq!(request.action, "pnpm publish --dry-run");
   assert_eq!(request.scope.as_deref(), Some("Publish a dry run"));
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = support::run_folder(root, id);
   assert_eq!(request.target.as_deref(), worktree.to_str());
   assert!(request.id.ends_with(":toolu_publish"), "{}", request.id);
   assert_eq!(readme(root, id), "hi\n", "nothing runs before the decision");
@@ -210,7 +205,7 @@ async fn stop_at_a_pending_approval(stopping: Stopping) -> PausedAtApproval {
     .await
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = support::run_folder(root, id);
   std::fs::write(worktree.join("progress.txt"), "keep actual progress").expect("work");
   match stopping {
     Stopping::Pause => tokio::time::timeout(PATIENCE, scheduler.pause_run(id))
