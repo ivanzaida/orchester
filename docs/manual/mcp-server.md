@@ -219,40 +219,51 @@ Where the window is:
 Takes the **active tab** to a route as a new history entry (mouse back, Alt+← / Cmd+[ return). Answers
 `{"route": {name, path, params}}`. All parameters are strings; `route` is required; `project` is the project's id
 (as `app_state` reports it) and is required for every project screen. A parameter the screen does not take is
-refused (`unexpected_param`).
+refused (`unexpected_param`). A `tab` left out is the one the screen opens on. Opening a page or an in-place question
+is navigation; answering it stays a person's.
 
 | `route` | Parameters | Allowed values |
 |---|---|---|
 | `all_projects` | — | |
 | `add_project` | — | |
-| `settings` | `tab` | `automation` (default), `general`, `accounts`, `orchester`, `connect` |
+| `settings` | `tab`, and per tab the parameters below | `automation` (default), `general`, `notifications`, `accounts`, `orchester` (Orchester Cloud), `connect` (Connect a server), `invite` (an invite's landing) |
 | `overview` | `project`, `tab` | `running` (default), `needs_you`, `queued`, `failed` |
 | `orchestrator` | `project`, `chat` | a conversation id, or `new`; omitted = latest |
 | `orchestrator_settings` | `project` | |
-| `tasks` | `project`, `tab`, `q`, `highlight` | tab `all` (default), `needs_you`, `backlog`, `todo`, `in_progress`, `in_review`, `done`; `q` search; `highlight` a task key |
+| `tasks` | `project`, `tab`, `q`, `highlight` | tab `active` (default), `needs_you`, `backlog`, `done`, `all`; `q` search; `highlight` a task key (as after Create). Shows the list or the board as last chosen for the project |
 | `new_task` | `project` | |
 | `edit_task` | `project`, `key` (req.) | |
-| `task` | `project`, `key` (req.), `tab`, `file`, `from` | tab `summary`, `details` (default), `conversation`, `changes`, `local-integration`, `artifacts`, `memory`; `file` (Changes only); `from` `checkpoint` (default) or `worktree`, only with `file` |
-| `modules` | `project`, `module` | a module id opens its page (note: `module` is not in the JSON schema, so strict clients may refuse it) |
+| `task` | `project`, `key` (req.), `tab`, `view`, `file`, `from` | tab `summary` (default), `conversation`, `changes`; `view` `memory` (the task's memory, from Summary) or `local-integration` (Local integration, from Changes); `file` a changed file on Changes; `from` `checkpoint` (default) or `worktree`, only with `file` |
+| `modules` | `project`, `tab`, `module`, `view` | without `module`: the list on tab `open` (default) or `closed`; `module` `new` (New module) or a module's id (its page on tab `summary`, the default, or `burndown`); `view` `edit` with a module's id opens Edit module |
 | `merge_queue` | `project` | |
-| `pull_requests` | `project`, `tab`, `number` | tab `open` (default), `needs_review`, `agent_working`, `merged`, `closed`; with `number`, one PR on *Files changed*, or `tab: feedback` for its *Agent feedback* |
-| `usage` | `project`, `query`, `view`, `period` | without `project`: all projects; `query` is the page's link query (e.g. `from=2026-10-01&to=2026-10-15&group=task`); `view` `usage` (default) or `delivery`; `period` (delivery) `30d` (default), `90d`, `365d` |
-| `pipelines` | `project` | |
+| `pull_requests` | `project`, `tab`, `number` | tab `open` (default), `needs_review`, `agent_working`, `merged`, `closed`; with `number` (`142` or `#142`), one PR on *Files changed*, or with `tab: feedback` its *Agent feedback* |
+| `usage` | `project`, `query`, `view`, `period` | without `project`: all projects (`query` only); `query` is the page's link query (e.g. `from=2026-10-01&to=2026-10-15&group=task`, as `get_usage`'s `link`); `view` `usage` (default) or `delivery`; `period` (delivery) `30d` (default), `90d`, `365d` |
+| `pipelines` | `project` | The list; a pipeline's page opens from its row on its Steps, Settings and Versions tabs |
 | `agents` | `project` | |
 | `instructions` | `project` | |
-| `memory` | `project`, `tab` | `waiting`, `active`, `deprecated`, `superseded`, `rejected`, `settings` |
+| `memory` | `project`, `tab` | `waiting`, `active`, `deprecated`, `superseded`, `rejected`, `settings`; omitted = the page chooses |
 | `skills` | `project`, `skill` | a skill id, `new` or `import`; omitted = library |
-| `tools` | `project`, `tool`, `tab` | `tool`: id or `new`; tab `configuration` (default), `inputs_outputs`, `access`, `usage_log` |
-| `secrets` | `project` | |
-| `connections` | `project`, `tab`, `selected` | tab `all` (default), `agent_providers`, `github`, `mcp_servers`; `selected` a connection id |
-| `new_connection` | `project`, `kind` | `agent_provider` (default), `mcp_server` |
-| `edit_connection` | `project`, `connection` (req.) | |
-| `project_settings` | `project` | |
-| `files` | `project`, `file`, `at`, `line` | `at` `checkout` (default), `base`, `run:<run id>`, `rev:<commit>`; `line` `12` or `12-20` |
+| `tools` | `project`, `tool`, `tab` | `tool`: id or `new` (a command draft); omitted = library. With a tool id, tab `configuration` (default), `inputs_outputs`, `access`, `usage_log` |
+| `project_settings` | `project`, `tab`, `view` | tab `general` (default), `runs`, `context`, `connections`, `secrets`, `sharing`; with tab `runs`, `view: rules` opens *Approved for every run* |
+| `connections` | `project`, `selected` | Project settings › Connections; `selected` the id of the connection whose page opens |
+| `secrets` | `project` | Project settings › Secrets |
+| `new_connection` | `project`, `kind` | `agent_provider` (default, Add provider) or `mcp_server` (Add MCP server), as a page of Project settings › Connections |
+| `edit_connection` | `project`, `connection` (req.) | An MCP server's id (its form), or an agent CLI connection's id (its account) |
+| `files` | `project`, `file`, `at`, `line` | `file` a path in the project (the tree alone when omitted); `at` `checkout` (default), `base`, `run:<run id>`, `rev:<commit>`; `line` `12` or `12-20` |
 | `import_resources` | `project`, `tab` | `all` (default), `pipelines`, `agents`, `instructions`, `tools`, `secrets` |
 
-Errors: `unknown_route`, `missing_param`, `unexpected_param`, `invalid_param`, `unknown_tab`, `not_a_string`,
-`not_an_object`, `not_ready`, `no_session`.
+Settings' extra parameters, by tab (any other is `unexpected_param`):
+
+| `tab` | Parameters | Allowed values |
+|---|---|---|
+| `automation` | `ask` | `rotate-token` (asks *Rotate the token?* in place) |
+| `accounts` | `account`, `panel` | `account`: an account's id or name, or `claude-default` / `codex-default` (its page); `panel`: `add` (Add account, without `account`), or with `account` `sign_in`, `rename` or `remove` |
+| `orchester` | `server`, `ask`, `invite` | `server`: a team server's id, name or host (its page); `ask`: `sign-out` (the cloud account, or with `server` that server) or `decline` with `invite` (an invite's id) |
+| `connect` | `server`, `step` | `server`: the server whose address Connect a server starts at; `step`: `address`, `compare`, `join` or `username` (a server with its own certificate stays at `compare`, which only a person answers) |
+| `invite` | `server`, `project` | `server` and the invite's project slug there |
+
+Errors: `unknown_route` (with the known names), `missing_param`, `unexpected_param`, `invalid_param`, `unknown_tab`
+(with the screen's tabs), `not_a_string`, `not_an_object`, `not_ready`, `no_session`.
 
 ### `set_theme` — needs window control
 
