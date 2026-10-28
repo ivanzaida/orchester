@@ -25,13 +25,14 @@ mod pipelines;
 mod placeholder;
 mod project_settings;
 mod pull_requests;
+mod review;
 mod secrets;
 mod settings;
 mod skills;
 pub(crate) mod task;
 mod task_close;
 mod task_form;
-mod tasks;
+pub(crate) mod tasks;
 mod tools;
 mod unavailable_project;
 mod usage;
@@ -96,7 +97,10 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
-    ProjectPage::MergeQueue => merge_queue::screen(ctx, project),
+    ProjectPage::MergeQueue => {
+      let body = merge_queue::screen(ctx, project);
+      review::page(ctx, project, review::ReviewTab::MergeQueue, body)
+    }
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
@@ -108,7 +112,10 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewModule => modules::new_module(ctx, project),
     ProjectPage::Module(id, tab) => modules::page(ctx, project, *id, *tab),
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
-    ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
+    ProjectPage::PullRequests(tab) => {
+      let body = pull_requests::screen(ctx, project, *tab);
+      review::page(ctx, project, review::ReviewTab::PullRequests, body)
+    }
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
       ctx,
       project,

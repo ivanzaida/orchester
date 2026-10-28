@@ -67,7 +67,12 @@ what is actually on screen.
    status bar component (`pmOpt`, states in `keJ9Z`), the rest against the screen frame; for
    orchester-app, the frame's own title bar (tab strip and window buttons), sidebar and status
    bar. There must be no native title bar or window border, and nothing else the OS or toolkit
-   adds that the design does not show.
+   adds that the design does not show. Since ORC-108 the sidebar is `Sidebar v2` (`Zn8dR` in
+   `Sidebar · redesign` `WWXmX` of the new `orchester.pen`): the switcher, *Jump to…*, Overview, Tasks,
+   Modules, Orchestrator, Review, Files, Configure (Pipelines, Agents), Running while runs go, and the
+   usage card; *Tokens today* is in the usage card, no longer in the status bar. The redesign
+   boards' windows draw it too; an older board's sidebar with Merge queue, Usage or Instructions
+   entries is outdated, not a mismatch.
 5. **Report** a table per screen: region, design, app, severity (`blocking` = visibly a
    different screen or wrong structure; `major` = wrong size/spacing/typography/color on a
    prominent element; `minor` = small offset or subtle color), and a suggested fix. Attach
