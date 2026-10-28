@@ -17,7 +17,7 @@ use orchester_store::ProjectDb;
 
 use super::runs_on::RunsOn;
 use crate::{
-  agents::form::{ModelOption, effort_options, model_options},
+  agents::form::{ModelOption, effort_options, first_model, listed_models, model_options},
   messages::{self, Message},
 };
 
@@ -122,8 +122,8 @@ impl OrchestratorSetup {
       return Vec::new();
     };
     let mut efforts: Vec<String> = Vec::new();
-    for model in found.models() {
-      for effort in effort_options(found, model.id()) {
+    for model in listed_models(found) {
+      for effort in effort_options(found, &model) {
         if !efforts.contains(&effort) {
           efforts.push(effort);
         }
@@ -146,13 +146,13 @@ impl OrchestratorSetup {
       .map(|connection| connection.id())
   }
 
-  /// What choosing `connection` fills in: what the draft or published version holds on it, else its first listed
-  /// model and the CLI's own effort. `None` when it offers no model to start with.
+  /// What choosing `connection` fills in: what the draft or published version holds on it, else the model a profile
+  /// starts on ([`first_model`]) and the agent's own effort. `None` when it offers no model to start with.
   pub fn choosing(&self, connection: ConnectionId) -> Option<OrchestratorSettings> {
     if let Some(settings) = self.current().filter(|settings| settings.connection() == connection) {
       return Some(settings.clone());
     }
-    let model = self.connection(connection)?.models().first()?.id().clone();
+    let model = first_model(self.connection(connection)?)?;
     Some(OrchestratorSettings::new(connection, model, None))
   }
 

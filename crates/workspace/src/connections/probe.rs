@@ -55,7 +55,7 @@ pub fn detect_repository(request: &DetectRequest<'_>) -> Detection {
 }
 
 /// Checks the program of a stored connection now, whatever its kind; `None` for a native agent
-/// connection, which runs no program and is not checked in this version.
+/// connection, which runs no program: its project's runner tests it (`super::native::test_in`).
 pub fn recheck(connection: &Connection) -> Option<LastCheck> {
   let executable = connection.executable()?;
   Some(match connection.kind() {

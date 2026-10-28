@@ -141,15 +141,16 @@ pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) 
   db.save_connection(&connection).map_err(|error| store_failure(&error))
 }
 
-/// *Test connection* and *Fetch models* of native connection `id` (`docs/architecture/native-agent.md` §7): the
-/// displayed project's runner reads its key and lists the model API's models, which spends no tokens, and what it
-/// found is recorded with the models it listed ([`record_tested_in`]). The desktop never reads the key.
+/// *Test connection* and *Fetch models* of native connection `id` (`docs/architecture/native-agent.md` §7), in the
+/// window and over MCP: the runner of the project at `repo_root` reads its key and lists the model API's models,
+/// which spends no tokens, and what it found is recorded with the models it listed ([`record_tested_in`]). The
+/// desktop never reads the key.
 pub async fn test_in(runners: &Runners, repo_root: PathBuf, id: ConnectionId) -> Result<(), Message> {
   let root = repo_root.clone();
   let connection = background::run(move || load_in(&root, id)).await??;
   let api = connection.api().ok_or_else(|| Message::new("errors.storage"))?.clone();
   let (result, models) = runners
-    .check_connection(connection.provider(), api.clone())
+    .check_connection(&repo_root, connection.provider(), api.clone())
     .await
     .map_err(|error| test_failure(&error))?;
   background::run(move || record_tested_in(&repo_root, id, &api, result, models)).await?
@@ -177,9 +178,7 @@ pub fn record_tested_in(
   fetched: Vec<NativeModel>,
 ) -> Result<(), Message> {
   let now = load_in(repo_root, id)?;
-  let same = now
-    .api()
-    .is_some_and(|api| (api.preset(), api.base_url(), api.key()) == (tested.preset(), tested.base_url(), tested.key()));
+  let same = now.api().is_some_and(|api| api.same_api(tested));
   if !same {
     tracing::info!(connection = %id, "the connection's endpoint changed while it was tested");
     return Err(Message::new("connections.native.testStale"));
@@ -214,13 +213,20 @@ pub fn record_check_in(
 }
 
 /// `models` with the models an endpoint listed, `fetched`, merged in (core's `with_fetched`); the default
-/// model and effort stay while the models still take them.
+/// model and effort stay while the models still take them. A default the merged models no longer take is left out,
+/// and logged: the connection then runs on the model's own effort until a person chooses another.
 pub fn merged_models(models: &NativeModels, fetched: Vec<NativeModel>) -> Result<NativeModels, Message> {
   let merged = with_fetched(models.models(), fetched);
   let default = models.default_model().cloned();
   NativeModels::new(merged.clone(), default.clone(), models.default_effort())
-    .or_else(|_| NativeModels::new(merged.clone(), default, None))
-    .or_else(|_| NativeModels::new(merged, None, None))
+    .or_else(|_| {
+      tracing::info!("the fetched models no longer take the default effort; it is left out");
+      NativeModels::new(merged.clone(), default, None)
+    })
+    .or_else(|_| {
+      tracing::info!("the fetched models no longer take the default model; it is left out");
+      NativeModels::new(merged, None, None)
+    })
     .map_err(|error| {
       tracing::warn!(%error, "the endpoint listed models that cannot be kept");
       Message::new("connections.models.fetchInvalid")

@@ -149,6 +149,7 @@ fn differs(draft: &NativeDraft, api: &ApiEndpoint) -> bool {
     KeySecret::New(_) => true,
   };
   key_changed
+    || draft.preset != api.preset()
     || draft.base_url != *api.base_url()
     || draft.models != *api.models()
     || draft.provider_fallback != api.provider_fallback()

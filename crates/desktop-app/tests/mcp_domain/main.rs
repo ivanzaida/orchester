@@ -30,6 +30,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod merged_outside;
+mod native_connections;
 mod modules;
 mod orchestrator_approval;
 mod orchestrator_auto_merge;
