@@ -431,11 +431,11 @@ each but `unified_exec` shows off in `codex features list` with them):
   command, could run. Should Codex still ask to run a command, the runner ends the turn failed, never approving it,
   as it does for a step that leaves no command to a person (`crates/runner/tests/chat_codex.rs`).
 - `features.view_image=false`: no image read from a path (it reads outside any sandbox); `web_search="disabled"`,
-  `features.hooks=false` (the user's own hook commands on the agent's events), `features.skill_mcp_dependency_install`
-  (a skill bringing an MCP server into the thread), `features.goals`, `memories`, `browser_use`, `computer_use` and
-  `image_generation` off; sub-agents (`multi_agent`, `multi_agent_v2`), plugins, apps, `notify` and the
-  permission-request tools off as for every Codex step (`CODEX_SUB_AGENTS_OFF`, `CODEX_ISOLATION`); the user's own MCP
-  servers turned off for the thread by name.
+  `features.skill_mcp_dependency_install` (a skill bringing an MCP server into the thread), `features.goals`,
+  `memories`, `browser_use`, `computer_use` and `image_generation` off; sub-agents (`multi_agent`, `multi_agent_v2`),
+  plugins, apps, `notify`, the user's own hooks (`features.hooks=false`) and the permission-request tools off as for
+  every Codex step (`CODEX_SUB_AGENTS_OFF`, `CODEX_ISOLATION`); the user's own MCP servers turned off for the thread
+  by name.
 - The repository's own agent files are left out, as the Claude Code Orchestrator (`--setting-sources ""`) loads none:
   the folder is marked untrusted (its `.codex` configuration does not load), `project_doc_max_bytes=0` keeps
   `AGENTS.md` out, and every skill of `.agents/skills` and `.codex/skills`, which Codex loads even from an untrusted

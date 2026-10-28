@@ -242,6 +242,8 @@ fn auto_mode_codex_reviewer_runs_exec_read_only_with_the_verdicts_schema() {
       "-c",
       "features.request_permissions_tool=false",
       "-c",
+      "features.hooks=false",
+      "-c",
       "features.shell_tool=false",
       "-c",
       "tools.web_search=false",
