@@ -15,7 +15,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{resource::Deliverable, run::DecidedBy};
+use orchester_core::{
+  resource::Deliverable,
+  run::{DecidedBy, tool_report_markdown},
+};
 use orchester_workspace::{
   display,
   tasks::{
@@ -46,12 +49,18 @@ pub fn sections(ctx: &mut Ctx, run: &RunView, result: &RunResult) -> Vec<Element
 fn report(ctx: &mut Ctx, run: &RunView, result: &RunResult) -> Option<Element> {
   let body: Element = match &result.report {
     Some(report) => {
-      let step = report
+      let view = report
         .step
         .as_ref()
-        .and_then(|key| run.steps.iter().find(|step| step.key == *key))
-        .map(|step| super::super::step_label(ctx, step));
-      let text = MarkdownView::new("task-report-text", report.text.to_string(), links(ctx))
+        .and_then(|key| run.steps.iter().find(|step| step.key == *key));
+      let step = view.map(|step| super::super::step_label(ctx, step));
+      // A tool step's program output is not Markdown.
+      let text = if view.is_some_and(|step| step.tool_step) {
+        tool_report_markdown(&report.text)
+      } else {
+        report.text.to_string()
+      };
+      let text = MarkdownView::new("task-report-text", text, links(ctx))
         .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
         .render(ctx);
       Column::new()
