@@ -91,9 +91,14 @@ async fn writable_folders_reach_codex_as_writable_roots_and_are_created() {
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, id, "argv: ");
-  // After the worktree, which App Server reports as its environment's workspace root.
-  let roots = format!(",{},{}]", toml(&paths[0]), toml(&paths[1]));
+  // After the worktree, which App Server reports as its environment's workspace root, and before the run's own
+  // storage, which every agent of the run that edits files gets (ORC-114).
+  let roots = format!(",{},{},", toml(&paths[0]), toml(&paths[1]));
   assert!(argv[0].contains(&roots), "{roots} in {argv:?}");
+  assert!(
+    argv[0].contains(&format!("runs\\\\{id}\"]")) || argv[0].contains(&format!("runs/{id}\"]")),
+    "{argv:?}"
+  );
   assert_eq!(threads(&db, id)[0]["sandbox"], "workspace-write");
   assert!(paths[0].is_dir(), "created before the agent started");
 }
@@ -113,9 +118,10 @@ async fn writable_folders_reach_claude_as_one_add_dir_each() {
   let argv = reported(&ProjectDb::open(root).expect("open"), id, "argv: ");
   let add = format!("--add-dir {} --add-dir {}", paths[0].display(), paths[1].display());
   assert!(argv[0].contains(&add), "{add} in {argv:?}");
-  // With allowed commands the step edits by rule, one for the worktree and one for each folder.
+  // With allowed commands the step edits by rule, one for the worktree, one for each folder and one for the run's own
+  // storage (ORC-114).
   assert!(argv[0].contains("--permission-mode default"), "{argv:?}");
-  assert_eq!(argv[0].matches(" Edit(/").count(), 3, "{argv:?}");
+  assert_eq!(argv[0].matches(" Edit(/").count(), 4, "{argv:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

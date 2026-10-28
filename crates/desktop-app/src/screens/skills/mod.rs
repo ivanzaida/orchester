@@ -1,15 +1,12 @@
-//! Skills library and editor, Skills layer TOntf in orchester2.pen.
+//! Skills, the Agents hub's third tab (`03 Skills` `w0NiG0`): the skills by scope with what this repository holds, a
+//! skill's page (`03b` `QbDWX`), and importing the repository's files with its result (`03c` `cC55E`).
 mod editor;
-mod guidance;
-mod import_preview;
-mod import_result;
 mod inspector;
 mod library;
 mod repository;
-mod repository_list;
 mod scope;
 mod state;
-mod words;
+pub(crate) mod words;
 mod work;
 use lurq::{
   app::{
@@ -17,16 +14,20 @@ use lurq::{
     ctx::{Ctx, FutureState},
   },
   components::Column,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{background, messages::Message, skills::editor::EditorData, tasks::outside::Outside};
 use state::{Panel, View};
 
 use crate::{
   project::{ShownProject, own::OwnChanges},
+  screens::hub::{self, Head, HubTab},
+  theme::HubSpacing,
   ui::{
-    message::message_text,
-    state::{load_error, loading},
+    button::{ActionButton, ButtonKind},
+    failure::LastFailure,
+    icon::Icon,
+    state::loading,
   },
 };
 #[derive(Clone, PartialEq)]
@@ -39,6 +40,8 @@ struct SkillsScreen {
   view: View,
   accepted_reset: lurq::core::Signal<u64>,
   rejected_reset: lurq::core::Signal<u64>,
+  /// Why the skills couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
 impl Component for SkillsScreen {
   type Props = Props;
@@ -56,39 +59,76 @@ impl Component for SkillsScreen {
       },
       accepted_reset: ctx.signal(0),
       rejected_reset: ctx.signal(0),
+      failure: LastFailure::default(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
-    let reading = self.read(ctx, &project);
-    let mut frame = Column::new()
+    let body = self.body(ctx, &project);
+    let head = Head::actions([
+      ActionButton::new("skills-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
+        .icon(Icon::FolderOpen)
+        .opens(self.view.panel.to(Panel::Import))
+        .into(),
+      ActionButton::new("skills-new", ButtonKind::Primary, ctx.t("skills.new"))
+        .icon(Icon::Plus)
+        .opens(self.view.panel.to(Panel::New))
+        .into(),
+    ]);
+    Column::new()
       .id("screen-skills")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0));
+      .height(Dimension::Pct(100.0))
+      .child(hub::page(ctx, &project, (HubTab::Skills, head), body))
+  }
+}
+impl SkillsScreen {
+  fn body(&self, ctx: &mut Ctx, project: &ShownProject) -> Element {
+    let project = project.clone();
+    let reading = self.read(ctx, &project);
+    let failed = self.failure.follow(&reading);
+    let mut frame = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
     let Some((data, read_reset)) = reading.data.clone() else {
-      return frame.child(self.awaiting(ctx, reading.error.as_ref().filter(|_| !reading.is_pending()), false));
+      return self.awaiting(ctx, &project, failed);
     };
     if reading.is_fulfilled() && !reading.is_pending() {
       self.accepted_reset.set(read_reset);
     }
-    if let Some(error) = reading.error.as_ref().filter(|_| !reading.is_pending()) {
+    let refresh_failed = reading.error.clone().filter(|_| !reading.is_pending());
+    if refresh_failed.is_some() {
       // Unlocking after rejection ends this discard decision. Later feed reads are passive.
       self.rejected_reset.set(self.view.reset.get_untracked());
-      let revision = self.view.revision.clone();
-      let reload = self.view.reload_requested.clone();
-      let replacing = read_reset != self.view.reset.get();
-      frame = frame.child(load_error(
-        ctx,
-        "skills-refresh-error",
-        (&ctx.t("skills.refreshFailed"), &message_text(ctx, error)),
-        move || {
-          if replacing {
-            reload.set(true);
-          } else {
-            revision.update(|r| *r += 1);
-          }
-        },
-      ));
+    }
+    let revision = self.view.revision.clone();
+    let reload = self.view.reload_requested.clone();
+    let replacing = read_reset != self.view.reset.get();
+    let what = ctx.t("skills.refreshFailed");
+    let failure = hub::read_failure(
+      ctx,
+      &project,
+      (HubTab::Skills, "skills-refresh-error", &what),
+      refresh_failed.map(|error| (error, false)),
+      move || {
+        if replacing {
+          reload.set(true);
+        } else {
+          revision.update(|r| *r += 1);
+        }
+      },
+    );
+    if let Some(failure) = failure {
+      // What was read stays under it.
+      frame = frame.child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(
+            Padding::new()
+              .left(HubSpacing::Side.role())
+              .right(HubSpacing::Side.role())
+              .top(HubSpacing::BodyTop.role()),
+          )
+          .child(failure.page(ctx)),
+      );
     }
     let requested = self.view.reset.get();
     let reloading = requested > self.rejected_reset.get_untracked() && requested != read_reset && reading.is_pending();
@@ -106,36 +146,42 @@ impl Component for SkillsScreen {
         _ => crate::routes::SkillsFilter::default(),
       },
     };
-    let content = match panel {
-      Panel::Library(_) => ctx.mount_keyed::<library::Library>("skills-library", props),
-      Panel::Import => ctx.mount_keyed::<repository::Import>("skills-import", props),
-      panel => {
-        let entry = match panel {
-          Panel::Edit(id) => {
-            let Some(entry) = props.data.listed.entry(id).cloned() else {
-              return frame.child(if reading.is_pending() {
-                Element::from(loading("skill-loading", &ctx.t("skills.reading")))
-              } else {
-                crate::ui::notice::Notice::new(
-                  "skill-missing",
-                  crate::ui::notice::NoticeTone::Danger,
-                  ctx.t("skills.notFound"),
-                )
-                .into()
-              });
-            };
-            Some(entry)
-          }
-          _ => None,
-        };
-        let key = entry.as_ref().map_or_else(
-          || format!("skill-new-{read_reset}"),
-          |e| format!("skill-editor-{}-{read_reset}", e.id),
-        );
-        ctx.mount_keyed::<editor::Editor>(&key, editor::Props { page: props, entry })
-      }
+    let content = Self::content(ctx, &panel, props, (read_reset, reading.is_pending()));
+    frame
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0))
+          .child(content),
+      )
+      .into()
+  }
+
+  /// The list, the import page or a skill's page, as `panel` names it; a skill no longer there says so.
+  fn content(ctx: &mut Ctx, panel: &Panel, props: PageProps, (read_reset, pending): (u64, bool)) -> Element {
+    let entry = match *panel {
+      Panel::Library(_) => return ctx.mount_keyed::<library::Library>("skills-library", props),
+      Panel::Import => return ctx.mount_keyed::<repository::Import>("skills-import", props),
+      Panel::Edit(id) => match props.data.listed.entry(id).cloned() {
+        Some(entry) => Some(entry),
+        None if pending => return loading("skill-loading", &ctx.t("skills.reading")).into(),
+        None => {
+          return crate::ui::notice::Notice::new(
+            "skill-missing",
+            crate::ui::notice::NoticeTone::Danger,
+            ctx.t("skills.notFound"),
+          )
+          .into();
+        }
+      },
+      Panel::New => None,
     };
-    frame.child(content)
+    let key = entry.as_ref().map_or_else(
+      || format!("skill-new-{read_reset}"),
+      |e| format!("skill-editor-{}-{read_reset}", e.id),
+    );
+    ctx.mount_keyed::<editor::Editor>(&key, editor::Props { page: props, entry })
   }
 }
 impl SkillsScreen {
@@ -175,25 +221,19 @@ impl SkillsScreen {
       .state()
       .get()
   }
-  fn awaiting(&self, ctx: &Ctx, error: Option<&orchester_workspace::messages::Message>, reload: bool) -> Element {
-    if let Some(error) = error {
-      let revision = self.view.revision.clone();
-      load_error(
-        ctx,
-        if reload {
-          "skills-reload-error"
-        } else {
-          "skills-load-error"
-        },
-        (&ctx.t("skills.loadFailed"), &message_text(ctx, error)),
-        move || revision.update(|r| *r += 1),
-      )
-    } else {
-      loading(
-        if reload { "skill-reloading" } else { "skills-loading" },
-        &ctx.t("skills.reading"),
-      )
-      .into()
+  /// Before the first read: the loader, or why it couldn't be read with Try again.
+  fn awaiting(&self, ctx: &mut Ctx, project: &ShownProject, failed: Option<(Message, bool)>) -> Element {
+    let revision = self.view.revision.clone();
+    let what = ctx.t("skills.loadFailed");
+    match hub::read_failure(
+      ctx,
+      project,
+      (HubTab::Skills, "skills-load-error", &what),
+      failed,
+      move || revision.update(|r| *r += 1),
+    ) {
+      Some(failure) => hub::list_body("skills-failed", failure.page(ctx)),
+      None => loading("skills-loading", &ctx.t("skills.reading")).into(),
     }
   }
 }

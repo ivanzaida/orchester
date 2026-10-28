@@ -1,9 +1,10 @@
 //! What the list shows instead of rows: a project without tasks, the tasks being read, reading them failing, a view
 //! without tasks, and a search that hides every row. Loading and a failure never look like an empty list.
 
-use std::{thread, time::Duration};
-
-use orchester_app::routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab};
+use orchester_app::{
+  project::hold::ReadHold,
+  routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab},
+};
 
 use crate::harness::Seeded;
 
@@ -43,8 +44,8 @@ fn tasks_a_project_without_tasks_shows_its_title_and_new_task_and_import() {
   );
 }
 
-#[test]
-fn tasks_loading_shows_the_reader_and_dashes_never_an_empty_list() {
+/// The seed's Tasks at `list` while its tasks are held from being read, and what lets them be read.
+fn held(list: TaskList) -> (Seeded, ReadHold) {
   let mut seeded = Seeded::reading("tasks", true);
   let hold = seeded
     .window
@@ -53,20 +54,79 @@ fn tasks_loading_shows_the_reader_and_dashes_never_an_empty_list() {
     .expect("the session started")
     .hold
     .clone();
-  seeded.go(TaskList::default());
-  seeded.until("the list", |seeded| seeded.shows("screen-tasks"));
-  for _ in 0..20 {
-    seeded.window.tree.tick_futures();
-    seeded.window.pass();
-    thread::sleep(Duration::from_millis(5));
-  }
-  assert_eq!(seeded.text("tasks-loading"), "Reading Kontur's tasks…");
-  assert_eq!(seeded.view("all"), "All —");
-  assert!(seeded.shows("tasks-search"), "the header stands over the loader");
+  seeded.go(list);
+  seeded.until("the screen", |seeded| seeded.shows("tasks-loading"));
+  (seeded, hold)
+}
+
+/// Waits, the window's timers firing as they fall due, until the skeleton `id` is laid out.
+fn bones(seeded: &mut Seeded, id: &str) {
+  seeded.until(id, |seeded| {
+    seeded.window.tree.tick_timers();
+    seeded.laid_out(id)
+  });
+}
+
+#[test]
+fn tasks_loading_shows_the_list_skeleton_after_a_moment_and_bones_for_counts_never_an_empty_list() {
+  let (mut seeded, hold) = held(TaskList::default());
+  assert!(seeded.shows("tasks-loading"));
+  assert!(
+    !seeded.shows("tasks-loading-rows"),
+    "a fast reading never flashes the bones"
+  );
+  bones(&mut seeded, "tasks-loading-rows");
+  assert_eq!(seeded.texts("tasks-loading-rows"), Vec::<String>::new(), "bones only");
+  assert_eq!(seeded.view("all"), "All", "each count a bone");
+  assert!(seeded.laid_out("tasks-view-all-count"));
+  assert!(seeded.shows("tasks-search"), "the header stands over the skeleton");
   assert!(!looks_empty(&mut seeded));
+  let top = seeded.bounds("tasks-loading").y;
   hold.set(false);
-  seeded.until("the rows", |seeded| seeded.shows("tasks-list"));
+  seeded.until("the rows", |seeded| seeded.laid_out("tasks-list"));
   assert!(!seeded.shows("tasks-loading"));
+  assert!(
+    (seeded.bounds("tasks-list").y - top).abs() < 0.5,
+    "the rows take the skeleton's place"
+  );
+}
+
+#[test]
+fn tasks_loading_on_the_board_shows_its_columns_heads_over_card_bones() {
+  let (mut seeded, hold) = held(TaskList::new(TaskListTab::All));
+  seeded.until("the layout switch", |seeded| seeded.laid_out("tasks-layout-board"));
+  seeded.click("tasks-layout-board");
+  bones(&mut seeded, "tasks-loading-board");
+  assert!(!seeded.shows("tasks-loading-rows"));
+  for (column, name) in [
+    ("backlog", "Backlog"),
+    ("todo", "Todo"),
+    ("in_progress", "In progress"),
+    ("in_review", "In review"),
+    ("done", "Done"),
+  ] {
+    let head = format!("tasks-loading-column-{column}-name");
+    assert_eq!(seeded.text(&head), name, "the real head of {column}");
+    assert!(
+      seeded.laid_out(&format!("tasks-loading-column-{column}-count")),
+      "its count a bone"
+    );
+  }
+  assert!(!seeded.shows("tasks-loading-column-canceled"));
+  assert_eq!(
+    seeded.text("tasks-loading-new-task"),
+    "New task",
+    "Backlog keeps its foot"
+  );
+  assert!(!looks_empty(&mut seeded));
+  let top = seeded.bounds("tasks-loading-column-backlog-head").y;
+  hold.set(false);
+  seeded.until("the board", |seeded| seeded.laid_out("tasks-board-column-backlog-head"));
+  assert!(!seeded.shows("tasks-loading"));
+  assert!(
+    (seeded.bounds("tasks-board-column-backlog-head").y - top).abs() < 0.5,
+    "the columns take the skeleton's place"
+  );
 }
 
 #[test]

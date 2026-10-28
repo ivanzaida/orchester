@@ -1,57 +1,41 @@
-//! Profile list Yr8vx and empty states CUsAe.
+//! The Profiles tab's list (`01 Profiles` `B94gsw`): the group's head with its counts, one row per profile and the
+//! versions note; with no profile yet, what a profile is, a quiet row with New agent and the project's connections
+//! (`06 Profiles · nothing yet` `KeGdE`), or, without a connection, what to add first (06b).
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text, VirtualizedList},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  app::ctx::Ctx,
+  components::{Column, Text},
+  node::{Element, dimension::Dimension},
 };
 use orchester_workspace::agents::data::ProjectAgents;
 
-use super::{
-  AgentsNav, Shown,
-  entries::{AgentRow, RowProps},
-  words,
-};
+use super::{AgentsNav, Shown, entries};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{AgentTab, ConnectionsView, ProjectPage, Route},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, agents::page_spacing},
+  screens::hub::{
+    self, Head,
+    parts::{Entry, Tone, boxed, group, head as group_head, note, status},
+  },
+  theme::{ExtraTypography, HubSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
-    state::EmptyState,
+    icon::Icon,
   },
 };
 
+/// Import agents and New agent, at the hub head's right.
+pub(super) fn head(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Head {
+  Head::actions([
+    import(ctx, "agents-import", nav).into(),
+    new_button(ctx, "agents-new", ButtonKind::Primary, listed, nav).into(),
+  ])
+}
+
 pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
-  let page = Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(page_spacing(), SpacingSize::Section))
-    .spacing(ExtraSpacing::Tabs.role())
-    .child(header(ctx, listed, nav));
   if listed.profiles.is_empty() {
-    return page.child(empty(ctx, project, listed, nav)).into();
+    return hub::list_body("agents-list", empty(ctx, project, listed, nav));
   }
-  let data = listed.clone();
-  let nav = nav.clone();
-  let rows = VirtualizedList::new_shared(ctx, listed.profiles.clone())
-    .list_key("agents-list")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .max_height(Dimension::Px(super::entries::ROW_HEIGHT * listed.profiles.len() as f32))
-    .mount_keyed::<AgentRow, _, _, _>(
-      |entry| entry.id.to_string(),
-      move |entry| RowProps {
-        entry: entry.clone(),
-        listed: data.clone(),
-        nav: nav.clone(),
-      },
-    );
   let published = listed
     .profiles
     .iter()
@@ -70,146 +54,133 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents
       ("missing", missing.to_string()),
     ],
   );
-  page
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .max_height(Dimension::Px(
-          super::entries::ROW_HEIGHT * listed.profiles.len() as f32 + super::entries::TABLE_CHROME,
-        ))
-        .rounded(RadiusSize::Lg)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(super::entries::header(ctx))
-        .child(rows)
-        .child(
-          Row::new()
-            .width(Dimension::Pct(100.0))
-            .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-            .background(PaletteColor::SurfacePanel)
-            .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-            .child(Text::new(&counts).variant(TypographyStyle::Caption)),
-        ),
-    )
-    .child(
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .child(icon(Icon::History, IconSize::Sm, PaletteColor::TextMuted))
-        .child(Text::new(&ctx.t("agents.versionNote")).variant(TypographyStyle::Caption)),
-    )
-    .into()
+  let rows = listed
+    .profiles
+    .iter()
+    .map(|entry| entries::row(ctx, entry, listed, nav));
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Groups.role())
+    .child(group(
+      "agents-profiles",
+      group_head("agents-profiles", &ctx.t("agents.listTitle"), Some(&counts), None),
+      boxed("agents-rows", rows),
+    ))
+    .child(note("agents-version-note", Icon::History, &ctx.t("agents.versionNote")));
+  hub::list_body("agents-list", pane)
 }
 
-fn new_button(ctx: &Ctx, id: &str, listed: &ProjectAgents, nav: &AgentsNav) -> ActionButton {
-  let button = ActionButton::new(id, ButtonKind::Primary, ctx.t("agents.new")).icon(Icon::Plus);
+fn new_button(ctx: &Ctx, id: &str, kind: ButtonKind, listed: &ProjectAgents, nav: &AgentsNav) -> ActionButton {
+  let button = ActionButton::new(id, kind, ctx.t("agents.new")).icon(Icon::Plus);
   if listed.connections.is_empty() {
     button.unavailable(ctx.t("agents.needsConnection"))
   } else {
     button.opens(nav.to(Shown::New(AgentTab::default())))
   }
 }
+
 /// Import agents, which opens Import resources on its Agents tab.
 fn import(ctx: &Ctx, id: &str, nav: &AgentsNav) -> ActionButton {
-  ActionButton::new(id, ButtonKind::Secondary, ctx.t("agents.import"))
+  ActionButton::new(id, ButtonKind::Ghost, ctx.t("agents.import"))
     .icon(Icon::Download)
     .opens(nav.import())
 }
-fn header(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Row {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Lg)
-    .align_items(Alignment::End)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(ExtraSpacing::Snug.role())
-        .child(Text::new(&ctx.t("agents.title")).variant(ExtraTypography::Display.role()))
-        .child(
-          Text::new(&ctx.t("agents.description"))
-            .variant(TypographyStyle::Body)
-            .color(PaletteColor::TextSecondary),
-        ),
-    )
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(import(ctx, "agents-import", nav))
-        .child(new_button(ctx, "agents-new", listed, nav)),
-    )
-}
+
 fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
-  let has_connection = !listed.connections.is_empty();
-  let mut empty = EmptyState::new(
-    "agents-empty",
-    if has_connection { Icon::Bot } else { Icon::Unplug },
-    ctx.t("agents.emptyTitle"),
-    ctx.t(if has_connection {
-      "agents.emptyDetail"
-    } else {
-      "agents.noConnections"
-    }),
-  );
-  if has_connection {
-    empty = empty
-      .action(new_button(ctx, "agents-empty-new", listed, nav))
-      .action(import(ctx, "agents-empty-import", nav));
-  } else {
-    let nav = Navigation::of(ctx);
-    let id = project.open.project.id();
-    empty = empty.action(
-      ActionButton::new(
-        "agents-open-connections",
-        ButtonKind::Primary,
-        ctx.t("agents.openConnections"),
-      )
-      .icon(Icon::Plug)
-      .opens(nav.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
-    );
-  }
-  empty.child(empty_connections(ctx, project, listed)).into()
-}
-fn empty_connections(ctx: &Ctx, project: &ShownProject, listed: &ProjectAgents) -> Column {
-  let mut connections = Column::new()
+  let navigation = Navigation::of(ctx);
+  let id = project.open.project.id();
+  let open_connections = || navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())));
+  let name = project.open.project.name().as_str();
+  let intro = Column::new()
+    .id("agents-empty")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Md))
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .spacing(ExtraSpacing::Snug.role())
+    .spacing(lurq::app::theme::SpacingSize::Sm)
+    .child(Text::new(&ctx.t("agents.emptyTitle")).variant(ExtraTypography::FormSection.role()))
     .child(
-      Text::new(&ctx.t_args(
-        "agents.connections",
-        [("project", project.open.project.name().as_str())],
-      ))
-      .variant(TypographyStyle::Caption),
+      Text::new(&ctx.t(if listed.connections.is_empty() {
+        "agents.noConnections"
+      } else {
+        "agents.emptyDetail"
+      }))
+      .variant(ExtraTypography::Prose.role())
+      .width(Dimension::Pct(100.0)),
     );
-  for connection in listed.connections.iter() {
-    let shown = crate::screens::connections::words::connection_status(connection, connection.status());
-    let detail = ctx.t_args(
-      "agents.connectionState",
-      [
-        (
-          "provider",
-          ctx.t(crate::screens::connections::words::provider_key(connection.provider())),
-        ),
-        ("status", ctx.t(shown.key)),
-      ],
-    );
-    connections = connections.child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(shown.icon, IconSize::Base, shown.tone.color()))
-        .child(Text::new(connection.name().as_str()).variant(TypographyStyle::Label))
-        .child(words::note(&detail)),
-    );
+  let first = if listed.connections.is_empty() {
+    Entry::new("agents-no-connection", ctx.t("agents.noConnectionTitle"))
+      .tile(Icon::Plug)
+      .hint(ctx.t("agents.noConnections"))
+      .end(
+        ActionButton::new(
+          "agents-open-connections",
+          ButtonKind::Secondary,
+          ctx.t("agents.openConnections"),
+        )
+        .icon(Icon::ArrowUpRight)
+        .opens(open_connections()),
+      )
+  } else {
+    Entry::new("agents-none", ctx.t_args("agents.noProfiles", [("project", name)]))
+      .tile(Icon::Bot)
+      .hint(ctx.t("agents.firstNote"))
+      .end(new_button(ctx, "agents-empty-new", ButtonKind::Secondary, listed, nav))
+  };
+  let mut pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Groups.role())
+    .child(intro)
+    .child(group(
+      "agents-profiles",
+      group_head("agents-profiles", &ctx.t("agents.listTitle"), None, None),
+      boxed("agents-rows", [first.into()]),
+    ));
+  if !listed.connections.is_empty() {
+    let link = ActionButton::new(
+      "agents-connections-open",
+      ButtonKind::Ghost,
+      ctx.t("agents.openConnections"),
+    )
+    .icon(Icon::ArrowUpRight)
+    .opens(open_connections());
+    pane = pane.child(connections(ctx, (name, listed), link));
   }
-  if listed.connections.is_empty() {
-    connections = connections.child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(icon(Icon::Circle, IconSize::Base, PaletteColor::TextMuted))
-        .child(Text::new(&ctx.t("agents.none")).variant(TypographyStyle::Label))
-        .child(words::note(&ctx.t("agents.needsConnection"))),
-    );
-  }
-  connections
+  pane
+    .child(note("agents-version-note", Icon::History, &ctx.t("agents.versionNote")))
+    .into()
+}
+
+/// The project's connections, each with its status, under no profile yet (06).
+fn connections(ctx: &Ctx, (name, listed): (&str, &ProjectAgents), link: ActionButton) -> Column {
+  let rows = listed.connections.iter().map(|connection| {
+    use crate::screens::connections::words::{Tone as Said, connection_status};
+    let shown = connection_status(connection, connection.status());
+    let tone = match shown.tone {
+      Said::Success => Tone::Success,
+      Said::Warning => Tone::Warning,
+      Said::Danger => Tone::Danger,
+      Said::Muted | Said::Busy => Tone::Muted,
+    };
+    let provider = ctx.t(crate::screens::connections::words::provider_key(connection.provider()));
+    Entry::new(
+      format!("agents-connection-{}", connection.id()),
+      connection.name().as_str(),
+    )
+    .tile(entries::provider_glyph(Some(connection)))
+    .hint(provider)
+    .end(status(
+      &format!("agents-connection-status-{}", connection.id()),
+      tone,
+      &ctx.t(shown.key),
+    ))
+    .into()
+  });
+  group(
+    "agents-connections",
+    group_head(
+      "agents-connections",
+      &ctx.t_args("agents.connections", [("project", name)]),
+      None,
+      Some(link.into()),
+    ),
+    boxed("agents-connection-rows", rows),
+  )
 }

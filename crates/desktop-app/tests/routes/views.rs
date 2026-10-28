@@ -5,8 +5,8 @@
 use std::num::NonZeroU32;
 
 use orchester_app::routes::{
-  AgentTab, InstructionsPanel, InstructionsTab, InstructionsView, PipelinePanel, ProjectPage, ProjectSettingsTab,
-  Route, SecretsPanel, SecretsView, SkillsFilter,
+  AgentTab, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, ProjectPage, ProjectSettingsTab, Route,
+  SecretsPanel, SecretsView, SkillsFilter, StepPage,
 };
 use orchester_core::{
   resource::{StepKey, VersionNumber},
@@ -58,22 +58,24 @@ pub(super) fn view_routes() -> Vec<Route> {
     }
   }
   all.push(at(ProjectPage::Instructions(InstructionsView::Import)));
-  for panel in [
-    PipelinePanel::Pipeline,
-    PipelinePanel::Step(StepKey::new("review").expect("a step key")),
-    PipelinePanel::Settings,
-    PipelinePanel::History,
-    PipelinePanel::Publish,
+  let review = StepKey::new("review").expect("a step key");
+  for view in [
+    PipelineView::Steps,
+    PipelineView::Step(review.clone()),
+    PipelineView::StepPage(review.clone(), StepPage::Permissions),
+    PipelineView::StepPage(review.clone(), StepPage::Sources),
+    PipelineView::StepPage(review, StepPage::Instructions),
+    PipelineView::Deliver,
+    PipelineView::Settings,
+    PipelineView::Versions,
+    PipelineView::Publish,
   ] {
-    if panel != PipelinePanel::Publish {
-      all.push(at(ProjectPage::PipelineVersion(
-        id,
-        VersionNumber::FIRST,
-        panel.clone(),
-      )));
+    if view != PipelineView::Publish {
+      all.push(at(ProjectPage::PipelineVersion(id, VersionNumber::FIRST, view.clone())));
     }
-    all.push(at(ProjectPage::Pipeline(id, panel)));
+    all.push(at(ProjectPage::Pipeline(id, view)));
   }
+  all.push(at(ProjectPage::CopyPipeline(id)));
   all.extend(ProjectSettingsTab::ALL.map(|tab| at(ProjectPage::Settings(tab))));
   all.push(at(ProjectPage::MakeLocal));
   all
@@ -164,36 +166,70 @@ fn project_settings_questions_have_their_documented_paths() {
 }
 
 #[test]
-fn pipeline_panels_have_their_documented_paths() {
+fn pipeline_tabs_and_step_pages_have_their_documented_paths() {
   let pipeline = format!("/project/{PROJECT}/pipelines/{CONNECTION}");
-  let at_panel = |panel| at(ProjectPage::Pipeline(CONNECTION.parse().expect("an id"), panel));
-  let step = PipelinePanel::Step(StepKey::new("review").expect("a step key"));
-  for (panel, path) in [
-    (PipelinePanel::Pipeline, pipeline.clone()),
-    (step, format!("{pipeline}?step=review")),
-    (PipelinePanel::Settings, format!("{pipeline}?panel=settings")),
-    (PipelinePanel::History, format!("{pipeline}?panel=history")),
-    (PipelinePanel::Publish, format!("{pipeline}?panel=publish")),
+  let id = CONNECTION.parse().expect("an id");
+  let at_view = |view| at(ProjectPage::Pipeline(id, view));
+  let review = || StepKey::new("review").expect("a step key");
+  for (view, path) in [
+    (PipelineView::Steps, pipeline.clone()),
+    (PipelineView::Step(review()), format!("{pipeline}?step=review")),
+    (
+      PipelineView::StepPage(review(), StepPage::Permissions),
+      format!("{pipeline}?step=review&page=permissions"),
+    ),
+    (PipelineView::Deliver, format!("{pipeline}?panel=deliver")),
+    (PipelineView::Settings, format!("{pipeline}?panel=settings")),
+    (PipelineView::Versions, format!("{pipeline}?panel=versions")),
+    (PipelineView::Publish, format!("{pipeline}?panel=publish")),
   ] {
-    assert_eq!(at_panel(panel).path(), path);
+    assert_eq!(at_view(view).path(), path);
   }
-  let viewed = |panel| {
+  let viewed = |view| {
     at(ProjectPage::PipelineVersion(
-      CONNECTION.parse().expect("an id"),
+      id,
       VersionNumber::new(NonZeroU32::new(2).expect("two")),
-      panel,
+      view,
     ))
   };
-  for (panel, path) in [
-    (PipelinePanel::Pipeline, format!("{pipeline}?version=2")),
+  for (view, path) in [
+    (PipelineView::Steps, format!("{pipeline}?version=2")),
     (
-      PipelinePanel::Step(StepKey::new("review").expect("a step key")),
+      PipelineView::Step(review()),
       format!("{pipeline}?version=2&step=review"),
     ),
-    (PipelinePanel::History, format!("{pipeline}?version=2&panel=history")),
+    (PipelineView::Versions, format!("{pipeline}?version=2&panel=versions")),
   ] {
-    assert_eq!(viewed(panel).path(), path);
+    assert_eq!(viewed(view).path(), path);
   }
+  assert_eq!(
+    at(ProjectPage::CopyPipeline(id)).path(),
+    format!("/project/{PROJECT}/pipelines/new?start=copy&from={CONNECTION}")
+  );
+}
+
+/// Links made before the tabs, which named the history panel, still open Versions.
+#[test]
+fn a_pipelines_history_link_opens_its_versions_tab() {
+  let pipeline = format!("/project/{PROJECT}/pipelines/{CONNECTION}");
+  let id = CONNECTION.parse().expect("an id");
+  assert_eq!(
+    Route::parse(&format!("{pipeline}?panel=history")).expect("a route"),
+    at(ProjectPage::Pipeline(id, PipelineView::Versions))
+  );
+  assert_eq!(
+    Route::parse(&format!("{pipeline}?version=2&panel=history")).expect("a route"),
+    at(ProjectPage::PipelineVersion(
+      id,
+      VersionNumber::new(NonZeroU32::new(2).expect("two")),
+      PipelineView::Versions
+    ))
+  );
+  assert!(
+    Route::parse(&format!("{pipeline}?page=sources")).is_err(),
+    "a page names its step"
+  );
+  assert!(Route::parse(&format!("{pipeline}?step=review&page=nothing")).is_err());
 }
 
 /// A panel named in the query that is the tab's own reads as the rule without it.

@@ -2,7 +2,9 @@
 //! its *More actions* menu: *Mark as done* and *Cancel task* close the task whatever its latest run did, *Reopen task*
 //! opens a closed one again, and *Delete task…* asks first. A task whose run has not ended asks in place whether to
 //! stop that run first (`confirm`), and deleting says in place what goes with the task (`delete`): under the header
-//! on the task page, over the rows on the Tasks list, never in a dialog. The design has no frame for them yet: they
+//! on the task page, over the rows on the Tasks list, in a popover at the card on the Tasks board (`Popover · stop
+//! run` `XdfNz`, which the board draws from [`Closer::stop_asked`]), never in a dialog. The design has no frame for
+//! the others yet: they
 //! follow Run again's confirmation in place and the Memory page's *Delete this record?* (`YdVse`). A shared project's
 //! tasks are its team server's, which keeps no deletion: *Delete task* is unavailable there, with why. Only a person
 //! deletes a task: an MCP client's press is refused, and the confirmation says so.
@@ -37,7 +39,10 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-pub use self::confirm::panel;
+pub use self::{
+  confirm::{StopLook, failure, panel},
+  delete::confirmation_in,
+};
 use crate::{
   navigation::{Navigation, press::OpenIn},
   project::ProjectFeed,
@@ -177,8 +182,79 @@ impl Closer {
     self.action.run(Asking { request, actor });
   }
 
+  /// Closes `subject` as `closing` asks: at once, or once its run, which has not ended, is confirmed stopped in place.
+  pub fn close(&self, subject: Subject, closing: Closing) {
+    self.run(Request::Close(subject, closing, Stop::Unconfirmed));
+  }
+
+  /// Opens the closed `subject` again.
+  pub fn reopen(&self, subject: Subject) {
+    self.run(Request::Reopen(subject));
+  }
+
+  /// Whether a request is under way; a render that reads it follows it.
+  pub fn busy(&self) -> bool {
+    self.action.state().get().is_pending()
+  }
+
+  /// The task the last request closed, and how, once it did; a render that reads it follows it.
+  pub fn closed(&self) -> Option<(Subject, Closing)> {
+    let state = self.action.state().get();
+    match (state.is_pending(), state.error, state.data) {
+      (false, None, Some(Request::Close(subject, closing, _))) if self.asked.get() == Asked::Nothing => {
+        Some((subject, closing))
+      }
+      _ => None,
+    }
+  }
+
+  /// The task whose run waits to be confirmed stopped before it closes, and how it closes, for a screen that asks it
+  /// in a place of its own (the board, at the card); a render that reads it follows it.
+  pub fn stop_asked(&self) -> Option<(Subject, Closing)> {
+    match self.asked.get() {
+      Asked::StopRun { task, closing, .. } => Some((task, closing)),
+      Asked::Nothing | Asked::Delete(_) => None,
+    }
+  }
+
+  /// The task whose deletion waits for the person's answer; a render that reads it follows it.
+  pub fn delete_asked(&self) -> Option<Subject> {
+    match self.asked.get() {
+      Asked::Delete(task) => Some(task),
+      Asked::Nothing | Asked::StopRun { .. } => None,
+    }
+  }
+
+  /// Why the last request about `task` did not happen, once it ended; a render that reads it follows it.
+  pub fn failure_of(&self, task: TaskId) -> Option<Message> {
+    let state = self.action.state().get();
+    let pending = state.is_pending();
+    state
+      .error
+      .filter(|failed| !pending && failed.task == task)
+      .map(|failed| failed.message)
+  }
+
+  /// The person confirmed stopping the run that waits: the run stops and the task closes. Answers whether a stop
+  /// waited.
+  pub fn confirm_stop(&self) -> bool {
+    let Asked::StopRun { task, closing, run } = self.asked.get_untracked() else {
+      return false;
+    };
+    self.run(Request::Close(task, closing, Stop::Confirmed(Some(run))));
+    true
+  }
+
+  /// Keeps what waits in place as it is (the run goes on, the task stays), unless a request is under way.
+  pub fn keep(&self) {
+    let pending = self.action.state().get_untracked().is_pending();
+    if !pending && self.asked.get_untracked() != Asked::Nothing {
+      self.asked.set(Asked::Nothing);
+    }
+  }
+
   /// Opens the delete confirmation of `subject` in place, its choice off.
-  fn ask_delete(&self, subject: Subject) {
+  pub fn ask_delete(&self, subject: Subject) {
     self.unmerged.set(false);
     self.person_only.set(false);
     self.asked.set(Asked::Delete(subject));

@@ -229,14 +229,14 @@ pub fn canvas_font(style: &TextStyle) -> CanvasFont {
   font
 }
 
-/// The colors and fonts a Usage chart draws with (`Plot` `cgGn2`, `jPHZ9`): a series in its account's color,
-/// the grid in `border`, the baseline and reset rules in `border_strong`, axis text `text_muted` (figures
-/// and clock times mono, days proportional, *Today* `text_secondary` 500), the warning threshold dashed in
-/// `text_muted`, a single-series line in `text_muted`; text never takes a series color.
+/// The colors and fonts a Usage chart draws with (`Plot` `cgGn2`, `jPHZ9`): a series in its provider's color, a
+/// plan limit line in its account's, the grid in `border`, the baseline and reset rules in `border_strong`, axis text
+/// `text_muted` (figures and clock times mono, days proportional, *Today* `text_secondary` 500), the warning threshold
+/// dashed in `text_muted`, a single-series line in `text_muted`; text never takes a series color.
 #[derive(Clone, PartialEq)]
 pub struct ChartStyle {
-  /// Accounts 1–3, Other accounts, No account (its stripes and outline, over `hatch`), by
-  /// `AccountSeries::index`.
+  /// Providers 1–3, Other providers, Earlier runs (its stripes and outline, over `hatch`), by
+  /// `ProviderSeries::index`; an account's plan limit lines by `AccountSeries::index`.
   pub series: [Color; SERIES],
   pub grid: Color,
   pub baseline: Color,

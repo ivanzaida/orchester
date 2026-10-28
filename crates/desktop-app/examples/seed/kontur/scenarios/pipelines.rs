@@ -1,4 +1,5 @@
-//! Supported private fixtures for the ORC-3 verifier; no agents or commands are started.
+//! Supported private fixtures for the ORC-3 verifier and the step states of the redesigned Pipelines (`03b` `g6Ecy`);
+//! no agents or commands are started.
 use std::collections::BTreeMap;
 
 use orchester_core::{
@@ -9,8 +10,9 @@ use orchester_core::{
     StepPermissions,
   },
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeniedBehavior, Draft, ModelId, Pipeline,
-    PipelineEdit, PromptText, ProviderSettings, RepositoryAccess, Slug, StepKind, Tool, ToolAction,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, DatabaseQuery, DeliverStep, DeniedBehavior, Draft,
+    HttpAuth, HttpMethod, HttpRequest, MergeMethod, ModelId, Pipeline, PipelineEdit, PromptText, ProviderSettings,
+    RepositoryAccess, Slug, StepKind, Tool, ToolAction,
   },
   store::{ConnectionStore, ResourceStore},
 };
@@ -52,7 +54,48 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     &Pipeline::new(vec![]).expect("empty drafts are valid"),
   )?;
   problems(kontur)?;
-  narrowed(kontur)
+  narrowed(kontur)?;
+  variants(kontur)
+}
+
+/// Publishing that asks for approval (`02b` `fXnX2`): Feature delivery v3 with a saved draft v4 in which Implement runs
+/// on another model and Deliver squashes, so *Publish v4* opens the review with *Publishing needs your approval*.
+/// Reaching it otherwise takes saving a weaker draft, whose question only a person answers.
+pub fn publish(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let id = catalogue.feature_delivery.id();
+  let latest = kontur
+    .db
+    .latest_version::<Pipeline>(id)?
+    .expect("the catalogue publishes Feature delivery");
+  let mut edit = PipelineEdit::new(latest.body().clone());
+  let implement = latest
+    .body()
+    .steps()
+    .iter()
+    .find(|step| step.name.as_str() == "Implement")
+    .expect("the starter implements")
+    .key
+    .clone();
+  edit.update(&implement, |step| {
+    if let StepKind::Agent { model, .. } = &mut step.kind {
+      *model = Some(ModelId::new("gpt-5.5-pro").expect("fixture model"));
+    }
+  });
+  let deliver = latest.body().deliver().cloned().expect("the catalogue delivers");
+  edit.set_deliver(Some(deliver.with_method(MergeMethod::Squash)));
+  let saved = orchester_core::time::Timestamp::from_unix_millis(kontur.now.unix_millis() - 5 * 60_000);
+  kontur.db.save_draft(
+    id,
+    &Draft::new(
+      edit
+        .validate()
+        .expect("a model and a merge method keep the draft valid"),
+      Some(latest.number()),
+      saved,
+    ),
+  )?;
+  Ok(())
 }
 
 fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceId, SeedError> {
@@ -70,18 +113,10 @@ fn create(kontur: &mut Kontur, title: &str, body: &Pipeline) -> Result<ResourceI
 }
 fn problems(kontur: &mut Kontur) -> Result<(), SeedError> {
   let unpublished = profile(kontur, "Unpublished reviewer", &["cargo test"], false)?;
-  let policy = AccessPolicy::new(
-    BTreeMap::new(),
-    name("QA"),
-    ApprovalMode::EveryCall,
-    AccessWindow::UntilStepEnds,
-    DeniedBehavior::AwaitChangedPlan,
-  )
-  .expect("empty caller list denies everyone");
   let tool = Tool::new(
     "",
     ToolAction::DatabaseQuery(DatabaseQuery::new(SecretId::generate(), "SELECT 1".into()).expect("fixture query")),
-    Some(policy),
+    Some(policy()),
   )
   .expect("database tool carries an access policy");
   let tool_id = kontur
@@ -115,14 +150,6 @@ fn problems(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 fn profile(kontur: &mut Kontur, title: &str, commands: &[&str], publish: bool) -> Result<ResourceId, SeedError> {
-  let connection = ConnectionId::generate();
-  kontur.db.create_connection(&Connection::new(
-    connection,
-    name(title),
-    ConnectionKind::Agent(AgentProvider::ClaudeCodeCli),
-    AgentEndpoint::Program(kontur.repo.join(".orchester/unused-qa-claude")),
-    kontur.now,
-  )?)?;
   let allowed = AllowedCommands::new(
     commands
       .iter()
@@ -130,6 +157,33 @@ fn profile(kontur: &mut Kontur, title: &str, commands: &[&str], publish: bool) -
       .collect(),
   )
   .expect("unique fixture prefixes");
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::Allowed(allowed),
+    NetworkAccess::On,
+  );
+  agent(kontur, (title, AgentProvider::ClaudeCodeCli), permissions, publish)
+}
+
+/// A profile called `title` on a connection of its own to `provider`, with `permissions`; published when `publish`.
+fn agent(
+  kontur: &mut Kontur,
+  (title, provider): (&str, AgentProvider),
+  permissions: AgentPermissions,
+  publish: bool,
+) -> Result<ResourceId, SeedError> {
+  let connection = ConnectionId::generate();
+  let program = match provider {
+    AgentProvider::CodexCli => ".orchester/unused-qa-codex",
+    _ => ".orchester/unused-qa-claude",
+  };
+  kontur.db.create_connection(&Connection::new(
+    connection,
+    name(title),
+    ConnectionKind::Agent(provider),
+    AgentEndpoint::Program(kontur.repo.join(program)),
+    kontur.now,
+  )?)?;
   let body = AgentProfile::new(
     name(title),
     String::new(),
@@ -138,11 +192,7 @@ fn profile(kontur: &mut Kontur, title: &str, commands: &[&str], publish: bool) -
     ModelId::new("qa-model").expect("fixture model"),
     ProviderSettings::default(),
   )
-  .with_permissions(AgentPermissions::new(
-    RepositoryAccess::ReadOnly,
-    CommandPermission::Allowed(allowed),
-    NetworkAccess::On,
-  ));
+  .with_permissions(permissions);
   let id = kontur
     .db
     .create_resource(
@@ -190,4 +240,83 @@ fn narrowed(kontur: &mut Kontur) -> Result<(), SeedError> {
   )?;
   kontur.db.publish_draft::<Pipeline>(id, kontur.now)?;
   Ok(())
+}
+
+/// Two drafts for 03b's (`g6Ecy`) variants that need data of their own. In `Status checks`, *Check status page* runs an
+/// HTTP tool, which cannot run as a step yet. In `Read-only review`, *Codex review* and *Summarize* run on a Codex CLI
+/// profile with any command, so a step can narrow neither its commands nor, on Windows, its network; its Deliver step
+/// follows steps that only read the repository, so no step can resolve conflicts and no command tool step runs Check
+/// again; and making *Codex review* run after *Summarize* draws a cycle.
+fn variants(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let request = HttpRequest::new(
+    HttpMethod::Get,
+    "https://status.kontur.dev/api/summary".into(),
+    "status.kontur.dev".into(),
+    HttpAuth::None,
+    BTreeMap::new(),
+    BTreeMap::new(),
+  )
+  .expect("fixture request");
+  let tool = Tool::new("", ToolAction::Http(request), Some(policy())).expect("HTTP tool carries an access policy");
+  let tool_id = kontur
+    .db
+    .create_resource(
+      Slug::new("status-page").expect("fixture slug"),
+      name("Status page"),
+      &tool,
+      kontur.now,
+    )?
+    .id();
+  kontur.db.publish_draft::<Tool>(tool_id, kontur.now)?;
+  let codex = agent(
+    kontur,
+    ("Codex reviewer", AgentProvider::CodexCli),
+    AgentPermissions::new(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AnyInWorktree,
+      NetworkAccess::On,
+    ),
+    true,
+  )?;
+  // On its own: a draft with a tool that cannot run is not saved again, which would cloud the others' states.
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let status = edit.add_step(name("Check status page"), None);
+  edit.update(&status, |s| s.kind = StepKind::Tool { tool: Some(tool_id) });
+  create(
+    kontur,
+    "Status checks",
+    &edit.validate().expect("a tool that cannot run is valid in a draft"),
+  )?;
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let review = edit.add_step(name("Codex review"), None);
+  let summary = edit.add_step(name("Summarize"), Some(&review));
+  for key in [&review, &summary] {
+    edit.update(key, |s| {
+      s.kind = StepKind::Agent {
+        profile: Some(codex),
+        model: None,
+        repository: RepositoryAccess::ReadOnly,
+        permissions: StepPermissions::default(),
+      }
+    });
+  }
+  edit.set_deliver(Some(DeliverStep::default()));
+  create(
+    kontur,
+    "Read-only review",
+    &edit.validate().expect("read-only steps and a Deliver step"),
+  )?;
+  Ok(())
+}
+
+/// An access policy that lets no caller in, which HTTP and database tools must carry.
+fn policy() -> AccessPolicy {
+  AccessPolicy::new(
+    BTreeMap::new(),
+    name("QA"),
+    ApprovalMode::EveryCall,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::AwaitChangedPlan,
+  )
+  .expect("empty caller list denies everyone")
 }

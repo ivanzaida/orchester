@@ -24,8 +24,9 @@ what is actually on screen.
 
 1. **Design screenshot.** Take it from the live design, not from `docs/design/previews/`
    (previews can be stale): `pencil` MCP → `get_editor_state` (with schema, once), then
-   `get_screenshot` for the screen node, or `export_nodes` at scale 1 into
-   `.tmp/verify/<screen>/design.png`. Never Read or Grep the `.pen` file, and never edit it.
+   `get_screenshot` for the screen node, or `export_nodes` at scale 1 into the run's own storage,
+   `$ORCHESTER_RUN_STORAGE/verify/<screen>/design.png` (`.orchester/runs/<run>/`; outside a run, `.tmp/verify/`).
+   Never Read or Grep the `.pen` file, and never edit it.
 2. **App screenshot in the same state.** For orchester-app, follow "orchester-app: start,
    connect, reach the state" below. For the deprecated desktop, build and run the implementation with
    `cargo run -p orchester-desktop` (every build includes the embedded MCP server; set
@@ -66,7 +67,12 @@ what is actually on screen.
    status bar component (`pmOpt`, states in `keJ9Z`), the rest against the screen frame; for
    orchester-app, the frame's own title bar (tab strip and window buttons), sidebar and status
    bar. There must be no native title bar or window border, and nothing else the OS or toolkit
-   adds that the design does not show.
+   adds that the design does not show. Since ORC-108 the sidebar is `Sidebar v2` (`Zn8dR` in
+   `Sidebar · redesign` `WWXmX` of the new `orchester.pen`): the switcher, *Jump to…*, Overview, Tasks,
+   Modules, Orchestrator, Review, Files, Configure (Pipelines, Agents), Running while runs go, and the
+   usage card; *Tokens today* is in the usage card, no longer in the status bar. The redesign
+   boards' windows draw it too; an older board's sidebar with Merge queue, Usage or Instructions
+   entries is outdated, not a mismatch.
 5. **Report** a table per screen: region, design, app, severity (`blocking` = visibly a
    different screen or wrong structure; `major` = wrong size/spacing/typography/color on a
    prominent element; `minor` = small offset or subtle color), and a suggested fix. Attach
@@ -140,6 +146,12 @@ points the project's Codex connection at the copied fake (any scenario; `live` n
 `-NoRunner` copies no runner, so the app cannot start one. Without `-FakeAgents` the profiles
 name a Codex connection that is not stored, so nothing can run.
 
+To pick a scenario, list them with `cargo run -p orchester-app --example seed -- --list-scenarios` (one per line,
+sorted). The seed checks the name: an unknown one exits non-zero with the known ones, writes nothing, and
+`tools/qa-app.ps1` stops before starting the app. A new scenario is added only in the seed's registry
+(`ALL` in `crates/desktop-app/examples/seed/kontur/scenarios/mod.rs`), never in `tools/qa-app.ps1`: the script
+names no scenarios, so its git blob, which the project rule *Approved for every run* for `start_qa_app` is kept to,
+stays the same. The table below describes some of them.
 | Scenario | What it holds | Design frames it serves |
 |---|---|---|
 | `empty` | The catalogue (Explorer, Planner, Builder, Reviewer; Feature delivery v3, Quick fix v2), no task | Tasks and Overview empty project; New task empty |
@@ -177,8 +189,9 @@ reading discovery or escalating a script outside the sandbox.
 For example, call `call_run_app` with `{"tool":"app_state","arguments":{}}` for the QA app, or
 `{"pid":12345,"tool":"app_state","arguments":{}}` for one the script started.
 Every embedded tool uses this same relay, including `navigate`, `lurq_resize` and `lurq_screenshot`.
-PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open with `read_file`
-(step 3) and cite.
+PNG images are saved in the run's own storage, `.orchester/runs/<run>/screenshots/` (the folder
+`ORCHESTER_RUN_STORAGE` names), which the task page lists under Artifacts and cleaning or reusing a workspace never
+removes; the answer gives its absolute path to open with `read_file` (step 3) and cite.
 
 `app_state` must answer `"mcp": {"window_control": true, …}` before you drive the window.
 

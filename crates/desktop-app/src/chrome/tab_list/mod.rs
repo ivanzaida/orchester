@@ -124,9 +124,7 @@ impl Component for TabList {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let navigation = Navigation::of(ctx);
     let open = self.open.get();
-    let list = ctx.props::<TabListProps>().list.clone();
-    list.set_open(open);
-    let button = list.button;
+    let button = ctx.props::<TabListProps>().list.button.clone();
     let keys = ListKeys {
       navigation: navigation.clone(),
       open: self.open.clone(),

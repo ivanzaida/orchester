@@ -4,10 +4,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  connection::AgentProvider,
+  id::{ModuleId, ResourceId, TaskId},
   integration::RunMerge,
   resource::{Deliverable, VersionNumber, WithoutCommits},
-  run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase, run_delivers},
+  run::{
+    PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase, can_run_again_after, run_delivers,
+  },
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
@@ -110,6 +113,9 @@ pub struct LatestRun {
   pub merged_into: Option<Arc<str>>,
   /// It passed every step and committed nothing, so there is nothing to merge ([`super::delivery`]).
   pub nothing_to_merge: bool,
+  /// It ended so that its task can run again after it, by core's `can_run_again_after`: it failed or was cancelled, or
+  /// it was interrupted and a person removed its worktree (ORC-63) ([`super::data`] reads the removal).
+  pub ended_for_run_again: bool,
   /// The question it waits for an answer to, if it does; the first that can be read when several do.
   pub question: Option<AwaitedQuestion>,
   /// Each of its steps that waits on a plan or for an answer, plans first, each in pipeline order.
@@ -126,6 +132,9 @@ pub struct LatestRun {
   pub delivers: bool,
   /// What it delivers (ORC-93): with [`Self::nothing_to_merge`], whether it is completed or flagged.
   pub deliverable: Deliverable,
+  /// Who runs the agent of [`Self::step`]: the provider of its profile's connection; `None` for a tool step, before
+  /// the first step, or when the profile or its connection cannot be found ([`super::data`] reads it).
+  pub agent: Option<AgentProvider>,
 }
 
 impl LatestRun {
@@ -151,6 +160,7 @@ impl LatestRun {
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
       nothing_to_merge: false,
+      ended_for_run_again: can_run_again_after(run, false),
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
@@ -173,6 +183,7 @@ impl LatestRun {
       lost_runner: false,
       delivers: run.snapshot().body().deliver().is_some(),
       deliverable: run_delivers(task, run),
+      agent: None,
     }
   }
 
@@ -187,6 +198,16 @@ impl LatestRun {
       lost_runner: self.lost_runner || phase != self.phase,
       ..self.clone()
     }
+  }
+
+  /// Whether Run again may follow the run, as the runner's check of core's `run_again` reads it: it failed or was
+  /// cancelled, or was interrupted and lost its worktree ([`Self::ended_for_run_again`]), or it passed every step and
+  /// committed nothing although its pipeline expects changes (ORC-93).
+  pub fn runs_again(&self) -> bool {
+    self.ended_for_run_again
+      || (self.phase == TaskPhase::Succeeded
+        && self.nothing_to_merge
+        && self.deliverable.without_commits() == WithoutCommits::Flagged)
   }
 
   /// What the run means for the task now: "Paused at 4b92ad0", "Last checkpoint 1b8e5c2".
@@ -222,20 +243,20 @@ impl LatestRun {
 /// A task's latest run: where it stands, or that it cannot be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Latest {
-  Run(LatestRun),
+  Run(Box<LatestRun>),
   Unreadable(Unreadable),
 }
 
 impl Latest {
   /// Where the task stands; `None` when its latest run cannot be read.
-  pub const fn phase(&self) -> Option<TaskPhase> {
+  pub fn phase(&self) -> Option<TaskPhase> {
     match self {
       Self::Run(latest) => Some(latest.phase),
       Self::Unreadable(_) => None,
     }
   }
 
-  pub const fn run(&self) -> Option<&LatestRun> {
+  pub fn run(&self) -> Option<&LatestRun> {
     match self {
       Self::Run(latest) => Some(latest),
       Self::Unreadable(_) => None,
@@ -264,7 +285,7 @@ impl Latest {
   #[must_use]
   pub fn without_runner(&self) -> Self {
     match self {
-      Self::Run(latest) => Self::Run(latest.without_runner()),
+      Self::Run(latest) => Self::Run(Box::new(latest.without_runner())),
       Self::Unreadable(_) => self.clone(),
     }
   }
@@ -398,6 +419,22 @@ pub struct TaskRow {
   pub nothing_to_merge: bool,
   /// Its story points, who set them and why; `None` while it has none.
   pub estimate: Option<orchester_core::task::estimate::StoryEstimate>,
+  /// Whether a person submitted it for running: a draft, or queued.
+  pub status: TaskStatus,
+  /// It has a run, readable or not: it no longer goes back to the drafts.
+  pub has_run: bool,
+  /// Its latest run ended so that Run again may follow it, as core's `run_again` decides ([`LatestRun::runs_again`]):
+  /// it failed, was cancelled, or was interrupted and lost its worktree, or it passed every step and committed nothing
+  /// although its pipeline expects changes (ORC-93). A run that succeeded with work to merge, was merged, or cannot be
+  /// read is never run again from the board.
+  pub runs_again: bool,
+  /// A run of it has not ended, as the store decides it ([`ProjectTasks::active`]): only closing it, after its run is
+  /// stopped, changes its workflow status by hand on the board.
+  pub run_not_ended: bool,
+  /// The module it belongs to, if any.
+  pub module: Option<ModuleId>,
+  /// Who runs the agent of its latest run's step ([`LatestRun::agent`]).
+  pub agent: Option<AgentProvider>,
 }
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
@@ -424,7 +461,9 @@ impl TaskRow {
         (readiness.message(), readiness.kind())
       }
     };
+    let has_run = latest.is_some();
     let latest = latest.and_then(Latest::run);
+    let runs_again = latest.is_some_and(LatestRun::runs_again);
     Self {
       id: task.id(),
       organization: task.organization().clone(),
@@ -444,6 +483,12 @@ impl TaskRow {
       step: latest.and_then(|latest| latest.step.clone()),
       nothing_to_merge: latest.is_some_and(|latest| latest.nothing_to_merge),
       estimate: task.estimate().cloned(),
+      status: task.status(),
+      has_run,
+      runs_again,
+      run_not_ended: false,
+      module: task.module(),
+      agent: latest.and_then(|latest| latest.agent),
     }
   }
 }
@@ -478,7 +523,10 @@ pub fn rows(tasks: &[Task], data: &ProjectTasks, tab: TaskTab) -> Vec<TaskRow> {
   tasks
     .iter()
     .filter(|task| tab.includes(task) && waiting.as_ref().is_none_or(|waiting| waiting.contains(&task.id())))
-    .map(|task| TaskRow::new(task, &data.pipelines, data.phases.get(&task.id())))
+    .map(|task| TaskRow {
+      run_not_ended: data.active.contains(&task.id()),
+      ..TaskRow::new(task, &data.pipelines, data.phases.get(&task.id()))
+    })
     .collect()
 }
 

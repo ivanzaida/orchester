@@ -3,6 +3,7 @@
 mod accounts;
 mod agents;
 mod agents_cases;
+mod agents_library;
 mod api_providers;
 mod cards;
 mod changes;
@@ -32,6 +33,7 @@ mod tasks_unreadable;
 mod unreadable_db;
 mod usage;
 mod usage_accounts;
+mod usage_providers;
 
 use super::{Kontur, SeedError};
 
@@ -76,8 +78,9 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 44] = [
+pub const ALL: [Scenario; 48] = [
   Scenario::of("agents", agents::seed),
+  Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
@@ -109,15 +112,18 @@ pub const ALL: [Scenario; 44] = [
   Scenario::of("project-settings-shared", project_settings::shared),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
+  Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),
   Scenario::of("pull-requests", pull_requests::seed),
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),
+  Scenario::of("sources-unreadable", sources::unreadable),
   Scenario::of("usage", usage::seed),
   Scenario::of("usage-empty", usage::no_runs_today),
   Scenario::of("usage-bare", usage::bare),
   Scenario::of("import", import::seed),
+  Scenario::of("import-done", import::done),
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),

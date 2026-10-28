@@ -113,6 +113,9 @@ pub enum StoreError {
   DuplicateSlug { kind: ResourceKind, slug: String },
   #[error("resource {0} has no draft to publish")]
   NoDraft(ResourceId),
+  /// The resource was never published, so its draft is all it has: it is removed, not discarded. Nothing was changed.
+  #[error("resource {0} has no published version to keep")]
+  NotPublished(ResourceId),
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),

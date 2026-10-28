@@ -1,29 +1,38 @@
-//! Pipelines library and editor (Pencil layers i4jt6V and vEDYY).
-mod canvas;
+//! Pipelines (`Pipelines · redesign` `evQ4U`): the list, New pipeline, and a pipeline's page with its Steps,
+//! Settings and Versions tabs.
+mod actions;
+mod column;
 mod command_picker;
 mod deliver;
-mod deliver_card;
 mod delivers;
 mod dependencies;
 mod editor;
-mod graph_routes;
-mod history;
-mod inspector;
+mod executor_menu;
+mod flow;
+mod flow_card;
+mod header;
 mod leaving;
 mod library;
+mod library_row;
 mod load_editor;
 mod new_pipeline;
+mod new_start;
 mod parts;
 mod publication;
 mod restore;
 mod settings;
-mod settings_nav;
 mod sources;
 mod state;
+mod step_access;
+mod step_column;
 mod step_executor;
 mod step_fields;
+mod step_instructions;
+mod step_name;
 mod step_permissions;
 mod summary;
+mod versions;
+mod viewing;
 mod work;
 
 use lurq::{app::ctx::Ctx, node::Element};
@@ -41,19 +50,19 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
 pub fn new_pipeline(ctx: &mut Ctx, project: &ShownProject) -> Element {
   ctx.mount_keyed::<new_pipeline::NewPipeline>(&format!("pipeline-new-{}", project.open.project.id()), project.clone())
 }
-/// The editor of pipeline `id` on the route's panel, of the draft or of the published version viewed.
+/// The page of pipeline `id` as the route shows it, of the draft or of the published version viewed.
 pub fn editor(
   ctx: &mut Ctx,
   project: &ShownProject,
   id: ResourceId,
-  (panel, version): (state::Panel, Option<VersionNumber>),
+  (view, version): (state::View, Option<VersionNumber>),
 ) -> Element {
   ctx.mount_keyed::<load_editor::LoadEditor>(
     &format!("pipeline-{id}"),
     load_editor::LoadProps {
       project: project.clone(),
       id,
-      panel,
+      view,
       version,
     },
   )

@@ -308,6 +308,7 @@ fn reviewer_usage_counts_toward_its_steps_budget_unless_unknown() {
     approval: format!("{}:call_1", agent.id),
     provider: AgentProvider::ClaudeCodeCli,
     account: None,
+    connection: None,
     model: model("claude-haiku-4-5"),
     started_at: Timestamp::from_unix_millis(10),
     ended_at: Timestamp::from_unix_millis(20),

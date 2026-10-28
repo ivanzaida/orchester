@@ -20,7 +20,7 @@ use orchester_workspace::merge_queue::PipelineDelivery;
 use super::words;
 use crate::{
   navigation::Navigation,
-  routes::{PipelinePanel, ProjectPage, Route},
+  routes::{PipelineView, ProjectPage, Route},
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -120,7 +120,7 @@ fn pipeline_line(ctx: &mut Ctx, project: ProjectId, pipeline: &PipelineDelivery)
         .min_width(Dimension::Px(0.0)),
     );
   if pipeline.deliver.is_none() {
-    let route = Route::Project(project, ProjectPage::Pipeline(pipeline.id, PipelinePanel::Deliver));
+    let route = Route::Project(project, ProjectPage::Pipeline(pipeline.id, PipelineView::Deliver));
     line = line.child(
       ActionButton::new(
         format!("{id}-add-deliver"),

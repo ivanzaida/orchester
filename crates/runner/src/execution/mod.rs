@@ -28,10 +28,14 @@ mod environment;
 mod estimate;
 mod halt;
 mod handoff;
+mod held;
 mod idle;
+mod low_disk;
+mod missing_checkpoints;
 mod permissions;
 mod plan;
 mod plan_limit;
+mod pool;
 mod prepare;
 mod question;
 mod record;
@@ -137,11 +141,14 @@ struct Inner {
   plan_waits: plan_limit::PlanWaits,
   /// The turns of the Orchestrator chat under way.
   chats: chat::Chats,
+  /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
+  disks: low_disk::DiskGuard,
+  disk_watch: low_disk::DiskWatch,
 }
 
 impl Scheduler {
   /// The scheduler of the project at `project_root`; its agents' QA apps take `qa_slots` ([`QaSlots::machine`]
-  /// outside tests).
+  /// outside tests). The disk guard reads this computer's disks unless [`Scheduler::with_disks`] says otherwise.
   pub fn new(
     project_root: &Path,
     notifier: Notifier,
@@ -150,6 +157,8 @@ impl Scheduler {
   ) -> Self {
     // Every statement of the process that waits for a database lock pauses off the runtime's async workers.
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
+    // Before the desktop connects and reads the runs.
+    missing_checkpoints::record(project_root);
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
@@ -165,6 +174,8 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
+        disks: low_disk::DiskGuard::local(),
+        disk_watch: low_disk::DiskWatch::default(),
       }),
     }
   }
@@ -443,7 +454,7 @@ impl Scheduler {
   }
 
   /// Whether new or continued work may start: the runner is not stopping, an agent slot is
-  /// free and today's token budget has room.
+  /// free, the disk has the free space the project keeps and today's token budget has room.
   fn admit(&self, db: &ProjectDb) -> Result<(), Rejection> {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
@@ -455,6 +466,7 @@ impl Scheduler {
     {
       return Err(Rejection::NoAgentSlot { slots });
     }
+    self.check_disk(db)?;
     idle::check_daily_budget(db)
   }
 
@@ -530,14 +542,17 @@ impl Scheduler {
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),
+      disks: self.inner.disks.clone(),
       controls,
       settled: settled.clone(),
     };
     let scheduler = self.clone();
     let task = tokio::spawn(async move {
       RunTask::new(db, prepared, context).drive().await;
-      // A run its task stopped at a plan limit continues at the reset.
+      // A run its task stopped at a plan limit continues at the reset, and one it paused for low disk space once
+      // the disk has room.
       scheduler.wait_for_plan_resets();
+      scheduler.watch_disk();
     });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())

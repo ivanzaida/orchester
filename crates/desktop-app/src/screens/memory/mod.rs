@@ -5,12 +5,14 @@
 //!
 //! The project's page: the title with *New record*, then a tab per status of its records — *Waiting for approval*,
 //! every proposal of the project and its tasks; *Active*, *Deprecated*, *Superseded* and *Rejected*, the project's own
-//! records searched, filtered and grouped by type, each opening its details in place — and *Settings*, how agents'
-//! records are saved and what each agent gets. The tab is part of the route (`ProjectPage::Memory`).
+//! records searched, filtered and grouped by type — and *Settings*, how agents' records are saved and what each agent
+//! gets. A record or a proposal under review opens as its own page in the tab (`record_page`, 05c, 05e). The tab is
+//! part of the route (`ProjectPage::Memory`).
 
 mod centered;
 mod delete;
 mod details;
+mod details_side;
 mod editor;
 mod list;
 mod no_match;
@@ -18,6 +20,8 @@ mod opened;
 mod page;
 mod parts;
 mod proposal;
+mod queue_row;
+mod record_page;
 mod row;
 mod settings;
 pub(crate) mod state;
@@ -53,7 +57,7 @@ pub(crate) use self::{
   toolbar::{FilterBar, FiltersProps},
 };
 use self::{state::Made, tabs::Order};
-use crate::{project::ShownProject, routes::MemoryTab, services::Services};
+use crate::{project::ShownProject, routes::MemoryTab, services::Services, ui::failure::LastFailure};
 
 #[derive(Clone, PartialEq)]
 struct Props {
@@ -83,6 +87,8 @@ struct MemoryScreen {
   order: OnceLock<Order>,
   /// The tab shown last; opening another closes the details open in place.
   shown: Mutex<Option<MemoryTab>>,
+  /// Why the memory couldn't be read, kept while it is read again.
+  failure: LastFailure,
 }
 
 impl Component for MemoryScreen {
@@ -95,6 +101,7 @@ impl Component for MemoryScreen {
       retries: ctx.signal(0),
       order: OnceLock::new(),
       shown: Mutex::new(None),
+      failure: LastFailure::default(),
     }
   }
 
@@ -102,10 +109,10 @@ impl Component for MemoryScreen {
     let Props { project, tab } = ctx.props::<Props>().clone();
     let state = self.made.state(ctx, &project, None);
     ctx.provide(state.clone());
-    let read = read(ctx, &project, self.retries.get());
+    let read = read(ctx, &project, (self.retries.get(), &self.failure));
     let view = match &read {
       Read::Ready(memory) => Some(*self.order.get_or_init(|| Order::of(memory.waiting.len()))),
-      Read::Reading | Read::Failed(_) => self.order.get().copied(),
+      Read::Reading | Read::Failed(..) => self.order.get().copied(),
     }
     .map(|order| page::view(order, tab));
     if let Some(view) = view
@@ -123,10 +130,11 @@ impl Component for MemoryScreen {
 pub(super) enum Read {
   Reading,
   Ready(std::sync::Arc<ProjectMemory>),
-  Failed(Message),
+  /// Why it couldn't be read, and whether it is being read again.
+  Failed(Message, bool),
 }
 
-fn read(ctx: &mut Ctx, project: &ShownProject, retries: u64) -> Read {
+fn read(ctx: &mut Ctx, project: &ShownProject, (retries, failure): (u64, &LastFailure)) -> Read {
   let feed = &project.feed;
   let again = feed.revision.get() + feed.run_changes(feed.running.get()) + retries;
   let hold = Services::of(ctx).hold;
@@ -142,9 +150,9 @@ fn read(ctx: &mut Ctx, project: &ShownProject, retries: u64) -> Read {
     })
     .state()
     .get();
-  // Data kept from before a failed reread is not shown as current.
-  if let Some(error) = loaded.error.clone().filter(|_| loaded.is_rejected()) {
-    return Read::Failed(error);
+  // Data kept from before a failed reread is not shown as current, nor while it is read again.
+  if let Some((error, retrying)) = failure.follow(&loaded) {
+    return Read::Failed(error, retrying);
   }
   loaded.data.map_or(Read::Reading, |read| Read::Ready(read.0))
 }

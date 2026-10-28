@@ -54,6 +54,7 @@ fn pipelines_restore_keep_preserves_unsaved_body_raw_inputs_and_errors() {
   editor.open(id);
   editor.click("pipeline-step-step");
   editor.set("step-budget", "invalid budget");
+  editor.click("step-instructions-row");
   editor.set("step-instructions", "Local work");
   editor.click("pipeline-history");
   editor.until("version", |e| e.exists("pipeline-version-1"));
@@ -64,6 +65,7 @@ fn pipelines_restore_keep_preserves_unsaved_body_raw_inputs_and_errors() {
   editor.click("pipeline-back-draft");
   editor.click("pipeline-step-step");
   assert_eq!(editor.value("step-budget"), "invalid budget");
+  editor.click("step-instructions-row");
   assert_eq!(editor.value("step-instructions"), "Local work");
   assert!(editor.exists("pipeline-field-error"));
   assert!(editor.db().draft::<Pipeline>(id).unwrap().is_none());
@@ -181,16 +183,19 @@ fn pipelines_history_keeps_immutable_changes_separate_from_comparison() {
   editor.click("pipeline-history");
   editor.until("history v2", |e| e.exists("pipeline-version-2"));
   editor.click("pipeline-version-2");
+  editor.until("v2's changes", |e| e.exists("pipeline-version-changes"));
   assert!(!editor.text("screen-pipelines").contains("description edited"));
   editor.click("pipeline-compare");
   assert!(editor.text("screen-pipelines").contains("description edited"));
-  assert_eq!(editor.text("pipeline-version-changes"), "Changes in v2");
-  assert_eq!(editor.text("pipeline-comparison-changes"), "Compared with published v3");
-  // Leaving history for the selected step and reopening used to keep comparison hidden.
+  assert_eq!(editor.text("pipeline-version-changes-title"), "Changes in v2");
+  assert_eq!(
+    editor.text("pipeline-comparison-changes-title"),
+    "Compared with published v3"
+  );
+  // Leaving the version for one of its steps and going back to Versions used to keep comparison hidden.
   editor.click("pipeline-step-step");
-  editor.click("pipeline-inspector-close");
-  editor.click("pipeline-summary-history");
-  editor.until("history remounted", |e| e.exists("pipeline-version-2"));
+  editor.click("pipeline-back-versions");
+  editor.until("versions remounted", |e| e.exists("pipeline-version-2"));
   assert!(!editor.exists("pipeline-comparison-changes"));
   assert!(!editor.text("screen-pipelines").contains("description edited"));
 }

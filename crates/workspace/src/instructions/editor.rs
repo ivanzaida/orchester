@@ -48,11 +48,7 @@ impl WriteError {
 /// Creates the first draft with its complete validated body in a single store operation.
 pub fn create_in(root: &Path, name: Name, body: &Instruction) -> Result<InstructionEntry, WriteError> {
   let mut db = ProjectDb::open(root)?;
-  let taken = db
-    .resources(Instruction::KIND)?
-    .iter()
-    .map(|resource| resource.slug().clone())
-    .collect::<Vec<_>>();
+  let taken = db.slugs(Instruction::KIND)?;
   let fallback = Slug::new("instruction").expect("the fallback slug is valid");
   let slug = Slug::unique_for(&name, &fallback, &taken);
   let now = Timestamp::now();

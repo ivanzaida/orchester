@@ -13,7 +13,7 @@ use orchester_workspace::{background, pipelines::data::OpenedPipeline};
 use super::{
   editor::{Editor, EditorProps},
   parts,
-  state::Panel,
+  state::View,
 };
 use crate::{
   project::ShownProject,
@@ -27,8 +27,8 @@ use crate::{
 pub struct LoadProps {
   pub project: ShownProject,
   pub id: ResourceId,
-  /// The panel the route shows.
-  pub panel: Panel,
+  /// What the route shows.
+  pub view: View,
   /// The published version the route views; `None` for the draft.
   pub version: Option<VersionNumber>,
 }
@@ -71,7 +71,7 @@ impl Component for LoadEditor {
         EditorProps {
           project: props.project,
           opened,
-          panel: props.panel,
+          view: props.view,
           version: props.version,
           reload: self.retry.clone(),
           loading: loaded.is_pending(),

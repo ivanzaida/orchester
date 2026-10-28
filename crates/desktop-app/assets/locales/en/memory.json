@@ -9,7 +9,7 @@
     "retry": "Try again",
     "personOnly": "Only a person changes memory here: input from an MCP client is refused, as what records say reaches every later agent. Clients can still read this page.",
     "loadFailed": "Memory couldn't be read",
-    "loadFailedBody": "{{reason}} Nothing was changed; agents keep working with what their prompts already hold.",
+    "loadStillWorks": "Agents keep working with what their prompts already hold.",
     "order": "Grouped by type · pinned first",
     "tabs": {
       "waiting": "Waiting for approval",
@@ -19,7 +19,8 @@
       "rejected": "Rejected",
       "settings": "Settings",
       "waitingNote": "Agents get a record from their next invocation after you approve it. Until then no agent receives it.",
-      "oldestFirst": "Oldest first",
+      "queueTitle": "Waiting for your approval",
+      "queueCount": "{{count}} · Oldest first",
       "activeNote": "Only active records reach agents: their task's latest handoff, pinned records, decisions and warnings, then the best matches for their step.",
       "settingsNote": "How agents' records are kept in {{project}}, and how much memory each agent gets.",
       "matchInOne": "1 match in {{tab}}",
@@ -64,10 +65,8 @@
       "tokensReadBack": "= {{tokens}} tokens · {{min}} to {{max}}",
       "tokensReadBackDefault": "= {{tokens}} tokens · {{min}} to {{max}} · default",
       "tokensRange": "{{min}} to {{max}}",
-      "nextTitle": "Changes apply to the next agent invocation",
-      "nextBody": "An agent already working keeps the memory it was given when it started or resumed.",
-      "peopleTitle": "Agents propose and supersede records",
-      "peopleBody": "Only people approve, edit, deprecate or delete them. Waiting proposals are never given to an agent.",
+      "nextNote": "Changes apply to the next agent invocation. An agent already working keeps the memory it was given when it started or resumed.",
+      "peopleNote": "Agents propose and supersede records. Only people approve, edit, deprecate or delete them. Waiting proposals are never given to an agent.",
       "saved": "All changes saved",
       "savingNow": "Saving…",
       "unsaved": "Changes not saved",
@@ -290,10 +289,21 @@
       "rejectNote": "Rejected proposals are kept and never given.",
       "rejectNoteShort": "Kept, never given or restored.",
       "approveNote": "Your edits are saved with the approval.",
+      "approveNotePage": "Your edits are saved with the approval. Rejected proposals are kept and never given.",
       "saveNote": "Changes reach agents from their next invocation.",
       "cancel": "Cancel",
       "save": "Save record",
-      "delete": "Delete…"
+      "delete": "Delete…",
+      "record": "Record"
+    },
+    "page": {
+      "crumb": "Memory",
+      "titleKeyed": "{{kind}} · {{key}}",
+      "sub": "{{status}} · {{meta}}"
+    },
+    "row": {
+      "key": "key {{key}}",
+      "latest": "Latest"
     },
     "delete": {
       "title": "Delete this record?",
@@ -333,7 +343,10 @@
       "byYou": "By you · {{time}}",
       "history": "History",
       "edited": "You edited it · {{time}}",
+      "editedTitle": "You edited it",
       "version": "v{{version}} · superseded {{time}} by this record",
+      "versionTitle": "v{{version}}",
+      "versionSuperseded": "superseded {{time}} by this record",
       "given": "Given to agents",
       "givenReading": "Reading the invocations…",
       "givenNone": "No invocation was given it yet.",

@@ -37,7 +37,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{AgentTab, InstructionsView, PipelinePanel, ProjectPage, Route, TaskTab, TaskView, ToolTab},
+  routes::{AgentTab, InstructionsView, PipelineView, ProjectPage, Route, TaskTab, TaskView, ToolTab},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
   ui::pressable::opening,
 };
@@ -143,7 +143,7 @@ pub(super) fn draft_route(project: ProjectId, publication: (Publishing, orcheste
   Route::Project(
     project,
     match of {
-      Publishing::Pipeline => ProjectPage::Pipeline(resource, PipelinePanel::default()),
+      Publishing::Pipeline => ProjectPage::Pipeline(resource, PipelineView::default()),
       Publishing::Profile => ProjectPage::Agent(resource, AgentTab::default()),
       Publishing::Instruction => ProjectPage::Instructions(InstructionsView::default()),
       Publishing::Skill => ProjectPage::Skill(resource),
@@ -299,14 +299,14 @@ fn place_part(ctx: &Ctx, place: &Place, project: ProjectId) -> Part {
     Place::Role(role) => Part::Value(ctx.t_args("orchestrator.change.facts.role", [("role", role.as_str())])),
     Place::Pipeline { pipeline, name } => Part::Link(
       name.as_str().into(),
-      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelinePanel::default())),
+      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelineView::default())),
     ),
     Place::Step { pipeline, name, step } => Part::Link(
       ctx.t_args(
         "orchestrator.change.facts.step",
         [("pipeline", name.as_str()), ("step", step.as_str())],
       ),
-      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelinePanel::default())),
+      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelineView::default())),
     ),
   }
 }

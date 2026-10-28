@@ -25,7 +25,7 @@ fn instructions_mark_a_draft_automation_wrote_until_a_person_saves_it() {
   });
   screen.set("instruction-prompt", "A person's words");
   screen.until("the person's draft", |s| {
-    s.text("instruction-save-status") == "Draft saved · Not published"
+    s.text("instruction-save-status") == "Draft v1 · not published"
   });
   assert!(!screen.listed().by_automation(&screen.entry(id)));
 }

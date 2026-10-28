@@ -91,6 +91,16 @@ impl ProjectDb {
     )?)
   }
 
+  /// Succeeded runs that recorded no checkpoint, by number: runners before ORC-147 recorded none when the agents
+  /// committed their work themselves.
+  pub fn succeeded_runs_without_checkpoint(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
+    Ok(load_runs(
+      &self.connection,
+      "WHERE status = 'succeeded' AND id NOT IN (SELECT run_id FROM checkpoints) ORDER BY number",
+      [],
+    )?)
+  }
+
   pub fn runs_at_plan_limit(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,
@@ -228,6 +238,14 @@ impl RunStore for ProjectDb {
       &self.connection,
       "WHERE status = ?1 ORDER BY number",
       [columns::RUNNING],
+    )?)
+  }
+
+  fn low_disk_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
+    Ok(load_runs(
+      &self.connection,
+      "WHERE status = 'paused' AND status_reason = ?1 ORDER BY number",
+      ["low_disk"],
     )?)
   }
 

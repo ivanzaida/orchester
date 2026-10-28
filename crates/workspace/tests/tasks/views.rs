@@ -81,7 +81,7 @@ fn task_views_hold_each_task_once_and_needs_you_whatever_its_status() {
   let rows = browse::faceted(&data, ("", ", "), &Facets::default(), TaskSort::Manual);
   let nothing = HashSet::new();
   let counts = ListView::ALL.map(|view| view.count(&rows, &nothing));
-  assert_eq!(counts, [1, 0, 1, 2], "Active, Backlog, Done, All");
+  assert_eq!(counts, [0, 1, 0, 1, 2], "Needs you, Active, Backlog, Done, All");
   let active = grouped(ListView::Active, &rows, (&data, &nothing), TaskSort::Manual);
   assert_eq!(active.len(), 1);
   assert_eq!(active[0].group, Some(Group::ReadyToStart), "a draft is ready to start");
@@ -89,12 +89,16 @@ fn task_views_hold_each_task_once_and_needs_you_whatever_its_status() {
   let counts = ListView::ALL.map(|view| view.count(&rows, &waiting));
   assert_eq!(
     counts,
-    [2, 0, 0, 2],
-    "a Done task that waits for the person is Active's"
+    [1, 2, 0, 0, 2],
+    "a Done task that waits for the person is Needs you's and Active's"
   );
   let active = grouped(ListView::Active, &rows, (&data, &waiting), TaskSort::Manual);
   assert_eq!(active[0].group, Some(Group::NeedsYou), "Needs you comes first");
   assert_eq!(titles(&active[0].rows), ["To queue"]);
+  let needs_you = grouped(ListView::NeedsYou, &rows, (&data, &waiting), TaskSort::Manual);
+  assert_eq!(needs_you.len(), 1);
+  assert_eq!(needs_you[0].group, None, "Needs you is flat");
+  assert_eq!(titles(&needs_you[0].rows), ["To queue"], "only what waits");
   let all = grouped(ListView::All, &rows, (&data, &waiting), TaskSort::Manual);
   let groups: Vec<Option<Group>> = all.iter().map(|part| part.group).collect();
   assert_eq!(

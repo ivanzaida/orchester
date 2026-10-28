@@ -85,6 +85,9 @@ fn pipelines_library_refetch_failure_shows_retry_instead_of_old_success() {
   let feed = editor.window.projects().feed(crate::support::project_id());
   feed.outside.update(|counts| counts.pipelines += 1);
   editor.until("failed refetch", |e| e.exists("pipelines-error"));
+  // A row is a keyed component of its own: it unmounts on the pass after the error replaced the list.
+  editor.arm();
+  assert!(editor.exists("pipelines-error"));
   assert!(!editor.exists(&format!("pipeline-row-{id}")));
   connection.pragma_update(None, "user_version", schema).unwrap();
   feed.outside.update(|counts| counts.pipelines += 1);

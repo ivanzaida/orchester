@@ -56,7 +56,6 @@ fn agents_usage_includes_published_and_draft_steps_with_model_overrides() {
   )
   .expect("save draft");
   screen.open(profile);
-  screen.click("agent-tab-used");
   let text = screen.text("agent-editor");
   for expected in [
     "Delivery",

@@ -1,28 +1,34 @@
 //! The project's Tasks list (`Tasks · redesign` `Lw1Gb` in the new `orchester.pen`, ORC-99): one header row with the
-//! search, Filter, Display, *More actions* and New task; the views Active, Backlog, Done and All with their counts;
-//! the applied filters as chips; and the view's rows, one line each, Active grouped by what happens next (Needs you,
-//! Running, Queued, Ready to start, then Stopped and Finished, which the design has no row for) and All by workflow
-//! status (`views::grouped`). Each row says in one phrase where its task stands and opens the task; under the pointer
-//! it shows its actions. The task a Create just added stands out. Its other states: a project without tasks (`03 No
-//! tasks yet` `f54MO`), the tasks being read, read failing, and a search or filters that hide every row. What waits
-//! for the person and is no task's (the project's memory records) is named in a notice over Active's rows, which opens
-//! the Needs you panel.
+//! search, List or Board, Filter, Display, *More actions* and New task; the views Needs you (ORC-105), Active, Backlog,
+//! Done and All with their counts; the applied filters as chips; and the view's rows, one line each, Active grouped by
+//! what happens next (Needs you, Running, Queued, Ready to start, then Stopped and Finished, which the design has no
+//! row for) and All by workflow status (`views::grouped`). Each row says in one phrase where its task stands and opens
+//! the task; under the pointer it shows its actions. The task a Create just added stands out. Its other states: a
+//! project without tasks (`03 No tasks yet` `f54MO`), the tasks being read (a skeleton, `skeleton`), read failing, and
+//! a search or filters that hide every row. What waits for the person and is no task's (the project's memory records)
+//! is named in a notice over Needs you's and Active's rows, which opens the Needs you panel.
+//!
+//! The same header, views, filters and notices stand over the board (ORC-105, `kanban`), which shows the view's tasks
+//! as cards in columns; List or Board is kept for the project (`kanban::display`).
 //!
 //! The tasks are the project feed's, as they stand with its runner: while no runner serves the project, a run recorded
-//! as running is interrupted. Not built yet (D4): selecting tasks and what is done to a selection, Manage tags.
+//! as running is interrupted. Not built yet (D4): selecting the list's rows, Manage tags.
 
+mod board_view;
 mod cache;
 mod display;
 mod facets;
 mod header;
+mod kanban;
 mod list;
 mod not_shared;
 mod phrase;
 mod queue;
 
-pub(crate) use self::{list::age, queue::actor_now};
+pub(crate) use self::{list::age, phrase::phrases, queue::actor_now};
 mod row;
 mod shared;
+mod skeleton;
 mod states;
 mod views;
 
@@ -52,12 +58,17 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use self::{
+  board_view::{keep_display, kept_display},
   cache::{ListCache, Reading, Rows, RowsKey},
   facets::Options,
   header::{Choices, Header},
+  kanban::{
+    display::{Display, Layout},
+    has_empty_columns,
+  },
   list::{Folded, Folding, Source},
   row::ItemProps,
-  views::{label_key, list_view},
+  views::{Counts, label_key, list_view},
 };
 use crate::{
   navigation::Navigation,
@@ -100,6 +111,8 @@ struct TasksScreen {
   placed: Mutex<Option<Placed>>,
   /// Closing, reopening and deleting tasks from their rows' menus, asked in place over the rows.
   closer: Closer,
+  /// List or Board, and the board's options, kept for the project.
+  display: Signal<Display>,
 }
 
 impl Component for TasksScreen {
@@ -111,6 +124,9 @@ impl Component for TasksScreen {
     let search = ctx.signal(typed);
     let navigation = Navigation::of(ctx);
     ctx.watch(&search, move |text: &String| header::follow_search(&navigation, text));
+    let shown = kept_display(ctx, &props.project);
+    let display = ctx.signal(shown);
+    keep_display(ctx, &props.project, &display);
     Self {
       choices: Choices {
         search,
@@ -125,6 +141,7 @@ impl Component for TasksScreen {
       scroll: ScrollState::new(),
       placed: Mutex::new(None),
       closer: Closer::new(ctx, (props.project.open, props.project.feed), None),
+      display,
     }
   }
 
@@ -165,6 +182,7 @@ impl Component for TasksScreen {
           options,
           queue,
           shared: shared.as_ref(),
+          display: &self.display,
         },
       ))
     };
@@ -196,21 +214,36 @@ impl Component for TasksScreen {
         let page = page.child(header(ctx, Some(options.clone()), queue(&project)));
         self.list(ctx, page.with_children(not_member), &shown, &options)
       }
-      TasksState::Loading => page
-        .child(header(ctx, None, None))
-        .with_children(not_member)
-        .child(inset(views::views(ctx, (id, &list), None, None)))
-        .child(inset(states::reading(ctx, project.open.project.name().as_str()))),
+      TasksState::Loading => {
+        let page = page.child(header(ctx, None, None)).with_children(not_member);
+        self.reading(ctx, page, (&project, &list))
+      }
       TasksState::Failed(error) => page
         .child(header(ctx, None, None))
         .with_children(not_member)
-        .child(inset(views::views(ctx, (id, &list), None, None)))
+        .child(inset(views::views(ctx, (id, &list), Counts::Unknown, None)))
         .child(inset(states::failed(ctx, &project.feed, &error))),
     }
   }
 }
 
 impl TasksScreen {
+  /// While the tasks are read: the views counting with bones, and the skeleton of the list or the board.
+  fn reading(&self, ctx: &mut Ctx, page: Column, (project, list): (&ShownProject, &TaskList)) -> Column {
+    let id = project.open.project.id();
+    let display = self.display.get();
+    let place = match display.layout {
+      Layout::List => skeleton::Place::List,
+      Layout::Board => skeleton::Place::Board(list.tab(), display.columns),
+    };
+    let label = ctx.t_args("tasks.loading", [("project", project.open.project.name().as_str())]);
+    page
+      .child(inset(views::views(ctx, (id, list), Counts::Reading, None)))
+      .child(ctx.mount_keyed::<skeleton::Skeleton>(
+        &format!("tasks-skeleton-{id}"),
+        skeleton::SkeletonProps { place, label },
+      ))
+  }
   /// The views, what is held and filtered, and the view's rows as searched, filtered and ordered, or why there is none.
   fn list(&self, ctx: &mut Ctx, page: Column, shown: &Shown<'_>, options: &Options) -> Column {
     let (project, list) = (shown.project, shown.list);
@@ -237,6 +270,7 @@ impl TasksScreen {
       (&reading.tasks, &reading.waiting),
       key.sort,
     );
+    let filtered = !key.search.trim().is_empty() || !key.facets.is_empty();
     if parts.is_empty() {
       // Rows that come back are placed afresh, at their top.
       *self.placed.lock() = None;
@@ -248,8 +282,15 @@ impl TasksScreen {
       if !found.is_empty() {
         return page.child(inset(not_shared::only_not_shared(ctx, (id, list), &found)));
       }
-      let filtered = !key.search.trim().is_empty() || !key.facets.is_empty();
-      return page.child(inset(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered)));
+      // A view the search and filters empty says so in the columns' place; an empty view shows its empty columns, and
+      // says so too where it has none (Needs you, columns by pipeline).
+      let display = self.display.get();
+      if display.layout == Layout::List || filtered || !has_empty_columns(list.tab(), &display.columns) {
+        return page.child(inset(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered)));
+      }
+    }
+    if self.display.get().layout == Layout::Board {
+      return page.child(self.board(ctx, shown, (&reading, &rows), filtered));
     }
     let highlight = list.highlight().map(ToString::to_string);
     let source = Source {
@@ -300,13 +341,20 @@ impl TasksScreen {
       let name = project.open.project.name().as_str();
       not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
     });
+    // The board asks at the card, in a popover over the columns (`Popover · stop run` `XdfNz`): only why the last
+    // close failed stands over them.
+    let close = if self.display.get().layout == Layout::Board {
+      task_close::failure(ctx, &self.closer, "tasks-close")
+    } else {
+      task_close::panel(ctx, &self.closer, ("tasks-close", task_close::StopLook::Quiet))
+    };
     page
-      .child(inset(views::views(ctx, (id, list), Some(counts), chip)))
+      .child(inset(views::views(ctx, (id, list), Counts::Read(counts), chip)))
       .with_children(held.flatten().map(inset))
       .with_children(filters.map(inset))
       .with_children(kept.map(inset))
       .with_children(states::outside_tasks(ctx, list.tab(), &reading.tasks).map(inset))
-      .with_children(task_close::panel(ctx, &self.closer, "tasks-close").map(inset))
+      .with_children(close.map(inset))
   }
 
   /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top, for another

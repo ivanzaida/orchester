@@ -16,7 +16,7 @@ use orchester_workspace::{project_settings::Settings, tasks::outside::Outside};
 
 use super::{
   TabProps,
-  kit::{Group, SettingRow, value},
+  kit::{Group, SettingRow, mono_value, value},
   page,
   work::{self, Change, Read},
 };
@@ -132,13 +132,13 @@ fn identity(ctx: &mut Ctx, props: &TabProps) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted))
-    .child(value("settings-project-folder", &folder));
+    .child(mono_value("settings-project-folder", &folder));
   let rows = [
     SettingRow::new("settings-name", ctx.t("project_settings.nameLabel"))
       .control(value("settings-project-name", project.project.name().as_str())),
     SettingRow::new("settings-key", ctx.t("project_settings.keyLabel"))
       .hint(ctx.t("project_settings.keyHint"))
-      .control(value("settings-project-key", project.project.key().as_str())),
+      .control(mono_value("settings-project-key", project.project.key().as_str())),
     SettingRow::new("settings-folder", ctx.t("project_settings.folderLabel"))
       .hint(ctx.t("project_settings.folderHint"))
       .control(folder),

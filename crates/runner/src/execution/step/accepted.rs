@@ -14,10 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::super::{
-  run::{ExecutionError, RunTask},
-  workspace::Workspace,
-};
+use super::super::run::{ExecutionError, RunTask};
 
 impl RunTask {
   /// Passes `execution` when it is the execution of an accepted step that the acceptance started; `false` for any
@@ -42,7 +39,8 @@ impl RunTask {
       .cloned()
       .ok_or(ExecutionError::NotAnAgentStep(accepted))?;
     // Checked when the person accepted; checked again, as the work may have changed since.
-    let found = Workspace::accepted_work(&self.root, (&self.run, &self.worktree), &judged)
+    let found = self
+      .accepted_work(&judged)
       .map_err(|error| error.to_string())
       .and_then(|found| found.map_err(|refusal| format!("{refusal}; run the step again instead")));
     let workspace = match found {
@@ -67,6 +65,6 @@ impl RunTask {
         ..result
       })?;
     }
-    self.pass(execution, (&workspace, &invocation), text)
+    self.pass(execution, (&workspace, &invocation), judged.judged(), text)
   }
 }

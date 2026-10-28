@@ -9,6 +9,7 @@ mod buttons;
 mod chat_links;
 mod choices;
 mod date_picker;
+mod failure;
 mod fields;
 mod harness;
 mod icons;

@@ -314,6 +314,7 @@
       "durationValue": "{{minutes}} min · {{start}} – {{end}}",
       "tokensNoLimit": "{{used}} · no limit",
       "tokensValue": "{{used}} of {{budget}}",
+      "tokensOutputUnreported": "{{tokens}} · output not reported yet",
       "agents": "Agents"
     }
   }

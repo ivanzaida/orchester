@@ -12,10 +12,19 @@ fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
   screen.go();
   screen.click("instructions-import");
   screen.until("review", |s| s.exists("instruction-import-create"));
-  assert!(!screen.exists("instructions-tabs"));
-  assert!(!screen.exists("instructions-new"));
-  let review = screen.text("instruction-import-review");
-  assert!(review.contains("INSTRUCTIONS"));
+  // A page of its own under the hub's tabs (02c): the list is not beside it, the preview is.
+  assert!(!screen.exists("instruction-library") && !screen.exists("instructions-empty"));
+  assert!(
+    screen
+      .text("instruction-import-title")
+      .contains("Import from repository")
+  );
+  assert!(
+    screen
+      .text("instruction-import-instructions-title")
+      .contains("Instructions · each becomes a draft project instruction")
+  );
+  let review = screen.text("instruction-import-page");
   assert!(review.contains("Draft project instruction AGENTS · v1"));
   assert!(review.contains("Project · change it in the editor"));
   assert!(review.contains("All agents · Agent start"));
@@ -23,7 +32,7 @@ fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
   assert!(screen.text("instruction-import-source").contains("1 line · read only"));
   assert!(screen.text("instruction-import-selection").contains("1 of 2 selected"));
   screen.click("instruction-import-cancel");
-  screen.until("return", |s| s.exists("instructions-tabs"));
+  screen.until("return", |s| s.exists("instructions-empty"));
   assert!(screen.listed().entries.is_empty());
 }
 
@@ -80,10 +89,11 @@ fn instructions_preview_keeps_horizontal_actions_visible_and_viewer_is_read_only
     false,
   );
   screen.go();
+  screen.click("instruction-panel-variables");
   screen.until("variable context", |s| s.exists("instruction-variable-context"));
   assert!(screen.text("instruction-variable-context").contains("KON-1 · Builder"));
   assert!(screen.text("instruction-variable-detail").contains("Available"));
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   let view = screen
     .window
@@ -104,7 +114,9 @@ fn instructions_preview_keeps_horizontal_actions_visible_and_viewer_is_read_only
     copy.x > view.x && copy.y + copy.height < 875.0,
     "actions fit inside the page"
   );
-  assert!(screen.text("instruction-panel").contains("Project rule · this rule"));
+  // The source row's sub-line names its part, its version and that it is this rule (`fSWIV` in 02b).
+  let panel = screen.text("instruction-panel");
+  assert!(panel.contains("Project rule · Draft v1 · this rule"), "{panel}");
   screen.click("instruction-full-prompt");
   screen.until("viewer", |s| s.exists("instruction-full-viewer"));
   assert!(
@@ -159,7 +171,12 @@ fn instructions_role_and_step_editors_show_their_injection_explanations() {
     InstructionScope::Step { pipeline, step },
     true,
   );
-  screen.go();
+  screen.list();
+  let list = screen.text("instruction-library");
+  assert!(
+    list.contains("Feature delivery v1") && list.contains("01 Implement"),
+    "{list}"
+  );
   screen.click("instruction-tab-1");
   screen.until("role editor", |s| s.exists("instruction-role"));
   assert!(
@@ -167,12 +184,9 @@ fn instructions_role_and_step_editors_show_their_injection_explanations() {
       .text("instruction-editor")
       .contains("after the profile’s own role instructions")
   );
-  assert!(screen.text("instruction-library").contains("1 rule"));
   screen.click("instruction-tab-3");
   screen.until("step editor", |s| s.exists("instruction-step"));
   assert!(!screen.exists("instruction-targets"));
-  assert!(screen.text("instruction-library").contains("Feature delivery v1"));
-  assert!(screen.text("instruction-library").contains("01 Implement"));
   assert!(screen.text("instruction-editor").contains("01 Implement runs Builder"));
 }
 
@@ -242,7 +256,7 @@ fn instructions_full_viewer_can_return_when_its_task_loses_preview_context() {
     false,
   );
   screen.go();
-  screen.click("instruction-panel-1");
+  screen.click("instruction-panel-preview");
   screen.until("preview", |s| s.exists("instruction-full-prompt"));
   screen.click("instruction-full-prompt");
   screen.until("viewer", |s| s.exists("instruction-full-viewer"));
@@ -267,7 +281,7 @@ fn instructions_full_viewer_can_return_when_its_task_loses_preview_context() {
   assert!(screen.exists("instruction-preview-task"));
   screen.click("instruction-viewer-back");
   screen.until("editor", |s| s.exists("instruction-prompt"));
-  assert!(screen.exists("instructions-tabs"));
+  assert!(screen.exists("agents-hub-tabs"));
   let changed = db.task(task.id()).expect("task").expect("present");
   assert!(
     db.update_task(task.id(), changed.revision(), task.details().clone())

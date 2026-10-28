@@ -37,11 +37,10 @@ fn agents_list_and_published_editor() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   screen.open(id);
-  assert!(screen.text("agent-save-status").contains("Published v1"));
-  screen.click("agent-tab-permissions");
+  assert!(screen.text("agent-draft-bar-status").contains("Published v1"));
+  // One page since ORC-107: the role, connection, permissions, enforcement and uses are all on it.
   assert!(screen.exists("agent-repository"));
   assert!(screen.exists("agent-enforcement"));
-  screen.click("agent-tab-used");
   assert!(screen.text("agent-editor").contains("not used in a pipeline"));
 }
 #[test]
@@ -57,7 +56,7 @@ fn agents_draft_and_stale_draft_states() {
   )
   .expect("stale draft");
   screen.open(id);
-  assert!(screen.text("agent-save-status").contains("Draft based on v0"));
+  assert!(screen.text("agent-draft-bar-status").contains("Draft based on v0"));
   assert!(!screen.exists("agent-keep-draft"));
   screen.click("agent-publish");
   screen.until("question armed", |s| s.exists("agent-confirm-confirm"));
@@ -75,7 +74,7 @@ fn agents_draft_and_stale_draft_states() {
   screen.window.pass();
   screen.click("agent-confirm-confirm");
   screen.until("published", |s| {
-    s.exists("agent-save-status") && s.text("agent-save-status").contains("Published v2")
+    s.exists("agent-draft-bar-status") && s.text("agent-draft-bar-status").contains("Published v2")
   });
   assert_eq!(
     db.latest_version::<AgentProfile>(id).expect("read").expect("v2").body(),
@@ -121,14 +120,15 @@ fn agents_profile_form_fits_the_initial_viewport_and_published_card_has_no_draft
   let name = bounds("agent-role-box");
   let instructions = bounds("agent-instructions-box");
   assert!(label.width > 60.0, "name label has room: {label:?}");
-  assert!(name.y < 350.0, "name starts near the top: {name:?}");
+  // Under the hub's head and tabs, the page's crumb, head and draft bar (01b).
+  assert!(name.y < 420.0, "name starts near the top: {name:?}");
   assert!(
     instructions.y + instructions.height < 872.0,
     "instructions fit above the status bar: {instructions:?}"
   );
-  let card = screen.text("agent-draft-card");
-  assert!(card.contains("No changes since v1"), "{card}");
-  assert!(!card.contains("Draft v2"), "{card}");
+  let bar = screen.text("agent-draft-bar");
+  assert!(bar.contains("Published v1"), "{bar}");
+  assert!(!bar.contains("Draft v2"), "{bar}");
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn agents_failed_refetch_replaces_retained_data_and_retry_restores_it() {
   screen.until("failed refetch", |s| s.exists("agents-load-error"));
   assert!(!screen.exists(&format!("agent-{id}")), "stale profile is hidden");
   assert!(!screen.exists("agents-new"));
-  assert!(screen.text("agents-load-error").contains("could not"));
+  assert!(screen.text("agents-load-error").contains("couldn't be read"));
   db.execute("UPDATE resource_drafts SET body = ?1", [&body])
     .expect("restore fixture");
   screen.click("agents-load-error-retry");
@@ -157,13 +157,10 @@ fn agents_failed_refetch_replaces_retained_data_and_retry_restores_it() {
 }
 
 #[test]
-fn agents_failed_refetch_and_retry_preserve_unsaved_editor_fields_and_tab() {
+fn agents_failed_refetch_and_retry_preserve_unsaved_editor_fields() {
   let mut screen = Agents::new(true);
   let id = screen.profile(false);
   screen.open(id);
-  screen.set("agent-responsibility", "My unsaved responsibility");
-  screen.set("agent-instructions", "My unsaved instructions");
-  screen.click("agent-tab-permissions");
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("fixture db");
   let body: String = db
     .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
@@ -177,39 +174,25 @@ fn agents_failed_refetch_and_retry_preserve_unsaved_editor_fields_and_tab() {
     .outside
     .update(|counts| counts.profiles += 1);
   screen.until("failed editor refetch", |s| s.exists("agents-load-error"));
-  assert!(screen.exists("agent-repository"), "permission tab remains mounted");
-  screen.click("agent-save");
-  assert!(!screen.exists("agent-saving"), "saving retained data is disabled");
+  // Edits made while the profiles cannot be read wait: nothing is saved over what the page could not read.
+  screen.set("agent-responsibility", "My unsaved responsibility");
+  screen.set("agent-instructions", "My unsaved instructions");
+  assert!(screen.exists("agent-repository"), "the page stays mounted");
   screen.click("agent-publish");
   assert!(!screen.exists("agent-saving"), "publishing retained data is disabled");
   db.execute("UPDATE resource_drafts SET body = ?1", [&body])
     .expect("restore fixture");
   screen.click("agents-load-error-retry");
   screen.until("editor read recovered", |s| !s.exists("agents-load-error"));
-  assert!(screen.exists("agent-repository"), "retry preserves selected tab");
-  screen.click("agent-tab-profile");
   for (id, expected) in [
     ("agent-responsibility", "My unsaved responsibility"),
     ("agent-instructions", "My unsaved instructions"),
   ] {
-    let value = screen
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.as_text_input())
-      .expect("field")
-      .value();
-    assert_eq!(value, expected);
+    assert_eq!(screen.value(id), expected);
   }
-  assert!(screen.text("agent-save-status").contains("Unsaved"));
-  screen.until("save enabled after retry", |s| {
-    s.click("agent-save");
-    s.exists("agent-saving")
+  screen.until("preserved fields saved on their own", |s| {
+    let profile = s.listed().profile(id).expect("profile").profile.clone();
+    profile.responsibilities() == "My unsaved responsibility"
+      && profile.instructions().as_str() == "My unsaved instructions"
   });
-  screen.until("preserved fields saved", |s| {
-    !s.exists("agent-save") && s.exists("agent-role")
-  });
-  let profile = screen.listed().profile(id).expect("profile").profile.clone();
-  assert_eq!(profile.responsibilities(), "My unsaved responsibility");
-  assert_eq!(profile.instructions().as_str(), "My unsaved instructions");
 }

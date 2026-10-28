@@ -43,7 +43,7 @@ async fn shutdown_at_approval(approve_command: bool, pause_while_active: bool) {
   let db = ProjectDb::open(root).expect("open");
   let step = StepKey::new("implement").expect("key");
   let command = pending(root, &mut events, id).await;
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = support::run_folder(root, id);
   std::fs::write(worktree.join("progress.txt"), "keep actual progress").expect("work");
   if approve_command {
     runner
@@ -145,7 +145,7 @@ fn verify_saved(root: &Path, id: RunId, step: &StepKey, approve_command: bool) {
     git(root, &["show", &format!("{}:progress.txt", checkpoint.revision())]),
     "keep actual progress"
   );
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = support::run_folder(root, id);
   assert_eq!(worktree.join("command-once.txt").exists(), approve_command);
   assert!(!worktree.join("mcp-once.txt").exists());
   assert!(db.pending_tool_approvals(id).expect("pending approvals").is_empty());

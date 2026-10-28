@@ -101,11 +101,13 @@ Hard requirements:
    starts with `#![allow(unsafe_code)]`, explains why at the top, keeps each `unsafe` block minimal and precedes it
    with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`,
    `crates/desktop-app/src/system_icon/windows.rs`, `crates/desktop-app/src/startup/front/windows.rs`,
-   `crates/desktop-app/src/mcp/bind/windows.rs`, `crates/desktop-app/src/notifications/os/windows/toast.rs`,
+   `crates/desktop-app/src/mcp/bind/windows.rs`, `crates/desktop-app/src/appearance/motion/windows.rs`,
+   `crates/desktop-app/src/notifications/os/windows/toast.rs`,
    `crates/desktop-app/src/notifications/os/windows/badge.rs`, `crates/desktop-app/src/notifications/os/macos.rs`,
    `crates/agent/src/files/entry/windows.rs`, `crates/core/src/permission/remote_drive.rs`,
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
-   `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
+   `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`,
+   `crates/exec/src/disk_space/windows.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
    `crates/exec/tests/support/process_window.rs`, `crates/exec/tests/support/process_term.rs` and
    `crates/exec/tests/support/console_children.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct

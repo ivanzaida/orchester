@@ -13,6 +13,22 @@ pub(super) fn kind(tool: &Tool) -> (&'static str, Icon) {
     ToolAction::DatabaseQuery(_) => ("tools.database", Icon::Database),
   }
 }
+/// How many pipeline steps call a tool: *Unused*, *1 pipeline step*, *3 pipeline steps*.
+pub(super) fn used(ctx: &Ctx, count: usize) -> Arc<str> {
+  match count {
+    0 => ctx.t("tools.unused"),
+    1 => ctx.t("tools.usedStepOne"),
+    _ => ctx.t_args("tools.usedSteps", [("count", count.to_string())]),
+  }
+}
+/// [`used`] in a tool page's subtitle: *Unused*, *used by 1 pipeline step* (`nuoSy`).
+pub(super) fn used_by(ctx: &Ctx, count: usize) -> Arc<str> {
+  match count {
+    0 => ctx.t("tools.unused"),
+    1 => ctx.t("tools.usedByStepOne"),
+    _ => ctx.t_args("tools.usedBySteps", [("count", count.to_string())]),
+  }
+}
 pub(super) fn version(ctx: &Ctx, entry: &ToolEntry) -> Arc<str> {
   match entry.state {
     VersionState::Published(v) => ctx.t_args("tools.published", [("version", v.get().to_string())]),

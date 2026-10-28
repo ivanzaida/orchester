@@ -34,6 +34,10 @@ impl Tab {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Saved(pub Option<InstructionEntry>);
 impl DevtoolsInspectable for Saved {}
+/// The rules removed on this page, by the part of the prompt they went into: their groups say so.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Removed(pub Vec<(orchester_core::run::PromptPart, Arc<str>)>);
+impl DevtoolsInspectable for Removed {}
 #[derive(Clone)]
 pub struct Selection {
   pub project: ProjectId,
@@ -43,6 +47,7 @@ pub struct Selection {
   pub created: Signal<Saved>,
   pub dirty: Signal<bool>,
   pub busy: Signal<bool>,
+  pub removed: Signal<Removed>,
 }
 impl Selection {
   /// The view the route shows now.

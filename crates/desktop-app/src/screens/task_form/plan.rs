@@ -25,12 +25,12 @@ use orchester_workspace::tasks::{
 
 use super::{
   Nav,
-  chips::{ChipState, Look, MenuOption, PropertyChip},
+  chips::{ChipState, HelpPlace, Look, MenuOption, PropertyChip},
   state::View,
 };
 use crate::{
   navigation::Navigation,
-  routes::{PipelinePanel, ProjectPage, Route},
+  routes::{PipelineView, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     filter::filter_menu_panel,
@@ -110,6 +110,7 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
         icon: Icon::Workflow,
         title: choice_label(ctx, choice),
         help: Some(option_detail(ctx, choice)),
+        help_place: HelpPlace::UnderIcon,
         chosen: chosen == Some(id),
       }
       .render(&state.open, move || pick.set(Pick(Some(id)))),
@@ -201,7 +202,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: ProjectId) -> Option<Eleme
     ),
     None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::TextMuted),
   };
-  let route = Route::Project(project, ProjectPage::Pipeline(choice.id, PipelinePanel::Pipeline));
+  let route = Route::Project(project, ProjectPage::Pipeline(choice.id, PipelineView::Steps));
   let view_pipeline = Focus::Link
     .apply(opening(Navigation::of(ctx).to(route)))
     .id("task-form-view-pipeline")

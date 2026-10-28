@@ -21,10 +21,13 @@ mod conversation;
 mod date_picker;
 mod decisions;
 mod delivery;
+mod failure;
 mod files;
 mod fonts;
 mod form;
 mod gate;
+mod groups;
+mod hub;
 mod import;
 pub mod instructions;
 mod lifecycle;
@@ -73,9 +76,12 @@ pub use self::{
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
+  failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   gate::{GateSpacing, GateText},
+  groups::GroupText,
+  hub::{HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -88,6 +94,7 @@ pub use self::{
   orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
+  pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
@@ -98,8 +105,11 @@ pub use self::{
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
-  task_form::{TaskFormSpacing, TaskFormText},
-  tasks::{TasksSpacing, list_scrollbar},
+  task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
+  tasks::{
+    DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
+    SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar,
+  },
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
 };
@@ -154,6 +164,8 @@ pub fn install(app: &mut App, mode: Mode) {
   sources::install(theme);
   delivery::install(theme);
   import::install(theme);
+  hub::install(theme);
+  failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
   theme.set_shadows(shadow::shadows());

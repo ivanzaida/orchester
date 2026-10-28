@@ -6,11 +6,14 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{ResourceId, RunId, StepExecutionId, TaskId},
+  limits::ProjectLimits,
   memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
-  run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
-  store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
+  run::{Run, RunEvent, RunNumber, RunStatus, StepExecutor, TaskPhase, can_run_again_after},
+  store::{
+    ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore,
+  },
   task::Task,
   task_group::GroupHold,
   time::Timestamp,
@@ -89,6 +92,10 @@ pub struct ProjectTasks {
   /// The project is shared on a server, which keeps no *Don't merge automatically* (ORC-69).
   pub shared: bool,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// The project's default pipeline (Pipelines › *Make default*), which New task starts with.
+  pub default_pipeline: Option<ResourceId>,
+  /// The project's limits, whose default run budget and time limit New task starts with.
+  pub limits: Arc<ProjectLimits>,
   /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
   pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
   /// Why each task of a reviewed group that holds its work waits.
@@ -111,6 +118,9 @@ pub struct ProjectTasks {
   pub merge_queue: Arc<Vec<orchester_core::merge_queue::QueueEntry>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
+  /// The tasks a run of which has not ended, as the store decides it (`active_task_run`): waiting for the person,
+  /// stopped at a limit, paused, interrupted with its worktree kept, or unreadable. No runner changes it.
+  pub active: Arc<std::collections::BTreeSet<TaskId>>,
   /// How many runs of each task were started and can be read.
   pub runs: Arc<BTreeMap<TaskId, usize>>,
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
@@ -231,6 +241,11 @@ impl ProjectTasks {
     if let Some(programs) = programs {
       unmerged.settle(programs, repo_root, &mut phases);
     }
+    // Only a task with a run can have one that has not ended.
+    let active = phases
+      .keys()
+      .filter_map(|task| db.active_task_run(*task).map(|run| run.map(|_| *task)).transpose())
+      .collect::<Result<_, _>>()?;
     Ok(Self {
       updated: Arc::new(
         tasks
@@ -265,11 +280,14 @@ impl ProjectTasks {
       queue: Arc::new(super::hold::held_in(db)?),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(db)?),
+      default_pipeline: db.default_pipeline()?,
+      limits: Arc::new(db.project_limits()?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
       asked: Arc::new(asked),
       phases: Arc::new(phases),
+      active: Arc::new(active),
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
@@ -356,7 +374,7 @@ fn latest_runs<'a>(
             key: task.key().to_string().into(),
           });
         }
-        Latest::Run(shown)
+        Latest::Run(Box::new(shown))
       }
       Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
       None => continue,
@@ -394,7 +412,8 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
   Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
 }
 
-/// `latest`, a run of `task`, with when it last changed and what it waits for.
+/// `latest`, a run of `task`, with when it last changed, what it waits for, who runs its step's agent and, once it was
+/// interrupted, whether a person removed its worktree so that its task runs again after it (ORC-63).
 pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
   let updated_at = db
     .events(latest.id())
@@ -403,7 +422,37 @@ pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<La
     .map_or_else(|| latest.created_at(), RunEvent::at);
   let awaited = awaited(db, latest)?;
   let merge = db.run_merge(latest.id())?;
-  Ok(LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited))
+  let mut shown = LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited);
+  shown.agent = step_agent(db, latest, shown.step.as_ref())?;
+  if matches!(latest.status(), RunStatus::Interrupted(_)) {
+    let removed = db.worktree_removal(latest.id())?.is_some();
+    shown.ended_for_run_again = can_run_again_after(latest, removed);
+  }
+  Ok(shown)
+}
+
+/// The provider of the connection whose agent runs `step` of `run`, as its pinned profile names it; `None` for a tool
+/// step, or a profile or connection no longer found.
+fn step_agent(
+  db: &ProjectDb,
+  run: &Run,
+  step: Option<&CurrentStep>,
+) -> Result<Option<orchester_core::connection::AgentProvider>, StoreError> {
+  let Some(StepExecutor::Agent { profile, .. }) = step
+    .and_then(|step| run.snapshot().steps().get(step.number.checked_sub(1)?))
+    .map(|snapshot| snapshot.executor())
+  else {
+    return Ok(None);
+  };
+  let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? else {
+    return Ok(None);
+  };
+  Ok(
+    ConnectionStore::connection(db, version.body().connection())?.and_then(|connection| match connection.kind() {
+      orchester_core::connection::ConnectionKind::Agent(provider) => Some(*provider),
+      orchester_core::connection::ConnectionKind::GitHub { .. } => None,
+    }),
+  )
 }
 
 /// Each step of `run` that waits on a decision on its plan or for an answer to its question, with the

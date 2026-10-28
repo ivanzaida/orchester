@@ -77,3 +77,77 @@ fn seed_agents_exposes_warning_capabilities_and_active_override() {
   assert!(listed.usage.steps.iter().any(|s| s.model_overridden && s.running == 1));
   assert!(!listed.usage.active.is_empty());
 }
+
+#[test]
+fn seed_agents_library_lists_every_instruction_part_skill_scope_and_repository_file() {
+  use orchester_core::{
+    agent_files::import::{ItemKind, Unimportable},
+    resource::InstructionScope,
+  };
+  use orchester_workspace::{instructions::data::ProjectInstructions, skills::data::ProjectSkills};
+  let seed = Seed::of("agents-library");
+  let instructions = ProjectInstructions::load_in(seed.repo()).expect("instructions");
+  let entry = |title: &str| {
+    instructions
+      .entries
+      .iter()
+      .find(|entry| &*entry.name == title)
+      .unwrap_or_else(|| panic!("{title}"))
+  };
+  assert!(matches!(
+    entry("Implementation standards").state,
+    VersionState::Draft { published: Some(_) }
+  ));
+  assert!(instructions.by_automation(entry("Commit messages")));
+  assert!(matches!(
+    entry("Security notes").state,
+    VersionState::Draft { published: None }
+  ));
+  assert!(matches!(
+    entry("Builder rules").body.scope(),
+    InstructionScope::AgentRole { .. }
+  ));
+  assert!(matches!(
+    entry("Feature delivery notes").body.scope(),
+    InstructionScope::Pipeline { .. }
+  ));
+  let InstructionScope::Step { pipeline, step } = entry("Deploy checklist").body.scope() else {
+    panic!("a step rule");
+  };
+  let feature = instructions.pipeline(*pipeline).expect("Feature delivery");
+  assert!(
+    !feature.steps.iter().any(|choice| choice.key == *step),
+    "the rule is orphaned"
+  );
+  let skills = ProjectSkills::load_in(seed.repo()).expect("skills");
+  let skill = |title: &str| skills.entries.iter().find(|entry| &*entry.name == title).expect(title);
+  assert!(matches!(
+    skill("run-checks").state,
+    VersionState::Draft { published: Some(_) }
+  ));
+  assert!(skills.by_automation(skill("migration-guide")));
+  assert!(matches!(
+    skill("review-diff").body.scope(),
+    InstructionScope::AgentRole { .. }
+  ));
+  assert!(matches!(
+    skill("release-notes").body.scope(),
+    InstructionScope::Pipeline { .. }
+  ));
+  let found = orchester_workspace::skills::repository::scan(seed.repo()).expect("the repository's agent files");
+  let items: Vec<(ItemKind, &str, bool)> = found
+    .items
+    .iter()
+    .map(|item| (item.kind, item.source.as_str(), item.outcome.is_ok()))
+    .collect();
+  assert_eq!(
+    items,
+    [
+      (ItemKind::Instruction, "AGENTS.md", true),
+      (ItemKind::Instruction, "CLAUDE.md", false),
+      (ItemKind::Skill, ".claude/skills/write-tests", true),
+      (ItemKind::Skill, ".agents/skills/drafts", false),
+    ]
+  );
+  assert!(matches!(found.items[3].outcome, Err(Unimportable::NoSkillFile)));
+}

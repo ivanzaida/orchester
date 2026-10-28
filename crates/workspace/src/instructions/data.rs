@@ -249,11 +249,7 @@ pub struct NewInstruction {
 
 /// Creates the instruction as an empty draft under a slug made from its name.
 pub fn create(db: &mut ProjectDb, new: NewInstruction, now: Timestamp) -> Result<ResourceId, StoreError> {
-  let taken: Vec<Slug> = db
-    .resources(ResourceKind::Instruction)?
-    .iter()
-    .map(|resource| resource.slug().clone())
-    .collect();
+  let taken: Vec<Slug> = db.slugs(ResourceKind::Instruction)?;
   let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
   let slug = Slug::unique_for(&new.name, &fallback, &taken);
   let body = Instruction::new(

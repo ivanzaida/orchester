@@ -1,345 +1,218 @@
-//! Pipeline settings is a page replacing the canvas (x4IIjM).
-//! The design's proposals D0hfv remain visibly unavailable, rather than storing settings runners ignore.
+//! The Settings tab (`02d · settings` `A29iv`, `02h · settings · delivery` `Wq6tZ`): General (name, slug,
+//! description, who can use it), Runs (what starts them and what happens when a step fails, as plain values),
+//! Sources for every step, and Delivery with what a run delivers and the Deliver step. What the draft changed shows in
+//! its strip with *Undo change* and on its row (*Changed in draft vN*). The planned sections are gone.
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, Text},
   core::{Ref, Signal},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
+use orchester_workspace::pipelines::write::next_version;
 
-use super::{inspector::SummaryProps, parts, state::State};
+use super::{
+  parts,
+  state::{Editing, State, View},
+  summary::SummaryProps,
+};
 use crate::{
-  theme::ExtraSpacing,
+  theme::{ExtraColor, ExtraTypography, GroupText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    form_section::{self, Label, Place},
-    icon::Icon,
-    inspector::{PropertyValue, property},
-    option_card::OptionCard,
+    icon::{Icon, icon},
+    pressable::Press,
+    row_group::{GroupRow, RowGroup},
   },
 };
-const FORM_WIDTH: f32 = 720.0;
 
-pub fn page(ctx: &mut Ctx, state: &State, busy: bool) -> Element {
+/// The name and description fields' width (`Input` `LuF69`).
+const FIELD_WIDTH: f32 = 260.0;
+
+pub fn page(ctx: &mut Ctx, state: &State, locked: bool) -> Element {
+  let editing = state.get();
   ctx.mount_keyed::<Settings>(
-    "pipeline-settings-body",
+    &format!("pipeline-settings-{}", editing.epoch),
     SummaryProps {
       state: state.clone(),
-      locked: busy,
+      locked: locked || editing.viewing.is_some(),
     },
   )
 }
-struct Settings {
-  navigation: super::settings_nav::Sections,
-}
-impl Component for Settings {
-  type Props = SummaryProps;
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      navigation: super::settings_nav::Sections::new(ctx),
-    }
-  }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<SummaryProps>().clone();
-    content(ctx, &props.state, props.locked, &self.navigation)
-  }
-}
-fn content(ctx: &mut Ctx, state: &State, busy: bool, sections: &super::settings_nav::Sections) -> Element {
-  let editing = state.get();
-  let changed = editing.viewing.is_none()
-    && editing
-      .opened
-      .latest
-      .as_ref()
-      .is_some_and(|v| v.body.description() != editing.edit.description());
-  let navigation = sections.navigation(ctx, state, changed);
-  let description = ctx.mount_keyed::<General>(
-    &format!("pipeline-settings-general-{}", editing.epoch),
-    SummaryProps {
-      state: state.clone(),
-      locked: busy || editing.viewing.is_some(),
-    },
-  );
-  let mut form = Column::new()
-    .width(Dimension::Pct(100.0))
-    .max_width(Dimension::Px(FORM_WIDTH))
-    .spacing(ExtraSpacing::Roomy.role())
-    .child(heading(ctx, changed, &editing))
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .ref_element(sections.target("pipelines.general"))
-        .child(description),
-    )
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .ref_element(sections.target("pipelines.starts"))
-        .child(starts(ctx)),
-    );
-  let locked = busy || editing.viewing.is_some();
-  form = proposals(ctx, sections, (state, locked), form);
-  Row::new()
-    .id("pipeline-settings-page")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .min_height(Dimension::Px(0.0))
-    .child(navigation)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .height(Dimension::Pct(100.0))
-        .with_children(changed.then(|| draft_strip(ctx, state, busy)))
-        .child(
-          ScrollVertical::new(
-            Column::new()
-              .width(Dimension::Pct(100.0))
-              .padding(ExtraSpacing::Roomy.role())
-              .align_items(Alignment::Center)
-              .ref_element(sections.origin.clone())
-              .child(form),
-          )
-          .with_scroll_state(sections.scroll.clone())
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0)),
-        ),
-    )
-    .into()
-}
 
-struct General {
+struct Settings {
   name: Signal<String>,
-  slug: Signal<String>,
   description: Signal<String>,
   /// Whether the fields are locked, as last shown.
   locked: Ref<bool>,
 }
-impl Component for General {
+impl Component for Settings {
   type Props = SummaryProps;
   fn create(ctx: &mut Ctx) -> Self {
-    let general = Self {
-      description: ctx.signal(ctx.props::<SummaryProps>().state.get().shown().description().to_owned()),
-      name: ctx.signal({
-        let editing = ctx.props::<SummaryProps>().state.get();
+    let props = ctx.props::<SummaryProps>().clone();
+    let editing = props.state.get();
+    let settings = Self {
+      description: ctx.signal(editing.shown().description().to_owned()),
+      name: ctx.signal(
         editing
           .inputs
           .get("pipeline-name")
           .cloned()
-          .unwrap_or_else(|| editing.name.to_string())
-      }),
-      slug: ctx.signal(ctx.props::<SummaryProps>().state.get().opened.slug.to_string()),
-      locked: ctx.create_ref(ctx.props::<SummaryProps>().locked),
+          .unwrap_or_else(|| editing.name.to_string()),
+      ),
+      locked: ctx.create_ref(props.locked),
     };
-    let state = ctx.props::<SummaryProps>().state.clone();
-    super::inspector::follow_identity(ctx, &state, (&general.name, &general.description), &general.locked);
-    general
+    super::summary::follow_identity(
+      ctx,
+      &props.state,
+      (&settings.name, &settings.description),
+      &settings.locked,
+    );
+    settings
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
+    self.locked.set(props.locked);
     let editing = props.state.get();
-    let locked = props.locked;
-    self.locked.set(locked);
-    let input = FieldInput::new(
+    let changed = changed(&editing);
+    let general = self.general(ctx, &props, &editing, changed.description);
+    let pane = parts::pane("pipeline-settings-page")
+      .child(general)
+      .child(runs(ctx))
+      .child(super::sources::settings_section(ctx, &props.state, props.locked))
+      .child(super::delivers::section(
+        ctx,
+        &props.state,
+        (props.locked, changed.delivers),
+      ))
+      .child(deliver_step(ctx, &editing));
+    // The strip spans the page above the pane, as the viewed version's banner does (`uHJyF` in `A29iv`).
+    Column::new()
+      .id("pipeline-settings-tab")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Lg)
+      .with_children((changed.count() > 0).then(|| strip(ctx, &props.state, (changed.count(), props.locked))))
+      .child(pane)
+  }
+}
+
+/// The settings the draft changed from the published version.
+#[derive(Clone, Copy)]
+struct Changed {
+  description: bool,
+  delivers: bool,
+}
+impl Changed {
+  const fn count(self) -> usize {
+    self.description as usize + self.delivers as usize
+  }
+}
+fn changed(editing: &Editing) -> Changed {
+  let latest = editing.opened.latest.as_ref().filter(|_| editing.viewing.is_none());
+  Changed {
+    description: latest.is_some_and(|v| v.body.description() != editing.edit.description()),
+    delivers: latest.is_some_and(|v| v.body.delivers() != editing.edit.delivers()),
+  }
+}
+
+fn next(editing: &Editing) -> String {
+  next_version(&editing.opened).map_or_else(String::new, |v| v.get().to_string())
+}
+
+impl Settings {
+  fn general(&self, ctx: &mut Ctx, props: &SummaryProps, editing: &Editing, changed: bool) -> RowGroup {
+    let mut name = FieldInput::new("pipeline-settings-name", ctx.t("pipelines.name"), self.name.clone())
+      .width(Dimension::Px(FIELD_WIDTH));
+    if props.locked {
+      name = name.locked();
+    }
+    if let Some(error) = editing.errors.get("pipeline-name") {
+      name = name.error(parts::pipeline_name_error(ctx, error));
+    }
+    let name = name.render(ctx);
+    let description = FieldInput::new(
       "pipeline-settings-description",
       ctx.t("pipelines.description"),
       self.description.clone(),
     )
-    .text_area()
-    .width(Dimension::Px(300.0));
-    let input = if locked { input.locked() } else { input }.render(ctx);
-    let (name, slug) = self.identity(ctx);
-    let changed = editing.viewing.is_none()
-      && editing
-        .opened
-        .latest
-        .as_ref()
-        .is_some_and(|v| v.body.description() != editing.edit.description());
-    let mut control = Column::new()
-      .width(Dimension::Px(300.0))
-      .spacing(SpacingSize::Sm)
-      .child(input);
-    if changed {
-      let undo = self.description.clone();
-      let before = editing
-        .opened
-        .latest
-        .as_ref()
-        .map(|v| v.body.description().to_owned())
-        .unwrap_or_default();
-      let action = ActionButton::new(
-        "pipeline-description-undo",
-        ButtonKind::Secondary,
-        ctx.t("pipelines.undoChange"),
-      )
-      .on_click(move || undo.set(before.clone()));
-      control = control
-        .child(changed_tag(ctx, &editing))
-        .child(if locked { action.disabled() } else { action });
-    }
-    form_section::section(
-      "pipeline-settings-general",
-      &ctx.t("pipelines.general"),
-      changed.then(|| ctx.t("pipelines.changed")).as_deref(),
-      vec![
-        form_section::side_row(
-          Label::new("pipeline-settings-name", ctx.t("pipelines.name")).description(ctx.t("pipelines.nameHelp")),
-          name,
-          Place::Within,
-          true,
-        ),
-        form_section::side_row(
-          Label::new("pipeline-settings-slug", ctx.t("pipelines.slug")).description(ctx.t("pipelines.slugHelp")),
-          slug,
-          Place::Within,
-          true,
-        ),
-        form_section::side_row(
-          Label::new("pipeline-settings-description", ctx.t("pipelines.description"))
-            .description(ctx.t("pipelines.descriptionHelp")),
-          control,
-          Place::Last,
-          true,
-        ),
-      ],
-    )
-  }
-}
-fn starts(ctx: &Ctx) -> Element {
-  let mut choices = Column::new()
-    .width(Dimension::Px(300.0))
-    .spacing(SpacingSize::Sm)
-    .child(OptionCard::new(
-      "pipeline-on-start",
-      (Icon::Zap, ctx.t("pipelines.onTaskStart")),
-      ctx.t("pipelines.onStartHelp"),
-      true,
-      || {},
-    ));
-  for (id, title, glyph) in [
-    ("pipeline-scheduled", "pipelines.scheduled", Icon::Clock),
-    (
-      "pipeline-github-trigger",
-      "pipelines.githubTrigger",
-      Icon::GitPullRequest,
-    ),
-  ] {
-    choices = choices.child(
-      OptionCard::new(
-        id,
-        (glyph, ctx.t(title)),
-        ctx.t(if id == "pipeline-scheduled" {
-          "pipelines.scheduledHelp"
-        } else {
-          "pipelines.githubTriggerHelp"
-        }),
-        false,
-        || {},
-      )
-      .unavailable(ctx.t("pipelines.plannedTrigger")),
-    );
-  }
-  form_section::section(
-    "pipeline-settings-starts",
-    &ctx.t("pipelines.starts"),
-    None,
-    vec![form_section::side_row(
-      Label::new("pipeline-settings-trigger", ctx.t("pipelines.startsRun")).description(ctx.t("pipelines.startsHelp")),
-      choices,
-      Place::Last,
-      true,
-    )],
-  )
-  .into()
-}
-impl General {
-  fn identity(&self, ctx: &mut Ctx) -> (Element, Element) {
-    let props = ctx.props::<SummaryProps>().clone();
-    let mut name =
-      FieldInput::new("pipeline-settings-name", ctx.t("pipelines.name"), self.name.clone()).width(Dimension::Px(300.0));
-    if props.locked {
-      name = name.locked();
-    }
-    if let Some(error) = props.state.get().errors.get("pipeline-name") {
-      name = name.error(parts::pipeline_name_error(ctx, error));
-    }
-    let name = name.render(ctx);
-    let slug = FieldInput::new("pipeline-settings-slug", ctx.t("pipelines.slug"), self.slug.clone())
-      .locked()
-      .mono()
-      .trailing(Icon::Lock)
-      .width(Dimension::Px(300.0))
-      .render(ctx);
-
-    let slug = Column::new()
-      .width(Dimension::Px(300.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .child(slug)
-      .child(crate::ui::unavailable::reason_line(
-        "pipeline-slug-fixed",
-        &if props.state.get().opened.latest.is_some() {
-          ctx.t("pipelines.slugPublished")
-        } else {
-          ctx.t("pipelines.slugFixed")
-        },
-      ))
-      .into();
-    (name, slug)
-  }
-}
-fn heading(ctx: &Ctx, changed: bool, editing: &super::state::Editing) -> Column {
-  let status = if let Some(version) = editing.viewing_version {
-    ctx.t_args("pipelines.viewing", [("version", version.get().to_string())])
-  } else {
-    ctx.t(if changed {
-      "pipelines.draftStrip"
-    } else if editing.opened.latest.is_none() {
-      "pipelines.saved"
+    .width(Dimension::Px(FIELD_WIDTH));
+    let description = if props.locked {
+      description.locked()
     } else {
-      "pipelines.settingsUnchanged"
-    })
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(Text::new(&ctx.t("pipelines.settings")).variant(TypographyStyle::Heading))
-    .child(parts::note(
-      &ctx.t_args(
-        "pipelines.settingsDescription",
-        [
-          ("name", editing.name.to_string()),
-          (
-            "version",
-            orchester_workspace::pipelines::write::next_version(&editing.opened)
-              .map_or_else(String::new, |v| v.get().to_string()),
-          ),
-        ],
-      ),
+      description
+    }
+    .render(ctx);
+    let mut description_row = GroupRow::new("pipeline-settings-description-row", ctx.t("pipelines.description"))
+      .hint(ctx.t("pipelines.descriptionHelp"))
+      .end(description);
+    if changed {
+      description_row = description_row.tag(draft_tag(ctx, editing));
+    }
+    let slug_hint = ctx.t(if editing.opened.latest.is_some() {
+      "pipelines.slugPublished"
+    } else {
+      "pipelines.slugFixed"
+    });
+    RowGroup::new("pipeline-settings-general", ctx.t("pipelines.general"))
+      .row(GroupRow::new("pipeline-settings-name-row", ctx.t("pipelines.name")).end(name))
+      .row(
+        GroupRow::new("pipeline-settings-slug", ctx.t("pipelines.slug"))
+          .hint(slug_hint)
+          .mono_value(&editing.opened.slug),
+      )
+      .row(description_row)
+      .row(GroupRow::new("pipeline-scope", ctx.t("pipelines.who")).value(&ctx.t("pipelines.scope")))
+  }
+}
+
+/// *Changed in draft vN* on a changed setting's row (`xeLvf`).
+pub(super) fn draft_tag(ctx: &Ctx, editing: &Editing) -> Row {
+  Row::new()
+    .id("pipeline-settings-draft")
+    .padding(Padding::symmetric(
+      SpacingSize::Sm,
+      crate::theme::ExtraSpacing::Tight.role(),
     ))
+    .rounded(crate::theme::ExtraRadius::Full.role())
+    .background(PaletteColor::InfoMuted)
     .child(
-      Row::new()
-        .id("pipeline-settings-draft")
-        .spacing(SpacingSize::Sm)
-        .padding(SpacingSize::Xs)
-        .child(crate::ui::icon::icon(
-          Icon::GitBranch,
-          crate::theme::IconSize::Sm,
-          lurq::app::theme::PaletteColor::TextMuted,
-        ))
-        .child(parts::caption(&status)),
+      Text::new(&ctx.t_args("pipelines.changedDraft", [("version", next(editing))]))
+        .variant(lurq::app::theme::TypographyStyle::Caption)
+        .color(ExtraColor::AccentText.role()),
     )
 }
 
-fn draft_strip(ctx: &Ctx, state: &State, locked: bool) -> Element {
+fn runs(ctx: &Ctx) -> RowGroup {
+  RowGroup::new("pipeline-settings-runs", ctx.t("pipelines.runsTitle"))
+    .row(GroupRow::new("pipeline-on-start", ctx.t("pipelines.starts")).value(&ctx.t("pipelines.onTaskStart")))
+    .row(
+      GroupRow::new("pipeline-settings-failure", ctx.t("pipelines.stopped")).value(&ctx.t("pipelines.stoppedSummary")),
+    )
+}
+
+/// The Deliver step, which opens on the Steps tab.
+fn deliver_step(ctx: &Ctx, editing: &Editing) -> RowGroup {
+  let hint = editing.shown().deliver().map_or_else(
+    || ctx.t("pipelines.noDeliverChip"),
+    |deliver| super::deliver::executor_words(ctx, deliver),
+  );
+  let views = editing.views.clone();
+  RowGroup::new("pipeline-settings-deliver", ctx.t("pipelines.deliverStep")).row(
+    GroupRow::new("pipeline-settings-deliver-row", ctx.t("delivery.step.title"))
+      .hint(hint)
+      .opens_page(Press::run(move || views.choose(View::Deliver))),
+  )
+}
+
+/// The draft strip (`Draft strip` `uHJyF`): how many settings the draft changed, what that means, *Undo change*.
+fn strip(ctx: &Ctx, state: &State, (count, locked): (usize, bool)) -> Element {
   let editing = state.get();
   let undo = state.clone();
-  let version = orchester_workspace::pipelines::write::next_version(&editing.opened)
-    .map_or_else(String::new, |v| v.get().to_string());
   let action = ActionButton::new(
     "pipeline-settings-undo",
     ButtonKind::Secondary,
@@ -348,91 +221,37 @@ fn draft_strip(ctx: &Ctx, state: &State, locked: bool) -> Element {
   .icon(Icon::Undo2)
   .on_click(move || {
     undo.update(|s| {
-      if let Some(latest) = &s.opened.latest {
+      if let Some(latest) = s.opened.latest.clone() {
         s.edit.set_description(latest.body.description());
+        s.edit.set_delivers(latest.body.delivers());
         s.epoch += 1;
       }
     })
   });
+  let title = if count == 1 {
+    ctx.t_args("pipelines.settingsChangeCount", [("version", next(&editing))])
+  } else {
+    ctx.t_args(
+      "pipelines.settingsChangesCount",
+      [("count", count.to_string()), ("version", next(&editing))],
+    )
+  };
   Row::new()
     .id("pipeline-settings-change-strip")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(44.0))
-    .padding(lurq::node::padding::Padding::horizontal(SpacingSize::Lg))
-    .spacing(ExtraSpacing::Loose.role())
+    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .spacing(crate::theme::ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .background(lurq::app::theme::PaletteColor::SurfaceRaised)
-    .child(crate::ui::icon::icon(
-      Icon::FilePen,
-      crate::theme::IconSize::Md,
-      lurq::app::theme::PaletteColor::TextSecondary,
-    ))
+    .rounded(RadiusSize::Md)
+    .background(PaletteColor::SurfaceRaised)
+    .child(icon(Icon::FilePen, IconSize::Md, ExtraColor::AccentText.role()))
+    .child(Text::new(&title).variant(ExtraTypography::Strong.role()))
     .child(
-      Text::new(&ctx.t_args("pipelines.settingsChangeCount", [("version", version)]))
-        .variant(crate::theme::ExtraTypography::Strong.role()),
+      Text::new(&ctx.t("pipelines.settingsImpact"))
+        .variant(GroupText::Hint.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
-    .child(parts::note(&ctx.t("pipelines.settingsImpact")).flex(1.0))
     .child(if locked { action.disabled() } else { action })
     .into()
-}
-/// The sections still planned, and Sources (`Q10UQ`) and Delivery (`EYko8`, what a run delivers) among them in the
-/// design's order.
-fn proposals(
-  ctx: &mut Ctx,
-  sections: &super::settings_nav::Sections,
-  (state, locked): (&State, bool),
-  mut form: Column,
-) -> Column {
-  for key in [
-    "pipelines.runDefaults",
-    "pipelines.failureDefaults",
-    "pipelines.permissions",
-    "pipelines.sources",
-    "pipelines.delivery",
-    "pipelines.archive",
-  ] {
-    let section = Column::new()
-      .width(Dimension::Pct(100.0))
-      .ref_element(sections.target(key));
-    form = form.child(match key {
-      "pipelines.sources" => section.child(super::sources::settings_section(ctx, state, locked)),
-      "pipelines.delivery" => section.child(super::delivers::settings_section(ctx, state, locked)),
-      _ => section
-        .spacing(SpacingSize::Md)
-        .child(parts::section(ctx, key))
-        .child(parts::note(&ctx.t("pipelines.proposal"))),
-    });
-  }
-  form = form.child(
-    property(
-      "pipeline-scope",
-      &ctx.t("pipelines.who"),
-      &ctx.t("pipelines.scope"),
-      PropertyValue::Plain,
-    )
-    .ref_element(sections.target("pipelines.who")),
-  );
-  form
-}
-fn changed_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
-  Row::new()
-    .padding(lurq::node::padding::Padding::symmetric(
-      SpacingSize::Sm,
-      ExtraSpacing::Tight.role(),
-    ))
-    .rounded(crate::theme::ExtraRadius::Full.role())
-    .background(lurq::app::theme::PaletteColor::InfoMuted)
-    .child(
-      parts::caption(
-        &ctx.t_args(
-          "pipelines.changedDraft",
-          [(
-            "version",
-            orchester_workspace::pipelines::write::next_version(&editing.opened)
-              .map_or_else(String::new, |v| v.get().to_string()),
-          )],
-        ),
-      )
-      .color(crate::theme::ExtraColor::Selection.role()),
-    )
 }

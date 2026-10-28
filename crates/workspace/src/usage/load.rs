@@ -1,15 +1,16 @@
 //! What the Usage page and `get_usage` read: the usage facts of a project, or of every listed project,
-//! from a time on, and the plan limits history of every listed project, since plan limits belong to the
-//! CLI accounts and every project's runs report them (decided 2026-09-30), with what Orchester read of
-//! them outside runs. Blocks on SQLite.
+//! from a time on, with the agent providers they ran on, and the plan limits history of every listed project, since
+//! plan limits belong to the CLI accounts and every project's runs report them (decided 2026-09-30), with what
+//! Orchester read of them outside runs. Blocks on SQLite.
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   account::AgentAccount,
+  id::ConnectionId,
   time::Timestamp,
   usage::{
-    ProjectFacts,
+    ProjectFacts, ProviderName,
     limits::{LimitSnapshot, WarningThreshold, retained_since},
   },
 };
@@ -28,7 +29,7 @@ pub struct UsageData {
   /// Every listed project's plan limits reports of the last 90 days.
   pub snapshots: Arc<[LimitSnapshot]>,
   pub threshold: WarningThreshold,
-  /// The CLI accounts, which name the accounts a filter chooses.
+  /// The CLI accounts, which name the accounts whose plan limits are drawn.
   pub accounts: Arc<[AgentAccount]>,
   pub read_at: Timestamp,
 }
@@ -95,6 +96,16 @@ impl UsageData {
       accounts: workspace.agent_accounts()?.into(),
       read_at: now,
     })
+  }
+
+  /// Every project's agent providers in series order: project by project, each as its Connections page lists them.
+  pub fn providers(&self) -> impl Iterator<Item = &ProviderName> {
+    self.projects.iter().flat_map(|project| &project.facts.providers)
+  }
+
+  /// The provider of `connection`, among every project's.
+  pub fn provider(&self, connection: ConnectionId) -> Option<&ProviderName> {
+    self.providers().find(|provider| provider.id == connection)
   }
 }
 

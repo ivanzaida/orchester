@@ -1,9 +1,12 @@
 //! The QA seed (`examples/seed`): every scenario builds a new repository in a temporary folder and registers
 //! its project, and what it wrote reads back through the store the way the app reads it: the task list's
 //! tabs and phases, the runs' checkpoints, worktrees and transcripts, the live connection (`live`), the schema a
-//! newer build left, and what the seed refuses (`refusals`). Needs `git`.
+//! newer build left, what the seed refuses (`refusals`) and its command line (`command_line`). Needs `git`.
 
 mod agents;
+#[path = "../../examples/seed/cli.rs"]
+mod cli;
+mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
@@ -153,11 +156,11 @@ fn seed_every_scenario_builds_a_repository_and_registers_kontur() {
       .every_project()
       .expect("projects");
     // `conversation`, and `long-chats` on it, register Atlas too, opened before Kontur, for its links into another
-    // project; `import` registers Personal website, to import from.
+    // project; `import`, and `import-done` on it, register Personal website, to import from.
     let names: Vec<&str> = projects.iter().map(|project| project.name.as_str()).collect();
     let expected: &[&str] = match scenario.name() {
       "conversation" | "long-chats" => &["Kontur", "Atlas"],
-      "import" => &["Kontur", "Personal website"],
+      "import" | "import-done" => &["Kontur", "Personal website"],
       _ => &["Kontur"],
     };
     assert_eq!(names, expected, "{}", scenario.name());
@@ -174,6 +177,7 @@ fn seed_names_every_scenario_once() {
     names,
     [
       "agents",
+      "agents-library",
       "agents-empty",
       "agents-no-connections",
       "agents-unreadable",
@@ -205,15 +209,18 @@ fn seed_names_every_scenario_once() {
       "project-settings-shared",
       "pipelines",
       "pipelines-empty",
+      "pipelines-publish",
       "accounts",
       "settings",
       "pull-requests",
       "pull-request-feedback",
       "sources",
+      "sources-unreadable",
       "usage",
       "usage-empty",
       "usage-bare",
       "import",
+      "import-done",
       "modules",
       "modules-short",
       "modules-none"

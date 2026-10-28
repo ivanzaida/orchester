@@ -1,19 +1,24 @@
-//! Instructions fePhH: scope tabs, the library, editor and in-place preview.
+//! Instructions, the Agents hub's second tab (`02 Instructions` `jtiqe`): one list in the order prompts assemble them,
+//! a rule's page with its prompt preview and variables beside it (`02b` `Sn37u`, `02d` `JXvc0`), a new rule that
+//! chooses its scope on the page (`02e` `dMYPx`), and the import page (`02c` `P21bwh`). The rule shown and the panel
+//! beside it are the route's ([`View`]), so Back and Forward step through them.
 mod autosave;
 mod availability;
 mod editor;
+mod editor_actions;
 mod editor_notes;
 mod empty;
 mod fields;
 mod frame;
 mod import;
-mod import_preview;
-mod import_rows;
 mod leaving;
 mod library;
 mod library_groups;
+mod page_head;
 mod panels;
 mod preview;
+mod rule;
+mod scope_choice;
 mod sources;
 mod state;
 mod variable_detail;
@@ -29,16 +34,20 @@ use lurq::{
   },
   components::Column,
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{background, instructions::data::ProjectInstructions, messages, tasks::outside::Outside};
 use state::{Selection, Tab, View};
 
 use crate::{
   project::ShownProject,
+  screens::hub::{self, Head, HubTab},
+  theme::HubSpacing,
   ui::{
-    message::message_text,
-    state::{load_error, loading},
+    button::{ActionButton, ButtonKind},
+    failure::LastFailure,
+    icon::Icon,
+    state::loading,
   },
 };
 
@@ -52,6 +61,8 @@ pub struct InstructionsScreen {
   /// recorded.
   reloads: Signal<u64>,
   leave: crate::navigation::guard::LeaveGuard,
+  /// Why the instructions couldn't be read, kept while they are read again.
+  failure: LastFailure,
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: View) -> Element {
   ctx.mount_keyed::<InstructionsScreen>(
@@ -72,6 +83,7 @@ impl Component for InstructionsScreen {
       created: ctx.signal(state::Saved::default()),
       dirty,
       busy,
+      removed: ctx.signal(state::Removed::default()),
     };
     let rule = selection.clone();
     let leave = selection.navigation.guard_within(
@@ -83,6 +95,7 @@ impl Component for InstructionsScreen {
       retry: ctx.signal(0),
       reloads: ctx.signal(0),
       leave,
+      failure: LastFailure::default(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -109,40 +122,74 @@ impl Component for InstructionsScreen {
       })
       .state()
       .get();
-    let page = Column::new()
-      .id("screen-instructions")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0));
+    let view = ctx.props::<Props>().1;
+    let head = self.head(ctx, view);
+    let retry = self.retry.clone();
+    let what = ctx.t("instructions.loadFailed");
+    let failure = hub::read_failure(
+      ctx,
+      &project,
+      (HubTab::Instructions, "instructions-load-error", &what),
+      self.failure.follow(&read),
+      move || retry.update(|v| *v += 1),
+    );
+    let failure = match failure {
+      Some(failure) if read.data.is_none() => {
+        let body = hub::list_body("instructions-failed", failure.page(ctx));
+        return frame(ctx, &project, head, body);
+      }
+      failure => failure,
+    };
     if read.is_pending() && read.data.is_none() {
-      return page.child(loading("instructions-loading", &ctx.t("instructions.reading")));
+      let body = loading("instructions-loading", &ctx.t("instructions.reading"));
+      return frame(ctx, &project, head, body.into());
     }
-    let mut page = page;
-    if let Some(error) = read.error.clone().filter(|_| read.is_rejected()) {
-      let retry = self.retry.clone();
-      page = page.child(load_error(
-        ctx,
-        "instructions-load-error",
-        (&ctx.t("instructions.loadFailed"), &message_text(ctx, &error)),
-        move || retry.update(|v| *v += 1),
-      ));
+    let mut page = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
+    if let Some(failure) = failure {
+      // What was read stays under it.
+      page = page.child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(
+            Padding::new()
+              .left(HubSpacing::Side.role())
+              .right(HubSpacing::Side.role())
+              .top(HubSpacing::BodyTop.role()),
+          )
+          .child(failure.page(ctx)),
+      );
     }
     let reading = read.is_pending();
-    let Some(data) = read.data else {
-      return page;
-    };
-    let view = ctx.props::<Props>().1;
-    page
-      .with_children(
-        view
-          .tab()
-          .filter(|_| view.panel() != Some(state::Panel::Full))
-          .map(|tab| frame::header(ctx, &project, &data, tab, &self.selection)),
-      )
-      .with_children(leaving::question(ctx, &self.selection, &self.leave))
-      .child(self.content(ctx, (project, view), data, reading))
+    if let Some(data) = read.data {
+      page = page
+        .with_children(leaving::question(ctx, &self.selection, &self.leave))
+        .child(
+          Column::new()
+            .width(Dimension::Pct(100.0))
+            .flex(1.0)
+            .min_height(Dimension::Px(0.0))
+            .child(self.content(ctx, (project.clone(), view), data, reading)),
+        );
+    }
+    frame(ctx, &project, head, page.into())
   }
 }
 impl InstructionsScreen {
+  /// Import from repository and New instruction, in the scope of the rule shown.
+  fn head(&self, ctx: &Ctx, view: View) -> Head {
+    let tab = view.tab().unwrap_or_default();
+    Head::actions([
+      ActionButton::new("instructions-import", ButtonKind::Ghost, ctx.t("instructions.import"))
+        .icon(Icon::FolderOpen)
+        .opens(self.selection.to(View::Import))
+        .into(),
+      ActionButton::new("instructions-new", ButtonKind::Primary, ctx.t("instructions.new"))
+        .icon(Icon::Plus)
+        .opens(self.selection.to(View::new_rule(tab)))
+        .into(),
+    ])
+  }
+
   fn content(
     &self,
     ctx: &mut Ctx,
@@ -150,48 +197,59 @@ impl InstructionsScreen {
     data: ProjectInstructions,
     reading: bool,
   ) -> Element {
-    match view.tab() {
-      None => ctx.mount_keyed::<import::Import>(
-        "instruction-import",
-        import::Props {
-          project,
-          selection: self.selection.clone(),
-        },
-      ),
-      Some(tab) => {
-        let created = self.selection.created.get().0;
-        if created.as_ref().is_some_and(|entry| data.entry(entry.id).is_some()) {
-          self.selection.created.set(state::Saved::default());
-        }
-        let entry = match view {
-          View::Rule(_, selected, _) => selected
-            .and_then(|id| {
-              data
-                .entry(id)
-                .or_else(|| created.as_ref().filter(|entry| entry.id == id))
-            })
-            .or_else(|| data.entries.iter().find(|entry| Tab::of(entry.body.scope()) == tab))
-            .cloned(),
-          _ => None,
-        };
-        if entry.is_none() && !matches!(view, View::New(..)) {
-          return frame::empty(ctx, &project, (&data, tab), &self.selection);
-        }
-        let key = format!("instruction-editor-{tab:?}-{:?}", entry.as_ref().map(|entry| entry.id));
-        ctx.mount_keyed::<editor::Editor>(
-          &key,
-          editor::Props {
-            project,
-            data,
-            entry,
-            tab,
-            panel: view.panel().unwrap_or(tab.panel()),
-            selection: self.selection.clone(),
-            reloads: self.reloads.clone(),
-            reading,
-          },
-        )
-      }
+    let created = self.selection.created.get().0;
+    if created.as_ref().is_some_and(|entry| data.entry(entry.id).is_some()) {
+      self.selection.created.set(state::Saved::default());
     }
+    let (tab, entry, panel) = match view {
+      View::Import => {
+        return ctx.mount_keyed::<import::Import>(
+          "instruction-import",
+          import::Props {
+            project,
+            selection: self.selection.clone(),
+          },
+        );
+      }
+      View::Rule(_, None, _) if data.entries.is_empty() => {
+        return frame::empty(ctx, &project, (&data, Tab::Project), &self.selection);
+      }
+      View::Rule(_, None, _) => return library::list(ctx, &data, &self.selection),
+      View::Rule(tab, Some(id), panel) => {
+        let entry = data
+          .entry(id)
+          .or_else(|| created.as_ref().filter(|entry| entry.id == id))
+          .cloned();
+        if entry.is_none() {
+          return library::list(ctx, &data, &self.selection);
+        }
+        (tab, entry, panel)
+      }
+      View::New(tab, panel) => (tab, None, panel),
+    };
+    let key = format!("instruction-editor-{:?}", entry.as_ref().map(|entry| entry.id));
+    ctx.mount_keyed::<editor::Editor>(
+      &key,
+      editor::Props {
+        project,
+        data,
+        entry,
+        tab,
+        panel,
+        selection: self.selection.clone(),
+        reloads: self.reloads.clone(),
+        reading,
+      },
+    )
   }
+}
+
+/// The hub on its Instructions tab around `body`, as the screen's element.
+fn frame(ctx: &mut Ctx, project: &ShownProject, head: Head, body: Element) -> Element {
+  Column::new()
+    .id("screen-instructions")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(hub::page(ctx, project, (HubTab::Instructions, head), body))
+    .into()
 }

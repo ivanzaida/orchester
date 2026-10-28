@@ -78,7 +78,7 @@ fn estimate_blocking(
   }
   let input = EstimateInput::new(task.details(), &db.calibration_records().map_err(failed)?);
   let setup = reviewer_setup(&db, &keys).map_err(failed)?;
-  let provider = setup.provider().map(|(provider, _)| provider);
+  let provider = setup.provider().map(|(provider, ..)| provider);
   let started_at = Timestamp::now();
   let Some((model, estimated)) = setup.estimate(&input, runtime) else {
     return Ok(EstimateOutcome::Failed {
@@ -144,7 +144,9 @@ impl ReviewerSetup {
     match self {
       Self::Missing => None,
       Self::Unreachable { model } => Some((model, not_run("the reviewer cannot be reached".to_owned()))),
-      Self::Native { client, model, effort } => {
+      Self::Native {
+        client, model, effort, ..
+      } => {
         let request = native_estimate_request(input, &model, effort);
         let estimated = runtime.block_on(async {
           let mut spend = NativeSpend::default();

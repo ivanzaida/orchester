@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
   execution::{
-    checkpoint::{self, Merge},
+    checkpoint::{self, Merge, Saved},
     record::RecordError,
     run::{ExecutionError, RunTask},
     workspace::Workspace,
@@ -54,6 +54,8 @@ impl RunTask {
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
       // No tool decision was sent: save the session's work without completing its step.
       Some(StopCause::Paused) => self.save(execution, &active, "saved while awaiting a tool decision"),
+      // The execution stays open: it continues where it stopped once the disk has room and the run resumes.
+      Some(StopCause::LowDisk) => self.save(execution, &active, "saved for low disk space"),
       // The execution stays open and continues its session with the person's message.
       Some(StopCause::TurnStopped) => self.turn_stopped(execution, &active),
       // The execution stays open and continues with the run's new permissions.
@@ -160,19 +162,26 @@ impl RunTask {
       self.keep_handoff(execution, StepFate::Failed);
       return self.fail_judged(execution, failure, active.judged.clone());
     }
-    self.pass(execution, (&active.workspace, &active.invocation), output.text)
+    self.pass(
+      execution,
+      (&active.workspace, &active.invocation),
+      active.judged.as_ref(),
+      output.text,
+    )
   }
 
   /// A step its agent or command finished with `output`, working in `workspace` (problems are reported around
-  /// `invocation`): its work joins the run's branch and the step passes — a gated one proposes `output` as its next
-  /// plan — or it fails when its work cannot be committed or merged.
+  /// `invocation`) from `judged`, the revision of the run's branch it started on when known: its work joins the run's
+  /// branch and the step passes — a gated one proposes `output` as its next plan — or it fails when its work cannot be
+  /// committed or merged.
   pub(in super::super) fn pass(
     &mut self,
     execution: StepExecutionId,
     (workspace, invocation): (&Workspace, &Invocation),
+    judged: Option<&Revision>,
     output: String,
   ) -> Result<(), ExecutionError> {
-    match self.integrate(execution, workspace) {
+    match self.integrate(execution, (workspace, invocation), judged) {
       Ok(Integrated::Done) if self.run.is_gated(execution).map_err(RecordError::from)? => {
         self.propose(execution, output)
       }
@@ -198,19 +207,33 @@ impl RunTask {
   }
 
   /// Commits a passed step's work and brings it onto the run's branch: in the run's worktree it is
-  /// there already; from a worktree of its own it is merged, and that worktree removed.
-  fn integrate(&mut self, execution: StepExecutionId, workspace: &Workspace) -> Result<Integrated, IntegrateError> {
+  /// there already; from a worktree of its own it is merged, and that worktree removed, or the workspace it borrowed
+  /// given back.
+  fn integrate(
+    &mut self,
+    execution: StepExecutionId,
+    (workspace, invocation): (&Workspace, &Invocation),
+    judged: Option<&Revision>,
+  ) -> Result<Integrated, IntegrateError> {
     let message = self.commit_message(execution, None);
-    let committed = checkpoint::commit(workspace.path(), &message)?;
-    let Workspace::Own { branch, owner, .. } = workspace else {
-      if let Some(revision) = committed {
-        self.checkpoint(execution, revision)?;
-      }
+    let saved = self.save_work(workspace, judged, &message)?;
+    let Workspace::Own {
+      branch,
+      owner,
+      borrowed,
+      ..
+    } = workspace
+    else {
+      self.keep(execution, invocation, saved)?;
       return Ok(Integrated::Done);
     };
-    let before = checkpoint::head(&self.worktree)?;
+    // What is on the step's branch is merged and recorded below; commits off it are only reported.
+    if let Saved::Elsewhere { .. } = saved {
+      self.keep(execution, invocation, saved)?;
+    }
+    let before = checkpoint::head(self.worktree())?;
     let message = self.commit_message(execution, Some("merge"));
-    let merged = match checkpoint::merge(&self.worktree, branch, &message)? {
+    let merged = match checkpoint::merge(self.worktree(), branch, &message)? {
       Merge::Merged(revision) => revision,
       Merge::Conflict(files) => {
         return Ok(Integrated::Conflict {
@@ -222,16 +245,20 @@ impl RunTask {
     if merged != before {
       self.checkpoint(execution, merged)?;
     }
-    // The step's commits are on the run's branch now; a worktree left behind only takes space.
-    if let Err(error) = Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch)) {
+    if *borrowed {
+      self.give_back_merged_step(*owner, branch);
+    } else if let Err(error) =
+      Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch))
+    {
+      // The step's commits are on the run's branch now; a worktree left behind only takes space.
       tracing::warn!(run = %self.run.id(), %execution, %error, "the merged step's worktree was not removed");
     }
     Ok(Integrated::Done)
   }
 
   /// Commits what an agent that did not pass changed, in its own worktree, as a checkpoint of its
-  /// execution: nothing is discarded, and the run's worktree stays clean for later merges. A commit
-  /// that fails is reported; the changes stay uncommitted.
+  /// execution — or records the commits it made itself: nothing is discarded, and the run's worktree
+  /// stays clean for later merges. A commit that fails is reported; the changes stay uncommitted.
   pub(in super::super) fn save(
     &mut self,
     execution: StepExecutionId,
@@ -239,14 +266,41 @@ impl RunTask {
     what: &str,
   ) -> Result<(), ExecutionError> {
     let message = self.commit_message(execution, Some(what));
-    match checkpoint::commit(active.workspace.path(), &message) {
-      Ok(Some(revision)) => self.checkpoint(execution, revision),
-      Ok(None) => Ok(()),
+    match self.save_work(&active.workspace, active.judged.as_ref(), &message) {
+      Ok(saved) => self.keep(execution, &active.invocation, saved),
       Err(error) => {
         let problem = RunnerProblem::CheckpointFailed {
           detail: error.to_string(),
         };
         self.report(&active.invocation, problem)
+      }
+    }
+  }
+
+  /// Commits what `workspace` holds uncommitted with `message`; else takes the commits the step's agent made itself on
+  /// the workspace's branch, when its HEAD is past where the step started (`judged`), the run's last checkpoint and the
+  /// run's start.
+  fn save_work(&self, workspace: &Workspace, judged: Option<&Revision>, message: &str) -> Result<Saved, WorktreeError> {
+    let branch = match workspace {
+      Workspace::Run(_) => self.run.branch().as_str(),
+      Workspace::Own { branch, .. } => branch.as_str(),
+    };
+    let last = self.run.last_checkpoint().map(Checkpoint::revision);
+    let known: Vec<&Revision> = judged.into_iter().chain(last).chain([self.run.base()]).collect();
+    checkpoint::save(workspace.path(), message, (branch, &known))
+  }
+
+  /// Records `saved` as `execution`'s checkpoint; commits its agent made off the worktree's branch are not taken, which
+  /// is reported around `invocation`.
+  fn keep(&mut self, execution: StepExecutionId, invocation: &Invocation, saved: Saved) -> Result<(), ExecutionError> {
+    match saved {
+      Saved::At(revision) => self.checkpoint(execution, revision),
+      Saved::Nothing => Ok(()),
+      Saved::Elsewhere { head, branch } => {
+        tracing::warn!(run = %self.run.id(), %execution, %head, %branch, "the agent's commits are off the step's branch");
+        let detail =
+          format!("the agent's commits are on {head}, not on {branch}: they were not taken as the step's work");
+        self.report(invocation, RunnerProblem::CheckpointFailed { detail })
       }
     }
   }
@@ -285,7 +339,7 @@ impl RunTask {
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(Taken::NoSlot);
     }
-    let judged = checkpoint::head(&self.worktree)
+    let judged = checkpoint::head(self.worktree())
       .inspect_err(|error| tracing::warn!(run = %self.run.id(), %error, "the run's revision cannot be read"))
       .ok();
     if let Some(revision) = judged

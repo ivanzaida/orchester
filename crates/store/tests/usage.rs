@@ -16,7 +16,7 @@ use orchester_core::{
   store::{ActivityStore, ConnectionStore},
   task::organization::{ChangeActor, TaskOrganization},
   time::Timestamp,
-  usage::{IndexGiven, RunOutcome, limits::RETENTION_DAYS},
+  usage::{IndexGiven, RunOutcome, UsedProvider, limits::RETENTION_DAYS},
 };
 use orchester_store::ProjectDb;
 use support::{at, copied_at_version, model, name, started_run};
@@ -95,8 +95,6 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
     index_searches: Some(3),
   };
   db.save_edit_progress(invocation.id, &progress).expect("progress");
-  let account = orchester_core::id::AgentAccountId::generate();
-  db.save_invocation_account(invocation.id, account).expect("account");
   invocation.ended_at = Some(at(5 * DAY + 10));
   invocation.outcome = Some(orchester_core::connection::stream::InvocationOutcome::Completed);
   db.save_invocation(&invocation).expect("ended");
@@ -113,7 +111,6 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
   assert_eq!(read.model.as_deref(), Some(model().as_str()));
   assert_eq!(read.profile.as_deref(), Some("Builder"));
   assert!(read.profile_id.is_some(), "the profile's resource");
-  assert_eq!(read.account, Some(account));
   assert_eq!(&*read.step, "Implement", "the step's name, not its key");
   assert_eq!(read.index, IndexGiven::Yes);
   assert_eq!(read.edit.as_ref(), Some(&progress));
@@ -133,6 +130,64 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
   );
   assert_eq!(run_facts.tags, ["auth".into()]);
   assert_eq!(run_facts.outcome, RunOutcome::Running);
+}
+
+#[test]
+fn usage_facts_name_the_profiles_connection_where_an_invocation_recorded_none() {
+  let (repo, mut db, run, execution) = started_run();
+  codex_connection(repo.path(), &mut db);
+  db.start_invocation(run.id(), execution, &model(), at(10))
+    .expect("an invocation from before connections were recorded");
+  let facts = db.usage_facts(at(0), at(DAY)).expect("facts");
+  let codex = db.connections().expect("connections")[0].id();
+  assert_eq!(
+    facts.invocations[0].connection,
+    Some(codex),
+    "an invocation that recorded no connection ran on its profile's"
+  );
+  assert_eq!(
+    facts
+      .providers
+      .iter()
+      .map(|provider| (provider.id, &*provider.name, provider.removed))
+      .collect::<Vec<_>>(),
+    [(codex, "Codex", false)]
+  );
+}
+
+#[test]
+fn usage_facts_name_the_connection_an_invocation_recorded_by_its_name_once_it_is_gone() {
+  let (repo, mut db, run, execution) = started_run();
+  codex_connection(repo.path(), &mut db);
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let gone = UsedProvider {
+    id: ConnectionId::generate(),
+    name: "Claude · DeepSeek".into(),
+  };
+  db.save_invocation_connection(invocation.id, &gone).expect("recorded");
+  assert!(
+    db.save_invocation_connection(invocation.id, &gone).is_err(),
+    "an invocation records its connection once"
+  );
+  let facts = db.usage_facts(at(0), at(DAY)).expect("facts");
+  assert_eq!(
+    facts.invocations[0].connection,
+    Some(gone.id),
+    "the recorded connection, not the profile's"
+  );
+  assert_eq!(
+    facts.invocations[0].cli, None,
+    "a connection that is gone runs on no CLI now"
+  );
+  let removed = facts
+    .providers
+    .iter()
+    .find(|provider| provider.id == gone.id)
+    .expect("the provider that is gone");
+  assert_eq!((&*removed.name, removed.removed), ("Claude · DeepSeek", true));
+  assert_eq!(facts.providers.len(), 2, "Codex, then the one gone since");
 }
 
 #[test]

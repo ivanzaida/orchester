@@ -203,8 +203,9 @@ fixed address instead (see *The new app's MCP server* below).
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `return_to_draft` (a queued task whose run never
-  started, as the task list's *Return to drafts* takes it back: only one its group holds for good;
-  refused with `not_queued`, `run_recorded` or `not_held`), `get_run`, `pause_run`, `resume_run`
+  started, to Draft and Backlog as the Tasks board's Backlog takes it back; one of a reviewed group only
+  when its group holds it for good; refused with `not_queued`, `run_recorded` or `not_held`),
+  `get_run`, `pause_run`, `resume_run`
   (continues an interrupted run), `cancel_run`, `send_message` (a message to the agents of a task's
   latest run, as the Conversation composer sends it in the run's state: it answers, follows up,
   continues a failed or stuck run, resumes a paused one or runs an ended task again; it waits for a
@@ -335,6 +336,14 @@ deprecated desktop's above: only you can read it, a `<pid>.lock` beside it, remo
 `tools/qa-app.ps1` sets the variable to `.tmp/qa/<task>/mcp/` in the worktree and prints that folder. Other builds
 therefore never take the installed app's port, and they can run beside it. The runs' `call_run_app` relay drives
 only an app whose program is inside the run's worktree, whatever discovery file it finds.
+
+**QA copies' scenarios.** `tools/qa-app.ps1 -Scenario <name>` seeds the QA project with the seed example
+(`crates/desktop-app/examples/seed`), which checks the name against its registry, the only list of scenarios (`ALL`
+in `examples/seed/kontur/scenarios/mod.rs`). An unknown name exits non-zero with the known ones, sorted, and writes
+nothing; the script then stops before starting the app, with the seed's message. `cargo run -p orchester-app
+--example seed -- --list-scenarios` prints the names, one per line. A new scenario is added only in the seed's
+registry, never in `tools/qa-app.ps1`: the script names no scenarios, so its git blob, which the project rule
+*Approve for every run of this project* for `start_qa_app` is kept to, does not change with each new scenario.
 
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn

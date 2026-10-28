@@ -81,6 +81,12 @@ pub struct ProjectFeed {
   pub unsaved: Signal<UnsavedForms>,
   /// Saved pipeline names read by editor tabs, shared with their chrome labels.
   pub pipeline_names: Signal<PipelineNames>,
+  /// What the Agents hub's tabs counted last, which they show again while they count anew on another tab.
+  pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
+  /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
+  pub hub_unread: Signal<u8>,
+  /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
+  pub configure_folded: Signal<bool>,
   /// The tasks last read while no runner served the project, as they stand without one.
   offline: Arc<Mutex<Option<Offline>>>,
 }
@@ -117,6 +123,15 @@ impl ProjectFeed {
       self.pipeline_names.update(|names| {
         std::sync::Arc::make_mut(&mut names.0).insert(id, name.to_owned());
       });
+    }
+  }
+
+  /// Marks the Agents hub's tab of `bit` as one whose read failed, or not.
+  pub fn mark_hub_unread(&self, bit: u8, unread: bool) {
+    let now = self.hub_unread.get_untracked();
+    let next = if unread { now | bit } else { now & !bit };
+    if next != now {
+      self.hub_unread.set(next);
     }
   }
 
@@ -163,6 +178,9 @@ impl ProjectFeed {
       job_state: Signal::new(jobs.state()),
       unsaved: Signal::new(UnsavedForms::default()),
       pipeline_names: Signal::new(PipelineNames::default()),
+      hub_counts: Signal::new(None),
+      hub_unread: Signal::new(0),
+      configure_folded: Signal::new(false),
       offline: Arc::default(),
       jobs,
     }

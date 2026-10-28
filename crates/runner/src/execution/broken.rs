@@ -16,6 +16,7 @@ use orchester_ipc::Event;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
+  pool::PoolError,
   record::RecordError,
   run::{ExecutionError, RunTask},
 };
@@ -24,11 +25,13 @@ impl ExecutionError {
   /// What kind of failure stopped the run, as the store reads its storage errors.
   fn runner_failure(&self) -> RunnerFailure {
     match self {
-      Self::Store(error) => error.runner_failure(),
+      Self::Store(error) | Self::Workspace(PoolError::Store(error)) => error.runner_failure(),
       Self::Record(RecordError::Store(error)) => error.runner_failure(),
-      Self::Record(RecordError::Run(_)) | Self::NotAnAgentStep(_) | Self::Stalled | Self::Conversation(_) => {
-        RunnerFailure::Other
-      }
+      Self::Record(RecordError::Run(_))
+      | Self::NotAnAgentStep(_)
+      | Self::Stalled
+      | Self::Conversation(_)
+      | Self::Workspace(PoolError::Git { .. }) => RunnerFailure::Other,
     }
   }
 }

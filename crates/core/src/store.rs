@@ -26,7 +26,8 @@ use crate::{
   pull_request::{PullRequest, SyncAttempt, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
-    CommandEnvironment, Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
+    CommandEnvironment, Draft, DraftSaved, ModelId, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug,
+    Version, VersionNumber,
   },
   revision::Revision,
   run::{
@@ -162,6 +163,8 @@ pub trait WorktreeStore {
   fn worktree_removals(&self, task: TaskId) -> Result<Vec<(RunId, Timestamp)>, Self::Error>;
 }
 
+pub use crate::workspaces::WorkspaceStore;
+
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.
 pub trait ResourceStore {
   type Error: std::error::Error + Send + Sync + 'static;
@@ -176,10 +179,20 @@ pub trait ResourceStore {
     now: Timestamp,
   ) -> Result<Resource, Self::Error>;
 
+  /// The resource, removed or not: a run that pinned it still names it.
   fn resource(&self, id: ResourceId) -> Result<Option<Resource>, Self::Error>;
 
-  /// Resources of one kind, ordered by slug.
+  /// Resources of one kind that are not removed, ordered by slug.
   fn resources(&self, kind: ResourceKind) -> Result<Vec<Resource>, Self::Error>;
+
+  /// The slugs resources of `kind` hold, removed ones too: a new resource takes none of them.
+  fn slugs(&self, kind: ResourceKind) -> Result<Vec<Slug>, Self::Error>;
+
+  /// Removes resource `id` (`crate::resource::Removal`), atomically with the reads that decide it: while steps of a
+  /// pipeline's latest version or draft run it, [`RemoveMode::Unused`] changes nothing and names them, and
+  /// [`RemoveMode::Reset`] first saves each such pipeline's draft without it, when those steps are exactly the ones
+  /// it lists; otherwise it too changes nothing and names them. Its versions stay.
+  fn remove_resource(&mut self, id: ResourceId, mode: RemoveMode, now: Timestamp) -> Result<Removal, Self::Error>;
 
   /// Stores `draft` as the resource's only draft, replacing an existing one. A draft that
   /// repeats the version it is based on ([`Draft::repeats`]) removes the stored draft instead.
@@ -427,6 +440,9 @@ pub trait RunStore {
   /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the
   /// session ended before it could record their interruption.
   fn running_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
+
+  /// Runs paused for low disk space (ORC-114), ordered by number: they go on once the disk has room.
+  fn low_disk_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// The numbers of the runs that pinned each published version of pipeline `pipeline`, in run
   /// order. A version no run pinned is absent.

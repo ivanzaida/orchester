@@ -61,8 +61,8 @@ pub struct PageTab {
   explanation: Option<Arc<str>>,
   /// A count of what waits for the person, in a badge after the label.
   badge: Option<usize>,
-  /// How many there are, a muted number after the label.
-  count: Option<usize>,
+  /// How many there are, a number after the label, and whether it counts what waits for the person.
+  count: Option<(usize, bool)>,
 }
 
 impl PageTab {
@@ -118,11 +118,12 @@ impl PageTab {
     self
   }
 
-  /// How many there are, in 12 `text_muted` after the label (`mIlfH` in Settings' `Tabs`); its element id is
+  /// How many there are, 6 after the label in 12 `text_muted` (`mIlfH` in Settings' `Tabs`), or in `warning` when
+  /// it counts what `waits` for the person (the Agents hub's tabs, `JasTq`, `Wk4e9` in `Cc3JP`); its element id is
   /// `<id>-count`.
   #[must_use]
-  pub const fn count(mut self, count: usize) -> Self {
-    self.count = Some(count);
+  pub const fn count(mut self, count: usize, waits: bool) -> Self {
+    self.count = Some((count, waits));
     self
   }
 
@@ -170,23 +171,7 @@ impl PageTab {
       .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" });
-    let button = match (self.badge, self.count) {
-      (Some(count), _) => button.child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(label)
-          .child(count_badge(&format!("{}-badge", self.id), count)),
-      ),
-      (None, Some(count)) => button.child(label).child(
-        Text::new(&count.to_string())
-          .id(format!("{}-count", self.id))
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
-          .nowrap(),
-      ),
-      (None, None) => button.child(label),
-    };
+    let button = button.child(counted_label(&self.id, label, (self.badge, self.count)));
     let button = if self.explanation.is_some() {
       button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
     } else {
@@ -203,6 +188,31 @@ impl PageTab {
       Some(reason) => Tooltip::new(self.id, reason).wrap(ctx, button),
       None => button,
     }
+  }
+}
+
+/// A tab's label with its badge, or its quiet count (in `warning` when it counts what waits for the person).
+fn counted_label(id: &str, label: Text, (badge, count): (Option<usize>, Option<(usize, bool)>)) -> Element {
+  let row = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(label);
+  match (badge, count) {
+    (Some(count), _) => row.child(count_badge(&format!("{id}-badge"), count)).into(),
+    (None, Some((count, waits))) => row
+      .child(
+        Text::new(&count.to_string())
+          .id(format!("{id}-count"))
+          .variant(TypographyStyle::Description)
+          .color(if waits {
+            PaletteColor::Warning
+          } else {
+            PaletteColor::TextMuted
+          })
+          .nowrap(),
+      )
+      .into(),
+    (None, None) => row.into(),
   }
 }
 
@@ -302,6 +312,8 @@ pub struct Segment {
   chosen: bool,
   choose: Arc<dyn Fn() + Send + Sync>,
   element: Option<ElementRef>,
+  /// The segments share the control's width equally.
+  fill: bool,
 }
 
 impl Segment {
@@ -317,6 +329,7 @@ impl Segment {
       chosen,
       choose: Arc::new(choose),
       element: None,
+      fill: false,
     }
   }
 
@@ -324,6 +337,13 @@ impl Segment {
   /// another open dropdown, only when the pressed segment is the popup's anchor itself.
   pub fn element(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
+    self
+  }
+
+  /// The segment takes an equal share of a control as wide as its place (`Layout` `O1Xwma` in `J0ncJ`).
+  #[must_use]
+  pub const fn fill(mut self) -> Self {
+    self.fill = true;
     self
   }
 
@@ -338,6 +358,9 @@ impl Segment {
       .describe("state", if self.chosen { "chosen" } else { "enabled" });
     if let Some(element) = self.element {
       button = button.ref_element(element);
+    }
+    if self.fill {
+      button = button.flex(1.0).min_width(Dimension::Px(0.0));
     }
     let (text, glyph) = if self.chosen {
       (PaletteColor::TextPrimary, PaletteColor::TextPrimary)

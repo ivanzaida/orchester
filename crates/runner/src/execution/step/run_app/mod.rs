@@ -46,20 +46,31 @@ enum AppError {
   Content,
   #[error("the app returned an invalid or oversized PNG image")]
   Image,
-  #[error("cannot save the app's PNG under this worktree's .tmp/; the output folder must remain inside the worktree")]
+  #[error("cannot save the app's PNG in the run's storage (.orchester/runs/<run>/screenshots/)")]
   SaveImage,
 }
 
 /// Calls `call`'s app: the invocation's QA app (`qa`) when the call leaves out its pid or names it, through its known
-/// discovery file; any other app of the run through the discovery its pid has.
-pub(super) fn call(processes: &RunProcesses, worktree: &Path, call: &AppCall, qa: Option<&StepQa>) -> ToolResult {
-  match run(processes, worktree, call, qa) {
+/// discovery file; any other app of the run through the discovery its pid has. Its PNGs are saved in the run's own
+/// storage `artifacts` (ORC-114), which cleaning or reusing a workspace never touches.
+pub(super) fn call(
+  processes: &RunProcesses,
+  (worktree, artifacts): (&Path, &Path),
+  call: &AppCall,
+  qa: Option<&StepQa>,
+) -> ToolResult {
+  match run(processes, (worktree, artifacts), call, qa) {
     Ok(result) => result,
     Err(error) => ToolResult::unavailable(&error.to_string()),
   }
 }
 
-fn run(processes: &RunProcesses, worktree: &Path, call: &AppCall, qa: Option<&StepQa>) -> Result<ToolResult, AppError> {
+fn run(
+  processes: &RunProcesses,
+  (worktree, artifacts): (&Path, &Path),
+  call: &AppCall,
+  qa: Option<&StepQa>,
+) -> Result<ToolResult, AppError> {
   let target = qa
     .map(|qa| qa.target(call.pid()))
     .transpose()
@@ -90,7 +101,7 @@ fn run(processes: &RunProcesses, worktree: &Path, call: &AppCall, qa: Option<&St
     None => discovery::find(worktree, pid)?,
   };
   let mut result = transport::Client::new(&process, &discovery)?.call(call)?;
-  images::save(worktree, &mut result)?;
+  images::save(artifacts, &mut result)?;
   // Redact before a result can reach Debug, a relay event, the agent or persistence.
   Ok(ToolResult::from_app(result).redacted(std::slice::from_ref(discovery.token())))
 }

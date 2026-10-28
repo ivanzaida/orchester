@@ -11,10 +11,12 @@ const HIGHLIGHT: &str = "highlight";
 const SHOW: &str = "show";
 const NOT_SHARED: &str = "not-shared";
 
-/// A view of the Tasks list (`Views` in `Tasks · redesign` `Lw1Gb`, ORC-99): Active (Todo, In progress, In review and
-/// what waits for the person), Backlog, Done (Done and Canceled) or All. Active is the one it opens on.
+/// A view of the Tasks list (`Views` in `Tasks · redesign` `Lw1Gb`, ORC-99): Needs you (only what waits for the
+/// person, first; `Needs you view` `yiAlE` in `Tasks board · redesign` `J6gQo`, ORC-105), Active (Todo, In progress,
+/// In review and what waits for the person), Backlog, Done (Done and Canceled) or All. Active is the one it opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskListTab {
+  NeedsYou,
   #[default]
   Active,
   Backlog,
@@ -23,11 +25,12 @@ pub enum TaskListTab {
 }
 
 impl TaskListTab {
-  pub const ALL: [Self; 4] = [Self::Active, Self::Backlog, Self::Done, Self::All];
+  pub const ALL: [Self; 5] = [Self::NeedsYou, Self::Active, Self::Backlog, Self::Done, Self::All];
 
   /// The view's name in a path's query and in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
+      Self::NeedsYou => "needs_you",
       Self::Active => "active",
       Self::Backlog => "backlog",
       Self::Done => "done",

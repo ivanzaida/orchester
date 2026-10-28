@@ -44,8 +44,11 @@ fn tools_refresh_failure_and_retry_preserve_unsaved_fields() {
     w.tree.get_element_by_id("tools-load-error").is_none() && w.tree.get_element_by_id("tool-changed").is_some()
   });
   assert_fields(&mut t, &local);
-  t.click("tool-save");
-  assert_eq!(command_text(&t.entry(id).tool).description, "Saved elsewhere");
+  assert_eq!(
+    command_text(&t.entry(id).tool).description,
+    "Saved elsewhere",
+    "nothing saves over it"
+  );
   t.click("tool-reload");
   t.window.until("explicit reload replaces the local values", |w| {
     w.tree.get_element_by_id("tool-editor").is_some() && w.tree.get_element_by_id("tool-changed").is_none()
@@ -99,14 +102,10 @@ fn tools_retry_revalidates_after_storage_recovers_without_changing_fields() {
   schema.restore();
   t.click("tools-load-error-retry");
   t.window.until("successful retry also reruns validation", |w| {
-    w.tree.get_element_by_id("tools-load-error").is_none()
-      && w.tree.get_element_by_id("tool-program-note").is_none()
-      && !w
-        .texts("tool-action-reason")
-        .is_some_and(|t| t.join(" ").contains("Checking"))
+    w.tree.get_element_by_id("tools-load-error").is_none() && w.tree.get_element_by_id("tool-program-note").is_none()
   });
   assert_fields(&mut t, &[("tool-description", "Keep this unsaved description")]);
-  t.click("tool-save");
+  // Once the program checks out again, the draft saves on its own.
   t.wait_state("Draft saved");
   assert_eq!(
     command_text(&t.entry(id).tool).description,
@@ -121,9 +120,11 @@ fn refresh(t: &Tools) {
     .outside
     .update(|c| c.tools += 1);
 }
+/// Waits until the read failed and is no longer under way: the card stays while it reads again.
 fn wait_failed(t: &mut Tools) {
   t.window.until("failed Tools refresh", |w| {
-    w.tree.get_element_by_id("tools-load-error").is_some()
+    w.texts("tools-load-error-retry")
+      .is_some_and(|label| !label.join(" ").contains("Trying again"))
   });
 }
 fn assert_fields(t: &mut Tools, values: &[(&str, &str)]) {

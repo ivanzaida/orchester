@@ -1,21 +1,20 @@
-//! The page's filters as a person works them (`et35n`, *Usage · interactions*): the five menus (*CLI*,
+//! The page's filters as a person works them (`et35n`, *Usage · interactions*): the five menus (*Provider*,
 //! *Model*, *Agent profile*, *Pipeline*, *Tag*) with what each offers and which are chosen, the chips of the
-//! chosen values, the narrower filters a link or a tool may add (a task, a run, a step, an account), and a
+//! chosen values, the narrower filters a link or a tool may add (a CLI, a task, a run, a step), and a
 //! *Where tokens go* row chosen as a filter. A menu chooses a profile or a pipeline by its id, so a link
 //! keeps naming it after a rename; a value chosen by name, from a row or a link, counts as chosen too.
 
 use std::sync::Arc;
 
 use orchester_core::{
-  account::AccountCli,
   connection::AgentProvider,
-  id::{AgentAccountId, ProjectId, ResourceId, RunId},
+  id::{ConnectionId, ProjectId, ResourceId, RunId},
   resource::VersionNumber,
   run::RunNumber,
-  usage::{AccountSeries, BreakdownKey, UsageFilter},
+  usage::{BreakdownKey, ProviderSeries, UsageFilter},
 };
 
-use super::{Dashboard, UsageQuery, names::Names, series::account_value_label};
+use super::{Dashboard, UsageQuery, names::Names, series::ProviderLabel};
 
 /// One filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -30,16 +29,16 @@ pub enum Facet {
   Task,
   Run,
   Step,
-  Account,
+  Provider,
 }
 
 impl Facet {
   /// The filters the toolbar has a menu for, in its order.
-  pub const MENUS: [Self; 5] = [Self::Account, Self::Model, Self::Profile, Self::Pipeline, Self::Tag];
+  pub const MENUS: [Self; 5] = [Self::Provider, Self::Model, Self::Profile, Self::Pipeline, Self::Tag];
   /// The menus of every project's page: *Project* first (`rHA8G`).
   pub const EVERY_PROJECT_MENUS: [Self; 6] = [
     Self::Project,
-    Self::Account,
+    Self::Provider,
     Self::Model,
     Self::Profile,
     Self::Pipeline,
@@ -56,7 +55,7 @@ impl Facet {
     Self::Task,
     Self::Run,
     Self::Step,
-    Self::Account,
+    Self::Provider,
   ];
 }
 
@@ -68,9 +67,10 @@ pub enum FilterValue {
   /// A model, profile, pipeline, tag, task or step, by id or name.
   Text(Arc<str>),
   Run(RunId),
-  Account(AgentAccountId),
-  /// Usage that started on no account.
-  NoAccount,
+  /// An agent provider, by its connection.
+  Provider(ConnectionId),
+  /// Usage no record names a provider for.
+  Earlier,
 }
 
 /// How a value reads.
@@ -83,18 +83,15 @@ pub enum ValueLabel {
     task: Arc<str>,
     number: RunNumber,
   },
-  /// An account by its name; `None` for a CLI's Default nobody renamed, which reads as *Default*.
-  Account {
-    cli: AccountCli,
-    name: Option<Arc<str>>,
-  },
+  /// An agent provider by its name.
+  Provider(ProviderLabel),
   /// A pipeline by its name and the newest version the period's runs pinned: *Quick fix v2*.
   Pipeline {
     name: Arc<str>,
     version: Option<VersionNumber>,
   },
-  /// *No account*.
-  NoAccount,
+  /// *Earlier runs*.
+  Earlier,
   /// An id that names nothing the page read, shown as it was given.
   Unknown(Arc<str>),
 }
@@ -107,8 +104,8 @@ pub struct FilterOption {
   pub chosen: bool,
   /// How many runs carry a tag.
   pub runs: Option<usize>,
-  /// The series an account's usage is drawn in, whose swatch its option wears.
-  pub series: Option<AccountSeries>,
+  /// The series a provider's usage is drawn in, whose swatch its option wears.
+  pub series: Option<ProviderSeries>,
 }
 
 impl Dashboard {
@@ -184,7 +181,7 @@ impl Dashboard {
           )
         })
         .collect(),
-      Facet::Account => self.account_options(),
+      Facet::Provider => self.provider_options(),
       Facet::Task | Facet::Run | Facet::Step => Vec::new(),
     }
   }
@@ -244,18 +241,14 @@ impl Dashboard {
           (FilterValue::Run(*run), label)
         })
         .collect(),
-      Facet::Account => filter
-        .accounts
+      Facet::Provider => filter
+        .providers
         .iter()
-        .map(|account| {
-          let label = account_value_label(self.account_label(*account), *account);
-          (FilterValue::Account(*account), label)
+        .map(|connection| {
+          let label = ValueLabel::Provider(self.provider_label(*connection));
+          (FilterValue::Provider(*connection), label)
         })
-        .chain(
-          filter
-            .no_account
-            .then_some((FilterValue::NoAccount, ValueLabel::NoAccount)),
-        )
+        .chain(filter.earlier.then_some((FilterValue::Earlier, ValueLabel::Earlier)))
         .collect(),
     }
   }
@@ -300,9 +293,9 @@ impl Dashboard {
       Facet::Task => filter.tasks.clear(),
       Facet::Run => filter.runs.clear(),
       Facet::Step => filter.steps.clear(),
-      Facet::Account => {
-        filter.accounts.clear();
-        filter.no_account = false;
+      Facet::Provider => {
+        filter.providers.clear();
+        filter.earlier = false;
       }
     }
     self.query.with_filter(filter)
@@ -343,8 +336,8 @@ impl Dashboard {
       FilterValue::Project(project) => filter.projects.retain(|chosen| chosen != project),
       FilterValue::Cli(cli) => filter.clis.retain(|chosen| chosen != cli),
       FilterValue::Run(run) => filter.runs.retain(|chosen| chosen != run),
-      FilterValue::Account(account) => filter.accounts.retain(|chosen| chosen != account),
-      FilterValue::NoAccount => filter.no_account = false,
+      FilterValue::Provider(connection) => filter.providers.retain(|chosen| chosen != connection),
+      FilterValue::Earlier => filter.earlier = false,
       FilterValue::Text(text) => {
         let list = match facet {
           Facet::Profile => Some(&self.names.profiles),
@@ -376,7 +369,7 @@ fn texts_of(filter: &mut UsageFilter, facet: Facet) -> Option<&mut Vec<Arc<str>>
     Facet::Tag => Some(&mut filter.tags),
     Facet::Task => Some(&mut filter.tasks),
     Facet::Step => Some(&mut filter.steps),
-    Facet::Project | Facet::Cli | Facet::Run | Facet::Account => None,
+    Facet::Project | Facet::Cli | Facet::Run | Facet::Provider => None,
   }
 }
 
@@ -385,8 +378,8 @@ fn add_value(filter: &mut UsageFilter, facet: Facet, value: FilterValue) {
     FilterValue::Project(project) => filter.projects.push(project),
     FilterValue::Cli(cli) => filter.clis.push(cli),
     FilterValue::Run(run) => filter.runs.push(run),
-    FilterValue::Account(account) => filter.accounts.push(account),
-    FilterValue::NoAccount => filter.no_account = true,
+    FilterValue::Provider(connection) => filter.providers.push(connection),
+    FilterValue::Earlier => filter.earlier = true,
     FilterValue::Text(text) => {
       if let Some(values) = texts_of(filter, facet) {
         values.push(text);

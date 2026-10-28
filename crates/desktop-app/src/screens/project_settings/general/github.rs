@@ -23,7 +23,7 @@ use orchester_workspace::{
 
 use super::super::{
   TabProps,
-  kit::{SettingRow, Tone, value},
+  kit::{SettingRow, Tone, mono_value},
   work::{self, Change, Save},
 };
 use crate::{
@@ -31,7 +31,8 @@ use crate::{
   theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
+    github_mark::github_mark,
+    icon::Icon,
     icon_button::IconButton,
     message::message_text,
     state::loading,
@@ -172,8 +173,8 @@ fn repository_row(
   let shown = Row::new()
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::GitPullRequest, IconSize::Base, PaletteColor::TextSecondary))
-    .child(value("settings-github-repository", &repository))
+    .child(github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary))
+    .child(mono_value("settings-github-repository", &repository))
     .child(again);
   SettingRow::new("settings-github-repo", ctx.t("project_settings.githubRepo"))
     .info(info)
@@ -192,13 +193,13 @@ fn account_row(ctx: &mut Ctx, props: &TabProps, save: &Save, read: &RepositoryRe
   let row = SettingRow::new("settings-github-login", ctx.t("project_settings.githubAccountLabel"))
     .info(ctx.t("project_settings.githubAccountDetail"));
   let Some(connection) = &read.connection else {
-    return row.control(value("settings-github-account", &account)).render(ctx);
+    return row.control(mono_value("settings-github-account", &account)).render(ctx);
   };
   let state = connection.state(read.link.as_ref().map(|l| l.expected_login()));
   let (hint, tone) = account_status(ctx, &state);
   let row = row.toned(hint, tone);
   let GitHubState::WrongAccount { active, .. } = &state else {
-    return row.control(value("settings-github-account", &account)).render(ctx);
+    return row.control(mono_value("settings-github-account", &account)).render(ctx);
   };
   let start = work::start(
     save,

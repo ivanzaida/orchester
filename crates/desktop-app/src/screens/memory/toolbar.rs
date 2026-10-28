@@ -26,9 +26,9 @@ use crate::ui::{
   menu::{MenuItem, menu},
 };
 
-/// The search field's width: the task's tab (`pYCO5`) and the project's page (`ITShi`).
+/// The search field's width: the task's tab (`pYCO5`) and the project's page (`fkKXS` in 05b).
 const TASK_SEARCH_WIDTH: f32 = 280.0;
-const PROJECT_SEARCH_WIDTH: f32 = 260.0;
+const PROJECT_SEARCH_WIDTH: f32 = 360.0;
 /// A filter's menu (`tEymU`).
 const MENU_WIDTH: f32 = 220.0;
 

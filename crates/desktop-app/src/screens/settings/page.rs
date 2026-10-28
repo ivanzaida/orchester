@@ -58,7 +58,7 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
     Route::Accounts(AccountsView::default()),
   );
   let accounts_tab = match accounts {
-    Some(count) => accounts_tab.count(count),
+    Some(count) => accounts_tab.count(count, false),
     None => accounts_tab,
   };
   let tabs = [

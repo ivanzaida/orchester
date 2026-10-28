@@ -1,6 +1,9 @@
 //! What the decision rests on (`Evidence` `oXmm0`, `What Review reported` `OjW9a`): what the failing step reported
-//! (`Report` `cLh0O`: who, the step, its attempt and time, and the words), and that the run's changes and messages
-//! are kept, with links to them (`Preserved` `v133z`). The latest attempt's steps are the Summary's rail (ORC-100).
+//! (`Report` `cLh0O`: who, the step, its attempt and time, and the words, read as Markdown with the Conversation's
+//! `ui::markdown`), and that the run's changes and messages are kept, with links to them (`Preserved` `v133z`). The
+//! latest attempt's steps are the Summary's rail (ORC-100).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -11,7 +14,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{resource::StepKey, run::StepFailure};
+use orchester_core::{
+  resource::StepKey,
+  run::{StepFailure, tool_report_markdown},
+};
 use orchester_workspace::{display, tasks::detail::RunView};
 
 use super::super::{super::TaskContext, step_label, tab_link};
@@ -20,7 +26,9 @@ use crate::{
   theme::{DecisionText, ExtraSpacing, IconSize, TaskText},
   ui::{
     card::{CardSurface, card},
+    chat::links,
     icon::{Icon, icon},
+    markdown::MarkdownView,
   },
 };
 
@@ -42,7 +50,7 @@ pub fn sections(ctx: &mut Ctx, props: &TaskContext, run: &RunView, failed: &Step
 }
 
 /// *What Review reported* and the report, when the failing step left one.
-fn report(ctx: &Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]> {
+fn report(ctx: &mut Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]> {
   let step = run.steps.iter().find(|step| step.key == *failed)?;
   // A step not run again on an unchanged revision left no output: its earlier result is what it reported.
   let output = step
@@ -90,16 +98,19 @@ fn report(ctx: &Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]> {
   let head = Text::new(&ctx.t_args("decisions.retries.reported", [("step", &*step.name)]))
     .id("task-retry-reported-head")
     .variant(TaskText::SectionTitle.role());
+  // What an agent wrote is Markdown, as the Conversation reads it; a tool step's program output is not.
+  let text: Arc<str> = if step.tool_step {
+    tool_report_markdown(&output.text).into()
+  } else {
+    output.text.as_str().into()
+  };
+  let text = MarkdownView::new("task-retry-report-text", text, links(ctx))
+    .style(DecisionText::Report.role(), PaletteColor::TextPrimary)
+    .render(ctx);
   let body = card("task-retry-report", CardSurface::Raised)
     .spacing(SpacingSize::Sm)
     .child(who)
-    .child(
-      Text::new(&output.text)
-        .id("task-retry-report-text")
-        .variant(DecisionText::Report.role())
-        .width(Dimension::Pct(100.0))
-        .selectable(true),
-    );
+    .child(text);
   Some([head.into(), body.into()])
 }
 

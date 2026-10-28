@@ -419,19 +419,25 @@ pub fn merge_in_as(
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LeftBehind(pub Vec<(RunId, Leftovers)>);
 
-/// What each of `runs` left in the repository at `repo_root`, by run.
+/// What each of `runs` left in the repository at `repo_root`, by run, with whether each borrows workspaces as its
+/// project's store says.
 pub fn leftovers_in(
   repo_root: &Path,
   programs: &Programs,
   runs: &[Arc<Run>],
 ) -> Result<LeftBehind, IntegrationProblem> {
+  use orchester_core::store::WorkspaceStore;
   let listed: Vec<&Run> = runs.iter().map(AsRef::as_ref).collect();
-  leftovers_of(&programs.runner(), Path::new(GIT), repo_root, &listed)
-    .map(|left| LeftBehind(runs.iter().map(|run| run.id()).zip(left).collect()))
-    .map_err(|error| {
-      tracing::warn!(%error, "cannot read what the runs left");
-      IntegrationProblem::Read(error)
-    })
+  let mut left = leftovers_of(&programs.runner(), Path::new(GIT), repo_root, &listed).map_err(|error| {
+    tracing::warn!(%error, "cannot read what the runs left");
+    IntegrationProblem::Read(error)
+  })?;
+  let db = ProjectDb::open(repo_root)?;
+  for (run, left) in runs.iter().zip(&mut left) {
+    let has_branch = left.branches.iter().any(|branch| branch.name == *run.branch());
+    left.borrows = has_branch && db.run_borrows(run.id())?;
+  }
+  Ok(LeftBehind(runs.iter().map(|run| run.id()).zip(left).collect()))
 }
 
 /// Removes what `run` left, discarding uncommitted changes only where `confirmed`, what the person

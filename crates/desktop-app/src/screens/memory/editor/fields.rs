@@ -57,7 +57,7 @@ impl RecordEditor {
         text.render(ctx),
         None,
       ))
-      .child(self.tags_field(ctx, id));
+      .child(self.tags_field(ctx, id, true));
     if props.mode == EditorMode::New && state.task.is_some() {
       fields = fields.child(self.save_to_field(ctx, state, id));
     }
@@ -121,8 +121,9 @@ impl RecordEditor {
   }
 
   /// *Tags*: the record's tags as removable chips in a field-like box, and *Add a tag…*, where a space, a comma or
-  /// leaving the field makes what was typed a tag (`B0ra2`).
-  fn tags_field(&self, ctx: &Ctx, id: &str) -> Element {
+  /// leaving the field makes what was typed a tag (`B0ra2`); under its `labelled` label, or under the row's on the
+  /// record's page.
+  pub(super) fn tags_field(&self, ctx: &Ctx, id: &str, labelled: bool) -> Element {
     let label = ctx.t("memory.editor.tags");
     let mut chips = Row::new()
       .id(format!("{id}-tags"))
@@ -145,7 +146,7 @@ impl RecordEditor {
       .id(format!("{id}-tags-field"))
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
-      .child(Text::new(&label).variant(TypographyStyle::FieldLabel))
+      .with_children(labelled.then(|| Text::new(&label).variant(TypographyStyle::FieldLabel)))
       .child(chips.child(self.tag_input(ctx, id)));
     if let Some(problem) = self.tag_problem.get() {
       column = column.child(field_error(&format!("{id}-tag-error"), &message_text(ctx, &problem)));

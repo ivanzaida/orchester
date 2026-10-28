@@ -16,6 +16,7 @@
       "failed": "Not changed: {{reason}}"
     },
     "views": {
+      "needsYou": "Needs you",
       "active": "Active",
       "backlog": "Backlog",
       "done": "Done",
@@ -99,6 +100,189 @@
     "listSeparator": ", ",
     "newBadge": "New",
     "loading": "Reading {{project}}'s tasks…",
+    "layout": {
+      "list": "List",
+      "board": "Board"
+    },
+    "board": {
+      "canceled": "{{task}} is Canceled",
+      "showCanceled": "Show Canceled",
+      "failedDismiss": "Dismiss",
+      "keys": {
+        "enter": "Enter",
+        "esc": "Esc",
+        "move": "M",
+        "priority": "P",
+        "tags": "T",
+        "copy": "Ctrl C",
+        "copyMac": "⌘ C"
+      },
+      "menu": {
+        "open": "Open",
+        "moveTo": "Move to",
+        "priority": "Priority",
+        "tags": "Tags",
+        "copyKey": "Copy key",
+        "runAgain": "Run again",
+        "back": "Back",
+        "noTags": "No tags yet",
+        "noTagsReason": "Create tags on a task's page first.",
+        "reason": "{{columns}}: {{reason}}",
+        "runNotEnded": "A run of this task has not ended. Done and Canceled stop it, after you confirm."
+      },
+      "refused": {
+        "runNotEnded": "A run of this task has not ended. Answer or stop it from the task, or wait for it to end.",
+        "runNotEndedMenu": "A run of this task has not ended.",
+        "incomplete": "Add the missing details before running the task.",
+        "hasRun": "This task already has a run.",
+        "pipeline": "Columns by pipeline only show where tasks are; a task's pipeline is chosen on its page.",
+        "chip": {
+          "runNotEnded": "Run not ended: stop it from the task",
+          "incomplete": "Needs a brief: add it before queuing",
+          "hasRun": "Has a run: can't go back to Backlog",
+          "pipeline": "Pipelines change on the task's page"
+        }
+      },
+      "ask": {
+        "confirms": "confirms",
+        "keeps": "keeps it",
+        "keepsRunning": "keeps it running",
+        "keysAnd": "{{first}} and {{last}}",
+        "bulkKeep": "Keep them",
+        "startsNow": {
+          "one": "Queue {{task}}? It starts now: 1 agent slot is free.",
+          "other": "Queue {{task}}? It starts now: {{count}} agent slots are free.",
+          "detail": "It runs on {{pipeline}} from its first step.",
+          "keep": "Keep as draft",
+          "confirm": "Queue"
+        },
+        "runAgain": {
+          "title": "Run {{task}} again?",
+          "detail": "Run again starts a new run from the first step. Move to Todo starts nothing. Don't move keeps it.",
+          "inTodo": "A new run starts from the first step. The last run stays in its history.",
+          "keep": "Don't move",
+          "keepInTodo": "Keep in Todo",
+          "move": "Move to Todo",
+          "confirm": "Run again",
+          "confirms": "runs again",
+          "keeps": "doesn't move it"
+        },
+        "bulkRunAgain": {
+          "title": "Run {{tasks}} again?",
+          "detail": "Run again starts new runs from step one. Move to Todo starts nothing. Don't move keeps them.",
+          "keeps": "doesn't move them"
+        },
+        "unmerged": {
+          "title": "Mark {{task}} as done without merging?",
+          "detail": "{{task}} is ready to merge. Marking it as done leaves its changes unmerged in their branch.",
+          "keep": "Keep in review",
+          "confirm": "Mark as done"
+        },
+        "bulkQueue": {
+          "one": "Queue {{tasks}}? They start now: 1 agent slot is free.",
+          "other": "Queue {{tasks}}? They start now: {{count}} agent slots are free.",
+          "detail": "Each runs on its pipeline from its first step; those without a free slot wait their turn.",
+          "keep": "Keep as drafts"
+        },
+        "bulkUnmerged": {
+          "title": "Mark {{count}} tasks as done without merging?",
+          "detail": "Ready to merge: {{unmerged}}. Marking the tasks as done leaves those changes unmerged in their branches."
+        },
+        "delete": {
+          "title": "Delete {{count}} tasks?",
+          "detail": "{{tasks}} are deleted with their runs, conversations and worktrees. This can't be undone.",
+          "keep": "Keep them",
+          "confirm": "Delete {{count}} tasks"
+        },
+        "bulkDone": {
+          "title": "Stop {{runs}} runs and mark {{count}} tasks as done?",
+          "detail": "The runs of {{running}} have not ended; they stop. {{tasks}} are marked as done.",
+          "confirm": "Stop and mark as done"
+        },
+        "bulkCanceled": {
+          "title": "Stop {{runs}} runs and cancel {{count}} tasks?",
+          "detail": "The runs of {{running}} have not ended; they stop. {{tasks}} are canceled.",
+          "confirm": "Stop and cancel"
+        }
+      },
+      "bulk": {
+        "selected": "{{count}} selected",
+        "moveTo": "Move to",
+        "priority": "Priority",
+        "tags": "Tags",
+        "delete": "Delete…",
+        "clear": "Clear the selection",
+        "allThere": "Every selected task is already there.",
+        "stay": "{{tasks}} stay: {{reason}}"
+      },
+      "column": {
+        "fold": "Fold {{column}}",
+        "unfold": "Unfold {{column}}",
+        "needsYou": "{{count}} need you",
+        "empty": {
+          "title": "No tasks",
+          "detail": "Drop a card here to move it to {{column}}."
+        },
+        "noMatch": {
+          "title": "No match",
+          "one": "{{column}} has {{count}} task the search or filters hide.",
+          "other": "{{column}} has {{count}} tasks the search or filters hide.",
+          "clear": "Clear search and filters"
+        }
+      },
+      "lane": {
+        "inColumn": "{{count}} in {{column}}"
+      },
+      "hint": {
+        "move": "Drop to move {{task}}",
+        "refused": "{{task}} can't go here",
+        "onlyClose": "{{task}} goes only to Done or Canceled",
+        "queue": "Drop to queue {{task}}",
+        "draft": "Drop to return {{task}} to draft",
+        "runAgain": "Drop to move {{task}} to Todo or run it again",
+        "done": "Drop to mark {{task}} as done",
+        "cancel": "Drop to cancel {{task}}",
+        "cancels": "cancels"
+      },
+      "quickAdd": {
+        "open": "Add a draft",
+        "label": "Title",
+        "placeholder": "Task title",
+        "add": "add",
+        "cancel": "cancel",
+        "draft": "Draft",
+        "tooLong": "A title has at most {{count}} characters.",
+        "failed": "Not added: {{reason}}"
+      },
+      "options": {
+        "columns": "Columns",
+        "rows": "Rows",
+        "order": "Order",
+        "properties": "Card properties",
+        "showEmpty": "Show empty columns",
+        "showCanceled": "Show Canceled column",
+        "reset": "Reset to default",
+        "saved": "Saved for this project",
+        "byStatus": "Status",
+        "byPriority": "Priority",
+        "byModule": "Module",
+        "byPipeline": "Pipeline",
+        "noRows": "No rows"
+      },
+      "property": {
+        "key": "Key",
+        "priority": "Priority",
+        "points": "Points",
+        "module": "Module",
+        "tags": "Tags",
+        "run": "Run status",
+        "readiness": "Readiness",
+        "agent": "Agent",
+        "age": "Age",
+        "blocked": "Blocked",
+        "pipeline": "Pipeline"
+      }
+    },
     "loadError": {
       "title": "Tasks cannot be read",
       "body": "Reading the task list from the project database failed. {{reason}} No task was changed. The list appears once it can be read."
@@ -118,6 +302,7 @@
     },
     "emptyView": {
       "title": "No tasks in this view.",
+      "needsYou": "A task shows here while something of it waits for you.",
       "active": "A task shows here once it is Todo, In progress or In review, or waits for you.",
       "backlog": "A task shows here while its workflow status is Backlog.",
       "done": "A task shows here once it is Done or Canceled.",

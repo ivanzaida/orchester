@@ -505,7 +505,7 @@ fn rejection_hold(error: &Rejection) -> GroupHold {
     Rejection::TaskGroupWaiting { hold } => hold.clone(),
     // The run failed before it started; retrying its key answers the same, so the person decides.
     Rejection::RunNotStarted { .. } => GroupHold::FailedTask,
-    Rejection::NoAgentSlot { .. } => GroupHold::AgentCapacity,
+    Rejection::NoAgentSlot { .. } | Rejection::LowDisk { .. } => GroupHold::AgentCapacity,
     Rejection::DailyBudgetUsed { .. } => GroupHold::DailyBudget,
     Rejection::Preflight { problems } => GroupHold::Preflight(problems.clone()),
     Rejection::LimitNotRaised {

@@ -15,6 +15,8 @@ mod modules;
 mod orchester;
 #[path = "theme/orchestrator.rs"]
 mod orchestrator;
+#[path = "theme/pipelines.rs"]
+mod pipelines;
 #[path = "theme/skills.rs"]
 mod skills;
 #[path = "theme/task_form.rs"]
@@ -112,6 +114,7 @@ fn every_extra_color_is_registered_with_its_design_value() {
     ExtraColor::ChartNone => ("#8A8A92", "#6B6B74"),
     ExtraColor::ChartHatch => ("#FFFFFF0F", "#00000012"),
     ExtraColor::MarkClaude => ("#D97757", "#D97757"),
+    ExtraColor::Note => ("#202023", "#E4E4E8"),
   };
   let (dark, light) = (themed(Mode::Dark), themed(Mode::Light));
   for extra in ExtraColor::ALL {
@@ -206,6 +209,11 @@ fn tasks_spacing_matches_the_redesign() {
       80.0,
       "the empty project's words sit 80 over the middle (GQZ6J)",
     ),
+    (
+      theme::TasksSpacing::QuestionKeys,
+      25.0,
+      "a board question's keys sit 25 in, under its words (gWRaB)",
+    ),
   ] {
     assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{why}");
   }
@@ -295,6 +303,11 @@ fn area_roles_follow_the_startup_screens_and_the_switcher() {
   assert_eq!(ShellSpacing::FolderActions.value(), 22.0);
   assert_eq!(color(ShellText::SwitcherInitial.role()), Color::from_hex("#B3B3BA"));
   assert_eq!(color(ShellText::SwitcherPath.role()), Color::from_hex("#8A8A92"));
+  // *Jump to*'s result and count (`KeDEy`, `qiz3y` in `aDYAX`).
+  check(ShellText::JumpResult.role(), (12.5, 1.35), FontWeight::Normal, "Geist");
+  check(ShellText::JumpCount.role(), (11.5, 1.35), FontWeight::Normal, "Geist");
+  assert_eq!(color(ShellText::JumpResult.role()), Color::from_hex("#EDEDF0"));
+  assert_eq!(color(ShellText::JumpCount.role()), Color::from_hex("#8A8A92"));
   for (spacing, value) in [(StartupSpacing::Block, 20.0), (StartupSpacing::Panel, 40.0)] {
     assert_eq!(spacing.value(), value, "{spacing:?}");
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");

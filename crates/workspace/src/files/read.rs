@@ -67,6 +67,7 @@ pub(super) fn resolve_in_folder(folder: &Path, path: &FilePath) -> Result<std::p
     code_index: None,
     skills: None,
     writable_folders: &[],
+    run_storage: None,
   })
   .map_err(|error| scope_error(path, &error))?;
   scope

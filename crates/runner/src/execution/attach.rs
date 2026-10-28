@@ -15,7 +15,7 @@ use orchester_core::{
   connection::stream::InvocationOutcome,
   id::RunId,
   run::{InterruptCause, ListedRun, Run},
-  store::{ActivityStore, RunStore},
+  store::{ActivityStore, RunStore, WorkspaceStore},
   time::Timestamp,
 };
 use orchester_ipc::{AttachSession, Event, RefusedRun, Rejection};
@@ -49,6 +49,16 @@ impl Scheduler {
     // A turn this runner answers is under way; any other still thinking was cut short.
     self.interrupt_chat_turns(&mut db, None)?;
     self.inner.board.set_slots(slots);
+    // Workspaces held by work of a runner that is gone are free again; what it left in them waits for a person.
+    if self.active_runs().is_empty() {
+      let returned = db
+        .return_runner_workspaces(Timestamp::now())
+        .map_err(|error| failed("cannot give back the workspaces of the last runner", &error))?;
+      if !returned.is_empty() {
+        tracing::info!(?returned, "workspaces the last runner held are free again");
+      }
+    }
+    self.watch_disk();
     let cause = session.interrupt_cause();
     let stale = readable(
       db.running_runs()
@@ -93,12 +103,17 @@ impl Scheduler {
     Ok(())
   }
 
-  /// Continues interrupted runs `runs` from their last checkpoints because a person asked to.
+  /// Continues interrupted runs `runs` from their last checkpoints because a person asked to. A run whose task
+  /// settled it and still ends — giving back its workspace — is waited for.
   pub async fn continue_runs(&self, runs: &[RunId]) -> (Vec<RunId>, Vec<RefusedRun>) {
     let _one_at_a_time = self.inner.continuing.lock().await;
     let mut continued = Vec::new();
     let mut refused = Vec::new();
     for &run in runs {
+      if let Err(rejection) = self.settled(run).await {
+        refused.push(RefusedRun { run, rejection });
+        continue;
+      }
       match self.continue_idle(run, |db, root| idle::continue_interrupted(db, root, run)) {
         Ok(()) => {
           // The run continues whatever happens to its group's hold: a hold that could not be

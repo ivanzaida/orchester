@@ -23,11 +23,13 @@ fn question() -> (Served, std::path::PathBuf) {
     "tool-program",
     &std::env::current_exe().expect("test executable").to_string_lossy(),
   );
-  s.until("valid program", |s| {
-    !super::tools_window::text(s, "tool-action-reason").contains("Checking")
+  // Create draft is pressable once the program resolved; a client's press only asks.
+  s.until("command widening", |s| {
+    if !s.shows("tool-confirm-confirm") {
+      let _ = s.click_by_client("tool-create");
+    }
+    s.shows("tool-confirm-confirm")
   });
-  s.click_by_client("tool-save").expect("request ordinary review");
-  s.until("command widening", |s| s.shows("tool-confirm-confirm"));
   (s, repo)
 }
 
@@ -54,7 +56,7 @@ fn domain_automation_policy_off_refuses_on_confirms_save_and_publish() {
     .expect("saved opt-in permits this app review");
   s.until("real draft saved", |_| count(&repo) == 1);
   s.until("saved editor", |s| {
-    s.shows("tool-publish") && super::tools_window::text(s, "tool-state").contains("Draft")
+    s.shows("tool-publish") && super::tools_window::text(s, "tool-draft-bar-status").contains("Draft")
   });
   s.click_by_client("tool-publish").expect("publish asks");
   s.until("publication review", |s| s.shows("tool-confirm-confirm"));

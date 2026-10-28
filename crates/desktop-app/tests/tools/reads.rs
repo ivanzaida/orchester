@@ -28,13 +28,11 @@ fn tools_save_reads_the_tools_once() {
   let mut t = Tools::new();
   let id = t.seed("Checks", true);
   t.edit(id);
-  t.set("tool-timeout", "60");
-  t.ready();
   settle(&mut t);
   let feed = t.window.projects().feed(project_id());
   let before = feed.outside.get_untracked().tools;
   let reads = Reads::count();
-  t.click("tool-save");
+  t.set("tool-timeout", "60");
   t.wait_state("Draft");
   settle(&mut t);
   let saved = reads.take();
@@ -49,14 +47,20 @@ fn tools_save_is_recorded_when_the_editor_leaves_before_it_ends() {
   let id = t.seed("Checks", true);
   t.edit(id);
   t.set("tool-timeout", "60");
-  t.ready();
-  t.click("tool-save");
+  let services = t.window.launch.services().expect("the session started").clone();
+  // The draft saves on its own once the program checks out.
+  t.window.until("the save started", |w| {
+    w.tree.tick_futures();
+    w.pass();
+    w.texts("tool-draft-bar-status")
+      .is_some_and(|s| s.join(" ").contains("Saving"))
+      || services.changes.counts(project_id()).tools == 1
+  });
   // The person leaves before the save ended: the editor that started it is gone when it does.
   t.window
     .navigation()
     .go(Route::Project(project_id(), ProjectPage::Tasks(TaskList::default())));
   t.window.pass();
-  let services = t.window.launch.services().expect("the session started").clone();
   t.window.until("the change recorded", |_| {
     services.changes.counts(project_id()).tools == 1
   });

@@ -1,155 +1,98 @@
-//! Access tab: published pipeline callers and the honestly unavailable access rules (`lfvWC`).
+//! A tool's Access tab (`04c` `zp1FL`): the pipeline steps that call it, each with Open pipeline, then the access
+//! rules — not applied yet, so one row says what holds today and what is planned, and Edit access rules stays
+//! unavailable.
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
-  layout::Alignment,
-  node::{border::Border, dimension::Dimension, padding::Padding},
+  app::ctx::Ctx,
+  components::Column,
+  node::{Element, dimension::Dimension},
 };
 use orchester_workspace::tools::data::ToolUse;
 
 use super::editor::EditorProps;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  navigation::Navigation,
+  routes::{PipelineView, ProjectPage, Route},
+  screens::hub::parts::{Entry, boxed, group, head, note},
+  theme::HubSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
-    form_section::section,
-    icon::{Icon, icon},
-    inspector::note,
-    state::EmptyState,
-    table::{ColumnWidth, table_header},
+    icon::Icon,
   },
 };
-const PIPELINE: f32 = 280.0;
-const RESULT: f32 = 200.0;
-const ROW: f32 = 56.0;
 
-pub(super) fn access(ctx: &Ctx, p: &EditorProps) -> Column {
+pub(super) fn access(ctx: &mut Ctx, p: &EditorProps) -> Column {
   let uses: Vec<_> = p.entry.iter().flat_map(|e| p.data.listed.used_by(e.id)).collect();
-  let mut table = Column::new()
-    .id("tool-access-steps")
-    .width(Dimension::Pct(100.0))
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(table_header(
-      "tool-access-heading",
-      &[
-        (ColumnWidth::Fixed(PIPELINE), Some(&ctx.t("tools.columns.pipeline"))),
-        (ColumnWidth::Fill, Some(&ctx.t("tools.columns.step"))),
-        (ColumnWidth::Fixed(RESULT), Some(&ctx.t("tools.columns.result"))),
-      ],
-      true,
-    ));
-  if uses.is_empty() {
-    table = table.child(
-      Text::new(&ctx.t("tools.noUses"))
-        .variant(TypographyStyle::Caption)
-        .padding(SpacingSize::Md),
-    );
-  }
-  for (i, used) in uses.iter().enumerate() {
-    table = table.child(caller(ctx, i, used));
-  }
+  let rows: Vec<Element> = if uses.is_empty() {
+    vec![Entry::new("tool-access-none", ctx.t("tools.noUses")).into()]
+  } else {
+    let navigation = Navigation::of(ctx);
+    uses
+      .iter()
+      .enumerate()
+      .map(|(index, used)| caller(ctx, (p, &navigation), index, used))
+      .collect()
+  };
+  let edit = ActionButton::new("tool-access-edit", ButtonKind::Ghost, ctx.t("tools.editAccess"))
+    .icon(Icon::SlidersHorizontal)
+    .unavailable(ctx.t("tools.locked"));
+  let rule = Entry::new("tool-access-rules", ctx.t("tools.accessNow")).hint(ctx.t("tools.accessPlanned"));
   Column::new()
     .id("tool-access-tab")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xl)
-    .child(
-      section(
-        "tool-access-uses-title",
-        &ctx.t("tools.usedTitle"),
-        Some(&ctx.t_args("tools.stepsCount", [("count", uses.len().to_string())])),
-        vec![
-          table.into(),
-          note("tool-uses-note", Icon::Pin, &ctx.t("tools.usesNote")).into(),
-        ],
-      )
-      .spacing(SpacingSize::Md),
-    )
-    .child(
-      section(
-        "tool-rules-title",
-        &ctx.t("tools.rulesTitle"),
-        Some(&ctx.t("tools.rulesStatus")),
-        vec![
-          EmptyState::new(
-            "tool-access-rules",
-            Icon::Shield,
-            ctx.t("tools.accessTitle"),
-            ctx.t("tools.accessDetail"),
-          )
-          .wide()
-          .compact()
-          .action(
-            ActionButton::new("tool-access-edit", ButtonKind::Secondary, ctx.t("tools.editAccess"))
-              .icon(Icon::SlidersHorizontal)
-              .disabled(),
-          )
-          .into(),
-        ],
-      )
-      .spacing(SpacingSize::Md),
-    )
-}
-fn caller(ctx: &Ctx, index: usize, used: &ToolUse) -> Row {
-  // The pipeline editor is unavailable; show the real caller without a no-op Open control.
-  Row::new()
-    .id(format!("tool-access-step-{index}"))
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW))
-    .spacing(SpacingSize::Md)
-    .padding(Padding::horizontal(SpacingSize::Md))
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .spacing(HubSpacing::Sections.role())
     .child(
       Column::new()
-        .width(Dimension::Px(PIPELINE))
-        .spacing(ExtraSpacing::Tight.role())
-        .child(
-          Text::new(&ctx.t_args(
-            "tools.pipelineTitle",
-            [
-              ("pipeline", used.pipeline_name.to_string()),
-              ("version", used.version.get().to_string()),
-            ],
-          ))
-          .variant(ExtraTypography::Strong.role())
-          .nowrap(),
-        )
-        .child(
-          Row::new()
-            .spacing(ExtraSpacing::Pair.role())
-            .align_items(Alignment::Center)
-            .child(icon(Icon::CircleCheck, IconSize::Sm, PaletteColor::Success))
-            .child(
-              Text::new(&ctx.t_args("tools.published", [("version", used.version.get().to_string())]))
-                .variant(ExtraTypography::Note.role()),
-            ),
-        ),
+        .width(Dimension::Pct(100.0))
+        .spacing(lurq::app::theme::SpacingSize::Sm)
+        .child(group(
+          "tool-access-uses",
+          head("tool-access-uses", &ctx.t("tools.usedTitle"), None, None),
+          boxed("tool-access-steps", rows),
+        ))
+        .child(note("tool-uses-note", Icon::Pin, &ctx.t("tools.usesNote"))),
     )
-    .child(
-      Row::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&format!("{:02}", used.ordinal))
-            .variant(ExtraTypography::MonoKey.role())
-            .color(PaletteColor::TextMuted),
-        )
-        .child(
-          Text::new(used.step.as_ref())
-            .variant(ExtraTypography::Lead.role())
-            .nowrap(),
-        ),
-    )
-    .child(
-      Text::new(&ctx.t("tools.exitResult"))
-        .variant(TypographyStyle::Description)
-        .width(Dimension::Px(RESULT)),
-    )
-    .child(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted).describe("state", "unavailable"))
+    .child(group(
+      "tool-rules",
+      head(
+        "tool-rules",
+        &ctx.t("tools.rulesTitle"),
+        Some(&ctx.t("tools.rulesStatus")),
+        Some(edit.into()),
+      ),
+      boxed("tool-rules-rows", [rule.into()]),
+    ))
+}
+
+/// A step that calls the tool: its pipeline version and step, what decides it, and Open pipeline.
+fn caller(ctx: &Ctx, (p, navigation): (&EditorProps, &Navigation), index: usize, used: &ToolUse) -> Element {
+  let step = ctx.t_args(
+    "tools.stepTitle",
+    [
+      ("ordinal", format!("{:02}", used.ordinal)),
+      ("step", used.step.to_string()),
+    ],
+  );
+  let title = ctx.t_args(
+    "tools.use",
+    [
+      ("pipeline", used.pipeline_name.to_string()),
+      ("version", used.version.get().to_string()),
+      ("step", step.to_string()),
+    ],
+  );
+  let route = Route::Project(
+    p.project.open.project.id(),
+    ProjectPage::Pipeline(used.pipeline, PipelineView::default()),
+  );
+  let open = ActionButton::new(
+    format!("tool-access-open-{index}"),
+    ButtonKind::Ghost,
+    ctx.t("tools.openPipeline"),
+  )
+  .icon(Icon::ArrowUpRight)
+  .opens(navigation.to(route));
+  Entry::new(format!("tool-access-step-{index}"), title)
+    .hint(ctx.t_args("tools.useHint", [("version", used.version.get().to_string())]))
+    .end(open)
+    .into()
 }

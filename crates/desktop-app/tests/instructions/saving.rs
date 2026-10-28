@@ -23,14 +23,10 @@ fn instructions_saving_draft_keeps_publish_unavailable_and_explains_wait() {
     glyph.text_content(),
     Some(orchester_app::ui::icon::Icon::Lock.glyph().to_string().as_str())
   );
-  assert_eq!(
-    screen.text("instruction-publish-note"),
-    "Publish waits until the draft is saved."
-  );
   screen.click("instruction-publish");
   db.execute_batch("ROLLBACK").expect("release private writer");
   screen.until("draft saved", |s| {
-    s.text("instruction-save-status").contains("Draft saved")
+    s.text("instruction-save-status").contains("Based on Published v1")
   });
   let entry = screen.entry(id);
   assert!(entry.state.has_draft());

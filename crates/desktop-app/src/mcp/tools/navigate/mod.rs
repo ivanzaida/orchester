@@ -44,23 +44,27 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   project's slug there); automation `ask` rotate-token (Rotate the token?). Opening a page or a question is \
   navigation; answering it stays a person's. Every other screen takes `project`, the project's id (a \
   UUID, as app_state reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the \
-  search) and `highlight` (a task key, as \
-  after Create); edit_task `key`; task `key`, `tab` (summary, conversation or changes), `view` for what a tab opens in \
+  search) and `highlight` (a task key, as after Create), and shows the list or the board as last chosen for the \
+  project (press tasks-layout-list or tasks-layout-board to switch); edit_task `key`; task `key`, `tab` (summary, \
+  conversation or changes), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \
   run). Connections and Secrets are tabs of Project settings with routes of their own: connections takes `selected` \
   (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
-  account); each opens Project settings on that tab or page. tools takes tool (a tool id, or new), and its editor \
-  tab; orchestrator takes `chat` (a \
+  account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
+  five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: skills takes \
+  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue and \
+  pull_requests are the two tabs of one Review page, each its own route; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), or `module`: new for New module, a module's id for its page on `tab` \
-  (summary or burndown), with `view` edit for Edit module. A tab or kind left out is the one the screen opens on. \
+  (summary or burndown), with `view` edit for Edit module; pipelines opens the list, from whose rows a pipeline's \
+  page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the screen opens on. \
   Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \

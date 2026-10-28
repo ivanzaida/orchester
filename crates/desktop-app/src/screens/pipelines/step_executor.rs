@@ -1,11 +1,12 @@
-//! Executor readback and unavailable branches in Clxs2 (adK4e / A0a2p).
+//! The Step group's executor and model rows (`Executor` `RodWl`, `Model for this step` `NPfAh` in `IsU5u`): one
+//! Executor dropdown listing the project's profiles, then its tools; what the profile runs on, or what decides a
+//! tool step; and the step's model as the CLI takes it. The variants of 03b (`g6Ecy`): no profile chosen, a profile
+//! with only a draft (*Open <profile>*), a tool that cannot run with why, by its kind.
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
-  components::{Column, SelectOption},
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Row, SelectOption},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{StepKind, ToolKind};
@@ -15,15 +16,15 @@ use orchester_workspace::pipelines::{
 };
 
 use super::{
-  parts,
-  step_fields::{Props, locked_options},
+  executor_menu::{Entry, ExecutorField, Tone},
+  step_fields::{FIELD_WIDTH, Props, locked_options},
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   field::SelectField,
   icon::Icon,
-  inspector::control,
   notice::{Notice, NoticeTone},
+  row_group::{GroupRow, HintTone},
 };
 
 pub(super) fn draft_profile(props: &Props) -> Option<DraftProfileChoice> {
@@ -41,83 +42,116 @@ pub(super) fn draft_profile(props: &Props) -> Option<DraftProfileChoice> {
     .cloned()
 }
 
-pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> Element {
-  let accounts = crate::services::accounts::listed(ctx);
-  let editing = props.state.get();
+/// The Executor row, and the notices that follow the group: a profile not published, a tool that cannot run.
+pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> (GroupRow, Vec<Element>) {
   let draft = draft_profile(props);
-  let options = executor_options(ctx, props, draft.as_ref());
   let missing = value.get() == Executor::Unset;
-  let tool = matches!(props.step.kind, StepKind::Tool { .. });
-  let input = SelectField::new(
-    "step-executor",
-    ctx.t("pipelines.executor"),
-    value,
-    locked_options(options, props.locked),
-  )
-  .leading(if tool { Icon::Wrench } else { Icon::Bot });
-  let input = if missing {
-    input.invalid()
-  } else if draft.is_some() {
-    input.warning()
+  let row = GroupRow::new("step-executor-row", ctx.t("pipelines.executor"));
+  let row = if props.viewing {
+    row.value(&executor_name(ctx, props))
   } else {
-    input
+    let (profiles, tools) = executor_entries(ctx, props, draft.as_ref());
+    let tone = if missing {
+      Tone::Invalid
+    } else if draft.is_some() {
+      Tone::Warning
+    } else {
+      Tone::Normal
+    };
+    let field = ExecutorField {
+      id: "step-executor".into(),
+      name: ctx.t("pipelines.executor"),
+      value,
+      unset: ctx.t("pipelines.chooseProfile"),
+      profiles,
+      tools,
+      width: FIELD_WIDTH,
+      tone,
+      locked: props.locked,
+    };
+    let field = field.render(ctx);
+    // *Open Builder* before the box, in the row (`ozGhL` in `bxdNK`).
+    match &draft {
+      Some(profile) => row.end(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(profile_action(ctx, props, profile))
+          .child(field),
+      ),
+      None => row.end(field),
+    }
   };
-  let mut field = Column::new().width(Dimension::Pct(100.0)).child(input.render(ctx));
-  if missing {
-    field = field.child(
-      parts::note(&ctx.t("pipelines.missingProfile"))
-        .id("step-profile-required")
-        .color(PaletteColor::Danger),
-    );
+  let row = match (missing, &draft) {
+    (true, _) => row.toned_hint(ctx.t("pipelines.missingProfile"), HintTone::Warning),
+    (false, Some(_)) => row.toned_hint(ctx.t("pipelines.profileUnpublished"), HintTone::Warning),
+    (false, None) => match runs_on(ctx, props) {
+      Some(hint) => row.hint(hint),
+      None => row,
+    },
+  };
+  (row, notices(ctx, draft.as_ref()))
+}
+
+/// The executor's name, as a viewed version shows it.
+fn executor_name(ctx: &Ctx, props: &Props) -> String {
+  let editing = props.state.get();
+  let assignables = &editing.opened.assignables;
+  match props.step.kind {
+    StepKind::Agent { profile: Some(id), .. } => assignables.profile(id).map_or_else(
+      || ctx.t("delivery.step.unknownProfile").to_string(),
+      |choice| choice.name.to_string(),
+    ),
+    StepKind::Tool { tool: Some(id) } => assignables.tool(id).map_or_else(
+      || ctx.t("pipelines.unassigned").to_string(),
+      |choice| choice.name.to_string(),
+    ),
+    _ => ctx.t("pipelines.unassigned").to_string(),
   }
-  let mut body = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xs)
-    .child(control(
-      "step-executor-row",
-      &ctx.t(if tool { "pipelines.tool" } else { "pipelines.profile" }),
-      field,
-    ));
-  if let Some(profile) = draft {
-    body = body.child(
+}
+
+/// A profile not published's notice, after the group (`OXySp` in `bxdNK`); *Open Builder* is in the Executor row.
+fn notices(ctx: &Ctx, draft: Option<&DraftProfileChoice>) -> Vec<Element> {
+  draft
+    .map(|profile| {
       Notice::new(
         "step-profile-unpublished",
         NoticeTone::Warning,
         ctx.t("pipelines.profileUnpublished"),
       )
-      .inspector()
+      .stacked()
+      .flat()
       .body(ctx.t_args("pipelines.profileDraftHint", [("name", profile.name.as_ref())]))
-      .action(profile_action(ctx, props, &profile)),
-    );
-  }
-  if let StepKind::Tool { tool: Some(id) } = props.step.kind
-    && let Some(tool) = editing.opened.assignables.tool(id).filter(|tool| !tool.runnable)
-  {
-    let reason = match tool.kind {
-      ToolKind::Database => "pipelines.databaseUnavailable",
-      ToolKind::Http => "pipelines.httpUnavailable",
-      ToolKind::Command => "pipelines.toolAccessUnavailable",
-    };
-    body = body.child(
-      Notice::new(
-        "step-tool-unavailable",
-        NoticeTone::Info,
-        ctx.t("pipelines.toolUnavailable"),
-      )
-      .inspector()
-      .icon(Icon::Lock)
-      .body(ctx.t(reason)),
-    );
-  }
-  body.with_children(runs_on(ctx, props, &accounts)).into()
+      .into()
+    })
+    .into_iter()
+    .collect()
 }
 
-/// What the step's profile runs on, read back (`M42rM`): its connection and that connection's account, so a pipeline
-/// whose steps run on different accounts shows it at a glance.
-fn runs_on(ctx: &Ctx, props: &Props, accounts: &crate::services::accounts::Accounts) -> Option<Element> {
-  let StepKind::Agent { profile: Some(id), .. } = props.step.kind else {
-    return None;
+/// Why the step's tool cannot run, by its kind, between the Executor row and the Model row (`pcNiB` in `mRLFg`).
+pub fn tool_notice(ctx: &Ctx, props: &Props) -> Option<Element> {
+  let tool = unavailable_tool(props)?;
+  Some(
+    Notice::new(
+      "step-tool-unavailable",
+      NoticeTone::Info,
+      ctx.t("pipelines.toolUnavailable"),
+    )
+    .icon(Icon::Lock)
+    .flat()
+    .body(ctx.t(tool_reason(tool.kind)))
+    .into(),
+  )
+}
+
+/// What the step's profile runs on (`Runs on Claude Code · account Work`), or what decides a tool step.
+fn runs_on(ctx: &mut Ctx, props: &Props) -> Option<std::sync::Arc<str>> {
+  let id = match props.step.kind {
+    StepKind::Tool { .. } => return Some(ctx.t("pipelines.toolBadge")),
+    StepKind::Agent { profile: Some(id), .. } => id,
+    StepKind::Agent { profile: None, .. } => return None,
   };
+  let accounts = crate::services::accounts::listed(ctx);
   let editing = props.state.get();
   let profile = editing
     .opened
@@ -131,27 +165,20 @@ fn runs_on(ctx: &Ctx, props: &Props, accounts: &crate::services::accounts::Accou
     || ctx.t("pipelines.defaultAccount").to_string(),
     |name| name.as_str().to_owned(),
   );
-  let text = ctx.t_args(
-    "pipelines.runsOnValue",
+  Some(ctx.t_args(
+    "pipelines.runsOnHint",
     [("connection", connection.name().as_str()), ("account", &account)],
-  );
-  Some(
-    crate::ui::inspector::property(
-      "step-runs-on",
-      &ctx.t("pipelines.runsOn"),
-      &text,
-      crate::ui::inspector::PropertyValue::Plain,
-    )
-    .into(),
-  )
+  ))
 }
 
+/// *Open Builder*, a ghost button with the outward arrow (`ozGhL` in `bxdNK`).
 fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) -> Element {
   let button = ActionButton::new(
     "step-open-profile",
-    ButtonKind::Secondary,
+    ButtonKind::Ghost,
     ctx.t_args("pipelines.openProfile", [("name", profile.name.as_ref())]),
-  );
+  )
+  .icon(Icon::ArrowUpRight);
   if props.navigation_locked {
     return crate::ui::tooltip::Tooltip::new("step-open-profile-reason", ctx.t("pipelines.profileWait"))
       .wrap(ctx, button.disabled());
@@ -160,45 +187,58 @@ fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) ->
   let project = navigation
     .route_now()
     .project()
-    .expect("a pipeline editor belongs to a project");
-  let id = profile.id;
+    .expect("a pipeline page belongs to a project");
   button
     .opens(navigation.to(crate::routes::Route::Project(
       project,
-      crate::routes::ProjectPage::Agent(id, crate::routes::AgentTab::default()),
+      crate::routes::ProjectPage::Agent(profile.id, crate::routes::AgentTab::default()),
     )))
     .into()
 }
 
-fn executor_options(ctx: &Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> Vec<SelectOption<Executor>> {
+/// The profiles, and the tools; a draft profile and a tool that cannot run are listed with why, not chosen.
+fn executor_entries(ctx: &Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> (Vec<Entry>, Vec<Entry>) {
   let editing = props.state.get();
-  let mut options = vec![SelectOption::new(Executor::Unset, ctx.t("pipelines.chooseProfile"))];
-  options.extend(
-    editing
-      .opened
-      .assignables
-      .profiles
-      .iter()
-      .map(|p| SelectOption::new(Executor::Profile(p.id), p.name.clone())),
-  );
-  if let Some(profile) = &draft {
-    options.push(
-      SelectOption::new(
-        Executor::Profile(profile.id),
-        ctx.t_args("pipelines.profileDraft", [("name", profile.name.as_ref())]),
-      )
-      .disabled(true),
-    );
+  let assignables = &editing.opened.assignables;
+  let mut profiles: Vec<Entry> = assignables
+    .profiles
+    .iter()
+    .map(|p| Entry {
+      value: Executor::Profile(p.id),
+      label: p.name.clone(),
+      icon: Icon::Bot,
+      unavailable: None,
+    })
+    .collect();
+  if let Some(profile) = draft {
+    profiles.push(Entry {
+      value: Executor::Profile(profile.id),
+      label: ctx.t_args("pipelines.profileDraft", [("name", profile.name.as_ref())]),
+      icon: Icon::Bot,
+      unavailable: Some(ctx.t("pipelines.profileUnpublished")),
+    });
   }
-  options.extend(editing.opened.assignables.tools.iter().map(|t| {
-    let option = SelectOption::new(Executor::Tool(t.id), t.name.clone());
-    if t.runnable {
-      option
-    } else {
-      option.detail(ctx.t("pipelines.toolUnavailable")).disabled(true)
-    }
-  }));
-  options
+  let tools = assignables
+    .tools
+    .iter()
+    .map(|t| Entry {
+      value: Executor::Tool(t.id),
+      label: t.name.clone(),
+      // Every tool takes the tool icon, whatever its kind (`Checks` `I5Egi` in `FHpIk`).
+      icon: Icon::Wrench,
+      unavailable: (!t.runnable).then(|| ctx.t("pipelines.toolUnavailable")),
+    })
+    .collect();
+  (profiles, tools)
+}
+
+/// Why a tool of `kind` cannot run as a step.
+const fn tool_reason(kind: ToolKind) -> &'static str {
+  match kind {
+    ToolKind::Database => "pipelines.databaseUnavailable",
+    ToolKind::Http => "pipelines.httpUnavailable",
+    ToolKind::Command => "pipelines.toolAccessUnavailable",
+  }
 }
 
 pub(super) fn unavailable_tool(props: &Props) -> Option<orchester_workspace::pipelines::data::ToolChoice> {
@@ -215,60 +255,68 @@ pub(super) fn unavailable_tool(props: &Props) -> Option<orchester_workspace::pip
     .cloned()
 }
 
-pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Element {
+/// The Model row: an agent step's model, or *Not used by tools* for a tool that cannot run; none for a tool step. The
+/// box shows a model id in Geist Mono (`DuMJh` in `IsU5u`): the step's own, or the one it takes from its profile,
+/// which its menu lists as *From the profile*.
+pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Option<GroupRow> {
+  let row = GroupRow::new("step-model-row", ctx.t("pipelines.model"));
   if matches!(props.step.kind, StepKind::Tool { .. }) {
-    if unavailable_tool(props).is_none() {
-      return Column::new().into();
-    }
+    unavailable_tool(props)?;
     let unused = Signal::new(false);
-    return control(
-      "step-model-row",
-      &ctx.t("pipelines.model"),
-      SelectField::new(
-        "step-model",
-        ctx.t("pipelines.model"),
-        unused,
-        vec![SelectOption::new(false, ctx.t("pipelines.toolModelUnused"))],
-      )
-      .locked()
-      .render(ctx),
+    let select = SelectField::new(
+      "step-model",
+      ctx.t("pipelines.model"),
+      unused,
+      vec![SelectOption::new(false, ctx.t("pipelines.toolModelUnused"))],
     )
-    .into();
+    .width(Dimension::Px(FIELD_WIDTH))
+    .locked();
+    return Some(row.muted().end(select.render(ctx)));
   }
   let editing = props.state.get();
   let draft = draft_profile(props);
+  let published_model = match props.step.kind {
+    StepKind::Agent { profile: Some(id), .. } => editing.opened.assignables.profile(id).map(|p| p.model.clone()),
+    StepKind::Agent { profile: None, .. } | StepKind::Tool { .. } => None,
+  };
+  let profile_model = draft.as_ref().map(|p| p.model.clone()).or(published_model);
   let inherited = draft
     .as_ref()
     .map_or_else(|| ctx.t("pipelines.inherit"), |p| p.model.as_str().into());
+  if props.viewing {
+    return Some(match value.get().0.or(profile_model) {
+      Some(model) => row.mono_value(model.as_str()),
+      None => row.value(&inherited),
+    });
+  }
   let models = fields::model_choices(
     editing.opened.assignables.profiles.iter().map(|p| &p.model),
     value.get().0.as_ref(),
   );
-  let mut options = vec![SelectOption::new(ModelChoice(None), inherited)];
+  let mut options = vec![SelectOption::new(ModelChoice(None), inherited.clone())];
   options.extend(
     models
       .into_iter()
       .map(|m| SelectOption::new(ModelChoice(Some(m.clone())), m.as_str().to_owned())),
   );
   let unset = Executor::of(&props.step) == Executor::Unset;
-  let select = SelectField::new(
+  let mut select = SelectField::new(
     "step-model",
     ctx.t("pipelines.model"),
     value.clone(),
     locked_options(options, props.locked || unset),
   )
-  .leading(Icon::Cpu);
-  let select = if unset { select.locked() } else { select }.render(ctx);
-  let mut body =
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .child(control("step-model-row", &ctx.t("pipelines.model"), select));
-  if let Some(profile) = draft.filter(|_| value.get().0.is_none()) {
-    body = body.child(control(
-      "step-model-source",
-      "",
-      parts::note(&ctx.t_args("pipelines.profileDraftModel", [("name", profile.name.as_ref())])),
-    ));
+  .width(Dimension::Px(FIELD_WIDTH));
+  if let Some(model) = &profile_model {
+    select = select.shows(inherited, model.as_str());
   }
-  body.into()
+  if value.get().0.is_some() || profile_model.is_some() {
+    select = select.mono();
+  }
+  let select = if unset { select.locked() } else { select }.render(ctx);
+  let row = row.end(select);
+  Some(match draft.filter(|_| value.get().0.is_none()) {
+    Some(profile) => row.hint(ctx.t_args("pipelines.profileDraftModel", [("name", profile.name.as_ref())])),
+    None => row,
+  })
 }
