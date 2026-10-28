@@ -2,9 +2,9 @@
 //! workspace's rules ([`moves::decide`]): a drop that changes nothing stays, a refused one says why at the column's
 //! top, Done and Canceled close the task through the screen's closer (its run stopped first after the confirmation in
 //! place), Done asks first for work that waits to be merged, Todo asks first when queuing starts the task at once and
-//! offers Run again for a task whose run ended. By priority or module a drop sets them; by pipeline it is refused,
-//! since a pipeline is chosen on the task's page. A drop into another row of the board sets the row's module or
-//! priority too. The Move to menu and the keys move a card the same way.
+//! asks a task whose run ended whether it runs again, only moves to Todo or stays. By priority or module a drop sets
+//! them; by pipeline it is refused, since a pipeline is chosen on the task's page. A drop into another row of the board
+//! sets the row's module or priority too. The Move to menu and the keys move a card the same way.
 
 use std::sync::Arc;
 
@@ -108,20 +108,29 @@ impl Dropping {
         None => Some(Some(ChangeKind::Queue)),
       },
       Decision::Move(Move::RunAgain) => {
-        match card.latest_run {
-          Some(after) => self.state.asked.set(Some(Ask::RunAgain {
-            task: subject,
-            after,
-            revision: card.revision,
-            pipeline: card.pipeline.clone(),
-          })),
-          None => self.refuse(card, target, Refusal::HasRun),
+        if !self.ask_run_again(card) {
+          self.refuse(card, target, Refusal::HasRun);
         }
         None
       }
       Decision::Move(Move::ReturnToDraft) => Some(Some(ChangeKind::ReturnToDraft)),
       Decision::Move(Move::Status(status)) => Some(Some(ChangeKind::Status(status))),
     }
+  }
+
+  /// Asks at `card` whether its task, whose latest run ended, runs again (or, unless it is in Todo already, only moves
+  /// there); `false` when that run cannot be read. A drop on Todo and the card menu's Run again ask it.
+  pub fn ask_run_again(&self, card: &CardModel) -> bool {
+    let Some(after) = card.latest_run else {
+      return false;
+    };
+    self.state.asked.set(Some(Ask::RunAgain {
+      task: self.subject(card),
+      after,
+      revision: card.revision,
+      pipeline: card.pipeline.clone(),
+    }));
+    true
   }
 
   /// The module or priority of another row of the board the drop went into.
