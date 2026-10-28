@@ -18,10 +18,7 @@ impl Runners {
     provider: AgentProvider,
     api: ApiEndpoint,
   ) -> Result<(CheckResult, Vec<NativeModel>), RunRequestError> {
-    match self
-      .ask(Some(root), Command::CheckConnection { provider, api })
-      .await?
-    {
+    match self.ask(Some(root), Command::CheckConnection { provider, api }).await? {
       Reply::ConnectionChecked { result, models } => Ok((result, models)),
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => {
