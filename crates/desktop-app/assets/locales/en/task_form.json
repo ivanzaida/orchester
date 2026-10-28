@@ -83,6 +83,7 @@
       "limits": {
         "label": "Limits",
         "title": "Run limits",
+        "default": "Default",
         "none": "No limit",
         "invalid": "Not valid",
         "both": "{{tokens}} · {{minutes}}",

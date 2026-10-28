@@ -14,7 +14,7 @@ use orchester_store::StoreError;
 use orchester_workspace::messages;
 
 use super::{
-  chips::{ChipState, Look, MenuOption, PropertyChip, menu_head},
+  chips::{ChipState, HelpPlace, Look, MenuOption, PropertyChip, menu_head},
   state::View,
 };
 use crate::ui::{
@@ -140,6 +140,7 @@ fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<DeliversPic
       icon,
       title,
       help: Some(help),
+      help_place: HelpPlace::BesideIcon,
       chosen: delivers == chosen,
     }
     .render(&state.open, move || pick.set(DeliversPick(delivers)))

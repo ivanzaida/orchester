@@ -38,11 +38,12 @@ const TILE: f32 = 28.0;
 /// An opened item's tile (`Tile` `AFO61`).
 const HEAD_TILE: f32 = 36.0;
 
-/// What an item's tile shows: a Lucide glyph in `text_secondary`, or the mark of the maker of an agent's models in its
-/// own color (`ui::agent_mark`).
+/// What an item's tile shows: a Lucide glyph in `text_secondary`, the GitHub mark in it (`ui::github_mark`, `yov2r` in
+/// `14`), or the mark of the maker of an agent's models in its own color (`ui::agent_mark`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Glyph {
   Icon(Icon),
+  GitHub,
   Mark(AgentMark),
 }
 
@@ -56,6 +57,7 @@ impl Glyph {
   fn render(self, ctx: &Ctx, size: IconSize) -> Element {
     match self {
       Self::Icon(glyph) => icon(glyph, size, PaletteColor::TextSecondary).into(),
+      Self::GitHub => crate::ui::github_mark::github_mark(ctx, size, PaletteColor::TextSecondary),
       Self::Mark(mark) => mark.render(ctx, size),
     }
   }
@@ -270,4 +272,10 @@ pub(crate) fn entity_head(
 /// A command to run in a terminal, with Copy, under the line that says why.
 pub(crate) fn command_line(ctx: &mut Ctx, id: &str, label: Arc<str>, command: impl Into<Arc<str>>) -> Element {
   CodeBox::new(id.to_owned(), label, command).render(ctx)
+}
+
+/// A command to run in a terminal in one box with its Copy icon inside it (`Command` `SiCGv` in `14`); `label` names
+/// the box for tools.
+pub(crate) fn command_box(ctx: &mut Ctx, id: &str, label: Arc<str>, command: impl Into<Arc<str>>) -> Element {
+  CodeBox::new(id.to_owned(), label, command).inline().render(ctx)
 }

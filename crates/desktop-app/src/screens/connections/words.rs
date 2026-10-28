@@ -4,9 +4,7 @@
 use std::path::Path;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::connection::{
-  AgentConnection, AgentProvider, ConnectionAccount, ConnectionStatus, GitHubState, mcp::McpServer,
-};
+use orchester_core::connection::{AgentConnection, AgentProvider, ConnectionAccount, ConnectionStatus, GitHubState};
 
 use crate::{
   screens::project_settings::kit::Glyph,
@@ -140,21 +138,15 @@ pub(super) const fn vendor_key(provider: AgentProvider) -> &'static str {
 }
 
 /// The glyph of an agent connection (`Agent marks` `z7PmEL`): the mark of the maker whose models it runs (Claude Code,
-/// Codex, the Anthropic and OpenAI APIs), or Lucide's cloud for a CLI on an API provider such as DeepSeek. GitHub, an
-/// MCP program and a remote MCP server keep their Lucide glyphs; the bundled icons have no GitHub mark, so GitHub shows
-/// its pull requests' glyph.
+/// Codex, the Anthropic and OpenAI APIs), or Lucide's cloud for a CLI on an API provider such as DeepSeek. GitHub shows
+/// its mark and an MCP server, a program or a remote one, Lucide's plug, as `05` `QNxAo` draws them.
 pub(super) fn agent_glyph(connection: &AgentConnection) -> Glyph {
   AgentMark::of_connection(connection).map_or(Glyph::Icon(Icon::Cloud), Glyph::Mark)
 }
 
-pub(super) const GITHUB_GLYPH: Icon = Icon::GitPullRequest;
+pub(super) const GITHUB_GLYPH: Glyph = Glyph::GitHub;
 
-pub(super) const fn mcp_glyph(server: &McpServer) -> Icon {
-  match server.transport() {
-    orchester_core::connection::mcp::McpTransport::Stdio(_) => Icon::Server,
-    orchester_core::connection::mcp::McpTransport::Http(_) => Icon::Globe,
-  }
-}
+pub(crate) const MCP_GLYPH: Icon = Icon::Plug;
 
 /// What the agent connection is, under its name: the vendor, the CLI and its version once checked
 /// (`Anthropic · Claude Code CLI 2.1.89`), a native connection's provider and endpoint host, or the CLI and the

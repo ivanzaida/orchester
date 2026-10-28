@@ -32,7 +32,7 @@ use crate::{
 };
 
 /// The bar's height (`Action bar` `IWxaO`).
-const HEIGHT: f32 = 56.0;
+pub(super) const HEIGHT: f32 = 56.0;
 
 pub type Handler = Arc<dyn Fn() + Send + Sync>;
 

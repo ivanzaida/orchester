@@ -140,6 +140,15 @@ pub fn whole_minutes(duration: Duration) -> u64 {
   duration.as_secs() / SECONDS_PER_MINUTE
 }
 
+/// Whether a task's run budget and time limit, as typed in its fields (`budget`, `time_limit`), are the project's
+/// defaults in `limits`, which New task starts with: an empty field matches a project without that default, and text
+/// that is not a limit matches nothing.
+pub fn holds_defaults(limits: ProjectLimits, (budget, time_limit): (&str, &str), separator: &str) -> bool {
+  let budget = parse_optional_budget(budget, separator).ok();
+  let minutes = read_minutes(time_limit).ok().map(|limit| limit.map(whole_minutes));
+  budget == Some(limits.default_run_budget()) && minutes == Some(limits.default_time_limit().map(whole_minutes))
+}
+
 /// The deprecated app's Limits tab fields as entered. An empty default run budget or time limit means new tasks
 /// have none. It has no *QA apps at once* field: its limits carry the default QA slots. The new app reads its
 /// fields with `crate::project_settings::LimitsText`.
