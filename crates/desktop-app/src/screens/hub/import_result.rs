@@ -89,7 +89,8 @@ impl Outcome<'_> {
           }),
         )
         .icon(Icon::Info)
-        .body(ctx.t("skills.resultRepository")),
+        .body(ctx.t("skills.resultRepository"))
+        .flat(),
       );
     }
     page.child(self.actions(ctx)).into()

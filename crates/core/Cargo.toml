@@ -15,8 +15,8 @@ workspace = true
 base64.workspace = true
 # Where the local day starts, for the daily project budget; std has no local time.
 chrono.workspace = true
-# The links a doc's body holds, found by their offsets in its Markdown (`docs::links`); the parser lurq's Markdown
-# renders with, already built through it, so it adds no crate.
+# The links a doc's body holds, found by their offsets in its Markdown (`docs::links`), and the body read as blocks
+# (`docs::blocks`); the parser lurq's Markdown renders with, already built through it, so it adds no crate.
 pulldown-cmark.workspace = true
 serde.workspace = true
 # Reads the JSON the agent CLIs print (model catalog, sign-in status).
