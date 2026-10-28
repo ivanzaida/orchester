@@ -49,7 +49,7 @@ impl TaskPhase {
       RunStatus::Pending => Self::Queued,
       RunStatus::Running if waiting(run) => Self::Waiting,
       RunStatus::Running => Self::Running,
-      RunStatus::Paused(PauseReason::Requested) => Self::Paused,
+      RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk) => Self::Paused,
       RunStatus::Paused(PauseReason::LimitReached(_)) => Self::StoppedAtLimit,
       RunStatus::Interrupted(_) => Self::Interrupted,
       RunStatus::WaitingForPerson(_) => Self::Stuck,

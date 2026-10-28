@@ -92,7 +92,7 @@ pub(in crate::orchestrator) fn resumable(run: &Run, to: ToldTo) -> Result<(), To
     RunStatus::Interrupted(_) => "orchestrator.proposal.resumeStopped.interrupted",
     RunStatus::Pending
     | RunStatus::Running
-    | RunStatus::Paused(PauseReason::Requested)
+    | RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk)
     | RunStatus::WaitingForPerson(_)
     | RunStatus::Succeeded
     | RunStatus::Failed(_)
