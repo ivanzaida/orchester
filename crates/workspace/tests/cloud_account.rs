@@ -32,7 +32,6 @@ use orchester_workspace::sharing::{
   cloud::{CloudError, ServerJoin, SignInStep, WebPage},
 };
 use server_support::TestServer;
-use tokio_rustls::rustls::pki_types::{CertificateDer, pem::PemObject};
 
 #[test]
 fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
@@ -261,8 +260,7 @@ fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of
   }
   // Under the trust store: the impostor's certificate comes from an authority this test trusts, and the proof it passes
   // on names the server's certificate, not the one of the connection that carried it.
-  let authority = CertificateDer::from_pem_slice(include_bytes!("../../server/tests/fixtures/ca.pem")).expect("the CA");
-  orchester_api::client::trust_for_tests(vec![authority]);
+  orchester_api::client::trust_for_tests(vec![impostor::authority()]);
   let impostor = Impostor::start(&id, Claimed::Relayed(server.client()));
   let address = ServerAddress::parse(&impostor.url()).expect("address");
   let code = Credential::new("ABCD-EFGH".into());
