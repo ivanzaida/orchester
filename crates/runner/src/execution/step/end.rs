@@ -54,6 +54,8 @@ impl RunTask {
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
       // No tool decision was sent: save the session's work without completing its step.
       Some(StopCause::Paused) => self.save(execution, &active, "saved while awaiting a tool decision"),
+      // The execution stays open: it continues where it stopped once the disk has room and the run resumes.
+      Some(StopCause::LowDisk) => self.save(execution, &active, "saved for low disk space"),
       // The execution stays open and continues its session with the person's message.
       Some(StopCause::TurnStopped) => self.turn_stopped(execution, &active),
       // The execution stays open and continues with the run's new permissions.
@@ -205,7 +207,8 @@ impl RunTask {
   }
 
   /// Commits a passed step's work and brings it onto the run's branch: in the run's worktree it is
-  /// there already; from a worktree of its own it is merged, and that worktree removed.
+  /// there already; from a worktree of its own it is merged, and that worktree removed, or the workspace it borrowed
+  /// given back.
   fn integrate(
     &mut self,
     execution: StepExecutionId,
@@ -214,7 +217,13 @@ impl RunTask {
   ) -> Result<Integrated, IntegrateError> {
     let message = self.commit_message(execution, None);
     let saved = self.save_work(workspace, judged, &message)?;
-    let Workspace::Own { branch, owner, .. } = workspace else {
+    let Workspace::Own {
+      branch,
+      owner,
+      borrowed,
+      ..
+    } = workspace
+    else {
       self.keep(execution, invocation, saved)?;
       return Ok(Integrated::Done);
     };
@@ -222,9 +231,9 @@ impl RunTask {
     if let Saved::Elsewhere { .. } = saved {
       self.keep(execution, invocation, saved)?;
     }
-    let before = checkpoint::head(&self.worktree)?;
+    let before = checkpoint::head(self.worktree())?;
     let message = self.commit_message(execution, Some("merge"));
-    let merged = match checkpoint::merge(&self.worktree, branch, &message)? {
+    let merged = match checkpoint::merge(self.worktree(), branch, &message)? {
       Merge::Merged(revision) => revision,
       Merge::Conflict(files) => {
         return Ok(Integrated::Conflict {
@@ -236,8 +245,12 @@ impl RunTask {
     if merged != before {
       self.checkpoint(execution, merged)?;
     }
-    // The step's commits are on the run's branch now; a worktree left behind only takes space.
-    if let Err(error) = Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch)) {
+    if *borrowed {
+      self.give_back_merged_step(*owner, branch);
+    } else if let Err(error) =
+      Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch))
+    {
+      // The step's commits are on the run's branch now; a worktree left behind only takes space.
       tracing::warn!(run = %self.run.id(), %execution, %error, "the merged step's worktree was not removed");
     }
     Ok(Integrated::Done)
@@ -326,7 +339,7 @@ impl RunTask {
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(Taken::NoSlot);
     }
-    let judged = checkpoint::head(&self.worktree)
+    let judged = checkpoint::head(self.worktree())
       .inspect_err(|error| tracing::warn!(run = %self.run.id(), %error, "the run's revision cannot be read"))
       .ok();
     if let Some(revision) = judged

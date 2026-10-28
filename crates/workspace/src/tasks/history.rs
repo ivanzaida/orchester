@@ -17,7 +17,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::{changes::run_worktree, data::latest_run, detail::run_store_error, unreadable::Unreadable};
+use super::{changes::run_work_present, data::latest_run, detail::run_store_error, unreadable::Unreadable};
 use crate::messages::Message;
 
 /// One run of the task, as its row shows it.
@@ -83,7 +83,7 @@ pub(super) fn note_missing_worktrees(
     .flatten()
     .filter(|run| matches!(run.status(), RunStatus::Interrupted(_)));
   for run in interrupted {
-    if db.worktree_removal(run.id())?.is_none() && !run_worktree(repo_root, run.id()).is_dir() {
+    if db.worktree_removal(run.id())?.is_none() && !run_work_present(db, repo_root, run) {
       tracing::warn!(run = %run.id(), "the interrupted run's worktree is gone; it can no longer continue");
       db.begin_worktree_removal(run.id(), Timestamp::now())?;
     }

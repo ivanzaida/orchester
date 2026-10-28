@@ -34,6 +34,7 @@ impl TaskForm {
   pub(super) fn composer(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {
     let composer = Column::new()
       .id("task-form")
+      .ref_element(self.column.clone())
       .width(Dimension::Px(FORM_WIDTH))
       .spacing(TaskFormSpacing::Composer.role())
       .child(head(ctx, view, &self.nav))
@@ -67,6 +68,7 @@ impl TaskForm {
     let limits = LimitFields {
       budget: &fields.budget,
       time_limit: &fields.time_limit,
+      defaults: props.limits,
     };
     let sources = SourcesProps {
       repo_root: props.project.open.repo_root.clone(),
@@ -76,6 +78,7 @@ impl TaskForm {
       pipeline: view.pipeline().map(|choice| (choice.id, choice.version)),
       drafted: self.sources.clone(),
       locked: view.locked(),
+      column: self.column.clone(),
     };
     let mut run = vec![pipeline_chip(
       ctx,

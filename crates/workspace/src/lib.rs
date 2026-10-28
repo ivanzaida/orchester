@@ -57,4 +57,5 @@ pub mod sources;
 pub mod tasks;
 pub mod tools;
 pub mod usage;
+pub mod warm_workspaces;
 pub mod workspace;

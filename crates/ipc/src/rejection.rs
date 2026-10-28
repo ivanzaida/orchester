@@ -94,6 +94,12 @@ pub enum Rejection {
   NoAgentSlot {
     slots: NonZeroU32,
   },
+  /// The disk the workspaces are on has `free_gb` gigabytes free, below the `needed_gb` the project keeps (ORC-114):
+  /// no step starts until there is room.
+  LowDisk {
+    free_gb: u64,
+    needed_gb: u64,
+  },
   /// No step of the run uses the agent profile whose permissions were to change.
   ProfileNotInRun,
   /// The connection's CLI cannot enforce the permissions for `step`.

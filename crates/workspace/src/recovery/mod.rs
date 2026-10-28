@@ -36,7 +36,7 @@ use crate::{
   display,
   messages::{self, Message},
   tasks::{
-    changes::{GIT, run_worktree},
+    changes::{GIT, run_folder, run_worktree},
     detail,
   },
   workspace::Workspace,
@@ -236,7 +236,7 @@ fn describe(
       checkpoint.created_at(),
     )
   });
-  let worktree = run_worktree(root, view.run.id());
+  let worktree = run_folder(db, root, view.run.id()).unwrap_or_else(|| run_worktree(root, view.run.id()));
   let (state, uncommitted_file) = worktree_state(programs, &worktree);
   Ok(InterruptedRun {
     project_id: db.project().id(),

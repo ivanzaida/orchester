@@ -122,8 +122,9 @@ pub fn exercise(worktree: &Path, images: bool, mut call: impl FnMut(&str, &Value
     .strip_prefix("PNG saved: ")
     .and_then(|rest| rest.strip_suffix("; open it with read_file to see it"))
     .expect("saved");
-  assert!(path.starts_with(".tmp/run-app/") && path.ends_with(".png"));
-  let saved = worktree.join(path);
+  // In the run's own storage, `.orchester/runs/<run>/screenshots/` (ORC-114), named by its absolute path.
+  assert!(path.contains("/.orchester/runs/") && path.contains("/screenshots/app-") && path.ends_with(".png"));
+  let saved = std::path::PathBuf::from(path);
   let image = image::open(saved).expect("PNG");
   assert_eq!((image.width(), image.height()), (2, 2));
   eprintln!("app-relay: screenshot saved");

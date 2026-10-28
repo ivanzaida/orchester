@@ -135,7 +135,7 @@ fn domain_api_providers_are_checked_as_the_form_checks_them() {
   unknown["api_provider"]["key_secret"] = json!("NO_SUCH_SECRET");
   assert_eq!(refused(&mut served, &unknown), "secret_not_found");
   let mut github = on("https://api.deepseek.com", &["deepseek-flash"]);
-  github["connection"] = json!("GitHub · github.com");
+  github["connection"] = json!("gh · github.com");
   assert_eq!(refused(&mut served, &github), "not_an_agent_connection");
 }
 

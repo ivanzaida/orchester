@@ -37,6 +37,10 @@ knowledge for people, beside what already exists for agents and code:
 
 - A doc is Markdown (CommonMark with GitHub tables and task lists), as lurq's `markdown` already renders. Images are
   blobs of the project (`blobs/`, as attachments are) referenced by an Orchester link, not by a file path.
+- The editor and the merge read a body as blocks (heading, paragraph, list item, quote, code block, table, image,
+  divider), each with its text and inline marks as spans over it, and write it back as normalized Markdown that parses
+  to the same blocks (`orchester_core::docs::blocks`; its module documentation lists the normalization: list markers,
+  emphasis characters, table padding, escapes).
 - Tables, beside the versioned configuration's pattern (`docs/architecture/storage.md` › *Versioned
   configuration*), with a doc's own lifecycle:
 

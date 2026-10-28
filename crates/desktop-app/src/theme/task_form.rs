@@ -6,10 +6,25 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  layout::{
+    scrollbar::ScrollBarStyle,
+    text_style::{FontWeight, TextStyle},
+  },
 };
 
 use super::typography::style;
+
+/// The Sources popover's scrollbar runs in the popover's 12 at its end, 4 in from its edge, clear of the rows and their
+/// ↗ links (`Sources popover` `B56QE` draws none).
+const SOURCES_SCROLL_EDGE: f32 = 4.0;
+
+/// `base`, the theme's scrollbar, placed for the Sources popover.
+pub fn sources_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  ScrollBarStyle {
+    edge_inset: Some(SOURCES_SCROLL_EDGE),
+    ..base.clone()
+  }
+}
 
 /// Text of the task form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,10 +35,23 @@ pub enum TaskFormText {
   Outcome,
   /// 13 `text_primary`, 1.3: an acceptance criterion in its row (`Criterion 1` `cScHP`).
   Criterion,
+  /// 12 `text_muted`, 1.3: the count and the hint beside *Acceptance criteria* (`Count` `KrVl9`, `Hint` `ZndIB`).
+  CriteriaHint,
+  /// 11.5 `text_muted`, 1.3: a pipeline's steps and gates under its name in the Pipeline menu (`Meta` `H1NsU`).
+  OptionMeta,
+  /// 12 `text_secondary`, 1.3: a note under the head, one 16 line in its 32 (`Text` `vpy3p` in `Note` `CvMGI`).
+  Note,
 }
 
 impl TaskFormText {
-  pub const ALL: [Self; 3] = [Self::Title, Self::Outcome, Self::Criterion];
+  pub const ALL: [Self; 6] = [
+    Self::Title,
+    Self::Outcome,
+    Self::Criterion,
+    Self::CriteriaHint,
+    Self::OptionMeta,
+    Self::Note,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -34,6 +62,9 @@ impl TaskFormText {
       Self::Title => "task_form_title",
       Self::Outcome => "task_form_outcome",
       Self::Criterion => "task_form_criterion",
+      Self::CriteriaHint => "task_form_criteria_hint",
+      Self::OptionMeta => "task_form_option_meta",
+      Self::Note => "task_form_note",
     }
   }
 
@@ -42,6 +73,9 @@ impl TaskFormText {
       Self::Title => style(24.0, FontWeight::SemiBold, 1.3, -0.4, palette.text_primary),
       Self::Outcome => style(14.0, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
       Self::Criterion => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
+      Self::CriteriaHint => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::OptionMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::Note => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
     }
   }
 }
@@ -57,10 +91,18 @@ pub enum TaskFormSpacing {
   Side,
   /// 20: between the composer's parts (`Composer` `IxeaX`).
   Composer,
+  /// 7: over and under a pipeline in the Pipeline menu (`Feature delivery v3` `I2BrOT`).
+  MenuOption,
 }
 
 impl TaskFormSpacing {
-  pub const ALL: [Self; 4] = [Self::PageTop, Self::PageBottom, Self::Side, Self::Composer];
+  pub const ALL: [Self; 5] = [
+    Self::PageTop,
+    Self::PageBottom,
+    Self::Side,
+    Self::Composer,
+    Self::MenuOption,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -72,6 +114,7 @@ impl TaskFormSpacing {
       Self::PageBottom => "task_form_page_bottom",
       Self::Side => "task_form_side",
       Self::Composer => "task_form_composer",
+      Self::MenuOption => "task_form_menu_option",
     }
   }
 
@@ -80,6 +123,7 @@ impl TaskFormSpacing {
       Self::PageTop | Self::Side => 28.0,
       Self::PageBottom => 40.0,
       Self::Composer => 20.0,
+      Self::MenuOption => 7.0,
     }
   }
 }

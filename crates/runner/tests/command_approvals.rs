@@ -71,7 +71,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
     .change_permissions(id, profile, permissions.clone(), PermissionsApply::NextInvocation)
     .await
     .expect("change");
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = support::run_folder(root, id);
   std::fs::write(worktree.join("uncommitted.txt"), "keep progress").expect("uncommitted work");
   let message = Message::from_person(
     project.task,
@@ -231,10 +231,7 @@ async fn command_approvals_soft_stop_after_delivery_prevents_automatic_replay() 
     .decide_tool_approval(id, command.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approve");
-  let marker = root
-    .join(".orchester/worktrees")
-    .join(id.to_string())
-    .join("command-once.txt");
+  let marker = support::run_folder(root, id).join("command-once.txt");
   tokio::time::timeout(PATIENCE, async {
     while !marker.exists() {
       tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -270,7 +267,7 @@ async fn verify_progress(
   (deny_command, deny_tool): (bool, bool),
 ) {
   let db = ProjectDb::open(root).expect("open");
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = support::run_folder(root, id);
   let profile = before
     .profile_of(&StepKey::new("implement").expect("key"))
     .expect("profile");

@@ -18,6 +18,8 @@ use crate::{
 /// Output lines a step's summary repeats for the steps after it, and the longest line it repeats.
 const SUMMARY_LINES: usize = 20;
 const SUMMARY_LINE_CHARS: usize = 300;
+/// What comes between how the program ended and the output's last lines in a step's summary.
+const LAST_LINES: &str = "\n\nThe last lines of its output:\n\n";
 
 /// The end of a program's output, both streams in the order the lines arrived, within the tool's
 /// [`OutputLimit`]: once more arrives, the oldest lines are dropped and counted.
@@ -213,5 +215,21 @@ fn last_lines(output: &CapturedOutput) -> String {
     .iter()
     .map(|line| line.chars().take(SUMMARY_LINE_CHARS).collect())
     .collect();
-  format!("\n\nThe last lines of its output:\n\n{}", shown.join("\n"))
+  format!("{LAST_LINES}{}", shown.join("\n"))
+}
+
+/// A tool step's report `text` read as Markdown: how its program ended as written, and the last lines of its output
+/// in a code block, since a program's output is not Markdown. A report without output lines is returned as it is.
+pub fn tool_report_markdown(text: &str) -> String {
+  let Some((ended, output)) = text.split_once(LAST_LINES) else {
+    return text.to_owned();
+  };
+  // A fence longer than any run of backticks in the output, so no line of it closes the block.
+  let longest = output
+    .split(|character| character != '`')
+    .map(str::len)
+    .max()
+    .unwrap_or_default();
+  let fence = "`".repeat(longest.max(2) + 1);
+  format!("{ended}{LAST_LINES}{fence}\n{output}\n{fence}")
 }

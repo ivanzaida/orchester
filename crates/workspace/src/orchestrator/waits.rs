@@ -50,7 +50,7 @@ use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
   tasks::{
-    changes::run_worktree,
+    changes::run_work_present,
     completion,
     detail::{RunView, run_store_error, run_view},
   },
@@ -265,7 +265,7 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
     return Ok(None);
   };
-  let present = db.worktree_removal(run.id())?.is_none() && run_worktree(root, run.id()).is_dir();
+  let present = db.worktree_removal(run.id())?.is_none() && run_work_present(db, root, &run);
   Ok(
     match ChatResume::of(run.status(), db.runner_failure(run.id())?, present) {
       ChatResume::Interrupted(cause) => Some(super::guard::continuing_of(db, run.id(), cause)?),

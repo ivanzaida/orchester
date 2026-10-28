@@ -107,8 +107,7 @@ impl Component for BaseBranch {
       })
       .state()
       .get();
-    let row = SettingRow::new("settings-base-branch-setting", ctx.t("project_settings.baseBranch"))
-      .info(ctx.t("project_settings.baseBranchInfo"));
+    let row = SettingRow::new("settings-base-branch-setting", ctx.t("project_settings.baseBranch"));
     // A failed re-read shows its error, not the setting read before, which a choice would be compared with; nor does
     // that setting show again while the row reads once more.
     let rejected = state.error.as_ref().filter(|_| state.is_rejected());

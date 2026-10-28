@@ -306,7 +306,8 @@ async fn a_turn_needs_a_kept_message_and_an_orchestrator_and_a_new_runner_ends_s
       None,
       orchester_runner::execution::QaSlots::in_folder(&root.join(".orchester").join("qa-slots")),
     ),
-  );
+  )
+  .with_disks(std::sync::Arc::new(support::disk::TestDisk::default()));
   fresh
     .attach(
       AttachSession::Fresh {
