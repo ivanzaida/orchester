@@ -33,6 +33,8 @@ projects*. A project tab reads "<project> · <screen>"; a task tab shows its key
 | Ctrl+Tab / Ctrl+Shift+Tab | same | Next / previous tab |
 | Alt+← / Alt+→ | ⌘[ / ⌘] | Back / Forward in the active tab |
 | Ctrl+Shift+A | ⌘⇧A | Open the tab list (when tabs overflow) |
+| Ctrl+K | ⌘K | Open or close *Jump to* |
+| Ctrl+, | ⌘, | Open the project's settings |
 | Mouse back/forward buttons | same | Back / Forward |
 
 **Links** (sidebar entries, breadcrumbs, rows that open a page, *Open …* buttons, links in chats):
@@ -46,17 +48,25 @@ of that project is used or opened, and Back there returns you once to where you 
 
 ### Sidebar
 
-At the top, the **project switcher**: recent projects (with *Open in new tab*), *All projects*, *Open folder…* and
-*Add project*. Then the project's screens:
+At the top, the **project switcher**: recent projects (with *Open in new tab*), then *Project settings* (Ctrl+, /
+⌘,), *All projects*, *Settings*, *Open folder…* and *Add project*. Under it, **Jump to…** (Ctrl+K / ⌘K). Then the
+project's places:
 
-- **Overview, Orchestrator, Tasks, Modules, Merge queue, Pull requests, Usage, Files**
-- *Configure*: **Pipelines, Agents, Instructions, Memory, Skills, Tools** (Connections and Secrets are tabs of
-  Project settings)
-- A **Running** section while runs work: "<key> · <step>" with the step's live agent time; a hand when the run waits
-  for you.
-- At the bottom: **All projects**, **Settings**, **Project settings**.
+- **Overview, Tasks, Modules, Orchestrator, Review, Files** — Review is one page with two tabs, *Merge queue* and
+  *Pull requests*.
+- *Configure*: **Pipelines, Agents** — Agents is one page with the tabs *Profiles, Instructions, Skills, Tools,
+  Memory*. Click the *Configure* heading to fold it (*Configure · 2*); each project keeps its own fold. Connections
+  and Secrets are tabs of Project settings.
+- A **Running** section while runs work, with how many: "<key> · <step>" with the step's live agent time; a hand when
+  the run waits for you.
+- At the bottom, the **usage card**: *Tokens today* "used / budget" with a meter; click it for Usage, or its ⚙ for
+  Settings.
 
-Counts show beside Tasks, Merge queue and Memory (records waiting for approval).
+Counts show beside Tasks and Review (runs in the merge queue, amber).
+
+**Jump to** (Ctrl+K / ⌘K anywhere, or the row under the switcher) finds the project's tasks by key or title, its
+modules, every page and hub tab, and actions such as *New task*. ↑ ↓ move, Enter opens, Ctrl+Enter (⌘Enter) opens in a
+new tab, Esc closes. Files keeps Ctrl+P for *Go to file*.
 
 ### Status bar
 
@@ -64,7 +74,8 @@ It belongs to the active tab's project. Left: project name, **runner** state (*R
 *Runner offline* with why; click for the runner log; *Restart runner* when it can't start), and an **activity slot**
 (operations under way, the newest failure, the latest event). Right:
 
-- **Agents** N/M (agents at work / slots), **Queued** N, **N need you**, tokens "used / budget today".
+- **Agents** N/M (agents at work / slots), **Queued** N, **N need you**. Today's tokens are in the sidebar's usage
+  card.
 - **Plan limits** per CLI ("Claude 42% · Codex 65%"); click for a card per account with the 5-hour and weekly
   windows and their resets.
 - **Approvals waiting** with *Review*; **Auto-approving** with *Stop*.
@@ -198,8 +209,8 @@ Over MCP: `add_cli_connection`, `set_api_provider`, `check_connection`, `list_mo
 ### Agents hub
 
 One **Agents** page with tabs **Profiles**, **Instructions**, **Skills**, **Tools** and **Memory**, each on its own
-route (`/project/<id>/agents`, `…/instructions`, `…/skills`, `…/tools`, `…/memory`); the sidebar entries open the hub at
-their tab. Each item opens as a sub-page with a back crumb. Profiles, instructions, skills and tools **autosave** their
+route (`/project/<id>/agents`, `…/instructions`, `…/skills`, `…/tools`, `…/memory`); the sidebar's *Agents* opens it on
+Profiles, and *Jump to* on any tab. Each item opens as a sub-page with a back crumb. Profiles, instructions, skills and tools **autosave** their
 draft; **Discard draft** returns to the published version and **Remove** deletes the item, both asked in place. Removing
 something in use lists who uses it and offers **Remove and reset**, which clears it from every user (a pipeline step
 loses its profile, a profile loses that skill).
@@ -598,13 +609,17 @@ worktree.
 
 ### Pull requests (`/project/<id>/pull-requests`)
 
-The linked GitHub repository's pull requests through `gh`, synced on open, on *Refresh* and every minute. Tabs **Open
+The *Pull requests* tab of the **Review** page (the sidebar's *Review*), beside the *Merge queue* tab
+(`/project/<id>/merge-queue`); each tab keeps its route. The linked GitHub repository's pull requests through `gh`,
+synced on open, on *Refresh* and every minute. Tabs **Open
 · Needs your review · Agent working · Merged · Closed**; search by title, number, branch or task key. A pull request
 opens on **Files changed** (diff, threads) and **Agent feedback**: select lines, then **Ask a question** (the linked
 task's agent answers in its conversation) or **Request a fix** (continues the task's run). Threads stay in Orchester and
 are never posted to GitHub. A PR is linked when a task's run made its branch.
 
 ### Usage (`/project/<id>/usage`, `/usage` for all projects)
+
+Opened from the sidebar's usage card (*Tokens today*).
 
 Period (*Today*, *7 days*, *30 days*, *Custom…*), *By hour* / *By day*, filters (account, model, agent profile,
 pipeline, tag, project). Sections: **Summary** (spent tokens = input − cached + output, runs, agent time, cache share,

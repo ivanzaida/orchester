@@ -1,16 +1,18 @@
 //! The Tasks board (ORC-105) on the QA seed's Kontur: the List/Board switch, kept for the project; what a card dropped
 //! on a column does by the person's rules (an incomplete draft is refused by Todo, a queued task that never ran returns
 //! to draft in Backlog, a task with a run stays out of Backlog, a run that has not ended moves only through the stop
-//! confirmation, which says why it failed, a run that ended is offered Run again, Done asks first for work that waits
-//! to be merged, In progress changes the status only, columns by pipeline refuse every drop); a canceled card's line;
-//! quick add in Backlog; and bulk moves and closes that leave the cards that cannot go with why and ask as single moves
-//! do. Nothing a drag or a question shows moves a card (`board_layout`). No runner serves the project, so no agent slot
-//! is free and queuing never asks first here; `mcp_domain`'s `board` queues a complete draft and asks with the real
-//! runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
+//! confirmation, which says why it failed, a run that failed dropped on Todo is asked Don't move, Move to Todo or Run
+//! again, alone and in bulk, while one that succeeded only moves (ORC-144), Done asks first for work that waits to be
+//! merged, In progress changes the status
+//! only, columns by pipeline refuse every drop); a canceled card's line; quick add in Backlog; and bulk moves and
+//! closes that leave the cards that cannot go with why and ask as single moves do. Nothing a drag or a question shows
+//! moves a card (`board_layout`). No runner serves the project, so no agent slot is free and queuing never asks first
+//! here, and Run again is refused by the missing runner; `mcp_domain`'s `board` queues a complete draft and asks with
+//! the real runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
 
 use orchester_app::routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
-  store::TaskStore,
+  store::{RunStore, TaskStore},
   task::{Task, TaskStatus, organization::WorkflowStatus},
 };
 use orchester_store::ProjectDb;
@@ -175,15 +177,168 @@ fn tasks_board_a_run_that_has_not_ended_moves_only_through_the_stop_confirmation
   assert_eq!(status(&seeded, "KON-12"), WorkflowStatus::InProgress, "kept running");
 }
 
+/// How many runs the seed's task `key` has.
+fn runs(seeded: &Seeded, key: &str) -> usize {
+  let task = stored(seeded, key);
+  ProjectDb::open(&seeded.repo)
+    .expect("the project")
+    .runs_of_task(task.id())
+    .expect("runs")
+    .len()
+}
+
+fn key(seeded: &mut Seeded, name: &str) {
+  seeded
+    .window
+    .tree
+    .key_down(name.to_owned(), name.to_owned(), false, false, false);
+  seeded.window.pass();
+}
+
+/// Drops `key`'s card on Todo and waits for the question of a task whose run ended, with its three answers.
+fn asked_to_run_again(seeded: &mut Seeded, card: &str) {
+  seeded.drag(card, "todo");
+  seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-move"));
+  assert_eq!(seeded.text("tasks-board-ask-title"), format!("Run {card} again?"));
+  assert_eq!(seeded.text("tasks-board-ask-keep"), "Don't move");
+  assert_eq!(seeded.text("tasks-board-ask-move"), "Move to Todo");
+  assert_eq!(seeded.text("tasks-board-ask-confirm"), "Run again");
+}
+
 #[test]
-fn tasks_board_a_run_that_ended_is_offered_run_again_in_place() {
+fn tasks_board_a_run_that_ended_dropped_on_todo_offers_don_t_move_move_to_todo_and_run_again() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
-  seeded.drag("KON-1", "todo");
-  seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-keep"));
-  assert!(seeded.text("tasks-board-ask").starts_with("Run KON-1 again?"));
+  // KON-11's run failed: Run again may follow it.
+  let ran = runs(&seeded, "KON-11");
+  asked_to_run_again(&mut seeded, "KON-11");
+  let said = seeded.text("tasks-board-ask");
+  assert!(said.contains("Move to Todo starts nothing."), "{said}");
+  assert!(
+    said.contains("runs again") && said.contains("doesn't move it"),
+    "{said}"
+  );
+  // What each answer does fits in two lines of the question's words, the title being one.
+  let (title, detail) = (
+    seeded.bounds("tasks-board-ask-title"),
+    seeded.bounds("tasks-board-ask-text"),
+  );
+  assert!(
+    detail.height < title.height * 2.5,
+    "{detail:?} against one line {title:?}"
+  );
+  // The three buttons in a row at the question's end, Run again last.
+  let (keep, moving, confirm) = (
+    seeded.bounds("tasks-board-ask-keep"),
+    seeded.bounds("tasks-board-ask-move"),
+    seeded.bounds("tasks-board-ask-confirm"),
+  );
+  assert!(keep.x < moving.x && moving.x < confirm.x);
+  assert!((keep.y - confirm.y).abs() < 0.5 && (moving.y - confirm.y).abs() < 0.5);
+  let panel = seeded.bounds("tasks-board-ask");
+  assert!(confirm.x + confirm.width <= panel.x + panel.width, "inside the popover");
+
+  // Don't move, then Esc: the card stays where it was.
   press(&mut seeded, "tasks-board-ask-keep");
   assert!(!seeded.shows("tasks-board-ask"));
-  assert_eq!(status(&seeded, "KON-1"), WorkflowStatus::Done, "nothing changed");
+  assert_eq!(status(&seeded, "KON-11"), WorkflowStatus::InProgress, "nothing changed");
+  asked_to_run_again(&mut seeded, "KON-11");
+  key(&mut seeded, "Escape");
+  assert!(!seeded.shows("tasks-board-ask"));
+  assert_eq!(
+    status(&seeded, "KON-11"),
+    WorkflowStatus::InProgress,
+    "Esc moves nothing"
+  );
+  assert!(in_column(&mut seeded, "KON-11", "in_progress"));
+
+  // Move to Todo: the status only, no run.
+  asked_to_run_again(&mut seeded, "KON-11");
+  press(&mut seeded, "tasks-board-ask-move");
+  seeded.until("KON-11 in Todo", |seeded| {
+    status(seeded, "KON-11") == WorkflowStatus::Todo
+  });
+  seeded.until("its card in Todo", |seeded| in_column(seeded, "KON-11", "todo"));
+  assert_eq!(runs(&seeded, "KON-11"), ran, "no run started");
+  assert!(!seeded.shows("tasks-board-failed"));
+
+  // From Todo, the card's Run again asks again without a move, and Enter runs it again: no runner serves the project,
+  // so the run is refused and says why.
+  seeded.hover("task-card-KON-11");
+  press(&mut seeded, "task-more-KON-11");
+  press(&mut seeded, "task-menu-KON-11-run-again");
+  seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-confirm"));
+  assert!(!seeded.shows("tasks-board-ask-move"), "in Todo already");
+  assert_eq!(seeded.text("tasks-board-ask-keep"), "Keep in Todo");
+  key(&mut seeded, "Enter");
+  seeded.until("the run refused", |seeded| seeded.laid_out("tasks-board-failed"));
+  let said = seeded.text("tasks-board-failed-text");
+  assert!(said.starts_with("KON-11 was not changed. "), "{said}");
+  assert_eq!(status(&seeded, "KON-11"), WorkflowStatus::Todo);
+}
+
+#[test]
+fn tasks_board_run_again_from_the_question_asks_the_runner_for_a_new_run() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  asked_to_run_again(&mut seeded, "KON-11");
+  // No runner serves the project: Run again asks it for the new run, which is refused and says so.
+  press(&mut seeded, "tasks-board-ask-confirm");
+  seeded.until("the run refused", |seeded| seeded.laid_out("tasks-board-failed"));
+  let said = seeded.text("tasks-board-failed-text");
+  assert!(said.starts_with("KON-11 was not changed. "), "{said}");
+  assert!(said.contains("runner"), "{said}");
+  assert_eq!(
+    status(&seeded, "KON-11"),
+    WorkflowStatus::InProgress,
+    "not moved without its run"
+  );
+}
+
+#[test]
+fn tasks_board_a_run_that_succeeded_never_runs_again_so_todo_only_moves_it() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  // KON-9's run passed every step with work nobody merged; KON-1's was merged. Core's run_again refuses both.
+  let ran = (runs(&seeded, "KON-9"), runs(&seeded, "KON-1"));
+  seeded.hover("task-card-KON-9");
+  press(&mut seeded, "task-more-KON-9");
+  seeded.until("the card's menu", |seeded| seeded.laid_out("task-menu-KON-9-move"));
+  assert!(!seeded.shows("task-menu-KON-9-run-again"), "no Run again to offer");
+  key(&mut seeded, "Escape");
+  seeded.until("the menu closed", |seeded| !seeded.shows("task-menu-KON-9-move"));
+
+  for (card, column) in [("KON-9", "in_review"), ("KON-1", "done")] {
+    assert!(in_column(&mut seeded, card, column));
+    seeded.drag(card, "todo");
+    seeded.until("the move", |seeded| status(seeded, card) == WorkflowStatus::Todo);
+    assert!(!seeded.shows("tasks-board-ask"), "nothing asked: {card} only moves");
+    seeded.until("its card in Todo", |seeded| in_column(seeded, card, "todo"));
+    assert!(!seeded.shows("tasks-board-failed"));
+  }
+  assert_eq!((runs(&seeded, "KON-9"), runs(&seeded, "KON-1")), ran, "no run started");
+}
+
+#[test]
+fn tasks_board_a_bulk_move_to_todo_of_tasks_whose_runs_ended_asks_the_same_three_ways() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  let ran = (runs(&seeded, "KON-1"), runs(&seeded, "KON-11"));
+  // KON-11's failed run may be followed by Run again; KON-1's merged run never is, so only KON-11 is asked about.
+  seeded.shift_click("task-card-KON-1");
+  seeded.shift_click("task-card-KON-11");
+  press(&mut seeded, "tasks-board-bulk-move");
+  press(&mut seeded, "tasks-board-bulk-move-todo");
+  seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-move"));
+  assert_eq!(seeded.text("tasks-board-ask-title"), "Run KON-11 again?");
+  assert_eq!(seeded.text("tasks-board-ask-keep"), "Don't move");
+  press(&mut seeded, "tasks-board-ask-keep");
+  assert_eq!(status(&seeded, "KON-1"), WorkflowStatus::Done, "nothing moved");
+  assert_eq!(status(&seeded, "KON-11"), WorkflowStatus::InProgress);
+
+  press(&mut seeded, "tasks-board-bulk-move");
+  press(&mut seeded, "tasks-board-bulk-move-todo");
+  press(&mut seeded, "tasks-board-ask-move");
+  seeded.until("both in Todo", |seeded| {
+    status(seeded, "KON-1") == WorkflowStatus::Todo && status(seeded, "KON-11") == WorkflowStatus::Todo
+  });
+  assert_eq!((runs(&seeded, "KON-1"), runs(&seeded, "KON-11")), ran, "no run started");
 }
 
 #[test]

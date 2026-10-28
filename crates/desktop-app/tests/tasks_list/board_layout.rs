@@ -274,17 +274,18 @@ fn tasks_board_layout_run_again_and_delete_ask_in_a_popover_at_the_card() {
   let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
   let columns = seeded.bounds("tasks-board-columns");
   let before = cards(&mut seeded);
-  seeded.drag("KON-1", "todo");
+  // KON-11's run failed: a drop on Todo asks whether it runs again.
+  seeded.drag("KON-11", "todo");
   seeded.until("the question", |seeded| seeded.laid_out("tasks-board-ask-keep"));
   let asked = seeded.bounds("tasks-board-ask");
   assert!((asked.width - QUESTION_WIDTH).abs() < 0.5, "a popover: {asked:?}");
-  assert!(seeded.laid_out("task-card-KON-1-pending"), "KON-1 waits in Todo");
+  assert!(seeded.laid_out("task-card-KON-11-pending"), "KON-11 waits in Todo");
   let todo = seeded.bounds("tasks-board-column-todo");
   assert_eq!(seeded.bounds("tasks-board-columns").y, columns.y);
   assert_eq!(moved(&before, &cards(&mut seeded), Some(todo)), Vec::<String>::new());
   escape(&mut seeded);
   assert!(!seeded.shows("tasks-board-ask"));
-  assert_eq!(status(&seeded, "KON-1"), WorkflowStatus::Done, "nothing changed");
+  assert_eq!(status(&seeded, "KON-11"), WorkflowStatus::InProgress, "nothing changed");
 
   // *Delete KON-15?* is asked at the card where it is.
   seeded.hover("task-card-KON-15");

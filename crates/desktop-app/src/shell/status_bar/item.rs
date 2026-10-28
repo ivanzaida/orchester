@@ -32,9 +32,9 @@ const DOT_SIZE: f32 = 6.0;
 /// the bar is one line, so both of its groups give way in one order, each part down to its limit before
 /// the next shrinks at all (handover §3.3). The room between the groups goes first, then the words of
 /// the window-control item; then what the waiting approval asks, which run auto-approves, the times and
-/// clocks, the version, *Tokens today*, the counts' labels (together), the project's name,
-/// the activity's words, the words after how many requests wait, and last the runner's words. The hand,
-/// the counts, *Review*, *Stop* and MCP never give way.
+/// clocks, the version, the counts' labels (together), the project's name, the activity's words, the words
+/// after how many requests wait, and last the runner's words. The hand, the counts, *Review*, *Stop* and MCP
+/// never give way.
 pub mod give_way {
   pub const ROOM: i32 = -1;
   pub const WINDOW_CONTROL: i32 = 0;
@@ -42,7 +42,6 @@ pub mod give_way {
   pub const RUN: i32 = 2;
   pub const TIMES: i32 = 3;
   pub const VERSION: i32 = 4;
-  pub const TOKENS: i32 = 5;
   pub const COUNT_LABELS: i32 = 6;
   pub const PROJECT: i32 = 7;
   pub const ACTIVITY: i32 = 8;
