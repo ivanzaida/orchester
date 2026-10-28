@@ -139,16 +139,17 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "check_connection",
     description: "Checks a connection's program again, as its Check again does, and stores what it found: status, \
-                  version and models. A native connection is not checked in this version.",
+                  version and models. A native connection is tested as its Test connection does: the project's \
+                  runner reads its key and lists the endpoint's models.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: false,
   },
   Spec {
     name: "list_models",
-    description: "The models an agent connection's last check listed, each with the reasoning efforts it takes, as \
-                  the profile editor offers them. A model it does not list can still be given to save_profile_draft \
-                  (it runs as not verified); an effort is kept only where the model lists it. `link` is the \
-                  connection's in the app.",
+    description: "The models an agent connection offers, each with the reasoning efforts it takes, as the profile \
+                  editor offers them: its last check's, an API provider's or a native connection's own. A model it \
+                  does not list can still be given to save_profile_draft (it runs as not verified); an effort is \
+                  kept only where the model lists it. `link` is the connection's in the app.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
   },

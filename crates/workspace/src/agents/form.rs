@@ -30,14 +30,31 @@ pub struct ModelOption {
   pub support: ModelSupport,
 }
 
-/// The connection's catalog models, then `current` if the catalog does not list it (a model
-/// that was typed in, or one the CLI no longer lists), marked as not verified.
+/// The model ids a profile chooses from on `connection`, in their order: a native connection's models, else the ones
+/// its check or API provider lists.
+pub fn listed_models(connection: &AgentConnection) -> Vec<ModelId> {
+  match connection.api() {
+    Some(api) => api.models().models().iter().map(|model| model.id().clone()).collect(),
+    None => connection.models().iter().map(|model| model.id().clone()).collect(),
+  }
+}
+
+/// The model a profile starts on when it chooses `connection`: a native connection's default model, else the first
+/// one listed.
+pub fn first_model(connection: &AgentConnection) -> Option<ModelId> {
+  connection
+    .api()
+    .and_then(|api| api.models().default_model().cloned())
+    .or_else(|| listed_models(connection).into_iter().next())
+}
+
+/// The connection's models ([`listed_models`]), then `current` if they do not list it (a model that was typed in, or
+/// one the CLI no longer lists), marked as not verified.
 pub fn model_options(connection: &AgentConnection, current: Option<&ModelId>) -> Vec<ModelOption> {
-  let mut options: Vec<ModelOption> = connection
-    .models()
-    .iter()
-    .map(|model| ModelOption {
-      id: model.id().clone(),
+  let mut options: Vec<ModelOption> = listed_models(connection)
+    .into_iter()
+    .map(|id| ModelOption {
+      id,
       support: ModelSupport::Listed,
     })
     .collect();
@@ -52,13 +69,22 @@ pub fn model_options(connection: &AgentConnection, current: Option<&ModelId>) ->
   options
 }
 
-/// Reasoning efforts the connection's catalog lists for `model`; none for a model it does not
-/// list, whose efforts are unknown.
-pub fn effort_options<'a>(connection: &'a AgentConnection, model: &ModelId) -> &'a [String] {
+/// Reasoning efforts the connection lists for `model`: a native connection's model's, else its catalog's; none for a
+/// model it does not list, whose efforts are unknown.
+pub fn effort_options(connection: &AgentConnection, model: &ModelId) -> Vec<String> {
+  if let Some(api) = connection.api() {
+    return api.models().model(model).map_or_else(Vec::new, |model| {
+      model
+        .efforts()
+        .iter()
+        .map(|effort| effort.as_str().to_owned())
+        .collect()
+    });
+  }
   connection
     .catalog()
     .and_then(|catalog| catalog.model(model))
-    .map_or(&[], |model| model.efforts())
+    .map_or_else(Vec::new, |model| model.efforts().to_vec())
 }
 
 /// Adapts a profile's access settings when its connection changes. Native connections do not

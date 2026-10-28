@@ -1,13 +1,16 @@
 //! A connection's page under Project settings › Connections (`05b` `PGwka`, an MCP server `13` `Ptkxo`, GitHub `14`
 //! `KItiZ`): the crumb back to Connections, its head (a 36 tile, its name in 16/600 over its status, its actions and a
 //! … menu at the end), what its status asks for, its details as groups of rows, and a question asked in place under
-//! them. Each kind fills it: an agent provider (`agent`, on an API provider `provider`), GitHub (`github`), an MCP
-//! server (`mcp`). An agent or GitHub connection is renamed in place of its title (`rename`), and a check pressed here
-//! says how it goes and what it found under the head (`result`).
+//! them. Each kind fills it: an agent provider (`agent`, on an API provider `provider`, a native connection `native`
+//! with what Orchester enforces for it, `enforced`), GitHub (`github`), an MCP server (`mcp`). An agent or GitHub
+//! connection is renamed in place of its title (`rename`), and a check pressed here says how it goes and what it found
+//! under the head (`result`).
 
 mod agent;
+mod enforced;
 mod github;
 mod mcp;
+mod native;
 mod provider;
 mod rename;
 mod result;
@@ -17,7 +20,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
@@ -30,7 +33,7 @@ use orchester_workspace::{connections::data::ProjectConnections, display, messag
 pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
 use super::{
   data::Entry,
-  words::{CHECKING, Shown},
+  words::{CHECKING, Shown, Tone},
   work::Work,
 };
 use crate::{
@@ -72,8 +75,8 @@ pub(super) enum Tested<'a> {
   Checking,
   /// It ran: the connection's last check is what it found.
   Checked,
-  /// It could not run, or what it found could not be stored.
-  Failed(&'a Message),
+  /// It could not run, or what it found could not be stored; it was pressed at the time.
+  Failed(&'a Message, Timestamp),
   /// It ran and stored what it found, but reading the connections again failed for this reason.
   Unread(&'a Message),
 }
@@ -148,12 +151,10 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
     (&ctx.t("project_settings.connections"), None),
     actions.back.clone(),
   );
-  let status = status_line(
-    ctx,
-    "connection-inspector-status",
-    parts.status,
-    parts.status_detail.as_deref(),
-  );
+  // A native connection's page says its status in `text_secondary` whatever its tone, its dot and the sentence
+  // under the head carrying the tone (05e–05k).
+  let native = matches!(inspecting.entry, Entry::Agent(connection) if connection.api().is_some());
+  let status = head_status(ctx, parts.status, parts.status_detail.as_deref(), native);
   let mut head_actions = parts.actions;
   if !parts.menu.is_empty() {
     head_actions.push(more_menu(ctx, actions, parts.menu));
@@ -180,10 +181,16 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
       .child(question);
     groups.insert(after.min(groups.len()), question.into());
   }
+  // A native connection's page sets its parts 16 apart (`Pane` in 05e–05k), the others 28 (`AMOv8` in 05b).
+  let gap = if native {
+    SpacingSize::Lg
+  } else {
+    ExtraSpacing::Roomy.role()
+  };
   Column::new()
     .id("connection-inspector")
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Roomy.role())
+    .spacing(gap)
     .describe("connection", inspecting.entry.id().to_string())
     .child(crumb)
     .child(head)
@@ -219,12 +226,29 @@ fn title(name: &str) -> Text {
 /// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`, the 6 `Dot` `IY1SX`); a check
 /// under way keeps its turning loader instead.
 pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
+  said_status(ctx, id, (status, detail), status.tone.word_color())
+}
+
+/// The page head's status (`Status` `l1Gh8O`), its word said in its tone when it asks for something, unless the page
+/// is a native connection's (`native`).
+fn head_status(ctx: &Ctx, status: Shown, detail: Option<&str>, native: bool) -> Row {
+  let words = if native {
+    PaletteColor::TextSecondary
+  } else {
+    status.tone.word_color()
+  };
+  said_status(ctx, "connection-inspector-status", (status, detail), words)
+}
+
+/// A dot of the status's tone, or the turning loader while a check runs, then its word with what follows it in
+/// `color`.
+fn said_status(ctx: &Ctx, id: &str, (status, detail): (Shown, Option<&str>), color: PaletteColor) -> Row {
   let word = ctx.t(status.key);
   let said = match detail {
     Some(detail) => ctx.t_args("connections.statusWith", [("status", &*word), ("detail", detail)]),
     None => word.clone(),
   };
-  let mark: Element = if status.tone == super::words::Tone::Busy {
+  let mark: Element = if status.tone == Tone::Busy {
     icon(status.icon, IconSize::Sm, status.tone.color()).into()
   } else {
     Row::new()
@@ -245,14 +269,14 @@ pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&st
     .child(
       Text::new(&said)
         .variant(TypographyStyle::Description)
-        .color(status.tone.word_color())
+        .color(color)
         .nowrap(),
     )
 }
 
-/// The status a connection shows: checking while its check runs.
+/// The status a connection shows: checking while its check or test runs.
 fn shown(inspecting: &Inspecting<'_>, status: Shown) -> Shown {
-  if inspecting.running == Some(Work::Check) {
+  if inspecting.running.is_some_and(Work::is_check) {
     CHECKING
   } else {
     status
@@ -269,15 +293,20 @@ fn sentence(id: &str, words: &str, tone: PaletteColor) -> Element {
     .into()
 }
 
-/// Check again or Refresh models on `id`: checking while it runs, unavailable while other work does.
+/// Check again or Refresh models on `id`, or a native connection's Test connection and Fetch models through the
+/// runner: checking while it runs, unavailable while other work does.
 fn check_button(inspecting: &Inspecting<'_>, (id, label): (&str, Arc<str>), actions: &Actions) -> ActionButton {
   let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label).icon(Icon::RefreshCw);
+  let work = match inspecting.entry {
+    Entry::Agent(connection) if connection.api().is_some() => Work::Test,
+    _ => Work::Check,
+  };
   match inspecting.running {
-    Some(Work::Check) => button.loading(),
+    Some(running) if running.is_check() => button.loading(),
     Some(_) => button.disabled(),
     None => {
       let (start, connection) = (actions.start.clone(), inspecting.entry.id());
-      button.on_click(move || start(connection, Work::Check))
+      button.on_click(move || start(connection, work))
     }
   }
 }

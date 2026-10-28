@@ -187,6 +187,12 @@ impl ApiEndpoint {
   pub const fn key(&self) -> SecretId {
     self.key
   }
+
+  /// Whether `other` reaches the same API with the same key: same preset, base URL and key secret. A check of one
+  /// holds for the other; their models and provider fallback may differ.
+  pub fn same_api(&self, other: &Self) -> bool {
+    self.preset == other.preset && self.base_url == other.base_url && self.key == other.key
+  }
 }
 
 /// The base URL of a model API: `https://`, or `http://` for this computer only; a host and an

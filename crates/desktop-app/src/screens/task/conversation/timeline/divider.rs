@@ -4,7 +4,8 @@
 //! icon and 11/500 `text_secondary` words, 8 apart, and a link in `accent_text`): finished steps in a row
 //! folded into one (*01–04 · 4 steps done · 16:20–16:24 · Show them*, `list-collapse`), the steps a failure
 //! kept from starting, a return or restart (*Review returned the work to 03 Implement · attempt 2 · 16:31*,
-//! `corner-down-left`) and the run's end, with the Orchestrator's row under a merge its chat carried out.
+//! `corner-down-left`) and the run's end, with the Orchestrator's row under a merge its chat carried out; at the run's
+//! start, that auto mode approves everything in it (`shield-check`; no frame draws it, so it is an event divider).
 
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use lurq::{
 use orchester_core::{
   connection::{AgentProvider, EndpointPreset, EngineVendor},
   orchestrator::{FromOrchestrator, SentWay},
+  run::Answerer,
   time::Timestamp,
   tokens::compact_tokens,
 };
@@ -37,6 +39,8 @@ use super::{
   message::{orchestrator_note, person_note},
 };
 use crate::{
+  navigation::Navigation,
+  routes::{ProjectPage, ProjectSettingsTab, Route},
   theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -266,6 +270,25 @@ pub(super) fn folded(ctx: &Ctx, timeline: &Timeline, key: &Arc<str>, steps: &[(A
     Icon::ListCollapse,
     &text,
     Some((ctx.t(link_key), show)),
+  )
+}
+
+/// The run's first line while auto mode's *approve everything in each run* answers its requests (ORC-199): "Auto
+/// mode approves everything in this run · turned on by you", with *Project settings*, where it is turned off.
+pub(super) fn everything(ctx: &mut Ctx, timeline: &Timeline, by: Answerer) -> Element {
+  let text = ctx.t(match by {
+    Answerer::Person => "conversation.everything.byYou",
+    Answerer::Automation => "conversation.everything.byAutomation",
+  });
+  let settings = Navigation::of(ctx).to(Route::Project(
+    timeline.project,
+    ProjectPage::Settings(ProjectSettingsTab::Runs),
+  ));
+  event(
+    "conversation-approve-everything".into(),
+    Icon::ShieldCheck,
+    &text,
+    Some((ctx.t("conversation.everything.settings"), Press::Open(settings))),
   )
 }
 

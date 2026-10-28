@@ -20,6 +20,7 @@ mod live;
 mod long_chats;
 mod memory;
 mod modules;
+mod native;
 mod orchestrator;
 mod overview_states;
 mod pipelines;
@@ -79,7 +80,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 50] = [
+pub const ALL: [Scenario; 51] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -111,6 +112,7 @@ pub const ALL: [Scenario; 50] = [
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
   Scenario::of("connections", connections::seed),
   Scenario::of("api-providers", api_providers::seed),
+  Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),
   Scenario::of("project-settings-shared", project_settings::shared),
   Scenario::of("pipelines", pipelines::seed),

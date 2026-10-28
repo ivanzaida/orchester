@@ -1,5 +1,6 @@
-//! Auto mode's rows (`Auto mode` `WSQqT` in `02 · Runs`): its switch, the reviewer's connection, model and effort as
-//! three selects with the domain's effective-reviewer read-back in the row's (i), and *Approved for every run*.
+//! Auto mode's rows (`Auto mode` `WSQqT` in `02 · Runs`): its switch, *approve everything in each run* drawn as the
+//! switch is, the reviewer's connection, model and effort as three selects with the domain's effective-reviewer
+//! read-back in the row's (i), and *Approved for every run*.
 use std::sync::Arc;
 
 use lurq::{
@@ -37,6 +38,7 @@ pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, 
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending();
   let on_row = switch_row(ctx, tab, props, settings, save, (options.resolved.as_ref().err(), busy));
+  let everything = super::everything::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() {
     unavailable_reviewer(ctx, props)
   } else {
@@ -45,6 +47,7 @@ pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, 
   let rules = super::rules::row(ctx, props, settings);
   Group::new("settings-auto", ctx.t("project_settings.auto"))
     .row(on_row)
+    .row(everything)
     .row(reviewer)
     .row(rules)
 }
