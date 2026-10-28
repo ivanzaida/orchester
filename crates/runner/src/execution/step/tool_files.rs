@@ -65,6 +65,7 @@ impl ToolFiles {
       code_index: folders.code_index,
       skills: folders.skills,
       writable_folders: folders.writable,
+      run_storage: folders.run_storage,
     })
     .map_err(|error| problem(format!("cannot confine Orchester's file tools: {error}")))?;
     let ripgrep: Option<PathBuf> = ripgrep::locate(

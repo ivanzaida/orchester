@@ -35,7 +35,9 @@ use super::{
   board::Board,
   codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
-  prepare::Prepared,
+  low_disk::DiskGuard,
+  pool::PoolError,
+  prepare::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
   step::{
     Active, QaApps,
@@ -61,6 +63,8 @@ pub(super) enum ExecutionError {
   Stalled,
   #[error(transparent)]
   Conversation(orchester_core::conversation::MessageError),
+  #[error(transparent)]
+  Workspace(#[from] PoolError),
 }
 
 /// What the task of a run is given besides the run: where it announces changes, where its
@@ -72,6 +76,7 @@ pub(super) struct TaskContext {
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) qa: Arc<QaApps>,
+  pub(super) disks: DiskGuard,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
 }
@@ -83,6 +88,8 @@ pub(super) struct Pending {
   pub(super) interrupt: Option<InterruptCause>,
   /// A limit the run reached while agents worked.
   pub(super) limit: Option<RunLimit>,
+  /// The disk ran low while agents worked: they were stopped, and the run pauses once they ended.
+  pub(super) low_disk: bool,
 }
 
 pub(super) struct RunTask {
@@ -93,8 +100,11 @@ pub(super) struct RunTask {
   pub(super) run: Run,
   pub(super) task: Task,
   pub(super) project: Project,
-  /// The run's worktree, on the run's branch.
-  pub(super) worktree: PathBuf,
+  /// Where the run works: its own worktree from before workspaces, or a workspace it borrows.
+  pub(super) folder: RunFolder,
+  /// The folder on the run's branch while the run works: its own worktree, or the workspace it borrowed, which its
+  /// first step takes ([`RunTask::hold_workspace`]).
+  pub(super) worktree: Option<PathBuf>,
   pub(super) notifier: Notifier,
   pub(super) vault: Arc<dyn SecretVault>,
   /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
@@ -102,6 +112,12 @@ pub(super) struct RunTask {
   pub(super) board: Arc<Board>,
   /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slots.
   pub(super) qa: Arc<QaApps>,
+  /// The disk guard's reading of free space, and how often it looks while agents work.
+  pub(super) disks: DiskGuard,
+  /// When the disk guard looks at the free space next while agents work.
+  pub(super) next_disk_check: Instant,
+  /// The run waits for a free workspace; the desktop was told once.
+  pub(super) waits_for_workspace: bool,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
   /// Set before the change that settles the run is recorded, or once the task stops executing
@@ -133,12 +149,19 @@ impl RunTask {
       run: prepared.run,
       task: prepared.task,
       project,
-      worktree: prepared.worktree,
+      worktree: match &prepared.folder {
+        RunFolder::Own(path) => Some(path.clone()),
+        RunFolder::Borrowed => None,
+      },
+      folder: prepared.folder,
       notifier: context.notifier,
       vault: context.vault,
       relay: context.relay,
       board: context.board,
       qa: context.qa,
+      disks: context.disks,
+      next_disk_check: Instant::now(),
+      waits_for_workspace: false,
       controls: context.controls,
       listening: true,
       settled: context.settled,
@@ -173,6 +196,7 @@ impl RunTask {
     }
     self.end_waiting_approvals();
     self.end_waiting_questions();
+    self.give_back_workspaces();
     self.board.settled(&self.run);
     match result {
       Ok(()) => tracing::info!(%run, status = ?self.run.status(), "run settled"),
@@ -226,9 +250,12 @@ impl RunTask {
   /// build to finish in the background; the next start of the task reuses it.
   async fn wait(&mut self, waiting_for_slot: bool) -> Result<(), ExecutionError> {
     let working = !self.agents.is_empty();
-    // A run without a time limit has no time to check; it still looks for a free slot again.
+    // A run without a time limit has no time to check; it still looks for a free slot again, and while agents work
+    // the disk guard looks at the free space.
     let time_check = if working { self.time_check()? } else { None };
-    let deadline = time_check.or_else(|| waiting_for_slot.then(|| Instant::now() + SLOT_RETRY));
+    let disk_check = working.then_some(self.next_disk_check);
+    let slot_retry = waiting_for_slot.then(|| Instant::now() + SLOT_RETRY);
+    let deadline = [time_check, disk_check, slot_retry].into_iter().flatten().min();
     tokio::select! {
       Some(event) = self.events.recv() => self.on_worker_event(event),
       control = self.controls.recv(), if self.listening => match control {
@@ -241,6 +268,7 @@ impl RunTask {
       () = tokio::time::sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
         if working {
           self.check_time()?;
+          self.check_disk_while_working()?;
         }
         Ok(())
       }

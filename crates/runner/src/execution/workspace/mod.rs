@@ -12,7 +12,10 @@
 //!   removed. A conflict fails the step with the files named; its branch and worktree stay for inspection.
 //!
 //! Which one an execution uses is recorded by the worktree itself: an execution with a worktree of
-//! its own works there, also when it continues after a pause, a limit or an interruption.
+//! its own works there, also when it continues after a pause, a limit or an interruption. A run that borrows warm
+//! workspaces (ORC-114) has no worktrees of its own: its steps beside others borrow a workspace each ([`borrowed`]).
+
+mod borrowed;
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +24,7 @@ use orchester_core::{
   run::{AcceptRefusal, Run, StepExecution},
 };
 
-use super::checkpoint;
+use super::{checkpoint, prepare::RunFolder, run::RunTask};
 use crate::{
   git::Git,
   worktree::{WorktreeError, Worktrees},
@@ -42,12 +45,38 @@ pub(super) enum Start {
 pub(super) enum Workspace {
   /// The run's worktree, on the run's branch: the step runs alone.
   Run(PathBuf),
-  /// A worktree of the step's own, on `branch` off the run's branch.
+  /// A worktree of the step's own, on `branch` off the run's branch; `borrowed` when it is a warm workspace the step
+  /// gives back once its branch is merged, rather than a worktree made for it.
   Own {
     path: PathBuf,
     branch: String,
     owner: StepExecutionId,
+    borrowed: bool,
   },
+}
+
+impl RunTask {
+  /// Where `execution` works when it starts as `start` says; `Ok(None)` while it waits for a free workspace. Why it
+  /// cannot work anywhere, otherwise.
+  pub(super) fn workspace(&mut self, execution: StepExecutionId, start: Start) -> Result<Option<Workspace>, String> {
+    match self.folder {
+      RunFolder::Own(_) => Workspace::of(&self.root, &self.run, self.worktree(), execution, start)
+        .map(Some)
+        .map_err(|error| error.to_string()),
+      RunFolder::Borrowed => self.borrowed_workspace(execution, start),
+    }
+  }
+
+  /// [`Workspace::accepted_work`] for the run, borrowing or not.
+  pub(super) fn accepted_work(
+    &self,
+    accepted: &StepExecution,
+  ) -> Result<Result<Workspace, AcceptRefusal>, WorktreeError> {
+    match self.folder {
+      RunFolder::Own(_) => Workspace::accepted_work(&self.root, (&self.run, self.worktree()), accepted),
+      RunFolder::Borrowed => self.borrowed_accepted_work(accepted),
+    }
+  }
 }
 
 impl Workspace {
@@ -76,6 +105,7 @@ impl Workspace {
           path,
           branch: branch(run, earlier),
           owner: earlier,
+          borrowed: false,
         });
       }
       previous = run.recovered_execution(earlier);
@@ -87,6 +117,7 @@ impl Workspace {
         path,
         branch,
         owner: execution,
+        borrowed: false,
       });
     }
     if start != Start::BesideOthers {
@@ -98,6 +129,7 @@ impl Workspace {
       path,
       branch,
       owner: execution,
+      borrowed: false,
     })
   }
 
@@ -150,6 +182,7 @@ impl Workspace {
         path,
         branch,
         owner: accepted,
+        borrowed: false,
       }));
     }
     if Git::new(root).answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])? {

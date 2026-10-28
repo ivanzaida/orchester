@@ -108,21 +108,28 @@ impl RunTask {
     Ok((step, profile, model))
   }
 
+  /// The run's own storage, `.orchester/runs/<run>/` (ORC-114), made when it is not there yet: every step reads it, a
+  /// step that edits files writes there too.
+  pub(super) fn run_storage(&self) -> Result<std::path::PathBuf, RunnerProblem> {
+    let storage = orchester_core::workspaces::artifacts_folder(&self.root, self.run.id());
+    std::fs::create_dir_all(&storage)
+      .map_err(|error| problem(format!("cannot make the run's storage {}: {error}", storage.display())))?;
+    Ok(storage)
+  }
+
   /// The extra writable folders `enforced` grants, resolved in the project's repository, the missing
-  /// ones created; or why one cannot be given (it was moved, or now lies somewhere refused).
+  /// ones created; or why one cannot be given (it was moved, or now lies somewhere refused). An agent that edits
+  /// files also gets the run's own storage, where what it writes for people to see stays (ORC-114).
   pub(super) fn writable_folders(&self, enforced: &EnforcedPermissions) -> Result<Vec<ResolvedFolder>, RunnerProblem> {
-    let Some(folders) = enforced
-      .permissions()
-      .granted_folders()
-      .filter(|folders| !folders.is_empty())
-    else {
+    let Some(folders) = enforced.permissions().granted_folders() else {
       return Ok(Vec::new());
     };
     let bounds = FolderBounds::new(&self.root, std::env::home_dir().as_deref())
       .map_err(|error| problem(format!("cannot read the repository {}: {error}", self.root.display())))?;
-    let resolved = folders
+    let mut resolved = folders
       .resolve(&bounds)
       .map_err(|(folder, error)| problem(format!("extra writable folder {folder}: {error}")))?;
+    resolved.push(ResolvedFolder::run_storage(&bounds, self.run.id()));
     resolved
       .into_iter()
       .map(|folder| {

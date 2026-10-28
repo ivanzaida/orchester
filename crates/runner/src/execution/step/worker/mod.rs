@@ -74,6 +74,8 @@ pub(in super::super) enum StopCause {
   /// A person stopped the agent's turn (*Stop turn*): its work is committed and its step goes on in the same session
   /// with their message.
   TurnStopped,
+  /// The disk ran low (ORC-114): its work is committed and its step goes on in the same session once the run resumes.
+  LowDisk,
 }
 
 /// What the run tells an agent.
