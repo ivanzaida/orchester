@@ -148,6 +148,13 @@ async fn reviewer_usage_of_claude_code_counts_toward_the_run_and_the_day_and_kee
     "the account its connection runs on"
   );
   assert_eq!(review.model.as_str(), DEFAULT_REVIEW_MODEL);
+  let connection = review.connection.as_ref().expect("the connection the reviewer ran on");
+  let connections = db.connections().expect("connections");
+  let stored = connections
+    .iter()
+    .find(|stored| stored.id() == connection.id)
+    .expect("the project's connection");
+  assert_eq!(&*connection.name, stored.name().as_str(), "named as it was then");
   assert_eq!(review.end, ReviewEnd::Approved);
   let usage = TokenUsage {
     input: 200,

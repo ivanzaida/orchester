@@ -15,7 +15,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::AccountSeries;
+use orchester_core::usage::ProviderSeries;
 
 use super::series::series_swatch;
 use crate::{
@@ -40,12 +40,12 @@ pub enum Width {
 #[derive(Clone, Debug)]
 pub struct TableColumn {
   pub heading: Arc<str>,
-  /// A line over the heading: the CLI over its account's name (`CODEX` over `CLIENT` in `FdC7Y`).
+  /// A line over the heading (`OTHER` over `2 PROVIDERS`, as `CODEX` over `CLIENT` in `FdC7Y`).
   pub over: Option<Arc<str>>,
   pub width: Width,
   pub figures: bool,
   /// The series its figures are, whose swatch goes before its heading (`CLIENT` in `FdC7Y`).
-  pub swatch: Option<AccountSeries>,
+  pub swatch: Option<ProviderSeries>,
 }
 
 pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
@@ -59,7 +59,7 @@ pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
 }
 
 impl TableColumn {
-  pub const fn swatch(mut self, series: AccountSeries) -> Self {
+  pub const fn swatch(mut self, series: ProviderSeries) -> Self {
     self.swatch = Some(series);
     self
   }
@@ -140,15 +140,13 @@ pub fn table(ctx: &Ctx, id: &str, columns: &[TableColumn], density: Density, row
 /// A column's heading `id`: its swatch and words `{id}-words`, with the line over them where it has one; its
 /// cell takes the `gap` before its column too.
 fn heading(id: &str, column: &TableColumn, gap: Option<(SpacingSize, f32)>) -> Element {
-  let whole = column.swatch.is_some();
-  // A series' heading is shown whole, past its column's room if it must (*2 ACCOUNTS*, *NO ACCOUNT* in
-  // `FdC7Y`); other headings give way with an ellipsis.
-  let text = Text::new(&column.heading).variant(UsageText::ColumnHeading.role());
-  let text = if whole {
-    text.nowrap().flex_shrink(0.0).into()
-  } else {
-    fit(text)
-  };
+  // *EARLIER RUNS*, words of our own, is shown whole, past an 84 column's room if it must (*NO ACCOUNT* in
+  // `d3lc3`); every other line, a provider's name among them, gives way with an ellipsis inside its cell, so it
+  // never runs into the next column's heading.
+  let whole = column.swatch == Some(ProviderSeries::Earlier);
+  let text = Text::new(&column.heading)
+    .id(format!("{id}-text"))
+    .variant(UsageText::ColumnHeading.role());
   let words = Row::new()
     .id(format!("{id}-words"))
     .spacing(ExtraSpacing::Snug.role())
@@ -156,17 +154,28 @@ fn heading(id: &str, column: &TableColumn, gap: Option<(SpacingSize, f32)>) -> E
     .flex_shrink(if whole { 0.0 } else { 1.0 })
     .min_width(Dimension::Px(0.0))
     .with_children(column.swatch.map(series_swatch))
-    .child(text);
+    .child(if whole {
+      text.nowrap().flex_shrink(0.0).into()
+    } else {
+      fit(text)
+    });
   let justify = if column.figures { Justify::End } else { Justify::Start };
-  let line = |child: Element| Row::new().width(Dimension::Pct(100.0)).justify(justify).child(child);
+  let line = |child: Element| {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .min_width(Dimension::Px(0.0))
+      .justify(justify)
+      .child(child)
+  };
   let cell = Column::new()
     .spacing(ExtraSpacing::Fine.role())
-    .with_children(
-      column
-        .over
-        .as_ref()
-        .map(|over| line(Text::new(over).variant(UsageText::ColumnOver.role()).nowrap().into())),
-    )
+    .with_children(column.over.as_ref().map(|over| {
+      line(fit(
+        Text::new(over)
+          .id(format!("{id}-over"))
+          .variant(UsageText::ColumnOver.role()),
+      ))
+    }))
     .child(line(words.into()));
   sized_column(cell.id(id.to_owned()), column, gap)
 }

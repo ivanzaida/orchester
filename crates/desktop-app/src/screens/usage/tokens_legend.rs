@@ -1,6 +1,6 @@
 //! *Tokens over time*'s legend (`Legend` `CuobA`, two rows in `EA7QF`): each series with usage in the range,
-//! its swatch, its label and its total for the measure, in series order, wrapping onto a second row; *No
-//! account* last with an ⓘ that says what has no account (`Legend item/no account` `XpTjp`, `m6cFFt`); and
+//! its swatch, its label and its total for the measure, in series order, wrapping onto a second row; *Earlier
+//! runs* last with an ⓘ that says what it holds (in the look of `Legend item/no account` `XpTjp`, `m6cFFt`); and
 //! under them what the bars count.
 
 use lurq::{
@@ -14,7 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::{AccountSeries, Grouping, Measure};
+use orchester_core::usage::{Grouping, Measure, ProviderSeries};
 use orchester_workspace::usage::Dashboard;
 
 use super::{
@@ -41,8 +41,7 @@ pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element
       let (series, total) = (shown.series, measure.of(shown.usage));
       let name = series_text(ctx, &shown.label);
       let id = format!("usage-tokens-legend-{}", series.index());
-      let info =
-        (series == AccountSeries::NoAccount).then(|| ctx.mount_keyed::<NoAccountInfo>("usage-no-account-info", ()));
+      let info = (series == ProviderSeries::Earlier).then(|| ctx.mount_keyed::<EarlierInfo>("usage-earlier-info", ()));
       Row::new()
         .id(id)
         .height(Dimension::Px(ITEM_HEIGHT))
@@ -93,13 +92,13 @@ fn caption(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> std::sync::Arc
 /// The ⓘ's room, no taller than the legend's line.
 const ICON_ROOM: f32 = 16.0;
 
-/// The ⓘ after *No account*, which says what has no account while the pointer rests on it (`m6cFFt`).
-pub struct NoAccountInfo {
+/// The ⓘ after *Earlier runs*, which says what it holds while the pointer rests on it (`m6cFFt`).
+pub struct EarlierInfo {
   shown: Signal<bool>,
   anchor: ElementRef,
 }
 
-impl Component for NoAccountInfo {
+impl Component for EarlierInfo {
   type Props = ();
 
   fn create(ctx: &mut Ctx) -> Self {
@@ -112,11 +111,11 @@ impl Component for NoAccountInfo {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let (show, hide) = (self.shown.clone(), self.shown.clone());
     let anchor = Row::new()
-      .id("usage-no-account-info")
+      .id("usage-earlier-info")
       .ref_element(self.anchor.clone())
       .height(Dimension::Px(ICON_ROOM))
       .align_items(Alignment::Center)
-      .describe("a11y_name", ctx.t("usage.accounts.noneInfo"))
+      .describe("a11y_name", ctx.t("usage.providers.earlierInfo"))
       .on_mouse_enter(move || show.set(true))
       .on_mouse_leave(move || hide.set(false))
       .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
@@ -124,9 +123,12 @@ impl Component for NoAccountInfo {
       return anchor;
     }
     let panel = tooltip::info_tip(
-      "usage-no-account-tooltip",
-      (series_swatch(AccountSeries::NoAccount), &ctx.t("usage.accounts.none")),
-      &ctx.t("usage.accounts.noneInfo"),
+      "usage-earlier-tooltip",
+      (
+        series_swatch(ProviderSeries::Earlier),
+        &ctx.t("usage.providers.earlier"),
+      ),
+      &ctx.t("usage.providers.earlierInfo"),
     );
     anchor.child(
       Popup::new(self.anchor.clone(), panel)

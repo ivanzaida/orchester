@@ -43,8 +43,7 @@ pub async fn get_daily_report(services: &Services, args: GetDailyReport) -> Resu
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let accounts = services.workspace.agent_accounts()?;
-    let (read, delivered) = report::report_in((&open.repo_root, &services.programs), accounts, (day, now))
+    let (read, delivered) = report::report_in((&open.repo_root, &services.programs), (day, now))
       .map_err(|reason| ToolError::refused("project_data", vec![reason]))?;
     let day_start = local_day_start(day).unwrap_or(now.local_day_start());
     let merge_queue = merge_queue::queue_of_day(&ProjectDb::open(&open.repo_root)?, day_start)?;

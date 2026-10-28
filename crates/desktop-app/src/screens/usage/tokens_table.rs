@@ -1,5 +1,5 @@
 //! *Tokens over time* as a table with exact numbers (`Table` `fxX9i`, more than three series in `FdC7Y`): DAY,
-//! a column per series with usage in the range (84 wide, its heading the CLI over the account with its swatch),
+//! a column per series with usage in the range (84 wide, its heading the agent provider with its swatch),
 //! the measure's total and the runs; by hour only the hours that have usage; then *Total*.
 
 use std::sync::Arc;
@@ -39,7 +39,7 @@ pub fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Eleme
   columns.push(column(ctx.t("usage.table.runs"), Width::Px(runs_width), true));
   let bars = &dashboard.report.series;
   let figures = |bar: &SeriesBar| -> Vec<u64> {
-    let split = dashboard.split(&bar.by_account);
+    let split = dashboard.split(&bar.by_provider);
     series.iter().map(|shown| measure.of(split.of(shown.series))).collect()
   };
   let mut sums = vec![0_u64; series.len()];
