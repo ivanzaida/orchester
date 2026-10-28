@@ -138,7 +138,10 @@ pub fn policy(ctx: &Ctx, (events, frozen): (&Signal<Events>, &Signal<bool>), var
       require.into(),
       &ctx.t("instructions.requireValue"),
       (
-        &ctx.t_args("instructions.requireNote", [("variable", variable.name())]),
+        &ctx.t_args(
+          "instructions.requireNote",
+          [("variable", format!("{{{{{}}}}}", variable.name()))],
+        ),
         false,
       ),
     ),

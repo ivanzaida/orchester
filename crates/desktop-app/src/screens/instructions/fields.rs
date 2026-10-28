@@ -191,6 +191,7 @@ impl Fields {
       .field(ctx, text_style, tokens(&raw, unavailable))
       .id("instruction-prompt")
       .describe("a11y_name", ctx.t("instructions.prompt"))
+      .placeholder(&ctx.t("instructions.promptPlaceholder"))
       .rows(1, usize::MAX)
       .flex(1.0)
       .min_width(Dimension::Px(0.0))

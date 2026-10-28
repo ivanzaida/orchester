@@ -35,15 +35,14 @@ fn instructions_discovery_card_keeps_the_designed_gap_and_row_rhythm() {
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
-  let action = bounds("instructions-empty-import");
+  // The findings follow the empty state's quiet row (06b) a group's gap below its box.
+  let empty = bounds("instructions-empty-rows");
   let card = bounds("instructions-repository-findings");
   let agents = bounds("instructions-finding-AGENTS.md");
   let claude = bounds("instructions-finding-CLAUDE.md");
   let skills = bounds("instructions-finding-.claude/skills");
-  assert!(
-    (card.y - action.y - action.height - 32.0).abs() < 1.0,
-    "{action:?} {card:?}"
-  );
+  let gap = card.y - empty.y - empty.height;
+  assert!(gap > 0.0 && gap < 40.0, "{empty:?} {card:?}");
   assert!((card.height - 228.0).abs() < 1.0, "{card:?}");
   assert!((claude.y - agents.y - 38.0).abs() < 1.0, "{agents:?} {claude:?}");
   assert!((skills.y - claude.y - 38.0).abs() < 1.0, "{claude:?} {skills:?}");

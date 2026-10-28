@@ -63,16 +63,9 @@ pub fn new_record(ctx: &Ctx, project: &str) -> EditorProps {
 }
 
 /// *Delete this record?* of `memory`.
-pub fn delete(ctx: &Ctx, memory: &Memory, among: Among<'_>) -> DeleteProps {
-  let written = match among.origins.written(memory) {
-    Some(place) => words::workplace(ctx, &place, among.with_task),
-    None => vec![ctx.t("memory.meta.you").to_string()],
-  };
-  let mut written = written;
-  written.push(words::when(ctx, memory.created_at()));
+pub fn delete(memory: &Memory, among: Among<'_>) -> DeleteProps {
   DeleteProps {
     memory: memory.clone(),
-    written: words::join(ctx, &written),
     earlier: listing::earlier_versions(memory, among.records).len(),
   }
 }

@@ -7,7 +7,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, ScrollVertical, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -191,10 +191,9 @@ impl Component for Editor {
     if self.panel.get() == Panel::Full {
       return panel;
     }
-    Row::new()
+    let row = Row::new()
       .id("instruction-editor")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
       .padding(
         Padding::new()
           .top(HubSpacing::BodyTop.role())
@@ -204,8 +203,16 @@ impl Component for Editor {
       )
       .spacing(HubSpacing::Beside.role())
       .child(pane)
-      .child(panel)
-      .into()
+      .child(panel);
+    // A new rule alone scrolls as the hub's pages do, its scrollbar at the body's edge (02e).
+    if saved.is_none() && self.panel.get() == Panel::Hidden {
+      return ScrollVertical::new(row)
+        .id("instruction-new-scroll")
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0))
+        .into();
+    }
+    row.height(Dimension::Pct(100.0)).into()
   }
 }
 impl Editor {
@@ -224,13 +231,8 @@ impl Editor {
       .id("instruction-pane")
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .height(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(top);
-    // A new rule with no panel beside it keeps the hub's column (`Pane` in 02e).
-    if saved.is_none() && self.panel.get() == Panel::Hidden {
-      pane = pane.max_width(Dimension::Px(crate::screens::hub::PANE_WIDTH));
-    }
     pane = editor_actions::write_error(self, ctx, pane);
     pane = editor_actions::published_notice(self, ctx, &availability.retained, pane);
     pane = editor_actions::reload(self, ctx, props, (saved, busy), pane);
@@ -244,12 +246,27 @@ impl Editor {
       errors,
       (busy && !dirty, &availability.unavailable, saved.is_some()),
     );
-    pane
+    // A new rule's scope says what it reaches in the Scope section's note (02e).
+    let scope_note = saved.and_then(|_| super::editor_notes::scope(ctx, &self.fields, &props.data));
+    let pane = pane
       .child(settings)
-      .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
+      .with_children(scope_note)
       .child(prompt)
       .with_children(super::editor_notes::warning(ctx, &self.fields, availability))
-      .with_children(saved.is_none().then(|| self.foot(ctx, props, busy)))
+      .with_children(saved.is_none().then(|| self.foot(ctx, props, busy)));
+    if saved.is_some() {
+      return pane.height(Dimension::Pct(100.0)).into();
+    }
+    // A new rule's page is taller than a short window: it scrolls, and its prompt keeps its least height (02e). Alone,
+    // it keeps the hub's column (`Pane` in 02e) and the whole page scrolls ([`Self::render`]); beside a panel, only it.
+    if self.panel.get() == Panel::Hidden {
+      return pane.max_width(Dimension::Px(crate::screens::hub::PANE_WIDTH)).into();
+    }
+    ScrollVertical::new(pane.width(Dimension::Pct(100.0)))
+      .id("instruction-new-scroll")
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .height(Dimension::Pct(100.0))
       .into()
   }
 

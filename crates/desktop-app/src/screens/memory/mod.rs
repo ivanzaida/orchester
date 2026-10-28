@@ -20,6 +20,7 @@ mod opened;
 mod page;
 mod parts;
 mod proposal;
+mod proposal_side;
 mod queue_row;
 mod record_page;
 mod row;

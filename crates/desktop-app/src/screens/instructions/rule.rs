@@ -13,7 +13,7 @@ use lurq::{
 };
 use orchester_workspace::instructions::{
   data::ProjectInstructions,
-  form::{Events, FormErrors, ScopeChoice, Target},
+  form::{Events, FormErrors, ScopeChoice, SettingsError, Target},
 };
 
 use super::{fields::Fields, words};
@@ -69,10 +69,19 @@ impl Fields {
         "instruction-event-field",
         &ctx.t("instructions.inject"),
         inject_hint.as_deref(),
-        self.event_field(ctx),
+        self.event_field(ctx, existing),
       )
       .into(),
     );
+    // A new rule's role, pipeline or step is chosen in the Scope section above, whose select says it is not chosen
+    // yet, and Create draft waits for it (02e).
+    let shown = errors.and_then(|e| e.settings).filter(|error| {
+      existing
+        || !matches!(
+          error,
+          SettingsError::RoleRequired | SettingsError::PipelineRequired | SettingsError::StepRequired
+        )
+    });
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -81,11 +90,7 @@ impl Fields {
         head("instruction-rule", &ctx.t("instructions.ruleTitle"), None, None),
         boxed("instruction-rule-rows", rows),
       ))
-      .with_children(
-        errors
-          .and_then(|e| e.settings)
-          .map(|error| field_error("instruction-settings-error", &message_text(ctx, &error.message()))),
-      )
+      .with_children(shown.map(|error| field_error("instruction-settings-error", &message_text(ctx, &error.message()))))
       .into()
   }
 
@@ -109,9 +114,10 @@ impl Fields {
     .into()
   }
 
-  /// Agent start · Agent resume · Start & resume; while the rule is being created the choice stays as it is.
-  fn event_field(&self, ctx: &Ctx) -> Element {
-    let role = matches!(self.scope.get(), ScopeChoice::AgentRole(_));
+  /// Agent start · Agent resume · Start & resume; while the rule is being created the choice stays as it is. A saved
+  /// role rule names its agents in the last one; a new rule's reads as drawn in 02e.
+  fn event_field(&self, ctx: &Ctx, existing: bool) -> Element {
+    let role = existing && matches!(self.scope.get(), ScopeChoice::AgentRole(_));
     let chosen = self.events.get();
     let segments = Events::ALL.into_iter().map(|event| {
       let (events, frozen) = (self.events.clone(), self.frozen.clone());

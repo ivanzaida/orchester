@@ -7,7 +7,10 @@ use std::{
 };
 
 use orchester_core::{
-  agent_files::import::{Found, FoundFile, INSTRUCTION_FILES, ImportItem, ItemKind, SKILL_FOLDERS, candidates},
+  agent_files::import::{
+    Candidate, Found, FoundFile, INSTRUCTION_FILES, ImportItem, ItemKind, SKILL_FOLDERS, candidates,
+  },
+  name::Name,
   native::scope::{FileScope, ScopeError, ScopeRoots},
   permission::RepositoryAccess,
   resource::{SKILL_FILE, SkillFilePath},
@@ -306,7 +309,17 @@ fn scan_observing(repo_root: &Path, observer: AccessObserver<'_>) -> Result<Repo
       }
     }
   }
-  Ok(RepositoryScan {
-    items: Arc::new(candidates(found)),
-  })
+  let mut items = candidates(found);
+  items.iter_mut().for_each(name_by_stem);
+  Ok(RepositoryScan { items: Arc::new(items) })
+}
+
+/// An instruction file's draft is named by its stem, *AGENTS* for `AGENTS.md`, on the Skills and the Instructions
+/// side alike (`cC55E`, `P21bwh`); its source keeps the file's path.
+fn name_by_stem(item: &mut ImportItem) {
+  if let Ok(Candidate::Instruction { name, .. }) = &mut item.outcome
+    && let Some(stem) = name.as_str().strip_suffix(".md")
+  {
+    *name = Name::new(stem).expect("recognized root instruction filenames have a nonempty stem");
+  }
 }

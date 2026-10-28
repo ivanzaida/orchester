@@ -251,13 +251,7 @@ impl Component for Found {
       control,
     );
     let items = &p.data.repository.items;
-    let found = super::words::found(ctx, &p.data.repository);
-    let open = ActionButton::new("skills-found-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
-      .icon(crate::ui::icon::Icon::FolderOpen)
-      .opens(p.view.panel.to(super::state::Panel::Import));
-    let import = hub_parts::Entry::new("skills-found-import", found)
-      .hint(ctx.t("skills.foundImportHint"))
-      .end(open);
+    let rows: Vec<Element> = std::iter::once(files.into()).chain(import_row(ctx, &p)).collect();
     let count = ctx.t_args("skills.repositoryCount", [("count", items.len().to_string())]);
     let mut panel = hub_parts::group(
       "skills-repository-settings",
@@ -267,7 +261,7 @@ impl Component for Found {
         Some(&count),
         None,
       ),
-      hub_parts::boxed("skills-repository-rows", [files.into(), import.into()]),
+      hub_parts::boxed("skills-repository-rows", rows),
     );
     if self.asking.get() {
       panel = panel.child(self.question(ctx, &p));
@@ -283,6 +277,23 @@ impl Component for Found {
     }
     panel
   }
+}
+
+/// Import with what the repository holds; with nothing found, a quiet row saying so, unless the library is empty too:
+/// then the empty box says it (06b).
+fn import_row(ctx: &Ctx, p: &PageProps) -> Option<Element> {
+  if p.data.repository.items.is_empty() {
+    return (!p.data.listed.entries.is_empty()).then(|| super::library::nothing_to_import(ctx));
+  }
+  let open = ActionButton::new("skills-found-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
+    .icon(Icon::FolderOpen)
+    .opens(p.view.panel.to(super::state::Panel::Import));
+  Some(
+    hub_parts::Entry::new("skills-found-import", super::words::found(ctx, &p.data.repository))
+      .hint(ctx.t("skills.foundImportHint"))
+      .end(open)
+      .into(),
+  )
 }
 impl Found {
   fn question(&self, ctx: &Ctx, p: &PageProps) -> Element {

@@ -75,7 +75,7 @@ pub fn page(ctx: &mut Ctx, state: &MemoryState, memory: &Arc<ProjectMemory>, tab
     .spacing(HubSpacing::Sections.role())
     .child(top(ctx, state, (&record, editor.as_ref()), (tab, &memory.origins)));
   if state.opened.get() == Opened::Delete(id) {
-    let props = opened::delete(ctx, &record, among);
+    let props = opened::delete(&record, among);
     main = main.child(ctx.mount_keyed::<DeleteConfirm>(&format!("memory-delete-{id}"), props));
   }
   main = main.child(match editor.clone() {

@@ -355,7 +355,16 @@
       "invocations": "{{count}} invocations",
       "tokens": "≈ {{tokens}} tokens",
       "showAll": "Show all {{count}} invocations",
-      "showFewer": "Show the latest only"
+      "showFewer": "Show the latest only",
+      "proposalSource": "Source",
+      "writtenIn": "Written in {{place}}",
+      "eventsOne": "1 event in {{place}}",
+      "eventsOther": "{{count}} events in {{place}}",
+      "agentConfidence": "Agent's confidence",
+      "confidenceKept": "{{confidence}} · set by {{agent}}; people don't change it",
+      "authorKept": "your edit keeps the author and adds edited by you",
+      "versions": "Versions",
+      "versionNewest": "v{{version}} · superseded {{time}}"
     },
     "reason": {
       "handoff": "latest handoff",

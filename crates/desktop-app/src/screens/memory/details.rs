@@ -14,7 +14,7 @@ use lurq::{
 };
 use orchester_core::{
   id::MemoryId,
-  memory::{GivenMemory, Memory},
+  memory::{GivenMemory, Memory, MemoryStatus},
 };
 use orchester_workspace::{
   background,
@@ -60,6 +60,10 @@ impl Component for RecordDetails {
       return Element::new();
     };
     let given = given(ctx, &state, record);
+    // A proposal under review has its own side (05e): it was given to no agent yet.
+    if record.status() == MemoryStatus::Proposed {
+      return super::proposal_side::side(ctx, &state, &props.memory, record);
+    }
     super::details_side::side(ctx, &state, (&props.memory, record), (given, &self.all_given))
   }
 }

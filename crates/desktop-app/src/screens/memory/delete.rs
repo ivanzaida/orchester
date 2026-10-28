@@ -1,9 +1,7 @@
-//! *Delete this record?*, in the record's place (`Memory / Delete confirmation` `YdVse`): what deleting does (it
-//! stops reaching agents, the invocations that were given it show *Deleted record*, its earlier versions go with it,
-//! it cannot be undone), the record as it is with how many invocations were given it, that deprecating keeps it, and
-//! *Deprecate instead*, *Cancel* and *Delete record*. Only a person deletes records.
-
-use std::sync::Arc;
+//! *Delete this record?*, in the record's place (`Question · Delete this record?` `n2UhqG` in 05c `CF0R7`), in the
+//! hub's danger tone ([`crate::screens::hub::question`]): what deleting does (it stops reaching agents, the
+//! invocations that were given it show *Deleted record*, its earlier versions go with it, it cannot be undone), that
+//! deprecating keeps it, then *Delete record*, *Deprecate instead* and *Cancel*. Only a person deletes records.
 
 use lurq::{
   app::{
@@ -11,9 +9,9 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::memory::{Memory, MemoryStatus};
 use orchester_workspace::{
@@ -22,14 +20,14 @@ use orchester_workspace::{
   messages::{self, Message},
 };
 
-use super::{state::MemoryState, words, work::Write};
+use super::{state::MemoryState, work::Write};
 use crate::{
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, MemoryText},
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
   },
 };
@@ -37,8 +35,6 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub struct DeleteProps {
   pub memory: Memory,
-  /// Who wrote it and where, as its meta line starts.
-  pub written: Arc<str>,
   /// How many earlier versions go with it.
   pub earlier: usize,
 }
@@ -60,41 +56,32 @@ impl Component for DeleteConfirm {
     let memory = &props.memory;
     let id = format!("memory-delete-{}", memory.id());
     let given = given_count(ctx, &state, memory);
-    let kind = words::kind_name(ctx, memory.content().kind());
-    let what = match memory.content().key() {
-      Some(key) => words::join(ctx, &[kind.to_string(), key.as_str().to_owned()]),
-      None => kind,
-    };
-    let head = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(icon(Icon::Trash2, IconSize::Md, PaletteColor::Danger))
-      .child(Text::new(&ctx.t("memory.delete.title")).variant(ExtraTypography::FormSection.role()))
-      .child(Spacer::new().flex(1.0))
-      .child(Text::new(&what).variant(TypographyStyle::Caption).nowrap());
     let mut confirm = Column::new()
       .id(id.clone())
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-      .spacing(SpacingSize::Md)
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .padding(Padding::symmetric(SpacingSize::Lg, HubSpacing::Row.role()))
+      .spacing(ExtraSpacing::Loose.role())
+      .background(PaletteColor::DangerMuted)
+      .border_inside(BorderSize::Sm, PaletteColor::Danger)
       .rounded(RadiusSize::Lg)
-      .child(head)
+      .describe("weight", "loses")
+      .child(
+        Text::new(&ctx.t("memory.delete.title"))
+          .id(format!("{id}-title"))
+          .variant(ExtraTypography::FormSection.role()),
+      )
       .child(
         Text::new(&explanation(ctx, given.as_ref().ok().copied(), props.earlier))
           .id(format!("{id}-text"))
-          .variant(TypographyStyle::Description),
-      )
-      .child(preview(ctx, &props, given.as_ref().ok().copied(), &id));
+          .variant(HubText::Status.role())
+          .width(Dimension::Pct(100.0)),
+      );
     if memory.status() == MemoryStatus::Active {
       confirm = confirm.child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(icon(Icon::Archive, IconSize::Sm, PaletteColor::TextMuted))
-          .child(Text::new(&ctx.t("memory.delete.deprecateHint")).variant(MemoryText::NoticeText.role())),
+        Text::new(&ctx.t("memory.delete.deprecateHint"))
+          .id(format!("{id}-hint"))
+          .variant(TypographyStyle::Description)
+          .width(Dimension::Pct(100.0)),
       );
     }
     if let Err(Some(reason)) = &given {
@@ -144,67 +131,11 @@ fn explanation(ctx: &Ctx, given: Option<usize>, earlier: usize) -> String {
   [reach, history, ctx.t("memory.delete.final")].join(" ")
 }
 
-/// The record as it is (`I6Sjzs`): its key, what it says, and who wrote it with how many invocations got it.
-fn preview(ctx: &Ctx, props: &DeleteProps, given: Option<usize>, id: &str) -> Column {
-  let memory = &props.memory;
-  let mut meta = vec![props.written.to_string()];
-  if let Some(count) = given {
-    meta.push(if count == 1 {
-      ctx.t("memory.delete.givenToOne").to_string()
-    } else {
-      ctx
-        .t_args("memory.delete.givenTo", [("count", count.to_string())])
-        .to_string()
-    });
-  }
-  Column::new()
-    .id(format!("{id}-preview"))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Xs)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .with_children(
-      memory
-        .content()
-        .key()
-        .map(|key| Text::new(key.as_str()).variant(ExtraTypography::MonoNote.role())),
-    )
-    .child(
-      Text::new(memory.content().text())
-        .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextPrimary),
-    )
-    .child(Text::new(&words::join(ctx, &meta)).variant(TypographyStyle::Caption))
-}
-
-/// *Deprecate instead* on an active record, *Cancel* and *Delete record* (`bQ3eS`).
+/// *Delete record*, *Deprecate instead* on an active record, and *Cancel*, at the start of one row (`m05a8`).
 fn actions(ctx: &Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Row {
   let (record, revision) = (memory.id(), memory.revision());
   let busy = state.busy();
   let held = |button: ActionButton| if busy { button.disabled() } else { button };
-  let mut row = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center);
-  if memory.status() == MemoryStatus::Active {
-    let deprecate = state.clone();
-    row = row.child(held(
-      ActionButton::new(
-        format!("{id}-deprecate"),
-        ButtonKind::Secondary,
-        ctx.t("memory.delete.deprecateInstead"),
-      )
-      .icon(Icon::Archive)
-      .on_click(move || deprecate.write(Write::Change(record, revision, Change::Deprecate))),
-    ));
-  }
-  let close = state.clone();
-  let cancel = held(
-    ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, ctx.t("memory.editor.cancel"))
-      .on_click(move || close.close()),
-  );
   let delete = state.clone();
   let confirm = ActionButton::new(
     format!("{id}-confirm"),
@@ -218,5 +149,25 @@ fn actions(ctx: &Ctx, state: &MemoryState, memory: &Memory, id: &str) -> Row {
   } else {
     held(confirm)
   };
-  row.child(Spacer::new().flex(1.0)).child(cancel).child(confirm)
+  let mut row = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(confirm);
+  if memory.status() == MemoryStatus::Active {
+    let deprecate = state.clone();
+    row = row.child(held(
+      ActionButton::new(
+        format!("{id}-deprecate"),
+        ButtonKind::Ghost,
+        ctx.t("memory.delete.deprecateInstead"),
+      )
+      .icon(Icon::Archive)
+      .on_click(move || deprecate.write(Write::Change(record, revision, Change::Deprecate))),
+    ));
+  }
+  let close = state.clone();
+  row.child(held(
+    ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, ctx.t("memory.editor.cancel"))
+      .on_click(move || close.close()),
+  ))
 }

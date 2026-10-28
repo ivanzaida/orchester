@@ -86,6 +86,7 @@
     "newNote": "Starts an empty draft. Nothing reaches an agent until you publish it.",
     "ownership": "Skills belong to {{project}} and reach agents from Orchester. While Project settings › Repository agent files is on, Codex reads AGENTS.md and .agents/skills, and Native agents load repository skills. Claude Code loads neither.",
     "noRepository": "Agents get skills only from Orchester. The repository has no AGENTS.md, CLAUDE.md or skills folders to import.",
+    "nothingTitle": "Nothing to import",
     "how": "How skills reach agents",
     "howScopeTitle": "Scope decides who gets it",
     "howScope": "Project: every agent. Role: agents of that profile. Pipeline or step: only agents working there.",
