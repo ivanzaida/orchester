@@ -182,3 +182,11 @@ define_id!(
   /// One request or reply a person wrote in a feedback thread.
   FeedbackPostId
 );
+define_id!(
+  /// One document of a project's Docs (`crate::docs`).
+  DocId
+);
+define_id!(
+  /// One folder of a project's Docs tree (`crate::docs`).
+  DocFolderId
+);
