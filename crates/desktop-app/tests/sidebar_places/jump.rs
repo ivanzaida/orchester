@@ -99,7 +99,11 @@ fn sidebar_jump_to_says_where_a_task_stands_and_offers_every_place() {
     window.until(&row, |window| window.texts(&row).is_some());
     let said = window.text(&format!("{row}-hint"));
     assert!(said.starts_with(phrase), "{task}: {said}");
-    assert_eq!(glyph(&mut window, &format!("{row}-icon")), mark.glyph(), "{task}: {said}");
+    assert_eq!(
+      glyph(&mut window, &format!("{row}-icon")),
+      mark.glyph(),
+      "{task}: {said}"
+    );
     close(&mut window);
   }
   // With nothing typed, every place of the sidebar, the hubs too.

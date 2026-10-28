@@ -175,14 +175,15 @@ fn matching(group: Group, entries: Vec<Entry>, query: &str, shown: usize) -> imp
 fn task_results(ctx: &Ctx, project: ProjectId, tasks: &ProjectTasks, query: &str) -> Vec<Found> {
   let separator = ctx.t("tasks.listSeparator");
   // The list's search finds briefs too; *Jump to* keeps the keys and titles among what it finds.
-  let mut hits: Vec<(bool, TaskRow)> = browse::faceted(tasks, (query, &separator), &Facets::default(), TaskSort::Manual)
-    .into_iter()
-    .filter_map(|row| {
-      let key = row.key.to_lowercase();
-      let by_key = key.starts_with(query);
-      (by_key || key.contains(query) || row.title.to_lowercase().contains(query)).then_some((by_key, row))
-    })
-    .collect();
+  let mut hits: Vec<(bool, TaskRow)> =
+    browse::faceted(tasks, (query, &separator), &Facets::default(), TaskSort::Manual)
+      .into_iter()
+      .filter_map(|row| {
+        let key = row.key.to_lowercase();
+        let by_key = key.starts_with(query);
+        (by_key || key.contains(query) || row.title.to_lowercase().contains(query)).then_some((by_key, row))
+      })
+      .collect();
   // A stable sort: the tasks keep the list's order within each kind of match.
   hits.sort_by_key(|(by_key, _)| !*by_key);
   let rows: Vec<TaskRow> = hits.into_iter().take(TASKS_SHOWN).map(|(_, row)| row).collect();
