@@ -1,6 +1,6 @@
 //! Checkpoint commits and merges: everything a step changed in its worktree, committed on the
-//! worktree's branch, and a step branch merged back into the run's branch — both with the
-//! repository's git identity.
+//! worktree's branch (or the commits its agent made there itself), and a step branch merged back
+//! into the run's branch — both with the repository's git identity.
 
 use std::path::Path;
 
@@ -9,7 +9,7 @@ use orchester_core::revision::Revision;
 use crate::{git::Git, worktree::WorktreeError};
 
 /// Commits every change in `worktree` with `message`; `None` when nothing changed.
-pub(super) fn commit(worktree: &Path, message: &str) -> Result<Option<Revision>, WorktreeError> {
+fn commit(worktree: &Path, message: &str) -> Result<Option<Revision>, WorktreeError> {
   let git = Git::new(worktree);
   if git
     .stdout(&["status", "--porcelain", "--untracked-files=all"])?
@@ -20,6 +20,43 @@ pub(super) fn commit(worktree: &Path, message: &str) -> Result<Option<Revision>,
   git.stdout(&["add", "--all"])?;
   git.stdout(&["commit", "--quiet", "-m", message])?;
   head(worktree).map(Some)
+}
+
+/// What a step left in its worktree when it ended.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Saved {
+  /// Its work is at this commit: what it left uncommitted, committed now, or else the commits its agent made itself.
+  At(Revision),
+  /// Nothing new.
+  Nothing,
+  /// Its agent's commits are on `head` (another branch, or a detached HEAD), not on `branch`, the worktree's: they are
+  /// not taken as its work.
+  Elsewhere { head: String, branch: String },
+}
+
+/// Commits every change in `worktree` with `message`; with nothing to commit, takes the commits the step's agent made
+/// itself on `branch`, the worktree's, when its HEAD is none of the `known` revisions (where the step started, the
+/// run's last checkpoint, the run's start).
+pub(super) fn save(
+  worktree: &Path,
+  message: &str,
+  (branch, known): (&str, &[&Revision]),
+) -> Result<Saved, WorktreeError> {
+  if let Some(revision) = commit(worktree, message)? {
+    return Ok(Saved::At(revision));
+  }
+  let head = head(worktree)?;
+  if known.contains(&&head) {
+    return Ok(Saved::Nothing);
+  }
+  let on = Git::new(worktree).attempt(&["symbolic-ref", "--quiet", "--short", "HEAD"])?;
+  if on.as_deref() == Ok(branch) {
+    return Ok(Saved::At(head));
+  }
+  Ok(Saved::Elsewhere {
+    head: on.unwrap_or_else(|_| "a detached HEAD".to_owned()),
+    branch: branch.to_owned(),
+  })
 }
 
 /// The commit checked out in `worktree`.

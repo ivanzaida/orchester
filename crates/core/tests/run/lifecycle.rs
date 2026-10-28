@@ -194,6 +194,29 @@ fn run_lifecycle_checkpoints_need_an_active_step() {
 }
 
 #[test]
+fn run_lifecycle_a_succeeded_run_records_the_checkpoint_it_lacks_once() {
+  let mut logged = crate::steps::implemented();
+  // While the run runs, the step that made the commits records them.
+  assert!(logged.run.record_missing_checkpoint(revision('e'), at(50)).is_err());
+  for step in ["checks", "review", "pr"] {
+    logged.pass(step);
+  }
+  logged.apply(|run| run.record_missing_checkpoint(revision('e'), at(60)));
+  assert_eq!(logged.run.status(), &RunStatus::Succeeded);
+  let checkpoint = logged.run.last_checkpoint().expect("recorded");
+  assert_eq!(checkpoint.execution(), logged.exec("pr"));
+  assert_eq!(checkpoint.revision(), &revision('e'));
+  assert!(matches!(
+    logged.run.record_missing_checkpoint(revision('f'), at(61)),
+    Err(RunError::InvalidRunTransition {
+      status: RunStatus::Succeeded,
+      event: "checkpoint_recorded"
+    })
+  ));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}
+
+#[test]
 fn run_lifecycle_rejected_transition_leaves_the_run_unchanged() {
   let mut logged = Logged::started();
   let before = logged.run.clone();
