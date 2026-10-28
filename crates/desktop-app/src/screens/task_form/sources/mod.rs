@@ -1,10 +1,10 @@
 //! The Sources chip (`Sources` `K39411`) and its popover (`Sources popover` `B56QE` in `03` `jsySh`): the chip counts
 //! the sources a run of the task starts with; the popover says what sources are, adds one (path, choose folder, Add),
 //! then lists the task's own, removable, and what it gets from the project and from the pipeline version it runs,
-//! read-only, and how many a run starts with. It opens under the chip and stays inside the composer's column, and
-//! never flips over the chip: what does not fit under it scrolls. A new task keeps its sources on the form until
-//! Create stores them with it; a stored task's are saved as they change. Adding one is asked in place first
-//! (`connections::widen`); the rules are `orchester_workspace::sources::task`.
+//! read-only, and how many a run starts with. It opens under the chip and stays inside the composer's column, short of
+//! its end as drawn, and never flips over the chip: what does not fit above the action bar scrolls. A new task keeps
+//! its sources on the form until Create stores them with it; a stored task's are saved as they change. Adding one is
+//! asked in place first (`connections::widen`); the rules are `orchester_workspace::sources::task`.
 
 mod groups;
 
@@ -36,17 +36,20 @@ use orchester_workspace::{
 };
 
 use self::groups::{group, inherited, subhead, summary};
-use super::chips::{ChipState, Look, PropertyChip};
+use super::{
+  bar::HEIGHT as BAR_HEIGHT,
+  chips::{ChipState, Look, PropertyChip},
+};
 use crate::{
   mcp::input_gate::Guarded,
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, ExtraTypography, sources_scrollbar},
   ui::{
     add_source::{AddSource, AddSourceProps, Asked, Layout},
     field::field_error,
     icon::Icon,
     message::message_text,
-    popover::{popover_panel, room_under},
+    popover::{padded_popover_panel, room_under},
     source_row::SourceRow,
     state::load_error,
   },
@@ -54,6 +57,9 @@ use crate::{
 
 /// The popover's width (`Sources popover` `B56QE`).
 const WIDTH: f32 = 420.0;
+/// How far before the composer column's end the popover ends at least (`B56QE` at 739..1159 in `03` `jsySh`, the
+/// column at 476..1196).
+const END_INSET: f32 = 37.0;
 
 /// A new task's sources on the form, until Create stores them with it. Wrapped so a signal can hold them, as
 /// `Asked` is.
@@ -185,7 +191,7 @@ impl Component for TaskSources {
       (ctx.t("task_form.sources.label"), value),
       Look::Empty,
     )
-    .inside(props.column.clone(), WIDTH)
+    .inside(props.column.clone(), (WIDTH, END_INSET))
     .render(&self.chip, panel)
   }
 }
@@ -254,23 +260,22 @@ impl TaskSources {
     self.frame(ctx, body)
   }
 
-  /// The popover's frame around `body`, as tall as the room under the chip lets it be: what does not fit scrolls.
+  /// The popover's frame around `body`, as tall as the room between the chip and the action bar lets it be: what does
+  /// not fit scrolls. The scroll area reaches into the popover's 12 at its end, where its scrollbar runs clear of the
+  /// rows.
   fn frame(&self, ctx: &Ctx, body: Column) -> Element {
-    let panel = popover_panel("task-form-sources-popover", WIDTH)
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Md)
-          .bottom(ExtraSpacing::Loose.role())
-          .left(SpacingSize::Md)
-          .right(SpacingSize::Md),
-      )
-      .child(
-        ScrollVertical::new(body)
-          .id("task-form-sources-scroll")
-          .width(Dimension::Pct(100.0))
-          .flex_shrink(1.0),
-      );
-    match room_under(ctx, &self.chip.anchor) {
+    let padding = Padding::new()
+      .top(SpacingSize::Md)
+      .bottom(ExtraSpacing::Loose.role())
+      .left(SpacingSize::Md);
+    let panel = padded_popover_panel("task-form-sources-popover", WIDTH, padding).child(
+      ScrollVertical::new(body.padding(Padding::new().right(SpacingSize::Md)))
+        .id("task-form-sources-scroll")
+        .scrollbar(sources_scrollbar(&ctx.theme().scrollbar()))
+        .width(Dimension::Pct(100.0))
+        .flex_shrink(1.0),
+    );
+    match room_under(ctx, &self.chip.anchor, BAR_HEIGHT) {
       Some(room) => panel.max_height(Dimension::Px(room)).into(),
       None => panel.into(),
     }

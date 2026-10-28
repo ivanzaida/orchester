@@ -6,10 +6,25 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  layout::{
+    scrollbar::ScrollBarStyle,
+    text_style::{FontWeight, TextStyle},
+  },
 };
 
 use super::typography::style;
+
+/// The Sources popover's scrollbar runs in the popover's 12 at its end, 4 in from its edge, clear of the rows and their
+/// ↗ links (`Sources popover` `B56QE` draws none).
+const SOURCES_SCROLL_EDGE: f32 = 4.0;
+
+/// `base`, the theme's scrollbar, placed for the Sources popover.
+pub fn sources_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  ScrollBarStyle {
+    edge_inset: Some(SOURCES_SCROLL_EDGE),
+    ..base.clone()
+  }
+}
 
 /// Text of the task form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,15 +39,18 @@ pub enum TaskFormText {
   CriteriaHint,
   /// 11.5 `text_muted`, 1.3: a pipeline's steps and gates under its name in the Pipeline menu (`Meta` `H1NsU`).
   OptionMeta,
+  /// 12 `text_secondary`, 1.3: a note under the head, one 16 line in its 32 (`Text` `vpy3p` in `Note` `CvMGI`).
+  Note,
 }
 
 impl TaskFormText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::Title,
     Self::Outcome,
     Self::Criterion,
     Self::CriteriaHint,
     Self::OptionMeta,
+    Self::Note,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -46,6 +64,7 @@ impl TaskFormText {
       Self::Criterion => "task_form_criterion",
       Self::CriteriaHint => "task_form_criteria_hint",
       Self::OptionMeta => "task_form_option_meta",
+      Self::Note => "task_form_note",
     }
   }
 
@@ -56,6 +75,7 @@ impl TaskFormText {
       Self::Criterion => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::CriteriaHint => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::OptionMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::Note => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
     }
   }
 }

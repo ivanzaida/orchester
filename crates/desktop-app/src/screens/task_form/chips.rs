@@ -108,8 +108,9 @@ pub struct PropertyChip {
   locked: bool,
   /// It cannot be changed here, for this reason: a lock at its end, its popover says why.
   unavailable: Option<Arc<str>>,
-  /// The column its popover, this wide, stays inside; `None`: the popover opens under the chip from its start.
-  inside: Option<(ElementRef, f32)>,
+  /// The column its popover, this wide, stays inside, ending this far or more before the column's end; `None`: the
+  /// popover opens under the chip from its start.
+  inside: Option<(ElementRef, f32, f32)>,
 }
 
 impl PropertyChip {
@@ -146,10 +147,11 @@ impl PropertyChip {
     self
   }
 
-  /// Its popover, `width` wide, stays under the chip and inside `column` ([`popover_inside`]).
+  /// Its popover, `width` wide, stays under the chip and inside `column`, ending `end_inset` or more before the
+  /// column's end ([`popover_inside`]).
   #[must_use]
-  pub fn inside(mut self, column: ElementRef, width: f32) -> Self {
-    self.inside = Some((column, width));
+  pub fn inside(mut self, column: ElementRef, (width, end_inset): (f32, f32)) -> Self {
+    self.inside = Some((column, width, end_inset));
     self
   }
 
@@ -226,10 +228,10 @@ impl PropertyChip {
         .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-lock", self.id)));
     }
     let popup = match &self.inside {
-      Some((column, width)) => popover_inside(
+      Some((column, width, end_inset)) => popover_inside(
         (&state.anchor, column),
         state.open.clone(),
-        *width,
+        (*width, *end_inset),
         panel.unwrap_or_default(),
       ),
       None => state.popover(panel),

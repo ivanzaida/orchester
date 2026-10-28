@@ -1,5 +1,5 @@
 //! The task form composer's own type roles and spacing (`Task form · redesign` `HFXxX` in the new `orchester.pen`).
-use orchester_app::theme::{TaskFormSpacing, TaskFormText};
+use orchester_app::theme::{TaskFormSpacing, TaskFormText, sources_scrollbar};
 
 use super::*;
 
@@ -45,6 +45,14 @@ fn task_form_roles_follow_the_composer() {
       1.3,
       PaletteColor::TextMuted,
     ),
+    // The words of a note under the head, one 16 line in its 32 (`vpy3p` in `CvMGI`).
+    (
+      TaskFormText::Note,
+      12.0,
+      FontWeight::Normal,
+      1.3,
+      PaletteColor::TextSecondary,
+    ),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -61,4 +69,7 @@ fn task_form_roles_follow_the_composer() {
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
+  // The Sources popover's 4 wide scrollbar runs 4 in from its end, inside its 12, clear of the rows.
+  let scrollbar = sources_scrollbar(&theme.scrollbar());
+  assert_eq!((scrollbar.width, scrollbar.resolved_edge_inset()), (4.0, 4.0));
 }

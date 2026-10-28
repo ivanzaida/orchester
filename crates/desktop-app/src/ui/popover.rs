@@ -27,10 +27,20 @@ pub enum PopoverSide {
 
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
 pub fn popover_panel(id: &str, width: f32) -> Column {
+  padded_popover_panel(
+    id,
+    width,
+    Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()),
+  )
+}
+
+/// [`popover_panel`] with `padding` of its own instead of the popover's, where a side may have none (a popover whose
+/// scroll area reaches its edge).
+pub fn padded_popover_panel(id: &str, width: f32, padding: Padding) -> Column {
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Px(width))
-    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+    .padding(padding)
     .spacing(SpacingSize::Md)
     .rounded(RadiusSize::Lg)
     .background(PaletteColor::SurfaceRaised)
@@ -53,15 +63,15 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
 }
 
 /// `panel`, `width` wide, opened under `anchor` from its start while `open` holds, moved back just enough that it ends
-/// no further than `frame` does (a column it belongs in), as both were last laid out. It never flips over its anchor:
-/// give it [`room_under`] as its most height.
+/// `end_inset` or more before `frame` does (a column it belongs in), as both were last laid out. It never flips over
+/// its anchor: give it [`room_under`] as its most height.
 pub fn popover_inside(
   (anchor, frame): (&ElementRef, &ElementRef),
   open: Signal<bool>,
-  width: f32,
+  (width, end_inset): (f32, f32),
   panel: impl Into<Element>,
 ) -> Popup {
-  let past = (anchor.x() + width) - (frame.x() + frame.width());
+  let past = (anchor.x() + width) - (frame.x() + frame.width() - end_inset);
   Popup::new(anchor.clone(), panel)
     .open(open)
     .placement(Placement::BottomStart)
@@ -69,11 +79,12 @@ pub fn popover_inside(
     .collision(CollisionStrategy::Clamp)
 }
 
-/// How tall a popover under `anchor` may be: the room between it, the popover's gap under it, and the status bar,
-/// kept 12 clear; `None` before the anchor was laid out.
-pub fn room_under(ctx: &Ctx, anchor: &ElementRef) -> Option<f32> {
+/// How tall a popover under `anchor` may be: the room between it, the popover's gap under it, and what sits at the
+/// window's bottom (the status bar, and `above_bar` over it, such as a page's action bar), kept 12 clear; `None` before
+/// the anchor was laid out.
+pub fn room_under(ctx: &Ctx, anchor: &ElementRef, above_bar: f32) -> Option<f32> {
   let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-  let bottom = ctx.window().info().logical_height() - STATUS_BAR_HEIGHT - margin;
+  let bottom = ctx.window().info().logical_height() - STATUS_BAR_HEIGHT - above_bar - margin;
   let top = anchor.y() + anchor.height() + ExtraSpacing::Snug.value();
   (anchor.height() > 0.0).then(|| (bottom - top).max(0.0))
 }
