@@ -122,7 +122,7 @@ impl Component for MakeLocal {
       row.control(
         ActionButton::new(
           "sharing-make-local-button",
-          ButtonKind::Secondary,
+          ButtonKind::DangerGhost,
           ctx.t("sharing.linked.makeLocalButton"),
         )
         .icon(Icon::Unplug)

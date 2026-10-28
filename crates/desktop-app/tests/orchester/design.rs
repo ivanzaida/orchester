@@ -41,33 +41,31 @@ fn orchester_design_link_takes_the_server_projects_key() {
     "the confirmation names the key the tasks take: {question}"
   );
   press(&mut window, "sharing-link-confirm");
-  // *Team server* (`rsQ79` in `04b Sharing · shared` `TnUGj`).
+  // *Team server* (`rsQ79` in `04b Sharing · shared` `TnUGj`): Address, Your role and Members, no Repository row.
   shows(&mut window, "sharing-role-hint");
   let role = window.text("sharing-role-hint");
   assert!(role.starts_with("Key BIL ·"), "linked under the server's key: {role}");
+  assert_eq!(
+    window.text("sharing-role-value"),
+    "Member",
+    "the role in a word (`GgOpf`)"
+  );
   let address = window.text("sharing-address-hint");
   assert!(address.starts_with("Synced "), "when it last synced: {address}");
   assert!(address.contains("connected"), "{address}");
-  window.until("the repository compared", |window| {
-    window
-      .texts("sharing-repository-hint")
-      .is_some_and(|texts| texts.join(" ").contains("doesn't match"))
-  });
-  assert_eq!(window.text("sharing-leave-row-label"), "Leave the project");
   assert!(
-    window
-      .text("sharing-repository-value")
-      .contains("github.com/acme/billing"),
-    "the project's hint: {}",
-    window.text("sharing-repository-value")
+    window.tree.get_element_by_id("sharing-repository").is_none(),
+    "the design's Team server has no Repository row"
   );
+  assert_eq!(window.text("sharing-leave-row-label"), "Leave the project");
   press(&mut window, "sharing-leave");
   shows(&mut window, "sharing-leave-question");
-  let question = window.texts("sharing-leave-question").unwrap_or_default().join(" ");
-  assert!(
-    question.contains("Billing"),
-    "the server project by its name: {question}"
-  );
+  // The server project by its name, once the server answered it.
+  window.until("the server project's name in the question", |window| {
+    window
+      .texts("sharing-leave-question")
+      .is_some_and(|texts| texts.join(" ").contains("Billing"))
+  });
 }
 
 #[test]

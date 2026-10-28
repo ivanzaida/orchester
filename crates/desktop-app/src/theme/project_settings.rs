@@ -50,13 +50,24 @@ impl ProjectSettingsText {
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::GroupTitle => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
-      Self::Hint => style(12.0, FontWeight::Normal, 1.35, 0.0, palette.text_muted),
+      // The design's lines of a hint and of a mono label are 16 high (`f7dgB`, `HaAqu` in `06` `d6auya`), so an
+      // item's row is 54 with them.
+      Self::Hint => style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted),
       Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::MonoLabel => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
+      Self::MonoLabel => mono(style(
+        12.5,
+        FontWeight::Medium,
+        LINE_16 / 12.5,
+        0.0,
+        palette.text_primary,
+      )),
       Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
     }
   }
 }
+
+/// A 16 line, as the design draws a 12 or 12.5 text.
+const LINE_16: f32 = 16.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectSettingsSpacing {

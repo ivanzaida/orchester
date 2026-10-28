@@ -72,6 +72,7 @@
     "loadFailed": "Project settings couldn't be read",
     "saved": "All changes saved",
     "unsaved": "Changes not saved",
+    "notSavedYet": "Not saved yet",
     "saving": "Saving…",
     "failed": "Not saved · Orchester couldn't write the settings",
     "invalid": "Not saved · fix the marked field",

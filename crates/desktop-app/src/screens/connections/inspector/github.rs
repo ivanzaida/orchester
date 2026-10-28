@@ -30,7 +30,7 @@ use crate::{
     },
     project_settings::kit::{Group, SettingRow, Tone, command_line, value},
   },
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -182,9 +182,11 @@ fn wrong_account(
         .spacing(ExtraSpacing::Tight.role())
         .child(title)
         .child(
+          // One 16 line, so the warning is 54 high (`hKkz6` in `ZH4Hq`).
           Text::new(&ctx.t("connections.github.wrongAccountShort"))
             .id("connection-inspector-sentence")
-            .variant(ExtraTypography::Prose.role())
+            .variant(ProjectSettingsText::Hint.role())
+            .color(PaletteColor::TextSecondary)
             .width(Dimension::Pct(100.0)),
         ),
     )

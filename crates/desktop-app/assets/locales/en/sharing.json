@@ -201,9 +201,9 @@
     "linked": {
       "sharedOn": "Shared on {{server}}",
       "detail": "{{key}} · linked {{day}} · {{role}} · synced {{synced}}",
-      "owner": "you're an owner",
-      "member": "you're a member",
-      "noRole": "you're an admin there",
+      "owner": "Owner",
+      "member": "Member",
+      "noRole": "Server admin",
       "taskListDescription": "{{local}}'s tasks live in {{project}} on {{server}}; every member's computer keeps a copy and keeps working offline. Runs stay on the computer that runs them.",
       "address": "Project address",
       "addressDescription": "The project this checkout is linked to. Its address is its identity and never changes.",
@@ -224,14 +224,6 @@
         "plain": "not encrypted"
       },
       "repository": {
-        "description": "{{project}} on {{server}} was set up for this remote. Orchester compares it with this checkout's origin.",
-        "reading": "Reading the project's repository hint…",
-        "noHint": "No repository hint",
-        "same": "This checkout's origin matches · checked {{time}}",
-        "different": "This checkout's origin is {{origin}} · it doesn't match · checked {{time}}",
-        "noOrigin": "This checkout has no origin remote; nothing to compare.",
-        "nothingToCompare": "The project names no repository; nothing to compare.",
-        "unread": "{{server}} can't be reached now; the hint is compared once it can.",
         "unknownServer": "The project's server is no longer in Settings › Orchester.",
         "notListed": "The server no longer lists this project for you."
       },
@@ -242,10 +234,11 @@
         "bodyNoName": "{{server}} answered at {{time}} that you aren't in {{project}} any more. This computer keeps {{key}}'s {{count}} tasks as they were then, read-only. Make {{local}} local to keep working here, or ask an owner to add you again.",
         "check": "Check again",
         "state": "Not a member of {{project}} · read-only",
-        "detail": "{{key}} · joined {{day}} · you were a member · last synced {{synced}}"
+        "detail": "{{key}} · joined {{day}} · you were a member · last synced {{synced}}",
+        "role": "None"
       },
-      "leaveSection": "Leave or make local",
-      "makeLocal": "Make local",
+      "leaveSection": "Leave",
+      "makeLocal": "Make this project local",
       "makeLocalDescription": "Stop using the server on this computer. Every task becomes a local task of {{project}} here; {{key}} stays the same for everyone else.",
       "makeLocalButton": "Make local…",
       "leave": "Leave {{project}}",
