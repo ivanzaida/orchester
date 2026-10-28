@@ -49,6 +49,8 @@ Exports: `.tmp/design/ORC-166/<id>.png` at scale 1 (not committed).
   `request.rs` for comparison next to the native one; the native rows are highlighted.
 - Status dot colours follow the tones: connected success, key missing and billing warning, key rejected and endpoint
   unreachable danger, not checked muted; the status sentence is in `warning` for every problem, as `sentence_tone` does.
+- **Control heights are plain numbers** (buttons and inputs 28, Fetch models and model pills 24), as in `10b`: Pencil
+  does not apply a `$control_height_*` variable to a height, and the controls collapse to their text.
 
 ## Not drawn
 
