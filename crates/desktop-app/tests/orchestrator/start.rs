@@ -26,10 +26,7 @@ fn orchestrator_new_conversation_starts_with_suggestions_that_fill_the_prompt() 
     "no keys line and no footer under the composer"
   );
   screen.click("orchestrator-suggestion-running");
-  assert_eq!(
-    screen.text("orchestrator-input"),
-    "What's running, what's waiting and what's blocked right now?"
-  );
+  assert_eq!(screen.text("orchestrator-input"), "What's running, waiting or blocked?");
   assert!(
     screen.db().chats().expect("chats").is_empty(),
     "a suggestion sends nothing"

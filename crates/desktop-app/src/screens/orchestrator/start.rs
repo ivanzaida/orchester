@@ -22,6 +22,7 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
+    tooltip::Truncated,
   },
 };
 
@@ -108,23 +109,28 @@ fn suggestions(ctx: &mut Ctx, view: &View) -> Element {
     .into()
 }
 
-/// One suggestion: pressing it puts its words in the prompt, with the focus.
+/// One suggestion: pressing it puts its words in the prompt, with the focus. Its words keep to one line, cut
+/// where a narrow window leaves them no room, so every suggestion is as high as the design's.
 fn suggestion(ctx: &mut Ctx, view: &View, glyph: Icon, key: &str) -> Element {
   let words: Arc<str> = ctx.t(key);
   let (draft, focus) = (view.draft.clone(), view.focus.clone());
   let fill = words.clone();
+  let name = key.rsplit('.').next().unwrap_or(key);
+  let text = Truncated::new(
+    format!("orchestrator-suggestion-{name}-words"),
+    words.clone(),
+    OrchestratorText::Suggestion.role(),
+  )
+  .render(ctx);
   pressable(move || {
     draft.set(fill.to_string());
     focus.set(true);
   })
-  .id(format!(
-    "orchestrator-suggestion-{}",
-    key.rsplit('.').next().unwrap_or(key)
-  ))
-  .describe("a11y_name", words.clone())
+  .id(format!("orchestrator-suggestion-{name}"))
+  .describe("a11y_name", words)
   .flex(1.0)
   .min_width(Dimension::Px(0.0))
-  .min_height(Dimension::Px(SUGGESTION_HEIGHT))
+  .height(Dimension::Px(SUGGESTION_HEIGHT))
   .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
   .spacing(SpacingSize::Sm)
   .align_items(Alignment::Center)
@@ -132,11 +138,6 @@ fn suggestion(ctx: &mut Ctx, view: &View, glyph: Icon, key: &str) -> Element {
   .rounded(ExtraRadius::Tile.role())
   .hovered_style(Style::new().background(ExtraColor::Hover.role()))
   .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
-  .child(
-    Text::new(&words)
-      .variant(OrchestratorText::Suggestion.role())
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0)),
-  )
+  .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text))
   .into()
 }
