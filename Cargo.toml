@@ -97,8 +97,9 @@ lurq = { version = "0.51.2", default-features = false }
 libc = "0.2"
 parking_lot = "0.12"
 # Where the text of an agent's chat message lies outside code and links, by its offsets in the source, so a task key or
-# an app route path written as text becomes a link (`orchester-app`'s `ui::chat::references`). lurq's Markdown parses
-# with it and keeps no offsets; already built, with these features, through lurq's `markdown`, so it adds no crate.
+# an app route path written as text becomes a link (`orchester-app`'s `ui::chat::references`), and the links a doc's
+# body holds (`orchester-core`'s `docs::links`). lurq's Markdown parses with it and keeps no offsets; already built,
+# with these features, through lurq's `markdown`, so it adds no crate.
 pulldown-cmark = { version = "0.13.4", default-features = false }
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"

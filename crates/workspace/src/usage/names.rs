@@ -1,15 +1,16 @@
 //! What the ids a filter or a link holds stand for: an agent profile's or a pipeline's name, a run's task
-//! and number, an account; and the pipeline version each run pinned, which the page names pipelines by. A filter
-//! chooses a profile or a pipeline by its id or its name, so a value is resolved through what the read usage names; a
-//! value that names nothing known stays as it was given.
+//! and number, an agent provider; and the pipeline version each run pinned, which the page names pipelines by. A
+//! filter chooses a profile or a pipeline by its id or its name, so a value is resolved through what the read usage
+//! names; a value that names nothing known stays as it was given.
 
 use std::sync::Arc;
 
 use orchester_core::{
   account::AgentAccount,
-  id::{AgentAccountId, ResourceId, RunId, TaskId},
+  id::{AgentAccountId, ConnectionId, ResourceId, RunId, TaskId},
   resource::VersionNumber,
   run::RunNumber,
+  usage::ProviderName,
 };
 
 use super::UsageData;
@@ -21,6 +22,9 @@ pub(super) struct Names {
   pub pipelines: Vec<(ResourceId, Arc<str>)>,
   /// Each run with its task's key and its number.
   pub runs: Vec<(RunId, Arc<str>, RunNumber)>,
+  /// Every project's agent providers in series order.
+  pub providers: Vec<ProviderName>,
+  /// The CLI accounts, whose plan limits are drawn.
   pub accounts: Vec<AgentAccount>,
   /// Each run's pinned pipeline.
   pub pinned: Vec<Pinned>,
@@ -39,6 +43,7 @@ pub(super) struct Pinned {
 impl Names {
   pub fn of(data: &UsageData) -> Self {
     let mut names = Self {
+      providers: data.providers().cloned().collect(),
       accounts: data.accounts.to_vec(),
       ..Self::default()
     };
@@ -137,6 +142,10 @@ impl Names {
       .filter(|pinned| pinned.task == task)
       .max_by_key(|pinned| pinned.number)?
       .version
+  }
+
+  pub fn provider(&self, connection: ConnectionId) -> Option<&ProviderName> {
+    self.providers.iter().find(|known| known.id == connection)
   }
 
   pub fn account(&self, account: AgentAccountId) -> Option<&AgentAccount> {

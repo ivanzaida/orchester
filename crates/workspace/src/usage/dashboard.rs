@@ -10,8 +10,8 @@ use orchester_core::{
   resource::VersionNumber,
   time::Timestamp,
   usage::{
-    AccountOrder, AccountSplit, AccountUsage, Change, DayRange, FilterOptions, Grouping, UsageFilter,
-    UsageQuery as ReportQuery, UsageReport,
+    AccountOrder, Change, DayRange, FilterOptions, Grouping, ProviderName, ProviderOrder, ProviderSplit, ProviderUsage,
+    UsageFilter, UsageQuery as ReportQuery, UsageReport,
     limits::{LimitHistory, WarningThreshold},
     local_date,
   },
@@ -59,10 +59,12 @@ pub struct Dashboard {
   pub limits: Arc<LimitHistory>,
   pub options: Arc<FilterOptions>,
   pub(super) names: Arc<Names>,
-  /// The connected accounts in series order.
-  pub(super) order: Arc<AccountOrder>,
+  /// The connected agent providers in series order.
+  pub(super) order: Arc<ProviderOrder>,
+  /// The connected CLI accounts, whose plan limits are drawn, in Settings' order.
+  pub(super) accounts: Arc<AccountOrder>,
   /// The range's usage by series: which series the legend and table show, and what Other holds.
-  pub(super) range_split: Arc<AccountSplit>,
+  pub(super) range_split: Arc<ProviderSplit>,
   /// Some CLI reported its plan limits before the range's end, whatever the filters choose.
   limits_reported: bool,
   pub threshold: WarningThreshold,
@@ -88,11 +90,12 @@ impl Dashboard {
       now,
     };
     let report = UsageReport::build(&data.projects, report_query);
-    let order = AccountOrder::of(&data.accounts);
-    let mut range_usage = AccountUsage::default();
+    let providers: Vec<ProviderName> = data.providers().cloned().collect();
+    let order = ProviderOrder::of(&providers);
+    let mut range_usage = ProviderUsage::default();
     for bar in &report.series {
-      for (account, usage) in bar.by_account.entries() {
-        range_usage.add(*account, *usage);
+      for (on, usage) in bar.by_provider.entries() {
+        range_usage.add(*on, *usage);
       }
     }
     let range_split = order.split(&range_usage);
@@ -123,6 +126,7 @@ impl Dashboard {
       options: Arc::new(FilterOptions::of(&data.projects)),
       names: Arc::new(Names::of(data)),
       order: Arc::new(order),
+      accounts: Arc::new(AccountOrder::of(&data.accounts)),
       range_split: Arc::new(range_split),
       limits_reported: data
         .snapshots
@@ -135,7 +139,7 @@ impl Dashboard {
   }
 
   /// The filter hides every plan limit the range has: some CLI reported its limits by the range's end, and
-  /// the CLIs, accounts or *No account* the filter chooses did not.
+  /// the CLIs the filter chooses did not.
   pub fn limits_filtered_out(&self) -> bool {
     self.limits.is_empty() && self.limits_reported && self.query.filter.chooses_limits()
   }

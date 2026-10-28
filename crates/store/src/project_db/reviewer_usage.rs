@@ -12,7 +12,7 @@ use orchester_core::{
   },
   time::Timestamp,
   tokens::TokensUsed,
-  usage::ReviewUsage,
+  usage::{ReviewUsage, UsedProvider},
 };
 use rusqlite::{Connection, Row, params};
 
@@ -26,8 +26,8 @@ use crate::{
 };
 
 const SELECT: &str = "SELECT run_id, step_execution_id, invocation_id, approval_id, provider, model, started_at, \
-                      ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id \
-                      FROM reviewer_usage";
+                      ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id, \
+                      connection_id, connection_name FROM reviewer_usage";
 
 impl ProjectDb {
   /// Stores what one review cost.
@@ -40,8 +40,8 @@ impl ProjectDb {
     };
     self.connection.execute(
       "INSERT INTO reviewer_usage (run_id, step_execution_id, invocation_id, approval_id, provider, model, started_at, \
-       ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+       ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id, connection_id, \
+       connection_name) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
       params![
         record.run.to_string(),
         record.execution.to_string(),
@@ -56,6 +56,8 @@ impl ProjectDb {
         tokens(|usage| usage.output)?,
         verdict_text(record.end),
         record.account.map(|account| account.to_string()),
+        record.connection.as_ref().map(|connection| connection.id.to_string()),
+        record.connection.as_ref().map(|connection| connection.name.to_string()),
       ],
     )?;
     Ok(())
@@ -88,7 +90,7 @@ impl ProjectDb {
           at: record.ended_at,
           invocation: record.invocation,
           cli: record.provider,
-          account: record.account,
+          connection: record.connection.map(|connection| connection.id),
           model: Arc::from(record.model.as_str()),
           usage,
         });
@@ -157,6 +159,7 @@ struct RecordRow {
   tokens: [Option<i64>; 3],
   verdict: String,
   account: Option<String>,
+  connection: (Option<String>, Option<String>),
 }
 
 impl RecordRow {
@@ -170,6 +173,7 @@ impl RecordRow {
       tokens: [row.get(8)?, row.get(9)?, row.get(10)?],
       verdict: row.get(11)?,
       account: row.get(12)?,
+      connection: (row.get(13)?, row.get(14)?),
     })
   }
 
@@ -179,6 +183,14 @@ impl RecordRow {
       [Some(input), Some(cached_input), Some(output)] => Some(usage([input, cached_input, output])?),
       [None, None, None] => None,
       partly => return Err(corrupt("reviewer tokens", format!("{partly:?}"))),
+    };
+    let connection = match self.connection {
+      (Some(id), Some(name)) => Some(UsedProvider {
+        id: parse("connection id", &id)?,
+        name: name.into(),
+      }),
+      (None, None) => None,
+      partly => return Err(corrupt("reviewer connection", format!("{partly:?}"))),
     };
     Ok(ReviewRecord {
       run: parse("run id", &run)?,
@@ -190,6 +202,7 @@ impl RecordRow {
         .account
         .map(|account| parse::<AgentAccountId>("account id", &account))
         .transpose()?,
+      connection,
       model: ModelId::new(&self.model).map_err(|error| corrupt("reviewer model", error))?,
       started_at: Timestamp::from_unix_millis(self.started_at),
       ended_at: Timestamp::from_unix_millis(self.ended_at),

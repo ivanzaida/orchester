@@ -190,7 +190,7 @@ fn usage_page_names_filters_that_match_nothing() {
   assert!(
     page
       .text("usage-limits-caption")
-      .starts_with("follow the Account filter only")
+      .starts_with("follow the CLI filter only")
   );
   page.click("usage-clear-filters-empty");
   assert!(page.query().filter.is_empty());

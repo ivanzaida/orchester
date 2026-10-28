@@ -8,8 +8,8 @@
 use std::{convert::Infallible, path::PathBuf};
 
 use orchester_core::{
-  connection::{AgentProvider, plan_limits::LimitReading},
-  id::{AgentAccountId, InvocationId, RunId, StepExecutionId},
+  connection::plan_limits::LimitReading,
+  id::{InvocationId, RunId, StepExecutionId},
   run::review::{AutoReview, ReviewEnd, ReviewRecord},
   time::Timestamp,
 };
@@ -17,7 +17,7 @@ use orchester_ipc::Event;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use super::super::WorkerEvent;
+use super::{super::WorkerEvent, setup::SpentOn};
 use crate::notify::Notifier;
 
 /// Where the cost of one review goes.
@@ -35,13 +35,9 @@ pub(super) struct ReviewLedger {
 }
 
 impl ReviewLedger {
-  /// Records what the review by `provider` on `account` that started at `started_at` cost, when it asked a model.
-  pub(super) fn record(
-    &self,
-    (provider, account): (AgentProvider, Option<AgentAccountId>),
-    started_at: Timestamp,
-    done: &AutoReview,
-  ) {
+  /// Records what the review by `provider` on `account` and `connection` that started at `started_at` cost, when it
+  /// asked a model.
+  pub(super) fn record(&self, (provider, account, connection): SpentOn, started_at: Timestamp, done: &AutoReview) {
     let (Some(cost), Some(end)) = (&done.cost, ReviewEnd::of(&done.review)) else {
       return;
     };
@@ -52,6 +48,7 @@ impl ReviewLedger {
       approval: self.approval.clone(),
       provider,
       account,
+      connection: Some(connection),
       model: cost.model.clone(),
       started_at,
       ended_at: Timestamp::now(),

@@ -61,6 +61,21 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
   pipeline's page is one route with its tab and what its Steps column shows (`routes::PipelineView`): the canvas,
   the step inspector, the settings page and the history panel are gone.
 
+## Confirmations and approvals in a modal
+
+A question that confirms or approves something the person just asked for — delete, discard, mark released, merge,
+any step that cannot be undone — opens a **modal dialog** over the page (`ui::backdrop` with the dialog roles:
+`DialogTitle`, `Explanation`, the action row). Never insert a warning, panel or confirm row into the page for it:
+a state that appears in the layout pushes everything under it around, and that is worse than a modal (the person,
+2026-10-28). This holds for Pencil designs and for the app.
+
+- The dialog says what will happen and what is lost, with the safe action (*Cancel*) and the action itself
+  (`danger` when destructive); Esc and the backdrop cancel. Extra input the action needs (an optional commit, a
+  message) sits in the dialog.
+- Still pages, not dialogs: creating and importing things (*New …*, *Import …*), forms and editors.
+- Not confirmations: work that waits for the person where it is (Needs you cards, a run's approval card in its
+  Conversation) stays where it is.
+
 ## Text through i18n
 
 ### Where
