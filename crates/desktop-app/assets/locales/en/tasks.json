@@ -158,9 +158,19 @@
         },
         "runAgain": {
           "title": "Run {{task}} again?",
-          "detail": "A new run of {{task}} starts on {{pipeline}} from its first step. The last run stays in its history.",
-          "keep": "Keep as it is",
-          "confirm": "Run again"
+          "detail": "Run again starts a new run from the first step. Move to Todo starts nothing. Don't move keeps it.",
+          "inTodo": "A new run starts from the first step. The last run stays in its history.",
+          "keep": "Don't move",
+          "keepInTodo": "Keep in Todo",
+          "move": "Move to Todo",
+          "confirm": "Run again",
+          "confirms": "runs again",
+          "keeps": "doesn't move it"
+        },
+        "bulkRunAgain": {
+          "title": "Run {{tasks}} again?",
+          "detail": "Run again starts new runs from step one. Move to Todo starts nothing. Don't move keeps them.",
+          "keeps": "doesn't move them"
         },
         "unmerged": {
           "title": "Mark {{task}} as done without merging?",
@@ -229,7 +239,7 @@
         "onlyClose": "{{task}} goes only to Done or Canceled",
         "queue": "Drop to queue {{task}}",
         "draft": "Drop to return {{task}} to draft",
-        "runAgain": "Drop to run {{task}} again",
+        "runAgain": "Drop to move {{task}} to Todo or run it again",
         "done": "Drop to mark {{task}} as done",
         "cancel": "Drop to cancel {{task}}",
         "cancels": "cancels"

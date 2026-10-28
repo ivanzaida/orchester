@@ -6,8 +6,9 @@
 //! the card where it is, and one about the selected cards over the selection bar. The popover is `surface_raised` in a
 //! `border_strong` stroke, radius 10, 12 over and under its parts and 14 at its sides, 10 between them, lifted by the
 //! menu's shadow: a 15 mark, the question in 13/600 and what it does in 12.5 `text_secondary`; *Enter confirms · Esc
-//! keeps it* 25 in; and its two buttons at its end. Esc, a press outside or the keep button put everything back; Enter
-//! confirms.
+//! keeps it* 25 in; and its buttons at its end, two or, for Run again, three (ORC-144: *Don't move*, *Move to Todo*,
+//! *Run again*; the design draws two, so the third takes the same buttons' styles). Esc, a press outside or the keep
+//! button put everything back; Enter confirms.
 
 use std::sync::Arc;
 
@@ -89,9 +90,18 @@ pub fn asking(state: &BoardState, closer: &Closer, shows: &dyn Fn(&ColumnKey) ->
     });
   }
   Some(match state.asked.get()? {
+    // A card in Todo already (Run again from its menu) is asked where it is.
+    Ask::RunAgain { task, .. } if task.status == WorkflowStatus::Todo => Asking::Card {
+      task: task.id,
+      to: None,
+    },
     Ask::StartsNow { task, .. } | Ask::RunAgain { task, .. } => at(task.id, WorkflowStatus::Todo),
     Ask::Unmerged(task) => at(task.id, WorkflowStatus::Done),
-    Ask::BulkQueue { .. } | Ask::BulkUnmerged { .. } | Ask::BulkClose { .. } | Ask::BulkDelete(_) => Asking::Bulk,
+    Ask::BulkQueue { .. }
+    | Ask::BulkRunAgain { .. }
+    | Ask::BulkUnmerged { .. }
+    | Ask::BulkClose { .. }
+    | Ask::BulkDelete(_) => Asking::Bulk,
   })
 }
 
@@ -126,17 +136,20 @@ pub fn at_anchor(state: &BoardState, (asking, first): (&Asking, bool), panel: El
     .into()
 }
 
-/// What a question shows: its mark in its tone, its words, what Esc keeps, what more it says (why it failed), and its
-/// two buttons. Its parts' ids start with `id`.
+/// What a question shows: its mark in its tone, its words, what Enter does and what Esc keeps, what more it says (why
+/// it failed), and its buttons: keep, a third choice between them when the question has one, and confirm. Its parts'
+/// ids start with `id`.
 pub struct Parts {
   pub id: &'static str,
   pub glyph: Icon,
   pub tone: PaletteColor,
   pub title: Arc<str>,
   pub detail: Arc<str>,
+  pub confirms: Arc<str>,
   pub keeps: Arc<str>,
   pub more: Vec<Element>,
   pub keep: Element,
+  pub between: Option<Element>,
   pub confirm: Element,
 }
 
@@ -148,7 +161,7 @@ pub fn question(ctx: &Ctx, parts: Parts) -> Column {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(key_cap(&format!("{id}-enter"), &ctx.t("tasks.board.keys.enter")))
-    .child(note(&ctx.t("tasks.board.ask.confirms")))
+    .child(note(&parts.confirms))
     .child(key_cap(&format!("{id}-esc"), &ctx.t("tasks.board.keys.esc")))
     .child(note(&parts.keeps));
   popover_panel(id, WIDTH)
@@ -189,6 +202,7 @@ pub fn question(ctx: &Ctx, parts: Parts) -> Column {
         .align_items(Alignment::Center)
         .child(Spacer::new().flex(1.0))
         .child(parts.keep)
+        .with_children(parts.between)
         .child(parts.confirm),
     )
 }
@@ -236,9 +250,11 @@ fn stop(ctx: &Ctx, closer: &Closer, (task, closing): (&Subject, Closing)) -> Col
       tone: PaletteColor::Warning,
       title: ctx.t_args("task_close.stop.title", [("task", key)]),
       detail: ctx.t_args(explanation, [("task", key)]),
+      confirms: ctx.t("tasks.board.ask.confirms"),
       keeps: ctx.t("tasks.board.ask.keepsRunning"),
       more: failed.into_iter().collect(),
       keep: keep.into(),
+      between: None,
       confirm: stop.into(),
     },
   )

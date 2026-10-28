@@ -3,7 +3,8 @@
 //! own Backlog rule; a complete draft moved to Todo is queued there; and with
 //! the real runner serving the project and an agent slot free, queuing a draft on Todo, alone from its card's Move to
 //! (in a popover at the card, nothing moved) or several from the selection bar, asks first that it starts now, and
-//! Keep as draft queues nothing. `cargo test -p orchester-app --test mcp_domain domain_board_`.
+//! Keep as draft queues nothing; with a task whose run ended in the selection, after its Move to Todo (ORC-144).
+//! `cargo test -p orchester-app --test mcp_domain domain_board_`.
 
 use std::path::Path;
 
@@ -11,7 +12,7 @@ use lurq::app::events::MouseButton;
 use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
   id::ProjectId,
-  store::TaskStore,
+  store::{SettingsStore, TaskStore},
   task::{
     Task, TaskStatus,
     organization::{ChangeActor, WorkflowStatus},
@@ -252,4 +253,66 @@ fn domain_board_queuing_drafts_that_start_now_asks_first_alone_and_in_bulk() {
     assert_eq!(task.status(), TaskStatus::Draft, "{key} kept as draft");
     assert_eq!(task.organization().status(), WorkflowStatus::Backlog);
   }
+}
+
+#[test]
+fn domain_board_a_bulk_move_only_to_todo_still_asks_before_its_drafts_start() {
+  let programs = runner_programs::programs();
+  let (folder, seeded) = Served::seed("task-states", Some(programs.fake_codex.clone()));
+  let (ended, run) = super::resolve::latest(&seeded, "failed");
+  // `task-states` spends the project's daily budget, which holds new starts: the person lifts it.
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let limits = db.project_limits().expect("limits").with_daily_budget_limit(None);
+  db.save_project_limits(&limits).expect("no daily limit");
+  drop(db);
+  let mut served = Served::start_with(folder, &seeded.app_database, programs.runner.clone(), true);
+  let draft = served.drafts(&["Write the board's docs"]).remove(0);
+  served.board(seeded.project);
+  served.until("the runner online with a free agent slot", |served| {
+    served
+      .services()
+      .runners
+      .status()
+      .work()
+      .is_some_and(|work| usize::try_from(work.agent_slots.get()).is_ok_and(|slots| slots > work.agents_working()))
+  });
+
+  // A draft that would start now and a task whose run ended: Move to Todo moves that task only, then the draft's start
+  // is asked, and Keep as drafts keeps it.
+  served.shift_click(&format!("task-card-{draft}"));
+  served.shift_click(&format!("task-card-{ended}"));
+  served.press_laid_out("tasks-board-bulk-move");
+  served.press_laid_out("tasks-board-bulk-move-todo");
+  served.until("the run-again question", |served| {
+    served.laid_out("tasks-board-ask-move")
+  });
+  served.click_by_person("tasks-board-ask-move");
+  served.until("the draft's question", |served| {
+    served.laid_out("tasks-board-ask-keep") && !served.laid_out("tasks-board-ask-move")
+  });
+  let asked = text(&mut served, "tasks-board-ask-title");
+  assert!(asked.starts_with(&format!("Queue {draft}? It starts now: ")), "{asked}");
+  assert_eq!(
+    stored(&seeded.repo, &draft).status(),
+    TaskStatus::Draft,
+    "not queued unasked"
+  );
+  served.until("the ended task in Todo", |_| {
+    stored(&seeded.repo, &ended).organization().status() == WorkflowStatus::Todo
+  });
+  // Its buttons wait for the move under way.
+  served.until("the draft kept", |served| {
+    if !served.shows("tasks-board-ask") {
+      return true;
+    }
+    served.click_by_person("tasks-board-ask-keep");
+    false
+  });
+  assert_eq!(
+    stored(&seeded.repo, &draft).status(),
+    TaskStatus::Draft,
+    "kept as draft"
+  );
+  let (_, latest) = super::resolve::latest(&seeded, "failed");
+  assert_eq!(latest.id(), run.id(), "no new run");
 }

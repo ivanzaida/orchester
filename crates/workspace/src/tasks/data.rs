@@ -10,8 +10,10 @@ use orchester_core::{
   memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
-  run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
-  store::{ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore},
+  run::{Run, RunEvent, RunNumber, RunStatus, StepExecutor, TaskPhase, can_run_again_after},
+  store::{
+    ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore,
+  },
   task::Task,
   task_group::GroupHold,
   time::Timestamp,
@@ -410,7 +412,8 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
   Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
 }
 
-/// `latest`, a run of `task`, with when it last changed, what it waits for and who runs its step's agent.
+/// `latest`, a run of `task`, with when it last changed, what it waits for, who runs its step's agent and, once it was
+/// interrupted, whether a person removed its worktree so that its task runs again after it (ORC-63).
 pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
   let updated_at = db
     .events(latest.id())
@@ -421,6 +424,10 @@ pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<La
   let merge = db.run_merge(latest.id())?;
   let mut shown = LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited);
   shown.agent = step_agent(db, latest, shown.step.as_ref())?;
+  if matches!(latest.status(), RunStatus::Interrupted(_)) {
+    let removed = db.worktree_removal(latest.id())?.is_some();
+    shown.ended_for_run_again = can_run_again_after(latest, removed);
+  }
   Ok(shown)
 }
 
