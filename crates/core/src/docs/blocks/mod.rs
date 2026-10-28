@@ -28,7 +28,8 @@
 //! - Tables are written `| a | b |` with one space around each cell and `---` delimiters with their alignment colons;
 //!   columns are not padded to one width.
 //! - A paragraph that holds only images is one image block per image; an image among text is its alt text linked to the
-//!   image's target. Raw HTML is kept as literal text.
+//!   image's target. An image inside a link (`[![alt](image)](target)`) is its alt text under that link, alone in a
+//!   paragraph too: links don't nest, so the image's target is dropped. Raw HTML is kept as literal text.
 //! - Text is escaped where Markdown would read it as syntax: `\`, `` ` ``, `*`, `[`, `]`, `<`, `~` and `|` always, `_`
 //!   unless inside a word, `&` before a character reference, `!` before a link, block markers at the start of a line
 //!   (`#`, `>`, `-`, `+`, `=`, `:`, `1.`), `#` at the end of a heading, and spaces at the edges of a line (as `&#32;`).

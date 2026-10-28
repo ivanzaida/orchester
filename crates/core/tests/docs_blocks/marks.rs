@@ -183,6 +183,31 @@ fn docs_blocks_crossing_marks_are_written_closed_and_reopened() {
 }
 
 #[test]
+fn docs_blocks_image_inside_a_link_is_its_alt_text_under_the_link() {
+  assert_eq!(paragraph_text("[![b](i)](l)\n"), marked("b", &[(0, 1, link("l"))]));
+  assert_eq!(normalized("[![b](i)](l)\n"), "[b](l)\n");
+  assert_eq!(
+    paragraph_text("See [![build](badge.svg)](ci) here\n"),
+    marked("See build here", &[(4, 9, link("ci"))])
+  );
+  assert_eq!(
+    normalized("See [![build](badge.svg)](ci) here\n"),
+    "See [build](ci) here\n"
+  );
+  assert_eq!(
+    paragraph_text("[see ![b](i) now](l)\n"),
+    marked("see b now", &[(0, 9, link("l"))])
+  );
+  assert_eq!(normalized("[see ![b](i) now](l)\n"), "[see b now](l)\n");
+  assert_eq!(normalized("- [![b](i)](l)\n"), "- [b](l)\n");
+  assert_eq!(normalized("# [![b](i)](l)\n"), "# [b](l)\n");
+  assert_eq!(
+    normalized("| a |\n| --- |\n| [![b](i)](l) |\n"),
+    "| a |\n| --- |\n| [b](l) |\n"
+  );
+}
+
+#[test]
 fn docs_blocks_marks_built_by_hand_round_trip() {
   let written = round_trip(vec![
     BlockKind::Paragraph(marked(

@@ -389,14 +389,20 @@ impl Inline {
     if self.in_image > 0 {
       return;
     }
-    if let Some((start, target)) = self.image.take() {
-      self.images.push((self.text[start..].to_owned(), target.clone()));
-      self.marks.push(Mark {
-        start,
-        end: self.text.len(),
-        kind: MarkKind::Link(target),
-      });
+    let Some((start, target)) = self.image.take() else {
+      return;
+    };
+    // An image inside a link is its alt text under that link: links don't nest, so the outer target wins.
+    if self.open.iter().any(|(_, kind)| matches!(kind, MarkKind::Link(_))) {
+      self.other = true;
+      return;
     }
+    self.images.push((self.text[start..].to_owned(), target.clone()));
+    self.marks.push(Mark {
+      start,
+      end: self.text.len(),
+      kind: MarkKind::Link(target),
+    });
   }
 
   fn push_text(&mut self, text: &str) {
