@@ -317,9 +317,8 @@ fn modules_page_changes_again_over_its_own_write_before_reading_again() {
       .create_module(with(ModuleState::Open, None), at(1, 8))
       .expect("module"),
   );
-  let change = |db: &mut orchester_store::ProjectDb, base: &Module, details| {
-    db.update_module(base.id(), base.details(), details)
-  };
+  let change =
+    |db: &mut orchester_store::ProjectDb, base: &Module, details| db.update_module(base.id(), base.details(), details);
 
   let base = LastWrite::base(None, &shown);
   let closed = Arc::new(change(&mut fixture.db, &base, with(ModuleState::Closed, None)).expect("closed"));
@@ -331,18 +330,23 @@ fn modules_page_changes_again_over_its_own_write_before_reading_again() {
     change(&mut fixture.db, &base, with(ModuleState::Closed, Some(day(9)))).expect("the second change is saved"),
   );
   let last = LastWrite::after(Some(last), base, dated.clone());
-  assert_eq!(LastWrite::base(Some(&last), &shown), dated, "and a third over the second's");
+  assert_eq!(
+    LastWrite::base(Some(&last), &shown),
+    dated,
+    "and a third over the second's"
+  );
   assert!(
     matches!(
       change(&mut fixture.db, &shown, with(ModuleState::Open, None)),
-      Err(orchester_store::StoreError::Module(orchester_core::module::ModuleError::ChangedMeanwhile))
+      Err(orchester_store::StoreError::Module(
+        orchester_core::module::ModuleError::ChangedMeanwhile
+      ))
     ),
     "over the first read itself, the change is refused as made meanwhile"
   );
 
   // Once the page reads again, a change goes over what it read, which may hold a change made elsewhere.
-  let elsewhere = Arc::new(
-    change(&mut fixture.db, &dated, with(ModuleState::Open, Some(day(9)))).expect("changed elsewhere"),
-  );
+  let elsewhere =
+    Arc::new(change(&mut fixture.db, &dated, with(ModuleState::Open, Some(day(9)))).expect("changed elsewhere"));
   assert_eq!(LastWrite::base(Some(&last), &elsewhere), elsewhere);
 }

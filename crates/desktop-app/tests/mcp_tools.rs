@@ -335,7 +335,11 @@ fn navigate_opens_modules_places_and_refuses_misplaced_tabs_and_views() {
     let mut again = answer["route"]["params"].as_object().expect("params").clone();
     again.insert("route".to_owned(), answer["route"]["name"].clone());
     let repeated = navigate(&navigation, &json!(again)).expect("its params name the same route");
-    assert_eq!(repeated["route"]["path"], json!(path), "the params keep the place: {again:?}");
+    assert_eq!(
+      repeated["route"]["path"],
+      json!(path),
+      "the params keep the place: {again:?}"
+    );
   }
   let refusals = [
     json!({ "view": "edit" }),

@@ -229,14 +229,15 @@ impl From<EmptyState> for Element {
         .align_items(Alignment::Center)
         .with_children(empty.actions)
     });
-    let frame = Column::new()
-      .id(empty.id.clone())
-      .width(Dimension::Pct(100.0))
-      .spacing(match (empty.gap, empty.compact) {
-        (Some(gap), _) => gap,
-        (None, true) => SpacingSize::Md,
-        (None, false) => ExtraSpacing::Inset.role(),
-      });
+    let frame =
+      Column::new()
+        .id(empty.id.clone())
+        .width(Dimension::Pct(100.0))
+        .spacing(match (empty.gap, empty.compact) {
+          (Some(gap), _) => gap,
+          (None, true) => SpacingSize::Md,
+          (None, false) => ExtraSpacing::Inset.role(),
+        });
     let frame = if centered {
       frame.align_items(Alignment::Center)
     } else {
