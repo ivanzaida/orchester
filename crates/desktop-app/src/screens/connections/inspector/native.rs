@@ -7,7 +7,11 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::Row,
+  node::{Element, dimension::Dimension, padding::Padding},
+};
 use orchester_core::{
   connection::{
     AgentConnection, ApiEndpoint, ConnectionStatus, EndpointPreset, ModelSource, NativeModel, NativeModels,
@@ -72,11 +76,6 @@ pub(super) fn parts(
     })
     .into_iter()
     .collect();
-  // Why the test waits, in words as well as on its locked buttons (05k `EbPSP`).
-  if status == ConnectionStatus::KeyMissing {
-    let why = ctx.t("connections.native.testWaitsForKey");
-    notices.push(reason_line("connection-test-reason", &why).into());
-  }
   notices.extend(result::native(ctx, connection, api, inspecting));
   let connection_group = Group::new("connection-properties", ctx.t("connections.connectionGroup"))
     .rows(rows(ctx, connection, api, inspecting))
@@ -146,6 +145,17 @@ fn rows(ctx: &mut Ctx, connection: &AgentConnection, api: &ApiEndpoint, inspecti
     ),
   ];
   rows.push(key_row(ctx, api, &inspecting.listed.secrets));
+  // Why the test waits, under the key it waits for, as well as on its locked buttons (`Reason` `Mq4XM` in 05k).
+  if connection.status_with(&inspecting.listed.secrets) == ConnectionStatus::KeyMissing {
+    let why = ctx.t("connections.native.testWaitsForKey");
+    rows.push(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+        .child(reason_line("connection-test-reason", &why))
+        .into(),
+    );
+  }
   let execution = ctx.t("connections.native.execution");
   rows.push(detail_row(
     ctx,

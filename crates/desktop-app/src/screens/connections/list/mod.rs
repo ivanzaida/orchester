@@ -255,7 +255,7 @@ impl ConnectionsScreen {
     let checked = last.filter(|(_, work, _)| work.is_check());
     let tested = checked.map(|(_, _, started)| match (&error, unread) {
       _ if running.is_some() => Tested::Checking,
-      (Some(error), _) => Tested::Failed(error),
+      (Some(error), _) => Tested::Failed(error, started),
       // Done, and the connections not read again yet: still reading them, or reading them failed.
       (None, unread) if entry.checked_at().is_none_or(|at| at < started) => {
         unread.map_or(Tested::Checking, Tested::Unread)

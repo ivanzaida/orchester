@@ -36,7 +36,7 @@ pub(super) fn agent(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspec
   let program = ctx.t(provider_key(connection.provider()));
   let said = match inspecting.tested? {
     Tested::Checking => checking(ctx, "connections.result.checkingCli", &program),
-    Tested::Failed(error) => failed(ctx, error),
+    Tested::Failed(error, at) => failed(ctx, error).at(at),
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
@@ -75,7 +75,7 @@ pub(super) fn native(
       detail: ctx.t_args("connections.result.checkingApi", [("host", host)]),
       at: None,
     },
-    Tested::Failed(error) => failed(ctx, error),
+    Tested::Failed(error, at) => failed(ctx, error).at(at),
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let check = connection.last_check()?;
@@ -106,7 +106,7 @@ pub(super) fn github(
 ) -> Option<Element> {
   let said = match inspecting.tested? {
     Tested::Checking => checking(ctx, "connections.result.checkingGh", ""),
-    Tested::Failed(error) => failed(ctx, error),
+    Tested::Failed(error, at) => failed(ctx, error).at(at),
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
@@ -178,6 +178,11 @@ struct Said {
 }
 
 impl Said {
+  /// What a check pressed at `at` said, with its time at the right (`Time` `hFbL8` in 05g).
+  fn at(self, at: Timestamp) -> Self {
+    Self { at: Some(at), ..self }
+  }
+
   /// A check that ran at `at` and ended in `shown`: passed, found a problem it names, or failed.
   fn found(ctx: &Ctx, shown: Shown, detail: Arc<str>, at: Timestamp) -> Self {
     let key = match shown.tone {

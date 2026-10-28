@@ -20,7 +20,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
@@ -75,8 +75,8 @@ pub(super) enum Tested<'a> {
   Checking,
   /// It ran: the connection's last check is what it found.
   Checked,
-  /// It could not run, or what it found could not be stored.
-  Failed(&'a Message),
+  /// It could not run, or what it found could not be stored; it was pressed at the time.
+  Failed(&'a Message, Timestamp),
   /// It ran and stored what it found, but reading the connections again failed for this reason.
   Unread(&'a Message),
 }
@@ -181,10 +181,16 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
       .child(question);
     groups.insert(after.min(groups.len()), question.into());
   }
+  // A native connection's page sets its parts 16 apart (`Pane` in 05e–05k), the others 28 (`AMOv8` in 05b).
+  let gap = if native {
+    SpacingSize::Lg
+  } else {
+    ExtraSpacing::Roomy.role()
+  };
   Column::new()
     .id("connection-inspector")
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Roomy.role())
+    .spacing(gap)
     .describe("connection", inspecting.entry.id().to_string())
     .child(crumb)
     .child(head)
