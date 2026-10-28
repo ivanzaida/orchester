@@ -35,6 +35,14 @@ impl TokenUsage {
   pub const fn counted(self) -> u64 {
     self.counted_input().saturating_add(self.output)
   }
+
+  /// Whether this, one invocation's usage, reports input but no output: a model that read its input wrote at least a
+  /// token, so its output is unknown, not none. Claude Code on an Anthropic-compatible API such as DeepSeek's reports
+  /// output only in the result that ends its turn (its messages carry the provider's `message_start` count, 0), so
+  /// a turn still at work, or one stopped before its result, has no output yet.
+  pub const fn output_unreported(self) -> bool {
+    self.input > 0 && self.output == 0
+  }
 }
 
 impl AddAssign for TokenUsage {

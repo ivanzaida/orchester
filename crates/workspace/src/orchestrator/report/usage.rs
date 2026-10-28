@@ -1,13 +1,15 @@
 //! The day's tokens and active agent time in the daily report, as `get_usage` reads them (`crate::usage`): in total, by
-//! task and by account, most spent first, against the project's daily budget, each linking to the Usage page of the
-//! day narrowed to it.
+//! task and by agent provider, most spent first, against the project's daily budget, each linking to the Usage page of
+//! the day narrowed to it.
 
 use std::slice;
 
 use orchester_core::{
   id::ProjectId,
-  orchestrator::report::{AccountShare, DayUsage, TaskShare},
-  usage::{DayRange, GroupBy, GroupKey, Grouped, Grouping, Period, UsageFilter, UsageQuery as ReportQuery, grouped},
+  orchestrator::report::{DayUsage, ProviderShare, SharedBy, TaskShare},
+  usage::{
+    DayRange, GroupBy, GroupKey, Grouped, Grouping, Period, SpentOn, UsageFilter, UsageQuery as ReportQuery, grouped,
+  },
 };
 
 use super::facts::DayFacts;
@@ -49,34 +51,17 @@ pub(super) fn of(facts: &DayFacts, project: ProjectId) -> DayUsage {
       _ => None,
     })
     .collect();
-  let accounts = grouped(projects, query(), GroupBy::Account)
+  let providers = grouped(projects, query(), GroupBy::Provider)
     .rows
     .iter()
-    .filter_map(|row| match &row.key {
-      GroupKey::Account(account) => Some(AccountShare {
-        account: *account,
-        name: account.and_then(|id| {
-          facts
-            .accounts
-            .iter()
-            .find(|known| known.id() == id)
-            .and_then(|known| known.name())
-            .map(|name| name.as_str().to_owned())
-        }),
+    .filter_map(|row| {
+      let (by, filter) = shared_by(facts, &row.key)?;
+      Some(ProviderShare {
+        by,
         spent: row.usage.counted(),
         active_ms: row.agent_ms,
-        link: page(match account {
-          Some(id) => UsageFilter {
-            accounts: vec![*id],
-            ..UsageFilter::default()
-          },
-          None => UsageFilter {
-            no_account: true,
-            ..UsageFilter::default()
-          },
-        }),
-      }),
-      _ => None,
+        link: page(filter),
+      })
     })
     .collect();
   DayUsage {
@@ -84,7 +69,36 @@ pub(super) fn of(facts: &DayFacts, project: ProjectId) -> DayUsage {
     active_ms: summary.agent_ms,
     budget: facts.budget,
     tasks,
-    accounts,
+    providers,
     link: page(UsageFilter::default()),
   }
+}
+
+/// What a row grouped by provider was spent on, with the filter its link narrows the page to; command tools' time
+/// narrows nothing.
+fn shared_by(facts: &DayFacts, key: &GroupKey) -> Option<(SharedBy, UsageFilter)> {
+  Some(match key {
+    GroupKey::Provider(SpentOn::Provider(connection)) => {
+      let known = facts.usage.facts.providers.iter().find(|known| known.id == *connection);
+      let by = SharedBy::Provider {
+        connection: *connection,
+        name: known.map(|known| known.name.to_string()),
+        removed: known.is_none_or(|known| known.removed),
+      };
+      let filter = UsageFilter {
+        providers: vec![*connection],
+        ..UsageFilter::default()
+      };
+      (by, filter)
+    }
+    GroupKey::Provider(SpentOn::Earlier) => (
+      SharedBy::Earlier,
+      UsageFilter {
+        earlier: true,
+        ..UsageFilter::default()
+      },
+    ),
+    GroupKey::CommandTools => (SharedBy::CommandTools, UsageFilter::default()),
+    _ => return None,
+  })
 }

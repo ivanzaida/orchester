@@ -18,7 +18,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::{AccountSeries, BreakdownKey, BreakdownRow, Breakdowns, percent};
+use orchester_core::usage::{BreakdownKey, BreakdownRow, Breakdowns, ProviderSeries, percent};
 use orchester_workspace::usage::Dashboard;
 
 use super::{
@@ -247,9 +247,9 @@ fn bar_row(
         .text_align(lurq::layout::text_style::TextAlign::Right)
         .nowrap(),
     );
-  // Split by account in series order and colours (`k9f4PW`); a reviewer's row splits by the accounts it ran on.
-  let split = dashboard.split(&entry.by_account);
-  let parts = AccountSeries::ALL
+  // Split by agent provider in series order and colours (`k9f4PW`); a reviewer's row by the providers it ran on.
+  let split = dashboard.split(&entry.by_provider);
+  let parts = ProviderSeries::ALL
     .into_iter()
     .map(|series| (series, split.of(series).counted()))
     .filter(|(_, spent)| *spent > 0)

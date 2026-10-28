@@ -30,7 +30,7 @@ use parking_lot::Mutex;
 use super::{
   limits_draw::{DrawnLine, DrawnPoint, LimitPlot, RIGHT_ROOM, draw},
   plot::{AXIS_GUTTER, AxisName, AxisText, CHART_HEIGHT, Frame, Redraw},
-  series::{account_name, account_text, cli_short, series_swatch},
+  series::{account_name, account_swatch, account_text, cli_short},
   tooltip, words,
 };
 use crate::{
@@ -369,7 +369,11 @@ fn tip(ctx: &Ctx, dashboard: &Dashboard, plot: &LimitPlot, hovered: Hovered) -> 
         [("percent", &*words::share(ctx, Some(point.percent.round() as u64)))],
       );
       let mut rows = vec![
-        tooltip::line(Some(series_swatch(dashboard.account_series(line.account))), &used, None),
+        tooltip::line(
+          Some(account_swatch(dashboard.account_series(line.account))),
+          &used,
+          None,
+        ),
         tooltip::line(
           None,
           &ctx.t_args(
