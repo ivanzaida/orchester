@@ -161,9 +161,9 @@ fn status_counts_show_zero_and_dash_only_while_unknown() {
     Some(vec!["0".to_owned(), "need you".to_owned()]),
     "0 stays visible"
   );
-  assert_eq!(
-    starting.texts("status-tokens"),
-    Some(vec!["3.8M / 20M today".to_owned()])
+  assert!(
+    starting.texts("status-tokens").is_none(),
+    "today's tokens show once, in the sidebar's usage card"
   );
   let online = RunnerFacts {
     work: Some(WorkSummary {
@@ -194,7 +194,6 @@ fn status_counts_show_zero_and_dash_only_while_unknown() {
   );
   let mut reading = Bar::of(facts(Some(ProjectFacts {
     tasks: None,
-    usage: None,
     ..kontur(runner(RunnerState::Online), ProjectTasks::default())
   })));
   assert_eq!(
@@ -203,7 +202,6 @@ fn status_counts_show_zero_and_dash_only_while_unknown() {
     "a dash while the tasks are read, so nothing moves once they are"
   );
   assert_eq!(reading.texts("status-queued-value"), Some(vec!["—".to_owned()]));
-  assert_eq!(reading.texts("status-tokens"), Some(vec!["— / — today".to_owned()]));
   assert_eq!(reading.texts("status-agents-value"), Some(vec!["—".to_owned()]));
 }
 
