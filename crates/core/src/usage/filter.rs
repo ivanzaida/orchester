@@ -1,16 +1,21 @@
-//! The dashboard's filters (*CLI*, *Model*, *Agent profile*, *Pipeline*, *Tag*, and *Project* across
-//! projects) and the narrower ones a link or a tool asks for (a task, a run, a step, an account): each is
-//! a set of chosen values, empty for all; a turn counts when every filter admits it. *Tag* matches a run
-//! whose task has any chosen tag. An agent profile or a pipeline is chosen by its id or its name in any case, a
-//! task by its key or its id. Plan limits follow the CLI filter only. A review of auto mode's reviewer is matched by
-//! the reviewer's CLI, model and account and by the step whose request it judged; it has no agent profile.
+//! The dashboard's filters (*Provider*, *Model*, *Agent profile*, *Pipeline*, *Tag*, and *Project* across
+//! projects) and the narrower ones a link or a tool asks for (a CLI, a task, a run, a step): each is a set of chosen
+//! values, empty for all; a turn counts when every filter admits it. *Tag* matches a run whose task has any chosen
+//! tag. An agent profile or a pipeline is chosen by its id or its name in any case, a task by its key or its id.
+//! *Provider* chooses agent connections and *Earlier runs*, whose provider no record names; a command tool runs on
+//! no provider, so choosing any leaves it out. Plan limits follow the CLI filter only. A review of auto mode's
+//! reviewer is matched by the reviewer's CLI, model and provider and by the step whose request it judged; it has no
+//! agent profile.
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use super::facts::{InvocationFacts, ProjectFacts, RunFacts};
+use super::{
+  SpentOn,
+  facts::{InvocationFacts, ProjectFacts, RunFacts},
+};
 use crate::{
   connection::AgentProvider,
-  id::{AgentAccountId, ProjectId, ResourceId, RunId},
+  id::{ConnectionId, ProjectId, ResourceId, RunId},
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -28,9 +33,10 @@ pub struct UsageFilter {
   pub runs: Vec<RunId>,
   /// Steps by name, in whichever pipeline.
   pub steps: Vec<Arc<str>>,
-  pub accounts: Vec<AgentAccountId>,
-  /// Usage that started on no account is chosen too (*No account* in the Account filter).
-  pub no_account: bool,
+  /// Agent providers, by their connection.
+  pub providers: Vec<ConnectionId>,
+  /// Usage whose provider no record names is chosen too (*Earlier runs* in the Provider filter).
+  pub earlier: bool,
 }
 
 impl UsageFilter {
@@ -40,39 +46,47 @@ impl UsageFilter {
 
   /// Whether `invocation` of `run` in `project` counts.
   pub fn admits(&self, project: ProjectId, run: &RunFacts, invocation: &InvocationFacts) -> bool {
+    // A command tool runs no model, and so on no provider.
+    let on = invocation.model.is_some().then(|| SpentOn::of(invocation.connection));
     self.admits_run(project, run)
       && chosen(&self.clis, invocation.cli.as_ref())
       && chosen(&self.models, invocation.model.as_ref())
       && named(&self.profiles, invocation.profile_id, invocation.profile.as_deref())
       && chosen(&self.steps, Some(&invocation.step))
-      && self.admits_account(invocation.account)
+      && self.admits_provider(on)
   }
 
-  /// Whether a review by auto mode's reviewer on `cli` with `model` on `account` of a request `invocation` of `run`
-  /// in `project` made counts.
+  /// Whether a review by auto mode's reviewer on `cli` with `model` spent `on` a provider, of a request `invocation`
+  /// of `run` in `project` made, counts.
   pub fn admits_review(
     &self,
     (project, run, invocation): (ProjectId, &RunFacts, &InvocationFacts),
-    (cli, model, account): (AgentProvider, &Arc<str>, Option<AgentAccountId>),
+    (cli, model, on): (AgentProvider, &Arc<str>, SpentOn),
   ) -> bool {
     self.admits_run(project, run)
       && chosen(&self.clis, Some(&cli))
       && chosen(&self.models, Some(model))
       && chosen(&self.profiles, None)
       && chosen(&self.steps, Some(&invocation.step))
-      && self.admits_account(account)
+      && self.admits_provider(Some(on))
   }
 
-  /// Whether usage that started on `account` (`None`: on no account) counts: everything while no account is
-  /// chosen, else the chosen accounts and, when *No account* is chosen, usage on none.
-  pub fn admits_account(&self, account: Option<AgentAccountId>) -> bool {
-    if self.accounts.is_empty() && !self.no_account {
+  /// Whether usage spent `on` a provider (`None`: on none, a command tool) counts: everything while no provider is
+  /// chosen, else the chosen providers and, when *Earlier runs* is chosen, usage whose provider no record names.
+  pub fn admits_provider(&self, on: Option<SpentOn>) -> bool {
+    if !self.chooses_providers() {
       return true;
     }
-    match account {
-      Some(account) => self.accounts.contains(&account),
-      None => self.no_account,
+    match on {
+      Some(SpentOn::Provider(connection)) => self.providers.contains(&connection),
+      Some(SpentOn::Earlier) => self.earlier,
+      None => false,
     }
+  }
+
+  /// Whether it chooses providers or *Earlier runs*.
+  pub fn chooses_providers(&self) -> bool {
+    !self.providers.is_empty() || self.earlier
   }
 
   fn admits_run(&self, project: ProjectId, run: &RunFacts) -> bool {
@@ -88,9 +102,9 @@ impl UsageFilter {
     self.clis.is_empty() || self.clis.contains(&cli)
   }
 
-  /// Whether it chooses whose plan limits are shown: CLIs, accounts or *No account*.
+  /// Whether it chooses whose plan limits are shown: CLIs.
   pub fn chooses_limits(&self) -> bool {
-    !self.clis.is_empty() || !self.accounts.is_empty() || self.no_account
+    !self.clis.is_empty()
   }
 }
 

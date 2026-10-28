@@ -270,8 +270,8 @@ impl UsageToolbar {
         Element::new()
       };
       let popup = menu(anchor.clone(), open.clone(), panel);
-      // The Account menu opens 12 under its button (`EU0ex`).
-      let popup = if facet == Facet::Account {
+      // The Provider menu opens 12 under its button, as the Account menu did (`EU0ex`).
+      let popup = if facet == Facet::Provider {
         popup.offset(0.0, ctx.theme().spacing_value(SpacingSize::Md).to_px())
       } else {
         popup

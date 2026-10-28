@@ -4,13 +4,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use super::{
-  Breakdowns, Efficiency, Grouping, RunCost, SeriesBar, TaskCost, UsageFilter,
+  Breakdowns, Efficiency, Grouping, RunCost, SeriesBar, SpentOn, TaskCost, UsageFilter,
   facts::{InvocationFacts, ProjectFacts, RunFacts},
   period::DayRange,
 };
 use crate::{
   connection::AgentProvider,
-  id::{AgentAccountId, InvocationId, ProjectId, RunId},
+  id::{ConnectionId, InvocationId, ProjectId, RunId},
   run::TokenUsage,
   time::Timestamp,
 };
@@ -37,6 +37,9 @@ pub struct Summary {
   pub agent_ms: u64,
   /// Tokens spent in the range by runs that failed.
   pub failed_spent: u64,
+  /// Agent invocations whose turns in the range reported input but no output ([`TokenUsage::output_unreported`]):
+  /// their output is unknown, so `usage.output` is what the others reported, not all there was.
+  pub output_unreported: usize,
 }
 
 impl Summary {
@@ -123,7 +126,7 @@ pub(super) enum Spender<'a> {
   Reviewer {
     cli: AgentProvider,
     model: &'a Arc<str>,
-    account: Option<AgentAccountId>,
+    connection: Option<ConnectionId>,
   },
 }
 
@@ -149,12 +152,12 @@ impl<'a> Turn<'a> {
     }
   }
 
-  /// The account the tokens were spent on: the invocation's, or for a review the reviewer's own.
-  pub const fn account(&self) -> Option<AgentAccountId> {
-    match self.by {
-      Spender::Agent => self.launch.invocation.account,
-      Spender::Reviewer { account, .. } => account,
-    }
+  /// The agent provider the tokens were spent on: the invocation's, or for a review the reviewer's own.
+  pub fn spent_on(&self) -> SpentOn {
+    SpentOn::of(match self.by {
+      Spender::Agent => self.launch.invocation.connection,
+      Spender::Reviewer { connection, .. } => connection,
+    })
   }
 
   /// The model that spent them.
@@ -208,7 +211,7 @@ impl<'a> Matched<'a> {
       }));
       matched.turns.extend(project.facts.reviews.iter().filter_map(|review| {
         let (launch, _) = launches.get(&review.invocation)?;
-        let reviewer = (review.cli, &review.model, review.account);
+        let reviewer = (review.cli, &review.model, SpentOn::of(review.connection));
         filter
           .admits_review((project.project, launch.run, launch.invocation), reviewer)
           .then_some(Turn {
@@ -218,7 +221,7 @@ impl<'a> Matched<'a> {
             by: Spender::Reviewer {
               cli: review.cli,
               model: &review.model,
-              account: review.account,
+              connection: review.connection,
             },
           })
       }));
@@ -314,6 +317,16 @@ impl Within<'_> {
         .filter(|turn| turn.run().outcome.failed())
         .map(|turn| turn.usage.counted())
         .sum(),
+      output_unreported: self.output_unreported(),
     }
+  }
+
+  /// How many agent invocations' turns in the range reported input but no output.
+  fn output_unreported(&self) -> usize {
+    let mut by_invocation: HashMap<InvocationId, TokenUsage> = HashMap::new();
+    for turn in self.turns.iter().filter(|turn| matches!(turn.by, Spender::Agent)) {
+      *by_invocation.entry(turn.launch.invocation.id).or_default() += turn.usage;
+    }
+    by_invocation.values().filter(|usage| usage.output_unreported()).count()
   }
 }

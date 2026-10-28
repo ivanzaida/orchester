@@ -9,6 +9,7 @@
 mod doc;
 mod draft;
 mod folder;
+pub mod links;
 mod title;
 mod version;
 

@@ -29,7 +29,7 @@ use super::{
 pub(super) fn report_turn(db: &mut ProjectDb, scope: &ChatScope) -> ChatId {
   let now = Timestamp::now();
   let programs = Programs::processes();
-  let built = build_in((&scope.root, &programs), Vec::new(), (local_date(now), now)).expect("built");
+  let built = build_in((&scope.root, &programs), (local_date(now), now)).expect("built");
   let report = DailyReport {
     automatic: true,
     ..built

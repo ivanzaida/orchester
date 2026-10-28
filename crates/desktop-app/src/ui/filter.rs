@@ -267,8 +267,8 @@ pub fn filter_option(
     .into()
 }
 
-/// An option that says under its label what it chooses (*No account* in `EU0ex`), as tall as its words, its
-/// check and swatch beside the label's line.
+/// An option that says under its label what it chooses (*Earlier runs*, as *No account* in `EU0ex`), as tall as its
+/// words, its check and swatch beside the label's line.
 pub fn filter_option_explained(
   id: impl Into<Arc<str>>,
   (label, detail, chosen): (&str, &str, bool),
