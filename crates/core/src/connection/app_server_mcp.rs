@@ -5,8 +5,8 @@
 //! that asks before MCP actions needs every selected server connected before its turn begins
 //! ([`verify_selected_servers`]); any other step works without a server that is not, and the run's
 //! activity says so ([`unavailable_selected`]). User hooks would run programs of the user's setup
-//! with the agent's work, and nothing turns them off, so a configuration with any refuses the step
-//! ([`refuse_user_hooks`]).
+//! with the agent's work: every Codex Orchester starts turns them off, and a configuration that has
+//! some while they are not off refuses the step ([`refuse_user_hooks`]).
 //!
 //! A step that asks before MCP actions approves the tools its servers list to run without asking:
 //! `mcp_servers.<server>.tools.<tool>.approval_mode = "approve"`. Codex 0.159.2 then runs that tool
@@ -82,10 +82,21 @@ pub fn servers_to_turn_off(result: &Value, selected: &BTreeSet<String>) -> Resul
   Ok(turned_off)
 }
 
-/// Refuses a `config/read` result whose configuration defines hooks.
+/// Refuses a `config/read` result whose configuration defines hooks while they could still run: Codex
+/// runs none with `features.hooks = false` ([`crate::connection::invocation::CODEX_ISOLATION`]), whatever its
+/// `hooks` table lists. Codex 0.159.2 reports that table, each event with an empty list and the user's trust
+/// `state`, even with the feature off, and never the commands of `hooks.json`; a Codex that did not take the
+/// override has no such flag, so a table there still refuses the step.
 pub fn refuse_user_hooks(result: &Value) -> Result<(), McpInventoryError> {
-  let hooks = result.get("config").and_then(|config| config.get("hooks"));
-  let defined = match hooks {
+  let config = result.get("config");
+  let turned_off = config
+    .and_then(|config| config.get("features"))
+    .and_then(|features| features.get("hooks"))
+    == Some(&Value::Bool(false));
+  if turned_off {
+    return Ok(());
+  }
+  let defined = match config.and_then(|config| config.get("hooks")) {
     None | Some(Value::Null) => false,
     Some(Value::Object(table)) => !table.is_empty(),
     Some(Value::Array(list)) => !list.is_empty(),

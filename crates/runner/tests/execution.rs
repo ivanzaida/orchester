@@ -111,11 +111,13 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     .iter()
     .find_map(|line| line.strip_prefix("argv: "))
     .expect("argv reported");
-  // What the user's own Codex setup would add is turned off first: notify, plugins, apps and the
-  // permission requests that could stay granted; then Codex's sub-agents, which would not get the step's tools.
+  // What the user's own Codex setup would add is turned off first: notify, plugins, apps, the permission requests
+  // that could stay granted and the user's own hooks; then Codex's sub-agents, which would not get the step's tools.
+  // The fake's `config/read` lists the user's hooks (`hooks.state` entries) as the person's Codex did, and the step
+  // still runs to the end, since they are off.
   let isolation = "app-server --stdio -c notify=[] -c features.plugins=false -c features.apps=false -c \
                    features.exec_permission_approvals=false -c features.request_permissions_tool=false -c \
-                   features.multi_agent=false -c features.multi_agent_v2=false ";
+                   features.hooks=false -c features.multi_agent=false -c features.multi_agent_v2=false ";
   // The profile has network off, which Codex cannot enforce on Windows: network stays on there.
   let expected = if cfg!(windows) {
     "-c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=["

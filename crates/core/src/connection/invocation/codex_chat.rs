@@ -43,16 +43,15 @@ use crate::{
 /// shells away (`shell`, `shell_command`, `exec_command`, `write_stdin`): `codex features list` shows it off, and the
 /// probe above saw none of them offered and each call refused. `unified_exec=false` is kept for a version that reads
 /// it, but 0.159.2's `codex features list` still shows `unified_exec` on with it, so nothing rests on it. `view_image`
-/// reads an image file outside any sandbox; `hooks` run the user's own commands on the agent's events;
-/// `skill_mcp_dependency_install` would let a skill bring an MCP server into the thread; the rest offer tools the chat
-/// has no use for. Each of these but `unified_exec` shows off in `codex features list` with the overrides. Sub-agents
-/// are off for every Codex invocation already ([`super::CODEX_SUB_AGENTS_OFF`]). A turned-off tool is not offered to
-/// the model, and a call of it is refused.
-pub const CONFINEMENT: [&str; 11] = [
+/// reads an image file outside any sandbox; `skill_mcp_dependency_install` would let a skill bring an MCP server into
+/// the thread; the rest offer tools the chat has no use for. Each of these but `unified_exec` shows off in
+/// `codex features list` with the overrides. Sub-agents and the user's own hooks are off for every Codex invocation
+/// already ([`super::CODEX_SUB_AGENTS_OFF`], [`super::CODEX_ISOLATION`]). A turned-off tool is not offered to the
+/// model, and a call of it is refused.
+pub const CONFINEMENT: [&str; 10] = [
   "features.shell_tool=false",
   "features.unified_exec=false",
   "features.view_image=false",
-  "features.hooks=false",
   "features.skill_mcp_dependency_install=false",
   "features.goals=false",
   "features.memories=false",
