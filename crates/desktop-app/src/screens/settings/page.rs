@@ -86,6 +86,7 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
       ctx.t("settings.tabs.orchester"),
       match tab {
         SettingsTab::Orchester(view) => (true, view.server.is_none() && view.panel != OrchesterPanel::Connect),
+        SettingsTab::Invite => (true, false),
         _ => (false, true),
       },
       Route::Orchester(OrchesterView::default()),

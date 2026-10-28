@@ -29,8 +29,6 @@ pub enum SettingsText {
   CardName,
   /// 12/600 `text_primary`: the initials in the cloud account's avatar (`Initials` `QkgEZ`).
   CardInitials,
-  /// Geist Mono 16/500 `text_primary`: a certificate's check code (`Value` `UWPnK` in `IBnMu`).
-  Code,
   /// Geist Mono 18/500 `text_primary`: a pairing code (`Code` `M6bqk` in `ZUuMT`).
   PairingCode,
   /// 12.5/500 `text_primary`: an option's name beside its radio (`Label` `gw62M` in `XAm8i`).
@@ -38,7 +36,7 @@ pub enum SettingsText {
 }
 
 impl SettingsText {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 9] = [
     Self::SectionTitle,
     Self::Lead,
     Self::GroupTitle,
@@ -46,7 +44,6 @@ impl SettingsText {
     Self::SubTitle,
     Self::CardName,
     Self::CardInitials,
-    Self::Code,
     Self::PairingCode,
     Self::OptionTitle,
   ];
@@ -64,7 +61,6 @@ impl SettingsText {
       Self::SubTitle => "settings_sub_title",
       Self::CardName => "settings_card_name",
       Self::CardInitials => "settings_card_initials",
-      Self::Code => "settings_code",
       Self::PairingCode => "settings_pairing_code",
       Self::OptionTitle => "settings_option_title",
     }
@@ -79,7 +75,6 @@ impl SettingsText {
       Self::SubTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::CardName => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::CardInitials => style(12.0, FontWeight::SemiBold, 1.0, 0.0, palette.text_primary),
-      Self::Code => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
       Self::PairingCode => mono(style(18.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
       Self::OptionTitle => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
     }

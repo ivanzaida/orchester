@@ -42,7 +42,7 @@ pub fn tab(ctx: &mut Ctx) -> Element {
         .row(ctx.mount_keyed::<threshold::ThresholdRow>("settings-threshold", ())),
     )
     .child(ctx.mount_keyed::<ThisComputer>("settings-computer", ()));
-  frame::column("settings-general-scroll", pane).into()
+  frame::column("settings-general-scroll", pane)
 }
 
 /// Where the application database and the log are, as read off the UI thread.

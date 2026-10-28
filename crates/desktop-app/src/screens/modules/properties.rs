@@ -14,7 +14,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Placement, Popup, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -27,7 +27,7 @@ use orchester_core::{
 use orchester_workspace::messages;
 
 use super::{
-  save::{self, SaveModule},
+  save::{self, SaveModule, Written},
   words,
 };
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
   screens::usage::words::{date_time, day},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ModulesSpacing, TaskSpacing},
   ui::{
-    date_picker::{Limits, PickerProps, date_popover},
+    date_picker::{Limits, PickerProps, date_panel},
     field::field_error,
     icon::{Icon, icon},
     menu::{MenuItem, menu, menu_panel},
@@ -49,10 +49,18 @@ pub const PROPERTIES_WIDTH: f32 = 260.0;
 const KEY_WIDTH: f32 = 78.0;
 const MENU_WIDTH: f32 = 160.0;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct PropertiesProps {
   pub project: ShownProject,
   pub module: Arc<Module>,
+  /// The page's, which a change goes over until the page reads again.
+  pub written: Written,
+}
+
+impl PartialEq for PropertiesProps {
+  fn eq(&self, other: &Self) -> bool {
+    (&self.project, &self.module) == (&other.project, &other.module)
+  }
 }
 
 impl DevtoolsInspectable for PropertiesProps {}
@@ -94,12 +102,8 @@ impl Component for ModuleProperties {
 
   fn create(ctx: &mut Ctx) -> Self {
     let save = save::action(ctx);
-    let feed = ctx.props::<PropertiesProps>().project.feed.clone();
-    ctx.watch(&save.state(), move |state| {
-      if state.is_fulfilled() && state.data.is_some() {
-        feed.saved();
-      }
-    });
+    let props = ctx.props::<PropertiesProps>().clone();
+    props.written.follow(ctx, &save, props.project.feed.clone());
     Self {
       state: Control::new(ctx),
       start: Control::new(ctx),
@@ -162,14 +166,14 @@ impl ModuleProperties {
       let rows: Vec<Element> = [ModuleState::Open, ModuleState::Closed]
         .into_iter()
         .map(|choice| {
-          let args = changed(props, |details| (details.start(), details.target(), choice));
-          let (save, invalid) = (self.save.clone(), self.invalid.clone());
+          let (save, invalid, props) = (self.save.clone(), self.invalid.clone(), props.clone());
           let id = match choice {
             ModuleState::Open => "module-property-state-open",
             ModuleState::Closed => "module-property-state-closed",
           };
           MenuItem::new(id, words::state(ctx, choice), move || {
-            run(&save, &invalid, args.clone())
+            let args = changed(&props, |details| (details.start(), details.target(), choice));
+            run(&save, &invalid, args);
           })
           .chosen(choice == state)
           .render(ctx, &self.state.open)
@@ -240,11 +244,11 @@ impl ModuleProperties {
       open: control.open.clone(),
       pick,
     });
-    let popover = date_popover(ctx, &control.anchor, picker, &control.open);
+    let panel = picker.map(|picker| date_panel(ctx, picker));
     Column::new()
       .width(Dimension::Pct(100.0))
       .child(opener((id, &ctx.t(key)), value, control))
-      .child(popover)
+      .child(under_column(control, panel.unwrap_or_default()))
       .into()
   }
 
@@ -265,19 +269,30 @@ impl ModuleProperties {
 /// The dot before the state's word (`Dot` `fKFJa`).
 const DOT: f32 = 6.0;
 
-/// `module`'s details with its dates and state as `change` makes them; the module's own check refuses dates out of
-/// order, which the picker's range already rules out.
+/// A date's calendar 10 under its row from the column's left hairline, not the row's start (`Target date picker`
+/// `oY7mm` in `iJ6mn`). The row stays the popup's anchor, so a press on another row switches to its control at once.
+fn under_column(control: &Control, panel: Element) -> Popup {
+  Popup::new(control.anchor.clone(), panel)
+    .open(control.open.clone())
+    .placement(Placement::BottomStart)
+    .offset(-ModulesSpacing::Properties.value(), ExtraSpacing::Loose.value())
+}
+
+/// The module's details with its dates and state as `change` makes them, over what the page last wrote while it has not
+/// read again ([`Written`]); the module's own check refuses dates out of order, which the picker's range already rules
+/// out.
 fn changed(
   props: &PropertiesProps,
   change: impl FnOnce(&ModuleDetails) -> (Option<NaiveDate>, Option<NaiveDate>, ModuleState),
 ) -> Result<SaveModule, messages::Message> {
-  let details = props.module.details();
+  let base = props.written.base(&props.module);
+  let details = base.details();
   let (start, target, state) = change(details);
   let details = ModuleDetails::new(details.name().clone(), details.description(), (start, target), state)
     .map_err(|error| messages::module_error(&error))?;
   Ok(SaveModule {
     root: props.project.open.repo_root.clone(),
-    module: Some(props.module.clone()),
+    module: Some(base),
     details,
   })
 }

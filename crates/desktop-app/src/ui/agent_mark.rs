@@ -2,7 +2,7 @@
 //! API by its kind, it shows its maker's own mark instead of a lucide glyph. Claude Code is the Claude mark
 //! (`Mark/Claude` `eFnry`) in `mark_claude`; Codex and OpenAI's API the OpenAI knot (`Mark/OpenAI` `e2P9hh`) and
 //! Anthropic's API Anthropic's "A" (`Mark/Anthropic` `OiwFt`), both in `text_primary`. The marks are Simple Icons'
-//! SVGs (CC0), filled in a theme color, as large as an icon of `size` or as the caller asks ([`mark_icon`]). A CLI on
+//! SVGs (CC0), filled in a theme color, as large as an icon of the size the caller asks. A CLI on
 //! an API provider such as DeepSeek runs on someone else's models, so it shows no maker's mark
 //! ([`AgentMark::of_connection`]). One helper serves the Orchestrator's runs-on picker, Connections and Settings.
 
@@ -89,16 +89,11 @@ impl AgentMark {
 
   /// The mark in its color, as large as an icon of `size`.
   pub fn render(self, ctx: &Ctx, size: IconSize) -> Element {
-    mark_icon(ctx, self, size.size())
+    let fill = ctx.theme().palette_color(self.color());
+    let side = Dimension::Px(size.size());
+    Svg::new(SvgData::from_str(self.svg()).with_fill(fill))
+      .describe("mark", format!("{self:?}"))
+      .size(side, side)
+      .into()
   }
-}
-
-/// `mark`, `side` wide and high, in its color.
-pub fn mark_icon(ctx: &Ctx, mark: AgentMark, side: f32) -> Element {
-  let fill = ctx.theme().palette_color(mark.color());
-  let side = Dimension::Px(side);
-  Svg::new(SvgData::from_str(mark.svg()).with_fill(fill))
-    .describe("mark", format!("{mark:?}"))
-    .size(side, side)
-    .into()
 }

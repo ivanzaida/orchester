@@ -4,11 +4,7 @@
 //! or whose sign-in expired, *Choose folder…* and *Remove* for a folder that is gone. While Orchester asks the CLI, a
 //! line says so. And the actions the page and its menu share: *Check again* and the sign-in.
 
-use lurq::{
-  app::ctx::Ctx,
-  components::Text,
-  node::{Element, dimension::Dimension},
-};
+use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   account::{AccountState, AgentAccount, same_sign_in},
   connection::invocation::Platform,
@@ -23,7 +19,6 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
-  theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
     command_row::CommandRow,
@@ -291,11 +286,4 @@ pub(super) fn command_row(ctx: &mut Ctx, id: &str, text: &str) -> Element {
   })
   .prompt()
   .render(ctx)
-}
-
-pub(super) fn paragraph(id: &str, text: &str) -> Text {
-  Text::new(text)
-    .id(id.to_owned())
-    .variant(ExtraTypography::Prose.role())
-    .width(Dimension::Pct(100.0))
 }

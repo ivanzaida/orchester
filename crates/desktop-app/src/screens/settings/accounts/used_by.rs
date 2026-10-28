@@ -3,7 +3,11 @@
 //! its project. How many there are in how many projects is in the group's heading; projects that could not be read
 //! are named under it.
 
-use lurq::{app::ctx::Ctx, components::Column, node::Element};
+use lurq::{
+  app::ctx::Ctx,
+  components::Column,
+  node::{Element, dimension::Dimension},
+};
 use orchester_workspace::accounts::{AccountUses, ConnectionUse};
 
 use super::words::{t, ta};
@@ -97,7 +101,7 @@ pub(super) fn group(ctx: &mut Ctx, uses: Option<&AccountUses>) -> Element {
     )
   });
   Column::new()
-    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .child(group)
     .with_children(unreadable)
