@@ -150,8 +150,10 @@ limits. Returns the connection as `list_connections` lists it.
 
 ### `check_connection` — changes data
 
-Checks a connection's program again (its *Check again*) and stores what it found: status, version and models. Native
-(API) connections are not checked in this version.
+Checks a connection's program again (its *Check again*) and stores what it found: status, version and models. A
+native (Anthropic API) connection is tested as its *Test connection* tests it: the project's runner reads its key and
+lists the endpoint's models, which are merged into its models; refused as `not_checked` with why when the runner is
+not running or the test did not happen.
 
 | Parameter    | Type   | Req. | Description                      |
 |--------------|--------|------|----------------------------------|
@@ -160,9 +162,10 @@ Checks a connection's program again (its *Check again*) and stores what it found
 
 ### `list_models` — read-only
 
-The models an agent connection's last check listed, each with the reasoning efforts it accepts, as the profile
-editor offers them. A model not listed can still be given to `save_profile_draft` (it then runs as *not verified*);
-an effort is kept only where the model lists it. `link` is the connection's app link.
+The models an agent connection offers, each with the reasoning efforts it accepts, as the profile editor offers them:
+the ones its last check listed, an API provider's typed ones (`source` `api_provider`), or a native connection's
+fetched and added ones (`source` `native`). A model not listed can still be given to `save_profile_draft` (it then
+runs as *not verified*); an effort is kept only where the model lists it. `link` is the connection's app link.
 
 Parameters: `project` (string, req.), `connection` (string, req.).
 

@@ -244,6 +244,10 @@ name = "approval_choices"
 required-features = ["test-agent"]
 
 [[test]]
+name = "approve_everything"
+required-features = ["test-agent"]
+
+[[test]]
 name = "stale_approvals"
 required-features = ["test-agent"]
 

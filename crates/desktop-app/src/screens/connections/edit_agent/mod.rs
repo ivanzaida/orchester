@@ -3,7 +3,9 @@
 //! are, which this app does not edit yet. Saving runs the connection on the chosen account and checks it there; a
 //! paused run's next step then starts there as a new session, which the page says. Choosing the account is a
 //! person's decision ([`super::account::AccountPicker`]), and so is running it on an API provider instead
-//! ([`super::provider_form`]).
+//! ([`super::provider_form`]). A native connection edits its key, endpoint and models ([`native`]).
+
+mod native;
 
 use std::path::PathBuf;
 
@@ -17,7 +19,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, ConnectionAccount},
+  connection::{AgentConnection, AgentProvider, ConnectionAccount},
   id::ConnectionId,
   secret::SecretValue,
 };
@@ -35,6 +37,7 @@ use orchester_workspace::{
 use super::{
   account, data,
   mcp_form::{McpForm, McpFormProps},
+  native_form::NativeForm,
   page::{Head, action_bar, page},
   provider_form::{ProviderForm, off_provider_notice},
   work::{self, Start, Work, WorkAction},
@@ -71,6 +74,9 @@ pub struct EditConnection {
   work: WorkAction,
   provider: ProviderForm,
   runs_on: RunsOnSave,
+  /// A native connection's fields, and what saves them.
+  native: NativeForm,
+  save_native: native::SaveNative,
 }
 
 impl Component for EditConnection {
@@ -80,6 +86,7 @@ impl Component for EditConnection {
     let props = ctx.props::<EditProps>().clone();
     let work = work::action(ctx);
     let runs_on = runs_on_action(ctx);
+    let save_native = native::save_action(ctx);
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
     let back = move |id: ConnectionId| {
@@ -95,10 +102,19 @@ impl Component for EditConnection {
       }
     });
     let changes = Services::of(ctx).changes;
+    let saved = move |id: ConnectionId| {
+      changes.record(project, Outside::Connections);
+      back(id);
+    };
+    let saved_native = saved.clone();
     ctx.watch(&runs_on.state(), move |state| {
       if let Some(data::Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
-        changes.record(project, Outside::Connections);
-        back(id);
+        saved(id);
+      }
+    });
+    ctx.watch(&save_native.state(), move |state| {
+      if let Some(data::Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
+        saved_native(id);
       }
     });
     Self {
@@ -106,6 +122,8 @@ impl Component for EditConnection {
       work,
       provider: ProviderForm::new(ctx),
       runs_on,
+      native: NativeForm::new(ctx, AgentProvider::AnthropicApi),
+      save_native,
     }
   }
 
@@ -137,6 +155,9 @@ impl Component for EditConnection {
         },
       );
     };
+    if let Some(api) = connection.api() {
+      return self.native_page(ctx, &props, (&connection, api, &listed));
+    }
     self.agent_page(ctx, &props, (&connection, &listed))
   }
 }

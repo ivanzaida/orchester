@@ -1,6 +1,9 @@
 //! Saving connections from the add/edit dialogs, renaming them, deriving "Used by" from agent profiles, and
 //! making the project expect the account `gh` uses now.
 
+#[path = "connections/native.rs"]
+mod native;
+
 use std::{fs, path::Path};
 
 use orchester_core::{

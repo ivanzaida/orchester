@@ -31,7 +31,7 @@ use lurq::{
 use orchester_core::{
   id::{InvocationId, ProjectId, StepExecutionId},
   project::TaskKey,
-  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
+  run::{Answerer, DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
 use orchester_workspace::tasks::{
   conversation::orchestrator::{ChatMerge, Proposal},
@@ -205,6 +205,9 @@ impl Toggles {
 /// What a row of the list shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Line {
+  /// At the run's start, while auto mode's *approve everything in each run* answers its requests: who turned it on
+  /// ([`divider::everything`]).
+  Everything(Answerer),
   /// Shared with the tab's built timeline (`super::built`), so a render of the list copies none of it.
   Row(Arc<Row>),
   /// What the merge queue did with the run ([`delivery`]), shared with the built timeline too.
@@ -230,6 +233,7 @@ impl lurq::app::component::DevtoolsInspectable for RowProps {}
 impl RowProps {
   fn of(line: Line) -> Self {
     let key = match &line {
+      Line::Everything(_) => "conversation-approve-everything".into(),
       Line::Row(row) => row.key().clone(),
       Line::Delivery(line) => line.key.clone(),
       Line::Proposal(proposal) => proposal.key(),
@@ -265,11 +269,12 @@ fn with_delivery(rows: &[Arc<Row>], delivery: &[Placed]) -> Vec<Line> {
 /// The chat of `rows` with the merge queue's lines (`delivery`) among them, what the timeline `items` show, then the
 /// Orchestrator chat's `proposals` for the run, then `working`, the working line while an agent works; *Jump to latest*
 /// under it while it does not follow the run, with what arrived since (`arrived` counts the transcript's entries, the
-/// conversation's messages and the proposals so far; the queue's lines count too).
+/// conversation's messages and the proposals so far; the queue's lines count too). `everything`, who turned on auto
+/// mode's *approve everything in each run* while it answers the run's requests, leads the rows.
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
-  (rows, delivery): (&[Arc<Row>], &[Placed]),
+  (rows, delivery, everything): (&[Arc<Row>], &[Placed], Option<Answerer>),
   (items, proposals): (&[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
 ) -> Element {
@@ -279,10 +284,13 @@ pub(super) fn chat(
     .iter()
     .find(|item| waits_for_you(item))
     .map(|item| item.key.to_string());
-  let reveal = follow.follow(rows.len() + delivery.len(), arrived, waiting);
+  let lead = usize::from(everything.is_some());
+  let reveal = follow.follow(rows.len() + delivery.len() + lead, arrived, waiting);
   let rows: Arc<Vec<RowProps>> = Arc::new(
-    with_delivery(rows, delivery)
+    everything
+      .map(Line::Everything)
       .into_iter()
+      .chain(with_delivery(rows, delivery))
       .chain(
         proposals
           .iter()
@@ -352,6 +360,10 @@ impl Component for RowView {
     let content = match &props.line {
       Line::Working(working) => ctx.mount_keyed::<working::WorkingLine>("conversation-working-line", working.clone()),
       Line::JumpRoom => follow::jump_room(),
+      Line::Everything(by) => {
+        let timeline = Timeline::of(ctx);
+        divider::everything(ctx, &timeline, *by)
+      }
       Line::Row(row) => row_content(ctx, row),
       Line::Delivery(line) => {
         let timeline = Timeline::of(ctx);

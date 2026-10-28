@@ -202,8 +202,9 @@ pub enum SaveError {
   /// The check did not find the expected CLI; the dialog does not offer saving then.
   #[error("the connection was not verified")]
   NotVerified,
-  /// A native connection is not checked in this version.
-  #[error("native agents are not available in this version")]
+  /// A native connection has no CLI to check here: its project's runner tests it (`super::native::test_in`), which
+  /// the window's *Test connection* and MCP's `check_connection` call instead.
+  #[error("a native connection is tested through the runner, not checked here")]
   NativeNotAvailable,
 }
 
@@ -333,9 +334,9 @@ pub fn save_in(repo_root: &Path, draft: ConnectionDraft) -> Result<ConnectionId,
   save(&mut ProjectDb::open(repo_root)?, draft, Timestamp::now())
 }
 
-/// Checks a stored connection's CLI again and stores the result, whatever it is. A native
-/// connection is not checked in this version. Only the check is stored: the CLI may take long, and a rename saved
-/// meanwhile stays.
+/// Checks a stored connection's CLI again and stores the result, whatever it is. A native connection is refused
+/// ([`SaveError::NativeNotAvailable`]): it is tested through the runner (`super::native::test_in`). Only the check is
+/// stored: the CLI may take long, and a rename saved meanwhile stays.
 pub fn recheck_in(repo_root: &Path, id: ConnectionId) -> Result<(), SaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
