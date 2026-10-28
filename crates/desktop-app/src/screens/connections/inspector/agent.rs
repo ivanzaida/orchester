@@ -1,9 +1,8 @@
 //! An agent provider's page (`05b` `PGwka`): a CLI's Check again, its … menu (Rename, Edit connection), what its
 //! status asks for (the sign-in command to run in a terminal, a model it is too old for, the account to sign in again
 //! in Settings), *Runs on* (its program and version, that it runs on its own sign-in, its account), the models its
-//! check listed with Refresh, and the profiles that use it. A native connection says native agents are not available
-//! yet, its endpoint, key and models, its check and editing unavailable. A CLI on an API provider shows the provider
-//! ([`super::provider`]) instead of an account.
+//! check listed with Refresh, and the profiles that use it. A native connection has a page of its own
+//! ([`super::native`]), and a CLI on an API provider shows the provider ([`super::provider`]) instead of an account.
 
 use std::sync::Arc;
 
@@ -12,9 +11,7 @@ use lurq::{
   components::{Column, Row},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::connection::{
-  AgentConnection, AgentProvider, ApiEndpoint, CatalogSource, ConnectionAccount, ConnectionStatus, EndpointPreset,
-};
+use orchester_core::connection::{AgentConnection, AgentProvider, CatalogSource, ConnectionAccount, ConnectionStatus};
 use orchester_exec::launch::{Launch, Via};
 use orchester_workspace::{connections::data::sign_in_command, display};
 
@@ -63,7 +60,7 @@ pub(super) fn parts(
     .collect();
   let used = used_by_row(ctx, &uses, actions, "connections.notUsed");
   match connection.api() {
-    Some(api) => native(ctx, connection, api, used, (inspecting, actions)),
+    Some(api) => super::native::parts(ctx, (connection, api), used, (inspecting, actions)),
     None => match connection.api_provider() {
       Some(api) => super::provider::parts(ctx, (connection, api), used, inspecting, actions),
       None => cli(ctx, connection, used, (inspecting, actions)),
@@ -354,134 +351,6 @@ fn listed(ctx: &Ctx, names: &[String]) -> Arc<str> {
       ("more", (names.len() - MODELS_SHOWN).to_string()),
     ],
   )
-}
-
-fn native(
-  ctx: &mut Ctx,
-  connection: &AgentConnection,
-  api: &ApiEndpoint,
-  used: Element,
-  (inspecting, actions): (&Inspecting<'_>, &Actions),
-) -> Parts {
-  let provider = ctx.t(provider_key(connection.provider()));
-  let reason: Arc<str> = ctx.t("connections.native.testUnavailable");
-  let unavailable = Notice::new(
-    "connection-native-unavailable",
-    NoticeTone::Info,
-    ctx.t_args(
-      "connections.nativeNotAvailable.heading",
-      [("connection", connection.name().as_str()), ("provider", &*provider)],
-    ),
-  )
-  .icon(Icon::Lock)
-  .body(ctx.t("connections.nativeNotAvailable.detail"));
-  let rows = native_rows(ctx, connection, api, inspecting);
-  let models: Vec<String> = api
-    .models()
-    .models()
-    .iter()
-    .map(|model| model.id().as_str().to_owned())
-    .collect();
-  let models = Group::new("connection-models-section", ctx.t("connections.models")).row(
-    SettingRow::new("connection-models", ctx.t("connections.models"))
-      .hint(listed(ctx, &models))
-      .info(ctx.t("connections.native.modelsUnavailable"))
-      .render(ctx),
-  );
-  let test = ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test"))
-    .icon(Icon::PlugZap)
-    .unavailable(reason.clone());
-  let edit = MenuItem::unavailable("connection-edit", ctx.t("connections.edit"), reason).icon(Icon::Pencil);
-  Parts {
-    glyph: agent_glyph(connection),
-    title: title_with_rename(
-      ctx,
-      (inspecting, actions),
-      (connection.id(), connection.name().as_str()),
-    ),
-    status: shown(
-      inspecting,
-      connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
-    ),
-    status_detail: checked_detail(ctx, connection, inspecting),
-    actions: vec![test.into()],
-    menu: vec![rename_item(ctx, inspecting, actions), edit],
-    notices: vec![unavailable.into()],
-    groups: vec![
-      Group::new("connection-properties", ctx.t("connections.connectionGroup"))
-        .rows(rows)
-        .into(),
-      models.into(),
-      used,
-    ],
-    question: None,
-  }
-}
-
-/// A native connection's provider, preset, endpoint, key and where it runs.
-fn native_rows(
-  ctx: &mut Ctx,
-  connection: &AgentConnection,
-  api: &ApiEndpoint,
-  inspecting: &Inspecting<'_>,
-) -> Vec<Element> {
-  let provider = ctx.t(provider_key(connection.provider()));
-  let key = inspecting
-    .listed
-    .secrets
-    .iter()
-    .find(|secret| secret.id() == api.key())
-    .map_or_else(
-      || ctx.t("connections.native.keyGone"),
-      |secret| {
-        ctx.t_args(
-          "connections.native.key",
-          [
-            ("name", secret.name().as_str()),
-            ("environment", secret.environment().as_str()),
-          ],
-        )
-      },
-    );
-  let rows = [
-    ("connection-provider", "connections.property.provider", provider, false),
-    (
-      "connection-preset",
-      "connections.property.preset",
-      ctx.t(preset_key(api.preset())),
-      false,
-    ),
-    (
-      "connection-endpoint",
-      "connections.property.endpoint",
-      api.base_url().as_str().into(),
-      true,
-    ),
-    (
-      "connection-authentication",
-      "connections.property.authentication",
-      key,
-      false,
-    ),
-    (
-      "connection-execution",
-      "connections.property.execution",
-      ctx.t("connections.native.execution"),
-      false,
-    ),
-  ];
-  rows
-    .into_iter()
-    .map(|(id, label, shown, mono)| detail_row(ctx, id, (&ctx.t(label), &shown), mono))
-    .collect()
-}
-
-const fn preset_key(preset: EndpointPreset) -> &'static str {
-  match preset {
-    EndpointPreset::Official => "connections.native.preset.official",
-    EndpointPreset::DeepSeek => "connections.native.preset.deepseek",
-    EndpointPreset::Custom => "connections.native.preset.custom",
-  }
 }
 
 /// What a status means and what to do about it. Signing in names the CLI's own command, which Orchester

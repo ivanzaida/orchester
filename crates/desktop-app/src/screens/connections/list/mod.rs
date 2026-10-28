@@ -207,7 +207,7 @@ impl ConnectionsScreen {
         .find(|(named, _)| *named == id)
         .map_or("", |(_, name)| name.as_str());
       let spec = match piece {
-        Work::Check | Work::UseActiveAccount => operations::connection_check(&open, name),
+        Work::Check | Work::Test | Work::UseActiveAccount => operations::connection_check(&open, name),
         Work::SetEnabled(enabled) => operations::mcp_server_switch(&open, name, enabled),
         Work::Remove => operations::mcp_server_remove(&open, name),
         Work::SetAccount(_) => operations::connection_save(&open, name),
@@ -252,7 +252,7 @@ impl ConnectionsScreen {
     let running = self.running.get().0.filter(|(on, _)| *on == id).map(|(_, work)| work);
     let last = self.last.get().0.filter(|(on, ..)| *on == id);
     let error = state.error.clone().filter(|_| state.is_rejected() && running.is_none());
-    let checked = last.filter(|(_, work, _)| *work == Work::Check);
+    let checked = last.filter(|(_, work, _)| work.is_check());
     let tested = checked.map(|(_, _, started)| match (&error, unread) {
       _ if running.is_some() => Tested::Checking,
       (Some(error), _) => Tested::Failed(error),

@@ -1,13 +1,16 @@
 //! A connection's page under Project settings › Connections (`05b` `PGwka`, an MCP server `13` `Ptkxo`, GitHub `14`
 //! `KItiZ`): the crumb back to Connections, its head (a 36 tile, its name in 16/600 over its status, its actions and a
 //! … menu at the end), what its status asks for, its details as groups of rows, and a question asked in place under
-//! them. Each kind fills it: an agent provider (`agent`, on an API provider `provider`), GitHub (`github`), an MCP
-//! server (`mcp`). An agent or GitHub connection is renamed in place of its title (`rename`), and a check pressed here
-//! says how it goes and what it found under the head (`result`).
+//! them. Each kind fills it: an agent provider (`agent`, on an API provider `provider`, a native connection `native`
+//! with what Orchester enforces for it, `enforced`), GitHub (`github`), an MCP server (`mcp`). An agent or GitHub
+//! connection is renamed in place of its title (`rename`), and a check pressed here says how it goes and what it found
+//! under the head (`result`).
 
 mod agent;
+mod enforced;
 mod github;
 mod mcp;
+mod native;
 mod provider;
 mod rename;
 mod result;
@@ -234,9 +237,9 @@ pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&st
     )
 }
 
-/// The status a connection shows: checking while its check runs.
+/// The status a connection shows: checking while its check or test runs.
 fn shown(inspecting: &Inspecting<'_>, status: Shown) -> Shown {
-  if inspecting.running == Some(Work::Check) {
+  if inspecting.running.is_some_and(Work::is_check) {
     CHECKING
   } else {
     status
@@ -253,15 +256,20 @@ fn sentence(id: &str, words: &str, tone: PaletteColor) -> Element {
     .into()
 }
 
-/// Check again or Refresh models on `id`: checking while it runs, unavailable while other work does.
+/// Check again or Refresh models on `id`, or a native connection's Test connection and Fetch models through the
+/// runner: checking while it runs, unavailable while other work does.
 fn check_button(inspecting: &Inspecting<'_>, (id, label): (&str, Arc<str>), actions: &Actions) -> ActionButton {
   let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label).icon(Icon::RefreshCw);
+  let work = match inspecting.entry {
+    Entry::Agent(connection) if connection.api().is_some() => Work::Test,
+    _ => Work::Check,
+  };
   match inspecting.running {
-    Some(Work::Check) => button.loading(),
+    Some(running) if running.is_check() => button.loading(),
     Some(_) => button.disabled(),
     None => {
       let (start, connection) = (actions.start.clone(), inspecting.entry.id());
-      button.on_click(move || start(connection, Work::Check))
+      button.on_click(move || start(connection, work))
     }
   }
 }

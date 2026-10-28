@@ -4,6 +4,10 @@
 //! environment, and the models it serves, added one by one as removable chips. Claude Code needs an Anthropic Messages
 //! API, Codex an OpenAI Responses API; the section says so, and what reaches the provider's host. The fields are drawn
 //! in [`fields`]. The key's value is never a ctx signal (not in DevTools) and is wiped once the page goes.
+//!
+//! A native connection's form ([`super::native_form`]) takes the same base URL, key and model fields
+//! ([`ProviderForm::for_native`]), in its own words: Orchester's runner reads the key, and models may come from the
+//! endpoint once the connection is tested, so none need be typed.
 
 mod fields;
 
@@ -14,8 +18,9 @@ use lurq::{
   core::Signal,
 };
 use orchester_core::{
-  connection::{ApiProvider, ConnectionAccount},
+  connection::{ApiEndpoint, ApiProvider, BaseUrl, ConnectionAccount},
   id::SecretId,
+  resource::ModelId,
   secret::{Environment, Secret, SecretKind, SecretValue},
 };
 use orchester_workspace::{
@@ -29,7 +34,7 @@ use orchester_workspace::{
 };
 use zeroize::Zeroize;
 
-pub(super) use self::fields::off_provider_notice;
+pub(super) use self::fields::{environment_key, off_provider_notice};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   ui::message::message_text,
@@ -83,6 +88,8 @@ pub(super) struct ProviderForm {
   seeded: Signal<bool>,
   /// Whether automation's input tried to save the connection on a provider where only a person may.
   refused: Signal<bool>,
+  /// The fields of a native connection rather than of a CLI's API provider.
+  native: bool,
 }
 
 impl ProviderForm {
@@ -98,6 +105,75 @@ impl ProviderForm {
       model_error: ctx.signal(None),
       seeded: ctx.signal(false),
       refused: ctx.signal(false),
+      native: false,
+    }
+  }
+
+  /// The base URL, key and model fields of a native connection, the URL starting at `url`, its preset's.
+  pub(super) fn for_native(ctx: &mut Ctx, url: String) -> Self {
+    let mut form = Self::new(ctx);
+    form.native = true;
+    form.on.set(OnProvider(true));
+    form.url.set(url);
+    form
+  }
+
+  /// Fills the fields once from a native connection's model API as stored (Edit connection).
+  pub(super) fn seed_native(&self, api: &ApiEndpoint) {
+    if self.seeded.get_untracked() {
+      return;
+    }
+    self.seeded.set(true);
+    self.url.set(api.base_url().as_str().to_owned());
+    self.key.set(KeyChoice::Existing(api.key()));
+    self.models.set(Models(
+      api
+        .models()
+        .models()
+        .iter()
+        .map(|model| model.id().as_str().to_owned())
+        .collect(),
+    ));
+  }
+
+  /// The model ids added, in order.
+  pub(super) fn model_ids(&self) -> Vec<String> {
+    self.models.get().0
+  }
+
+  /// The base URL as typed.
+  pub(super) fn url(&self) -> Signal<String> {
+    self.url.clone()
+  }
+
+  /// A native connection's base URL, key and model ids (none is fine: the endpoint lists them once tested); `None`
+  /// while a field cannot be saved. A new key secret's value is read when saving ([`SaveGuard`]).
+  pub(super) fn native_parts(&self, listed: &ProjectConnections) -> Option<(BaseUrl, KeySecret, Vec<ModelId>)> {
+    let base_url = base_url(&self.url.get()).ok()?;
+    let models = self
+      .models
+      .get()
+      .0
+      .iter()
+      .map(|model| model_id(model))
+      .collect::<Result<Vec<_>, _>>()
+      .ok()?;
+    let key = self.key_secret(listed)?;
+    Some((base_url, key, models))
+  }
+
+  /// The key secret chosen, ready to save; `None` while none is, or the new one is not complete.
+  fn key_secret(&self, listed: &ProjectConnections) -> Option<KeySecret> {
+    match self.key.get() {
+      KeyChoice::None => None,
+      KeyChoice::Existing(id) if active(listed, id).is_none() => None,
+      KeyChoice::Existing(id) => Some(KeySecret::Existing(id)),
+      KeyChoice::New if self.value.with(|value| value.trim().is_empty()) => None,
+      KeyChoice::New => Some(KeySecret::New(
+        self
+          .name_check(&listed.secrets)
+          .new_secret(SecretKind::ApiKey, Environment::NEW_SECRET)?,
+      )),
     }
   }
 
@@ -150,28 +226,8 @@ impl ProviderForm {
     if !self.on() {
       return Some(RunsOn::Account(account));
     }
-    let base_url = base_url(&self.url.get()).ok()?;
-    let models = self
-      .models
-      .get()
-      .0
-      .iter()
-      .map(|model| model_id(model))
-      .collect::<Result<Vec<_>, _>>()
-      .ok()
-      .filter(|models| !models.is_empty())?;
-    let key = match self.key.get() {
-      KeyChoice::None => return None,
-      KeyChoice::Existing(id) if active(listed, id).is_none() => return None,
-      KeyChoice::Existing(id) => KeySecret::Existing(id),
-      KeyChoice::New if self.value.with(|value| value.trim().is_empty()) => return None,
-      KeyChoice::New => KeySecret::New(
-        self
-          .name_check(&listed.secrets)
-          .new_secret(SecretKind::ApiKey, Environment::NEW_SECRET)?,
-      ),
-    };
-    Some(RunsOn::Provider(ProviderDraft { base_url, key, models }))
+    let (base_url, key, models) = self.native_parts(listed)?;
+    (!models.is_empty()).then_some(RunsOn::Provider(ProviderDraft { base_url, key, models }))
   }
 
   /// That automation's input tried to save the connection on a provider where only a person may; Save stays for the
@@ -202,12 +258,8 @@ impl ProviderForm {
     {
       return Some(ctx.t("connections.apiProvider.reasons.key"));
     }
-    self
-      .models
-      .get()
-      .0
-      .is_empty()
-      .then(|| ctx.t("connections.apiProvider.reasons.models"))
+    // A native connection's models may come from its endpoint once it is tested.
+    (!self.native && self.models.get().0.is_empty()).then(|| ctx.t("connections.apiProvider.reasons.models"))
   }
 
   /// Adds the model ids typed (several may be separated by commas or spaces), or says why one cannot be added.
@@ -281,19 +333,26 @@ impl SaveGuard {
     let RunsOn::Provider(draft) = runs_on else {
       return Some(None);
     };
+    self.admit_key(&draft.key, gate)
+  }
+
+  /// What saving a connection with the key secret `key` takes along, or `None` when it is not saved: a model API
+  /// reached with a key gets what its agents send, so only a person saves one ([`Self::admit`]). The key typed for a
+  /// new secret comes along when it creates one.
+  pub(super) fn admit_key(&self, key: &KeySecret, gate: Option<&InputGate>) -> Option<Option<SecretValue>> {
     if !input_may_decide(gate, Guarded::PermissionWidening) {
-      tracing::warn!("synthetic input saved a connection on an API provider; not taken");
+      tracing::warn!("synthetic input saved a connection on an API key; not taken");
       self.refused.set(true);
       return None;
     }
     self.refused.set(false);
-    if !matches!(draft.key, KeySecret::New(_)) {
+    if !matches!(key, KeySecret::New(_)) {
       return Some(None);
     }
     match self.value.with(|value| SecretValue::new(value.clone())) {
       Ok(value) => Some(Some(value)),
-      // The form offers Save only once a key is typed (`runs_on`), so a blank one is a field that changed under the
-      // click; nothing is saved, and the reason shows again.
+      // The form offers Save only once a key is typed (`runs_on`, `native_parts`), so a blank one is a field that
+      // changed under the click; nothing is saved, and the reason shows again.
       Err(error) => {
         tracing::warn!(%error, "the key typed for a new secret is blank; not saved");
         None

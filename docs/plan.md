@@ -820,6 +820,32 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58
     and run native steps on `ResponsesClient`; P1d's effort mapping drops `none`, which `connection::Effort` lacks
     (adding it needs a decision). The `safety_identifier` user tag is P3. `clippy --target aarch64-apple-darwin`
     could not run here (`ring` needs a C cross-compiler); the change has no platform-specific code.
+- **ORC-148 · native agents in the new app (implemented 2026-10-28, waits for Check, Review and Verify):** the new app
+  (`crates/desktop-app`) gets what P1e built in the frozen app, for the Anthropic API.
+  - Add provider: the Anthropic API card is unlocked (`connections.kind.anthropicShort`); its page has the native
+    fields (`screens/connections/native_form.rs`): the Official preset with DeepSeek and Custom locked with why, the
+    base URL starting at the preset's, the key secret picked or created (`ProviderForm::for_native`), models added by
+    hand (optional: the endpoint lists its own), the default model and effort, provider fallback (off by default).
+    Saving is a person's decision (`SaveGuard::admit_key`).
+  - Inspector (`inspector/native.rs`, `inspector/enforced.rs`): the statuses with what each asks for, *Test
+    connection* and *Fetch models* through the runner (`Work::Test` → `connections::native::test_in` →
+    `Command::CheckConnection`, recording the result and merging the listed models), the result in place, the models
+    with their source, limits, efforts and default, *Edit models*, and *Enforced by Orchester* from core's capability
+    table. Edit connection edits a native connection's key, endpoint, models and defaults
+    (`edit_agent/native.rs`); a model a profile or step runs on is never dropped (`save_native_in` → `ensure_kept`).
+  - Runs: profiles list a native connection's models and efforts (`agents::form::listed_models`, `first_model`,
+    `effort_options`); the profile page says *Enforced by Orchester*; a native command's approval card shows its shell
+    and time limit (04.H9). The conversation divider already names the native engine; Usage already lists the
+    Anthropic API as its own provider (ORC-146).
+  - **Follow-up (OpenAI API):** the runner's `Command::CheckConnection` still refuses `OpenAiApi` and native steps run
+    on `AnthropicClient` only (`NativeSession`, `step/native/drive.rs`, the review worker, `NativeConversation.wire`);
+    until that hookup, the OpenAI API card stays locked (`connections.kind.openaiUnavailable`).
+  - Not drawn in the new design (`XGtkg` has no native frames; `PNDQm` is not in the redesign file): the native form,
+    the native connection page with *Enforced by Orchester*, and the native command approval rows were adapted from
+    04.H to `10b` `hc1vS` and `05b` `PGwka`'s patterns.
+  - P1 items still open after ORC-148: a live run with cache reads (needs a person's key), runner-level tests of
+    budgets, the time limit, cancel and resume after a runner restart for a native step, and a refusal shown as a
+    problem in the new app's conversation.
 
 ## L · After lurq 0.30.0
 

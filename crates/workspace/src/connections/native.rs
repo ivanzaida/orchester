@@ -4,7 +4,7 @@
 //! listed. The key's value goes to the keychain only and is never read back here. Every function blocks on SQLite or on
 //! the keychain; the UI calls them off the UI thread.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   connection::{
@@ -20,7 +20,11 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::model_uses::{self, UsedKeys, keep_used};
-use crate::messages::{self, Message};
+use crate::{
+  background,
+  messages::{self, Message},
+  runner::{RequestError, RunRequestError, Runners},
+};
 
 /// What a save refused for a model something still uses says.
 pub const DROPPED_KEYS: UsedKeys = UsedKeys {
@@ -135,6 +139,31 @@ pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) 
     .with_models(models);
   connection.set_api(api).map_err(|error| connection_failure(&error))?;
   db.save_connection(&connection).map_err(|error| store_failure(&error))
+}
+
+/// *Test connection* and *Fetch models* of native connection `id` (`docs/architecture/native-agent.md` §7): the
+/// displayed project's runner reads its key and lists the model API's models, which spends no tokens, and what it
+/// found is recorded with the models it listed ([`record_check_in`]). The desktop never reads the key.
+pub async fn test_in(runners: &Runners, repo_root: PathBuf, id: ConnectionId) -> Result<(), Message> {
+  let root = repo_root.clone();
+  let connection = background::run(move || load_in(&root, id)).await??;
+  let api = connection.api().ok_or_else(|| Message::new("errors.storage"))?.clone();
+  let (result, models) = runners
+    .check_connection(connection.provider(), api)
+    .await
+    .map_err(|error| test_failure(&error))?;
+  background::run(move || record_check_in(&repo_root, id, result, models)).await?
+}
+
+/// Why a test through the runner did not happen.
+fn test_failure(error: &RunRequestError) -> Message {
+  tracing::warn!(%error, "the runner did not test the native connection");
+  match error {
+    RunRequestError::Request(RequestError::NotConnected) => Message::new("connections.native.testNoRunner"),
+    RunRequestError::Request(RequestError::Lost) | RunRequestError::Rejected(_) => {
+      Message::new("connections.native.testFailed")
+    }
+  }
 }
 
 /// Records a test of native connection `id` (`docs/architecture/native-agent.md` §7): what it found, and

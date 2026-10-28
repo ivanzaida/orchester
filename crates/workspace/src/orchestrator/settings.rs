@@ -111,7 +111,7 @@ impl OrchestratorSetup {
   pub fn efforts(&self, connection: ConnectionId, model: &ModelId) -> Vec<String> {
     self
       .connection(connection)
-      .map(|connection| effort_options(connection, model).to_vec())
+      .map(|connection| effort_options(connection, model))
       .unwrap_or_default()
   }
 
@@ -124,8 +124,8 @@ impl OrchestratorSetup {
     let mut efforts: Vec<String> = Vec::new();
     for model in found.models() {
       for effort in effort_options(found, model.id()) {
-        if !efforts.contains(effort) {
-          efforts.push(effort.clone());
+        if !efforts.contains(&effort) {
+          efforts.push(effort);
         }
       }
     }

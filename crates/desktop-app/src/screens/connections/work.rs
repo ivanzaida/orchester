@@ -1,8 +1,8 @@
 //! Work the inspector starts on a stored connection, off the UI thread and listed in the status bar's
-//! activity: checking its program again (Test connection, Refresh models, Check again), making the project
-//! expect the account `gh` uses now (*Use this account*, `P89Dl`), turning an MCP server on or off, and
-//! removing one no profile chooses. Turning a server on widens what agents get, so the inspector asks a person
-//! first (`widen`).
+//! activity: checking its program again (Check again, Refresh models), testing a native connection's model API
+//! through the runner (Test connection, Fetch models), making the project expect the account `gh` uses now (*Use this
+//! account*, `P89Dl`), turning an MCP server on or off, and removing one no profile chooses. Turning a server on widens
+//! what agents get, so the inspector asks a person first (`widen`).
 
 use std::path::{Path, PathBuf};
 
@@ -18,6 +18,7 @@ use orchester_workspace::{
     data::{recheck_in, set_account_in},
     github::expect_active_account_in,
     mcp::{remove_in, set_enabled_in},
+    native::test_in,
   },
   messages::{self, Message},
   tasks::outside::Outside,
@@ -29,13 +30,23 @@ use crate::services::Services;
 /// What runs on a connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Work {
+  /// Check a CLI's or gh's program again.
   Check,
+  /// Test a native connection's model API through the runner, which also fetches its models.
+  Test,
   UseActiveAccount,
   /// Turn the MCP server on (`true`) or off for every profile that chooses it.
   SetEnabled(bool),
   Remove,
   /// Run the agent connection on this account from now on, checked there.
   SetAccount(AgentAccountId),
+}
+
+impl Work {
+  /// Whether the work finds out how the connection stands: a check of its program, or a test of its model API.
+  pub(super) const fn is_check(self) -> bool {
+    matches!(self, Self::Check | Self::Test)
+  }
 }
 
 /// One piece of work as started.
@@ -65,10 +76,12 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
     activity,
     workspace,
     changes,
+    runners,
     ..
   } = Services::of(ctx);
   ctx.future_action(move |start: Start| {
-    let (activity, workspace, changes) = (activity.clone(), workspace.clone(), changes.clone());
+    let (activity, workspace, changes, runners) =
+      (activity.clone(), workspace.clone(), changes.clone(), runners.clone());
     async move {
       let Start {
         project,
@@ -77,7 +90,12 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
         work,
         spec,
       } = start;
-      let run = async move { background::run(move || run(&workspace, &repo_root, (id, work))).await? };
+      let run = async move {
+        match work {
+          Work::Test => test_in(&runners, repo_root, id).await,
+          _ => background::run(move || run(&workspace, &repo_root, (id, work))).await?,
+        }
+      };
       activity.track(spec, run).await?;
       // Every screen that shows the project's connections reads them again, the status bar's accounts too.
       changes.record(project, Outside::Connections);
@@ -88,6 +106,7 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
 
 fn run(workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Work)) -> Result<(), Message> {
   match work {
+    Work::Test => unreachable!("`action` has the runner test a native connection and never hands that work here"),
     Work::SetAccount(account) => {
       let account = workspace
         .agent_account(account)
