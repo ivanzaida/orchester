@@ -296,7 +296,7 @@ pub fn tab(ctx: &mut Ctx, rotation: bool) -> Element {
       .end(only_you(ctx, "settings-orchestrator-may-only-you"))
       .rows(orchestrator),
     );
-  frame::column("settings-automation-scroll", pane).into()
+  frame::column("settings-automation-scroll", pane)
 }
 
 type SaveAction = FutureAction<bool, bool, Message>;

@@ -10,19 +10,22 @@ use lurq::{
   },
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_workspace::display;
 
 use crate::{
   mcp::{McpStatus, SeenClient},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraTypography, IconSize},
   ui::{
-    agent_mark::{AgentMark, mark_icon},
+    agent_mark::AgentMark,
     icon::{Icon, icon},
     setting_rows::{SettingRow, status},
   },
 };
+
+/// A client's row (`Claude Code` `KC73f`, 28 high).
+const CLIENT_ROW_HEIGHT: f32 = 28.0;
 
 pub fn connected(ctx: &mut Ctx, status: &McpStatus) -> Element {
   let (description, none) = if status.rotated {
@@ -78,12 +81,14 @@ fn client_row(ctx: &Ctx, index: usize, client: &SeenClient) -> Element {
   };
   let mark = AgentMark::of_client(&client.name).map_or_else(
     || icon(Icon::Plug, IconSize::Md, PaletteColor::TextMuted).into(),
-    |mark| mark_icon(ctx, mark, IconSize::Md.size()),
+    |mark| mark.render(ctx, IconSize::Md),
   );
+  // The row's height is the design's, not its words' line height: the 12 state text is 18 high in the theme.
   Row::new()
     .id(format!("settings-mcp-client-{index}"))
     .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(ExtraSpacing::Snug.role()))
+    .height(Dimension::Px(CLIENT_ROW_HEIGHT))
+    .flex_shrink(0.0)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))

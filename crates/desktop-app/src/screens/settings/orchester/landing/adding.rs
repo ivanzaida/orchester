@@ -106,19 +106,16 @@ fn not_git_card(ctx: &Ctx, folder: &std::path::Path) -> Element {
 }
 
 /// *Add a checkout folder…* with what to do next: pick another folder after a refusal, pick one before going on when
-/// none can be picked, or what adding one does.
+/// none can be picked, or what adding one does; the page's `actions` at its end (`Actions` `JZzjA`).
 pub(super) fn add_row(
   ctx: &Ctx,
   landing: &Landing,
   (add, none): (&FutureAction<Arc<str>, Added, Said>, bool),
+  actions: [Element; 2],
 ) -> Element {
   let state = add.state().get();
-  let button = ActionButton::new(
-    "orchester-landing-add",
-    ButtonKind::Secondary,
-    ctx.t("sharing.landing.add"),
-  )
-  .icon(Icon::FolderPlus);
+  let button =
+    ActionButton::new("orchester-landing-add", ButtonKind::Ghost, ctx.t("sharing.landing.add")).icon(Icon::FolderPlus);
   let button = if state.is_pending() {
     button.loading()
   } else {
@@ -136,14 +133,16 @@ pub(super) fn add_row(
     .id("orchester-landing-add-row")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(SpacingSize::Xs))
-    .spacing(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(button)
     .child(
       Text::new(&note)
         .id("orchester-landing-add-note")
         .variant(ExtraTypography::Note.role())
-        .flex(1.0),
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
+    .with_children(actions)
     .into()
 }

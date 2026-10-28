@@ -9,14 +9,10 @@
 use std::time::Duration;
 
 use lurq::{
-  app::{
-    component::DevtoolsInspectable,
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
-  },
+  app::{component::DevtoolsInspectable, ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_api::cloud::TwoFactorStatus;
 use orchester_core::time::Timestamp;
@@ -29,11 +25,11 @@ use super::{
   two_factor::{self, Need},
 };
 use crate::{
-  theme::{AccountsSpacing, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
-    icon::{Icon, icon},
+    icon::Icon,
   },
 };
 
@@ -103,72 +99,57 @@ fn needs_two_factor(ctx: &mut Ctx, invite: &AcceptedInvite, (need, answers): (Ne
         ctx.t_args("cloud.invites.joinStopped.title", [("server", server)]),
       )
       .icon(Icon::ShieldAlert)
-      .body(ctx.t(body)),
-    )
-    .child(Row::new().spacing(SpacingSize::Sm).child(first).child(put_off))
-    .child(
-      Text::new(&ctx.t(note))
-        .id(format!("{id}-two-factor-note"))
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0)),
+      .body(ctx.t(body))
+      .detail(actions(first, Some(put_off.into())))
+      .detail(
+        Text::new(&ctx.t(note))
+          .id(format!("{id}-two-factor-note"))
+          .variant(ExtraTypography::Note.role())
+          .width(Dimension::Pct(100.0)),
+      ),
     )
     .with_children(answers.person.reason(ctx, &format!("{id}-sign-in-again")))
     .with_children(answers.person.reason(ctx, &format!("{id}-turn-on")))
     .into()
 }
 
-/// *Waiting for approval*: who approves, that nothing was uploaded, and *Cancel joining*.
+/// *Waiting for approval*, an information notice (`Notice · info` `ktYJP` in `at7XI`): who approves, *Cancel joining*,
+/// and under it that nothing was uploaded.
 fn waiting(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
   let id = format!("orchester-accepted-{}", invite.invite);
   let server = invite.server_name.as_str();
   let (set_aside, kept) = (answers.set_aside.clone(), invite.invite);
-  Column::new()
-    .id(id.clone())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(AccountsSpacing::Edge.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Section.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .child(
-      Text::new(&ctx.t("cloud.invites.approval.title"))
-        .id(format!("{id}-title"))
-        .variant(ExtraTypography::FormSection.role()),
-    )
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Start)
-        .child(icon(Icon::LoaderCircle, IconSize::Lg, PaletteColor::TextSecondary))
-        .child(
-          Text::new(&ctx.t_args("cloud.invites.approval.ask", [("server", server)]))
-            .id(format!("{id}-ask"))
-            .variant(ExtraTypography::Lead.role())
-            .flex(1.0),
-        ),
-    )
-    .child(
+  let cancel = ActionButton::new(
+    format!("{id}-cancel"),
+    ButtonKind::Ghost,
+    ctx.t("cloud.invites.approval.cancel"),
+  )
+  .on_click(move || set_aside.run(kept));
+  Callout::new(id.clone(), CalloutTone::Info, ctx.t("cloud.invites.approval.title"))
+    .body(ctx.t_args("cloud.invites.approval.ask", [("server", server)]))
+    .detail(actions(cancel, None))
+    .detail(
       Text::new(&ctx.t("cloud.invites.approval.later"))
-        .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextMuted)
+        .id(format!("{id}-later-note"))
+        .variant(ExtraTypography::Note.role())
         .width(Dimension::Pct(100.0)),
-    )
-    .child(
-      Row::new().child(
-        ActionButton::new(
-          format!("{id}-cancel"),
-          ButtonKind::Ghost,
-          ctx.t("cloud.invites.approval.cancel"),
-        )
-        .on_click(move || set_aside.run(kept)),
-      ),
     )
     .into()
 }
 
+/// A notice's buttons as parts of it, so that a note can follow them (`Actions` `ppr9A` then `Note` `uxLaj`); a
+/// callout's own actions come last.
+fn actions(first: impl Into<Element>, second: Option<Element>) -> Row {
+  Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .padding(Padding::new().top(ExtraSpacing::Snug.role()))
+    .child(first)
+    .with_children(second)
+}
+
 /// *Joining Kontur team didn't finish*, why, and *Try again* (or *Cancel joining* once asked for as often as
-/// Orchester does) and *Later*.
+/// Orchester does) and *Later*, inside the notice (`Notice · warning` `p6biQ` in `at7XI`).
 fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
   let id = format!("orchester-accepted-{}", invite.invite);
   let server = invite.server_name.as_str();
@@ -219,9 +200,10 @@ fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
         ctx.t_args("cloud.invites.joinStopped.title", [("server", server)]),
       )
       .icon(glyph)
-      .body(body),
+      .body(body)
+      .action(first)
+      .action(put_off),
     )
-    .child(Row::new().spacing(SpacingSize::Sm).child(first).child(put_off))
     .with_children(answers.person.reason(ctx, &again))
     .into()
 }
