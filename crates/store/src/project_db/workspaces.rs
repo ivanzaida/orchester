@@ -90,7 +90,7 @@ impl WorkspaceStore for ProjectDb {
       let Some(holder) = record.holder else {
         continue;
       };
-      if matches!(holder, Holder::Recheck { .. }) {
+      if matches!(holder, Holder::Recheck { .. } | Holder::Upkeep) {
         continue;
       }
       transaction.execute(
@@ -101,6 +101,22 @@ impl WorkspaceStore for ProjectDb {
     }
     transaction.commit()?;
     Ok(returned)
+  }
+
+  fn reserve_idle_workspace(&mut self, number: WorkspaceNumber, holder: Holder) -> Result<bool, StoreError> {
+    let taken = self.connection.execute(
+      "UPDATE workspaces SET holder = ?2 WHERE number = ?1 AND holder IS NULL",
+      params![number.get(), holder_text(holder)?],
+    )?;
+    Ok(taken == 1)
+  }
+
+  fn release_workspace(&mut self, number: WorkspaceNumber, holder: Holder) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE workspaces SET holder = NULL WHERE number = ?1 AND holder = ?2",
+      params![number.get(), holder_text(holder)?],
+    )?;
+    Ok(())
   }
 
   fn set_workspace_stranded(&mut self, number: WorkspaceNumber, stranded: Option<Stranded>) -> Result<(), StoreError> {

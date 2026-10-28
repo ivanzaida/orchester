@@ -67,7 +67,6 @@ use orchester_core::{
   secret::SecretVault,
   store::RunStore,
   tokens::TokenBudget,
-  workspaces::DiskSpace,
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, RunStoreError};
@@ -143,7 +142,7 @@ struct Inner {
   /// The turns of the Orchestrator chat under way.
   chats: chat::Chats,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
-  disks: Arc<dyn DiskSpace>,
+  disks: low_disk::DiskGuard,
   disk_watch: low_disk::DiskWatch,
 }
 
@@ -175,19 +174,10 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
-        disks: Arc::new(orchester_exec::disk_space::LocalDisks),
+        disks: low_disk::DiskGuard::local(),
         disk_watch: low_disk::DiskWatch::default(),
       }),
     }
-  }
-
-  /// This scheduler reading free space through `disks`, before it is shared: what tests give the disk guard.
-  #[must_use]
-  pub fn with_disks(mut self, disks: Arc<dyn DiskSpace>) -> Self {
-    if let Some(inner) = Arc::get_mut(&mut self.inner) {
-      inner.disks = disks;
-    }
-    self
   }
 
   fn plan_waits(&self) -> &plan_limit::PlanWaits {

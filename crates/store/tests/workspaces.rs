@@ -106,6 +106,37 @@ fn workspaces_a_new_runner_gives_back_what_the_last_one_held_but_rechecks() {
 }
 
 #[test]
+fn workspaces_a_reserved_workspace_is_not_borrowed_and_keeps_its_use_and_warmth_once_released() {
+  let (_repo, mut db, run, _execution) = started_run();
+  let holder = Holder::Run { run: run.id() };
+  db.borrow_workspace(holder, None, limit(1), at(1)).expect("borrow");
+  assert!(
+    !db.reserve_idle_workspace(number(1), Holder::Upkeep).expect("reserve"),
+    "a workspace in use is not reserved"
+  );
+  assert!(
+    !db.reserve_idle_workspace(number(2), Holder::Upkeep).expect("reserve"),
+    "nor one never made"
+  );
+  db.return_workspace(holder, at(2)).expect("give back");
+  assert!(db.reserve_idle_workspace(number(1), Holder::Upkeep).expect("reserve"));
+  assert!(matches!(
+    db.borrow_workspace(holder, None, limit(1), at(3)).expect("wait"),
+    Borrow::Wait(_)
+  ));
+  assert!(
+    db.return_runner_workspaces(at(4)).expect("give back").is_empty(),
+    "upkeep is the app's"
+  );
+  db.release_workspace(number(1), Holder::Upkeep).expect("release");
+  let idle = db.workspaces().expect("read");
+  assert_eq!(
+    (idle[0].holder, idle[0].last_used, idle[0].warmth),
+    (None, Some(at(2)), Warmth::Warm)
+  );
+}
+
+#[test]
 fn workspaces_settings_round_trip_and_default_to_150_gb() {
   let (repo, mut db, _run, _execution) = started_run();
   assert_eq!(db.workspace_settings().expect("read"), WorkspaceSettings::default());

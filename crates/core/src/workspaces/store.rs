@@ -33,8 +33,16 @@ pub trait WorkspaceStore {
   fn return_workspace(&mut self, holder: Holder, now: Timestamp) -> Result<Option<WorkspaceNumber>, Self::Error>;
 
   /// Gives back every workspace a runner's work held — runs, their steps and the warm-up — when a runner starts and
-  /// none of it works any more. The merge queue's re-checks are the app's and stay.
+  /// none of it works any more. The merge queue's re-checks and a person's upkeep are the app's and stay.
   fn return_runner_workspaces(&mut self, now: Timestamp) -> Result<Vec<WorkspaceNumber>, Self::Error>;
+
+  /// Takes workspace `number` for `holder` if it is idle, in one write, so no borrower takes it meanwhile; `false`
+  /// when somebody holds it, or it was never made.
+  fn reserve_idle_workspace(&mut self, number: WorkspaceNumber, holder: Holder) -> Result<bool, Self::Error>;
+
+  /// Frees workspace `number` from `holder`, keeping when it was last used and its warmth: what
+  /// [`WorkspaceStore::reserve_idle_workspace`] took.
+  fn release_workspace(&mut self, number: WorkspaceNumber, holder: Holder) -> Result<(), Self::Error>;
 
   /// Records that `number` holds `stranded`, which nobody takes until a person keeps or discards them; `None` once
   /// they did.

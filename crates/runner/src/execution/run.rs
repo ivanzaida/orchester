@@ -24,7 +24,6 @@ use orchester_core::{
   store::ActivityStore,
   task::Task,
   time::Timestamp,
-  workspaces::DiskSpace,
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, StoreError};
@@ -36,6 +35,7 @@ use super::{
   board::Board,
   codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
+  low_disk::DiskGuard,
   pool::PoolError,
   prepare::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
@@ -76,7 +76,7 @@ pub(super) struct TaskContext {
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) qa: Arc<QaApps>,
-  pub(super) disks: Arc<dyn DiskSpace>,
+  pub(super) disks: DiskGuard,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
 }
@@ -112,8 +112,8 @@ pub(super) struct RunTask {
   pub(super) board: Arc<Board>,
   /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slots.
   pub(super) qa: Arc<QaApps>,
-  /// The disk guard's reading of free space.
-  pub(super) disks: Arc<dyn DiskSpace>,
+  /// The disk guard's reading of free space, and how often it looks while agents work.
+  pub(super) disks: DiskGuard,
   /// When the disk guard looks at the free space next while agents work.
   pub(super) next_disk_check: Instant,
   /// The run waits for a free workspace; the desktop was told once.

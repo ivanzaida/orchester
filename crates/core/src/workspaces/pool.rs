@@ -27,14 +27,17 @@ pub enum Holder {
   Recheck { run: RunId },
   /// The project's warm-up command, on the base branch.
   WarmUp,
+  /// A person's cleanup of its warm folders, or their choice for its leftovers, while the app carries it out: nobody
+  /// borrows it meanwhile.
+  Upkeep,
 }
 
 impl Holder {
-  /// The run it works for; `None` for the warm-up.
+  /// The run it works for; `None` for the warm-up and a person's upkeep.
   pub const fn run(self) -> Option<RunId> {
     match self {
       Self::Run { run } | Self::Step { run, .. } | Self::Recheck { run } => Some(run),
-      Self::WarmUp => None,
+      Self::WarmUp | Self::Upkeep => None,
     }
   }
 }

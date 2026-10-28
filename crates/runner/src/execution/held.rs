@@ -6,7 +6,7 @@
 //! Below the free space the project keeps, no step starts, and agents at work are stopped with their work committed:
 //! the run pauses for low disk space and goes on by itself once there is room ([`super::Scheduler`]).
 
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 use orchester_core::{
   id::StepExecutionId,
@@ -24,9 +24,6 @@ use super::{
   step::worker::{Stop, StopCause},
 };
 
-/// How often the disk guard looks at the free space while agents work.
-const DISK_CHECK: Duration = Duration::from_secs(30);
-
 impl RunTask {
   /// The folder the run works in, on its branch.
   pub(super) fn worktree(&self) -> &Path {
@@ -37,11 +34,12 @@ impl RunTask {
   }
 
   /// What holds the run's next steps back, as [`RunTask::start_ready`] answers: `Some(false)` when the disk is low —
-  /// nothing new starts, and the run pauses until there is room — and `Some(true)` while it waits for a workspace.
+  /// nothing new starts, agents still at work beside a step that ended are stopped with their work committed, and the
+  /// run pauses until there is room — and `Some(true)` while it waits for a workspace.
   pub(super) fn held_back(&mut self) -> Result<Option<bool>, ExecutionError> {
     if self.disk_is_low()? {
       tracing::warn!(run = %self.run.id(), "the disk is low; the run's next step waits for room");
-      self.pending.low_disk = true;
+      self.disk_ran_low();
       return Ok(Some(false));
     }
     Ok((!self.hold_workspace()?).then_some(true))
@@ -127,20 +125,27 @@ impl RunTask {
     }
   }
 
-  /// While agents work, at most every [`DISK_CHECK`]: a disk that ran low stops them with their work committed, and
-  /// the run pauses for low disk space once they have ended.
+  /// While agents work, at most as often as the disk guard looks: a disk that ran low stops them with their work
+  /// committed, and the run pauses for low disk space once they have ended.
   pub(super) fn check_disk_while_working(&mut self) -> Result<(), ExecutionError> {
     let now = Instant::now();
     if now < self.next_disk_check {
       return Ok(());
     }
-    self.next_disk_check = now + DISK_CHECK;
+    self.next_disk_check = now + self.disks.every;
     if !self.pending.low_disk && self.disk_is_low()? {
       tracing::warn!(run = %self.run.id(), "the disk ran low; the run's agents stop and it pauses");
-      self.pending.low_disk = true;
-      self.stop_agents(Stop::Now(StopCause::LowDisk));
+      self.disk_ran_low();
     }
     Ok(())
+  }
+
+  /// The disk is low: the run pauses once its agents have ended, and those at work are stopped, each once, with their
+  /// work committed.
+  fn disk_ran_low(&mut self) {
+    if !std::mem::replace(&mut self.pending.low_disk, true) {
+      self.stop_agents(Stop::Now(StopCause::LowDisk));
+    }
   }
 
   /// Gives back the workspace of `owner`, a step that worked beside others, once its branch `branch` was merged into

@@ -8,7 +8,7 @@ use orchester_core::{
   integration::workspace::{WorkspaceGitError, Workspaces},
   run::BranchName,
   store::{RunStore, WorkspaceStore},
-  workspaces::{WorkspaceNumber, WorkspaceSettings, rescue_branch},
+  workspaces::{Holder, WorkspaceNumber, WorkspaceSettings, rescue_branch},
 };
 use orchester_exec::{ProcessRunner, disk_space::folder_size};
 use orchester_store::{ProjectDb, StoreError};
@@ -74,25 +74,27 @@ pub fn save_settings(repo_root: &Path, settings: &WorkspaceSettings) -> Result<(
 }
 
 /// Deletes the warm folders of each idle workspace of `numbers` (one in use is skipped and logged); the bytes that
-/// freed. Their next run builds from cold; branches, checkpoints and the runs' artifacts stay.
+/// freed. Their next run builds from cold; branches, checkpoints and the runs' artifacts stay. Each is reserved while
+/// it is cleaned, so no run borrows it meanwhile.
 pub fn clean(repo_root: &Path, numbers: &[WorkspaceNumber]) -> Result<u64, WorkspaceActionError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let records = db.workspaces()?;
   let runner = ProcessRunner::new(GIT_TIMEOUT);
   let workspaces = Workspaces::new(&runner, Path::new(GIT), repo_root);
   let mut freed = 0_u64;
   for number in numbers {
-    let Some(record) = records.iter().find(|record| record.number == *number) else {
-      continue;
-    };
-    if record.holder.is_some() {
+    if !db.reserve_idle_workspace(*number, Holder::Upkeep)? {
       tracing::warn!(%number, "a workspace in use is not cleaned");
       continue;
     }
     let path = number.path(repo_root);
     let before = folder_size(&path).unwrap_or(0);
-    workspaces.clean_warm(&path)?;
-    db.set_workspace_cold(*number)?;
+    let cleaned = workspaces
+      .clean_warm(&path)
+      .map_err(WorkspaceActionError::from)
+      .and_then(|()| Ok(db.set_workspace_cold(*number)?));
+    let released = db.release_workspace(*number, Holder::Upkeep);
+    cleaned?;
+    released?;
     freed = freed.saturating_add(before.saturating_sub(folder_size(&path).unwrap_or(0)));
   }
   Ok(freed)
@@ -108,22 +110,41 @@ pub enum Leftovers {
 }
 
 /// Keeps or discards the leftovers of stranded workspace `number`, which is free again afterwards; the branch they
-/// were kept on, when kept.
+/// were kept on, when kept. The workspace is reserved meanwhile, so no run borrows it.
 pub fn resolve_leftovers(
   repo_root: &Path,
   number: WorkspaceNumber,
   leftovers: Leftovers,
 ) -> Result<Option<BranchName>, WorkspaceActionError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let record = db
+  if !db.reserve_idle_workspace(number, Holder::Upkeep)? {
+    let made = db.workspaces()?.iter().any(|record| record.number == number);
+    return Err(if made {
+      WorkspaceActionError::InUse(number)
+    } else {
+      WorkspaceActionError::NotStranded(number)
+    });
+  }
+  let resolved = resolve_reserved(&mut db, repo_root, number, leftovers);
+  let released = db.release_workspace(number, Holder::Upkeep);
+  let kept = resolved?;
+  released?;
+  Ok(kept)
+}
+
+/// [`resolve_leftovers`] once the workspace is reserved.
+fn resolve_reserved(
+  db: &mut ProjectDb,
+  repo_root: &Path,
+  number: WorkspaceNumber,
+  leftovers: Leftovers,
+) -> Result<Option<BranchName>, WorkspaceActionError> {
+  let stranded = db
     .workspaces()?
     .into_iter()
     .find(|record| record.number == number)
+    .and_then(|record| record.stranded)
     .ok_or(WorkspaceActionError::NotStranded(number))?;
-  if record.holder.is_some() {
-    return Err(WorkspaceActionError::InUse(number));
-  }
-  let stranded = record.stranded.ok_or(WorkspaceActionError::NotStranded(number))?;
   let runner = ProcessRunner::new(GIT_TIMEOUT);
   let workspaces = Workspaces::new(&runner, Path::new(GIT), repo_root);
   let path = number.path(repo_root);
