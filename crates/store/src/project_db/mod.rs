@@ -21,6 +21,7 @@ mod estimates;
 mod feedback;
 mod import;
 mod invocation_accounts;
+mod invocation_connections;
 mod invocation_prompts;
 mod invocation_providers;
 mod joining;
@@ -79,6 +80,7 @@ mod task_snapshots;
 mod tasks;
 mod tool_approvals;
 mod usage;
+mod workspaces;
 mod worktree_removals;
 mod write_transaction;
 

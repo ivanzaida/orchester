@@ -12,6 +12,7 @@ use crate::{
   run::TokenUsage,
   time::Timestamp,
   tokens::TokensUsed,
+  usage::UsedProvider,
 };
 
 /// What a reviewer spent on one review.
@@ -109,6 +110,8 @@ pub struct ReviewRecord {
   /// The CLI account the reviewer's connection ran on; `None` for a native reviewer, a provider without
   /// accounts, or a review recorded before the account was kept.
   pub account: Option<AgentAccountId>,
+  /// The reviewer's connection; `None` for a review recorded before it was kept.
+  pub connection: Option<UsedProvider>,
   pub model: ModelId,
   pub started_at: Timestamp,
   pub ended_at: Timestamp,

@@ -54,6 +54,7 @@ pub(crate) struct SettingRow {
   label: Arc<str>,
   label_style: TypographyStyle,
   label_color: Option<PaletteColor>,
+  cut_label: bool,
   info: Option<Arc<str>>,
   hint: Option<(Arc<str>, Tone)>,
   lead: Option<Element>,
@@ -71,6 +72,7 @@ impl SettingRow {
       label: label.into(),
       label_style: ExtraTypography::Strong.role(),
       label_color: None,
+      cut_label: false,
       info: None,
       hint: None,
       lead: None,
@@ -102,6 +104,12 @@ impl SettingRow {
   /// The label in `color`, e.g. a quiet empty row's title.
   pub(crate) fn label_color(mut self, color: PaletteColor) -> Self {
     self.label_color = Some(color);
+    self
+  }
+
+  /// The label stays on one line and ends in an ellipsis where the row runs out, e.g. a list of names.
+  pub(crate) fn cut_label(mut self) -> Self {
+    self.cut_label = true;
     self
   }
 
@@ -165,6 +173,16 @@ impl SettingRow {
       Some(color) => label.color(color),
       None => label,
     };
+    // A label that is a list of names stays on its line and ends in an ellipsis where the row runs out.
+    let label = if self.cut_label {
+      label
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+    } else {
+      label
+    };
     let info = self.info.map(|info| {
       let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
@@ -176,17 +194,21 @@ impl SettingRow {
         .color(tone.color())
         .width(Dimension::Pct(100.0))
     });
+    let heading = Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(label)
+      .with_children(info);
+    let heading = if self.cut_label {
+      heading.width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0))
+    } else {
+      heading
+    };
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(label)
-          .with_children(info),
-      )
+      .child(heading)
       .with_children(hint);
     let line = Row::new()
       .width(Dimension::Pct(100.0))
@@ -233,4 +255,9 @@ pub(crate) fn value(id: &str, words: &str) -> Text {
     .nowrap()
     .max_width(Dimension::Px(crate::screens::project_settings::page::CONTROL_WIDTH))
     .text_overflow(TextOverflow::Elipsis)
+}
+
+/// A read-only value that is an identifier, a path or an address, in Geist Mono (`boX03`, `W2lRBk` in `01b`).
+pub(crate) fn mono_value(id: &str, words: &str) -> Text {
+  value(id, words).variant(ProjectSettingsText::MonoValue.role())
 }

@@ -15,9 +15,11 @@ use orchester_core::{
     content::{Choice, ContentMerge},
   },
   time::Timestamp,
+  tokens::grouped,
 };
 use orchester_workspace::{
   background,
+  budget::minutes_text,
   modules::ModuleChoice,
   tasks::{conflict::EditConflict, run::StartOutcome},
 };
@@ -46,13 +48,20 @@ pub struct Base {
 impl lurq::app::component::DevtoolsInspectable for Base {}
 
 impl Base {
-  /// New task's start, with the project's default pipeline chosen.
-  fn new_task(pipeline: Option<orchester_core::id::ResourceId>) -> Self {
+  /// New task's start, with the project's default pipeline chosen and its default run budget, grouped with
+  /// `separator`, and time limit.
+  fn new_task(props: &FormProps, separator: &str) -> Self {
+    let limits = props.limits;
     Self {
       task: None,
       revision: None,
       values: Values {
-        pipeline,
+        pipeline: props.default_pipeline,
+        budget: limits
+          .default_run_budget()
+          .map(|budget| grouped(budget.get(), separator))
+          .unwrap_or_default(),
+        time_limit: minutes_text(limits.default_time_limit()),
         ..Values::default()
       },
     }
@@ -125,10 +134,10 @@ impl TaskForm {
       (None, Some(_)) => None,
       (None, None) => return false,
     };
-    let stored = props.subject.task().map_or_else(
-      || Base::new_task(props.default_pipeline),
-      |task| Base::of(task, separator),
-    );
+    let stored = props
+      .subject
+      .task()
+      .map_or_else(|| Base::new_task(props, separator), |task| Base::of(task, separator));
     if let Some(task) = props.subject.task().filter(|_| props.subject.awaits_first_run()) {
       // A queued task's details are locked: edits kept for it from an earlier visit cannot be saved.
       if kept.is_some() {

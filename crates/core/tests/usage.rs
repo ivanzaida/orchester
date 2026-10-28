@@ -75,7 +75,7 @@ fn invocation(
     model: Some(model.into()),
     profile: Some(profile.into()),
     profile_id: None,
-    account: None,
+    connection: None,
     step: "implement".into(),
     started_at: from,
     ended_at: Some(to),
@@ -135,6 +135,7 @@ fn kontur() -> ProjectFacts {
       reviews: Vec::new(),
       invocations: vec![codex, claude, earlier],
       runs: vec![ok, failed, before],
+      providers: Vec::new(),
       last_turn: Some(on(29, 15)),
     },
   }
@@ -332,7 +333,7 @@ fn kontur_reviewed() -> ProjectFacts {
     at: later(on(25, 10), HOUR / 2),
     invocation: builder,
     cli: AgentProvider::ClaudeCodeCli,
-    account: None,
+    connection: None,
     model: "claude-haiku-4-5".into(),
     usage: usage(1_000, 400, 100),
   });

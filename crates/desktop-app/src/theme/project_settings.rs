@@ -18,19 +18,27 @@ pub enum ProjectSettingsText {
   Hint,
   /// 12.5 `text_secondary`: a read-only value at a row's end (`Text` `IxKWi`).
   Value,
+  /// Geist Mono 12.5 `text_secondary`: a read-only value that is an identifier, a path or an address (`boX03`,
+  /// `W2lRBk`, `U5AlRd` in `01b` `VwkMw`).
+  MonoValue,
   /// Geist Mono 12.5/500 `text_primary`: an identifier as a row's label, a secret's name (`Name` `HaAqu`).
   MonoLabel,
   /// 16/600 `text_primary`: a sub-page's or an opened item's title (`Title` `RYStU`, `N9Na8Q`).
   PageTitle,
+  /// Geist Mono 16/500 `text_primary`: an opened item's title that is an identifier, a secret's name (`CKPaZ` in
+  /// `06b` `uCVIP`).
+  MonoPageTitle,
 }
 
 impl ProjectSettingsText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 7] = [
     Self::GroupTitle,
     Self::Hint,
     Self::Value,
+    Self::MonoValue,
     Self::MonoLabel,
     Self::PageTitle,
+    Self::MonoPageTitle,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -42,21 +50,36 @@ impl ProjectSettingsText {
       Self::GroupTitle => "project_settings_group_title",
       Self::Hint => "project_settings_hint",
       Self::Value => "project_settings_value",
+      Self::MonoValue => "project_settings_mono_value",
       Self::MonoLabel => "project_settings_mono_label",
       Self::PageTitle => "project_settings_page_title",
+      Self::MonoPageTitle => "project_settings_mono_page_title",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::GroupTitle => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
-      Self::Hint => style(12.0, FontWeight::Normal, 1.35, 0.0, palette.text_muted),
+      // The design's lines of a hint and of a mono label are 16 high (`f7dgB`, `HaAqu` in `06` `d6auya`), so an
+      // item's row is 54 with them.
+      Self::Hint => style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted),
       Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::MonoLabel => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
+      Self::MonoValue => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::MonoLabel => mono(style(
+        12.5,
+        FontWeight::Medium,
+        LINE_16 / 12.5,
+        0.0,
+        palette.text_primary,
+      )),
       Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::MonoPageTitle => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
     }
   }
 }
+
+/// A 16 line, as the design draws a 12 or 12.5 text.
+const LINE_16: f32 = 16.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectSettingsSpacing {

@@ -68,23 +68,28 @@ pub enum ExtraColor {
   BrandTile,
   /// The Orchester mark's bars, the same in both modes.
   BrandMark,
-  /// `chart_1`, `chart_2`, `chart_3`: a chart's series, accounts 1–3 in series order (Usage `et35n`, `FDC8B`).
+  /// `chart_1`, `chart_2`, `chart_3`: a chart's series, agent providers 1–3 in series order, and accounts 1–3 in
+  /// *Plan limits* (Usage `et35n`, `FDC8B`).
   Chart1,
   Chart2,
   Chart3,
-  /// `chart_other`: *Other accounts*, the fourth connected account and later (`FDC8B`).
+  /// `chart_other`: *Other providers*, the fourth connected provider and later, and the fourth account and later
+  /// (`FDC8B`).
   ChartOther,
-  /// `chart_none`: *No account*'s stripes and outline over `chart_hatch` (`LEQ1w`).
+  /// `chart_none`: *Earlier runs*' stripes and outline over `chart_hatch` (`LEQ1w`).
   ChartNone,
   /// `chart_hatch`: a chart's stretch where nothing is known (*No data from Claude · Work* in `et35n`), and
-  /// *No account*'s ground.
+  /// *Earlier runs*' ground.
   ChartHatch,
   /// `mark_claude`: the Claude mark's orange (`Mark/Claude` `eFnry`), the same in both modes.
   MarkClaude,
+  /// A one-line note on a page (`Note` `CvMGI` in `Qzvo0`): `surface_raised` in dark; in light, where the design's
+  /// `surface_raised` is the panel's white, `surface_base`, so the note still reads as one (the person's choice).
+  Note,
 }
 
 impl ExtraColor {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 25] = [
     Self::AccentText,
     Self::OnAccent,
     Self::PanelBorder,
@@ -109,6 +114,7 @@ impl ExtraColor {
     Self::ChartNone,
     Self::ChartHatch,
     Self::MarkClaude,
+    Self::Note,
   ];
 
   pub fn role(self) -> PaletteColor {
@@ -142,6 +148,7 @@ impl ExtraColor {
       Self::ChartNone => "chart_none",
       Self::ChartHatch => "chart_hatch",
       Self::MarkClaude => "mark_claude",
+      Self::Note => "page_note",
     }
   }
 
@@ -171,6 +178,7 @@ impl ExtraColor {
       Self::ChartNone => mode.pick("#8A8A92", "#6B6B74"),
       Self::ChartHatch => mode.pick("#FFFFFF0F", "#00000012"),
       Self::MarkClaude => mode.pick("#D97757", "#D97757"),
+      Self::Note => mode.pick("#202023", "#E4E4E8"),
     }
   }
 }

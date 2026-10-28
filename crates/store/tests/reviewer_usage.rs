@@ -1,6 +1,6 @@
 //! What auto mode's reviewer spent: one record per review, linked to its run, step execution, invocation
-//! and request, with the account it ran on; known tokens count toward the day and reach the Usage dashboard,
-//! unknown ones count nothing; the migration that adds the records keeps a database's runs, and the one that
+//! and request, with the account and the connection it ran on; known tokens count toward the day and reach the Usage
+//! dashboard, unknown ones count nothing; the migration that adds the records keeps a database's runs, and the one that
 //! adds the account leaves the reviews before it on no account.
 //! `cargo test -p orchester-store --test reviewer_usage reviewer_usage`.
 mod support;
@@ -10,7 +10,7 @@ use orchester_core::{
     AgentProvider,
     stream::{AgentEvent, InvocationOutcome},
   },
-  id::AgentAccountId,
+  id::{AgentAccountId, ConnectionId},
   resource::ModelId,
   run::{
     Invocation, PendingToolApproval, TokenUsage,
@@ -19,7 +19,7 @@ use orchester_core::{
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
-  usage::ReviewUsage,
+  usage::{ReviewUsage, UsedProvider},
 };
 use orchester_store::ProjectDb;
 use support::{at, copied_at_version, model, started_run};
@@ -63,6 +63,7 @@ fn review(approval: &PendingToolApproval, ended: Timestamp, usage: Option<TokenU
     approval: approval.id.clone(),
     provider: AgentProvider::ClaudeCodeCli,
     account: None,
+    connection: None,
     model: ModelId::new("claude-haiku-4-5").expect("model"),
     started_at: Timestamp::from_unix_millis(ended.unix_millis() - 5),
     ended_at: ended,
@@ -110,7 +111,7 @@ fn reviewer_usage_is_kept_per_review_and_counts_toward_the_day_and_the_dashboard
       at: at(30),
       invocation: invocation.id,
       cli: AgentProvider::ClaudeCodeCli,
-      account: None,
+      connection: None,
       model: "claude-haiku-4-5".into(),
       usage: usage(200, 50, 7),
     }
@@ -175,15 +176,20 @@ fn version_before_reviewer_usage(latest: u32) -> u32 {
 }
 
 #[test]
-fn reviewer_usage_keeps_the_account_the_reviewer_ran_on() {
+fn reviewer_usage_keeps_the_account_and_the_connection_the_reviewer_ran_on() {
   let (_repo, mut db, run, execution) = started_run();
   let invocation = db
     .start_invocation(run.id(), execution, &model(), at(10))
     .expect("invocation");
   let approval = request(&mut db, &invocation);
   let account = AgentAccountId::generate();
+  let connection = UsedProvider {
+    id: ConnectionId::generate(),
+    name: "Claude · Reviewer".into(),
+  };
   let record = ReviewRecord {
     account: Some(account),
+    connection: Some(connection.clone()),
     ..review(&approval, at(30), Some(usage(200, 50, 7)), ReviewEnd::Approved)
   };
   db.record_reviewer_usage(&record).expect("recorded");
@@ -191,14 +197,20 @@ fn reviewer_usage_keeps_the_account_the_reviewer_ran_on() {
   let facts = db.usage_facts(at(0), at(DAY)).expect("facts");
   assert_eq!(facts.reviews.len(), 1);
   assert_eq!(
-    facts.reviews[0].account,
-    Some(account),
-    "the dashboard gets the account"
+    facts.reviews[0].connection,
+    Some(connection.id),
+    "the dashboard gets the provider"
   );
+  let named = facts
+    .providers
+    .iter()
+    .find(|provider| provider.id == connection.id)
+    .expect("a connection gone since is named by the name the review recorded");
+  assert_eq!((&*named.name, named.removed), ("Claude · Reviewer", true));
 }
 
 #[test]
-fn reviewer_usage_from_before_the_account_was_kept_stays_on_no_account() {
+fn reviewer_usage_from_before_the_account_was_kept_is_given_no_account() {
   let (repo, mut db, run, execution) = started_run();
   let invocation = db
     .start_invocation(run.id(), execution, &model(), at(10))

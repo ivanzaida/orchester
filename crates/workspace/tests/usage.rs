@@ -216,7 +216,7 @@ fn data(now: Timestamp) -> (UsageData, ResourceId, ResourceId) {
     model: Some("gpt-5.5".into()),
     profile: Some("Builder".into()),
     profile_id: Some(profile),
-    account: None,
+    connection: None,
     step: "Implement".into(),
     started_at: started,
     ended_at: Some(now),
@@ -241,6 +241,7 @@ fn data(now: Timestamp) -> (UsageData, ResourceId, ResourceId) {
       reviews: Vec::new(),
       invocations: vec![invocation],
       runs: vec![run],
+      providers: Vec::new(),
       last_turn: Some(now),
     },
   };
@@ -464,22 +465,32 @@ fn usage_failed_tasks_open_the_one_project_their_runs_belong_to() {
 }
 
 #[test]
-fn usage_account_filter_reads_none_and_offers_no_account_last() {
-  let no_account = read_back(&[("account", "none".to_owned())]).expect("a query");
-  assert!(no_account.filter.no_account && no_account.filter.accounts.is_empty());
-  assert_eq!(no_account.params(), [("account", "none".to_owned())], "written back");
+fn usage_provider_filter_reads_earlier_and_a_connection_and_offers_earlier_runs_last() {
+  let connection = orchester_core::id::ConnectionId::generate();
+  let params = [("provider", connection.to_string()), ("provider", "earlier".to_owned())];
+  let read = read_back(&params).expect("a query");
+  assert!(read.filter.earlier);
+  assert_eq!(read.filter.providers, [connection]);
+  assert_eq!(read.params(), params, "written back");
+  assert!(
+    read_back(&[("account", "none".to_owned())])
+      .expect("a parameter the query is not asked for is the caller's to refuse")
+      .filter
+      .is_empty(),
+    "there is no No account to choose"
+  );
   let now = Timestamp::now();
   let (data, ..) = data(now);
   let page = dashboard(&UsageQuery::default(), &data, now);
-  let options = page.options(Facet::Account);
-  let last = options.last().expect("No account");
-  assert_eq!(last.value, FilterValue::NoAccount);
-  assert_eq!(last.label, ValueLabel::NoAccount);
-  let chosen = page.toggled(Facet::Account, &FilterValue::NoAccount);
-  assert!(chosen.filter.no_account);
+  let options = page.options(Facet::Provider);
+  let last = options.last().expect("Earlier runs");
+  assert_eq!(last.value, FilterValue::Earlier);
+  assert_eq!(last.label, ValueLabel::Earlier);
+  let chosen = page.toggled(Facet::Provider, &FilterValue::Earlier);
+  assert!(chosen.filter.earlier);
   assert!(
     dashboard(&chosen, &data, now)
-      .toggled(Facet::Account, &FilterValue::NoAccount)
+      .toggled(Facet::Provider, &FilterValue::Earlier)
       .filter
       .is_empty()
   );

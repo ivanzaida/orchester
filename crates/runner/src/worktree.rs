@@ -156,6 +156,26 @@ impl Worktrees {
       .ok_or_else(|| WorktreeError::BranchExists(branch.to_owned()))
   }
 
+  /// Creates a run's branch at `base` without a worktree, for a run that borrows a workspace (ORC-114): `branch`, or
+  /// the first free numbered name, as [`Worktrees::create`] picks it. Returns the branch made.
+  pub fn create_branch(&self, branch: &str, base: &str) -> Result<String, WorktreeError> {
+    let git = Git::new(&self.repo_root);
+    if !git.succeeds(&["check-ref-format", "--branch", branch])? {
+      return Err(WorktreeError::InvalidBranch(branch.to_owned()));
+    }
+    let base_revision = self.base_revision(&git, base)?;
+    let taken = names::taken(&git, branch)?;
+    let candidates = iter::once(branch.to_owned()).chain((2..=MAX_SUFFIX).map(|suffix| format!("{branch}-{suffix}")));
+    for candidate in candidates.filter(|candidate| !names::is_taken(&taken, candidate)) {
+      match git.stdout(&["branch", "--no-track", &candidate, &base_revision]) {
+        Ok(_) => return Ok(candidate),
+        Err(error) if names::taken_meanwhile(&candidate, &error) => {}
+        Err(error) => return Err(error),
+      }
+    }
+    Err(WorktreeError::NoFreeBranch(branch.to_owned()))
+  }
+
   /// The branch the run's worktree has checked out. Its folder counts only when git lists it as a
   /// worktree of the repository: in any other folder git would answer for the checkout around it.
   pub fn branch_of(&self, run: RunId) -> Result<String, WorktreeError> {

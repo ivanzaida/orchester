@@ -1,6 +1,6 @@
 //! Usage grouped and narrowed as `get_usage` and a link ask for it: tokens and active agent time per day,
-//! task, pipeline, step, agent profile, model and account, auto mode's reviewer as an agent of its own;
-//! filters by a task's key or id, a run, a step, an account, and a profile or pipeline by its id or name.
+//! task, pipeline, step, agent profile, model and agent provider, auto mode's reviewer as an agent of its own;
+//! filters by a task's key or id, a run, a step, a provider, and a profile or pipeline by its id or name.
 //! `cargo test -p orchester-core --test usage_groups usage_groups`.
 
 use std::{num::NonZeroU32, sync::Arc};
@@ -8,12 +8,12 @@ use std::{num::NonZeroU32, sync::Arc};
 use chrono::NaiveDate;
 use orchester_core::{
   connection::AgentProvider,
-  id::{AgentAccountId, InvocationId, ProjectId, ResourceId, RunId, TaskId},
+  id::{ConnectionId, InvocationId, ProjectId, ResourceId, RunId, TaskId},
   run::{RunNumber, TokenUsage},
   time::Timestamp,
   usage::{
     DayRange, GroupBy, GroupKey, Grouping, IndexGiven, InvocationFacts, ProjectFacts, ReviewUsage, RunFacts,
-    RunOutcome, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport, day_start, grouped,
+    RunOutcome, SpentOn, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport, day_start, grouped,
   },
 };
 
@@ -39,7 +39,7 @@ struct Fixture {
   facts: ProjectFacts,
   feature: ResourceId,
   builder: ResourceId,
-  account: AgentAccountId,
+  connection: ConnectionId,
   first_run: RunId,
 }
 
@@ -56,7 +56,7 @@ fn invocation(
     model: Some(model.into()),
     profile: Some(name.into()),
     profile_id: Some(profile),
-    account: None,
+    connection: None,
     step: step.into(),
     started_at: from,
     ended_at: Some(to),
@@ -67,13 +67,13 @@ fn invocation(
   }
 }
 
-/// KON-1 on Feature delivery, run 1: Builder implements on Codex (account `account`), 2 h on Sep 25; KON-2
-/// on Quick fix, run 2: Reviewer reviews on Claude, 1 h on Sep 26, and auto mode's reviewer judged one of
-/// its requests on haiku.
+/// KON-1 on Feature delivery, run 1: Builder implements on Codex (connection `connection`), 2 h on Sep 25; KON-2
+/// on Quick fix, run 2: Reviewer reviews on Claude, 1 h on Sep 26 on a connection no record names, and auto mode's
+/// reviewer judged one of its requests on haiku, recorded before its connection was.
 fn fixture() -> Fixture {
   let (feature, quick) = (ResourceId::generate(), ResourceId::generate());
   let (builder, reviewer) = (ResourceId::generate(), ResourceId::generate());
-  let account = AgentAccountId::generate();
+  let connection = ConnectionId::generate();
   let run = |number: u32, key: &str, pipeline: (ResourceId, &str)| RunFacts {
     id: RunId::generate(),
     number: RunNumber::new(NonZeroU32::new(number).expect("above zero")),
@@ -96,7 +96,7 @@ fn fixture() -> Fixture {
     (builder, "Builder", "Implement"),
     (on(25, 9), on(25, 11)),
   );
-  implement.account = Some(account);
+  implement.connection = Some(connection);
   let review = invocation(
     &two,
     (AgentProvider::ClaudeCodeCli, "claude-sonnet-5-5"),
@@ -119,7 +119,7 @@ fn fixture() -> Fixture {
     at: on(26, 15),
     invocation: review.id,
     cli: AgentProvider::ClaudeCodeCli,
-    account: None,
+    connection: None,
     model: "claude-haiku-4-5".into(),
     usage: spent(500),
   }];
@@ -133,12 +133,13 @@ fn fixture() -> Fixture {
         reviews,
         invocations: vec![implement, review],
         runs: vec![one, two],
+        providers: Vec::new(),
         last_turn: Some(on(26, 15)),
       },
     },
     feature,
     builder,
-    account,
+    connection,
     first_run,
   }
 }
@@ -222,16 +223,19 @@ fn usage_groups_by_agent_keep_the_reviewer_apart_and_by_task_name_the_task() {
 }
 
 #[test]
-fn usage_groups_by_account_put_what_names_none_in_one_row() {
+fn usage_groups_by_provider_put_what_names_none_in_earlier_runs() {
   let fixture = fixture();
-  let accounts = rows(&fixture.facts, &UsageFilter::default(), GroupBy::Account);
-  assert_eq!(accounts[0].key, GroupKey::Account(Some(fixture.account)));
-  assert_eq!(accounts[1].key, GroupKey::Account(None));
-  assert_eq!(accounts[1].spent(), 4_500);
+  let providers = rows(&fixture.facts, &UsageFilter::default(), GroupBy::Provider);
+  assert_eq!(
+    providers[0].key,
+    GroupKey::Provider(SpentOn::Provider(fixture.connection))
+  );
+  assert_eq!(providers[1].key, GroupKey::Provider(SpentOn::Earlier));
+  assert_eq!(providers[1].spent(), 4_500);
 }
 
 #[test]
-fn usage_groups_filters_narrow_to_a_task_run_step_account_and_resource() {
+fn usage_groups_filters_narrow_to_a_task_run_step_provider_and_resource() {
   let fixture = fixture();
   let facts = &fixture.facts;
   let with = |change: fn(&mut UsageFilter, &Fixture)| {
@@ -251,9 +255,9 @@ fn usage_groups_filters_narrow_to_a_task_run_step_account_and_resource() {
     "the reviewer's review counts under its step"
   );
   assert_eq!(
-    with(|filter, fixture| filter.accounts.push(fixture.account)),
+    with(|filter, fixture| filter.providers.push(fixture.connection)),
     10_000,
-    "a review names no account"
+    "a review recorded before its provider was is no provider's"
   );
   assert_eq!(
     with(|filter, fixture| filter.profiles.push(fixture.builder.to_string().into())),

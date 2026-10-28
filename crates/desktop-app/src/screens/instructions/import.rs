@@ -191,7 +191,8 @@ impl Import {
         ctx.t("instructions.importDraftsOnly"),
       )
       .icon(Icon::Info)
-      .body(ctx.t("instructions.importNote")),
+      .body(ctx.t("instructions.importNote"))
+      .flat(),
     );
     if state.is_rejected() {
       page = page.child(field_error(

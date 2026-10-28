@@ -2,7 +2,7 @@
 //! own page with the crumb back for each kind (`05b` `PGwka`, `13` `Ptkxo`, `14` `KItiZ`), and what the tab shows
 //! without connections (`07` `WYCDL`), while it reads them, and when reading fails.
 
-use orchester_app::routes::{ConnectionsView, ProjectPage};
+use orchester_app::routes::{ConnectionsView, NewConnection, ProjectPage};
 use orchester_core::store::ConnectionStore;
 
 use super::harness::Seeded;
@@ -24,7 +24,7 @@ fn connections_groups_list_each_kind_with_its_add() {
     ),
     (
       "connections-github",
-      &["GitHub", "GitHub · github.com", "signed in as ivanzaida"][..],
+      &["GitHub", "gh · github.com", "signed in as ivanzaida"][..],
     ),
     (
       "connections-mcp",
@@ -42,6 +42,14 @@ fn connections_groups_list_each_kind_with_its_add() {
     !seeded.exists("project-settings-save-status"),
     "Connections saves per action"
   );
+}
+
+/// Add provider says at the title's right that the provider isn't saved yet (`Saved` `v6VzvO` in `10` `LaTB4`).
+#[test]
+fn connections_add_provider_says_it_is_not_saved_yet() {
+  let mut seeded = Seeded::new("connections");
+  seeded.add(NewConnection::AgentProvider);
+  assert_eq!(seeded.text("project-settings-save-status"), "Not saved yet");
 }
 
 /// A row opens the connection's page under the tab, which leads back to Connections by its crumb.
@@ -86,7 +94,7 @@ fn connections_row_opens_the_connections_page_with_a_crumb_back() {
     .connections()
     .expect("connections read")
     .into_iter()
-    .find(|connection| connection.name().as_str() == "GitHub · github.com")
+    .find(|connection| connection.name().as_str() == "gh · github.com")
     .expect("the GitHub connection");
   seeded.open(github.id());
   let page = seeded.text("connection-inspector");

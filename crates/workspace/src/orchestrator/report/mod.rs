@@ -15,7 +15,6 @@ use std::path::Path;
 
 use chrono::NaiveDate;
 use orchester_core::{
-  account::AgentAccount,
   id::ChatId,
   orchestrator::{Chat, DailyReport},
   time::Timestamp,
@@ -28,28 +27,26 @@ use self::{facts::DayFacts, rules::active};
 use super::settings::OrchestratorSetup;
 use crate::messages::{self, Message};
 
-/// The facts of `day` in the project at `root` read at `now`, its usage's accounts named by `accounts`, with the latest
-/// runs `programs`' git proves merged without Orchester settled.
+/// The facts of `day` in the project at `root` read at `now`, with the latest runs `programs`' git proves merged
+/// without Orchester settled.
 fn facts_in(
   (db, root, programs): (&ProjectDb, &Path, &Programs),
-  accounts: Vec<AgentAccount>,
   (day, now): (NaiveDate, Timestamp),
 ) -> Result<DayFacts, StoreError> {
-  let mut facts = DayFacts::read(db, (day, now), accounts)?;
+  let mut facts = DayFacts::read(db, (day, now))?;
   facts.settle_outside(programs, root);
   Ok(facts)
 }
 
-/// The report of `day` in the project at `root` as it reads at `now`, its usage's accounts named by `accounts`; git,
-/// run by `programs`, tells which succeeded runs were merged without Orchester. Blocks on SQLite and git.
+/// The report of `day` in the project at `root` as it reads at `now`; git, run by `programs`, tells which succeeded
+/// runs were merged without Orchester. Blocks on SQLite and git.
 pub fn build_in(
   (root, programs): (&Path, &Programs),
-  accounts: Vec<AgentAccount>,
   (day, now): (NaiveDate, Timestamp),
 ) -> Result<DailyReport, Message> {
   let built = || {
     let db = ProjectDb::open(root)?;
-    let facts = facts_in((&db, root, programs), accounts, (day, now))?;
+    let facts = facts_in((&db, root, programs), (day, now))?;
     Ok::<_, StoreError>(rules::build(&facts, db.project().id()))
   };
   built().map_err(|error| messages::store_error(&error))
@@ -59,7 +56,6 @@ pub fn build_in(
 /// it was delivered with, or else built now; and whether it was kept. Blocks on SQLite and git.
 pub fn report_in(
   (root, programs): (&Path, &Programs),
-  accounts: Vec<AgentAccount>,
   (day, now): (NaiveDate, Timestamp),
 ) -> Result<(DailyReport, bool), Message> {
   let kept = ProjectDb::open(root)
@@ -67,7 +63,7 @@ pub fn report_in(
     .map_err(|error| messages::store_error(&error))?;
   match kept {
     Some(report) => Ok((report, true)),
-    None => Ok((build_in((root, programs), accounts, (day, now))?, false)),
+    None => Ok((build_in((root, programs), (day, now))?, false)),
   }
 }
 
@@ -88,7 +84,7 @@ pub enum Delivery {
 /// Blocks on SQLite and git.
 pub fn deliver_in(
   (root, programs): (&Path, &Programs),
-  (accounts, answers): (Vec<AgentAccount>, bool),
+  answers: bool,
   (day, now): (NaiveDate, Timestamp),
   title: &str,
 ) -> Result<Delivery, Message> {
@@ -98,7 +94,7 @@ pub fn deliver_in(
     if db.daily_report(&DailyReport::key_of(day))?.is_some() {
       return Ok(Delivery::Known);
     }
-    let facts = facts_in((&db, root, programs), accounts, (day, now))?;
+    let facts = facts_in((&db, root, programs), (day, now))?;
     let report = rules::build(&facts, db.project().id());
     if !active(&facts, &report) {
       return Ok(Delivery::Quiet);

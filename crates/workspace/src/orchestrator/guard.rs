@@ -34,7 +34,7 @@ use super::{
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
   messages::Message,
-  tasks::changes::run_worktree,
+  tasks::changes::run_work_present,
 };
 
 /// Whether the chat's call of `name` in `scope` is only proposed as a change because nobody asked for anything in its
@@ -126,7 +126,7 @@ pub(super) async fn resume_as(
   let read = blocking(move || {
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &named)?;
-    let present = db.worktree_removal(run.id())?.is_none() && run_worktree(&root, run.id()).is_dir();
+    let present = db.worktree_removal(run.id())?.is_none() && run_work_present(&db, &root, &run);
     let started_by = thinking_wait(&db.chat_entries(chat)?);
     let resume = ChatResume::of(run.status(), db.runner_failure(run.id())?, present);
     let continuing = match resume {

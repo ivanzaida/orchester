@@ -8,9 +8,11 @@ mod capped;
 mod console;
 mod exchange;
 
+pub mod disk_space;
 pub mod external;
 pub mod launch;
 pub mod local_git;
+pub mod priority;
 #[cfg(unix)]
 pub mod process_group;
 pub mod programs;

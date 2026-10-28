@@ -147,7 +147,8 @@ impl Component for Import {
           ctx.t("instructions.importDraftsOnly"),
         )
         .icon(Icon::Info)
-        .body(ctx.t("instructions.importNote")),
+        .body(ctx.t("instructions.importNote"))
+        .flat(),
       )
       .with_children(
         state
