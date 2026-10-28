@@ -1,4 +1,4 @@
-//! *Tokens over time* (`Card · Tokens over time` `w1aVOX`, `EA7QF`): stacked bars by account per hour or day
+//! *Tokens over time* (`Card · Tokens over time` `w1aVOX`, `EA7QF`): stacked bars by agent provider per hour or day
 //! with *Spent* / *Cached* / *Output*, a legend with each series' total ([`super::tokens_legend`]), a tooltip
 //! on the hovered bar (`Chart tooltip` `G7cuH`) and the same data as a table ([`super::tokens_table`]).
 
@@ -15,7 +15,7 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::usage::{AccountSeries, Grouping, Measure, SeriesBar};
+use orchester_core::usage::{Grouping, Measure, ProviderSeries, SeriesBar};
 use orchester_workspace::{display, usage::Dashboard};
 use parking_lot::Mutex;
 
@@ -23,7 +23,7 @@ use super::{
   Views,
   card::{Card, footnote, push_down, view_switch},
   plot::{AxisName, AxisText, CHART_HEIGHT, Frame, Redraw, label_every},
-  series::{account_text, series_swatch, series_text},
+  series::{provider_text, series_swatch, series_text},
   tokens_draw::{TokenPlot, draw},
   tokens_legend::legend,
   tokens_table::{table_footnote, tokens_table},
@@ -161,7 +161,7 @@ impl Component for TokensChart {
     let plot = TokenPlot {
       bars: bars
         .iter()
-        .map(|bar| dashboard.split(&bar.by_account).series.map(|usage| measure.of(usage)))
+        .map(|bar| dashboard.split(&bar.by_provider).series.map(|usage| measure.of(usage)))
         .collect(),
       labels: labels(ctx, &dashboard, width),
       label_kind: if dashboard.grouping == Grouping::Hour && dashboard.range.days() == 1 {
@@ -282,13 +282,13 @@ fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<Ax
 }
 
 /// The hovered bar's tooltip (`EA7QF`): its day, each series with usage in the range with its exact count,
-/// top to bottom in series order, Other accounts opened to its accounts, then the measure's total and the runs.
+/// top to bottom in series order, Other providers opened to its providers, then the measure's total and the runs.
 fn tokens_tip(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar, measure: Measure) -> Element {
   let title = match bar.bucket.hour {
     Some(_) => bar_name(ctx, bar),
     None => words::long_day(ctx, bar.bucket.date),
   };
-  let split = dashboard.split(&bar.by_account);
+  let split = dashboard.split(&bar.by_provider);
   let mut rows: Vec<Element> = Vec::new();
   for shown in dashboard.shown_series() {
     rows.push(tooltip::line(
@@ -296,10 +296,10 @@ fn tokens_tip(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar, measure: Measur
       &series_text(ctx, &shown.label),
       Some(&words::exact(ctx, measure.of(split.of(shown.series)))),
     ));
-    if shown.series == AccountSeries::Other {
-      rows.extend(dashboard.opened_others(&split).iter().map(|(account, usage)| {
+    if shown.series == ProviderSeries::Other {
+      rows.extend(dashboard.opened_others(&split).iter().map(|(connection, usage)| {
         tooltip::detail_line(
-          &account_text(ctx, &dashboard.account_label(*account)),
+          &provider_text(ctx, &dashboard.provider_label(*connection)),
           &words::exact(ctx, measure.of(*usage)),
         )
       }));
@@ -326,14 +326,22 @@ const fn measure_key(measure: Measure) -> &'static str {
   }
 }
 
-/// What *Spent* counts, and how far today counts when the range has it.
+/// What *Spent* counts, and how far today counts when the range has it; then, when some agents' CLIs reported input
+/// but no output yet, that their output is unknown, so *Spent* and *Output* leave it out.
 fn chart_footnote(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
-  if dashboard.has_today() {
+  let footnote = if dashboard.has_today() {
     ctx.t_args(
       "usage.tokens.footnoteToday",
       [("time", display::clock(dashboard.now).as_str())],
     )
   } else {
     ctx.t("usage.tokens.footnote")
+  };
+  match dashboard.report.summary.output_unreported {
+    0 => footnote,
+    count => ctx.t_args(
+      "usage.tokens.footnoteUnreported",
+      [("footnote", &*footnote), ("count", count.to_string().as_str())],
+    ),
   }
 }

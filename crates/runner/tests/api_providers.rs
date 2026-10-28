@@ -123,6 +123,22 @@ async fn api_providers_claude_code_runs_on_the_providers_url_models_and_key() {
     .expect("read")
     .expect("the provider it started on is recorded");
   assert_eq!(base_url.as_str(), "https://api.deepseek.com/anthropic");
+  // Its usage is the connection's, which the Usage page names as the Connections page does, never *No account*.
+  let facts = db
+    .usage_facts(
+      orchester_core::time::Timestamp::from_unix_millis(0),
+      orchester_core::time::Timestamp::now(),
+    )
+    .expect("usage");
+  let connection = facts.invocations[0]
+    .connection
+    .expect("the invocation records the connection it started on");
+  let provider = facts
+    .providers
+    .iter()
+    .find(|provider| provider.id == connection)
+    .expect("a provider of the project");
+  assert!(!provider.removed, "{provider:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

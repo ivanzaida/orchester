@@ -21,6 +21,7 @@ mod estimates;
 mod feedback;
 mod import;
 mod invocation_accounts;
+mod invocation_connections;
 mod invocation_prompts;
 mod invocation_providers;
 mod joining;

@@ -111783,6 +111783,602 @@
           "fontFamily": "$font_sans",
           "fontSize": 16,
           "fontWeight": "500"
+        },
+        {
+          "type": "frame",
+          "id": "fefZA",
+          "x": 1520,
+          "y": 3220,
+          "name": "Task · Summary · ready for review · create pull request · dark",
+          "theme": {
+            "mode": "dark",
+            "accent": "graphite"
+          },
+          "fill": "$canvas",
+          "cornerRadius": 12,
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 40,
+          "children": [
+            {
+              "type": "frame",
+              "id": "bQrll",
+              "name": "Header",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "MZg72",
+                  "name": "Title",
+                  "fill": "$text_primary",
+                  "content": "Create pull request from Ready for review",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 20,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "XKLmH",
+                  "name": "Description",
+                  "fill": "$text_secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 852,
+                  "content": "Create pull request with Open as draft beside Merge into main, and the question asked in place of the actions when local main has commits that aren't on origin. Boards show the Summary column's content only (the Ready card 788 wide); the window chrome, task header and Run details match Summary · ready for review.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Q7jmf2",
+              "name": "Board · 1 · Ready · Create pull request with Open as draft",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bUZvy",
+                  "name": "Caption",
+                  "fill": "$text_secondary",
+                  "content": "1 · Ready for your review · Create pull request with Open as draft (on by default)",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "frame",
+                  "id": "O8U2wv",
+                  "name": "Content · Summary column",
+                  "width": 852,
+                  "fill": "$surface_panel",
+                  "cornerRadius": 10,
+                  "stroke": "$border_panel",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "padding": [
+                    20,
+                    32,
+                    28,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "s4EMA",
+                      "name": "Ready card · Create pull request",
+                      "width": "fill_container",
+                      "fill": "$success_muted",
+                      "cornerRadius": 10,
+                      "stroke": "$success",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        16,
+                        18
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "o3LyMl",
+                          "name": "Head",
+                          "width": "fill_container",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "G4DZQT",
+                              "name": "Icon",
+                              "width": 17,
+                              "height": 17,
+                              "icon": "circle-check",
+                              "library": "lucide",
+                              "fill": "$success"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ie6Ve",
+                              "name": "T",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 3,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Rtzgd",
+                                  "name": "Ready for your review",
+                                  "fill": "$text_primary",
+                                  "content": "Ready for your review",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "QHob2",
+                                  "name": "Every step of the run passed. It",
+                                  "fill": "$text_secondary",
+                                  "content": "Every step of the run passed. Its changes wait for your review.",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "XKfzl",
+                          "name": "Actions",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "QDJep",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Merge into main",
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "git-merge"
+                                },
+                                "P8aXN": {
+                                  "content": "Merge into main"
+                                }
+                              }
+                            },
+                            {
+                              "id": "JkQ8A",
+                              "type": "ref",
+                              "ref": "Dswcx",
+                              "name": "Create pull request",
+                              "descendants": {
+                                "umW23": {
+                                  "icon": "git-pull-request"
+                                },
+                                "Y6DIM": {
+                                  "content": "Create pull request"
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "RjUKw",
+                              "name": "Open as draft",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "id": "I63Gu",
+                                  "type": "ref",
+                                  "ref": "XC5zU",
+                                  "name": "Switch · on"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "wAF9x",
+                                  "name": "Label",
+                                  "fill": "$text_primary",
+                                  "content": "Open as draft",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "YfTdB",
+                              "type": "ref",
+                              "ref": "Dswcx",
+                              "name": "Ask agent",
+                              "descendants": {
+                                "umW23": {
+                                  "icon": "message-square-text"
+                                },
+                                "Y6DIM": {
+                                  "content": "Ask agent"
+                                }
+                              }
+                            },
+                            {
+                              "id": "MbiSg",
+                              "type": "ref",
+                              "ref": "Dswcx",
+                              "name": "Review PR · unavailable",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "umW23": {
+                                  "icon": "lock"
+                                },
+                                "Y6DIM": {
+                                  "content": "Review PR"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "id": "Qm6ic",
+                          "type": "ref",
+                          "ref": "QR1ER",
+                          "name": "Unavailable · Review PR needs a pull request",
+                          "descendants": {
+                            "Cvxzc": {
+                              "content": "Review PR needs a pull request: create one for this run first."
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "PSOnJ",
+              "name": "Board · 2 · Create pull request · local main not pushed",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "yoIvj",
+                  "name": "Caption",
+                  "fill": "$text_secondary",
+                  "content": "2 · After Create pull request · local main has commits that aren't on origin · asked in place",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "frame",
+                  "id": "SxONW",
+                  "name": "Content · Summary column",
+                  "width": 852,
+                  "fill": "$surface_panel",
+                  "cornerRadius": 10,
+                  "stroke": "$border_panel",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "padding": [
+                    20,
+                    32,
+                    28,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "V4Axs",
+                      "name": "Ready card · asks about local main",
+                      "width": "fill_container",
+                      "fill": "$success_muted",
+                      "cornerRadius": 10,
+                      "stroke": "$success",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        16,
+                        18
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Eu7tO",
+                          "name": "Head",
+                          "width": "fill_container",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "eqRXR",
+                              "name": "Icon",
+                              "width": 17,
+                              "height": 17,
+                              "icon": "circle-check",
+                              "library": "lucide",
+                              "fill": "$success"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "YvhvY",
+                              "name": "T",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 3,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "tnmqW",
+                                  "name": "Ready for your review",
+                                  "fill": "$text_primary",
+                                  "content": "Ready for your review",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "oOuoa",
+                                  "name": "Every step of the run passed. It",
+                                  "fill": "$text_secondary",
+                                  "content": "Every step of the run passed. Its changes wait for your review.",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "PJBRJ",
+                          "type": "ref",
+                          "ref": "RWODj",
+                          "name": "In-place question · base not pushed",
+                          "descendants": {
+                            "LQkgW": {
+                              "content": "Local main has 1 commit that isn't on origin"
+                            },
+                            "Npd7H": {
+                              "icon": "git-commit-horizontal"
+                            },
+                            "vz7oQ": {
+                              "content": "This run's branch was cut from your local main, so its pull request would carry those commits too."
+                            },
+                            "KhL3P": {
+                              "icon": "cloud-upload"
+                            },
+                            "cWHyo": {
+                              "content": "Push main to origin first, then create the pull request. Orchester doesn't push main for you."
+                            },
+                            "emjRS": {
+                              "name": "Create anyway"
+                            },
+                            "emjRS/SUTVv": {
+                              "icon": "git-pull-request"
+                            },
+                            "emjRS/P8aXN": {
+                              "content": "Create anyway"
+                            },
+                            "OWM8D": {
+                              "name": "Cancel"
+                            },
+                            "OWM8D/Y6DIM": {
+                              "content": "Cancel"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dmnXJ",
+              "name": "Board · 3 · Create pull request · local main not pushed · automation refused",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TelKM",
+                  "name": "Caption",
+                  "fill": "$text_secondary",
+                  "content": "3 · The same question · window automation pressed a button · refused in place",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "frame",
+                  "id": "Fzvgs",
+                  "name": "Content · Summary column",
+                  "width": 852,
+                  "fill": "$surface_panel",
+                  "cornerRadius": 10,
+                  "stroke": "$border_panel",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "padding": [
+                    20,
+                    32,
+                    28,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Q5UPv",
+                      "name": "Ready card · asks about local main",
+                      "width": "fill_container",
+                      "fill": "$success_muted",
+                      "cornerRadius": 10,
+                      "stroke": "$success",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        16,
+                        18
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "x7MUIv",
+                          "name": "Head",
+                          "width": "fill_container",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "uuYUt",
+                              "name": "Icon",
+                              "width": 17,
+                              "height": 17,
+                              "icon": "circle-check",
+                              "library": "lucide",
+                              "fill": "$success"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "scVMP",
+                              "name": "T",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 3,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "x0zHp5",
+                                  "name": "Ready for your review",
+                                  "fill": "$text_primary",
+                                  "content": "Ready for your review",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "A3y5mJ",
+                                  "name": "Every step of the run passed. It",
+                                  "fill": "$text_secondary",
+                                  "content": "Every step of the run passed. Its changes wait for your review.",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "T5vyI",
+                          "type": "ref",
+                          "ref": "RWODj",
+                          "name": "In-place question · base not pushed",
+                          "descendants": {
+                            "LQkgW": {
+                              "content": "Local main has 3 commits that aren't on origin"
+                            },
+                            "Npd7H": {
+                              "icon": "git-commit-horizontal"
+                            },
+                            "vz7oQ": {
+                              "content": "This run's branch was cut from your local main, so its pull request would carry those commits too."
+                            },
+                            "KhL3P": {
+                              "icon": "cloud-upload"
+                            },
+                            "cWHyo": {
+                              "content": "Push main to origin first, then create the pull request. Orchester doesn't push main for you."
+                            },
+                            "N0NL0": {
+                              "type": "frame",
+                              "id": "d1WAAG",
+                              "name": "Error and buttons",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "id": "n0fUt6",
+                                  "type": "ref",
+                                  "ref": "d5xipm",
+                                  "name": "Field error · only a person",
+                                  "width": "fill_container",
+                                  "alignItems": "start",
+                                  "descendants": {
+                                    "rCoJS": {
+                                      "content": "Only a person decides this in the window: window automation can't create it anyway or put this away.",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ZaQd5",
+                                  "name": "Buttons",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "L6nL2",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Create anyway",
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "git-pull-request"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Create anyway"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "VGjhO",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Cancel",
+                                      "descendants": {
+                                        "umW23": {
+                                          "enabled": false
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Cancel"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },

@@ -5,14 +5,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use super::{
-  AccountUsage, CliSeries,
+  CliSeries, ProviderUsage, SpentOn,
   facts::ProjectFacts,
   report::{Spender, Within},
 };
-use crate::{
-  id::{AgentAccountId, ProjectId},
-  run::TokenUsage,
-};
+use crate::{id::ProjectId, run::TokenUsage};
 
 /// What a row groups by.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -29,12 +26,12 @@ pub enum BreakdownKey {
   Project(ProjectId, Arc<str>),
 }
 
-/// One row: spent tokens per CLI (indexed by [`CliSeries::index`]), and its usage per account.
+/// One row: spent tokens per CLI (indexed by [`CliSeries::index`]), and its usage per agent provider.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BreakdownRow {
   pub key: BreakdownKey,
   pub by_cli: [u64; 3],
-  pub by_account: AccountUsage,
+  pub by_provider: ProviderUsage,
 }
 
 impl BreakdownRow {
@@ -61,7 +58,7 @@ impl Breakdowns {
     let mut by_project = Rows::default();
     for turn in &within.turns {
       let invocation = turn.launch.invocation;
-      let series = (CliSeries::of(turn.cli()), turn.account(), turn.usage);
+      let series = (CliSeries::of(turn.cli()), turn.spent_on(), turn.usage);
       let profile = match turn.by {
         Spender::Agent => invocation.profile.as_ref().map(|profile| BreakdownKey::ProfileStep {
           profile: profile.clone(),
@@ -100,14 +97,14 @@ impl Breakdowns {
 }
 
 #[derive(Default)]
-struct Rows(HashMap<BreakdownKey, ([u64; 3], AccountUsage)>);
+struct Rows(HashMap<BreakdownKey, ([u64; 3], ProviderUsage)>);
 
 impl Rows {
-  /// A turn's tokens under `key`, on its CLI and its account.
-  fn add(&mut self, key: BreakdownKey, (cli, account, usage): (CliSeries, Option<AgentAccountId>, TokenUsage)) {
-    let (by_cli, by_account) = self.0.entry(key).or_default();
+  /// A turn's tokens under `key`, on its CLI and its provider.
+  fn add(&mut self, key: BreakdownKey, (cli, on, usage): (CliSeries, SpentOn, TokenUsage)) {
+    let (by_cli, by_provider) = self.0.entry(key).or_default();
     by_cli[cli.index()] = by_cli[cli.index()].saturating_add(usage.counted());
-    by_account.add(account, usage);
+    by_provider.add(on, usage);
   }
 
   /// Rows with tokens, most first; ties by key so the order is stable.
@@ -115,10 +112,10 @@ impl Rows {
     let mut rows: Vec<BreakdownRow> = self
       .0
       .into_iter()
-      .map(|(key, (by_cli, by_account))| BreakdownRow {
+      .map(|(key, (by_cli, by_provider))| BreakdownRow {
         key,
         by_cli,
-        by_account,
+        by_provider,
       })
       .filter(|row| row.total() > 0)
       .collect();
