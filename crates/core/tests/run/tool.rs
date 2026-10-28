@@ -259,6 +259,10 @@ fn tool_step_report_as_markdown_puts_the_output_in_a_code_block() {
       &OutputCapture::new(OutputLimit::DEFAULT).finish(),
     )
     .expect("output");
-  assert_eq!(tool_report_markdown(&silent.text), silent.text, "nothing printed, nothing fenced");
+  assert_eq!(
+    tool_report_markdown(&silent.text),
+    silent.text,
+    "nothing printed, nothing fenced"
+  );
   assert_eq!(tool_report_markdown("**Done.**"), "**Done.**");
 }
