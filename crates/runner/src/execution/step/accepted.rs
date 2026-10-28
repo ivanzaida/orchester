@@ -67,6 +67,6 @@ impl RunTask {
         ..result
       })?;
     }
-    self.pass(execution, (&workspace, &invocation), text)
+    self.pass(execution, (&workspace, &invocation), judged.judged(), text)
   }
 }
