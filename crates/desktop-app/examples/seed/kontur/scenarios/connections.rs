@@ -109,7 +109,7 @@ pub(super) fn github(kontur: &mut Kontur, program: PathBuf, at: Timestamp) -> Re
   let invalid = |error: &dyn std::fmt::Display| SeedError::Invalid(error.to_string());
   let mut connection = GitHubConnection::new(
     ConnectionId::generate(),
-    name("GitHub · github.com"),
+    name("gh · github.com"),
     GitHubHost::github_com(),
     program,
     at,

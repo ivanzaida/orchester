@@ -28,7 +28,9 @@ use crate::{
   theme::{DeliveryText, ExtraSpacing, ExtraTypography, TaskText},
   ui::{
     card::{CardSurface, card},
+    chat::links,
     icon::Icon,
+    markdown::MarkdownView,
     notice::{Notice, NoticeTone},
   },
 };
@@ -135,8 +137,8 @@ pub(super) fn checks_card(ctx: &Ctx, id: &str, rows: Vec<Element>) -> Element {
     .into()
 }
 
-/// *In Builder's words*: what the Integrate step's agent last reported, when it did.
-fn integrator_words(ctx: &Ctx, view: &View<'_>, integrator: &str) -> Option<Element> {
+/// *In Builder's words*: what the Integrate step's agent last reported, when it did, read as Markdown.
+fn integrator_words(ctx: &mut Ctx, view: &View<'_>, integrator: &str) -> Option<Element> {
   let step = view.queue.delivery.as_ref().and_then(|delivery| {
     delivery.events.iter().rev().find_map(|recorded| match &recorded.event {
       QueueEvent::IntegrateStarted { step, .. } => Some(step.clone()),
@@ -154,13 +156,12 @@ fn integrator_words(ctx: &Ctx, view: &View<'_>, integrator: &str) -> Option<Elem
     .find(|invocation| invocation.execution == execution)
     .map(|invocation| clock(invocation.started_at));
   let figure = at.map(|at| ctx.t_args("delivery.task.failed.wordsAt", [("time", at)]));
+  let said = MarkdownView::new("task-delivery-integrator-words-text", said.trim(), links(ctx))
+    .style(ExtraTypography::Prose.role(), PaletteColor::TextSecondary)
+    .render(ctx);
   let quote = card("task-delivery-integrator-words", CardSurface::Outline)
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .child(
-      Text::new(said.trim())
-        .variant(ExtraTypography::Prose.role())
-        .width(Dimension::Pct(100.0)),
-    );
+    .child(said);
   let title = ctx.t_args("delivery.task.failed.words", [("integrator", integrator)]);
   let head = Row::new()
     .width(Dimension::Pct(100.0))

@@ -1,8 +1,10 @@
 //! The Limits chip (`Limits` `XKfLI`) and its popover: the run budget and the time limit (`Limit field` `UQFos`), each
 //! read back in words under it. Each is optional and has no maximum (the person's decision of 2026-10-09): an empty
 //! field is no limit, read back *No limit · the run uses what it needs*, and a task without either is complete and
-//! runs; only text that is not a whole number is refused, in the field's own words. The chip reads what is set, e.g.
-//! *Limits · 1.4M · 30 min*, *Limits · No limit*, and says its name in `warning` while a value is refused.
+//! runs; only text that is not a whole number is refused, in the field's own words. New task starts with the project's
+//! defaults. The chip reads *Limits · Default* while the task holds them (`SclBL` in `cg0vn`), else what is set, e.g.
+//! *Limits · 1.4M · 30 min*, or *Limits · No limit* when neither is, and says its name in `warning` while a value is
+//! refused.
 
 use std::sync::Arc;
 
@@ -16,9 +18,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::tokens::{compact_tokens, parse_optional_budget};
+use orchester_core::{
+  limits::ProjectLimits,
+  tokens::{compact_tokens, parse_optional_budget},
+};
 use orchester_workspace::{
-  budget::{read_minutes, whole_minutes},
+  budget::{holds_defaults, read_minutes, whole_minutes},
   messages::Message,
 };
 
@@ -37,6 +42,8 @@ const WIDTH: f32 = 460.0;
 pub struct LimitFields<'a> {
   pub budget: &'a Signal<String>,
   pub time_limit: &'a Signal<String>,
+  /// The project's limits, whose defaults the chip names *Default*.
+  pub defaults: ProjectLimits,
 }
 
 pub fn limits_chip(
@@ -46,8 +53,11 @@ pub fn limits_chip(
   separator: &str,
 ) -> Element {
   let refused = view.budget_error.is_some() || view.time_error.is_some();
+  let typed = (view.values.budget.as_str(), view.values.time_limit.as_str());
   let value = if refused {
     ctx.t("task_form.fields.limits.invalid")
+  } else if holds_defaults(fields.defaults, typed, separator) {
+    ctx.t("task_form.fields.limits.default")
   } else {
     chip_value(ctx, view, separator)
   };

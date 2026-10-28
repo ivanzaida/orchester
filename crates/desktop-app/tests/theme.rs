@@ -114,6 +114,7 @@ fn every_extra_color_is_registered_with_its_design_value() {
     ExtraColor::ChartNone => ("#8A8A92", "#6B6B74"),
     ExtraColor::ChartHatch => ("#FFFFFF0F", "#00000012"),
     ExtraColor::MarkClaude => ("#D97757", "#D97757"),
+    ExtraColor::Note => ("#202023", "#E4E4E8"),
   };
   let (dark, light) = (themed(Mode::Dark), themed(Mode::Light));
   for extra in ExtraColor::ALL {

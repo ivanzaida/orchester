@@ -15,7 +15,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use super::{PATIENCE, Setup, TestProject, project, reported, scheduler_with};
+use super::{PATIENCE, Setup, TestProject, project, reported, run_folder, scheduler_with};
 
 /// A run whose yielded cell's outside search waits for the person (`fake_codex_cell`).
 pub struct Waiting {
@@ -84,7 +84,7 @@ pub async fn pending(
 
 /// Lets the fake's model end its turn and waits until it has.
 pub async fn ended_turn(root: &Path, id: RunId) {
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
+  let worktree = run_folder(root, id);
   std::fs::write(worktree.join("yield-turn.txt"), "end the model turn").expect("release turn");
   tokio::time::timeout(PATIENCE, async {
     loop {

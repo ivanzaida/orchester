@@ -58,7 +58,7 @@ impl ChatResume {
   /// `runner_failure`: why the runner failed, when it interrupted the run and recorded why.
   pub const fn of(status: &RunStatus, runner_failure: Option<RunnerFailure>, worktree_present: bool) -> Self {
     match status {
-      RunStatus::Paused(PauseReason::Requested) => Self::Paused,
+      RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk) => Self::Paused,
       RunStatus::Paused(PauseReason::LimitReached(limit)) => Self::PersonOnly(PersonsStop::Limit(*limit)),
       RunStatus::Interrupted(_) if !worktree_present => Self::PersonOnly(PersonsStop::WorktreeGone),
       RunStatus::Interrupted(InterruptCause::RunnerFailed) => match runner_failure {

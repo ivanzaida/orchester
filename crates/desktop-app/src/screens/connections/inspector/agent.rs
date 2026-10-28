@@ -238,7 +238,6 @@ pub(super) fn program_rows(ctx: &mut Ctx, connection: &AgentConnection, inspecti
   let mut rows = vec![
     SettingRow::new("connection-program", ctx.t("connections.property.program"))
       .toned(hint, hint_tone)
-      .info(ctx.t(provider_key(connection.provider())))
       .control(value("connection-version", &version))
       .render(ctx),
   ];
@@ -278,8 +277,9 @@ fn too_old(ctx: &Ctx, connection: &AgentConnection) -> Option<Element> {
   )
 }
 
-/// *Models* (`OWJtS`): the models the last check listed (a model the CLI is too old for marked) in the row's hint,
-/// where the list came from in its (i), and Refresh; a CLI on an API provider types its models in Edit connection.
+/// *Models* (`OWJtS`): the models the last check listed (a model the CLI is too old for marked) in the row's hint, or
+/// where the list comes from while there is none, and Refresh; a CLI on an API provider types its models in Edit
+/// connection.
 pub(super) fn models(
   ctx: &mut Ctx,
   connection: &AgentConnection,
@@ -319,8 +319,7 @@ pub(super) fn models(
     listed(ctx, &names)
   };
   let row = SettingRow::new("connection-models", ctx.t("connections.modelsItLists"))
-    .toned(hint, if too_old { Tone::Warning } else { Tone::Muted })
-    .info(ctx.t(source));
+    .toned(hint, if too_old { Tone::Warning } else { Tone::Muted });
   // An API provider's models are typed in Edit connection; a check of the CLI lists none of them.
   let row = if connection.api_provider().is_none() {
     row.control(

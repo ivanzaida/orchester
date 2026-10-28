@@ -19,6 +19,7 @@ mod merge;
 mod merged;
 mod recorded;
 pub mod resolve;
+pub mod workspace;
 
 use std::path::Path;
 

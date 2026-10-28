@@ -20,10 +20,10 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing, TaskFormText},
   ui::{
     icon::{Icon, icon},
-    popover::{PopoverSide, popover},
+    popover::{PopoverSide, popover, popover_inside},
     pressable::{inert, pressable},
   },
 };
@@ -108,6 +108,9 @@ pub struct PropertyChip {
   locked: bool,
   /// It cannot be changed here, for this reason: a lock at its end, its popover says why.
   unavailable: Option<Arc<str>>,
+  /// The column its popover, this wide, stays inside, ending this far or more before the column's end; `None`: the
+  /// popover opens under the chip from its start.
+  inside: Option<(ElementRef, f32, f32)>,
 }
 
 impl PropertyChip {
@@ -121,6 +124,7 @@ impl PropertyChip {
       warning: false,
       locked: false,
       unavailable: None,
+      inside: None,
     }
   }
 
@@ -140,6 +144,14 @@ impl PropertyChip {
   #[must_use]
   pub fn unavailable(mut self, reason: Arc<str>) -> Self {
     self.unavailable = Some(reason);
+    self
+  }
+
+  /// Its popover, `width` wide, stays under the chip and inside `column`, ending `end_inset` or more before the
+  /// column's end ([`popover_inside`]).
+  #[must_use]
+  pub fn inside(mut self, column: ElementRef, (width, end_inset): (f32, f32)) -> Self {
+    self.inside = Some((column, width, end_inset));
     self
   }
 
@@ -215,7 +227,16 @@ impl PropertyChip {
         .describe("reason", reason.clone())
         .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-lock", self.id)));
     }
-    Row::new().child(chip).child(state.popover(panel)).into()
+    let popup = match &self.inside {
+      Some((column, width, end_inset)) => popover_inside(
+        (&state.anchor, column),
+        state.open.clone(),
+        (*width, *end_inset),
+        panel.unwrap_or_default(),
+      ),
+      None => state.popover(panel),
+    };
+    Row::new().child(chip).child(popup).into()
   }
 }
 
@@ -260,61 +281,119 @@ pub fn chip_row(id: &str, chips: Vec<Element>) -> Element {
     .into()
 }
 
+/// Where a menu option's help goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HelpPlace {
+  /// Beside the icon, under the name (`Outside the repository` `yufU5`): 8 over and under, 10 from the icon.
+  BesideIcon,
+  /// Under the icon and the name, in a line of its own (`Feature delivery v3` `I2BrOT`): 7 over and under, the icon 8
+  /// from the name.
+  UnderIcon,
+}
+
 /// One choice of a chip's menu that says what it chooses (`Feature delivery v3` `I2BrOT`, `Outside the repository`
 /// `yufU5`): a 14 icon, its name in 12.5/500 and its help in 11.5 `text_muted` under it, a check at its end while it is
-/// the choice; 8 over and under, 10 at the sides, radius 6, the `hover` fill under the pointer. A press chooses it and
-/// closes the menu `open`.
+/// the choice; 10 at the sides, radius 6, the `hover` fill under the pointer and while it is the choice. A press
+/// chooses it and closes the menu `open`.
 pub struct MenuOption {
   pub id: String,
   pub icon: Icon,
   pub title: Arc<str>,
   pub help: Option<Arc<str>>,
+  pub help_place: HelpPlace,
   pub chosen: bool,
 }
 
 impl MenuOption {
-  pub fn render(self, open: &Signal<bool>, choose: impl Fn() + Send + Sync + 'static) -> Element {
-    let open = open.clone();
-    let words = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
-      .child(
-        Text::new(&self.title)
-          .id(format!("{}-title", self.id))
-          .variant(ExtraTypography::OptionTitle.role()),
-      )
-      .with_children(self.help.map(|help| {
-        Text::new(&help)
-          .id(format!("{}-help", self.id))
-          .width(Dimension::Pct(100.0))
-          .variant(ExtraTypography::Note.role())
-      }));
-    let glyph = if self.chosen {
+  fn title(&self) -> Text {
+    Text::new(&self.title)
+      .id(format!("{}-title", self.id))
+      .variant(ExtraTypography::OptionTitle.role())
+  }
+
+  fn help(&self, style: TypographyStyle) -> Option<Text> {
+    self.help.as_ref().map(|help| {
+      Text::new(help)
+        .id(format!("{}-help", self.id))
+        .width(Dimension::Pct(100.0))
+        .variant(style)
+    })
+  }
+
+  fn check(&self) -> Option<Text> {
+    self
+      .chosen
+      .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary))
+  }
+
+  fn glyph(&self) -> Text {
+    let color = if self.chosen {
       PaletteColor::TextPrimary
     } else {
       PaletteColor::TextSecondary
     };
-    pressable(move || {
+    icon(self.icon, IconSize::Md, color)
+  }
+
+  /// The icon, then the name with the help under it.
+  fn beside(self, option: Button) -> Button {
+    let words = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(self.title())
+      .with_children(self.help(ExtraTypography::Note.role()));
+    option
+      .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+      .spacing(ExtraSpacing::Loose.role())
+      .align_items(Alignment::Start)
+      .child(self.glyph())
+      .child(words)
+      .with_children(self.check())
+  }
+
+  /// A line of the icon, the name and the check, then the help under it from the icon's start.
+  fn under(self, option: Button) -> Button {
+    let line = Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(self.glyph())
+      .child(self.title().flex(1.0).min_width(Dimension::Px(0.0)))
+      .with_children(self.check());
+    let lines = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(line)
+      .with_children(self.help(TaskFormText::OptionMeta.role()));
+    option
+      .padding(Padding::symmetric(
+        ExtraSpacing::Loose.role(),
+        TaskFormSpacing::MenuOption.role(),
+      ))
+      .child(lines)
+  }
+
+  pub fn render(self, open: &Signal<bool>, choose: impl Fn() + Send + Sync + 'static) -> Element {
+    let open = open.clone();
+    let mut option = pressable(move || {
       open.set(false);
       choose();
     })
     .id(self.id.clone())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Start)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .describe("a11y_name", self.title.clone())
-    .describe("chosen", if self.chosen { "true" } else { "false" })
-    .child(icon(self.icon, IconSize::Md, glyph))
-    .child(words)
-    .with_children(
-      self
-        .chosen
-        .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)),
-    )
+    .describe("chosen", if self.chosen { "true" } else { "false" });
+    if self.chosen {
+      option = option.background(ExtraColor::Hover.role());
+    }
+    match self.help_place {
+      HelpPlace::BesideIcon => self.beside(option),
+      HelpPlace::UnderIcon => self.under(option),
+    }
     .into()
   }
 }

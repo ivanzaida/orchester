@@ -731,6 +731,7 @@
     "capacity": {
       "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
       "noAgentSlot": "All {{slots}} agent slots are in use. Try again when a running run settles.",
+      "lowDisk": "Low disk space: {{free}} GB free of the {{needed}} GB the project keeps free. New steps wait until there is room; Clean up in Project settings › Runs frees some.",
       "shuttingDown": "Orchester is closing; no new work starts."
     },
     "control": {
@@ -1511,7 +1512,7 @@
       "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
       "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets)."
     },
-    "githubConnectionName": "GitHub · {{host}}",
+    "githubConnectionName": "gh · {{host}}",
     "projectTools": {
       "errors": {
         "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",

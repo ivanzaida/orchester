@@ -52,7 +52,7 @@ use crate::{
 
 /// The … menu's width (`Menu` in `05b` `PGwka`).
 const MENU_WIDTH: f32 = 220.0;
-/// The head status's dot (`Dot` `IY1SX` in `05b`).
+/// A status's dot (`Dot` `IY1SX` in `05b`, `Vqfat` in `05`).
 const STATUS_DOT: f32 = 6.0;
 
 /// A question the page asks in place before it acts.
@@ -194,14 +194,15 @@ pub(super) fn page(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Actions
     .into()
 }
 
-/// The … button and the menu it opens at its end.
+/// The … button and the menu it opens at its end; while the menu is open the button shows it pressed, without its
+/// tooltip, which would show over the menu.
 fn more_menu(ctx: &mut Ctx, actions: &Actions, items: Vec<MenuItem>) -> Element {
   let (open, anchor) = actions.more.clone();
   let toggle = open.clone();
   let button = IconButton::new("connection-more", Icon::Ellipsis, ctx.t("connections.more"))
     .element(anchor.clone())
-    .on_click(move || toggle.update(|open| *open = !*open))
-    .render(ctx);
+    .on_click(move || toggle.update(|open| *open = !*open));
+  let button = if open.get() { button.active() } else { button }.render(ctx);
   let panel = items.into_iter().fold(
     menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)),
     |panel, item| panel.child(item.render(ctx, &open)),
@@ -216,52 +217,49 @@ fn title(name: &str) -> Text {
     .variant(ProjectSettingsText::PageTitle.role())
 }
 
-/// A status as its icon in its tone and its word, with what follows it (a list row's status cell).
+/// A status as a dot of its tone and its word, with what follows it (`Status` `l1Gh8O`, the 6 `Dot` `IY1SX`); a check
+/// under way keeps its turning loader instead.
 pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, detail: Option<&str>) -> Row {
-  let lead = icon(status.icon, IconSize::Sm, status.tone.color()).into();
-  said_status(ctx, (id, lead), (status, detail), status.tone.word_color())
+  said_status(ctx, id, (status, detail), status.tone.word_color())
 }
 
-/// The page head's status (`Status` `l1Gh8O`): a dot of its tone, or the turning loader while a check runs, and its
-/// word with what follows it, said in its tone when it asks for something, unless the page is a native connection's
-/// (`native`).
+/// The page head's status (`Status` `l1Gh8O`), its word said in its tone when it asks for something, unless the page
+/// is a native connection's (`native`).
 fn head_status(ctx: &Ctx, status: Shown, detail: Option<&str>, native: bool) -> Row {
-  let lead = if status.tone == Tone::Busy {
-    icon(status.icon, IconSize::Sm, status.tone.color()).into()
-  } else {
-    Row::new()
-      .width(Dimension::Px(STATUS_DOT))
-      .height(Dimension::Px(STATUS_DOT))
-      .rounded(ExtraRadius::Full.role())
-      .background(status.tone.color())
-      .into()
-  };
   let words = if native {
     PaletteColor::TextSecondary
   } else {
     status.tone.word_color()
   };
-  said_status(ctx, ("connection-inspector-status", lead), (status, detail), words)
+  said_status(ctx, "connection-inspector-status", (status, detail), words)
 }
 
-/// `lead`, then the status's word with what follows it in `color`.
-fn said_status(
-  ctx: &Ctx,
-  (id, lead): (&str, Element),
-  (status, detail): (Shown, Option<&str>),
-  color: PaletteColor,
-) -> Row {
+/// A dot of the status's tone, or the turning loader while a check runs, then its word with what follows it in
+/// `color`.
+fn said_status(ctx: &Ctx, id: &str, (status, detail): (Shown, Option<&str>), color: PaletteColor) -> Row {
   let word = ctx.t(status.key);
   let said = match detail {
     Some(detail) => ctx.t_args("connections.statusWith", [("status", &*word), ("detail", detail)]),
     None => word.clone(),
+  };
+  let mark: Element = if status.tone == Tone::Busy {
+    icon(status.icon, IconSize::Sm, status.tone.color()).into()
+  } else {
+    Row::new()
+      .id(format!("{id}-dot"))
+      .width(Dimension::Px(STATUS_DOT))
+      .height(Dimension::Px(STATUS_DOT))
+      .flex_shrink(0.0)
+      .rounded(ExtraRadius::Full.role())
+      .background(status.tone.color())
+      .into()
   };
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("status", word)
-    .child(lead)
+    .child(mark)
     .child(
       Text::new(&said)
         .variant(TypographyStyle::Description)
@@ -347,7 +345,9 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
   .icon(Icon::ArrowUpRight)
   .compact()
   .opens(actions.agents.clone());
+  // A list longer than the row ends in an ellipsis (`i4ZYXi`).
   let row = SettingRow::new("connection-used-by", label)
+    .cut_label()
     .hint(hint)
     .control(agents)
     .render(ctx);
