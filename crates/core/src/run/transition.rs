@@ -5,13 +5,13 @@
 use std::time::Duration;
 
 use super::{
-  attempt::Checkpoint,
+  attempt::{Checkpoint, StepExecution},
   branch::BranchName,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   not_started::WorktreeFailure,
   state::Run,
-  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus},
+  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus, StepStatus},
 };
 use crate::{
   id::{AttemptId, CheckpointId, StepExecutionId},
@@ -227,6 +227,23 @@ impl Run {
         revision,
       })
     })
+  }
+
+  /// Records `revision`, the tip of a succeeded run's branch, as the checkpoint of its last passed execution, when the
+  /// run has none: its agents committed their work themselves, which runners before ORC-147 did not record.
+  pub fn record_missing_checkpoint(&mut self, revision: Revision, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    let execution = self
+      .current_attempt()
+      .and_then(|attempt| {
+        attempt
+          .executions()
+          .iter()
+          .rev()
+          .find(|execution| execution.status() == StepStatus::Passed)
+      })
+      .map(StepExecution::id)
+      .ok_or(RunError::StepsNotPassed)?;
+    self.record_checkpoint(execution, revision, now)
   }
 
   /// Adds tokens an agent CLI reported. Usage is a fact, so it is recorded in every status.

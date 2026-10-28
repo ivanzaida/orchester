@@ -31,6 +31,7 @@ mod handoff;
 mod held;
 mod idle;
 mod low_disk;
+mod missing_checkpoints;
 #[cfg(feature = "test-agent")]
 mod own_worktrees;
 mod permissions;
@@ -161,6 +162,8 @@ impl Scheduler {
   ) -> Self {
     // Every statement of the process that waits for a database lock pauses off the runtime's async workers.
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
+    // Before the desktop connects and reads the runs.
+    missing_checkpoints::record(project_root);
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),

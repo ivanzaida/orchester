@@ -169,6 +169,13 @@ impl Run {
       self.expect_status(kind, !self.status.is_terminal())?;
       return self.expect_step(kind, execution, StepStatus::is_open);
     }
+    // The checkpoint a succeeded run lacks, of the commits its agents made themselves (`record_missing_checkpoint`).
+    if let RunEventKind::CheckpointRecorded { .. } = kind
+      && self.status == RunStatus::Succeeded
+    {
+      self.expect_status(kind, self.last_checkpoint.is_none())?;
+      return self.expect_step(kind, execution, |status| status == StepStatus::Passed);
+    }
     self.expect_status(kind, self.status == RunStatus::Running)?;
     match kind {
       RunEventKind::StepStarted { .. } => {

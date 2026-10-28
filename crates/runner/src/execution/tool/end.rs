@@ -47,6 +47,7 @@ impl RunTask {
             self.pass(
               execution,
               (&active.workspace, &active.invocation),
+              active.judged.as_ref(),
               output.unwrap_or_default(),
             )
           }
