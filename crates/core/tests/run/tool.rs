@@ -16,7 +16,7 @@ use orchester_core::{
   },
   run::{
     CommandEnd, OutputCapture, PreflightInput, PreflightProblem, StepAt, StepFailure, StepOutcome, ToolCommand,
-    preflight,
+    preflight, tool_report_markdown,
   },
 };
 
@@ -219,4 +219,46 @@ fn tool_step_output_names_the_command_its_end_and_the_last_lines() {
     panic!("a finished command");
   };
   assert_eq!((result, exit_code), (ToolCommandResult::Passed, Some(0)));
+}
+
+#[test]
+fn tool_step_report_as_markdown_puts_the_output_in_a_code_block() {
+  let action = command();
+  let run = ToolCommand {
+    tool: "Run test suite",
+    action: &action,
+  };
+  let mut capture = OutputCapture::new(OutputLimit::DEFAULT);
+  for line in ["**not bold**", "a ``` fence", "- not a list"] {
+    capture.push(line);
+  }
+  let at_step = StepAt {
+    run: RunId::generate(),
+    execution: StepExecutionId::generate(),
+    step: key("checks"),
+    now: at(5),
+  };
+  let report = run
+    .output(
+      at_step.clone(),
+      CommandEnd::Exited { code: Some(1) },
+      Duration::from_secs(1),
+      &capture.finish(),
+    )
+    .expect("a finished step leaves an output");
+  assert_eq!(
+    tool_report_markdown(&report.text),
+    "Run test suite ran `cargo test`, which exited with code 1 after 1.0 s, a code the tool expects.\n\n\
+     The last lines of its output:\n\n````\n**not bold**\na ``` fence\n- not a list\n````"
+  );
+  let silent = run
+    .output(
+      at_step,
+      CommandEnd::Exited { code: Some(0) },
+      Duration::from_secs(1),
+      &OutputCapture::new(OutputLimit::DEFAULT).finish(),
+    )
+    .expect("output");
+  assert_eq!(tool_report_markdown(&silent.text), silent.text, "nothing printed, nothing fenced");
+  assert_eq!(tool_report_markdown("**Done.**"), "**Done.**");
 }
