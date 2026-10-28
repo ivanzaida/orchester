@@ -4,12 +4,16 @@
 //! v2, which only Preview release may call; Content checks reviews with Reviewer and runs Link checker, with Release
 //! notes style written for it; Implementation standards is a project rule; Preview host is an HTTP tool whose token is
 //! the secret PREVIEW_HOST_API_KEY.
+//!
+//! `import-done`: the same, after Preview release v3 and Preview host were imported into Kontur with every default
+//! choice, so PREVIEW_HOST_API_KEY is left unresolved (`06b` `ky5kJ`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{ConnectionId, ProjectId, ResourceId, SecretId},
+  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, SecretId},
+  import::{Catalog, Choices, Plan},
   project::{Project, ProjectKey},
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
@@ -18,14 +22,45 @@ use orchester_core::{
     Slug, StepKind, Tool, ToolAction,
   },
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  store::{ResourceStore, SecretStore},
+  store::{ImportStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb};
 
 use crate::kontur::{Kontur, SeedError, catalogue, files, git, name};
 
+/// Personal website as an import reads it, and the resources an import into Kontur selects.
+struct Website {
+  catalog: Catalog,
+  preview: ResourceId,
+  host: ResourceId,
+}
+
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  prepare(kontur).map(drop)
+}
+
+/// [`seed`], then Preview release and Preview host imported into Kontur an hour ago, with every default choice.
+pub fn done(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let website = prepare(kontur)?;
+  let target = Catalog::read(kontur.db.project().clone(), &kontur.db)?;
+  let selection = [website.preview, website.host].map(|id| {
+    let pick = website
+      .catalog
+      .resource(id)
+      .expect("Personal website has it")
+      .default_pick();
+    (id, pick)
+  });
+  let plan = Plan::new(&website.catalog, &target, &selection, &Choices::default());
+  let batch = plan
+    .batch(&website.catalog, IdempotencyKey::generate(), kontur.ago(60))
+    .map_err(|error| SeedError::Invalid(error.to_string()))?;
+  kontur.db.import(&batch)?;
+  Ok(())
+}
+
+fn prepare(kontur: &mut Kontur) -> Result<Website, SeedError> {
   kontur.catalogue()?;
   let now = kontur.ago(60);
   let programs = kontur.repo.join(".orchester").join("recorded");
@@ -51,7 +86,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// Personal website, a repository of its own beside Kontur's, registered in the app's database before Kontur.
-fn personal_website(kontur: &Kontur) -> Result<(), SeedError> {
+fn personal_website(kontur: &Kontur) -> Result<Website, SeedError> {
   let folder = kontur.app_database.with_file_name("repo-personal-website");
   std::fs::create_dir_all(&folder).map_err(|source| SeedError::Io {
     path: folder.clone(),
@@ -65,17 +100,23 @@ fn personal_website(kontur: &Kontur) -> Result<(), SeedError> {
   );
   let mut db = ProjectDb::create(&folder, project.clone())?;
   let now = kontur.ago(2 * 24 * 60);
-  website_catalogue(&mut db, &folder, now)?;
+  let (preview, host) = website_catalogue(&mut db, &folder, now)?;
+  let catalog = Catalog::read(project.clone(), &db)?;
   drop(db);
   let mut apps = AppDb::open(&kontur.app_database)?;
   // The signed-in account's project, or the next one's to sign in.
   let owner = apps.cloud_account()?.map(|account| account.account);
   // Opened a day before Kontur, which stays the project the app opens.
   apps.register_project(&project, &folder, kontur.ago(24 * 60), owner.as_ref())?;
-  Ok(())
+  Ok(Website { catalog, preview, host })
 }
 
-fn website_catalogue(db: &mut ProjectDb, folder: &std::path::Path, now: Timestamp) -> Result<(), SeedError> {
+/// Writes Personal website's catalogue: Preview release's id, then Preview host's.
+fn website_catalogue(
+  db: &mut ProjectDb,
+  folder: &std::path::Path,
+  now: Timestamp,
+) -> Result<(ResourceId, ResourceId), SeedError> {
   let codex = catalogue::recorded_connection(
     db,
     (
@@ -146,13 +187,15 @@ fn website_catalogue(db: &mut ProjectDb, folder: &std::path::Path, now: Timestam
   // No pipeline calls Preview host yet: its policy denies every caller.
   let host = Tool::new("", ToolAction::Http(request), Some(access(BTreeMap::new())?))
     .map_err(|error| SeedError::Invalid(error.to_string()))?;
-  db.create_resource(
-    Slug::new("preview-host").expect("slug"),
-    name("Preview host"),
-    &host,
-    now,
-  )?;
-  Ok(())
+  let host = db
+    .create_resource(
+      Slug::new("preview-host").expect("slug"),
+      name("Preview host"),
+      &host,
+      now,
+    )?
+    .id();
+  Ok((preview, host))
 }
 
 /// A staging policy that lets `callers` call the tool, after asking every call.

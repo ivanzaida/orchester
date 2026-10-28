@@ -6,6 +6,10 @@
 //! `danger` (`kXWCj`, `fRrDA`), a success on `success_muted` in `success` (`nqp68`). The text wraps and
 //! the icon stays with the first line.
 //!
+//! A flat notice ([`Notice::flat`], `Notice · warning` `Mxt7k` in the redesigned Pipelines `evQ4U`): its tone's
+//! fill without a stroke, radius 6, 10 over and under and 12 at its sides, a 14 icon 10 from the text (`text_muted`
+//! for information, `PlJxG`), the title, its explanation and its actions 6 apart.
+//!
 //! Handling notice (`Handling notice` `mERxM`): how something is handled, in one paragraph: a 15
 //! `text_secondary` icon and the words in 12/1.45 `text_secondary`, 10 apart; radius 8, 10 over and under and
 //! 12 at its sides, `surface_raised` in a `border` stroke.
@@ -85,6 +89,8 @@ pub struct Notice {
   parts: Vec<Element>,
   actions: Vec<Element>,
   layout: NoticeLayout,
+  /// Drawn as the redesigned screens draw it: no stroke, a smaller icon, its parts closer.
+  flat: bool,
 }
 
 impl Notice {
@@ -99,6 +105,7 @@ impl Notice {
       parts: Vec::new(),
       actions: Vec::new(),
       layout: NoticeLayout::Inline,
+      flat: false,
     }
   }
 
@@ -133,6 +140,13 @@ impl Notice {
     self
   }
 
+  /// The redesigned screens' notice (`Notice · warning` `Mxt7k` in `evQ4U`): its tone's fill without a stroke, a 14
+  /// icon, and its actions under its words.
+  pub fn flat(mut self) -> Self {
+    self.flat = true;
+    self
+  }
+
   /// `part` under the explanation, after the ones added before it: a command to run in a terminal
   /// (`Command` in `Account notice` `CWJuh`). Stacked actions follow the parts.
   pub fn part(mut self, part: impl Into<Element>) -> Self {
@@ -153,10 +167,17 @@ impl From<Notice> for Element {
       return inspector_notice(notice);
     }
     let (fill, stroke, mark) = notice.tone.colors();
-    let mark = notice.mark.unwrap_or(mark);
+    let flat = notice.flat;
+    // A flat notice's information icon is `text_muted` (`PlJxG` in `ky5kJ`).
+    let mark = match (flat, notice.tone) {
+      (true, NoticeTone::Info) => notice.mark.unwrap_or(PaletteColor::TextMuted),
+      _ => notice.mark.unwrap_or(mark),
+    };
     let text = Column::new()
       .id(format!("{}-text", notice.id))
-      .spacing(if notice.layout == NoticeLayout::Stacked {
+      .spacing(if flat {
+        ExtraSpacing::Snug.role()
+      } else if notice.layout == NoticeLayout::Stacked {
         ExtraSpacing::Fine.role()
       } else {
         ExtraSpacing::Tight.role()
@@ -177,11 +198,16 @@ impl From<Notice> for Element {
         .align_items(Alignment::Center)
         .with_children(notice.actions)
     });
-    let (text, actions) = if notice.layout == NoticeLayout::Stacked {
+    // A flat notice keeps its actions under its words, as a stacked one does.
+    let (text, actions) = if flat || notice.layout == NoticeLayout::Stacked {
       (
         Column::new()
           .flex(1.0)
-          .spacing(ExtraSpacing::Loose.role())
+          .spacing(if flat {
+            ExtraSpacing::Snug.role()
+          } else {
+            ExtraSpacing::Loose.role()
+          })
           .child(text)
           .with_children(notice.parts)
           .with_children(actions),
@@ -190,17 +216,31 @@ impl From<Notice> for Element {
     } else {
       (text.flex(1.0).with_children(notice.parts), actions)
     };
-    Row::new()
+    let row = Row::new()
       .id(notice.id.clone())
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Start)
       .background(fill)
-      .border(Border::inside(BorderSize::Sm, stroke))
-      .rounded(RadiusSize::Lg)
-      .describe("tone", notice.tone.name())
-      .child(icon(notice.icon, IconSize::Lg, mark).id(format!("{}-icon", notice.id)))
+      .describe("tone", notice.tone.name());
+    let (row, mark_size) = if flat {
+      (
+        row
+          .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+          .rounded(RadiusSize::Md),
+        IconSize::Md,
+      )
+    } else {
+      (
+        row
+          .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+          .border(Border::inside(BorderSize::Sm, stroke))
+          .rounded(RadiusSize::Lg),
+        IconSize::Lg,
+      )
+    };
+    row
+      .child(icon(notice.icon, mark_size, mark).id(format!("{}-icon", notice.id)))
       .child(text)
       .with_children(actions)
       .into()

@@ -40,11 +40,14 @@ pub struct LibraryEntry {
   pub state: VersionState,
   pub used_by: usize,
   pub last_published: Option<Timestamp>,
+  /// The project's default pipeline, which New task starts with.
+  pub default: bool,
 }
 
 /// The project's pipelines, ordered by slug.
 pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
   let tasks = db.tasks()?;
+  let default = db.default_pipeline()?;
   let mut entries = Vec::new();
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
@@ -71,6 +74,7 @@ pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
       state,
       used_by: tasks.iter().filter(|task| task.details().pipeline == Some(id)).count(),
       last_published: latest.map(|version| version.published_at()),
+      default: default == Some(id),
     });
   }
   Ok(entries)
@@ -78,6 +82,35 @@ pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
 
 pub fn library_in(repo_root: &Path) -> Result<Vec<LibraryEntry>, StoreError> {
   library(&ProjectDb::open(repo_root)?)
+}
+
+/// Makes `pipeline` the project's default, the one New task starts with. Only a published pipeline can be: New task
+/// lists no other.
+pub fn make_default_in(repo_root: &Path, pipeline: ResourceId) -> Result<(), MakeDefaultError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  if db.latest_version::<Pipeline>(pipeline)?.is_none() {
+    return Err(MakeDefaultError::NotPublished);
+  }
+  Ok(db.save_default_pipeline(Some(pipeline))?)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MakeDefaultError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  /// The pipeline has no published version: New task could not choose it.
+  #[error("the pipeline is not published")]
+  NotPublished,
+}
+
+impl MakeDefaultError {
+  /// What a person reads when the pipeline is not made the default.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Store(error) => messages::store_error(error),
+      Self::NotPublished => Message::new("pipelines.default.notPublished"),
+    }
+  }
 }
 
 /// What a new pipeline starts with.

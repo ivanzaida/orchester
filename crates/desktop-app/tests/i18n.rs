@@ -192,6 +192,73 @@ fn an_area_file_holds_its_own_keys_only_so_no_key_is_in_two_files() {
   }
 }
 
+/// The keys `json` repeats inside one object, as dotted paths. serde_json keeps the last of two equal keys
+/// silently, so a repeated key would hide the earlier text and its placeholders.
+fn repeated_keys(json: &str) -> Vec<String> {
+  let chars: Vec<char> = json.chars().collect();
+  // One frame per open object: its path, its keys so far and the key whose value comes next.
+  let mut objects: Vec<(String, BTreeSet<String>, Option<String>)> = Vec::new();
+  let mut repeated = Vec::new();
+  let mut at = 0;
+  while at < chars.len() {
+    match chars[at] {
+      '{' => {
+        let path = objects.last().map_or_else(String::new, |(path, _, key)| {
+          let key = key.clone().unwrap_or_default();
+          if path.is_empty() { key } else { format!("{path}.{key}") }
+        });
+        objects.push((path, BTreeSet::new(), None));
+      }
+      '}' => {
+        objects.pop();
+      }
+      '"' => {
+        let (literal, end) = read_string(&chars, at + 1);
+        at = end;
+        let next = chars
+          .get(end + 1..)
+          .unwrap_or_default()
+          .iter()
+          .copied()
+          .find(|c| !c.is_whitespace());
+        if let (Some(':'), Some((path, keys, key))) = (next, objects.last_mut()) {
+          if !keys.insert(literal.clone()) {
+            repeated.push(if path.is_empty() {
+              literal.clone()
+            } else {
+              format!("{path}.{literal}")
+            });
+          }
+          *key = Some(literal);
+        }
+      }
+      _ => {}
+    }
+    at += 1;
+  }
+  repeated
+}
+
+#[test]
+fn no_locale_file_repeats_a_key() {
+  assert_eq!(
+    repeated_keys(r#"{ "a": { "b": "x", "c": "{y}", "b": "z" }, "d": { "b": "w" } }"#),
+    ["a.b"],
+    "the scan finds a key repeated in one object only"
+  );
+  for locale in LOCALES {
+    for area in locale.areas {
+      let repeated = repeated_keys(area.contents);
+      assert!(
+        repeated.is_empty(),
+        "{}/{}.json repeats {repeated:?}",
+        locale.name,
+        area.name
+      );
+    }
+  }
+}
+
 #[test]
 fn locales_have_the_areas_keys_and_placeholders_of_the_fallback() {
   let expected: BTreeMap<&str, Leaves> = fallback()

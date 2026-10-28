@@ -14,7 +14,7 @@ use orchester_workspace::agents::usage::PipelineUse;
 use super::editor::Props;
 use crate::{
   navigation::Navigation,
-  routes::{PipelinePanel, ProjectPage, Route},
+  routes::{PipelineView, ProjectPage, Route},
   screens::hub::parts::{Entry, boxed, group, head, note, quiet},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -162,7 +162,7 @@ fn open_pipeline(
       let navigation = Navigation::of(ctx);
       let route = Route::Project(
         props.project.open.project.id(),
-        ProjectPage::Pipeline(step.pipeline, PipelinePanel::default()),
+        ProjectPage::Pipeline(step.pipeline, PipelineView::default()),
       );
       button.opens(navigation.to(route)).into()
     }

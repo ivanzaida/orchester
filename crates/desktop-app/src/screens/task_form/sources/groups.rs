@@ -21,7 +21,7 @@ use orchester_workspace::sources::{
 use super::SourcesProps;
 use crate::{
   navigation::Navigation,
-  routes::{PipelinePanel, ProjectPage, ProjectSettingsTab, Route},
+  routes::{PipelineView, ProjectPage, ProjectSettingsTab, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -101,7 +101,7 @@ pub(super) fn inherited(ctx: &mut Ctx, props: &SourcesProps, inherited: &Inherit
   let Some((pipeline, _)) = props.pipeline else {
     return groups;
   };
-  let route = Route::Project(props.project, ProjectPage::Pipeline(pipeline, PipelinePanel::Pipeline));
+  let route = Route::Project(props.project, ProjectPage::Pipeline(pipeline, PipelineView::Steps));
   let view = link(
     ctx,
     "task-form-sources-pipeline-link",

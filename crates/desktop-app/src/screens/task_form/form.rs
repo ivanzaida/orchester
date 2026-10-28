@@ -50,6 +50,8 @@ pub struct FormProps {
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for.
   pub missing_pipeline: Option<Arc<str>>,
+  /// The project's default pipeline, published, which New task starts with.
+  pub default_pipeline: Option<orchester_core::id::ResourceId>,
   /// The project's modules, which the task may go in.
   pub modules: Arc<Vec<Module>>,
   /// Whether the project is shared on a server, which keeps no *Don't merge automatically*.

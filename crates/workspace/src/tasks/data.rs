@@ -89,6 +89,8 @@ pub struct ProjectTasks {
   /// The project is shared on a server, which keeps no *Don't merge automatically* (ORC-69).
   pub shared: bool,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// The project's default pipeline (Pipelines › *Make default*), which New task starts with.
+  pub default_pipeline: Option<ResourceId>,
   /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
   pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
   /// Why each task of a reviewed group that holds its work waits.
@@ -273,6 +275,7 @@ impl ProjectTasks {
       queue: Arc::new(super::hold::held_in(db)?),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(db)?),
+      default_pipeline: db.default_pipeline()?,
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),

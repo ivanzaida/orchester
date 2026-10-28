@@ -59,22 +59,41 @@ fn profile(editor: &Editor, name: &str, commands: &[&str]) -> ResourceId {
   id
 }
 
+/// The step's Permissions page, from its fields.
+fn permissions(editor: &mut Editor) {
+  if editor.exists("step-open-permissions") {
+    editor.click("step-open-permissions");
+  }
+}
+
+/// The step's fields, from one of its pages.
+fn fields(editor: &mut Editor) {
+  if editor.exists("step-page-back") {
+    editor.click("step-page-back");
+  }
+}
+
 fn command(editor: &mut Editor, index: usize) {
+  permissions(editor);
   editor.click("step-command-picker");
   editor.click(&format!("step-command-{index}"));
   editor.click("step-command-picker");
 }
 
+fn executor(editor: &mut Editor, name: &str) {
+  fields(editor);
+  editor.choose("step-executor", name);
+}
+
 fn changed_profile() -> (Editor, ResourceId) {
   let mut editor = Editor::new();
-  // The step's sources come before its permissions: a taller window keeps the command list in view.
   editor.window.tree.resize(1440, 1800);
   profile(&editor, "Profile A", &["cargo check", "cargo test"]);
   profile(&editor, "Profile B", &["cargo test"]);
   let id = editor.empty("Permission transitions");
   editor.open(id);
   editor.click("pipeline-add-step");
-  editor.choose("step-executor", "Profile A");
+  executor(&mut editor, "Profile A");
   command(&mut editor, 1);
   editor.until("narrowed draft saved", |e| {
     e.db()
@@ -90,8 +109,10 @@ fn changed_profile() -> (Editor, ResourceId) {
           if only.entries().len() == 1 && only.entries()[0].as_str() == "cargo check"))
       })
   });
-  editor.choose("step-executor", "Profile B");
-  assert!(editor.exists("step-executor-error"));
+  executor(&mut editor, "Profile B");
+  editor.until("Profile B cannot keep A's narrowing", |e| {
+    e.exists("step-executor-error")
+  });
   (editor, id)
 }
 
@@ -108,21 +129,16 @@ fn pipelines_permissions_choices_open_from_compact_summary_and_preserve_enforcem
   let id = editor.empty("Compact permissions");
   editor.open(id);
   editor.click("pipeline-add-step");
-  editor.choose("step-executor", "Reviewer");
+  executor(&mut editor, "Reviewer");
+  assert!(editor.text("step-open-permissions").contains("From Reviewer"));
+  permissions(&mut editor);
   assert!(!editor.exists("step-command-0"));
   assert_eq!(editor.text("step-command-picker-label"), "From the profile");
   command(&mut editor, 1);
   assert_eq!(editor.text("step-command-picker-label"), "Narrowed · 2 allowed");
-  assert!(editor.text("step-permissions-title").contains("Narrower than Reviewer"));
+  assert!(editor.text("step-page-title").contains("Narrower than Reviewer"));
   assert!(!editor.exists("step-command-0"));
-  assert!(editor.text("step-narrow-note").contains("cargo clippy"));
-  let row = editor
-    .window
-    .tree
-    .get_element_by_id_mut("step-command-summary")
-    .and_then(|e| e.bounds())
-    .unwrap();
-  assert!((row.height - 28.0).abs() < 0.1, "{row:?}");
+  assert!(editor.text("step-commands-lead").contains("cargo clippy"));
   editor.until("commands saved", |e| {
     e.db()
       .draft::<Pipeline>(id)
@@ -174,6 +190,7 @@ fn pipelines_permissions_reset_recovers_obsolete_commands_after_profile_change()
 fn pipelines_permissions_removing_step_clears_its_error_and_allows_autosave() {
   let (mut editor, id) = changed_profile();
   permission_error(&mut editor);
+  fields(&mut editor);
   editor.click("step-remove");
   editor.click("step-remove-confirm");
   assert!(
@@ -189,8 +206,9 @@ fn pipelines_permissions_removing_step_clears_its_error_and_allows_autosave() {
 fn pipelines_permissions_replacing_executor_clears_only_its_permission_error() {
   let (mut editor, id) = changed_profile();
   permission_error(&mut editor);
+  fields(&mut editor);
   editor.set("step-budget", "invalid");
-  editor.choose("step-executor", "Profile A");
+  executor(&mut editor, "Profile A");
   assert!(!editor.exists("step-executor-error"));
   assert!(editor.exists("pipeline-field-error"), "the invalid budget must remain");
   editor.set("step-budget", "100");
@@ -218,6 +236,7 @@ fn pipelines_permissions_removing_another_step_does_not_clear_the_invalid_step()
     "the first step still has an error"
   );
   editor.click("pipeline-step-step");
+  permissions(&mut editor);
   editor.click("step-permissions-reset");
   assert!(!editor.exists("pipeline-field-error"));
   editor.until("remaining step autosaved", |e| {
@@ -228,19 +247,87 @@ fn pipelines_permissions_removing_another_step_does_not_clear_the_invalid_step()
   });
 }
 
-#[test]
-fn pipelines_permissions_reset_keeps_approvals_and_protects_weaker_publication() {
+/// A step that asks about its agent's tool calls, published as v1, and its Permissions page open again.
+fn asking_published() -> (Editor, ResourceId) {
   let (mut editor, id) = changed_profile();
-  editor.choose("step-executor", "Profile A");
+  executor(&mut editor, "Profile A");
+  permissions(&mut editor);
   editor.click("step-ask-tools");
   editor.until("approval retained in draft", |e| {
-    matches!(&e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[0].kind,
+    let draft = e
+      .db()
+      .draft::<Pipeline>(id)
+      .expect("the draft reads")
+      .expect("the draft exists");
+    matches!(&draft.body().steps()[0].kind,
       StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals)
   });
-  editor.db().publish_draft::<Pipeline>(id, Timestamp::now()).unwrap();
+  editor
+    .db()
+    .publish_draft::<Pipeline>(id, Timestamp::now())
+    .expect("the asking draft publishes");
   editor.go(orchester_app::routes::ProjectPage::Pipelines);
   editor.open(id);
   editor.click("pipeline-step-step");
+  permissions(&mut editor);
+  (editor, id)
+}
+
+#[test]
+fn pipelines_permissions_turning_ask_off_asks_before_saving_with_its_reason() {
+  let (mut editor, id) = asking_published();
+  editor.click("step-ask-tools");
+  editor.arm();
+  assert!(
+    editor.db().draft::<Pipeline>(id).unwrap().is_none(),
+    "a weaker draft is not saved on its own"
+  );
+  editor.click("pipeline-save");
+  editor.until("save question", |e| e.exists("pipeline-save-question-confirm"));
+  assert!(editor.gated(), "only a person answers it");
+  assert!(
+    editor
+      .text("pipeline-save-question")
+      .contains("Saving needs your approval")
+  );
+  assert!(
+    editor.exists("step-ask-tools"),
+    "the question sits beside the Permissions page"
+  );
+  let rect = |editor: &mut Editor, id: &str| {
+    editor
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.bounds())
+      .unwrap_or_else(|| panic!("laid out: {id}"))
+  };
+  let (column, title, question) = (
+    rect(&mut editor, "pipeline-step-column"),
+    rect(&mut editor, "step-page-title"),
+    rect(&mut editor, "pipeline-save-question"),
+  );
+  assert!(
+    question.x >= column.x && question.x + question.width <= column.x + column.width + 0.5,
+    "the question sits in the step column, not across the page: {question:?} in {column:?}"
+  );
+  assert!(question.y >= title.y + title.height, "under the Permissions title");
+  editor.click("pipeline-save-question-keep");
+  assert!(!editor.exists("pipeline-save-question"));
+  editor.click("pipeline-save");
+  editor.until("asked again", |e| e.exists("pipeline-save-question-confirm"));
+  editor.click("pipeline-save-question-confirm");
+  editor.until("weaker draft saved after approval", |e| {
+    e.db().draft::<Pipeline>(id).unwrap().is_some_and(|draft| {
+      matches!(&draft.body().steps()[0].kind, StepKind::Agent { permissions, .. }
+        if !permissions.interactive_tool_approvals)
+    })
+  });
+}
+
+#[test]
+fn pipelines_permissions_reset_keeps_approvals_and_protects_weaker_publication() {
+  let (mut editor, id) = asking_published();
   editor.click("step-permissions-reset");
   editor.until("reset autosaved", |e| {
     e.db().draft::<Pipeline>(id).unwrap().is_some_and(|draft| {
@@ -278,11 +365,11 @@ fn pipelines_permissions_tool_replacement_clears_error_but_keeps_save_approval()
   let id = editor.empty("Tool replacement");
   editor.open(id);
   editor.click("pipeline-add-step");
-  editor.choose("step-executor", "Profile A");
+  executor(&mut editor, "Profile A");
   command(&mut editor, 1);
-  editor.choose("step-executor", "Profile B");
+  executor(&mut editor, "Profile B");
   permission_error(&mut editor);
-  editor.choose("step-executor", "Checks");
+  executor(&mut editor, "Checks");
   assert!(!editor.exists("pipeline-field-error"));
   assert!(!editor.exists("step-executor-error"));
   editor.click("pipeline-save");

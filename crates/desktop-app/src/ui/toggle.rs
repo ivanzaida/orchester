@@ -204,6 +204,12 @@ pub fn check_mark(on: bool) -> Row {
   }
 }
 
+/// A radio's mark alone (`Radio/off` `RchTU`, `Radio/on` `vsbEb`), for a row that is pressed as a whole, e.g. a
+/// choice among grouped rows (`Y5K4K` in `Wq6tZ`).
+pub fn radio_mark(on: bool) -> Row {
+  Toggle::new("radio", ToggleKind::Radio, on, "").mark().flex_shrink(0.0)
+}
+
 impl From<Toggle> for Element {
   fn from(toggle: Toggle) -> Self {
     let mark = toggle.mark().id(format!("{}-mark", toggle.id));

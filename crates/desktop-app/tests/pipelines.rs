@@ -27,7 +27,10 @@ fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
   editor.click("pipeline-publish");
   assert!(editor.text("screen-pipelines").contains("Add a step before publishing"));
   assert!(!editor.exists("pipeline-publish-confirm"));
-  assert!(editor.exists("pipeline-add-first"));
+  assert!(
+    editor.exists("pipeline-use-starter"),
+    "an empty draft offers its starter steps"
+  );
   editor.click("pipeline-parent");
   editor.until("library row", |e| e.exists(&format!("pipeline-row-{id}")));
   assert!(editor.text(&format!("pipeline-row-{id}")).contains("Draft"));
@@ -43,7 +46,9 @@ fn pipelines_steps_keep_fields_validate_and_save() {
   editor.open(id);
   editor.click("pipeline-add-step");
   editor.set("step-name", "Check code");
+  editor.click("step-instructions-row");
   editor.set("step-instructions", "Inspect the changes.");
+  editor.click("step-page-back");
   editor.set("step-budget", "4,000");
   editor.click("step-gate");
   editor.click("pipeline-save");
@@ -119,7 +124,7 @@ fn pipelines_publish_weaker_version_asks_in_place_and_preserves_history() {
   editor.click("pipeline-settings");
   assert!(editor.exists("pipeline-settings-page"));
   editor.set("pipeline-settings-description", "Updated description");
-  editor.click("pipeline-back-steps");
+  editor.click("pipeline-tab-steps");
   editor.click("pipeline-save");
   editor.until("description saved", |e| {
     e.db()
@@ -138,8 +143,13 @@ fn pipelines_slug_collision_and_stale_editor_keep_the_existing_draft() {
   editor.set("pipeline-name", "Checks");
   editor.click("pipeline-start-2");
   editor.click("pipeline-create");
-  editor.until("collision", |e| e.exists("pipeline-create-error"));
-  assert!(editor.text("pipeline-create-error").contains("already used"));
+  editor.until("collision", |e| e.exists("pipeline-open-existing"));
+  assert!(editor.text("pipeline-slug-hint").contains("Already used by Checks"));
+  assert!(
+    editor
+      .text("screen-pipelines")
+      .contains("Choose a name with a free slug.")
+  );
   editor.open(id);
   editor.set("pipeline-description", "Local");
   let mut edit = PipelineEdit::new(editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().clone());
@@ -171,7 +181,9 @@ fn pipelines_agent_and_tool_steps_dependencies_retries_and_narrowing_are_saved()
   editor.click("pipeline-add-step");
   editor.set("step-name", "Inspect");
   editor.choose("step-executor", "Reviewer");
+  editor.click("step-open-permissions");
   editor.click("step-ask-tools");
+  editor.click("step-page-back");
   editor.click("pipeline-add-step");
   editor.set("step-name", "Verify");
   editor.choose("step-executor", "Checks");
@@ -223,17 +235,12 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
   editor.click("pipeline-version-1");
   assert!(editor.text("screen-pipelines").contains("Viewing v1"));
   editor.click("pipeline-step-step");
-  editor.click("step-gate");
   assert!(
-    editor
-      .db()
-      .latest_version::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
-      .body()
-      .steps()[0]
-      .approval_gate
+    !editor.exists("step-gate"),
+    "a viewed version reads its approval, never switches it"
   );
+  assert_eq!(editor.text("step-gate-row-value"), "On");
+  assert!(!editor.exists("pipeline-save"), "a viewed version has nothing to save");
   editor.click("pipeline-back-draft");
   assert!(!editor.text("screen-pipelines").contains("Viewing v1"));
 }
@@ -242,8 +249,12 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
 mod async_failures;
 #[path = "pipelines/base_moves.rs"]
 mod base_moves;
+#[path = "pipelines/default.rs"]
+mod default;
 #[path = "pipelines/delivers.rs"]
 mod delivers;
+#[path = "pipelines/flow.rs"]
+mod flow;
 #[path = "pipelines/history_safety.rs"]
 mod history_safety;
 #[path = "pipelines/layout.rs"]
@@ -271,3 +282,6 @@ mod watch_pileup;
 
 #[path = "pipelines/sources.rs"]
 mod sources;
+
+#[path = "pipelines/step_name.rs"]
+mod step_name;

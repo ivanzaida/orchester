@@ -53,6 +53,13 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
   unavailable reason. Its own words are in `en/ui.json` (`ui.*`), the shared Copy and Try again in `common.*`; extra roles add `ExtraShadow`, `ControlHeight` and the
   `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
   every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
+- Grouped rows (`ui::row_group`: `RowGroup`, `GroupRow`, `tag`, `note`; roles `GroupText`) draw a titled group of rows
+  in one outline, as the redesigned Pipelines screens do (`Pipelines · redesign` `evQ4U` in the new `orchester.pen`):
+  a row's label and hint, and at its end its control, its value or a chevron to a page; a radio row leads with
+  `toggle::radio_mark`. Their notices are `ui::notice::Notice::flat` (no stroke, a 14 icon, actions under the words).
+  Pipelines' own values are `PipelinesText` / `PipelinesSpacing` (`theme/pipelines.rs`). A
+  pipeline's page is one route with its tab and what its Steps column shows (`routes::PipelineView`): the canvas,
+  the step inspector, the settings page and the history panel are gone.
 
 ## Text through i18n
 

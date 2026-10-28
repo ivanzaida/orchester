@@ -171,8 +171,8 @@ pub fn model_choices<'a>(
   models
 }
 
-/// A name no step has yet: `first` ("New step"), else `numbered(2)`, `numbered(3)`, … so steps
-/// added one after another can be told apart.
+/// A name no step has yet: `first` (the app's "New step 4", by the number the step adds), else `numbered(2)`,
+/// `numbered(3)`, … so steps added one after another can be told apart.
 pub fn unused_step_name(steps: &[Step], first: &str, numbered: impl Fn(usize) -> String) -> Name {
   let taken = |candidate: &str| steps.iter().any(|step| step.name.as_str() == candidate);
   let name = std::iter::once(first.to_owned())

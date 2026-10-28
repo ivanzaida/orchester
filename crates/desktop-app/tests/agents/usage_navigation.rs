@@ -66,7 +66,7 @@ fn current_pipeline(screen: &mut Agents, pipeline: ResourceId) {
     screen.window.navigation().route_now(),
     Route::Project(project_id(), ProjectPage::Pipeline(pipeline, Default::default()))
   );
-  screen.until("actual current pipeline editor", |s| s.exists("pipeline-canvas"));
+  screen.until("actual current pipeline page", |s| s.exists("pipeline-flow"));
   assert!(screen.text("screen-pipelines").contains("Linked delivery"));
   let db = ProjectDb::open(&screen.root).expect("fixture opens after navigation");
   assert_eq!(

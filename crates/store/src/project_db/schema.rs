@@ -17,6 +17,7 @@ mod command_approvals;
 mod conversation;
 mod creation_snapshots;
 mod decision_authors;
+mod default_pipeline;
 mod denial_notes;
 mod editor_drafts;
 mod feedback;

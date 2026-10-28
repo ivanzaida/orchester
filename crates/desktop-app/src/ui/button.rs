@@ -132,6 +132,8 @@ pub struct ActionButton {
   held: bool,
   /// What it sets applies something now, e.g. a filter.
   applied: bool,
+  /// What it holds is refused: its outline in `danger`.
+  invalid: bool,
   element: Option<ElementRef>,
 }
 
@@ -153,6 +155,7 @@ impl ActionButton {
       bounded: false,
       held: false,
       applied: false,
+      invalid: false,
       element: None,
     }
   }
@@ -260,6 +263,13 @@ impl ActionButton {
   /// `border_strong` stroke, its content `text_primary`.
   pub fn applied(mut self, applied: bool) -> Self {
     self.applied = applied;
+    self
+  }
+
+  /// What a select-like button holds is refused, e.g. steps that wait for themselves (`ok2Zu` in `g6Ecy`): its
+  /// outline in `danger`.
+  pub fn invalid(mut self, invalid: bool) -> Self {
+    self.invalid = invalid;
     self
   }
 
@@ -391,6 +401,11 @@ impl From<ActionButton> for Element {
         .background(PaletteColor::AccentMuted)
         .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
         .describe("applied", "true");
+    }
+    if button.invalid {
+      frame = frame
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+        .describe("invalid", "true");
     }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);

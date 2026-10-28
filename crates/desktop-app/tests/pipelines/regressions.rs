@@ -56,9 +56,10 @@ fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
   keyboard_across_save(&mut editor, "pipeline-description", "a");
   editor.click("pipeline-settings");
   keyboard_across_save(&mut editor, "pipeline-settings-description", "d");
-  editor.click("pipeline-back-steps");
+  editor.click("pipeline-tab-steps");
   editor.click("pipeline-add-step");
   editor.set("step-name", "Typing");
+  editor.click("step-instructions-row");
   keyboard_across_save(&mut editor, "step-instructions", "g");
 }
 
@@ -306,7 +307,8 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
   editor.choose("step-executor", "Checks");
   assert!(!editor.exists("step-model"));
   editor.choose("step-executor", "Reviewer");
-  assert!(editor.text("step-model").contains("From the profile"));
+  // Taken from the profile, the box shows the profile's model id (`DuMJh` in `IsU5u`).
+  assert_eq!(editor.text("step-model-label"), "test-model");
   editor.until("inherited model saved", |e| {
     matches!(
       e.db().draft::<Pipeline>(id).unwrap().unwrap().body().steps()[0].kind,
@@ -317,8 +319,8 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
       }
     )
   });
-  assert!(editor.text("step-model").contains("From the profile"));
+  assert_eq!(editor.text("step-model-label"), "test-model");
   editor.click("pipeline-start");
   editor.click("pipeline-step-step");
-  assert!(editor.text("step-model").contains("From the profile"));
+  assert_eq!(editor.text("step-model-label"), "test-model");
 }

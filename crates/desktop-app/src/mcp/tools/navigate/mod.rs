@@ -63,7 +63,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), or `module`: new for New module, a module's id for its page on `tab` \
-  (summary or burndown), with `view` edit for Edit module. A tab or kind left out is the one the screen opens on. \
+  (summary or burndown), with `view` edit for Edit module; pipelines opens the list, from whose rows a pipeline's \
+  page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the screen opens on. \
   Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \

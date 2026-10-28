@@ -542,5 +542,6 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   super::orchestrator_senders::MIGRATION,
   super::run_completions::MIGRATION,
   super::story_points::SETTING_MIGRATION,
+  super::default_pipeline::MIGRATION,
   super::removed_resources::MIGRATION,
 ];

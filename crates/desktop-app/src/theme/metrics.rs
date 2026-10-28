@@ -45,10 +45,12 @@ pub enum ExtraSpacing {
   IndexEmpty,
   /// 9: a filter chip's start, before its facet (`Filter chip` `zjUM8`).
   ChipStart,
+  /// 11: above and below a row with a tile at its start and a button at its end (`Asx53` in `l4Udx`).
+  TiledRow,
 }
 
 impl ExtraSpacing {
-  pub const ALL: [Self; 18] = [
+  pub const ALL: [Self; 19] = [
     Self::Hair,
     Self::Tight,
     Self::Fine,
@@ -67,6 +69,7 @@ impl ExtraSpacing {
     Self::SettingsHead,
     Self::IndexEmpty,
     Self::ChipStart,
+    Self::TiledRow,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -93,6 +96,7 @@ impl ExtraSpacing {
       Self::SettingsHead => "settings_head",
       Self::IndexEmpty => "index_empty",
       Self::ChipStart => "chip_start",
+      Self::TiledRow => "tiled_row",
     }
   }
 
@@ -114,6 +118,7 @@ impl ExtraSpacing {
       Self::MenuOffset => 2.0,
       Self::SettingsHead | Self::IndexEmpty => 18.0,
       Self::ChipStart => 9.0,
+      Self::TiledRow => 11.0,
     }
   }
 }

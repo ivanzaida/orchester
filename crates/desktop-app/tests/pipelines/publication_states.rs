@@ -149,8 +149,8 @@ fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_se
     let title = bounds(&mut editor, &format!("pipeline-step-title-{}", step.key));
     let executor = bounds(&mut editor, &format!("pipeline-step-executor-{}", step.key));
     assert!(
-      card.y >= previous_bottom + 20.0,
-      "cards and connectors must stay separate: {card:?}"
+      card.y >= previous_bottom + 10.0,
+      "cards and the edges between them must stay separate: {card:?}"
     );
     assert!(title.y + title.height <= executor.y, "title covers metadata");
     assert!(
@@ -233,7 +233,7 @@ fn pipelines_unpublished_profile_shows_draft_identity_model_and_stays_unassignab
   );
   assert!(editor.exists("step-open-profile"));
   assert!(editor.text("step-model").contains("qa-model"));
-  assert!(editor.text("step-model-source").contains("From the profile’s draft"));
+  assert!(editor.text("step-model-row-hint").contains("From the profile’s draft"));
   editor.click("pipeline-publish");
   assert!(!editor.exists("pipeline-publish-confirm"));
 }
@@ -252,6 +252,25 @@ fn pipelines_unsupported_database_is_distinct_from_runnable_commands() {
   assert!(editor.text("step-tool-unavailable").contains("Database actions"));
   assert!(!editor.text("step-tool-unavailable").contains("pull request"));
   assert!(editor.text("step-model").contains("Not used by tools"));
+  // The Executor menu (`03d`): *Choose a profile* first, then every profile and tool with its icon; the tool that
+  // cannot run says why. The box shows the name alone (`Select` `GRGH7`).
+  assert!(!editor.exists("step-executor-icon"), "the box shows no icon");
+  editor.click("step-executor");
+  assert_eq!(editor.text("step-executor-option-0-label"), "Choose a profile");
+  let mut unavailable = 0;
+  for index in 1.. {
+    let option = format!("step-executor-option-{index}");
+    if !editor.exists(&option) {
+      assert!(index > 1, "the menu lists the profiles and tools");
+      break;
+    }
+    assert!(editor.exists(&format!("{option}-icon")), "{option} has its icon");
+    if editor.text(&option).contains("This tool cannot run as a pipeline step") {
+      unavailable += 1;
+    }
+  }
+  assert_eq!(unavailable, 1, "the database tool says why it cannot be chosen");
+  editor.click("step-executor");
   editor.open(command);
   let step = editor
     .db()
@@ -262,8 +281,10 @@ fn pipelines_unsupported_database_is_distinct_from_runnable_commands() {
     .steps()[0]
     .clone();
   let card = format!("pipeline-step-{}", step.key);
-  assert!(editor.text(&card).contains("exit code"));
+  // The runnable command step waits for an approval, which its card says in place of what decides it.
+  assert!(!editor.text(&card).contains("Unavailable"), "{}", editor.text(&card));
   editor.click(&card);
+  assert!(editor.text("step-executor-row-hint").contains("exit code"));
   assert!(!editor.exists("step-tool-unavailable"));
 }
 
@@ -315,6 +336,10 @@ fn pipelines_publication_problem_links_flow_onto_another_line() {
     );
     assert!(rect.y + rect.height <= strip.y + strip.height, "{link}: {rect:?}");
     editor.click(&link);
-    assert!(editor.exists("step-profile-required"));
+    assert!(
+      editor
+        .text("step-executor-row-hint")
+        .contains("Choose a profile before publishing")
+    );
   }
 }

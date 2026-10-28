@@ -15,6 +15,8 @@ mod modules;
 mod orchester;
 #[path = "theme/orchestrator.rs"]
 mod orchestrator;
+#[path = "theme/pipelines.rs"]
+mod pipelines;
 #[path = "theme/skills.rs"]
 mod skills;
 #[path = "theme/task_form.rs"]

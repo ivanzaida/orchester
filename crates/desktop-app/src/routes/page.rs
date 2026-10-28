@@ -15,7 +15,7 @@ use orchester_workspace::{
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
   MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
-  PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList,
+  PipelineView, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList,
   TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
@@ -70,13 +70,16 @@ pub enum ProjectPage {
   /// The Delivery view beside Usage, over its period.
   Delivery(DeliveryPeriod),
   Pipelines,
+  /// New pipeline, starting from the starter.
   NewPipeline,
   NewEmptyPipeline,
-  /// A pipeline's editor, with the panel it shows beside the graph.
-  Pipeline(ResourceId, PipelinePanel),
-  /// A pipeline's editor showing a published version, read-only, picked in its history, with the panel
-  /// beside the graph; never the publish review.
-  PipelineVersion(ResourceId, VersionNumber, PipelinePanel),
+  /// New pipeline with *Copy a pipeline* chosen, copying this one (a library row's *Duplicate*).
+  CopyPipeline(ResourceId),
+  /// A pipeline's page, on its tab and with what its Steps column shows.
+  Pipeline(ResourceId, PipelineView),
+  /// A pipeline's page showing a published version, read-only, picked in Versions, with what its column
+  /// shows; never the publish review.
+  PipelineVersion(ResourceId, VersionNumber, PipelineView),
   Agents,
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
@@ -179,9 +182,12 @@ impl ProjectPage {
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
-      Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) | Self::PipelineVersion(..) => {
-        Screen::Pipelines
-      }
+      Self::Pipelines
+      | Self::NewPipeline
+      | Self::NewEmptyPipeline
+      | Self::CopyPipeline(_)
+      | Self::Pipeline(..)
+      | Self::PipelineVersion(..) => Screen::Pipelines,
       Self::Agents | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
       Self::Memory(_) => Screen::Memory,
@@ -227,8 +233,12 @@ impl ProjectPage {
       ),
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
-      Self::Pipeline(id, panel) => panel.path(format!("{project_root}/pipelines/{id}"), None),
-      Self::PipelineVersion(id, version, panel) => panel.path(format!("{project_root}/pipelines/{id}"), Some(*version)),
+      Self::CopyPipeline(id) => with_query(
+        format!("{project_root}/pipelines/{NEW}"),
+        &[("start", Some("copy")), ("from", Some(&id.to_string()))],
+      ),
+      Self::Pipeline(id, view) => view.path(format!("{project_root}/pipelines/{id}"), None),
+      Self::PipelineVersion(id, version, view) => view.path(format!("{project_root}/pipelines/{id}"), Some(*version)),
       Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
@@ -257,16 +267,20 @@ impl ProjectPage {
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
+      Self::MakeLocal | Self::ProjectRules | Self::Join(_) => self.settings_path(segment(Screen::ProjectSettings)),
+      page => segment(page.screen()),
+    }
+  }
+
+  /// The path of a Project settings question or page under `settings`: *Make local*, the rules, a join.
+  fn settings_path(&self, settings: String) -> String {
+    match self {
       Self::MakeLocal => with_query(
-        segment(Screen::ProjectSettings),
+        settings,
         &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
       ),
-      Self::ProjectRules => with_query(
-        segment(Screen::ProjectSettings),
-        &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))],
-      ),
-      Self::Join(target) => join_path(segment(Screen::ProjectSettings), target),
-      page => segment(page.screen()),
+      Self::Join(target) => join_path(settings, target),
+      _ => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))]),
     }
   }
 
@@ -296,25 +310,18 @@ impl ProjectPage {
         Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
       },
       ["tools"] => tools(params),
-      ["pipelines", NEW] => match params.take("start")?.as_deref() {
-        None | Some("starter") => Ok(Self::NewPipeline),
-        Some("empty") => Ok(Self::NewEmptyPipeline),
-        Some(value) => Err(RouteError::InvalidParam {
-          param: "start".to_owned(),
-          value: value.to_owned(),
-        }),
-      },
+      ["pipelines", NEW] => new_pipeline(params),
       ["pipelines", id] => {
         let id = id.parse().map_err(|_| RouteError::NoScreen)?;
-        let version = PipelinePanel::take_version(params)?;
-        match (version, PipelinePanel::take(params)?) {
-          (None, panel) => Ok(Self::Pipeline(id, panel)),
+        let version = PipelineView::take_version(params)?;
+        match (version, PipelineView::take(params)?) {
+          (None, view) => Ok(Self::Pipeline(id, view)),
           // A published version is never published again.
-          (Some(_), PipelinePanel::Publish) => Err(RouteError::InvalidParam {
+          (Some(_), PipelineView::Publish) => Err(RouteError::InvalidParam {
             param: "panel".to_owned(),
             value: "publish".to_owned(),
           }),
-          (Some(version), panel) => Ok(Self::PipelineVersion(id, version, panel)),
+          (Some(version), view) => Ok(Self::PipelineVersion(id, version, view)),
         }
       }
       ["agents", NEW] => AgentTab::take(params).map(Self::NewAgent),
@@ -399,6 +406,26 @@ fn task_key(value: &str) -> Result<TaskKey, RouteError> {
     value: value.to_owned(),
     source,
   })
+}
+
+/// New pipeline as the query starts it: from the starter, empty (`start=empty`) or copying a pipeline
+/// (`start=copy&from=<id>`).
+fn new_pipeline(params: &mut Params) -> Result<ProjectPage, RouteError> {
+  match params.take("start")?.as_deref() {
+    None | Some("starter") => Ok(ProjectPage::NewPipeline),
+    Some("empty") => Ok(ProjectPage::NewEmptyPipeline),
+    Some("copy") => match params.take_parsed("from")? {
+      Some(id) => Ok(ProjectPage::CopyPipeline(id)),
+      None => Err(RouteError::InvalidParam {
+        param: "start".to_owned(),
+        value: "copy".to_owned(),
+      }),
+    },
+    Some(value) => Err(RouteError::InvalidParam {
+      param: "start".to_owned(),
+      value: value.to_owned(),
+    }),
+  }
 }
 
 /// The Tools library, a new tool's draft (`tool=new`), or a tool on its tab (`tool=<id>&tab=…`).

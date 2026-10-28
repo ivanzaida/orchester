@@ -1,4 +1,6 @@
-//! K0WLeG: command narrowing stays compact until its selector is opened.
+//! The Commands row's picker (`Commands` `D3ReK` in `02e` `T46Jq`): the box says what the step allows; open, its list
+//! (`Command list` `KFGZ7`) is a menu as wide as the box, under it from its end, one checkbox per command the profile
+//! allows.
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::{Column, ScrollVertical},
@@ -9,14 +11,18 @@ use orchester_core::resource::StepKind;
 use orchester_workspace::pipelines::narrowing;
 
 use super::{
-  step_fields::Props,
-  step_permissions::{command_rows, command_summary},
+  step_access::command_summary,
+  step_fields::{FIELD_WIDTH, Props},
+  step_permissions::command_rows,
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
-  popover::{PopoverSide, popover, popover_panel},
+  menu::{menu_at_end, menu_panel},
   tooltip::Tooltip,
 };
+
+/// The most the open list grows to before it scrolls.
+const LIST_MAX_HEIGHT: f32 = 260.0;
 
 pub struct Commands {
   open: Signal<bool>,
@@ -32,6 +38,7 @@ impl Component for Commands {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    super::leaving::close_while_asked(ctx, &self.open);
     let editing = props.state.get();
     let StepKind::Agent {
       profile: Some(profile), ..
@@ -59,15 +66,13 @@ impl Component for Commands {
     } else {
       trigger.into()
     };
-    let menu = popover_panel("step-command-menu", 300.0).child(
+    let menu = menu_panel("step-command-menu").width(Dimension::Px(FIELD_WIDTH)).child(
       ScrollVertical::new(command_rows(&props.state, &props.step, choice, props.locked))
-        .max_height(Dimension::Px(260.0)),
+        .max_height(Dimension::Px(LIST_MAX_HEIGHT)),
     );
-    Column::new().width(Dimension::Pct(100.0)).child(trigger).child(popover(
-      self.anchor.clone(),
-      self.open.clone(),
-      PopoverSide::Below,
-      menu,
-    ))
+    Column::new()
+      .width(Dimension::Px(FIELD_WIDTH))
+      .child(trigger)
+      .child(menu_at_end(self.anchor.clone(), self.open.clone(), menu))
   }
 }

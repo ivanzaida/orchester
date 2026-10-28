@@ -73,6 +73,9 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject, module: Option<ModuleId>)
     Ok(tasks) => tasks,
     Err(waiting) => return waiting,
   };
+  let default_pipeline = tasks
+    .default_pipeline
+    .filter(|id| tasks.pipelines.iter().any(|choice| choice.id == *id));
   let props = FormProps {
     project: project.clone(),
     subject: Subject::New,
@@ -81,6 +84,7 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject, module: Option<ModuleId>)
     separator: ctx.t("task_form.number.groupSeparator"),
     pipelines: Some(tasks.pipelines),
     missing_pipeline: None,
+    default_pipeline,
     modules: tasks.modules,
     shared: tasks.shared,
     starts_in: module,
@@ -117,6 +121,7 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
       .missing_pipelines
       .get(&task_id)
       .map(|slug| Arc::from(slug.as_str())),
+    default_pipeline: None,
     modules: tasks.modules.clone(),
     shared: tasks.shared,
     starts_in: None,

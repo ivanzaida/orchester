@@ -93,6 +93,13 @@ impl Fixture {
       .window
       .click_by_client(&format!("pipeline-step-{key}"))
       .expect("step selected");
+    if toggle == "step-ask-tools" {
+      // Asking about tool calls is set on the step's Permissions page.
+      self
+        .window
+        .click_by_client("step-open-permissions")
+        .expect("the step's permissions");
+    }
     self.window.click_by_client(toggle).expect("permission proposal");
     self
       .window
