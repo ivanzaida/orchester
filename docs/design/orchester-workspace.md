@@ -967,6 +967,16 @@ step*) beside the chosen step's column, whose Permissions, Sources and Instructi
 (`?step=<key>&page=permissions`); the publish review replaces the column; a viewed version is a banner over the same
 flow, read-only. The rules above (draft, publish, approval of weaker versions, restore) are unchanged.
 
+**One Info notice look (ORC-272, 2026-10-28, in the new `orchester.pen`; decided in ORC-131).** Every Info notice,
+stroked and flat, is drawn on `info_muted` with an `info` icon, as the Agents frames (03c `byr8E`, 02c `HfwWH`) and the
+App settings states (`eDfVk`: `w415U`, `ktYJP`, `gFL7a`, `yrbED`, `JY3WV`) already were. Changed: the component
+`Notice/Info` `xnJyn` (Components › Notices and callouts `N8huo`) is `info_muted` in an `info` stroke, so it follows
+the other tones (Warning `warning_muted` in `warning`, Danger, Success) — `surface_raised`, `border` and the
+`text_secondary` icon of `ui/notice.rs` are out of date; the flat Pipelines notices `PlJxG` (06b `zJbUH`), `nxxg6`
+(06c `wbSfw`) and `pcNiB` (03b `mRLFg`, Row 6) are `info_muted` with an `info` icon instead of `surface_raised` with a
+`text_muted` one (`pcNiB` keeps its `lock` mark, now in `info`). The file has no instance of `xnJyn` and no other
+stroked Info notice. Warning, Danger, Success and the callouts are unchanged. Exports: `.tmp/design/ORC-272/`.
+
 ## Presets
 
 Drawn 2026-10-01, not built. Group `Rg8DS` ("Presets · entry, choose, preview, finish setup, save", last in 03 / Pipelines at x 0 / y 5664, height 4264; the section is now 10024 high). It sits in 03 / Pipelines because a preset is mainly a way to get pipelines: *Add from preset* lives in the Pipelines library, presets replace the single starter of 03.A and 03.05, and the profiles and tools a preset creates exist for its pipelines. Fixture: Kontur (and Atlas in 03.D); the presets *Website content update* and *Kontur feature flow*, the dates, the commands and every count are illustrative. Proposed copy namespaces: `presets.*` (`presets.picker.*`, `presets.preview.*`, `presets.finishSetup.*`, `presets.save.*`, `presets.provenance.*`), `setup.startingPoint.*`.
