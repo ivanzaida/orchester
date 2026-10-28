@@ -31,7 +31,7 @@ impl Seeded {
   }
 
   /// `scenario` seeded, then changed by `prepare` in its repository before the app opens it.
-  fn prepared(scenario: &str, held: bool, prepare: impl FnOnce(&Path)) -> Self {
+  pub fn prepared(scenario: &str, held: bool, prepare: impl FnOnce(&Path)) -> Self {
     let data = Data::new();
     let request = SeedRequest {
       data_dir: data.dir.path().to_path_buf(),
@@ -78,10 +78,10 @@ impl Seeded {
     Self::shown(seeded, OverviewTab::Running)
   }
 
-  fn shown(mut seeded: Self, tab: OverviewTab) -> Self {
+  pub fn shown(mut seeded: Self, tab: OverviewTab) -> Self {
     seeded.go(tab);
     seeded.until("the tasks", |seeded| {
-      seeded.shows("overview-footer") || seeded.shows("overview-empty")
+      seeded.shows("overview-merge-queue") || seeded.shows("overview-start")
     });
     seeded
   }

@@ -56,7 +56,7 @@ pub use self::{
   gate::gate,
   item::dot,
   mcp::from_scratch,
-  server::{ServerFacts, ServerState},
+  server::{ServerFacts, ServerState, server_facts},
 };
 use crate::{
   lifecycle,
