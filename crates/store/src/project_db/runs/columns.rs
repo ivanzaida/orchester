@@ -137,6 +137,7 @@ const UNCHANGED: &str = "unchanged";
 const fn pause_reason_text(reason: PauseReason) -> &'static str {
   match reason {
     PauseReason::Requested => "requested",
+    PauseReason::LowDisk => "low_disk",
     PauseReason::LimitReached(RunLimit::Tokens) => "token_limit",
     PauseReason::LimitReached(RunLimit::Time) => "time_limit",
     PauseReason::LimitReached(RunLimit::DailyBudget) => "daily_budget",
@@ -149,6 +150,7 @@ const fn pause_reason_text(reason: PauseReason) -> &'static str {
 fn parse_pause_reason(value: &str) -> Result<PauseReason, StoreError> {
   match value {
     "requested" => Ok(PauseReason::Requested),
+    "low_disk" => Ok(PauseReason::LowDisk),
     "token_limit" => Ok(PauseReason::LimitReached(RunLimit::Tokens)),
     "time_limit" => Ok(PauseReason::LimitReached(RunLimit::Time)),
     "daily_budget" => Ok(PauseReason::LimitReached(RunLimit::DailyBudget)),

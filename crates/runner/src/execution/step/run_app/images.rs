@@ -1,5 +1,7 @@
-//! Converts PNG blocks to run-owned files. Re-encoding discards metadata that could contain credentials. The agent
-//! opens a saved file with `read_file`, which shows it on Claude Code.
+//! Converts PNG blocks to run-owned files in the run's own storage, `.orchester/runs/<run>/screenshots/` (ORC-114):
+//! the task page lists them under Artifacts, and cleaning or reusing a workspace never removes them. Re-encoding
+//! discards metadata that could contain credentials. The agent opens a saved file with `read_file`, which shows it on
+//! Claude Code.
 
 use std::{
   fs,
@@ -14,14 +16,17 @@ use serde_json::{Value, json};
 
 use super::AppError;
 
-pub(super) fn save(worktree: &Path, result: &mut Value) -> Result<(), AppError> {
+/// The folder of the run's storage the screenshots go to.
+const SCREENSHOTS: &str = "screenshots";
+
+pub(super) fn save(artifacts: &Path, result: &mut Value) -> Result<(), AppError> {
   let content = result["content"].as_array_mut().ok_or(AppError::Content)?;
   for block in content {
     match block["type"].as_str() {
       Some("text") if block["text"].is_string() => {}
       Some("image") => {
-        let relative = save_png(worktree, block)?;
-        *block = json!({"type":"text","text":format!("PNG saved: {relative}; open it with read_file to see it")});
+        let saved = save_png(artifacts, block)?;
+        *block = json!({"type":"text","text":format!("PNG saved: {saved}; open it with read_file to see it")});
       }
       _ => return Err(AppError::Content),
     }
@@ -29,7 +34,8 @@ pub(super) fn save(worktree: &Path, result: &mut Value) -> Result<(), AppError> 
   Ok(())
 }
 
-fn save_png(worktree: &Path, block: &Value) -> Result<String, AppError> {
+/// Saves the PNG of `block` in the screenshots of the run's storage `artifacts`; its absolute path, with `/`.
+fn save_png(artifacts: &Path, block: &Value) -> Result<String, AppError> {
   if block["mimeType"] != "image/png" {
     return Err(AppError::Image);
   }
@@ -41,8 +47,7 @@ fn save_png(worktree: &Path, block: &Value) -> Result<String, AppError> {
   let mut reader = ImageReader::with_format(Cursor::new(bytes), ImageFormat::Png);
   reader.limits(decoding_limits());
   let image = reader.decode().map_err(|_| AppError::Image)?;
-  let root = fs::canonicalize(worktree).map_err(|_| AppError::SaveImage)?;
-  let folder = output_folder(&root)?;
+  let folder = output_folder(artifacts)?;
   let mut file = tempfile::Builder::new()
     .prefix("app-")
     .suffix(".png")
@@ -52,25 +57,19 @@ fn save_png(worktree: &Path, block: &Value) -> Result<String, AppError> {
     .write_to(&mut file, ImageFormat::Png)
     .map_err(|_| AppError::SaveImage)?;
   let (_, path) = file.keep().map_err(|_| AppError::SaveImage)?;
-  path
-    .strip_prefix(&root)
-    .map(|path| path.to_string_lossy().replace('\\', "/"))
-    .map_err(|_| AppError::SaveImage)
+  Ok(path.to_string_lossy().replace('\\', "/"))
 }
 
-fn output_folder(root: &Path) -> Result<PathBuf, AppError> {
-  let mut folder = root.to_path_buf();
-  for name in [".tmp", "run-app"] {
-    let path = folder.join(name);
-    match fs::create_dir(&path) {
-      Ok(()) => {}
-      Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-      Err(_) => return Err(AppError::SaveImage),
-    }
-    folder = fs::canonicalize(path).map_err(|_| AppError::SaveImage)?;
-    if !folder.starts_with(root) || !folder.is_dir() {
-      return Err(AppError::SaveImage);
-    }
+/// The screenshots folder of the run's storage, made when it is not there, as spelled from `artifacts` (Windows would
+/// name a resolved one in its verbatim `\\?\` form, which the file tools read no path in); refused when a link put
+/// there leads out of the storage.
+fn output_folder(artifacts: &Path) -> Result<PathBuf, AppError> {
+  let folder = artifacts.join(SCREENSHOTS);
+  fs::create_dir_all(&folder).map_err(|_| AppError::SaveImage)?;
+  let storage = fs::canonicalize(artifacts).map_err(|_| AppError::SaveImage)?;
+  let resolved = fs::canonicalize(&folder).map_err(|_| AppError::SaveImage)?;
+  if !resolved.starts_with(&storage) || !resolved.is_dir() {
+    return Err(AppError::SaveImage);
   }
   Ok(folder)
 }

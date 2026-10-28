@@ -163,6 +163,8 @@ pub trait WorktreeStore {
   fn worktree_removals(&self, task: TaskId) -> Result<Vec<(RunId, Timestamp)>, Self::Error>;
 }
 
+pub use crate::workspaces::WorkspaceStore;
+
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.
 pub trait ResourceStore {
   type Error: std::error::Error + Send + Sync + 'static;
@@ -438,6 +440,9 @@ pub trait RunStore {
   /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the
   /// session ended before it could record their interruption.
   fn running_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
+
+  /// Runs paused for low disk space (ORC-114), ordered by number: they go on once the disk has room.
+  fn low_disk_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// The numbers of the runs that pinned each published version of pipeline `pipeline`, in run
   /// order. A version no run pinned is absent.
