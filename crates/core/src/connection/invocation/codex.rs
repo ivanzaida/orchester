@@ -25,8 +25,8 @@
 //!   folder that does not exist is accepted and ignored, so the runner creates them first.
 //! - App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's own configuration. What of it
 //!   would reach the agent is turned off ([`ISOLATION`]): the `notify` program, plugins (with their skills and MCP
-//!   servers), apps, and the permission requests that could stay granted for later commands. The user's own MCP servers
-//!   are turned off for the thread by name, which the runner reads with `config/read` first
+//!   servers), apps, the user's own hooks, and the permission requests that could stay granted for later commands. The
+//!   user's own MCP servers are turned off for the thread by name, which the runner reads with `config/read` first
 //!   (`crate::connection::app_server_mcp`). The user's own execpolicy `.rules` stay: they are the user's choice, and
 //!   the enforcement panel says that a command an `allow` rule there matches runs outside the sandbox without asking.
 //! - The repository's own `.codex` folder (configuration, hooks, execpolicy rules, MCP servers) is never loaded,
@@ -65,12 +65,23 @@ use crate::{
 /// becomes empty (an array replaces the user's), and the plugin servers (`code-review`, `cua_repl`)
 /// and `codex_app` are gone from the thread's MCP inventory. A table such as `mcp_servers` merges
 /// with the user's rather than replacing it, so servers are turned off one by one instead.
-pub const ISOLATION: [&str; 5] = [
+///
+/// `features.hooks=false` keeps the user's own hooks (`~/.codex/hooks.json`, which another agent tool may
+/// install) from running with the agent's work. Checked live with Codex 0.159.2 (2026-10-28) under a scratch
+/// `CODEX_HOME` whose trusted `hooks.json` appends each event to a marker file, a turn against a closed local
+/// port standing in for the model: without the override `SessionStart` and `UserPromptSubmit` ran as the turn
+/// started (none on `thread/start`); with it `hooks/list` listed none, no hook ran and no marker was written.
+/// `config/read` then reports `features.hooks = false` (a `sessionFlags` layer), while its `hooks` table
+/// still lists every event, each with an empty list, and the user's trust `state`, whether or not the
+/// override is given; without it `features` has no `hooks` key. The runner checks the flag before a thread
+/// starts (`crate::connection::app_server_mcp::refuse_user_hooks`).
+pub const ISOLATION: [&str; 6] = [
   "notify=[]",
   "features.plugins=false",
   "features.apps=false",
   "features.exec_permission_approvals=false",
   "features.request_permissions_tool=false",
+  "features.hooks=false",
 ];
 
 /// Codex's own sub-agents (`multi_agent`, on by default in 0.159.2, and `multi_agent_v2`), turned off for a step:
