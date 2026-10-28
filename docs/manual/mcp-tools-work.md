@@ -262,8 +262,9 @@ The complete state of a run:
   commits), `not_merged`, `nothing_to_merge`, or `null` for a run that has not succeeded.
 - **`base_moved`**: notices that the base branch moved — branch and revision, tasks and commits that landed, files
   both sides changed, and state: `waits_for_writing_step`, `waits_until_work_goes_back` (with `waits_for_step`, when
-  only non-merging steps like Review/Verify are left), `kept_until_run_goes_on`, `waits_for_follow_up`, or `delivered`
-  (with the agent and step that read it).
+  only non-merging steps like Review/Verify are left), `kept_until_run_goes_on`, `waits_for_follow_up`, `delivered`
+  (with the agent and step that read it), or `merged_by_runner` (with `merged_by_runner.before_step` and
+  `merge_commit`: the move overlapped none of the run's changes, so Orchester merged it itself before that step).
 - **`delivery`** (merge queue; `null` without a Deliver step or if it never joined): `queued` (with `place`),
   `syncing`, `rechecking`, `integrating` (`integrate_step`, `files`), `waiting_for_approval`, `blocked`
   (`blocked.why`: `uncommitted_changes` + files, `other_branch_checked_out`, `operation_in_progress`,

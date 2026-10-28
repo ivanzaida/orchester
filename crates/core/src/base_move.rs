@@ -80,9 +80,10 @@ pub struct LandedTask {
 }
 
 /// Where a notice stands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NoticeDelivery {
-  /// It waits for an agent of a writing step of its run, or for the window of its move to pass.
+  /// It waits for an agent of a writing step of its run, for the runner to merge it, or for the window of its move to
+  /// pass.
   Pending,
   /// Invocation `invocation` of `execution` started with it at `at`.
   Delivered {
@@ -90,11 +91,22 @@ pub enum NoticeDelivery {
     invocation: InvocationId,
     at: Timestamp,
   },
+  /// The runner merged it into the run's worktree itself at `at`, with the merge commit `revision`, as `execution`
+  /// started (ORC-151): it overlapped none of the run's changes, so no agent was interrupted for it.
+  Merged {
+    execution: StepExecutionId,
+    revision: Revision,
+    at: Timestamp,
+  },
 }
 
 /// A notice to run `run` that its base branch `branch` moved to `revision`, which its branch lacks: what landed,
 /// the files that also changed on the run's side (likely conflicts), and where it stands. A run has at most one
-/// pending notice; a newer move replaces it.
+/// pending notice; a newer move replaces it, so pending moves combine into one.
+///
+/// Only a notice that overlaps the run's changes interrupts a writing step's agent (ORC-151); the runner merges one
+/// that does not itself, before the run's next step that does not take base moves, and delivers it to a writing step
+/// as one that overlaps when that merge conflicts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BaseNotice {
   pub id: NoticeId,
@@ -105,7 +117,8 @@ pub struct BaseNotice {
   /// The commits of the base the run's branch lacks, newest first, at most [`crate::integration::MAX_LANDED`].
   pub commits: Vec<LandedCommit>,
   pub tasks: Vec<LandedTask>,
-  /// Files changed on both sides since they forked, in path order.
+  /// Files changed on both sides since they forked, in path order; after the runner's merge conflicted, the files it
+  /// conflicted in.
   pub overlapping: Vec<String>,
   pub noticed_at: Timestamp,
   pub deliver_after: Timestamp,
@@ -122,11 +135,29 @@ impl BaseNotice {
     self.is_pending() && now >= self.deliver_after
   }
 
-  /// When it was delivered, once it was.
+  /// When it was delivered to an agent, once it was.
   pub const fn delivered(&self) -> Option<(StepExecutionId, Timestamp)> {
     match self.delivery {
-      NoticeDelivery::Pending => None,
+      NoticeDelivery::Pending | NoticeDelivery::Merged { .. } => None,
       NoticeDelivery::Delivered { execution, at, .. } => Some((execution, at)),
+    }
+  }
+
+  /// The merge commit, and when the runner merged it itself, once it did.
+  pub const fn merged(&self) -> Option<(&Revision, Timestamp)> {
+    match &self.delivery {
+      NoticeDelivery::Pending | NoticeDelivery::Delivered { .. } => None,
+      NoticeDelivery::Merged { revision, at, .. } => Some((revision, *at)),
+    }
+  }
+
+  /// The execution it was delivered to or merged before, and when, once it is no longer pending.
+  pub const fn settled(&self) -> Option<(StepExecutionId, Timestamp)> {
+    match self.delivery {
+      NoticeDelivery::Pending => None,
+      NoticeDelivery::Delivered { execution, at, .. } | NoticeDelivery::Merged { execution, at, .. } => {
+        Some((execution, at))
+      }
     }
   }
 }

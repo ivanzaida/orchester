@@ -4,9 +4,14 @@
 //! it and its next writing step takes it once the run goes on; one within its move's window, or while the project's
 //! switch is off, waits. Only the step that implements the change takes it (ORC-65): in Implement → Check → Review →
 //! Verify, where every step writes, a move during Verify stays pending and one during Implement reaches Implement,
-//! unless the steps choose otherwise. Every writing agent is told how to merge the base safely. Needs `git`.
-//! Run with `cargo test -p orchester-runner --features test-agent --test base_moved base_moved`.
+//! unless the steps choose otherwise. Only a notice that overlaps the run's changes interrupts a writing step
+//! (ORC-151): one that does not lets its step pass and the runner merges it itself before Check; a merge of the
+//! runner's that conflicts is undone and the notice goes to the next writing step; pending moves combine, and the
+//! combined one is delivered once any of its files overlap. Every writing agent is told how to merge the base safely.
+//! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test base_moved base_moved`.
 
+#[path = "base_moved/overlap.rs"]
+mod overlap;
 mod support;
 
 use std::path::Path;

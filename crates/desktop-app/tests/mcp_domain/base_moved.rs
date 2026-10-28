@@ -75,3 +75,66 @@ fn domain_get_run_and_get_conversation_report_the_base_moved_notice() {
   assert_eq!(entry["revision"], revision.as_str());
   assert_eq!(entry["delivered_to"], serde_json::Value::Null);
 }
+
+/// A move that overlapped none of the run's changes, which the runner merged itself before a step started (ORC-151):
+/// `get_run` says so, with that step and the merge commit, and names no agent it was delivered to.
+#[test]
+fn domain_get_run_reports_a_base_move_the_runner_merged() {
+  let (mut served, seeded) = Served::seeded("decisions");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the database opens");
+  let task = db.tasks().expect("tasks").remove(0);
+  let run = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .pop()
+    .expect("its run")
+    .expect("readable");
+  let execution = run
+    .current_attempt()
+    .and_then(|attempt| attempt.executions().first())
+    .expect("an execution");
+  let step = run
+    .snapshot()
+    .body()
+    .step(execution.step())
+    .expect("its step")
+    .name
+    .as_str()
+    .to_owned();
+  let revision = Revision::new(&"c".repeat(40)).expect("revision");
+  let merge = Revision::new(&"d".repeat(40)).expect("merge commit");
+  let notice = BaseNotice {
+    id: NoticeId::generate(),
+    run: run.id(),
+    task: task.id(),
+    branch: BranchName::new("main").expect("branch"),
+    revision: revision.clone(),
+    commits: vec![LandedCommit {
+      revision: revision.clone(),
+      subject: "Merge KON-9 run #4".to_owned(),
+    }],
+    tasks: Vec::new(),
+    overlapping: Vec::new(),
+    noticed_at: Timestamp::now(),
+    deliver_after: Timestamp::now(),
+    delivery: NoticeDelivery::Pending,
+  };
+  db.queue_base_notice(&notice).expect("queued");
+  assert!(
+    db.merge_base_notice(&notice, (execution.id(), &merge), Timestamp::now())
+      .expect("merged")
+  );
+  assert!(
+    db.pending_base_notice(run.id()).expect("read").is_none(),
+    "no longer pending"
+  );
+
+  let number = run.number().get().to_string();
+  let shown = served.ok("get_run", &json!({ "project": "Kontur", "run": number }));
+  let notice = &shown["base_moved"][0];
+  assert_eq!(notice["state"], "merged_by_runner", "{shown}");
+  assert_eq!(notice["delivered_to"], serde_json::Value::Null);
+  assert_eq!(notice["merged_by_runner"]["before_step"], step.as_str());
+  assert_eq!(notice["merged_by_runner"]["merge_commit"], merge.as_str());
+  assert_eq!(notice["revision"], revision.as_str());
+}
