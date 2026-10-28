@@ -3,13 +3,16 @@
 //! Send & continue and a follow-up all ask here before they ask the runner. A task someone else
 //! holds starts nothing, and the person is told who holds it. A local project's tasks need no claim.
 
-use std::path::{Path, PathBuf};
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+};
 
 use orchester_api::{
   ClaimTake, ErrorCode, SharingErrorDetails,
   client::{ClientError, ServerAddress},
 };
-use orchester_core::{id::TaskId, sharing::ClaimKind};
+use orchester_core::{id::TaskId, sharing::ClaimKind, time::Timestamp};
 
 use super::{ProjectServer, store::RemoteTaskStore};
 use crate::{
@@ -63,6 +66,8 @@ impl WorkRefusal {
 pub struct WorkClaim {
   /// The project and task whose claim this attempt took.
   taken: Option<(PathBuf, TaskId)>,
+  /// The shared task whose claim this attempt asked for, and when.
+  asked: Option<(TaskId, Timestamp)>,
 }
 
 impl WorkClaim {
@@ -75,13 +80,17 @@ impl WorkClaim {
   pub fn and(self, later: Self) -> Self {
     Self {
       taken: self.taken.or(later.taken),
+      asked: later.asked.or(self.asked),
     }
   }
 
   /// The work did not start: a claim this attempt took is released, while no run of the task is
   /// under way here, so it does not stay held (and kept fresh by the heartbeat) for nothing. A claim
-  /// the person held already stays.
+  /// the person held already stays, held against its task's latest run again.
   pub async fn release(self, servers: &Servers) {
+    if let Some((task, at)) = self.asked {
+      servers.forget_work_asked(task, at);
+    }
     if let Some((root, task)) = self.taken {
       servers.release_taken_claim(&root, task).await;
     }
@@ -90,7 +99,9 @@ impl WorkClaim {
 
 impl Servers {
   /// Takes the run claim of `task` in the project at `repo_root` when it is shared, or confirms that
-  /// the person holds it; a local project's task needs none.
+  /// the person holds it; a local project's task needs none. Until the work's run is recorded, the
+  /// task's latest run here may be one that ended: the claim ends of runs that ended leave a claim
+  /// asked for after its run ended alone.
   pub async fn claim_for_work(&self, repo_root: &Path, task: TaskId) -> Result<WorkClaim, WorkRefusal> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let server = background::run(move || ProjectServer::open(&servers, &root))
@@ -100,10 +111,33 @@ impl Servers {
     let Some(server) = server else {
       return Ok(WorkClaim::default());
     };
-    let taken = server.take_run_claim(task).await?;
+    // Before the server is asked, so a claim end on its way meanwhile finds it.
+    let asked = Timestamp::now();
+    self.inner.work_asked.lock().insert(task, asked);
+    let taken = match server.take_run_claim(task).await {
+      Ok(taken) => taken,
+      Err(refusal) => {
+        self.forget_work_asked(task, asked);
+        return Err(refusal);
+      }
+    };
     Ok(WorkClaim {
       taken: taken.then(|| (repo_root.to_owned(), task)),
+      asked: Some((task, asked)),
     })
+  }
+
+  /// When work on each shared task last asked for its run claim this session, by this computer's clock.
+  pub(super) fn work_asked(&self) -> HashMap<TaskId, Timestamp> {
+    self.inner.work_asked.lock().clone()
+  }
+
+  /// Forgets that work on `task` asked for its claim at `at`, which did not start, unless other work asked since.
+  fn forget_work_asked(&self, task: TaskId, at: Timestamp) {
+    let mut asked = self.inner.work_asked.lock();
+    if asked.get(&task) == Some(&at) {
+      asked.remove(&task);
+    }
   }
 
   /// Releases the run claim of `task` that work which did not start took, unless a run of it is

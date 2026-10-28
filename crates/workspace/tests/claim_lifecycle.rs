@@ -21,7 +21,7 @@ use std::{
   time::Duration,
 };
 
-use orchester_api::SharedTask;
+use orchester_api::{ClaimTake, SharedTask};
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, TaskId},
   integration::{MergeKind, RunMerge},
@@ -30,13 +30,13 @@ use orchester_core::{
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, RunStatus, StepFailure, TaskPhase},
-  sharing::ClaimEnd,
+  sharing::{ClaimEnd, ClaimKind},
   store::{MergeStore, ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::sharing::project::ClaimEndError;
+use orchester_workspace::sharing::project::{ClaimEndError, WorkClaim};
 use run_reports::ReportingServer;
 use server_support::TestServer;
 use support::{Other, Person, details, member};
@@ -65,7 +65,7 @@ struct Team {
   snapshot: RunSnapshot,
   programs: Programs,
   runs: usize,
-  _server: TestServer,
+  server: TestServer,
 }
 
 impl Team {
@@ -87,7 +87,7 @@ impl Team {
       snapshot,
       programs: Programs::processes(),
       runs: 0,
-      _server: server,
+      server,
     }
   }
 
@@ -97,11 +97,27 @@ impl Team {
 
   /// Alice takes the run claim of `task`, as starting its run does.
   fn claimed(&self, task: TaskId) {
-    let claim = self
+    let claim = self.work_on(task);
+    assert!(claim.newly_taken());
+  }
+
+  /// Work on `task` asks for its run claim, as Run again does before the runner records the new run.
+  fn work_on(&self, task: TaskId) -> WorkClaim {
+    self
       .alice
       .block_on(self.alice.servers.claim_for_work(self.root(), task))
-      .expect("alice holds the task");
-    assert!(claim.newly_taken());
+      .expect("alice holds the task")
+  }
+
+  /// Alice's other computer takes the run claim of `task` through the server's API.
+  fn claimed_elsewhere(&self, task: TaskId) {
+    let project = self.alice.server().link().project;
+    let elsewhere = self.server.device_of("alice");
+    let take = ClaimTake { kind: ClaimKind::Run };
+    self
+      .alice
+      .block_on(self.oleh.client.claim(&elsewhere, project, task, &take))
+      .expect("Alice's other computer takes the task");
   }
 
   /// A run of `task` from `main`, its one step at work.
@@ -392,4 +408,67 @@ fn claim_lifecycle_a_server_without_the_report_refuses_it_as_not_supported_and_a
   assert_eq!(team.front.taken(), [(task.to_string(), TaskPhase::Merged)]);
   assert!(team.held_here().is_empty());
   assert!(team.on_server(task).claim.is_none());
+}
+
+/// Run again takes the claim before the runner records the new run, so the task's latest run here is still the
+/// cancelled one: neither a run change nor a sync releases the claim taken again, and the heartbeat keeps it fresh.
+#[test]
+fn claim_lifecycle_a_claim_taken_again_after_a_cancelled_run_is_kept_for_the_run_that_starts() {
+  let mut team = Team::new();
+  let [task, ..] = team.tasks;
+  team.claimed(task);
+  team.cancelled(task);
+  team.sync(false);
+  assert!(
+    team.on_server(task).claim.is_none(),
+    "the cancelled run's claim is released"
+  );
+
+  team.claimed(task);
+  let taken_at = team.heartbeat_at(task);
+  std::thread::sleep(Duration::from_millis(5));
+  team.alice.block_on(team.alice.servers.end_claims(&team.programs));
+  team.sync(true);
+  assert_eq!(team.held_here(), BTreeSet::from([task]));
+  assert!(team.heartbeat_at(task) > taken_at, "kept fresh");
+}
+
+/// Run again a moment after the cancel, before a sync released the cancelled run's claim, finds it held and only
+/// confirms it: the claim keeps its start, and work that asked for it after the run ended keeps it all the same. Once
+/// that work does not start, the claim is the cancelled run's again.
+#[test]
+fn claim_lifecycle_a_claim_confirmed_after_a_cancelled_run_is_kept_until_its_work_does_not_start() {
+  let mut team = Team::new();
+  let [task, ..] = team.tasks;
+  team.claimed(task);
+  team.cancelled(task);
+  std::thread::sleep(Duration::from_millis(5));
+
+  let again = team.work_on(task);
+  assert!(!again.newly_taken(), "held since before the cancel");
+  team.sync(true);
+  assert!(team.on_server(task).claim.is_some(), "kept for the run that starts");
+  assert_eq!(team.held_here(), BTreeSet::from([task]));
+
+  team.alice.block_on(again.release(&team.alice.servers));
+  team.sync(false);
+  assert!(team.on_server(task).claim.is_none(), "released with the cancelled run");
+}
+
+/// A claim Alice's other computer took after the run here was cancelled is that computer's work: syncs here keep it.
+#[test]
+fn claim_lifecycle_a_claim_taken_on_the_other_computer_after_the_run_here_ended_is_kept() {
+  let mut team = Team::new();
+  let [task, ..] = team.tasks;
+  team.claimed(task);
+  team.cancelled(task);
+  team.sync(false);
+  assert!(team.on_server(task).claim.is_none());
+  std::thread::sleep(Duration::from_millis(5));
+
+  team.claimed_elsewhere(task);
+  team.sync(false);
+  team.sync(false);
+  assert!(team.on_server(task).claim.is_some(), "the other computer's claim stays");
+  assert_eq!(team.held_here(), BTreeSet::from([task]));
 }

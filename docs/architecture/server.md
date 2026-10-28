@@ -303,7 +303,11 @@ A claim says who has taken a task into work. A task has at most one; the server 
 person holds in each shared project (`sharing::project::claim_ends`) and applies core's `claim_end` to the phase of
 each task's latest run here, read as the task page reads it (a succeeded run whose work git finds merged into its base
 branch is merged): a merged one is reported with `PUT …/run` (`merged`), which completes the claim; a cancelled one
-releases it with `DELETE …/claim`; succeeded, failed and every other phase keep it. Claims that were never ended
+releases it with `DELETE …/claim`; succeeded, failed and every other phase keep it. Only a claim taken before its
+run ended is that run's to end: one whose `since` is later than the run's end (the merge, the cancel, or for work merged
+without Orchester its last event), such as one the person's other computer took since, is kept, and so is one that
+work on this computer asked for after the run ended (Run again, before the runner records the new run; the desktop
+remembers when, for the session, and forgets it when that work does not start). Claims that were never ended
 before (ORC-281) end this way on the first sync of a fixed desktop. A server without `PUT …/run` answers `404` or
 `405`: the report fails as *not supported* and is logged, and the next sync tries it again; meanwhile the heartbeat
 no longer names the task, so the claim goes stale instead of staying fresh.

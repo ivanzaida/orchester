@@ -110,8 +110,8 @@ impl Servers {
       return;
     };
     let roots: Vec<_> = projects.iter().map(|project| project.repo_root().to_owned()).collect();
-    let programs = programs.clone();
-    let held = background::run(move || held_claims(&roots, me, &programs)).await;
+    let (asked, programs) = (self.work_asked(), programs.clone());
+    let held = background::run(move || held_claims(&roots, me, &asked, &programs)).await;
     let held: HashMap<TaskId, usize> = match held {
       Ok(Ok(held)) => held,
       Ok(Err(error)) => {
@@ -220,11 +220,12 @@ fn shared_projects_of(servers: &Servers, owner: Option<&CloudAccountId>) -> Vec<
 fn held_claims(
   roots: &[std::path::PathBuf],
   me: orchester_core::id::UserId,
+  asked: &HashMap<TaskId, orchester_core::time::Timestamp>,
   programs: &Programs,
 ) -> Result<HashMap<TaskId, usize>, orchester_store::StoreError> {
   let mut held = HashMap::new();
   for (index, root) in roots.iter().enumerate() {
-    for task in claim_ends::HeldClaims::read(root, me, programs)?.kept {
+    for task in claim_ends::HeldClaims::read(root, me, asked, programs)?.kept {
       held.insert(task, index);
     }
   }

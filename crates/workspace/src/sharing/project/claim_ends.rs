@@ -2,19 +2,22 @@
 //! holds in a shared project is held against the phase of its task's latest run on this computer, read as the task's
 //! page reads it (a run whose work a person merged without Orchester is merged), by core's [`claim_end`]: a merged
 //! run completes its claim through the run progress report (`PUT …/run`), a cancelled one releases it, and every other
-//! phase keeps it. This runs on every run change and every sync, so claims that ended before it existed end on the
-//! first sync too. The heartbeat names only the claims that are kept: one whose end the server did not take goes stale
-//! instead of staying fresh, and the next sync tries again.
+//! phase keeps it. Only a claim taken before its run ended is that run's: one taken since, by work on this computer
+//! that asked for it after the run ended (Run again, before the runner records the new run) or on the person's other
+//! computer (the claim's `since`), is kept. This runs on every run change and every sync, so claims that ended before
+//! it existed end on the first sync too. The heartbeat names only the claims that are kept: one whose end the server
+//! did not take goes stale instead of staying fresh, and the next sync tries again.
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use orchester_api::{ErrorCode, RunReport, client::ClientError};
 use orchester_core::{
   id::{TaskId, UserId},
   integration::{RunMerge, RunWork},
-  run::{Run, RunEvent, TaskPhase},
+  run::{Run, RunEvent, RunEventKind, TaskPhase},
   sharing::{ClaimEnd, claim_end},
   store::{MergeStore, RunStore, TaskStore},
+  time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
@@ -48,22 +51,41 @@ pub struct EndedClaim {
 
 /// The claims a person holds in a project, by what core's [`claim_end`] makes of their task's latest run here.
 pub(super) struct HeldClaims {
-  /// The heartbeat keeps these fresh: their run goes on or waits for review, or there is no run of theirs here.
+  /// The heartbeat keeps these fresh: their run goes on or waits for review, there is no run of theirs here, or the
+  /// claim was taken after the run ended.
   pub(super) kept: Vec<TaskId>,
   ending: Vec<Ending>,
 }
 
-enum Ending {
-  /// A merged run's, with its report.
-  Complete(TaskId, RunReport),
-  /// A cancelled run's.
-  Release(TaskId),
+/// A claim its task's latest run ended.
+struct Ending {
+  task: TaskId,
+  /// When the run ended, by this computer's clock.
+  ended: Timestamp,
+  /// A merged run's report, which completes the claim; a cancelled run's claim is released.
+  report: Option<RunReport>,
+}
+
+impl Ending {
+  const fn end(&self) -> ClaimEnd {
+    if self.report.is_some() {
+      ClaimEnd::Complete
+    } else {
+      ClaimEnd::Release
+    }
+  }
 }
 
 impl HeldClaims {
-  /// The claims `me` holds in the project at `root`, as its cache has them. Git, through `programs`, tells whether
-  /// the work of a run that passed every step was merged without Orchester. Blocking.
-  pub(super) fn read(root: &Path, me: UserId, programs: &Programs) -> Result<Self, StoreError> {
+  /// The claims `me` holds in the project at `root`, as its cache has them; `asked` says when work on this computer
+  /// last asked for a task's claim ([`Servers::work_asked`]). Git, through `programs`, tells whether the work of a run
+  /// that passed every step was merged without Orchester. Blocking.
+  pub(super) fn read(
+    root: &Path,
+    me: UserId,
+    asked: &HashMap<TaskId, Timestamp>,
+    programs: &Programs,
+  ) -> Result<Self, StoreError> {
     let db = ProjectDb::open(root)?;
     let mut held = Self {
       kept: Vec::new(),
@@ -78,11 +100,27 @@ impl HeldClaims {
     }
     settle(programs, root, &mut latest);
     for run in latest {
-      match claim_end(run.phase) {
-        ClaimEnd::Keep => held.kept.push(run.task),
-        ClaimEnd::Release => held.ending.push(Ending::Release(run.task)),
-        ClaimEnd::Complete => held.ending.push(Ending::Complete(run.task, run.report(&db)?)),
+      let end = claim_end(run.phase);
+      if end == ClaimEnd::Keep {
+        held.kept.push(run.task);
+        continue;
       }
+      let ended = run.ended_at(&db)?;
+      let taken = db
+        .shared_task_info(run.task)?
+        .and_then(|info| info.claim)
+        .map(|claim| claim.since)
+        .max(asked.get(&run.task).copied());
+      if taken.is_some_and(|taken| taken > ended) {
+        held.kept.push(run.task);
+        continue;
+      }
+      let report = (end == ClaimEnd::Complete).then(|| run.report(ended));
+      held.ending.push(Ending {
+        task: run.task,
+        ended,
+        report,
+      });
     }
     Ok(held)
   }
@@ -116,24 +154,32 @@ impl Latest {
     }))
   }
 
-  /// The report of a merged run: merged since Orchester merged it, or, for work a person merged without Orchester,
-  /// since the run last recorded something, as git does not say when.
-  fn report(&self, db: &ProjectDb) -> Result<RunReport, StoreError> {
-    let since = match &self.merge {
-      Some(merge) => merge.merged_at,
-      None => db
-        .events(self.run.id())
-        .map_err(run_store_error)?
-        .last()
+  /// When the run that ended its claim ended: Orchester merged it, it was cancelled, or, for work a person merged
+  /// without Orchester, it last recorded something, as git does not say when.
+  fn ended_at(&self, db: &ProjectDb) -> Result<Timestamp, StoreError> {
+    if let Some(merge) = &self.merge {
+      return Ok(merge.merged_at);
+    }
+    let events = db.events(self.run.id()).map_err(run_store_error)?;
+    let cancelled = events
+      .iter()
+      .rfind(|event| matches!(event.kind(), RunEventKind::Cancelled));
+    Ok(
+      cancelled
+        .or(events.last())
         .map_or_else(|| self.run.created_at(), RunEvent::at),
-    };
-    Ok(RunReport {
+    )
+  }
+
+  /// The report of a merged run, merged since `ended`.
+  fn report(&self, ended: Timestamp) -> RunReport {
+    RunReport {
       number: self.run.number().get(),
       phase: self.phase,
       step: None,
       started_at: self.run.created_at().unix_millis(),
-      phase_since: since.unix_millis(),
-    })
+      phase_since: ended.unix_millis(),
+    }
   }
 }
 
@@ -180,13 +226,15 @@ impl ProjectServer {
     self.writable()?;
     let me = self.me().ok_or(SharingError::SignedOut)?;
     let (root, programs) = (self.repo_root.clone(), programs.clone());
-    let held = background::run(move || HeldClaims::read(&root, me, &programs)).await??;
+    let asked = self.servers.work_asked();
+    let held = background::run(move || HeldClaims::read(&root, me, &asked, &programs)).await??;
     let mut ended = Vec::with_capacity(held.ending.len());
     for ending in held.ending {
-      let (task, end) = match &ending {
-        Ending::Complete(task, _) => (*task, ClaimEnd::Complete),
-        Ending::Release(task) => (*task, ClaimEnd::Release),
-      };
+      // Work that asked for the claim after its run ended, while the claims before it were ended, keeps it.
+      if self.servers.work_asked().get(&ending.task) > Some(&ending.ended) {
+        continue;
+      }
+      let (task, end) = (ending.task, ending.end());
       let result = self.end_claim(ending).await;
       if let Err(error) = &result {
         tracing::warn!(%error, %task, project = %self.link.project, ?end,
@@ -198,9 +246,9 @@ impl ProjectServer {
   }
 
   async fn end_claim(&self, ending: Ending) -> Result<(), ClaimEndError> {
-    let (task, report) = match ending {
-      Ending::Release(task) => return Ok(self.release_claim(task).await?),
-      Ending::Complete(task, report) => (task, report),
+    let Ending { task, report, .. } = ending;
+    let Some(report) = report else {
+      return Ok(self.release_claim(task).await?);
     };
     let answer = self
       .call(|client, token, project| async move { client.report_run(&token, project, task, &report).await })
