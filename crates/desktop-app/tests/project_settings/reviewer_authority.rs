@@ -8,7 +8,7 @@ use serde_json::json;
 use super::{domain, harness::Settings, run_fixture};
 
 #[test]
-fn project_settings_reviewer_change_for_existing_auto_run_requires_person() {
+fn project_settings_reviewer_change_for_existing_auto_run_is_a_persons() {
   let mut page = Settings::new(true);
   page.choose("settings-reviewer-connection", "Claude Code");
   page.saved();
@@ -27,19 +27,12 @@ fn project_settings_reviewer_change_for_existing_auto_run_requires_person() {
       "reviewer":{"connection":"Claude Code","model":"sonnet"}})).expect_err("automation OFF"),
     orchester_workspace::app_mcp::ToolError::Refused { code, .. } if code == "automation_not_allowed"
   ));
-  page.choose("settings-reviewer-model", "sonnet");
-  page.until("reviewer question", |p| p.exists("settings-auto-question-confirm"));
-  assert!(page.window.link.input_gate().protecting());
+  // The window's own input from automation is put back too.
+  lurq::app::events::with_synthetic_input(|| page.choose("settings-reviewer-model", "sonnet"));
+  page.until("the reviewer put back", |p| p.exists("settings-auto-person-only"));
   assert_eq!(page.db().auto_mode_settings().expect("unchanged"), original);
-  page.click("settings-auto-question-keep");
-  assert_eq!(page.db().auto_mode_settings().expect("kept"), original);
-  assert!(!page.window.link.input_gate().protecting());
   page.choose("settings-reviewer-model", "sonnet");
-  page.until("second question", |p| p.exists("settings-auto-question-confirm"));
-  page.until("confirmed save starts after the headless card is armed", |p| {
-    p.click("settings-auto-question-confirm");
-    p.text("project-settings-save-status") == "Saving…"
-  });
+  page.until("a person's reviewer saved", |p| p.reviewer_model() == "sonnet");
   page.saved();
   assert!(!page.window.link.input_gate().protecting());
   assert!(!page.db().auto_mode_settings().expect("future default").new_runs);

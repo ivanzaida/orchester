@@ -83,6 +83,9 @@ pub struct ScopeRoots<'a> {
   pub skills: Option<&'a Path>,
   /// The granted writable folders; they apply only when the step edits files.
   pub writable_folders: &'a [ResolvedFolder],
+  /// The run's own storage (ORC-114), which must exist: among `writable_folders` for a step that edits files, and
+  /// read-only for any other, so every step reads what the run keeps for people to see.
+  pub run_storage: Option<&'a Path>,
 }
 
 /// The canonicalised folders of one step's scope.
@@ -99,12 +102,12 @@ impl FileScope {
   /// exist, a writable folder may still be missing.
   pub fn new(roots: &ScopeRoots<'_>) -> Result<Self, ScopeError> {
     let worktree = canonical_root(roots.worktree)?;
-    let read_only = [roots.code_index, roots.skills]
+    let writes = roots.access == RepositoryAccess::Write;
+    let read_only = [roots.code_index, roots.skills, roots.run_storage.filter(|_| !writes)]
       .into_iter()
       .flatten()
       .map(canonical_root)
       .collect::<Result<_, _>>()?;
-    let writes = roots.access == RepositoryAccess::Write;
     let writable_folders = if writes {
       roots
         .writable_folders

@@ -56,6 +56,7 @@ pub enum Change {
   Auto {
     base: AutoModeSettings,
     asked: AutoModeSettings,
+    /// The input that made the change may widen auto mode: a person's, or automation's under both opt-ins.
     confirmed: bool,
   },
   /// *With auto mode on, approve everything in each run*, turned on or off by a person or, where the window let it,

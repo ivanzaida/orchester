@@ -156,19 +156,8 @@ pub(super) fn program_row(
     )
     .child(check_line(ctx, provider, state, on_provider))
     .with_children(sign_in(ctx, provider, state, on_provider));
-  let info = ctx.t_args(
-    "connections.dialog.programInfo",
-    [
-      (
-        "about",
-        ctx.t_args("connections.dialog.programHint", [("program", program)]),
-      ),
-      ("choose", ctx.t("connections.dialog.chooseFileUnavailable")),
-    ],
-  );
   FormField::new("connection-program", label)
     .toned(hint, tone)
-    .info(info)
     .render(ctx, control)
 }
 

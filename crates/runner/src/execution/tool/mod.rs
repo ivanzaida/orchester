@@ -55,7 +55,14 @@ impl RunTask {
     if !self.board.take_command(execution) {
       return Ok(false);
     }
-    let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
+    let workspace = match self.workspace(execution, start) {
+      Ok(None) => {
+        self.board.release(execution);
+        return Ok(false);
+      }
+      Ok(Some(workspace)) => Ok(workspace),
+      Err(detail) => Err(detail),
+    };
     if self.run.execution(execution).map(|execution| execution.status()) == Some(StepStatus::Pending) {
       self.transition(|run, now| run.start_step(execution, now))?;
     }
@@ -64,10 +71,8 @@ impl RunTask {
       .start_command_invocation(self.run.id(), execution, Timestamp::now())?;
     let workspace = match workspace {
       Ok(workspace) => workspace,
-      Err(error) => {
-        let problem = RunnerProblem::CheckpointFailed {
-          detail: error.to_string(),
-        };
+      Err(detail) => {
+        let problem = RunnerProblem::CheckpointFailed { detail };
         self.not_started(execution, &mut invocation, problem, StepFailure::CheckpointFailed)?;
         return Ok(true);
       }

@@ -141,7 +141,7 @@ Tabs: **General · Runs · Context · Connections · Secrets · Sharing**.
 
 | Group | Setting | Default | Notes |
 |---|---|---|---|
-| Auto mode | **New runs use auto mode** | Off | A reviewer model answers what the rules leave to you. Changing it asks in place (person-only). |
+| Auto mode | **New runs use auto mode** | Off | A reviewer model answers what the rules leave to you. The switch and the reviewer save as you change them; turning it on or changing its reviewer is person-only (automation's change is put back). |
 | | **Reviewer** | First Claude Code connection with Haiku 4.5 | Connection, model, effort. Not an API-provider connection. |
 | | **Approved for every run** | — | The rules from *Approve for every run of this project* (QA app starts while `tools/qa-app.ps1` is unchanged), on a page of their own with *Revoke*. |
 | Estimates | **Let Orchester estimate story points** | Off | Per project. Estimates new and changed tasks with auto mode's reviewer model (tokens count toward the daily budget). Points you set are never changed. Person-only. |

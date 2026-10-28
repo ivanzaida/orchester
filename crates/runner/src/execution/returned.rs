@@ -37,8 +37,10 @@ impl Scheduler {
         if stored.last_sequence() != expected {
           return Err(Rejection::RunChangedMeanwhile);
         }
-        let worktree = prepare::existing_worktree(root, run)?;
-        in_merge(&worktree)?;
+        // A borrowing run has no folder a person could begin a merge in; its workspace is switched when it goes on.
+        if let prepare::RunFolder::Own(worktree) = prepare::existing_folder(db, root, &stored)? {
+          in_merge(&worktree)?;
+        }
         let events = stored
           .return_ended(&step, (&note, conflicts.as_ref()), by, Timestamp::now())
           .map_err(idle::rejection)?;

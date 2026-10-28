@@ -60,7 +60,7 @@ pub(super) fn recover(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<O
         })
     });
   let Some((step, by)) = step else { return Ok(None) };
-  prepare::existing_worktree(root, run.id())?;
+  prepare::existing_folder(db, root, &run)?;
   let events = run.recover_as(&step, by, Timestamp::now()).map_err(idle::rejection)?;
   // Validate the pinned task and worktree before changing durable run state.
   let prepared = Prepared::continuing(db, root, run)?;

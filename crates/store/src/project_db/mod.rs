@@ -81,6 +81,7 @@ mod task_snapshots;
 mod tasks;
 mod tool_approvals;
 mod usage;
+mod workspaces;
 mod worktree_removals;
 mod write_transaction;
 

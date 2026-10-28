@@ -59,7 +59,6 @@ fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
   assert!(page.text("settings-auto-open-connections").contains("Open Connections"));
   page.click("settings-auto-new-runs");
   assert!(!page.db().auto_mode_settings().expect("auto mode").new_runs);
-  assert!(!page.exists("settings-auto-question"));
   page.click("settings-auto-open-connections");
   assert!(matches!(
     page.window.navigation().route_now(),
@@ -67,27 +66,62 @@ fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
   ));
 }
 
+/// Without its opt-ins, automation's input cannot widen auto mode: turning it on, or changing its reviewer once it is
+/// on, is put back and said under the group, and nothing is stored; a person's change then saves.
 #[test]
-fn project_settings_auto_mode_asks_a_person_then_saves_and_can_turn_off_without_asking() {
+fn project_settings_auto_mode_widening_from_automation_is_put_back() {
+  use lurq::app::events::with_synthetic_input;
+  let mut page = Settings::new(true);
+  with_synthetic_input(|| page.click("settings-auto-new-runs"));
+  page.until("the refusal", |p| p.exists("settings-auto-person-only"));
+  assert!(!page.db().auto_mode_settings().expect("unchanged").new_runs);
+  assert!(!page.switch_on("settings-auto-new-runs"));
+  page.click("settings-auto-new-runs");
+  page.until("a person's switch saved", |p| {
+    p.db().auto_mode_settings().expect("saved").new_runs
+  });
+  page.saved();
+  assert!(!page.exists("settings-auto-person-only"));
+  let on = page.db().auto_mode_settings().expect("on");
+  with_synthetic_input(|| page.choose("settings-reviewer-model", "sonnet"));
+  page.until("the reviewer put back", |p| p.exists("settings-auto-person-only"));
+  for _ in 0..10 {
+    page.window.tree.tick_futures();
+    page.window.pass();
+  }
+  assert_eq!(page.db().auto_mode_settings().expect("kept"), on);
+  page.choose("settings-reviewer-model", "sonnet");
+  page.until("a person's reviewer saved", |p| {
+    p.db()
+      .auto_mode_settings()
+      .expect("saved")
+      .reviewer
+      .is_some_and(|choice| choice.model.as_str() == "sonnet")
+  });
+  page.saved();
+}
+
+/// A person's switch saves at once and shows the new value while it saves; nothing is asked and no input is locked.
+#[test]
+fn project_settings_auto_mode_saves_a_persons_switch_at_once_and_turns_off() {
   let mut page = Settings::new(true);
   page.click("settings-auto-new-runs");
-  page.until("auto-mode question", |p| p.exists("settings-auto-question-confirm"));
-  assert!(page.window.link.input_gate().protecting());
-  assert!(!page.db().auto_mode_settings().expect("unchanged").new_runs);
-  page.window.tree.tick_futures();
-  page.window.pass();
-  page.click("settings-auto-question-confirm");
+  assert_eq!(page.text("project-settings-save-status"), "Saving…");
+  assert!(
+    page.switch_on("settings-auto-new-runs"),
+    "the switch shows On while it saves"
+  );
+  assert!(!page.exists("settings-auto-question"), "nothing is asked");
+  assert!(!page.window.link.input_gate().protecting());
   page.until("auto mode saved", |p| {
     p.db().auto_mode_settings().expect("saved").new_runs
   });
   page.saved();
-  assert!(!page.window.link.input_gate().protecting());
   page.click("settings-auto-new-runs");
   page.until("auto mode off", |p| {
     !p.db().auto_mode_settings().expect("saved").new_runs
   });
   page.saved();
-  assert!(!page.exists("settings-auto-question"));
   page.choose("settings-reviewer-connection", "Claude Code");
   page.until("reviewer saved", |p| {
     p.db().auto_mode_settings().expect("saved").reviewer.is_some()

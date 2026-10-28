@@ -95,12 +95,11 @@ impl Run {
       }
       RunEventKind::Interrupted { .. } => self.expect_status(kind, self.status == RunStatus::Running),
       RunEventKind::Resumed => match self.status {
-        // The daily project budget is shared; a run stopped by it continues once the day has
-        // room again, which the runner checks, not with limits of its own.
-        // An account's plan limit is not the run's either: the run continues at its reset, or on another account.
-        RunStatus::Paused(
-          PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget | RunLimit::PlanLimit { .. }),
-        ) => Ok(()),
+        // The daily project budget is shared; a run stopped by it continues once the day has room again, which the
+        // runner checks, not with limits of its own. An account's plan limit is not the run's either: the run
+        // continues at its reset, or on another account. A run paused for low disk space, once the disk has room.
+        RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk) => Ok(()),
+        RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget | RunLimit::PlanLimit { .. })) => Ok(()),
         RunStatus::Paused(PauseReason::LimitReached(limit)) => Err(RunError::LimitNotRaised(limit)),
         _ => self.expect_status(kind, false),
       },

@@ -1,12 +1,17 @@
 //! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch, *approve everything in each run* and the reviewer,
-//! saved as they change, with the input-locked, person-only question asked in place under the group before a change
-//! that widens what the reviewer approves, and the project's approval rules.
+//! saved as soon as they change, like the page's other settings, and the project's approval rules. Turning it on or
+//! changing its active reviewer widens what the reviewer approves in the person's place, so only a person's input does
+//! it (or automation's under both of its opt-ins, [`Guarded::ApprovalWidening`]); such a change from other input is put
+//! back and said under the group.
 mod controls;
 mod everything;
 mod feedback;
 mod rules;
 
-use std::sync::Arc;
+use std::sync::{
+  Arc,
+  atomic::{AtomicBool, Ordering},
+};
 
 use lurq::{
   app::{
@@ -26,8 +31,8 @@ use super::super::{
   work::{self, Change, Save},
 };
 use crate::{
-  mcp::input_gate::InputGate,
-  screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  ui::unavailable::reason_line,
 };
 
 #[derive(Clone)]
@@ -62,12 +67,15 @@ pub struct AutoMode {
   effort: Signal<String>,
   stored: Signal<Stored>,
   supplied: Signal<Stored>,
-  asking: Signal<Asked>,
   attempted: Signal<Asked>,
   failed: Signal<bool>,
   gate: Option<InputGate>,
   /// An MCP client's input asked to turn on *approve everything in each run* and was refused.
   everything_refused: Signal<bool>,
+  /// Whether the input that made the last edit may widen auto mode, read while it was delivered.
+  may_widen: Arc<AtomicBool>,
+  /// A widening from input that may not make it was put back; said under the group until the next change.
+  refused: Signal<bool>,
 }
 impl Component for AutoMode {
   type Props = Props;
@@ -82,11 +90,12 @@ impl Component for AutoMode {
       effort: ctx.signal(effort),
       stored: ctx.signal(Stored(settings.clone())),
       supplied: ctx.signal(Stored(settings)),
-      asking: ctx.signal(Asked(None)),
       attempted: ctx.signal(Asked(None)),
       failed: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
       everything_refused: ctx.signal(false),
+      may_widen: Arc::new(AtomicBool::new(true)),
+      refused: ctx.signal(false),
     };
     let save = tab.save.clone();
     tab.follow(ctx, &save);
@@ -107,6 +116,11 @@ impl Component for AutoMode {
         after.effort.set(String::new());
       }
     });
+    // A select's choice is taken in its handler, so who chose is read while the input is delivered.
+    for chosen in [&tab.connection, &tab.model, &tab.effort] {
+      let after = tab.clone();
+      ctx.watch(chosen, move |_| after.note_input());
+    }
     tab
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -119,6 +133,12 @@ impl Component for AutoMode {
     }
     let settings = self.stored.get().0;
     let mut group = controls::group(ctx, self, &props, &settings, &save);
+    if self.refused.get() {
+      group = group.after(reason_line(
+        "settings-auto-person-only",
+        &ctx.t("project_settings.autoPersonOnly"),
+      ));
+    }
     if self.failed.get() {
       group = group.after(
         Row::new()
@@ -135,18 +155,21 @@ impl Component for AutoMode {
     props.tab.status.get();
     if save.state().get().is_pending() {
       props.tab.status.set(Status::Saving);
-    } else if outside || self.asking.get().0.is_some() {
+    } else if outside {
       props.tab.status.set(Status::Unsaved);
     } else if self.failed.get() {
       props.tab.status.set(Status::Failed);
-    }
-    if let Some(asked) = self.asking.get().0 {
-      group = group.after(self.question(ctx, &props, &save, asked));
     }
     Element::from(group)
   }
 }
 impl AutoMode {
+  /// Notes whether the input being delivered may widen auto mode: a person's always; an MCP client's only under the
+  /// stored opt-ins. Called from a control's handler, or a watcher it sets off.
+  fn note_input(&self) {
+    let may = input_may_decide(self.gate.as_ref(), Guarded::ApprovalWidening);
+    self.may_widen.store(may, Ordering::SeqCst);
+  }
   fn dirty(&self) -> bool {
     let stored = self.stored.get_untracked().0;
     (
@@ -154,7 +177,6 @@ impl AutoMode {
       self.model.get_untracked(),
       self.effort.get_untracked(),
     ) != values(&stored)
-      || self.asking.get_untracked().0.is_some()
       || self.failed.get_untracked()
   }
   fn outside(&self) -> bool {
@@ -199,7 +221,6 @@ impl AutoMode {
         status.set(Status::Saving);
       } else if state.error.is_some() {
         tab.failed.set(true);
-        tab.asking.set(Asked(None));
         status.set(Status::Failed);
       } else if let Some(saved) = &state.data {
         tab.fill(saved.0.clone());
@@ -207,7 +228,6 @@ impl AutoMode {
         props.parent_read.set(Some(work::Read(saved.0.clone(), u64::MAX)));
         props.own.took(saved);
         props.refresh.update(|revision| *revision += 1);
-        tab.asking.set(Asked(None));
         tab.failed.set(false);
         status.set(Status::Saved);
         feed.saved();
@@ -223,7 +243,7 @@ impl AutoMode {
     Ok(asked)
   }
   fn commit(&self, props: &Props, save: &Save) {
-    if save.state().get().is_pending() || self.asking.get().0.is_some() {
+    if save.state().get().is_pending() {
       return;
     }
     let settings = self.stored.get().0;
@@ -250,64 +270,27 @@ impl AutoMode {
     }
     self.request(props, save, asked);
   }
+  /// Saves `asked` at once; a widening from input that may not make it is put back and said instead.
   fn request(&self, props: &Props, save: &Save, asked: AutoModeSettings) {
     let settings = self.stored.get_untracked().0;
-    let base = settings.auto_mode;
+    let base = settings.auto_mode.clone();
+    let confirmed = self.may_widen.load(Ordering::SeqCst);
     self.failed.set(false);
-    self.attempted.set(Asked(Some(asked.clone())));
-    if project_settings::auto_widens(&base, &asked, settings.auto_runs) {
-      self.asking.set(Asked(Some(asked)));
-      props.tab.status.set(Status::Unsaved);
-    } else {
-      save.run((
-        props.tab.project.open.repo_root.clone(),
-        Change::Auto {
-          base,
-          asked,
-          confirmed: false,
-        },
-      ));
+    self.refused.set(false);
+    if !confirmed && project_settings::auto_widens(&base, &asked, settings.auto_runs) {
+      tracing::warn!("input that may not widen auto mode changed it; put back");
+      self.attempted.set(Asked(None));
+      self.fill(settings);
+      self.refused.set(true);
+      return;
     }
-  }
-  fn question(&self, ctx: &mut Ctx, props: &Props, save: &Save, asked: AutoModeSettings) -> Element {
-    let (tab, save, root, base, status) = (
-      self.clone(),
-      save.clone(),
+    self.attempted.set(Asked(Some(asked.clone())));
+    // The workspace refuses a widening it was not told a person (or automation under its opt-ins) made, so a run
+    // that turned Auto since the page read cannot let other input widen it.
+    save.run((
       props.tab.project.open.repo_root.clone(),
-      self.stored.get_untracked().0.auto_mode,
-      props.tab.status.clone(),
-    );
-    ctx.mount_keyed::<WidenConfirm>(
-      "settings-auto-confirm",
-      WidenProps {
-        id: "settings-auto-question".into(),
-        look: WidenLook::Box,
-        affirming: false,
-        automation: crate::mcp::input_gate::Guarded::ApprovalWidening,
-        title: ctx.t("project_settings.confirmAuto"),
-        reasons: vec![ctx.t("project_settings.confirmAutoDetail")].into(),
-        keep: ctx.t("project_settings.keep"),
-        confirm: ctx.t("project_settings.confirm"),
-        on_keep: Arc::new(move || {
-          tab.fill(tab.stored.get_untracked().0);
-          tab.attempted.set(Asked(None));
-          tab.asking.set(Asked(None));
-          status.set(Status::Saved);
-        }),
-        on_confirm: Arc::new(move || {
-          if !save.state().get_untracked().is_pending() {
-            save.run((
-              root.clone(),
-              Change::Auto {
-                base: base.clone(),
-                asked: asked.clone(),
-                confirmed: true,
-              },
-            ));
-          }
-        }),
-      },
-    )
+      Change::Auto { base, asked, confirmed },
+    ));
   }
 }
 fn values(settings: &Settings) -> (String, String, String) {
