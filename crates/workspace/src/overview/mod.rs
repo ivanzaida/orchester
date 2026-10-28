@@ -7,6 +7,7 @@
 //! - [`limits`]: the accounts near or at a plan limit, and those whose window reset since a reading said so;
 //! - [`landed`]: the runs merged today and earlier, and the merge queue's state;
 //! - [`delivery`]: the open modules' progress and forecasts, and the queued work's;
+//! - [`ready`]: the drafts that could be queued now, on the quiet page;
 //! - [`start`]: a new project's getting-started steps.
 
 pub mod at_work;
@@ -14,6 +15,7 @@ pub mod delivery;
 pub mod landed;
 pub mod limits;
 pub mod queue;
+pub mod ready;
 pub mod start;
 
 /// How many lines a section shows before its *Show all* (05 `JzNRO`, Rules).

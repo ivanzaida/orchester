@@ -50,11 +50,23 @@ pub struct RunAtWork {
   pub agent: Option<StepAgent>,
 }
 
-/// `run`, which runs and stands at `step`.
-pub(super) fn read(db: &ProjectDb, run: &Run, step: Option<&CurrentStep>) -> Result<RunAtWork, StoreError> {
-  let agent = match step_agent(db, run, step)? {
+/// The agent of a run's step as reading the run found it: its pinned profile, its connection and the connection's
+/// provider. Found once per reading of a run ([`step_agent`]) and handed on.
+pub(super) struct FoundAgent {
+  profile: AgentProfile,
+  connection: Connection,
+  pub(super) provider: AgentProvider,
+}
+
+/// `run`, which runs, its step's agent `found` as [`step_agent`] found it.
+pub(super) fn read(db: &ProjectDb, run: &Run, found: Option<FoundAgent>) -> Result<RunAtWork, StoreError> {
+  let agent = match found {
     None => None,
-    Some((profile, connection, provider)) => {
+    Some(FoundAgent {
+      profile,
+      connection,
+      provider,
+    }) => {
       let launched = db
         .invocations(run.id())?
         .into_iter()
@@ -78,22 +90,13 @@ pub(super) fn read(db: &ProjectDb, run: &Run, step: Option<&CurrentStep>) -> Res
   })
 }
 
-/// The provider of the connection whose agent runs `step` of `run`, as its pinned profile names it; `None` for a tool
-/// step, or a profile or connection no longer found.
-pub(super) fn provider(
+/// The agent that runs `step` of `run`, as its pinned profile names it; `None` for a tool step, or a profile or
+/// connection no longer found.
+pub(super) fn step_agent(
   db: &ProjectDb,
   run: &Run,
   step: Option<&CurrentStep>,
-) -> Result<Option<AgentProvider>, StoreError> {
-  Ok(step_agent(db, run, step)?.map(|(.., provider)| provider))
-}
-
-/// The pinned profile of `step`'s agent, its connection and the connection's provider.
-fn step_agent(
-  db: &ProjectDb,
-  run: &Run,
-  step: Option<&CurrentStep>,
-) -> Result<Option<(AgentProfile, Connection, AgentProvider)>, StoreError> {
+) -> Result<Option<FoundAgent>, StoreError> {
   let Some(StepExecutor::Agent { profile, .. }) = step
     .and_then(|step| run.snapshot().steps().get(step.number.checked_sub(1)?))
     .map(|snapshot| snapshot.executor())
@@ -108,7 +111,11 @@ fn step_agent(
     ConnectionStore::connection(db, profile.connection())?.and_then(|connection| match connection.kind() {
       ConnectionKind::Agent(provider) => {
         let provider = *provider;
-        Some((profile, connection, provider))
+        Some(FoundAgent {
+          profile,
+          connection,
+          provider,
+        })
       }
       ConnectionKind::GitHub { .. } => None,
     }),

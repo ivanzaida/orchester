@@ -2,7 +2,7 @@
 //! (information: it reconnects on its own, and what was read stays), the runner that gave up restarting (the failure
 //! card's form with Restart runner and Open runner log, as the status bar offers them), and a shared project whose
 //! team-server sign-in ended (*Join again*, which opens the server in Settings › Orchester). Each task whose latest run
-//! can't be read keeps a row of its own with Open log.
+//! can't be read keeps a row of its own with Open log and a link to the task.
 
 use std::path::PathBuf;
 
@@ -10,19 +10,24 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::SpacingSize,
   },
-  node::Element,
+  components::{Column, Row},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
+use orchester_core::id::ProjectId;
 use orchester_workspace::{
   messages,
   runner::state::RunnerState,
   tasks::{data::ProjectTasks, list::Latest},
 };
 
+use super::section::link;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{OrchesterView, Route},
+  routes::{OrchesterView, ProjectPage, Route, TaskTab, TaskView},
   services::Services,
   shell::status_bar::{ServerFacts, ServerState, server_facts},
   ui::{
@@ -31,6 +36,7 @@ use crate::{
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
+    pressable::Press,
   },
 };
 
@@ -144,23 +150,41 @@ impl Component for ServerNotice {
   }
 }
 
-/// A row for each task whose latest run can't be read, with Open log.
-pub(super) fn unreadable(ctx: &mut Ctx, root: &std::path::Path, tasks: &ProjectTasks) -> Vec<Element> {
+/// A row for each task whose latest run can't be read, with Open log and *Open task ↗*, which opens the task.
+pub(super) fn unreadable(
+  ctx: &mut Ctx,
+  (project, root): (ProjectId, &std::path::Path),
+  tasks: &ProjectTasks,
+) -> Vec<Element> {
   tasks
     .tasks
     .iter()
     .filter_map(|task| match tasks.phases.get(&task.id())? {
-      Latest::Unreadable(unreadable) => Some((task.key().to_string(), unreadable.title())),
+      Latest::Unreadable(unreadable) => Some((task.key(), unreadable.title())),
       Latest::Run(_) => None,
     })
-    .map(|(key, error)| {
-      Failure::new(
-        format!("overview-unreadable-{key}"),
-        ctx.t("overview.unreadable.title"),
-        error,
-      )
-      .log(root.to_path_buf())
-      .row(ctx, Some(&key))
+    .map(|(task_key, error)| {
+      let key = task_key.to_string();
+      let id = format!("overview-unreadable-{key}");
+      let row = Failure::new(id.clone(), ctx.t("overview.unreadable.title"), error)
+        .log(root.to_path_buf())
+        .row(ctx, Some(&key));
+      let route = Route::Project(
+        project,
+        ProjectPage::Task(task_key.clone(), TaskView::of(TaskTab::default())),
+      );
+      let open = Navigation::of(ctx).to(route);
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(row))
+        .child(link(
+          &format!("{id}-open"),
+          &ctx.t("overview.unreadable.open"),
+          Press::Open(open),
+        ))
+        .into()
     })
     .collect()
 }

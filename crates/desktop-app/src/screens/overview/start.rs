@@ -33,6 +33,7 @@ use crate::{
   routes::{ConnectionsView, ImportTab, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
+    failure::LastFailure,
     icon::{Icon, icon},
     message::message_text,
     pressable::Press,
@@ -68,13 +69,19 @@ struct StartProps {
 
 impl DevtoolsInspectable for StartProps {}
 
-struct GettingStarted;
+struct GettingStarted {
+  /// A failed read's error, kept while the list is read again: a read that fails after one that worked says so
+  /// instead of keeping the steps it read before.
+  last: LastFailure,
+}
 
 impl Component for GettingStarted {
   type Props = StartProps;
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self
+    Self {
+      last: LastFailure::default(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -88,10 +95,16 @@ impl Component for GettingStarted {
         })
     });
     let state = read.state().get();
+    let failed = self.last.follow(&state);
     let head_title = ctx.t_args("overview.start.head", [("project", &*props.name)]);
     let list = frame("overview-start-list");
-    let list = match (&state.data, &state.error) {
-      (Some(readiness), _) => {
+    let list = match (failed, &state.data) {
+      (Some((error, _)), _) => list.child(start_head(&head_title, None)).child(
+        Row::new()
+          .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Md))
+          .child(muted(&message_text(ctx, &error)).id("overview-start-error")),
+      ),
+      (None, Some(readiness)) => {
         let lines = steps(readiness, props.tasks, &ctx.t("overview.listSeparator"));
         let count = ctx.t_args("overview.start.done", [("count", done(&lines).to_string())]);
         lines
@@ -100,11 +113,6 @@ impl Component for GettingStarted {
             list.child(step_line(ctx, props.project, line))
           })
       }
-      (None, Some(error)) => list.child(start_head(&head_title, None)).child(
-        Row::new()
-          .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Md))
-          .child(muted(&message_text(ctx, error)).id("overview-start-error")),
-      ),
       (None, None) => list
         .child(start_head(&head_title, None))
         .child(loading("overview-start-reading", &ctx.t("overview.start.reading")).padding(SpacingSize::Md)),

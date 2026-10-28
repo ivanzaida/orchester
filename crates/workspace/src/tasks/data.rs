@@ -360,7 +360,7 @@ fn latest_runs<'a>(
         if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
           group_holds.remove(&task.id());
         }
-        let mut shown = latest_run(db, task, latest)?;
+        let (mut shown, agent) = latest_run_and_agent(db, task, latest)?;
         // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one at
         // a plan does.
         if shown.phase == TaskPhase::Running
@@ -371,7 +371,7 @@ fn latest_runs<'a>(
         if shown.phase == TaskPhase::Succeeded {
           unmerged.add(task.id(), latest);
         }
-        found.note(db, latest, &shown)?;
+        found.note(db, (latest, &shown), agent)?;
         if run_approvals::counts_as_auto_approving(db, task, latest)? {
           found.auto_approving.push(AutoApprovingRun {
             run: latest.id(),
@@ -391,11 +391,17 @@ fn latest_runs<'a>(
 }
 
 impl LatestRuns {
-  /// Keeps who works on `latest` while it runs, and when it merged once it was merged in Orchester.
-  fn note(&mut self, db: &ProjectDb, latest: &Run, shown: &LatestRun) -> Result<(), StoreError> {
+  /// Keeps who works on `latest` while it runs (`agent`, its step's agent as reading it found it), and when it merged
+  /// once it was merged in Orchester.
+  fn note(
+    &mut self,
+    db: &ProjectDb,
+    (latest, shown): (&Run, &LatestRun),
+    agent: Option<super::at_work::FoundAgent>,
+  ) -> Result<(), StoreError> {
     match shown.phase {
       TaskPhase::Running => {
-        let at_work = super::at_work::read(db, latest, shown.step.as_ref())?;
+        let at_work = super::at_work::read(db, latest, agent)?;
         self.facts.at_work.insert(latest.id(), at_work);
       }
       TaskPhase::Merged => {
@@ -447,6 +453,15 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
 /// `latest`, a run of `task`, with when it last changed, what it waits for, who runs its step's agent and, once it was
 /// interrupted, whether a person removed its worktree so that its task runs again after it (ORC-63).
 pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
+  latest_run_and_agent(db, task, latest).map(|(shown, _)| shown)
+}
+
+/// [`latest_run`], with its step's agent as it was found, so that a running run's facts don't look it up again.
+fn latest_run_and_agent(
+  db: &ProjectDb,
+  task: &Task,
+  latest: &Run,
+) -> Result<(LatestRun, Option<super::at_work::FoundAgent>), StoreError> {
   let updated_at = db
     .events(latest.id())
     .map_err(run_store_error)?
@@ -455,12 +470,13 @@ pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<La
   let awaited = awaited(db, latest)?;
   let merge = db.run_merge(latest.id())?;
   let mut shown = LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited);
-  shown.agent = super::at_work::provider(db, latest, shown.step.as_ref())?;
+  let agent = super::at_work::step_agent(db, latest, shown.step.as_ref())?;
+  shown.agent = agent.as_ref().map(|found| found.provider);
   if matches!(latest.status(), RunStatus::Interrupted(_)) {
     let removed = db.worktree_removal(latest.id())?.is_some();
     shown.ended_for_run_again = can_run_again_after(latest, removed);
   }
-  Ok(shown)
+  Ok((shown, agent))
 }
 
 /// Each step of `run` that waits on a decision on its plan or for an answer to its question, with the

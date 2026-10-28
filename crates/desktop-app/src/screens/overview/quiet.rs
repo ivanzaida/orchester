@@ -1,7 +1,8 @@
 //! The quiet Overview (02 `HWznK`): nothing waits and nothing runs. In the digest's place, a `border` card radius 10
 //! with a `circle-check` in `success`, *Nothing waits for you, and nothing is running.* and what is known of the slots,
-//! the queue and the last merge (`bNnoJ`); under it *Ready to start*, the drafts a person could queue now, each with
-//! *Ready* and its pipeline (`aM7e8`), *Tasks ↗* opening the list.
+//! the queue and the last merge (`bNnoJ`; its clock time today, how long ago before); under it *Ready to start*, the
+//! drafts a person could queue now (`orchester_workspace::overview::ready`), each with *Ready* and its pipeline
+//! (`aM7e8`), *Tasks ↗* opening the list, and *Show all N* where the list is cut.
 
 use std::num::NonZeroU32;
 
@@ -14,14 +15,14 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::ProjectId, project::TaskKey, task::TaskStatus, time::Timestamp};
+use orchester_core::{id::ProjectId, project::TaskKey, time::Timestamp};
 use orchester_workspace::{
   display,
-  overview::QUEUE_SHOWN,
+  overview::{QUEUE_SHOWN, ready::ready_to_start as ready_drafts},
   tasks::{data::ProjectTasks, list::PipelineLabel},
 };
 
-use super::section::{LINE_HEIGHT, head, key, line, link, muted, section, title};
+use super::section::{LINE_HEIGHT, head, key, line, link, muted, section, show_all, title};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView},
@@ -36,8 +37,12 @@ use crate::{
 /// The pipeline's room (`PzN8w`).
 const PIPELINE_WIDTH: f32 = 150.0;
 
-/// The card; `slots` as the runner reported them, `last_merge` the newest merge known.
-pub(super) fn nothing_waits(ctx: &Ctx, slots: Option<(usize, NonZeroU32)>, last_merge: Option<Timestamp>) -> Column {
+/// The card; `slots` as the runner reported them, `last_merge` the newest merge known, at `now`.
+pub(super) fn nothing_waits(
+  ctx: &Ctx,
+  slots: Option<(usize, NonZeroU32)>,
+  (last_merge, now): (Option<Timestamp>, Timestamp),
+) -> Column {
   let mut parts: Vec<String> = Vec::new();
   if let Some((used, slots)) = slots {
     parts.push(
@@ -51,11 +56,12 @@ pub(super) fn nothing_waits(ctx: &Ctx, slots: Option<(usize, NonZeroU32)>, last_
   }
   parts.push(ctx.t("overview.quiet.queueEmpty").to_string());
   if let Some(at) = last_merge {
-    parts.push(
-      ctx
-        .t_args("overview.quiet.lastMerge", [("time", display::clock(at))])
-        .to_string(),
-    );
+    let time = if at >= now.local_day_start() {
+      display::clock(at)
+    } else {
+      message_text(ctx, &display::ago(now, at)).to_string()
+    };
+    parts.push(ctx.t_args("overview.quiet.lastMerge", [("time", time)]).to_string());
   }
   let note = parts.join(&ctx.t("overview.separator"));
   Column::new()
@@ -86,17 +92,7 @@ pub(super) fn nothing_waits(ctx: &Ctx, slots: Option<(usize, NonZeroU32)>, last_
 
 /// *Ready to start*: the drafts that could be queued now; `None` when there are none.
 pub(super) fn ready_to_start(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> Option<Column> {
-  let ready: Vec<_> = tasks
-    .tasks
-    .iter()
-    .filter(|task| {
-      task.status() == TaskStatus::Draft
-        && !task.organization().status().is_closed()
-        && !tasks.phases.contains_key(&task.id())
-        && task.details().missing().is_empty()
-        && tasks.blocking.get(&task.id()).is_none_or(Vec::is_empty)
-    })
-    .collect();
+  let ready = ready_drafts(tasks);
   if ready.is_empty() {
     return None;
   }
@@ -105,6 +101,10 @@ pub(super) fn ready_to_start(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectT
     project,
     ProjectPage::Tasks(TaskList::new(TaskListTab::Backlog)),
   ));
+  let more = (ready.len() > QUEUE_SHOWN).then(|| {
+    let label = ctx.t_args("overview.ready.showAll", [("count", ready.len().to_string())]);
+    show_all("overview-ready-all", &label, Press::Open(all.clone()))
+  });
   let lines: Vec<Element> = ready
     .iter()
     .take(QUEUE_SHOWN)
@@ -155,6 +155,7 @@ pub(super) fn ready_to_start(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectT
           Press::Open(all),
         )),
       ))
-      .with_children(lines),
+      .with_children(lines)
+      .with_children(more),
   )
 }

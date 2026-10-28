@@ -1918,7 +1918,7 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 3. **Plan limits** — % used per window as a line: solid for weekly windows, dashed for 5-hour windows, hue by CLI; a current point and a legend with the current value and reset time (*Codex · weekly 41% resets Oct 4, 09:00*); a dashed warning threshold labelled with its value at its end (default 80%; see below); a reset marker (rotate-ccw and a `$border` rule) where a weekly window reset. Grouped by day, 5-hour windows are not drawn (they would be a comb of spikes) and their legend entries are dimmed but keep the current value; grouped by hour they are drawn (board `e5PbG`). Scope (decided 2026-09-30): the project view shows the same account-wide chart, labelled *shared by all projects · account-wide* — limits belong to the CLI account, so it uses snapshots from runs in every project.
 4. **Where tokens go** — three columns of horizontal bars, stacked by CLI and scaled to the column's largest row, with value and share: *By agent profile · step*, *By model* (mono), *By pipeline*. Selecting a row adds it as a filter.
 5. **Most expensive** — *Tasks* / *Runs* switch, sorted by spent tokens in the period. *Tasks*: Task (key in mono, title), Pipeline, Runs, Spent tokens, Cached input, Outcome (`DeizF`), chevron; a row opens the task; footer *5 of 38 tasks with runs in the period* · *Show all 38 →*. *Runs* (`sOQmy`): Run (*ORC-128 · Run 3* in mono, task title), Pipeline, Started, Agent time, Spent tokens, Cached input, Outcome, chevron; a row opens the run; footer *5 of 64 runs in the period · a row opens the run* · *Show all 64 →*.
-6. **Efficiency** — *Cache share* per day (one line in `$muted`, direct label on the last point); *Tokens before first edit*, median per invocation that changed a file, with and without code index (single-series bars in `$subtle` with invocation counts; invocations without an edit are left out and counted); *Failed runs* (count and share, tokens spent on them and their share of spent as a bar, the largest failed run and *Show failed tasks →*, which opens Tasks › Failed).
+6. **Efficiency** — *Cache share* per day (one line in `$muted`, direct label on the last point); *Tokens before first edit*, median per invocation that changed a file, with and without code index (single-series bars in `$subtle` with invocation counts; invocations without an edit are left out and counted); *Failed runs* (count and share, tokens spent on them and their share of spent as a bar, the largest failed run and *Show failed tasks →*, which opens Tasks › Active, where failed tasks are listed under *Stopped*).
 
 **Metrics.** Token counts are what the CLIs reported (see [Token budgets](#token-budgets)). *Spent* = input − cached input + output (= counted). *Cached* = cached input. *Output* includes reasoning. *Cache share* = cached input ÷ all input. *Runs* are runs with agent activity in the period; a run spanning the boundary counts in both periods, its tokens by turn time. *Agent time* is active agent time. *Failed runs* are runs whose latest attempt failed, as in the Overview filter. Values use the display rule (`31.6M`); tooltips and tables show exact grouped counts.
 
@@ -2020,10 +2020,14 @@ forecast, and the queued work's; *Delivery ↗* opens the Delivery view). While 
 are real and the rows are bones after 300 ms; a page that can't be read is the failure card under the header, a section
 that fails alone (Delivery) its section row. Under the header: the runner away (information), the runner that gave up
 restarting (Restart runner, Open runner log), a shared project signed out of its team server (*Join again*), and a row
-with Open log for each task whose latest run can't be read. *Completed today* and the tasks' tabs are gone; *Tokens
-today* is only in the sidebar's usage card. The route's old `tab` (`?tab=needs_you`, `queued`, `failed`) still opens the
-Overview, which shows every section. QA seeds: `tasks` (busy), `delivery` and `delivery-blocked` (the merge queue),
-`overview-quiet` (quiet), `empty` (new project), `tasks-unreadable` (the page can't be read).
+with Open log and *Open task ↗* for each task whose latest run can't be read. *Completed today* and the tasks' tabs are
+gone; *Tokens today* is only in the sidebar's usage card. Failed tasks are listed in Tasks › Active under *Stopped*;
+Usage's *Show failed tasks* opens it, and Jump to no longer offers the old Overview tabs. The route's old `tab`
+(`?tab=needs_you`, `queued`, `failed`) still opens the Overview, which shows every section. QA seeds: `tasks` (busy),
+`delivery` and `delivery-blocked` (the merge queue), `overview-quiet` (quiet), `empty` (new project),
+`tasks-unreadable` (the page can't be read), `overview-states` (lists longer than they show, with *Show all N*; Plan
+limits near, reached and *unknown since reset*). No seed reaches the runner away or a runner that gave up restarting, a
+team-server sign-in that ended, or Delivery failing alone: they need a live runner, a team server or a damaged read.
 
 ## Sidebar
 

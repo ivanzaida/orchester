@@ -21,6 +21,7 @@ mod long_chats;
 mod memory;
 mod modules;
 mod orchestrator;
+mod overview_states;
 mod pipelines;
 mod project_settings;
 mod pull_requests;
@@ -78,7 +79,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 49] = [
+pub const ALL: [Scenario; 50] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -102,6 +103,7 @@ pub const ALL: [Scenario; 49] = [
   Scenario::of("delivery-blocked", delivery::blocked),
   Scenario::of("delivery-empty", delivery::empty),
   Scenario::of("overview-quiet", delivery::quiet),
+  Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),
   Scenario::of("unreadable-db", unreadable_db::seed),
   Scenario::of("tasks-unreadable", tasks_unreadable::seed),

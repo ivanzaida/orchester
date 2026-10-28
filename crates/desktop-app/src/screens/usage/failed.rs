@@ -1,8 +1,8 @@
 //! The *Failed runs* card of *Efficiency* (`Card · Failed runs` `Kc99a`): how many runs failed of all and
 //! the tokens spent on them, each with its share; their share of the spent tokens as a two-part bar with
-//! its legend; the failed run that spent the most; and *Show failed tasks →*, which opens the Overview's
-//! *Failed* tab of the project the failed runs belong to (on every project's page, while they belong to one). Its
-//! figures are exact already, so it has no table view.
+//! its legend; the failed run that spent the most; and *Show failed tasks →*, which opens Tasks › Active of the
+//! project the failed runs belong to, where failed tasks are listed under *Stopped* (on every project's page, while
+//! they belong to one). Its figures are exact already, so it has no table view.
 
 use lurq::{
   app::{
@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{OverviewTab, ProjectPage, Route},
+  routes::{ProjectPage, Route, TaskList, TaskListTab},
   theme::{ExtraSpacing, UsageRadius, UsageText},
 };
 
@@ -36,7 +36,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Dashboard) -> Element {
     .fill();
   let failed = &dashboard.report.efficiency.failed;
   let show = dashboard.failed_project().map(|project| {
-    let route = Route::Project(project, ProjectPage::Overview(OverviewTab::Failed));
+    let route = Route::Project(project, ProjectPage::Tasks(TaskList::new(TaskListTab::Active)));
     text_link(
       "usage-show-failed",
       &ctx.t("usage.efficiency.showFailed"),

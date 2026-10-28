@@ -170,6 +170,35 @@ fn overview_quiet_says_nothing_waits_and_lists_drafts_ready_to_start() {
   assert_eq!(seeded.text("overview-landed-today"), "Today · 2 merged");
 }
 
+/// The states sheet's seed (05 `JzNRO`): lists longer than they show end in *Show all N*, and Plan limits shows an
+/// account near its limit, one at it, and one whose window reset since its reading, greyed.
+#[test]
+fn overview_states_seed_reaches_long_lists_and_every_plan_limit_look() {
+  let mut seeded = Seeded::overview("overview-states", OverviewTab::Running);
+  let waits = attention::items(&seeded.tasks()).len();
+  assert!(waits > 6, "{waits} wait");
+  assert_eq!(
+    seeded.text("overview-waits-all"),
+    format!("Show all {waits} in Tasks ↗")
+  );
+  assert!(seeded.shows("overview-queue-all"), "more than five are queued");
+  let values = |seeded: &mut Seeded| -> Vec<String> {
+    let mut values: Vec<String> = seeded
+      .ids("overview-limit-")
+      .into_iter()
+      .filter(|id| id.ends_with("-value"))
+      .map(|id| seeded.text(&id))
+      .collect();
+    values.sort();
+    values
+  };
+  seeded.until("the three accounts", |seeded| values(seeded).len() == 3);
+  assert_eq!(
+    values(&mut seeded),
+    ["86% of 5-hour", "Reached · 5-hour", "unknown since reset"]
+  );
+}
+
 #[test]
 fn overview_of_a_new_project_marks_its_steps_done_from_its_state() {
   let mut seeded = Seeded::overview("empty", OverviewTab::Running);

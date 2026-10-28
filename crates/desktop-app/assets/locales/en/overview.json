@@ -124,7 +124,8 @@
     "ready": {
       "title": "Ready to start",
       "ready": "Ready",
-      "tasks": "Tasks ↗"
+      "tasks": "Tasks ↗",
+      "showAll": "Show all {{count}} in Tasks ↗"
     },
     "start": {
       "head": "Set up {{project}} to run tasks",
@@ -151,7 +152,8 @@
       "join": "Join again"
     },
     "unreadable": {
-      "title": "Latest run can't be read"
+      "title": "Latest run can't be read",
+      "open": "Open task ↗"
     }
   }
 }

@@ -197,7 +197,7 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
   if items.is_empty() && at_work.is_empty() && queued.is_empty() {
     let last_merge = tasks.run_facts.merged_at.values().max().copied();
     main = main
-      .child(quiet::nothing_waits(ctx, around.slots, last_merge))
+      .child(quiet::nothing_waits(ctx, around.slots, (last_merge, around.now)))
       .with_children(quiet::ready_to_start(ctx, id, tasks));
   }
   if !at_work.is_empty() {
@@ -211,7 +211,7 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
   if !queued.is_empty() || tasks.queue.project {
     main = main.child(queue::queue(ctx, (id, root.clone()), &queued, tasks.queue.project));
   }
-  main = main.with_children(notices::unreadable(ctx, &root, tasks));
+  main = main.with_children(notices::unreadable(ctx, (id, &root), tasks));
   let account_ids: Vec<_> = around.accounts.0.iter().map(|account| account.id()).collect();
   let near = near_limits(&account_ids, &around.readings, around.now);
   let side = side_column()
