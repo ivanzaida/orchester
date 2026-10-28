@@ -55,16 +55,22 @@ pub fn action(ctx: &mut Ctx) -> SaveAction {
 /// The module as its page last wrote it ([`LastWrite`]), shared by the page's saves (*Close module* and the Summary's
 /// properties).
 #[derive(Clone)]
-pub struct Written(Signal<Option<LastWrite>>);
+pub struct Written(Signal<Last>);
+
+/// The page's last write, none before its first.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Last(Option<LastWrite>);
+
+impl DevtoolsInspectable for Last {}
 
 impl Written {
   pub fn new(ctx: &mut Ctx) -> Self {
-    Self(ctx.signal(None))
+    Self(ctx.signal(Last::default()))
   }
 
   /// What a change to `shown`, the module as the page read it, goes over.
   pub fn base(&self, shown: &Arc<Module>) -> Arc<Module> {
-    LastWrite::base(self.0.get_untracked().as_ref(), shown)
+    LastWrite::base(self.0.get_untracked().0.as_ref(), shown)
   }
 
   /// Keeps each of `save`'s writes over a module, and has the project read again after every save.
@@ -75,7 +81,7 @@ impl Written {
         return;
       };
       if let Some(over) = saved.over.clone() {
-        written.update(|last| *last = Some(LastWrite::after(last.take(), over, saved.module.clone())));
+        written.update(|last| last.0 = Some(LastWrite::after(last.0.take(), over, saved.module.clone())));
       }
       feed.saved();
     });
