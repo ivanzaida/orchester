@@ -32,8 +32,6 @@ mod held;
 mod idle;
 mod low_disk;
 mod missing_checkpoints;
-#[cfg(feature = "test-agent")]
-mod own_worktrees;
 mod permissions;
 mod plan;
 mod plan_limit;
@@ -147,8 +145,6 @@ struct Inner {
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: Arc<dyn DiskSpace>,
   disk_watch: low_disk::DiskWatch,
-  /// Runs get a worktree of their own, as before workspaces: set only by tests (`own_worktrees`).
-  own_worktrees: AtomicBool,
 }
 
 impl Scheduler {
@@ -181,7 +177,6 @@ impl Scheduler {
         chats: chat::Chats::default(),
         disks: Arc::new(orchester_exec::disk_space::LocalDisks),
         disk_watch: low_disk::DiskWatch::default(),
-        own_worktrees: AtomicBool::new(false),
       }),
     }
   }
@@ -540,8 +535,6 @@ impl Scheduler {
   /// Starts the task that executes `prepared`. A run another task still executes is refused rather
   /// than left to that task, which does not know the change just recorded.
   fn spawn(&self, db: ProjectDb, prepared: Prepared) -> Result<(), Rejection> {
-    #[cfg(feature = "test-agent")]
-    let prepared = self.own_worktree_for_tests(prepared)?;
     let mut active = self.inner.active.lock();
     let run = prepared.run.id();
     if active.get(&run).is_some_and(|active| !active.ended()) {

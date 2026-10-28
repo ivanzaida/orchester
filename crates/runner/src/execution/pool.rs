@@ -4,7 +4,10 @@
 //! them in a branch or discards them — and the next one is tried. Giving back commits what is left, detaches the
 //! workspace's HEAD so its branch is free, and records it idle.
 
-use std::{path::Path, path::PathBuf, time::Duration};
+use std::{
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_core::{
   integration::workspace::{SwitchTo, WorkspaceGitError, Workspaces},
@@ -41,7 +44,12 @@ pub(super) enum Borrowed {
 
 /// Takes a workspace for `holder` in the repository at `root` and switches it to `to`; a new workspace's folder is
 /// made at `base` first.
-pub(super) fn borrow(db: &mut ProjectDb, root: &Path, holder: Holder, (to, base): (SwitchTo<'_>, &str)) -> Result<Borrowed, PoolError> {
+pub(super) fn borrow(
+  db: &mut ProjectDb,
+  root: &Path,
+  holder: Holder,
+  (to, base): (SwitchTo<'_>, &str),
+) -> Result<Borrowed, PoolError> {
   let limit = db.project_limits()?.agent_slots().get();
   let folders = db.workspace_settings()?.folders;
   let runner = ProcessRunner::new(GIT_TIMEOUT);
@@ -59,7 +67,8 @@ pub(super) fn borrow(db: &mut ProjectDb, root: &Path, holder: Holder, (to, base)
     let last = before.iter().find(|record| record.number == number);
     let last_run = last.and_then(|record| record.last_run);
     // The run that worked there last goes on there, on the same branch: what it left goes along.
-    let carry = last_run.is_some() && last_run == holder.run() && last.and_then(|record| record.branch.as_ref()) == branch;
+    let carry =
+      last_run.is_some() && last_run == holder.run() && last.and_then(|record| record.branch.as_ref()) == branch;
     let switched = workspaces
       .prepare(number, base)
       .and_then(|path| workspaces.switch(&path, to, (&folders, carry)).map(|()| path));
@@ -88,7 +97,11 @@ pub(super) fn give_back(
   holder: Holder,
   message: &str,
 ) -> Result<Option<WorkspaceNumber>, StoreError> {
-  let Some(record) = db.workspaces()?.into_iter().find(|record| record.holder == Some(holder)) else {
+  let Some(record) = db
+    .workspaces()?
+    .into_iter()
+    .find(|record| record.holder == Some(holder))
+  else {
     return Ok(None);
   };
   let runner = ProcessRunner::new(GIT_TIMEOUT);

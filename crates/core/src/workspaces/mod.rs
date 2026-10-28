@@ -2,13 +2,12 @@
 //! instead of owning a worktree each. N is the project's "Agents working at once" ([`crate::limits::AgentSlots`]):
 //! each agent at work uses one workspace, and so does the merge queue's re-check, which builds.
 //!
-//! - A run is its branch plus checkpoint commits. When a step starts, it takes a free workspace — the one it used
-//!   last, else the one idle longest ([`pool`]) — and waits with the reason when none is free. Git switches the
-//!   workspace to the run's branch and cleans every ignored file but the warm folders kept between runs ([`warm`]).
-//!   The run keeps it while its steps follow one another and gives it back, after a checkpoint commit, when it waits
-//!   or ends.
-//! - Orchester knows no languages: it suggests the ignored folders of the person's checkout that are worth keeping
-//!   only by their size ([`suggest`]).
+//! - A run is its branch plus checkpoint commits. When a step starts, it takes a free workspace — the one it used last,
+//!   else the one idle longest ([`pool`]) — and waits with the reason when none is free. Git switches the workspace to
+//!   the run's branch and cleans every ignored file but the warm folders kept between runs ([`warm`]). The run keeps it
+//!   while its steps follow one another and gives it back, after a checkpoint commit, when it waits or ends.
+//! - Orchester knows no languages: it suggests the ignored folders of the person's checkout that are worth keeping only
+//!   by their size ([`suggest`]).
 //! - What runs write for people to see lives in the run's own storage, `.orchester/runs/<run-id>/`, which cleaning or
 //!   reusing a workspace never touches ([`artifacts_folder`]).
 //! - The disk guard keeps free space on the repository's disk ([`disk`]): below it no step starts and working steps

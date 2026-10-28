@@ -19,7 +19,11 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, disk::TestDisk, git, pooled_scheduler, project, queue_another_task, wait_for, wait_for_idle};
+use self::support::{
+  Setup,
+  disk::{TestDisk, pooled_scheduler},
+  git, project, queue_another_task, wait_for, wait_for_idle,
+};
 
 fn number(n: u32) -> WorkspaceNumber {
   WorkspaceNumber::new(n).expect("above zero")
@@ -27,7 +31,11 @@ fn number(n: u32) -> WorkspaceNumber {
 
 fn read(root: &std::path::Path, id: RunId) -> orchester_core::run::Run {
   use orchester_core::store::RunStore;
-  ProjectDb::open(root).expect("open").run(id).expect("read").expect("the run")
+  ProjectDb::open(root)
+    .expect("open")
+    .run(id)
+    .expect("read")
+    .expect("the run")
 }
 
 fn agents_at_once(root: &std::path::Path, count: u64) {
@@ -52,12 +60,21 @@ async fn workspaces_a_run_borrows_one_and_gives_it_back_detached_with_its_work_o
   let records = ProjectDb::open(root).expect("open").workspaces().expect("workspaces");
   assert_eq!(records.len(), 1);
   assert_eq!(
-    (records[0].number, records[0].holder, records[0].last_run, records[0].warmth),
+    (
+      records[0].number,
+      records[0].holder,
+      records[0].last_run,
+      records[0].warmth
+    ),
     (number(1), None, Some(id), Warmth::Warm)
   );
   let workspace = number(1).path(root);
   assert_eq!(git(&workspace, &["status", "--porcelain"]), "", "given back clean");
-  assert_eq!(git(&workspace, &["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD", "detached");
+  assert_eq!(
+    git(&workspace, &["rev-parse", "--abbrev-ref", "HEAD"]),
+    "HEAD",
+    "detached"
+  );
   assert_eq!(
     git(root, &["rev-parse", done.branch().as_str()]),
     git(&workspace, &["rev-parse", "HEAD"])
@@ -91,7 +108,12 @@ async fn workspaces_a_run_waits_while_every_workspace_is_in_use_and_goes_on_once
     .await
     .expect("start");
   tokio::time::timeout(support::PATIENCE, async {
-    while ProjectDb::open(root).expect("open").workspace_waits().expect("waits").is_empty() {
+    while ProjectDb::open(root)
+      .expect("open")
+      .workspace_waits()
+      .expect("waits")
+      .is_empty()
+    {
       tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
   })
@@ -105,7 +127,13 @@ async fn workspaces_a_run_waits_while_every_workspace_is_in_use_and_goes_on_once
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   wait_for_idle(&scheduler).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
-  assert!(ProjectDb::open(root).expect("open").workspace_waits().expect("waits").is_empty());
+  assert!(
+    ProjectDb::open(root)
+      .expect("open")
+      .workspace_waits()
+      .expect("waits")
+      .is_empty()
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -143,7 +171,10 @@ async fn workspaces_leftovers_of_another_run_strand_a_workspace_and_the_run_take
       files: 1
     })
   );
-  assert!(number(1).path(root).join("left-behind.txt").is_file(), "nothing is thrown away unseen");
+  assert!(
+    number(1).path(root).join("left-behind.txt").is_file(),
+    "nothing is thrown away unseen"
+  );
   assert_eq!(records[1].last_run, Some(next));
 }
 

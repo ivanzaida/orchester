@@ -25,13 +25,17 @@ const WATCH_INTERVAL: Duration = Duration::from_secs(30);
 pub(super) struct DiskWatch(AtomicBool);
 
 impl Scheduler {
-  /// Refused while the disk the workspaces are on has less free space than the project keeps. A disk that cannot
-  /// be read holds nothing back; the guard logs it.
+  /// Refused while the disk the workspaces are on has less free space than the project keeps, in a project that
+  /// turned warm workspaces on (in any other the guard holds nothing back). A disk that cannot be read holds nothing
+  /// back either; the guard logs it.
   pub(super) fn check_disk(&self, db: &ProjectDb) -> Result<(), Rejection> {
-    let keep = db
+    let settings = db
       .workspace_settings()
-      .map_err(|error| failed("cannot read the workspace settings", &error))?
-      .keep_free;
+      .map_err(|error| failed("cannot read the workspace settings", &error))?;
+    if !settings.enabled {
+      return Ok(());
+    }
+    let keep = settings.keep_free;
     match self.inner.disks.usage(&self.inner.project_root) {
       Ok(usage) => match keep.verdict(usage) {
         DiskVerdict::Room => Ok(()),

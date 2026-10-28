@@ -118,9 +118,10 @@ impl WorkspaceStore for ProjectDb {
   }
 
   fn set_workspace_cold(&mut self, number: WorkspaceNumber) -> Result<(), StoreError> {
-    self
-      .connection
-      .execute("UPDATE workspaces SET warmth = 'cold' WHERE number = ?1", [number.get()])?;
+    self.connection.execute(
+      "UPDATE workspaces SET warmth = 'cold' WHERE number = ?1",
+      [number.get()],
+    )?;
     Ok(())
   }
 
@@ -169,16 +170,17 @@ impl WorkspaceStore for ProjectDb {
   }
 
   fn workspace_settings(&self) -> Result<WorkspaceSettings, StoreError> {
-    let row: Option<(i64, Option<String>)> = self
+    let row: Option<(bool, i64, Option<String>)> = self
       .connection
       .query_row(
-        "SELECT keep_free_gb, warm_up_command FROM workspace_settings",
+        "SELECT enabled, keep_free_gb, warm_up_command FROM workspace_settings",
         [],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
       )
       .optional()?;
-    let (keep_free, warm_up) = match row {
-      Some((gigabytes, command)) => (
+    let (enabled, keep_free, warm_up) = match row {
+      Some((enabled, gigabytes, command)) => (
+        enabled,
         u64::try_from(gigabytes)
           .ok()
           .and_then(|gigabytes| KeepFree::from_gigabytes(gigabytes).ok())
@@ -187,9 +189,10 @@ impl WorkspaceStore for ProjectDb {
           .map(|command| WarmUpCommand::new(&command).map_err(|error| corrupt("warm-up command", error)))
           .transpose()?,
       ),
-      None => (KeepFree::DEFAULT, None),
+      None => (false, KeepFree::DEFAULT, None),
     };
     Ok(WorkspaceSettings {
+      enabled,
       keep_free,
       warm_up,
       folders: warm_folders(&self.connection)?,
@@ -199,10 +202,11 @@ impl WorkspaceStore for ProjectDb {
   fn save_workspace_settings(&mut self, settings: &WorkspaceSettings) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     transaction.execute(
-      "INSERT INTO workspace_settings (id, keep_free_gb, warm_up_command) VALUES (1, ?1, ?2) \
-       ON CONFLICT (id) DO UPDATE SET keep_free_gb = excluded.keep_free_gb, \
+      "INSERT INTO workspace_settings (id, enabled, keep_free_gb, warm_up_command) VALUES (1, ?1, ?2, ?3) \
+       ON CONFLICT (id) DO UPDATE SET enabled = excluded.enabled, keep_free_gb = excluded.keep_free_gb, \
        warm_up_command = excluded.warm_up_command",
       params![
+        settings.enabled,
         i64::try_from(settings.keep_free.gigabytes()).map_err(|_| StoreError::Unrepresentable("keep free"))?,
         settings.warm_up.as_ref().map(WarmUpCommand::as_str),
       ],

@@ -54,7 +54,10 @@ fn pool_borrow_by_a_holder_that_holds_one_gets_that_one_again() {
   let run = RunId::generate();
   let mut held = idle(3, 1);
   held.holder = Some(Holder::Run { run });
-  assert_eq!(choose(&[idle(1, 0), held], limit(3), Holder::Run { run }), Borrow::Take(number(3)));
+  assert_eq!(
+    choose(&[idle(1, 0), held], limit(3), Holder::Run { run }),
+    Borrow::Take(number(3))
+  );
 }
 
 #[test]
@@ -69,7 +72,10 @@ fn pool_borrow_steps_beside_others_and_the_recheck_each_take_one() {
     execution: StepExecutionId::generate(),
   });
   let records = [main, step];
-  assert_eq!(choose(&records, limit(3), Holder::Recheck { run }), Borrow::Take(number(3)));
+  assert_eq!(
+    choose(&records, limit(3), Holder::Recheck { run }),
+    Borrow::Take(number(3))
+  );
   assert_eq!(
     choose(&records, limit(2), Holder::Recheck { run }),
     Borrow::Wait(WaitReason { in_use: 2, of: 2 })

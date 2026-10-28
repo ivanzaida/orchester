@@ -142,7 +142,11 @@ pub fn resolve_leftovers(
         Some(run) => rescue_branch(run.branch()),
         None => rescue_branch(&BranchName::new(&format!("workspace-{number}")).expect("a valid branch name")),
       };
-      workspaces.rescue(&path, &branch, &format!("Kept from workspace {number}: what a stopped run left"))?;
+      workspaces.rescue(
+        &path,
+        &branch,
+        &format!("Kept from workspace {number}: what a stopped run left"),
+      )?;
       Some(branch)
     }
   };

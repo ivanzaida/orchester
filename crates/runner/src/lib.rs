@@ -13,8 +13,6 @@ pub mod private_file;
 pub mod server;
 pub mod shutdown_signal;
 pub mod supervisor;
-#[cfg(feature = "test-agent")]
-mod test_disk;
 pub mod worktree;
 
 /// The async workers of the runner's runtime. Agents' output, the desktop's requests, the relays and the timers run

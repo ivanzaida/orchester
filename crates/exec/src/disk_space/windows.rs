@@ -17,8 +17,5 @@ pub(super) fn usage(folder: &Path) -> io::Result<DiskUsage> {
   if succeeded == 0 {
     return Err(io::Error::last_os_error());
   }
-  Ok(DiskUsage {
-    free: available,
-    total,
-  })
+  Ok(DiskUsage { free: available, total })
 }

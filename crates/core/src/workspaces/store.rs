@@ -38,8 +38,7 @@ pub trait WorkspaceStore {
 
   /// Records that `number` holds `stranded`, which nobody takes until a person keeps or discards them; `None` once
   /// they did.
-  fn set_workspace_stranded(&mut self, number: WorkspaceNumber, stranded: Option<Stranded>)
-  -> Result<(), Self::Error>;
+  fn set_workspace_stranded(&mut self, number: WorkspaceNumber, stranded: Option<Stranded>) -> Result<(), Self::Error>;
 
   /// Records that `number` lost what it had built: cleanup deleted its warm folders.
   fn set_workspace_cold(&mut self, number: WorkspaceNumber) -> Result<(), Self::Error>;

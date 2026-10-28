@@ -109,10 +109,15 @@ impl RunTask {
     self.announce_workspace();
   }
 
-  /// Whether the disk the workspaces are on has less free space than the project keeps. A disk that cannot be read
-  /// holds nothing back: the guard is for space, not for errors of its own, which are logged.
+  /// Whether the disk the workspaces are on has less free space than the project keeps. The guard watches only a
+  /// project that turned warm workspaces on; a disk that cannot be read holds nothing back: the guard is for space,
+  /// not for errors of its own, which are logged.
   pub(super) fn disk_is_low(&self) -> Result<bool, ExecutionError> {
-    let keep = self.db.workspace_settings()?.keep_free;
+    let settings = self.db.workspace_settings()?;
+    if !settings.enabled {
+      return Ok(false);
+    }
+    let keep = settings.keep_free;
     match self.disks.usage(&self.root) {
       Ok(usage) => Ok(matches!(keep.verdict(usage), DiskVerdict::Low { .. })),
       Err(error) => {

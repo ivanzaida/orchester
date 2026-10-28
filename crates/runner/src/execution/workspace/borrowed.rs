@@ -50,7 +50,12 @@ impl RunTask {
       execution: owner,
     };
     let base = self.run.base().as_str().to_owned();
-    match pool::borrow(&mut self.db, &self.root, holder, (SwitchTo::Branch(&step_branch), &base)) {
+    match pool::borrow(
+      &mut self.db,
+      &self.root,
+      holder,
+      (SwitchTo::Branch(&step_branch), &base),
+    ) {
       Ok(Borrowed::Folder(path)) => Ok(Some(Workspace::Own {
         path,
         branch: name,
@@ -64,7 +69,10 @@ impl RunTask {
 
   /// The execution whose step branch `execution` works on again: its own, or that of the execution it recovers,
   /// nearest first; `None` when none has one.
-  fn step_branch_owner(&self, execution: StepExecutionId) -> Result<Option<StepExecutionId>, crate::worktree::WorktreeError> {
+  fn step_branch_owner(
+    &self,
+    execution: StepExecutionId,
+  ) -> Result<Option<StepExecutionId>, crate::worktree::WorktreeError> {
     let mut candidate = Some(execution);
     while let Some(owner) = candidate {
       if branch_exists(&self.root, &branch(&self.run, owner))? {

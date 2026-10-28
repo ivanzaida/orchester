@@ -1,8 +1,8 @@
 use orchester_core::{
   id::RunId,
+  run::BranchName,
   workspaces::{CleanupChoice, Holder, Stranded, cleanup_order, default_cleanup, rescue_branch},
 };
-use orchester_core::run::BranchName;
 
 use super::{idle, limit, number};
 
@@ -11,10 +11,7 @@ fn cleanup_order_takes_over_the_limit_first_then_the_longest_idle() {
   let mut held = idle(1, 0);
   held.holder = Some(Holder::Run { run: RunId::generate() });
   let mut stranded = idle(4, 0);
-  stranded.stranded = Some(Stranded {
-    run: None,
-    files: 1,
-  });
+  stranded.stranded = Some(Stranded { run: None, files: 1 });
   let records = [held, idle(2, 30), idle(3, 10), stranded, idle(5, 50)];
   assert_eq!(cleanup_order(&records, limit(4)), [number(5), number(3), number(2)]);
 }

@@ -418,27 +418,19 @@ pub fn queue_another_task(root: &Path) -> TaskId {
   task.id()
 }
 
-/// A scheduler whose runs get a worktree of their own, `.orchester/worktrees/<run>`, as runs made before warm
-/// workspaces (ORC-114) have and go on with: what most tests here check does not depend on where a run works.
+/// A scheduler of the project at `root`. Its runs get a worktree of their own, `.orchester/worktrees/<run>`, while
+/// the project has not turned warm workspaces on (ORC-114), as every project here but [`pooled_scheduler`]'s.
 pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   scheduler_with(root, Arc::new(MemoryVault::default()))
 }
 
-/// A scheduler whose runs borrow warm workspaces (ORC-114), on `disk`.
-pub fn pooled_scheduler(root: &Path, disk: disk::TestDisk) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
-  let (scheduler, events) = scheduler_on(root, Arc::new(MemoryVault::default()), disk);
-  (scheduler, events)
-}
-
-/// A scheduler of runs with worktrees of their own that reads secret values from `vault`. Its QA apps take QA slots
-/// of the project's own, in `.orchester/qa-slots/`, never the computer's, and its disk guard reads a disk with
-/// plenty of room.
+/// A scheduler that reads secret values from `vault`. Its QA apps take QA slots of the project's own, in
+/// `.orchester/qa-slots/`, never the computer's, and its disk guard reads a disk with plenty of room.
 pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
-  let (scheduler, events) = scheduler_on(root, vault, disk::TestDisk::default());
-  (scheduler.with_own_worktrees(), events)
+  scheduler_on(root, vault, disk::TestDisk::default())
 }
 
-/// A scheduler of runs that borrow workspaces, reading secret values from `vault` and free space from `disk`.
+/// A scheduler that reads secret values from `vault` and free space from `disk`.
 pub fn scheduler_on(
   root: &Path,
   vault: Arc<MemoryVault>,

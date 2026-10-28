@@ -36,7 +36,13 @@ pub fn suggest(ignored: &[IgnoredFolder]) -> Vec<Suggestion> {
   let folders: Vec<(WarmPattern, u64)> = shallow.collect();
   for (exact, bytes) in &folders {
     let pattern = parent_wildcard(exact)
-      .filter(|wildcard| folders.iter().filter(|(other, _)| wildcard.matches(other.as_str())).count() > 1)
+      .filter(|wildcard| {
+        folders
+          .iter()
+          .filter(|(other, _)| wildcard.matches(other.as_str()))
+          .count()
+          > 1
+      })
       .unwrap_or_else(|| exact.clone());
     match grouped.iter_mut().find(|suggestion| suggestion.pattern == pattern) {
       Some(suggestion) => {

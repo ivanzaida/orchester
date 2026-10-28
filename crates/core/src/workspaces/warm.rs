@@ -53,7 +53,10 @@ impl WarmPattern {
     }
     let trimmed = text.strip_suffix('/').unwrap_or(text);
     let parts: Vec<&str> = trimmed.split('/').collect();
-    if parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
+    if parts
+      .iter()
+      .any(|part| part.is_empty() || *part == "." || *part == "..")
+    {
       return Err(WarmPatternError::BadPart(text.to_owned()));
     }
     let partial = |part: &&str| part.contains(['*', '?', '[', ']']) && **part != *"*";

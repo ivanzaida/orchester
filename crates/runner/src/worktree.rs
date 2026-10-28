@@ -156,17 +156,6 @@ impl Worktrees {
       .ok_or_else(|| WorktreeError::BranchExists(branch.to_owned()))
   }
 
-  /// Adds the run's own worktree on its existing `branch`, for a test that starts runs as they were before workspaces.
-  #[cfg(feature = "test-agent")]
-  pub fn add_on_branch(&self, run: RunId, branch: &str) -> Result<PathBuf, WorktreeError> {
-    let name = run.to_string();
-    let path = self.at(&name);
-    if !path.is_dir() {
-      Git::new(&self.repo_root).stdout(&["worktree", "add", "--quiet", &Self::relative(&name), branch])?;
-    }
-    Ok(path)
-  }
-
   /// Creates a run's branch at `base` without a worktree, for a run that borrows a workspace (ORC-114): `branch`, or
   /// the first free numbered name, as [`Worktrees::create`] picks it. Returns the branch made.
   pub fn create_branch(&self, branch: &str, base: &str) -> Result<String, WorktreeError> {
@@ -208,7 +197,6 @@ impl Worktrees {
       None => Err(WorktreeError::NotAWorktree(path)),
     }
   }
-
 
   /// The worktree folder `name`.
   fn at(&self, name: &str) -> PathBuf {

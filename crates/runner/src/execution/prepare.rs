@@ -195,7 +195,12 @@ pub(super) fn resume_recorded(
 fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) -> Result<Prepared, Rejection> {
   let worktrees = Worktrees::new(root).map_err(|error| failed("cannot find the worktrees", &error))?;
   let own = worktrees.path(run.id());
-  let folder = if own.is_dir() {
+  // A project that has not turned warm workspaces on gives each run a worktree of its own, as before them.
+  let borrows = db
+    .workspace_settings()
+    .map_err(|error| failed("cannot read the workspace settings", &error))?
+    .enabled;
+  let folder = if own.is_dir() || !borrows {
     RunFolder::Own(own)
   } else {
     RunFolder::Borrowed
@@ -240,12 +245,15 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
   })
 }
 
-/// The branch of the pending run: the one its own worktree, which an earlier request made before workspaces, is on;
-/// else one made now, which it borrows a workspace for. Why there is none, when it cannot be. Only the runner's log
-/// has git's full answer.
+/// The branch of the pending run: the one its own worktree is on, which is created now unless an earlier request
+/// did; or, for a run that borrows workspaces, a branch made now without a worktree. Why there is none, when it cannot
+/// be. Only the runner's log has git's full answer.
 fn run_branch(worktrees: &Worktrees, run: &Run, folder: &RunFolder) -> Result<BranchName, WorktreeFailure> {
   let branch = match folder {
-    RunFolder::Own(_) => worktrees.branch_of(run.id()),
+    RunFolder::Own(path) if path.is_dir() => worktrees.branch_of(run.id()),
+    RunFolder::Own(_) => worktrees
+      .create(run.id(), run.branch().as_str(), run.base().as_str())
+      .map(|created| created.branch().to_owned()),
     RunFolder::Borrowed => worktrees.create_branch(run.branch().as_str(), run.base().as_str()),
   }
   .map_err(|error| {

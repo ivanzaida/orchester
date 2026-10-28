@@ -64,6 +64,10 @@ impl WarmUpCommand {
 /// The workspace settings of a project.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkspaceSettings {
+  /// Whether the project uses warm workspaces: new runs borrow them, and the disk guard keeps `keep_free` free. Off
+  /// until a person turns it on in Project settings › Runs; until then every new run gets a worktree of its own, as
+  /// before workspaces, and the disk guard neither refuses nor pauses runs.
+  pub enabled: bool,
   pub keep_free: KeepFree,
   pub warm_up: Option<WarmUpCommand>,
   /// In the order the person sees them.

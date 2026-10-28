@@ -85,7 +85,10 @@ impl Default for KeepFree {
 pub enum DiskVerdict {
   Room,
   /// `free` bytes are below the `needed` the person keeps free: new steps wait, working ones pause.
-  Low { free: u64, needed: u64 },
+  Low {
+    free: u64,
+    needed: u64,
+  },
 }
 
 impl DiskVerdict {

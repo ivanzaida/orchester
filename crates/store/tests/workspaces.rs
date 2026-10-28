@@ -31,7 +31,8 @@ fn workspaces_borrow_records_the_holder_and_giving_back_makes_it_warm() {
   let holder = Holder::Run { run: run.id() };
   let branch = BranchName::new("orchester/kon-1-run-1").expect("a branch");
   assert_eq!(
-    db.borrow_workspace(holder, Some(&branch), limit(2), at(1)).expect("borrow"),
+    db.borrow_workspace(holder, Some(&branch), limit(2), at(1))
+      .expect("borrow"),
     Borrow::Take(number(1))
   );
   let held = db.workspaces().expect("read");
@@ -68,7 +69,8 @@ fn workspaces_borrow_waits_and_records_since_when_until_one_is_taken() {
 #[test]
 fn workspaces_stranded_leftovers_keep_others_out_until_resolved() {
   let (_repo, mut db, run, _execution) = started_run();
-  db.borrow_workspace(Holder::WarmUp, None, limit(1), at(1)).expect("borrow");
+  db.borrow_workspace(Holder::WarmUp, None, limit(1), at(1))
+    .expect("borrow");
   db.return_workspace(Holder::WarmUp, at(2)).expect("give back");
   let stranded = Stranded {
     run: Some(run.id()),
@@ -77,12 +79,14 @@ fn workspaces_stranded_leftovers_keep_others_out_until_resolved() {
   db.set_workspace_stranded(number(1), Some(stranded)).expect("strand");
   assert_eq!(db.workspaces().expect("read")[0].stranded, Some(stranded));
   assert!(matches!(
-    db.borrow_workspace(Holder::WarmUp, None, limit(1), at(3)).expect("wait"),
+    db.borrow_workspace(Holder::WarmUp, None, limit(1), at(3))
+      .expect("wait"),
     Borrow::Wait(_)
   ));
   db.set_workspace_stranded(number(1), None).expect("resolve");
   assert_eq!(
-    db.borrow_workspace(Holder::WarmUp, None, limit(1), at(4)).expect("borrow"),
+    db.borrow_workspace(Holder::WarmUp, None, limit(1), at(4))
+      .expect("borrow"),
     Borrow::Take(number(1))
   );
 }
@@ -105,7 +109,12 @@ fn workspaces_a_new_runner_gives_back_what_the_last_one_held_but_rechecks() {
 fn workspaces_settings_round_trip_and_default_to_150_gb() {
   let (repo, mut db, _run, _execution) = started_run();
   assert_eq!(db.workspace_settings().expect("read"), WorkspaceSettings::default());
+  assert!(
+    !db.workspace_settings().expect("read").enabled,
+    "workspaces are off until turned on"
+  );
   let settings = WorkspaceSettings {
+    enabled: true,
     keep_free: KeepFree::from_gigabytes(200).expect("200 GB"),
     warm_up: Some(WarmUpCommand::new("cargo build --tests").expect("a command")),
     folders: vec![

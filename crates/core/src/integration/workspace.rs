@@ -242,6 +242,12 @@ impl<'a, R: CommandRunner> Workspaces<'a, R> {
     if own.is_dir() {
       return Ok(true);
     }
-    Ok(borrows && self.git(self.repo).commit(&format!("refs/heads/{}", run.branch()))?.is_some())
+    Ok(
+      borrows
+        && self
+          .git(self.repo)
+          .commit(&format!("refs/heads/{}", run.branch()))?
+          .is_some(),
+    )
   }
 }

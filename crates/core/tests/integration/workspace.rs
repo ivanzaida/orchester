@@ -44,7 +44,12 @@ fn workspace_clean_keeps_only_keep_folders_on_a_switch() {
   workspaces
     .switch(&path, SwitchTo::Branch(&branch("orchester/orc-1-run-1")), (&[], false))
     .expect("switch");
-  for built in ["target/debug/app", "packages/web/node_modules/x/index.js", "dist/app.js", ".tmp/scratch"] {
+  for built in [
+    "target/debug/app",
+    "packages/web/node_modules/x/index.js",
+    "dist/app.js",
+    ".tmp/scratch",
+  ] {
     let file = path.join(built);
     fs::create_dir_all(file.parent().expect("a parent")).expect("folders");
     fs::write(&file, "built").expect("a build file");
@@ -57,13 +62,20 @@ fn workspace_clean_keeps_only_keep_folders_on_a_switch() {
   ];
   workspaces.detach(&path).expect("give back");
   workspaces
-    .switch(&path, SwitchTo::Branch(&branch("orchester/orc-2-run-1")), (&folders, false))
+    .switch(
+      &path,
+      SwitchTo::Branch(&branch("orchester/orc-2-run-1")),
+      (&folders, false),
+    )
     .expect("switch to another run");
   assert!(path.join("target/debug/app").is_file());
   assert!(path.join("packages/web/node_modules/x/index.js").is_file());
   assert!(!path.join("dist").exists(), "a folder set to clean every run goes");
   assert!(!path.join(".tmp").exists(), "everything else ignored goes");
-  assert_eq!(git_in(&path, &["symbolic-ref", "--short", "HEAD"]), "orchester/orc-2-run-1");
+  assert_eq!(
+    git_in(&path, &["symbolic-ref", "--short", "HEAD"]),
+    "orchester/orc-2-run-1"
+  );
 }
 
 #[test]
@@ -77,9 +89,14 @@ fn workspace_uncommitted_leftovers_refuse_a_switch_until_kept_in_a_branch() {
     .expect("switch");
   fs::write(path.join("half-done.rs"), "fn main() {}").expect("a leftover");
   let refused = workspaces.switch(&path, SwitchTo::Branch(&branch("orchester/orc-2-run-1")), (&[], false));
-  assert_eq!(refused, Err(WorkspaceGitError::Uncommitted(vec!["half-done.rs".to_owned()])));
+  assert_eq!(
+    refused,
+    Err(WorkspaceGitError::Uncommitted(vec!["half-done.rs".to_owned()]))
+  );
   let rescue = branch("orchester/rescue/orc-1-run-1");
-  workspaces.rescue(&path, &rescue, "kept from a stopped run").expect("rescue");
+  workspaces
+    .rescue(&path, &rescue, "kept from a stopped run")
+    .expect("rescue");
   assert!(repo.branch_exists(rescue.as_str()));
   assert_eq!(
     git_in(&repo.root, &["show", "orchester/rescue/orc-1-run-1:half-done.rs"]),

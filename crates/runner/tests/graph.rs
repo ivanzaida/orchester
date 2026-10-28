@@ -34,9 +34,11 @@ fn failures(run: &Run) -> Vec<(String, StepFailure)> {
 }
 
 /// Whether an agent's `argv` works in the run's own worktree, `.orchester/worktrees/<run>`: its run storage,
-/// `.orchester/runs/<run>`, which every step of the run may write to, names the run too.
+/// `.orchester/runs/<run>`, which every step of the run may write to, names the run too. Separators are
+/// dropped first, because the argv quotes paths with escaped backslashes.
 fn in_run_worktree(argv: &str, run: orchester_core::id::RunId) -> bool {
-  argv.contains(&format!("worktrees\\{run}")) || argv.contains(&format!("worktrees/{run}"))
+  let bare: String = argv.chars().filter(|char| !matches!(char, '\\' | '/')).collect();
+  bare.contains(&format!("worktrees{run}"))
 }
 fn problems(db: &ProjectDb, run: &Run) -> Vec<RunnerProblem> {
   db.activity(run.id(), 0)

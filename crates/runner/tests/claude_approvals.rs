@@ -107,8 +107,7 @@ async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: 
 }
 
 fn readme(root: &Path, run: RunId) -> String {
-  std::fs::read_to_string(support::run_folder(root, run).join("README.md"))
-  .expect("README")
+  std::fs::read_to_string(support::run_folder(root, run).join("README.md")).expect("README")
 }
 
 #[tokio::test(flavor = "multi_thread")]

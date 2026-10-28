@@ -95,7 +95,10 @@ async fn writable_folders_reach_codex_as_writable_roots_and_are_created() {
   // storage, which every agent of the run that edits files gets (ORC-114).
   let roots = format!(",{},{},", toml(&paths[0]), toml(&paths[1]));
   assert!(argv[0].contains(&roots), "{roots} in {argv:?}");
-  assert!(argv[0].contains(&format!("runs\\\\{id}\"]")) || argv[0].contains(&format!("runs/{id}\"]")), "{argv:?}");
+  assert!(
+    argv[0].contains(&format!("runs\\\\{id}\"]")) || argv[0].contains(&format!("runs/{id}\"]")),
+    "{argv:?}"
+  );
   assert_eq!(threads(&db, id)[0]["sandbox"], "workspace-write");
   assert!(paths[0].is_dir(), "created before the agent started");
 }

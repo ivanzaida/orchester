@@ -75,6 +75,8 @@ pub struct WorkspacesView {
   pub limit: NonZeroU32,
   pub rows: Vec<WorkspaceRow>,
   pub disk: Option<DiskUsage>,
+  /// Whether the project turned warm workspaces on, and with them the disk guard.
+  pub enabled: bool,
   pub keep_free: KeepFree,
   pub folders: Vec<FolderRow>,
   /// Suggested folders the project has no warm folder for yet.
@@ -87,11 +89,13 @@ pub struct WorkspacesView {
 }
 
 impl WorkspacesView {
-  /// Whether the disk has less free space than the project keeps.
+  /// Whether the disk guard holds work back: workspaces are on and the disk has less free space than the project
+  /// keeps.
   pub fn low_disk(&self) -> bool {
-    self
-      .disk
-      .is_some_and(|usage| matches!(self.keep_free.verdict(usage), DiskVerdict::Low { .. }))
+    self.enabled
+      && self
+        .disk
+        .is_some_and(|usage| matches!(self.keep_free.verdict(usage), DiskVerdict::Low { .. }))
   }
 
   /// What the workspaces hold on disk together.
@@ -128,6 +132,7 @@ pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<WorkspacesView, S
       .usage(repo_root)
       .inspect_err(|error| tracing::warn!(%error, "the disk guard cannot read the free space"))
       .ok(),
+    enabled: settings.enabled,
     keep_free: settings.keep_free,
     folders,
     suggestions,
@@ -143,7 +148,12 @@ pub fn read_local(repo_root: &Path) -> Result<WorkspacesView, StoreError> {
   read(repo_root, &LocalDisks)
 }
 
-fn row(db: &ProjectDb, repo_root: &Path, record: WorkspaceRecord, limit: NonZeroU32) -> Result<WorkspaceRow, StoreError> {
+fn row(
+  db: &ProjectDb,
+  repo_root: &Path,
+  record: WorkspaceRecord,
+  limit: NonZeroU32,
+) -> Result<WorkspaceRow, StoreError> {
   let run = record
     .holder
     .and_then(|holder| holder.run())

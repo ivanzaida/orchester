@@ -14,7 +14,25 @@ use orchester_core::{
   store::WorkspaceStore,
   workspaces::{DiskSpace, DiskSpaceError, DiskUsage, GIGABYTE, Holder},
 };
+use orchester_ipc::Event;
+use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
+use tokio::sync::mpsc;
+
+use super::{scheduler_on, vault::MemoryVault};
+
+/// A scheduler whose project turned warm workspaces on, so its runs borrow them and the disk guard reads `disk`.
+pub fn pooled_scheduler(root: &Path, disk: TestDisk) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
+  let settings = orchester_core::workspaces::WorkspaceSettings {
+    enabled: true,
+    ..Default::default()
+  };
+  ProjectDb::open(root)
+    .expect("open")
+    .save_workspace_settings(&settings)
+    .expect("workspaces on");
+  scheduler_on(root, Arc::new(MemoryVault::default()), disk)
+}
 
 /// Where run `id` works: the workspace it holds, else the one it worked in last, else its own worktree from before
 /// workspaces.

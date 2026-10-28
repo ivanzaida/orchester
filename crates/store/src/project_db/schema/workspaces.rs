@@ -31,10 +31,12 @@ CREATE TABLE workspace_waits (
   since INTEGER NOT NULL
 ) STRICT;
 
--- Project settings › Runs: the free space the disk guard keeps and the optional warm-up command. Without a row the
--- project keeps 150 GB free and has no warm-up.
+-- Project settings › Runs: whether the project uses warm workspaces (and with them the disk guard), the free space
+-- the guard keeps and the optional warm-up command. Without a row workspaces are off: runs get worktrees of their
+-- own and nothing is held back for space; 150 GB is what the guard would keep.
 CREATE TABLE workspace_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
+  enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
   keep_free_gb INTEGER NOT NULL CHECK (keep_free_gb > 0),
   warm_up_command TEXT
 ) STRICT;
