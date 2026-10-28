@@ -5,11 +5,13 @@
 
 mod support;
 
+use std::sync::Arc;
+
 use chrono::NaiveDate;
 use orchester_core::{
   id::{ModuleId, TaskId},
   integration::{MergeKind, RunMerge},
-  module::{ModuleDetails, ModuleState},
+  module::{Module, ModuleDetails, ModuleState},
   name::Name,
   project::{ProjectKey, TaskKey},
   revision::Revision,
@@ -27,6 +29,7 @@ use orchester_workspace::modules::{
   burndown::{Burndown, ChartDays, MAX_CHART_DAYS, TaskTrack},
   data::{ModulePage, summaries},
   form::ModuleForm,
+  last_write::LastWrite,
   measure::WorkUnit,
 };
 use support::Fixture;
@@ -300,4 +303,46 @@ fn modules_page_reads_a_merged_run_as_done() {
   );
   assert_eq!(listed[0].progress, page.progress);
   assert_eq!(listed[0].progress.percent(), Some(50));
+}
+
+#[test]
+fn modules_page_changes_again_over_its_own_write_before_reading_again() {
+  let mut fixture = Fixture::new();
+  let with = |state: ModuleState, target: Option<NaiveDate>| {
+    ModuleDetails::new(Name::new("Checkout").expect("name"), "", (None, target), state).expect("details")
+  };
+  let shown = Arc::new(
+    fixture
+      .db
+      .create_module(with(ModuleState::Open, None), at(1, 8))
+      .expect("module"),
+  );
+  let change = |db: &mut orchester_store::ProjectDb, base: &Module, details| {
+    db.update_module(base.id(), base.details(), details)
+  };
+
+  let base = LastWrite::base(None, &shown);
+  let closed = Arc::new(change(&mut fixture.db, &base, with(ModuleState::Closed, None)).expect("closed"));
+  let last = LastWrite::after(None, base, closed.clone());
+  // The page still shows the module as first read: a second change goes over the first one's write.
+  let base = LastWrite::base(Some(&last), &shown);
+  assert_eq!(base, closed);
+  let dated = Arc::new(
+    change(&mut fixture.db, &base, with(ModuleState::Closed, Some(day(9)))).expect("the second change is saved"),
+  );
+  let last = LastWrite::after(Some(last), base, dated.clone());
+  assert_eq!(LastWrite::base(Some(&last), &shown), dated, "and a third over the second's");
+  assert!(
+    matches!(
+      change(&mut fixture.db, &shown, with(ModuleState::Open, None)),
+      Err(orchester_store::StoreError::Module(orchester_core::module::ModuleError::ChangedMeanwhile))
+    ),
+    "over the first read itself, the change is refused as made meanwhile"
+  );
+
+  // Once the page reads again, a change goes over what it read, which may hold a change made elsewhere.
+  let elsewhere = Arc::new(
+    change(&mut fixture.db, &dated, with(ModuleState::Open, Some(day(9)))).expect("changed elsewhere"),
+  );
+  assert_eq!(LastWrite::base(Some(&last), &elsewhere), elsewhere);
 }

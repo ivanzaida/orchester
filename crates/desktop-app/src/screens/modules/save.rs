@@ -1,15 +1,21 @@
 //! Writing a module through the project's task writer off the UI thread, for New module, Edit module, the Summary's
 //! properties and the page's *Close module*: a new one, or a change over the module as it was read, refused when it
-//! changed since.
+//! changed since. A module's page keeps what it last wrote ([`Written`]), so a second change made before the page reads
+//! again goes over that and not over the read it replaced.
 
 use std::{path::PathBuf, sync::Arc};
 
-use lurq::app::{
-  component::DevtoolsInspectable,
-  ctx::{Ctx, FutureAction},
+use lurq::{
+  app::{
+    component::DevtoolsInspectable,
+    ctx::{Ctx, FutureAction},
+  },
+  core::Signal,
 };
 use orchester_core::module::{Module, ModuleDetails};
-use orchester_workspace::{background, messages::Message, sharing::Servers, tasks::writer::TaskWriter};
+use orchester_workspace::{
+  background, messages::Message, modules::last_write::LastWrite, sharing::Servers, tasks::writer::TaskWriter,
+};
 
 use crate::services::Services;
 
@@ -21,8 +27,12 @@ pub struct SaveModule {
   pub details: ModuleDetails,
 }
 
+/// The module as written, and the one it was written over (none for a new one).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Saved(pub Arc<Module>);
+pub struct Saved {
+  pub over: Option<Arc<Module>>,
+  pub module: Arc<Module>,
+}
 
 impl DevtoolsInspectable for Saved {}
 
@@ -42,6 +52,36 @@ pub fn action(ctx: &mut Ctx) -> SaveAction {
   })
 }
 
+/// The module as its page last wrote it ([`LastWrite`]), shared by the page's saves (*Close module* and the Summary's
+/// properties).
+#[derive(Clone)]
+pub struct Written(Signal<Option<LastWrite>>);
+
+impl Written {
+  pub fn new(ctx: &mut Ctx) -> Self {
+    Self(ctx.signal(None))
+  }
+
+  /// What a change to `shown`, the module as the page read it, goes over.
+  pub fn base(&self, shown: &Arc<Module>) -> Arc<Module> {
+    LastWrite::base(self.0.get_untracked().as_ref(), shown)
+  }
+
+  /// Keeps each of `save`'s writes over a module, and has the project read again after every save.
+  pub fn follow(&self, ctx: &mut Ctx, save: &SaveAction, feed: crate::project::ProjectFeed) {
+    let written = self.0.clone();
+    ctx.watch(&save.state(), move |state| {
+      let Some(saved) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
+        return;
+      };
+      if let Some(over) = saved.over.clone() {
+        written.update(|last| *last = Some(LastWrite::after(last.take(), over, saved.module.clone())));
+      }
+      feed.saved();
+    });
+  }
+}
+
 /// Creates or changes the module through the project's task writer; a change is refused when the module changed
 /// since it was read.
 fn write(args: &SaveModule, servers: &Servers) -> Result<Saved, Refused> {
@@ -55,5 +95,8 @@ fn write(args: &SaveModule, servers: &Servers) -> Result<Saved, Refused> {
     None => writer.create_module(args.details.clone()),
   }
   .map_err(|error| refused(&error))?;
-  Ok(Saved(Arc::new(module)))
+  Ok(Saved {
+    over: args.module.clone(),
+    module: Arc::new(module),
+  })
 }

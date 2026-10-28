@@ -68,10 +68,12 @@ impl Toggled {
 pub fn section(ctx: &mut Ctx, project: ProjectId, tasks: &[Task], toggled: &Signal<Toggled>) -> Element {
   let head = section_head(ctx, "module-tasks-head", "modules.page.tasks", Some(tasks.len()));
   let body: Element = if tasks.is_empty() {
+    // 25 under the heading's top, as the line in `lAYch` sits, where the list starts 21 under it.
     Text::new(&ctx.t("modules.page.noTasks"))
       .id("module-no-tasks")
       .variant(TypographyStyle::Description)
       .width(Dimension::Pct(100.0))
+      .padding(Padding::new().top(ExtraSpacing::Fine.role()))
       .into()
   } else {
     list(ctx, project, tasks, toggled)

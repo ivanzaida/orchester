@@ -311,6 +311,52 @@ fn navigate_refuses_the_task_pages_former_tabs_and_misplaced_views() {
   assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
 }
 
+/// Modules' places (ORC-124): `view` new opens New module, New task in module keeps its module, and a `tab` or `view`
+/// that names nothing where it is given is refused, not left out.
+#[test]
+fn navigate_opens_modules_places_and_refuses_misplaced_tabs_and_views() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let module = "7d6c5b4a-3928-4716-8504-f3e2d1c0b9a8";
+  let root = format!("/project/{PROJECT}");
+  let cases = [
+    (
+      json!({ "route": "modules", "project": PROJECT, "view": "new" }),
+      format!("{root}/modules/new"),
+    ),
+    (
+      json!({ "route": "new_task", "project": PROJECT, "module": module }),
+      format!("{root}/tasks/new?module={module}"),
+    ),
+  ];
+  for (args, path) in cases {
+    let answer = navigate(&navigation, &args).expect("a valid route");
+    assert_eq!(answer["route"]["path"], json!(path), "{args}");
+    let mut again = answer["route"]["params"].as_object().expect("params").clone();
+    again.insert("route".to_owned(), answer["route"]["name"].clone());
+    let repeated = navigate(&navigation, &json!(again)).expect("its params name the same route");
+    assert_eq!(repeated["route"]["path"], json!(path), "the params keep the place: {again:?}");
+  }
+  let refusals = [
+    json!({ "view": "edit" }),
+    json!({ "view": "burndown" }),
+    json!({ "view": "new", "tab": "closed" }),
+    json!({ "module": "new", "tab": "summary" }),
+    json!({ "module": "new", "view": "edit" }),
+    json!({ "module": module, "view": "edit", "tab": "burndown" }),
+  ];
+  let before = navigation.route_now();
+  for extra in refusals {
+    let mut args = json!({ "route": "modules", "project": PROJECT });
+    for (name, value) in extra.as_object().expect("an object") {
+      args[name] = value.clone();
+    }
+    let error = navigate(&navigation, &args).expect_err("a refusal");
+    assert_eq!(error.code(), "invalid_param", "{args}");
+  }
+  assert_eq!(navigation.route_now(), before, "a refusal goes nowhere");
+}
+
 #[test]
 fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
   let window = Window::open();

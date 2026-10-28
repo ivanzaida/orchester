@@ -46,6 +46,7 @@ pub struct EmptyState {
   measure: Option<f32>,
   unframed: bool,
   centered: bool,
+  gap: Option<SpacingSize>,
   note: Option<Arc<str>>,
 }
 
@@ -69,6 +70,7 @@ impl EmptyState {
       measure: None,
       unframed: false,
       centered: false,
+      gap: None,
       note: None,
     }
   }
@@ -103,9 +105,16 @@ impl EmptyState {
     self
   }
 
-  /// Every part centered under the glyph, the explanation's lines too (`04 · Modules · none yet` `yJdJ9`).
+  /// Every part centered under the glyph, the explanation's lines too (`04 · Modules · none yet` `yJdJ9`), the
+  /// explanation's top 25 under the title's.
   pub fn centered(mut self) -> Self {
     self.centered = true;
+    self
+  }
+
+  /// Its parts `gap` apart where the design sets its own (16 in `yJdJ9`, 12 in the Modules' `jIxzJ`).
+  pub fn gap(mut self, gap: SpacingSize) -> Self {
+    self.gap = Some(gap);
     self
   }
 
@@ -165,7 +174,10 @@ impl EmptyState {
       } else {
         Dimension::Auto
       })
-      .spacing(if self.secrets || self.unframed {
+      .spacing(if self.centered {
+        // The design's 19 high title and 6 put the explanation 25 under it; the app's title line is 20 high.
+        ExtraSpacing::Pair.role()
+      } else if self.secrets || self.unframed {
         ExtraSpacing::Snug.role()
       } else {
         SpacingSize::Xs
@@ -220,10 +232,10 @@ impl From<EmptyState> for Element {
     let frame = Column::new()
       .id(empty.id.clone())
       .width(Dimension::Pct(100.0))
-      .spacing(if empty.compact {
-        SpacingSize::Md
-      } else {
-        ExtraSpacing::Inset.role()
+      .spacing(match (empty.gap, empty.compact) {
+        (Some(gap), _) => gap,
+        (None, true) => SpacingSize::Md,
+        (None, false) => ExtraSpacing::Inset.role(),
       });
     let frame = if centered {
       frame.align_items(Alignment::Center)
