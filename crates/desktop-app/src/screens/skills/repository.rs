@@ -142,7 +142,8 @@ impl Component for Import {
       .child(
         Notice::new("skill-import-notice", NoticeTone::Info, ctx.t("skills.importNotice"))
           .icon(Icon::Info)
-          .body(ctx.t("skills.importNoticeDetail")),
+          .body(ctx.t("skills.importNoticeDetail"))
+          .flat(),
       )
       .with_children(
         state
