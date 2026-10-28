@@ -4,8 +4,8 @@ Settings live in several places:
 
 | Where | What | Kept in |
 |---|---|---|
-| **Settings** (app menu, sidebar bottom) › General · Notifications · Accounts · Automation · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
-| **Project settings** › General · Runs · Context · Connections · Secrets · Sharing | Project, GitHub, base branch, base-moved notices, repository agent files; auto mode, estimates, limits, environment; sources, code index; connections; secrets; sharing | Project database (base branch per computer; secret values in the OS keychain) |
+| **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
+| **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Context · Connections · Secrets · Sharing | Project, GitHub, base branch, base-moved notices, repository agent files; auto mode, estimates, limits, environment; sources, code index; connections; secrets; sharing | Project database (base branch per computer; secret values in the OS keychain) |
 | **Memory › Settings** | How task and project memory save; how much each agent gets | Project database |
 | **Orchestrator settings** | The chat's connection, model and effort (versioned) | Project database |
 | **Agent profile › Permissions** | Repository access, writable folders, commands, network, MCP servers, approvals | Project database |
