@@ -1,5 +1,9 @@
 # Shared server in the new app — plan
 
+> Since 2026-10-27 the team server, its web app and the tests and QA examples that start it live in the private
+> platform repository `ivanzaida/orchester-platform` ([server.md](server.md), "Where the code is"); the paths below
+> under `crates/server`, `web/` and those tests mean that repository.
+
 Date: 2026-10-15. Status: **proposed**, for the person's review. The design is
 [server.md](server.md) (decisions 1–65); this document only orders the work and names its files, frames and tests.
 When a phase starts, its entry goes into `docs/plan.md` (*S · Shared server*) as usual.
