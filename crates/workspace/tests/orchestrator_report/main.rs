@@ -258,6 +258,11 @@ fn report_of_a_busy_day_tells_what_was_done_and_how_the_work_stands() {
     proposal.link
   );
 
+  busy_day_usage_is_told(&read);
+}
+
+/// The busy day's usage: its spend, time, task and the provider it ran on.
+fn busy_day_usage_is_told(read: &DailyReport) {
   assert_eq!(read.usage.spent, 4_000);
   assert_eq!(read.usage.active_ms, 60 * 60 * 1000, "one hour of agent time");
   assert_eq!(read.usage.budget, Some(20_000_000), "against the default daily budget");
