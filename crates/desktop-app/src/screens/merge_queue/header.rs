@@ -47,14 +47,11 @@ pub(super) fn header(ctx: &Ctx, read: &QueueRead, checkout: &Arc<str>) -> Row {
     .spacing(SpacingSize::Xl)
     .align_items(Alignment::Start)
     .child(
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .child(
-          Text::new(&lead)
-            .id("merge-queue-lead")
-            .variant(DeliveryText::Lead.role()),
-        ),
+      Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
+        Text::new(&lead)
+          .id("merge-queue-lead")
+          .variant(DeliveryText::Lead.role()),
+      ),
     )
     .with_children(read.base.as_ref().map(|base| base_box(ctx, base, checkout)))
 }
