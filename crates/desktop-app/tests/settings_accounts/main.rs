@@ -11,7 +11,7 @@ use std::{env, fs};
 use harness::{Window, add_account, click, go, in_child, joined, set, shown, sign_in};
 use orchester_app::routes::AccountsPanel;
 use orchester_core::{
-  account::{AccountCli, AccountState},
+  account::{AccountCli, AccountState, resolved},
   connection::{AgentConnection, AgentProvider, ConnectionAccount},
   id::{AgentAccountId, ConnectionId},
   name::Name,
@@ -169,6 +169,8 @@ fn settings_accounts_adds_a_folder_the_person_already_uses_and_refuses_one_in_a_
         .into_iter()
         .find(|account| account.name().is_some_and(|name| name.as_str() == "Client"))
         .expect("Client is stored");
+      // Kept as the file system resolves it: macOS's temporary folders lie behind the link `/var`.
+      let brought = resolved(&brought).expect("the person's folder resolves");
       assert_eq!(added.folder().path(), Some(brought.as_path()));
       assert_eq!(added.state(), AccountState::SignedIn);
     },

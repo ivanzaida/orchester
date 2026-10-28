@@ -5,7 +5,7 @@
 //! system or a CLI; the UI calls it off the UI thread.
 
 mod error;
-mod folders;
+pub(crate) mod folders;
 pub mod sign_in;
 pub mod trash;
 mod uses;

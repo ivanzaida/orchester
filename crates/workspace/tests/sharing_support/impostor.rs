@@ -7,8 +7,9 @@
 use std::{
   io::{Read, Write},
   net::{TcpListener, TcpStream},
-  sync::Arc,
+  sync::{Arc, LazyLock},
   thread,
+  time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use orchester_api::{
@@ -17,15 +18,56 @@ use orchester_api::{
   statements::{KEY_PROOF_TYPE, KeyProof},
 };
 use parking_lot::Mutex;
+use rcgen::{
+  BasicConstraints, CertificateParams, CertifiedIssuer, DnType, ExtendedKeyUsagePurpose, IsCa, KeyPair,
+  KeyUsagePurpose, date_time_ymd,
+};
 use serde_json::{Value, json};
 use tokio_rustls::rustls::{
   ServerConfig, ServerConnection, StreamOwned,
   crypto::ring,
-  pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
+  pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer},
 };
 
-const CERTIFICATE: &[u8] = include_bytes!("../../../server/tests/fixtures/server.pem");
-const KEY: &[u8] = include_bytes!("../../../server/tests/fixtures/server-key.pem");
+/// The authority the impostors' certificate comes from, made for this test process: a test that trusts it
+/// ([`orchester_api::client::trust_for_tests`]) reaches an impostor under the trust store.
+static AUTHORITY: LazyLock<CertifiedIssuer<'static, KeyPair>> = LazyLock::new(|| {
+  let mut params = CertificateParams::new(Vec::<String>::new()).expect("authority parameters");
+  params
+    .distinguished_name
+    .push(DnType::CommonName, "Orchester impostor authority");
+  params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+  params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
+  valid_for_a_month(&mut params);
+  let key = KeyPair::generate().expect("authority key");
+  CertifiedIssuer::self_signed(params, key).expect("authority certificate")
+});
+
+/// The certificate every impostor presents for `localhost`, and its key.
+static LEAF: LazyLock<(CertificateDer<'static>, PrivatePkcs8KeyDer<'static>)> = LazyLock::new(|| {
+  let mut params = CertificateParams::new(vec!["localhost".to_owned()]).expect("leaf parameters");
+  params.distinguished_name.push(DnType::CommonName, "localhost");
+  params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+  params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+  valid_for_a_month(&mut params);
+  let key = KeyPair::generate().expect("leaf key");
+  let certificate = params.signed_by(&key, &*AUTHORITY).expect("leaf certificate");
+  (certificate.der().clone(), PrivatePkcs8KeyDer::from(key.serialize_der()))
+});
+
+/// The authority behind the impostors' certificate, for a test to trust.
+pub fn authority() -> CertificateDer<'static> {
+  AUTHORITY.as_ref().der().clone()
+}
+
+/// From yesterday for a month: macOS refuses a server certificate valid for longer than 825 days, even from an
+/// authority the test trusts.
+fn valid_for_a_month(params: &mut CertificateParams) {
+  let now = date_time_ymd(1970, 1, 1) + SystemTime::now().duration_since(UNIX_EPOCH).expect("after 1970");
+  let day = Duration::from_secs(86_400);
+  params.not_before = now - day;
+  params.not_after = now + 30 * day;
+}
 
 /// What the impostor answers a key proof with.
 pub enum Claimed {
@@ -110,11 +152,11 @@ impl Answers {
 }
 
 fn certificate() -> CertificateDer<'static> {
-  CertificateDer::from_pem_slice(CERTIFICATE).expect("the fixture certificate")
+  LEAF.0.clone()
 }
 
 fn tls_config() -> ServerConfig {
-  let key = PrivateKeyDer::from_pem_slice(KEY).expect("the fixture key");
+  let key = PrivateKeyDer::from(LEAF.1.clone_key());
   ServerConfig::builder_with_provider(Arc::new(ring::default_provider()))
     .with_safe_default_protocol_versions()
     .expect("protocol versions")

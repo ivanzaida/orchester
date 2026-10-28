@@ -1,6 +1,8 @@
 //! What reads the accounts again is told of a change once the project connections that follow it moved: after an
 //! account's new folder reached them, and also when moving them failed part way.
 
+mod account_places;
+
 use std::{fs, sync::Arc, thread, time::Duration};
 
 use orchester_core::{
@@ -88,7 +90,8 @@ fn account_changes_tell_of_a_new_folder_once_the_connections_followed_it() {
   let client = add(&workspace, "Client");
   let repo = project_on(&workspace, &client);
   fs::remove_dir_all(client.folder().path().expect("a folder")).expect("the folder goes");
-  let chosen = data.path().join("codex-client-elsewhere");
+  let place = account_places::in_credential_place();
+  let chosen = place.path().join("codex-client-elsewhere");
   fs::create_dir_all(&chosen).expect("the person's folder");
   let mut changes = workspace.account_changes();
   changes.borrow_and_update();
