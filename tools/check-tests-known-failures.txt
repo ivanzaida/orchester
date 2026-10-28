@@ -14,7 +14,6 @@ orchester-app orchestrator links::orchestrator_reply_links_go_in_the_app_and_sho
 
 # Run no test on purpose: (none).
 orchester-cloud cloud (none) # runs only with ORCHESTER_CLOUD_TEST_DATABASE_URL (a PostgreSQL), see docs/cloud-hosting.md
-orchester-app orchester_cloud (none) # its tests are ignored: they need ORCHESTER_CLOUD_TEST_DATABASE_URL
 orchester-exec trash (none) # its one test is ignored: it moves a folder into the person's real Recycle Bin
 orchester-exec local_untracked_mode (none) # Unix only
 orchester-runner supervisor_unix (none) # Unix only

@@ -1,4 +1,4 @@
-# Repository quality gate: formatting, clippy with warnings denied, the 600-line file limit and the web checks.
+# Repository quality gate: formatting, clippy with warnings denied, the 600-line file limit and the UI literals.
 # Run from anywhere: powershell -File tools/check.ps1
 #
 # With `-Tests changed` it also runs the tests of the crates the branch changed and of the crates that depend on them
@@ -91,21 +91,6 @@ try {
     if ($violations) {
         $violations | Format-Table -AutoSize -Wrap | Out-String -Width 200 | Write-Output
         $failed = $true
-    }
-
-    # The web apps (web/, an npm workspace): lint, type check and unit tests of every package, with the same rules
-    # (docs/architecture/server.md, "The web workspace"). Only where Node is installed; said plainly when it is not.
-    Write-Output "== web"
-    if (Get-Command node -ErrorAction SilentlyContinue) {
-        npm --prefix web ci --ignore-scripts
-        if ($LASTEXITCODE -ne 0) { $failed = $true }
-        else {
-            npm --prefix web run check
-            if ($LASTEXITCODE -ne 0) { $failed = $true }
-        }
-    }
-    else {
-        Write-Output "web: skipped, Node (node) is not on PATH; the web checks did not run"
     }
 
     if ($Tests -and $clippyFailed) {

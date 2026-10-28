@@ -4,7 +4,7 @@
 # docs/stable-build.md, "Releases from CI".
 #
 # The version is crates/desktop-app/Cargo.toml's own `version`, apart from the workspace's `[workspace.package]`
-# version, which the team server reports (server-release.yml, `server-v*` tags): bumping one never releases the other.
+# version: bumping that one releases nothing. The team server's releases are in the private platform repository.
 # A push to master that changes the file releases only when neither the tag nor a release `app-v<version>` exists yet,
 # so other edits of that file, and the same run again, release nothing.
 #
