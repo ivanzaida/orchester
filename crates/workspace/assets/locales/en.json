@@ -135,10 +135,59 @@
   },
   "overview": {
     "eyebrow": {
-      "key": "PROJECT KEY {{key}}",
-      "repository": "PROJECT KEY {{key}} · {{repository}}",
-      "branch": "PROJECT KEY {{key}} · {{branch}}",
-      "repositoryBranch": "PROJECT KEY {{key}} · {{repository}} · {{branch}}"
+      "key": "{{key}}",
+      "repository": "{{key}} · {{repository}}",
+      "branch": "{{key}} · {{branch}}",
+      "repositoryBranch": "{{key}} · {{repository}} · {{branch}}"
+    },
+    "queue": {
+      "slot": "Waiting for an agent slot",
+      "blocked": "Waiting for blocking tasks · {{tasks}}",
+      "previous": "Waiting for the previous task · {{task}}",
+      "held": "Held · new starts held",
+      "queued": "Queued",
+      "place": {
+        "next": "next",
+        "st": "{{place}}st",
+        "nd": "{{place}}nd",
+        "rd": "{{place}}rd",
+        "th": "{{place}}th"
+      }
+    },
+    "landed": {
+      "empty": "empty",
+      "waiting": {
+        "one": "{{count}} waits",
+        "other": "{{count}} wait"
+      },
+      "state": {
+        "queued": "{{task}} queued",
+        "syncing": "{{task}} syncing",
+        "rechecking": "{{task}} rechecking",
+        "integrating": "{{task}} integrating",
+        "approval": "{{task}} waits for you",
+        "blocked": "blocked: your checkout keeps delivery out",
+        "left": "{{task}} left the queue"
+      }
+    },
+    "start": {
+      "connect": {
+        "title": "Connect an agent CLI",
+        "none": "No agent connection signed in yet"
+      },
+      "profile": {
+        "title": "Publish an agent profile",
+        "none": "No published profile yet"
+      },
+      "pipeline": {
+        "title": "Publish a pipeline",
+        "none": "No published pipeline yet"
+      },
+      "task": {
+        "title": "Create the first task",
+        "none": "A brief with acceptance criteria; its pipeline runs it step by step in a worktree of its own",
+        "done": "{{count}} tasks"
+      }
     },
     "metrics": {
       "agentsWorking": {

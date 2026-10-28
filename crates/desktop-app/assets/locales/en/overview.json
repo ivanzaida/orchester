@@ -1,67 +1,157 @@
 {
   "overview": {
-    "description": "What is moving in {{project}} and what needs you.",
     "importResources": "Import resources",
+    "openOrchestrator": "Open Orchestrator",
     "newTask": "New task",
-    "unknown": "—",
-    "separator": "·",
+    "separator": " · ",
     "listSeparator": ", ",
-    "loadError": {
-      "title": "The tasks cannot be read",
-      "body": "{{reason}} The Overview shows them once they can be read."
-    },
     "tabs": {
       "running": "Running",
       "needsYou": "Needs you",
       "queued": "Queued",
       "failed": "Failed"
     },
-    "metrics": {
-      "running": "Running now",
-      "needsInput": "Need your input",
-      "needsInputDetail": "Review & decisions",
-      "completed": "Completed today",
-      "completedDetail": "Runs with every step passed",
-      "tokens": "Tokens today",
-      "reading": "Reading…"
+    "loadError": {
+      "title": "The tasks couldn't be read",
+      "stillWorks": "The header's actions work; the page shows the tasks once they can be read."
     },
-    "tasks": {
-      "title": "Tasks",
-      "reading": "Reading {{project}}'s tasks…",
-      "runStep": "{{number}} {{step}}",
-      "deliver": "Deliver",
-      "emptyTab": "No task is in {{tab}}.",
-      "viewAll": "View all tasks"
+    "age": {
+      "now": "now",
+      "minutes": "{{count}}m",
+      "hours": "{{count}}h",
+      "days": "{{count}}d"
     },
-    "empty": {
-      "title": "No tasks yet",
-      "detail": "A task is a brief with acceptance criteria. Its pipeline runs it step by step in a worktree of its own; you answer what the agents ask."
+    "waits": {
+      "title": {
+        "one": "1 waiting for you",
+        "other": "{{count}} waiting for you"
+      },
+      "loading": "Waiting for you",
+      "order": "oldest first",
+      "target": "{{task}} · #{{run}}",
+      "showAll": "Show all {{count}} in Tasks ↗",
+      "link": {
+        "review": "Review ↗",
+        "answer": "Answer ↗",
+        "reviewPlan": "Review plan ↗",
+        "decide": "Decide ↗",
+        "raiseLimit": "Raise limit ↗",
+        "summary": "Summary ↗",
+        "merge": "Merge ↗",
+        "complete": "Complete ↗",
+        "resolve": "Resolve ↗",
+        "mergeQueue": "Merge queue ↗",
+        "records": "Review records ↗"
+      }
+    },
+    "atWork": {
+      "title": "At work",
+      "slots": {
+        "one": "{{count}} of {{slots}} agent slot",
+        "other": "{{count}} of {{slots}} agent slots"
+      },
+      "step": "{{number}} {{step}}",
+      "agent": "{{account}} · {{model}}",
+      "showAll": "Show all {{count}} in Tasks ↗"
+    },
+    "queue": {
+      "title": "Queue",
+      "hold": "Hold new starts",
+      "release": "Release new starts",
+      "failed": "New starts were not changed: {{reason}}",
+      "showAll": "Show all {{count}} in Tasks ↗"
+    },
+    "limits": {
+      "title": "Plan limits",
+      "accounts": "Accounts ↗",
+      "name": "{{cli}} · {{account}}",
+      "claude": "Claude Code",
+      "codex": "Codex",
+      "share": "{{used}}% of {{window}}",
+      "reached": "Reached · {{window}}",
+      "reachedOnly": "Reached",
+      "unknown": "unknown since reset",
+      "fiveHour": "5-hour",
+      "weekly": "weekly",
+      "window": "{{hours}}-hour",
+      "resets": "Resets {{time}}",
+      "resetsRuns": {
+        "one": "Resets {{time}} · {{count}} run on it",
+        "other": "Resets {{time}} · {{count}} runs on it"
+      },
+      "runs": {
+        "one": "{{count}} run on it",
+        "other": "{{count}} runs on it"
+      },
+      "lastRead": "Last read {{used}}% of {{window}} · reset {{time}} passed",
+      "day": "{{weekday}} {{time}}"
+    },
+    "landed": {
+      "title": "Landed",
+      "done": "Done ↗",
+      "queue": "Merge queue",
+      "review": "Review ↗",
+      "queueWaiting": "{{state}} · {{waiting}}",
+      "today": {
+        "one": "Today · 1 merged",
+        "other": "Today · {{count}} merged"
+      },
+      "earlier": "Earlier",
+      "showAll": "Show all {{count}} in Done ↗"
+    },
+    "delivery": {
+      "title": "Delivery",
+      "link": "Delivery ↗",
+      "tasks": "{{done}} / {{scope}} tasks",
+      "dates": "Likely {{likely}} · 85% by {{safe}}",
+      "done": "Done",
+      "notEnough": "Not enough history yet · {{tasks}} tasks merged in {{days}} days",
+      "queued": {
+        "one": "Queued work · 1 task",
+        "other": "Queued work · {{count}} tasks"
+      },
+      "queuedSafe": "85% by {{date}}",
+      "date": "{{month}} {{day}}",
+      "failed": "Forecasts couldn't be read",
+      "stillWorks": "The rest of the page is current."
+    },
+    "quiet": {
+      "title": "Nothing waits for you, and nothing is running.",
+      "slots": "{{used}} of {{slots}} agent slots in use",
+      "queueEmpty": "the queue is empty",
+      "lastMerge": "last merge {{time}}"
     },
     "ready": {
-      "title": "Ready to run",
+      "title": "Ready to start",
+      "ready": "Ready",
+      "tasks": "Tasks ↗"
+    },
+    "start": {
+      "head": "Set up {{project}} to run tasks",
+      "done": "{{count}} of 4 done",
+      "connections": "Project settings › Connections ↗",
+      "agents": "Agents ↗",
+      "pipelines": "Pipelines ↗",
+      "newTask": "New task ↗",
+      "import": "Agent files already in the repository (CLAUDE.md, AGENTS.md, skills) come in as drafts.",
+      "importLink": "Import resources ↗",
       "reading": "Reading the agents, pipelines and connections…"
     },
-    "activity": {
-      "title": "Recent activity",
-      "reading": "Reading activity…",
-      "meta": "{{task}} · {{time}}",
-      "mergeQueueBlocked": "Merge queue blocked: your checkout keeps delivery out"
-    },
-    "needs": {
-      "title": "Needs you",
-      "reading": "Reading…",
-      "emptyTitle": "Nothing needs you right now.",
-      "emptyDetail": "Approvals, questions, plans, merges, interrupted runs and memory records appear here."
-    },
-    "notices": {
-      "open": "Open {{task}}",
-      "openTask": "Open task"
-    },
     "runner": {
+      "awayTitle": "The runner isn't connected",
+      "awayBody": "Showing what was read last. Orchester reconnects on its own; runs pause their reads until then.",
       "title": "The runner could not restart",
       "body": "{{reason}} Runs can't start or continue until it runs again.",
       "openLog": "Open runner log",
       "restart": "Restart runner"
+    },
+    "server": {
+      "title": "Signed out of {{server}}",
+      "body": "{{project}} is shared there. Others' changes, and yours, wait until you join again.",
+      "join": "Join again"
+    },
+    "unreadable": {
+      "title": "Latest run can't be read"
     }
   }
 }

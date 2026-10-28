@@ -198,6 +198,7 @@ fn seed_names_every_scenario_once() {
       "delivery",
       "delivery-blocked",
       "delivery-empty",
+      "overview-quiet",
       "interrupted",
       "unreadable-db",
       "tasks-unreadable",

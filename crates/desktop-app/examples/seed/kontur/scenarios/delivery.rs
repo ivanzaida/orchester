@@ -149,6 +149,25 @@ pub fn empty(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.delivering_catalogue().map(drop)
 }
 
+/// `overview-quiet` (the Overview's 02 `HWznK`): nothing waits and nothing runs; two runs merged today and two drafts
+/// ready to start.
+pub fn quiet(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let feature = &catalogue.feature_delivery;
+  for (title, ago) in [("Retry webhooks with backoff", 200), ("Show the run's account", 120)] {
+    passed(kontur, feature, (title, "merged today"), (Work::Merged, ago))?;
+  }
+  for title in ["Rotate API keys from settings", "Group exports by month"] {
+    let task = kontur.task(
+      (title, "a draft ready to start", &CRITERIA),
+      Some(feature),
+      kontur.ago(60),
+    )?;
+    kontur.seeded(&task, "a draft ready to start");
+  }
+  Ok(())
+}
+
 /// A run of a new task titled `title` that passed every step, started `ago` minutes before now, its work made as
 /// `work` says.
 fn passed(

@@ -89,7 +89,8 @@ fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, general, notifications, accounts, \
-     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {}; tasks {}; \
+     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \
+     links: the Overview shows every section on one page); tasks {}; \
      task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),

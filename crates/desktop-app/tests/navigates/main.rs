@@ -57,8 +57,8 @@ fn a_task_row_opens_its_task_by_browser_rules() {
 #[test]
 fn a_breadcrumb_opens_its_page_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
-  let row = seeded.ids("overview-row-").first().cloned().expect("a running task");
-  let page = task(&seeded, row.trim_start_matches("overview-row-"), TaskTab::Summary);
+  let key = seeded.tasks().tasks.first().expect("a task").key().to_string();
+  let page = task(&seeded, &key, TaskTab::Summary);
   seeded.window.navigation().go(page.clone());
   // *← Tasks / KON-12*: the first crumb is the Tasks list, and so is the arrow before it.
   let place = tasks_list(&seeded);
@@ -68,7 +68,7 @@ fn a_breadcrumb_opens_its_page_by_browser_rules() {
 }
 
 #[test]
-fn an_overview_card_opens_its_task_by_browser_rules() {
+fn an_overview_wait_opens_its_task_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   let first = attention::items(&seeded.tasks())
     .into_iter()
@@ -78,12 +78,12 @@ fn an_overview_card_opens_its_task_by_browser_rules() {
     NeedKind::Approval | NeedKind::Question | NeedKind::Input => TaskTab::Conversation,
     _ => TaskTab::Summary,
   };
-  let key = first.task().expect("the first card's task").key.clone();
+  let key = first.task().expect("the first wait's task").key.clone();
   let action = seeded
-    .ids("overview-need-0-")
+    .ids("overview-wait-0-")
     .into_iter()
-    .find(|id| id.ends_with("-action"))
-    .expect("the first card's action");
+    .find(|id| id.ends_with("-open"))
+    .expect("the first wait's link");
   let place = task(&seeded, &key, tab);
   control_opens_by_browser_rules(&mut seeded.window, &action, &place);
 }
