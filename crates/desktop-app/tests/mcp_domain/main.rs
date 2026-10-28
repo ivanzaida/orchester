@@ -7,6 +7,7 @@
 mod accounts;
 mod accounts_window;
 mod api_providers;
+mod approve_everything;
 mod automation_permissions;
 mod base_moved;
 mod basics;
@@ -31,6 +32,7 @@ mod mcp_servers;
 mod merge;
 mod merged_outside;
 mod modules;
+mod native_connections;
 mod orchestrator_approval;
 mod orchestrator_auto_merge;
 mod orchestrator_chat;

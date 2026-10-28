@@ -112,6 +112,11 @@
     },
     "engine": "{{provider}} / {{model}}",
     "engineNative": "{{engine}} · native",
+    "everything": {
+      "byAutomation": "Auto mode approves everything in this run · turned on by automation",
+      "byYou": "Auto mode approves everything in this run · turned on by you",
+      "settings": "Project settings"
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",

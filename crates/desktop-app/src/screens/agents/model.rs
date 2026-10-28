@@ -13,7 +13,10 @@ use orchester_core::{
   connection::{AgentConnection, ProviderEffortError, provider_effort},
   resource::{AgentProfile, ModelId},
 };
-use orchester_workspace::agents::{data::ProjectAgents, form::effort_options};
+use orchester_workspace::agents::{
+  data::ProjectAgents,
+  form::{effort_options, listed_models},
+};
 
 use super::{fields::Fields, words};
 use crate::{
@@ -245,8 +248,8 @@ fn model_select(ctx: &mut Ctx, fields: &Fields, connection: Option<&AgentConnect
   };
   let mut models: Vec<_> = connection
     .into_iter()
-    .flat_map(|c| c.models())
-    .map(|m| model_choice(m.id().as_str().to_owned()))
+    .flat_map(listed_models)
+    .map(|model| model_choice(model.as_str().to_owned()))
     .collect();
   let current = fields.model.get();
   if !current.is_empty() && !models.iter().any(|m| m.value == current) {

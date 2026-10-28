@@ -254,7 +254,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// `task`'s run, started at `at`, with Implement's agent at work: the run and its invocation.
-fn at_work(
+pub(super) fn at_work(
   kontur: &mut Kontur,
   task: &mut Task,
   pipeline: &Published,
@@ -276,7 +276,11 @@ fn at_work(
 
 /// With `held`, `invocation`'s step is recorded waiting for the person, so its request reads waiting without a
 /// runner.
-fn hold(kontur: &mut Kontur, mut run: Run, (invocation, held): (&Invocation, bool)) -> Result<(), SeedError> {
+pub(super) fn hold(
+  kontur: &mut Kontur,
+  mut run: Run,
+  (invocation, held): (&Invocation, bool),
+) -> Result<(), SeedError> {
   if !held {
     return Ok(());
   }
