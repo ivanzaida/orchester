@@ -12,10 +12,8 @@
 //!
 //! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; the tabs that
 //! do not fit are only in the tab list (`tab_list`), whose button follows the last tab that shows. The
-//! active tab takes the room it was laid out at (`tab_measure`). When the list goes away while it held
-//! the focus, *New tab* takes it; *New tab* is a Tab stop for that, its ring only after keyboard use.
-
-use std::sync::atomic::{AtomicBool, Ordering};
+//! active tab takes the room it was laid out at (`tab_measure`). *New tab* is for the pointer only, never a Tab
+//! stop: the Tab that comes with Alt+Tab back into the window must not land on it, where Space would open a tab.
 
 use lurq::{
   app::{
@@ -59,9 +57,6 @@ const NEW_TAB_WIDTH: f32 = 26.0;
 pub struct TabStrip {
   active_width: ActiveWidth,
   list: ListHold,
-  new_tab: ElementRef,
-  /// The strip showed the tab list when it was laid out last.
-  overflowed: AtomicBool,
 }
 
 /// The title bar's *N need you* pill, as it was laid out last.
@@ -94,8 +89,6 @@ impl Component for TabStrip {
     Self {
       active_width: ActiveWidth::new(ctx),
       list: ListHold::default(),
-      new_tab: ctx.element_ref(),
-      overflowed: AtomicBool::new(false),
     }
   }
 
@@ -112,7 +105,6 @@ impl Component for TabStrip {
       marks: marks(&projects, tabs.active()),
     });
     let fit = fit(&projects, &tabs, (room, measured));
-    self.keep_focus(ctx, fit.overflows());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
     let strip = tabs
       .tabs()
@@ -156,7 +148,7 @@ impl Component for TabStrip {
       })
       .child(strip)
       .with_children(list)
-      .child(new_tab(ctx, navigation, self.new_tab.clone()));
+      .child(new_tab(ctx, navigation));
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::new().left(SpacingSize::Sm))
@@ -171,17 +163,6 @@ impl Component for TabStrip {
           .height(Dimension::Px(TAB_HEIGHT)),
       )
       .child(Row::new().flex(1.0))
-  }
-}
-
-impl TabStrip {
-  /// Gives the focus to *New tab* when the tab list goes away while it held it.
-  fn keep_focus(&self, ctx: &Ctx, overflows: bool) {
-    let overflowed = self.overflowed.swap(overflows, Ordering::Relaxed);
-    if overflowed && !overflows && self.list.holds() {
-      self.list.set_open(false);
-      ctx.focus(&self.new_tab);
-    }
   }
 }
 
@@ -346,11 +327,10 @@ fn labelled_tab(
     .into()
 }
 
-/// *New tab* (`New tab` `w204x`): a tab at All projects, right of the active one.
-fn new_tab(ctx: &mut Ctx, navigation: Navigation, element: ElementRef) -> Element {
-  in_title_bar(Focus::Keyboard.apply(pressable(move || navigation.open_tab())))
+/// *New tab* (`New tab` `w204x`): a tab at All projects, right of the active one; Ctrl+T does it from the keyboard.
+fn new_tab(ctx: &mut Ctx, navigation: Navigation) -> Element {
+  in_title_bar(Focus::Pointer.apply(pressable(move || navigation.open_tab())))
     .id("new-tab")
-    .ref_element(element)
     .describe("a11y_name", ctx.t("common.newTab"))
     .width(Dimension::Px(NEW_TAB_WIDTH))
     .height(Dimension::Px(TAB_HEIGHT))
