@@ -17,8 +17,6 @@ mod kontur;
 
 mod accounts;
 mod data;
-#[path = "../../tests/support/signed_in.rs"]
-mod signed_in;
 mod stand_ins;
 
 use std::{
@@ -38,6 +36,7 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{Root, RootProps, Start},
   routes::{AccountsPanel, AccountsView, ProjectPage, Route, TaskTab, TaskView},
+  test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };

@@ -78,7 +78,7 @@ impl OptionCard {
 
   /// A compact card, one of a few side by side (`Claude Code CLI` `qzI86` in `10 · Add provider`): no dot, its mark
   /// and title over one short line in 11.5 `text_muted`, 10 over and under and 12 at its sides; off it has no fill.
-  /// One that cannot be chosen keeps its strength and shows a lock at its title's end; why is its `reason`.
+  /// One that cannot be chosen is faded to half and shows a lock at its title's end; why is its `reason`.
   pub fn compact(mut self) -> Self {
     self.compact = true;
     self
@@ -287,8 +287,11 @@ impl OptionCard {
 
 impl From<OptionCard> for Element {
   fn from(card: OptionCard) -> Self {
-    let compact = card.compact;
-    let (frame, choice) = if compact { card.compact_frame() } else { card.frame() };
+    let (frame, choice) = if card.compact {
+      card.compact_frame()
+    } else {
+      card.frame()
+    };
     match choice {
       Choice::Choose(choose) => Focus::Keyboard
         .apply(frame)
@@ -298,8 +301,7 @@ impl From<OptionCard> for Element {
           choose();
         })
         .into(),
-      // A compact card that cannot be chosen keeps its strength: its lock and its line say so (`HvtFb`).
-      Choice::Unavailable(reason) if compact => inert(frame.describe("reason", reason)).into(),
+      // A card that cannot be chosen is faded to half, a compact one too (`HvtFb`, `osYDH` in `10` `ilfLu`).
       Choice::Unavailable(reason) => inert(frame.describe("reason", reason)).opacity(DISABLED_OPACITY).into(),
       Choice::Waiting => inert(frame).opacity(DISABLED_OPACITY).into(),
     }

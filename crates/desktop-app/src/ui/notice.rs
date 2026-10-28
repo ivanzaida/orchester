@@ -1,14 +1,14 @@
 //! Notice (`Notice` `R3Pyx`): a 16 icon, a title in 13/500 `text_primary` with its explanation 2 under
 //! it in 12/1.45 `text_secondary`, and actions at the end, 10 apart and 8 between actions; radius 10,
 //! 12 over and under and 14 at its sides, inside a 1 stroke. Its tone colors the fill, the stroke and
-//! the icon: information on `surface_raised` in a `border` stroke with a `text_secondary` icon (`IJCZY`,
-//! `uqbUH`), a warning on `warning_muted` in `warning` (`iw9rS`), a failure on `danger_muted` in
-//! `danger` (`kXWCj`, `fRrDA`), a success on `success_muted` in `success` (`nqp68`). The text wraps and
-//! the icon stays with the first line.
+//! the icon: information on `info_muted` in `info`, as the redesigned screens draw it (`Notice · info`
+//! `byr8E` in `cC55E`, `HfwWH` in `P21bwh`), a warning on `warning_muted` in `warning` (`iw9rS`), a
+//! failure on `danger_muted` in `danger` (`kXWCj`, `fRrDA`), a success on `success_muted` in `success`
+//! (`nqp68`). The text wraps and the icon stays with the first line.
 //!
 //! A flat notice ([`Notice::flat`], `Notice · warning` `Mxt7k` in the redesigned Pipelines `evQ4U`): its tone's
-//! fill without a stroke, radius 6, 10 over and under and 12 at its sides, a 14 icon 10 from the text (`text_muted`
-//! for information, `PlJxG`), the title, its explanation and its actions 6 apart.
+//! fill without a stroke, radius 6, 10 over and under and 12 at its sides, a 14 icon in its tone's color 10 from
+//! the text, the title, its explanation and its actions 6 apart.
 //!
 //! Handling notice (`Handling notice` `mERxM`): how something is handled, in one paragraph: a 15
 //! `text_secondary` icon and the words in 12/1.45 `text_secondary`, 10 apart; radius 8, 10 over and under and
@@ -48,11 +48,7 @@ impl NoticeTone {
   /// The fill, the stroke and the icon's color.
   const fn colors(self) -> (PaletteColor, PaletteColor, PaletteColor) {
     match self {
-      Self::Info => (
-        PaletteColor::SurfaceRaised,
-        PaletteColor::Border,
-        PaletteColor::TextSecondary,
-      ),
+      Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info, PaletteColor::Info),
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, PaletteColor::Warning),
       Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, PaletteColor::Danger),
       Self::Success => (PaletteColor::SuccessMuted, PaletteColor::Success, PaletteColor::Success),
@@ -168,11 +164,7 @@ impl From<Notice> for Element {
     }
     let (fill, stroke, mark) = notice.tone.colors();
     let flat = notice.flat;
-    // A flat notice's information icon is `text_muted` (`PlJxG` in `ky5kJ`).
-    let mark = match (flat, notice.tone) {
-      (true, NoticeTone::Info) => notice.mark.unwrap_or(PaletteColor::TextMuted),
-      _ => notice.mark.unwrap_or(mark),
-    };
+    let mark = notice.mark.unwrap_or(mark);
     let text = Column::new()
       .id(format!("{}-text", notice.id))
       .spacing(if flat {

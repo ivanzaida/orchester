@@ -179,12 +179,14 @@ impl RunTask {
     skills: Option<&Path>,
   ) -> Result<Prepared, RunnerProblem> {
     let folders = self.writable_folders(enforced)?;
+    let storage = self.run_storage()?;
     let scope = FileScope::new(&ScopeRoots {
       worktree,
       access: enforced.permissions().repository(),
       code_index: index.folder.as_deref(),
       skills,
       writable_folders: &folders,
+      run_storage: Some(&storage),
     })
     .map_err(|error| problem(error.to_string()))?;
     let policy = CommandPolicy::new(enforced.permissions().commands()).map_err(|error| problem(error.to_string()))?;

@@ -25,7 +25,7 @@ use crate::{
     connections::{
       data::{Entry, github_state},
       inspector::{Asks, Confirm, asked, mcp_switch, status_line},
-      words::{GITHUB_GLYPH, agent_glyph, agent_line, connection_status, github_status, mcp_glyph, program_name},
+      words::{GITHUB_GLYPH, MCP_GLYPH, agent_glyph, agent_line, connection_status, github_status, program_name},
       work::Work,
     },
     project_settings::kit::{EmptyRow, Glyph, Group, SettingRow, tile},
@@ -212,7 +212,7 @@ fn github_group(ctx: &mut Ctx, listed: &ProjectConnections, open: &impl Fn(Conne
       row(
         ctx,
         Entry::GitHub(connection),
-        (GITHUB_GLYPH.into(), line),
+        (GITHUB_GLYPH, line),
         vec![status.into()],
         open(connection.id()),
       )
@@ -238,7 +238,7 @@ fn mcp_group(
       .row(
         EmptyRow::new(
           "connections-mcp-empty",
-          Icon::Server,
+          MCP_GLYPH,
           ctx.t("connections.mcp.emptyTitle"),
           ctx.t("connections.mcp.emptyDetailShort"),
         )
@@ -284,7 +284,7 @@ fn mcp_group(
     let row = row(
       ctx,
       Entry::Mcp(server),
-      (mcp_glyph(server).into(), line.to_string()),
+      (MCP_GLYPH.into(), line.to_string()),
       vec![switch],
       open(id),
     );

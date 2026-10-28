@@ -21,12 +21,16 @@ mod sources;
 mod support;
 mod versions;
 
+use std::time::Duration;
+
 use harness::Form;
 use lurq::app::events::MouseButton;
 use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
-  store::{RunStore, TaskStore},
+  limits::ProjectLimits,
+  store::{RunStore, SettingsStore, TaskStore},
   task::TaskStatus,
+  tokens::TokenBudget,
 };
 
 const REASON_EMPTY: &str = "To create, add a title. To run, also the outcome, one criterion and a pipeline.";
@@ -59,10 +63,39 @@ fn form_new_task_says_what_each_action_needs() {
 }
 
 #[test]
+fn form_limits_start_with_the_project_defaults_and_name_them_default() {
+  let mut form = Form::seeded("live");
+  let budget = |tokens| TokenBudget::new(tokens).expect("a budget");
+  let defaults = ProjectLimits::new(
+    Some(budget(2_000_000)),
+    budget(20_000_000),
+    Some(Duration::from_secs(45 * 60)),
+  )
+  .expect("valid limits");
+  form
+    .db()
+    .save_project_limits(&defaults)
+    .expect("the defaults are stored");
+  form.window.projects().feed(form.project).saved();
+  form.window.pass();
+  form.new_task();
+  assert_eq!(form.text("task-form-limits-value"), "Default");
+  form.open("task-form-limits");
+  assert_eq!(form.value("task-form-budget-input"), "2,000,000");
+  assert_eq!(form.value("task-form-time-limit-input"), "45");
+  form.limits("2,000,000", "60");
+  assert_eq!(form.text("task-form-limits-value"), "2M · 60 min");
+  // Only a task without either limit says it has none.
+  form.limits("", "");
+  assert_eq!(form.text("task-form-limits-value"), "No limit");
+}
+
+#[test]
 fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   let mut form = Form::seeded("live");
   form.new_task();
-  assert_eq!(form.text("task-form-limits-value"), "No limit");
+  // The project has no default limits: the task takes them, and has none.
+  assert_eq!(form.text("task-form-limits-value"), "Default");
   form.open("task-form-limits");
   assert_eq!(
     form.text("task-form-budget-input-read-back"),

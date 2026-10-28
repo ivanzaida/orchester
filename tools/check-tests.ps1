@@ -47,7 +47,7 @@ $noTestsName = "(none)"
 # tests run the runner with its fake agents: the tests that start it build it themselves with the same command as here
 # and start copies of their own (crates/workspace/tests/support/runner_programs.rs), so that build finds it built.
 # Built with the test profile, whose programs land in target/debug/ as well and match what a dev build makes.
-# Orchester Cloud is built in its private repository; its end-to-end tests here are ignored unless named.
+# Orchester Cloud, the team server and the end-to-end tests against them are in the private platform repository.
 $programsForTests = @{
     "orchester-app" = @(
         @{ Package = "orchester-runner"; Features = "test-agent" }

@@ -237,8 +237,7 @@ pub(super) fn add_row(ctx: &mut Ctx, accounts: &Accounts, provider: AgentProvide
       on_choose: Arc::new(move |chosen| setter.set(chosen)),
     },
   );
-  let row = FormField::new("connection-account", ctx.t("connections.account.label"))
-    .info(ctx.t("connections.account.description"));
+  let row = FormField::new("connection-account", ctx.t("connections.account.label"));
   match hint {
     Some((hint, true)) => row.toned(hint, Tone::Warning),
     Some((hint, false)) => row.hint(hint),
@@ -311,7 +310,6 @@ pub(super) fn account_row(
     "connection-account-row",
     ctx.t("connections.account.label"),
   )
-  .info(ctx.t("connections.account.description"))
   .control(link);
   match hint {
     Some(hint) => row.hint(hint),

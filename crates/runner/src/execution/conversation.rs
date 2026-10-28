@@ -210,7 +210,7 @@ fn follow_up(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<Option<Pre
   };
   // Refused before the run changes: a follow-up without its worktree would be recorded as running
   // with no agent at work.
-  prepare::existing_worktree(root, run.id())?;
+  prepare::existing_folder(db, root, &run)?;
   let events = run.follow_up(&step, Timestamp::now()).map_err(idle::rejection)?;
   let prepared = Prepared::continuing(db, root, run)?;
   idle::store(db, &prepared.run, &events)?;

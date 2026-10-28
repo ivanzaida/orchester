@@ -26,8 +26,9 @@ use super::canonical::{self, normalize, plain};
 
 /// The repository's folder for Orchester's own files; writable folders may be created under it.
 const STATE_DIR: &str = ".orchester";
-/// Folders under [`STATE_DIR`] that Orchester keeps: the runs' worktrees and the runner's logs.
-const RESERVED: [&str; 2] = ["worktrees", "logs"];
+/// Folders under [`STATE_DIR`] that Orchester keeps: the runs' worktrees, the warm workspaces, the runs' own storage
+/// (each run's agents get theirs, [`ResolvedFolder::run_storage`]) and the runner's logs.
+const RESERVED: [&str; 4] = ["worktrees", "workspaces", "runs", "logs"];
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum WritableFolderError {
@@ -89,6 +90,16 @@ pub struct ResolvedFolder {
 }
 
 impl ResolvedFolder {
+  /// The run's own storage `.orchester/runs/<run-id>/` in the repository `bounds` were made for (ORC-114), which the
+  /// run's agents read and write: Orchester gives it, no person adds it. It is made before the agent starts.
+  pub fn run_storage(bounds: &FolderBounds, run: crate::id::RunId) -> Self {
+    let path = crate::workspaces::artifacts_folder(&bounds.repository, run);
+    Self {
+      missing: !path.is_dir(),
+      path,
+    }
+  }
+
   /// The absolute folder, links resolved.
   pub fn path(&self) -> &Path {
     &self.path

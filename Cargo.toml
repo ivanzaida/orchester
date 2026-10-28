@@ -11,7 +11,6 @@ members = [
   "crates/index",
   "crates/ipc",
   "crates/runner",
-  "crates/server",
   "crates/store",
   "crates/vault",
   "crates/workspace",
@@ -45,18 +44,19 @@ redundant_clone = "warn"
 # Without its default `http` feature: the file tools only, without the model clients' TLS stack.
 orchester-agent = { path = "crates/agent", default-features = false }
 orchester-api = { path = "crates/api" }
+# The app's own `test-support` feature for its tests and QA examples (`test_support`).
+orchester-app = { path = "crates/desktop-app" }
 orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
 orchester-index = { path = "crates/index" }
 orchester-ipc = { path = "crates/ipc" }
-orchester-server = { path = "crates/server" }
 orchester-store = { path = "crates/store" }
 orchester-vault = { path = "crates/vault" }
 orchester-workspace = { path = "crates/workspace" }
 # The macOS keychain store of the keyring crates, for `orchester-vault` (generic passwords in the
 # login keychain).
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
-# HTTP routing, JSON extraction and SSE on tokio for the shared server.
+# HTTP routing and the bearer/Origin guard of the app's MCP server on loopback.
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "matched-path", "query", "tokio"] }
 # Local wall-clock time of status bar events and the local day of the daily project budget (the OS
 # time zone); std has no local time.
@@ -69,8 +69,7 @@ embed-resource = "3"
 # clipboard (arboard), so it adds no crate to the build.
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
-# HTTP/1 connection builder exposes header/idle deadlines that axum::serve cannot configure; its HTTP/1 client
-# connection forwards the team server's non-API paths to the server admin app on a private address.
+# HTTP/1 connection builder exposes header/idle deadlines that axum::serve cannot configure (the app's MCP server).
 hyper = { version = "1", default-features = false, features = ["client", "http1", "server"] }
 # Tokio IO/timer and the axum-to-hyper service adapter for the bounded server transport.
 hyper-util = { version = "0.1", default-features = false, features = ["tokio", "service"] }
@@ -97,8 +96,10 @@ lurq = { version = "0.51.2", default-features = false }
 libc = "0.2"
 parking_lot = "0.12"
 # Where the text of an agent's chat message lies outside code and links, by its offsets in the source, so a task key or
-# an app route path written as text becomes a link (`orchester-app`'s `ui::chat::references`). lurq's Markdown parses
-# with it and keeps no offsets; already built, with these features, through lurq's `markdown`, so it adds no crate.
+# an app route path written as text becomes a link (`orchester-app`'s `ui::chat::references`), the links a doc's
+# body holds (`orchester-core`'s `docs::links`), and a doc's Markdown body read as blocks with inline marks
+# (`orchester-core`'s `docs::blocks`), parsed as lurq's Markdown renders it. lurq's Markdown parses with it and keeps
+# no offsets; already built, with these features, through lurq's `markdown`, so it adds no crate.
 pulldown-cmark = { version = "0.13.4", default-features = false }
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
@@ -113,19 +114,13 @@ rmcp = { version = "3.4", default-features = false, features = ["server"] }
 # through lurq. Without default features: no system proxy lookup, no HTTP/2, and the crypto provider is
 # chosen by the caller (ring, below).
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
-# The team server's own certificate, generated on its first start (`docs/architecture/server.md`, row 39): an
-# ECDSA P-256 key and a self-signed X.509 certificate through ring, the provider rustls already uses here. A
-# certificate is not something to write by hand. Without `aws_lc_rs`, so no second crypto library.
-rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
-# The ring crypto provider for the client's rustls, the provider the server's own TLS already uses, and
-# rustls' certificate errors, to tell an untrusted certificate from a server that cannot be reached.
-# Already built through tokio-rustls.
+# The ring crypto provider for the client's rustls, and rustls' certificate errors, to tell an untrusted certificate
+# from a server that cannot be reached. Already built through reqwest.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 # Ed25519 signing and verifying of Orchester Cloud's identity tokens and key sets (`orchester-api`'s `identity`
-# feature, which the cloud in its private repository builds too), the team server's Ed25519 key (signed invites and
-# the cloud link statement) and HMAC-SHA-256 of its codes with a constant-time check, and the OS random source for tokens and
-# codes. Already built as rustls' crypto provider, so it adds no crate; there is no JWT crate: a token is a few lines
+# feature, which the cloud and the team server in the private platform repository build too), and the OS random
+# source for tokens and codes. Already built as rustls' crypto provider, so it adds no crate; there is no JWT crate: a token is a few lines
 # of base64url JSON.
 ring = "0.17"
 # The operating system's trust store for `orchester-api`'s client (the desktop's connection to Orchester Cloud and
@@ -148,17 +143,11 @@ socket2 = "0.6"
 # `default-syntaxes` bundles the grammars, and no themes or HTML output are compiled in.
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 tempfile = "3"
-# PostgreSQL client for `orchester-app`'s end-to-end tests against an Orchester Cloud program built from its private
-# repository (`crates/desktop-app/tests/orchester_cloud`): it creates and drops their database. `with-uuid-1` maps
-# ids.
-tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
 thiserror = "2"
 # The desktop also runs blocking work (database, native dialogs) off the UI thread through lurq futures.
 # `signal`: the macOS runner ends its agents on SIGTERM/SIGINT; it builds on the signal handling
 # `process` already compiles in.
 tokio = { version = "1.53", features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
-# Optional server TLS with PEM loading through rustls, with no OpenSSL dependency.
-tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 # Reads package manifests (`Cargo.toml`, `pyproject.toml`) for the codebase index's repository map.
 # Already built for embed-resource on Windows; a TOML parser is not a few lines of code.
 toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }

@@ -518,8 +518,8 @@ fn queue(message: &Message, (run, working): (Option<&RunView>, &[WorkingAgent]),
   };
   match run.run.status() {
     RunStatus::Pending => Queue::RunStarts,
-    RunStatus::Paused(PauseReason::Requested) if later_agent => next_turn(),
-    RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes(reader()),
+    RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk) if later_agent => next_turn(),
+    RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk) => Queue::RunResumes(reader()),
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_)
       if later_agent =>
     {

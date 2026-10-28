@@ -78,11 +78,12 @@ impl RunTask {
     self.pending.cancel.is_none()
       && self.pending.interrupt.is_none()
       && self.pending.limit.is_none()
+      && !self.pending.low_disk
       && self.agents.values().all(|active| !active.abandoned)
   }
 
-  /// With no agent at work: carries out a cancel or interruption, a reached limit or a requested
-  /// pause. `true` when the run no longer executes.
+  /// With no agent at work: carries out a cancel or interruption, a pause for low disk space, a reached limit or a
+  /// requested pause. `true` when the run no longer executes.
   pub(super) fn settle(&mut self) -> Result<bool, ExecutionError> {
     if let Some(ack) = self.pending.cancel.take() {
       let cancelled = self.transition(|run, now| run.cancel(now));
@@ -101,6 +102,10 @@ impl RunTask {
     }
     if let Some(cause) = self.pending.interrupt {
       self.transition(|run, now| run.interrupt(cause, now))?;
+      return Ok(true);
+    }
+    if std::mem::take(&mut self.pending.low_disk) {
+      self.transition(|run, now| run.pause_for_low_disk(now))?;
       return Ok(true);
     }
     let limit = match self.pending.limit.take().filter(|limit| self.still_applies(*limit)) {

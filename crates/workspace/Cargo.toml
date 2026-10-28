@@ -59,24 +59,6 @@ windows-sys = { workspace = true, features = ["Wdk_Foundation", "Wdk_Storage_Fil
 
 [dev-dependencies]
 orchester-workspace = { workspace = true, features = ["test-support"] }
-# A test team server with a certificate from the tests' authority, trusted besides the store (`tests/cloud_account.rs`).
-orchester-api = { workspace = true, features = ["client", "identity", "test-support"] }
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true
-# Captures the log of a sign-in, to check that no token or password reaches it.
-tracing-subscriber.workspace = true
-# Shared-server tests talk to a real server on loopback with a temporary data directory.
-orchester-server.workspace = true
-# Set-up requests to a test server that presents its own certificate from the start (`tests/server_support/tls.rs`).
-tokio-rustls.workspace = true
-# The certificate of a test team server that gives itself another's id (`tests/sharing_support/impostor.rs`), from an
-# authority made per test process and valid for a month: macOS refuses the 20-year fixture under the trust store.
-# Already built for orchester-server.
-rcgen.workspace = true
-# A team server with the run progress report in front of the test server, which has none yet
-# (`tests/sharing_support/run_reports.rs`): axum serves it, hyper passes every other request through. Both are built
-# for orchester-server already.
-axum.workspace = true
-hyper.workspace = true
-hyper-util.workspace = true

@@ -18,6 +18,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
+  limits::ProjectLimits,
   module::Module,
   time::Timestamp,
 };
@@ -52,6 +53,9 @@ pub struct FormProps {
   pub missing_pipeline: Option<Arc<str>>,
   /// The project's default pipeline, published, which New task starts with.
   pub default_pipeline: Option<orchester_core::id::ResourceId>,
+  /// The project's limits: New task starts with their default run budget and time limit, and the Limits chip says
+  /// *Default* while the task holds them.
+  pub limits: ProjectLimits,
   /// The project's modules, which the task may go in.
   pub modules: Arc<Vec<Module>>,
   /// Whether the project is shared on a server, which keeps no *Don't merge automatically*.
@@ -107,6 +111,8 @@ pub struct TaskForm {
   /// The title's input, which has the focus on a new task.
   pub(super) title_input: ElementRef,
   pub(super) title_focused: Signal<bool>,
+  /// The composer's column, which the Sources popover stays inside.
+  pub(super) column: ElementRef,
 }
 
 /// Leaving the form writes the edits whose pause has not ended yet.
@@ -174,6 +180,7 @@ impl Component for TaskForm {
       tried_run: ctx.signal(false),
       title_input: ElementRef::default(),
       title_focused: ctx.signal(false),
+      column: ElementRef::default(),
     };
     form.follow_save(ctx, &save, &props);
     form.follow_run(ctx, &run, &props);

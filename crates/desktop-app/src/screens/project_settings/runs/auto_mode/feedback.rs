@@ -31,6 +31,8 @@ impl AutoMode {
           if let Some(attempt) = tab.attempted.get_untracked().0 {
             asked.new_runs = attempt.new_runs;
           }
+          // Retrying makes the change again: whoever presses it must be one who may.
+          tab.note_input();
           tab.request(&props, &save, asked);
         }
       })
@@ -52,7 +54,6 @@ impl AutoMode {
       )
       .on_click(move || {
         tab.fill(tab.supplied.get_untracked().0);
-        tab.asking.set(Asked(None));
         tab.attempted.set(Asked(None));
         tab.failed.set(false);
         status.set(Status::Saved);

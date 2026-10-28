@@ -71,6 +71,7 @@ fn scope(root: &Path) -> Result<FileScope, ScanError> {
     code_index: None,
     skills: None,
     writable_folders: &[],
+    run_storage: None,
   })
   .map_err(|error| scope_error(root, &error))
 }

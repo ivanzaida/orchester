@@ -62,21 +62,16 @@ fn project_settings_review_limits_revert_during_save_is_committed() {
 }
 
 #[test]
-fn project_settings_review_default_model_edit_in_auto_mode_requires_person_confirmation() {
+fn project_settings_review_default_model_edit_in_auto_mode_saves_a_persons_change_at_once() {
   let mut page = Settings::new(true);
   page.click("settings-auto-new-runs");
-  page.until("enable question", |p| p.exists("settings-auto-question-confirm"));
-  page.window.tree.tick_futures();
-  page.window.pass();
-  page.click("settings-auto-question-confirm");
+  page.until("auto mode on", |p| {
+    p.db().auto_mode_settings().expect("settings").new_runs
+  });
   page.saved();
   page.choose("settings-reviewer-model", "sonnet");
-  page.until("reviewer question", |p| p.exists("settings-auto-question-confirm"));
-  assert!(page.window.link.input_gate().protecting());
-  assert_eq!(page.db().auto_mode_settings().expect("settings").reviewer, None);
-  page.window.tree.tick_futures();
-  page.window.pass();
-  page.click("settings-auto-question-confirm");
+  assert_eq!(page.text("project-settings-save-status"), "Saving…");
+  assert!(!page.window.link.input_gate().protecting());
   page.until("reviewer saved", |p| {
     p.db()
       .auto_mode_settings()
@@ -85,11 +80,10 @@ fn project_settings_review_default_model_edit_in_auto_mode_requires_person_confi
       .is_some_and(|choice| choice.model.as_str() == "sonnet")
   });
   page.saved();
-  assert!(!page.window.link.input_gate().protecting());
 }
 
 #[test]
-fn project_settings_review_reselecting_a_reviewer_after_keep_asks_again_and_saves() {
+fn project_settings_review_reselecting_a_reviewer_in_auto_mode_saves_each_choice() {
   let mut page = Settings::new(true);
   page.choose("settings-reviewer-connection", "Claude Code");
   page.until("initial reviewer saved", |p| {
@@ -97,62 +91,20 @@ fn project_settings_review_reselecting_a_reviewer_after_keep_asks_again_and_save
   });
   page.saved();
   page.click("settings-auto-new-runs");
-  page.until("enable question", |p| p.exists("settings-auto-question-confirm"));
-  page.window.tree.tick_futures();
-  page.window.pass();
-  page.click("settings-auto-question-confirm");
+  page.until("auto mode on", |p| {
+    p.db().auto_mode_settings().expect("settings").new_runs
+  });
   page.saved();
-  // Remount Runs from storage so its reviewer is settled before the cancelled edit.
+  // Remount Runs from storage so its reviewer is settled before the edits.
   page.tab("general", "settings-project-name");
   page.tab("runs", "settings-reviewer-model");
-  let original = page.db().auto_mode_settings().expect("settings");
-  assert!(original.new_runs);
-  assert!(
-    original
-      .reviewer
-      .as_ref()
-      .expect("reviewer")
-      .model
-      .as_str()
-      .contains("haiku")
-  );
-  page.choose("settings-reviewer-model", "sonnet");
-  page.until("first reviewer question", |p| {
-    p.exists("settings-auto-question-confirm")
-  });
-  assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
-  assert!(page.window.link.input_gate().protecting());
-  assert_eq!(page.db().auto_mode_settings().expect("unchanged"), original);
-  page.click("settings-auto-question-keep");
-  assert!(!page.exists("settings-auto-question"));
-  assert!(!page.window.link.input_gate().protecting());
-  assert_eq!(page.text("project-settings-save-status"), "All changes saved");
   assert!(page.reviewer_model().contains("haiku"));
-  assert_eq!(page.db().auto_mode_settings().expect("kept"), original);
-
-  page.choose("settings-reviewer-model", "sonnet");
-  page.until("reselected reviewer question", |p| {
-    p.exists("settings-auto-question-confirm")
-  });
-  assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
-  assert_eq!(page.value("settings-reviewer-model"), "sonnet");
-  assert!(page.window.link.input_gate().protecting());
-  assert_eq!(page.db().auto_mode_settings().expect("not confirmed"), original);
-  page.window.tree.tick_futures();
-  page.window.pass();
-  page.click("settings-auto-question-confirm");
-  assert_eq!(page.text("project-settings-save-status"), "Saving…");
-  page.until("reselected reviewer saved", |p| {
-    p.db()
-      .auto_mode_settings()
-      .expect("settings")
-      .reviewer
-      .is_some_and(|choice| choice.model.as_str() == "sonnet")
-  });
-  page.saved();
+  for model in ["sonnet", "haiku", "sonnet"] {
+    page.choose("settings-reviewer-model", model);
+    page.until("the reviewer saved", |p| p.reviewer_model() == model);
+    page.saved();
+  }
   assert!(!page.exists("settings-auto-question"));
-  assert!(!page.window.link.input_gate().protecting());
-  assert!(page.reviewer_model().contains("sonnet"));
   page.tab("general", "settings-project-name");
   page.tab("runs", "settings-reviewer-model");
   assert!(page.reviewer_model().contains("sonnet"));
