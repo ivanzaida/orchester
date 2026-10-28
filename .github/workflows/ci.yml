@@ -1,7 +1,11 @@
 name: CI
 
-# By hand only (Actions → CI → Run workflow): a push or pull request starts nothing, so CI minutes go to releases.
+# On a push to master that raises the version (a release), and by hand (Actions → CI → Run workflow); other pushes
+# and pull requests start nothing, so CI minutes go to releases.
 on:
+  push:
+    branches: [master]
+    paths: [crates/desktop-app/Cargo.toml]
   workflow_dispatch:
 
 concurrency:
@@ -13,7 +17,33 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
+  # The other jobs run only when this push raised the app's version (crates/desktop-app/Cargo.toml), or when run by hand.
+  version:
+    name: Version raised?
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: compare
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          version() { sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"/\1/p'; }
+          now="$(version < crates/desktop-app/Cargo.toml)"
+          if [ "$EVENT" != push ] || [ -z "${BEFORE//0/}" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --quiet --depth=1 origin "$BEFORE"
+          was="$(git show "$BEFORE:crates/desktop-app/Cargo.toml" | version)"
+          echo "Version $was -> $now"
+          if [ "$was" != "$now" ]; then echo "changed=true"; else echo "changed=false"; fi >> "$GITHUB_OUTPUT"
+
   windows:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
     name: Windows (check.ps1 + tests)
     runs-on: windows-latest
     steps:
@@ -28,6 +58,8 @@ jobs:
         run: cargo test --workspace
 
   macos:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
     name: macOS (clippy + tests)
     runs-on: macos-latest
     steps:
@@ -41,6 +73,8 @@ jobs:
   # orchester-api's identity tokens and key sets, which the desktop app checks and Orchester Cloud (its private
   # repository) signs; the feature is off in the jobs above.
   identity:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
     name: Linux (orchester-api identity)
     runs-on: ubuntu-latest
     steps:
