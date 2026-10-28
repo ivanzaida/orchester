@@ -20,10 +20,14 @@ use lurq::{
 use parking_lot::Mutex;
 
 use crate::{
-  screens::usage::plot::{self, AxisName, AxisText, CHART_HEIGHT, Frame, Redraw, XLabel},
+  screens::usage::plot::{self, AxisName, AxisText, Frame, LABEL_GAP, LABEL_LINE, Redraw, TOP_ROOM, XLabel},
   theme::usage::ChartStyle,
 };
 
+/// The burndown's plot, taller than the Usage charts' (`Plot` `a4EQ1a`).
+const PLOT_HEIGHT: f32 = 240.0;
+/// Its canvas: the room over the plot, the plot and the x axis, 266 as `Plot` with `X axis` `EQ9bc`.
+const CHART_HEIGHT: f32 = TOP_ROOM + PLOT_HEIGHT + LABEL_GAP + LABEL_LINE;
 const LINE_WIDTH: f32 = 1.5;
 const POINT_SIZE: f32 = 6.0;
 /// The ideal line's dash (as the warning threshold of *Plan limits* is dashed, `bsp8a`).

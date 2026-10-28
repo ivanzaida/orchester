@@ -23,6 +23,7 @@ use orchester_workspace::modules::data::ModulePage;
 use super::{
   page::body_padding,
   properties::{ModuleProperties, PropertiesProps},
+  save::Written,
   tasks::{self, Toggled},
   words,
 };
@@ -42,6 +43,8 @@ use crate::{
 pub struct SummaryProps {
   pub project: ShownProject,
   pub page: Arc<ModulePage>,
+  /// The page's, for as long as it shows.
+  pub written: Written,
 }
 
 impl PartialEq for SummaryProps {
@@ -83,6 +86,7 @@ impl Component for ModuleSummary {
       PropertiesProps {
         project: props.project.clone(),
         module: Arc::new(page.module.clone()),
+        written: props.written.clone(),
       },
     );
     let body = Row::new()

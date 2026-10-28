@@ -3,7 +3,7 @@ mod modules;
 use std::num::NonZeroU64;
 
 use lurq::mcp::{McpTool, Scope};
-use modules::module_page;
+use modules::{module_page, new_task_page};
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
@@ -62,9 +62,11 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
-  it; modules takes `tab` (open or closed), or `module`: new for New module, a module's id for its page on `tab` \
-  (summary or burndown), with `view` edit for Edit module; pipelines opens the list, from whose rows a pipeline's \
-  page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the screen opens on. \
+  it; modules takes `tab` (open or closed), `view` new for New module, or `module`: new for New module, a module's id \
+  for its page on `tab` (summary or burndown), with `view` edit for Edit module (a `tab` or `view` that names nothing \
+  there is refused); new_task takes `module`, a module's id, for New task in module; pipelines opens the list, from \
+  whose rows a pipeline's page opens on its Steps, Settings and Versions tabs. A tab or kind left out is the one the \
+  screen opens on. \
   Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
@@ -103,7 +105,7 @@ fn schema() -> Value {
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
-  let views: Vec<&str> = ["usage", "delivery", "rules", "edit"]
+  let views: Vec<&str> = ["usage", "delivery", "rules", "edit", "new"]
     .into_iter()
     .chain(TaskView::SUB_VIEWS)
     .collect();
@@ -129,7 +131,7 @@ fn schema() -> Value {
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
-      "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list." },
+      "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
       "query": {
         "type": "string",
         "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
@@ -137,7 +139,7 @@ fn schema() -> Value {
       "view": {
         "type": "string",
         "enum": views,
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run. modules with `module`: edit opens Edit module.",
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run. modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module.",
       },
       "period": {
         "type": "string",
@@ -188,7 +190,7 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
     Screen::Orchestrator => ProjectPage::Orchestrator(orchestrator_chat(args)?),
     Screen::OrchestratorSettings => ProjectPage::OrchestratorSettings,
     Screen::Tasks => ProjectPage::Tasks(task_list(args)?),
-    Screen::NewTask => ProjectPage::NewTask,
+    Screen::NewTask => new_task_page(args)?,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
     Screen::Modules => module_page(args)?,
@@ -262,9 +264,9 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::EditConnection => &["project", "connection"],
     Screen::Usage => &["project", "query", "view", "period"],
     Screen::Modules => &["project", "module", "tab", "view"],
+    Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
-    Screen::NewTask
-    | Screen::MergeQueue
+    Screen::MergeQueue
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
