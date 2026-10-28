@@ -155,10 +155,6 @@ define_id!(
   MemoryId
 );
 define_id!(
-  /// A document of a project's Docs (`docs/design/docs.md`).
-  DocId
-);
-define_id!(
   /// One notice to a run that its base branch moved (`crate::base_move`).
   NoticeId
 );
@@ -185,4 +181,12 @@ define_id!(
 define_id!(
   /// One request or reply a person wrote in a feedback thread.
   FeedbackPostId
+);
+define_id!(
+  /// One document of a project's Docs (`crate::docs`).
+  DocId
+);
+define_id!(
+  /// One folder of a project's Docs tree (`crate::docs`).
+  DocFolderId
 );

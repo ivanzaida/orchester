@@ -55,8 +55,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: skills takes \
-  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; orchestrator takes \
-  `chat` (a \
+  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue and \
+  pull_requests are the two tabs of one Review page, each its own route; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \

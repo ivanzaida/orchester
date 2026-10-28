@@ -1,8 +1,9 @@
 //! The status bar (`Status bar` `sMpGe` of `q9mf0k`; handover §3.3), for the active tab's project: on the
 //! left the project, its folder in the name's tooltip, the runner and the activity slot; on the right the project's
-//! counts and tokens, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
+//! counts, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
 //! the team server's item (`X39PHh`), Orchester Cloud while it cannot be reached (`ZSB6h`), the app's MCP server and
-//! the version. The sign-in gate has a bar of its own ([`gate()`]).
+//! the version. Today's tokens show in the sidebar's usage card instead (`Hub pages` `ZRBS5`). The sign-in gate has a
+//! bar of its own ([`gate()`]).
 //! Every item shows only measured data. A screen outside a project shows the activity and the app's items
 //! only, its events named by their project. A startup screen's bar has the version only.
 //!
@@ -166,7 +167,6 @@ fn shown(projects: &Projects, project: ProjectId, recovery: &RecoveryState) -> O
     repo_root: open.repo_root,
     runner,
     tasks,
-    usage: feed.usage.get(),
     read_failure,
     undecided_runs: recovery.undecided(project),
     limits: Vec::new(),
@@ -327,7 +327,7 @@ impl Component for StatusBarView {
       }
       (None, None, ActivitySlot::Activity(_)) => {}
     }
-    // The requests and the runs that answer their own follow Tokens today (`xommZ`).
+    // The requests and the runs that answer their own follow the counts (`xommZ`).
     right.extend(waiting);
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
       right.extend(approvals::auto_approving(

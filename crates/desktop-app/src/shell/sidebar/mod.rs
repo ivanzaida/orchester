@@ -1,18 +1,23 @@
-//! The sidebar (`Sidebar` `ev8rR`): the project switcher, the project's screens with the Configure
-//! section, the runs under way (`running`), and All projects, Settings and Project settings at the
-//! bottom. Tasks shows how many tasks the project has, a dash while they are read, and Memory how many
-//! records wait for approval. The project is the tab's (`Tab::sidebar_project`): on the app's Settings the
-//! one the tab was in last, with Settings selected; a tab that has been in no project shows only the
-//! switcher and the bottom group. All projects and Add project have no sidebar.
+//! The sidebar (`Sidebar v2` `Zn8dR` in `Sidebar · redesign` `WWXmX`): the project switcher, whose menu holds
+//! Project settings, All projects and Settings; *Jump to…* (`shell::jump`); the six places for daily work; the
+//! Configure section with Pipelines and Agents, which folds per project (`configure`); the runs under way
+//! (`running`), only while there are any; and at the bottom the usage card, which opens Usage and Settings
+//! (`usage_card`). Tasks shows how many tasks the project has, a dash while they are read, and Review how many runs
+//! wait in the merge queue. The project is the tab's (`Tab::sidebar_project`): on the app's Settings the one the
+//! tab was in last; a tab that has been in no project shows only the switcher and *Jump to…*. All projects and Add
+//! project have no sidebar.
 //!
-//! The design draws the sidebar only where everything fits. In a window too short for it, the switcher
-//! stays at the top and All projects, Settings and Project settings at the bottom, and what lies between
-//! (the screens and the runs under way) scrolls, the thumb in the sidebar's right padding, with a hairline
-//! at an edge where it cuts rows (`edges`).
+//! The design draws the sidebar only where everything fits. In a window too short for it, the switcher and *Jump
+//! to…* stay at the top and the usage card at the bottom, and what lies between (the places, Configure and the runs
+//! under way) scrolls, the thumb in the sidebar's right padding, with a hairline at an edge where it cuts rows
+//! (`edges`).
 
+mod configure;
 mod edges;
+pub mod place;
 pub mod running;
 pub mod switcher;
+mod usage_card;
 
 use lurq::{
   app::{
@@ -28,19 +33,23 @@ use orchester_core::id::ProjectId;
 
 use self::{
   edges::Watch,
+  place::Place,
   running::{Running, RunningProps, under_way},
   switcher::{Switcher, SwitcherProps},
 };
 use crate::{
   navigation::Navigation,
   project::{ProjectState, Projects, TasksState},
-  routes::{ProjectPage, Route, Screen},
+  routes::Route,
+  shell::jump,
   theme::ExtraSpacing,
-  ui::{icon::screen_icon, nav_item::NavItem},
+  ui::nav_item::NavItem,
 };
 
-/// `Sidebar` width.
+/// `Sidebar v2` width.
 const SIDEBAR_WIDTH: f32 = 240.0;
+/// A section's head (`Configure head` `hbx5J`, `Running head` `veG7t`).
+const SECTION_HEAD_HEIGHT: f32 = 24.0;
 
 pub struct Sidebar {
   edges: Watch,
@@ -61,37 +70,32 @@ impl Component for Sidebar {
     // A path that names no route selects nothing; the screen says why it names none.
     let route = Route::parse(&ctx.route_path()).ok();
     let navigation = Navigation::of(ctx);
-    let selected = route.as_ref().map(Route::nav_screen);
+    let selected = route.as_ref().and_then(Place::of);
     let project = navigation.tabs().active().sidebar_project();
     let switcher = ctx.mount_keyed::<Switcher>("project-switcher", SwitcherProps { project });
+    let jump = jump::row(ctx, &navigation);
     let edges = self.edges.edges();
     let mut screens = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::horizontal(SpacingSize::Md))
       .spacing(ExtraSpacing::Tight.role());
-    let mut bottom = vec![Screen::AllProjects, Screen::Settings];
+    let mut bottom = None;
     if let Some(project) = project {
       let counts = counts(ctx, project);
       let items = Items {
-        project: Some(project),
+        project,
         selected,
         navigation: &navigation,
         counts: &counts,
       };
+      let daily = items.group(ctx, &Place::DAILY);
+      let configure = configure::section(ctx, &items);
       screens = screens
-        .child(items.group(ctx, &Screen::PROJECT_MAIN))
-        .child(section_label(&ctx.t("shell.nav.configure")))
-        .child(items.group(ctx, &Screen::CONFIGURE))
+        .with_children(daily)
+        .with_children(configure)
         .with_children(running(ctx, project));
-      bottom.push(Screen::ProjectSettings);
+      bottom = Some(usage_card::card(ctx, project, &navigation));
     }
-    let items = Items {
-      project,
-      selected,
-      navigation: &navigation,
-      counts: &[],
-    };
-    let bottom = items.group(ctx, &bottom);
     Column::new()
       .id("sidebar")
       .width(Dimension::Px(SIDEBAR_WIDTH))
@@ -99,13 +103,14 @@ impl Component for Sidebar {
       .padding(
         Padding::new()
           .top(ExtraSpacing::Snug.role())
-          .bottom(ExtraSpacing::Loose.role()),
+          .bottom(SpacingSize::Md),
       )
       .spacing(ExtraSpacing::Tight.role())
       .child(pinned(switcher))
-      // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
+      .child(jump)
+      // The places' 8 from *Jump to…* (`Screens` `LxKdr`), with the sidebar's gap on each side.
       .with_children(project.map(|_| pinned(edges.top())))
-      // The room the design leaves empty (`Spacer`) between the screens and the bottom group.
+      // The room the design leaves empty between the places and the usage card.
       .child(
         ScrollVertical::new(screens)
           .with_scroll_state(self.edges.scroll())
@@ -116,7 +121,7 @@ impl Component for Sidebar {
           .on_scroll(self.edges.on_scroll()),
       )
       .with_children(self.edges.bottom(edges).map(pinned))
-      .child(pinned(bottom))
+      .with_children(bottom.map(pinned))
   }
 }
 
@@ -128,11 +133,17 @@ fn pinned(child: impl Into<Element>) -> Column {
     .child(child)
 }
 
-/// The counts beside the project's screens: how many tasks `project` has, a dash while they are read,
-/// how many runs are in its merge queue (`Nav · Merge queue`) and how many memory records wait for approval
-/// (`Nav · Memory` in `q9mf0k`). A count of none is left out, and so are all when the tasks cannot be read or the
-/// project is not open.
-fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<(Screen, String)> {
+/// A count beside a place, and whether it counts what waits for the person.
+struct Count {
+  place: Place,
+  value: String,
+  waiting: bool,
+}
+
+/// The counts beside the places: how many tasks `project` has, a dash while they are read, and how many runs are in
+/// its merge queue beside Review, in `warning`. A count of none is left out, and so are all when the tasks cannot be
+/// read or the project is not open.
+fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<Count> {
   let projects = Projects::of(ctx);
   if projects.state(project).is_none_or(|state| state.open().is_none()) {
     return Vec::new();
@@ -140,18 +151,26 @@ fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<(Screen, String)> {
   match projects.feed(project).tasks.get() {
     TasksState::Ready(tasks) => [
       // A project without tasks shows no count (`a5CcQx`).
-      (Screen::Tasks, tasks.tasks.len()),
+      (Place::Tasks, tasks.tasks.len(), false),
       (
-        Screen::MergeQueue,
+        Place::Review,
         orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()),
+        true,
       ),
-      (Screen::Memory, tasks.proposed_memory.len()),
     ]
     .into_iter()
-    .filter(|(_, count)| *count > 0)
-    .map(|(screen, count)| (screen, count.to_string()))
+    .filter(|(_, count, _)| *count > 0)
+    .map(|(place, count, waiting)| Count {
+      place,
+      value: count.to_string(),
+      waiting,
+    })
     .collect(),
-    TasksState::Loading => vec![(Screen::Tasks, ctx.t("shell.sidebar.unknownCount").to_string())],
+    TasksState::Loading => vec![Count {
+      place: Place::Tasks,
+      value: ctx.t("shell.sidebar.unknownCount").to_string(),
+      waiting: false,
+    }],
     TasksState::Failed(_) => Vec::new(),
   }
 }
@@ -175,69 +194,58 @@ fn running(ctx: &mut Ctx, project: ProjectId) -> Option<Element> {
   Some(ctx.mount_keyed::<Running>("running", props))
 }
 
-/// What every navigation item of the sidebar needs: the project its screens belong to, the selected
-/// screen, the navigation that goes there, and the counts beside the screens that show one.
+/// What every entry of the sidebar needs: the project its places belong to, the selected place, the navigation
+/// that goes there, and the counts beside the places that show one.
 struct Items<'a> {
-  project: Option<ProjectId>,
-  selected: Option<Screen>,
+  project: ProjectId,
+  selected: Option<Place>,
   navigation: &'a Navigation,
-  counts: &'a [(Screen, String)],
+  counts: &'a [Count],
 }
 
 impl Items<'_> {
-  fn group(&self, ctx: &mut Ctx, screens: &[Screen]) -> Column {
-    screens.iter().fold(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Tight.role()),
-      |group, &screen| match self.target(screen) {
-        Some(route) => group.child(self.item(ctx, screen, route)),
-        None => group,
-      },
-    )
+  fn group(&self, ctx: &mut Ctx, places: &[Place]) -> Vec<Element> {
+    places.iter().map(|&place| self.item(ctx, place)).collect()
   }
 
-  /// Where the item of `screen` goes: in the project when the screen is one of a project's.
-  fn target(&self, screen: Screen) -> Option<Route> {
-    match screen {
-      Screen::AllProjects => Some(Route::AllProjects),
-      Screen::Settings => Some(Route::Settings),
-      screen => Some(Route::Project(self.project?, ProjectPage::of(screen)?)),
-    }
-  }
-
-  fn item(&self, ctx: &mut Ctx, screen: Screen, route: Route) -> Element {
-    let label = ctx.t(screen.title_key());
+  fn item(&self, ctx: &mut Ctx, place: Place) -> Element {
+    let label = ctx.t(place.title_key());
+    let count = self.counts.iter().find(|count| count.place == place);
     NavItem {
-      id: format!("nav-{}", screen.name()),
-      icon: screen_icon(screen),
+      id: format!("nav-{}", place.name()),
+      icon: place.icon(),
       label: &label,
-      count: self
-        .counts
-        .iter()
-        .find(|(counted, _)| *counted == screen)
-        .map(|(_, count)| count.as_str()),
-      selected: self.selected == Some(screen),
+      count: count.map(|count| count.value.as_str()),
+      waiting: count.is_some_and(|count| count.waiting),
+      selected: self.selected == Some(place),
     }
-    .opens(self.navigation.to(route))
+    .opens(self.navigation.to(place.route(self.project)))
   }
 }
 
-/// A section's label (`Section label` `TuunG`); add its action as a child.
-fn section_label(label: &str) -> Row {
+/// The room before a section (`Section gap` `cYdI6`): 10, with the list's gap on each side.
+fn section_gap() -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().top(ExtraSpacing::Loose.role()))
+}
+
+/// A section's head with its label (`Configure head` `hbx5J`, `Running head` `veG7t`), its parts `spacing` apart;
+/// add what follows the label as children.
+fn section_head(label: &str, spacing: SpacingSize) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::horizontal(SpacingSize::Sm)
-        .top(ExtraSpacing::Section.role())
-        .bottom(ExtraSpacing::Snug.role()),
-    )
+    .height(Dimension::Px(SECTION_HEAD_HEIGHT))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(spacing)
     .align_items(Alignment::Center)
-    .child(
-      Text::new(label)
-        .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
-        .nowrap()
-        .flex(1.0),
-    )
+    .child(section_label(label))
+}
+
+/// A section's label: 11/500 `text_muted`.
+fn section_label(label: &str) -> Text {
+  Text::new(label)
+    .variant(TypographyStyle::FieldLabel)
+    .color(PaletteColor::TextMuted)
+    .nowrap()
 }
