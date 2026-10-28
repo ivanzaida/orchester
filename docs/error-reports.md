@@ -43,13 +43,14 @@ add.
 
 The message, the error type, function and module names, file names and Orchester's tags are rewritten:
 
-- **The home folder** becomes `~`: `C:\Users\ivan\AppData\x.log` becomes `~\AppData\x.log`, and
-  `/Users/ivan/notes.txt` becomes `~/notes.txt`. Only the home folder itself is replaced. The folders inside it
-  stay as written.
-- **Files in the Orchester source tree** are shown relative to it.
-- **Any other absolute path** becomes `<path>`, for example a project folder such as `D:\work\acme`. A Windows path
-  with spaces (`C:\Program Files\Acme\acme.exe`) is hidden as a whole. Folders are matched with `\` and `/` treated
-  alike and with letters in any case.
+- **Files in the Orchester source tree** are shown relative to it, even when the tree is inside the home folder.
+- **The home folder** becomes `~`, and nothing inside it shows: `C:\Users\ivan\work\acme\notes.txt` becomes
+  `~\<path>`, and `/Users/ivan/projects/acme/x.rs` becomes `~/<path>`. A project in the home folder is hidden this
+  way.
+- **Any other absolute path** becomes `<path>`, for example a project folder such as `D:\work\acme`, including one
+  written after a colon or in a `file://` address. A Windows path with spaces (`C:\Program Files\Acme\acme.exe`) is
+  hidden as a whole. Folders are matched with `\` and `/` treated alike and with letters in any case, and only by
+  their whole name: `C:\Users\ivan.smith` is not the home folder `C:\Users\ivan`, so it becomes `<path>`.
 - **Anything shaped like a secret** becomes `<redacted>`:
   - API keys starting with `sk-` (OpenAI, Anthropic), and GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`,
     `github_pat_`)

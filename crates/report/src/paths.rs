@@ -13,14 +13,14 @@ pub(crate) struct PathRules {
 impl PathRules {
   pub(crate) fn new(source_root: &Path, home: Option<&Path>) -> Self {
     Self {
-      // The source root becomes nothing, with the separator after it, so a source file reads relative to it.
-      source_root: Folder::new(source_root, ""),
-      home: home.and_then(|home| Folder::new(home, "~")),
+      source_root: Folder::new(source_root, Shortening::Relative),
+      home: home.and_then(|home| Folder::new(home, Shortening::Home)),
     }
   }
 
-  /// `text` with the source root's and the home folder's paths shortened and every other absolute path hidden.
-  /// The source root goes first because it may lie in the home folder.
+  /// `text` with the source root's paths made relative, the home folder's paths shortened to `~` with what
+  /// follows it hidden, and every other absolute path hidden. The source root goes first because it may lie in
+  /// the home folder.
   pub(crate) fn rewrite(&self, text: &str) -> String {
     let mut text = text.to_owned();
     for folder in [&self.source_root, &self.home].into_iter().flatten() {
@@ -30,19 +30,26 @@ impl PathRules {
   }
 }
 
+enum Shortening {
+  /// The folder becomes nothing, with the separator after it, so a source file reads relative to it.
+  Relative,
+  /// The folder becomes `~`, and a path inside it `~/<path>`, so no folder or file name in it shows.
+  Home,
+}
+
 struct Folder {
   /// The folder in [`comparable`] form, without a trailing separator.
   key: String,
-  with: &'static str,
+  shortening: Shortening,
 }
 
 impl Folder {
-  fn new(path: &Path, with: &'static str) -> Option<Self> {
+  fn new(path: &Path, shortening: Shortening) -> Option<Self> {
     let key = comparable(&path.to_string_lossy());
     let key = key.trim_end_matches('/');
     (!key.is_empty()).then(|| Self {
       key: key.to_owned(),
-      with,
+      shortening,
     })
   }
 
@@ -51,29 +58,46 @@ impl Folder {
     let mut replaced = String::with_capacity(text.len());
     let mut copied = 0;
     for (start, _) in comparable.match_indices(&self.key) {
-      if start < copied {
+      let end = start + self.key.len();
+      if start < copied || continues_name(&text[end..]) {
         continue;
       }
-      let Some(end) = self.match_end(text, start + self.key.len()) else {
-        continue;
-      };
       replaced.push_str(&text[copied..start]);
-      replaced.push_str(self.with);
-      copied = end;
+      copied = self.shorten(text, end, &mut replaced);
     }
     replaced.push_str(&text[copied..]);
     replaced
   }
 
-  /// Where an occurrence ending at `end` ends once its separator is dropped, or `None` when the text goes on
-  /// with a longer folder name (`C:\Users\bob` in `C:\Users\bobby`).
-  fn match_end(&self, text: &str, end: usize) -> Option<usize> {
-    match text[end..].chars().next() {
-      Some('/' | '\\') if self.with.is_empty() => Some(end + 1),
-      Some(next) if next.is_alphanumeric() || matches!(next, '_' | '-') => None,
-      _ => Some(end),
+  /// Pushes the shortened form of the folder that ends at `end` in `text`, with what follows it when that is
+  /// hidden too, and returns where the text goes on.
+  fn shorten(&self, text: &str, end: usize, replaced: &mut String) -> usize {
+    let rest = &text[end..];
+    let separator = rest.chars().next().filter(|c| matches!(c, '/' | '\\'));
+    match (&self.shortening, separator) {
+      (Shortening::Relative, Some(_)) => end + 1,
+      (Shortening::Relative, None) => end,
+      (Shortening::Home, Some(separator)) if word_len(&rest[1..]) > 0 => {
+        replaced.push('~');
+        replaced.push(separator);
+        replaced.push_str(OUTSIDE);
+        end + 1 + path_len(&rest[1..])
+      }
+      (Shortening::Home, _) => {
+        replaced.push('~');
+        end
+      }
     }
   }
+}
+
+/// Whether `rest`, the text after a folder, goes on with a longer folder name (`C:\Users\bob` in
+/// `C:\Users\bobby` or `C:\Users\bob.smith`).
+fn continues_name(rest: &str) -> bool {
+  rest
+    .chars()
+    .next()
+    .is_some_and(|next| next.is_alphanumeric() || matches!(next, '_' | '-' | '.'))
 }
 
 /// `text` with `\` as `/` and ASCII letters in lower case. Every character keeps its length in bytes, so
@@ -85,8 +109,8 @@ fn comparable(text: &str) -> String {
     .collect()
 }
 
-/// `text` with every absolute path that starts after a space, a quote, a bracket or `=` replaced by
-/// [`OUTSIDE`].
+/// `text` with every absolute path that starts after a space, a quote, a bracket, `=`, `:` or a URL's `://`
+/// replaced by [`OUTSIDE`].
 fn hide_absolute(text: &str) -> String {
   let mut hidden = String::with_capacity(text.len());
   let mut copied = 0;
@@ -102,7 +126,13 @@ fn hide_absolute(text: &str) -> String {
       after_opening = false;
       continue;
     }
-    after_opening = c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '(' | '[' | '<' | '{' | '=' | ',' | ';');
+    if text[index..].starts_with("://") {
+      // `file:///D:/work` and `file:///Users/x`: the path starts after the URL's scheme.
+      index += "://".len();
+      after_opening = true;
+      continue;
+    }
+    after_opening = c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '(' | '[' | '<' | '{' | '=' | ',' | ';' | ':');
     index += c.len_utf8();
   }
   hidden.push_str(&text[copied..]);

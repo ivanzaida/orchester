@@ -89,7 +89,61 @@ fn scrub_shortens_home_hides_other_paths_and_redacts_secrets() {
 
   assert_eq!(
     scrubbed.message.as_deref(),
-    Some("failed to read ~/notes.txt in <path> with <redacted> and Bearer <redacted>")
+    Some("failed to read ~/<path> in <path> with <redacted> and Bearer <redacted>")
+  );
+}
+
+#[test]
+fn scrub_hides_a_unix_project_under_the_home_folder() {
+  let event = Event {
+    message: Some(format!(
+      "failed to open {HOME}/projects/acme-secret/.orchester/worktrees/run-1/src/lib.rs at {SOURCE_ROOT}/crates/x.rs"
+    )),
+    ..Event::default()
+  };
+
+  let scrubbed = scrubber().scrub(event);
+
+  assert_eq!(
+    scrubbed.message.as_deref(),
+    Some("failed to open ~/<path> at crates/x.rs")
+  );
+}
+
+#[test]
+fn scrub_hides_a_windows_project_under_the_home_folder_but_keeps_the_source_tree_in_it() {
+  let scrubber = ReportScrubber::new(
+    Path::new(r"C:\Users\Ivan\src\orchester"),
+    Some(Path::new(r"C:\Users\Ivan")),
+  );
+  let event = Event {
+    message: Some(
+      r"cannot read C:\Users\Ivan\work\acme\notes.txt from C:\Users\Ivan\src\orchester\crates\runner\src\main.rs:3"
+        .to_owned(),
+    ),
+    ..Event::default()
+  };
+
+  let scrubbed = scrubber.scrub(event);
+
+  assert_eq!(
+    scrubbed.message.as_deref(),
+    Some(r"cannot read ~\<path> from crates\runner\src\main.rs:3")
+  );
+}
+
+#[test]
+fn scrub_hides_paths_after_a_colon_or_a_url_scheme() {
+  let event = Event {
+    message: Some(r"open file:///D:/work/acme and file:///srv/acme, path:D:\work\acme".to_owned()),
+    ..Event::default()
+  };
+
+  let scrubbed = scrubber().scrub(event);
+
+  assert_eq!(
+    scrubbed.message.as_deref(),
+    Some("open file://<path> and file://<path>, path:<path>")
   );
 }
 
@@ -158,7 +212,7 @@ fn scrub_keeps_the_message_of_a_log_entry() {
 
   let scrubbed = scrubber().scrub(event);
 
-  assert_eq!(scrubbed.message.as_deref(), Some("cannot open ~/x"));
+  assert_eq!(scrubbed.message.as_deref(), Some("cannot open ~/<path>"));
   assert_eq!(scrubbed.logentry, None);
 }
 
@@ -177,20 +231,22 @@ fn scrub_matches_windows_paths_with_spaces_and_backslashes() {
 
   assert_eq!(
     scrubbed.message.as_deref(),
-    Some(r"panicked at crates\runner\src\main.rs:12:5 reading ~\AppData\x.log and <path>")
+    Some(r"panicked at crates\runner\src\main.rs:12:5 reading ~\<path> and <path>")
   );
 }
 
 #[test]
 fn scrub_matches_only_whole_folder_names() {
   let event = Event {
-    message: Some(format!("{HOME}by/x and {HOME}")),
+    message: Some(format!(
+      "{HOME}by/x and {HOME}.smith/x and {SOURCE_ROOT}.bak/x and {HOME}"
+    )),
     ..Event::default()
   };
 
   let scrubbed = scrubber().scrub(event);
 
-  assert_eq!(scrubbed.message.as_deref(), Some("<path> and ~"));
+  assert_eq!(scrubbed.message.as_deref(), Some("<path> and <path> and <path> and ~"));
 }
 
 #[test]
