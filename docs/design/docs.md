@@ -142,7 +142,8 @@ person keep either or both before committing again. No live co-editing in the fi
 ## Design (Pencil)
 
 Drawn 2026-10-28 (ORC-198), waiting for the person's review. Board `Docs · redesign` `YXCuv` in the desktop
-`orchester.pen`, dark, Kontur fixture data; exports in `.tmp/design/orc-198/` of the run's worktree.
+`orchester.pen` (it hugs its rows, so the widest row sets its width), dark, Kontur fixture data; exports in
+`.tmp/design/orc-198/` of the run's worktree.
 
 | Row | Frame | Node | Shows |
 | --- | --- | --- | --- |
