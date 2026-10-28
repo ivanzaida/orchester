@@ -269,10 +269,9 @@ impl RunTask {
     index: AgentIndex,
     agent: StepAgent<'_>,
   ) -> Result<AgentStart, RunnerProblem> {
-    let (step, model, body, connection) = (agent.step, agent.model, agent.body, agent.connection);
+    let (step, model, body, connection, info) = (agent.step, agent.model, agent.body, agent.connection, agent.info());
     let provider = connection.provider();
     let executable = cli::program(connection)?;
-    let info = agent.info();
     let mut placed = self.place_skills(execution, step, info)?;
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);

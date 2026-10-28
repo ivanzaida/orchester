@@ -33,7 +33,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
-  id::StepExecutionId,
+  id::{InvocationId, StepExecutionId},
   memory::MemoryStore,
   permission::LaunchPermissions,
   resource::ModelId,
@@ -347,11 +347,7 @@ impl RunTask {
 
   /// Records what `invocation` reaches its model through and on: its connection, a native agent's engine, a CLI's
   /// account, or the API provider a CLI runs on.
-  fn record_reached(
-    &mut self,
-    invocation: orchester_core::id::InvocationId,
-    start: &start::AgentStart,
-  ) -> Result<(), ExecutionError> {
+  fn record_reached(&mut self, invocation: InvocationId, start: &start::AgentStart) -> Result<(), ExecutionError> {
     self.db.save_invocation_connection(invocation, &start.connection)?;
     if let Some(engine) = &start.engine {
       self.db.save_invocation_engine(invocation, engine)?;
