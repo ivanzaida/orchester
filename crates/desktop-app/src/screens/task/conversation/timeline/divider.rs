@@ -424,22 +424,27 @@ fn labelled(ctx: &Ctx, timeline: &Timeline, name: &Arc<str>) -> Arc<str> {
 
 /// Orchester's notice that the base branch moved (ORC-54): "master moved to 1a2b3c4 · 2 tasks landed · merge
 /// requested · told Builder at 16:31", or, past the steps that merge it (ORC-65), "… · waits until the work goes back
-/// to Implement".
+/// to Implement", or, when it overlapped none of the run's changes (ORC-151), "… · merged by Orchester before Check at
+/// 16:31".
 pub(super) fn base_moved(ctx: &Ctx, key: &str, mark: &BaseMovedMark) -> Element {
   let notice = &mark.notice;
+  let time = notice.settled().map(|(_, at)| display::clock(at)).unwrap_or_default();
   let state = match &mark.state {
     NoticeState::WritingStep => ctx.t("conversation.baseMoved.writingStep"),
     NoticeState::WorkGoesBack { step } => ctx.t_args("conversation.baseMoved.workGoesBack", [("step", &**step)]),
     NoticeState::RunGoesOn => ctx.t("conversation.baseMoved.runGoesOn"),
     NoticeState::FollowUp => ctx.t("conversation.baseMoved.followUp"),
     NoticeState::Delivered { agent, step } => {
-      let time = notice.delivered().map(|(_, at)| display::clock(at)).unwrap_or_default();
       let agent = if agent.is_empty() { step } else { agent };
       ctx.t_args(
         "conversation.baseMoved.delivered",
         [("agent", &**agent), ("time", time.as_str())],
       )
     }
+    NoticeState::MergedByRunner { step } => ctx.t_args(
+      "conversation.baseMoved.mergedByRunner",
+      [("step", &**step), ("time", time.as_str())],
+    ),
   };
   let (what, count) = if notice.tasks.is_empty() {
     ("commits", notice.commits.len())

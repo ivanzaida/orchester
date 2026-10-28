@@ -1,5 +1,6 @@
 //! A notice that a run's base branch moved (ORC-54), as `get_conversation` and `get_run` give it (kind
-//! `base_moved`): where the base moved, what landed, the files both sides changed, and where the notice stands.
+//! `base_moved`): where the base moved, what landed, the files both sides changed, and where the notice stands —
+//! delivered to an agent, or merged by the runner itself as it overlapped none of the run's changes (ORC-151).
 
 use serde_json::{Value, json};
 
@@ -12,7 +13,8 @@ use crate::tasks::{
   },
 };
 
-/// `mark`'s fields; one that waits until the work goes back names the step it goes back to (`waits_for_step`).
+/// `mark`'s fields; one that waits until the work goes back names the step it goes back to (`waits_for_step`), and
+/// one the runner merged the step that started on it and the merge commit (`merged_by_runner`).
 pub(super) fn shown(mark: &BaseMovedMark) -> Value {
   let notice = &mark.notice;
   let (state, agent, step) = match &mark.state {
@@ -21,6 +23,13 @@ pub(super) fn shown(mark: &BaseMovedMark) -> Value {
     NoticeState::RunGoesOn => ("kept_until_run_goes_on", None, None),
     NoticeState::FollowUp => ("waits_for_follow_up", None, None),
     NoticeState::Delivered { agent, step } => ("delivered", Some(&**agent), Some(&**step)),
+    NoticeState::MergedByRunner { .. } => ("merged_by_runner", None, None),
+  };
+  let merged = match &mark.state {
+    NoticeState::MergedByRunner { step } => notice
+      .merged()
+      .map(|(revision, at)| json!({ "before_step": &**step, "merge_commit": revision.as_str(), "at": wire::time(at) })),
+    _ => None,
   };
   let tasks: Vec<Value> = notice
     .tasks
@@ -40,6 +49,7 @@ pub(super) fn shown(mark: &BaseMovedMark) -> Value {
     "overlapping_files": &notice.overlapping,
     "state": state,
     "delivered_to": agent.map(|agent| json!({ "agent": agent, "step": step })),
+    "merged_by_runner": merged,
     "waits_for_step": agent.is_none().then_some(step).flatten(),
     "noticed_at": wire::time(notice.noticed_at),
     "delivered_at": notice.delivered().map(|(_, at)| wire::time(at)),

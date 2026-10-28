@@ -12,6 +12,7 @@ mod auto_mode;
 mod automation_answers;
 mod automation_drafts;
 mod base_branch;
+mod base_notice_merges;
 mod base_notices;
 mod code_index;
 mod command_approvals;

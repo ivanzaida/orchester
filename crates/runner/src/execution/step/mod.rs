@@ -272,7 +272,7 @@ impl RunTask {
     self.try_at_plan_limit.take_if(|asked| *asked == execution);
     let mut continuation = self.begin_step(execution)?;
     self.keep_session_on_its_account(execution, &mut continuation)?;
-    continuation.notice = self.notice_for(execution)?;
+    let judged = self.meet_moved_base(execution, workspace.as_ref(), &mut continuation, judged)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db

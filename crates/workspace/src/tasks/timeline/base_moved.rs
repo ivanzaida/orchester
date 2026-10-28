@@ -1,8 +1,10 @@
 //! The notices that the run's base branch moved (ORC-54, `orchester_core::base_move`) as the timeline shows them: an
 //! Orchester event, *master moved to 1a2b3c4 · 2 tasks landed · merge requested*, with where the notice stands. One
-//! that waits sits with the messages that wait for a step; one delivered sits in the step whose agent read it. Only a
-//! step that implements the change takes it (ORC-65, `orchester_core::resource::Pipeline::takes_base_moves`): a run
-//! past those steps, with only Review or Verify ahead, keeps it until its work goes back to one of them.
+//! that waits sits with the messages that wait for a step; one delivered sits in the step whose agent read it, and one
+//! the runner merged itself, as it overlapped none of the run's changes (ORC-151), in the step that started on the
+//! merged base. Only a step that implements the change takes it (ORC-65,
+//! `orchester_core::resource::Pipeline::takes_base_moves`): a run past those steps, with only Review or Verify ahead,
+//! keeps it until its work goes back to one of them, unless the runner merges it first.
 
 use std::sync::Arc;
 
@@ -33,22 +35,31 @@ pub enum NoticeState {
   FollowUp,
   /// The agent `agent` of step `step` read it.
   Delivered { agent: Arc<str>, step: Arc<str> },
+  /// The runner merged it itself before step `step` started, as it overlapped none of the run's changes.
+  MergedByRunner { step: Arc<str> },
 }
 
-/// The run's notices that belong to `execution`: those delivered to it, or with `None` those still waiting.
+/// The run's notices that belong to `execution`: those delivered to it or merged before it, or with `None` those
+/// still waiting.
 pub(super) fn items(run: &RunView, execution: Option<StepExecutionId>) -> impl Iterator<Item = Item> + '_ {
   all(run).filter(move |item| item.execution == execution)
 }
 
-/// Every notice of the run, oldest first, each where it stands: in the step whose agent read it, or waiting.
+/// Every notice of the run, oldest first, each where it stands: in the step whose agent read it or that started on
+/// the base the runner merged, or waiting.
 pub fn all(run: &RunView) -> impl Iterator<Item = Item> + '_ {
   run.base_notices.iter().map(|notice| {
-    let (state, at) = match notice.delivered() {
+    let (state, at) = match notice.settled() {
       Some((execution, at)) => {
         let step = run.step_of(execution);
-        let state = NoticeState::Delivered {
-          agent: step.and_then(|step| step.agent.clone()).unwrap_or_default(),
-          step: step.map(|step| step.name.clone()).unwrap_or_default(),
+        let name = step.map(|step| step.name.clone()).unwrap_or_default();
+        let state = if notice.merged().is_some() {
+          NoticeState::MergedByRunner { step: name }
+        } else {
+          NoticeState::Delivered {
+            agent: step.and_then(|step| step.agent.clone()).unwrap_or_default(),
+            step: name,
+          }
         };
         (state, at)
       }
@@ -56,7 +67,7 @@ pub fn all(run: &RunView) -> impl Iterator<Item = Item> + '_ {
     };
     Item {
       key: format!("base-moved-{}", notice.id).into(),
-      execution: notice.delivered().map(|(to, _)| to),
+      execution: notice.settled().map(|(to, _)| to),
       at,
       kind: ItemKind::BaseMoved(BaseMovedMark {
         notice: notice.clone(),

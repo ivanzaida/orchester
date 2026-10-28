@@ -66,6 +66,8 @@ impl RunTask {
     if self.run.execution(execution).map(|execution| execution.status()) == Some(StepStatus::Pending) {
       self.transition(|run, now| run.start_step(execution, now))?;
     }
+    // The command checks the base the run will merge into (ORC-151).
+    self.merge_moved_base(execution, workspace.as_ref().ok())?;
     let mut invocation = self
       .db
       .start_command_invocation(self.run.id(), execution, Timestamp::now())?;
