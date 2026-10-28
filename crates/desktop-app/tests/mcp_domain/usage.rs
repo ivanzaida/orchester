@@ -1,11 +1,19 @@
 //! `get_usage` on the `usage` seed: totals and rows grouped and filtered as the Usage page reads them, and
-//! links the window's router opens as that page with the same query.
+//! links the window's router opens as that page with the same query; `get_usage` and `get_run` count the
+//! invocations whose output is not reported yet instead of passing their output off as 0.
 
 use orchester_app::routes::{ProjectPage, Route};
+use orchester_core::{
+  connection::stream::AgentEvent,
+  run::{InvocationKind, TokenUsage},
+  store::{ActivityStore, RunStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::ProjectDb;
 use orchester_workspace::links::with_usage_query;
 use serde_json::{Value, json};
 
-use super::Served;
+use super::{Served, kontur::Seeded};
 
 fn routed(link: &Value) -> Route {
   let path = link.as_str().unwrap_or_else(|| panic!("a link: {link}"));
@@ -170,4 +178,63 @@ fn domain_usage_names_each_provider_and_filters_to_it_by_name_or_id() {
     refused["code"], "invalid_arguments",
     "there is no account filter: {refused}"
   );
+}
+
+/// The run of `title` with its still open agent invocation now reporting a turn as Claude Code on DeepSeek's
+/// Anthropic API does before its result: input, but output 0. Answers the run's id.
+fn output_unreported_so_far(seeded: &Seeded, title: &str) -> String {
+  let mut db = ProjectDb::open(&seeded.repo).expect("the database opens");
+  let task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.details().title.as_str() == title)
+    .expect("the seeded task");
+  let run = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .pop()
+    .expect("its run")
+    .expect("readable");
+  let mut invocation = db
+    .invocations(run.id())
+    .expect("invocations")
+    .into_iter()
+    .find(|invocation| invocation.ended_at.is_none() && matches!(invocation.kind, InvocationKind::Agent { .. }))
+    .expect("the agent at work");
+  let usage = TokenUsage {
+    input: 60_000,
+    cached_input: 50_000,
+    output: 0,
+  };
+  db.append_activity(&invocation, &[(Timestamp::now(), AgentEvent::TurnCompleted { usage })])
+    .expect("the turn is recorded");
+  invocation.usage = usage;
+  db.save_invocation(&invocation).expect("the invocation is saved");
+  run.id().to_string()
+}
+
+#[test]
+fn domain_usage_and_run_count_output_not_reported_yet_instead_of_a_false_zero() {
+  let (mut served, seeded) = Served::seeded("usage");
+  let usage = served.ok("get_usage", &json!({ "project": "Kontur" }));
+  assert_eq!(
+    usage["total"]["output_unreported"], 0,
+    "every CLI reported its output: {usage}"
+  );
+  let before = usage["total"]["tokens"]["output"].clone();
+  let run = output_unreported_so_far(&seeded, "Add retry to webhook sender");
+  let shown = served.ok("get_run", &json!({ "project": "Kontur", "run": &run }));
+  assert_eq!(shown["tokens"]["output_unreported"], 1, "{shown}");
+  let usage = served.ok("get_usage", &json!({ "project": "Kontur" }));
+  assert_eq!(
+    usage["total"]["output_unreported"], 1,
+    "the invocation's output is unknown, not 0: {usage}"
+  );
+  assert_eq!(
+    usage["total"]["tokens"]["output"], before,
+    "the output counts only what the others reported"
+  );
+  let alone = served.ok("get_usage", &json!({ "project": "Kontur", "run": run }));
+  assert_eq!(alone["total"]["output_unreported"], 1, "{alone}");
 }

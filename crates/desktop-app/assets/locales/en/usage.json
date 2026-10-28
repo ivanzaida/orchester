@@ -169,7 +169,7 @@
       },
       "footnote": "Spent = input − cached input + output, as each CLI reported it.",
       "footnoteToday": "Spent = input − cached input + output, as each CLI reported it. Today counts up to {{time}}.",
-      "footnoteUnreported": "{{footnote}} Output is unknown for {{count}} agent runs whose CLI reported input but no output yet, so Spent and Output leave it out.",
+      "footnoteUnreported": "{{footnote}} Agent runs whose CLI reported input but no output yet: {{count}}. Their output is unknown, so Spent and Output leave it out.",
       "tableFootnote": "Exact counts as the CLIs reported them.",
       "tableFootnoteToday": "Exact counts as the CLIs reported them. Today counts up to {{time}}.",
       "todayUntil": "Today, until {{time}}"

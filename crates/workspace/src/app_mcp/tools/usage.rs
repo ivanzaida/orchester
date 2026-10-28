@@ -334,9 +334,13 @@ fn tokens(usage: orchester_core::run::TokenUsage) -> Value {
   })
 }
 
+/// The range's totals. `output_unreported` counts the agent invocations whose CLI reported input but no output
+/// ([`orchester_core::run::TokenUsage::output_unreported`]): while it is above 0, `tokens.output` and `spent` hold
+/// only what the others reported, as the Usage page's footnote says.
 fn total(summary: &Summary) -> Value {
   json!({
     "tokens": tokens(summary.usage),
+    "output_unreported": summary.output_unreported,
     "active_seconds": seconds(summary.agent_ms),
     "runs": summary.runs,
     "finished_runs": summary.finished,

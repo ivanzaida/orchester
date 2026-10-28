@@ -210,7 +210,7 @@ fn reviewer_usage_keeps_the_account_and_the_connection_the_reviewer_ran_on() {
 }
 
 #[test]
-fn reviewer_usage_from_before_the_account_was_kept_stays_on_no_account() {
+fn reviewer_usage_from_before_the_account_was_kept_is_given_no_account() {
   let (repo, mut db, run, execution) = started_run();
   let invocation = db
     .start_invocation(run.id(), execution, &model(), at(10))
