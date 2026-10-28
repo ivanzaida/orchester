@@ -50,8 +50,12 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
    anyway* decides (row 49). Or *Clone it here*, with progress in place (open choice A).
 7. **First download.** Joined, linked, tasks (*84 of 212*, the latest arrivals listed), team settings, each with its
    state. *Open Kontur* works before the download ends; tasks keep arriving in the list without a restart (ORC-282).
-8. **Returning start.** All projects keeps *Join a team*, *Open shared project…* and *Add project* in its header. A
-   team's project not on this computer yet is offered once above the list, with *Not now*.
+8. **Returning start.** All projects stays as built (`crates/desktop-app/src/screens/all_projects/`): the centred
+   1120 column, its description, the *Projects · Usage* tabs, the *Status*, *Active runs*, *Needs you* and *Last
+   opened* columns, *Open project folder…*, *Add project* and the removal note under the list. It adds *Join a team*
+   and *Open shared project…* to the header and a *Where* column (*Local*, or *Shared · Acme*). A team's project not
+   on this computer yet is offered once above the list, with *Not now*. 09 is a Column `P5z2w` (tabs `k19me`,
+   removal note `S3gIYI`); 09b is a Column `aPjYW` (tabs `z9cYpG`, removal note `olNkR`).
 9. **macOS.** An app started from Finder lacks the shell's PATH; Orchester reads it from the login shell. When an
    agent CLI is still not found, the start page shows a warning callout with *Choose the claude file…*, *Check
    again* and the folders it looked in. Local projects still open.
@@ -70,6 +74,12 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 
 - Buttons and field boxes are 36 px (large) and 28 px as plain numbers: Pencil keeps no variable on a height. The
   values are `control_height_lg` and `control_height_md`.
+- Gaps and paddings of 4, 8, 12, 16, 24 and 32 are `spacing_xs` … `spacing_section`; the others (2, 6, 10, 20, 28,
+  40, 56) have no variable and stay numbers.
+- An error under a field next to a button (13 `sN8Pa`: Folder row `d3Cx27`) sits under the row (`DNRz3`), so the
+  button lines up with the field's box.
+- Task states in the first download (08) are `Chip/*` instances; runner states in All projects are `Badge/Success`
+  and `Badge/Neutral`. 01b `Knacr`, already signed in, offers *Your teams* instead of *Sign in*.
 - The way-in cards, list rows, option panels and the progress bars are frames from the theme roles
   (`surface_raised`, `border`, `border_focus`, `radius_lg`, `spacing_*`); no shared component was changed.
 - The macOS traffic lights keep the component's own colours.
