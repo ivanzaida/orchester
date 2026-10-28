@@ -34,12 +34,13 @@ fn everything_line_leads_the_run_while_the_setting_answers_it() {
   window.until("the line", |window| window.tree.get_element_by_id(LINE).is_some());
   assert_eq!(
     window.texts(&format!("{LINE}-text")),
-    Some(vec!["Auto mode approves everything in this run · turned on by you".to_owned()])
+    Some(vec![
+      "Auto mode approves everything in this run · turned on by you".to_owned()
+    ])
   );
   click(&mut window, &format!("{LINE}-link"));
   window.until("Project settings", |window| {
-    window.navigation().route_now()
-      == Route::Project(seeded.project, ProjectPage::Settings(ProjectSettingsTab::Runs))
+    window.navigation().route_now() == Route::Project(seeded.project, ProjectPage::Settings(ProjectSettingsTab::Runs))
   });
 }
 
@@ -51,16 +52,22 @@ fn everything_line_names_automation_and_is_gone_without_auto_mode() {
   open(&mut window, &seeded, &key, "conversation-chat");
   to_start(&mut window);
   window.until("the line", |window| window.tree.get_element_by_id(LINE).is_some());
-  assert!(
-    all_text(&mut window).contains("Auto mode approves everything in this run · turned on by automation")
-  );
+  assert!(all_text(&mut window).contains("Auto mode approves everything in this run · turned on by automation"));
 
   let (mut window, seeded) = super::seeded("conversation");
   approving(&seeded.repo, false, ApproveEverything::on(Answerer::Person));
-  open(&mut window, &seeded, &key_of(&seeded, "Add retry to webhook sender"), "conversation-chat");
+  open(
+    &mut window,
+    &seeded,
+    &key_of(&seeded, "Add retry to webhook sender"),
+    "conversation-chat",
+  );
   to_start(&mut window);
   window.until("the timeline's start", |window| {
     all_text(window).contains("01–04 · 4 steps done")
   });
-  assert!(window.tree.get_element_by_id(LINE).is_none(), "the run does not use auto mode");
+  assert!(
+    window.tree.get_element_by_id(LINE).is_none(),
+    "the run does not use auto mode"
+  );
 }

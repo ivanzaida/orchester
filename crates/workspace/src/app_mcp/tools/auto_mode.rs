@@ -143,7 +143,11 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
     let everything = match args.approve_everything {
       Some(on) => Some(
         db.approve_everything()?
-          .changed(on, Answerer::Automation, services.workspace.automation_changes_permissions()?)
+          .changed(
+            on,
+            Answerer::Automation,
+            services.workspace.automation_changes_permissions()?,
+          )
           .map_err(|_| ToolError::refused("person_only", vec![approve_everything_person_only()]))?,
       ),
       None => None,

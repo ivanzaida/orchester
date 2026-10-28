@@ -60,7 +60,10 @@ pub enum Change {
   },
   /// *With auto mode on, approve everything in each run*, turned on or off by a person or, where the window let it,
   /// automation.
-  Everything { on: bool, by: Answerer },
+  Everything {
+    on: bool,
+    by: Answerer,
+  },
   UseAccount(ConnectionId),
   /// Revokes a rule of the project's (*Approve for every run of this project*).
   Revoke(ProjectRuleId),

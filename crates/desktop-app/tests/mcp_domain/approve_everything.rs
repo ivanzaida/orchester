@@ -12,7 +12,10 @@ use super::connections_window::controlled;
 const SWITCH: &str = "settings-auto-everything";
 
 fn setting(repo: &std::path::Path) -> ApproveEverything {
-  ProjectDb::open(repo).expect("db").approve_everything().expect("setting")
+  ProjectDb::open(repo)
+    .expect("db")
+    .approve_everything()
+    .expect("setting")
 }
 
 /// What a person lets automation do, in Settings.
@@ -30,10 +33,10 @@ fn lets(s: &super::Served, (answers, permissions): (bool, bool)) {
 fn approve_everything_switch_turns_on_by_client_input_only_under_the_persons_switches() {
   let (mut s, project, repo) = controlled();
   s.until("navigation attached", |s| s.link.navigation().is_ok());
-  s.link.navigation().expect("navigation").go(Route::Project(
-    project,
-    ProjectPage::Settings(ProjectSettingsTab::Runs),
-  ));
+  s.link
+    .navigation()
+    .expect("navigation")
+    .go(Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::Runs)));
   s.until("the switch", |s| s.shows(SWITCH));
   assert_eq!(setting(&repo), ApproveEverything::OFF, "off by default");
   s.click_by_client(SWITCH).expect("the click is delivered");
@@ -43,8 +46,12 @@ fn approve_everything_switch_turns_on_by_client_input_only_under_the_persons_swi
   }
   assert_eq!(setting(&repo), ApproveEverything::OFF);
   s.click_by_person(SWITCH);
-  s.until("on by the person", |_| setting(&repo) == ApproveEverything::on(Answerer::Person));
-  s.until("the refusal cleared", |s| !s.shows("settings-auto-everything-person-only"));
+  s.until("on by the person", |_| {
+    setting(&repo) == ApproveEverything::on(Answerer::Person)
+  });
+  s.until("the refusal cleared", |s| {
+    !s.shows("settings-auto-everything-person-only")
+  });
   // Turning it off is anyone's.
   s.click_by_client(SWITCH).expect("the click is delivered");
   s.until("off by the client", |_| setting(&repo) == ApproveEverything::OFF);

@@ -84,7 +84,11 @@ fn approve_everything_answers_from_the_runs_first_request_while_auto_mode_and_th
     ("ls ../dependency/src", CommandCategory::ReadOnly),
   ] {
     let subject = fixture.command(command);
-    assert_eq!(auto_verdict(&subject), AutoVerdict::Approve(Some(category)), "{command}");
+    assert_eq!(
+      auto_verdict(&subject),
+      AutoVerdict::Approve(Some(category)),
+      "{command}"
+    );
     assert!(answered(&subject, None, (on, true)), "{command}");
   }
 }
@@ -113,8 +117,15 @@ fn approve_everything_leaves_what_auto_approval_leaves_to_a_person() {
 fn approve_everything_answers_a_read_of_a_dependency_under_home() {
   let fixture = Fixture::new();
   let subject = fixture.command(r#"ls "$HOME/.cargo/git/checkouts/orchester-1a2b/3c4d/crates/api/src""#);
-  assert_eq!(auto_verdict(&subject), AutoVerdict::Approve(Some(CommandCategory::ReadOnly)));
-  assert!(answered(&subject, None, (ApproveEverything::on(Answerer::Person), true)));
+  assert_eq!(
+    auto_verdict(&subject),
+    AutoVerdict::Approve(Some(CommandCategory::ReadOnly))
+  );
+  assert!(answered(
+    &subject,
+    None,
+    (ApproveEverything::on(Answerer::Person), true)
+  ));
 }
 
 #[test]
@@ -124,9 +135,15 @@ fn approve_everything_stops_with_auto_mode_or_the_setting_off_and_the_runs_own_s
   let on = ApproveEverything::on(Answerer::Automation);
   assert!(answered(&subject, None, (on, true)));
   assert!(!answered(&subject, None, (on, false)), "the run's auto mode turned off");
-  assert!(!answered(&subject, None, (ApproveEverything::OFF, true)), "the setting turned off");
+  assert!(
+    !answered(&subject, None, (ApproveEverything::OFF, true)),
+    "the setting turned off"
+  );
   assert!(!answered(&subject, Some(false), (on, true)), "the run's own Stop");
-  assert!(answered(&subject, Some(true), (ApproveEverything::OFF, false)), "Approve everything in this run");
+  assert!(
+    answered(&subject, Some(true), (ApproveEverything::OFF, false)),
+    "Approve everything in this run"
+  );
 }
 
 #[test]

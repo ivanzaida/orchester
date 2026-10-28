@@ -147,7 +147,11 @@ async fn approve_everything_answers_a_worktree_command_and_an_mcp_call_without_a
       assert_eq!(decision.review, None, "{brief}: no reviewer judged it");
     }
     let counts = started.db().decision_counts(started.id).expect("counts");
-    assert_eq!((counts.auto_approved, counts.by_you, counts.by_reviewer), (2, 0, 0), "{brief}");
+    assert_eq!(
+      (counts.auto_approved, counts.by_you, counts.by_reviewer),
+      (2, 0, 0),
+      "{brief}"
+    );
     let invocations = started.db().invocations(started.id).expect("invocations");
     assert!(
       invocations
@@ -156,7 +160,11 @@ async fn approve_everything_answers_a_worktree_command_and_an_mcp_call_without_a
       "{brief}"
     );
     // The run's own choice stays the person's to make.
-    assert_eq!(started.db().run_auto_approve(started.id).expect("read"), None, "{brief}");
+    assert_eq!(
+      started.db().run_auto_approve(started.id).expect("read"),
+      None,
+      "{brief}"
+    );
   }
 }
 
