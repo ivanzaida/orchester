@@ -5,12 +5,12 @@
 //! run at work by its step (`02 Plan`) in `text_secondary`, a failed one at which step in `danger`, one that cannot be
 //! read in `danger`, what waits in the queue or is ready to start in `text_muted`, what is held as its group holds it.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::{run::TaskPhase, task_group::GroupHold};
+use orchester_core::{id::TaskId, run::TaskPhase, task_group::GroupHold};
 use orchester_workspace::tasks::{
-  attention::{NeedItem, NeedKind},
+  attention::{self, NeedItem, NeedKind},
   data::ProjectTasks,
   list::{CurrentStep, ReadinessKind, TaskRow},
   needs_you::WaitingKind,
@@ -20,7 +20,7 @@ use crate::ui::{icon::Icon, message::message_text};
 
 /// What a row says about where its task stands.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Phrase {
+pub(crate) struct Phrase {
   pub glyph: Icon,
   pub glyph_color: PaletteColor,
   pub words: Arc<str>,
@@ -35,6 +35,27 @@ impl Phrase {
       None => stands(ctx, row),
     }
   }
+}
+
+/// The oldest thing each task of `tasks` waits for from the person.
+pub(super) fn needs(tasks: &ProjectTasks) -> HashMap<TaskId, NeedItem> {
+  let mut needs = HashMap::new();
+  for item in attention::items(tasks) {
+    if let Some(task) = item.task() {
+      needs.entry(task.id).or_insert(item);
+    }
+  }
+  needs
+}
+
+/// What each of `rows` says as the list says it, `tasks` being what they were read from: *Jump to*'s task results
+/// (`shell::jump`) say it so too.
+pub(crate) fn phrases(ctx: &Ctx, tasks: &ProjectTasks, rows: &[TaskRow]) -> Vec<Phrase> {
+  let needs = needs(tasks);
+  rows
+    .iter()
+    .map(|row| Phrase::of(ctx, row, needs.get(&row.id), tasks))
+    .collect()
 }
 
 /// What a task waits for from the person.

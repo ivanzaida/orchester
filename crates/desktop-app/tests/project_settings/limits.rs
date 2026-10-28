@@ -42,9 +42,9 @@ fn project_settings_limits_show_no_limit_and_save_all_fields_without_a_maximum()
   let read = page.db().project_limits().expect("limits");
   assert_eq!(read.default_time_limit().map(|v| v.as_secs()), Some(72000));
   assert_eq!(read.agent_slots().get().get(), 16);
-  page.until("the bar's no-limit readback", |p| {
+  page.until("the usage card's no-limit readback", |p| {
     p.window
-      .texts("status-tokens-value")
+      .texts("sidebar-usage-value")
       .is_some_and(|text| text.join(" ").contains("No limit"))
   });
   page.tab("general", "settings-project-name");

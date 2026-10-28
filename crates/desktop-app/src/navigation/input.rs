@@ -22,6 +22,7 @@ use super::{
   Navigation,
   shortcuts::{Keys, Shortcut, shortcut},
 };
+use crate::routes::{ProjectPage, ProjectSettingsTab, Route};
 
 const BACK_BUTTON: MouseButton = MouseButton::Other(4);
 const FORWARD_BUTTON: MouseButton = MouseButton::Other(5);
@@ -104,5 +105,15 @@ fn run(navigation: &Navigation, shortcut: Shortcut) {
     Shortcut::CloseTab => navigation.close_active(),
     Shortcut::NextTab => navigation.cycle(1),
     Shortcut::PreviousTab => navigation.cycle(-1),
+    Shortcut::JumpTo => navigation.jump().update(|open| *open = !*open),
+    // A tab that has been in no project has no project settings to open.
+    Shortcut::ProjectSettings => {
+      if let Some(project) = navigation.tabs_now().active().sidebar_project() {
+        navigation.go(Route::Project(
+          project,
+          ProjectPage::Settings(ProjectSettingsTab::default()),
+        ));
+      }
+    }
   }
 }
