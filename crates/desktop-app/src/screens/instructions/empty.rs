@@ -197,7 +197,7 @@ fn findings(ctx: &mut Ctx, scan: &RepositoryScan, root: &str) -> Element {
     found = found.child(finding(
       Icon::FileText,
       &item.source,
-      &super::import::item_detail(ctx, item),
+      &crate::screens::hub::import_detail::item_detail(ctx, item),
     ));
   }
   for folder in orchester_core::agent_files::import::SKILL_FOLDERS {

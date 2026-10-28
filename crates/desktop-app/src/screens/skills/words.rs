@@ -2,11 +2,11 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{
-  agent_files::import::{ImportItem, ItemKind},
-  resource::InstructionScope,
+use orchester_core::resource::InstructionScope;
+use orchester_workspace::{
+  agents::data::VersionState,
+  skills::{editor::EditorData, repository::RepositoryScan},
 };
-use orchester_workspace::{agents::data::VersionState, skills::editor::EditorData};
 pub fn next(state: VersionState) -> u32 {
   state.published().map_or(1, |v| v.get().saturating_add(1))
 }
@@ -117,21 +117,13 @@ pub fn types(ctx: &Ctx, instructions: usize, skills: usize) -> Arc<str> {
 }
 
 /// What the repository holds to import, by its files and folders (*AGENTS.md and 2 skills folders*, `HMf2M` in 03):
-/// the instruction files that can be imported, then how many folders hold its skills.
-pub fn found(ctx: &Ctx, items: &[ImportItem]) -> Arc<str> {
-  let files: Vec<&str> = items
-    .iter()
-    .filter(|item| item.kind == ItemKind::Instruction && item.outcome.is_ok())
-    .map(|item| item.source.as_str())
-    .collect();
-  let mut folders: Vec<&str> = items
-    .iter()
-    .filter(|item| item.kind == ItemKind::Skill)
-    .map(|item| item.source.rsplit_once('/').map_or("", |(folder, _)| folder))
-    .collect();
-  folders.sort_unstable();
-  folders.dedup();
-  let folders = match folders.len() {
+/// the instruction files that can be imported, then how many folders hold its skills
+/// ([`RepositoryScan::sources`]). With no skills folder only the files are named.
+pub fn found(ctx: &Ctx, scan: &RepositoryScan) -> Arc<str> {
+  let (files, folders) = scan.sources();
+  let files = files.join(", ");
+  let folders = match folders {
+    0 if !files.is_empty() => return files.into(),
     1 => ctx.t("skills.foldersOne"),
     count => ctx.t_args("skills.foldersMany", [("count", count.to_string())]),
   };
@@ -140,7 +132,7 @@ pub fn found(ctx: &Ctx, items: &[ImportItem]) -> Arc<str> {
   }
   ctx.t_args(
     "skills.foundFilesAndFolders",
-    [("files", files.join(", ")), ("folders", folders.to_string())],
+    [("files", files), ("folders", folders.to_string())],
   )
 }
 

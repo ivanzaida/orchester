@@ -19,6 +19,7 @@ use orchester_workspace::{memory::listing::Filters, secrets::Vault};
 use super::work::{self, Start, Write};
 use crate::{
   project::ProjectFeed,
+  routes::MemoryTab,
   ui::{field::field_error, message::message_text, tinted_note::person_only},
 };
 
@@ -103,6 +104,9 @@ pub struct MemoryState {
   pub histories: Signal<Unfolded>,
   /// The task's handoffs before the latest are listed too.
   pub earlier_handoffs: Signal<bool>,
+  /// The tab other than Active whose search and Filter a search or a filter brought up: they stay there while the
+  /// person clears them, so the field keeps its focus, until another tab shows.
+  pub bar_kept: Signal<Option<MemoryTab>>,
   pub selected: Signal<Chosen>,
   pub action: work::Action,
   pub asked: Signal<Asked>,
@@ -118,6 +122,7 @@ pub struct Made {
   pub search: Signal<String>,
   pub histories: Signal<Unfolded>,
   pub earlier_handoffs: Signal<bool>,
+  pub bar_kept: Signal<Option<MemoryTab>>,
   pub selected: Signal<Chosen>,
   pub action: work::Action,
   pub asked: Signal<Asked>,
@@ -135,6 +140,7 @@ impl Made {
       search: ctx.signal(String::new()),
       histories: ctx.signal(Unfolded::default()),
       earlier_handoffs: ctx.signal(false),
+      bar_kept: ctx.signal(None),
       selected: ctx.signal(Chosen::default()),
       action: work::action(ctx),
       asked: ctx.signal(Asked::default()),
@@ -172,6 +178,7 @@ impl Made {
       search: self.search.clone(),
       histories: self.histories.clone(),
       earlier_handoffs: self.earlier_handoffs.clone(),
+      bar_kept: self.bar_kept.clone(),
       selected: self.selected.clone(),
       action: self.action.clone(),
       asked: self.asked.clone(),

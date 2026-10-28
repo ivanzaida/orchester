@@ -30,15 +30,13 @@ use orchester_workspace::{
 use super::PageProps;
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  screens::{
-    hub::{
-      self,
-      draft_bar::{DraftBar, Standing},
-      import_preview, import_result,
-      import_rows::{Review, Unchosen, Viewed},
-      page_head, parts as hub_parts,
-    },
-    instructions::import::item_detail,
+  screens::hub::{
+    self,
+    draft_bar::{DraftBar, Standing},
+    import_detail::item_detail,
+    import_preview, import_result,
+    import_rows::{Review, Unchosen, Viewed},
+    page_head, parts as hub_parts,
   },
   services::Services,
   theme::{ExtraSpacing, HubSpacing, HubText},
@@ -253,7 +251,7 @@ impl Component for Found {
       control,
     );
     let items = &p.data.repository.items;
-    let found = super::words::found(ctx, items);
+    let found = super::words::found(ctx, &p.data.repository);
     let open = ActionButton::new("skills-found-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
       .icon(crate::ui::icon::Icon::FolderOpen)
       .opens(p.view.panel.to(super::state::Panel::Import));

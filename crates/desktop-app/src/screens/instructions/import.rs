@@ -15,7 +15,7 @@ use lurq::{
 use orchester_core::{
   agent_files::{
     RepositoryAgentFiles,
-    import::{Candidate, ImportItem, ItemKind, Unimportable},
+    import::{ImportItem, ItemKind},
   },
   id::IdempotencyKey,
   resource::ResourceKind,
@@ -36,6 +36,7 @@ use crate::{
     hub::{
       self,
       draft_bar::{DraftBar, Standing},
+      import_detail::item_detail,
       import_preview, import_result,
       import_rows::{Review, Unchosen, Viewed},
       page_head,
@@ -321,47 +322,4 @@ fn top(ctx: &Ctx, props: &Props) -> Element {
         ),
     )
     .into()
-}
-/// What an item becomes, or why it cannot be imported (`Draft project instruction “AGENTS” · 84 lines`), the same
-/// whether Instructions or Skills opened the import (02c).
-pub(crate) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
-  match &item.outcome {
-    Err(Unimportable::OnlyImports { targets }) => ctx.t_args(
-      "instructions.importOnlyPoints",
-      [
-        ("targets", targets.join(", ")),
-        (
-          "references",
-          targets
-            .iter()
-            .map(|target| format!("@{target}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-        ),
-      ],
-    ),
-    Ok(Candidate::Instruction { name, text }) => {
-      let lines = text.as_str().lines().count();
-      ctx.t_args(
-        if lines == 1 {
-          "instructions.importInstructionOne"
-        } else {
-          "instructions.importInstruction"
-        },
-        [("name", name.as_str().to_owned()), ("lines", lines.to_string())],
-      )
-    }
-    Ok(Candidate::Skill { name, files, .. }) => ctx.t_args(
-      match files.len() {
-        0 => "instructions.importSkillNone",
-        1 => "instructions.importSkillOne",
-        _ => "instructions.importSkill",
-      },
-      [("name", name.as_str().to_owned()), ("files", files.len().to_string())],
-    ),
-    Err(Unimportable::Empty) => ctx.t("instructions.importBlank"),
-    Err(Unimportable::NotText) => ctx.t("instructions.importNotText"),
-    Err(Unimportable::NoSkillFile) => ctx.t("instructions.importNoSkill"),
-    Err(Unimportable::UnsupportedFiles { .. }) => ctx.t("instructions.importUnsupported"),
-  }
 }

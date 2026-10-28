@@ -90,33 +90,42 @@ fn insert(ctx: &Ctx, props: &Props, variable: Variable) -> Element {
     .into()
 }
 /// *When this value is unavailable*: Require value, which blocks the injection, Inject at Agent resume, and a fallback
-/// value that cannot be chosen yet; a radio and its words in each row (`XIcKy`).
+/// value that cannot be chosen yet; a radio and its words in each row (`XIcKy`). While the rule is frozen the radios
+/// are faded and fixed.
 pub fn policy(ctx: &Ctx, (events, frozen): (&Signal<Events>, &Signal<bool>), variable: Variable) -> Element {
   let resume = events.get() == Events::Resume;
-  let choose = |to: Events| {
+  let fixed = frozen.get();
+  let choose = |toggle: Toggle, to: Events| {
+    if fixed {
+      return toggle;
+    }
     let (events, frozen) = (events.clone(), frozen.clone());
-    move |_| {
+    toggle.on_change(move |_| {
       if !frozen.get_untracked() {
         events.set(to);
       }
-    }
+    })
   };
-  let require = Toggle::new(
-    "instruction-variable-require",
-    ToggleKind::Radio,
-    !resume,
-    ctx.t("instructions.requireValue"),
-  )
-  .hide_label()
-  .on_change(choose(Events::Start));
-  let resumed = Toggle::new(
-    "instruction-variable-resume",
-    ToggleKind::Radio,
-    resume,
-    ctx.t("instructions.resumePolicy"),
-  )
-  .hide_label()
-  .on_change(choose(Events::Resume));
+  let require = choose(
+    Toggle::new(
+      "instruction-variable-require",
+      ToggleKind::Radio,
+      !resume,
+      ctx.t("instructions.requireValue"),
+    )
+    .hide_label(),
+    Events::Start,
+  );
+  let resumed = choose(
+    Toggle::new(
+      "instruction-variable-resume",
+      ToggleKind::Radio,
+      resume,
+      ctx.t("instructions.resumePolicy"),
+    )
+    .hide_label(),
+    Events::Resume,
+  );
   let fallback = Toggle::new(
     "instruction-variable-fallback",
     ToggleKind::Radio,

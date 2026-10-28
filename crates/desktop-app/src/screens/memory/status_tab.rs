@@ -66,9 +66,11 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
     .cloned()
     .collect();
   if listed.is_empty() {
+    keep_bar(state, None);
     return column.with_children(empty(ctx, state, tab));
   }
   if tab == MemoryTab::Waiting {
+    keep_bar(state, None);
     // The queue is short and oldest first: it lists every proposal, without the search and filters (05).
     return column
       .child(note("memory-tab-note", Icon::Info, &ctx.t("memory.tabs.waitingNote")))
@@ -85,7 +87,8 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
       status: statuses,
       ..Filters::default()
     };
-  if tab == MemoryTab::Active || narrowed {
+  let kept = keep_bar(state, (tab != MemoryTab::Active).then_some((tab, narrowed)));
+  if tab == MemoryTab::Active || kept {
     column = column.child(bar(ctx, (memory, &listed), tab));
   }
   if tab == MemoryTab::Active {
@@ -97,6 +100,18 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
     ),
     None => column.child(tab_no_match(ctx, state, (memory, tab, shown.order), &filters)),
   }
+}
+
+/// Whether a tab other than Active shows its search and Filter: from when a search or a filter narrows it (`shown`:
+/// the tab and whether its filters narrow it) until another tab shows, so clearing the search's last character keeps
+/// the field and its focus. `None` for a tab without them.
+fn keep_bar(state: &MemoryState, shown: Option<(MemoryTab, bool)>) -> bool {
+  let stored = state.bar_kept.get_untracked();
+  let kept = shown.and_then(|(tab, narrowed)| (narrowed || stored == Some(tab)).then_some(tab));
+  if kept != stored {
+    state.bar_kept.set(kept);
+  }
+  kept.is_some()
 }
 
 /// The search and the Filter, with how many are active and wait at the end on Active (`E3atNZ`, `NW4wY` in 05b).

@@ -19,7 +19,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  library_groups::{Group, Line, groups},
+  library_groups::{Gone, Group, Line, groups},
   state::{Selection, Tab, View},
   words,
 };
@@ -72,7 +72,7 @@ fn section(
   let rules = group_of
     .rows
     .iter()
-    .filter(|line| matches!(line, Line::Rule(_) | Line::StepRule { .. } | Line::Orphan(_)))
+    .filter(|line| matches!(line, Line::Rule(_) | Line::StepRule { .. } | Line::Orphan { .. }))
     .count();
   let count = (tab == Tab::Project).then(|| rules.to_string());
   let rows: Vec<Element> = if group_of.rows.is_empty() {
@@ -106,9 +106,9 @@ fn line_row(
       overrides,
     } => head_row(ctx, (tab, index), label, (*count, *overrides)),
     Line::Step { label } => sub_head(&format!("instructions-step-{}-{index}", tab.name()), label, None, true).into(),
-    Line::Rule(entry) => rule_row(ctx, data, (entry, None), selection, false),
-    Line::StepRule { entry, step } => rule_row(ctx, data, (entry, Some(step)), selection, false),
-    Line::Orphan(entry) => rule_row(ctx, data, (entry, None), selection, true),
+    Line::Rule(entry) => rule_row(ctx, data, (entry, None), selection, None),
+    Line::StepRule { entry, step } => rule_row(ctx, data, (entry, Some(step)), selection, None),
+    Line::Orphan { entry, gone } => rule_row(ctx, data, (entry, None), selection, Some(*gone)),
     Line::Removed(name) => Entry::new(
       format!("instructions-removed-{index}"),
       ctx.t_args("hub.remove.removed", [("name", &**name)]),
@@ -141,7 +141,7 @@ fn rule_row(
   data: &ProjectInstructions,
   (entry, step): (&InstructionEntry, Option<&Arc<str>>),
   selection: &Selection,
-  orphan: bool,
+  orphan: Option<Gone>,
 ) -> Element {
   let events = Events::of(entry.body.events());
   let scope = entry.body.scope();
@@ -150,11 +150,12 @@ fn rule_row(
     Some(step) => step.clone(),
     None => where_it_applies(ctx, data, scope, entry),
   };
-  let hint: Arc<str> = if orphan {
-    ctx.t(if matches!(scope, InstructionScope::Step { .. }) {
-      "instructions.orphanStep"
-    } else {
-      "instructions.orphanPipeline"
+  let hint: Arc<str> = if let Some(gone) = orphan {
+    ctx.t(match (gone, scope) {
+      // The design's wording (`02`) is for a deleted pipeline; a step a pipeline draft removed says so.
+      (Gone::Step, _) => "instructions.orphanRemovedStep",
+      (Gone::Pipeline, InstructionScope::Step { .. }) => "instructions.orphanStep",
+      (Gone::Pipeline, _) => "instructions.orphanPipeline",
     })
   } else {
     ctx.t_args(

@@ -253,6 +253,7 @@
     "taskSource": "{{task}} · brief, criteria, earlier steps",
     "orderNote": "Groups follow the order prompts assemble them: agent role, project rules, pipeline, step, then the task.",
     "orphanStep": "Step override · its pipeline was deleted · open it to move or remove it",
+    "orphanRemovedStep": "Step override · its step was removed · open it to move or remove it",
     "orphanPipeline": "Pipeline override · its pipeline was deleted · open it to move or remove it",
     "emptyProject": "No project rules in {{project}} yet",
     "emptyProjectDetail": "Added to the prompts of every agent, or of the agents a rule names.",

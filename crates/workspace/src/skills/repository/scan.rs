@@ -36,6 +36,30 @@ impl RepositoryScan {
     let skills = self.items.iter().filter(|i| i.kind == ItemKind::Skill).count();
     (files, skills)
   }
+
+  /// The instruction files that can be imported, and how many skills folders (`.claude/skills`, `.agents/skills`)
+  /// hold the skills found (*AGENTS.md and 2 skills folders*, `HMf2M` in 03).
+  pub fn sources(&self) -> (Vec<&str>, usize) {
+    let files = self
+      .items
+      .iter()
+      .filter(|item| item.kind == ItemKind::Instruction && item.outcome.is_ok())
+      .map(|item| item.source.as_str())
+      .collect();
+    let folders = SKILL_FOLDERS
+      .iter()
+      .filter(|folder| {
+        self.items.iter().any(|item| {
+          item.kind == ItemKind::Skill
+            && item
+              .source
+              .strip_prefix(**folder)
+              .is_some_and(|rest| rest.starts_with('/'))
+        })
+      })
+      .count();
+    (files, folders)
+  }
 }
 
 #[derive(Debug, Error)]
