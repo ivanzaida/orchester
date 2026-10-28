@@ -88,7 +88,7 @@ pub use self::{
     ARGUMENTS_CEILING, CommandShell, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision,
     UnknownShell, cut_arguments, recorded_arguments,
   },
-  tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
+  tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand, tool_report_markdown},
   transition::RaisedLimits,
   unreadable::{ListedRun, UnreadableRun},
   unverified::AcceptRefusal,

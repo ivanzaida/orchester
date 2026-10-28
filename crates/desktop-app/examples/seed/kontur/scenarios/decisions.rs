@@ -25,14 +25,17 @@ const CRITERIA: [&str; 2] = ["The change is covered by tests.", "Nothing changes
 /// The lines of the sender and its settings that the conflicting run and `main` both change.
 const SEND_LINE: &str = "    let response = self.client.post(&endpoint.url).body(body).send().await?;\n";
 const TIMEOUT_LINE: &str = "  pub timeout_secs: u64,\n";
-/// What Review reported when it failed the work for the last time (`RuLVp` in `DVuXu`).
+/// What Review reported when it failed the work for the last time (`RuLVp` in `DVuXu`), in Markdown as agents write
+/// it: the Summary reads it as the Conversation does.
 const REVIEW_REPORT: &str = concat!(
-  "Criterion 2 is still not met: when Retry-After is an HTTP date, the sender reads it as seconds and waits 0 s. ",
-  "Same finding as the attempt before."
+  "**Criterion 2 is still not met.** When `Retry-After` is an HTTP date, the sender reads it as seconds:\n\n",
+  "1. `parse_retry_after` takes only digits.\n",
+  "   - An HTTP date reads as `0`, so the sender waits 0 s.\n",
+  "2. Same finding as the attempt before."
 );
 /// What Review reported when it could not check everything.
 const UNVERIFIED_REPORT: &str =
-  "Checked the task list and the empty project against the design. Two states could not be reached.";
+  "Checked the task list and the empty project against the design. **Two states could not be reached.**";
 /// What Review reported when it failed the work it was then not run again on.
 const UNCHANGED_REPORT: &str = "The date header still shows the UTC day for runs that ended after local midnight.";
 /// What it could not check, and why.
