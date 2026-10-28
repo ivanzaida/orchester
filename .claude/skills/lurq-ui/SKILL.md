@@ -170,7 +170,8 @@ whole app at 60 Hz.
 
 Baseline affordances: anything clickable gets a pointer cursor and a hover state; selected
 rows render inert; destructive actions confirm through an in-app modal rather than a native
-OS dialog, so the confirmation is themed like the rest of the app.
+OS dialog, so the confirmation is themed like the rest of the app, and rather than a warning
+inserted into the page, which shifts the layout under it.
 
 ## Verify
 

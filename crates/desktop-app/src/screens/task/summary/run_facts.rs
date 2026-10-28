@@ -233,7 +233,9 @@ fn checkpoint(ctx: &Ctx, run: &RunView) -> Element {
   )
 }
 
-/// *Tokens*: "412k of 500k", in `warning` once the run used its budget up; "412k · no limit".
+/// *Tokens*: "412k of 500k", in `warning` once the run used its budget up; "412k · no limit". While an agent's CLI
+/// reported input but no output ([`orchester_core::run::TokenUsage::output_unreported`]), its output is unknown and
+/// the count leaves it out: "412k of 500k · output not reported yet".
 fn tokens(ctx: &Ctx, run: &RunView) -> Element {
   let used = compact_tokens(run.run.used().get());
   let text = match run.run.budget() {
@@ -242,6 +244,15 @@ fn tokens(ctx: &Ctx, run: &RunView) -> Element {
       [("used", used), ("budget", compact_tokens(budget.get()))],
     ),
     None => ctx.t_args("summary.runDetails.tokensNoLimit", [("used", used)]),
+  };
+  let unreported = run
+    .invocations
+    .iter()
+    .any(|invocation| invocation.usage.output_unreported());
+  let text = if unreported {
+    ctx.t_args("summary.runDetails.tokensOutputUnreported", [("tokens", &*text)])
+  } else {
+    text
   };
   let shown = value("task-fact-tokens", &text, Look::Secondary);
   let shown = if run.run.token_limit_reached() {

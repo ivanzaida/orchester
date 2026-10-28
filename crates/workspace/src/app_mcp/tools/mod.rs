@@ -163,7 +163,8 @@ const SPECS: &[Spec] = &[
     description: "A run: its steps, state (for one the runner interrupted after its own failure, reason \
                   runner_failed with runner_failure: storage_contention when the project database stayed busy, \
                   storage_failure when it was unavailable, other, or null when not recorded), tokens (auto mode's \
-                  reviewer included, and its part apart), active time and \
+                  reviewer included, and its part apart; output_unreported counts its agent invocations whose CLI \
+                  reported input but no output yet: their output is unknown, not 0), active time and \
                   what it waits for, its agents' waiting questions with their options, the steps that wait for a \
                   message with what each one's agent wrote last (awaiting.messages: the question it ended its step with, \
                   or its newest message), and the plan waiting for a decision (version, step, its whole text and an \
@@ -340,7 +341,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_usage",
-    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account (an id, or `none` for usage on no account; names in any case); `unmatched` names each filter value nothing in the range matches. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row. `unread_runs` counts the runs left out because their record is damaged; the rest is counted. `estimates`, for one project, is the story-point estimator's own usage in the range (its tokens and how many requests asked a model), outside the runs and their filters; null without `project`.",
+    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or provider (the agent connection the tokens were spent on), filtered by task, run, pipeline, step, agent profile, model or provider (an id, or `earlier` for usage no record names a provider for; names in any case); `unmatched` names each filter value nothing in the range matches. The totals' `output_unreported` counts the agent invocations whose CLI reported input but no output yet (Claude Code on some providers reports output only in its final result): their output is unknown, not 0, so `output` and `spent` hold only what the others reported. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row. `unread_runs` counts the runs left out because their record is damaged; the rest is counted. `estimates`, for one project, is the story-point estimator's own usage in the range (its tokens and how many requests asked a model), outside the runs and their filters; null without `project`.",
     schema: schema_for_type::<usage::GetUsage>,
     read_only: true,
   },
