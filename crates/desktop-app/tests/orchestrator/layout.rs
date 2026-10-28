@@ -77,6 +77,11 @@ fn orchestrator_new_conversation_starts_640_wide_with_the_composer_focused() {
   // 12 over the message and 28 between it and the bar (`QcfyZ`).
   let composer = screen.bounds("orchestrator-composer");
   assert!((composer.height - 93.0).abs() < 2.0, "{composer:?}");
+  // Four one-line suggestions, 32 high each (`VLqDm`), two a row.
+  for name in ["plan", "running", "order", "idea"] {
+    let suggestion = screen.bounds(&format!("orchestrator-suggestion-{name}"));
+    assert!(same(suggestion.height, 32.0), "{name}: {suggestion:?}");
+  }
   screen.until("the focus in the composer", |screen| {
     screen
       .window

@@ -26,6 +26,7 @@ mod open_long;
 mod paste;
 mod proposal;
 mod queue;
+mod reading;
 mod references;
 mod report;
 mod repository;

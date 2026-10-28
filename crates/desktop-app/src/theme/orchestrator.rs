@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{ShadowStyle, SpacingSize, Theme, ThemePalette, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  layout::{
+    scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+    text_style::{FontWeight, TextStyle},
+  },
   node::box_shadow::BoxShadow,
 };
 
@@ -230,6 +233,21 @@ impl OrchestratorSpacing {
       Self::StartComposer => 28.0,
     }
   }
+}
+
+/// `base`, the theme's scrollbar, for the chat's turns: in a lane of its own, so the thumb never covers a message's
+/// end.
+pub fn chat_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  ScrollBarStyle {
+    placement: ScrollBarPlacement::Reserved,
+    ..base.clone()
+  }
+}
+
+/// The chat's side (`ECQg8`) less the lane `scrollbar` keeps at the turns' right, so their column stays centred on
+/// the chat, as the composer's is, wherever the lane takes room.
+pub fn beside_chat_lane(scrollbar: &ScrollBarStyle) -> f32 {
+  OrchestratorSpacing::PageSide.value() - (scrollbar.width + scrollbar.resolved_edge_inset() * 2.0)
 }
 
 /// Shadows of the Orchestrator.

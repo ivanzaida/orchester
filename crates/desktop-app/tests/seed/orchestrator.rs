@@ -6,7 +6,7 @@ use orchester_core::{account::AccountState, connection::invocation::Platform, id
 use orchester_exec::programs::Programs;
 use orchester_store::AppDb;
 use orchester_workspace::orchestrator::{
-  chat::ChatView,
+  chat::{ChatView, EndMoved},
   waits::{MergeChecks, Switches, follow_in},
 };
 
@@ -37,6 +37,11 @@ fn seed_orchestrator_keeps_waits_that_stand_under_the_followers_keys() {
     cards.standing.len(),
     3,
     "the run ready to merge, the plan and the question being read stand"
+  );
+  assert_eq!(
+    cards.moved.values().copied().collect::<Vec<_>>(),
+    vec![EndMoved::Merged],
+    "the end of the run merged since no longer waits: its line is neutral"
   );
   let followed = follow_in(
     (seed.repo(), seed.seeded.project, &Programs::processes()),
