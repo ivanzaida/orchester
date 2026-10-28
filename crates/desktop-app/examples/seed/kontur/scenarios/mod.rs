@@ -3,6 +3,7 @@
 mod accounts;
 mod agents;
 mod agents_cases;
+mod agents_library;
 mod api_providers;
 mod cards;
 mod changes;
@@ -76,8 +77,9 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 47] = [
+pub const ALL: [Scenario; 48] = [
   Scenario::of("agents", agents::seed),
+  Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
