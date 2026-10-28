@@ -101,24 +101,28 @@ fn invocation_marks_the_worktree_and_its_repository_untrusted() {
   );
 }
 
-/// What App Server would otherwise take from the user's own Codex setup is turned off on every start:
-/// the notify program, plugins and apps, and the permission requests that could stay granted.
+/// What App Server would otherwise take from the user's own Codex setup is turned off on every start, read-only or
+/// writing, on every platform: the notify program, plugins and apps, the user's own hooks, and the permission requests
+/// that could stay granted.
 #[test]
 fn invocation_turns_off_what_the_users_codex_setup_would_add() {
-  let args = invocation(RepositoryAccess::Write, Platform::MacOs)
-    .args()
-    .expect("unicode paths");
-  for setting in [
-    "notify=[]",
-    "features.plugins=false",
-    "features.apps=false",
-    "features.exec_permission_approvals=false",
-    "features.request_permissions_tool=false",
-  ] {
-    assert!(
-      args.windows(2).any(|pair| pair == ["-c", setting]),
-      "{setting}: {args:?}"
-    );
+  for access in [RepositoryAccess::ReadOnly, RepositoryAccess::Write] {
+    for platform in [Platform::Windows, Platform::MacOs] {
+      let args = invocation(access, platform).args().expect("unicode paths");
+      for setting in [
+        "notify=[]",
+        "features.plugins=false",
+        "features.apps=false",
+        "features.exec_permission_approvals=false",
+        "features.request_permissions_tool=false",
+        "features.hooks=false",
+      ] {
+        assert!(
+          args.windows(2).any(|pair| pair == ["-c", setting]),
+          "{setting}: {args:?}"
+        );
+      }
+    }
   }
 }
 

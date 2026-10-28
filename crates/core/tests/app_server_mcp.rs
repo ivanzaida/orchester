@@ -163,7 +163,7 @@ fn only_the_chosen_servers_run() {
 }
 
 /// Hooks would run programs of the user's setup with the agent's work: a configuration with any
-/// refuses the step.
+/// refuses the step while they are not turned off.
 #[test]
 fn user_hooks_refuse_the_step() {
   for hooks in [json!(null), json!({}), json!([])] {
@@ -172,6 +172,51 @@ fn user_hooks_refuse_the_step() {
   assert_eq!(refuse_user_hooks(&json!({"config": {}})), Ok(()));
   let hooks = json!({"config": {"hooks": {"PreToolUse": [{"command": "audit.exe"}]}}});
   assert_eq!(refuse_user_hooks(&hooks), Err(McpInventoryError::UserHooks));
+}
+
+/// The `hooks` table Codex 0.159.2 reported for a person whose other agent tool installed global hooks
+/// (2026-10-28): every event with an empty list, and the trust `state` of each `hooks.json` entry.
+fn installed_hooks() -> serde_json::Value {
+  let mut hooks: serde_json::Map<String, serde_json::Value> = [
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "SessionStart",
+    "UserPromptSubmit",
+    "Stop",
+  ]
+  .into_iter()
+  .map(|event| (event.to_owned(), json!([])))
+  .collect();
+  hooks.insert(
+    "state".to_owned(),
+    json!({
+      r"C:\Users\me\.codex\hooks.json:session_start:0:0": {"trusted_hash": "sha256:5e1f"},
+      r"C:\Users\me\.codex\hooks.json:pre_tool_use:0:0": {"trusted_hash": "sha256:9a0c"},
+    }),
+  );
+  serde_json::Value::Object(hooks)
+}
+
+/// With `features.hooks = false`, which every Codex Orchester starts has, no hook runs, so the user's hooks no longer
+/// refuse the step; without the flag, or with it on, they still do.
+#[test]
+fn user_hooks_turned_off_do_not_refuse_the_step() {
+  let off = json!({"config": {"hooks": installed_hooks(), "features": {"hooks": false}}});
+  assert_eq!(refuse_user_hooks(&off), Ok(()));
+  let defined = json!({"config": {"hooks": {"PreToolUse": [{"command": "audit.exe"}]}, "features": {"hooks": false}}});
+  assert_eq!(refuse_user_hooks(&defined), Ok(()), "none of them runs");
+  for features in [
+    json!(null),
+    json!({}),
+    json!({"hooks": true}),
+    json!({"hooks": "false"}),
+  ] {
+    let on = json!({"config": {"hooks": installed_hooks(), "features": features}});
+    assert_eq!(refuse_user_hooks(&on), Err(McpInventoryError::UserHooks), "{features}");
+  }
+  let unset = json!({"config": {"hooks": installed_hooks()}});
+  assert_eq!(refuse_user_hooks(&unset), Err(McpInventoryError::UserHooks));
 }
 
 /// What `config/read` reports with the runs' relay [`SERVER`] from the process's overrides, a chosen `docs`, and the

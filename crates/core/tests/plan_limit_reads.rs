@@ -107,7 +107,12 @@ fn plan_limit_reads_codex_reads_the_plan_bucket_without_a_turn() {
   let asked = codex.asked.borrow();
   let args = asked[0].args();
   assert_eq!(args[..2], ["app-server", "--stdio"]);
-  assert!(args.iter().any(|arg| arg == "features.plugins=false"), "{args:?}");
+  for setting in ["features.plugins=false", "features.hooks=false"] {
+    assert!(
+      args.windows(2).any(|pair| pair == ["-c", setting]),
+      "the user's own setup is off for a read too: {setting}: {args:?}"
+    );
+  }
   let input = asked[0].stdin().expect("the requests are on its input");
   assert!(
     asked[0].interactive_stdin(),
