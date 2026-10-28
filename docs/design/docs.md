@@ -56,7 +56,7 @@ knowledge for people, beside what already exists for agents and code:
 
 ## The screens
 
-A new sidebar entry *Docs* in the project (next to Tasks, after the sidebar redesign of ORC-108 settles where).
+A new sidebar entry *Docs* in the project (the design proposes it after *Files*; see *Design (Pencil)*).
 
 - **Docs page:** a tree of folders and docs on the left (drag to move, *New doc*, *New folder*), the open doc on the
   right, an outline of its headings beside it on wide windows. Route `/project/<id>/docs/<doc-id>?version=<n>`;
@@ -139,6 +139,62 @@ person keep either or both before committing again. No live co-editing in the fi
 6. **D5 · Team server.** Docs of a shared project on its server, the offline cache, commits through the server.
 7. **Later:** backlinks, comments, export and import of folders of Markdown files, live co-editing.
 
+## Design (Pencil)
+
+Drawn 2026-10-28 (ORC-198), waiting for the person's review. Board `Docs · redesign` `YXCuv` in the desktop
+`orchester.pen`, dark, Kontur fixture data; exports in `.tmp/design/orc-198/` of the run's worktree.
+
+| Row | Frame | Node | Shows |
+| --- | --- | --- | --- |
+| Parts `WaFwh` | Docs/Tree row | `DlJLA` (examples `R4FI4O`) | Folder, doc, chosen, hover with the drag handle, waiting proposal (blue dot and count) |
+| | Docs/Draft bar | `uvZbM` (`Lpyfn`) | *Draft · not committed*, saved time and base version, *Discard draft*, *Commit…* |
+| Row 1 `xrodh` | 01 · Reading | `yHt6C` | Tree (*New doc*, *New folder*, find field, *Import from the repository…*), the doc rendered (headings, paragraph, list, table, code, image, links to `KON-18`, a file path and a doc), version line, *History*, *Edit*, outline |
+| | 01L · Reading · light | `rvtFt` | The same in the light theme |
+| | 02 · History | `xR3rK` | Versions with message and author (person; agent with run and step), v4 chosen, its diff against v3 |
+| | 03 · Search · by title | `pnaQS` | Ctrl/⌘ P list under the tree's find field, matches marked |
+| | 03b · Search · text in docs | `MZDto` | Ctrl/⌘ Shift F results in the doc pane, best first, matches marked in context |
+| Row 2 `QycrU` | 04 · Editing | `bvKZo` | Draft bar; one focused block with marks styled as typed (markers only by the caret); other blocks rendered |
+| | 04L · Editing · light | `zNddI` | The same in the light theme |
+| | 04b · Editing · / block menu | `xVO24` | `/` on an empty block: the block menu with Markdown shortcuts |
+| | 04c · Editing · link to a task | `p4l4J` | Typing `KON-1` offers tasks |
+| | 04d · Editing · link to a doc | `gRIbQ` | `[[ret` offers docs and headings |
+| Row 3 `h2le9s` | 05 · Commit in place | `MVgME` | Message (optional) and *Commit v5* under the draft bar |
+| | 05b · Commit refused · newer version | `mMeuc` | Refusal notice in place, *Show v5*, *Merge with v5* |
+| | 05c · Merge block by block | `zTwTt` | Each block both changed: yours and theirs, *Keep mine / Keep theirs / Keep both*; *Commit v6* waits for every choice |
+| Row 4 `OOgCm` | 06 · Agent proposal | `wY9uK` | Proposal bar (agent, run, step, message), diff against v7, *Commit v8* / *Discard*; waiting proposals marked in the tree, a proposed new doc muted |
+| | 08 · Empty | `xXMKO` | No docs yet: *New doc*, *Import from the repository…* |
+| Row 5 `G4LXw` | 07 · Import · choose a folder | `q18SB` | The checkout's folders with `.md` files, one chosen |
+| | 07b · Import · choose files | `paN7W` | Files with check boxes and where each lands; an earlier import offered as *Skip* / *Import as a new version* |
+| | 07c · Import · report | `tLWIX` | Imported, skipped, not chosen; the new docs in the tree |
+| Row 6 `AS1ZR` | 09 · Profile · Docs permission | `mdLqn` | Copy of `Agents · redesign` 01c with *Docs: commit without asking* (off) in Approvals and the Connection enforcement row *Docs · Orchester tools · changes wait as proposals* |
+| | 10 · Sidebar · Docs entry | `g1yWog` | Docs after Files, chosen and not, with the reasons |
+| | 10b · Task · Sources names a doc | `p3vV4b` | Copy of `Task form · redesign` 03 with a *Docs* group in Sources |
+| | 10c · Run · Save as doc | `pXvBW` | Copy of `Task page · redesign` 01d with *Save as doc* on the Report row (its hover tooltip turned off) |
+| Row 7 `B40Mcf` | What the design decides, Open choices | `K5qL0`, `i1XG73` | Notes |
+
+Decisions the design makes:
+
+- **Sidebar:** *Docs* is the last daily place, right after *Files* (both are where the project is read: code and
+  documents); Tasks keeps its place second and the work places keep their order. No count on the entry.
+- **No modals:** quick open drops from the tree's find field; text search, history, merge and import take the doc
+  pane; commit, refusal and discard happen under the draft bar.
+- **Editor:** only the focused block is a field; its Markdown markers show only next to the caret.
+- **Proposals:** shown with the same bar as a draft (Docs/Draft bar), with the agent, run and step; the tree marks docs
+  and folders with waiting proposals with a blue dot and count.
+- **Profile row:** *Docs: commit without asking* sits in the profile's Approvals group.
+- Button and Field components carry no height in the file; their instances on this board are 28 high.
+
+New words (not in locales yet): *Find a doc*, *On this page*, *Draft · not committed*, *Commit…*, *Commit v5*,
+*Discard draft*, *Show whole v4*, *Back to the doc*, *Close search*, *Text in docs*, *Type to filter blocks*,
+*Link to a task*, *Link to a doc*, *Message (optional)*, *Not committed: Dana committed v5 while you wrote*,
+*Merge with v5*, *Merging with v5*, *Keep mine*, *Keep theirs*, *Keep both*, *Proposed by Builder · Run #57 · 03
+Implement*, *Import from the repository*, *Folder of the checkout*, *Show its files*, *Change folder*, *Lands in docs
+as*, *Skip*, *Import as a new version*, *Import 4 docs*, *Imported 4 docs from docs/*, *No docs yet*, *Docs: commit
+without asking*, *Save as doc*, *Add a doc*.
+
+Not drawn yet (see the Notes row): proposals in Needs you, where *Save as doc* lands, naming a new doc or folder in
+the tree and the drop line while dragging, archiving, narrow windows.
+
 ## Open questions for review
 
-1. **Where *Docs* sits in the sidebar** after ORC-108's redesign.
+1. **Where *Docs* sits in the sidebar** after ORC-108's redesign: the design proposes after *Files* (see *Design*).
