@@ -2,6 +2,7 @@
 
 mod cached;
 mod delta;
+mod references;
 mod similar;
 mod widens;
 
@@ -11,6 +12,10 @@ use thiserror::Error;
 pub use self::{
   cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
+  references::{
+    Binding, BindingKindError, ConnectionRole, LocalEntities, Published, Reference, ReferenceKind, for_publishing,
+    named, resolve,
+  },
   similar::similar_titles,
   widens::{SharedBody, VersionWidening, widens},
 };
