@@ -1969,6 +1969,14 @@
       "readOnly": "This task is Not shared, so it is read-only. Share task on its page uploads it first."
     }
   },
+  "teamJoin": {
+    "refused": {
+      "wrongCode": "That code isn't right, or it was used or has expired: codes work once, for a limited time. Check it with whoever made it.",
+      "inviteEnded": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected.",
+      "unreachable": "Nothing answered at {{address}}. Check the address, and that this computer is on your team's network.",
+      "noProjects": "{{server}} has no shared project you're invited to yet. Ask someone there to invite you to their project."
+    }
+  },
   "claims": {
     "refused": {
       "held": "{{holder}} has taken this task, so nothing started. Ask them, or wait until they release it.",
