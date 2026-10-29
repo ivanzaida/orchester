@@ -1,13 +1,13 @@
 //! The fake team server's writes of the team's configuration, by its admins only (`403 not_admin` otherwise): a
 //! resource created with its v1, a version published on the latest one (`409 version_conflict` with the latest
-//! otherwise, `422 missing_files` for a skill part it does not have), and a skill part uploaded by its hash. Each
-//! version appends its `resource.published`.
+//! otherwise, `422 missing_files` for a skill part it does not have), resources imported with their history, and a
+//! skill part uploaded by its hash. Each version, and each imported resource, appends its `resource.published`.
 
 use std::{net::TcpStream, num::NonZeroU32};
 
 use orchester_api::{
-  Attribution, Event, Reference, ResourceCreate, ResourcePublished, SharedResource, SharedResourceKind, SharedVersion,
-  UserRef, VersionPublish,
+  Attribution, Event, Reference, ResourceCreate, ResourcePublished, ResourcesImport, SharedResource,
+  SharedResourceKind, SharedVersion, UserRef, VersionPublish,
 };
 use orchester_core::{blob::ContentHash, id::ResourceId, resource::VersionNumber, sharing::TaskRevision};
 use serde_json::{Value, json};
@@ -146,6 +146,69 @@ pub(super) fn publish(shared: &Shared, user: &UserRef, resource: &str, request: 
   drop(state);
   shared.appended.notify_all();
   respond(stream, 201, &json!({ "version": version }));
+}
+
+/// `POST …/resources/import`: each resource with its id and every version with its number and time, the uploader as
+/// their publisher. Appends each resource's `resource.published`.
+pub(super) fn import(shared: &Shared, user: &UserRef, request: &Request, stream: &mut TcpStream) {
+  let import: ResourcesImport = request.json();
+  let mut state = shared.state.lock().expect("state");
+  let missing: Vec<String> = import
+    .resources
+    .iter()
+    .flat_map(|resource| &resource.versions)
+    .flat_map(|version| state.missing_files(&version.body))
+    .collect();
+  if !missing.is_empty() {
+    drop(state);
+    return missing_files(stream, &missing);
+  }
+  let mut kept = Vec::new();
+  for resource in import.resources {
+    let mut latest = None;
+    for version in resource.versions {
+      state.versions.push(SharedVersion {
+        resource: resource.id,
+        number: version.number,
+        body: version.body,
+        hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
+        references: version.references,
+        based_on: latest,
+        published: Attribution {
+          by: user.clone(),
+          at: version.published_at,
+        },
+      });
+      latest = Some(version.number);
+    }
+    let uploaded = Attribution {
+      by: user.clone(),
+      at: state.tick(),
+    };
+    let resource = SharedResource {
+      id: resource.id,
+      kind: resource.kind,
+      slug: resource.slug,
+      name: resource.name,
+      archived: resource.archived,
+      revision: TaskRevision::FIRST,
+      latest,
+      created: uploaded.clone(),
+      updated: uploaded,
+    };
+    state.resources.push(resource.clone());
+    state.append(
+      user,
+      ResourcePublished {
+        resource: resource.clone(),
+      },
+      Event::ResourcePublished,
+    );
+    kept.push(resource);
+  }
+  drop(state);
+  shared.appended.notify_all();
+  respond(stream, 201, &json!({ "resources": kept }));
 }
 
 /// `PUT …/files/{sha256}`: `201` for a part the project did not have, `200` for one it had.

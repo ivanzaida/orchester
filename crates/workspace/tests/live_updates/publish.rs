@@ -15,7 +15,8 @@ use std::{
 };
 
 use orchester_api::{
-  FileStored, ResourceCreate, ResourceCreated, SharedResourceKind, SharedVersion, VersionPublish, Versions,
+  FileStored, ResourceCreate, ResourceCreated, ResourcesImport, SharedResource, SharedResourceKind, SharedVersion,
+  VersionPublish, Versions,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -42,9 +43,19 @@ use super::{ALICE, BOB, Member, TeamServer, Workspace, seen_within};
 const CACHED: Duration = Duration::from_secs(5);
 
 /// A person's server as their store publishes to it; it cannot be reached while `offline` is set.
-struct Publisher {
+pub(super) struct Publisher {
   member: Member,
   offline: Arc<AtomicBool>,
+}
+
+impl Publisher {
+  /// `token`'s member's server, which can be reached.
+  pub(super) fn online(server: &TeamServer, token: &str) -> Self {
+    Self {
+      member: Member::of(server, token),
+      offline: Arc::new(AtomicBool::new(false)),
+    }
+  }
 }
 
 impl ConfigServer for Publisher {
@@ -93,6 +104,16 @@ impl ConfigServer for Publisher {
       member
         .client
         .upload_file(&member.token, member.project, &hash, content)
+        .await?,
+    )
+  }
+
+  async fn import_resources(&self, import: ResourcesImport) -> Result<Vec<SharedResource>, SharingError> {
+    let member = &self.member;
+    Ok(
+      member
+        .client
+        .import_resources(&member.token, member.project, &import)
         .await?,
     )
   }
@@ -178,7 +199,7 @@ impl Computer {
   }
 }
 
-fn rule(text: &str) -> Instruction {
+pub(super) fn rule(text: &str) -> Instruction {
   Instruction::new(
     PromptText::new(text).expect("a prompt"),
     AgentTargets::All,
@@ -188,11 +209,11 @@ fn rule(text: &str) -> Instruction {
   .expect("a valid instruction")
 }
 
-fn json(text: &str) -> Value {
+pub(super) fn json(text: &str) -> Value {
   serde_json::to_value(rule(text)).expect("an instruction serializes")
 }
 
-fn number(value: u32) -> VersionNumber {
+pub(super) fn number(value: u32) -> VersionNumber {
   VersionNumber::new(value.try_into().expect("above zero"))
 }
 
