@@ -5,7 +5,7 @@ Settings live in several places:
 | Where | What | Kept in |
 |---|---|---|
 | **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
-| **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Context · Connections · Secrets · Sharing | Project, GitHub, base branch, base-moved notices, repository agent files; auto mode, estimates, limits, environment; sources, code index; connections; secrets; sharing | Project database (base branch per computer; secret values in the OS keychain) |
+| **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Context · Connections · Secrets · Sharing | Project, GitHub, base branch, base-moved notices, repository agent files; approvals (Allow Autopilot, reviewer), estimates, limits, environment; sources, code index; connections; secrets; sharing | Project database (base branch and Allow Autopilot per computer; secret values in the OS keychain) |
 | **Memory › Settings** | How task and project memory save; how much each agent gets | Project database |
 | **Orchestrator settings** | The chat's connection, model and effort (versioned) | Project database |
 | **Agent profile › Permissions** | Repository access, writable folders, commands, network, MCP servers, approvals | Project database |
@@ -13,7 +13,7 @@ Settings live in several places:
 | **New / Edit task** chips | Pipeline, delivers, limits, sources, module, priority, points, *Don't merge automatically* | Project database |
 
 **Person-only settings.** Settings › **Automation**, **Accounts** and **Orchester Cloud**, Project settings › Runs ›
-*Let Orchester estimate story points*, and the widening confirmations in Project settings (auto mode, environment,
+*Let Orchester estimate story points*, and the widening confirmations in Project settings (Allow Autopilot, environment,
 adding a source, turning repository agent files on) take only a person's input. Input from an MCP client is refused
 visibly: "A change brought by automation was not taken: only you change this setting, here in the window." Turning a
 permission *off* is always taken. General and Notifications have no such gate.
@@ -93,7 +93,7 @@ Every row is off until a person turns it on (except as noted), and only a person
 |---|---|---|---|
 | The window | **Look at the window** | Always on | Screenshots, the element tree, the app's log and state, for every client with the token. |
 | | **Agents can control this window** | Off in release builds, on in development builds | Click and type, resize, change pages and the theme. Applies from the next start; `ORCHESTER_APP_MCP_WINDOW_CONTROL` overrides it for one run. |
-| Approvals and permissions | **Let automation answer approvals** | Off | Clients may approve a waiting tool request once or deny it, answer questions, decide plans, continue stopped runs with retry/return/accept, set auto mode — recorded as *automation's*. Wider answers stay yours. |
+| Approvals and permissions | **Let automation answer approvals** | Off | Clients may approve a waiting tool request once or deny it, answer questions, decide plans, continue stopped runs with retry/return/accept, choose the reviewer — recorded as *automation's*. Wider answers stay yours; allowing Autopilot in a project is always a person's. |
 | | **Let automation change agent permissions** | Off | Clients may widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs, environment variables, API providers, new tools and publications. Narrowing is always allowed. |
 | The Orchestrator may | **Publish drafts** | Off | The chat publishes pipelines, profiles, instructions, skills and tools it drafts without your click. Widening drafts still need *Let automation change agent permissions*. |
 | | **Answer agents** | Off | The chat answers agents' questions and messages a run's agents directly, and starts a turn by itself when an agent waits, a run ends, or the daily report arrives. Approvals and plan decisions stay yours. |
@@ -141,8 +141,8 @@ Tabs: **General · Runs · Context · Connections · Secrets · Sharing**.
 
 | Group | Setting | Default | Notes |
 |---|---|---|---|
-| Approvals | **Allow Autopilot for agents in this project** | Off | On, agent profiles set to Autopilot approve their own requests; off, every agent runs as Manual and the hint names the profiles set to Autopilot. Saves as you change it; turning it on is person-only (an MCP client's input is refused, with the reason under the row), turning it off is anyone's. |
-| | **Reviewer** | First Claude Code connection with Haiku 4.5 | For Manual requests off the allowed list. Connection, model, effort. Not an API-provider connection. Changing it is person-only (automation's change is put back). |
+| Approvals | **Allow Autopilot for agents in this project** | Off | On: agents whose profile is set to Autopilot approve their own requests (work outside the worktree, pushes to a remote and other branches still ask you). Off: every agent here runs as Manual, and the hint names the profiles set to Autopilot. Kept on this computer only. Saves as you flip it; turning it on is person-only (an MCP client's input is refused, with the reason under the row; automation's change is put back), turning it off is always taken. |
+| | **Reviewer** | First Claude Code connection with Haiku 4.5 | For Manual requests off the allowed list: the connection, model and effort that judge Manual's requests before you. Saves as you change it; automation chooses another only with both *Let automation answer approvals* and *Let automation change agent permissions*. Not an API-provider connection. |
 | | **Approved for every run** | — | The rules from *Approve for every run of this project* (QA app starts while `tools/qa-app.ps1` is unchanged), on a page of their own with *Revoke*. |
 | Estimates | **Let Orchester estimate story points** | Off | Per project. Estimates new and changed tasks with the reviewer's model (tokens count toward the daily budget). Points you set are never changed. Person-only. |
 | Limits (apply to new runs) | **Run budget** | No limit | Tokens prefilled in New task. |

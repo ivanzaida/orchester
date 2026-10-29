@@ -46,7 +46,7 @@ const DESCRIPTION: &str = "Proposes making this project's folder a git repositor
   honoured as it is); then a first commit of the folder's files that .gitignore does not list (first_commit files) or \
   an empty one (empty). Orchester's .orchester folder always stays out of git. It never adds a remote, pushes or \
   changes git's settings. It writes to the project's folder, so in this chat it is always a card the person applies \
-  or dismisses in the conversation, whatever auto mode and the person's switches say: nothing is made until they \
+  or dismisses in the conversation, whatever Autopilot and the person's switches say: nothing is made until they \
   apply it, on the card or by approving it in a later message (apply_proposal, only when no file looks as if it holds \
   secrets). The card shows the branch, how many files the commit adds, the whole .gitignore \
   it honours and the files that look as if they hold secrets (such as .env), which the person decides on: propose a \

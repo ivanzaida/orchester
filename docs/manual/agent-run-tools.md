@@ -35,9 +35,9 @@ reach.
 
 - `run_check` and `start_qa_app` are not offered to a step without network.
 - A call that asks reaches a person like any request outside the step's permissions; a run rule (*Approve similar*)
-  may answer it. **Auto-approval and auto mode never answer `run_check` or `start_qa_app`.**
+  may answer it. **Auto-approval and the reviewer never answer `run_check` or `start_qa_app`.**
 - *Approve for every run of this project* on a `start_qa_app` card keeps a project rule tied to the QA script's git
-  blob (revoked in Project settings › Runs › Auto mode › *Approved for every run*).
+  blob (revoked in Project settings › Runs › Approvals › *Approved for every run*).
 
 ## Tool reference
 
