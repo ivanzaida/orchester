@@ -2,12 +2,13 @@
 //! it: what the run delivers, whether it was completed and by whom, its report, and for work done outside the
 //! repository the MCP tool calls that changed something. A run whose result is its report is completed (its task Done)
 //! instead of merged; one whose pipeline expects changes is flagged and waits for the person, who may complete it
-//! anyway.
+//! anyway. Closing the task while such a run waits settles its completion (ORC-150, [`settle_closed_in`]).
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::RunId,
+  integration::RunWork,
   orchester_tools,
   resource::{Deliverable, StepKey, WithoutCommits},
   run::{
@@ -15,7 +16,7 @@ use orchester_core::{
     StepOutput, ToolApprovalDecision, last_report, run_delivers,
   },
   store::{ActivityStore, RunStore, TaskStore},
-  task::Task,
+  task::{Task, organization::ChangeActor},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -149,15 +150,7 @@ pub fn complete_in(
   if run_delivers(&task, &found).without_commits() == WithoutCommits::Flagged && !anyway {
     return Err(Message::new("runs.complete.failure.expectsChanges"));
   }
-  let outputs = db.step_outputs(run).map_err(store)?;
-  let plans = db.plans(run).map_err(run_store_error).map_err(store)?;
-  let report = last_report(&found, &outputs, &plans).map(|(step, text)| RunArtifact {
-    run,
-    name: REPORT_ARTIFACT.to_owned(),
-    step: Some(step.clone()),
-    text: text.to_owned(),
-    created_at: now,
-  });
+  let report = report_artifact(&db, &found, now).map_err(store)?;
   let completion = RunCompletion {
     run,
     by,
@@ -165,4 +158,76 @@ pub fn complete_in(
   };
   db.save_run_completion(&completion, report.as_ref()).map_err(store)?;
   Ok(completion)
+}
+
+/// Settles the completion of each closed task's latest run that waits to be completed (ORC-150), in the project at
+/// `repo_root`: a task closed, Done or Canceled, while its run passed every step and committed nothing, as git through
+/// `programs` tells, is completed as of its closing, by whoever closed it ([`closer`]), its report kept as completing
+/// keeps it, and its status left as it was closed. However it was closed (on its page, on the board, through
+/// Orchester's MCP server, or by a member on the team server), its Summary and every *Needs you* stop asking. Whether
+/// it settled any. Blocks on SQLite, and on git for such runs only.
+pub fn settle_closed_in((repo_root, programs): (&Path, &Programs)) -> Result<bool, StoreError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let mut waiting = Vec::new();
+  for task in db.tasks()? {
+    if !task.organization().status().is_closed() {
+      continue;
+    }
+    if let Some(run) = db.uncompleted_latest_run(task.id())?
+      && let Some(run) = db.run(run).map_err(run_store_error)?
+    {
+      waiting.push((task, run));
+    }
+  }
+  let works: Vec<RunWork> = waiting.iter().map(|(_, run)| RunWork::of(run)).collect();
+  let deliveries = delivery::deliveries(programs, repo_root, &works);
+  let mut settled = false;
+  for ((task, run), delivery) in waiting.iter().zip(deliveries) {
+    if delivery != Delivery::NothingToMerge {
+      continue;
+    }
+    let (by, at) = closer(&db, task)?;
+    let report = report_artifact(&db, run, at)?;
+    let completion = RunCompletion {
+      run: run.id(),
+      by,
+      completed_at: at,
+    };
+    settled |= db.settle_run_completion(&completion, report.as_ref())?;
+  }
+  Ok(settled)
+}
+
+/// Who closed `task`, a closed task, and when: a shared task a member of its project, on its team server, when the
+/// server last changed it; a local task the actor of the change that closed it, a person or automation through
+/// Orchester's MCP server, and when.
+fn closer(db: &ProjectDb, task: &Task) -> Result<(CompletedBy, Timestamp), StoreError> {
+  if let Some(info) = db.shared_task_info(task.id())?
+    && info.kept_tags.is_none()
+  {
+    return Ok((CompletedBy::Member, info.updated_at.unwrap_or_else(Timestamp::now)));
+  }
+  let closing = db
+    .task_organization_history(task.id())?
+    .into_iter()
+    .rev()
+    .find(|change| change.to.status().is_closed() && !change.from.status().is_closed());
+  Ok(match closing {
+    Some(change) if change.actor == ChangeActor::Orchester => (CompletedBy::Automation, change.at),
+    Some(change) => (CompletedBy::Person, change.at),
+    None => (CompletedBy::Person, Timestamp::now()),
+  })
+}
+
+/// The last step's report of `run`, as its artifact *Report* made at `at`; `None` when no step reported anything.
+fn report_artifact(db: &ProjectDb, run: &Run, at: Timestamp) -> Result<Option<RunArtifact>, StoreError> {
+  let outputs = db.step_outputs(run.id())?;
+  let plans = db.plans(run.id()).map_err(run_store_error)?;
+  Ok(last_report(run, &outputs, &plans).map(|(step, text)| RunArtifact {
+    run: run.id(),
+    name: REPORT_ARTIFACT.to_owned(),
+    step: Some(step.clone()),
+    text: text.to_owned(),
+    created_at: at,
+  }))
 }

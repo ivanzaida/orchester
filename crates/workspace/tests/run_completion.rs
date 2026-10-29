@@ -1,38 +1,46 @@
 //! Runs whose result is not a commit (ORC-93), against a real repository: a run that passed every step and committed
 //! nothing waits to be completed when its task or pipeline says it delivers a report or work outside the repository,
 //! and is flagged when changes were expected; completing keeps the last step's report as the run's *Report* and sets
-//! the task Done; the Orchestrator completes such a run on its own as it would merge one, never a flagged one.
-//! `cargo test -p orchester-workspace --test run_completion completion`.
+//! the task Done; the Orchestrator completes such a run on its own as it would merge one, never a flagged one. A
+//! closed task never waits and counts in Done; closing it settles its run's waiting completion, however it was closed
+//! (ORC-150). `cargo test -p orchester-workspace --test run_completion completion`.
 
 mod support;
 
-use std::{collections::HashSet, fs, path::Path, process};
+use std::{
+  collections::{HashMap, HashSet},
+  fs,
+  path::Path,
+  process,
+};
 
 use orchester_core::{
-  id::{InvocationId, RunId, StepExecutionId, TaskId},
+  id::{InvocationId, ProjectId, RunId, ServerId, StepExecutionId, TaskId},
   resource::{Deliverable, StepKey},
   run::{
     CompletedBy, DecidedBy, DecidedToolApproval, PendingToolApproval, REPORT_ARTIFACT, Run, StepOutcome, StepOutput,
     TaskPhase, ToolApprovalDecision,
   },
+  sharing::MemberRole,
   store::{ActivityStore, TaskStore},
   task::organization::{ChangeActor, WorkflowStatus},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::ProjectDb;
+use orchester_store::{CachedTask, ProjectDb, SharingLink};
 use orchester_workspace::{
   orchestrator::{
     auto_merge::completes_in,
     waits::{MergeChecks, Switches, follow_in},
   },
   tasks::{
-    completion::{complete_in, outside_changes},
+    completion::{complete_in, outside_changes, settle_closed_in},
     data::ProjectTasks,
     delivery::Delivery,
     detail::TaskDetail,
     list::{self, TaskTab},
     needs_you::WaitingKind,
+    views::ListView,
   },
 };
 use support::{Fixture, at};
@@ -312,4 +320,222 @@ fn completion_lists_the_mcp_tool_calls_that_were_approved_outside_orchesters_own
     ("pencil", "batch_design", Some("sign-in.pen"), Some(DecidedBy::Person))
   );
   assert_eq!(listed[0].at, at(20));
+}
+
+/// How many tasks Needs you, Active and Done hold, as the Tasks list counts them.
+fn view_counts(tasks: &ProjectTasks) -> [usize; 3] {
+  let rows = list::rows(&tasks.tasks, tasks, TaskTab::All);
+  let waiting = tasks.waiting_tasks();
+  [ListView::NeedsYou, ListView::Active, ListView::Done].map(|view| view.count(&rows, &waiting))
+}
+
+fn settle(fixture: &Fixture) -> bool {
+  settle_closed_in((fixture.repo.path(), &Programs::processes())).expect("settled")
+}
+
+fn completion_of(fixture: &Fixture, run: RunId) -> Option<(CompletedBy, Timestamp)> {
+  let db = ProjectDb::open(fixture.repo.path()).expect("open");
+  db.run_completion(run)
+    .expect("read")
+    .map(|completion| (completion.by, completion.completed_at))
+}
+
+#[test]
+fn completion_a_closed_task_whose_report_waits_is_in_done_and_closing_settles_it() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let (task, run) = nothing_committed(
+    &mut fixture,
+    ("Write the report", Some(Deliverable::Report)),
+    (&base, "Found it."),
+  );
+  let programs = Programs::processes();
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read");
+  assert_eq!(view_counts(&tasks), [1, 1, 0], "it waits to be completed");
+  fixture
+    .db
+    .close_task_organization(task, WorkflowStatus::Done, (ChangeActor::Person, at(40)))
+    .expect("closed");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read again");
+  assert!(waiting(&tasks).is_empty(), "a closed task waits for nothing");
+  assert_eq!(view_counts(&tasks), [0, 0, 1], "it is in Done only");
+
+  assert!(settle(&fixture));
+  assert_eq!(completion_of(&fixture, run.id()), Some((CompletedBy::Person, at(40))));
+  let db = ProjectDb::open(fixture.repo.path()).expect("open");
+  assert_eq!(db.run_artifacts(run.id()).expect("artifacts")[0].text, "Found it.");
+  assert_eq!(
+    db.task(task).expect("read").expect("task").organization().status(),
+    WorkflowStatus::Done
+  );
+  assert!(!settle(&fixture), "once is enough");
+
+  fixture
+    .db
+    .update_task_organization(task, ChangeActor::Person, at(50), |value| {
+      value.with_status(WorkflowStatus::Todo)
+    })
+    .expect("reopened");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read again");
+  assert!(
+    waiting(&tasks).is_empty(),
+    "reopened, its completed run asks nothing again"
+  );
+  let rows = list::rows(&tasks.tasks, &tasks, TaskTab::All);
+  assert_eq!(rows[0].detail.key, "tasks.progress.completed");
+  let page = TaskDetail::load_settled(fixture.repo.path(), task, &programs).expect("the task reads");
+  assert!(page.result.and_then(|result| result.completion).is_some());
+}
+
+#[test]
+fn completion_closing_over_mcp_settles_as_automation_and_a_run_with_commits_is_left() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let (canceled, run) = nothing_committed(
+    &mut fixture,
+    ("Draw the page", Some(Deliverable::Outside)),
+    (&base, "Drew it."),
+  );
+  fixture
+    .db
+    .update_task_organization(canceled, ChangeActor::Orchester, at(41), |value| {
+      value.with_status(WorkflowStatus::Canceled)
+    })
+    .expect("canceled over MCP");
+  let (merged_later, committed) = nothing_committed(
+    &mut fixture,
+    ("Report with commits", Some(Deliverable::Report)),
+    (&base, "x"),
+  );
+  let repo = fixture.repo.path();
+  git(repo, &["checkout", "--quiet", committed.branch().as_str()]);
+  fs::write(repo.join("work.md"), "work\n").expect("a file");
+  git(repo, &["add", "--all"]);
+  git(repo, &["commit", "--quiet", "-m", "work"]);
+  git(repo, &["checkout", "--quiet", "main"]);
+  fixture
+    .db
+    .close_task_organization(merged_later, WorkflowStatus::Done, (ChangeActor::Person, at(42)))
+    .expect("closed");
+
+  assert!(settle(&fixture));
+  assert_eq!(
+    completion_of(&fixture, run.id()),
+    Some((CompletedBy::Automation, at(41)))
+  );
+  assert_eq!(
+    ProjectDb::open(fixture.repo.path())
+      .expect("open")
+      .task(canceled)
+      .expect("read")
+      .expect("task")
+      .organization()
+      .status(),
+    WorkflowStatus::Canceled,
+    "settling leaves the status as it was closed"
+  );
+  assert_eq!(
+    completion_of(&fixture, committed.id()),
+    None,
+    "work to merge is no completion"
+  );
+}
+
+/// Shares the project with `task` as the server has it, organized as `organization`, last changed at `changed`.
+fn shared(fixture: &mut Fixture, task: TaskId, (organization, changed): (WorkflowStatus, Timestamp)) {
+  let found = fixture.db.task(task).expect("read").expect("task");
+  let details = found.details();
+  let value = fixture
+    .db
+    .task_organization(task)
+    .expect("organization")
+    .with_status(organization);
+  let cached = CachedTask {
+    id: task,
+    number: found.key().number(),
+    revision: found.revision(),
+    title: details.title.clone(),
+    brief: details.brief.clone(),
+    criteria: details.acceptance_criteria.clone(),
+    pipeline: None,
+    limits: details.limits,
+    status: found.status(),
+    organization: value,
+    module: None,
+    former_key: None,
+    created_by: "Alice Moreau".to_owned(),
+    created_at: found.created_at(),
+    updated_by: "Alice Moreau".to_owned(),
+    updated_at: changed,
+    claim: None,
+    run: None,
+  };
+  if fixture.db.sharing().expect("read").is_some() {
+    fixture.db.cache_shared_tasks(&[cached], None).expect("cached");
+    return;
+  }
+  let link = SharingLink {
+    server: ServerId::generate(),
+    project: ProjectId::generate(),
+    key: found.key().project().clone(),
+    role: Some(MemberRole::Member),
+    joined_at: at(1),
+    cursor: 0,
+    last_synced_at: at(1),
+    removed_at: None,
+    address: Some("https://orchester.kontur.lan/kontur".into()),
+  };
+  fixture
+    .db
+    .start_sharing(&link, &[], (&[cached], &HashMap::new()))
+    .expect("shared");
+}
+
+#[test]
+fn completion_a_member_closing_the_task_on_the_team_server_settles_it() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let (task, run) = nothing_committed(
+    &mut fixture,
+    ("Platform report", Some(Deliverable::Report)),
+    (&base, "Done."),
+  );
+  shared(&mut fixture, task, (WorkflowStatus::InProgress, at(35)));
+  assert!(!settle(&fixture), "an open task waits for the person");
+  let programs = Programs::processes();
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read");
+  assert_eq!(waiting(&tasks), [WaitingKind::ReadyToComplete]);
+
+  shared(&mut fixture, task, (WorkflowStatus::Done, at(45)));
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read again");
+  assert_eq!(view_counts(&tasks), [0, 0, 1], "the server's Done wins over the run");
+  assert!(settle(&fixture));
+  assert_eq!(completion_of(&fixture, run.id()), Some((CompletedBy::Member, at(45))));
+}
+
+/// OP-26: the Orchestrator completes a shared task's report run; the task's Done waits for the team server, and
+/// meanwhile the completed run waits for no one.
+#[test]
+fn completion_a_shared_task_the_orchestrator_completed_waits_for_nothing_before_the_servers_done() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let (task, run) = nothing_committed(
+    &mut fixture,
+    ("Platform report", Some(Deliverable::Report)),
+    (&base, "Done."),
+  );
+  shared(&mut fixture, task, (WorkflowStatus::InProgress, at(35)));
+  complete_in(
+    (fixture.repo.path(), &Programs::processes()),
+    run.id(),
+    (CompletedBy::Orchestrator, false),
+    at(40),
+  )
+  .expect("completed");
+  let programs = Programs::processes();
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read");
+  let status = tasks.tasks[0].organization().status();
+  assert_eq!(status, WorkflowStatus::InProgress, "the server has not taken Done yet");
+  assert!(waiting(&tasks).is_empty(), "a completed run waits for no one");
+  assert_eq!(view_counts(&tasks), [0, 1, 0]);
 }
