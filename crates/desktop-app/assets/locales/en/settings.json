@@ -366,7 +366,6 @@
         "title": "Browser window",
         "label": "Open the Browser window when an agent starts browsing",
         "hint": "It opens and takes focus. Off: open it from a run's Summary or the status bar.",
-        "note": "The Browser window isn't in this version yet: this switch keeps your choice for when it comes.",
         "notSaved": "Not saved: {{reason}}"
       }
     },
