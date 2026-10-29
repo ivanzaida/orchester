@@ -153,6 +153,20 @@ pub struct RunStatus {
   pub updated_at: i64,
 }
 
+/// `PUT …/tasks/{task}/run`: the holder's report of their latest run, a [`RunStatus`] without the holder and
+/// `updated_at`, which the server sets. `merged` completes the claim, `cancelled` releases it, and the other phases
+/// are stored as the task's run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunReport {
+  pub number: u32,
+  #[serde(with = "wire::Phase")]
+  pub phase: TaskPhase,
+  pub step: Option<String>,
+  pub started_at: i64,
+  pub phase_since: i64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharedTask {
   pub id: TaskId,

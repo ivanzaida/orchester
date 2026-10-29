@@ -48,6 +48,16 @@ orchester.exe (desktop, UI)
   Each agent CLI and command runs as the leader of its own process group; the runner ends it with
   the group (SIGTERM, SIGKILL after 3 s), and ends the same way whatever it left running when it
   exited. Unlike a Job Object, a process that leaves its group on purpose (`setsid`) survives.
+- Local integration (merging a run into the checkout, `crates/exec/src/local_git`) holds each Git program it runs
+  with everything that program starts: in a private kill-on-close Job Object on Windows, in a process group of its
+  own on macOS, which it observes until empty and kills when a program overruns or leaves a writer behind. On macOS
+  the group does not end with the desktop, and a process that leaves it (`setsid`) is neither observed nor stopped.
+  Windows also holds `.orchester`, its database and its SQLite sidecars against rename and replacement while an
+  integration works; macOS cannot hold a name, so it checks them instead (reached without a link, regular files of
+  one link) and does not prevent a substitution after that check. A file the integration removes is deleted through
+  its handle on Windows; on macOS it is first moved, without replacing anything, to a private name and deleted only
+  once it proves to be the file that was checked. The lease of a checkout (`flock` on macOS) waits up to half a
+  second for a lock held only by a program another thread is starting with `fork`.
 
 ### Lifecycle
 

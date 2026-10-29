@@ -103,6 +103,10 @@ parking_lot = "0.12"
 # (`orchester-core`'s `docs::blocks`), parsed as lurq's Markdown renders it. lurq's Markdown parses with it and keeps
 # no offsets; already built, with these features, through lurq's `markdown`, so it adds no crate.
 pulldown-cmark = { version = "0.13.4", default-features = false }
+# The log-line pattern a service is ready on (`orchester-core`'s `service::readiness`), checked when the service is
+# defined and matched when it starts. A regular expression engine is not a few lines of code; already built for
+# tree-sitter and sentry, so it adds no crate.
+regex = "1"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
 # The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in
@@ -110,6 +114,9 @@ rfd = "0.15"
 # Already built, with these features, for lurq's embedded MCP server, so it adds no crate; the protocol
 # and its sessions are not a few lines of code.
 rmcp = { version = "3.4", default-features = false, features = ["server"] }
+# Reads JUnit XML test reports (`orchester-core`'s `test_report`). A read-only, pure Rust XML parser with positions
+# for its errors; already built at this version for usvg (lurq's SVG icons), so it adds no crate.
+roxmltree = "0.20"
 # The shared server's HTTP client, behind `orchester-api`'s `client` feature (`docs/architecture/server.md`,
 # "Dependencies"): rustls with the operating system's trust store (`rustls-platform-verifier`) on Windows
 # and macOS, no OpenSSL. A TLS-capable HTTP client is not a few lines of code; hyper is already built

@@ -119,8 +119,9 @@ fn finish_family(
     }
     if Instant::now() >= deadline {
       family.stop()?;
-      await_empty(family)?;
+      // Reaped first: a process group counts its leader until then, which a job does not.
       child.wait().map_err(|_| LocalError::ProcessUncertain)?;
+      await_empty(family)?;
       return Err(LocalGitError::Process);
     }
     thread::sleep(Duration::from_millis(10));

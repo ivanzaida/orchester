@@ -155,7 +155,7 @@ impl OwnedFile {
 
   pub fn remove(mut self, expected: &ContentHash) -> Result<(), LocalGitError> {
     self.compare(Some(expected))?;
-    platform::remove(&self.file)
+    platform::remove(&self.parent, &self.name, &self.file)
   }
 
   fn compare(&mut self, expected: Option<&ContentHash>) -> Result<(), LocalGitError> {

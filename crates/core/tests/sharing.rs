@@ -94,6 +94,29 @@ fn s1b_claim_release_and_terminal_phases() {
   );
 }
 
+/// The rule the desktop ends its claims by (ORC-284): only a merged run completes the claim and only a cancelled one
+/// releases it; every other phase of a task's latest run keeps it, so the heartbeat keeps it fresh.
+#[test]
+fn claim_lifecycle_only_merged_and_cancelled_runs_end_their_claim() {
+  let kept = [
+    TaskPhase::Draft,
+    TaskPhase::Queued,
+    TaskPhase::Running,
+    TaskPhase::Waiting,
+    TaskPhase::Stuck,
+    TaskPhase::Paused,
+    TaskPhase::StoppedAtLimit,
+    TaskPhase::Interrupted,
+    TaskPhase::Succeeded,
+    TaskPhase::Failed,
+  ];
+  for phase in kept {
+    assert_eq!(claim_end(phase), ClaimEnd::Keep, "{phase:?}");
+  }
+  assert_eq!(claim_end(TaskPhase::Merged), ClaimEnd::Complete);
+  assert_eq!(claim_end(TaskPhase::Cancelled), ClaimEnd::Release);
+}
+
 #[test]
 fn s1b_revision_rejects_invalid_and_overflow() {
   assert!(TaskRevision::try_from(0).is_err());

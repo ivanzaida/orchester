@@ -11,8 +11,16 @@ add.
 
 ## When reports are sent
 
-Today only the desktop app sends reports, and only of its panics, to the GlitchTip project `desktop`
-(`orchester_app::error_reports`). The runner sends none yet.
+Today only the desktop app sends reports, of its panics and of the ERROR lines of its log, to the GlitchTip project
+`desktop` (`orchester_app::error_reports`, `orchester_app::app_log::error_reports`). The runner sends none yet.
+
+- **Only ERROR lines.** A WARN, INFO or lower line sends nothing and is no breadcrumb either. The app logs at WARN
+  what a person causes or expects (wrong input, a program that is not installed, a network that is down, a file with
+  no program to open it), so those are not reported.
+- **One report per panic.** A panic is also logged at ERROR, but only the panic itself is reported, with its stack
+  trace.
+- **A log line's fields** (`error=…`, `path=…`) are added to the message as `name=value` before the scrubber runs, so
+  they are cleaned like the rest of the message. An ERROR line's report carries the stack where it was logged.
 
 - **Only while the setting is on.** The app reads it from `orchester.db` as soon as the database is open, right after
   the session starts and before the window opens. A panic before that point is not reported: while the log starts,

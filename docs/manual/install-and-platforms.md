@@ -90,7 +90,6 @@ project's runner holds `.orchester/runner.lock`, so one app runs a project at a 
 | Notifications | Toasts (AppUserModelID `Orchester.App`); taskbar overlay badge; a toast clicked after the app closed opens nothing | UserNotifications (asks permission once; only from the `.app` bundle); Dock badge |
 | *Switch to that window* (already open) | Works | Not available yet |
 | Codex *Network off* | Unavailable (the sandbox can't block the network) | Enforced by the sandbox |
-| Claude Code accounts other than Default | Supported | Not supported yet |
 | Open in editor | Default program | `open -t` |
 | Account sign-in terminal | New PowerShell window | Terminal |
 | Programs found from the launcher | Normal `PATH` | An app started from Finder gets a minimal `PATH`; Orchester adds Homebrew, `/usr/local/bin`, `~/.local/bin`, `~/.claude/local`, npm, volta, bun, pnpm, cargo and nvm folders, but doesn't read your shell start-up files. Start `Orchester.app/Contents/MacOS/orchester` from a terminal to pass its `PATH`. |

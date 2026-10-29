@@ -19,7 +19,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  routes::{InstructionsTab, InstructionsView, ProjectPage, Route},
+  routes::{InstructionsTab, InstructionsView, ProjectPage, ProjectSettingsTab, Route},
   services::Services,
 };
 
@@ -97,5 +97,7 @@ pub(super) fn page_of(id: ResourceId, kind: ResourceKind, content: Option<&Conte
     }
     ResourceKind::Tool => ProjectPage::Tool(id, Default::default()),
     ResourceKind::Skill => ProjectPage::Skill(id),
+    // No import makes a test suite, and test suites have no page yet: Project settings will list them.
+    ResourceKind::TestSuite => ProjectPage::Settings(ProjectSettingsTab::default()),
   }
 }

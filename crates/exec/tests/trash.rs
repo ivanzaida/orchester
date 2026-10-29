@@ -2,7 +2,9 @@
 //! others check the refusals that come before any move, and the workspace's tests and QA copies use a trash folder of
 //! their own (`orchester_workspace::accounts::trash`).
 
-use orchester_exec::trash::{Bin, TrashRefusal, ensure_movable};
+#[cfg(windows)]
+use orchester_exec::trash::ensure_movable;
+use orchester_exec::trash::{Bin, TrashRefusal};
 
 #[test]
 #[ignore = "moves a folder into the person's real Recycle Bin / Trash; run by hand: cargo test -p orchester-exec --test trash -- --ignored"]

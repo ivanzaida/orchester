@@ -13,7 +13,7 @@ use orchester_agent::AnthropicClient;
 use orchester_core::{
   connection::{
     AgentProvider, ApiEndpoint, ConnectionKind,
-    invocation::{Platform, account_environment, agent_environment},
+    invocation::{account_environment, agent_environment},
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
   id::{AgentAccountId, SecretId},
@@ -323,10 +323,7 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
   let ConnectionKind::Agent(provider) = *connection.kind() else {
     return Ok(ReviewerSetup::Missing);
   };
-  if let Some(reason) = connection
-    .account()
-    .start_problem(provider, Platform::current(), Path::is_dir)
-  {
+  if let Some(reason) = connection.account().start_problem(Path::is_dir) {
     tracing::warn!(%reason, "the reviewer's connection cannot run on its account");
     return Ok(ReviewerSetup::Missing);
   }

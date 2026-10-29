@@ -9,7 +9,7 @@ use orchester_core::{
   command::Command,
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount,
-    invocation::{Platform, account_environment, on_account},
+    invocation::{account_environment, on_account},
     plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
   },
   id::{AgentAccountId, ConnectionId},
@@ -117,32 +117,16 @@ fn accounts_an_added_account_needs_an_absolute_folder_of_its_own() {
 #[test]
 fn accounts_a_sign_out_after_a_sign_in_reads_as_expired_and_keeps_who_it_was() {
   let mut work = created("Work");
-  assert_eq!(work.state(Platform::Windows), AccountState::NotChecked);
+  assert_eq!(work.state(), AccountState::NotChecked);
   work.record_check(signed_out());
-  assert_eq!(work.state(Platform::Windows), AccountState::NotSignedIn);
+  assert_eq!(work.state(), AccountState::NotSignedIn);
   work.record_check(signed_in("ana@example.com"));
-  assert_eq!(work.state(Platform::Windows), AccountState::SignedIn);
+  assert_eq!(work.state(), AccountState::SignedIn);
   work.record_check(signed_out());
-  assert_eq!(work.state(Platform::Windows), AccountState::Expired);
+  assert_eq!(work.state(), AccountState::Expired);
   assert_eq!(work.email(), Some("ana@example.com"));
   assert!(!AccountState::Expired.lets_runs_start());
   assert!(AccountState::Unknown.lets_runs_start());
-}
-
-#[test]
-fn accounts_claude_accounts_other_than_default_are_not_supported_on_macos_yet() {
-  let work = created("Work");
-  assert_eq!(work.state(Platform::MacOs), AccountState::Unsupported);
-  assert_eq!(
-    AgentAccount::default_of(AccountCli::ClaudeCode).state(Platform::MacOs),
-    AccountState::NotChecked
-  );
-  let codex = account(
-    AccountCli::Codex,
-    "Client",
-    AccountFolder::Brought(home().join(".codex-client")),
-  );
-  assert_eq!(codex.state(Platform::MacOs), AccountState::NotChecked);
 }
 
 #[test]
@@ -379,28 +363,18 @@ fn accounts_a_connection_runs_its_cli_with_the_accounts_folder_variable() {
 }
 
 #[test]
-fn accounts_a_run_does_not_start_without_an_account_or_its_folder_or_on_an_unsupported_one() {
+fn accounts_a_run_does_not_start_without_an_account_or_its_folder() {
   let work = ConnectionAccount::of(&created("Work"));
   assert_eq!(
-    ConnectionAccount::Unassigned.start_problem(AgentProvider::ClaudeCodeCli, Platform::Windows, |_| true),
+    ConnectionAccount::Unassigned.start_problem(|_| true),
     Some(AccountStartProblem::NoAccount)
   );
   assert!(matches!(
-    work.start_problem(AgentProvider::ClaudeCodeCli, Platform::Windows, |_| false),
+    work.start_problem(|_| false),
     Some(AccountStartProblem::FolderMissing { .. })
   ));
-  assert_eq!(
-    work.start_problem(AgentProvider::ClaudeCodeCli, Platform::MacOs, |_| true),
-    Some(AccountStartProblem::Unsupported)
-  );
-  assert_eq!(
-    work.start_problem(AgentProvider::ClaudeCodeCli, Platform::Windows, |_| true),
-    None
-  );
-  assert_eq!(
-    ConnectionAccount::Default.start_problem(AgentProvider::CodexCli, Platform::MacOs, |_| false),
-    None
-  );
+  assert_eq!(work.start_problem(|_| true), None);
+  assert_eq!(ConnectionAccount::Default.start_problem(|_| false), None);
 }
 
 #[test]
