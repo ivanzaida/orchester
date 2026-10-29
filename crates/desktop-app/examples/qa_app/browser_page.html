@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- The QA Browser window's sample page (Kontur Admin's orders-sync endpoint, `Page content` `G3txY5` of the
+     `Browser · redesign` board), rendered by this computer's browser for the window's frames. Light, as a web page
+     reads. Its fields stand where the QA fixture's element boxes say (test_support/browser_qa/tabs.rs). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>orders-sync · Kontur Admin</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #ffffff; color: #18181b;
+    font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 13px; }
+  .mono { font-family: "Geist Mono", ui-monospace, Menlo, Consolas, monospace; }
+  header { position: absolute; left: 0; top: 0; right: 0; height: 52px; border-bottom: 1px solid #e4e4e7;
+    display: flex; align-items: center; gap: 24px; padding: 0 28px; }
+  header .logo { font-size: 14px; font-weight: 600; }
+  header .nav { color: #71717a; }
+  header .nav.on { color: #18181b; font-weight: 500; }
+  header .spacer { flex: 1; }
+  header .user { font-size: 12px; color: #71717a; }
+  header .avatar { width: 24px; height: 24px; border-radius: 50%; background: #d4d4d8; }
+  .at { position: absolute; }
+  .crumbs { left: 32px; top: 80px; font-size: 12px; color: #52525b; }
+  h1 { left: 32px; top: 110px; margin: 0; font-size: 20px; font-weight: 600; }
+  .sub { left: 32px; top: 148px; color: #52525b; }
+  .card { left: 32px; top: 183px; width: 600px; height: 310px; border: 1px solid #e4e4e7; border-radius: 12px; }
+  label { font-size: 12px; color: #3f3f46; }
+  .field { height: 34px; border: 1px solid #d4d4d8; border-radius: 6px; padding: 0 12px; display: flex;
+    align-items: center; justify-content: space-between; background: #fff; }
+  .button { height: 34px; border-radius: 6px; padding: 0 14px; display: flex; align-items: center;
+    font-weight: 500; }
+  .dark { background: #18181b; color: #fff; }
+  .outline { border: 1px solid #d4d4d8; }
+  .danger { color: #dc2626; }
+  .list { left: 668px; top: 147px; width: 564px; border: 1px solid #e4e4e7; border-radius: 10px; }
+  .row { height: 38px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+    border-bottom: 1px solid #f0f0f2; }
+  .row:last-child { border-bottom: 0; }
+  .row .time { margin-left: auto; color: #52525b; }
+  .ok { color: #15803d; } .bad { color: #dc2626; } .slow { color: #b45309; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">Kontur Admin</span>
+  <span class="nav on">Endpoints</span>
+  <span class="nav">Deliveries</span>
+  <span class="nav">Settings</span>
+  <span class="spacer"></span>
+  <span class="user">dev@kontur.test</span>
+  <span class="avatar"></span>
+</header>
+<div class="at crumbs">Endpoints / orders-sync</div>
+<h1 class="at">orders-sync</h1>
+<div class="at sub">Sends order events to hooks.kontur.test/orders</div>
+<div class="at card"></div>
+<label class="at" style="left:56px; top:208px">Endpoint URL</label>
+<div class="at field mono" style="left:55px; top:229px; width:552px">https://hooks.kontur.test/orders</div>
+<label class="at" style="left:56px; top:282px">Retry policy</label>
+<div class="at field" style="left:55px; top:303px; width:552px">Exponential with jitter<span>⌄</span></div>
+<label class="at" style="left:56px; top:356px">Max attempts</label>
+<div class="at field" id="attempts" style="left:55px; top:377px; width:268px">5</div>
+<label class="at" style="left:339px; top:356px">Timeout</label>
+<div class="at field" style="left:339px; top:377px; width:268px">10 s</div>
+<div class="at button dark" style="left:55px; top:435px">Save changes</div>
+<div class="at button outline" style="left:178px; top:435px">Send test event</div>
+<div class="at danger" style="left:509px; top:444px">Delete endpoint</div>
+<div class="at" style="left:668px; top:118px; font-size:14px; font-weight:600">Recent deliveries</div>
+<div class="at list mono">
+  <div class="row"><span class="ok">200</span><span>order.created</span><span class="time">15:41:08</span></div>
+  <div class="row"><span class="bad">503</span><span>order.updated</span><span class="time">15:40:52</span></div>
+  <div class="row"><span class="ok">200</span><span>order.paid</span><span class="time">15:39:10</span></div>
+  <div class="row"><span class="slow">429</span><span>order.created</span><span class="time">15:38:44</span></div>
+  <div class="row"><span class="ok">200</span><span>order.updated</span><span class="time">15:37:02</span></div>
+  <div class="row"><span class="ok">200</span><span>order.created</span><span class="time">15:35:19</span></div>
+</div>
+<script>
+  const attempts = new URLSearchParams(location.search).get("attempts");
+  if (attempts) document.getElementById("attempts").textContent = attempts;
+</script>
+</body>
+</html>

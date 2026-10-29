@@ -6,6 +6,7 @@ mod agents_browser;
 mod agents_cases;
 mod agents_library;
 mod api_providers;
+mod browser;
 mod cards;
 mod changes;
 mod connections;
@@ -81,10 +82,19 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 52] = [
+pub const ALL: [Scenario; 61] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
+  Scenario::of("browser", browser::default),
+  Scenario::of("browser-many", browser::many),
+  Scenario::of("browser-overflow", browser::overflow),
+  Scenario::of("browser-acting", browser::acting),
+  Scenario::of("browser-dialog", browser::dialog),
+  Scenario::of("browser-select", browser::select),
+  Scenario::of("browser-headed", browser::headed),
+  Scenario::of("browser-empty", browser::empty),
+  Scenario::of("browser-not-found", browser::not_found),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),

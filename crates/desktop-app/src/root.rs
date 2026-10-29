@@ -26,6 +26,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  browser::{AutoOpen, BrowserLink},
   chrome, lifecycle,
   mcp::{self, McpLink, WindowLink},
   navigation::{
@@ -142,6 +143,8 @@ struct SessionWindow {
   account_tabs: AccountTabs,
   /// The person's notification settings, read by the notifications' host and changed in Settings.
   notifications: NotificationPrefs,
+  /// The Browser window, which the window opens and points.
+  browser: BrowserLink,
 }
 
 impl Component for SessionWindow {
@@ -155,7 +158,7 @@ impl Component for SessionWindow {
     } = ctx.props::<SessionProps>().clone();
     let router = ctx.router(routes::routes());
     let navigation = Navigation::new(ctx.signal(TabSet::at(landing.route)), router.clone());
-    let projects = Projects::new(landing.project, services.jobs);
+    let projects = Projects::new(landing.project, services.jobs.clone());
     link.attach(navigation.clone(), projects.clone());
     lifecycle::hook(ctx, &services.close);
     // The Orchestrator's decisions an earlier session left under way are settled by what happened, in its words.
@@ -164,6 +167,7 @@ impl Component for SessionWindow {
       (services.session_start, mcp::domain::translate(ctx.i18n().clone())),
       services.runners.clone(),
     ));
+    let browser = BrowserLink::new(services.clone(), ctx.window_opener(), navigation.clone());
     Self {
       router,
       account_tabs: AccountTabs::new(services.cloud.sign_in_state().account()),
@@ -174,6 +178,7 @@ impl Component for SessionWindow {
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      browser,
     }
   }
 
@@ -190,6 +195,7 @@ impl Component for SessionWindow {
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.browser.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     if let Some(account) = sign_in.account() {
       self.account_tabs.follow(account, &self.navigation, &self.projects);
@@ -197,10 +203,14 @@ impl Component for SessionWindow {
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
-    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification.
+    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification, and no page
+    // opens by itself.
     let notifications = sign_in
       .is_signed_in()
       .then(|| ctx.mount_keyed::<NotificationsHost>("notifications", ()));
+    let browser = sign_in
+      .is_signed_in()
+      .then(|| ctx.mount_keyed::<AutoOpen>("browser-auto-open", self.browser.clone()));
     let screen = match &sign_in {
       SignIn::SignedIn { .. } => Router::mount(ctx, self.router.clone()),
       SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
@@ -223,6 +233,7 @@ impl Component for SessionWindow {
       .height(Dimension::Pct(100.0))
       .child(projects)
       .with_children(notifications)
+      .with_children(browser)
       .child(framed);
     // Behind the gate no shortcut opens a tab or a screen.
     window_input(

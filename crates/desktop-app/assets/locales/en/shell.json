@@ -18,7 +18,9 @@
     },
     "menu": {
       "quit": "Quit Orchester",
-      "label": "Orchester menu"
+      "label": "Orchester menu",
+      "browser": "Browser",
+      "browserNoProject": "Open a project first: the Browser window shows one project's pages."
     },
     "tabs": {
       "close": "Close tab",

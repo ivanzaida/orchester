@@ -1,6 +1,7 @@
 //! The app menu (`App menu / Orchester` `jksEw`): the mark and a chevron open it below. A custom title
 //! bar has no native menu, so the window's own commands live here. The design draws the button only;
-//! the menu is the shared menu (`ui::menu`).
+//! the menu is the shared menu (`ui::menu`). *Browser* opens the Browser window on the project of the tab shown, else
+//! on a project whose browser has tabs (`docs/design/browser.md`, "The *Browser* window").
 
 use lurq::{
   app::{
@@ -15,8 +16,11 @@ use lurq::{
 
 use crate::{
   brand::mark,
+  browser::BrowserLink,
   navigation::Navigation,
+  project::Projects,
   routes::{Route, Screen},
+  services::Services,
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -36,11 +40,12 @@ enum Command {
   NewTab,
   AllProjects,
   Settings,
+  Browser,
   Quit,
 }
 
 /// The rows of the menu: id, icon, i18n key, command; `None` is a separator.
-const ENTRIES: [Option<(&str, Icon, &str, Command)>; 5] = [
+const ENTRIES: [Option<(&str, Icon, &str, Command)>; 6] = [
   Some(("menu-new-tab", Icon::Plus, "common.newTab", Command::NewTab)),
   Some((
     "menu-all-projects",
@@ -54,6 +59,7 @@ const ENTRIES: [Option<(&str, Icon, &str, Command)>; 5] = [
     Screen::Settings.title_key(),
     Command::Settings,
   )),
+  Some(("menu-browser", Icon::Globe, "shell.menu.browser", Command::Browser)),
   None,
   Some(("menu-quit", Icon::LogOut, "shell.menu.quit", Command::Quit)),
 ];
@@ -114,17 +120,41 @@ impl AppMenu {
         };
         let label = ctx.t(label_key);
         let (navigation, window) = (navigation.clone(), window.clone());
-        // All projects and Settings are places, opened by a browser's rules; New tab and Quit are actions.
+        // All projects and Settings are places, opened by a browser's rules; New tab, Browser and Quit are actions.
         let item = match (command, navigation) {
           (Command::AllProjects, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::AllProjects)),
           (Command::Settings, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::Settings)),
           (Command::NewTab, Some(navigation)) => MenuItem::new(id, label, move || navigation.open_tab()),
+          (Command::Browser, Some(navigation)) => browser_item(ctx, (id, label), &navigation),
           (Command::Quit, _) => MenuItem::new(id, label, move || window.request_close()),
           // Only Quit is listed without tabs.
-          (Command::NewTab | Command::AllProjects | Command::Settings, None) => return menu,
+          (Command::NewTab | Command::AllProjects | Command::Settings | Command::Browser, None) => return menu,
         };
         menu.child(item.icon(glyph).render(ctx, &self.open))
       },
     )
+  }
+}
+
+/// *Browser*: the Browser window on the project of the tab shown, else on the first project whose browser has tabs;
+/// unavailable while there is neither.
+fn browser_item(ctx: &mut Ctx, (id, label): (&str, std::sync::Arc<str>), navigation: &Navigation) -> MenuItem {
+  let shown = navigation
+    .route_now()
+    .project()
+    .and_then(|project| Projects::of(ctx).state(project))
+    .and_then(|state| state.repo_root().map(std::path::Path::to_path_buf));
+  let project = shown.or_else(|| {
+    Services::of(ctx)
+      .runners
+      .browser_window()
+      .projects()
+      .into_iter()
+      .next()
+      .map(|(root, _)| root)
+  });
+  match (BrowserLink::of(ctx), project) {
+    (Some(link), Some(project)) => MenuItem::new(id, label, move || link.show(&project, None)),
+    _ => MenuItem::unavailable(id, label, ctx.t("shell.menu.browserNoProject")),
   }
 }

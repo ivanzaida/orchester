@@ -8,6 +8,7 @@
 //! replaces it, so a slow decode drops frames instead of queueing them, as the runner does before sending.
 
 mod frame;
+mod owners;
 mod view;
 
 use std::{
@@ -24,6 +25,7 @@ use tokio::sync::watch;
 
 pub use self::{
   frame::{FrameDecodeError, RgbaFrame},
+  owners::{RunOwner, run_owners},
   view::{AgentActing, BrowserView, OpenSelect},
 };
 use crate::workspace::Workspace;
