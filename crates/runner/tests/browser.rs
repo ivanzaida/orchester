@@ -1,10 +1,12 @@
 //! The project's browser with the real Chrome, Edge, Brave or Chromium of this computer, on pages the test serves on
 //! loopback: it starts at the first use, opens a run's tab and reads it over CDP, keeps each run to its own tabs,
-//! closes a run's tabs when the run ends (and not while it is paused) and stops with the runner. Where no browser is
-//! found each test says so and checks nothing. Needs `git` for the scheduler's projects. Run with
-//! `cargo test -p orchester-runner --features test-agent --test browser browser_`.
+//! closes a run's tabs when the run ends (and not while it is paused) and stops with the runner; the *Browser* window's
+//! side of it is in [`window`]. Where no browser is found each test says so and checks nothing. Needs `git` for the
+//! scheduler's projects. Run with `cargo test -p orchester-runner --features test-agent --test browser browser_`.
 
 mod support;
+#[path = "browser/window.rs"]
+mod window;
 
 use std::{path::Path, time::Duration};
 
@@ -43,7 +45,8 @@ fn browser_installed() -> bool {
   }
 }
 
-/// Serves `<title>Page <name></title>` at `/<name>` on loopback until the test ends; the address to put names after.
+/// Serves `<title>Page <name></title>` at `/<name>` on loopback until the test ends, and the window tests' pages at
+/// their names; the address to put names after.
 async fn pages() -> String {
   let listener = TcpListener::bind("127.0.0.1:0").await.expect("a loopback port");
   let address = listener.local_addr().expect("its address");
@@ -66,7 +69,12 @@ async fn answer(stream: TcpStream) {
     header.clear();
   }
   let name = request.split_whitespace().nth(1).unwrap_or("/").trim_start_matches('/');
-  let body = format!("<!doctype html><html><head><title>Page {name}</title></head><body>{name}</body></html>");
+  let body = match name {
+    "form" => window::FORM.to_owned(),
+    "animated" => window::ANIMATED.to_owned(),
+    "dialog" => window::DIALOG.to_owned(),
+    _ => format!("<!doctype html><html><head><title>Page {name}</title></head><body>{name}</body></html>"),
+  };
   let response = format!(
     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
     body.len()

@@ -1,5 +1,8 @@
 //! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
-//! scheduler's change notifications.
+//! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
+//! shows.
+
+mod browser;
 
 use std::{
   future::Future,
@@ -146,6 +149,8 @@ impl Drop for InFlightRequest {
 impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
   async fn run(mut self) -> Result<(), IpcError> {
     let mut groups = tokio::time::interval(Duration::from_secs(1));
+    // Only the latest frame of the window's tab waits there; a newer one replaces it while the desktop reads slowly.
+    let browser = Arc::clone(self.scheduler.browser());
     loop {
       tokio::select! {
         _ = groups.tick(), if self.finishing.is_none() => {
@@ -159,6 +164,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
           }
         }
         Some(event) = self.outgoing.recv() => self.write_waiting(vec![event]).await?,
+        frame = browser.next_frame() => self.writer.write_event(&Event::BrowserFrame(frame)).await?,
         finished = async { self.finishing.as_mut().expect("polled only while finishing").await }, if self.finishing.is_some() => {
           if let Err(error) = finished {
             tracing::error!(%error, "finishing at checkpoints failed");
@@ -189,7 +195,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
       }
     };
     match answer(&self.scheduler, (&self.replies, &self.in_flight), &request).await {
-      Answer::Reply(event) => self.writer.write(&event).await?,
+      Answer::Reply(event) => self.writer.write_event(&event).await?,
       Answer::Later => {}
       Answer::StopIfIdle(id) => return self.stop_if_idle(id).await,
       Answer::Shutdown(ShutdownMode::FinishAtCheckpoints) => {
@@ -239,7 +245,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
       waiting.push(event);
     }
     for event in coalesce(waiting) {
-      self.writer.write(&event).await?;
+      self.writer.write_event(&event).await?;
     }
     Ok(())
   }
@@ -343,6 +349,7 @@ async fn answer(
       Err(rejection) => Reply::Rejected(rejection),
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
+    Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::EstimateTask { task } => {
       return later.reply(async move {
         match handle.estimate_task(task).await {

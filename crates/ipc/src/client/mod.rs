@@ -148,7 +148,7 @@ pub struct EventReceiver {
 impl EventReceiver {
   /// The next event, or `None` once the runner closed the connection.
   pub async fn next(&mut self) -> Result<Option<Event>, IpcError> {
-    Ok(self.reader.read().await?)
+    Ok(self.reader.read_event().await?)
   }
 }
 
