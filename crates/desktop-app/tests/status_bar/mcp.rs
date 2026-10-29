@@ -64,7 +64,10 @@ fn status_mcp_item_names_the_address_or_why_agents_cannot_reach_it() {
     assert_eq!(bar.texts("status-window-control").is_some(), listening, "{words}");
   }
   // The installed app's server listening is quiet: the health dot's card names its address.
-  let mut quiet = Bar::of(with(ServerState::Listening { port: port(47821) }, McpKind::Installation));
+  let mut quiet = Bar::of(with(
+    ServerState::Listening { port: port(47821) },
+    McpKind::Installation,
+  ));
   assert!(quiet.texts("status-mcp").is_none());
 }
 

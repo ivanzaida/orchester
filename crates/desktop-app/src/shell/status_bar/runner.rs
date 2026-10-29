@@ -155,11 +155,7 @@ fn card(ctx: &Ctx, runner: &RunnerFacts, (color, key): (PaletteColor, &str)) -> 
     facts.push(Fact {
       id: "lost",
       label: ctx.t("shell.status.health.lostLabel").to_string(),
-      value: FactValue::Words(
-        ctx
-          .t_args(key, [("count", runner.interrupted.to_string())])
-          .to_string(),
-      ),
+      value: FactValue::Words(ctx.t_args(key, [("count", runner.interrupted.to_string())]).to_string()),
     });
   }
   Some(FactsCard {

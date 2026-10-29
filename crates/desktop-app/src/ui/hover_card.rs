@@ -149,9 +149,9 @@ pub fn card(words: &CardWords) -> Element {
     .into()
 }
 
-/// The panel of a card of facts (`oagTL`): 12 inside a `border_strong` stroke, its lines 8 apart; the state 12/500 after
-/// a 6 dot, a label 11 `text_muted` 96 wide and 12 before its value in `text_secondary`; the note under a `border`
-/// line, 8 below it.
+/// The panel of a card of facts (`oagTL`): 12 inside a `border_strong` stroke, its lines 8 apart; the state 12/500
+/// after a 6 dot, a label 11 `text_muted` 96 wide and 12 before its value in `text_secondary`; the note under a
+/// `border` line, 8 below it.
 pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
   let mut panel = padded_popover_panel(&card.id, FACTS_WIDTH, Padding::all(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
@@ -257,8 +257,7 @@ impl Component for HoverCard {
       })
       .with_children(ctx.children().iter().cloned());
     if let Card::Facts(FactsCard {
-      gives_way: Some(order),
-      ..
+      gives_way: Some(order), ..
     }) = &card
     {
       anchor = anchor

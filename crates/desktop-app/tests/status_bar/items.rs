@@ -184,7 +184,13 @@ fn status_runner_card_says_tries_the_next_try_and_runs_waiting() {
   let card = bar
     .card("status-runner", "status-runner-card")
     .expect("the card shows on hover");
-  for words in ["Runner offline", "Tried", "5 times", "Runs waiting", "2 runs lost their agents"] {
+  for words in [
+    "Runner offline",
+    "Tried",
+    "5 times",
+    "Runs waiting",
+    "2 runs lost their agents",
+  ] {
     assert!(card.iter().any(|text| text == words), "{words} in {card:?}");
   }
   let reconnecting = RunnerFacts {
@@ -199,7 +205,10 @@ fn status_runner_card_says_tries_the_next_try_and_runs_waiting() {
     .card("status-runner", "status-runner-card")
     .expect("the card shows on hover");
   assert!(card.iter().any(|text| text == "Next try"), "{card:?}");
-  let mut starting = Bar::of(facts(Some(kontur(runner(RunnerState::Starting), ProjectTasks::default()))));
+  let mut starting = Bar::of(facts(Some(kontur(
+    runner(RunnerState::Starting),
+    ProjectTasks::default(),
+  ))));
   assert!(
     starting.card("status-runner", "status-runner-card").is_none(),
     "a starting runner has no card"
