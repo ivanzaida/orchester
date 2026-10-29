@@ -1,5 +1,5 @@
-//! Auto mode's rows (`Auto mode` `WSQqT` in `02 · Runs`): its switch, *approve everything in each run* drawn as the
-//! switch is, the reviewer's connection, model and effort as three selects with the domain's effective-reviewer
+//! Approvals' rows (`Auto mode` `WSQqT` in `02 · Runs`, as `m0eUB` redraws it): *Allow Autopilot for agents in this
+//! project*, Manual's reviewer's connection, model and effort as three selects with the domain's effective-reviewer
 //! read-back in the row's (i), and *Approved for every run*.
 use std::sync::Arc;
 
@@ -25,7 +25,6 @@ use crate::{
     field::{FieldInput, SelectField},
     icon::Icon,
     message::message_text,
-    toggle::{Toggle, ToggleKind},
   },
 };
 
@@ -37,8 +36,7 @@ const EFFORT_WIDTH: f32 = 120.0;
 pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Group {
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending();
-  let on_row = switch_row(ctx, tab, props, settings, save, (options.resolved.as_ref().err(), busy));
-  let everything = super::everything::row(ctx, (tab, props), settings, (save, busy));
+  let autopilot = super::autopilot::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() {
     unavailable_reviewer(ctx, props)
   } else {
@@ -46,51 +44,9 @@ pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, 
   };
   let rules = super::rules::row(ctx, props, settings);
   Group::new("settings-auto", ctx.t("project_settings.auto"))
-    .row(on_row)
-    .row(everything)
+    .row(autopilot)
     .row(reviewer)
     .row(rules)
-}
-fn switch_row(
-  ctx: &mut Ctx,
-  tab: &AutoMode,
-  props: &Props,
-  settings: &Settings,
-  save: &Save,
-  (unavailable, busy): (Option<&orchester_workspace::messages::Message>, bool),
-) -> Element {
-  // While its save runs, the switch already shows what was chosen; a failed one reads storage back.
-  let on = tab
-    .attempted
-    .get()
-    .0
-    .filter(|_| busy)
-    .map_or(settings.auto_mode.new_runs, |asked| asked.new_runs);
-  let mut toggle = Toggle::new(
-    "settings-auto-new-runs",
-    ToggleKind::Switch,
-    on,
-    ctx.t(if on {
-      "project_settings.on"
-    } else {
-      "project_settings.off"
-    }),
-  )
-  .hide_label();
-  if !busy && (on || unavailable.is_none()) {
-    let (tab, props, save, base) = (tab.clone(), props.clone(), save.clone(), settings.auto_mode.clone());
-    toggle = toggle.on_change(move |chosen| {
-      let mut asked = base.clone();
-      asked.new_runs = chosen;
-      tab.note_input();
-      tab.request(&props, &save, asked);
-    });
-  }
-  SettingRow::new("settings-auto-on", ctx.t("project_settings.newRuns"))
-    .info(ctx.t("project_settings.autoDetail"))
-    .hint(ctx.t("project_settings.autoHint"))
-    .control(toggle)
-    .render(ctx)
 }
 fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);

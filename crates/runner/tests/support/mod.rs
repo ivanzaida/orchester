@@ -39,7 +39,10 @@ use orchester_core::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
     StepKind,
   },
-  run::{PendingToolApproval, Run, RunStatus},
+  run::{
+    PendingToolApproval, Run, RunStatus,
+    review::{AutoModeSettings, DEFAULT_REVIEW_MODEL, ReviewerChoice},
+  },
   secret::Secret,
   store::{
     ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, SettingsStore, TaskStore,
@@ -228,6 +231,17 @@ pub fn project_in(setup: &Setup, repo: TempDir) -> TestProject {
     None => agent_connection(setup.provider),
   };
   db.create_connection(&connection).expect("connection");
+  // Runs are in Manual, so a request waits for the person only once the reviewer leaves it to them. These projects
+  // have no reviewer (the chosen connection is gone), so their requests ask the person at once; a test of the
+  // reviewer chooses one ([`with_default_reviewer`]).
+  db.save_auto_mode_settings(&AutoModeSettings {
+    reviewer: Some(ReviewerChoice {
+      connection: ConnectionId::generate(),
+      model: ModelId::new(DEFAULT_REVIEW_MODEL).expect("a valid model"),
+      effort: None,
+    }),
+  })
+  .expect("no reviewer");
   let mut values = Vec::new();
   for (secret, value) in &setup.secrets {
     db.create_secret(secret).expect("secret");
@@ -244,6 +258,16 @@ pub fn project_in(setup: &Setup, repo: TempDir) -> TestProject {
     project: id,
     vault: MemoryVault::with(values),
   }
+}
+
+/// `project` with the default reviewer: its first Claude Code connection, else its first connection a reviewer runs
+/// on.
+pub fn with_default_reviewer(project: TestProject) -> TestProject {
+  ProjectDb::open(project.repo.path())
+    .expect("open")
+    .save_auto_mode_settings(&AutoModeSettings::default())
+    .expect("the default reviewer");
+  project
 }
 
 /// A checked connection of `provider` to its fake CLI.

@@ -5,12 +5,10 @@ use orchester_workspace::tasks::outside::Outside;
 
 use super::harness::Settings;
 
-/// Auto mode turned on by the person, saved.
+/// Autopilot allowed by the person, saved: the reviewer's saves keep working beside it.
 fn turned_on(page: &mut Settings) {
-  page.click("settings-auto-new-runs");
-  page.until("auto mode on", |p| {
-    p.db().auto_mode_settings().expect("settings").new_runs
-  });
+  page.click("settings-allow-autopilot");
+  page.until("Autopilot allowed", |p| p.db().allow_autopilot().expect("settings").is_on());
   page.saved();
 }
 
@@ -176,25 +174,4 @@ fn project_settings_failed_reviewer_new_draft_saves_only_the_visible_choice() {
   page.tab("general", "settings-project-name");
   page.tab("runs", "settings-reviewer-model");
   assert!(page.text("settings-reviewer-effort").contains("high"));
-}
-
-#[test]
-fn project_settings_failed_auto_switch_keeps_explicit_retry() {
-  let mut page = Settings::new(true);
-  fail_writes(&page, true);
-  page.click("settings-auto-new-runs");
-  page.until("enable failed", |p| p.exists("settings-auto-retry"));
-  assert!(!page.db().auto_mode_settings().expect("still Off").new_runs);
-  for _ in 0..30 {
-    page.window.tree.tick_futures();
-    page.window.pass();
-  }
-  assert!(
-    page.exists("settings-auto-retry"),
-    "a switch failure is not reviewer abandonment"
-  );
-  fail_writes(&page, false);
-  page.click("settings-auto-retry");
-  page.saved();
-  assert!(page.db().auto_mode_settings().expect("enabled").new_runs);
 }

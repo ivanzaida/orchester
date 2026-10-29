@@ -107,7 +107,7 @@ fn project_settings_base_branch_defaults_to_the_checked_out_branch_and_saves_a_b
 
   {
     let mut db = page.db();
-    super::run_fixture::auto_run(&mut db);
+    super::run_fixture::started_run(&mut db);
   }
   page.choose(SELECT, "staging");
   page.until("staging saved", |p| {

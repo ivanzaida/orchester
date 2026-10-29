@@ -1,10 +1,12 @@
-//! Auto mode in the worker (`orchester_core::run::review`): when the run uses auto mode, a request the
-//! rules leave to a person waits under review, without asking the person (no dialog, no *Needs you*),
+//! Manual's reviewer in the worker (`orchester_core::run::review`, `docs/design/approval-modes.md`): in Manual, a
+//! request the rules leave to a person waits under review, without asking the person (no dialog, no *Needs you*),
 //! while the reviewer judges it on the blocking pool, so the worker keeps following its agent; it asks
 //! the person once the reviewer asks, fails or times out. A hard rule asks the person at once. An approval answers the
-//! request as the reviewer's; anything else leaves it to the person with what auto mode said. A person who answers
-//! first wins, and the review is stopped; so is a review whose run turned auto mode off meanwhile, whose
-//! result is then dropped. A Codex escalation (a command outside its sandbox) is reviewed under the same
+//! request as the reviewer's; anything else leaves it to the person with what the reviewer said. Autopilot has no
+//! reviewer: what it does not approve itself asks the person at once, as every request does in a project without a
+//! reviewer to ask (no connection a reviewer runs on, or the chosen one gone). A person who answers first wins, and
+//! the review is stopped; so is a review whose run turned Autopilot meanwhile (its project allowed it), whose result
+//! is then dropped. A Codex escalation (a command outside its sandbox) is reviewed under the same
 //! hard rules, which keep it from the reviewer where the step's network is off or it only reads. What a
 //! review that asked a model cost is recorded when it ends, dropped or not, and counts like a turn of the
 //! agent's ([`ledger`]).
@@ -34,7 +36,7 @@ pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerKeys
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
-  setup::{PushPlace, ReviewJob, hold_now, ignored_build_output},
+  setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -67,7 +69,7 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> (String, Review) {
 }
 
 impl Worker {
-  /// Starts auto mode's review of `approval`, which waits for the person, when its run uses auto mode;
+  /// Starts the reviewer's review of `approval`, which waits for the person, when its run is in Manual;
   /// `escalation`: Codex asks to run it outside its sandbox.
   pub(in super::super) fn start_review(
     &mut self,
@@ -75,7 +77,12 @@ impl Worker {
     approval: &PendingToolApproval,
     escalation: bool,
   ) -> Result<Option<Reviewing>, StoreError> {
-    if !watch.db.run_auto_mode(approval.run)? {
+    if watch.db.run_approval_mode(approval.run)?.is_autopilot() {
+      return Ok(None);
+    }
+    // A project without a reviewer to ask leaves each request to the person at once, with nothing reviewed.
+    let setup = self.reviewer(watch)?;
+    if matches!(setup, ReviewerSetup::Missing) {
       return Ok(None);
     }
     // The agent's last messages may still wait to be written.
@@ -108,7 +115,6 @@ impl Worker {
       return Ok(None);
     }
     // Marked last, after everything that can fail: a request marked under review always gets its review.
-    let setup = self.reviewer(watch)?;
     watch.db.set_reviewing(approval.run, &approval.id, true)?;
     let (stop, stopped) = stop_review();
     let job = ReviewJob {
@@ -140,8 +146,8 @@ impl Worker {
     }))
   }
 
-  /// Records what auto mode did with request `id`, and answers it when the reviewer approved, unless the
-  /// person answered first or the run no longer uses auto mode.
+  /// Records what the reviewer did with request `id`, and answers it when the reviewer approved, unless the
+  /// person answered first or the run is no longer in Manual.
   pub(in super::super) async fn apply_review(
     &mut self,
     watch: &mut Watch,
@@ -152,8 +158,8 @@ impl Worker {
     if !waiting || watch.stop.is_some() {
       return Ok(());
     }
-    if !watch.db.run_auto_mode(run)? {
-      // Auto mode was turned off meanwhile: its result is dropped, and the person decides now.
+    if watch.db.run_approval_mode(run)?.is_autopilot() {
+      // The run turned Autopilot meanwhile, which has no reviewer: its result is dropped, and the person decides now.
       watch.db.set_reviewing(run, &id, false)?;
       return self.ask_person(watch);
     }

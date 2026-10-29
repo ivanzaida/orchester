@@ -1,13 +1,13 @@
 //! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5), on the seeded
 //! Kontur: in a turn a wait or a run's end started by itself, `merge_run` and `run_task` only propose, even with *Let
-//! the Orchestrator merge runs* and auto mode on; `resume_run` refuses a run stopped at a limit or interrupted,
+//! the Orchestrator merge runs* on and Autopilot allowed; `resume_run` refuses a run stopped at a limit or interrupted,
 //! which only the person resumes; and a hold or a release of new starts that would change nothing is refused.
 
 use orchester_core::{
   id::IdempotencyKey,
   orchestrator::ActionOutcome,
   resource::Pipeline,
-  run::{InterruptCause, RunLimit, review::AutoModeSettings},
+  run::{AllowAutopilot, InterruptCause, RunLimit},
   store::{MergeStore, ResourceStore, RunStore, TaskStore},
   task_group::{HoldActor, HoldScope, ReviewedPipeline, Scheduling, TaskGroup},
   time::Timestamp,
@@ -47,11 +47,8 @@ fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
     .workspace
     .set_orchestrator_allows(OrchestratorConsent::MergeRuns, true)
     .expect("the person turned it on");
-  db.update_auto_mode_settings(|current| AutoModeSettings {
-    new_runs: true,
-    reviewer: current.reviewer,
-  })
-  .expect("auto mode on");
+  db.save_allow_autopilot(AllowAutopilot::ON)
+    .expect("Autopilot allowed");
   // The tools of a turn a run's end started by itself.
   let scope = ChatScope {
     on_its_own: true,
@@ -71,7 +68,7 @@ fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
     .expect("the ready draft");
   let start = json!({ "project": "Kontur", "key": draft.key().to_string() });
   let told = chat_call(&mut served, &scope, "run_task", start).expect("proposed");
-  assert_eq!(told["waits_for_person"], true, "even in auto mode: {told}");
+  assert_eq!(told["waits_for_person"], true, "even with Autopilot allowed: {told}");
   assert!(
     actions(&db, &scope)
       .pop()

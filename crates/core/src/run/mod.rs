@@ -8,6 +8,7 @@ mod active_clock;
 mod again;
 mod answer;
 mod apply;
+mod approval_mode;
 mod attempt;
 mod branch;
 mod completion;
@@ -47,11 +48,12 @@ pub use self::{
   again::{RunAgainBlock, RunAgainInput, can_run_again_after, holds_task, run_again},
   answer::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
-    ApproveEverything, ApproveEverythingPersonOnly, AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, DenialNote,
-    DenialNoteError, ProjectRule, ProjectRuleId, ProjectScope, RuleScope, SimilarUnavailable, ToolDecision, ToolReach,
-    UnknownAnswer, allowing_command, allowing_tool, always_prefixes, answering, answering_in_project, auto_approves,
-    auto_verdict, codex_denial, denial_message, denial_with_message, listing, permitted,
+    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, DenialNote, DenialNoteError, ProjectRule, ProjectRuleId,
+    ProjectScope, RuleScope, SimilarUnavailable, ToolDecision, ToolReach, UnknownAnswer, allowing_command,
+    allowing_tool, always_prefixes, answering, answering_in_project, auto_approves, auto_verdict, codex_denial,
+    denial_message, denial_with_message, listing, permitted,
   },
+  approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause, ProfileMode},
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
   completion::{CompletedBy, REPORT_ARTIFACT, RunArtifact, RunCompletion, UnknownCompleter, last_report, run_delivers},

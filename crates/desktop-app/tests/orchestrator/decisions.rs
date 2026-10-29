@@ -45,7 +45,7 @@ fn orchestrator_decision_ends_when_its_card_goes_away() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let delivery = screen.delivery();
   let key = screen.draft_with(delivery, "Keep going", ("Keep working.", &["It keeps working."]));
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   screen.go(OrchestratorChat::New);
   call(
     &mut screen,

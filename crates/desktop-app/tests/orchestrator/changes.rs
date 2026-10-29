@@ -387,7 +387,7 @@ fn orchestrator_starts_in_auto_mode_and_cancel_waits_for_the_person() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let delivery = screen.delivery();
   let key = screen.draft_with(delivery, "Keep going", ("Keep working.", &["It keeps working."]));
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   screen.go(OrchestratorChat::New);
   call(
     &mut screen,
@@ -395,12 +395,12 @@ fn orchestrator_starts_in_auto_mode_and_cancel_waits_for_the_person() {
     1,
   );
   let started = actions(&screen).remove(0);
-  assert_eq!(started.outcome, ActionOutcome::Done, "auto mode starts it at once");
+  assert_eq!(started.outcome, ActionOutcome::Done, "Autopilot allowed starts it at once");
   assert!(started.auto_mode && started.started.is_some(), "{started:?}");
   assert_eq!(runs(&screen, &key), 1);
   let card = proposal_card(&screen);
   screen.until("the started line", |screen| {
-    screen.text(&format!("{card}-chip")) == "auto mode"
+    screen.text(&format!("{card}-chip")) == "Autopilot allowed"
       && screen
         .text(&format!("{card}-title"))
         .contains(&format!("Started {key} on Delivery"))
@@ -473,7 +473,7 @@ fn orchestrator_auto_mode_names_the_task_a_start_waits_for() {
   let first = screen.draft_with(delivery, "Lay the ground", ("Lay it.", &["It is laid."]));
   let second = screen.draft_with(delivery, "Build on it", ("Build.", &["It is built."]));
   block(&screen, &second, &first);
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   screen.go(OrchestratorChat::New);
   call(
     &mut screen,
