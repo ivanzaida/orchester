@@ -19,6 +19,7 @@ use crate::browser::{
   BrowserError, ProjectBrowser,
   cdp::{Cdp, CdpError, SessionId, TargetId},
   running::Running,
+  tabs::ClosedBy,
 };
 
 /// The JPEG quality of the screencast: sharp enough for text, about 100 KB a frame of a full page.
@@ -135,12 +136,23 @@ impl ProjectBrowser {
     Ok(BrowserTabId::new(target.as_str()))
   }
 
-  /// Closes `tab`, the person's or an agent's: an agent's next call on it answers that it is closed.
+  /// Closes `tab`, the person's or an agent's, which is no longer kept from now on: an agent's next call on it answers
+  /// that the person closed it.
   async fn close_window_tab(&self, tab: &BrowserTabId) -> Result<(), BrowserError> {
-    let reached = self.window_tab(tab).await?;
-    self.window.forget(&reached.target);
-    reached.cdp.close_target(&reached.target).await?;
-    Ok(())
+    let target = TargetId::from(tab.as_str());
+    let cdp = {
+      let running = self.running.lock().await;
+      let closed = running
+        .as_ref()
+        .filter(|running| running.tabs.lock().closed_by(&target, ClosedBy::Person));
+      match closed {
+        Some(running) => Arc::clone(&running.cdp),
+        None => return Err(BrowserError::NoSuchTab(target)),
+      }
+    };
+    self.window.forget(&target);
+    self.window.changed();
+    Ok(cdp.close_target(&target).await?)
   }
 
   async fn answer_dialog(&self, tab: &BrowserTabId, accept: bool, text: Option<String>) -> Result<(), BrowserError> {
@@ -308,7 +320,11 @@ fn rejection(error: &BrowserError) -> Rejection {
     BrowserError::Unavailable(_) | BrowserError::Start(_) => Rejection::BrowserUnavailable {
       detail: error.to_string(),
     },
-    BrowserError::NoSuchTab(_) | BrowserError::NotRunsTab(_) | BrowserError::NoTab => Rejection::NoSuchTab,
+    BrowserError::NoSuchTab(_)
+    | BrowserError::NotRunsTab(_)
+    | BrowserError::ClosedByPerson(_)
+    | BrowserError::ClosedInBrowser(_)
+    | BrowserError::NoTab => Rejection::NoSuchTab,
     BrowserError::Cdp(_)
     | BrowserError::NotOpened { .. }
     | BrowserError::NoHistory(_)

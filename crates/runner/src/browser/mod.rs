@@ -41,7 +41,7 @@ use self::{
   window::Window,
 };
 pub use self::{
-  log::{ConsoleMessage, Request, TabLog},
+  log::{ConsoleMessage, KEPT, Request, TabLog},
   running::LOAD_LIMIT,
   tab::Tab,
 };
@@ -59,6 +59,15 @@ pub enum BrowserError {
   NotOpened { url: String, reason: String },
   #[error("tab {0} is not one of this run's open tabs: browser_tabs lists them")]
   NotRunsTab(TargetId),
+  /// One of the run's tabs the person closed from the *Browser* window.
+  #[error("the person closed tab {0} in the Browser window: open a new one with browser_open if you still need one")]
+  ClosedByPerson(TargetId),
+  /// One of the run's tabs the browser reported closed, which neither the run nor the *Browser* window closed.
+  #[error(
+    "tab {0} was closed in the browser, by its own page or by the person in the browser's window: open a new one \
+     with browser_open if you still need one"
+  )]
+  ClosedInBrowser(TargetId),
   #[error("this run has no open tab: open a page with browser_open first")]
   NoTab,
   #[error("{0} is stale or was never read: read the page again with browser_read_page and use a ref it gives")]
@@ -145,7 +154,8 @@ impl ProjectBrowser {
   }
 
   /// `run`'s tab `tab`, or its current one for `None`; refused for a tab that is not the run's, the person's included,
-  /// and when the run has none open. Does not start the browser.
+  /// for one someone other than the run closed, saying who, and when the run has none open. Does not start the
+  /// browser.
   pub async fn tab(&self, run: RunId, tab: Option<&TargetId>) -> Result<Tab, BrowserError> {
     let running = self.running.lock().await;
     let Some(running) = running.as_ref() else {
@@ -156,9 +166,7 @@ impl ProjectBrowser {
       Some(tab) => tab.clone(),
       None => tabs.current(run).ok_or(BrowserError::NoTab)?,
     };
-    let (session, state) = tabs
-      .session(run, &target)
-      .ok_or_else(|| BrowserError::NotRunsTab(target.clone()))?;
+    let (session, state) = tabs.session(run, &target).ok_or_else(|| tabs.refused(run, &target))?;
     Ok(Tab::new(target, Arc::clone(&running.cdp), session, state))
   }
 
@@ -192,7 +200,7 @@ impl ProjectBrowser {
       let running = running.as_ref().ok_or_else(|| BrowserError::NotRunsTab(tab.clone()))?;
       let mut tabs = running.tabs.lock();
       if tabs.session(run, tab).is_none() {
-        return Err(BrowserError::NotRunsTab(tab.clone()));
+        return Err(tabs.refused(run, tab));
       }
       tabs.forget(tab);
       Arc::clone(&running.cdp)
@@ -223,14 +231,13 @@ impl ProjectBrowser {
   /// Tells the window what an agent of `run` did on `tab`, one of the run's tabs, for *Agent is acting*: the browser
   /// tools report each action so, not CDP.
   pub async fn agent_acted(&self, run: RunId, tab: &TargetId, action: AgentAction) -> Result<(), BrowserError> {
-    let owned = self
-      .running
-      .lock()
-      .await
-      .as_ref()
-      .is_some_and(|running| running.tabs.lock().session(run, tab).is_some());
-    if !owned {
-      return Err(BrowserError::NotRunsTab(tab.clone()));
+    {
+      let running = self.running.lock().await;
+      let running = running.as_ref().ok_or_else(|| BrowserError::NotRunsTab(tab.clone()))?;
+      let tabs = running.tabs.lock();
+      if tabs.session(run, tab).is_none() {
+        return Err(tabs.refused(run, tab));
+      }
     }
     self.window.send(BrowserEvent::AgentActed {
       run,

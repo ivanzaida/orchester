@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 use super::{Window, tab_id};
 use crate::browser::{
   cdp::{Cdp, CdpEvent, SessionId, TargetId},
-  tabs::Tabs,
+  tabs::{ClosedBy, Tabs},
 };
 
 /// One tab of the browser to follow: which, on what session, and whose.
@@ -115,9 +115,9 @@ fn dialog(params: &Value) -> BrowserDialog {
   }
 }
 
-/// Follows the browser's own `events` until its connection ends: forgets each tab the browser reports closed,
-/// whoever closed it, and tells the window when a kept tab changed its title or address. A browser that ends is
-/// ended for the window too ([`Window::ended`]), unless another started since.
+/// Follows the browser's own `events` until its connection ends: forgets each tab the browser reports closed that is
+/// still kept, which neither its run nor the window closed, and tells the window when a kept tab changed its title or
+/// address. A browser that ends is ended for the window too ([`Window::ended`]), unless another started since.
 pub(in crate::browser) async fn follow_targets(
   mut events: mpsc::UnboundedReceiver<CdpEvent>,
   tabs: Arc<Mutex<Tabs>>,
@@ -135,7 +135,7 @@ pub(in crate::browser) async fn follow_targets(
       continue;
     };
     match event.method.as_str() {
-      "Target.targetDestroyed" if tabs.lock().forget(&target) => {
+      "Target.targetDestroyed" if tabs.lock().closed_by(&target, ClosedBy::Browser) => {
         window.forget(&target);
         window.changed();
       }
