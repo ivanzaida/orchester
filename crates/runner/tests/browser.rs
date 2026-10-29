@@ -1,9 +1,14 @@
 //! The project's browser with the real Chrome, Edge, Brave or Chromium of this computer, on pages the test serves on
-//! loopback: it starts at the first use, opens a run's tab and reads it over CDP, keeps each run to its own tabs,
-//! closes a run's tabs when the run ends (and not while it is paused) and stops with the runner. Where no browser is
-//! found each test says so and checks nothing. Needs `git` for the scheduler's projects. Run with
+//! loopback (`browser/site.rs`): it starts at the first use, opens a run's tab and reads it over CDP, keeps each run to
+//! its own tabs, closes a run's tabs when the run ends (and not while it is paused) and stops with the runner; the
+//! agents' browser tools through the relay (`browser/tools.rs`). Where no browser is found each test says so and checks
+//! nothing. Needs `git` for the scheduler's projects. Run with
 //! `cargo test -p orchester-runner --features test-agent --test browser browser_`.
 
+mod browser {
+  pub mod site;
+  mod tools;
+}
 mod support;
 
 use std::{path::Path, time::Duration};
@@ -19,12 +24,12 @@ use orchester_runner::browser::{
   profile_of,
 };
 use serde_json::json;
-use tokio::{
-  io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-  net::{TcpListener, TcpStream},
-};
+use tokio::net::TcpStream;
 
-use self::support::{PATIENCE, Setup, pending::record_pending_run, project, scheduler, wait_for, wait_for_turns};
+use self::{
+  browser::site::serve as pages,
+  support::{PATIENCE, Setup, pending::record_pending_run, project, scheduler, wait_for, wait_for_turns},
+};
 
 const POLL: Duration = Duration::from_millis(100);
 
@@ -41,38 +46,6 @@ fn browser_installed() -> bool {
       false
     }
   }
-}
-
-/// Serves `<title>Page <name></title>` at `/<name>` on loopback until the test ends; the address to put names after.
-async fn pages() -> String {
-  let listener = TcpListener::bind("127.0.0.1:0").await.expect("a loopback port");
-  let address = listener.local_addr().expect("its address");
-  tokio::spawn(async move {
-    while let Ok((stream, _)) = listener.accept().await {
-      tokio::spawn(answer(stream));
-    }
-  });
-  format!("http://{address}/")
-}
-
-async fn answer(stream: TcpStream) {
-  let mut reader = BufReader::new(stream);
-  let mut request = String::new();
-  if reader.read_line(&mut request).await.is_err() {
-    return;
-  }
-  let mut header = String::new();
-  while reader.read_line(&mut header).await.is_ok_and(|read| read > 2) {
-    header.clear();
-  }
-  let name = request.split_whitespace().nth(1).unwrap_or("/").trim_start_matches('/');
-  let body = format!("<!doctype html><html><head><title>Page {name}</title></head><body>{name}</body></html>");
-  let response = format!(
-    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-    body.len()
-  );
-  // A browser that stopped reading leaves nothing to answer.
-  let _ = reader.get_mut().write_all(response.as_bytes()).await;
 }
 
 async fn title(browser: &ProjectBrowser, run: RunId, tab: &TargetId) -> String {

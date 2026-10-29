@@ -107,6 +107,15 @@ impl BrowserTool {
     Self::ALL.into_iter().find(|tool| tool.as_str() == name)
   }
 
+  /// The name an agent CLI calls the tool by: `mcp__Orchester__<tool>` for Claude Code, its own for Codex.
+  pub fn called(self, claude: bool) -> String {
+    if claude {
+      format!("mcp__{}__{}", super::SERVER, self.as_str())
+    } else {
+      self.as_str().to_owned()
+    }
+  }
+
   pub const fn reach(self) -> BrowserReach {
     match self {
       Self::Tabs

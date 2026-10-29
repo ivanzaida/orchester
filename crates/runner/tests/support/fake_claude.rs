@@ -216,7 +216,7 @@ impl Fake {
     if prompt.contains("Search the code index") {
       return self.search_index(worktree, (args, permission_prompt), step);
     }
-    if prompt.contains("Use the process tools") {
+    if prompt.contains("Use the process tools") || prompt.contains("Use the browser tools") {
       return self.use_process_tools(worktree, (args, permission_prompt), step);
     }
     if prompt.contains("Use the run tools") {
