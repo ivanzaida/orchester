@@ -15,7 +15,28 @@ design source is `crates/desktop-app/design/orchester.pen`, read and changed onl
     anything else goes first to the reviewer (the LLM of today's auto mode), which may approve something harmless;
     what it denies or is unsure about comes to the person.
 - **Decisions always come to the person** in both modes: agents' questions, plans, a step that needs a choice or ends
-  unverified, limits, merge conflicts. Autopilot never answers them.
+  unverified, limits, merge conflicts. Autopilot never answers them. What answers one without a person today, and the
+  setting that allows it (ORC-348; none of them reads auto mode, *approve everything in each run* or a run's
+  *Approve everything in this run*, which answer tool requests only, `runner::execution::step::answer`):
+
+  | Decision | Who answers it without a person | Setting that allows it |
+  |---|---|---|
+  | An agent's question | An MCP client: `answer_question`, the question card, the composer (window input) | Settings › Automation › *Let automation answer approvals* (`DecisionKind::Question`) |
+  | An agent's question or message | The Orchestrator chat: `answer_question`, `send_message` (`answered_by_orchestrator`) | *Let the Orchestrator answer agents* **and** *Let automation answer approvals*; otherwise a proposal the person applies |
+  | A plan | An MCP client: `decide_plan`, the plan card and bar, the composer's changes | *Let automation answer approvals* (`DecisionKind::Plan`); the Orchestrator chat never decides plans |
+  | A step that used up its retries, broke again, waits unverified or unchanged | An MCP client: `continue_run`'s `allow_retry`, `return_to`, `accept`, the Summary's retry, return, stop and *Accept … as it is*, `complete_run` with `anyway` | *Let automation answer approvals* (`DecisionKind::Stuck`); the Orchestrator chat only proposes |
+  | A finished run's work returned to a step | An MCP client: `continue_run`'s `return_to`, the Summary's *Return to … with note* | *Let automation answer approvals* (`DecisionKind::Stuck`) |
+  | A limit (token budget, time limit, a step's budget) | An MCP client: `continue_run`'s `raise_limits`, `raise_step_budget`, the Summary's *Continue with …* and *Remove the limit* | *Let automation answer approvals* (`DecisionKind::Limit`, new in ORC-348: before, nothing gated them); the Orchestrator chat refuses them (`person_only`) |
+  | The daily budget | An MCP client raising or removing it: `update_project_limits`'s `daily_budget`, Project settings › Limits' *Daily budget* (window input); then `continue_run`'s `resume` and `resume_run`, which raise nothing and go on only once the runner finds today's budget free again | *Let automation answer approvals* (`DecisionKind::Limit`, new in ORC-348: before, nothing gated it); lowering it takes no consent; the Orchestrator chat has no `update_project_limits` |
+  | An account's plan limit | Waiting for the reset resumes by itself, as the person's default; continuing on another account by window input | *Let automation change agent permissions* |
+  | Merge conflicts | The Deliver step's Integrate step sends them to its integrator agent (`merge_queue::integrate`); an MCP client: `continue_run`'s `resolve_conflicts`, the Summary's *Ask an agent to resolve* and *Resolve myself* | The pipeline's Deliver step (its integrator; none, and they go to the person); *Let automation answer approvals* (`DecisionKind::Stuck`) |
+  | A merge waiting for approval | Only a person (`merge_queue::approve` refuses automation) | — |
+  | Merging a finished run | The Orchestrator chat | *Let the Orchestrator merge runs*; on its own after a run's success also *merge finished runs* and *answer agents* |
+  | Continuing an interrupted run | The Orchestrator chat | *Let the Orchestrator continue interrupted runs* |
+
+  Not a decision, but still tied to auto mode: while *New runs use auto mode* is on, the Orchestrator chat's
+  `run_task` starts a run the person asked for in the chat instead of proposing it (never in a turn nobody asked
+  for). ORC-341 removes that setting; what replaces it there is open.
 - **Project override.** Project settings › Runs › *Allow Autopilot for agents in this project*; off forces Manual for
   every agent. *New runs use auto mode* and *With auto mode on, approve everything in each run* go away; the reviewer
   setting stays (used by Manual) and so does *Approved for every run*.

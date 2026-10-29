@@ -66,6 +66,7 @@ mod runner_failures;
 mod runs;
 mod schema;
 mod secrets;
+mod service_needs;
 mod shared_members;
 mod shared_modules;
 mod shared_tasks;

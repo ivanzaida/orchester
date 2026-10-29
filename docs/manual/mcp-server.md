@@ -111,7 +111,7 @@ automation may do; nothing over MCP or synthetic input can flip them:
 
 | Switch | Off by default; when off… |
 |---|---|
-| **Let automation answer approvals** (AA) | `decide_approval`, `decide_plan`, `answer_question`, `set_auto_mode`, `set_run_auto_mode`, `continue_run`'s retry/return/accept/resolve, `complete_run` with `anyway`, and profiles that approve automatically are refused as `automation_not_allowed`. |
+| **Let automation answer approvals** (AA) | `decide_approval`, `decide_plan`, `answer_question`, `set_auto_mode`, `set_run_auto_mode`, `continue_run`'s retry/return/accept/resolve and `raise_limits`/`raise_step_budget`, `update_project_limits` raising or removing the daily budget, `complete_run` with `anyway`, and profiles that approve automatically are refused as `automation_not_allowed`. Auto mode never stands in for it. |
 | **Let automation change agent permissions** (AP) | Every *widening* of what agents may do is refused as `person_only`: broader profile permissions, MCP servers added/widened/turned on, a CLI program not found on the search path, non-harmless environment variables, running a CLI on an API provider, another account, new command tools or tool program changes, publishing pipelines that are weaker or new, publishing instructions/skills/re-worded profiles, turning repository agent files on, moving a task to another pipeline. **Narrowing is always allowed.** |
 
 Further person-only switches concern the Orchestrator chat (see [orchestrator-chat.md](orchestrator-chat.md)).
@@ -128,8 +128,9 @@ Further person-only switches concern the Orchestrator chat (see [orchestrator-ch
 3. **Person-only controls** — any lurq input tool is refused `{"code":"person_only"}` while a protected control is
    on screen: the person-only switches, the MCP server section, Accounts, or a *widening confirmation* (Connections,
    Agents, Tools, Secrets, Skills, Project settings, Pipelines, task form, Local integration). Synthetic input that
-   decides on a person's behalf (approvals, questions, plans, retry/return/stop, *Accept … as it is*) needs AA and is
-   then recorded as automation's.
+   decides on a person's behalf (approvals, questions, plans, retry/return/stop, *Accept … as it is*, raising or
+   removing a run's limit or the project's daily budget) needs AA. Approvals, questions, plans and step decisions are
+   then recorded as automation's; a raised limit records no answerer.
 
 ## 4. Conventions of the domain tools
 

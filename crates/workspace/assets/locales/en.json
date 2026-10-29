@@ -1429,6 +1429,14 @@
       "fileTooLarge": "{{path}} is larger than {{max}} KiB, the most a reference file holds."
     }
   },
+  "services": {
+    "errors": {
+      "duplicateService": "More than one published service is named {{service}}.",
+      "needNotPublished": "{{service}} needs {{need}}, which is not a published service. Publish {{need}} first.",
+      "serviceNotPublished": "{{service}} is not a published service. Publish it first.",
+      "needsCycle": "The services' needs form a cycle: {{cycle}}. A service cannot start after itself."
+    }
+  },
   "sources": {
     "personOnly": "Adding a source lets agents read more without asking: a person confirms it in the window.",
     "check": {
@@ -1580,6 +1588,24 @@
         "arguments": "The tool's arguments would change, and with them what its program does.",
         "exitCodes": "Exit codes {{codes}} would pass, which did not.",
         "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
+      }
+    },
+    "services": {
+      "errors": {
+        "invalid": "The definition is not valid: {{reason}}",
+        "nameNotEditable": "A service keeps the name it was made with; save its definition under that name.",
+        "stackNameNotEditable": "A stack keeps the name it was made with; leave out the name or give the same one.",
+        "serviceNameTaken": "Another service is named {{name}}. Give the new service a name of its own.",
+        "stackNameTaken": "Another stack is named {{name}}. Give the new stack a name of its own."
+      },
+      "widens": {
+        "newService": "A new service runs its program whenever a run starts it: with your rights, network access and no sandbox, in the run's worktree, on files its agents wrote. Allow it only where you would let those agents do that.",
+        "firstVersion": "A service's first version lets runs start its program with your rights, network access and no sandbox, so a person publishes it.",
+        "program": "The service would run {{program}} where it ran {{before}}.",
+        "arguments": "The service's arguments would change, and with them what its program does.",
+        "workingFolder": "The service's program would start in another folder, where it may run other code.",
+        "variables": "The service's variables would change: a variable can change what its program loads, where it connects or what it trusts.",
+        "seed": "The service's seed would change: what it runs, or the requests it sends, once the service is ready."
       }
     },
     "widens": {

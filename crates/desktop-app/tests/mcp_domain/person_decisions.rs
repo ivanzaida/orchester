@@ -1,4 +1,5 @@
 //! Drives the real controls headless, then reads the decisions the real runner stored.
+mod limits;
 mod regressions;
 use orchester_app::routes::{ProjectPage, Route, TaskView};
 use orchester_core::{

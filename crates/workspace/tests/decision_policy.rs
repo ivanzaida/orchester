@@ -13,6 +13,7 @@ fn decision_policy_each_kind_requires_approvals_and_honors_revocation() {
     DecisionKind::Question,
     DecisionKind::Plan,
     DecisionKind::Stuck,
+    DecisionKind::Limit,
   ];
   for permissions in [false, true] {
     workspace
