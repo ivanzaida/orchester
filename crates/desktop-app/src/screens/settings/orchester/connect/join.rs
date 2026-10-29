@@ -17,20 +17,16 @@ use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
 };
-use orchester_core::id::{ServerId, TeamServerId};
+use orchester_core::id::TeamServerId;
 use orchester_workspace::sharing::{
-  CloudJoined, CodeRequest, Reaching, Trust,
-  cloud::{CloudError, ServerJoin},
+  CodeRequest, Reaching, Trust,
+  team_join::{JoinOutcome, JoinedServer},
 };
 
-use super::{ConnectPage, Found};
+use super::{ConnectPage, Found, Shown, join_error};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  screens::settings::orchester::{
-    Said,
-    words::{cloud_error, sharing_error},
-  },
   services::Services,
   theme::OrchesterSpacing,
   ui::{
@@ -66,11 +62,7 @@ impl DevtoolsInspectable for Confirmed {}
 /// What joining came to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Outcome {
-  Joined {
-    server: ServerId,
-    name: String,
-    username: String,
-  },
+  Joined(JoinedServer),
   /// The server holds the join until another computer of the person's, or an admin, approves it.
   Waiting,
   /// The server has no place for the account (`With your Orchester account · nothing for you there`).
@@ -92,6 +84,19 @@ pub(super) struct Request {
   name: String,
 }
 
+impl Request {
+  /// The code, the username and the name as the server takes them: trimmed, a blank field as none.
+  fn code(&self) -> CodeRequest {
+    let filled = |text: &str| (!text.trim().is_empty()).then(|| text.trim().to_owned());
+    CodeRequest {
+      code: Credential::new(self.code.trim().to_owned()),
+      username: filled(&self.username),
+      display_name: filled(&self.name),
+      proof: None,
+    }
+  }
+}
+
 /// The join's state on the page. Clones share it.
 #[derive(Clone)]
 pub(super) struct Join {
@@ -100,14 +105,14 @@ pub(super) struct Join {
   code: Signal<String>,
   username: Signal<String>,
   name: Signal<String>,
-  run: FutureAction<Request, Outcome, Said>,
+  run: FutureAction<Request, Outcome, Shown>,
 }
 
 impl Join {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
-    let (servers, cloud) = (services.servers, services.cloud);
-    let (username, name) = suggested(&cloud);
+    let team_join = services.team_join;
+    let (username, name) = suggested(&services.cloud);
     Self {
       confirmed: ctx.signal(Confirmed(None)),
       method: ctx.signal(Method::Code),
@@ -115,31 +120,21 @@ impl Join {
       username: ctx.signal(username),
       name: ctx.signal(name),
       run: ctx.future_action(move |request: Request| {
-        let (servers, cloud) = (servers.clone(), cloud.clone());
+        let team_join = team_join.clone();
         async move {
-          match request.method {
-            Method::Account => match cloud.join_server(&request.address, request.linked).await {
-              Ok(ServerJoin::Joined(CloudJoined::Joined(server))) => joined(&servers, server).await,
-              Ok(ServerJoin::Joined(CloudJoined::Waiting(_))) => Ok(Outcome::Waiting),
-              Ok(ServerJoin::NotInvited) => Ok(Outcome::NotInvited),
-              Err(CloudError::NoServer) => Ok(Outcome::NotInvited),
-              Err(error) => Err(cloud_error(&error)),
-            },
+          let outcome = match request.method {
+            Method::Account => team_join.join_server(&request.address, request.linked).await,
             Method::Code => {
-              let filled = |text: &str| (!text.trim().is_empty()).then(|| text.trim().to_owned());
-              let code = CodeRequest {
-                code: Credential::new(request.code.trim().to_owned()),
-                username: filled(&request.username),
-                display_name: filled(&request.name),
-                proof: None,
-              };
-              let server = cloud
-                .join_with_code(&request.address, request.trust, code)
+              team_join
+                .join_by_code(&request.address, request.trust, request.code())
                 .await
-                .map_err(|error| cloud_error(&error))?;
-              joined(&servers, server).await
             }
-          }
+          };
+          Ok(match outcome.map_err(|error| join_error(&error))? {
+            JoinOutcome::Joined(joined) => Outcome::Joined(joined),
+            JoinOutcome::Waiting(_) => Outcome::Waiting,
+            JoinOutcome::NotInvited => Outcome::NotInvited,
+          })
         }
       }),
     }
@@ -175,23 +170,6 @@ fn suggested(cloud: &orchester_workspace::sharing::cloud::Cloud) -> (String, Str
 
 /// The longest username a server accepts.
 const USERNAME_MAX: usize = 64;
-
-/// The server joined, with the name and the username it has there now.
-async fn joined(servers: &orchester_workspace::sharing::Servers, server: ServerId) -> Result<Outcome, Said> {
-  let servers = servers.clone();
-  let entry = orchester_workspace::background::run(move || servers.entries())
-    .await
-    .map_err(|_| Said::new("cloud.errors.local"))?
-    .map_err(|error| sharing_error(&error))?
-    .into_iter()
-    .find(|entry| entry.stored.id == server)
-    .ok_or_else(|| Said::new("cloud.errors.local"))?;
-  Ok(Outcome::Joined {
-    server,
-    name: entry.stored.name,
-    username: entry.stored.account.map(|account| account.username).unwrap_or_default(),
-  })
-}
 
 /// How this computer trusts what was found: the confirmed pin, the system's trust store, or plain HTTP as allowed.
 fn trust_of(join: &Join, found: &Found) -> Option<Trust> {
@@ -370,11 +348,7 @@ fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {
   let navigation = Navigation::of(ctx);
   let server = found.reached.info.name.as_str();
   match outcome {
-    Outcome::Joined {
-      server: id,
-      name,
-      username,
-    } => {
+    Outcome::Joined(JoinedServer { id, name, username }) => {
       let id = *id;
       // A code names no project: the server's entry lists the person's projects there, each with *Link a checkout…*,
       // which leads to the join review.

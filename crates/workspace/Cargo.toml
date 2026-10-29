@@ -58,6 +58,8 @@ rustix = { workspace = true, features = ["fs"] }
 windows-sys = { workspace = true, features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO"] }
 
 [dev-dependencies]
+# The stand-in Orchester Cloud on loopback (`test_support::account_cloud`), for joining a team (`tests/startup_join`).
+orchester-api = { workspace = true, features = ["test-support"] }
 orchester-workspace = { workspace = true, features = ["test-support"] }
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true

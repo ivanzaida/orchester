@@ -19,20 +19,27 @@ use lurq::{
   layout::layout_kind::Justify,
   node::{Element, dimension::Dimension},
 };
-use orchester_api::client::{PlainHttp, ServerAddress};
+use orchester_api::client::{ClientError, PlainHttp, ServerAddress};
 use orchester_core::id::ServerId;
 use orchester_workspace::{
   background,
-  sharing::{Reached, Reaching, ServerEntry},
+  messages::Message,
+  sharing::{Reached, Reaching, ServerEntry, SharingError, team_join::JoinError},
 };
 
-use super::{Said, words::server_client};
+use super::{
+  Said,
+  words::{cloud_error, sharing_error},
+};
 use crate::{
   navigation::Navigation,
   routes::{ConnectStep, OrchesterView, Route},
   screens::settings::frame,
   services::Services,
-  ui::button::{ActionButton, ButtonKind},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    message::message_text,
+  },
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -54,6 +61,34 @@ pub(super) struct Found {
 
 impl DevtoolsInspectable for Found {}
 
+/// Why a step did not go on, in the page's own words or in a refusal's of the workspace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Shown {
+  Said(Said),
+  Message(Message),
+}
+
+impl DevtoolsInspectable for Shown {}
+
+impl Shown {
+  pub(super) fn text(&self, ctx: &Ctx) -> String {
+    match self {
+      Self::Said(said) => said.text(ctx),
+      Self::Message(message) => message_text(ctx, message).to_string(),
+    }
+  }
+}
+
+/// What to tell the person about a join that did not happen: a refusal in its own words, the rest as Settings says
+/// the cloud's and the team server's failures.
+pub(super) fn join_error(error: &JoinError) -> Shown {
+  match error {
+    JoinError::Refused(refusal) => Shown::Message(refusal.message()),
+    JoinError::Cloud(error) => Shown::Said(cloud_error(error)),
+    JoinError::Server(error) => Shown::Said(sharing_error(error)),
+  }
+}
+
 /// How far the page is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Stage {
@@ -72,7 +107,7 @@ pub struct ConnectPage {
   address: Signal<String>,
   allow_plain: Signal<bool>,
   stage: Signal<Stage>,
-  reach: FutureAction<(String, bool), Found, Said>,
+  reach: FutureAction<(String, bool), Found, Shown>,
   join: join::Join,
   seeded: Signal<bool>,
   /// Allowing plain HTTP to another computer and joining are a person's (review 1, M1).
@@ -83,17 +118,18 @@ impl Component for ConnectPage {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let servers = Services::of(ctx).servers;
+    let team_join = Services::of(ctx).team_join;
     let reach = ctx.future_action(move |(text, allow_plain): (String, bool)| {
-      let servers = servers.clone();
+      let team_join = team_join.clone();
       async move {
-        let address = ServerAddress::parse(&text).map_err(|_| Said::new("sharing.connect.address.invalid"))?;
+        let address =
+          ServerAddress::parse(&text).map_err(|_| Shown::Said(Said::new("sharing.connect.address.invalid")))?;
         let plain_http = if allow_plain {
           PlainHttp::Allowed
         } else {
           PlainHttp::NotAllowed
         };
-        let reached = servers
+        let reached = team_join
           .reach(&address, plain_http)
           .await
           .map_err(|error| reach_error(&error, &address))?;
@@ -217,15 +253,15 @@ struct Entries(Vec<ServerEntry>);
 
 impl DevtoolsInspectable for Entries {}
 
-/// Why nothing usable answered at `address`.
-fn reach_error(error: &orchester_api::client::ClientError, address: &ServerAddress) -> Said {
-  use orchester_api::client::ClientError;
+/// Why nothing usable answered at `address`; nothing answering at all is the workspace's refusal.
+fn reach_error(error: &JoinError, address: &ServerAddress) -> Shown {
   match error {
-    error if error.is_connection() => Said::new("sharing.connect.address.nothing").with("address", address.as_str()),
-    ClientError::NotOrchester { .. } | ClientError::Redirect { .. } => {
-      Said::new("sharing.connect.address.notOrchester").with("address", address.as_str())
+    JoinError::Server(SharingError::Client(ClientError::NotOrchester { .. } | ClientError::Redirect { .. })) => {
+      Shown::Said(Said::new("sharing.connect.address.notOrchester").with("address", address.as_str()))
     }
-    ClientError::PlainHttpRefused => Said::new("sharing.connect.address.plain"),
-    error => server_client(error),
+    JoinError::Server(SharingError::Client(ClientError::PlainHttpRefused)) => {
+      Shown::Said(Said::new("sharing.connect.address.plain"))
+    }
+    error => join_error(error),
   }
 }

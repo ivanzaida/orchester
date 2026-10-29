@@ -16,7 +16,6 @@
         "placeholder": "orchester.example.com",
         "hint": "Ask whoever runs the server for its address. An invite by email fills it in for you.",
         "invalid": "That isn't a server address.",
-        "nothing": "Nothing answered at {{address}}. Check the address, and that this computer is on your team's network.",
         "notOrchester": "{{address}} answered, but it isn't an Orchester server. The address usually starts with orchester. or has a port, like :8740.",
         "plain": "This address isn't encrypted: allow plain HTTP for it first."
       },
@@ -70,7 +69,6 @@
         "label": "Invite code",
         "placeholder": "K7QM-3XRD",
         "hint": "Read without regard to case or the hyphen.",
-        "invalid": "That code isn't right, or it was used or has expired: codes work once, for a limited time. Check it with whoever made it.",
         "rateLimited": "Too many wrong codes from this computer. Try again in {{minutes}} min."
       },
       "username": {
