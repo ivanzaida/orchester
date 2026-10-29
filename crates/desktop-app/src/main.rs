@@ -12,8 +12,9 @@ use tokio::runtime::Runtime;
 
 fn main() {
   let log = app_log::install();
-  // Only this window asks the login shell for its PATH on macOS (a Finder start lacks it); the runners inherit the
-  // search path from here, and tests and QA copies keep the PATH they were started with.
+  // Only the app process asks the login shell for its PATH on macOS (a Finder start lacks it), and only when its input
+  // is not a terminal, so a QA copy started without one reads it too; the runners inherit the search path from here,
+  // and tests, which never call this, keep the PATH they were started with.
   orchester_exec::search_path::read_login_shell();
   // Refused before anything opens in a QA copy or a debug build: a run that asked for a place must not get
   // a window elsewhere. The installed app ignores the variable (`WindowPosition::requested`).

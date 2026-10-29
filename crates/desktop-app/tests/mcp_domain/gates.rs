@@ -214,6 +214,14 @@ fn domain_a_chosen_cli_file_is_checked_before_anything_runs() {
       "program_not_executable"
     );
   }
+  #[cfg(windows)]
+  assert_eq!(
+    served.refused(
+      "add_cli_connection",
+      &cli_args(Path::new(r"\\server.invalid\share\codex.exe"))
+    )["code"],
+    "program_not_local"
+  );
 }
 
 fn cli_args(program: &Path) -> Value {

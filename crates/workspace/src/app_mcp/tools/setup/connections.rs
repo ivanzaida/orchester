@@ -380,6 +380,10 @@ fn chosen_refused(error: &ChosenProgramError) -> ToolError {
   let named = |key: &'static str, path: &Path| Message::new(key).with("program", path.display().to_string());
   match error {
     ChosenProgramError::NotAbsolute(_) => refused("program_not_absolute", Message::new("errors.executableNotAbsolute")),
+    ChosenProgramError::NotLocal(path) => refused(
+      "program_not_local",
+      named("connections.mcp.errors.programNotLocal", path),
+    ),
     ChosenProgramError::Missing(path) => refused("program_not_found", named("appMcp.errors.programMissing", path)),
     ChosenProgramError::NotAFile(path) => refused("program_not_a_file", named("appMcp.errors.programNotAFile", path)),
     ChosenProgramError::NotExecutable(path) => refused(

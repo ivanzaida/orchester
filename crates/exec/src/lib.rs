@@ -183,7 +183,7 @@ fn joined_input(writer: thread::JoinHandle<io::Result<()>>) -> Result<(), Comman
   }
 }
 
-pub(crate) fn read_to_end(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<io::Result<String>> {
+fn read_to_end(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<io::Result<String>> {
   thread::spawn(move || {
     let mut bytes = Vec::new();
     if let Some(mut pipe) = pipe {

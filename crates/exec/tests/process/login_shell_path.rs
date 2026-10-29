@@ -73,6 +73,28 @@ fn login_shell_path_takes_only_standard_output() {
 }
 
 #[test]
+fn login_shell_path_is_read_while_a_background_job_holds_the_output() {
+  let path = format!("{PATH_START}/a/bin{PATH_END}");
+  let (program, args) = leaving_a_background_job(Some(&path));
+  let args: Vec<&str> = args.iter().map(String::as_str).collect();
+  let started = Instant::now();
+  let folders = login_shell::read_with(Path::new(program), &args, login_shell::TIMEOUT).expect("the PATH is read");
+  assert_eq!(folders, [PathBuf::from("/a/bin")]);
+  assert!(started.elapsed() < login_shell::TIMEOUT, "{:?}", started.elapsed());
+}
+
+#[test]
+fn login_shell_path_read_ends_at_the_deadline_while_a_background_job_holds_the_output() {
+  let (program, args) = leaving_a_background_job(None);
+  let args: Vec<&str> = args.iter().map(String::as_str).collect();
+  let timeout = Duration::from_secs(1);
+  let started = Instant::now();
+  let read = login_shell::read_with(Path::new(program), &args, timeout);
+  assert!(matches!(read, Err(LoginShellError::TimedOut(_))), "{read:?}");
+  assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+}
+
+#[test]
 fn login_shell_path_folders_follow_the_inherited_path_before_the_install_folders() {
   let inherited = joined(&["/usr/bin", "/bin"]);
   let login_shell = ["/opt/homebrew/bin", "/usr/bin"].map(PathBuf::from);
@@ -187,4 +209,23 @@ fn long_running() -> (&'static str, &'static [&'static str]) {
 #[cfg(not(windows))]
 fn long_running() -> (&'static str, &'static [&'static str]) {
   ("sleep", &["30"])
+}
+
+/// A shell that starts a program in the background, which holds the shell's output open for
+/// seconds after the shell exited, then prints `output` if there is one.
+#[cfg(windows)]
+fn leaving_a_background_job(output: Option<&str>) -> (&'static str, Vec<String>) {
+  let mut args = ["/C", "start", "/b", "ping", "-n", "10", "127.0.0.1"]
+    .map(String::from)
+    .to_vec();
+  if let Some(output) = output {
+    args.extend(["&", "echo", output].map(String::from));
+  }
+  ("cmd", args)
+}
+
+#[cfg(not(windows))]
+fn leaving_a_background_job(output: Option<&str>) -> (&'static str, Vec<String>) {
+  let echo = output.map(|output| format!(" echo '{output}'")).unwrap_or_default();
+  ("/bin/sh", vec!["-c".to_owned(), format!("sleep 10 &{echo}")])
 }

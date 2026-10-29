@@ -38,6 +38,21 @@ fn chosen_program_that_is_missing_relative_or_a_folder_is_refused() {
   ));
 }
 
+/// Refused by its text, so no server is contacted to find out whether the file is there.
+#[cfg(windows)]
+#[test]
+fn chosen_program_on_another_machine_is_refused_before_it_is_read() {
+  for path in [
+    r"\\server.invalid\share\claude.exe",
+    r"\\?\UNC\server.invalid\share\claude.exe",
+  ] {
+    assert!(
+      matches!(chosen_program(Path::new(path)), Err(ChosenProgramError::NotLocal(refused)) if refused == Path::new(path)),
+      "{path}"
+    );
+  }
+}
+
 #[cfg(unix)]
 #[test]
 fn chosen_program_without_an_execute_bit_is_refused() {

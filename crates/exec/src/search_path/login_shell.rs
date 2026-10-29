@@ -6,10 +6,12 @@
 //! (`super::macos`).
 
 use std::{
-  io,
+  io::{self, Read},
   path::{Path, PathBuf},
-  process::{Command as Process, Stdio},
-  time::Duration,
+  process::{Child, ChildStdout, Command as Process, Stdio},
+  sync::mpsc::{self, Receiver, RecvTimeoutError},
+  thread,
+  time::{Duration, Instant},
 };
 
 use thiserror::Error;
@@ -22,6 +24,8 @@ pub const PATH_START: &str = "__ORCHESTER_PATH_START__";
 pub const PATH_END: &str = "__ORCHESTER_PATH_END__";
 /// A login shell that has not printed its `PATH` by then is stopped, and its `PATH` is not used.
 pub const TIMEOUT: Duration = Duration::from_secs(5);
+
+const CHUNK_BYTES: usize = 4096;
 
 #[derive(Debug, Error)]
 pub enum LoginShellError {
@@ -45,9 +49,30 @@ pub fn read(shell: &Path, timeout: Duration) -> Result<Vec<PathBuf>, LoginShellE
 }
 
 /// Runs `program` with `args` and reads the `PATH` it prints between the markers on its standard
-/// output. The program reads no input, and is stopped with everything it started when it does not
-/// finish within `timeout`.
+/// output, taking at most `timeout` in all. The program reads no input, and is stopped with
+/// everything it started when it does not finish in time. A program started in the background by
+/// the start-up files may keep the output open after the shell exited: the read ends as soon as
+/// the `PATH` is there, and what still holds the output at the deadline is ended on macOS.
 pub fn read_with(program: &Path, args: &[&str], timeout: Duration) -> Result<Vec<PathBuf>, LoginShellError> {
+  let deadline = Instant::now() + timeout;
+  let mut child = start(program, args)?;
+  let chunks = read_chunks(child.stdout.take());
+  // A shell whose start-up files fail may still print the PATH, so its exit status is not read.
+  crate::wait_for(&mut child, program, timeout)
+    .map_err(LoginShellError::Wait)?
+    .ok_or(LoginShellError::TimedOut(timeout))?;
+  match printed_path(&chunks, deadline)? {
+    Some(folders) => Ok(folders),
+    None => {
+      // On Windows there is no group to end: the reader stops once what holds the output ends.
+      #[cfg(unix)]
+      end_left_behind(&child, program);
+      Err(LoginShellError::TimedOut(timeout))
+    }
+  }
+}
+
+fn start(program: &Path, args: &[&str]) -> Result<Child, LoginShellError> {
   // Not `crate::prepare`: that gives the program the search path, which this read is part of.
   let mut process = Process::new(program);
   process
@@ -58,20 +83,65 @@ pub fn read_with(program: &Path, args: &[&str], timeout: Duration) -> Result<Vec
   console::hide_window(&mut process);
   #[cfg(unix)]
   crate::process_group::lead_own_group(&mut process);
-  let mut child = process.spawn().map_err(|source| LoginShellError::Start {
+  process.spawn().map_err(|source| LoginShellError::Start {
     shell: program.to_path_buf(),
     source,
-  })?;
-  let stdout = crate::read_to_end(child.stdout.take());
-  // A shell whose start-up files fail may still print the PATH, so its exit status is not read.
-  crate::wait_for(&mut child, program, timeout)
-    .map_err(LoginShellError::Wait)?
-    .ok_or(LoginShellError::TimedOut(timeout))?;
-  let output = stdout
-    .join()
-    .map_err(|_| LoginShellError::Output(io::Error::other("the output reader panicked")))?
-    .map_err(LoginShellError::Output)?;
-  parse(&output)
+  })
+}
+
+/// Sends what `pipe` gives as it comes, until its end, a read error, or nobody receives any more.
+fn read_chunks(pipe: Option<ChildStdout>) -> Receiver<io::Result<Vec<u8>>> {
+  let (sender, receiver) = mpsc::channel();
+  thread::spawn(move || {
+    let Some(mut pipe) = pipe else {
+      return;
+    };
+    let mut buffer = [0; CHUNK_BYTES];
+    loop {
+      let chunk = match pipe.read(&mut buffer) {
+        Ok(0) => return,
+        Ok(read) => Ok(buffer[..read].to_vec()),
+        Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+        Err(error) => Err(error),
+      };
+      let failed = chunk.is_err();
+      if sender.send(chunk).is_err() || failed {
+        return;
+      }
+    }
+  });
+  receiver
+}
+
+/// The folders of the `PATH` in the output `chunks` bring, read until the output ends or holds the
+/// `PATH`. `None` when `deadline` passes before either.
+fn printed_path(
+  chunks: &Receiver<io::Result<Vec<u8>>>,
+  deadline: Instant,
+) -> Result<Option<Vec<PathBuf>>, LoginShellError> {
+  let mut output = Vec::new();
+  loop {
+    match chunks.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+      Ok(chunk) => output.extend(chunk.map_err(LoginShellError::Output)?),
+      Err(RecvTimeoutError::Disconnected) => return parse(&String::from_utf8_lossy(&output)).map(Some),
+      Err(RecvTimeoutError::Timeout) => return Ok(None),
+    }
+    // The shell printed the PATH last and has exited, so a whole PATH is all it will print.
+    if let Ok(folders) = parse(&String::from_utf8_lossy(&output)) {
+      return Ok(Some(folders));
+    }
+  }
+}
+
+/// Ends what the exited shell left running in its process group that still holds its output.
+#[cfg(unix)]
+fn end_left_behind(child: &Child, program: &Path) {
+  let Some(group) = crate::process_group::ProcessGroup::led_by(child.id()) else {
+    return;
+  };
+  if let Err(error) = group.kill() {
+    tracing::warn!(%error, program = %program.display(), "cannot end what the login shell left running");
+  }
 }
 
 /// The folders of the `PATH` in `stdout`: between the last [`PATH_START`] and the [`PATH_END`]
