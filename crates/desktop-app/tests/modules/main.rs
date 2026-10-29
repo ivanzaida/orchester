@@ -20,7 +20,10 @@ mod support;
 
 use harness::{Seeded, details, module_with};
 use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab, TaskView};
-use orchester_core::task::organization::{ChangeActor, WorkflowStatus};
+use orchester_core::{
+  task::organization::{ChangeActor, WorkflowStatus},
+  time::Timestamp,
+};
 use orchester_workspace::delivery::DeliveryPeriod;
 
 #[test]
@@ -79,6 +82,37 @@ fn modules_the_task_header_moves_the_task_as_a_person() {
     (None, Some(module), ChangeActor::Person)
   );
   assert!(!seeded.shows("task-module-error"));
+  // The saved task read again reaches the field with the module it chose (issue #64: the window froze here).
+  seeded.read_again();
+  seeded.until("the header keeps the module", |seeded| {
+    seeded.text("task-module").contains("Checkout")
+  });
+}
+
+/// A move made elsewhere (another window, MCP, the team server) while the task's page is open: the header shows
+/// the new module and the window keeps working. It once deadlocked here, the field holding its own lock while it
+/// set the choice whose watcher took that lock again.
+#[test]
+fn modules_the_task_header_follows_a_move_made_elsewhere() {
+  let mut picked = None;
+  let mut seeded = Seeded::new("tasks", |db| {
+    picked = Some(module_with(db, details("Checkout", (0, 7)), &[]).0);
+  });
+  let module = picked.expect("the module");
+  let key = "KON-12";
+  let page = ProjectPage::Task(key.parse().expect("a key"), TaskView::default());
+  seeded.open(page, "task-module");
+  let task = seeded.task(key).id();
+  seeded
+    .db()
+    .set_task_module(task, Some(module), ChangeActor::Orchester, Timestamp::now())
+    .expect("moved elsewhere");
+  seeded.read_again();
+  seeded.until("the header shows the module", |seeded| {
+    seeded.text("task-module").contains("Checkout")
+  });
+  let moves = seeded.db().module_changes(module).expect("the moves");
+  assert_eq!(moves.len(), 1, "the header made no move of its own: {moves:?}");
 }
 
 #[test]

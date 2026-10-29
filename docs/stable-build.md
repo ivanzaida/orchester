@@ -134,7 +134,11 @@ its releases (`server-v*` tags) are in the private platform repository `ivanzaid
 **What it builds**, on a Windows runner: `cargo build --release --locked -p orchester-app -p
 orchester-runner` as the installed app (`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/install.ps1`
 builds it: the MCP server on its fixed address, the token in Credential Manager), with the C
-runtime linked in so the programs start without the Visual C++ Redistributable. The release
+runtime linked in so the programs start without the Visual C++ Redistributable. The workspace's
+release profile keeps line tables (`debug = "line-tables-only"`), which on Windows land in a PDB
+beside each program (`orchester.pdb`, `orchester_runner.pdb`; on macOS in a `.dSYM`, by
+`split-debuginfo = "packed"`): GlitchTip resolves an error report's frame addresses with them
+(`docs/error-reports.md`). Neither the installer nor the zip packs a PDB. The release
 `app-v<version>`, tagged on the pushed commit, has:
 
 - `Orchester-<version>-setup.exe`, the installer (Inno Setup, `tools/installer/orchester.iss`):

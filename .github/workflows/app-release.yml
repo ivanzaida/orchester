@@ -144,7 +144,8 @@ jobs:
           $built = (Resolve-Path "target/release").Path
 
           # The zip holds one folder, Orchester-<version>, with both programs: the app starts the runner from beside
-          # itself, so orchester.exe alone does not work.
+          # itself, so orchester.exe alone does not work. The PDBs the build writes beside them (orchester.pdb,
+          # orchester_runner.pdb) are GlitchTip's, to resolve error reports, and never go to the person.
           $folder = Join-Path $out "Orchester-$env:VERSION"
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           foreach ($program in "orchester.exe", "orchester-runner.exe") {
@@ -153,6 +154,13 @@ jobs:
           Copy-Item -LiteralPath "tools/installer/portable-readme.txt" -Destination (Join-Path $folder "README.txt")
           $zip = "Orchester-$env:VERSION-windows-x64.zip"
           Compress-Archive -Path $folder -DestinationPath (Join-Path $out $zip)
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $packed = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $out $zip))
+          try { $pdbs = @($packed.Entries | Where-Object { $_.Name -like "*.pdb" }) } finally { $packed.Dispose() }
+          if ($pdbs.Count -gt 0) {
+            Write-Output "::error::$zip holds debug files ($($pdbs.FullName -join ', ')); they go to GlitchTip, not into the zip."
+            exit 1
+          }
 
           # Inno Setup 6, installed only on this runner when its image does not have it.
           $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source

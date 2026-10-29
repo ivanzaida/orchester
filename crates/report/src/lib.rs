@@ -5,6 +5,7 @@
 //! hold the IPC protocol, processes, the database and the keychain. Nothing here sends a report.
 
 mod event;
+mod images;
 mod paths;
 mod secrets;
 mod stack;

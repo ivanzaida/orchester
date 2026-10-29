@@ -1,9 +1,12 @@
 use std::{borrow::Cow, path::Path};
 
 use orchester_report::ReportScrubber;
-use sentry::protocol::{
-  Breadcrumb, Context, DeviceContext, Event, Exception, Frame, Level, Map, OsContext, Request, RuntimeContext,
-  Stacktrace, Url, User, Value,
+use sentry::{
+  protocol::{
+    Addr, Breadcrumb, Context, DebugMeta, DeviceContext, Event, Exception, Frame, Level, Map, OsContext, Request,
+    RuntimeContext, Stacktrace, SymbolicDebugImage, Url, User, Value,
+  },
+  types::{CodeId, DebugId},
 };
 
 const HOME: &str = "/Users/ivan";
@@ -162,11 +165,14 @@ fn scrub_keeps_stack_frames_message_level_release_and_environment() {
           module: Some("orchester_runner".to_owned()),
           filename: Some("main.rs".to_owned()),
           abs_path: Some(format!("{SOURCE_ROOT}/crates/runner/src/main.rs")),
+          package: Some(format!("{PROJECT}/orchester-runner.exe")),
           lineno: Some(12),
           colno: Some(5),
           in_app: Some(true),
           context_line: Some("let secret = read();".to_owned()),
           vars: Map::from([("secret".to_owned(), Value::from("hunter2"))]),
+          instruction_addr: Some(Addr(0x7ff6_1234_5678)),
+          symbol_addr: Some(Addr(0x7ff6_1234_5600)),
           ..Frame::default()
         }],
         ..Stacktrace::default()
@@ -195,9 +201,41 @@ fn scrub_keeps_stack_frames_message_level_release_and_environment() {
       lineno: Some(12),
       colno: Some(5),
       in_app: Some(true),
+      instruction_addr: Some(Addr(0x7ff6_1234_5678)),
       ..Frame::default()
     }]
   );
+}
+
+#[test]
+fn scrub_keeps_debug_images_with_their_file_names_only() {
+  let debug_id: DebugId = "3249d99d-0c40-4931-8610-f4e4fb0b6936-1".parse().expect("a debug id");
+  let program = SymbolicDebugImage {
+    name: format!(r"{HOME}\AppData\Local\Orchester\orchester.exe"),
+    arch: Some("x86_64".to_owned()),
+    image_addr: Addr(0x7ff6_1230_0000),
+    image_size: 0x0120_0000,
+    image_vmaddr: Addr(0),
+    id: debug_id,
+    code_id: Some(CodeId::new("65f1a2b31200000".to_owned())),
+    debug_file: Some(r"D:\a\orchester\target\release\deps\orchester.pdb".to_owned()),
+  };
+  let event = Event {
+    debug_meta: Cow::Owned(DebugMeta {
+      images: vec![program.clone().into()],
+      ..DebugMeta::default()
+    }),
+    ..Event::default()
+  };
+
+  let scrubbed = scrubber().scrub(event);
+
+  let expected = SymbolicDebugImage {
+    name: "orchester.exe".to_owned(),
+    debug_file: Some("orchester.pdb".to_owned()),
+    ..program
+  };
+  assert_eq!(scrubbed.debug_meta.images, vec![expected.into()]);
 }
 
 #[test]
