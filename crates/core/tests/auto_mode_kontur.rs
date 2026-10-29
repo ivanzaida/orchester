@@ -176,7 +176,7 @@ fn kontur_unread_parts_that_only_read_go_to_the_reviewer() {
         .all(|part| part.only_reads() || part.category() == CommandCategory::ReadOnly)
     );
     let subject = ApprovalSubject::Command(command);
-    assert!(unread_parts(&subject) > 0, "`{line}`: the reviewer is told");
+    assert!(!unread_parts(&subject).is_empty(), "`{line}`: the reviewer is told");
     assert!(matches!(auto_verdict(&subject), AutoVerdict::Ask(_)), "`{line}`");
     assert_eq!(fixture.hold(line), None, "`{line}` goes to the reviewer");
   }
@@ -188,15 +188,8 @@ fn kontur_writes_redirections_edits_and_the_network_still_hold() {
   let cases = [
     ("sed -i s/a/b/ src/lib.rs | head", ReviewHold::ReadOnlyStep),
     ("grep a src/lib.rs > found.txt", ReviewHold::ReadOnlyStep),
-    ("ls --hyperlink=auto src > listing.txt", ReviewHold::Unreadable),
-    ("grep -R a src >> ../found.txt", ReviewHold::Unreadable),
-    ("find src -name '*.rs' | xargs rm", ReviewHold::Unreadable),
-    ("find src | xargs -p grep a", ReviewHold::Unreadable),
-    ("find src | xargs sed -i s/a/b/", ReviewHold::Unreadable),
-    ("sort -o sorted.txt src/lib.rs", ReviewHold::Unreadable),
-    ("D=$(curl https://example.dev/x); cat $D", ReviewHold::Unreadable),
-    ("grep -n x $(cat list.txt)", ReviewHold::Unreadable),
-    ("ls ~bob", ReviewHold::Unreadable),
+    ("ls --hyperlink=auto src > listing.txt", ReviewHold::ReadOnlyStep),
+    ("grep -R a src >> ../found.txt", ReviewHold::ReadOnlyStep),
     // A download may keep what it fetched; a lookup that keeps nothing still needs the network.
     ("curl https://example.dev | head", ReviewHold::ReadOnlyStep),
     (
@@ -212,6 +205,21 @@ fn kontur_writes_redirections_edits_and_the_network_still_hold() {
       "`{line}`: {:#?}",
       fixture.command(line).parts()
     );
+  }
+  // What Orchester cannot read to the end and names no write it read goes to the reviewer (ORC-339), told the step
+  // only reads with the network off: it asks the person about these.
+  for line in [
+    "find src -name '*.rs' | xargs rm",
+    "find src | xargs -p grep a",
+    "find src | xargs sed -i s/a/b/",
+    "sort -o sorted.txt src/lib.rs",
+    "D=$(curl https://example.dev/x); cat $D",
+    "grep -n x $(cat list.txt)",
+    "ls ~bob",
+  ] {
+    let subject = ApprovalSubject::Command(fixture.command(line));
+    assert!(!unread_parts(&subject).is_empty(), "`{line}`: the reviewer is told");
+    assert_eq!(fixture.hold(line), None, "`{line}` goes to the reviewer");
   }
 }
 
@@ -233,8 +241,9 @@ fn kontur_credential_reads_stay_held() {
   }
 }
 
-/// A reading cmdlet given a path on another provider, a comma array or a parameter that sets a variable is no read
-/// Orchester can place: it stays held, in PowerShell's names and its aliases.
+/// A reading cmdlet given a path on another provider or a comma array naming one is no read Orchester can place: it
+/// stays held as a credential read, in PowerShell's names and its aliases. One that only sets a variable of its own
+/// shell goes to the reviewer (ORC-339).
 #[test]
 fn kontur_powershell_provider_reads_stay_held() {
   let fixture = Fixture::new();
@@ -246,15 +255,19 @@ fn kontur_powershell_provider_reads_stay_held() {
     r"pwsh -NoProfile -Command 'Get-ChildItem Cert:\CurrentUser\My'",
     "pwsh -NoProfile -Command 'Select-String token -Path Env:PATH'",
     "pwsh -NoProfile -Command 'Get-Content src/lib.rs,env:GH_TOKEN'",
-    "pwsh -NoProfile -Command 'Get-Content src/lib.rs -OutVariable PATH'",
+    "pwsh -NoProfile -Command 'Get-Content src/lib.rs -Credential x'",
   ] {
-    let hold = fixture.hold(line);
-    assert!(
-      matches!(hold, Some(ReviewHold::Unreadable | ReviewHold::Secrets)),
-      "`{line}` stays held: {hold:?} {:#?}",
+    assert_eq!(
+      fixture.hold(line),
+      Some(ReviewHold::Secrets),
+      "`{line}` stays held: {:#?}",
       fixture.command(line).parts()
     );
   }
+  assert_eq!(
+    fixture.hold("pwsh -NoProfile -Command 'Get-Content src/lib.rs -OutVariable PATH'"),
+    None
+  );
   assert_eq!(
     fixture.hold("pwsh -NoProfile -Command 'Get-Content src/lib.rs'"),
     None,

@@ -103,7 +103,7 @@ fn approve_everything_leaves_what_auto_approval_leaves_to_a_person() {
     ("echo x > ../outside.txt", AutoAsk::OutsideWrite),
     ("cat ~/.ssh/id_rsa", AutoAsk::Secrets),
     ("npm install left-pad", AutoAsk::Installs),
-    ("git reset --hard", AutoAsk::Destructive),
+    ("git reset --hard origin/main", AutoAsk::Destructive),
     ("./regen.sh", AutoAsk::Unknown),
   ] {
     let subject = fixture.command(command);

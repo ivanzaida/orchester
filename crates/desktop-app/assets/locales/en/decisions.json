@@ -143,7 +143,8 @@
       "completedTitle": "Task completed",
       "completedByYou": "You completed the task at {{time}}. Run #{{run}} committed nothing; its report is kept as the run's Report.",
       "completedByAutomation": "Automation completed the task at {{time}} through Orchester's MCP server. Run #{{run}} committed nothing; its report is kept as the run's Report.",
-      "completedByOrchestrator": "The Orchestrator completed the task at {{time}}, as it would merge a finished run. Run #{{run}} committed nothing; its report is kept as the run's Report."
+      "completedByOrchestrator": "The Orchestrator completed the task at {{time}}, as it would merge a finished run. Run #{{run}} committed nothing; its report is kept as the run's Report.",
+      "completedByMember": "A member of the project closed the task on its team server at {{time}}. Run #{{run}} committed nothing; its report is kept as the run's Report."
     },
     "ready": {
       "title": "Ready for your review",

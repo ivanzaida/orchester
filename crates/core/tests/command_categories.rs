@@ -58,9 +58,11 @@ fn command_categories_by_program_and_subcommand() {
     ("cargo add serde --features derive", CommandCategory::Network),
     ("curl https://example.dev", CommandCategory::Network),
     ("git push origin main", CommandCategory::HistoryDestructive),
-    ("git reset --hard HEAD~1", CommandCategory::HistoryDestructive),
+    // The run's own branch in its worktree is the run's (ORC-339); another branch's commit is not.
+    ("git reset --hard HEAD~1", CommandCategory::Worktree),
+    ("git reset --hard origin/main", CommandCategory::HistoryDestructive),
     ("git branch -D old", CommandCategory::HistoryDestructive),
-    ("git commit --amend --no-edit", CommandCategory::HistoryDestructive),
+    ("git commit --amend --no-edit", CommandCategory::Worktree),
     ("./scripts/regen.sh", CommandCategory::Unknown),
     ("echo $PATH", CommandCategory::Unknown),
     ("cat $(git ls-files)", CommandCategory::Unknown),

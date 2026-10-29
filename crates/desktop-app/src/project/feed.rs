@@ -312,9 +312,15 @@ impl Component for FeedLoader {
       publish(&self.feed.job_state, state);
     }
     // Tasks automation saved count as the screens' own saves, and so does a change of the merge queue: a run it
-    // merged is done, and the sidebar counts the queue.
-    let saved = self.feed.revision.get() + outside.tasks + super::merge_queue::changes(ctx, &root);
+    // merged is done, and the sidebar counts the queue. So does a change of a shared project's cache: a status another
+    // member set on the team server, or one this computer's run reached that the server took (ORC-150).
+    let saved = self.feed.revision.get()
+      + outside.tasks
+      + super::merge_queue::changes(ctx, &root)
+      + super::closed::shared_changes(ctx, &services.servers);
     publish(&self.feed.saves, saved);
+    // A task closed while its run waited to be completed settles that completion, however it was closed (ORC-150).
+    super::closed::settle(ctx, (&open, saved + states));
     let hold = services.hold;
     // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
     let settled = answers(ctx, (runners.clone(), root.clone())).settled();

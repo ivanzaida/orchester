@@ -257,7 +257,10 @@ fn command_compound_adversarial_lines_stay_unknown_or_dangerous() {
     ),
     ("echo $?; rm -rf ~", CommandCategory::HistoryDestructive),
     ("cargo build && git push", CommandCategory::HistoryDestructive),
-    ("cargo test || git reset --hard", CommandCategory::HistoryDestructive),
+    (
+      "cargo test || git reset --hard origin/main",
+      CommandCategory::HistoryDestructive,
+    ),
     (
       "cargo test 2>&1 | head; curl https://example.dev",
       CommandCategory::Network,
@@ -343,16 +346,10 @@ fn command_compound_auto_mode_reviews_unknown_lines_and_holds_dangerous_parts() 
     "run() { cargo test \"$@\"; }; run decision_cards card",
   ] {
     assert_eq!(fixture.command(line).category(), CommandCategory::Unknown, "`{line}`");
-    assert_eq!(
-      fixture.hold(line, NetworkAccess::On),
-      None,
-      "`{line}` goes to the reviewer"
-    );
-    assert_eq!(
-      fixture.hold(line, NetworkAccess::Off),
-      Some(ReviewHold::Unreadable),
-      "`{line}` with the network off"
-    );
+    // With the network off too (ORC-339): the reviewer is told and judges it.
+    for network in [NetworkAccess::On, NetworkAccess::Off] {
+      assert_eq!(fixture.hold(line, network), None, "`{line}` goes to the reviewer");
+    }
   }
   let held = [
     ("D=$(ls); rm -rf ~/projects", ReviewHold::Destructive),
@@ -365,6 +362,6 @@ fn command_compound_auto_mode_reviews_unknown_lines_and_holds_dangerous_parts() 
   }
   assert_eq!(
     fixture.hold("$(id); curl https://example.dev", NetworkAccess::Off),
-    Some(ReviewHold::Unreadable)
+    Some(ReviewHold::NetworkOff)
   );
 }

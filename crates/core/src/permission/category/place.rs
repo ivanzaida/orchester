@@ -207,10 +207,10 @@ impl<'a> Placing<'a> {
       })
   }
 
-  /// `word` must lie in the worktree or a writable folder, else the part is Unknown.
-  pub(super) fn inside(&self, part: &mut CommandPart, word: &str) {
+  /// `word` must lie in the worktree or a writable folder, else the part is Unknown; whether it does.
+  pub(super) fn inside(&self, part: &mut CommandPart, word: &str) -> bool {
     if word.is_empty() || is_null_device(word) {
-      return;
+      return true;
     }
     let inside = self
       .locate(word)
@@ -218,6 +218,7 @@ impl<'a> Placing<'a> {
     if !inside {
       part.at_least(CommandCategory::Unknown);
     }
+    inside
   }
 }
 

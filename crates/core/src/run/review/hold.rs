@@ -26,13 +26,14 @@
 //! that may write, such a lookup goes to the reviewer, as a build that fills the same caches does.
 //!
 //! A part Orchester cannot read to the end (an unknown program or form, a script whose content it does
-//! not read) goes to the reviewer, which is told so ([`unread_parts`]), except in a step whose network is
-//! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides.
-//! Where its output goes is checked all the same. A part whose program only reads under any option, or that
-//! `xargs` runs, with every path it names placed and no redirect into a file ([`CommandPart::only_reads`], ORC-95),
-//! writes and starts nothing whatever Orchester did not read of it: it goes to the reviewer there too, which sees the
-//! whole line and judges what no word names (the paths `xargs` reads from its input), and a credential or share its
-//! words name still holds it. A Codex escalation (a command outside its sandbox)
+//! not read) goes to the reviewer in every step (ORC-339, the person's decision of 2026-10-29): parsing that
+//! stopped is no reason to ask the person. The reviewer is told which parts and why ([`unread_parts`]), with the
+//! step's permissions, and judges itself whether such a part may write in a read-only step, reach the network,
+//! write outside the worktree, read a secret, install, or destroy; it asks the person when it may. What
+//! Orchester did read of such a part still holds it: where its output goes, a credential or share its words
+//! name, a write outside, and every other part of the line, each checked on its own. Only a request with no
+//! command Orchester could read at all ([`ReviewHold::Unreadable`]) goes to the person unreviewed.
+//! A Codex escalation (a command outside its sandbox)
 //! always goes to the person. Orchester's `run_check` and `start_qa_app` (a project program outside every
 //! sandbox) and a request too long to be reviewed whole go to the person too; a project rule a person made
 //! for `start_qa_app` answers before auto mode looks ([`crate::run::ProjectRule`]).
@@ -41,12 +42,16 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::push::{PushFacts, disguised_git, is_push, reviewable_push};
+use super::{
+  input::{UnreadPart, UnreadWhy},
+  push::{PushFacts, disguised_git, is_push, reviewable_push},
+};
 use crate::{
   orchester_tools::auto_approvable,
   permission::{
     AgentPermissions, NetworkAccess, RepositoryAccess,
     category::{CommandCategory, CommandPart},
+    known_safe::program_name,
   },
   run::answer::ApprovalSubject,
 };
@@ -57,9 +62,11 @@ use crate::{
 pub enum ReviewHold {
   /// It reads a credential location or store.
   Secrets,
-  /// A part of it Orchester could not read to the end, in a step whose network is off or that only reads.
+  /// Orchester found no command in it to read. Before ORC-339 (2026-10-29) also a part it could not read to the
+  /// end, in a step whose network is off or that only reads; such a part now goes to the reviewer.
   Unreadable,
-  /// It rewrites or discards history, or deletes outside the worktree.
+  /// It rewrites or discards history beyond the run's own branch, changes git beyond the run's worktree (another
+  /// branch, a tag, the shared settings, the worktrees), or deletes outside the worktree.
   Destructive,
   /// It pushes something other than the run's own branch to `origin`, or forces a push.
   Push,
@@ -112,9 +119,8 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   let Some(permissions) = rules.permissions else {
     return Some(ReviewHold::PermissionsUnknown);
   };
-  let confined = permissions.network() == NetworkAccess::Off || permissions.repository() == RepositoryAccess::ReadOnly;
   let parts = command.parts();
-  if parts.is_empty() || (confined && parts.iter().any(|part| unread(part) && !part.only_reads())) {
+  if parts.is_empty() {
     return Some(ReviewHold::Unreadable);
   }
   if (0..parts.len()).any(|at| is_push(&parts[at]) && !reviewable_push(parts, at, &rules.push)) {
@@ -129,19 +135,14 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   outside_permissions(parts, permissions, rules.build_output)
 }
 
-/// The hard rule a part outside the step's permissions breaks: in a read-only step a part that may write, but
-/// a build's output in `ignored` ([`writes_build_output`]); the network or an install while it is off; a write
-/// outside the folders.
+/// The hard rule a part outside the step's permissions breaks: in a read-only step a part that may write
+/// ([`may_write`]); the network or an install while it is off; a write outside the folders.
 fn outside_permissions(
   parts: &[CommandPart],
   permissions: &AgentPermissions,
   ignored: &[PathBuf],
 ) -> Option<ReviewHold> {
-  if permissions.repository() == RepositoryAccess::ReadOnly
-    && parts
-      .iter()
-      .any(|part| !part.writes_nothing() && !writes_build_output(part, ignored))
-  {
+  if permissions.repository() == RepositoryAccess::ReadOnly && parts.iter().any(|part| may_write(part, ignored)) {
     return Some(ReviewHold::ReadOnlyStep);
   }
   if permissions.network() == NetworkAccess::Off
@@ -157,6 +158,25 @@ fn outside_permissions(
     .then_some(ReviewHold::OutsideFolders)
 }
 
+/// Whether `part` may write in a read-only step as far as Orchester can tell: a part it read that writes anything
+/// but a Cargo build's output in `ignored` ([`writes_build_output`]); a part it did not read to the end only when
+/// what it did read writes (a redirect into a file, a write outside, an install or a tool's cache) or it runs Cargo
+/// in a form Orchester does not know, which builds and writes as the person's decision of 2026-10-18 holds. What it
+/// did not read the reviewer judges, told the step only reads.
+fn may_write(part: &CommandPart, ignored: &[PathBuf]) -> bool {
+  if unread(part) {
+    return part.writes_output()
+      || part.writes_outside()
+      || part.installs()
+      || part.updates_cache()
+      || part
+        .words()
+        .iter()
+        .any(|word| program_name(word).as_deref() == Some("cargo"));
+  }
+  !part.writes_nothing() && !writes_build_output(part, ignored)
+}
+
 /// Whether `part` writes only a Cargo build's output: into a writable folder outside the worktree, or into a folder
 /// of the worktree that git told is `ignored`.
 fn writes_build_output(part: &CommandPart, ignored: &[PathBuf]) -> bool {
@@ -170,12 +190,25 @@ fn unread(part: &CommandPart) -> bool {
   part.category() == CommandCategory::Unknown || part.runs_script()
 }
 
-/// How many parts of `subject` Orchester could not read to the end; the reviewer is told.
-pub fn unread_parts(subject: &ApprovalSubject) -> usize {
-  match subject {
-    ApprovalSubject::Command(command) => command.parts().iter().filter(|part| unread(part)).count(),
-    ApprovalSubject::McpTool { .. } => 0,
-  }
+/// The parts of `subject` Orchester could not read to the end, and why; the reviewer is told.
+pub fn unread_parts(subject: &ApprovalSubject) -> Vec<UnreadPart> {
+  let ApprovalSubject::Command(command) = subject else {
+    return Vec::new();
+  };
+  command
+    .parts()
+    .iter()
+    .enumerate()
+    .filter(|(_, part)| unread(part))
+    .map(|(at, part)| UnreadPart {
+      at: at + 1,
+      why: if part.runs_script() {
+        UnreadWhy::Script
+      } else {
+        UnreadWhy::Unknown
+      },
+    })
+    .collect()
 }
 
 /// The hard rule for a call of an MCP tool: Orchester's `run_check` never goes to the reviewer.

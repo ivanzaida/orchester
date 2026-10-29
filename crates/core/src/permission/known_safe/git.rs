@@ -345,7 +345,8 @@ pub(super) fn readable(args: &[String]) -> Option<Vec<&str>> {
   }
   let options = match subcommand.as_str() {
     "status" => STATUS,
-    "log" | "show" => LOG,
+    "log" => return Some([vec![subcommand.as_str()], log_readable(rest)?].concat()),
+    "show" => LOG,
     "diff" => DIFF,
     "rev-parse" => REV_PARSE,
     "ls-files" => LS_FILES,
@@ -356,6 +357,36 @@ pub(super) fn readable(args: &[String]) -> Option<Vec<&str>> {
   };
   let mut candidates = vec![subcommand.as_str()];
   candidates.extend(options.readable(rest)?);
+  Some(candidates)
+}
+
+/// The arguments of `git log` that may name a file, read as [`LOG`] reads them, with the line ranges of `-L`
+/// (`-L<start>,<end>:<file>`, `-L:<function>:<file>`, the range attached or the next argument): the file after its
+/// last colon may name a file, which is placed. A range without a file is `None`.
+fn log_readable(rest: &[String]) -> Option<Vec<&str>> {
+  let mut candidates = Vec::new();
+  let (mut start, mut at) = (0, 0);
+  while let Some(arg) = rest.get(at) {
+    if arg == "--" {
+      break;
+    }
+    let Some(attached) = arg.strip_prefix("-L") else {
+      at += 1;
+      continue;
+    };
+    candidates.extend(LOG.readable(&rest[start..at])?);
+    let (range, next) = match attached {
+      "" => (rest.get(at + 1)?.as_str(), at + 2),
+      attached => (attached, at + 1),
+    };
+    let file = range.rsplit_once(':')?.1;
+    if file.is_empty() {
+      return None;
+    }
+    candidates.push(file);
+    (start, at) = (next, next);
+  }
+  candidates.extend(LOG.readable(&rest[start..])?);
   Some(candidates)
 }
 
