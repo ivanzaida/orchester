@@ -48,6 +48,14 @@ never shipped data. Exports at scale 1: `.tmp/design/ORC-357/<node id>.png`.
 - **Quieter tool and bookkeeping rows**: a turn's tool calls fold into one muted line (*Ran 2 commands ›*). Opened, the
   line lists the calls; usage, reasoning and unparsed lines are counted and appear only behind *Show N details*.
   Messages, cards, step dividers, run events, failed calls (`$danger`) and CLI errors never fold.
+- **Long and multi-line commands** (asked for by the person, pointing at ORC-342's `vZcoN`, which stays unchanged):
+  the command is shown whole before you allow it. Long lines wrap in the block and never scroll sideways. Past four
+  wrapped lines, or six script lines, the command folds behind *Show the whole command · N characters* / *Show all N
+  lines*. A script has a head with its shell, line count and copy, and numbered lines. Opened, a block longer than 24
+  lines scrolls inside it, so the answers stay in view. Chained commands (`&&`, `;`, `|`) list each part on its own row,
+  saying why each one runs or asks, and the part that asks is marked. A folded line cuts a long command in the middle
+  (the program and its end stay); a script shows its first line and *+ N lines*. The same middle cut applies to
+  ORC-342's quiet approval rows.
 - No component, variable or existing frame changed. The new patterns are built from variables and are not components
   yet: the inline decision card, a button with a key hint, the answered line and the tool line. Rows inside the copied
   `Window` (`qlXhJ`), `Sidebar` and `Task header` keep those components' own text styles.
@@ -72,6 +80,7 @@ never shipped data. Exports at scale 1: `.tmp/design/ORC-357/<node id>.png`.
 | `hHFaa` | Row 3 | 06a · … · light | 06 in the light theme (window `AtcIh`) |
 | `iw7me` | Row 3 | 06b · Command approval · states | a focused answer with its consequence · b More open (every run of the project, everything in this run) · c deny with a message · d long command folded · e destructive command (no similar answer, why) · f the reviewer is still checking · g an MCP tool |
 | `DtXld` | Row 3 | 06c · Command approval · answered | Allowed once · allowed similar · denied with your words · answered without you (reviewer, autopilot, profile, automation) · not answered |
+| `pC82N` | Row 3 | 06d · Command approval · long and multi-line commands | a long single line that wraps (up to four lines) · b a longer line folded with *Show the whole command · 612 characters* · c a 12-line PowerShell script with a shell and line-count head, numbered lines, folded after 6 (*Show all 12 lines*) · d the script opened (*Show less*; past 24 lines the block scrolls inside) · e chained commands with one row per part, the part that asks marked in `$warning_muted` · f answered lines with long commands (middle cut; a script's first line + *+ 11 lines*) |
 
 ## Copy
 
