@@ -8,7 +8,7 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_app::ui::decision::{Answer, AnsweredLine, Asked, Decision, Mark, Stage};
+use orchester_app::ui::decision::{Answer, AnsweredLine, Asked, Decision, Stage};
 
 use super::{line, stack, wide_cell};
 use crate::gallery::State;
@@ -149,16 +149,8 @@ fn answered(ctx: &mut Ctx) -> Column {
     "“Restart the session once”",
     "· through Orchester’s MCP server · 15:24",
   );
-  let run_ended = AnsweredLine::not_answered(
-    ctx,
-    Mark::Ended,
-    "· Design tools still missing · the run ended at 16:02",
-  );
-  let stopped = AnsweredLine::not_answered(
-    ctx,
-    Mark::Stopped,
-    "· Builder stopped waiting at 15:51, when the run was interrupted",
-  );
+  let run_ended = AnsweredLine::run_ended(ctx, "Design tools still missing", "16:02");
+  let stopped = AnsweredLine::stopped(ctx, "Builder", "15:51");
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)

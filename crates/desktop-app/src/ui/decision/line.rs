@@ -101,6 +101,18 @@ impl AnsweredLine {
     Self::new(mark, ctx.t("cards.answered.notAnswered"), None, detail)
   }
 
+  /// *Not answered · `question` · the run ended at `time`* (`NQ5Y8`).
+  pub fn run_ended(ctx: &Ctx, question: &str, time: &str) -> Self {
+    let ended = ctx.t_args("cards.answered.ended", [("time", time)]);
+    Self::not_answered(ctx, Mark::Ended, format!("· {question} · {ended}"))
+  }
+
+  /// *Not answered · `agent` stopped waiting at `time`, when the run was interrupted* (`xlTR0`).
+  pub fn stopped(ctx: &Ctx, agent: &str, time: &str) -> Self {
+    let stopped = ctx.t_args("cards.answered.stopped", [("agent", agent), ("time", time)]);
+    Self::not_answered(ctx, Mark::Stopped, format!("· {stopped}"))
+  }
+
   /// The line `id` ending in `chevron`; a press runs `toggle`.
   pub(super) fn render(&self, id: &str, chevron: Icon, toggle: impl Fn() + Send + Sync + 'static) -> Element {
     let (glyph, color) = self.mark.glyph();

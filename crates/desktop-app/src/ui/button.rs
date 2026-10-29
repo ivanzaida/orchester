@@ -478,7 +478,10 @@ impl ActionButton {
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0))
         .text_overflow(lurq::components::TextOverflow::Elipsis)
-    } else if self.kind == ButtonKind::Select {
+    } else {
+      label
+    };
+    let label = if self.kind == ButtonKind::Select {
       label.flex(1.0).min_width(Dimension::Px(0.0))
     } else {
       label

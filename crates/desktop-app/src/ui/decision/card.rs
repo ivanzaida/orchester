@@ -322,20 +322,22 @@ fn answer_button(id: &str, (index, answer): (usize, &Answer), state: Answers) ->
       }
     }
     Answers::Given(chosen) => {
-      let button = if answer.consequence.is_some() {
-        button.stacked()
-      } else {
-        button
-      };
+      let stacked = answer.consequence.is_some();
+      let button = if stacked { button.stacked() } else { button };
       if chosen == Some(index) {
         return button.icon(Icon::Check).shown().into();
       }
-      Column::new()
-        .width(Dimension::Pct(100.0))
+      let dimmed = Column::new()
         .opacity(NOT_CHOSEN_OPACITY)
         .describe("dimmed", "true")
-        .child(button.shown())
-        .into()
+        .child(button.shown());
+      // A stacked answer is as wide as its parent, so its wrapper is too; a row answer keeps its own width.
+      let dimmed = if stacked {
+        dimmed.width(Dimension::Pct(100.0))
+      } else {
+        dimmed
+      };
+      dimmed.into()
     }
   }
 }
