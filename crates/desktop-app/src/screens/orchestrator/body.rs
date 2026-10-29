@@ -13,7 +13,7 @@ use lurq::{
     ctx::{Ctx, FutureState},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -424,19 +424,9 @@ fn frame(content: Element) -> Element {
     .into()
 }
 
-/// While a conversation is read: its loader and what loads, over the faded composer.
+/// While a conversation is read: its turns' bones (`super::reading`), over the faded composer.
 fn loading(ctx: &mut Ctx, view: &View, project: &ShownProject, reads: &Reads) -> Element {
-  let content = Column::new()
-    .id("orchestrator-loading")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(Spacer::new().flex(1.0))
-    .child(icon(Icon::LoaderCircle, IconSize::Lg, PaletteColor::TextSecondary))
-    .child(Text::new(&ctx.t("orchestrator.loading.title")).variant(OrchestratorText::Emphasis.role()))
-    .child(Text::new(&ctx.t("orchestrator.loading.note")).variant(ExtraTypography::Note.role()))
-    .child(Spacer::new().flex(1.0));
+  let content = super::reading::turns(ctx);
   let held = Sending::Held(ctx.t("orchestrator.composer.loading"));
   let foot = Foot {
     state: &held,

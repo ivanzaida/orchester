@@ -19,8 +19,16 @@ fn on(window: &mut Window) -> bool {
   switch_on(window, SWITCH)
 }
 
-/// Whether the switch `switch` shows on.
+/// Whether the switch `switch` shows on, once it is drawn: while its setting reads, a bone stands in its place
+/// (ORC-110).
 fn switch_on(window: &mut Window, switch: &str) -> bool {
+  let mark = format!("{switch}-mark");
+  window.until("the switch drawn", |window| {
+    window
+      .tree
+      .get_element_by_id_mut(&mark)
+      .is_some_and(|element| element.bounds().is_some())
+  });
   let mut bounds = |id: String| {
     window
       .tree

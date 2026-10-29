@@ -19,6 +19,7 @@ mod new_pipeline;
 mod new_start;
 mod parts;
 mod publication;
+mod reading;
 mod restore;
 mod settings;
 mod sources;

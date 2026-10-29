@@ -141,14 +141,24 @@ impl Component for PullRequestsScreen {
     let now = Timestamp::now();
     let page = frame();
     let Some(list) = list else {
-      // Until the stored list is known only the heading shows, so nothing appears that moves once it is.
-      let page = page.child(header::header(ctx, None, &Shown::Syncing, now));
+      // Until the stored list is known the heading, the tabs and the query stand over the rows' bones.
       return match loaded.error {
         Some(error) if !pending => {
           let reread = self.reread.clone();
-          page.child(states::failed(ctx, &error, move || reread.update(|count| *count += 1)))
+          page
+            .child(header::header(ctx, None, &Shown::Syncing, now))
+            .child(states::failed(ctx, &error, move || reread.update(|count| *count += 1)))
         }
-        _ => page,
+        _ => {
+          let id = project.open.project.id();
+          let header = header::reading(ctx);
+          let query = query::query(ctx, &self.choices);
+          page
+            .child(header)
+            .child(query::tabs(ctx, id, (tab, true), None))
+            .child(query)
+            .child(states::reading(ctx))
+        }
       };
     };
     let PullRequestList::Linked(linked) = list else {
@@ -201,7 +211,8 @@ impl PullRequestsScreen {
   ) -> Column {
     let id = project.open.project.id();
     let known = linked.synced_at.is_some();
-    let page = page.child(query::tabs(ctx, id, tab, known.then_some(linked)));
+    let reading = !known && linked.failure.is_none();
+    let page = page.child(query::tabs(ctx, id, (tab, reading), known.then_some(linked)));
     let notice_actions = self.notice_actions(ctx, project, actions);
     let notice = notice::failure_notice(ctx, linked, project.open.project.name().as_str(), now, &notice_actions);
     let failed = self.failed.get().map(|reason| {

@@ -97,11 +97,9 @@ fn orchestrator_opening_a_conversation_never_looks_like_a_new_one() {
     .clone();
   hold.set(true);
   screen.click(&format!("orchestrator-history-{older}"));
+  // Its turns are bones named *Loading conversation…* (ORC-110).
   screen.until("the conversation loading", |screen| {
-    screen
-      .text("orchestrator-conversation-loading")
-      .contains("Loading conversation")
-      || screen.text("screen-orchestrator").contains("Loading conversation")
+    screen.exists("orchestrator-loading")
   });
   assert_eq!(screen.text("orchestrator-title"), "Order of the auth work");
   assert_eq!(screen.text("orchestrator-meta"), "· opening from History");

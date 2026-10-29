@@ -20,6 +20,7 @@ mod import;
 mod interrupted;
 mod lifecycle;
 mod live;
+mod loading_states;
 mod long_chats;
 mod memory;
 mod modules;
@@ -139,6 +140,7 @@ pub const ALL: [Scenario; 55] = [
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),
+  Scenario::of("loading-states", loading_states::seed),
 ];
 
 /// The scenario called `name`.

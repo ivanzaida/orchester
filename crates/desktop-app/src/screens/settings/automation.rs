@@ -53,6 +53,7 @@ use crate::{
     message::message_text,
     setting_notice::status_line,
     setting_rows::{SettingGroup, SettingRow, marked_words},
+    skeleton::{self, Skeleton},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -376,9 +377,17 @@ impl Component for ConsentRow {
       (Consent::WindowControl, None) => None,
       _ => Some(ctx.t(hint).to_string()),
     };
+    // While the stored choice is read, the switch is a bone of its size (`15 · App settings · Automation · loading`).
+    let control: Element = if shown.is_none() && read.is_pending() {
+      Skeleton::new(format!("{id}-reading"), ctx.t("settings.reading"))
+        .inline()
+        .show(ctx, skeleton::switch())
+    } else {
+      switch.into()
+    };
     let row = SettingRow::new(id, ctx.t(label))
       .info(ctx.t(words.description))
-      .control(switch)
+      .control(control)
       .below_all(below);
     let row = match hint {
       Some(hint) => row.hint(hint),
@@ -481,10 +490,11 @@ fn stored(
   workspace: &Workspace,
   (consent, saved): (Consent, Option<bool>),
 ) -> FutureState<bool, Message> {
-  let workspace = workspace.clone();
+  let (workspace, hold) = (workspace.clone(), Services::of(ctx).hold);
   let read = ctx.future(saved, move |_| {
-    let workspace = workspace.clone();
+    let (workspace, hold) = (workspace.clone(), hold.clone());
     async move {
+      hold.released().await;
       background::run(move || consent.read(&workspace))
         .await?
         .map_err(|error| {

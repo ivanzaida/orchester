@@ -38,7 +38,8 @@ use crate::{
     field::FieldInput,
     icon::Icon,
     message::message_text,
-    state::{EmptyState, load_error, loading},
+    skeleton::{Skeleton, fading},
+    state::{EmptyState, load_error},
     tabs::{PageTab, page_tabs},
   },
 };
@@ -120,7 +121,7 @@ impl Component for ModulesList {
         );
         padded(failed)
       }
-      _ => padded(loading("modules-loading", &ctx.t("modules.reading")).into()),
+      _ => reading(ctx),
     };
     Column::new()
       .id("screen-modules")
@@ -145,7 +146,9 @@ impl ModulesList {
     let new = ActionButton::new("modules-new", ButtonKind::Primary, ctx.t("modules.newModule"))
       .icon(Icon::Plus)
       .opens(navigation.to(Route::Project(id, ProjectPage::NewModule)));
-    let any = listed.is_some_and(|listed| !listed.is_empty());
+    // While the modules are read the search stands where it will (`05 · Modules · loading` `beo7S`).
+    let reading = matches!(project.feed.tasks.get(), TasksState::Loading);
+    let any = reading || listed.is_some_and(|listed| !listed.is_empty());
     let search = any.then(|| {
       FieldInput::new("modules-search", ctx.t("modules.search.label"), self.search.clone())
         .search()
@@ -167,7 +170,7 @@ impl ModulesList {
       title: header::title(ctx, "modules-title", &ctx.t("modules.title")),
       actions: search.into_iter().chain([new.into()]).collect(),
       status: header::status_line("modules-status", vec![status.into()]),
-      tabs: tabs(ctx, id, tab, listed),
+      tabs: tabs(ctx, id, (tab, reading), listed),
     })
   }
 
@@ -225,11 +228,12 @@ impl ModulesList {
   }
 }
 
-/// Open and Closed with their counts, 12 `text_muted` after the label (`MYsfj`), once the modules are read.
+/// Open and Closed with their counts, 12 `text_muted` after the label (`MYsfj`), once the modules are read; each count
+/// a bone while they are `reading`.
 fn tabs(
   ctx: &mut Ctx,
   project: orchester_core::id::ProjectId,
-  chosen: ModuleListTab,
+  (chosen, reading): (ModuleListTab, bool),
   listed: Option<&[ModuleSummary]>,
 ) -> Element {
   let navigation = Navigation::of(ctx);
@@ -244,11 +248,41 @@ fn tabs(
       let page_tab = PageTab::to(format!("modules-tab-{}", tab.name()), word, tab == chosen, open);
       match listed.filter(|listed| !listed.is_empty()) {
         Some(listed) => page_tab.count(listed.iter().filter(|summary| shows(tab, summary)).count(), false),
+        None if reading => page_tab.count_reading(),
         None => page_tab,
       }
     })
     .collect();
   page_tabs(ctx, "modules-tabs", tabs).into()
+}
+
+/// Each module's row bones while the modules are read (`05 · Modules · loading` `beo7S`): its name, description and
+/// forecast.
+const READING: [(f32, f32, f32); 6] = [
+  (104.0, 218.0, 88.0),
+  (120.0, 186.0, 164.0),
+  (98.0, 164.0, 120.0),
+  (130.0, 228.0, 98.0),
+  (108.0, 196.0, 130.0),
+  (88.0, 174.0, 108.0),
+];
+
+/// The rows while the modules are read, in the list's own room, the lower rows fading. *Reading the modules…*
+/// (`modules.reading`) names them.
+fn reading(ctx: &mut Ctx) -> Element {
+  let rows = READING.iter().map(|words| list_row::bones(ctx, *words)).collect();
+  let rows = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Xl)
+        .bottom(TaskSpacing::Foot.role())
+        .left(TaskSpacing::Side.role())
+        .right(TaskSpacing::Side.role()),
+    )
+    .spacing(ExtraSpacing::Tight.role())
+    .with_children(fading(rows));
+  Skeleton::new("modules-loading", ctx.t("modules.reading")).show(ctx, rows)
 }
 
 fn shows(tab: ModuleListTab, summary: &ModuleSummary) -> bool {

@@ -216,15 +216,17 @@ impl ChangesReads {
   }
 
   fn checkpointed(&self, ctx: &mut Ctx, repo_root: &Path, run: Option<&RunView>, retry: u64) -> CheckpointedRead {
-    let programs = Services::of(ctx).programs;
+    let services = Services::of(ctx);
+    let (programs, hold) = (services.programs, services.hold);
     let range = run.map(|run| RunRange::of(&run.run));
     let deps = (repo_root.to_path_buf(), range, retry);
     let load = ctx.future(deps, move |(repo_root, range, _)| {
-      let programs = programs.clone();
+      let (programs, hold) = (programs.clone(), hold.clone());
       async move {
         let Some(range) = range else {
           return Ok::<_, ()>(None);
         };
+        hold.released().await;
         let run = range.run;
         let read = background::run(move || run_changes_in(&repo_root, &programs, &range))
           .await

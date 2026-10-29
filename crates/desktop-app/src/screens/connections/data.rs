@@ -23,9 +23,12 @@ pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureSt
 
 /// [`load`]'s reading itself, for a page that follows its outcome.
 pub(super) fn reading(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureHandle<ProjectConnections, Message> {
-  ctx.future((repo_root, revision), |(repo_root, _)| {
+  let hold = crate::services::Services::of(ctx).hold;
+  ctx.future((repo_root, revision), move |(repo_root, _)| {
     tracing::trace!(target: crate::app_log::READ_LOG, read = "connections");
+    let hold = hold.clone();
     async move {
+      hold.released().await;
       background::run(move || ProjectConnections::load_in(&repo_root))
         .await?
         .map_err(|error| {

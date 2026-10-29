@@ -8,7 +8,9 @@
 
 mod send;
 
-use orchester_api::{FileStored, ResourceCreate, ResourceCreated, SharedVersion, VersionPublish, Versions};
+use orchester_api::{
+  FileStored, ResourceCreate, ResourceCreated, ResourcesImport, SharedResource, SharedVersion, VersionPublish, Versions,
+};
 use orchester_core::{
   blob::ContentHash,
   id::{ResourceId, VersionId},
@@ -55,6 +57,12 @@ pub trait ConfigServer: Send + Sync {
     hash: ContentHash,
     content: Vec<u8>,
   ) -> impl Future<Output = Result<FileStored, SharingError>> + Send;
+
+  /// Uploads local resources with their history, ids and version numbers kept (Share).
+  fn import_resources(
+    &self,
+    import: ResourcesImport,
+  ) -> impl Future<Output = Result<Vec<SharedResource>, SharingError>> + Send;
 }
 
 pub struct RemoteResourceStore<S> {
