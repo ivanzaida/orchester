@@ -115,7 +115,8 @@ fn samples() -> Vec<Value> {
       "resource.renamed",
       json!({ "resource": RESOURCE, "name": "Careful review" }),
     ),
-    delta("resource.archived", json!({ "resource": RESOURCE })),
+    delta("resource.archived", json!({ "resource": RESOURCE, "archived": true })),
+    delta("resource.archived", json!({ "resource": RESOURCE, "archived": false })),
     json!({ "kind": "revoked", "data": {} }),
   ]
 }

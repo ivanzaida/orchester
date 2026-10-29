@@ -809,7 +809,7 @@ of its kind:
 | `project.changed` | `project: { id, key, name }` |
 | `resource.published` | `resource` with its metadata and the new version number; the body is read with `GET …/versions` (S5) |
 | `resource.renamed` | `resource`, `name` (S5) |
-| `resource.archived` | `resource` (S5) |
+| `resource.archived` | `resource`, `archived`: `true` when it was archived, `false` when it was restored (S5) |
 | `revoked` | `{}`: the session or this person's membership ended; the stream closes after it |
 
 **Applying.** A client applies `task.changed` only when its cached revision of that task equals `base`; otherwise it
