@@ -12,6 +12,7 @@ mod error;
 mod modules;
 mod pinned;
 mod recorded;
+mod resources;
 mod sharing;
 
 use std::time::Duration;

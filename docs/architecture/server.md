@@ -889,7 +889,7 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `POST /projects/{id}/modules` | member | `{ idempotency_key, id, module: ModuleFields }` | `201 { module }` at revision 1; a repeated key returns the first answer | `409 module_exists { module }`, `409 id_taken`, `422 module { reason: "target_before_start" }`, `422 invalid` | ORC-78 |
 | `PATCH /projects/{id}/modules/{module}` | member | `{ idempotency_key, revision, module: ModuleFields }` (the fields as a whole) | `{ module }`; the same fields change nothing; a repeated key returns the first answer | `404`, `409 revision_conflict { current: Module }`, `409 module_exists { module }`, `422 module { reason }`, `422 invalid` | ORC-78 |
 | `GET /projects/{id}/resources` | member | | `{ resources: [Resource], cursor }` | | new in 3 (S5) |
-| `GET /projects/{id}/resources/{resource}/versions?after={n}` | member | | `{ versions: [Version] }`, oldest first, at most 64 or 1 MiB (then `next`) | `404` | new in 3 (S5) |
+| `GET /projects/{id}/resources/{resource}/versions?after={n}` | member | | `{ versions: [Version], next? }`: the versions after `after` (all without it), oldest first, at most 64 or 1 MiB; `next`, the `after` of the following page, only when there is one | `404` | new in 3 (S5) |
 | `POST /projects/{id}/resources` | admin (row 72) | `{ idempotency_key, id, kind, slug, name, version: { body, references } }` | `201 { resource, version }` (v1) | `403 not_admin`, `409 slug_taken { resource }`, `409 id_taken`, `422 invalid { reason }` | new in 3 (S5); admin row 72 |
 | `POST /projects/{id}/resources/import` | admin (row 72) | `{ idempotency_key, resources: [UploadResource] }` | `201 { resources: [Resource] }`; version numbers kept | `403 not_admin`, `409 slug_taken { resource }`, `409 id_taken`, `422 invalid` | new in 3 (S5); admin row 72 |
 | `POST /projects/{id}/resources/{resource}/versions` | admin (row 72) | `{ idempotency_key, based_on, body, references }` | `201 { version }` with the next number | `403 not_admin`, `409 version_conflict { latest: Version }`, `409 archived`, `422 missing_files { hashes }`, `422 invalid { reason }` | new in 3 (S5); admin row 72 |
@@ -923,7 +923,16 @@ A skill's parts are not in its body: the body lists them by path, hash, size and
 uploaded first with `PUT …/files/{sha256}`. A create, import or publish that names a part the project lacks answers
 `422 missing_files`; one over core's `SkillLimits` answers `422 invalid { reason: "skill_size" }` ([Skills in the
 database](#skills-in-the-database)). `hash` is core's content hash of the body. Import keeps ids and version numbers and names the uploader as each
-version's publisher, with the original `published_at`.
+version's publisher, with the original `published_at`. A `Reference` carries its kind beside its id, so the id's type
+follows from it: a connection's or an MCP server's id is a `ConnectionId`, a secret's a `SecretId`, a tool's a
+`ResourceId`. Every write of these endpoints, file uploads included, answers a member `403 not_admin` with no details.
+
+The contract is `orchester-api`'s `resources.rs` (`SharedResource`, `SharedVersion`, `Reference`, `UploadResource`,
+the requests `ResourceCreate`, `ResourcesImport`, `VersionPublish`, `ResourcePatch`, and the answers) and its client's
+`client/resources.rs`: `resources`, `versions`, `create_resource`, `import_resources`, `publish_version`,
+`update_resource`, `upload_file` (`FileStored::Created` for `201`, `Known` for `200`) and `file`. The error details are
+`SharingErrorDetails`' `Resource` (`slug_taken`), `Version` (`version_conflict`), `Files` (`missing_files`),
+`ResourceRevision` (`revision_conflict`) and `Reason` (`invalid`).
 
 **Progress reports.** `PUT …/run` replaces the task's report. The server checks the shape (step keys unique, `step`
 among `steps`, `waiting_for` only with `waiting`, `stuck` or `stopped_at_limit`; a URL that is `https`), stores it,
