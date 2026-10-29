@@ -85,7 +85,10 @@ fn error_reports_an_error_line_is_one_scrubbed_event_and_a_warning_none() {
 
 #[test]
 fn error_reports_without_the_app_saying_so_or_in_a_debug_build_nothing_starts() {
-  assert!(error_reports::allowed_options(None, false).is_none(), "started without reports");
+  assert!(
+    error_reports::allowed_options(None, false).is_none(),
+    "started without reports"
+  );
   assert!(
     error_reports::allowed_options(Some(&reports()), true).is_none(),
     "a debug build never reports"

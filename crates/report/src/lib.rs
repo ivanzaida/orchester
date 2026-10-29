@@ -8,6 +8,7 @@
 #[cfg(feature = "client")]
 pub mod client;
 mod event;
+mod images;
 mod paths;
 mod secrets;
 mod stack;

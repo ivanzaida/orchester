@@ -63,7 +63,7 @@ impl Environment {
 }
 
 /// The client's options for `environment` (`orchester_report::client::options`): GlitchTip's `desktop` project,
-/// [`RELEASE`], the tag `process=app`, and the scrubber as `before_send`.
+/// [`RELEASE`], the tag `process=app`, the loaded modules' debug IDs, and the scrubber as `before_send`.
 pub fn options(environment: Environment) -> ClientOptions {
   orchester_report::client::options(PROCESS, RELEASE, environment.name())
 }

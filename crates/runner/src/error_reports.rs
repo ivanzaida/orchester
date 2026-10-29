@@ -17,11 +17,7 @@ pub const PROCESS: &str = "runner";
 /// The client's options for `reports`: GlitchTip's `desktop` project, the app's environment and release, the tag
 /// `process=runner`, and the scrubber as `before_send`.
 pub fn options(reports: &ErrorReports) -> ClientOptions {
-  orchester_report::client::options(
-    PROCESS,
-    reports.release().to_owned(),
-    reports.environment().to_owned(),
-  )
+  orchester_report::client::options(PROCESS, reports.release().to_owned(), reports.environment().to_owned())
 }
 
 /// [`options`] when the app said to report (`reports`) and this is not a `debug` build; `None` otherwise.
@@ -52,6 +48,9 @@ pub fn start() -> Option<ClientInitGuard> {
   // Installing fails only when a provider is installed already, which then serves as well.
   let _ = rustls::crypto::ring::default_provider().install_default();
   let guard = sentry::init(options);
-  tracing::info!(environment = environment.as_deref(), "error reports are sent to GlitchTip");
+  tracing::info!(
+    environment = environment.as_deref(),
+    "error reports are sent to GlitchTip"
+  );
   Some(guard)
 }

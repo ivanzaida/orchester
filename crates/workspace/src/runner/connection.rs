@@ -12,8 +12,8 @@ use std::{
 
 use orchester_core::limits::AgentSlots;
 use orchester_ipc::{
-  AttachSession, Command, CommandSender, ErrorReports, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess,
-  ShutdownMode,
+  AttachSession, Command, CommandSender, ErrorReports, Event, IpcError, LaunchError, Reply, RunnerClient,
+  RunnerProcess, ShutdownMode,
 };
 use tokio::{
   runtime::Handle,

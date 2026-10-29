@@ -1,6 +1,7 @@
-//! The app's error reports (ORC-156, ORC-157): a panic becomes one scrubbed event with the release and the
-//! environment, and so does an ERROR log line, while a WARN line sends nothing; debug builds and tests never start the
-//! client, and nothing starts while the person's setting is off.
+//! The app's error reports (ORC-156, ORC-157, ORC-162): a panic becomes one scrubbed event with the release and the
+//! environment, and so does an ERROR log line, while a WARN line sends nothing; a panic names the loaded modules with
+//! their debug IDs and its frames' instruction addresses; debug builds and tests never start the client, and nothing
+//! starts while the person's setting is off.
 
 use std::{
   ffi::OsStr,
@@ -15,7 +16,11 @@ use orchester_app::{
 };
 use orchester_store::AppDb;
 use orchester_workspace::workspace::Workspace;
-use sentry::{Hub, protocol::Event, test::with_captured_events_options};
+use sentry::{
+  Hub,
+  protocol::{DebugImage, Event},
+  test::with_captured_events_options,
+};
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{
   Layer,
@@ -148,6 +153,54 @@ fn error_reports_the_runners_report_in_the_apps_environment_and_release() {
   let reports = error_reports::for_runners(Environment::Production);
   assert_eq!(reports.environment(), "production");
   assert_eq!(reports.release(), RELEASE);
+}
+
+/// GlitchTip resolves a release build's raw frames in its uploaded debug files: the event names this program's image
+/// with its debug ID (a PE's, with its PDB, on Windows), and its frames carry instruction addresses inside it.
+#[test]
+fn error_reports_a_panic_names_its_debug_images_and_instruction_addresses() {
+  let events = with_captured_events_options(
+    || {
+      let panicked = panic::catch_unwind(|| panic!("index out of bounds"));
+      assert!(panicked.is_err(), "the closure panics");
+    },
+    error_reports::options(Environment::Qa),
+  );
+
+  assert_eq!(events.len(), 1, "{events:?}");
+  let event = &events[0];
+  let program = std::env::current_exe().expect("the test's program");
+  let program = program.file_name().and_then(OsStr::to_str).expect("a file name");
+  let image = event
+    .debug_meta
+    .images
+    .iter()
+    .find_map(|image| match image {
+      DebugImage::Symbolic(image) if image.name == program => Some(image),
+      _ => None,
+    })
+    .unwrap_or_else(|| panic!("{program} is among the debug images: {:?}", event.debug_meta));
+  assert!(!image.id.is_nil(), "{image:?}");
+  if cfg!(windows) {
+    assert!(image.code_id.is_some(), "{image:?}");
+    let pdb = image.debug_file.as_deref().expect("a PE names its PDB");
+    assert!(pdb.ends_with(".pdb") && !pdb.contains(['/', '\\']), "{pdb}");
+  }
+
+  let start = image.image_addr.0;
+  let end = start + image.image_size;
+  let frames = &event.exception.values[0]
+    .stacktrace
+    .as_ref()
+    .expect("the panic's stack trace")
+    .frames;
+  assert!(
+    frames
+      .iter()
+      .filter_map(|frame| frame.instruction_addr)
+      .any(|address| (start..end).contains(&address.0)),
+    "a frame lies in {program}: {frames:?}"
+  );
 }
 
 #[test]

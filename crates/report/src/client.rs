@@ -8,6 +8,7 @@ use sentry::{
   integrations::{
     backtrace::{AttachStacktraceIntegration, ProcessStacktraceIntegration},
     contexts::ContextIntegration,
+    debug_images::DebugImagesIntegration,
     panic::PanicIntegration,
   },
   protocol::{Context, Event, Value},
@@ -29,7 +30,8 @@ const LOG_FIELDS: &str = "Rust Tracing Fields";
 /// into its message ([`with_fields_in_message`]) and the tag is set. Sentry's defaults keep PII, traces and sessions
 /// off. The integrations are named here rather than left to `sentry::init`, so a client made from these options alone
 /// (a test's) reports the same way: the panic hook, the OS and CPU contexts, the stack where an ERROR line was logged,
-/// and the stack trace's frames marked as Orchester's or not.
+/// the stack trace's frames marked as Orchester's or not, and the loaded modules with their debug IDs, by which
+/// GlitchTip resolves a release build's frame addresses in its uploaded PDBs.
 pub fn options(
   process: &'static str,
   release: impl Into<Cow<'static, str>>,
@@ -48,6 +50,7 @@ pub fn options(
     .add_integration(PanicIntegration::default())
     .add_integration(AttachStacktraceIntegration)
     .add_integration(ProcessStacktraceIntegration)
+    .add_integration(DebugImagesIntegration::new())
     .before_send(move |mut event| {
       event.tags.insert("process".to_owned(), process.to_owned());
       Some(scrubber.scrub(with_fields_in_message(event)))
