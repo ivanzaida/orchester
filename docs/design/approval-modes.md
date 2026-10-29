@@ -168,6 +168,8 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
 | `task.conversation.approval.{autopilot,profile,reviewer}` | Approved by autopilot · Allowed by the profile · Approved by the reviewer |
 | `task.conversation.approval.switched` | Switched to Manual for this run |
 | `task.request.reason.{outside,notAllowed,reviewerUnsure,reviewerDenied,push,refs}` | Came to you: the path is outside the worktree, its Sources and {agent}'s temp folders. Autopilot never approves these. · Not on {agent}'s allowed list. · The reviewer wasn't sure: "{reason}" · The reviewer denied it: "{reason}" · Pushes to a remote always come to you, in Autopilot too. · Only the run's branch {branch} is the run's own; other refs come to you. |
+| `cards.approval.asks.{outside,notAllowed,push,refs}` (ORC-354) | {agent} asks to edit a file outside the worktree · {agent} asks to run a command not on its allowed list (the reviewer unsure or denying it too) · {agent} asks to push to a remote · {agent} asks to change another branch; for an MCP call `.outsideTool` / `.notAllowedTool`: … to reach outside the worktree · … to call a tool not on its allowed list |
+| `cards.approval.asks.meta`, `cards.approval.moreAnswers`, `cards.approval.quiet.listedAt` (ORC-354) | {step} · {time} · More answers (the card's other answers, folded under *Approve* and *Deny*) · · on the allowed list · {time} |
 
 ## Open questions
 

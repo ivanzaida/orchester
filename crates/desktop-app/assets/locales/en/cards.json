@@ -150,6 +150,16 @@
       "deny": "Deny",
       "approveOnce": "Approve once",
       "approve": "Approve",
+      "moreAnswers": "More answers",
+      "asks": {
+        "outside": "{{agent}} asks to edit a file outside the worktree",
+        "outsideTool": "{{agent}} asks to reach outside the worktree",
+        "notAllowed": "{{agent}} asks to run a command not on its allowed list",
+        "notAllowedTool": "{{agent}} asks to call a tool not on its allowed list",
+        "push": "{{agent}} asks to push to a remote",
+        "refs": "{{agent}} asks to change another branch",
+        "meta": "{{step}} · {{time}}"
+      },
       "cameToYou": {
         "outside": "Came to you: the path is outside the worktree, its Sources and {{agent}}'s temp folders. Autopilot never approves these.",
         "outsidePath": "Came to you: {{path}} is outside the worktree, its Sources and {{agent}}'s temp folders. Autopilot never approves these.",
@@ -166,6 +176,7 @@
         "profile": "Allowed by the profile",
         "reviewer": "Approved by the reviewer",
         "at": "· {{time}}",
+        "listedAt": "· on the allowed list · {{time}}",
         "reasonAt": "· “{{reason}}” · {{time}}",
         "more": "· {{count}} more"
       },

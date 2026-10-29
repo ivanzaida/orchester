@@ -10,7 +10,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::typography::{mono, style};
 
 /// The answers an answered card did not choose, dimmed (`AAgL1`, `F0nR9` in `hm5wE`).
 pub const NOT_CHOSEN_OPACITY: f32 = 0.5;
@@ -41,10 +41,13 @@ pub enum CardsText {
   Lead,
   /// 12/500 `text_primary`, 1.3: what was chosen, in an answered line (`sGpQy` in `F16aNE`).
   Chosen,
+  /// Mono 12.5 `text_secondary`, 1.5: what a request that came to the person asks, on its card (`ZNwbH` in
+  /// `vO7CW`).
+  Action,
 }
 
 impl CardsText {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::Title,
     Self::ApprovalTitle,
     Self::PlanLines,
@@ -56,6 +59,7 @@ impl CardsText {
     Self::Quiet,
     Self::Lead,
     Self::Chosen,
+    Self::Action,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -81,6 +85,7 @@ impl CardsText {
       Self::Quiet => "cards_quiet",
       Self::Lead => "cards_lead",
       Self::Chosen => "cards_chosen",
+      Self::Action => "cards_action",
     }
   }
 
@@ -97,6 +102,7 @@ impl CardsText {
       Self::Quiet => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::Lead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Chosen => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
+      Self::Action => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary)),
     }
   }
 }

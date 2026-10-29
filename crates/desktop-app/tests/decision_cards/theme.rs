@@ -18,6 +18,7 @@ fn card_theme_roles_follow_the_card_components() {
     (CardsText::ApprovalTitle, (13.0, 1.35), FontWeight::SemiBold, "#EDEDF0"),
     (CardsText::PlanLines, (12.5, 1.6), FontWeight::Normal, "#B3B3BA"),
     (CardsText::Decided, (12.5, 1.35), FontWeight::Medium, "#EDEDF0"),
+    (CardsText::Action, (12.5, 1.5), FontWeight::Normal, "#B3B3BA"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

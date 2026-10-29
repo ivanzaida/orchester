@@ -2,8 +2,8 @@
 //! autopilot` `T1Ix39`, `Approval · Allowed by the profile` `G4of0`, `Approval · Approved by the reviewer` `iTpC5` in
 //! 04c `vZcoN`): in line with a message's text past its avatar (`vs9mB` in 04 `H6kPd`), a 13 `text_muted` glyph, who
 //! approved it in 12 `text_secondary`, what was asked in 12 mono `text_primary`, then in 12 `text_muted` the
-//! reviewer's reason and the time, 10 apart. The last row a step's Autopilot rows show says how many more follow
-//! (`FHr3B` in `H6kPd`), which a press shows.
+//! reviewer's reason, or that the profile's allowed list holds it, and the time, 10 apart. The last row a step's
+//! Autopilot rows show says how many more follow (`FHr3B` in `H6kPd`), which a press shows.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -36,12 +36,13 @@ pub(crate) fn line(ctx: &Ctx, id: &str, card: &ApprovalCard, more: Option<(usize
     AnswerKind::Autopilot | AnswerKind::Person => (Icon::CheckCheck, "cards.approval.quiet.autopilot"),
   };
   let time = card.decided_at.map_or_else(String::new, display::clock);
-  let detail = match answer.reason.as_deref().filter(|_| answer.kind == AnswerKind::Reviewer) {
-    Some(reason) => ctx.t_args(
+  let detail = match (answer.kind, answer.reason.as_deref()) {
+    (AnswerKind::Reviewer, Some(reason)) => ctx.t_args(
       "cards.approval.quiet.reasonAt",
       [("reason", reason), ("time", time.as_str())],
     ),
-    None => ctx.t_args("cards.approval.quiet.at", [("time", time.as_str())]),
+    (AnswerKind::Profile, _) => ctx.t_args("cards.approval.quiet.listedAt", [("time", time.as_str())]),
+    _ => ctx.t_args("cards.approval.quiet.at", [("time", time.as_str())]),
   };
   let more = more.map(|(count, press)| {
     let count = count.to_string();
