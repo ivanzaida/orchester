@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="adds numbers" time="0.000695" classname="test" file="C:\work\calc\test\math.test.mjs"/>
+	<testcase name="subtracts numbers" time="0.001065" classname="test" file="C:\work\calc\test\math.test.mjs" failure="Expected values to be strictly equal:&#10;&#10;8 !== 2&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;8 !== 2">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+8 !== 2
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  8 !== 2
+  
+      at TestContext.&lt;anonymous> (file:///C:/work/calc/test/math.test.mjs:10:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1103:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:785:18)
+      at Test.postRun (node:internal/test_runner/test:1232:19)
+      at Test.run (node:internal/test_runner/test:1160:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 8,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="downloads a file" time="0.000101" classname="test" file="C:\work\calc\test\math.test.mjs">
+		<skipped type="skipped" message="needs a network"/>
+	</testcase>
+	<testcase name="divides by zero" time="0.000176" classname="test" file="C:\work\calc\test\math.test.mjs" failure="Expected values to be strictly equal:&#10;&#10;Infinity !== 0&#10;">
+		<skipped type="todo" message="decide the rule"/>
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;Infinity !== 0">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+Infinity !== 0
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  Infinity !== 0
+  
+      at TestContext.&lt;anonymous> (file:///C:/work/calc/test/math.test.mjs:16:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1103:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:785:18)
+      at Test.postRun (node:internal/test_runner/test:1232:19)
+      at Test.run (node:internal/test_runner/test:1160:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Infinity,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<!-- tests 4 -->
+	<!-- suites 0 -->
+	<!-- pass 1 -->
+	<!-- fail 1 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 1 -->
+	<!-- todo 1 -->
+	<!-- duration_ms 207.0159 -->
+</testsuites>

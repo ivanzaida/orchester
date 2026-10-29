@@ -1,0 +1,12 @@
+{ "type": "suite", "event": "started", "test_count": 5 }
+{ "type": "test", "event": "started", "name": "tests::adds" }
+{ "type": "test", "event": "started", "name": "tests::downloads" }
+{ "type": "test", "event": "started", "name": "tests::nested::deep" }
+{ "type": "test", "event": "started", "name": "tests::rejects_overflow" }
+{ "type": "test", "event": "started", "name": "tests::subtracts" }
+{ "type": "test", "name": "tests::downloads", "event": "ignored", "message": "needs a network" }
+{ "type": "test", "name": "tests::adds", "event": "ok", "exec_time": 0.0000009 }
+{ "type": "test", "name": "tests::nested::deep", "event": "ok", "exec_time": 0.0000003 }
+{ "type": "test", "name": "tests::rejects_overflow", "event": "failed", "exec_time": 0.0000002, "message": "test did not panic as expected at src\\lib.rs:30:6" }
+{ "type": "test", "name": "tests::subtracts", "event": "failed", "exec_time": 0.000082, "stdout": "subtracting 5 - 3\n\nthread 'tests::subtracts' (28804) panicked at src\\lib.rs:21:5:\nassertion `left == right` failed\n  left: 8\n right: 2\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n" }
+{ "type": "suite", "event": "failed", "passed": 2, "failed": 2, "ignored": 1, "measured": 0, "filtered_out": 0, "exec_time": 0.0006207 }

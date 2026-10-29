@@ -1,0 +1,6 @@
+{ "type": "suite", "event": "started", "test_count": 3 }
+{ "type": "test", "event": "started", "name": "tests::adds" }
+{ "type": "test", "event": "started", "name": "tests::recurses" }
+{ "type": "test", "event": "started", "name": "tests::subtracts" }
+{ "type": "test", "name": "tests::adds", "event": "ok", "exec_time": 0.0000009 }
+{ "type": "test", "name": "tests::subtracts", "event": "failed", "exec_time": 0.000082, "stdout": "\nthread 'tests::subtracts' (28804) panicked at src\\lib.rs:21:5:\nassertion `left == right` failed\n  left: 8\n right: 2\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n" }
