@@ -100,11 +100,7 @@ impl Component for Sidebar {
       .id("sidebar")
       .width(Dimension::Px(SIDEBAR_WIDTH))
       .height(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(ExtraSpacing::Snug.role())
-          .bottom(SpacingSize::Md),
-      )
+      .padding(Padding::new().top(ExtraSpacing::Snug.role()).bottom(SpacingSize::Md))
       .spacing(ExtraSpacing::Tight.role())
       .child(pinned(switcher))
       .child(jump)

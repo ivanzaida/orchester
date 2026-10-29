@@ -241,7 +241,13 @@ fn lines(ctx: &Ctx, (landing, checkout): (&Landing, &Checkout), (id, added): (&s
         .nowrap(),
     )
     // One folder is added at a time.
-    .with_children(added.then(|| badge("orchester-landing-added", BadgeTone::Info, &ctx.t("sharing.landing.added"))));
+    .with_children(added.then(|| {
+      badge(
+        "orchester-landing-added",
+        BadgeTone::Info,
+        &ctx.t("sharing.landing.added"),
+      )
+    }));
   let (glyph, color, line) = compare(ctx, landing, checkout);
   Column::new()
     .flex(1.0)

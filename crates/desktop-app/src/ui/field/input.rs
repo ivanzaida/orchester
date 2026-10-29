@@ -465,7 +465,12 @@ impl FieldBox {
       .on_blur({
         let regroup = regroup_on_leave(lost, props.value.clone(), props.group_separator.clone());
         let on_leave = props.on_leave.clone();
-        move || { regroup(); if let Some(commit) = &on_leave { commit(); } }
+        move || {
+          regroup();
+          if let Some(commit) = &on_leave {
+            commit();
+          }
+        }
       });
     if props.masked {
       input = input.mask();
