@@ -9,6 +9,7 @@
 
 mod closed;
 mod daily_report;
+mod download;
 pub mod feed;
 mod feedback;
 pub mod hold;

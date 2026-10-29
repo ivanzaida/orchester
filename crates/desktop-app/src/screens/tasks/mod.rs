@@ -4,9 +4,11 @@
 //! what happens next (Needs you, Running, Queued, Ready to start, then Stopped and Finished, which the design has no
 //! row for) and All by workflow status (`views::grouped`). Each row says in one phrase where its task stands and opens
 //! the task; under the pointer it shows its actions. The task a Create just added stands out. Its other states: a
-//! project without tasks (`03 No tasks yet` `f54MO`), the tasks being read (a skeleton, `skeleton`), read failing, and
-//! a search or filters that hide every row. What waits for the person and is no task's (the project's memory records)
-//! is named in a notice over Needs you's and Active's rows, which opens the Needs you panel.
+//! project without tasks (`03 No tasks yet` `f54MO`), the tasks being read (a skeleton, `skeleton`), read failing, a
+//! shared project's tasks coming down from its team server after a join (the same skeleton, ORC-282) or failing to
+//! (`kXWCj`'s notice, with Try again), and a search or filters that hide every row. What waits for the person and is
+//! no task's (the project's memory records) is named in a notice over Needs you's and Active's rows, which opens the
+//! Needs you panel.
 //!
 //! The same header, views, filters and notices stand over the board (ORC-105, `kanban`), which shows the view's tasks
 //! as cards in columns; List or Board is kept for the project (`kanban::display`).
@@ -46,9 +48,10 @@ use lurq::{
   layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::project::TaskKey;
+use orchester_core::{id::ProjectId, project::TaskKey};
 use orchester_workspace::{
   runner::{RunnerStatus, state::RunnerState},
+  sharing::project::FirstDownload,
   tasks::{
     browse::{self, Facets, TaskSort},
     data::ProjectTasks,
@@ -75,6 +78,7 @@ use crate::{
   project::{ShownProject, TasksState},
   routes::{TaskList, TaskListTab},
   screens::task_close::{self, Closer},
+  services::Services,
   theme::TasksSpacing,
 };
 
@@ -163,7 +167,8 @@ impl Component for TasksScreen {
     let shared = shared::read(ctx, &project);
     let not_member = shared
       .as_ref()
-      .and_then(|shared| shared::not_member(ctx, &project, shared));
+      .and_then(|shared| shared::not_member(ctx, &project, shared))
+      .map(inset);
     // The page keeps 28 at its left; its parts keep the 28 at their right themselves ([`inset`]), so the list can run
     // to the panel's edge with its scrollbar there.
     let page = Column::new()
@@ -173,27 +178,10 @@ impl Component for TasksScreen {
       .padding(Padding::new().top(SpacingSize::Xl).left(TasksSpacing::Sides.role()))
       .spacing(TasksSpacing::Stack.role())
       .on_key_down(slash(self.focus_search.clone()));
-    let header = |ctx: &mut Ctx, options, queue| {
-      inset(header::header(
-        ctx,
-        Header {
-          project: id,
-          choices: &self.choices,
-          options,
-          queue,
-          shared: shared.as_ref(),
-          display: &self.display,
-        },
-      ))
-    };
-    let not_member = not_member.map(inset);
+    let head = (id, shared.as_ref());
     match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => {
-        let read_only = shared.as_ref().and_then(|shared| shared.read_only(ctx));
-        page
-          .child(inset(header::title_only(ctx, id, shared.as_ref())))
-          .with_children(not_member)
-          .child(inset(states::empty_project(ctx, id, read_only)).flex(1.0))
+        self.no_tasks(ctx, page, (&project, &list), (shared.as_ref(), not_member))
       }
       TasksState::Ready(source) => {
         // The filter is gone once no task is Not shared: the list is the shared one again.
@@ -211,15 +199,18 @@ impl Component for TasksScreen {
         if offered.count() != chosen.count() {
           self.choices.facets.set(offered);
         }
-        let page = page.child(header(ctx, Some(options.clone()), queue(&project)));
-        self.list(ctx, page.with_children(not_member), &shown, &options)
+        let header = self.header(ctx, head, (Some(options.clone()), queue(&project)));
+        self.list(ctx, page.child(header).with_children(not_member), &shown, &options)
       }
       TasksState::Loading => {
-        let page = page.child(header(ctx, None, None)).with_children(not_member);
-        self.reading(ctx, page, (&project, &list))
+        let page = page
+          .child(self.header(ctx, head, (None, None)))
+          .with_children(not_member);
+        let label = ctx.t_args("tasks.loading", [("project", project.open.project.name().as_str())]);
+        self.reading(ctx, page, (&project, &list), label)
       }
       TasksState::Failed(error) => page
-        .child(header(ctx, None, None))
+        .child(self.header(ctx, head, (None, None)))
         .with_children(not_member)
         .child(inset(views::views(ctx, (id, &list), Counts::Unknown, None)))
         .child(inset(states::failed(ctx, &project.feed, &error))),
@@ -228,15 +219,78 @@ impl Component for TasksScreen {
 }
 
 impl TasksScreen {
-  /// While the tasks are read: the views counting with bones, and the skeleton of the list or the board.
-  fn reading(&self, ctx: &mut Ctx, page: Column, (project, list): (&ShownProject, &TaskList)) -> Column {
+  /// The header row, with the Filter's facets and the holds on new starts once the tasks are read.
+  fn header(
+    &self,
+    ctx: &mut Ctx,
+    (project, shared): (ProjectId, Option<&shared::Shared>),
+    (options, queue): (Option<Arc<Options>>, Option<queue::QueueProps>),
+  ) -> Column {
+    inset(header::header(
+      ctx,
+      Header {
+        project,
+        choices: &self.choices,
+        options,
+        queue,
+        shared,
+        display: &self.display,
+      },
+    ))
+  }
+
+  /// A project without a task: while its tasks come down from its team server after a join, the reading's skeleton;
+  /// once that failed, why, with Try again; otherwise that it has none.
+  fn no_tasks(
+    &self,
+    ctx: &mut Ctx,
+    page: Column,
+    (project, list): (&ShownProject, &TaskList),
+    (shared, not_member): (Option<&shared::Shared>, Option<Column>),
+  ) -> Column {
+    let (id, name) = (project.open.project.id(), project.open.project.name().as_str());
+    match project.feed.download.get() {
+      Some(FirstDownload::Downloading { server }) => {
+        let page = page
+          .child(self.header(ctx, (id, shared), (None, None)))
+          .with_children(not_member);
+        let label = ctx.t_args("tasks.downloading", [("project", name), ("server", server.as_str())]);
+        self.reading(ctx, page, (project, list), label)
+      }
+      Some(FirstDownload::Failed { server, reason }) => {
+        let (servers, root) = (Services::of(ctx).servers, project.open.repo_root.clone());
+        let retry = move || servers.retry_download(&root);
+        page
+          .child(self.header(ctx, (id, shared), (None, None)))
+          .with_children(not_member)
+          .child(inset(views::views(ctx, (id, list), Counts::Unknown, None)))
+          .child(inset(states::download_failed(ctx, (name, &server, &reason), retry)))
+      }
+      None => {
+        let read_only = shared.and_then(|shared| shared.read_only(ctx));
+        page
+          .child(inset(header::title_only(ctx, id, shared)))
+          .with_children(not_member)
+          .child(inset(states::empty_project(ctx, id, read_only)).flex(1.0))
+      }
+    }
+  }
+
+  /// While the tasks are read, `label` naming it for tools: the views counting with bones, and the skeleton of the
+  /// list or the board.
+  fn reading(
+    &self,
+    ctx: &mut Ctx,
+    page: Column,
+    (project, list): (&ShownProject, &TaskList),
+    label: Arc<str>,
+  ) -> Column {
     let id = project.open.project.id();
     let display = self.display.get();
     let place = match display.layout {
       Layout::List => skeleton::Place::List,
       Layout::Board => skeleton::Place::Board(list.tab(), display.columns),
     };
-    let label = ctx.t_args("tasks.loading", [("project", project.open.project.name().as_str())]);
     page
       .child(inset(views::views(ctx, (id, list), Counts::Reading, None)))
       .child(ctx.mount_keyed::<skeleton::Skeleton>(

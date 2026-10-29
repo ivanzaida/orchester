@@ -112,6 +112,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::cloud::CloudInUse {}
     impl $inspect for crate::sharing::cloud::Reach {}
     impl $inspect for crate::sharing::cloud::SignIn {}
+    impl $inspect for crate::sharing::project::FirstDownload {}
     impl $inspect for crate::sharing::project::IdentityProblem {}
     impl $inspect for crate::sharing::project::JoinReview {}
     impl $inspect for crate::sharing::project::Joined {}

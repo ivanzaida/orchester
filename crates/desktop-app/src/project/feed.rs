@@ -28,6 +28,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners, state::RunnerState},
+  sharing::project::FirstDownload,
   tasks::{
     answering::PendingAnswers,
     data::ProjectTasks,
@@ -49,6 +50,8 @@ pub struct ProjectFeed {
   pub tasks: Signal<TasksState>,
   /// Why the tasks shown could not be read again; they are the ones last read.
   pub stale: Signal<Option<Message>>,
+  /// How the first download of a shared project's tasks after a join stands, until the tasks it brought are read.
+  pub download: Signal<Option<FirstDownload>>,
   /// The limits and today's usage; `None` until read.
   pub usage: Signal<Option<ProjectUsage>>,
   /// The project's runner; `None` while it has none in this session.
@@ -166,6 +169,7 @@ impl ProjectFeed {
     Self {
       tasks: Signal::new(TasksState::Loading),
       stale: Signal::new(None),
+      download: Signal::new(None),
       usage: Signal::new(None),
       status: Signal::new(None),
       changes: Signal::new(0),
@@ -330,6 +334,11 @@ impl Component for FeedLoader {
     let running = tasks.ready().is_some_and(runs_now);
     publish(&self.feed.running, running);
     publish(&self.feed.tasks, tasks);
+    let download = super::download::state(ctx, (&services.servers, &root));
+    // A download that ended is still under way for the list until the reading of what it brought ended too.
+    if download.is_some() || read.stale.is_some() {
+      publish(&self.feed.download, download);
+    }
     if let Some(stale) = read.stale {
       publish(&self.feed.stale, stale);
     }

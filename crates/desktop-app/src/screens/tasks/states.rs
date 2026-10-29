@@ -116,6 +116,21 @@ pub(super) fn failed(ctx: &Ctx, feed: &ProjectFeed, error: &Message) -> Element 
   )
 }
 
+/// The first download of `project`'s tasks from the team server `server` after a join failed, `reason` why, and Try
+/// again, which downloads them again (`Notice · Tasks cannot be read` `kXWCj`).
+pub(super) fn download_failed(
+  ctx: &Ctx,
+  (project, server, reason): (&str, &str, &Message),
+  retry: impl Fn() + Send + Sync + 'static,
+) -> Element {
+  let title = ctx.t_args("tasks.downloadError.title", [("project", project)]);
+  let body = ctx.t_args(
+    "tasks.downloadError.body",
+    [("server", Arc::from(server)), ("reason", message_text(ctx, reason))],
+  );
+  load_error(ctx, "tasks-download-error", (&title, &body), retry)
+}
+
 /// The search or the filters hide all `count` tasks of `view`; Clear undoes them.
 pub(super) fn no_matches(ctx: &Ctx, (view, count): (&str, usize), clear: impl Fn() + Send + Sync + 'static) -> Column {
   let key = if count == 1 {

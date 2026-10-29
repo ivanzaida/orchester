@@ -211,7 +211,8 @@ impl Servers {
 
   /// Keeps what a join gave: the server in `owner`'s list with its trust and name, the device token in the keychain
   /// and the account. A server another account joined from this computer gets an entry of `owner`'s own, with the
-  /// device token this join was issued: each account is its own device on the server.
+  /// device token this join was issued: each account is its own device on the server. The projects linked to a
+  /// project there are read at once ([`Servers::first_download`]).
   async fn keep_join(
     &self,
     (address, owner): (&ServerAddress, Option<CloudAccountId>),
@@ -223,10 +224,11 @@ impl Servers {
     let token =
       SecretValue::new(joined.token.expose().to_owned()).map_err(|_| SharingError::InvalidAnswer("device token"))?;
     let (pin, plain_http) = trust.columns();
-    let (workspace, url, user) = (
+    let (workspace, url, user, named) = (
       self.inner.workspace.clone(),
       address.as_str().to_owned(),
       account(&joined.user),
+      name.clone(),
     );
     let id = background::run(move || -> Result<ServerId, SharingError> {
       let known = workspace
@@ -261,6 +263,7 @@ impl Servers {
     .await??;
     self.store_token(id, token).await?;
     self.reached(id);
+    self.first_download(id, &named).await;
     Ok(id)
   }
 }

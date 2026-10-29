@@ -3,8 +3,8 @@
 //! request per server names the claims the person holds in the projects this computer shares there,
 //! and what they lost is written to the cache; then each shared project's cache is read again, and
 //! the claims of runs that ended are ended ([`super::claim_ends`]). A request to sync now (opening a
-//! project, *Try now*, *Check again*, after Share) reads the caches at once without a heartbeat,
-//! which keeps to the server's limit of 12 heartbeats a minute.
+//! project, *Try now*, *Check again*, after Share, a join's first download) reads the caches at once
+//! without a heartbeat, which keeps to the server's limit of 12 heartbeats a minute.
 
 use std::{
   collections::{BTreeMap, HashMap},
@@ -74,8 +74,10 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
 
 impl Servers {
   /// One round over every shared project of the workspace, by server: the heartbeat when `beat`,
-  /// then each project's sync and the end of the claims whose runs ended.
+  /// then each project's sync and the end of the claims whose runs ended. Each first download asked for before the
+  /// round began ends with it ([`super::download`]).
   pub async fn sync_shared(&self, beat: bool, programs: &Programs) {
+    let round = Instant::now();
     let servers = self.clone();
     let Ok(projects) = background::run(move || shared_projects(&servers)).await else {
       // The blocking pool is shutting down with the window.
@@ -85,18 +87,27 @@ impl Servers {
     for project in projects {
       by_server.entry(project.link().server).or_default().push(project);
     }
+    let mut attempted = Vec::new();
     for projects in by_server.values() {
       if beat {
         self.heartbeat(projects, programs).await;
       }
       for project in projects {
-        match project.sync().await {
+        let synced = project.sync().await;
+        self.downloaded(
+          (project.repo_root(), project.entry()),
+          synced.as_ref().map(|_| ()),
+          round,
+        );
+        attempted.push(project.repo_root().to_owned());
+        match synced {
           Ok(()) => claim_ends::end_claims_of(project, programs).await,
           Err(SharingError::Offline | SharingError::SignedOut) => {}
           Err(error) => tracing::warn!(%error, project = %project.link().project, "cannot read the shared project"),
         }
       }
     }
+    self.unreached(&attempted, round);
   }
 
   /// One heartbeat request (more for more than 256 claims) for the claims the person holds in
