@@ -1,7 +1,7 @@
 //! Bringing a shared project's cache up to the server (`docs/architecture/server.md`, "Live
 //! updates"): its project, tags, modules and tasks are read and written to the cache, with when it last
 //! matched, then the moves of tasks into and out of modules the cache does not have yet. Until the live event stream
-//! (S2d) this runs when the project is opened, every minute
+//! (S2d) this runs when the project is opened, every minute, after a join ([`super::download`])
 //! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
 //! no longer has the person as a member (10.44); the cache then says since when. The workflow
 //! statuses this computer's runs reached go to the server then ([`super::automatic`]).

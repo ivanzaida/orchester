@@ -48,6 +48,7 @@ impl Servers {
         tracing::warn!(%error, "cannot read which projects are linked to a server just joined");
         Vec::new()
       }
+      // The blocking pool is shutting down with the window: there is no round left to sync in.
       Err(_) => return,
     };
     let asked = Instant::now();

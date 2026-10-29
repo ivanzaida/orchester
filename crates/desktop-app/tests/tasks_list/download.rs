@@ -127,6 +127,10 @@ fn laid_out(window: &mut Window, id: &str) -> bool {
 #[test]
 fn tasks_download_after_a_join_the_list_shows_downloading_then_fills_without_a_restart() {
   let mut joining = Joining::linked(TasksAnswer::Hold);
+  assert!(
+    !laid_out(&mut joining.window, "tasks-view-needs_you-count"),
+    "an empty project counts no view"
+  );
   joining.join();
   joining
     .window
@@ -144,16 +148,20 @@ fn tasks_download_after_a_join_the_list_shows_downloading_then_fills_without_a_r
   );
   joining.responder.tasks(TasksAnswer::Serve);
   joining.until_filled();
-  assert_eq!(joining.download(), None);
+  // The sync's own notice fills the list; the download ends with the reading the mark's settling starts after it.
+  joining.window.until("the download's end", |window| {
+    window.projects().feed(project_id()).download.get().is_none()
+  });
   for key in ["KON-1", "KON-2", "KON-3"] {
     let row = format!("task-key-{key}");
     joining.window.until(&row, |window| laid_out(window, &row));
   }
   assert_eq!(joining.window.text("nav-tasks"), "Tasks 3", "the sidebar counts them");
+  // Needs you is worked out from the tasks that came down: none has a run on this computer that waits.
   assert_eq!(
     joining.window.text("tasks-view-needs_you-count"),
     "0",
-    "Needs you counts them: none waits"
+    "Needs you counts the downloaded tasks"
   );
   joining
     .window
