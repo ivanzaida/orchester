@@ -12,7 +12,7 @@ use uuid::Uuid;
 /// Every UUID that is a string value of `value`, in the order they appear, each once. Object
 /// keys are not references: a map keyed by ids (a tool's allowed pipelines) holds settings per
 /// entity, not something the body needs.
-pub(super) fn values(value: &Value) -> Vec<Uuid> {
+pub(crate) fn values(value: &Value) -> Vec<Uuid> {
   let mut found = Vec::new();
   collect(value, &mut found);
   let mut seen = HashSet::new();
@@ -30,7 +30,7 @@ fn collect(value: &Value, found: &mut Vec<Uuid>) {
 }
 
 /// How the ids of source entities become ids of the target.
-pub(super) struct Remap {
+pub(crate) struct Remap {
   /// Every resolved reference: to a copy, or to the target's own resource, connection or secret.
   pub values: HashMap<Uuid, Uuid>,
   /// Source resources copied by this import, to their copies. Settings keyed by an entity (a
@@ -45,7 +45,7 @@ impl Remap {
   /// `value` with its references replaced. A key naming a source entity that was not copied is
   /// removed with its entry. A value without a replacement is kept, an unresolved reference
   /// included.
-  pub(super) fn rewrite(&self, value: Value) -> Value {
+  pub(crate) fn rewrite(&self, value: Value) -> Value {
     match value {
       Value::String(text) => match uuid(&text).and_then(|id| self.values.get(&id)) {
         Some(replacement) => Value::String(replacement.to_string()),
