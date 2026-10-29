@@ -411,8 +411,9 @@ not jump to another project by itself.
      `no_runner`, so no runner reports
      its own browser over the fixture. Not yet: an input method's composition (lurq gives it only to its own text
      inputs; what it commits arrives as keys), copy and paste bridged to the system clipboard, the cursor's shape over
-     links and fields, the file chooser, the status bar's *Browser 3 tabs*, and bringing an open window to the front
-     (no lurq command).
+     links and fields, the file chooser, the status bar's *Browser 3 tabs*, bringing an open window to the front
+     (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
+     report the history; they fade only without a tab to go through).
 
 ## Not in scope
 

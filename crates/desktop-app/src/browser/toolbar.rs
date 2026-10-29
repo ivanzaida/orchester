@@ -90,6 +90,7 @@ pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> E
 fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
   let tab = showing.shown().cloned();
   let usable = showing.usable();
+  // With no tab to go through, back, forward and reload are faded (`05`, `06`, `07`).
   let navigate = |ctx: &mut Ctx, (id, glyph, key): (&str, Icon, &str), to: Navigation| {
     let button = IconButton::new(id, glyph, ctx.t(key));
     match tab.clone().filter(|_| usable) {
@@ -104,7 +105,7 @@ fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
           })
           .render(ctx)
       }
-      None => button.render(ctx),
+      None => Row::new().opacity(DISABLED_OPACITY).child(button.render(ctx)).into(),
     }
   };
   let back = navigate(
@@ -122,22 +123,30 @@ fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
     ("browser-reload", Icon::RotateCw, "browser.toolbar.reload"),
     Navigation::Reload,
   );
+  // The address line is faded while it takes no input: the browser in its own window (`05`) or none found (`07`).
   let address = ctx.mount_keyed::<Address>("browser-address", showing.clone());
-  let open_in_window = (showing.mode() == BrowserMode::Headless).then(|| {
-    let button = ActionButton::new(
+  let address = if usable {
+    address
+  } else {
+    Row::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .opacity(DISABLED_OPACITY)
+      .child(address)
+      .into()
+  };
+  // Without a browser there is no window to open the page in (`07`).
+  let open_in_window = usable.then(|| {
+    let commands = showing.commands.clone();
+    ActionButton::new(
       "browser-open-in-window",
       ButtonKind::Ghost,
       ctx.t("browser.toolbar.openInWindow"),
     )
-    .icon(Icon::AppWindow);
-    if showing.unavailable() {
-      button.disabled()
-    } else {
-      let commands = showing.commands.clone();
-      button.on_click(move || commands.send(BrowserCommand::OpenInWindow))
-    }
+    .icon(Icon::AppWindow)
+    .on_click(move || commands.send(BrowserCommand::OpenInWindow))
   });
-  let row = Row::new()
+  Row::new()
     .id("browser-toolbar")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOOLBAR_HEIGHT))
@@ -152,12 +161,8 @@ fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
     // The 4 more before the address line (`Gap` `K8rnhr`).
     .child(Row::new().padding(Padding::new().left(SpacingSize::Xs)))
     .child(address)
-    .with_children(open_in_window.map(|button| Row::new().padding(Padding::new().left(SpacingSize::Xs)).child(button)));
-  if showing.unavailable() {
-    row.opacity(DISABLED_OPACITY).into()
-  } else {
-    row.into()
-  }
+    .with_children(open_in_window.map(|button| Row::new().padding(Padding::new().left(SpacingSize::Xs)).child(button)))
+    .into()
 }
 
 /// The address line: the address of the tab shown, which the person can type over and open with Enter.
@@ -226,15 +231,10 @@ impl Address {
     }
   }
 
+  /// The address in mono; the words that stand in for it in sans (`URL` in `06` `eCCuU`, `07` `YEv2c`).
   fn input(&self, ctx: &Ctx, showing: &Showing, tab: Option<BrowserTabId>) -> TextInput {
     let theme = ctx.theme();
-    let resolve = |color| {
-      FormTextRole {
-        typography: BrowserText::Address.role(),
-        color,
-      }
-      .resolve(&theme.typography(), &theme.palette())
-    };
+    let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
     let placeholder = if showing.unavailable() {
       ctx.t("browser.toolbar.noBrowser")
     } else {
@@ -243,41 +243,44 @@ impl Address {
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let (value, commands) = (self.value.clone(), showing.commands.clone());
     let hooks = showing.person.clone();
-    let input = TextInput::styled(self.value.clone(), resolve(PaletteColor::TextPrimary))
-      .placeholder_style(resolve(PaletteColor::TextMuted))
-      .placeholder(&placeholder)
-      .caret_color(PaletteColor::TextPrimary)
-      .id("browser-address")
-      .ref_element(showing.address.clone())
-      .describe("a11y_name", ctx.t("browser.toolbar.address"))
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .single_line()
-      .on_focus(move || gained.set(true))
-      .on_blur(move || lost.set(false))
-      .on_key_down(move |event: KeyboardEvent| {
-        if event.key != "Enter" {
-          return;
+    let input = TextInput::styled(
+      self.value.clone(),
+      resolve(BrowserText::Address.role(), PaletteColor::TextPrimary),
+    )
+    .placeholder_style(resolve(ExtraTypography::Property.role(), PaletteColor::TextMuted))
+    .placeholder(&placeholder)
+    .caret_color(PaletteColor::TextPrimary)
+    .id("browser-address")
+    .ref_element(showing.address.clone())
+    .describe("a11y_name", ctx.t("browser.toolbar.address"))
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .single_line()
+    .on_focus(move || gained.set(true))
+    .on_blur(move || lost.set(false))
+    .on_key_down(move |event: KeyboardEvent| {
+      if event.key != "Enter" {
+        return;
+      }
+      event.prevent_default();
+      let Some(url) = model::typed_address(&value.get_untracked()) else {
+        return;
+      };
+      match tab.clone() {
+        Some(tab) => commands.send(BrowserCommand::Navigate {
+          tab,
+          to: Navigation::Address { url },
+        }),
+        None => {
+          let hooks = hooks.clone();
+          commands.send_then(BrowserCommand::OpenTab { url: Some(url) }, move |reply| {
+            if let orchester_ipc::browser::BrowserReply::TabOpened { tab } = reply {
+              hooks.pick(&tab);
+            }
+          });
         }
-        event.prevent_default();
-        let Some(url) = model::typed_address(&value.get_untracked()) else {
-          return;
-        };
-        match tab.clone() {
-          Some(tab) => commands.send(BrowserCommand::Navigate {
-            tab,
-            to: Navigation::Address { url },
-          }),
-          None => {
-            let hooks = hooks.clone();
-            commands.send_then(BrowserCommand::OpenTab { url: Some(url) }, move |reply| {
-              if let orchester_ipc::browser::BrowserReply::TabOpened { tab } = reply {
-                hooks.pick(&tab);
-              }
-            });
-          }
-        }
-      });
+      }
+    });
     if showing.usable() {
       input
     } else {

@@ -40,6 +40,9 @@ const CLOSE_SIDE: f32 = 18.0;
 const DOT: f32 = 7.0;
 const DOT_LEFT: f32 = 7.0;
 const DOT_RAISE: f32 = 2.0;
+/// Narrower than this, an agent's tab shows its task key alone, with no room left for a cut title (`Tab · ORC-107` at
+/// 93 in `01c · Many runs` `fPkxD`).
+const KEY_ONLY_WIDTH: f32 = 120.0;
 
 /// The tab's props: the tab, its place, its width and the project shown.
 #[derive(Clone, PartialEq)]
@@ -129,14 +132,19 @@ impl Component for Tab {
         TypographyStyle::Description,
       ),
     };
+    let shown_label = match tab.key() {
+      Some(key) if !shown && width < KEY_ONLY_WIDTH => {
+        Truncated::new(format!("{id}-label"), key.clone(), style).hint(label.clone(), label)
+      }
+      _ => Truncated::new(format!("{id}-label"), label, style),
+    };
     button
       .child(tab_icon(&tab, glyph, &id))
       .child(
-        Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
-          Truncated::new(format!("{id}-label"), label, style)
-            .color(text)
-            .render(ctx),
-        ),
+        Row::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .child(shown_label.color(text).render(ctx)),
       )
       .with_children(with_close.then(|| close_button(ctx, closing, &id)))
   }
@@ -162,7 +170,9 @@ pub fn label(ctx: &Ctx, tab: &StripTab) -> Arc<str> {
   }
 }
 
-/// The page's icon with the tab's dot over its corner; the loader while the page loads.
+/// The page's icon with the tab's dot over its corner; the loader while the page loads. The dot rises over the icon's
+/// top, so the icon stands in a box as much taller at both ends: the box holds the whole dot and keeps the icon
+/// centred.
 pub fn tab_icon(tab: &StripTab, color: PaletteColor, id: &str) -> Element {
   let glyph = if tab.loading {
     Icon::LoaderCircle
@@ -175,9 +185,18 @@ pub fn tab_icon(tab: &StripTab, color: PaletteColor, id: &str) -> Element {
   let Some(indicator) = tab.indicator else {
     return icon.into();
   };
+  let (size, rise) = (IconSize::Base.size(), DOT_RAISE + BrowserBorder::Ring.value());
   Stack::new()
+    .width(Dimension::Px(size))
+    .height(Dimension::Px(size + 2.0 * rise))
     .flex_shrink(0.0)
-    .child(icon)
+    .child(
+      Row::new()
+        .absolute(0.0, rise, Dimension::Px(size), Dimension::Px(size))
+        .align_items(Alignment::Center)
+        .justify(lurq::layout::layout_kind::Justify::Center)
+        .child(icon),
+    )
     .child(dot(indicator, format!("{id}-dot")))
     .into()
 }
@@ -192,19 +211,14 @@ const fn dot_color(indicator: Indicator) -> PaletteColor {
 }
 
 /// A tab's dot over its icon (`Indicator · …` in `zxkfr`): amber, blue or white, ringed in the title bar's color
-/// outside it.
+/// outside it; at the top of the icon's box.
 fn dot(indicator: Indicator, id: String) -> Row {
   let ring = BrowserBorder::Ring.value();
   let side = DOT + 2.0 * ring;
   Row::new()
     .id(id)
     .describe("indicator", indicator.name())
-    .absolute(
-      DOT_LEFT - ring,
-      -DOT_RAISE - ring,
-      Dimension::Px(side),
-      Dimension::Px(side),
-    )
+    .absolute(DOT_LEFT - ring, 0.0, Dimension::Px(side), Dimension::Px(side))
     .rounded(ExtraRadius::Full.role())
     .background(dot_color(indicator))
     .border_inside(BrowserBorder::Ring.role(), PaletteColor::SurfaceBase)

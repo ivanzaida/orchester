@@ -9,8 +9,7 @@ use lurq::{
     events::MouseEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
-  layout::Alignment,
+  components::{Column, Stack, Text, TextOverflow},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_ipc::browser::{BrowserCommand, BrowserTabId};
@@ -93,11 +92,11 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
       Element::from(row)
     });
   }
+  // A stack, as lurq places absolute children only there.
   Some(
-    Row::new()
+    Stack::new()
       .id("browser-select")
       .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
-      .align_items(Alignment::Start)
       .on_mouse_down(move |event: MouseEvent| {
         event.stop_propagation();
         browser.close_select(&root);

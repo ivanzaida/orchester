@@ -93,8 +93,9 @@ pub fn scene(state: BrowserState, runs: &[RunId]) -> Scene {
     tabs.add(run(0), RETRY_AFTER);
   }
   let deliveries = tabs.add(run(1), DELIVERIES);
+  // `01c` `fPkxD` has nine tabs, crowded but all in view; `01d` `fWhIr` twenty.
   let extra = match state {
-    BrowserState::Many => 4,
+    BrowserState::Many => 3,
     BrowserState::Overflow => 14,
     _ => 0,
   };

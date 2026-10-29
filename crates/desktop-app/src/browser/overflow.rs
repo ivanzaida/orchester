@@ -32,9 +32,10 @@ use crate::{
   },
 };
 
-/// The menu (`Overflow menu` in `fWhIr`) and the most of it that shows before its rows scroll.
+/// The menu (`All tabs menu` `P6RCw` in `fWhIr`) and the most of its rows that shows before they scroll: the frame's
+/// twenty rows and divider fit.
 const MENU_WIDTH: f32 = 440.0;
-const MENU_MAX_HEIGHT: f32 = 560.0;
+const MENU_MAX_HEIGHT: f32 = 640.0;
 
 #[derive(Clone, PartialEq)]
 pub struct OverflowProps {
@@ -50,6 +51,8 @@ pub struct Overflow {
   open: Signal<bool>,
   anchor: ElementRef,
   filter: Signal<String>,
+  /// The row under the pointer, which shows its ×.
+  hovered: Signal<Option<usize>>,
 }
 
 impl Component for Overflow {
@@ -60,6 +63,7 @@ impl Component for Overflow {
       open: ctx.signal(false),
       anchor: ctx.element_ref(),
       filter: ctx.signal(String::new()),
+      hovered: ctx.signal(None),
     }
   }
 
@@ -69,7 +73,7 @@ impl Component for Overflow {
       strongest,
       showing,
     } = ctx.props::<OverflowProps>().clone();
-    let (open, filter) = (self.open.clone(), self.filter.clone());
+    let (open, filter, hovered) = (self.open.clone(), self.filter.clone(), self.hovered.clone());
     let count_name = if hidden == 1 {
       ctx.t_args("browser.overflow.button.one", [("count", hidden.to_string())])
     } else {
@@ -77,6 +81,7 @@ impl Component for Overflow {
     };
     let button = in_title_bar(pressable(move || {
       filter.set(String::new());
+      hovered.set(None);
       open.update(|open| *open = !*open);
     }))
     .id("browser-overflow")
@@ -141,9 +146,9 @@ impl Overflow {
     .placeholder(ctx.t("browser.overflow.filter"))
     .search()
     .render(ctx);
+    // Rows of 28 one under another, as the frame's (`Row · …` in `P6RCw`).
     let rows = Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Tight.role())
       .with_children(agents)
       .with_children(divider)
       .with_children(person)
@@ -171,21 +176,24 @@ impl Overflow {
       _ => None,
     };
     let shown = showing.shown() == Some(&tab.id);
-    let (open, hooks, picked) = (self.open.clone(), showing.person.clone(), tab.id.clone());
-    let (commands, closed) = (showing.commands.clone(), tab.id.clone());
-    let close = Button::empty()
-      .id(format!("{id}-close"))
-      .describe("a11y_name", ctx.t("browser.tabs.close"))
-      .focusable(false)
-      .cursor(CursorIcon::Pointer)
-      .rounded(RadiusSize::Sm)
-      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .on_click(move |event: MouseEvent| {
-        event.stop_propagation();
-        commands.send(BrowserCommand::CloseTab { tab: closed.clone() });
-      })
-      .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted));
+    let close = (self.hovered.get() == Some(index)).then(|| {
+      let (commands, closed) = (showing.commands.clone(), tab.id.clone());
+      Button::empty()
+        .id(format!("{id}-close"))
+        .describe("a11y_name", ctx.t("browser.tabs.close"))
+        .focusable(false)
+        .cursor(CursorIcon::Pointer)
+        .rounded(RadiusSize::Sm)
+        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+        .on_click(move |event: MouseEvent| {
+          event.stop_propagation();
+          commands.send(BrowserCommand::CloseTab { tab: closed.clone() });
+        })
+        .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
+    });
     let label = label(ctx, tab);
+    let (open, hooks, picked) = (self.open.clone(), showing.person.clone(), tab.id.clone());
+    let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     let row = pressable(move || {
       open.set(false);
       hooks.pick(&picked);
@@ -195,10 +203,19 @@ impl Overflow {
     .describe("chosen", if shown { "true" } else { "false" })
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ControlHeight::Md.value()))
+    .flex_shrink(0.0)
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .on_mouse_enter(move || enter.set(Some(index)))
+    .on_mouse_leave(move || {
+      leave.update(|hovered| {
+        if *hovered == Some(index) {
+          *hovered = None;
+        }
+      });
+    })
     .child(tab_icon(tab, PaletteColor::TextMuted, &id))
     .child(
       Text::new(&label)
@@ -210,7 +227,7 @@ impl Overflow {
         .min_width(Dimension::Px(0.0)),
     )
     .with_children(run.map(|run| Text::new(&run).variant(ExtraTypography::Note.role()).nowrap()))
-    .child(close);
+    .with_children(close);
     if shown {
       row.background(ExtraColor::Hover.role()).into()
     } else {

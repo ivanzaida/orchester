@@ -16,6 +16,7 @@ use lurq::{
   layout::{
     Alignment,
     layout_kind::{Justify, ScrollState},
+    scrollbar::ScrollBarStyle,
   },
   node::{Element, Gradient, GradientStop, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
 };
@@ -194,11 +195,13 @@ impl Strip {
     row
   }
 
-  /// The tabs in a viewport `visible` wide that scrolls sideways, with a fade at each cut edge.
+  /// The tabs in a viewport `visible` wide that scrolls sideways with the wheel, with a fade at each cut edge and no
+  /// scrollbar.
   fn viewport(&self, tabs: Row, visible: f32, (scroll, content): (f32, f32)) -> Element {
     let (scrolled, state) = (self.scrolled.clone(), self.scroll.clone());
     let scroller = ScrollHorizontal::new(tabs)
       .with_scroll_state(self.scroll.clone())
+      .scrollbar(ScrollBarStyle::hidden())
       .width(Dimension::Px(visible))
       .height(Dimension::Px(TAB_HEIGHT))
       .on_scroll(move |_: ScrollEvent| scrolled.set(state.scroll_x()));

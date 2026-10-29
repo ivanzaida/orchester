@@ -13,7 +13,10 @@ use std::{
 };
 
 use image::{ImageFormat, Rgb, RgbImage};
-use lurq::{app::Tree, node::element::ElementRef};
+use lurq::{
+  app::{Tree, events::MouseButton},
+  node::element::ElementRef,
+};
 use orchester_app::{
   browser::{
     BrowserLink, BrowserRoot,
@@ -99,6 +102,37 @@ impl Browser {
 
   fn shows(&mut self, id: &str) -> bool {
     self.tree.get_element_by_id(id).is_some()
+  }
+
+  /// Where `id` is laid out from the page's top left, and its size.
+  fn on_page(&mut self, id: &str) -> (f32, f32, f32, f32) {
+    let mut bounds = |id: &str| {
+      self
+        .tree
+        .get_element_by_id_mut(id)
+        .and_then(|element| element.bounds())
+        .unwrap_or_else(|| panic!("{id} is laid out"))
+    };
+    let (page, element) = (bounds("browser-page"), bounds(id));
+    (element.x - page.x, element.y - page.y, element.width, element.height)
+  }
+
+  /// A press on the page at its bottom right, away from what is drawn over it, then a key there.
+  fn use_page(&mut self) {
+    let page = self
+      .tree
+      .get_element_by_id_mut("browser-page")
+      .and_then(|element| element.bounds())
+      .expect("the page is laid out");
+    let (x, y) = (page.x + page.width - 10.0, page.y + page.height - 10.0);
+    self.tree.mouse_down(x, y, MouseButton::Left);
+    self.tree.mouse_up(x, y, MouseButton::Left);
+    self.pass();
+    self
+      .tree
+      .key_down("a".to_owned(), "KeyA".to_owned(), false, false, false);
+    self.tree.key_up("a".to_owned(), "KeyA".to_owned(), false, false, false);
+    self.pass();
   }
 
   fn focused(&self) -> Option<String> {
@@ -238,6 +272,17 @@ fn browser_window_draws_what_frames_do_not_show() {
   });
   browser.until_shown("browser-activity");
   assert!(browser.text("browser-activity").contains("typed 8 in Max attempts"));
+  // Before the first frame a CSS pixel is a logical one: the ring stands 4 out of the element's box (`XczoY`), the
+  // pointer 28 in from its right and 16 up from its bottom (`D7l36`).
+  assert_eq!(browser.on_page("browser-agent-ring"), (51.0, 373.0, 276.0, 42.0));
+  let (left, top, ..) = browser.on_page("browser-agent-pointer");
+  assert_eq!((left, top), (51.0 + 276.0 - 28.0, 373.0 + 42.0 - 16.0));
+  browser.use_page();
+  assert!(browser.text("browser-activity").contains("You're using this tab"));
+  assert!(
+    !browser.shows("browser-agent-mark"),
+    "the person's input holds the agent, so no mark (02b)"
+  );
 
   browser.feed(state("P1", BrowserMode::Headless).0);
   browser.feed(BrowserEvent::DialogOpened {
@@ -276,6 +321,13 @@ fn browser_window_draws_what_frames_do_not_show() {
   });
   browser.until_shown("browser-select-option-3");
   assert_eq!(browser.text("browser-select-option-3"), "Exponential with jitter");
+  let (left, top, width, height) = browser.on_page("browser-select-list");
+  assert_eq!(
+    (left, top, width),
+    (55.0, 303.0 + 34.0 + 6.0, 552.0),
+    "under its field, as wide as it"
+  );
+  assert!(height > 4.0 * 28.0, "the list holds its four rows");
 }
 
 #[test]
@@ -315,6 +367,61 @@ fn browser_window_says_when_no_browser_is_found() {
       .contains("No Chromium-based browser found")
   );
   assert!(browser.shows("browser-open-settings") && browser.shows("browser-look-again"));
+  assert!(
+    !browser.shows("browser-open-in-window"),
+    "no browser, no window to open the page in (07)"
+  );
+}
+
+#[test]
+fn browser_overflow_menu_lists_every_tab_in_rows_with_a_close_under_the_pointer() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  let tabs = (0..20)
+    .map(|index| tab(&format!("P{index}"), TabOwner::Person, "Pull requests · GitHub"))
+    .collect();
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs,
+    shown: Some(BrowserTabId::new("P0")),
+    mode: BrowserMode::Headless,
+  }));
+  browser.until_shown("browser-overflow");
+  let center = |browser: &mut Browser, id: &str| {
+    browser
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+      .center()
+  };
+  let (x, y) = center(&mut browser, "browser-overflow");
+  browser.tree.mouse_down(x, y, MouseButton::Left);
+  browser.tree.mouse_up(x, y, MouseButton::Left);
+  browser.until_shown("browser-overflow-19");
+  let row = |browser: &mut Browser, index: usize| {
+    browser
+      .tree
+      .get_element_by_id_mut(&format!("browser-overflow-{index}"))
+      .and_then(|element| element.bounds())
+      .expect("the row is laid out")
+  };
+  let (first, second, last) = (row(&mut browser, 0), row(&mut browser, 1), row(&mut browser, 19));
+  assert_eq!(
+    (first.height, second.y - first.y),
+    (28.0, 28.0),
+    "rows of 28, one under another"
+  );
+  assert!(
+    last.y + last.height <= 800.0,
+    "all twenty rows show without scrolling, as 01d's"
+  );
+  assert!(!browser.shows("browser-overflow-1-close"), "× only under the pointer");
+  let (x, y) = center(&mut browser, "browser-overflow-1");
+  browser.tree.mouse_move(x, y);
+  browser.until_shown("browser-overflow-1-close");
+  assert!(!browser.shows("browser-overflow-2-close"));
 }
 
 #[test]

@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize},
   },
-  components::{Row, Text},
+  components::{Row, Stack, Text},
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
 };
@@ -22,16 +22,23 @@ use crate::{
   ui::icon::{Icon, icon},
 };
 
-/// How far the ring stands out of the element, and the pointer's overlap of the ring's corner (`XczoY`, `D7l36`).
-const RING_OUTSET: f32 = 3.0;
-const POINTER_OVERLAP: f32 = 16.0;
+/// How far the ring stands out of the element (`XczoY`: 276 × 42 round a 268 × 34 field), and how far the pointer
+/// with the name stands in from the ring's right and up from its bottom (`D7l36`).
+const RING_OUTSET: f32 = 4.0;
+const POINTER_IN: f32 = 28.0;
+const POINTER_UP: f32 = 16.0;
 
-/// The ring and the agent's name over the element the agent of `tab` acted on last, while it is recent.
+/// The ring and the agent's name over the element the agent of `tab` acted on last, while it is recent and the
+/// person's input does not hold the agent (`02b · You use the tab` `k7xvx` has no mark).
 pub fn mark(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) -> Option<Element> {
   let view = showing.view.as_ref()?;
+  let now = Instant::now();
+  if showing.marks.holds(tab, now) {
+    return None;
+  }
   let acting = view
     .acting(tab)
-    .filter(|acting| Instant::now().saturating_duration_since(acting.at) < ACTING_FOR)?;
+    .filter(|acting| now.saturating_duration_since(acting.at) < ACTING_FOR)?;
   let element = acting.action.element?;
   let name = agent_name(ctx, showing.strip.find(tab)?);
   let left = element.x as f32 * scale.x - RING_OUTSET;
@@ -47,8 +54,8 @@ pub fn mark(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
   let pointer = Row::new()
     .id("browser-agent-pointer")
     .absolute(
-      left + width - POINTER_OVERLAP,
-      top + height - POINTER_OVERLAP / 2.0,
+      left + width - POINTER_IN,
+      top + height - POINTER_UP,
       Dimension::Auto,
       Dimension::Auto,
     )
@@ -66,8 +73,9 @@ pub fn mark(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
         .background(PaletteColor::Info)
         .child(Text::new(&name).variant(BrowserText::AgentTag.role()).nowrap()),
     );
+  // A stack, as lurq places absolute children only there.
   Some(
-    Row::new()
+    Stack::new()
       .id("browser-agent-mark")
       .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
       .hit_test(HitTestBehavior::None)
