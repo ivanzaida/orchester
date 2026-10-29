@@ -1,0 +1,190 @@
+//! The login shell's `PATH` (read on macOS as the app starts) and the search path's folders with
+//! their sources. Reading, parsing and merging are platform-neutral, so they are tested everywhere.
+
+use std::{
+  env,
+  ffi::OsString,
+  fs,
+  path::{Path, PathBuf},
+  time::{Duration, Instant},
+};
+
+use orchester_exec::search_path::{
+  FolderSource, ProgramLookup, SearchPath,
+  login_shell::{self, LoginShellError, PATH_END, PATH_START},
+};
+
+const PROGRAM: &str = "orchester-probe-cli";
+
+#[test]
+fn login_shell_path_is_parsed_between_the_markers() {
+  let stdout = format!(
+    "Welcome back!\nnoise {PATH_START} that is not the PATH\n{PATH_START}/opt/homebrew/bin::relative/bin:/usr/bin:{PATH_END}\nbye {PATH_END}\n"
+  );
+  let folders = login_shell::parse(&stdout).expect("a PATH between the markers");
+  assert_eq!(folders, [PathBuf::from("/opt/homebrew/bin"), PathBuf::from("/usr/bin")]);
+
+  assert!(matches!(
+    login_shell::parse("Welcome back!\n"),
+    Err(LoginShellError::NoPath)
+  ));
+  assert!(matches!(
+    login_shell::parse(&format!("{PATH_START}/usr/bin")),
+    Err(LoginShellError::NoPath)
+  ));
+}
+
+#[test]
+fn login_shell_path_read_that_does_not_finish_times_out() {
+  let (program, args) = long_running();
+  let started = Instant::now();
+  let read = login_shell::read_with(Path::new(program), args, Duration::from_millis(300));
+  assert!(matches!(read, Err(LoginShellError::TimedOut(_))), "{read:?}");
+  assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
+}
+
+#[test]
+fn login_shell_path_takes_only_standard_output() {
+  let stdout_path = format!("{PATH_START}/a/bin:/b/bin{PATH_END}");
+  let stderr_path = format!("{PATH_START}/stderr/bin{PATH_END}");
+  #[cfg(windows)]
+  let (program, args) = (
+    "cmd",
+    [
+      "/C",
+      "echo",
+      "greeting",
+      "&",
+      "echo",
+      &stdout_path,
+      "&",
+      "echo",
+      &stderr_path,
+      "1>&2",
+    ],
+  );
+  #[cfg(unix)]
+  let script = format!("echo greeting; echo '{stdout_path}'; echo '{stderr_path}' >&2");
+  #[cfg(unix)]
+  let (program, args) = ("/bin/sh", ["-c", &script]);
+
+  let folders = login_shell::read_with(Path::new(program), &args, login_shell::TIMEOUT).expect("the PATH is read");
+  assert_eq!(folders, [PathBuf::from("/a/bin"), PathBuf::from("/b/bin")]);
+}
+
+#[test]
+fn login_shell_path_folders_follow_the_inherited_path_before_the_install_folders() {
+  let inherited = joined(&["/usr/bin", "/bin"]);
+  let login_shell = ["/opt/homebrew/bin", "/usr/bin"].map(PathBuf::from);
+  let install = [
+    PathBuf::from("/opt/homebrew/bin"),
+    PathBuf::from("/usr/local/bin"),
+    unjoinable(),
+  ];
+
+  let search = SearchPath::merge(Some(&inherited), &login_shell, &install);
+  let folders: Vec<(&Path, FolderSource)> = search
+    .folders()
+    .iter()
+    .map(|folder| (folder.path(), folder.source()))
+    .collect();
+  assert_eq!(
+    folders,
+    [
+      (Path::new("/usr/bin"), FolderSource::Inherited),
+      (Path::new("/bin"), FolderSource::Inherited),
+      (Path::new("/opt/homebrew/bin"), FolderSource::LoginShell),
+      (Path::new("/usr/local/bin"), FolderSource::InstallFolder),
+    ]
+  );
+  assert_eq!(
+    search.joined(),
+    joined(&["/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin"])
+  );
+}
+
+#[test]
+fn login_shell_path_lookup_names_the_folders_searched_when_not_found() {
+  let root = tempfile::tempdir().expect("temporary directory");
+  let [first, second, shell] = ["first", "second", "shell"].map(|name| {
+    let folder = root.path().join(name);
+    fs::create_dir(&folder).expect("folder");
+    folder
+  });
+  let inherited = env::join_paths([first.as_path(), Path::new("relative"), second.as_path()]).expect("a PATH");
+  let search = SearchPath::merge(Some(&inherited), std::slice::from_ref(&shell), &[]);
+
+  let ProgramLookup::NotFound { searched } = search.lookup(PROGRAM) else {
+    panic!("no copy of {PROGRAM} exists yet");
+  };
+  let searched: Vec<(&Path, FolderSource)> = searched.iter().map(|folder| (folder.path(), folder.source())).collect();
+  assert_eq!(
+    searched,
+    [
+      (first.as_path(), FolderSource::Inherited),
+      (second.as_path(), FolderSource::Inherited),
+      (shell.as_path(), FolderSource::LoginShell),
+    ]
+  );
+
+  let copies = [&shell, &second].map(|folder| {
+    let copy = folder.join(program_file());
+    fs::write(&copy, "").expect("a copy of the program");
+    copy
+  });
+  assert_eq!(
+    search.lookup(PROGRAM),
+    ProgramLookup::Found(vec![copies[1].clone(), copies[0].clone()])
+  );
+}
+
+/// A fake login shell whose start-up prints greetings and puts a folder first on the PATH; it runs
+/// the script it is given (`-l -i -c <script>`) with `/bin/sh`.
+#[cfg(target_os = "macos")]
+#[test]
+fn login_shell_path_of_a_shell_with_a_noisy_profile() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let shell = folder.path().join("fake-shell");
+  fs::write(
+    &shell,
+    "#!/bin/sh\necho 'Welcome to the fake shell'\necho 'profile noise' >&2\nPATH=\"/opt/fake/bin:$PATH\"\nexport PATH\nexec /bin/sh -c \"$4\"\n",
+  )
+  .expect("the fake shell");
+  fs::set_permissions(&shell, fs::Permissions::from_mode(0o755)).expect("the fake shell runs");
+
+  let folders = login_shell::read(&shell, login_shell::TIMEOUT).expect("the PATH is read");
+  assert_eq!(folders.first(), Some(&PathBuf::from("/opt/fake/bin")), "{folders:?}");
+}
+
+fn joined(folders: &[&str]) -> OsString {
+  env::join_paths(folders).expect("folders a PATH can hold")
+}
+
+/// A folder no `PATH` can hold: its name has the separator, or a quote on Windows.
+fn unjoinable() -> PathBuf {
+  if cfg!(windows) {
+    PathBuf::from("C:\\with\"quote")
+  } else {
+    PathBuf::from("/with:colon")
+  }
+}
+
+fn program_file() -> String {
+  if cfg!(windows) {
+    format!("{PROGRAM}.exe")
+  } else {
+    PROGRAM.to_owned()
+  }
+}
+
+#[cfg(windows)]
+fn long_running() -> (&'static str, &'static [&'static str]) {
+  ("ping", &["-n", "30", "127.0.0.1"])
+}
+
+#[cfg(not(windows))]
+fn long_running() -> (&'static str, &'static [&'static str]) {
+  ("sleep", &["30"])
+}

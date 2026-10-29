@@ -16,7 +16,10 @@ use orchester_core::{
   repository::{self, DetectRequest, Detection},
   time::Timestamp,
 };
-use orchester_exec::ProcessRunner;
+use orchester_exec::{
+  ProcessRunner,
+  search_path::{ProgramLookup, SearchPath},
+};
 
 /// A CLI that does not answer a status command within this time is reported as not running.
 pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -68,13 +71,25 @@ pub fn recheck(connection: &Connection) -> Option<LastCheck> {
 /// whose version cannot be read come last. Each copy is asked for its version only. A native
 /// provider has no program to find.
 pub fn detect_agent(provider: AgentProvider) -> Vec<PathBuf> {
-  let Some(program) = provider.program_name() else {
-    return Vec::new();
-  };
-  connection::rank_installed(provider, detect(program), &RUNNER)
-    .into_iter()
-    .map(|installed| installed.executable)
-    .collect()
+  match find_agent(provider) {
+    Some(ProgramLookup::Found(found)) => found,
+    Some(ProgramLookup::NotFound { .. }) | None => Vec::new(),
+  }
+}
+
+/// The installed copies of the agent CLI of `provider`, ranked as [`detect_agent`] ranks them, or the
+/// folders searched when there is none; `None` for a native provider, which has no program to find.
+pub fn find_agent(provider: AgentProvider) -> Option<ProgramLookup> {
+  let program = provider.program_name()?;
+  Some(match SearchPath::current().lookup(program) {
+    ProgramLookup::Found(found) => ProgramLookup::Found(
+      connection::rank_installed(provider, found, &RUNNER)
+        .into_iter()
+        .map(|installed| installed.executable)
+        .collect(),
+    ),
+    not_found @ ProgramLookup::NotFound { .. } => not_found,
+  })
 }
 
 /// The copy among `found` (installed copies, as [`detect_agent`] lists them) that `program` names, as
@@ -88,15 +103,11 @@ pub fn found_copy<'a>(found: &'a [PathBuf], program: &Path) -> Option<&'a Path> 
 }
 
 /// Installed copies of `program` (see `ConnectionKind::program_name`) found on the search path
-/// (the `PATH`, and on macOS the usual install folders: `orchester_exec::search_path`), in search
-/// order.
+/// (the `PATH`, and on macOS the login shell's and the usual install folders:
+/// `orchester_exec::search_path`), in search order.
 pub fn detect(program: &str) -> Vec<PathBuf> {
-  let path = orchester_exec::search_path::search_path();
-  let mut found: Vec<PathBuf> = Vec::new();
-  for candidate in connection::executable_candidates(program, path.as_deref()) {
-    if candidate.is_file() && !found.contains(&candidate) {
-      found.push(candidate);
-    }
+  match SearchPath::current().lookup(program) {
+    ProgramLookup::Found(found) => found,
+    ProgramLookup::NotFound { .. } => Vec::new(),
   }
-  found
 }

@@ -181,7 +181,8 @@ fn domain_loading_the_repositorys_agent_files_again_needs_a_person() {
 fn domain_a_cli_of_automations_choosing_needs_a_person_before_it_runs() {
   let mut served = served();
   let program = served.folder.path().join("my-codex.exe");
-  let args = json!({ "project": "Kontur", "kind": "codex", "name": "Mine", "program": program.display().to_string() });
+  write_program(&program, 0o755);
+  let args = cli_args(&program);
   assert_person_only(&served.refused("add_cli_connection", &args));
   served.let_automation_widen(true);
   assert_eq!(
@@ -189,6 +190,44 @@ fn domain_a_cli_of_automations_choosing_needs_a_person_before_it_runs() {
     "not_verified",
     "checked once a person lets it"
   );
+}
+
+/// A chosen file that cannot be a program is refused for what it is, before any gate and without running anything.
+#[test]
+fn domain_a_chosen_cli_file_is_checked_before_anything_runs() {
+  let mut served = served();
+  let missing = served.folder.path().join("no-such-codex.exe");
+  let refused = served.refused("add_cli_connection", &cli_args(&missing));
+  assert_eq!(refused["code"], "program_not_found", "{refused}");
+  assert!(refused.to_string().contains("There is no file at"), "{refused}");
+  let folder = served.folder.path().to_path_buf();
+  assert_eq!(
+    served.refused("add_cli_connection", &cli_args(&folder))["code"],
+    "program_not_a_file"
+  );
+  #[cfg(unix)]
+  {
+    let program = served.folder.path().join("codex-not-executable");
+    write_program(&program, 0o644);
+    assert_eq!(
+      served.refused("add_cli_connection", &cli_args(&program))["code"],
+      "program_not_executable"
+    );
+  }
+}
+
+fn cli_args(program: &Path) -> Value {
+  json!({ "project": "Kontur", "kind": "codex", "name": "Mine", "program": program.display().to_string() })
+}
+
+/// A file that is not a CLI, with the Unix permission `mode`.
+fn write_program(path: &Path, #[cfg_attr(windows, expect(unused_variables))] mode: u32) {
+  std::fs::write(path, "not a program").expect("the file is written");
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).expect("the file's permissions");
+  }
 }
 
 #[test]

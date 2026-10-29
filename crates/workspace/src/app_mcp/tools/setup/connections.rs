@@ -4,7 +4,7 @@
 //! editor offers for one. A CLI added on an API provider names its key secret ([`super::api_providers`]); no secret's
 //! value is listed.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   connection::{
@@ -15,6 +15,7 @@ use orchester_core::{
   secret::Secret,
   store::ConnectionStore,
 };
+use orchester_exec::search_path::{ChosenProgramError, ProgramLookup, SearchFolder, chosen_program};
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
@@ -137,29 +138,26 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
     let open = services.project(&args.project)?;
     let provider = args.kind.provider();
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-    let found = probe::detect_agent(provider);
-    let program = match args.program {
-      Some(program) => PathBuf::from(program),
-      None => found.first().cloned().ok_or_else(|| {
-        let program = provider.program_name().unwrap_or_default();
-        refused(
-          "program_not_found",
-          Message::new("appMcp.errors.cliNotFound").with("program", program.to_owned()),
-        )
-      })?,
+    // The chosen file is only examined here: nothing runs it before the widening gate below.
+    let chosen = args
+      .program
+      .map(|program| chosen_program(Path::new(&program)).map_err(|error| chosen_refused(&error)))
+      .transpose()?;
+    let lookup = probe::find_agent(provider).expect("a CLI kind names an agent CLI, which has a program to find");
+    let program = match chosen {
+      Some(program) => program,
+      None => found_program(provider, &lookup)?,
     };
-    if !program.is_absolute() {
-      return Err(refused(
-        "program_not_absolute",
-        Message::new("errors.executableNotAbsolute"),
-      ));
-    }
+    let found = match &lookup {
+      ProgramLookup::Found(found) => found.as_slice(),
+      ProgramLookup::NotFound { .. } => &[],
+    };
     // A program of automation's own choosing would run as the project's agent: a person's decision,
     // made before anything runs it. A copy found on the search path is saved as the search path names it,
     // never as the client named it: a link the client chose could be pointed elsewhere later. So is an API
     // provider, which would get the project's prompts and code.
     let mut reasons = Vec::new();
-    let program = match probe::found_copy(&found, &program) {
+    let program = match probe::found_copy(found, &program) {
       Some(copy) => copy.to_path_buf(),
       None => {
         reasons.push(Message::new("appMcp.widens.program").with("program", program.display().to_string()));
@@ -346,6 +344,53 @@ fn save_error(error: &SaveError, check: &ConnectionCheck) -> ToolError {
     SaveError::Store(_) | SaveError::Connection(_) => "project_data",
   };
   ToolError::refused(code, vec![error.message()])
+}
+
+/// The newest copy of the CLI on the search path, or the refusal that names the folders searched.
+fn found_program(provider: AgentProvider, lookup: &ProgramLookup) -> Result<PathBuf, ToolError> {
+  let searched: &[SearchFolder] = match lookup {
+    ProgramLookup::Found(found) => return found.first().cloned().ok_or_else(|| not_found(provider, &[])),
+    ProgramLookup::NotFound { searched } => searched,
+  };
+  Err(not_found(provider, searched))
+}
+
+fn not_found(provider: AgentProvider, searched: &[SearchFolder]) -> ToolError {
+  let program = provider.program_name().unwrap_or_default().to_owned();
+  if searched.is_empty() {
+    return refused(
+      "program_not_found",
+      Message::new("appMcp.errors.cliNotFound").with("program", program),
+    );
+  }
+  let folders: Vec<String> = searched
+    .iter()
+    .map(|folder| folder.path().display().to_string())
+    .collect();
+  refused(
+    "program_not_found",
+    Message::new("appMcp.errors.cliNotFoundIn")
+      .with("program", program)
+      .with("folders", folders.join(", ")),
+  )
+}
+
+/// Why the program file the client chose cannot be a CLI connection's program.
+fn chosen_refused(error: &ChosenProgramError) -> ToolError {
+  let named = |key: &'static str, path: &Path| Message::new(key).with("program", path.display().to_string());
+  match error {
+    ChosenProgramError::NotAbsolute(_) => refused("program_not_absolute", Message::new("errors.executableNotAbsolute")),
+    ChosenProgramError::Missing(path) => refused("program_not_found", named("appMcp.errors.programMissing", path)),
+    ChosenProgramError::NotAFile(path) => refused("program_not_a_file", named("appMcp.errors.programNotAFile", path)),
+    ChosenProgramError::NotExecutable(path) => refused(
+      "program_not_executable",
+      named("appMcp.errors.programNotExecutable", path),
+    ),
+    ChosenProgramError::Unreadable { path, source } => refused(
+      "program_unreadable",
+      named("appMcp.errors.programUnreadable", path).with("reason", source.to_string()),
+    ),
+  }
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {

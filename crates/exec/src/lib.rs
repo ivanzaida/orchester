@@ -25,6 +25,7 @@ pub mod verifier_app;
 
 use std::{
   io::{self, Read, Write},
+  path::Path,
   process::{Child, ChildStdin, Command as Process, ExitStatus, Stdio},
   thread,
   time::{Duration, Instant},
@@ -122,19 +123,26 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
 }
 
 fn wait(child: &mut Child, command: &Command, timeout: Duration) -> Result<ExitStatus, CommandError> {
+  wait_for(child, command.program(), timeout)
+    .map_err(|error| CommandError::Failed(error.to_string()))?
+    .ok_or(CommandError::TimedOut)
+}
+
+/// Waits up to `timeout` for `child`, the started `program`, to exit. `None` when it did not: it
+/// is stopped then ([`stop`]).
+pub(crate) fn wait_for(child: &mut Child, program: &Path, timeout: Duration) -> io::Result<Option<ExitStatus>> {
   let deadline = Instant::now() + timeout;
   loop {
-    match child.try_wait() {
-      Ok(Some(status)) => return Ok(status),
-      Ok(None) if Instant::now() >= deadline => {
-        if let Err(error) = stop(child) {
-          tracing::warn!(%error, program = %command.program().display(), "cannot stop a program that did not finish");
-        }
-        return Err(CommandError::TimedOut);
-      }
-      Ok(None) => thread::sleep(POLL_INTERVAL),
-      Err(error) => return Err(CommandError::Failed(error.to_string())),
+    if let Some(status) = child.try_wait()? {
+      return Ok(Some(status));
     }
+    if Instant::now() >= deadline {
+      if let Err(error) = stop(child) {
+        tracing::warn!(%error, program = %program.display(), "cannot stop a program that did not finish");
+      }
+      return Ok(None);
+    }
+    thread::sleep(POLL_INTERVAL);
   }
 }
 
@@ -175,7 +183,7 @@ fn joined_input(writer: thread::JoinHandle<io::Result<()>>) -> Result<(), Comman
   }
 }
 
-fn read_to_end(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<io::Result<String>> {
+pub(crate) fn read_to_end(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<io::Result<String>> {
   thread::spawn(move || {
     let mut bytes = Vec::new();
     if let Some(mut pipe) = pipe {
