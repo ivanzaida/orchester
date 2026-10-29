@@ -1,8 +1,9 @@
 //! How the fake CLIs use the browser tools ("Use the browser tools"), on the pages the test serves at the address it
-//! writes into `fake-browser-site` beside the worktrees; `fake-browser-other-tab` names a tab another run opened. Each
-//! answer is reported (`browser-call: <tool> <ok|error>[ +image]: <first line>`), and each of its lines
-//! (`browser-answer: <tool> | <line>`). Without a site the fake only lists the run's tabs: the step may not have the
-//! browser.
+//! writes into `fake-browser-site` beside the worktrees; `fake-browser-other-tab` names a tab another run opened. With
+//! `fake-browser-elsewhere`, the same pages at an address whose host is not local, the fake reads and acts as
+//! [`read_closely_and_act_elsewhere`] says instead. Each answer is reported
+//! (`browser-call: <tool> <ok|error>[ +image]: <first line>`), and each of its lines (`browser-answer: <tool> |
+//! <line>`). Without a site the fake only lists the run's tabs: the step may not have the browser.
 
 use std::{fs, path::Path};
 
@@ -16,6 +17,10 @@ pub fn exercise(worktree: &Path, call: Call<'_>) {
     report(call, "browser_tabs", &json!({}));
     return;
   };
+  if let Some(elsewhere) = written(worktree, "fake-browser-elsewhere") {
+    read_closely_and_act_elsewhere(&site, &elsewhere, call);
+    return;
+  }
   report(call, "browser_tabs", &json!({}));
   if let Some(other) = written(worktree, "fake-browser-other-tab") {
     report(call, "browser_read_page", &json!({"tab": other}));
@@ -61,6 +66,41 @@ pub fn exercise(worktree: &Path, call: Call<'_>) {
   );
   report(call, "browser_close", &json!({}));
   report(call, "browser_tabs", &json!({}));
+}
+
+/// Reads the form filtered by a query, cut at `max_chars` and as its interactive elements only, and its text cut short;
+/// saves, reloads, goes to a later page, back and forward again; dismisses a `confirm()` that then throws and reads the
+/// console's errors. Then, on `elsewhere` (a host neither local nor allowed), opens the form, clicks Save twice and
+/// types into its field: the test answers the first click with Approve similar.
+fn read_closely_and_act_elsewhere(site: &str, elsewhere: &str, call: Call<'_>) {
+  report(call, "browser_open", &json!({"url": format!("{site}form")}));
+  report(call, "browser_read_page", &json!({"query": "SAVE"}));
+  report(call, "browser_read_page", &json!({"max_chars": 30}));
+  report(call, "browser_page_text", &json!({"max_chars": 10}));
+  let form = report(call, "browser_read_page", &json!({"interactive_only": true}));
+  let (field, save) = (element(&form, "textbox \"Name\""), element(&form, "button \"Save\""));
+  report(call, "browser_type", &json!({"ref": field, "text": "Ada"}));
+  report(call, "browser_click", &json!({"ref": save}));
+  report(call, "browser_navigate", &json!({"to": "reload"}));
+  report(call, "browser_page_text", &json!({}));
+  report(call, "browser_open", &json!({"url": format!("{site}later")}));
+  report(call, "browser_navigate", &json!({"to": "back"}));
+  report(call, "browser_navigate", &json!({"to": "forward"}));
+  report(call, "browser_open", &json!({"url": format!("{site}confirm")}));
+  let page = report(call, "browser_read_page", &json!({"interactive_only": true}));
+  report(
+    call,
+    "browser_click",
+    &json!({"ref": element(&page, "button \"Delete\"")}),
+  );
+  report(call, "browser_page_text", &json!({}));
+  report(call, "browser_console", &json!({"errors_only": true}));
+  report(call, "browser_open", &json!({"url": format!("{elsewhere}form")}));
+  let form = report(call, "browser_read_page", &json!({"interactive_only": true}));
+  let (field, save) = (element(&form, "textbox \"Name\""), element(&form, "button \"Save\""));
+  report(call, "browser_click", &json!({"ref": save}));
+  report(call, "browser_click", &json!({"ref": save}));
+  report(call, "browser_type", &json!({"ref": field, "text": "Bo"}));
 }
 
 /// What the test wrote into `name` beside the worktrees.

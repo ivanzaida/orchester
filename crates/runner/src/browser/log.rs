@@ -17,7 +17,7 @@ use super::{
 };
 
 /// The most console messages and requests a tab keeps, each.
-const KEPT: usize = 1000;
+pub const KEPT: usize = 1000;
 /// The longest text of one message, URL or dialog kept.
 const MAX_TEXT_CHARS: usize = 2000;
 
