@@ -18,3 +18,17 @@ CREATE TABLE run_artifacts (
   PRIMARY KEY (run_id, name)
 ) STRICT;
 ";
+
+/// A completion settled when a member closed the task on its team server (ORC-150): `member`. SQLite cannot change a
+/// CHECK constraint, so `run_completions` is rebuilt.
+pub(super) const MEMBER_MIGRATION: &str = r"
+CREATE TABLE run_completions_member (
+  run_id TEXT PRIMARY KEY REFERENCES runs (id),
+  completed_by TEXT NOT NULL CHECK (completed_by IN ('person', 'automation', 'orchestrator', 'member')),
+  completed_at INTEGER NOT NULL
+) STRICT;
+INSERT INTO run_completions_member (run_id, completed_by, completed_at)
+  SELECT run_id, completed_by, completed_at FROM run_completions;
+DROP TABLE run_completions;
+ALTER TABLE run_completions_member RENAME TO run_completions;
+";

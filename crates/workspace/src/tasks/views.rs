@@ -1,7 +1,8 @@
 //! The Tasks list's views and groups (ORC-99). Needs you holds only the tasks something of waits for the person
 //! ([`ProjectTasks::waiting_tasks`]), so it names exactly the tasks every *Needs you* counts (ORC-105). Active holds
-//! the Todo, In progress and In review tasks and every task that waits, whatever its status; Backlog and Done (Done and
-//! Canceled) hold the rest, and All every task. Each task is in one of Active, Backlog and Done.
+//! the Todo, In progress and In review tasks and every other task that waits but a closed one; Done holds every Done
+//! and Canceled task, whatever its latest run says (ORC-150), Backlog the rest, and All every task. Each task is in
+//! one of Active, Backlog and Done.
 //!
 //! Active is grouped by what happens next: Needs you, Running, Queued, Ready to start, and the two groups the design
 //! has no row for: Stopped (a run that failed, paused, was interrupted, canceled, or cannot be read, and waits for no
@@ -27,10 +28,11 @@ pub enum ListView {
 impl ListView {
   pub const ALL: [Self; 5] = [Self::NeedsYou, Self::Active, Self::Backlog, Self::Done, Self::All];
 
-  /// Whether the view holds `row`, `waiting` being the tasks something of waits for the person.
+  /// Whether the view holds `row`, `waiting` being the tasks something of waits for the person. A closed task is in
+  /// Done only, even while `waiting` names it.
   pub fn keeps(self, row: &TaskRow, waiting: &HashSet<TaskId>) -> bool {
     let status = row.organization.status();
-    let waits = waiting.contains(&row.id);
+    let waits = !status.is_closed() && waiting.contains(&row.id);
     match self {
       Self::NeedsYou => waits,
       Self::Active => {
@@ -41,7 +43,7 @@ impl ListView {
           )
       }
       Self::Backlog => !waits && status == WorkflowStatus::Backlog,
-      Self::Done => !waits && status.is_closed(),
+      Self::Done => status.is_closed(),
       Self::All => true,
     }
   }

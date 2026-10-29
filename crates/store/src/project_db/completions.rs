@@ -2,7 +2,7 @@
 //! run keeps by name, a completed run's report.
 
 use orchester_core::{
-  id::RunId,
+  id::{RunId, TaskId},
   resource::StepKey,
   run::{CompletedBy, RunArtifact, RunCompletion, RunStatus},
   time::Timestamp,
@@ -30,29 +30,11 @@ impl ProjectDb {
     if completed(&transaction, run)? {
       return Err(StoreError::AlreadyCompleted(run));
     }
-    let resolving = super::resolutions::resolution(&transaction, run)?.is_some();
-    if status != RunStatus::Succeeded
-      || resolving
-      || super::merges::merged(&transaction, run)?
-      || later(&transaction, run)?
-    {
+    if !completable(&transaction, run, &status)? {
       return Err(StoreError::NotCompletable(run));
     }
-    transaction.execute(
-      "INSERT INTO run_completions (run_id, completed_by, completed_at) VALUES (?1, ?2, ?3)",
-      params![
-        run.to_string(),
-        completion.by.as_str(),
-        completion.completed_at.unix_millis()
-      ],
-    )?;
-    if let Some(report) = report.filter(|report| report.run == run) {
-      save_artifact(&transaction, report)?;
-    }
-    let task: String = transaction.query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| {
-      row.get(0)
-    })?;
-    let task = parse("task id", &task)?;
+    record(&transaction, completion, report)?;
+    let task = task_of(&transaction, run)?;
     super::organization::automatic(
       &transaction,
       task,
@@ -62,6 +44,48 @@ impl ProjectDb {
     super::task_effort::record(&transaction, task, completion.completed_at)?;
     transaction.commit()?;
     Ok(())
+  }
+
+  /// Settles the completion `completion` names, of a run whose task was closed (Done or Canceled) while the run waited
+  /// to be completed (ORC-150): records it and keeps `report` as save_run_completion does, and leaves the task's status
+  /// as it was closed. Whether it settled it: a run completed already, or that save_run_completion would refuse, or
+  /// whose task is not closed, is left as it is.
+  pub fn settle_run_completion(
+    &mut self,
+    completion: &RunCompletion,
+    report: Option<&RunArtifact>,
+  ) -> Result<bool, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let run = completion.run;
+    let Some(status) = super::runs::stored_status(&transaction, run)? else {
+      return Ok(false);
+    };
+    if completed(&transaction, run)? || !completable(&transaction, run, &status)? {
+      return Ok(false);
+    }
+    let task = task_of(&transaction, run)?;
+    if !super::organization::load(&transaction, task)?.status().is_closed() {
+      return Ok(false);
+    }
+    record(&transaction, completion, report)?;
+    transaction.commit()?;
+    Ok(true)
+  }
+
+  /// The latest run of `task` when it passed every step and was neither merged nor completed: one that may wait to be
+  /// completed, as git tells whether it committed anything.
+  pub fn uncompleted_latest_run(&self, task: TaskId) -> Result<Option<RunId>, StoreError> {
+    let id: Option<String> = self
+      .connection
+      .query_row(
+        "SELECT id FROM (SELECT id, status FROM runs WHERE task_id = ?1 ORDER BY number DESC LIMIT 1) \
+         WHERE status = 'succeeded' AND id NOT IN (SELECT run_id FROM run_merges) \
+         AND id NOT IN (SELECT run_id FROM run_completions)",
+        [task.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    id.map(|id| parse("run id", &id)).transpose()
   }
 
   /// How `run` was completed without a merge, once it was.
@@ -125,6 +149,46 @@ fn completed(transaction: &Transaction<'_>, run: RunId) -> Result<bool, StoreErr
     [run.to_string()],
     |row| row.get(0),
   )?)
+}
+
+/// Whether `run`, whose stored status is `status`, may be completed: it is its task's latest run, passed every step,
+/// was not merged and no merge waits in its worktree.
+fn completable(transaction: &Transaction<'_>, run: RunId, status: &RunStatus) -> Result<bool, StoreError> {
+  Ok(
+    *status == RunStatus::Succeeded
+      && super::resolutions::resolution(transaction, run)?.is_none()
+      && !super::merges::merged(transaction, run)?
+      && !later(transaction, run)?,
+  )
+}
+
+/// Records `completion` and keeps `report`, when it is the run's.
+fn record(
+  transaction: &Transaction<'_>,
+  completion: &RunCompletion,
+  report: Option<&RunArtifact>,
+) -> Result<(), StoreError> {
+  let run = completion.run;
+  transaction.execute(
+    "INSERT INTO run_completions (run_id, completed_by, completed_at) VALUES (?1, ?2, ?3)",
+    params![
+      run.to_string(),
+      completion.by.as_str(),
+      completion.completed_at.unix_millis()
+    ],
+  )?;
+  if let Some(report) = report.filter(|report| report.run == run) {
+    save_artifact(transaction, report)?;
+  }
+  Ok(())
+}
+
+/// The task `run` belongs to.
+fn task_of(transaction: &Transaction<'_>, run: RunId) -> Result<TaskId, StoreError> {
+  let task: String = transaction.query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| {
+    row.get(0)
+  })?;
+  parse("task id", &task)
 }
 
 /// Whether a later run of `run`'s task exists.

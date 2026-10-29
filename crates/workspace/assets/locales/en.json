@@ -478,6 +478,7 @@
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
       "reportReady": "Every step passed: its report waits to be completed",
+      "completed": "Every step passed: completed",
       "committedNothing": "Committed nothing, but its pipeline expects changes",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
