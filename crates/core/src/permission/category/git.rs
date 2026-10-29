@@ -265,7 +265,7 @@ fn reset(rest: &[String]) -> Judged {
 }
 
 /// Whether `target` names `HEAD` or a commit counted from it, or a commit by its id (7 to 64 hex digits).
-fn own_commit(target: &str) -> bool {
+pub(crate) fn own_commit(target: &str) -> bool {
   let base = target.find(['~', '^']).map_or(target, |at| &target[..at]);
   let counted = target[base.len()..]
     .chars()
