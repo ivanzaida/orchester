@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::Served;
+use super::{Served, write_program};
 
 /// Kontur seeded empty, its Codex connection's program any file the seed records as checked.
 fn served() -> Served {
@@ -226,16 +226,6 @@ fn domain_a_chosen_cli_file_is_checked_before_anything_runs() {
 
 fn cli_args(program: &Path) -> Value {
   json!({ "project": "Kontur", "kind": "codex", "name": "Mine", "program": program.display().to_string() })
-}
-
-/// A file that is not a CLI, with the Unix permission `mode`.
-fn write_program(path: &Path, #[cfg_attr(windows, expect(unused_variables))] mode: u32) {
-  std::fs::write(path, "not a program").expect("the file is written");
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).expect("the file's permissions");
-  }
 }
 
 #[test]
