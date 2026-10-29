@@ -10,6 +10,7 @@ pub mod hold;
 pub mod native;
 pub mod pending;
 pub mod qa;
+pub mod reviewer;
 pub mod tool_wait;
 pub mod tools;
 pub mod vault;
@@ -228,6 +229,7 @@ pub fn project_in(setup: &Setup, repo: TempDir) -> TestProject {
     None => agent_connection(setup.provider),
   };
   db.create_connection(&connection).expect("connection");
+  reviewer::none(&mut db);
   let mut values = Vec::new();
   for (secret, value) in &setup.secrets {
     db.create_secret(secret).expect("secret");

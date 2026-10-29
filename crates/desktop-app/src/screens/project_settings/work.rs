@@ -49,15 +49,15 @@ pub enum Change {
   Index(bool),
   /// *Tell working agents when the base branch moves*.
   BaseNotices(bool),
+  /// Manual's reviewer.
   Auto {
     base: AutoModeSettings,
     asked: AutoModeSettings,
-    /// The input that made the change may widen auto mode: a person's, or automation's under both opt-ins.
+    /// The input that made the change may choose another reviewer: a person's, or automation's under both opt-ins.
     confirmed: bool,
   },
-  /// *With auto mode on, approve everything in each run*, turned on or off by a person or, where the window let it,
-  /// automation.
-  Everything {
+  /// *Allow Autopilot for agents in this project*, turned on by a person, or off by anyone.
+  Autopilot {
     on: bool,
     by: Answerer,
   },
@@ -83,7 +83,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
       background::run(move || {
         let outside = match &change {
           Change::Limits { .. } => Outside::Limits,
-          Change::Auto { .. } | Change::Everything { .. } | Change::Revoke(_) => Outside::AutoMode,
+          Change::Auto { .. } | Change::Autopilot { .. } | Change::Revoke(_) => Outside::AutoMode,
           Change::Index(_) => Outside::CodeIndex,
           Change::Files(_) | Change::BaseNotices(_) => Outside::ProjectSettings,
           Change::UseAccount(_) => Outside::Connections,
@@ -110,10 +110,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
           Change::Auto { base, asked, confirmed } => {
             project_settings::save_auto_mode_in(&root, &base, &asked, confirmed)?
           }
-          // The window asks automation's input only where the input gate let it take a widening.
-          Change::Everything { on, by } => {
-            project_settings::save_approve_everything_in(&root, on, (by, by == Answerer::Automation)).map(|_| ())?
-          }
+          Change::Autopilot { on, by } => project_settings::save_allow_autopilot_in(&root, on, by).map(|_| ())?,
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
           Change::Revoke(rule) => {
             project_settings::revoke_project_rule_in(&root, rule).map_err(|e| messages::store_error(&e))?

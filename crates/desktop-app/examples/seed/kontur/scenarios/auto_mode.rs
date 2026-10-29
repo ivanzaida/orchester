@@ -73,8 +73,8 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     let minutes = i64::try_from(TASKS.len() - index).expect("a short list") * 30;
     let (created, started) = (kontur.ago(minutes + 20), kontur.ago(minutes));
     let mut task = kontur.task((title, title, &CRITERIA), Some(pipeline), created)?;
+    // Runs are in Manual, whose reviewer judges what the rules leave to the person.
     let (run, invocation) = at_work(kontur, &mut task, pipeline, started)?;
-    kontur.db.set_run_auto_mode(run.id(), true)?;
     kontur.seeded(&task, state);
     // Two minutes into the agent's turn.
     let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 2 * 60_000);

@@ -3,8 +3,8 @@
 //! services the screens use; none of them holds a rule of its own.
 
 mod across;
+mod approval_settings;
 mod approvals;
-mod auto_mode;
 mod base_moved;
 mod continue_run;
 mod conversation;
@@ -252,21 +252,21 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
-    name: "set_run_auto_mode",
-    description: "Turns a run's auto mode on or off: a reviewer model answers the requests the rules leave to the person, approving only those that clearly serve the task. Refused unless a person turned on Let automation answer approvals in the app.",
-    schema: schema_for_type::<auto_mode::SetRunAutoMode>,
+    name: "switch_run_to_manual",
+    description: "Switches a run to Manual for itself, as its status line does: its agents' requests no longer go through Autopilot, but through the profile's allowed commands, then the reviewer, then the person. A run never goes back to Autopilot. Always taken for a run that has not ended; answers with the run's approval mode and why it is Manual (profile, project or run).",
+    schema: schema_for_type::<approval_settings::SwitchRunToManual>,
     read_only: false,
   },
   Spec {
-    name: "get_auto_mode",
-    description: "A project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it (and who turned that on), and which connection, model and effort review requests (or why auto mode has no reviewer).",
-    schema: schema_for_type::<auto_mode::GetAutoMode>,
+    name: "get_approval_settings",
+    description: "A project's approval settings: whether it allows Autopilot for its agents (Allow Autopilot for agents in this project), and which connection, model and effort review Manual's requests (or why it has no reviewer).",
+    schema: schema_for_type::<approval_settings::GetApprovalSettings>,
     read_only: true,
   },
   Spec {
-    name: "set_auto_mode",
-    description: "Changes a project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it as Approve everything in this run does, and the reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer). Refused unless a person turned on Let automation answer approvals in the app; turning approve_everything on is also refused as person_only unless a person turned on Let automation change agent permissions. Turning approve_everything off alone is always taken.",
-    schema: schema_for_type::<auto_mode::SetAutoMode>,
+    name: "set_approval_settings",
+    description: "Changes a project's approval settings: allow_autopilot false stops allowing Autopilot and is always taken; allow_autopilot true is refused as person_only, as only a person allows Autopilot in the app. The reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer) is refused unless a person turned on Let automation answer approvals, and another reviewer also needs Let automation change agent permissions.",
+    schema: schema_for_type::<approval_settings::SetApprovalSettings>,
     read_only: false,
   },
   Spec {
@@ -463,9 +463,9 @@ async fn dispatch_answers(
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "answer_question" => questions::answer_question(services, parse(arguments)?, SentBy::Client).await,
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
-    "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
-    "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
-    "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
+    "switch_run_to_manual" => approval_settings::switch_run_to_manual(services, parse(arguments)?).await,
+    "get_approval_settings" => approval_settings::get_approval_settings(services, parse(arguments)?).await,
+    "set_approval_settings" => approval_settings::set_approval_settings(services, parse(arguments)?).await,
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "list_modules" => modules::list_modules(services, parse(arguments)?).await,

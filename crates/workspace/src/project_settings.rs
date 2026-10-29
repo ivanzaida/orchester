@@ -14,7 +14,7 @@ use orchester_core::{
   limits::ProjectLimits,
   resource::ModelId,
   run::{
-    Answerer, ApproveEverything, ProjectRule, ProjectRuleId,
+    AllowAutopilot, Answerer, ProjectRule, ProjectRuleId,
     review::{AutoModeSettings, ReviewerChoice, default_review_model, resolve_reviewer, reviewer_kind},
   },
   store::{ConnectionStore, SettingsStore},
@@ -40,10 +40,10 @@ pub struct Settings {
   pub limits: ProjectLimits,
   pub agent_files: RepositoryAgentFiles,
   pub code_index: CodeIndexSetting,
+  /// The reviewer Manual asks before the person.
   pub auto_mode: AutoModeSettings,
-  /// *With auto mode on, approve everything in each run*; off until someone turns it on.
-  pub approve_everything: ApproveEverything,
-  pub auto_runs: bool,
+  /// *Allow Autopilot for agents in this project*; off until a person turns it on.
+  pub allow_autopilot: AllowAutopilot,
   pub connections: Vec<Connection>,
   /// The project's active approval rules, oldest first (*Approve for every run of this project*).
   pub approval_rules: Vec<ProjectRule>,
@@ -58,8 +58,7 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     agent_files: db.repository_agent_files()?,
     code_index: db.code_index()?,
     auto_mode: db.auto_mode_settings()?,
-    approve_everything: db.approve_everything()?,
-    auto_runs: db.has_auto_mode_runs()?,
+    allow_autopilot: db.allow_autopilot()?,
     connections: db.connections()?,
     approval_rules: db
       .project_approval_rules()?
@@ -76,27 +75,20 @@ pub fn save_base_notices_in(root: &Path, on: bool) -> Result<(), StoreError> {
   ProjectDb::open(root)?.save_tells_base_moves(on)
 }
 
-/// Turns auto mode's *approve everything in each run* `on` or off, as `by` asks ([`ApproveEverything::changed`]):
-/// turning it on is refused as a person's while automation asks and `automation_may` (a person lets automation change
-/// agent permissions) is not given. The setting saved.
-pub fn save_approve_everything_in(
-  root: &Path,
-  on: bool,
-  (by, automation_may): (Answerer, bool),
-) -> Result<ApproveEverything, Message> {
+/// Turns *Allow Autopilot for agents in this project* `on` or off, as `by` asks ([`AllowAutopilot::changed`]): turning
+/// it on is a person's alone; turning it off is anyone's. The setting saved.
+pub fn save_allow_autopilot_in(root: &Path, on: bool, by: Answerer) -> Result<AllowAutopilot, Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  let current = db.approve_everything().map_err(|error| messages::store_error(&error))?;
-  let changed = current
-    .changed(on, by, automation_may)
-    .map_err(|_| approve_everything_person_only())?;
-  db.save_approve_everything(changed)
+  let current = db.allow_autopilot().map_err(|error| messages::store_error(&error))?;
+  let changed = current.changed(on, by).map_err(|_| autopilot_person_only())?;
+  db.save_allow_autopilot(changed)
     .map_err(|error| messages::store_error(&error))?;
   Ok(changed)
 }
 
-/// Why automation's turning on of *approve everything in each run* was not taken.
-pub fn approve_everything_person_only() -> Message {
-  Message::new("projectSettings.approveEverythingPersonOnly")
+/// Why allowing Autopilot from anyone but a person was not taken.
+pub fn autopilot_person_only() -> Message {
+  Message::new("projectSettings.autopilotPersonOnly")
 }
 
 /// Revokes the project's approval rule `rule`: the requests it answered ask again from the next one on. A rule
@@ -247,9 +239,10 @@ pub fn reviewer(
   }))
 }
 
-/// Auto mode answers for the person; enabling it or changing its active reviewer needs confirmation.
-pub fn auto_widens(base: &AutoModeSettings, asked: &AutoModeSettings, auto_runs: bool) -> bool {
-  (asked.new_runs && !base.new_runs) || ((asked.new_runs || auto_runs) && base.reviewer != asked.reviewer)
+/// The reviewer approves requests in the person's place in every Manual run, so choosing another one needs
+/// confirmation.
+pub fn reviewer_widens(base: &AutoModeSettings, asked: &AutoModeSettings) -> bool {
+  base.reviewer != asked.reviewer
 }
 
 pub fn save_auto_mode_in(
@@ -258,31 +251,22 @@ pub fn save_auto_mode_in(
   asked: &AutoModeSettings,
   confirmed: bool,
 ) -> Result<(), Message> {
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  if auto_widens(
-    base,
-    asked,
-    db.has_auto_mode_runs().map_err(|e| messages::store_error(&e))?,
-  ) && !confirmed
-  {
+  let widens = reviewer_widens(base, asked);
+  if widens && !confirmed {
     return Err(Message::new("projectSettings.personOnly"));
   }
-  let connections = db.connections().map_err(|error| messages::store_error(&error))?;
-  if asked.new_runs
-    || (db.has_auto_mode_runs().map_err(|e| messages::store_error(&e))? && base.reviewer != asked.reviewer)
-  {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  if widens {
+    let connections = db.connections().map_err(|error| messages::store_error(&error))?;
     resolve_reviewer(asked, &connections).map_err(|why| Message::new(unavailable_key(why)))?;
   }
   use orchester_store::AutoModeSave;
   match db
-    .save_auto_mode_if_current(base, asked, |auto_runs| {
-      confirmed || !auto_widens(base, asked, auto_runs)
-    })
+    .save_auto_mode_if_current(base, asked)
     .map_err(|error| messages::store_error(&error))?
   {
     AutoModeSave::Saved => Ok(()),
     AutoModeSave::ChangedOutside => Err(Message::new("projectSettings.changedOutside")),
-    AutoModeSave::Refused => Err(Message::new("projectSettings.personOnly")),
   }
 }
 

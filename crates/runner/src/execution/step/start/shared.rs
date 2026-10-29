@@ -5,9 +5,9 @@
 //! not exist.
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, SessionOrigin, invocation::Platform, stream::RunnerProblem},
+  connection::{AgentConnection, SessionOrigin, invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  permission::{FolderBounds, ResolvedFolder, capability::EnforcedPermissions},
+  permission::{EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{PinnedVersion, StepExecutor},
   store::{ActivityStore, ConnectionStore, ResourceStore},
@@ -66,21 +66,31 @@ impl RunTask {
     }
   }
 
-  /// The permissions the agent of step `key` gets on `provider`: the run's for the profile, if they
-  /// were changed for it, else the profile's, narrowed by the step. Preflight already refused steps
-  /// whose permissions the CLI cannot enforce; checked again because an agent never starts with
+  /// The permissions the agent of step `key` gets on `connection`: the run's for the profile, if they
+  /// were changed for it, else the profile's, narrowed by the step, in the approval mode the step runs in there
+  /// (Autopilot only where the connection's CLI hands its requests to Orchester, else Manual). Preflight already
+  /// refused steps whose permissions the CLI cannot enforce; checked again because an agent never starts with
   /// permissions that are not enforced.
   pub(super) fn enforced(
     &self,
     key: &StepKey,
     body: &AgentProfile,
-    provider: AgentProvider,
+    connection: &AgentConnection,
   ) -> Result<EnforcedPermissions, RunnerProblem> {
-    self
+    let permissions = self
       .run
       .step_permissions(key, body.permissions())
-      .expect("an agent step of the run has permissions")
-      .enforced_on(provider, Platform::current())
+      .expect("an agent step of the run has permissions");
+    let effective = EffectiveApprovalMode::of(permissions.approval_mode(), connection.autopilot_support());
+    if let EffectiveApprovalMode::Manual {
+      why: ManualReason::CantEnforce { why },
+    } = &effective
+    {
+      tracing::info!(step = %key, ?why, "the profile is set to Autopilot, but its CLI cannot hand its requests to Orchester: the step runs as Manual");
+    }
+    permissions
+      .with_effective_mode(&effective)
+      .enforced_on(connection.provider(), Platform::current())
       .map_err(|error| problem(error.to_string()))
   }
 

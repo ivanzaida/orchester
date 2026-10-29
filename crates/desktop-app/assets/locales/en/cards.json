@@ -29,8 +29,22 @@
       "answeredNoStep": "Asked at {{time}} · the answer follows in the conversation",
       "answer": "Answer",
       "lost": "Asked at {{time}} · {{step}} · the run was interrupted before an answer",
-      "lostNoStep": "Asked at {{time}} · the run was interrupted before an answer"
+      "lostNoStep": "Asked at {{time}} · the run was interrupted before an answer",
+      "meta": "{{agent}} asks · {{step}} · {{time}}",
+      "whole": "Show the whole question · {{count}} lines"
     },
+    "answered": {
+      "you": "You answered",
+      "orchestrator": "The Orchestrator answered",
+      "automation": "Automation answered",
+      "notAnswered": "Not answered",
+      "ended": "the run ended at {{time}}",
+      "stopped": "{{agent}} stopped waiting at {{time}}, when the run was interrupted"
+    },
+    "folded": "Waits for your answer",
+    "foldedDetail": "· {{question}} · since {{time}}",
+    "fold": "Fold",
+    "reply": "Reply",
     "choice": {
       "number": "Question {{number}} of {{count}}",
       "options": "{{agent}}'s options",

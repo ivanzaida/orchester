@@ -1,4 +1,4 @@
-//! An existing Auto ON run in the window's own project, created through store APIs.
+//! An existing started run in the window's own project, in Manual, created through store APIs.
 use std::collections::BTreeMap;
 
 use orchester_core::{
@@ -16,7 +16,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-pub fn auto_run(db: &mut ProjectDb) -> RunId {
+pub fn started_run(db: &mut ProjectDb) -> RunId {
   let now = Timestamp::now();
   let task = db
     .create_tasks(
@@ -50,7 +50,6 @@ pub fn auto_run(db: &mut ProjectDb) -> RunId {
     .expect("run");
   let events = run.start(now).expect("start");
   db.append_events(&run, &events).expect("started run");
-  db.set_run_auto_mode(run.id(), true).expect("Auto ON");
   run.id()
 }
 

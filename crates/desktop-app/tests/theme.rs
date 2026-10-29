@@ -186,6 +186,11 @@ fn agents_page_spacing_matches_the_design() {
     Dimension::Px(40.0),
     "NPPl4 and a7PAf leave 40 at each side"
   );
+  assert_eq!(
+    app.theme().spacing_value(theme::HubSpacing::Nested.role()),
+    Dimension::Px(44.0),
+    "A6i2K3 in 07 starts 44 from the box's side, past its radio"
+  );
 }
 
 #[test]

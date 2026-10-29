@@ -102,8 +102,8 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   served.ok("save_profile_draft", &auto);
 }
 
-/// Manual → Autopilot widens what agents do unasked: a person's decision over MCP unless they let automation widen.
-/// Switching back to Manual is always taken.
+/// Manual → Autopilot widens what agents do unasked and answers requests in a person's place: over MCP it needs both
+/// of a person's switches, as the window's question does. Switching back to Manual is always taken.
 #[test]
 fn domain_approval_mode_profile_autopilot_is_person_only() {
   let mut served = served();
@@ -118,6 +118,16 @@ fn domain_approval_mode_profile_autopilot_is_person_only() {
   assert_person_only(&refused);
   assert!(refused["reasons"].to_string().contains("Autopilot"), "{refused}");
   served.let_automation_widen(true);
+  let answers = served.refused("save_profile_draft", &pilot);
+  assert_eq!(
+    answers["code"], "automation_not_allowed",
+    "Autopilot needs both switches"
+  );
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("a person lets automation answer approvals");
   let saved = served.ok("save_profile_draft", &pilot);
   assert_eq!(saved["profile"]["permissions"]["approval_mode"], "autopilot");
   served.let_automation_widen(false);

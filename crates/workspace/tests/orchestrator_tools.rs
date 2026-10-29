@@ -70,8 +70,8 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
   for name in [
     "decide_approval",
     "decide_plan",
-    "set_run_auto_mode",
-    "set_auto_mode",
+    "switch_run_to_manual",
+    "set_approval_settings",
     "remove_worktree",
     "return_to_draft",
     "add_project",
@@ -182,7 +182,7 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       .unwrap_or_else(|| panic!("{name} is listed with a description"))
       .to_owned()
   };
-  assert!(description("run_task").contains("auto mode"));
+  assert!(description("run_task").contains("allows Autopilot"));
   assert!(description("cancel_run").contains("proposes the change to the person"));
   let merge = description("merge_run");
   for part in [
@@ -271,12 +271,12 @@ fn orchestrator_tools_say_which_releases_are_refused_before_they_are_proposed() 
 }
 
 #[test]
-fn orchestrator_tools_read_auto_mode_which_run_task_names() {
+fn orchestrator_tools_read_approval_settings_which_run_task_names() {
   let tools = listed();
   let get = tools
     .iter()
-    .find(|tool| tool.name == "get_auto_mode")
-    .expect("the chat reads auto mode, which run_task's description names");
+    .find(|tool| tool.name == "get_approval_settings")
+    .expect("the chat reads the approval settings, which run_task's description names");
   assert_eq!(
     get.annotations.as_ref().and_then(|hints| hints.read_only_hint),
     Some(true)
@@ -287,7 +287,7 @@ fn orchestrator_tools_read_auto_mode_which_run_task_names() {
       .description
       .as_deref()
       .unwrap_or_default()
-      .contains("get_auto_mode")
+      .contains("get_approval_settings")
   );
 }
 

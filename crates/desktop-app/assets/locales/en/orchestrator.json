@@ -539,8 +539,8 @@
         "doneOn": "Started {{task}} on {{pipeline}}",
         "done": "Started {{task}}",
         "refused": "Start {{task}} · not done",
-        "autoMode": "auto mode",
-        "effect": "Auto mode is on in {{project}}, so the Orchestrator started this run without asking. It went through the queue's checks, as Start in Tasks does."
+        "autoMode": "Autopilot allowed",
+        "effect": "{{project}} allows Autopilot, so the Orchestrator started this run without asking. It went through the queue's checks, as Start in Tasks does."
       },
       "facts": {
         "asked": "Asked",

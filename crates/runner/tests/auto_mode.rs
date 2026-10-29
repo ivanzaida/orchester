@@ -1,11 +1,11 @@
-//! Auto mode end to end with `orchester-fake-claude` as both the agent and the reviewer: a command the
-//! rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
+//! Manual's reviewer end to end with `orchester-fake-claude` as both the agent and the reviewer: in Manual, a command
+//! the rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
 //! with its system prompt, an unknown command too, also in a step that only reads (ORC-339), and a plain push of the
 //! run's branch to the origin recorded at its start, and a Cargo test in a step that only reads whose output git
 //! ignores; a credential read, a force push, or a test whose output git does not ignore in a
 //! step that only reads, and every Codex escalation still ask the person without a review; a question of the
-//! reviewer and an answer it cannot read leave the request to the person with what auto mode said; a review whose run
-//! turned auto mode off meanwhile is dropped; and a reviewer still at work when the person answers is stopped. A Codex
+//! reviewer and an answer it cannot read leave the request to the person with what the reviewer said; a run switched
+//! to Manual during a review keeps it; and a reviewer still at work when the person answers is stopped. A Codex
 //! connection reviews through `codex exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs
 //! `git`. Run with `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
 
@@ -19,7 +19,7 @@ use orchester_core::{
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{CommandEnvironment, ModelId, VariableName},
   run::{
-    Answerer, ApprovalAnswer, DecidedBy, PendingToolApproval, Run,
+    Answerer, ApprovalAnswer, DecidedBy, EffectiveMode, ManualBecause, PendingToolApproval, Run,
     review::{AutoModeSettings, Review, ReviewFailure, ReviewHold, ReviewerChoice},
   },
   store::{ActivityStore, ConnectionStore, SettingsStore},
@@ -81,20 +81,17 @@ struct Started {
 }
 
 impl Started {
-  /// A run of `setup` in a project whose new runs use auto mode, with the default reviewer.
+  /// A run of `setup` in Manual, with the default reviewer.
   async fn new(setup: &Setup) -> Self {
     Self::of(project(setup), None).await
   }
 
-  /// A run of `project`'s task, its new runs using auto mode with `reviewer`.
+  /// A run of `project`'s task in Manual, which `reviewer` reviews.
   async fn of(project: TestProject, reviewer: Option<ReviewerChoice>) -> Self {
     let log = tempfile::tempdir().expect("a folder for the review log");
     let mut db = ProjectDb::open(project.repo.path()).expect("open");
-    let settings = AutoModeSettings {
-      new_runs: true,
-      reviewer,
-    };
-    db.save_auto_mode_settings(&settings).expect("auto mode for new runs");
+    let settings = AutoModeSettings { reviewer };
+    db.save_auto_mode_settings(&settings).expect("the reviewer");
     let variable = VariableName::new("FAKE_REVIEW_LOG").expect("name");
     let path = log.path().join("review.log").display().to_string();
     let environment = CommandEnvironment::new(BTreeMap::from([(variable, path)])).expect("environment");
@@ -225,7 +222,10 @@ impl Started {
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_mode_approves_a_command_that_serves_the_task_in_a_folder_of_its_own() {
   let mut started = Started::new(&claude("Run `cargo build`.")).await;
-  assert!(started.db().run_auto_mode(started.id).expect("read"));
+  assert_eq!(
+    started.db().run_approval_mode(started.id).expect("read"),
+    EffectiveMode::Manual(ManualBecause::Profile)
+  );
   let run = started.ended().await;
   assert!(run.status().is_terminal());
   let decided = started.db().decided_tool_approvals(started.id).expect("decided");
@@ -439,23 +439,19 @@ async fn auto_mode_asks_the_person_when_the_reviewer_asks_or_babbles() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_turned_off_during_a_review_drops_its_approval() {
+async fn auto_mode_switched_to_manual_during_a_review_keeps_its_approval() {
   let mut started = Started::new(&claude("Run `cargo build`. Reviewer waits.")).await;
-  let request = started.under_review().await;
+  started.under_review().await;
   started.reviewer_started().await;
   started
     .db()
-    .set_run_auto_mode(started.id, false)
-    .expect("a person turns auto mode off");
-  // The reviewer approves after three seconds; its approval must not answer the request.
-  tokio::time::sleep(Duration::from_secs(6)).await;
-  let db = started.db();
-  assert_eq!(db.pending_tool_approvals(started.id).expect("requests").len(), 1);
-  assert_eq!(db.tool_approval_review(started.id, &request.id).expect("review"), None);
-  started.deny(request).await;
+    .switch_run_to_manual(started.id)
+    .expect("a person switches the run to Manual");
+  // The run was in Manual already: the reviewer's approval, after three seconds, still answers the request.
   started.ended().await;
   let decisions = started.decisions();
-  assert_eq!(decisions, [(DecidedBy::PersonDeny, None)]);
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
 }
 
 #[tokio::test(flavor = "multi_thread")]

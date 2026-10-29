@@ -9,7 +9,6 @@
 
 mod always;
 mod auto;
-mod everything;
 mod note;
 mod permitted;
 mod project;
@@ -24,7 +23,6 @@ use thiserror::Error;
 pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
-  everything::{ApproveEverything, ApproveEverythingPersonOnly},
   note::{DenialNote, DenialNoteError},
   permitted::permitted,
   project::{ProjectRule, ProjectRuleId, ProjectScope, answering_in_project},

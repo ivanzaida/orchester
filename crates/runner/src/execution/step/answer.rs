@@ -2,9 +2,9 @@
 //! requests"): Orchester answers it itself when its server lists the tool to run without asking since
 //! the agent started (Always allow), the step's own permissions run every part of the command on its
 //! own (`orchester_core::run::permitted`), a rule of the run covers it (Approve similar, or a command Always
-//! allowed during the run), a rule of the project does (Approve for every run of this project, `start_qa_app` only),
-//! or the run auto-approves (its own choice, a profile, or auto mode's *approve everything in each run*) and the
-//! request is not one auto-approval leaves to a person. Otherwise a person answers, and a wider answer first leaves
+//! allowed during the run), a rule of the project does in Manual (Approve for every run of this project,
+//! `start_qa_app` only), or the run auto-approves (its own choice, a profile, or Autopilot) and the request is not one
+//! auto-approval leaves to a person. Otherwise a person answers, and a wider answer first leaves
 //! what it promises: a rule, a
 //! profile version or a server setting, or the run's auto-approval. Each answer is recorded with who
 //! gave it, delivered to the one call that asked, and marked in the activity; Deny tells the agent what
@@ -111,7 +111,10 @@ impl Worker {
         ..Settled::by(decided_by, category)
       }));
     }
-    if let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, &subject) {
+    // Read again at each request: disallowing Autopilot, or switching the run to Manual, stops it from the next one.
+    let autopilot = watch.approval_mode()?.is_autopilot();
+    // The project's *Approved for every run* rules answer only in Manual (`docs/design/approval-modes.md`).
+    if !autopilot && let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, &subject) {
       return Ok(Some(Settled {
         rule: Some(Answering::Project(rule.id)),
         ..Settled::by(DecidedBy::SimilarRule, category)
@@ -122,13 +125,7 @@ impl Worker {
       .permissions
       .as_ref()
       .is_some_and(|launch| launch.permissions().auto_approve());
-    // Auto mode's *approve everything in each run* answers as Approve everything in this run would, read again at
-    // each request: turning it or the run's auto mode off stops it from the next one.
-    let everything = watch
-      .db
-      .approve_everything()?
-      .covers(watch.db.run_auto_mode(approval.run)?);
-    if auto_approves(watch.db.run_auto_approve(approval.run)?, profile || everything)
+    if auto_approves(watch.db.run_auto_approve(approval.run)?, profile || autopilot)
       && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(&subject)
     {

@@ -204,7 +204,7 @@ impl ConversationTab {
     let chat = timeline::chat(
       ctx,
       &self.follow,
-      (&built.rows, &built.delivery, run.approvals.approved_by_setting()),
+      (&built.rows, &built.delivery, run.approvals.approved_by_autopilot()),
       (items, &proposed),
       (working, arrived),
     );

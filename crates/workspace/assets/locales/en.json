@@ -18,7 +18,7 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
-    "approveEverythingPersonOnly": "Only a person turns on approving everything in each run: it lets every auto mode run answer its own requests. Input from an MCP client is taken only while you let automation change agent permissions.",
+    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is.",
     "baseBranch": {
       "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
     }
@@ -1559,7 +1559,7 @@
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
       "promptPersonOnly": "This changes what agents are told, which a person decides in Orchester: they publish it in the window or apply the Orchestrator's proposal, or let automation decide by turning on Let automation change agent permissions in Settings › What automation may do. Saving a draft stays open to automation.",
-      "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
+      "autoApproveNeedsAnswers": "Approving automatically and Autopilot answer requests in a person's place, so they also need Let automation answer approvals, which a person turns on in the window.",
       "mcpProgramAndUrl": "A server is either a program (program) or a remote server (url), not both.",
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
@@ -1617,7 +1617,8 @@
       "autoApprove": "Approving automatically, where the latest version asks a person.",
       "autopilot": "Autopilot, which approves the agents' tool requests in the worktree without asking, where the latest version is Manual.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
-      "reviewerAccount": "Auto mode's reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
+      "reviewer": "Another reviewer would approve requests in every Manual run in your place.",
+      "reviewerAccount": "The reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
       "account": "Its agents would run on another account than the latest version's: another sign-in, and possibly another organisation's provider, would get the project's work.",
       "program": "{{program}} is not a copy of the CLI found on the search path.",
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",

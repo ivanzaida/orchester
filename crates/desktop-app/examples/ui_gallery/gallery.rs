@@ -17,6 +17,7 @@ use lurq::{
 use orchester_app::{
   theme::{self, Mode},
   ui::{
+    clipboard::Clipboard,
     markdown::LinkHandler,
     pressable::Focus,
     tabs::{PageTab, Segment, SegmentFace, page_tabs, segmented},
@@ -32,12 +33,13 @@ pub enum Section {
   Inputs,
   Labels,
   Blocks,
+  Decisions,
 }
 
 impl DevtoolsInspectable for Section {}
 
 impl Section {
-  const ALL: [Self; 4] = [Self::Actions, Self::Inputs, Self::Labels, Self::Blocks];
+  const ALL: [Self; 5] = [Self::Actions, Self::Inputs, Self::Labels, Self::Blocks, Self::Decisions];
 
   const fn id(self) -> &'static str {
     match self {
@@ -45,6 +47,7 @@ impl Section {
       Self::Inputs => "gallery-tab-inputs",
       Self::Labels => "gallery-tab-labels",
       Self::Blocks => "gallery-tab-blocks",
+      Self::Decisions => "gallery-tab-decisions",
     }
   }
 
@@ -54,6 +57,7 @@ impl Section {
       Self::Inputs => "Fields and selects",
       Self::Labels => "Choices, tabs and labels",
       Self::Blocks => "Notices, cards, tables, states and overlays",
+      Self::Decisions => "Decision cards",
     }
   }
 }
@@ -130,6 +134,12 @@ impl Component for Gallery {
         chosen.set(section)
       })
     });
+    // The gallery leaves the person's clipboard alone: a copy says in the header what it would put there.
+    let copied = self.state.pressed.clone();
+    ctx.provide(Clipboard::new(move |text| {
+      copied.set(format!("copy {text}"));
+      true
+    }));
     let body = sections::section(ctx, current, &self.state);
     let tabs = page_tabs(ctx, "gallery-tabs", tabs);
     Column::new()

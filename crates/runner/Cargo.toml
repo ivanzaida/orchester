@@ -244,7 +244,7 @@ name = "approval_choices"
 required-features = ["test-agent"]
 
 [[test]]
-name = "approve_everything"
+name = "approval_mode_effective"
 required-features = ["test-agent"]
 
 [[test]]
@@ -253,6 +253,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "codex_escalations"
+required-features = ["test-agent"]
+
+[[test]]
+name = "approval_mode_launch"
 required-features = ["test-agent"]
 
 [[test]]

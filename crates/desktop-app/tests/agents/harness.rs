@@ -43,8 +43,14 @@ impl Agents {
     }
   }
   pub fn profile(&self, published: bool) -> ResourceId {
+    self.profile_with(published, |_| {})
+  }
+  /// A profile with the most restrictive permissions as `change` leaves them.
+  pub fn profile_with(&self, published: bool, change: impl FnOnce(&mut AgentPermissions)) -> ResourceId {
     let listed = ProjectAgents::load_in(&self.root).expect("agents");
     let c = &listed.connections[0];
+    let mut permissions = AgentPermissions::most_restrictive(c.provider(), Platform::current());
+    change(&mut permissions);
     let profile = AgentProfile::new(
       Name::new("Builder").expect("name"),
       "Builds the change".into(),
@@ -53,7 +59,7 @@ impl Agents {
       ModelId::new("test-model").expect("model"),
       ProviderSettings::default(),
     )
-    .with_permissions(AgentPermissions::most_restrictive(c.provider(), Platform::current()));
+    .with_permissions(permissions);
     let mut db = ProjectDb::open(&self.root).expect("database");
     let id = data::create_profile(&mut db, &profile, Timestamp::now()).expect("profile");
     if published {

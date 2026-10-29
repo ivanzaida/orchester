@@ -171,7 +171,7 @@ pub fn copied_at_version(current: &std::path::Path, version: u32) -> tempfile::T
     .collect::<Result<_, _>>()
     .expect("tables");
   for table in tables {
-    // The columns both versions have: a later migration may also have dropped one.
+    // The columns both versions have: a later migration may also have dropped one, or the whole table.
     let columns: Vec<String> = old
       .prepare(&format!(
         "SELECT name FROM pragma_table_info('{table}')          WHERE name IN (SELECT name FROM pragma_table_info('{table}', 'current'))"
@@ -181,6 +181,9 @@ pub fn copied_at_version(current: &std::path::Path, version: u32) -> tempfile::T
       .expect("columns")
       .collect::<Result<_, _>>()
       .expect("columns");
+    if columns.is_empty() {
+      continue;
+    }
     let columns = columns.join(", ");
     // Replacing: the migrations seed some rows themselves, such as the counters.
     old

@@ -299,6 +299,31 @@ fn an_unavailable_upload_keeps_its_glyph_and_cannot_press_a_handler() {
   assert_eq!(presses.load(Ordering::SeqCst), 0);
 }
 
+#[test]
+fn a_select_keeps_its_label_at_the_start_and_its_chevron_at_the_end_bounded_or_not() {
+  let mut kit = Kit::show(|_| {
+    Column::new()
+      .width(Dimension::Px(300.0))
+      .child(ActionButton::new("plain", ButtonKind::Select, "Agent").on_click(|| {}))
+      .child(
+        ActionButton::new("bounded", ButtonKind::Select, "Agent")
+          .bounded_label()
+          .on_click(|| {}),
+      )
+      .into()
+  });
+  for id in ["plain", "bounded"] {
+    let (frame, label) = (kit.bounds(id), kit.bounds(&format!("{id}-label")));
+    assert_close(frame.width, 300.0, &format!("{id} is as wide as its parent"));
+    assert_close(label.x - frame.x, 12.0, &format!("{id} label at the start"));
+    assert!(
+      label.width > frame.width / 2.0,
+      "{id} label fills the room up to the chevron: {}",
+      label.width
+    );
+  }
+}
+
 /// A title bar's control keeps its press from the bar, which hands a press it receives to the OS to move the
 /// window (lurq's `ChromeTitleBar`), and the OS move loop takes the release, so no click would follow. The
 /// bar's empty room still takes the press.

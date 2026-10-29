@@ -9,6 +9,7 @@ mod address;
 mod cloud;
 mod cloud_address;
 mod error;
+mod events;
 mod modules;
 mod pinned;
 mod recorded;
@@ -36,6 +37,7 @@ pub use self::{
   cloud::{CloudClient, SignInAnswer},
   cloud_address::CloudAddress,
   error::ClientError,
+  events::{EventStream, StreamEnd},
 };
 use crate::{
   ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, KeyProofRequest, KeyProofResponse,
@@ -280,6 +282,8 @@ fn builder() -> reqwest::ClientBuilder {
     .redirect(Policy::none())
     .connect_timeout(CONNECT_TIMEOUT)
     .timeout(REQUEST_TIMEOUT)
+    // Longer than any request may take, so it matters only to an event stream, whose own deadline replaces that one.
+    .read_timeout(events::STREAM_IDLE)
 }
 
 /// `request` with the bearer token, as a header value marked sensitive so it is never shown.
