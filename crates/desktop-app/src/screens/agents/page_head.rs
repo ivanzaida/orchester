@@ -11,10 +11,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::AgentProfile;
+use orchester_core::{permission::ApprovalMode, resource::AgentProfile};
 use orchester_workspace::agents::data::{ProfileEntry, ProjectAgents, VersionState};
 
-use super::{AgentsNav, Shown, entries, fields::Fields, policy_panel};
+use super::{AgentsNav, Shown, entries, fields::Fields, permissions::mode_name, policy_panel};
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
@@ -111,6 +111,8 @@ pub struct Bar<'a> {
   pub saved_at: Option<orchester_core::time::Timestamp>,
   /// The connection can run and enforce the profile, so it can be published.
   pub publishable: bool,
+  /// Turning Autopilot on waits for the person to allow it: the bar names the change (07b).
+  pub autopilot_waits: bool,
   pub actions: Vec<Element>,
 }
 
@@ -167,7 +169,14 @@ pub fn bar(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, bar: Bar<'_>) -> 
       changes(ctx, fields, listed, bar.published),
     ),
   };
-  let sub = if bar.publishable || !state.has_draft() {
+  let sub = if bar.autopilot_waits {
+    mode_change(
+      ctx,
+      "agents.permissions.approvals.waiting",
+      ApprovalMode::Manual,
+      ApprovalMode::Autopilot,
+    )
+  } else if bar.publishable || !state.has_draft() {
     sub
   } else {
     ctx.t("agents.notEnforced")
@@ -179,7 +188,19 @@ pub fn bar(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, bar: Bar<'_>) -> 
   draft.into()
 }
 
-/// What the draft changes from the published version: `Model a → b · Permissions · Changed`.
+/// `Approvals · Manual → Autopilot`, in the words of `key`.
+fn mode_change(ctx: &Ctx, key: &str, from: ApprovalMode, to: ApprovalMode) -> Arc<str> {
+  ctx.t_args(
+    key,
+    [
+      ("from", mode_name(ctx, from).to_string()),
+      ("to", mode_name(ctx, to).to_string()),
+    ],
+  )
+}
+
+/// What the draft changes from the published version: `Model a → b · Approvals · Manual → Autopilot · Permissions ·
+/// Changed`.
 fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&AgentProfile>) -> Arc<str> {
   let Some(base) = base else {
     return ctx.t("agents.versionNote");
@@ -212,6 +233,13 @@ fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&Age
       );
     }
   }
+  let mut permissions = fields.permissions.get().0;
+  let (from, to) = (base.permissions().approval_mode(), permissions.approval_mode());
+  if from != to {
+    parts.push(mode_change(ctx, "agents.permissions.approvals.change", from, to).to_string());
+  }
+  // The approval mode is named above; *Permissions* stands for the rest.
+  permissions.set_approval_mode(from);
   for (different, key) in [
     (fields.role.get() != base.role().as_str(), "agents.role"),
     (
@@ -226,10 +254,7 @@ fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&Age
       fields.connection.get() != base.connection().to_string(),
       "agents.connection",
     ),
-    (
-      fields.permissions.get().0 != *base.permissions(),
-      "agents.permissionsTab",
-    ),
+    (permissions != *base.permissions(), "agents.permissionsTab"),
     (fields.servers.get().0 != *base.mcp_servers(), "agents.mcp"),
   ] {
     if different {

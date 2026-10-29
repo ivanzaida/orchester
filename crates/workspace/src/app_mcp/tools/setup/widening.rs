@@ -10,7 +10,6 @@
 use orchester_core::{
   connection::AgentProvider,
   id::ResourceId,
-  permission::widening::Widening,
   resource::{AgentProfile, Pipeline},
 };
 use orchester_store::ProjectDb;
@@ -48,8 +47,9 @@ pub(in crate::app_mcp::tools) fn prompt_allowed(
 
 /// Refused unless a person lets automation take what `profile` widens beyond the latest published version
 /// of profile `id` (before its first version: the most restrictive permissions `provider` enforces here and
-/// no MCP server). Approving automatically answers requests in a person's place, so it also needs *Let
-/// automation answer approvals*, as auto mode does.
+/// no MCP server). Approving automatically and Autopilot answer requests in a person's place, so they also need
+/// *Let automation answer approvals*, as auto mode does
+/// ([`answers_in_persons_place`](crate::agents::widening::answers_in_persons_place)).
 pub(super) fn check_profile(
   services: &Services,
   db: &ProjectDb,
@@ -57,7 +57,7 @@ pub(super) fn check_profile(
   provider: AgentProvider,
 ) -> Result<(), ToolError> {
   let reasons = crate::agents::widening::reasons(db, id, profile, provider)?;
-  let auto = reasons.contains(&crate::agents::widening::message(Widening::AutoApprove));
+  let auto = crate::agents::widening::answers_in_persons_place(&reasons);
   allowed(services, reasons)?;
   if auto && services.person.is_none() && !services.workspace.automation_answers_approvals()? {
     return Err(ToolError::refused(
