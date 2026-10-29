@@ -36,6 +36,32 @@ fn agents_approvals_manual_lists_allowed_commands_and_network_stands_alone() {
   );
 }
 
+/// A profile that approves automatically, set before approval modes or over MCP, runs so: it shows in Approvals while
+/// it is on, and turning it off saves without asking.
+#[test]
+fn agents_approvals_shows_approving_automatically_while_it_is_on() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile_with(true, |permissions| permissions.set_auto_approve(true));
+  screen.open(id);
+  let row = screen.text("agent-auto-row");
+  assert!(row.contains("Approve automatically"), "{row}");
+  assert!(
+    screen.text("agent-approvals").contains("Approve automatically"),
+    "inside the Approvals box"
+  );
+  screen.click("agent-auto");
+  screen.until("turned off", |s| {
+    assert!(!s.exists("agent-confirm-confirm"), "turning it off never asks");
+    !s.listed()
+      .profile(id)
+      .expect("profile")
+      .profile
+      .permissions()
+      .auto_approve()
+  });
+  assert!(!screen.exists("agent-auto-row"), "gone once off");
+}
+
 #[test]
 fn agents_turning_autopilot_on_is_asked_in_place_and_named_in_the_draft_bar() {
   let mut screen = Agents::new(true);

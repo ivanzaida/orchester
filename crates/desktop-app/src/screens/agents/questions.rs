@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
-use orchester_workspace::agents::editor::Action;
+use orchester_workspace::agents::{editor::Action, widening::answers_in_persons_place};
 
 use super::{
   permissions::Section,
@@ -50,7 +50,7 @@ pub fn autopilot_waits(pending: &Pending) -> bool {
 }
 
 /// What the pending candidate widens, at its section; `None` without one, or for a stale publication. Turning
-/// Autopilot on alone asks *Allow Autopilot for `profile`?* (07b).
+/// Autopilot on alone asks *Allow Autopilot for `profile`?* (07b), or for *this profile* while it has no role.
 pub fn widening(ctx: &mut Ctx, asking: &Asking, profile: &str) -> Option<(Section, Element)> {
   let asked = asking.pending.get().0?;
   if asked.request.action == Action::PublishStale {
@@ -58,22 +58,20 @@ pub fn widening(ctx: &mut Ctx, asking: &Asking, profile: &str) -> Option<(Sectio
   }
   let section = asked.reasons.first().map_or(Section::Connection, Section::of);
   let (title, reasons): (Arc<str>, Vec<Arc<str>>) = if only_autopilot(&asked.reasons) {
-    (
-      ctx.t_args("agents.permissions.approvals.widen.title", [("profile", profile)]),
-      vec![ctx.t("agents.permissions.approvals.widen.reason")],
-    )
+    let title = if profile.is_empty() {
+      ctx.t("agents.permissions.approvals.widen.untitled")
+    } else {
+      ctx.t_args("agents.permissions.approvals.widen.title", [("profile", profile)])
+    };
+    (title, vec![ctx.t("agents.permissions.approvals.widen.reason")])
   } else {
     (
       ctx.t("agents.widenTitle"),
       asked.reasons.iter().map(|reason| message_text(ctx, reason)).collect(),
     )
   };
-  // Autopilot answers requests in a person's place, as approving automatically does.
-  let automation = if asked
-    .reasons
-    .iter()
-    .any(|reason| matches!(reason.key, "appMcp.widens.autoApprove" | AUTOPILOT))
-  {
+  // The domain tools' rule: what answers requests in a person's place also needs automation to answer approvals.
+  let automation = if answers_in_persons_place(&asked.reasons) {
     Guarded::ApprovalWidening
   } else {
     Guarded::PermissionWidening

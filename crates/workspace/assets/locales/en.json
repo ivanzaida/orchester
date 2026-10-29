@@ -1551,7 +1551,7 @@
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
       "promptPersonOnly": "This changes what agents are told, which a person decides in Orchester: they publish it in the window or apply the Orchestrator's proposal, or let automation decide by turning on Let automation change agent permissions in Settings › What automation may do. Saving a draft stays open to automation.",
-      "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
+      "autoApproveNeedsAnswers": "Approving automatically and Autopilot answer requests in a person's place, so they also need Let automation answer approvals, which a person turns on in the window.",
       "mcpProgramAndUrl": "A server is either a program (program) or a remote server (url), not both.",
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
