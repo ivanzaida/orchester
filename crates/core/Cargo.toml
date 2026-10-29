@@ -20,6 +20,8 @@ chrono.workspace = true
 pulldown-cmark.workspace = true
 # The log-line pattern a service is ready on (`service::readiness`).
 regex.workspace = true
+# JUnit XML test reports (`test_report::junit`); already built for lurq's SVG icons.
+roxmltree.workspace = true
 serde.workspace = true
 # Reads the JSON the agent CLIs print (model catalog, sign-in status).
 serde_json.workspace = true

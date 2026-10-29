@@ -558,6 +558,7 @@ pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
     ResourceKind::Pipeline => "pipeline",
     ResourceKind::Tool => "tool",
     ResourceKind::Skill => "skill",
+    ResourceKind::TestSuite => "test_suite",
   }
 }
 
@@ -568,6 +569,7 @@ fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
     "pipeline" => Ok(ResourceKind::Pipeline),
     "tool" => Ok(ResourceKind::Tool),
     "skill" => Ok(ResourceKind::Skill),
+    "test_suite" => Ok(ResourceKind::TestSuite),
     other => Err(corrupt("resource kind", other)),
   }
 }

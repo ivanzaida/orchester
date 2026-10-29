@@ -114,6 +114,9 @@ rfd = "0.15"
 # Already built, with these features, for lurq's embedded MCP server, so it adds no crate; the protocol
 # and its sessions are not a few lines of code.
 rmcp = { version = "3.4", default-features = false, features = ["server"] }
+# Reads JUnit XML test reports (`orchester-core`'s `test_report`). A read-only, pure Rust XML parser with positions
+# for its errors; already built at this version for usvg (lurq's SVG icons), so it adds no crate.
+roxmltree = "0.20"
 # The shared server's HTTP client, behind `orchester-api`'s `client` feature (`docs/architecture/server.md`,
 # "Dependencies"): rustls with the operating system's trust store (`rustls-platform-verifier`) on Windows
 # and macOS, no OpenSSL. A TLS-capable HTTP client is not a few lines of code; hyper is already built
