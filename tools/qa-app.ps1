@@ -48,8 +48,8 @@
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
-# only cargo's target folder: never the user's install (E:\Orchester, formerly E:\projects\orchester), the user's discovery
-# folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
+# only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),
+# the user's discovery folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
 param(
     [Parameter(Mandatory = $true)][string]$Name,
     # The seed checks it against its registry (see the header); the app starts only when the seed succeeds.
@@ -87,17 +87,30 @@ $repo = Join-Path $qa "repo-$Scenario"
 # The QA copy's MCP discovery folder (ORCHESTER_APP_MCP_DISCOVERY).
 $mcp = Join-Path $qa "mcp"
 
-# Only .tmp/qa/<task>/ of this checkout, and never inside the user's install.
-$installs = @("E:\Orchester", "E:\projects\orchester") | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+# The installed Orchester folder that holds `path`, or $null. An install keeps its orchester.db beside its program,
+# wherever the person installed it; a checkout or a QA copy's bin/ (orchester-app-qa) holds no such pair.
+function Find-Install([string]$path) {
+    $folder = [System.IO.DirectoryInfo]::new($path)
+    while ($folder) {
+        $program = Join-Path $folder.FullName "orchester$exe"
+        $database = Join-Path $folder.FullName "orchester.db"
+        if ((Test-Path -LiteralPath $program -PathType Leaf) -and (Test-Path -LiteralPath $database -PathType Leaf)) {
+            return $folder.FullName
+        }
+        $folder = $folder.Parent
+    }
+    return $null
+}
+
+# Only .tmp/qa/<task>/ of this checkout, and never inside an installed Orchester.
 foreach ($path in @($qa, $bin, $repo, $mcp)) {
     $full = [System.IO.Path]::GetFullPath($path)
     if (-not $full.StartsWith($qaRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "refusing ${full}: QA data stays under $qaRoot"
     }
-    foreach ($install in $installs) {
-        if ($full.StartsWith($install, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "refusing ${full}: it is inside the user's install"
-        }
+    $install = Find-Install $full
+    if ($install) {
+        throw "refusing ${full}: it is inside the Orchester installed in $install"
     }
 }
 
