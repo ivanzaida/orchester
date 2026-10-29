@@ -111,6 +111,13 @@ impl Client {
     self.call(bearer(self.request(Method::GET, &path)?, token)).await
   }
 
+  /// `GET …/tasks/{task}`: one task as the server has it now, e.g. after a delta the cache could not take.
+  pub async fn task(&self, token: &SecretValue, project: ProjectId, task: TaskId) -> Result<SharedTask, ClientError> {
+    let path = format!("/projects/{project}/tasks/{task}");
+    let response: TaskResponse = self.call(bearer(self.request(Method::GET, &path)?, token)).await?;
+    Ok(response.task)
+  }
+
   /// `POST …/tasks`: new tasks with consecutive numbers; a repeated batch key returns the first ones.
   pub async fn create_tasks(
     &self,

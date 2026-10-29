@@ -107,8 +107,10 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `list_projects` | RO | All projects |
 | `set_code_index` | | Turn the code index on or off |
 | `update_project_limits` | | Budgets, time limit, agent and QA slots |
-| `get_auto_mode` | RO | Auto mode settings |
-| `set_auto_mode` | AA | Change auto mode settings |
+| `get_approvals` | RO | Allow Autopilot, the reviewer, running runs' approval modes |
+| `set_allow_autopilot` | person only to turn on | Allow Autopilot in the project, or stop |
+| `set_reviewer` | AA; AP for another reviewer | Manual's reviewer |
+| `get_auto_mode` / `set_auto_mode` / `set_run_auto_mode` | retired | Answer `retired`, naming the tools above |
 | `list_tasks` / `get_task` | RO | Tasks |
 | `create_task` | | New draft task |
 | `update_task` | AP to switch pipelines | Change a task, close or reopen it |
@@ -120,7 +122,7 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `list_runs` / `get_run` | RO | Runs and their full state |
 | `pause_run` / `resume_run` / `cancel_run` | | Control a run |
 | `continue_run` | AA for retry/return/accept/resolve | Continue a stopped run |
-| `set_run_auto_mode` | AA | One run's auto mode |
+| `set_run_manual` | | Switch one run to Manual for good |
 | `remove_worktree` | | Remove an ended run's worktree |
 | `hold_queue` / `release_queue` | | Hold or release new starts |
 | `list_approvals` | RO | Waiting tool requests and plans |

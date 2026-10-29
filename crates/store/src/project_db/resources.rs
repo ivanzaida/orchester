@@ -18,7 +18,9 @@ use crate::{
 };
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
-const SELECT_VERSIONS: &str = "SELECT id, number, body, published_at FROM resource_versions";
+/// A cached version of a shared resource reads as its local body, which this computer's bindings rewrite.
+const SELECT_VERSIONS: &str = "SELECT id, number, COALESCE(local_body, body), published_at FROM resource_versions \
+                               LEFT JOIN shared_version_bodies ON version_id = id";
 
 impl ProjectDb {
   /// Reads the draft and latest version under the write lock, then saves the returned draft.
@@ -526,7 +528,7 @@ pub(super) fn encode<B: ResourceBody>(body: &B) -> Result<String, StoreError> {
 
 /// A stored body in the current shape; bodies of an older schema are upgraded as they are read
 /// (published versions are immutable, so they are not rewritten).
-fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
+pub(super) fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
   const WHAT: &str = "resource body";
   let (schema, body) = decode_document(WHAT, text)?;
   if schema == B::SCHEMA {

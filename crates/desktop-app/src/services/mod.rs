@@ -140,9 +140,9 @@ impl Services {
       .expect("the root provides the services before mounting the window of a started session")
   }
 
-  /// Starts the shared servers' connection monitor, the shared projects' sync, the check of the cloud sign-in
-  /// (`sharing::cloud::keep_checking`) and the activity's following of the account signed in; they run until the
-  /// returned [`Background`] is dropped.
+  /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the
+  /// cloud sign-in (`sharing::cloud::keep_checking`) and the activity's following of the account signed in; they run
+  /// until the returned [`Background`] is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -151,6 +151,7 @@ impl Services {
         self.runners.run_changes(),
         self.programs.clone(),
       )),
+      self.runtime.spawn(sharing::sync::run(self.servers.clone())),
       self.runtime.spawn(sharing::cloud::keep_checking(self.cloud.clone())),
       self.runtime.spawn(sharing::cloud::keep_activity_to_the_account(
         self.cloud.clone(),

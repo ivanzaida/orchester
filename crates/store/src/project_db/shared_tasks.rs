@@ -313,7 +313,7 @@ type InfoRow = (
   Option<String>,
 );
 
-fn info(connection: &Connection, task: TaskId) -> Result<Option<SharedTaskInfo>, StoreError> {
+pub(super) fn info(connection: &Connection, task: TaskId) -> Result<Option<SharedTaskInfo>, StoreError> {
   let row: Option<InfoRow> = connection
     .query_row(
       "SELECT pipeline_slug, former_key, created_by, updated_by, updated_at, kept_tag_names FROM tasks \
