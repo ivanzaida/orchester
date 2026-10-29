@@ -1,7 +1,7 @@
 //! Settings › Browser (`docs/design/browser.md`, "Finding the browser"): the program the person chose for agents'
-//! browser, instead of the one Orchester finds installed (none until a person chooses one), and whether the Browser
-//! window opens when an agent starts browsing (on until a person turns it off, the person's decision 2026-10-29). The
-//! runner reads the program as it starts a project's browser ([`AppDb::open_read_only`]).
+//! browser, instead of the one Orchester finds installed (none until a person chooses one). The runner reads it as it
+//! starts a project's browser ([`AppDb::open_read_only`]). Whether the Browser window opens when an agent starts
+//! browsing is [`AppDb::browser_window_opens_itself`].
 
 use std::path::{Path, PathBuf};
 
@@ -11,11 +11,8 @@ use super::AppDb;
 use crate::StoreError;
 
 pub(super) const MIGRATION: &str = r"
--- Settings › Browser (ORC-369): the program chosen for agents' browser (NULL: the one found installed), and Open the
--- Browser window when an agent starts browsing, on until a person turns it off.
+-- Settings › Browser (ORC-369): the program chosen for agents' browser (NULL: the one found installed).
 ALTER TABLE app_settings ADD COLUMN browser_program TEXT;
-ALTER TABLE app_settings ADD COLUMN opens_browser_window INTEGER NOT NULL DEFAULT 1
-  CHECK (opens_browser_window IN (0, 1));
 ";
 
 impl AppDb {
@@ -43,23 +40,6 @@ impl AppDb {
     self.connection.execute(
       "UPDATE app_settings SET browser_program = ?1 WHERE id = 1",
       params![program],
-    )?;
-    Ok(())
-  }
-
-  /// Whether the Browser window opens, without taking focus, when an agent starts browsing.
-  pub fn opens_browser_window(&self) -> Result<bool, StoreError> {
-    Ok(self.connection.query_row(
-      "SELECT opens_browser_window FROM app_settings WHERE id = 1",
-      [],
-      |row| row.get(0),
-    )?)
-  }
-
-  pub fn set_opens_browser_window(&mut self, opens: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET opens_browser_window = ?1 WHERE id = 1",
-      params![opens],
     )?;
     Ok(())
   }

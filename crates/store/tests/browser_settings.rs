@@ -1,13 +1,13 @@
-//! Settings › Browser in the application database (`docs/design/browser.md`, "Finding the browser"): no program chosen
-//! and the Browser window opening when an agent starts browsing until a person changes them, both kept, and the
-//! read-only opening the runner reads them with. Run with `cargo test -p orchester-store --test browser_settings`.
+//! Settings › Browser's program in the application database (`docs/design/browser.md`, "Finding the browser"): none
+//! chosen until a person chooses one, the choice kept, and the read-only opening the runner reads it with. The Browser
+//! window's switch is tested in `app_db.rs`. Run with `cargo test -p orchester-store --test browser_settings`.
 
 use std::path::Path;
 
 use orchester_store::{AppDb, StoreError, location::browser_profiles_beside};
 
-/// The schema before Settings › Browser (30).
-const BEFORE_BROWSER: u32 = 29;
+/// The schema before Settings › Browser's program (31).
+const BEFORE_BROWSER: u32 = 30;
 
 #[test]
 fn browser_program_is_the_one_found_until_chosen_and_the_choice_is_kept() {
@@ -30,27 +30,14 @@ fn browser_program_is_the_one_found_until_chosen_and_the_choice_is_kept() {
 }
 
 #[test]
-fn browser_window_opens_until_turned_off_and_is_kept() {
-  let dir = tempfile::tempdir().expect("temporary directory");
-  let path = dir.path().join("orchester.db");
-  let mut db = AppDb::open(&path).expect("create");
-  assert!(db.opens_browser_window().expect("read"), "on in a new database");
-  db.set_opens_browser_window(false).expect("turn off");
-  drop(db);
-
-  let db = AppDb::open(&path).expect("reopen");
-  assert!(!db.opens_browser_window().expect("read"), "off is kept");
-}
-
-#[test]
-fn browser_settings_of_a_database_that_never_stored_them_are_the_defaults() {
+fn browser_program_of_a_database_that_never_stored_it_is_none() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
   drop(AppDb::create_at_version(&path, BEFORE_BROWSER).expect("the schema before Settings › Browser"));
 
   let db = AppDb::open(&path).expect("migrate");
   assert_eq!(db.browser_program().expect("read"), None);
-  assert!(db.opens_browser_window().expect("read"), "on until turned off");
+  assert!(db.browser_window_opens_itself().expect("read"), "on until turned off");
 }
 
 #[test]
@@ -66,7 +53,7 @@ fn browser_settings_read_only_are_read_and_never_written() {
   let mut read = AppDb::open_read_only(&path).expect("open to read");
   assert_eq!(read.browser_program().expect("read"), Some(chosen.to_path_buf()));
   assert!(
-    matches!(read.set_opens_browser_window(false), Err(StoreError::Sqlite(_))),
+    matches!(read.set_browser_program(None), Err(StoreError::Sqlite(_))),
     "a read-only database refuses writes"
   );
 

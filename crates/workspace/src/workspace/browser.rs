@@ -59,7 +59,7 @@ impl Workspace {
   pub fn browser_settings(&self) -> Result<BrowserSettings, StoreError> {
     let (chosen, opens_window) = {
       let db = self.db.lock();
-      (db.browser_program()?, db.opens_browser_window()?)
+      (db.browser_program()?, db.browser_window_opens_itself()?)
     };
     let browser = match chosen {
       Some(program) => browser::chosen(&program).map_or_else(AgentsBrowser::ChosenUnusable, AgentsBrowser::Chosen),
@@ -80,10 +80,6 @@ impl Workspace {
     let taken = browser::chosen(program)?;
     self.db.lock().set_browser_program(Some(taken.path()))?;
     Ok(taken)
-  }
-
-  pub fn set_opens_browser_window(&self, opens: bool) -> Result<(), StoreError> {
-    self.db.lock().set_opens_browser_window(opens)
   }
 
   /// Makes this workspace and its clones look for an installed browser in `folders` only, never in the computer's own

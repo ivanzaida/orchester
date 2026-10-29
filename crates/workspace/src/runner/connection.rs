@@ -12,7 +12,8 @@ use std::{
 
 use orchester_core::limits::AgentSlots;
 use orchester_ipc::{
-  AttachSession, Command, CommandSender, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess, ShutdownMode,
+  AttachSession, Command, CommandSender, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess,
+  ShutdownMode, browser::BrowserCommand,
 };
 use tokio::{
   runtime::Handle,
@@ -172,10 +173,11 @@ impl Supervisor {
       // Whatever happens to this runner, the next one replaces it after a drop.
       self.session = AttachSession::Reconnect;
       let agent_slots = attach_slots(&self.project).await;
-      match Session::start(client)
+      let served = Session::start(client)
         .serve((session, agent_slots), &mut self.requests, &self.reporter)
-        .await
-      {
+        .await;
+      self.reporter.browser_ended();
+      match served {
         Served::Dropped(failure) => {
           if !self.retry_after(RunnerEvent::Dropped(failure)).await {
             return;
@@ -361,6 +363,10 @@ impl Session {
           match answer {
             Ok(Ok(Reply::Attached { continued, .. })) => {
               reporter.attached(session == AttachSession::Reconnect, continued.len());
+              // The project's browser is followed from now on; the runner always takes it.
+              if !self.send(Command::Browser(BrowserCommand::Subscribe), None).await {
+                return Served::Dropped(RunnerFailure::Lost);
+              }
             }
             other => {
               tracing::warn!(?other, "the runner did not attach");
@@ -442,11 +448,9 @@ impl Session {
         reporter.task_run_changed(task);
         true
       }
-      Some(Ok(Some(Event::TaskGroupChanged { .. }))) => {
-        reporter.run_changed();
-        true
-      }
-      Some(Ok(Some(Event::ToolApprovalChanged { .. } | Event::QuestionChanged { .. }))) => {
+      Some(Ok(Some(
+        Event::TaskGroupChanged { .. } | Event::ToolApprovalChanged { .. } | Event::QuestionChanged { .. },
+      ))) => {
         reporter.run_changed();
         true
       }
@@ -461,6 +465,14 @@ impl Session {
       }
       Some(Ok(Some(Event::WorkSummary(summary)))) => {
         reporter.work(summary);
+        true
+      }
+      Some(Ok(Some(Event::Browser(event)))) => {
+        reporter.browser(event);
+        true
+      }
+      Some(Ok(Some(Event::BrowserFrame(frame)))) => {
+        reporter.browser_frame(frame);
         true
       }
       Some(Ok(Some(Event::PlanProposed {

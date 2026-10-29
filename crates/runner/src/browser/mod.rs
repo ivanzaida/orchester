@@ -1,10 +1,14 @@
 //! The project's browser (`docs/design/browser.md`, decisions 3, 4 and 6, "The browser process"): one headless
 //! Chromium per project, owned by its runner, the only process that talks to it ([`cdp`]). It starts on the first use
-//! by any of the project's runs, on the project's own profile folder ([`profile_of`]), with the program the person
-//! chose in Settings › Browser or else the one installed, and keeps running until the runner exits
-//! ([`ProjectBrowser::stop`]); one that ended on its own starts again at the next use. Each tab a run opens belongs to
-//! that run, which reaches only its own tabs; they close when the run ends (completed, cancelled, failed; a merged run
-//! had completed), and pausing keeps them.
+//! by any of the project's runs or by the person in the *Browser* window, on the project's own profile folder
+//! ([`profile_of`]), with the program the person chose in Settings › Browser or else the one installed, and keeps
+//! running until the runner exits ([`ProjectBrowser::stop`]); one that ended on its own starts again at the next use.
+//! Each tab a run opens belongs to that run, which reaches only its own tabs; they close when the run ends (completed,
+//! cancelled, failed; a merged run had completed), and pausing keeps them. The tabs the person opens in the window are
+//! the person's, and no run reaches them.
+//!
+//! The window sees and drives every tab through the runner (`window`): the browser's state, the screencast of the tab
+//! it shows, the person's input, dialogs and `<select>` lists, and the restart in a browser window of its own.
 //!
 //! The browser ends with the runner: on Windows its kill-on-close Job Object ends it however the runner ends; on macOS
 //! the runner closes it as it exits, and a runner killed with SIGKILL leaves it running, as it leaves agents
@@ -16,6 +20,7 @@ mod process;
 mod running;
 mod tab;
 mod tabs;
+mod window;
 
 use std::{
   path::{Path, PathBuf},
@@ -24,16 +29,16 @@ use std::{
 
 use orchester_core::id::RunId;
 use orchester_exec::browser::{self as program, BrowserProgram, BrowserUnavailable};
+use orchester_ipc::browser::{AgentAction, BrowserEvent, BrowserMode, BrowserTabId, ScreencastFrame, TabOwner};
 use orchester_store::{AppDb, ProjectDb, location::browser_profiles_beside};
-use parking_lot::Mutex;
-use serde_json::{Value, json};
+use serde_json::Value;
 use thiserror::Error;
+use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 
 use self::{
-  cdp::{Cdp, CdpError, TargetId, TargetInfo},
+  cdp::{CdpError, TargetId, TargetInfo},
   running::Running,
-  tab::TabState,
-  tabs::RunTabs,
+  window::Window,
 };
 pub use self::{
   log::{ConsoleMessage, Request, TabLog},
@@ -58,13 +63,21 @@ pub enum BrowserError {
   NoTab,
   #[error("{0} is stale or was never read: read the page again with browser_read_page and use a ref it gives")]
   StaleRef(String),
+  #[error("the browser has no tab {0}")]
+  NoSuchTab(TargetId),
+  /// Back or forward with no page there in the tab's history.
+  #[error("the tab has no page {0} in its history")]
+  NoHistory(&'static str),
+  /// A page's element, such as a `<select>` list, could not be read or set.
+  #[error("the page's element: {0}")]
+  Element(String),
 }
 
 /// What a running browser's connection listens to ([`ProjectBrowser::listening`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Listening {
-  /// The receivers of its events still held: the runner's own of the browser's events, each open tab's log follower,
-  /// and any wait in progress.
+  /// The receivers of its events still held: the runner's own of the browser's events, each open tab's followers
+  /// (the window's, and a run's tab's log), and any wait in progress.
   pub receivers: usize,
   /// The tabs whose console messages, requests and dialogs are still followed.
   pub followed_logs: usize,
@@ -75,7 +88,8 @@ pub struct ProjectBrowser {
   profile: Result<PathBuf, BrowserUnavailable>,
   /// The application database whose Settings › Browser may name the program; `None`: the one installed.
   settings: Option<PathBuf>,
-  running: tokio::sync::Mutex<Option<Running>>,
+  running: Mutex<Option<Running>>,
+  window: Arc<Window>,
 }
 
 impl ProjectBrowser {
@@ -107,46 +121,31 @@ impl ProjectBrowser {
     Self {
       profile,
       settings: None,
-      running: tokio::sync::Mutex::new(None),
+      running: Mutex::new(None),
+      window: Arc::new(Window::default()),
     }
   }
 
   /// Opens a new tab for `run` on `url` and waits for its load, within a time limit; it becomes the run's current
   /// tab. The tab is `run`'s from the moment it is attached: a load that fails leaves it to the run, which closes it
-  /// or has it closed at its end. From then on the tab's console messages, requests and dialogs are recorded.
+  /// or has it closed at its end. From then on the tab's console messages, requests and dialogs are recorded. The
+  /// run's first tab tells the window that an agent started browsing.
   pub async fn open_tab(&self, run: RunId, url: &str) -> Result<TargetId, BrowserError> {
-    let (cdp, tabs) = self.connection().await?;
-    let target = cdp.create_tab("about:blank").await?;
-    let session = match cdp.attach(&target).await {
-      Ok(session) => session,
-      Err(error) => {
-        if let Err(closing) = cdp.close_target(&target).await {
-          tracing::warn!(%closing, "a tab that could not be attached was not closed");
-        }
-        return Err(error.into());
-      }
+    let (target, session, cdp, first) = {
+      let running = self.connection().await?;
+      let first = running.tabs.lock().of(run).is_empty();
+      let (target, session) = running.open(TabOwner::Run { run }).await?;
+      (target, session, Arc::clone(&running.cdp), first)
     };
-    let state = Arc::new(TabState::default());
-    {
-      let mut tabs = tabs.lock();
-      tokio::spawn(log::follow(
-        cdp.subscribe(Some(session.clone())),
-        Arc::downgrade(&cdp),
-        session.clone(),
-        Arc::clone(&state),
-        tabs.follower(),
-      ));
-      tabs.add(run, target.clone(), session.clone(), state);
-    }
-    for domain in ["Runtime.enable", "Network.enable", "Log.enable"] {
-      cdp.call(Some(&session), domain, json!({})).await?;
+    if first {
+      self.window.send(BrowserEvent::AgentStartedBrowsing { run });
     }
     running::load(&cdp, &session, url).await?;
     Ok(target)
   }
 
-  /// `run`'s tab `tab`, or its current one for `None`; refused for a tab that is not the run's, and when the run has
-  /// none open. Does not start the browser.
+  /// `run`'s tab `tab`, or its current one for `None`; refused for a tab that is not the run's, the person's included,
+  /// and when the run has none open. Does not start the browser.
   pub async fn tab(&self, run: RunId, tab: Option<&TargetId>) -> Result<Tab, BrowserError> {
     let running = self.running.lock().await;
     let Some(running) = running.as_ref() else {
@@ -163,7 +162,7 @@ impl ProjectBrowser {
     Ok(Tab::new(target, Arc::clone(&running.cdp), session, state))
   }
 
-  /// Sends `method` with `params` to `tab`, one of `run`'s tabs; refused for any other tab.
+  /// Sends `method` with `params` to `tab`, one of `run`'s tabs; refused for any other tab, the person's included.
   pub async fn call(&self, run: RunId, tab: &TargetId, method: &str, params: Value) -> Result<Value, BrowserError> {
     Ok(self.tab(run, Some(tab)).await?.call(method, params).await?)
   }
@@ -186,7 +185,7 @@ impl ProjectBrowser {
     }
   }
 
-  /// Closes `tab`, one of `run`'s tabs, which is no longer the run's.
+  /// Closes `tab`, one of `run`'s tabs, which is no longer the run's; the window no longer shows it.
   pub async fn close_tab(&self, run: RunId, tab: &TargetId) -> Result<(), BrowserError> {
     let cdp = {
       let running = self.running.lock().await;
@@ -198,6 +197,8 @@ impl ProjectBrowser {
       tabs.forget(tab);
       Arc::clone(&running.cdp)
     };
+    self.window.forget(tab);
+    self.window.changed();
     Ok(cdp.close_target(tab).await?)
   }
 
@@ -219,6 +220,26 @@ impl ProjectBrowser {
     Ok(listed)
   }
 
+  /// Tells the window what an agent of `run` did on `tab`, one of the run's tabs, for *Agent is acting*: the browser
+  /// tools report each action so, not CDP.
+  pub async fn agent_acted(&self, run: RunId, tab: &TargetId, action: AgentAction) -> Result<(), BrowserError> {
+    let owned = self
+      .running
+      .lock()
+      .await
+      .as_ref()
+      .is_some_and(|running| running.tabs.lock().session(run, tab).is_some());
+    if !owned {
+      return Err(BrowserError::NotRunsTab(tab.clone()));
+    }
+    self.window.send(BrowserEvent::AgentActed {
+      run,
+      tab: BrowserTabId::new(tab.as_str()),
+      action,
+    });
+    Ok(())
+  }
+
   /// What the running browser's connection still listens to, so that closed tabs are seen to leave nothing behind;
   /// nothing while it does not run.
   pub async fn listening(&self) -> Listening {
@@ -238,8 +259,12 @@ impl ProjectBrowser {
       };
       (Arc::clone(&running.cdp), running.tabs.lock().take(run))
     };
+    if !ended.is_empty() {
+      self.window.changed();
+    }
     let mut failed = None;
     for target in ended {
+      self.window.forget(&target);
       if let Err(error) = cdp.close_target(&target).await {
         failed.get_or_insert(error);
       }
@@ -257,6 +282,17 @@ impl ProjectBrowser {
     });
   }
 
+  /// The latest frame of the tab the window shows, once there is one: a newer frame replaced every frame before it
+  /// that was not taken yet.
+  pub async fn next_frame(&self) -> ScreencastFrame {
+    self.window.next_frame().await
+  }
+
+  /// How many frames a newer one replaced before they were taken.
+  pub fn dropped_frames(&self) -> u64 {
+    self.window.dropped_frames()
+  }
+
   /// Stops the browser, as the runner exits: `Browser.close`, so it saves its profile, then its process with
   /// everything it started once it has not exited within a grace period. Its tabs are gone; a later use starts it
   /// again.
@@ -267,27 +303,33 @@ impl ProjectBrowser {
     }
   }
 
-  /// The running browser's connection and tabs, starting it first when it does not run: its first use, or it ended on
-  /// its own, with its tabs.
-  async fn connection(&self) -> Result<(Arc<Cdp>, Arc<Mutex<RunTabs>>), BrowserError> {
+  /// The running browser, started first when it does not run: its first use, or it ended on its own, with its tabs.
+  /// One that starts so is headless.
+  async fn connection(&self) -> Result<MappedMutexGuard<'_, Running>, BrowserError> {
     let mut running = self.running.lock().await;
-    if let Some(current) = running.as_ref()
-      && current.is_alive()
-    {
-      return Ok((Arc::clone(&current.cdp), Arc::clone(&current.tabs)));
-    }
-    if running.take().is_some() {
+    if running.as_ref().is_some_and(|current| !current.is_alive()) {
       tracing::warn!("the project's browser ended on its own; starting it again");
+      running.take();
     }
-    let profile = self.profile.clone()?;
+    if running.is_none() {
+      let profile = self.profile.clone()?;
+      let found = self.program().await?;
+      *running = Some(Running::start(&found, &profile, BrowserMode::Headless, &self.window).await?);
+    }
+    Ok(MutexGuard::map(running, |running| {
+      running.as_mut().expect("a browser runs: it was kept or started above")
+    }))
+  }
+
+  /// The program the browser starts with: the one chosen in Settings › Browser, else the one installed
+  /// ([`chosen_or_found`]).
+  async fn program(&self) -> Result<BrowserProgram, BrowserError> {
     let settings = self.settings.clone();
-    let found = tokio::task::spawn_blocking(move || chosen_or_found(settings.as_deref()))
-      .await
-      .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??;
-    let started = Running::start(&found, &profile).await?;
-    let handles = (Arc::clone(&started.cdp), Arc::clone(&started.tabs));
-    *running = Some(started);
-    Ok(handles)
+    Ok(
+      tokio::task::spawn_blocking(move || chosen_or_found(settings.as_deref()))
+        .await
+        .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??,
+    )
   }
 }
 

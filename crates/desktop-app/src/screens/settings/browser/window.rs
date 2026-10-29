@@ -96,7 +96,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   ctx.future_action(move |opens: bool| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.set_opens_browser_window(opens))
+      background::run(move || workspace.set_browser_window_opens_itself(opens))
         .await?
         .map_err(|error| {
           tracing::error!(%error, "Open the Browser window when an agent starts browsing was not saved");

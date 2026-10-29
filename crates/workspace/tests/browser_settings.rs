@@ -156,7 +156,10 @@ fn browser_program_chosen_that_is_gone_is_unusable_and_not_passed_over() {
 #[test]
 fn browser_window_switch_is_kept() {
   let fixture = Fixture::new();
-  fixture.workspace.set_opens_browser_window(false).expect("turned off");
+  fixture
+    .workspace
+    .set_browser_window_opens_itself(false)
+    .expect("turned off");
 
   assert!(!fixture.workspace.browser_settings().expect("read").opens_window);
 }

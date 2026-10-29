@@ -1,17 +1,22 @@
-//! A started browser: its process, its one CDP connection and its runs' tabs; how it starts, loads a page and stops.
+//! A started browser: its process, its one CDP connection and its tabs, the runs' and the person's; how it starts,
+//! opens a tab, loads a page and stops.
 
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
 use orchester_exec::browser::{self as program, BrowserProgram, DevToolsActivePort};
+use orchester_ipc::browser::{BrowserMode, TabOwner};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
-use tokio::{sync::mpsc, time::Instant};
+use tokio::{task::JoinHandle, time::Instant};
 
 use super::{
   BrowserError,
-  cdp::{self, Cdp, CdpError, CdpEvent, SessionId, TargetId},
+  cdp::{self, Cdp, CdpError, SessionId, TargetId},
+  log,
   process::BrowserProcess,
-  tabs::RunTabs,
+  tab::TabState,
+  tabs::Tabs,
+  window::{self, Window},
 };
 use crate::supervisor::ProcessExit;
 
@@ -30,13 +35,30 @@ const EXIT_GRACE: Duration = Duration::from_secs(5);
 pub(super) struct Running {
   process: BrowserProcess,
   pub(super) cdp: Arc<Cdp>,
-  pub(super) tabs: Arc<Mutex<RunTabs>>,
+  pub(super) tabs: Arc<Mutex<Tabs>>,
+  window: Arc<Window>,
+  /// Sends the window the browser's state while it runs ([`window::publish`]).
+  _publisher: Publisher,
+}
+
+/// Ends the publisher of a browser's state with the browser.
+struct Publisher(JoinHandle<()>);
+
+impl Drop for Publisher {
+  fn drop(&mut self) {
+    self.0.abort();
+  }
 }
 
 impl Running {
-  /// Starts `found` headless on `profile` and connects to it. A browser that does not get as far as the connection is
-  /// ended.
-  pub(super) async fn start(found: &BrowserProgram, profile: &Path) -> Result<Self, BrowserError> {
+  /// Starts `found` on `profile`, headless or in a window of its own as `mode` says, and connects to it. A browser
+  /// that does not get as far as the connection is ended.
+  pub(super) async fn start(
+    found: &BrowserProgram,
+    profile: &Path,
+    mode: BrowserMode,
+    window: &Arc<Window>,
+  ) -> Result<Self, BrowserError> {
     fs::create_dir_all(profile).map_err(|error| {
       BrowserError::Start(format!(
         "the profile folder {} cannot be made: {error}",
@@ -45,23 +67,96 @@ impl Running {
     })?;
     DevToolsActivePort::remove(profile)
       .map_err(|error| BrowserError::Start(format!("an earlier browser's debugging port file stays: {error}")))?;
-    let process = BrowserProcess::start(&program::headless(found, profile)?)?;
-    tracing::info!(browser = found.name(), "the project's browser started");
+    let command = match mode {
+      BrowserMode::Headless => program::headless(found, profile)?,
+      BrowserMode::Headed => program::headed(found, profile)?,
+    };
+    let process = BrowserProcess::start(&command)?;
+    tracing::info!(browser = found.name(), ?mode, "the project's browser started");
     let port = devtools_port(profile, &process).await?;
     let cdp = Arc::new(Cdp::connect(&port.websocket_url()).await?);
-    let tabs = Arc::new(Mutex::new(RunTabs::new(&cdp)));
-    let destroyed = cdp.subscribe(None);
+    let tabs = Arc::new(Mutex::new(Tabs::new(&cdp)));
+    let targets = cdp.subscribe(None);
     cdp
       .call(None, "Target.setDiscoverTargets", json!({ "discover": true }))
       .await?;
-    tokio::spawn(forget_closed(destroyed, Arc::clone(&tabs)));
     block(&cdp).await?;
-    Ok(Self { process, cdp, tabs })
+    let generation = window.started();
+    tokio::spawn(window::follow_targets(
+      targets,
+      Arc::clone(&tabs),
+      Arc::clone(window),
+      generation,
+    ));
+    let publisher = Publisher(tokio::spawn(window::publish(
+      Arc::clone(&cdp),
+      Arc::clone(&tabs),
+      Arc::clone(window),
+      mode,
+    )));
+    window.changed();
+    Ok(Self {
+      process,
+      cdp,
+      tabs,
+      window: Arc::clone(window),
+      _publisher: publisher,
+    })
   }
 
   /// Whether the browser still runs and its connection is open.
   pub(super) fn is_alive(&self) -> bool {
     self.process.exit().is_none() && !self.cdp.is_closed()
+  }
+
+  /// Opens a blank tab of `owner`'s and attaches to it; its events are followed for the window from the start, and a
+  /// run's tab's console messages, requests and dialogs are recorded for its tools ([`log::follow`]). A tab that could
+  /// not be attached is closed again.
+  pub(super) async fn open(&self, owner: TabOwner) -> Result<(TargetId, SessionId), BrowserError> {
+    let target = self.cdp.create_tab("about:blank").await?;
+    let session = match self.cdp.attach(&target).await {
+      Ok(session) => session,
+      Err(error) => {
+        if let Err(closing) = self.cdp.close_target(&target).await {
+          tracing::warn!(%closing, "a tab that could not be attached was not closed");
+        }
+        return Err(error.into());
+      }
+    };
+    let state = Arc::new(TabState::default());
+    let window_follower = tokio::spawn(window::follow_tab(
+      Arc::clone(&self.cdp),
+      window::Followed {
+        target: target.clone(),
+        session: session.clone(),
+        owner,
+      },
+      self.cdp.subscribe(Some(session.clone())),
+      Arc::clone(&self.tabs),
+      Arc::clone(&self.window),
+    ));
+    {
+      let mut tabs = self.tabs.lock();
+      if matches!(owner, TabOwner::Run { .. }) {
+        tokio::spawn(log::follow(
+          self.cdp.subscribe(Some(session.clone())),
+          Arc::downgrade(&self.cdp),
+          session.clone(),
+          Arc::clone(&state),
+          tabs.follower(),
+        ));
+      }
+      // The tab is its owner's from the moment it is attached: a failure below leaves it to them.
+      tabs.add(owner, (target.clone(), session.clone()), state, window_follower);
+    }
+    self.window.changed();
+    self.cdp.call(Some(&session), "Page.enable", json!({})).await?;
+    if matches!(owner, TabOwner::Run { .. }) {
+      for domain in ["Runtime.enable", "Network.enable", "Log.enable"] {
+        self.cdp.call(Some(&session), domain, json!({})).await?;
+      }
+    }
+    Ok((target, session))
   }
 
   pub(super) async fn stop(self) {
@@ -74,7 +169,7 @@ impl Running {
       Ok(_) | Err(CdpError::Closed) => {}
       Err(error) => tracing::warn!(%error, "the browser did not close when asked"),
     }
-    drop(self.cdp);
+    drop((self._publisher, self.cdp));
     match self.process.end(EXIT_GRACE).await {
       ProcessExit::Exited { .. } => tracing::info!("the project's browser stopped"),
       exit => tracing::warn!(?exit, "the project's browser was ended"),
@@ -153,16 +248,5 @@ async fn devtools_port(profile: &Path, process: &BrowserProcess) -> Result<DevTo
       )));
     }
     tokio::time::sleep(PORT_POLL).await;
-  }
-}
-
-/// Forgets each tab the browser reports closed, whoever closed it, until the connection ends.
-async fn forget_closed(mut events: mpsc::UnboundedReceiver<CdpEvent>, tabs: Arc<Mutex<RunTabs>>) {
-  while let Some(event) = events.recv().await {
-    if event.method == "Target.targetDestroyed"
-      && let Some(target) = event.params.get("targetId").and_then(Value::as_str)
-    {
-      tabs.lock().forget(&TargetId::from(target));
-    }
   }
 }

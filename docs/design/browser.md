@@ -2,10 +2,12 @@
 
 Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
 port and keep-running decisions (11, 12) the same day, and that the Browser window opens when an agent starts
-browsing by default (open question 2). P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding
-and starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second
-(ORC-359: the `browser_*` tools offered to steps through the runner's relay); the profile's Browser row (ORC-368) and
-Settings › Browser (ORC-369) are built too. The window is not yet.
+browsing by default (open question 2); decisions 13 to 15 (binary frames, the window opening by itself, focus) with
+ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and starting the browser,
+the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359: the `browser_*`
+tools offered to steps through the runner's relay); the profile's Browser row (ORC-368), Settings › Browser (ORC-369)
+and the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state) are
+built too. The window itself is not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -59,6 +61,15 @@ time.
     runner closes it (`Browser.close`, then its process group) as it exits. Known gap on macOS, as for agents
     (`AGENTS.md`, rule 0): a runner killed with SIGKILL, or one that aborts, leaves the browser running; the next start
     on that profile then fails while the old browser holds it, and says so.
+13. **Screencast frames travel as a binary IPC message** (the person, ORC-378): a frame's JPEG bytes follow a small
+    JSON head in a frame of their own kind in `orchester-ipc`, not base64 in JSON. Both ends, both platforms (the
+    named pipe on Windows, the Unix socket on macOS), within the frame limit (16 MiB) and under the protocol version
+    the IPC already checks (`PROTOCOL_VERSION` 33).
+14. **The window opens by itself when an agent starts browsing, on by default** (the person, ORC-378). Settings ›
+    Browser has the switch *Open the Browser window when an agent starts browsing* (ORC-369 draws it); the setting is
+    stored with the application's settings and is on until a person turns it off.
+15. **A window that opens by itself takes focus; no lurq change** (the person, ORC-378). lurq has no "open without
+    activating", and the window opening on an agent's first tab is what the setting asks for.
 
 Decision 3's *one browser profile per project* is the person's too (2026-10-29): the project's runs share its
 sign-ins, and the window's project switcher relies on it.
@@ -170,13 +181,15 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   `msedge.exe`, `chrome.exe` (Chromium's under a folder named so) or `brave.exe`; on macOS the program of Google
   Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
   is refused under the row with the reason, and nothing changes. The choice is an application setting
-  (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser; a chosen
-  program that is gone later is unavailable with that reason, never passed over for the one installed.
+  (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser, headless or
+  in a window of its own; a chosen program that is gone later is unavailable with that reason, never passed over for
+  the one installed.
 - None found: the section says so with what was looked for and where, how to fix it and *Look again*; the *Browser*
   window will say the same, and every browser tool answers `browser_unavailable` with that reason (no silent gap,
   `AGENTS.md` rule 0). The section also shows the folder of the browser profiles with Copy, and the switch *Open the
-  Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29), an application setting.
-  Until the window is built, the switch keeps the choice only, as the note under it says.
+  Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29; decision 14), the
+  application setting `app_settings.browser_window_opens_itself` the window's rule reads. Until the window is built,
+  the switch keeps the choice only, as the note under it says.
 
 ### Starting it and connecting
 
@@ -226,8 +239,10 @@ chrome `Window/Browser` `lfxcu` (title bar `Rc27N`, project switcher `u4BK9L`, t
 A secondary lurq window (`WindowOpener::open_with`, window name `browser`), one for the whole app. It opens from the
 run's Summary line *Browser · 2 tabs · localhost:5173, docs.rs › Show* (`10 · Run · Browser line` `RGeKO`) and
 from the status bar item *Browser 3 tabs* of the main window, which is there while the project's browser has tabs; both
-switch the window to that project and tab. It also opens without taking focus when an agent starts browsing, unless
-the person turned that off (Settings › Browser, on by default: the person, 2026-10-29).
+switch the window to that project and tab. It also opens by itself, showing that project, when an agent of a run
+opens the run's first tab, unless the person turned that off in Settings › Browser (on by default: the person,
+2026-10-29; decision 14); a window that opens so takes focus, as lurq opens windows (decision 15). Once open, it does
+not jump to another project by itself.
 
 ### Projects
 
@@ -276,7 +291,9 @@ the person turned that off (Settings › Browser, on by default: the person, 202
 - **The agent acting** (`02 · Agent is acting` `UKAkY`): a line under the toolbar says what the agent did last
   (*Builder is acting in this tab · typed 8 in Max attempts*), and a ring with the agent's name marks the element it
   acted on. Orchester draws both from the runner's report of the action (element box, tool, short summary), not
-  CDP. There is no take-over control: the person's input in the tab makes the agent wait
+  CDP: each browser tool call that opens a page, goes through its history or acts on it reports what it did once
+  carried out, with the element's accessible name and its box as the page has them then; the reading tools and
+  `browser_close` do not. There is no take-over control: the person's input in the tab makes the agent wait
   (`02b · You use the tab` `k7xvx`: *You're using this tab · Builder waits until 10 s after your last input*).
 - **Empty** (`06 · Empty` `eCCuU`): no tabs; the address line is focused (*Type an address*) and a card says when
   agents' tabs appear. **Not found** (`07 · Browser not found` `YEv2c`): the reason, *Open Settings › Browser*,
@@ -290,10 +307,17 @@ the person turned that off (Settings › Browser, on by default: the person, 202
 - **The person's input.** lurq's pointer, wheel, keyboard, text input and IME events become
   `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText` and `Input.imeSetComposition`, with
   coordinates in the page's CSS pixels.
-- **IPC.** New `orchester-ipc` requests (show tab, stop showing, input, window size) and events (frame, tabs changed,
-  load state, agent action with its element box, agent waiting, dialog, file chooser). A frame is one event with its
-  JPEG bytes; at 30 frames a second of a full-size page that is about 3 MB/s, well inside the channel and its 16 MiB
-  frame limit. Base64 in the JSON frame adds a third; a binary frame kind is an open question.
+- **IPC** (protocol 33, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+  viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
+  option, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its
+  tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent started browsing; an agent
+  acted, with its element box; a dialog opened or closed; a `<select>` list opened). A frame is one event with its JPEG
+  bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a full-size page that is
+  about 3 MB/s, well inside the channel and its 16 MiB frame limit. Only the latest frame waits in the runner, so
+  frames are dropped rather than queued, and the app decodes one at a time per project, keeping only the latest that
+  waits. The desktop subscribes once a runner attached; `orchester_workspace::browser::BrowserWindow` holds what the
+  window shows, `Runners::browser` sends its requests. Not yet: the agent waiting for the person's input, the file
+  chooser.
 
 ### What frames do not show, and what Orchester draws instead
 
@@ -352,12 +376,20 @@ the person turned that off (Settings › Browser, on by default: the person, 202
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
    - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
      described under "Permissions and policy" above.
-   - **P4b.** Done (ORC-369): Settings › Browser, with the program chosen there started by the runner. Tests:
-     `cargo test -p orchester-app --test settings_browser browser_`, `cargo test -p orchester-workspace --test
-     browser_settings`, `cargo test -p orchester-store --test browser_settings`, the chosen program in
-     `cargo test -p orchester-exec --test browser browser_` and `orchester-runner --test browser browser_`. QA:
-     the seed's scenarios `browser` (found), `browser-not-found` and `browser-chosen` (another program chosen),
-     whose browsers the QA app looks for in `browsers/` beside its data only.
+   - **P4b.** Done (ORC-369): Settings › Browser, with the program chosen there started by the runner, and its
+     switch stored as decision 14's setting. Tests: `cargo test -p orchester-app --test settings_browser browser_`,
+     `cargo test -p orchester-workspace --test browser_settings`, `cargo test -p orchester-store --test
+     browser_settings`, the chosen program in `cargo test -p orchester-exec --test browser browser_` and
+     `orchester-runner --test browser browser_`. QA: the seed's scenarios `browser` (found), `browser-not-found` and
+     `browser-chosen` (another program chosen), whose browsers the QA app looks for in `browsers/` beside its data
+     only.
+   - **P4c.** Done (ORC-378): the window's plumbing, no window yet. The IPC (`cargo test -p orchester-ipc --test
+     browser`), the runner's screencast with backpressure, the person's input, navigation and own tabs, dialogs,
+     `<select>` lists and the headed restart (`cargo test -p orchester-runner --features test-agent --test browser
+     browser_`), the stored setting of decision 14 (`cargo test -p orchester-store --test app_db browser_window`), and
+     the window's state with its frames decoded to RGBA and the auto-open rule (`cargo test -p orchester-workspace
+     --features test-support --test browser_window browser_window_`).
+   - **P4d.** The *Browser* window itself, on that state.
 
 ## Not in scope
 
@@ -371,11 +403,9 @@ the person turned that off (Settings › Browser, on by default: the person, 202
 
 Decided by the person on 2026-10-29: one browser profile per project (decision 3), read-only steps get the browser
 (decision 10), `browser_eval` is offered as a tool whose every call asks (decision 9), CDP over a port and not a pipe
-(decision 11), the browser keeps running until the runner exits, with no idle stop (decision 12), and the Browser
-window opens when an agent starts browsing by default (formerly open question 2; the person turns it off in Settings ›
-Browser).
+(decision 11), and the browser keeps running until the runner exits, with no idle stop (decision 12). Decided with
+ORC-378: screencast frames as a binary IPC message (decision 13), the window opening by itself when an agent starts
+browsing, on by default (decision 14, the person's decision of 2026-10-29; turned off in Settings › Browser), and
+such a window taking focus, with no lurq change (decision 15).
 
-1. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
-2. **Opening the window when an agent starts browsing**: decided, on by default (see above).
-3. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
-   in lurq (a lurq change, `app-vs-lurq-scope`).
+None open.

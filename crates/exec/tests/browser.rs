@@ -6,7 +6,8 @@
 use std::{fs, path::PathBuf};
 
 use orchester_exec::browser::{
-  BROWSER_UNAVAILABLE, BrowserUnavailable, DevToolsActivePort, first_installed, headless, registry_default_value,
+  BROWSER_UNAVAILABLE, BrowserUnavailable, DevToolsActivePort, first_installed, headed, headless,
+  registry_default_value,
 };
 
 fn program_in(folder: &std::path::Path, name: &str) -> PathBuf {
@@ -81,6 +82,21 @@ fn browser_headless_command_runs_on_the_profile_with_a_free_debugging_port() {
   let profile_arg = format!("--user-data-dir={}", profile.display());
   assert!(args.contains(&profile_arg), "{args:?}");
   assert_eq!(args.last().map(String::as_str), Some("about:blank"));
+}
+
+/// *Open in a browser window* starts the same browser on the same profile, only without `--headless`.
+#[test]
+fn browser_headed_command_is_the_headless_one_without_headless() {
+  let folder = tempfile::tempdir().expect("temporary folder");
+  let program = first_installed([("Google Chrome", program_in(folder.path(), "chrome"))], "here").expect("installed");
+  let profile = folder.path().join("browser").join("project");
+  let headless = headless(&program, &profile).expect("a Unicode profile folder");
+  let headed = headed(&program, &profile).expect("a Unicode profile folder");
+
+  assert_eq!(headed.program(), program.path());
+  let expected: Vec<&String> = headless.args().iter().filter(|arg| *arg != "--headless=new").collect();
+  assert_eq!(headed.args().iter().collect::<Vec<_>>(), expected);
+  assert!(!headed.args().iter().any(|arg| arg.starts_with("--headless")));
 }
 
 #[test]

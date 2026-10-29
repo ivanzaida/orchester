@@ -154,26 +154,33 @@ fn listed(folders: &[PathBuf]) -> String {
 /// on a free port of the loopback interface, which it writes into [`DEVTOOLS_ACTIVE_PORT`]; it opens on a blank page.
 /// Refused for a folder whose path is not Unicode, which the browser's arguments could not name exactly.
 pub fn headless(program: &BrowserProgram, profile: &Path) -> Result<Command, BrowserUnavailable> {
+  command(program, profile, Some("--headless=new"))
+}
+
+/// [`headless`] without `--headless`: the browser shows its own window on the desktop, for what the *Browser* window's
+/// frames cannot do (*Open in a browser window*, `docs/design/browser.md`, decision 7).
+pub fn headed(program: &BrowserProgram, profile: &Path) -> Result<Command, BrowserUnavailable> {
+  command(program, profile, None)
+}
+
+fn command(program: &BrowserProgram, profile: &Path, headless: Option<&str>) -> Result<Command, BrowserUnavailable> {
   let folder = profile.to_str().ok_or_else(|| {
     BrowserUnavailable::new(format!(
       "the browser profile folder {} is not a Unicode path",
       profile.display()
     ))
   })?;
-  Ok(Command::new(
-    program.path(),
-    [
-      "--headless=new".to_owned(),
-      format!("--user-data-dir={folder}"),
-      "--remote-debugging-port=0".to_owned(),
-      "--no-first-run".to_owned(),
-      "--no-default-browser-check".to_owned(),
-      "--disable-extensions".to_owned(),
-      "--disable-sync".to_owned(),
-      "--mute-audio".to_owned(),
-      "about:blank".to_owned(),
-    ],
-  ))
+  let arguments = headless.map(str::to_owned).into_iter().chain([
+    format!("--user-data-dir={folder}"),
+    "--remote-debugging-port=0".to_owned(),
+    "--no-first-run".to_owned(),
+    "--no-default-browser-check".to_owned(),
+    "--disable-extensions".to_owned(),
+    "--disable-sync".to_owned(),
+    "--mute-audio".to_owned(),
+    "about:blank".to_owned(),
+  ]);
+  Ok(Command::new(program.path(), arguments))
 }
 
 /// Where a started browser listens for its DevTools Protocol connection, as it wrote it into its profile folder.

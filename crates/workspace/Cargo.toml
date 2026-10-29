@@ -21,6 +21,9 @@ devtools-inspect = ["dep:lurq"]
 [dependencies]
 # Local wall-clock time of status bar events and the local day of the daily project budget.
 chrono.workspace = true
+# Decodes the *Browser* window's screencast frames from JPEG to RGBA (`browser::RgbaFrame`), with zune-jpeg; image and
+# its JPEG decoder are already built for lurq's clipboard, so it adds no crate.
+image = { workspace = true, features = ["jpeg"] }
 # Shared servers: the HTTP client of the server's API (`sharing`).
 orchester-api = { workspace = true, features = ["client", "identity"] }
 orchester-core.workspace = true

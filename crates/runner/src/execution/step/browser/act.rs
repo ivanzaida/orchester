@@ -126,6 +126,20 @@ pub(super) async fn centre(tab: &Tab, element: &ElementRef) -> Result<(f64, f64)
   tab
     .call("DOM.scrollIntoViewIfNeeded", json!({ "backendNodeId": node }))
     .await?;
+  let quad = quad(tab, node).await?.ok_or_else(|| {
+    ToolError::Page(format!(
+      "{} has no box on the page: it is hidden or has no size",
+      element.as_str()
+    ))
+  })?;
+  let x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4.0;
+  let y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4.0;
+  Ok((x, y))
+}
+
+/// The corners of the first box of `node` (a `backendNodeId`) in the visible page, `x` and `y` of each in turn; `None`
+/// when it has none: it is hidden or has no size.
+pub(super) async fn quad(tab: &Tab, node: i64) -> Result<Option<[f64; 8]>, ToolError> {
   let quads = tab
     .call("DOM.getContentQuads", json!({ "backendNodeId": node }))
     .await?;
@@ -133,15 +147,7 @@ pub(super) async fn centre(tab: &Tab, element: &ElementRef) -> Result<(f64, f64)
     .as_array()
     .map(|points| points.iter().filter_map(Value::as_f64).collect())
     .unwrap_or_default();
-  if quad.len() != 8 {
-    return Err(ToolError::Page(format!(
-      "{} has no box on the page: it is hidden or has no size",
-      element.as_str()
-    )));
-  }
-  let x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4.0;
-  let y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4.0;
-  Ok((x, y))
+  Ok(quad.try_into().ok())
 }
 
 async fn mouse(tab: &Tab, event: Value) -> Result<(), ToolError> {

@@ -1,6 +1,7 @@
 //! The pages the browser tests open, served on loopback until the test ends: `/form`, a guest book whose Save button
 //! writes a status, logs to the console, fetches `/api/save` and shows an alert; `/later`, a page to go back from;
-//! `/api/save`, a small JSON answer; and any other `/<name>`, a page titled `Page <name>`.
+//! `/api/save`, a small JSON answer; the *Browser* window tests' `/window-form`, `/animated` and `/dialog`
+//! (`crate::window`); and any other `/<name>`, a page titled `Page <name>`.
 
 use tokio::{
   io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -55,6 +56,9 @@ async fn answer(stream: TcpStream) {
       "<!doctype html><html><head><title>Later</title></head><body><p>A later page.</p></body></html>".to_owned(),
     ),
     "api/save" => ("application/json", r#"{"saved":true}"#.to_owned()),
+    "window-form" => ("text/html", crate::window::FORM.to_owned()),
+    "animated" => ("text/html", crate::window::ANIMATED.to_owned()),
+    "dialog" => ("text/html", crate::window::DIALOG.to_owned()),
     _ => (
       "text/html",
       format!("<!doctype html><html><head><title>Page {name}</title></head><body>{name}</body></html>"),

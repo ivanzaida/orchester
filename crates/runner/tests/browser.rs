@@ -1,16 +1,17 @@
 //! The project's browser with the real Chrome, Edge, Brave or Chromium of this computer, on pages the test serves on
 //! loopback (`browser/site.rs`): it starts at the first use, opens a run's tab and reads it over CDP, keeps each run to
 //! its own tabs, closes a run's tabs when the run ends (and not while it is paused), keeps nothing of a closed tab and
-//! stops with the runner; the agents' browser tools through the relay (`browser/tools.rs`). Where no browser is found
-//! each test says so and checks
-//! nothing. Needs `git` for the scheduler's projects. Run with
-//! `cargo test -p orchester-runner --features test-agent --test browser browser_`.
+//! stops with the runner; the agents' browser tools through the relay (`browser/tools.rs`); the *Browser* window's
+//! side of it is in [`window`]. Where no browser is found each test says so and checks nothing. Needs `git` for the
+//! scheduler's projects. Run with `cargo test -p orchester-runner --features test-agent --test browser browser_`.
 
 mod browser {
   pub mod site;
   mod tools;
 }
 mod support;
+#[path = "browser/window.rs"]
+mod window;
 
 use std::{path::Path, time::Duration};
 
@@ -269,9 +270,10 @@ async fn browser_closed_tabs_leave_no_listener_or_log_behind() {
       .expect("opened");
   }
   let kept = browser.open_tab(other, &format!("{site}kept")).await.expect("opened");
-  // The runner's own receiver of the browser's events, and one per open tab.
+  // The runner's own receiver of the browser's events, and two per open run's tab: the window's follower and its
+  // log's.
   let open = |tabs| Listening {
-    receivers: 1 + tabs,
+    receivers: 1 + 2 * tabs,
     followed_logs: tabs,
   };
   listening(&browser, open(4)).await;
