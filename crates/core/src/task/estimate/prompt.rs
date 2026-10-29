@@ -1,6 +1,6 @@
 //! What the story-point estimator is told and how its answer is read, whichever connection it runs on (the
-//! reviewer's, `get_approval_settings`): the instructions, the message with the task and the project's merged tasks with
-//! their points and actual effort, and the strict JSON answer. The task and the examples are the person's and the
+//! reviewer's, `get_approval_settings`): the instructions, the message with the task and the project's merged tasks
+//! with their points and actual effort, and the strict JSON answer. The task and the examples are the person's and the
 //! agents' text: they reach the estimator JSON-encoded on one line between markers it cannot write, as the
 //! reviewer's data does.
 

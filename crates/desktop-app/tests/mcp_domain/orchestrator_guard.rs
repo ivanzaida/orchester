@@ -47,8 +47,7 @@ fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
     .workspace
     .set_orchestrator_allows(OrchestratorConsent::MergeRuns, true)
     .expect("the person turned it on");
-  db.save_allow_autopilot(AllowAutopilot::ON)
-    .expect("Autopilot allowed");
+  db.save_allow_autopilot(AllowAutopilot::ON).expect("Autopilot allowed");
   // The tools of a turn a run's end started by itself.
   let scope = ChatScope {
     on_its_own: true,

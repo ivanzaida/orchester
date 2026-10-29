@@ -166,7 +166,12 @@ fn project_settings_auto_mode_reviewer_needs_a_person_and_a_connection_and_refus
 #[test]
 fn project_settings_approval_mode_effective_allow_autopilot_is_turned_on_by_a_person_alone() {
   let (repo, db) = project();
-  assert!(!project_settings::load_in(repo.path()).expect("load").allow_autopilot.is_on());
+  assert!(
+    !project_settings::load_in(repo.path())
+      .expect("load")
+      .allow_autopilot
+      .is_on()
+  );
   assert_eq!(
     project_settings::save_allow_autopilot_in(repo.path(), true, Answerer::Automation)
       .expect_err("person only")
@@ -178,7 +183,12 @@ fn project_settings_approval_mode_effective_allow_autopilot_is_turned_on_by_a_pe
     project_settings::save_allow_autopilot_in(repo.path(), true, Answerer::Person).expect("a person"),
     AllowAutopilot::ON
   );
-  assert!(project_settings::load_in(repo.path()).expect("load").allow_autopilot.is_on());
+  assert!(
+    project_settings::load_in(repo.path())
+      .expect("load")
+      .allow_autopilot
+      .is_on()
+  );
   // Turning it off is anyone's.
   assert_eq!(
     project_settings::save_allow_autopilot_in(repo.path(), false, Answerer::Automation).expect("off"),

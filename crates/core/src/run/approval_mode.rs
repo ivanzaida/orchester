@@ -67,7 +67,7 @@ impl EffectiveMode {
   /// `switched_to_manual` or not.
   pub const fn of(profile: ApprovalMode, project: AllowAutopilot, switched_to_manual: bool) -> Self {
     match (profile, project.is_on(), switched_to_manual) {
-      (ApprovalMode::Manual, _, _) => Self::Manual(ManualBecause::Profile),
+      (ApprovalMode::Manual, ..) => Self::Manual(ManualBecause::Profile),
       (ApprovalMode::Autopilot, false, _) => Self::Manual(ManualBecause::Project),
       (ApprovalMode::Autopilot, true, true) => Self::Manual(ManualBecause::Run),
       (ApprovalMode::Autopilot, true, false) => Self::Autopilot,

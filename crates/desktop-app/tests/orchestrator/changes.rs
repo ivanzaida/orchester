@@ -395,7 +395,11 @@ fn orchestrator_starts_in_auto_mode_and_cancel_waits_for_the_person() {
     1,
   );
   let started = actions(&screen).remove(0);
-  assert_eq!(started.outcome, ActionOutcome::Done, "Autopilot allowed starts it at once");
+  assert_eq!(
+    started.outcome,
+    ActionOutcome::Done,
+    "Autopilot allowed starts it at once"
+  );
   assert!(started.auto_mode && started.started.is_some(), "{started:?}");
   assert_eq!(runs(&screen, &key), 1);
   let card = proposal_card(&screen);

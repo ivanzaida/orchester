@@ -13,10 +13,7 @@ const SWITCH: &str = "settings-allow-autopilot";
 const REFUSAL: &str = "settings-allow-autopilot-person-only";
 
 fn setting(repo: &std::path::Path) -> AllowAutopilot {
-  ProjectDb::open(repo)
-    .expect("db")
-    .allow_autopilot()
-    .expect("setting")
+  ProjectDb::open(repo).expect("db").allow_autopilot().expect("setting")
 }
 
 /// What a person lets automation do, in Settings: answer approvals and change agent permissions.
@@ -95,7 +92,11 @@ fn approval_mode_effective_switch_run_to_manual_is_taken_without_the_persons_swi
   );
   let run = served.ok("get_run", &arguments);
   assert_eq!(run["approval_mode"]["mode"], "manual", "{run}");
-  let id = switched["run"]["id"].as_str().expect("the run's id").parse().expect("a run id");
+  let id = switched["run"]["id"]
+    .as_str()
+    .expect("the run's id")
+    .parse()
+    .expect("a run id");
   assert!(
     ProjectDb::open(&seeded.repo)
       .expect("db")

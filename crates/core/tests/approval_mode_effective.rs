@@ -10,8 +10,8 @@ use orchester_core::{
     category::{CommandCategory, CommandScope},
   },
   run::{
-    AllowAutopilot, Answerer, ApprovalSubject, AutoAsk, AutoVerdict, AutopilotPersonOnly, EffectiveMode,
-    ManualBecause, PendingToolApproval, ToolReach, auto_approves, auto_verdict,
+    AllowAutopilot, Answerer, ApprovalSubject, AutoAsk, AutoVerdict, AutopilotPersonOnly, EffectiveMode, ManualBecause,
+    PendingToolApproval, ToolReach, auto_approves, auto_verdict,
   },
   time::Timestamp,
 };
@@ -68,8 +68,18 @@ fn approval_mode_effective_is_autopilot_only_when_profile_project_and_run_all_le
   let cases = [
     (Autopilot, allowed, false, EffectiveMode::Autopilot),
     (Autopilot, allowed, true, EffectiveMode::Manual(ManualBecause::Run)),
-    (Autopilot, disallowed, false, EffectiveMode::Manual(ManualBecause::Project)),
-    (Autopilot, disallowed, true, EffectiveMode::Manual(ManualBecause::Project)),
+    (
+      Autopilot,
+      disallowed,
+      false,
+      EffectiveMode::Manual(ManualBecause::Project),
+    ),
+    (
+      Autopilot,
+      disallowed,
+      true,
+      EffectiveMode::Manual(ManualBecause::Project),
+    ),
     (Manual, allowed, false, EffectiveMode::Manual(ManualBecause::Profile)),
     (Manual, allowed, true, EffectiveMode::Manual(ManualBecause::Profile)),
     (Manual, disallowed, false, EffectiveMode::Manual(ManualBecause::Profile)),
@@ -173,7 +183,10 @@ fn approval_mode_effective_manual_answers_nothing_itself_and_the_runs_own_choice
   for because in [ManualBecause::Profile, ManualBecause::Project, ManualBecause::Run] {
     assert!(!answered(&subject, None, EffectiveMode::Manual(because)), "{because:?}");
   }
-  assert!(!answered(&subject, Some(false), EffectiveMode::Autopilot), "the run's own Stop");
+  assert!(
+    !answered(&subject, Some(false), EffectiveMode::Autopilot),
+    "the run's own Stop"
+  );
   assert!(
     answered(&subject, Some(true), EffectiveMode::Manual(ManualBecause::Profile)),
     "Approve everything in this run"

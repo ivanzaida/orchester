@@ -123,7 +123,11 @@ fn approval_mode_effective_migration_keeps_the_reviewer_and_drops_the_old_settin
     .expect("auto mode");
   drop(raw);
   let db = ProjectDb::open(old.path()).expect("migrate");
-  let reviewer = db.auto_mode_settings().expect("read").reviewer.expect("the reviewer kept");
+  let reviewer = db
+    .auto_mode_settings()
+    .expect("read")
+    .reviewer
+    .expect("the reviewer kept");
   assert_eq!(reviewer.model.as_str(), "claude-sonnet-5-5");
   assert_eq!(reviewer.effort.as_deref(), Some("high"));
   drop(db);
