@@ -1,8 +1,9 @@
-//! A stand-in team server on loopback over plain HTTP, in the shapes of `orchester-api`: what it is (`GET /server`,
-//! not linked to Orchester Cloud, so a code needs no cloud identity), joining with a code (`POST /auth/code`) or a
-//! cloud identity (`POST /auth/cloud`), and the projects the person is a member of (`GET /projects`). It answers a
-//! wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a cloud
-//! identity, and it can stop answering.
+//! A stand-in team server on loopback over plain HTTP, in the shapes of `orchester-api`, for the tests and QA builds
+//! that join a team with no project open (the workspace's `startup_join`, the app's All projects): what it is
+//! (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud identity), joining with a code
+//! (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), and the projects the person is a member of
+//! (`GET /projects`). It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can
+//! have no place for a cloud identity, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -14,7 +15,7 @@ use std::{
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
-/// The server's name, as it gives it at `GET /server`.
+/// The server's name, as it gives it at `GET /server`, unless it is [`TeamServer::named`] otherwise.
 pub const NAME: &str = "Kontur team";
 /// The invite code that joins.
 pub const CODE: &str = "K7QM3XRD";
@@ -25,8 +26,9 @@ pub const USERNAME: &str = "bohdan";
 /// The device token every join issues.
 const TOKEN: &str = "orc_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-#[derive(Default)]
 struct State {
+  /// The name it gives at `GET /server`.
+  name: String,
   /// The projects `GET /projects` lists.
   projects: Vec<Value>,
   /// `POST /auth/cloud` answers `not_invited`.
@@ -46,10 +48,24 @@ pub struct TeamServer {
 }
 
 impl TeamServer {
+  /// The server named [`NAME`].
   pub fn start() -> Self {
+    Self::named(NAME)
+  }
+
+  /// The server named `name`, e.g. *Acme* as the design names the team.
+  pub fn named(name: &str) -> Self {
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("listen");
     let port = listener.local_addr().expect("address").port();
-    let state = Arc::new(Mutex::new(State::default()));
+    let state = Arc::new(Mutex::new(State {
+      name: name.to_owned(),
+      projects: Vec::new(),
+      not_invited: false,
+      later_expired: false,
+      down: false,
+      code_joins: Vec::new(),
+      cloud_joins: 0,
+    }));
     let serving = state.clone();
     thread::spawn(move || {
       for stream in listener.incoming().flatten() {
@@ -124,10 +140,13 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>) {
 fn route(path: &str, (headers, body): (&str, &str), state: &Mutex<State>) -> (&'static str, Value) {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
   match path {
-    "GET /api/v1/server" => (
-      "200 OK",
-      json!({"name": NAME, "api_version": 3, "needs_setup": false, "cloud": null, "version": "0.4.0"}),
-    ),
+    "GET /api/v1/server" => {
+      let name = state.lock().name.clone();
+      (
+        "200 OK",
+        json!({"name": name, "api_version": 3, "needs_setup": false, "cloud": null, "version": "0.4.0"}),
+      )
+    }
     "POST /api/v1/auth/code" => {
       let mut state = state.lock();
       state.code_joins.push(request.get("identity_token").is_some());

@@ -1,15 +1,19 @@
 //! Joining a team with no project open (`orchester_workspace::sharing::team_join`), as the start page and Settings ›
 //! Orchester do: the Cloud account's team servers and invites, a join that gives this computer its own device sign-in,
 //! a join by address and code with and without Cloud, the team's projects after joining, and the refusals in the
-//! workspace's words. Run with `cargo test -p orchester-workspace --test startup_join startup_join`.
+//! workspace's words; and the returning start's All projects ([`returning`]). Run with
+//! `cargo test -p orchester-workspace --test startup_join startup_join`.
 
+mod returning;
 mod support;
-mod team_server;
 
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::account_cloud::AccountCloud,
+  test_support::{
+    account_cloud::AccountCloud,
+    team_server::{CODE, LATER_CODE, NAME, TeamServer, USERNAME},
+  },
 };
 use orchester_workspace::{
   i18n::{FALLBACK_LOCALE, LOCALES},
@@ -21,7 +25,6 @@ use orchester_workspace::{
 };
 use serde_json::Value;
 use support::{Desk, closed_address};
-use team_server::{CODE, LATER_CODE, NAME, TeamServer, USERNAME};
 
 /// The team server's id at the stand-in cloud.
 const AUDIENCE: &str = "0191c7c0-0000-7000-8000-0000000005e1";

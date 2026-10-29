@@ -1,8 +1,10 @@
-//! The page of All projects (`Column` `k4fycz` in `S5HDKf`): the heading with *Open project folder…* and *Add
-//! project*, the *Projects* | *Usage* tabs, the error line of *Open project folder…* (`FV5pQ`), then the list
-//! with what removing means under it, the empty list (`d1oNx8`) or why the list cannot be read (`T46trR`).
-//! *Usage* is a page of its own (`rHA8G`): the heading and tabs pinned across the whole content panel, 40 from
-//! its sides, over every project's usage, which pins its toolbar and scrolls its sections.
+//! The page of All projects (`Column` `k4fycz` in `S5HDKf`; `P5z2w` in 09 `i5G19A`, `aPjYW` in 09b `dLOCJ`): the
+//! heading with *Join a team*, *Open shared project…*, *Open project folder…* and *Add project*, the *Projects* |
+//! *Usage* tabs, the error line of *Open project folder…* (`FV5pQ`), the team project offered (`ZyS3T`), then the
+//! list with what removing means under it and, with no team joined, how to see a team's projects (`b3WTlF`), the
+//! empty list (`d1oNx8`) or why the list cannot be read (`T46trR`). *Usage* is a page of its own (`rHA8G`): the
+//! heading and tabs pinned across the whole content panel, 40 from its sides, over every project's usage, which pins
+//! its toolbar and scrolls its sections.
 
 use std::sync::Arc;
 
@@ -15,7 +17,8 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::{messages::Message, project_list::ListedProject};
+use orchester_core::id::ServerId;
+use orchester_workspace::{messages::Message, project_list::ListedProject, sharing::Places};
 
 use super::{
   Ask,
@@ -24,7 +27,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::Route,
+  routes::{OrchesterView, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText, UsageSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -39,6 +42,14 @@ use crate::{
 /// The page's column (`k4fycz`).
 const COLUMN_WIDTH: f32 = 1120.0;
 
+/// What the heading's actions need: *Open project folder…*'s action, and the team servers joined (`None` until they
+/// are read).
+#[derive(Clone, Copy)]
+pub(super) struct Heading<'a> {
+  pub open: &'a OpenAction,
+  pub joined: Option<&'a [ServerId]>,
+}
+
 /// What the page shows under its tabs.
 pub(super) enum Body<'a> {
   /// The list cannot be read, and why.
@@ -47,28 +58,37 @@ pub(super) enum Body<'a> {
   Empty,
   List {
     rows: &'a [ListedProject],
+    /// Where each project is, once it is read.
+    places: Option<&'a Places>,
     ask: &'a Ask,
   },
   /// The *Usage* tab's page.
   Usage(Element),
 }
 
-/// The page with `body` under its tabs, and the invites notice between them while it shows something.
-pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>, notice: Option<Element>) -> Element {
-  let failure = folder::failure(ctx, open);
+/// The page with `body` under its tabs, and between them the invites notice and the team project offered while they
+/// show something.
+pub(super) fn page(
+  ctx: &mut Ctx,
+  heading: Heading<'_>,
+  body: Body<'_>,
+  (notice, offer): (Option<Element>, Option<Element>),
+) -> Element {
+  let failure = folder::failure(ctx, heading.open);
   let (state, content) = match body {
     Body::Failed(error) => ("failed", failed(ctx, error)),
-    Body::Empty => ("empty", empty(ctx, open)),
-    Body::List { rows, ask } => ("list", list(ctx, rows, ask)),
-    Body::Usage(usage) => return usage_page(ctx, open, failure, usage),
+    Body::Empty => ("empty", empty(ctx, heading.open)),
+    Body::List { rows, places, ask } => ("list", list(ctx, (rows, places), ask, heading.joined)),
+    Body::Usage(usage) => return usage_page(ctx, heading, failure, usage),
   };
   let column = Column::new()
     .width(Dimension::Px(COLUMN_WIDTH))
     .spacing(ProjectsSpacing::Page.role())
-    .child(heading(ctx, open))
+    .child(header(ctx, heading))
     .child(tabs(ctx, false))
     .with_children(notice)
     .with_children(failure.map(|failure| error_line(&failure)))
+    .with_children(offer)
     .child(content);
   let scrolled = Column::new()
     .width(Dimension::Pct(100.0))
@@ -86,7 +106,7 @@ pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>, notice: Opt
 
 /// The *Usage* tab (`yCCBS` in `rHA8G`): the heading and the tabs pinned at the top (`Top · pinned` `anSHC`:
 /// 28 over them, 40 at the sides, 18 between them), then `usage`, which pins its toolbar and scrolls.
-fn usage_page(ctx: &mut Ctx, open: &OpenAction, failure: Option<Arc<str>>, usage: Element) -> Element {
+fn usage_page(ctx: &mut Ctx, heading: Heading<'_>, failure: Option<Arc<str>>, usage: Element) -> Element {
   let top = Column::new()
     .id("all-projects-top")
     .width(Dimension::Pct(100.0))
@@ -97,7 +117,7 @@ fn usage_page(ctx: &mut Ctx, open: &OpenAction, failure: Option<Arc<str>>, usage
         .right(UsageSpacing::Page.role()),
     )
     .spacing(ExtraSpacing::SettingsHead.role())
-    .child(heading(ctx, open))
+    .child(header(ctx, heading))
     .child(tabs(ctx, true))
     .with_children(failure.map(|failure| error_line(&failure)));
   Column::new()
@@ -116,16 +136,17 @@ fn usage_page(ctx: &mut Ctx, open: &OpenAction, failure: Option<Arc<str>>, usage
     .into()
 }
 
-/// *All projects*, what it lists, and the actions at the end (`Header` `t1fIB4`).
-fn heading(ctx: &mut Ctx, open: &OpenAction) -> Row {
+/// *All projects*, what it lists, and the actions at the end, 12 apart (`Header` `e9eYnG` in 09 `i5G19A`).
+fn header(ctx: &mut Ctx, heading: Heading<'_>) -> Row {
   let navigation = Navigation::of(ctx);
+  let (join, shared) = team_actions(ctx, heading.joined);
   let add = ActionButton::new("all-projects-add", ButtonKind::Primary, ctx.t("projects.add"))
     .icon(Icon::Plus)
     .opens(navigation.to(Route::AddProject(None)));
   Row::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Lg)
-    .align_items(Alignment::End)
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
     .child(
       Column::new()
         .flex(1.0)
@@ -139,11 +160,40 @@ fn heading(ctx: &mut Ctx, open: &OpenAction) -> Row {
     )
     .child(
       Row::new()
-        .spacing(SpacingSize::Sm)
+        .spacing(SpacingSize::Md)
         .align_items(Alignment::Center)
-        .child(folder::button(ctx, open, "all-projects-open-folder"))
+        .child(join)
+        .child(shared)
+        .child(folder::button(ctx, heading.open, "all-projects-open-folder"))
         .child(add),
     )
+}
+
+/// *Join a team* (`JL7DS`) and *Open shared project…* (`sK0yA`). Joining is Settings › Orchester Cloud's, until the
+/// start page's own steps are built; a shared project opens from its team's page there, which lists the team's
+/// projects with *Link a checkout…*: the one team's when exactly one is joined, otherwise the teams to choose from.
+fn team_actions(ctx: &mut Ctx, joined: Option<&[ServerId]>) -> (ActionButton, ActionButton) {
+  let navigation = Navigation::of(ctx);
+  let teams = Route::Orchester(OrchesterView::default());
+  let shared = match joined {
+    Some([server]) => Route::Orchester(OrchesterView::server(*server)),
+    _ => teams.clone(),
+  };
+  let join = ActionButton::new(
+    "all-projects-join-team",
+    ButtonKind::Secondary,
+    ctx.t("projects.header.joinTeam"),
+  )
+  .icon(Icon::Users)
+  .opens(navigation.to(teams));
+  let shared = ActionButton::new(
+    "all-projects-open-shared",
+    ButtonKind::Secondary,
+    ctx.t("projects.header.openShared"),
+  )
+  .icon(Icon::FolderGit2)
+  .opens(navigation.to(shared));
+  (join, shared)
 }
 
 /// *Projects* | *Usage* (`Tabs` `Uecqx`), `usage` the current one or not.
@@ -189,13 +239,22 @@ fn error_line(failure: &str) -> Element {
     .into()
 }
 
-/// The column headings, the rows, and what removing means (`Project list` `FJsmz`, `Note · removal` `phKj1`).
-fn list(ctx: &mut Ctx, rows: &[ListedProject], ask: &Ask) -> Element {
+/// The column headings, the rows, what removing means (`Project list` `FJsmz`, `Note · removal` `phKj1`) and, once it
+/// is read that no team is joined, how to see a team's projects (`Hint` `b3WTlF` in 09b `dLOCJ`).
+fn list(
+  ctx: &mut Ctx,
+  (rows, places): (&[ListedProject], Option<&Places>),
+  ask: &Ask,
+  joined: Option<&[ServerId]>,
+) -> Element {
   let last = rows.len().saturating_sub(1);
   let shown: Vec<Element> = rows
     .iter()
     .enumerate()
-    .map(|(index, listed)| row::row(ctx, listed, ask, index == last))
+    .map(|(index, listed)| {
+      let place = places.and_then(|places| places.of(listed.project.id));
+      row::row(ctx, (listed, place), ask, index == last)
+    })
     .collect();
   let table = Column::new()
     .id("project-list")
@@ -205,6 +264,9 @@ fn list(ctx: &mut Ctx, rows: &[ListedProject], ask: &Ask) -> Element {
     .clip()
     .child(row::headings(ctx))
     .with_children(shown);
+  let hint = joined
+    .is_some_and(<[ServerId]>::is_empty)
+    .then(|| note("all-projects-team-hint", Icon::Info, &ctx.t("projects.header.teamHint")));
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ProjectsSpacing::Page.role())
@@ -214,6 +276,7 @@ fn list(ctx: &mut Ctx, rows: &[ListedProject], ask: &Ask) -> Element {
       Icon::Info,
       &ctx.t("projects.removal.note"),
     ))
+    .with_children(hint)
     .into()
 }
 

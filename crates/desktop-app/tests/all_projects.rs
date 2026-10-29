@@ -1,8 +1,12 @@
 //! All projects and the welcome of a first launch: what the list says of each project, opening one, removing one
-//! in place, the empty list, *Open project folder…* with a stand-in picker, and the *Usage* tab. Projects live in
-//! repositories of the test's own data folder.
+//! in place, the empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, and the person's teams
+//! ([`teams`]). Projects live in repositories of the test's own data folder.
+//!
+//! `cargo test -p orchester-app --test all_projects all_projects`
 
 mod support;
+#[path = "all_projects/teams.rs"]
+mod teams;
 
 use std::{fs, path::Path};
 
@@ -70,7 +74,7 @@ fn all_projects_lists_projects_with_where_they_stand() {
   all_projects(&mut window);
   assert!(window.tree.get_element_by_id("sidebar").is_none(), "no sidebar");
   let headings = window.text("project-list-headings");
-  assert_eq!(headings, "PROJECT STATUS ACTIVE RUNS NEEDS YOU LAST OPENED");
+  assert_eq!(headings, "PROJECT WHERE STATUS ACTIVE RUNS NEEDS YOU LAST OPENED");
   window.until("the counts to be read", |window| {
     window.text(&row(project_id())).contains(" 0 0 Just now")
   });
@@ -82,8 +86,8 @@ fn all_projects_lists_projects_with_where_they_stand() {
   assert!(missing.contains("Folder missing — — "), "never a made-up 0: {missing}");
   let unreadable = window.text(&row(old.project.id()));
   assert!(
-    unreadable.contains("The data was written by a newer version of Orchester. Can’t be opened"),
-    "{unreadable}"
+    unreadable.contains("The data was written by a newer version of Orchester. — Can’t be opened"),
+    "where it is cannot be read either: {unreadable}"
   );
   let note = window.text("all-projects-removal-note");
   assert!(

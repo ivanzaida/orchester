@@ -1,17 +1,21 @@
-//! All projects (`All projects · dark` `S5HDKf`, its states `kwpO2`) and the welcome of a first launch
-//! (`Welcome · first launch · dark` `UQZRa`): the projects the application database knows, each with where it
-//! stands, its runs and when it was last opened, read without starting a runner; or, while a session has no
-//! project yet, the welcome. The list and its folders show at once, the counts once each project's data is
-//! read (a dash until then), and the runners' states as they report. Selecting a project that opens shows its
-//! Overview; *Open project folder…* opens the project a folder keeps ([`folder`]); *Add project* opens Add
-//! project; the × asks in place whether to remove a project from the list ([`remove`]). The *Usage* tab
-//! shows every project's usage (`rHA8G`, `crate::screens::usage::everywhere`). The rules are
-//! `orchester_workspace::project_list`'s.
+//! All projects (`All projects · dark` `S5HDKf`, its states `kwpO2`; the returning start, 09 `i5G19A` with a team and
+//! 09b `dLOCJ` without) and the welcome of a first launch (`Welcome · first launch · dark` `UQZRa`): the projects the
+//! application database knows, each with where it is, where it stands, its runs and when it was last opened, read
+//! without starting a runner; or, while a session has no project yet, the welcome. The list and its folders show at
+//! once, the counts and where each project is once its data is read (a dash until then), and the runners' states as
+//! they report. Selecting a project that opens shows its Overview; *Open project folder…* opens the project a folder
+//! keeps ([`folder`]); *Add project* opens Add project; *Join a team* and *Open shared project…* open the teams in
+//! Settings › Orchester Cloud; a joined team's project with no checkout here is offered above the list until *Not
+//! now* ([`teams`], [`offer`]); the × asks in place whether to remove a project from the list ([`remove`]). The
+//! *Usage* tab shows every project's usage (`rHA8G`, `crate::screens::usage::everywhere`). The rules are
+//! `orchester_workspace::project_list`'s and `orchester_workspace::sharing`'s.
 
 mod folder;
+mod offer;
 mod page;
 mod remove;
 mod row;
+mod teams;
 mod welcome;
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -34,6 +38,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+use self::teams::Teams;
 use crate::{routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
 
 /// The element of the screen, as every screen has one (`screen-<name>`).
@@ -84,6 +89,8 @@ struct AllProjects {
   seen: Arc<Mutex<Seen>>,
   /// The answers of the invites notice, which outlive the notice.
   invites: InvitesNotice,
+  /// What was put off of the teams' projects offered.
+  teams: Teams,
 }
 
 impl Component for AllProjects {
@@ -99,6 +106,7 @@ impl Component for AllProjects {
       read: Arc::default(),
       seen: Arc::default(),
       invites: InvitesNotice::new(ctx),
+      teams: Teams::new(ctx),
     }
   }
 
@@ -125,17 +133,22 @@ impl Component for AllProjects {
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let invites = InvitesNotice::read(ctx);
+    let teams = self.teams.read(ctx, &services.servers, &entries);
+    let heading = page::Heading {
+      open: &open,
+      joined: teams.joined.as_ref().map(|joined| joined.servers.as_slice()),
+    };
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
     let tab = ctx.props::<Tab>().clone();
     match (listing.data, failed) {
       (_, Some(error)) => {
         let notice = self.invites.notice(ctx, &invites);
-        page::page(ctx, &open, page::Body::Failed(&error), notice)
+        page::page(ctx, heading, page::Body::Failed(&error), (notice, None))
       }
       (Some(Listing::Welcome), None) => welcome::welcome(ctx, &open),
       (Some(Listing::Projects(_)), None) if let Tab::Usage(query) = tab => {
         let usage = crate::screens::usage::everywhere(ctx, &query, work);
-        page::page(ctx, &open, page::Body::Usage(usage), None)
+        page::page(ctx, heading, page::Body::Usage(usage), (None, None))
       }
       (Some(Listing::Projects(_)), None) => {
         let rows = project_list::listed(&entries, &data, &services.runners);
@@ -144,11 +157,16 @@ impl Component for AllProjects {
         } else {
           page::Body::List {
             rows: &rows,
+            places: teams.joined.as_ref().map(|joined| &joined.places),
             ask: &self.ask,
           }
         };
         let notice = self.invites.notice(ctx, &invites);
-        page::page(ctx, &open, body, notice)
+        let offer = teams
+          .offer
+          .as_ref()
+          .map(|offered| offer::strip(ctx, offered, &teams.answer));
+        page::page(ctx, heading, body, (notice, offer))
       }
       // Reading the list takes a moment; the screen stays empty meanwhile.
       (None, None) => lurq::components::Column::new().id(screen_id()).into(),

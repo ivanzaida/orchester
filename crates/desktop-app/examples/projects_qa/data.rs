@@ -66,6 +66,11 @@ impl Folders {
     self.root.join("folders").join(name)
   }
 
+  /// The seeded Kontur's repository.
+  pub fn kontur(&self) -> PathBuf {
+    self.root.join("projects").join("kontur")
+  }
+
   /// The window's git settings (`GIT_CONFIG_GLOBAL`).
   pub fn git_settings(&self) -> PathBuf {
     self.root.join("gitconfig")
@@ -115,7 +120,7 @@ pub fn projects(folders: &Folders) -> Result<Seeded, Box<dyn Error>> {
   let now = Timestamp::now();
   let seeded = kontur::seed(&kontur::SeedRequest {
     data_dir: folders.app(),
-    repo: folders.root.join("projects").join("kontur"),
+    repo: folders.kontur(),
     scenario,
     fake_codex: None,
     now,

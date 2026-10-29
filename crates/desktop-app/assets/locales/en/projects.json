@@ -23,16 +23,32 @@
     "openFolder": "Open project folder…",
     "openFolderTitle": "Choose a folder with an Orchester project",
     "add": "Add project",
+    "header": {
+      "joinTeam": "Join a team",
+      "openShared": "Open shared project…",
+      "offer": {
+        "text": "{{team}} shares {{project}} with you. It isn't on this computer yet.",
+        "open": "Open {{project}}…",
+        "notNow": "Not now"
+      },
+      "teamHint": "Working with a team? Join it to see the projects it shares with you."
+    },
     "tabs": {
       "projects": "Projects",
       "usage": "Usage"
     },
     "columns": {
       "project": "PROJECT",
+      "where": "WHERE",
       "status": "STATUS",
       "activeRuns": "ACTIVE RUNS",
       "needsYou": "NEEDS YOU",
       "lastOpened": "LAST OPENED"
+    },
+    "where": {
+      "local": "Local",
+      "shared": "Shared · {{team}}",
+      "sharedUnknown": "Shared"
     },
     "status": {
       "notStarted": "Runner not started",
