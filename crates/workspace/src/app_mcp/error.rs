@@ -30,6 +30,8 @@ pub enum Missing {
   Account,
   PullRequest,
   Module,
+  Service,
+  Stack,
 }
 
 impl Missing {
@@ -52,6 +54,8 @@ impl Missing {
       Self::Account => "account_not_found",
       Self::PullRequest => "pull_request_not_found",
       Self::Module => "module_not_found",
+      Self::Service => "service_not_found",
+      Self::Stack => "stack_not_found",
     }
   }
 }

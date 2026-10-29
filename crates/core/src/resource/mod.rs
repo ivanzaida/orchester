@@ -1,10 +1,11 @@
-//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills and test suites
-//! share one lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
-//! versions, so publishing affects new runs only.
+//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills, test suites,
+//! services and stacks share one lifecycle — one editable draft and immutable published versions
+//! `v1..vN`. Runs pin versions, so publishing affects new runs only.
 //!
-//! Bodies reference other resources, connections and secrets by id only, except a test suite, which
-//! names its secrets and the services it needs ([`TestSuite`]). Which published version of a
-//! referenced resource is used is decided when a run snapshots its configuration, not inside a body.
+//! Bodies reference other resources, connections and secrets by id only, except a test suite, a
+//! service and a stack, which name their secrets and the services they need ([`TestSuite`],
+//! [`crate::service`]). Which published version of a referenced resource is used is decided when a
+//! run snapshots its configuration, not inside a body.
 
 mod agent_profile;
 mod instruction;
@@ -48,7 +49,10 @@ pub use self::{
   },
   variable::{UnknownVariable, Variable, VariableGroup, VariableType},
 };
-use crate::permission::AgentPermissions;
+use crate::{
+  permission::AgentPermissions,
+  service::{PublishNeeds, Service, Stack},
+};
 
 /// Content of a versioned resource kind, stored as JSON. Deserializing re-runs the domain
 /// constructors, so a stored body that breaks a rule is rejected instead of loaded.
@@ -68,6 +72,12 @@ pub trait ResourceBody: Serialize + DeserializeOwned + PartialEq {
   /// [`crate::store::ResourceStore::publish_draft`] implementation checks it before publishing.
   fn check_publishable(&self) -> Result<(), PublishError> {
     Ok(())
+  }
+
+  /// The needs a service or stack must find among the project's published services to be published; `None`
+  /// for every other kind.
+  fn publish_needs(&self) -> Option<PublishNeeds<'_>> {
+    None
   }
 }
 
@@ -163,4 +173,22 @@ impl ResourceBody for Skill {
 impl ResourceBody for TestSuite {
   const KIND: ResourceKind = ResourceKind::TestSuite;
   const SCHEMA: u32 = 1;
+}
+
+impl ResourceBody for Service {
+  const KIND: ResourceKind = ResourceKind::Service;
+  const SCHEMA: u32 = 1;
+
+  fn publish_needs(&self) -> Option<PublishNeeds<'_>> {
+    Some(PublishNeeds::Service(self))
+  }
+}
+
+impl ResourceBody for Stack {
+  const KIND: ResourceKind = ResourceKind::Stack;
+  const SCHEMA: u32 = 1;
+
+  fn publish_needs(&self) -> Option<PublishNeeds<'_>> {
+    Some(PublishNeeds::Stack(self))
+  }
 }
