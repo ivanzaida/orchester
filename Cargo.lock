@@ -2821,6 +2821,7 @@ name = "orchester-agent"
 version = "0.1.3"
 dependencies = [
  "image",
+ "orchester-api",
  "orchester-core",
  "orchester-exec",
  "parking_lot",

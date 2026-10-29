@@ -1,6 +1,6 @@
 //! The SSE parser: comments, multi-line data, CRLF and chunks split anywhere.
 
-use orchester_agent::sse::{MAX_EVENT, SseError, SseEvent, SseParser};
+use orchester_api::sse::{MAX_EVENT, SseError, SseEvent, SseParser};
 
 fn event(name: Option<&str>, data: &str) -> SseEvent {
   SseEvent {
@@ -10,7 +10,7 @@ fn event(name: Option<&str>, data: &str) -> SseEvent {
 }
 
 #[test]
-fn anthropic_sse_skips_comments_and_joins_data_lines() {
+fn sse_skips_comments_and_joins_data_lines() {
   let mut parser = SseParser::new();
   let stream = ": keep-alive\n\nevent: message_start\ndata: {\"a\":\ndata: 1}\n\n:ping\ndata: plain\n\n";
   let events = parser.feed(stream.as_bytes()).expect("events");
@@ -21,7 +21,7 @@ fn anthropic_sse_skips_comments_and_joins_data_lines() {
 }
 
 #[test]
-fn anthropic_sse_reads_events_split_at_every_byte() {
+fn sse_reads_events_split_at_every_byte() {
   let stream = "event: delta\r\ndata: {\"text\":\"héllo ✓\"}\r\n\r\nevent: stop\ndata:{}\n\n";
   let mut parser = SseParser::new();
   let mut events = Vec::new();
@@ -38,14 +38,14 @@ fn anthropic_sse_reads_events_split_at_every_byte() {
 }
 
 #[test]
-fn anthropic_sse_waits_for_the_empty_line() {
+fn sse_waits_for_the_empty_line() {
   let mut parser = SseParser::new();
   assert!(parser.feed(b"event: a\ndata: 1\n").expect("events").is_empty());
   assert_eq!(parser.feed(b"\n"), Ok(vec![event(Some("a"), "1")]));
 }
 
 #[test]
-fn anthropic_sse_reads_lone_cr_and_drops_a_bom() {
+fn sse_reads_lone_cr_and_drops_a_bom() {
   let stream = "\u{feff}event: a\rdata: 1\r\rdata: 2\r";
   let mut parser = SseParser::new();
   let mut events = Vec::new();
@@ -57,7 +57,7 @@ fn anthropic_sse_reads_lone_cr_and_drops_a_bom() {
 }
 
 #[test]
-fn anthropic_sse_refuses_an_endless_event() {
+fn sse_refuses_an_endless_event() {
   let mut parser = SseParser::new();
   let chunk = vec![b'x'; 1024 * 1024];
   let mut fed = 0;
