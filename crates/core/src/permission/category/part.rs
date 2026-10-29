@@ -103,6 +103,10 @@ pub struct CommandPart {
   pub(super) updates_cache: bool,
   /// Its program only reads under any option ([`super::only_reads`]), and every path it names was placed.
   pub(super) only_reads: bool,
+  /// Every path it names, reads or writes, links followed, from each folder it may run in ([`Self::touches`]).
+  pub(super) touches: Vec<PathBuf>,
+  /// A word of it that may name a path could not be placed, or it was not read into words at all.
+  pub(super) unplaced: bool,
 }
 
 impl CommandPart {
@@ -138,11 +142,17 @@ impl CommandPart {
       looks_up: judged.looks_up,
       updates_cache: judged.updates_cache,
       only_reads: false,
+      touches: Vec::new(),
+      unplaced: false,
     }
   }
 
+  /// A part Orchester did not read; nothing of what it touches is known until its words are placed.
   pub(super) fn unknown(words: Vec<String>) -> Self {
-    Self::new(words, None, &Judged::unknown())
+    Self {
+      unplaced: true,
+      ..Self::new(words, None, &Judged::unknown())
+    }
   }
 
   pub(super) fn at_least(&mut self, category: CommandCategory) {
@@ -176,6 +186,18 @@ impl CommandPart {
   /// Whether it names, reads or writes anything outside the worktree and its writable folders.
   pub const fn reaches_outside(&self) -> bool {
     !self.outside.is_empty()
+  }
+
+  /// Every path it names, reads or writes, the folder it runs in included, links followed as far as they exist, from
+  /// each folder it may run in: what the run's roots are compared with ([`crate::permission::roots`]).
+  pub fn touches(&self) -> &[PathBuf] {
+    &self.touches
+  }
+
+  /// Whether a word of it that may name a path could not be placed (`~bob`, a folder a `cd` left unknown), or it was
+  /// not read into words at all: what it touches cannot be told from [`Self::touches`] alone.
+  pub const fn unplaced(&self) -> bool {
+    self.unplaced
   }
 
   /// The program as the rules know it; `None` when it is written with a folder or was not read.

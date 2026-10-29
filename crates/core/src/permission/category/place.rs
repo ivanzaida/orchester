@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place, toolchains};
+use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place, toolchains, variables::is_assignment};
 
 /// The folders a part may run in; `None` when one cannot be told.
 pub(super) type Folders = Option<Vec<PathBuf>>;
@@ -82,7 +82,7 @@ impl<'a> Placing<'a> {
     if word.is_empty() || word == "-" {
       return;
     }
-    let Some(located) = self.locate(word) else {
+    let Some(located) = self.located(part, word) else {
       part.at_least(CommandCategory::Unknown);
       part.only_reads = false;
       return;
@@ -97,13 +97,48 @@ impl<'a> Placing<'a> {
     }
   }
 
+  /// [`Self::locate`], noting what `word` names among what `part` touches ([`CommandPart::touches`]).
+  fn located(&self, part: &mut CommandPart, word: &str) -> Option<Vec<(PathBuf, Place)>> {
+    let located = self.locate(word);
+    match &located {
+      Some(located) => part.touches.extend(located.iter().map(|(path, _)| path.clone())),
+      None => part.unplaced = true,
+    }
+    located
+  }
+
+  /// Notes what the words of a part Orchester did not read may name ([`CommandPart::touches`]): the folder it runs
+  /// in, and each word after its program as [`named`] reads it, an assignment's value for one before the program.
+  pub(super) fn touch_words(&self, part: &mut CommandPart) {
+    let words = part.words.clone();
+    self.touch(part, ".");
+    let mut program = false;
+    for word in &words {
+      if !program && let Some((_, value)) = word.split_once('=').filter(|_| is_assignment(word)) {
+        self.touch(part, value);
+      } else if !program {
+        program = true;
+      } else {
+        for named in named(std::slice::from_ref(word)) {
+          self.touch(part, named);
+        }
+      }
+    }
+  }
+
+  fn touch(&self, part: &mut CommandPart, word: &str) {
+    if !(word.is_empty() || word == "-" || is_null_device(word)) {
+      self.located(part, word);
+    }
+  }
+
   /// `target`, a file the part writes or, with `delete`, removes: a write outside the worktree is
   /// Outside write, a delete outside the temporary folder History / destructive.
   pub(super) fn write(&self, part: &mut CommandPart, target: &str, delete: bool) {
     if target == "-" || is_null_device(target) {
       return;
     }
-    let Some(located) = self.locate(target).filter(|_| !self.under_made(target)) else {
+    let Some(located) = self.located(part, target).filter(|_| !self.under_made(target)) else {
       part.at_least(CommandCategory::Unknown);
       return;
     };
@@ -213,7 +248,7 @@ impl<'a> Placing<'a> {
       return true;
     }
     let inside = self
-      .locate(word)
+      .located(part, word)
       .is_some_and(|located| located.iter().all(|(_, place)| *place == Place::Granted));
     if !inside {
       part.at_least(CommandCategory::Unknown);
