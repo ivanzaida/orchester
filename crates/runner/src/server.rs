@@ -44,7 +44,7 @@ type Incoming = Result<Option<Request>, IpcError>;
 
 /// Accepts the desktop's connection and serves it until the desktop disconnects, asks the
 /// runner to stop, or `shutdown` is signalled. Runs still executing then are interrupted: their
-/// agents are ended and the runs keep their last checkpoint.
+/// agents are ended and the runs keep their last checkpoint. The project's browser stops last.
 pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<(), IpcError> {
   // Made before the desktop can connect: it notes the groups queued before this runner started.
   let (notifications, outgoing) = mpsc::unbounded_channel();
@@ -86,6 +86,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
       }
     }
   });
+  let browser = Arc::clone(scheduler.browser());
   let result = Session {
     scheduler,
     replies,
@@ -99,6 +100,8 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
   .run()
   .await;
   reading.abort();
+  // The project's browser ends with the runner, its runs stopped; one never used was never started.
+  browser.stop().await;
   result
 }
 

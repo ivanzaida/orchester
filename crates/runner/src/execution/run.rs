@@ -177,10 +177,10 @@ impl RunTask {
     }
   }
 
-  /// Executes the run until it ends or settles. A failure of the runner itself (the database, a
-  /// rejected transition) ends the run's agents and interrupts the run where it was last recorded,
-  /// with the error in its activity ([`super::broken`]); it is logged, and its steps are not retried.
-  pub(super) async fn drive(mut self) {
+  /// Executes the run until it ends or settles; whether it ended (completed, cancelled or failed). A failure of the
+  /// runner itself (the database, a rejected transition) ends the run's agents and interrupts the run where it was
+  /// last recorded, with the error in its activity ([`super::broken`]); it is logged, and its steps are not retried.
+  pub(super) async fn drive(mut self) -> bool {
     let run = self.run.id();
     tracing::info!(%run, "run executing");
     let result = self.steps().await;
@@ -212,6 +212,7 @@ impl RunTask {
         }
       }
     }
+    self.run.status().is_terminal()
   }
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {

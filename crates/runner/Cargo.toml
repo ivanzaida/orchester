@@ -335,6 +335,10 @@ required-features = ["test-agent"]
 name = "db_busy_retry"
 required-features = ["test-agent"]
 
+[[test]]
+name = "browser"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -362,6 +366,9 @@ image.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# The project's browser over the DevTools Protocol (`browser::cdp`): its WebSocket, and the stream and sink of it.
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
