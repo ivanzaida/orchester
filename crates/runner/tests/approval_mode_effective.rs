@@ -1,7 +1,7 @@
 //! Approval modes end to end (`docs/design/approval-modes.md`) with `orchester-fake-claude` as the agent and the
-//! reviewer. Agent profiles have no approval mode yet, so every run is in Manual by its profile, whether or not its
-//! project allows Autopilot: a worktree command goes to the reviewer, and a network command the reviewer asks about
-//! waits for the person. Needs `git`. Run with
+//! reviewer: a Builder set to Autopilot in a project that allows it approves a worktree command itself, without the
+//! reviewer; in a project that does not, or with a Builder set to Manual, the run is in Manual and the reviewer
+//! takes it; a network command the reviewer asks about waits for the person. Needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test approval_mode_effective approval_mode_effective`.
 
 mod support;
@@ -9,7 +9,7 @@ mod support;
 use orchester_core::{
   connection::{AgentProvider, stream::AgentEvent},
   id::{IdempotencyKey, RunId},
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{AgentPermissions, ApprovalMode, CommandPermission, NetworkAccess, RepositoryAccess},
   run::{AllowAutopilot, Answerer, ApprovalAnswer, DecidedBy, EffectiveMode, ManualBecause, Run, review::Review},
   store::ActivityStore,
 };
@@ -20,15 +20,13 @@ use tokio::sync::mpsc;
 
 use self::support::{PATIENCE, Setup, TestProject, project, scheduler_with, wait_for, with_default_reviewer};
 
-/// A Claude Code Builder that asks before every command, in a project with the default reviewer.
-fn asking(brief: &'static str) -> TestProject {
+/// A Claude Code Builder in `mode` that asks before every command, in a project with the default reviewer.
+fn asking(brief: &'static str, mode: ApprovalMode) -> TestProject {
+  let mut permissions = AgentPermissions::new(RepositoryAccess::Write, CommandPermission::AskBefore, NetworkAccess::On);
+  permissions.set_approval_mode(mode);
   with_default_reviewer(project(&Setup {
     provider: AgentProvider::ClaudeCodeCli,
-    permissions: Some(AgentPermissions::new(
-      RepositoryAccess::Write,
-      CommandPermission::AskBefore,
-      NetworkAccess::On,
-    )),
+    permissions: Some(permissions),
     ..Setup::new(brief)
   }))
 }
@@ -104,23 +102,42 @@ impl Started {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn approval_mode_effective_manual_reviews_a_worktree_command_whether_or_not_autopilot_is_allowed() {
+async fn approval_mode_effective_manual_profile_reviews_a_worktree_command_whether_or_not_autopilot_is_allowed() {
   for allow in [AllowAutopilot::OFF, AllowAutopilot::ON] {
-    let mut started = Started::new(asking("Run `cargo test -p core`."), allow).await;
+    let mut started = Started::new(asking("Run `cargo test -p core`.", ApprovalMode::Manual), allow).await;
+    started.ended().await;
     assert_eq!(
       started.db().run_approval_mode(started.id).expect("mode"),
       EffectiveMode::Manual(ManualBecause::Profile),
       "{allow:?}"
     );
-    started.ended().await;
     assert_eq!(started.decided(), [DecidedBy::Reviewer], "{allow:?}");
   }
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn approval_mode_effective_autopilot_approves_a_worktree_command_only_where_the_project_allows_it() {
+  let brief = "Run `cargo test -p core`.";
+  let mut allowed = Started::new(asking(brief, ApprovalMode::Autopilot), AllowAutopilot::ON).await;
+  allowed.ended().await;
+  assert_eq!(
+    allowed.db().run_approval_mode(allowed.id).expect("mode"),
+    EffectiveMode::Autopilot
+  );
+  assert_eq!(allowed.decided(), [DecidedBy::AutoApproved], "no reviewer, no card");
+  let mut disallowed = Started::new(asking(brief, ApprovalMode::Autopilot), AllowAutopilot::OFF).await;
+  disallowed.ended().await;
+  assert_eq!(
+    disallowed.db().run_approval_mode(disallowed.id).expect("mode"),
+    EffectiveMode::Manual(ManualBecause::Project)
+  );
+  assert_eq!(disallowed.decided(), [DecidedBy::Reviewer]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn approval_mode_effective_manual_leaves_a_network_command_the_reviewer_asks_about_to_the_person() {
   let mut started = Started::new(
-    asking("Run `git fetch origin`. Reviewer asks."),
+    asking("Run `git fetch origin`. Reviewer asks.", ApprovalMode::Manual),
     AllowAutopilot::ON,
   )
   .await;
