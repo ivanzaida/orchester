@@ -1953,7 +1953,8 @@
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
       "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
       "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
-      "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version."
+      "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
+      "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

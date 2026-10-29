@@ -54,6 +54,7 @@ fn cached<B>(local_body: B, references: Vec<VersionReference>) -> CachedVersion<
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
     references,
     local_body,
+    waits_here: false,
   }
 }
 
@@ -277,6 +278,58 @@ fn shared_configuration_marks_a_resource_shared() {
 }
 
 #[test]
+fn shared_configuration_a_waiting_version_is_left_out_of_the_latest_until_it_is_used() {
+  let (_repo, mut db, _run, _execution) = started_run();
+  let id = db
+    .create_resource(
+      Slug::new("review-rules").expect("slug"),
+      name("Review rules"),
+      &instruction("Draft."),
+      at(10),
+    )
+    .expect("create")
+    .id();
+  let number = |value: u32| VersionNumber::new(std::num::NonZeroU32::new(value).expect("above zero"));
+  let version = |value: u32, text: &str, waits_here: bool| CachedVersion {
+    number: number(value),
+    waits_here,
+    ..cached(instruction(text), Vec::new())
+  };
+  let latest = |db: &ProjectDb| {
+    db.latest_version::<Instruction>(id)
+      .expect("latest")
+      .map(|version| version.number().get())
+  };
+  db.cache_shared_version(id, &version(1, "One.", false)).expect("v1");
+  db.cache_shared_version(id, &version(2, "Two.", true)).expect("v2");
+  assert_eq!(latest(&db), Some(1), "runs keep v1 while v2 waits");
+  assert_eq!(db.waiting_version(id).expect("waiting"), Some(number(2)));
+  assert!(
+    db.cached_version::<Instruction>(id, number(2))
+      .expect("read")
+      .expect("cached")
+      .waits_here
+  );
+  assert_eq!(
+    db.versions::<Instruction>(id).expect("versions").len(),
+    2,
+    "both are kept"
+  );
+  assert!(!db.use_shared_version(id, number(1)).expect("v1 did not wait"));
+
+  assert!(db.use_shared_version(id, number(2)).expect("used"));
+  assert_eq!(latest(&db), Some(2));
+  assert_eq!(db.waiting_version(id).expect("waiting"), None);
+  assert!(!db.use_shared_version(id, number(2)).expect("used already"));
+
+  // A later version that applies at once supersedes one that waited.
+  db.cache_shared_version(id, &version(3, "Three.", true)).expect("v3");
+  db.cache_shared_version(id, &version(4, "Four.", false)).expect("v4");
+  assert_eq!(latest(&db), Some(4));
+  assert_eq!(db.waiting_version(id).expect("waiting"), None);
+}
+
+#[test]
 fn shared_configuration_migration_runs_forward() {
   let (repo, db, _run, _execution) = started_run();
   let builder = db
@@ -289,9 +342,9 @@ fn shared_configuration_migration_runs_forward() {
     .expect("version");
   drop(db);
 
-  // Before shared configuration's migration, which ORC-346's request answers and the run's switch to Manual
-  // (ORC-353) follow.
-  let old = copied_at_version(&repo.path().join(".orchester").join("orchester.db"), current - 3);
+  // Before shared configuration's migration, which ORC-346's request answers, the run's switch to Manual (ORC-353)
+  // and ORC-387's waiting versions follow.
+  let old = copied_at_version(&repo.path().join(".orchester").join("orchester.db"), current - 4);
   let mut db = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(db.resource_sharing(builder).expect("local"), None);
   assert_eq!(

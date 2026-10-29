@@ -13,8 +13,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun, Rejection, Reply,
-  Request, RequestId, RunWork, SessionEnd, ShutdownMode, WorkState, WorkSummary,
+  AttachSession, Command, ErrorReports, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun,
+  Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, WorkState, WorkSummary,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -386,6 +386,41 @@ async fn frames_round_trip_a_connection_check() {
   drop(writer);
   assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
   assert_eq!(reader.read::<Event>().await.expect("read reply"), Some(reply));
+}
+
+/// Error reports turned on with the app's environment and release, and off, for a runner that runs (protocol 33);
+/// reports that name no release are refused.
+#[tokio::test]
+async fn frames_round_trip_error_reports_on_and_off() {
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let on = ErrorReports::new("production", "orchester@0.4.0").expect("both are text");
+  let requests: Vec<Request> = [Some(on), None]
+    .into_iter()
+    .enumerate()
+    .map(|(index, reports)| Request {
+      id: RequestId::new(index as u64 + 1),
+      command: Command::SetErrorReports { reports },
+    })
+    .collect();
+  let reply = Event::Reply {
+    id: RequestId::new(1),
+    reply: Reply::ErrorReportsSet,
+  };
+  for request in &requests {
+    writer.write(request).await.expect("write request");
+  }
+  writer.write(&reply).await.expect("write reply");
+  drop(writer);
+  for request in requests {
+    assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
+  }
+  assert_eq!(reader.read::<Event>().await.expect("read reply"), Some(reply));
+
+  let empty = r#"{"type":"set_error_reports","data":{"reports":{"environment":"qa","release":""}}}"#;
+  assert!(
+    serde_json::from_str::<Command>(empty).is_err(),
+    "no release is no reports"
+  );
 }
 
 /// Run again with what a person saw the run before leave, a worktree folder git forgot among it

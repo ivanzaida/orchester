@@ -17,6 +17,7 @@ mod publish;
 mod server;
 #[path = "../support/mod.rs"]
 mod support;
+mod widening;
 
 use std::{
   collections::HashMap,

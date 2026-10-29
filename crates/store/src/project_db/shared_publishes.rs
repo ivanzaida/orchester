@@ -161,6 +161,8 @@ impl ProjectDb {
       [version.to_string()],
     )?;
     let kept = super::shared_versions::keep_version(&transaction, resource, confirmed)?;
+    // A version published here never waits for *Use v<N> here*, and supersedes a teammate's that waits below it.
+    super::shared_versions::stop_waiting(&transaction, resource, confirmed.number)?;
     transaction.commit()?;
     Ok(kept)
   }
