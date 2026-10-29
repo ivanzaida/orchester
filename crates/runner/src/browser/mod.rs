@@ -59,6 +59,16 @@ pub enum BrowserError {
   StaleRef(String),
 }
 
+/// What a running browser's connection listens to ([`ProjectBrowser::listening`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Listening {
+  /// The receivers of its events still held: the runner's own of the browser's events, each open tab's log follower,
+  /// and any wait in progress.
+  pub receivers: usize,
+  /// The tabs whose console messages, requests and dialogs are still followed.
+  pub followed_logs: usize,
+}
+
 /// The project's browser, started at its first use.
 pub struct ProjectBrowser {
   profile: Result<PathBuf, BrowserUnavailable>,
@@ -99,14 +109,17 @@ impl ProjectBrowser {
       }
     };
     let state = Arc::new(TabState::default());
-    let events = cdp.subscribe(Some(session.clone()));
-    tokio::spawn(log::follow(
-      events,
-      Arc::downgrade(&cdp),
-      session.clone(),
-      Arc::clone(&state),
-    ));
-    tabs.lock().add(run, target.clone(), session.clone(), state);
+    {
+      let mut tabs = tabs.lock();
+      tokio::spawn(log::follow(
+        cdp.subscribe(Some(session.clone())),
+        Arc::downgrade(&cdp),
+        session.clone(),
+        Arc::clone(&state),
+        tabs.follower(),
+      ));
+      tabs.add(run, target.clone(), session.clone(), state);
+    }
     for domain in ["Runtime.enable", "Network.enable", "Log.enable"] {
       cdp.call(Some(&session), domain, json!({})).await?;
     }
@@ -186,6 +199,16 @@ impl ProjectBrowser {
     listed.retain(|target| own.contains(&target.id));
     listed.sort_by_key(|target| own.iter().position(|id| id == &target.id));
     Ok(listed)
+  }
+
+  /// What the running browser's connection still listens to, so that closed tabs are seen to leave nothing behind;
+  /// nothing while it does not run.
+  pub async fn listening(&self) -> Listening {
+    let running = self.running.lock().await;
+    running.as_ref().map_or_else(Listening::default, |running| Listening {
+      receivers: running.cdp.listeners(),
+      followed_logs: running.tabs.lock().followed(),
+    })
   }
 
   /// `run` ended: its tabs are no longer its and close. Every tab is tried; the first failure is returned.

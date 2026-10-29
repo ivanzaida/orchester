@@ -1,7 +1,8 @@
 //! The project's browser with the real Chrome, Edge, Brave or Chromium of this computer, on pages the test serves on
 //! loopback (`browser/site.rs`): it starts at the first use, opens a run's tab and reads it over CDP, keeps each run to
-//! its own tabs, closes a run's tabs when the run ends (and not while it is paused) and stops with the runner; the
-//! agents' browser tools through the relay (`browser/tools.rs`). Where no browser is found each test says so and checks
+//! its own tabs, closes a run's tabs when the run ends (and not while it is paused), keeps nothing of a closed tab and
+//! stops with the runner; the agents' browser tools through the relay (`browser/tools.rs`). Where no browser is found
+//! each test says so and checks
 //! nothing. Needs `git` for the scheduler's projects. Run with
 //! `cargo test -p orchester-runner --features test-agent --test browser browser_`.
 
@@ -19,7 +20,7 @@ use orchester_core::{
 };
 use orchester_exec::browser::DevToolsActivePort;
 use orchester_runner::browser::{
-  BrowserError, ProjectBrowser,
+  BrowserError, Listening, ProjectBrowser,
   cdp::{Cdp, TargetId},
   profile_of,
 };
@@ -181,6 +182,62 @@ async fn browser_opens_a_runs_tab_reads_it_and_closes_the_runs_tabs_at_its_end()
     browser.tabs(other).await.expect("tabs").is_empty(),
     "a stopped browser has no tabs"
   );
+}
+
+/// Waits until `browser` listens to what `expected` says, its log followers ending on their own tasks.
+async fn listening(browser: &ProjectBrowser, expected: Listening) {
+  let settled = tokio::time::timeout(PATIENCE, async {
+    while browser.listening().await != expected {
+      tokio::time::sleep(POLL).await;
+    }
+  })
+  .await;
+  assert!(settled.is_ok(), "{:?}, not {expected:?}", browser.listening().await);
+}
+
+/// A tab that closes, by `browser_close`, at its run's end or by the browser itself, leaves nothing behind: its log's
+/// follower ends and its events are no longer listened to, though the browser runs on.
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_closed_tabs_leave_no_listener_or_log_behind() {
+  if !browser_installed() {
+    return;
+  }
+  let profile = tempfile::tempdir().expect("temporary folder");
+  let browser = ProjectBrowser::new(profile.path().to_path_buf());
+  let site = pages().await;
+  let (ending, other) = (RunId::generate(), RunId::generate());
+  let closing = browser
+    .open_tab(other, &format!("{site}closing"))
+    .await
+    .expect("opened");
+  for page in ["first", "second"] {
+    browser
+      .open_tab(ending, &format!("{site}{page}"))
+      .await
+      .expect("opened");
+  }
+  let kept = browser.open_tab(other, &format!("{site}kept")).await.expect("opened");
+  // The runner's own receiver of the browser's events, and one per open tab.
+  let open = |tabs| Listening {
+    receivers: 1 + tabs,
+    followed_logs: tabs,
+  };
+  listening(&browser, open(4)).await;
+
+  browser.close_tab(other, &closing).await.expect("closed");
+  listening(&browser, open(3)).await;
+  browser.close_run_tabs(ending).await.expect("closed");
+  listening(&browser, open(1)).await;
+  let observer = observer(profile.path()).await;
+  observer
+    .close_target(&kept)
+    .await
+    .expect("closed by another connection");
+  listening(&browser, open(0)).await;
+  assert!(browser.tabs(other).await.expect("tabs").is_empty());
+
+  browser.stop().await;
+  assert_eq!(browser.listening().await, Listening::default());
 }
 
 #[tokio::test(flavor = "multi_thread")]

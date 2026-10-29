@@ -52,7 +52,7 @@ impl Running {
     tracing::info!(browser = found.name(), "the project's browser started");
     let port = devtools_port(profile, &process).await?;
     let cdp = Arc::new(Cdp::connect(&port.websocket_url()).await?);
-    let tabs = Arc::new(Mutex::new(RunTabs::default()));
+    let tabs = Arc::new(Mutex::new(RunTabs::new(&cdp)));
     let destroyed = cdp.subscribe(None);
     cdp
       .call(None, "Target.setDiscoverTargets", json!({ "discover": true }))

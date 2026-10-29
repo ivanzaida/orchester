@@ -3,7 +3,7 @@
 //! whose profile has *Browser* on reads, types, clicks, waits, scrolls, takes screenshots under `.tmp/browser/`, reads
 //! the console and the network, goes back in history and closes its tab, on its own tabs only; `browser_eval` asks
 //! even on a local page, an allowed site opens without asking and any other site asks. A step without *Browser* is
-//! offered none of them.
+//! offered none of them, and no screenshot is saved through a link out of the worktree.
 
 use std::{fs, path::Path};
 
@@ -22,7 +22,7 @@ use orchester_store::ProjectDb;
 use super::site;
 use crate::{
   browser_installed,
-  support::{Setup, TestProject, pending_approval, project, reported, scheduler, wait_for},
+  support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, wait_for},
 };
 
 /// A read-only profile on `provider` whose *Browser* is `access`, allowing `docs.example.invalid`.
@@ -295,6 +295,36 @@ fn went_back_and_followed_the_policy(root: &Path, id: RunId, calls: &[String]) {
   assert!(
     !tabs.iter().any(|line| line.contains("Page other")),
     "never another run's tab: {tabs:?}"
+  );
+}
+
+/// A `.tmp` in the repository that links out of the worktree: each screenshot is refused, and nothing is made where the
+/// link leads.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_screenshots_are_refused_where_a_link_leads_their_folder_out_of_the_worktree() {
+  if !browser_installed() {
+    return;
+  }
+  let project = browsing(AgentProvider::CodexCli, BrowserAccess::On);
+  let root = project.repo.path();
+  let outside = tempfile::tempdir().expect("temporary folder");
+  std::os::unix::fs::symlink(outside.path(), root.join(".tmp")).expect("a link");
+  git(root, &["add", "--force", ".tmp"]);
+  git(root, &["commit", "--quiet", "-m", "a scratch folder elsewhere"]);
+  let id = run_script(&project).await;
+
+  let calls = calls(root, id);
+  for index in 0..3 {
+    assert_eq!(
+      call_of(&calls, "browser_screenshot", index),
+      "browser_screenshot error: the screenshot was not saved in .tmp/browser/ of the worktree: a link leads it out \
+       of the worktree",
+    );
+  }
+  assert!(
+    !outside.path().join("browser").exists(),
+    "nothing is made out of the worktree"
   );
 }
 

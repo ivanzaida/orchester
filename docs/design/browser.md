@@ -328,9 +328,12 @@ person asked for that (setting); by default it opens only when the person opens 
    - **P2b.** Done (ORC-359): the `browser_*` tools on the runs' tabs (`orchester-runner`'s
      `execution/step/browser/`), offered through the runner's relay to Claude Code and Codex steps with *Browser* and
      network on, read-only steps included, each call decided by the policy and asked about by the runner; downloads and
-     the camera, microphone, location and notification permissions are denied when the browser starts. Tests: the
-     tools end to end through the fake CLIs (`cargo test -p orchester-runner --features test-agent --test browser
-     browser_tools`), the offering and the approvals in `cargo test -p orchester-core --test browser browser_`. Not
+     the camera, microphone, location and notification permissions are denied when the browser starts. A tab that
+     closes (`browser_close`, its run's end, or the browser) is no longer listened to and its log's follower ends, so
+     the browser that runs as long as the runner keeps nothing of closed tabs; a screenshot's folder is checked to stay
+     in the worktree before any part of it is made. Tests: the tools end to end through the fake CLIs (`cargo test -p
+     orchester-runner --features test-agent --test browser browser_tools`), closed tabs in `browser_closed_tabs_`, the
+     offering and the approvals in `cargo test -p orchester-core --test browser browser_`. Not
      yet: the native agent, which gets none of Orchester's relay tools today; the agent's actions waiting while the
      person drives a tab (P4, with the window); the approval card's reason when *Approve similar* is unavailable for
      `browser_eval` still reads as for a check (P4).

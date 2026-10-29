@@ -4,7 +4,7 @@
 
 use std::{
   fs,
-  io::Write as _,
+  io::{ErrorKind, Write as _},
   path::{Path, PathBuf},
   time::Duration,
 };
@@ -101,16 +101,10 @@ async fn element_clip(tab: &Tab, element: &ElementRef) -> Result<Value, ToolErro
 /// `/`. Refused when a link leads the folder out of the worktree.
 fn save(worktree: &Path, png: &[u8]) -> Result<String, ToolError> {
   let failed = |error: std::io::Error| ToolError::Save(error.to_string());
-  let folder: PathBuf = FOLDER.iter().fold(worktree.to_path_buf(), |path, part| path.join(part));
-  fs::create_dir_all(&folder).map_err(failed)?;
-  let inside = fs::canonicalize(&folder).map_err(failed)?;
-  if !inside.starts_with(fs::canonicalize(worktree).map_err(failed)?) {
-    return Err(ToolError::Save("a link leads it out of the worktree".to_owned()));
-  }
   let mut file = tempfile::Builder::new()
     .prefix("screenshot-")
     .suffix(".png")
-    .tempfile_in(&folder)
+    .tempfile_in(folder_in(worktree)?)
     .map_err(failed)?;
   file.write_all(png).map_err(failed)?;
   let (_, path) = file.keep().map_err(|error| failed(error.error))?;
@@ -119,4 +113,27 @@ fn save(worktree: &Path, png: &[u8]) -> Result<String, ToolError> {
     .and_then(|name| name.to_str())
     .ok_or_else(|| ToolError::Save("the file's name is not Unicode".to_owned()))?;
   Ok(format!("{}/{name}", FOLDER.join("/")))
+}
+
+/// The canonical path of `.tmp/browser/` in `worktree`, made one part at a time where it is missing. Each part is
+/// checked to stay inside the worktree before anything is made in it, and the screenshot goes into the checked path:
+/// a link that leads out of the worktree is refused, never followed. Making a folder never follows a link in its
+/// place.
+fn folder_in(worktree: &Path) -> Result<PathBuf, ToolError> {
+  let failed = |error: std::io::Error| ToolError::Save(error.to_string());
+  let root = fs::canonicalize(worktree).map_err(failed)?;
+  let mut folder = root.clone();
+  for part in FOLDER {
+    let next = folder.join(part);
+    match fs::create_dir(&next) {
+      Ok(()) => {}
+      Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+      Err(error) => return Err(failed(error)),
+    }
+    folder = fs::canonicalize(&next).map_err(failed)?;
+    if !folder.starts_with(&root) {
+      return Err(ToolError::Save("a link leads it out of the worktree".to_owned()));
+    }
+  }
+  Ok(folder)
 }

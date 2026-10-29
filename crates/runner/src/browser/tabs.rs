@@ -1,21 +1,29 @@
 //! Which run each tab belongs to (`docs/design/browser.md`, decision 6): a tab a run opens is that run's, the run
 //! reaches only its own, and they close when it ends. Each run has a current tab, which a call that names none acts
 //! on: the one it opened or loaded a page in last, else the last it opened that is still open.
+//!
+//! A tab that is no longer a run's, closed or taken from an ended run, is no longer listened to: its log's follower
+//! ([`super::log::follow`]) ends with it, so a browser that runs as long as the runner keeps nothing of closed tabs.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+  collections::HashMap,
+  sync::{Arc, Weak},
+};
 
 use orchester_core::id::RunId;
 
 use super::{
-  cdp::{SessionId, TargetId},
+  cdp::{Cdp, SessionId, TargetId},
   tab::TabState,
 };
 
 /// The runs' open tabs, in the order they opened.
-#[derive(Default)]
 pub(super) struct RunTabs {
+  cdp: Weak<Cdp>,
   tabs: Vec<RunTab>,
   current: HashMap<RunId, TargetId>,
+  /// Held by each tab's log follower while it runs.
+  followers: Arc<()>,
 }
 
 struct RunTab {
@@ -23,9 +31,29 @@ struct RunTab {
   run: RunId,
   session: SessionId,
   state: Arc<TabState>,
+  cdp: Weak<Cdp>,
+}
+
+impl Drop for RunTab {
+  /// The tab's events are no longer listened to, so its log's follower ends.
+  fn drop(&mut self) {
+    if let Some(cdp) = self.cdp.upgrade() {
+      cdp.unsubscribe(&self.session);
+    }
+  }
 }
 
 impl RunTabs {
+  /// The tabs opened on the connection `cdp`.
+  pub(super) fn new(cdp: &Arc<Cdp>) -> Self {
+    Self {
+      cdp: Arc::downgrade(cdp),
+      tabs: Vec::new(),
+      current: HashMap::new(),
+      followers: Arc::new(()),
+    }
+  }
+
   /// Adds `run`'s new tab `target`, which becomes its current one.
   pub(super) fn add(&mut self, run: RunId, target: TargetId, session: SessionId, state: Arc<TabState>) {
     self.current.insert(run, target.clone());
@@ -34,7 +62,18 @@ impl RunTabs {
       run,
       session,
       state,
+      cdp: Weak::clone(&self.cdp),
     });
+  }
+
+  /// What a tab's log follower holds while it runs, for [`RunTabs::followed`].
+  pub(super) fn follower(&self) -> Arc<()> {
+    Arc::clone(&self.followers)
+  }
+
+  /// How many tabs' logs are still followed.
+  pub(super) fn followed(&self) -> usize {
+    Arc::strong_count(&self.followers) - 1
   }
 
   /// The session and state of `target` when it is one of `run`'s tabs.

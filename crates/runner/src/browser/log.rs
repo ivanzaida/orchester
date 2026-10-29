@@ -152,13 +152,16 @@ impl TabLog {
 }
 
 /// Records what the tab of `session` reports in `state`'s log, and dismisses each JavaScript dialog it opens, which
-/// would block the page, until the connection ends.
+/// would block the page, until the tab is no longer listened to: it closed or is no longer a run's
+/// (`RunTabs`), or the connection ended. `follower` is held until then.
 pub(super) async fn follow(
   mut events: mpsc::UnboundedReceiver<CdpEvent>,
   cdp: Weak<Cdp>,
   session: SessionId,
   state: Arc<TabState>,
+  follower: Arc<()>,
 ) {
+  let _follower = follower;
   while let Some(event) = events.recv().await {
     state.log.lock().record(&event);
     if event.method != "Page.javascriptDialogOpening" {
