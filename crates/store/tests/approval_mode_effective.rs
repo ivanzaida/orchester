@@ -6,11 +6,17 @@ mod support;
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::run::{AllowAutopilot, EffectiveMode, ManualBecause};
+use orchester_core::{
+  run::{AllowAutopilot, Answerer, EffectiveMode, ManualBecause, ManualSwitch},
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 use rusqlite::{Connection, params};
 
 use self::support::{copied_at_version, started_run};
+
+/// The migrations from approval modes on: auto mode's settings read once, then when and by whom a run was switched.
+const APPROVAL_MODE_MIGRATIONS: u32 = 2;
 
 fn database(repo: &Path) -> PathBuf {
   repo.join(".orchester").join("orchester.db")
@@ -42,22 +48,33 @@ fn approval_mode_effective_project_does_not_allow_autopilot_until_saved() {
 fn approval_mode_effective_run_switch_to_manual_is_kept_for_good() {
   let (_repo, mut db, run, _) = started_run();
   assert!(!db.run_switched_to_manual(run.id()).expect("read"));
-  db.switch_run_to_manual(run.id()).expect("switch");
+  assert_eq!(db.run_manual_switch(run.id()).expect("read"), None);
+  let first = ManualSwitch {
+    at: Timestamp::from_unix_millis(1_800_000_000_000),
+    by: Answerer::Person,
+  };
+  db.switch_run_to_manual(run.id(), first).expect("switch");
   assert!(db.run_switched_to_manual(run.id()).expect("read"));
-  // Switching again changes nothing; allowing Autopilot does not switch the run back.
-  db.switch_run_to_manual(run.id()).expect("switch again");
+  assert_eq!(db.run_manual_switch(run.id()).expect("read"), Some(first));
+  // Switching again changes nothing, not even who switched it; allowing Autopilot does not switch the run back.
+  let again = ManualSwitch {
+    at: Timestamp::from_unix_millis(1_800_000_060_000),
+    by: Answerer::Automation,
+  };
+  db.switch_run_to_manual(run.id(), again).expect("switch again");
   db.save_allow_autopilot(AllowAutopilot::ON).expect("save");
   assert!(db.run_switched_to_manual(run.id()).expect("read"));
+  assert_eq!(db.run_manual_switch(run.id()).expect("read"), Some(first));
 }
 
 /// A project of the schema before approval modes with auto mode's settings as given (`new_runs`, *approve
 /// everything in each run*) and its run's auto mode `run_auto_mode`, opened, and so migrated: whether it allows
-/// Autopilot and whether its run was switched to Manual.
+/// Autopilot and whether its run was switched to Manual. A run switched so has no time or author of its switch.
 fn migrated((new_runs, everything): (bool, bool), run_auto_mode: bool) -> (bool, bool) {
   let (current, db, run, _) = started_run();
   drop(db);
   let latest = schema_version(&database(current.path()));
-  let old = copied_at_version(&database(current.path()), latest - 1);
+  let old = copied_at_version(&database(current.path()), latest - APPROVAL_MODE_MIGRATIONS);
   let raw = Connection::open(database(old.path())).expect("open the old database");
   raw
     .execute(
@@ -82,6 +99,7 @@ fn migrated((new_runs, everything): (bool, bool), run_auto_mode: bool) -> (bool,
   drop(raw);
   let db = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(schema_version(&database(old.path())), latest);
+  assert_eq!(db.run_manual_switch(run.id()).expect("read"), None);
   (
     db.allow_autopilot().expect("read").is_on(),
     db.run_switched_to_manual(run.id()).expect("read"),
@@ -112,7 +130,7 @@ fn approval_mode_effective_migration_keeps_the_reviewer_and_drops_the_old_settin
   let (current, db, ..) = started_run();
   drop(db);
   let latest = schema_version(&database(current.path()));
-  let old = copied_at_version(&database(current.path()), latest - 1);
+  let old = copied_at_version(&database(current.path()), latest - APPROVAL_MODE_MIGRATIONS);
   let raw = Connection::open(database(old.path())).expect("open the old database");
   raw
     .execute(

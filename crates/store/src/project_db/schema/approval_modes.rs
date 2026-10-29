@@ -19,3 +19,10 @@ ALTER TABLE runs DROP COLUMN auto_mode;
 ALTER TABLE project_auto_mode DROP COLUMN new_runs;
 DROP TABLE project_approve_everything;
 ";
+
+/// When a run was switched to Manual for itself and who switched it, for its Conversation's row; a run the migration
+/// above switched has neither.
+pub(super) const SWITCH_MIGRATION: &str = r"
+ALTER TABLE runs ADD COLUMN manual_at INTEGER;
+ALTER TABLE runs ADD COLUMN manual_by TEXT CHECK (manual_by IN ('person', 'automation'));
+";

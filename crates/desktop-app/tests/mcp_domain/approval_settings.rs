@@ -3,7 +3,7 @@
 //! `allow_autopilot` are refused, and turning it off is always taken; `switch_run_to_manual` is a narrowing, taken
 //! without any of the person's switches, and a run never goes back. Filter: `approval_mode_effective`.
 use orchester_app::routes::{ProjectPage, ProjectSettingsTab, Route};
-use orchester_core::run::AllowAutopilot;
+use orchester_core::run::{AllowAutopilot, Answerer};
 use orchester_store::ProjectDb;
 use serde_json::json;
 
@@ -97,12 +97,15 @@ fn approval_mode_effective_switch_run_to_manual_is_taken_without_the_persons_swi
     .expect("the run's id")
     .parse()
     .expect("a run id");
-  assert!(
-    ProjectDb::open(&seeded.repo)
-      .expect("db")
-      .run_switched_to_manual(id)
-      .expect("read")
+  let db = ProjectDb::open(&seeded.repo).expect("db");
+  assert!(db.run_switched_to_manual(id).expect("read"));
+  let switch = db.run_manual_switch(id).expect("read").expect("recorded");
+  assert_eq!(
+    switch.by,
+    Answerer::Automation,
+    "its Conversation says automation switched it"
   );
-  // Switching again is taken too: a run only ever drops to Manual.
+  // Switching again is taken too: a run only ever drops to Manual, and the first switch stays the one recorded.
   served.ok("switch_run_to_manual", &arguments);
+  assert_eq!(db.run_manual_switch(id).expect("read"), Some(switch));
 }

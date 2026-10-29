@@ -19,10 +19,11 @@ use orchester_core::{
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{CommandEnvironment, ModelId, VariableName},
   run::{
-    Answerer, ApprovalAnswer, DecidedBy, EffectiveMode, ManualBecause, PendingToolApproval, Run,
+    Answerer, ApprovalAnswer, DecidedBy, EffectiveMode, ManualBecause, ManualSwitch, PendingToolApproval, Run,
     review::{AutoModeSettings, Review, ReviewFailure, ReviewHold, ReviewerChoice},
   },
   store::{ActivityStore, ConnectionStore, SettingsStore},
+  time::Timestamp,
 };
 use orchester_ipc::Event;
 use orchester_runner::execution::Scheduler;
@@ -443,9 +444,13 @@ async fn auto_mode_switched_to_manual_during_a_review_keeps_its_approval() {
   let mut started = Started::new(&claude("Run `cargo build`. Reviewer waits.")).await;
   started.under_review().await;
   started.reviewer_started().await;
+  let switch = ManualSwitch {
+    at: Timestamp::now(),
+    by: Answerer::Person,
+  };
   started
     .db()
-    .switch_run_to_manual(started.id)
+    .switch_run_to_manual(started.id, switch)
     .expect("a person switches the run to Manual");
   // The run was in Manual already: the reviewer's approval, after three seconds, still answers the request.
   started.ended().await;

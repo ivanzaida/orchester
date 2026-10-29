@@ -117,6 +117,15 @@
       "line": "Autopilot approves this run's requests · work outside the worktree, pushes and other branches still ask you",
       "settings": "Project settings"
     },
+    "approval": {
+      "switched": "Switched to Manual for this run",
+      "switchedBy": {
+        "person": "by you · {{time}}",
+        "personProfile": "by you · {{time}} · {{agent}}’s profile stays on Autopilot",
+        "automation": "by automation · {{time}}",
+        "automationProfile": "by automation · {{time}} · {{agent}}’s profile stays on Autopilot"
+      }
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",
