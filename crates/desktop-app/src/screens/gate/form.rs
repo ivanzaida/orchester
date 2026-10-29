@@ -56,14 +56,14 @@ const PAUSE_LOOK: Duration = Duration::from_secs(15);
 /// How long a pause lasts when the cloud does not say: its sign-in limit's 15 minutes (`docs/cloud-api.md`).
 const PAUSE_DEFAULT: u64 = 15 * 60;
 
-const SUBMIT: &str = "gate-sign-in";
+pub(super) const SUBMIT: &str = "gate-sign-in";
 /// The email's and the password's places at the head of the window's Tab order: *Forgot password?* is drawn over the
 /// password, and Tab reaches it after the password, as a person reads the card.
 const EMAIL_TAB: i32 = 1;
 const PASSWORD_TAB: i32 = 2;
 
 /// Takes the gate back to the password step, the password empty and focused; `true` when a code step timed out.
-pub(super) type ToPassword = Arc<dyn Fn(bool) + Send + Sync>;
+pub(crate) type ToPassword = Arc<dyn Fn(bool) + Send + Sync>;
 
 /// A field of the card that takes the focus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,7 +76,7 @@ impl DevtoolsInspectable for Field {}
 
 /// Why the cloud did not sign this computer in, as the card says it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Refusal {
+pub(crate) enum Refusal {
   /// A wrong email or password: both fields are marked.
   Wrong,
   /// *Confirm your email first*, for this email, with *Open Orchester Cloud*.
@@ -113,29 +113,32 @@ impl Refusal {
   }
 }
 
-/// The card's state: what was typed, the sign-in under way, and a page that did not open.
-pub(super) struct Form {
-  email: Signal<String>,
+/// The card's state: what was typed, the sign-in under way, and a page that did not open. The gate's card and the
+/// Cloud column of *Join a team* (`B914L`) share it, each with its own *Sign in*, which lays the fields out itself.
+pub(crate) struct Form {
+  pub(crate) email: Signal<String>,
   /// Made outside the component's context, so DevTools never records it ([`FieldInput::masked`]).
-  password: Signal<String>,
+  pub(crate) password: Signal<String>,
   sign_in: FutureAction<(String, String), (), Refusal>,
   /// The cloud's page that could not open in the browser.
   unopened: Signal<Option<String>>,
-  person: PersonOnly,
+  pub(crate) person: PersonOnly,
   /// Looks while a sign-in is paused, so *Sign in* comes back when its time has come.
   pause_look: Interval,
   tick: Signal<u64>,
   /// The field to focus at the next render.
   focus: Signal<Option<Field>>,
-  email_input: ElementRef,
-  password_input: ElementRef,
+  pub(crate) email_input: ElementRef,
+  pub(crate) password_input: ElementRef,
   step: Signal<Step>,
+  /// The id of *Sign in*, which only a person presses.
+  pub(crate) submit: &'static str,
 }
 
 impl Form {
   /// The card, its email filled in with `email` (the account whose sign-in ended here), going on to the code step in
-  /// `step`.
-  pub(super) fn new(ctx: &mut Ctx, email: &str, step: Signal<Step>) -> Self {
+  /// `step`; `submit` is the id of its *Sign in*.
+  pub(crate) fn new(ctx: &mut Ctx, email: &str, step: Signal<Step>, submit: &'static str) -> Self {
     let cloud = Services::of(ctx).cloud;
     let password = Signal::new(String::new());
     let (clear, coded) = (password.clone(), step.clone());
@@ -179,11 +182,12 @@ impl Form {
       email_input: ElementRef::new(),
       password_input: ElementRef::new(),
       step,
+      submit,
     }
   }
 
   /// Back to this card from the code step: the email kept, the password to type again.
-  pub(super) fn to_password(&self) -> ToPassword {
+  pub(crate) fn to_password(&self) -> ToPassword {
     let (step, password, focus) = (self.step.clone(), self.password.clone(), self.focus.clone());
     Arc::new(move |timed_out| {
       password.set(String::new());
@@ -193,12 +197,12 @@ impl Form {
   }
 
   /// Whether a sign-in is under way: the gate's other parts fade with the card's.
-  pub(super) fn pending(&self) -> bool {
+  pub(crate) fn pending(&self) -> bool {
     self.sign_in.state().get().is_pending()
   }
 
   /// The refusal shown, once the sign-in that got it ended.
-  fn refusal(&self) -> Option<Refusal> {
+  pub(crate) fn refusal(&self) -> Option<Refusal> {
     let state = self.sign_in.state().get();
     let pending = state.is_pending();
     state.error.filter(|_| !pending)
@@ -223,7 +227,7 @@ impl Form {
   /// Signs in with what was typed, for *Sign in* and for Enter in either field alike. Nothing happens while a sign-in
   /// is under way or this email's sign-in is paused; an empty field takes the focus instead of a sign-in; synthetic
   /// input is refused, and the card says so under *Sign in*.
-  fn submitter(&self) -> impl Fn() + Send + Sync + 'static {
+  pub(crate) fn submitter(&self) -> impl Fn() + Send + Sync + 'static {
     let (action, email, password, person, focus) = (
       self.sign_in.clone(),
       self.email.clone(),
@@ -231,7 +235,7 @@ impl Form {
       self.person.clone(),
       self.focus.clone(),
     );
-    let step = self.step.clone();
+    let (step, submit) = (self.step.clone(), self.submit);
     move || {
       let state = action.state().get_untracked();
       let (typed, secret) = (email.get_untracked(), password.get_untracked());
@@ -247,7 +251,7 @@ impl Form {
         focus.set(Some(field));
         return;
       }
-      if person.allows(SUBMIT) {
+      if person.allows(submit) {
         step.set(Step::Password { timed_out: false });
         action.run_if_idle((typed, secret));
       }
@@ -255,7 +259,7 @@ impl Form {
   }
 
   /// Moves the focus to the field asked for, once.
-  fn take_focus(&self, ctx: &Ctx) {
+  pub(crate) fn take_focus(&self, ctx: &Ctx) {
     let Some(field) = self.focus.get() else {
       return;
     };
@@ -301,9 +305,9 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
     .child(faded(email))
     .child(faded(password))
     .with_children(refusal.as_ref().map(|refusal| refusal_part(ctx, form, (refusal, host))))
-    .child(submit(ctx, form))
+    .child(submit_button(ctx, form))
     .with_children(checking)
-    .with_children(form.person.reason(ctx, SUBMIT))
+    .with_children(form.person.reason(ctx, form.submit))
     .with_children(unopened(ctx, form))
     .child(divider())
     .child(faded(create_row(ctx, form)))
@@ -317,21 +321,20 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
   LurqForm::element(FormProps::default().on_submit_data(move |_| submit()), card)
 }
 
-/// *Sign in*, *Signing in…* while it does, faded while this email's sign-in is paused.
-fn submit(ctx: &mut Ctx, form: &Form) -> Element {
-  let button = ActionButton::new(SUBMIT, ButtonKind::Primary, ctx.t("gate.submit"))
+/// *Sign in*, as wide as the card, *Signing in…* while it does, faded while this email's sign-in is paused.
+pub(crate) fn submit_button(ctx: &mut Ctx, form: &Form) -> ActionButton {
+  if form.pending() {
+    return ActionButton::new(form.submit, ButtonKind::Primary, ctx.t("gate.signingIn"))
+      .fill_width()
+      .loading();
+  }
+  let button = ActionButton::new(form.submit, ButtonKind::Primary, ctx.t("gate.submit"))
     .icon(Icon::LogIn)
     .fill_width();
-  if form.pending() {
-    return ActionButton::new(SUBMIT, ButtonKind::Primary, ctx.t("gate.signingIn"))
-      .fill_width()
-      .loading()
-      .into();
-  }
   if form.paused() {
-    return button.disabled().into();
+    return button.disabled();
   }
-  button.in_form().on_click(form.submitter()).into()
+  button.in_form().on_click(form.submitter())
 }
 
 /// The email, and the password with *Forgot password?* over it; both marked after a wrong one.
@@ -381,7 +384,7 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
 }
 
 /// The refusal in place: the fields' error, or a callout.
-fn refusal_part(ctx: &mut Ctx, form: &Form, (refusal, host): (&Refusal, &str)) -> Element {
+pub(crate) fn refusal_part(ctx: &mut Ctx, form: &Form, (refusal, host): (&Refusal, &str)) -> Element {
   match refusal {
     Refusal::Wrong => field_error("gate-wrong", &ctx.t("gate.wrong")).into(),
     Refusal::Unconfirmed(email) => Callout::new(
@@ -419,7 +422,7 @@ fn refusal_part(ctx: &mut Ctx, form: &Form, (refusal, host): (&Refusal, &str)) -
 }
 
 /// Why the cloud's page did not open in the browser.
-fn unopened(ctx: &Ctx, form: &Form) -> Option<Element> {
+pub(crate) fn unopened(ctx: &Ctx, form: &Form) -> Option<Element> {
   let page = form.unopened.get()?;
   Some(
     field_error(
@@ -449,7 +452,7 @@ fn create_row(ctx: &mut Ctx, form: &Form) -> Element {
 }
 
 /// Opens `page` of the cloud in the browser; says so in place when it cannot.
-fn opener(ctx: &mut Ctx, (form, page): (&Form, WebPage)) -> impl Fn() + Send + Sync + 'static {
+pub(crate) fn opener(ctx: &mut Ctx, (form, page): (&Form, WebPage)) -> impl Fn() + Send + Sync + 'static {
   let services = Services::of(ctx);
   let (cloud, links, unopened) = (services.cloud, services.links, form.unopened.clone());
   move || {

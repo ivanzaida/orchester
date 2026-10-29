@@ -331,6 +331,7 @@ pub const fn screen_icon(screen: Screen) -> Icon {
   match screen {
     Screen::AllProjects => Icon::Folders,
     Screen::AddProject => Icon::Plus,
+    Screen::JoinTeam => Icon::Users,
     Screen::Settings => Icon::Settings,
     Screen::Overview => Icon::LayoutDashboard,
     Screen::Orchestrator | Screen::OrchestratorSettings => Icon::MessagesSquare,

@@ -1,8 +1,8 @@
-//! A stand-in team server on loopback over plain HTTP, in the shapes of `orchester-api`: what it is (`GET /server`,
-//! not linked to Orchester Cloud, so a code needs no cloud identity), joining with a code (`POST /auth/code`) or a
-//! cloud identity (`POST /auth/cloud`), and the projects the person is a member of (`GET /projects`). It answers a
-//! wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a cloud
-//! identity, and it can stop answering.
+//! A stand-in team server on loopback over plain HTTP, in this crate's shapes: what it is (`GET /server`, not linked
+//! to Orchester Cloud, so a code needs no cloud identity), joining with a code (`POST /auth/code`) or a cloud identity
+//! (`POST /auth/cloud`), and the projects the person is a member of (`GET /projects`). It answers a wrong code and an
+//! expired one alike, `invalid_code`, as a real server does; it can have no place for a cloud identity, and it can stop
+//! answering. The workspace's and the desktop app's tests and the app's QA build share it.
 
 use std::{
   io::{Read, Write},

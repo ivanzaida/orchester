@@ -4,12 +4,14 @@
 //! workspace's words. Run with `cargo test -p orchester-workspace --test startup_join startup_join`.
 
 mod support;
-mod team_server;
 
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::account_cloud::AccountCloud,
+  test_support::{
+    account_cloud::AccountCloud,
+    team_server::{CODE, LATER_CODE, NAME, TeamServer, USERNAME},
+  },
 };
 use orchester_workspace::{
   i18n::{FALLBACK_LOCALE, LOCALES},
@@ -21,7 +23,6 @@ use orchester_workspace::{
 };
 use serde_json::Value;
 use support::{Desk, closed_address};
-use team_server::{CODE, LATER_CODE, NAME, TeamServer, USERNAME};
 
 /// The team server's id at the stand-in cloud.
 const AUDIENCE: &str = "0191c7c0-0000-7000-8000-0000000005e1";
@@ -88,6 +89,7 @@ fn startup_join_lists_cloud_teams_and_invites() {
   assert_eq!(teams.servers[0].server.name, NAME);
   assert_eq!(teams.servers[0].server.address, server.url());
   assert_eq!(teams.servers[0].joined, None, "this computer has joined nothing yet");
+  assert!(!teams.servers[0].owner, "the account is a member there");
   let invites: Vec<_> = teams.invites.iter().map(|invite| invite.id.to_string()).collect();
   assert_eq!(invites, [INVITE]);
   assert_eq!(
