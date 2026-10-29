@@ -48,7 +48,8 @@
     "where": {
       "local": "Local",
       "shared": "Shared · {{team}}",
-      "sharedUnknown": "Shared"
+      "sharedUnknown": "Shared",
+      "unknown": "—"
     },
     "status": {
       "notStarted": "Runner not started",

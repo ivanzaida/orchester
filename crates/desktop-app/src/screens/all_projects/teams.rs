@@ -89,10 +89,12 @@ impl Teams {
     }
   }
 
-  /// The teams' reads for `entries`. The screen asks for them in every render, in the same place: lurq keeps a
-  /// component's futures by the order it asks for them.
-  pub fn read(&self, ctx: &mut Ctx, servers: &Servers, entries: &[ProjectEntry]) -> Read {
-    let joined = joined(ctx, servers, entries);
+  /// The teams' reads for `entries`, held while they are `None`: until the list is read, and on the welcome. The
+  /// screen asks for them in every render, in the same place: lurq keeps a component's futures by the order it asks
+  /// for them.
+  pub fn read(&self, ctx: &mut Ctx, servers: &Servers, entries: Option<&[ProjectEntry]>) -> Read {
+    let entries = entries.map(<[ProjectEntry]>::to_vec);
+    let joined = joined(ctx, servers, entries.clone());
     let offer = offer(ctx, servers, (entries, self.kept.get()));
     let action = not_now_action(ctx, servers);
     self.follow(ctx, &action);
@@ -124,10 +126,14 @@ impl Teams {
   }
 }
 
-/// Where each of `entries` is and the servers joined, read off the UI thread whenever the list changes.
-fn joined(ctx: &mut Ctx, servers: &Servers, entries: &[ProjectEntry]) -> Option<Joined> {
+/// Where each of `entries` is and the servers joined, read off the UI thread whenever the list changes; nothing
+/// while the entries are held.
+fn joined(ctx: &mut Ctx, servers: &Servers, entries: Option<Vec<ProjectEntry>>) -> Option<Joined> {
   ctx
-    .future((servers.clone(), entries.to_vec()), |(servers, entries)| async move {
+    .future((servers.clone(), entries), |(servers, entries)| async move {
+      let Some(entries) = entries else {
+        return Ok(None);
+      };
       let read = background::run(move || -> Result<Joined, SharingError> {
         Ok(Joined {
           places: servers.places(&entries)?,
@@ -141,7 +147,7 @@ fn joined(ctx: &mut Ctx, servers: &Servers, entries: &[ProjectEntry]) -> Option<
       })
       .await;
       match read {
-        Ok(Ok(joined)) => Ok(joined),
+        Ok(Ok(joined)) => Ok(Some(joined)),
         Ok(Err(error)) => {
           tracing::warn!(%error, "cannot read where the listed projects are");
           Err(())
@@ -153,13 +159,22 @@ fn joined(ctx: &mut Ctx, servers: &Servers, entries: &[ProjectEntry]) -> Option<
     .state()
     .get()
     .data
+    .flatten()
 }
 
-/// The project offered, read when the list changes and after a kept *Not now*. Not when a server's connection
-/// changes: reading the offer asks the servers, and each answer changes their connection.
-fn offer(ctx: &mut Ctx, servers: &Servers, (entries, kept): (&[ProjectEntry], u64)) -> Option<OfferedProject> {
+/// The project offered, read when the list changes and after a kept *Not now*; nothing while the entries are held.
+/// Not when a server's connection changes: reading the offer asks the servers, and each answer changes their
+/// connection.
+fn offer(
+  ctx: &mut Ctx,
+  servers: &Servers,
+  (entries, kept): (Option<Vec<ProjectEntry>>, u64),
+) -> Option<OfferedProject> {
   ctx
-    .future((servers.clone(), entries.to_vec(), kept), |(servers, ..)| async move {
+    .future((servers.clone(), entries, kept), |(servers, entries, _)| async move {
+      if entries.is_none() {
+        return Ok(None);
+      }
       servers.offered().await.map_err(|error| {
         tracing::warn!(%error, "cannot read which team project to offer");
       })

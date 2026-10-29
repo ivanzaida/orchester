@@ -128,17 +128,23 @@ impl Component for AllProjects {
       Some(Listing::Projects(entries)) => entries.clone(),
       Some(Listing::Welcome) | None => Vec::new(),
     };
+    let failed = listing.error.clone().filter(|_| !listing.is_pending());
+    // The teams are read once the page shows: for the listed projects, or for the header alone when the list failed.
+    let shown = match (&listing.data, &failed) {
+      (Some(Listing::Projects(entries)), _) => Some(entries.as_slice()),
+      (_, Some(_)) => Some(&[][..]),
+      (Some(Listing::Welcome) | None, None) => None,
+    };
     let reports = reports(ctx, (&services.runners, &self.seen), &entries);
     let work = reports.total();
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let invites = InvitesNotice::read(ctx);
-    let teams = self.teams.read(ctx, &services.servers, &entries);
+    let teams = self.teams.read(ctx, &services.servers, shown);
     let heading = page::Heading {
       open: &open,
       joined: teams.joined.as_ref().map(|joined| joined.servers.as_slice()),
     };
-    let failed = listing.error.clone().filter(|_| !listing.is_pending());
     let tab = ctx.props::<Tab>().clone();
     match (listing.data, failed) {
       (_, Some(error)) => {

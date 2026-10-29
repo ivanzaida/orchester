@@ -183,7 +183,11 @@ fn all_projects_says_where_each_project_is() {
 #[test]
 fn all_projects_offers_a_team_project_once_with_not_now() {
   let server = TeamServer::named(TEAM);
-  server.share(&[("Kontur", "kontur", None), ("Billing", "billing", None)]);
+  server.share(&[
+    ("Kontur", "kontur", None),
+    ("Billing", "billing", None),
+    ("Atlas", "atlas", None),
+  ]);
   let data = Data::new();
   let launch = data.launch();
   let kontur = data.add_kontur(launch.workspace().expect("the session started"));
@@ -223,23 +227,76 @@ fn all_projects_offers_a_team_project_once_with_not_now() {
   window.until("Billing to be offered again", |window| window.texts(OFFER).is_some());
   window.press("all-projects-offer-not-now");
   assert!(window.texts(OFFER).is_none(), "Not now puts it off at once");
-  let servers = window.launch.services().expect("the session").servers.clone();
-  window.until("Billing to be put off for good", |window| {
-    window
-      .data
-      .runtime
-      .block_on(servers.offered())
-      .expect("the offer")
-      .is_none()
-  });
-  all_projects(&mut window);
-  window.until("Kontur's place", |window| {
-    window.texts(&place(project_id())).is_some_and(|texts| texts != ["—"])
-  });
-  window.pass();
+  window.until("the next project to be offered", |window| window.texts(OFFER).is_some());
   assert!(
-    window.texts(OFFER).is_none(),
-    "nothing more to offer: Billing was put off"
+    window.text(OFFER).starts_with("Acme shares Atlas with you."),
+    "once Billing is put off, the next one: {}",
+    window.text(OFFER)
+  );
+  let Window { data, launch, .. } = window;
+  let mut window = Window::of(data, launch);
+  all_projects(&mut window);
+  window.until("a new window's offer", |window| window.texts(OFFER).is_some());
+  assert!(
+    window.text(OFFER).starts_with("Acme shares Atlas with you."),
+    "Billing stays put off in a new window: {}",
+    window.text(OFFER)
+  );
+}
+
+#[test]
+fn all_projects_cuts_a_long_team_name_to_its_column() {
+  let data = Data::new();
+  let launch = data.launch();
+  let workspace = launch.workspace().expect("the session started");
+  let services = launch.services().expect("the session started");
+  data.add_kontur(workspace);
+  let team = "Orchester Platform and Partner Integrations";
+  let server = data
+    .runtime
+    .block_on(services.servers.add(
+      &ServerAddress::parse("https://orchester.acme.dev").expect("address"),
+      team.to_owned(),
+      PlainHttp::NotAllowed,
+    ))
+    .expect("the team server is in the list");
+  let billing = add_project(
+    workspace,
+    (ProjectId::generate(), "BIL", "Billing"),
+    &data.repo("repo-billing"),
+  );
+  link(&billing.repo_root, (server, ProjectId::generate()));
+  let mut window = Window::of(data, launch);
+  all_projects(&mut window);
+  let cell = place(billing.project.id());
+  let badge = format!("{cell}-badge");
+  window.until("where Billing is", |window| {
+    window.tree.get_element_by_id(&badge).is_some()
+  });
+  let bounds = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (column, shown, words) = (
+    bounds(&mut window, &cell),
+    bounds(&mut window, &badge),
+    bounds(&mut window, &format!("{badge}-label")),
+  );
+  let status = bounds(&mut window, &format!("project-row-status-{}", billing.project.id()));
+  assert!(
+    shown.x + shown.width <= column.x + column.width + 0.5,
+    "the badge keeps to its column: {shown:?} in {column:?}"
+  );
+  assert!(
+    words.x + words.width <= shown.x + shown.width + 0.5,
+    "its words keep to the badge: {words:?} in {shown:?}"
+  );
+  assert!(
+    words.x + words.width < status.x,
+    "the words end before the status: {words:?}, {status:?}"
   );
 }
 

@@ -27,7 +27,7 @@ use crate::{
   services::Services,
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectsText},
   ui::{
-    chip::{BadgeTone, badge},
+    chip::{BadgeTone, badge, cut_badge},
     icon::{Icon, icon},
     icon_button::IconButton,
     message::message_text,
@@ -178,22 +178,21 @@ fn identity(ctx: &Ctx, listed: &ListedProject) -> Row {
 }
 
 /// Where the project is (`Where` `mmabW`, `aDEWg`): a badge saying *Shared · Acme* in `info` (`MOCLi`) or *Local*
-/// in `text_secondary` (`eQqrn`); a dash while it is not read, and when its folder or data cannot be read.
-fn where_cell(ctx: &Ctx, listed: &ListedProject, place: Option<&Place>) -> Row {
+/// in `text_secondary` (`eQqrn`); a dash while it is not read, and when its folder or data cannot be read. The team's
+/// name is the server's own, of any length: a long one is cut to the column, whole in a tooltip.
+fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> Row {
   let id = format!("project-row-where-{}", listed.project.id);
   let badge_id = format!("{id}-badge");
   let shown: Element = match place {
-    None => Text::new(&ctx.t("projects.unknownCount"))
+    None => Text::new(&ctx.t("projects.where.unknown"))
       .variant(TypographyStyle::Description)
       .color(PaletteColor::TextMuted)
       .into(),
     Some(Place::Local) => badge(&badge_id, BadgeTone::Neutral, &ctx.t("projects.where.local")).into(),
-    Some(Place::Shared { team: Some(team) }) => badge(
-      &badge_id,
-      BadgeTone::Info,
-      &ctx.t_args("projects.where.shared", [("team", team.as_str())]),
-    )
-    .into(),
+    Some(Place::Shared { team: Some(team) }) => {
+      let words = ctx.t_args("projects.where.shared", [("team", team.as_str())]);
+      cut_badge(ctx, &badge_id, BadgeTone::Info, &words).into()
+    }
     Some(Place::Shared { team: None }) => {
       badge(&badge_id, BadgeTone::Info, &ctx.t("projects.where.sharedUnknown")).into()
     }
