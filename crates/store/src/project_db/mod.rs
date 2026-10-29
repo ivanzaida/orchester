@@ -68,6 +68,7 @@ mod runs;
 mod schema;
 mod secrets;
 mod service_needs;
+mod shared_events;
 mod shared_members;
 mod shared_modules;
 mod shared_tasks;
@@ -117,6 +118,7 @@ pub use self::{
   resources::ResourceUpdate,
   run_ends::EndedRun,
   runs::RunBranch,
+  shared_events::{SharedEvent, SharedSnapshot},
   shared_members::SharedMember,
   shared_modules::{CachedModule, CachedModuleChange},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
