@@ -22,6 +22,8 @@ use crate::tasks::transcript::{Entry, entries};
 pub struct Loaded {
   pub entries: Arc<Vec<Entry>>,
   pub pending: Arc<Vec<PendingToolApproval>>,
+  /// The ids of the `pending` requests auto mode's reviewer is judging.
+  pub reviewing: Arc<Vec<String>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
   pub questions: Arc<Vec<AskedQuestions>>,
   /// The Orchestrator chat's actions that answer the run's agents, send them a message or continue the run.
@@ -32,6 +34,8 @@ pub struct Loaded {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Requests {
   pub pending: Arc<Vec<PendingToolApproval>>,
+  /// The ids of the `pending` requests auto mode's reviewer is judging.
+  pub reviewing: Arc<Vec<String>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
   pub questions: Arc<Vec<AskedQuestions>>,
   pub orchestrated: Arc<Vec<KeptAction>>,
@@ -43,6 +47,7 @@ impl Loaded {
     Self {
       entries,
       pending: requests.pending,
+      reviewing: requests.reviewing,
       decided: requests.decided,
       questions: requests.questions,
       orchestrated: requests.orchestrated,
@@ -59,8 +64,15 @@ pub fn transcript_in(repo_root: &Path, run: RunId) -> Result<Arc<Vec<Entry>>, St
 /// Reads `run`'s tool requests, and what the Orchestrator chat proposed or sent its agents.
 pub fn requests_in(repo_root: &Path, run: RunId) -> Result<Requests, StoreError> {
   let db = ProjectDb::open(repo_root)?;
+  let pending = db.pending_tool_approvals(run)?;
+  let reviewing = db
+    .reviewing_tool_approvals()?
+    .into_iter()
+    .filter(|id| pending.iter().any(|request| request.id == *id))
+    .collect();
   Ok(Requests {
-    pending: Arc::new(db.pending_tool_approvals(run)?),
+    pending: Arc::new(pending),
+    reviewing: Arc::new(reviewing),
     decided: Arc::new(db.decided_tool_approvals(run)?),
     questions: Arc::new(db.questions(run)?),
     orchestrated: Arc::new(db.run_answer_actions(run)?),

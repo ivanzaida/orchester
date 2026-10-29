@@ -64,6 +64,7 @@ impl BuiltTimeline {
       entries: &loaded.entries,
       conversation,
       pending: &loaded.pending,
+      reviewing: &loaded.reviewing,
       decided: &loaded.decided,
       questions: &loaded.questions,
       merge: detail.merge.as_ref(),

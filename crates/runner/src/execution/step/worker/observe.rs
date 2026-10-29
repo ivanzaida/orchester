@@ -112,7 +112,7 @@ impl Worker {
     }
   }
 
-  pub(super) fn flush(&self, watch: &mut Watch) -> Result<(), StoreError> {
+  pub(in super::super) fn flush(&self, watch: &mut Watch) -> Result<(), StoreError> {
     if watch.pending.is_empty() {
       return Ok(());
     }

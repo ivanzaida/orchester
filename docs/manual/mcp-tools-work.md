@@ -345,7 +345,8 @@ what holds now.
 
 Tool requests waiting for a decision, oldest first (kind, command or tool, arguments, agent, run, task, since when),
 and the plans runs wait on (version, step, excerpt) with decisions on their earlier versions and `decided_by`. Each
-links to its card on the task's Conversation.
+links to its card on the task's Conversation. A request auto mode's reviewer still judges has `reviewing: true`: it
+waits for the reviewer, not for a person, until the review ends (`get_run`'s `awaiting.approvals` mark it the same).
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 

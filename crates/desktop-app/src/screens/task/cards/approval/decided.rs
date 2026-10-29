@@ -196,7 +196,7 @@ fn untimed(
 }
 
 /// What was asked, on one line: a command's first line, or the server and tool of an MCP call.
-fn asked(ctx: &Ctx, request: &PendingToolApproval) -> std::sync::Arc<str> {
+pub(super) fn asked(ctx: &Ctx, request: &PendingToolApproval) -> std::sync::Arc<str> {
   if !request.command {
     return ctx.t_args(
       "cards.approval.toolValue",

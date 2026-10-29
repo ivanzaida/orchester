@@ -90,6 +90,9 @@ pub struct ShownApproval {
   pub auto_approving: bool,
   /// What auto mode did with it, when the run uses auto mode: why it is left to the person.
   pub review: Option<Review>,
+  /// Auto mode's reviewer is judging it: it waits for the reviewer, not for the person, until the review ends (the
+  /// runner stops a review after a minute and asks the person then).
+  pub reviewing: bool,
 }
 
 impl ShownApproval {
@@ -128,17 +131,22 @@ pub const fn hold_cause(hold: ReviewHold) -> Message {
   })
 }
 
-/// The pending requests of the project at `repo_root`, oldest first, each with its agent's CLI.
+/// The pending requests of the project at `repo_root`, oldest first, each with its agent's CLI and whether auto
+/// mode's reviewer is judging it.
 pub fn pending(db: &ProjectDb, repo_root: &Path) -> Result<Vec<ShownApproval>, StoreError> {
+  let under_review = db.reviewing_tool_approvals()?;
   Ok(
     db.pending_tool_approvals_all()?
       .into_iter()
-      .map(|approval| shown(db, repo_root, approval))
+      .map(|approval| {
+        let reviewing = under_review.contains(&approval.id);
+        shown(db, repo_root, (approval, reviewing))
+      })
       .collect(),
   )
 }
 
-fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> ShownApproval {
+fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolApproval, bool)) -> ShownApproval {
   // `.ok()`: an unreadable run only loses the names and the wider answers' details; the request itself
   // stays shown and decidable, and the list reports its own read errors.
   let run = db.run(approval.run).ok().flatten();
@@ -200,6 +208,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
   let review = db.tool_approval_review(approval.run, &approval.id).ok().flatten();
   ShownApproval {
     review,
+    reviewing,
     provider,
     vendor: connection.as_ref().map(AgentConnection::vendor),
     model,
