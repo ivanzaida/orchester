@@ -9,5 +9,10 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The client options the app and the runner report with (`client`): the panic hook, the stack trace and the OS and
+# CPU contexts. Without a transport: each program that sends turns on its own.
+client = ["sentry/backtrace", "sentry/contexts", "sentry/panic"]
+
 [dependencies]
 sentry.workspace = true

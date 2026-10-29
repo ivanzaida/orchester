@@ -41,7 +41,7 @@ fn initialized_project() -> TempDir {
 }
 
 async fn launch(project: &Path) -> RunnerClient {
-  timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project))
+  timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project, None))
     .await
     .expect("launch in time")
     .expect("launch")
@@ -120,7 +120,7 @@ async fn second_runner_for_a_project_fails_clearly() {
   let project = project();
   let _first = launch(project.path()).await;
 
-  match RunnerClient::launch(Path::new(RUNNER), project.path()).await {
+  match RunnerClient::launch(Path::new(RUNNER), project.path(), None).await {
     Err(LaunchError::ProjectLocked) => {}
     Err(other) => panic!("expected the second runner to report the held lock, got {other}"),
     Ok(_) => panic!("a second runner connected"),
@@ -130,7 +130,7 @@ async fn second_runner_for_a_project_fails_clearly() {
 #[tokio::test]
 async fn runner_refuses_an_uninitialized_project() {
   let project = tempfile::tempdir().expect("temporary directory");
-  match RunnerClient::launch(Path::new(RUNNER), project.path()).await {
+  match RunnerClient::launch(Path::new(RUNNER), project.path(), None).await {
     Err(LaunchError::RunnerExited { stderr, .. }) => {
       assert!(stderr.contains("is not an Orchester project"), "stderr: {stderr}");
     }
@@ -184,7 +184,7 @@ async fn the_desktop_refuses_a_pipe_served_by_another_process() {
     squatter
   });
 
-  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path()))
+  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path(), None))
     .await
     .expect("launch returns in time");
   assert!(
@@ -215,7 +215,7 @@ async fn the_desktop_refuses_a_socket_served_by_another_process() {
     squatter
   });
 
-  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path()))
+  let result = timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project.path(), None))
     .await
     .expect("launch returns in time");
   assert!(

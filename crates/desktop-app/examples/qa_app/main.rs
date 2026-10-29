@@ -52,8 +52,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     (log, signed_in::keychain()),
   );
   // A QA copy reports its panics as `qa`, though it is a debug build (the person's decision, ORC-156), once its
-  // database is open and while its setting allows; kept to the end of `main`.
-  let _reports = error_reports::start(Environment::Qa, launch.workspace());
+  // database is open and while its setting allows; kept to the end of `main`. Its runners are told too, though a debug
+  // runner never sends.
+  let reports = error_reports::start(Environment::Qa, launch.workspace());
+  if let (Some(_), Some(services)) = (&reports, launch.services()) {
+    services.runners.send_error_reports(error_reports::for_runners(Environment::Qa));
+  }
   // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
   // `trash` beside its data instead, never to the person's own.
   if let (Some(workspace), Some(folder)) = (launch.workspace(), location.database.parent()) {

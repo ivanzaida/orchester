@@ -140,6 +140,14 @@ fn error_reports_a_panic_is_one_scrubbed_event_with_release_and_environment() {
   assert_eq!(event.server_name, None);
   assert_eq!(event.user, None);
   assert!(event.extra.is_empty() && event.breadcrumbs.values.is_empty());
+  assert_eq!(event.tags.get("process").map(String::as_str), Some("app"));
+}
+
+#[test]
+fn error_reports_the_runners_report_in_the_apps_environment_and_release() {
+  let reports = error_reports::for_runners(Environment::Production);
+  assert_eq!(reports.environment(), "production");
+  assert_eq!(reports.release(), RELEASE);
 }
 
 #[test]

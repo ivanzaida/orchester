@@ -12,7 +12,8 @@ use std::{
 
 use orchester_core::limits::AgentSlots;
 use orchester_ipc::{
-  AttachSession, Command, CommandSender, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess, ShutdownMode,
+  AttachSession, Command, CommandSender, ErrorReports, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess,
+  ShutdownMode,
 };
 use tokio::{
   runtime::Handle,
@@ -58,11 +59,13 @@ impl Drop for Connection {
 }
 
 impl Connection {
-  /// Starts the runner for `project`. Its first attach is for `session`; every runner started
-  /// after a drop attaches as a reconnect.
+  /// Starts the runner for `project`, sending error reports with `reports`. Its first attach is
+  /// for `session`; every runner started after a drop attaches as a reconnect, with the same
+  /// `reports`.
   pub(super) fn spawn(
     runtime: &Handle,
     runner_exe: PathBuf,
+    reports: Option<ErrorReports>,
     project: PathBuf,
     reporter: Reporter,
     session: AttachSession,
@@ -71,6 +74,7 @@ impl Connection {
     let task = runtime.spawn(
       Supervisor {
         runner_exe,
+        reports,
         project,
         reporter,
         requests,
@@ -129,6 +133,8 @@ impl Connection {
 
 struct Supervisor {
   runner_exe: PathBuf,
+  /// Whether its runners send error reports, as the runners were told when this connection started.
+  reports: Option<ErrorReports>,
   project: PathBuf,
   reporter: Reporter,
   requests: mpsc::UnboundedReceiver<Control>,
@@ -188,7 +194,11 @@ impl Supervisor {
 
   /// The launched runner, or `None` when a stop request or the desktop ended the task first.
   async fn launch(&mut self) -> Option<Result<RunnerClient, RunnerFailure>> {
-    let mut launch = pin!(RunnerClient::launch(&self.runner_exe, &self.project));
+    let mut launch = pin!(RunnerClient::launch(
+      &self.runner_exe,
+      &self.project,
+      self.reports.as_ref()
+    ));
     let result = loop {
       tokio::select! {
         result = &mut launch => break result,
