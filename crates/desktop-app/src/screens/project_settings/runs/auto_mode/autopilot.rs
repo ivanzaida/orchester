@@ -3,7 +3,7 @@
 //! Autopilot lets agents set to it approve their own requests, so only a person's input turns it on, whatever the
 //! input gate lets automation do; turning it off stays open. A refused press says so under the row.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_core::run::Answerer;
@@ -63,14 +63,33 @@ pub(super) fn row(
     ctx.t("project_settings.allowAutopilot"),
   )
   .info(ctx.t("project_settings.allowAutopilotDetail"))
-  .hint(ctx.t(if on {
-    "project_settings.allowAutopilotOn"
-  } else {
-    "project_settings.allowAutopilotOff"
-  }))
+  .hint(hint(ctx, on, &settings.autopilot_profiles))
   .control(toggle)
   .under_all(refusal.map(Element::from))
   .render(ctx)
+}
+
+/// What the switch's state means; off, it names the profiles set to Autopilot (`tvmsJ`), which then run as Manual.
+fn hint(ctx: &Ctx, on: bool, profiles: &[String]) -> Arc<str> {
+  match profiles {
+    _ if on => ctx.t("project_settings.allowAutopilotOn"),
+    [] => ctx.t("project_settings.allowAutopilotOff"),
+    [one] => ctx.t_args(
+      "project_settings.allowAutopilotOffProfiles.one",
+      [("profiles", one.as_str())],
+    ),
+    [rest @ .., last] => {
+      let rest = rest.join(&ctx.t("project_settings.listSeparator"));
+      let listed = ctx.t_args(
+        "project_settings.listAnd",
+        [("rest", rest.as_str()), ("last", last.as_str())],
+      );
+      ctx.t_args(
+        "project_settings.allowAutopilotOffProfiles.other",
+        [("profiles", &*listed)],
+      )
+    }
+  }
 }
 
 /// Saves the switch turned `on` or off as whoever gives the input: turning it off is anyone's, turning it on only a
