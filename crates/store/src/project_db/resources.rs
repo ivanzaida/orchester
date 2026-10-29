@@ -12,7 +12,10 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
 
-use super::ProjectDb;
+use super::{
+  ProjectDb, shared_publishes,
+  used_versions::{newest_number, used_here},
+};
 use crate::{
   StoreError,
   rows::{corrupt, decode_body, decode_document, encode_json, parse},
@@ -134,6 +137,7 @@ impl ProjectDb {
       .connection
       .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     check_kind::<B>(&transaction, resource)?;
+    shared_publishes::ensure_may_change(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
     let latest = used_here::<B>(&transaction, resource)?;
     let number = latest.as_ref().map(Version::number);
@@ -193,6 +197,7 @@ impl ResourceStore for ProjectDb {
   ) -> Result<Resource, StoreError> {
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
+    shared_publishes::ensure_may_create(&transaction, B::KIND)?;
     let taken: bool = transaction.query_row(
       "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
       params![kind_text(B::KIND), slug.as_str()],
@@ -305,6 +310,7 @@ fn publish_checked<B: ResourceBody>(
   now: Timestamp,
 ) -> Result<Version<B>, StoreError> {
   check_kind::<B>(connection, resource)?;
+  shared_publishes::ensure_may_change(connection, resource)?;
   let draft = load_draft::<B>(connection, resource)?.ok_or(StoreError::NoDraft(resource))?;
   if expected.is_some_and(|expected| draft.body() != expected) {
     return Err(StoreError::DraftChanged(resource));
@@ -317,8 +323,9 @@ fn publish_checked<B: ResourceBody>(
   publish_prepared(connection, resource, draft, latest, now)
 }
 
-/// Publishes `draft`, which must be based on `latest`, the version used here, as the version after the newest one
-/// this computer has: a teammate's version that waits keeps its number, and the one published here supersedes it.
+/// Publishes `draft`, based on `latest`, the version used here, after the newest version this computer has: a
+/// teammate's version that waits keeps its number, and this one supersedes it. In a shared project the callers checked
+/// that the person is an admin, and the version waits for the server's number ([`super::shared_publishes`]).
 fn publish_prepared<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
@@ -354,36 +361,8 @@ fn publish_prepared<B: ResourceBody>(
     [resource.to_string()],
   )?;
   super::shared_versions::stop_waiting(connection, resource, version.number())?;
+  shared_publishes::record(connection, resource, &version, latest)?;
   Ok(version)
-}
-
-/// The version this computer uses of `resource`: its newest, except a teammate's version that waits for the person's
-/// *Use v<N> here* ([`super::shared_versions`]). Runs, editors, Always allow and publishing all start from it.
-pub(super) fn used_here<B: ResourceBody>(
-  connection: &Connection,
-  resource: ResourceId,
-) -> Result<Option<Version<B>>, StoreError> {
-  Ok(
-    load_versions(
-      connection,
-      "WHERE resource_id = ?1 AND id NOT IN (SELECT version_id FROM waiting_versions) ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?
-    .pop(),
-  )
-}
-
-/// The number of the newest version this computer has of `resource`, waiting or not; the next version follows it.
-pub(super) fn newest_number(
-  connection: &Connection,
-  resource: ResourceId,
-) -> Result<Option<VersionNumber>, StoreError> {
-  let number: Option<i64> = connection.query_row(
-    "SELECT MAX(number) FROM resource_versions WHERE resource_id = ?1",
-    [resource.to_string()],
-    |row| row.get(0),
-  )?;
-  number.map(version_number).transpose()
 }
 
 pub(super) fn save_draft<B: ResourceBody>(
@@ -393,6 +372,7 @@ pub(super) fn save_draft<B: ResourceBody>(
 ) -> Result<DraftSaved, StoreError> {
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
+  shared_publishes::ensure_may_change(connection, resource)?;
   let base = match draft.based_on() {
     Some(number) => load_versions::<B>(
       connection,

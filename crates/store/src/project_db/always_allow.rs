@@ -16,8 +16,9 @@ use rusqlite::params;
 
 use super::{
   ProjectDb,
-  resources::{encode, load_draft, newest_number, used_here},
+  resources::{encode, load_draft},
   shared_versions::stop_waiting,
+  used_versions::{newest_number, used_here},
 };
 use crate::StoreError;
 

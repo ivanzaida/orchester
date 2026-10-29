@@ -10,13 +10,13 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, widening::Widening},
-  resource::{AgentProfile, Pipeline, RepositoryAccess, Slug, VersionNumber},
+  resource::{AgentProfile, Draft, Pipeline, RepositoryAccess, Slug, VersionNumber},
   run::{Answerer, PreflightProblem},
-  sharing::VersionWidening,
+  sharing::{MemberRole, VersionWidening},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{Bound, BoundBy, BoundReference, ResourceSharing};
+use orchester_store::{Bound, BoundBy, BoundReference, PublishState, ResourceSharing};
 use orchester_workspace::{
   app_mcp,
   orchestrator::tools,
@@ -29,6 +29,7 @@ use orchester_workspace::{
 use super::{
   ALICE, LIVE, Member, TeamServer, Workspace,
   config::{agent, builder, codex, docs, key, latest, pipeline, problems, profile, reference, step, use_first},
+  publish::Computer,
   seen_within,
 };
 
@@ -200,32 +201,115 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   stream.abort();
 }
 
+/// Both rules at once (rows 35 and 36): the owner's own version, published offline, waits for the server's number and
+/// never for *Use v<N> here*; a teammate's widening version that took its number meanwhile waits for the person.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_version_waits_for_its_number() {
+  let team = Team::publish();
+  let builder_id = team.builder;
+  let alice = Computer::new(&team.server, ALICE, MemberRole::Owner);
+  let workspace = &alice.workspace;
+  codex(&mut workspace.db(), &workspace.root, "Laptop");
+  let stream = workspace.follow(Member::of(&team.server, ALICE));
+  use_first(workspace, builder_id).await;
+  stream.abort();
+  let v1 = latest::<AgentProfile>(workspace, builder_id).expect("v1 used here");
+
+  alice.go_offline(true);
+  let narrower = AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::Allowed(AllowedCommands::default()),
+    NetworkAccess::Off,
+  );
+  let own = v1.body().clone().with_permissions(narrower);
+  let draft = Draft::new(own.clone(), Some(number(1)), Timestamp::now());
+  let published = alice
+    .store(&team.server, move |store| {
+      store.save_draft(builder_id, &draft)?;
+      store.publish_draft::<AgentProfile>(builder_id, Timestamp::now())
+    })
+    .await
+    .expect("published here");
+  assert_eq!(published.number(), number(2), "its number here until the server's");
+  assert_eq!(
+    used(workspace, builder_id),
+    Some(2),
+    "the owner's new runs use it at once"
+  );
+
+  let wider = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::On,
+  );
+  team.server.publish(
+    (builder_id, SharedResourceKind::AgentProfile, "Builder"),
+    serde_json::to_value(profile(team.theirs, &[], wider)).expect("a profile serializes"),
+    vec![work(team.theirs)],
+  );
+  alice.go_offline(false);
+  let sent = alice.store(&team.server, |store| store.send_waiting()).await;
+  sent.expect("the conflict is recorded on the version");
+  let sending = workspace.db().waiting_publishes().expect("read");
+  assert_eq!(
+    sending
+      .iter()
+      .map(|publish| (publish.number, publish.state.clone()))
+      .collect::<Vec<_>>(),
+    [(number(3), PublishState::Conflict { latest: number(2) })],
+    "the teammate's v2 took its number here"
+  );
+  let kept = latest::<AgentProfile>(workspace, builder_id).expect("a version used here");
+  assert_eq!(
+    (kept.id(), kept.body()),
+    (published.id(), &own),
+    "runs keep the owner's own version"
+  );
+  assert_eq!(
+    waiting(&workspace.root, builder_id)
+      .expect("read")
+      .map(|waiting| waiting.number),
+    Some(number(2)),
+    "the teammate's widening v2 waits for Use v2 here"
+  );
+
+  let version = sending[0].version;
+  alice
+    .store(&team.server, move |store| store.publish_again(version))
+    .await
+    .expect("published as the next version");
+  assert_eq!(workspace.db().waiting_publishes().expect("read"), []);
+  assert_eq!(used(workspace, builder_id), Some(3));
+  assert_eq!(
+    waiting(&workspace.root, builder_id).expect("read"),
+    None,
+    "the owner's v3, numbered by the server, supersedes it"
+  );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply_at_once() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let workspace = Workspace::linked(&server);
-  let mut db = workspace.db();
-  let laptop = codex(&mut db, &workspace.root, "Laptop");
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let workspace = &alice.workspace;
+  let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
   // Any command in the worktree: as a teammate's first version, this Builder would wait.
   let own = profile(laptop, &[], AgentPermissions::before_permissions());
   let at = Timestamp::from_unix_millis(1);
-  let builder_id = db
-    .create_resource(
-      Slug::new("builder").expect("slug"),
-      Name::new("Builder").expect("name"),
-      &own,
-      at,
-    )
-    .expect("created")
-    .id();
-  db.publish_draft::<AgentProfile>(builder_id, at)
+  // The owner publishes it from here; the server numbers it at once.
+  let builder_id = alice
+    .store(&server, move |store| {
+      let slug = Slug::new("builder").expect("slug");
+      let created = store.create_resource(slug, Name::new("Builder").expect("name"), &own, at)?;
+      store.publish_draft::<AgentProfile>(created.id(), at)?;
+      Ok::<_, SharingError>(created.id())
+    })
+    .await
     .expect("v1 published here");
-  drop(db);
-  // Sharing uploaded it: the server's v1 is this computer's.
-  server.publish(
-    (builder_id, SharedResourceKind::AgentProfile, "Builder"),
-    serde_json::to_value(&own).expect("a profile serializes"),
-    Vec::new(),
+  assert_eq!(
+    workspace.db().waiting_publishes().expect("read"),
+    [],
+    "the server numbered it"
   );
   let stream = workspace.follow(Member::of(&server, ALICE));
   seen_within(LIVE, "the resource the server's", || {
@@ -235,7 +319,7 @@ async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply
     )
   })
   .await;
-  assert_eq!(used(&workspace, builder_id), Some(1), "published here, it never waits");
+  assert_eq!(used(workspace, builder_id), Some(1), "published here, it never waits");
   assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
 
   // A teammate narrows it: no command, read-only, network off.
@@ -253,7 +337,7 @@ async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply
       Some("codex_cli"),
     )],
   );
-  seen_within(LIVE, "v2 applied at once", || used(&workspace, builder_id) == Some(2)).await;
+  seen_within(LIVE, "v2 applied at once", || used(workspace, builder_id) == Some(2)).await;
   assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
   stream.abort();
 }

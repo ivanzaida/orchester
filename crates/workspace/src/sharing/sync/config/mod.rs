@@ -5,9 +5,11 @@
 //! local body as they do any version. A reference that is not bound keeps the publisher's id, which matches nothing
 //! here, so preflight reports it missing. When a person binds a reference, the local bodies that name it are written
 //! again ([`bind`]). A teammate's version that widens what agents may do here waits for the person's *Use v<N> here*
-//! ([`waiting`]). Skills are not kept yet: their parts travel apart from their bodies, by hash.
+//! ([`waiting`]). Skills are not kept yet: their parts travel apart from their bodies, by hash. An admin publishes
+//! from this computer through [`RemoteResourceStore`].
 
 mod bindings;
+mod publish;
 mod waiting;
 
 use std::path::Path;
@@ -24,25 +26,38 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{
-  Bound, BoundBy, BoundReference, CachedVersion, NamingVersion, ProjectDb, ReferenceBinding, ReferenceTarget,
-  StoreError, VersionReference,
+  Bound, BoundBy, BoundReference, CachedVersion, NamingVersion, ProjectDb, PublishState, ReferenceBinding,
+  ReferenceTarget, StoreError, VersionReference,
 };
 use serde_json::Value;
 
-pub use self::waiting::{Waiting, use_here, waiting};
+pub use self::{
+  publish::{ConfigServer, RemoteResourceStore},
+  waiting::{Waiting, use_here, waiting},
+};
 use super::stream::{Source, blocking};
 use crate::sharing::{SharingError, project::convert};
 
-/// Keeps `resource` as the server has it, with every version this computer does not have yet.
+/// Keeps `resource` as the server has it, with every version this computer does not have yet. While a version of it
+/// published here is being sent, its versions are read by the sending ([`RemoteResourceStore`]) instead: the server
+/// may have numbered that version already.
 pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedResource) -> Result<(), SharingError> {
   if resource.kind == SharedResourceKind::Skill {
     tracing::debug!(resource = %resource.id, "a shared skill is not kept on this computer yet");
     return Ok(());
   }
   let id = resource.id;
-  let cached = blocking(root, move |root| Ok(ProjectDb::open(root)?.latest_version_number(id)?)).await?;
+  let (cached, sending) = blocking(root, move |root| {
+    let db = ProjectDb::open(root)?;
+    let sending = db
+      .waiting_publishes()?
+      .iter()
+      .any(|waiting| waiting.resource == id && waiting.state == PublishState::Waiting);
+    Ok((db.latest_version_number(id)?, sending))
+  })
+  .await?;
   let mut versions = Vec::new();
-  if resource.latest > cached {
+  if resource.latest > cached && !sending {
     let mut after = cached;
     loop {
       let page = source.versions(id, after).await?;

@@ -70,7 +70,13 @@ pub(super) fn waits<B: ResourceBody + SharedBody>(
   number: VersionNumber,
   next: &B,
 ) -> Result<bool, StoreError> {
-  if db.version::<B>(resource, number)?.is_some() {
+  // A version published here that still waits for the server's number only holds `number` until this one takes it
+  // and moves it up, so this one is new here.
+  let sending = db
+    .waiting_publishes()?
+    .iter()
+    .any(|publish| publish.resource == resource && publish.number == number);
+  if !sending && db.version::<B>(resource, number)?.is_some() {
     return Ok(
       db.cached_version::<B>(resource, number)?
         .is_some_and(|cached| cached.waits_here),

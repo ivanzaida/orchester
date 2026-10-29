@@ -8,7 +8,10 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-use super::resources::{kind_text, load_resources, used_here};
+use super::{
+  resources::{kind_text, load_resources},
+  used_versions::used_here,
+};
 use crate::StoreError;
 
 /// Refused with [`PublishError::Needs`] when `body`, published as `resource`, would name a service that is not

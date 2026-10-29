@@ -5,6 +5,7 @@
 use orchester_app::{
   app_log, clipboard,
   error_reports::{self, Environment},
+  hang_reports,
   startup::{Launch, WindowPosition},
   window,
 };
@@ -40,7 +41,11 @@ fn main() {
   }
   // Only this window reads the accounts' plan limits on its own; tests and QA copies never read a real account.
   launch.read_plan_limits();
+  // A frozen window is reported while the error reports are sent, from this thread's first beat in the window until
+  // the window has closed: the work after it is not watched.
+  let watchdog = reports.as_ref().and_then(|_| hang_reports::Watchdog::start());
   window::open(&runtime, &launch, position);
+  drop(watchdog);
   // The window has closed and its server stopped: then the runners stop and the session records its end.
   clipboard::clear_at_exit();
   launch.end();

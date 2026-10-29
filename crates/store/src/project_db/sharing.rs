@@ -102,6 +102,7 @@ impl ProjectDb {
        DELETE FROM task_run_status;
        DELETE FROM shared_automatic_status;
        DELETE FROM shared_members;
+       DELETE FROM shared_publishes;
        DELETE FROM sharing;
        UPDATE modules SET revision = NULL;
        UPDATE counters SET next = (SELECT COALESCE(MAX(number), 0) + 1 FROM tasks) WHERE name = 'task';",

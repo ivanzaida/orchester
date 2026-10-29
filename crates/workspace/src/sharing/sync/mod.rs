@@ -30,7 +30,7 @@ use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
 pub use self::{
-  config::{Waiting, bind, use_here, waiting},
+  config::{ConfigServer, RemoteResourceStore, Waiting, bind, use_here, waiting},
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
@@ -138,6 +138,26 @@ struct Live {
   current: Arc<AtomicBool>,
 }
 
+impl Live {
+  /// Sends the versions of the team's configuration published here while the server could not be reached, now that
+  /// the stream connected again (row 36). One the server does not take waits on its version with why; the stream goes
+  /// on either way.
+  async fn send_published(&self) {
+    let project = self.project.clone();
+    let shared = project.link().project;
+    let sent = background::run(move || {
+      let db = orchester_store::ProjectDb::open(project.repo_root())?;
+      RemoteResourceStore::new(db, project)?.send_waiting()
+    })
+    .await;
+    match sent {
+      Ok(Ok(())) => {}
+      Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
+      Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
+    }
+  }
+}
+
 impl Source for Live {
   async fn open(&self, cursor: Option<u64>) -> Result<EventStream, StreamEnd> {
     let entry = self.project.entry();
@@ -159,7 +179,10 @@ impl Source for Live {
     };
     let opened = client.events(&token, self.project.link().project, cursor).await;
     match &opened {
-      Ok(_) => self.servers.reached(server),
+      Ok(_) => {
+        self.servers.reached(server);
+        self.send_published().await;
+      }
       Err(StreamEnd::Unauthorized) => self.servers.refused(server).await,
       Err(_) => {}
     }
