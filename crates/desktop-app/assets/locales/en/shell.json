@@ -195,7 +195,7 @@
       "mcpUnavailable": "MCP unavailable",
       "mcpQa": "MCP :{{port}} · QA",
       "mcpDevelopment": "MCP :{{port}}",
-      "windowControl": "Agents can control this window",
+      "windowControl": "Agents control the window",
       "version": "v{{version}}",
       "unread": {
         "first": "Tasks couldn't be read · {{reason}}",

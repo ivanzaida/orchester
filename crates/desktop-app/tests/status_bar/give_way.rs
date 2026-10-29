@@ -26,7 +26,7 @@ fn several_at_once() -> BarFacts {
 fn status_gives_way_in_its_order_when_narrow() {
   let mut wide = Bar::of(several_at_once());
   assert!(wide.width("status-window-control") > 0.0);
-  let mut narrow = Bar::at(600, several_at_once());
+  let mut narrow = Bar::at(520, several_at_once());
   for id in ["status-auto-approving-stop", "status-mcp", "status-health"] {
     assert!(narrow.width(id) > 0.0, "{id} never gives way");
   }

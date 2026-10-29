@@ -93,7 +93,7 @@ fn status_health_card_without_a_project_holds_the_apps_own() {
   assert!(bar.texts("status-runner").is_none());
   assert_eq!(
     bar.texts("status-window-control"),
-    Some(vec!["Agents can control this window".to_owned()])
+    Some(vec!["Agents control the window".to_owned()])
   );
   let card = bar
     .card("status-health", "status-health-card")

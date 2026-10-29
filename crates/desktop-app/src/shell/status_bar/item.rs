@@ -1,8 +1,8 @@
 //! Parts of the status bar's items (`Status item` `wnnsD`): 26 high, 8 at each side, a 12 icon and an
 //! 11 label in `text_muted`, 6 apart. Items that do something take the `hover` fill under the pointer and
-//! never take the focus: the status bar is pointer-only (`ui::pressable`). An action beside an item
-//! (*Restart runner*, *Review*, *Stop*) is 11/500 `text_primary`, 3 at its sides, so two actions read 6
-//! apart. Text an item shortens keeps its full value in a tooltip (handover §3.3).
+//! never take the focus: the status bar is pointer-only (`ui::pressable`). An action (*Restart runner*,
+//! *Review*, *Stop*) is the compact button (`Button/Size/Compact` `SHKod`), 6 from the next one. Text an
+//! item shortens keeps its full value in a tooltip (handover §3.3).
 
 use lurq::{
   app::{
@@ -17,6 +17,7 @@ use lurq::{
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
+    button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     pressable::Press,
     tooltip::Truncated,
@@ -109,17 +110,23 @@ pub fn time_part(id: &str, time: impl Into<Element>) -> Element {
     .into()
 }
 
-/// An action beside an item, with the element id `id`.
+/// An action beside an item, with the element id `id`: the compact button, 6 before what follows it.
 pub fn action(id: &str, text: &str, press: Press) -> Element {
-  pressed(id, press)
-    .padding(Padding::horizontal(ExtraSpacing::Fine.role()))
-    .describe("a11y_name", text.to_owned())
-    .child(
-      Text::new(text)
-        .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextPrimary)
-        .nowrap(),
-    )
+  Row::new()
+    .height(Dimension::Px(ITEM_HEIGHT))
+    .padding(Padding::new().right(ExtraSpacing::Snug.role()))
+    .align_items(Alignment::Center)
+    .child(button(id, text, press))
+    .into()
+}
+
+/// The compact button (`Button/Size/Compact` `SHKod`) with the element id `id`, inside an item: 22 high,
+/// `surface_raised` inside a `border_strong` stroke, an 11.5 `text_primary` label, 10 at each side.
+pub fn button(id: &str, text: &str, press: Press) -> Element {
+  ActionButton::new(id.to_owned(), ButtonKind::Secondary, text.to_owned())
+    .compact()
+    .tight()
+    .press(press)
     .into()
 }
 
