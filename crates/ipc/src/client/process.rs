@@ -16,7 +16,7 @@ use std::{
 use tokio::{process::Child, task::JoinHandle};
 
 use super::{LaunchError, drain_stderr};
-use crate::EXIT_PROJECT_LOCKED;
+use crate::{EXIT_PROJECT_LOCKED, ErrorReports};
 
 /// How long the runner may take to end its agents and exit after SIGTERM: it ends one run after
 /// another, each agent's process group with a grace period of its own
@@ -34,13 +34,18 @@ pub struct RunnerProcess {
 }
 
 impl RunnerProcess {
-  pub(super) fn spawn(runner_exe: &Path, project_root: &Path) -> Result<Self, LaunchError> {
+  pub(super) fn spawn(
+    runner_exe: &Path,
+    project_root: &Path,
+    reports: Option<&ErrorReports>,
+  ) -> Result<Self, LaunchError> {
     let mut command = tokio::process::Command::new(runner_exe);
     command
       .arg(project_root)
       .stdin(Stdio::null())
       .stdout(Stdio::null())
       .stderr(Stdio::piped());
+    ErrorReports::pass(reports, &mut command);
     platform::prepare(&mut command);
     let mut child = command.spawn().map_err(|source| LaunchError::Spawn {
       exe: runner_exe.to_path_buf(),

@@ -261,7 +261,10 @@ const fn new_local(kind: Option<orchester_core::resource::ResourceKind>) -> &'st
     Some(ResourceKind::Pipeline) => "import.statusDetail.newPipeline",
     Some(ResourceKind::AgentProfile) => "import.statusDetail.newAgentProfile",
     Some(ResourceKind::Instruction) => "import.statusDetail.newInstruction",
-    Some(ResourceKind::Tool | ResourceKind::Skill | ResourceKind::TestSuite) | None => "import.statusDetail.newTool",
+    Some(
+      ResourceKind::Tool | ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack,
+    )
+    | None => "import.statusDetail.newTool",
   }
 }
 

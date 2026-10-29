@@ -1,9 +1,11 @@
-//! The app's MCP server in the status bar (`Status item` `wnnsD`; its states and popover `QqBCj`): the address it
-//! listens on (*MCP 127.0.0.1:47821*), or that its port is taken, that it is off or not running, in `danger` when
-//! agents cannot reach it; a QA copy or a development build names its port only (*MCP :53122 · QA*). It never
-//! gives way. A click opens the popover over it: the server's state, the address or the discovery file with Copy,
-//! the agents connected, whether agents may control the window, and *Open Automation settings*. It names where the
-//! token is kept, never the token.
+//! The app's MCP server in the status bar (`Status item` `wnnsD`; its states and popover `QqBCj`;
+//! `16 · MCP server not listening` `cKExU` and `17 · Agents may control the window · QA copy` `oEBfM` in
+//! `Status bar · redesign`): the installed app's server listening is quiet, the health dot's card names its address;
+//! otherwise the item says that its port is taken, that it is off or not running, in `danger` when agents cannot
+//! reach it, and a QA copy or a development build names its port only (*MCP :53122 · QA*). It never gives way. A
+//! click opens the popover over it: the server's state, the address or the discovery file with Copy, the agents
+//! connected, whether agents may control the window, and *Open Automation settings*. It names where the token is
+//! kept, never the token. Before it, while agents may control the window, a muted item says so.
 
 use std::{
   path::{Path, PathBuf},
@@ -19,13 +21,13 @@ use lurq::{
   clipboard::copy_to_clipboard,
   components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
 use super::{
   facts::{BarAction, Dispatch},
-  item::{dot, glyph, label, pressed},
+  item::{dot, dropping, give_way, glyph, item, label, pressed},
 };
 use crate::{
   mcp::{McpKind, McpStatus, ServerState, WindowControlSource, address, endpoint},
@@ -60,6 +62,31 @@ impl PartialEq for McpItemProps {
 }
 
 impl DevtoolsInspectable for McpItemProps {}
+
+/// Whether agents may control the window (its words give way first), then the MCP item unless the installed app's
+/// server listens.
+pub fn app_items(ctx: &mut Ctx, (status, bar): (&McpStatus, &ElementRef), dispatch: &Dispatch) -> Vec<Element> {
+  let mut items = Vec::new();
+  if status.window_control() {
+    items.push(
+      item("status-window-control")
+        .flex_shrink(1.0)
+        .shrink_order(give_way::WINDOW_CONTROL)
+        .shrink_limit(ShrinkLimit::Content)
+        .child(glyph(Icon::MousePointerClick, PaletteColor::TextMuted))
+        .child(dropping(&ctx.t("shell.status.windowControl"), PaletteColor::TextMuted))
+        .into(),
+    );
+  }
+  let quiet = matches!(
+    (&status.kind, &status.server),
+    (McpKind::Installation, ServerState::Listening { .. })
+  );
+  if !quiet {
+    items.push(mcp_item(ctx, status, dispatch, bar));
+  }
+  items
+}
 
 /// The item, and its popover while it is open.
 pub fn mcp_item(ctx: &mut Ctx, status: &McpStatus, dispatch: &Dispatch, bar: &ElementRef) -> Element {

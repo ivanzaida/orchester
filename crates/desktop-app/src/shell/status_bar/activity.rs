@@ -28,7 +28,7 @@ use orchester_workspace::{
 
 use super::{
   facts::{BarAction, Dispatch, ProjectFacts, ReadFailure},
-  item::{action, cut, give_way, glyph, item, label, pressed, time_part},
+  item::{action, button, cut, give_way, glyph, item, label, pressed, time_part},
   operations::{Operations, OperationsProps},
 };
 use crate::{
@@ -116,25 +116,25 @@ fn failure(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatc
 }
 
 /// The project's tasks could not be read, or not read again (the ones shown are the ones last read),
-/// and *Try again*.
+/// with *Try again* inside its item (`10 · Tasks could not be read` `CKlpO`).
 pub fn read_failure(ctx: &mut Ctx, failure: &ReadFailure, dispatch: &Dispatch) -> Vec<Element> {
   let (key, reason, state) = match failure {
     ReadFailure::First(reason) => ("shell.status.unread.first", reason, "unread"),
     ReadFailure::Again(reason) => ("shell.status.unread.again", reason, "stale"),
   };
   let text = ctx.t_args(key, [("reason", message_text(ctx, reason).to_string())]);
-  let row = raised("status-activity", state)
-    .child(glyph(Icon::CircleAlert, PaletteColor::TextPrimary))
-    .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextPrimary));
   let dispatch = dispatch.clone();
-  vec![
-    row.into(),
-    action(
-      "status-read-again",
-      &ctx.t("shell.status.unread.tryAgain"),
-      Press::run(move || dispatch(BarAction::ReadAgain)),
-    ),
-  ]
+  let again = button(
+    "status-read-again",
+    &ctx.t("shell.status.unread.tryAgain"),
+    Press::run(move || dispatch(BarAction::ReadAgain)),
+  );
+  let row = raised("status-activity", state)
+    .padding(Padding::horizontal(SpacingSize::Sm).right(SpacingSize::Xs))
+    .child(glyph(Icon::TriangleAlert, PaletteColor::Warning))
+    .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextSecondary))
+    .child(again);
+  vec![row.into()]
 }
 
 /// An activity item on a raised fill, for what the person should look at.

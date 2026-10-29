@@ -1,6 +1,8 @@
 //! Limits (`Limits` `tmV5e` in `02 · Runs`): the run and daily budgets, the time limit and how many agents and QA apps
 //! work at once, number fields with their units and read-backs, each saved as a person leaves it, with per-field
-//! validation and a change made outside the screen said under the group.
+//! validation and a change made outside the screen said under the group. Raising or removing the daily budget lets
+//! runs it stopped go on, a person's decision: window input from an MCP client saves it only while the person lets
+//! automation answer approvals.
 use std::{path::Path, sync::Arc};
 
 use lurq::{
@@ -15,7 +17,8 @@ use lurq::{
 };
 use orchester_core::tokens::compact_tokens;
 use orchester_workspace::{
-  budget::LimitsErrors, messages::Message, project_settings::LimitsText, tasks::outside::Outside,
+  budget::LimitsErrors, decisions::DecisionKind, messages::Message, project_settings::LimitsText,
+  tasks::outside::Outside,
 };
 
 use super::super::{
@@ -24,6 +27,7 @@ use super::super::{
   work::{self, Change, Read, Save},
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -51,7 +55,11 @@ pub(super) struct Limits {
   own: work::OwnSaves,
   separator: Arc<str>,
   submitted: Signal<Submitted>,
-  queued: Signal<bool>,
+  /// A save asked for while another ran, with whether every input that asked for it may raise the daily budget.
+  queued: Signal<Option<bool>>,
+  gate: Option<InputGate>,
+  /// Window input raised or removed the daily budget while the person does not let automation decide for them.
+  person_only: Signal<bool>,
 }
 #[derive(Clone, PartialEq)]
 struct Submitted(Option<LimitsText>);
@@ -158,7 +166,9 @@ impl Component for Limits {
       own: work::OwnSaves::new(ctx, &[Outside::Limits]),
       separator: ctx.t("project_settings.groupSeparator"),
       submitted: ctx.signal(Submitted(None)),
-      queued: ctx.signal(false),
+      queued: ctx.signal(None),
+      gate: ctx.use_context::<InputGate>(),
+      person_only: ctx.signal(false),
     };
     let save = tab.save.clone();
     work::follow(
@@ -178,8 +188,8 @@ impl Component for Limits {
         && let Some(saved) = &state.data
       {
         after.accept(saved.0.limits);
-        if after.queued.get_untracked() {
-          after.submit(&root, &next);
+        if let Some(may_raise) = after.queued.get_untracked() {
+          after.submit(&root, &next, may_raise);
         }
       }
     });
@@ -206,7 +216,7 @@ impl Component for Limits {
     }
     if !changed && !save.state().get().is_pending() && save.state().get().error.is_some() {
       self.submitted.set(Submitted(None));
-      self.queued.set(false);
+      self.queued.set(None);
       save.state().set(lurq::app::ctx::FutureState::idle());
     }
     if !save.state().get().is_pending() && save.state().get().error.is_none() {
@@ -255,6 +265,9 @@ impl Component for Limits {
     if let Some(error) = state.error {
       group = group.after(field_error("settings-limits-read-error", &message_text(ctx, &error)));
     }
+    if let Some(refused) = self.person_only_line(ctx, changed) {
+      group = group.after(refused);
+    }
     if outside && changed {
       group = group.after(self.outside(ctx, data));
     }
@@ -262,6 +275,19 @@ impl Component for Limits {
   }
 }
 impl Limits {
+  /// Why a client's raise of the daily budget was not saved, while the fields still hold it.
+  fn person_only_line(&self, ctx: &Ctx, changed: bool) -> Option<Element> {
+    if !changed && self.person_only.get_untracked() {
+      self.person_only.set(false);
+    }
+    self.person_only.get().then(|| {
+      field_error(
+        "settings-limits-person-only",
+        &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
+      )
+      .into()
+    })
+  }
   fn text(&self) -> LimitsText {
     LimitsText {
       default: self.default.get(),
@@ -301,15 +327,26 @@ impl Limits {
   }
   fn commit(&self, props: &TabProps, save: &Save) -> Arc<dyn Fn() + Send + Sync> {
     let (tab, save, root) = (self.clone(), save.clone(), props.project.open.repo_root.clone());
-    Arc::new(move || tab.submit(&root, &save))
+    Arc::new(move || {
+      // Read while the input that left the field is delivered; a save queued behind another keeps it.
+      let may_raise = input_may_decide(tab.gate.as_ref(), Guarded::Decision(DecisionKind::Limit));
+      tab.submit(&root, &save, may_raise);
+    })
   }
-  fn submit(&self, root: &Path, save: &Save) {
+  /// Saves the fields as they read now; `may_raise` is whether the input that asked may raise or remove the daily
+  /// budget.
+  fn submit(&self, root: &Path, save: &Save, may_raise: bool) {
     if save.state().get_untracked().is_pending() {
-      // A later blur must be committed even when it reverted to the pre-save baseline.
-      self.queued.set(true);
+      // A later blur must be committed even when it reverted to the pre-save baseline. Queued by inputs that may not
+      // raise the daily budget, it does not.
+      let queued = self
+        .queued
+        .get_untracked()
+        .map_or(may_raise, |earlier| earlier && may_raise);
+      self.queued.set(Some(queued));
       return;
     }
-    self.queued.set(false);
+    self.queued.set(None);
     let Some(base) = self.stored.get_untracked() else {
       return;
     };
@@ -317,6 +354,12 @@ impl Limits {
     let Ok(asked) = text.limits(base.0.limits, &self.separator) else {
       return;
     };
+    if base.0.limits.raises_daily_budget(asked) && !may_raise {
+      tracing::warn!("synthetic input raised the daily budget without consent; not saved");
+      self.person_only.set(true);
+      return;
+    }
+    self.person_only.set(false);
     if asked != base.0.limits {
       self.submitted.set(Submitted(Some(text)));
       save.run((

@@ -351,6 +351,7 @@ fn publish_prepared<B: ResourceBody>(
   now: Timestamp,
 ) -> Result<Version<B>, StoreError> {
   draft.body().check_publishable()?;
+  super::service_needs::check(connection, resource, draft.body())?;
   let version = publish(draft, latest, now)?;
   connection.execute(
     "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -559,6 +560,8 @@ pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
     ResourceKind::Tool => "tool",
     ResourceKind::Skill => "skill",
     ResourceKind::TestSuite => "test_suite",
+    ResourceKind::Service => "service",
+    ResourceKind::Stack => "stack",
   }
 }
 
@@ -570,6 +573,8 @@ fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
     "tool" => Ok(ResourceKind::Tool),
     "skill" => Ok(ResourceKind::Skill),
     "test_suite" => Ok(ResourceKind::TestSuite),
+    "service" => Ok(ResourceKind::Service),
+    "stack" => Ok(ResourceKind::Stack),
     other => Err(corrupt("resource kind", other)),
   }
 }

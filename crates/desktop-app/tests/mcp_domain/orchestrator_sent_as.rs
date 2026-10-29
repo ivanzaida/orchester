@@ -112,13 +112,11 @@ fn chat_message_card_kept_before_what_it_does_was_known_is_refused() {
 fn chat_run_again_card_keeps_and_shows_the_run_it_started() {
   let programs = super::runner_programs::programs();
   let (folder, seeded) = Served::seed("task-states", Some(programs.fake_codex.clone()));
-  let mut served = Served::start_with(folder, &seeded.app_database, programs.runner.clone(), false);
-  // The seed used today's budget: lifted, so the task runs again.
-  served.ok(
-    "update_project_limits",
-    &json!({ "project": "Kontur", "daily_budget": null }),
-  );
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  // The seed used today's budget: lifted by the person, so the task runs again.
+  db.update_project_limits(|limits| Some(limits.with_daily_budget_limit(None)))
+    .expect("no daily budget");
+  let mut served = Served::start_with(folder, &seeded.app_database, programs.runner.clone(), false);
   let scope = chat(&served, &mut db);
   let (task, old) = task_run(&db, &titled(&seeded, "cancelled"));
   let message = json!({ "project": "Kontur", "run": old.id().to_string(), "text": "Start over from main." });

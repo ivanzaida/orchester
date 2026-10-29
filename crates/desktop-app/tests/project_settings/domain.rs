@@ -27,9 +27,21 @@ pub(super) fn call(page: &Settings, name: &str, args: Value) -> Result<Value, To
   })
 }
 
+/// Lets automation answer approvals, as the person does in Settings: removing or raising the daily budget needs it.
+pub(super) fn consent(page: &Settings) {
+  page
+    .window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_automation_answers_approvals(true)
+    .expect("the approvals opt-in");
+}
+
 #[test]
 fn project_settings_domain_limits_accept_null_daily_budget_and_preserve_it_when_omitted() {
   let page = Settings::new(false);
+  consent(&page);
   let unlimited = call(
     &page,
     "update_project_limits",
