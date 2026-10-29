@@ -329,6 +329,8 @@ person asked for that (setting); by default it opens only when the person opens 
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
+   - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
+     described under "Permissions and policy" above.
 
 ## Not in scope
 
