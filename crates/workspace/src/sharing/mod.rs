@@ -23,6 +23,7 @@ mod owners;
 mod password;
 pub mod project;
 mod server_key;
+pub mod team_join;
 pub mod trust;
 
 use std::{

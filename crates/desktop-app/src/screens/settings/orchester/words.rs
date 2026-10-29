@@ -148,7 +148,6 @@ pub fn sharing_error(error: &SharingError) -> Said {
 pub fn server_client(error: &ClientError) -> Said {
   match error {
     ClientError::Api { code, retry_after, .. } => match code {
-      ErrorCode::InvalidCode => Said::new("sharing.connect.code.invalid"),
       ErrorCode::UsernameTaken => Said::new("sharing.connect.username.taken"),
       ErrorCode::Invalid => Said::new("sharing.connect.username.needed"),
       ErrorCode::RateLimited => minutes(Said::new("sharing.connect.code.rateLimited"), *retry_after),

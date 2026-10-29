@@ -11,6 +11,7 @@ pub mod convert;
 pub mod discovery;
 pub(super) mod download;
 pub mod first_link;
+pub mod folder;
 mod join;
 pub mod landing;
 pub mod link;
