@@ -47,11 +47,7 @@ type Incoming = Result<Option<Request>, IpcError>;
 /// runner to stop, or `shutdown` is signalled. Runs still executing then are interrupted: their
 /// agents are ended and the runs keep their last checkpoint. The desktop turns the runner's error
 /// reports on and off with `reports`, which a build that never reports has none of.
-pub async fn serve(
-  project_root: &Path,
-  mut shutdown: ShutdownSignal,
-  reports: Option<Switch>,
-) -> Result<(), IpcError> {
+pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal, reports: Option<Switch>) -> Result<(), IpcError> {
   // Made before the desktop can connect: it notes the groups queued before this runner started.
   let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.

@@ -122,7 +122,10 @@ struct Transports {
 impl TransportFactory for Transports {
   fn create_transport_with_options(&self, _: TransportOptions) -> Arc<dyn Transport> {
     *self.made.lock().expect("count") += 1;
-    let (sending, release) = (self.sending.lock().expect("sending").take(), self.release.lock().expect("release").take());
+    let (sending, release) = (
+      self.sending.lock().expect("sending").take(),
+      self.release.lock().expect("release").take(),
+    );
     let mut hold = sending.zip(release);
     let sent = self.sent.clone();
     let thread = TokioTransportThreadOptions::new(move |envelope: Envelope, limits| {
@@ -189,13 +192,17 @@ fn error_reports_off_drops_the_waiting_reports_and_sends_none_until_turned_on_ag
   let switch = runner.switch();
 
   hub.capture_message("on its way", sentry::Level::Error);
-  on_its_way.recv_timeout(PATIENCE).expect("the first report is on its way");
+  on_its_way
+    .recv_timeout(PATIENCE)
+    .expect("the first report is on its way");
   hub.capture_message("waiting one", sentry::Level::Error);
   hub.capture_message("waiting two", sentry::Level::Error);
   switch.set(None);
   hub.capture_message("while off", sentry::Level::Error);
   release.send(()).expect("the held report goes");
-  first_ended.recv_timeout(PATIENCE).expect("turning off ends the transport");
+  first_ended
+    .recv_timeout(PATIENCE)
+    .expect("turning off ends the transport");
   assert_eq!(
     *sent.lock().expect("sent"),
     [("on its way".to_owned(), RELEASE.to_owned())],
@@ -212,7 +219,11 @@ fn error_reports_off_drops_the_waiting_reports_and_sends_none_until_turned_on_ag
     "on again sends with the release it was turned on with"
   );
   assert_eq!(sent.lock().expect("sent").len(), 2);
-  assert_eq!(*transports.made.lock().expect("count"), 2, "on again sends through a new transport");
+  assert_eq!(
+    *transports.made.lock().expect("count"),
+    2,
+    "on again sends through a new transport"
+  );
 }
 
 #[test]

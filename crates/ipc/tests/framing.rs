@@ -417,7 +417,10 @@ async fn frames_round_trip_error_reports_on_and_off() {
   assert_eq!(reader.read::<Event>().await.expect("read reply"), Some(reply));
 
   let empty = r#"{"type":"set_error_reports","data":{"reports":{"environment":"qa","release":""}}}"#;
-  assert!(serde_json::from_str::<Command>(empty).is_err(), "no release is no reports");
+  assert!(
+    serde_json::from_str::<Command>(empty).is_err(),
+    "no release is no reports"
+  );
 }
 
 /// Run again with what a person saw the run before leave, a worktree folder git forgot among it

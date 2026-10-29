@@ -69,7 +69,10 @@ impl Reports {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let started_with = ErrorReports::of_this_process();
     if let Some(reports) = &started_with {
-      tracing::info!(environment = reports.environment(), "error reports are sent to GlitchTip");
+      tracing::info!(
+        environment = reports.environment(),
+        "error reports are sent to GlitchTip"
+      );
     }
     let reports = Self::new(started_with, Arc::new(sentry::transports::DefaultTransportFactory));
     Hub::main().bind_client(Some(reports.client.clone()));
