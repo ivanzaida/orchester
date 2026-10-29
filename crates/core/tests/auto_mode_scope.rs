@@ -1,5 +1,5 @@
 //! What auto mode leaves to its reviewer: a command with parts Orchester cannot read goes to the reviewer,
-//! told so, unless the step's network is off or it only reads; a Codex escalation always goes to the
+//! told so, in every step (ORC-339); a Codex escalation always goes to the
 //! person; the reviewer's input is plain ASCII, so
 //! no line separator or look-alike marker reaches it; a reason loses its invisible characters; and a push
 //! is reviewed only to the run's origin, of its checked-out branch.
@@ -15,8 +15,8 @@ use orchester_core::{
     ApprovalSubject, PendingToolApproval,
     review::{
       DATA_START, HoldRules, PushFacts, REVIEW_INSTRUCTIONS, RequestReviewer, Review, ReviewHold, ReviewInput,
-      ReviewSpend, ReviewVerdict, Reviewed, ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt,
-      review_request,
+      ReviewSpend, ReviewVerdict, Reviewed, ReviewedRequest, ReviewedStep, ReviewedTask, UnreadPart, UnreadWhy,
+      review_hold, review_prompt, review_request,
     },
   },
   time::Timestamp,
@@ -113,46 +113,50 @@ fn step(repository: RepositoryAccess, network: NetworkAccess) -> AgentPermission
 }
 
 #[test]
-fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
+fn auto_mode_reviews_an_unknown_command_in_every_step() {
   let (_root, unknown) = subject("frobnicate --all");
+  let unread = vec![UnreadPart {
+    at: 1,
+    why: UnreadWhy::Unknown,
+  }];
+  let prompt = review_prompt(&input("frobnicate --all", "").with_unread(unread));
+  assert!(prompt.contains(r#""command_parts_orchester_could_not_read":1"#));
+  // A step whose network is off or that only reads no longer leaves it to the person (ORC-339): the reviewer is
+  // told the step's limits and judges it.
+  for any in [
+    step(RepositoryAccess::Write, NetworkAccess::On),
+    step(RepositoryAccess::Write, NetworkAccess::Off),
+    step(RepositoryAccess::ReadOnly, NetworkAccess::On),
+    step(RepositoryAccess::ReadOnly, NetworkAccess::Off),
+  ] {
+    let reviewer = Approves::new("It regenerates the task's fixtures.");
+    let rules = HoldRules {
+      permissions: Some(&any),
+      push: PushFacts::default(),
+      escalation: false,
+      build_output: &[],
+    };
+    let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
+    assert!(review.approves(), "{review:?}");
+    assert_eq!(
+      reviewer.told.get(),
+      Some(1),
+      "the reviewer is told Orchester could not read one part"
+    );
+  }
+  let (_root, empty) = subject("");
   let writing = step(RepositoryAccess::Write, NetworkAccess::On);
-  let reviewer = Approves::new("It regenerates the task's fixtures.");
   let rules = HoldRules {
     permissions: Some(&writing),
     push: PushFacts::default(),
     escalation: false,
     build_output: &[],
   };
-  let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
-  assert!(review.approves(), "{review:?}");
   assert_eq!(
-    reviewer.told.get(),
-    Some(1),
-    "the reviewer is told Orchester could not read one part"
+    review_hold(&empty, &rules),
+    Some(ReviewHold::Unreadable),
+    "no command to read at all"
   );
-  let prompt = review_prompt(&input("frobnicate --all", "").with_unread(1));
-  assert!(prompt.contains(r#""command_parts_orchester_could_not_read":1"#));
-
-  for confined in [
-    step(RepositoryAccess::Write, NetworkAccess::Off),
-    step(RepositoryAccess::ReadOnly, NetworkAccess::On),
-  ] {
-    let reviewer = Approves::new("Looks fine.");
-    let rules = HoldRules {
-      permissions: Some(&confined),
-      push: PushFacts::default(),
-      escalation: false,
-      build_output: &[],
-    };
-    let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
-    assert_eq!(
-      review,
-      Review::Held {
-        hold: ReviewHold::Unreadable
-      }
-    );
-    assert_eq!(reviewer.told.get(), None, "no review");
-  }
 }
 
 #[test]

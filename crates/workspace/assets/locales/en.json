@@ -33,8 +33,8 @@
   },
   "autoModeHold": {
     "secrets": "Auto mode didn’t review this: it reads a credential location or store.",
-    "unreadable": "Auto mode didn’t review this: Orchester couldn’t read all of it, and the step’s network is off or the step only reads the repository.",
-    "destructive": "Auto mode didn’t review this: it rewrites or discards history, or deletes outside the worktree.",
+    "unreadable": "Auto mode didn’t review this: Orchester found no command in it that it could read.",
+    "destructive": "Auto mode didn’t review this: it rewrites or discards history beyond the run’s own branch, changes git beyond the run’s worktree, or deletes outside the worktree.",
     "push": "Auto mode didn’t review this: it pushes something other than the run’s own branch to origin, or forces the push.",
     "readOnlyStep": "Auto mode didn’t review this: the step only reads the repository, and this command may write.",
     "networkOff": "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install.",

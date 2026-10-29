@@ -1,8 +1,8 @@
 //! Auto mode end to end with `orchester-fake-claude` as both the agent and the reviewer: a command the
 //! rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
-//! with its system prompt, an unknown command too while the step's network is on, and a plain push of the
+//! with its system prompt, an unknown command too, also in a step that only reads (ORC-339), and a plain push of the
 //! run's branch to the origin recorded at its start, and a Cargo test in a step that only reads whose output git
-//! ignores; a credential read, a force push, an unknown command or a test whose output git does not ignore in a
+//! ignores; a credential read, a force push, or a test whose output git does not ignore in a
 //! step that only reads, and every Codex escalation still ask the person without a review; a question of the
 //! reviewer and an answer it cannot read leave the request to the person with what auto mode said; a review whose run
 //! turned auto mode off meanwhile is dropped; and a reviewer still at work when the person answers is stopped. A Codex
@@ -269,8 +269,10 @@ async fn auto_mode_leaves_a_credential_read_to_the_person_without_a_review() {
   assert!(started.logged("pid").is_empty(), "no reviewer ran");
 }
 
+/// ORC-339: a command Orchester cannot read to the end goes to the reviewer in a step that only reads too; the
+/// reviewer is told the step's limits and decides.
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_reviews_an_unknown_command_unless_the_step_only_reads() {
+async fn auto_mode_reviews_an_unknown_command_also_when_the_step_only_reads() {
   let mut on = Started::new(&claude("Run `./regen.sh`.")).await;
   on.ended().await;
   let decisions = on.decisions();
@@ -278,17 +280,12 @@ async fn auto_mode_reviews_an_unknown_command_unless_the_step_only_reads() {
   assert_eq!(decisions[0].0, DecidedBy::Reviewer);
   assert_eq!(on.logged("pid").len(), 1, "the reviewer judged it");
 
-  let mut off = Started::new(&asking_in("Run `./regen.sh`.", RepositoryAccess::ReadOnly)).await;
-  let (request, review) = off.left_to_person().await;
-  assert_eq!(
-    review,
-    Review::Held {
-      hold: ReviewHold::Unreadable
-    }
-  );
-  off.deny(request).await;
-  off.ended().await;
-  assert!(off.logged("pid").is_empty(), "no reviewer ran");
+  let mut read_only = Started::new(&asking_in("Run `./regen.sh`.", RepositoryAccess::ReadOnly)).await;
+  read_only.ended().await;
+  let decisions = read_only.decisions();
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
+  assert_eq!(read_only.logged("pid").len(), 1, "the reviewer judged it");
 }
 
 #[tokio::test(flavor = "multi_thread")]

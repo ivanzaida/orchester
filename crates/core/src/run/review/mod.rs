@@ -5,10 +5,11 @@
 //! reviewer's reason. It is not "approve everything".
 //!
 //! Hard rules come before the reviewer and it cannot override them ([`review_hold`], every part of a
-//! command line checked on its own): a credential read, a part Orchester could not read to the end, a
-//! rewrite of history or a delete outside the worktree, and anything outside the step's permissions (a
-//! write in a read-only step, the network while it is off, a write outside the worktree and its writable
-//! folders) always go to the person, as do Codex escalations and requests too long to be reviewed whole.
+//! command line checked on its own): a credential read, a rewrite of history or a delete outside the
+//! worktree, and anything outside the step's permissions (a write in a read-only step, the network while it
+//! is off, a write outside the worktree and its writable folders) always go to the person, as do Codex
+//! escalations and requests too long to be reviewed whole. A part Orchester could not read to the end goes to
+//! the reviewer, told which and why ([`unread_parts`]), which judges it against the step's permissions.
 //! The reviewer fails closed: an error, a timeout or an answer that cannot be read goes to the person too
 //! ([`Review::of`]). What it reads holds no secret value: the request as the approval card shows it,
 //! redacted the same way. Its reason is the reviewer's own text, so it is kept to one plain line.
@@ -30,7 +31,7 @@ pub use self::{
     default_review_model, resolve_reviewer, reviewer_kind,
   },
   hold::{HoldRules, ReviewHold, review_hold, unread_parts},
-  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
+  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, UnreadPart, UnreadWhy},
   prompt::{
     DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_verdict, parse_verdict_text, review_prompt,
   },

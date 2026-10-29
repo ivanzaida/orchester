@@ -153,31 +153,38 @@ fn lookups_that_may_write_a_tool_cache_hold_in_a_read_only_step() {
 #[test]
 fn lookups_keep_the_writing_forms_and_the_other_hard_rules() {
   let fixture = Fixture::new();
+  // A Cargo form Orchester does not read to the end holds as a write in a read-only step (ORC-339).
   for (command, hold) in [
     ("cargo fmt", ReviewHold::ReadOnlyStep),
-    ("cargo fix --allow-dirty", ReviewHold::Unreadable),
+    ("cargo fix --allow-dirty", ReviewHold::ReadOnlyStep),
     ("cargo add serde", ReviewHold::ReadOnlyStep),
     ("cargo install ripgrep", ReviewHold::ReadOnlyStep),
-    ("cargo publish", ReviewHold::Unreadable),
+    ("cargo publish", ReviewHold::ReadOnlyStep),
     ("cargo search lurq > crates.txt", ReviewHold::ReadOnlyStep),
     ("cargo search lurq >> notes/crates.txt", ReviewHold::ReadOnlyStep),
-    ("cargo s lurq", ReviewHold::Unreadable),
+    ("cargo s lurq", ReviewHold::ReadOnlyStep),
     (
       "cargo metadata --frozen --manifest-path ../other/Cargo.toml",
-      ReviewHold::Unreadable,
+      ReviewHold::ReadOnlyStep,
     ),
-    ("cargo search lurq --config net.offline=true", ReviewHold::Unreadable),
+    ("cargo search lurq --config net.offline=true", ReviewHold::ReadOnlyStep),
     ("git fetch origin", ReviewHold::ReadOnlyStep),
     ("git remote update", ReviewHold::ReadOnlyStep),
-    ("git ls-remote --upload-pack=x origin", ReviewHold::Unreadable),
-    // Git takes a shortening of an option's name: `--upload` is `--upload-pack`.
-    ("git ls-remote --upload=x .", ReviewHold::Unreadable),
-    ("git ls-remote --upload x .", ReviewHold::Unreadable),
-    ("git ls-remote --exe=x origin", ReviewHold::Unreadable),
-    ("git ls-remote --hea origin", ReviewHold::Unreadable),
     ("cargo search lurq; cat ~/.cargo/credentials.toml", ReviewHold::Secrets),
   ] {
     assert_eq!(fixture.held(command), Some(hold), "{command}");
+  }
+  // A git option Orchester does not read (one that starts a program, or a shortening of one) goes to the reviewer,
+  // which asks about a command that may start a program or reach the network (ORC-339).
+  for command in [
+    "git ls-remote --upload-pack=x origin",
+    // Git takes a shortening of an option's name: `--upload` is `--upload-pack`.
+    "git ls-remote --upload=x .",
+    "git ls-remote --upload x .",
+    "git ls-remote --exe=x origin",
+    "git ls-remote --hea origin",
+  ] {
+    assert_eq!(fixture.held(command), None, "{command}");
   }
 }
 
@@ -226,7 +233,7 @@ fn lookups_count_only_under_cargos_own_names() {
       "cargo search lurq",
       (RepositoryAccess::ReadOnly, NetworkAccess::On)
     ),
-    Some(ReviewHold::Unreadable)
+    Some(ReviewHold::ReadOnlyStep)
   );
   assert_eq!(
     fixture.held_in(

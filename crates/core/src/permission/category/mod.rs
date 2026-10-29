@@ -19,6 +19,7 @@
 mod awk_program;
 mod broad;
 mod build_output;
+mod dotnet;
 mod files;
 mod gh;
 mod git;
@@ -296,17 +297,11 @@ fn classify_part(
   }
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
-  // What a folder's settings name runs only where they are the agent's own.
-  if judged.folder_code {
-    placing.inside(&mut part, ".");
-  }
   place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
   for target in &judged.writes {
     placing.write(&mut part, target, judged.deletes);
   }
-  for word in &judged.inside {
-    placing.inside(&mut part, word);
-  }
+  place_folders(&mut part, &judged, placing, line.folders.as_deref());
   if let Some(words) = &judged.build_words {
     build_output::place(&mut part, words, placing);
   }
@@ -387,7 +382,16 @@ fn shell_parts(
   }
   // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
   let mut inner_line = line.clone();
-  let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
+  let mut parts = match dotnet_statements(&script, inner, no_profile) {
+    Some(statements) => statements
+      .into_iter()
+      .flat_map(|statement| match dotnet::call(statement) {
+        Some(call) => vec![dotnet_part(call, statement, inner_line.placing(scope))],
+        None => classify_line(statement, inner, scope, &mut inner_line, depth + 1),
+      })
+      .collect(),
+    None => classify_line(&script, inner, scope, &mut inner_line, depth + 1),
+  };
   line.made = inner_line.made;
   // A shell written with a folder is not the bare shell a rule names, and PowerShell without
   // `-NoProfile` runs the user's profile first: no rule runs what either runs.
@@ -404,6 +408,67 @@ fn shell_parts(
   parts
 }
 
+/// The statements of a PowerShell `script` run with `-NoProfile`, when one of them is a .NET call that only reads
+/// ([`dotnet`]): each such call is read on its own, the other statements as a script's parts. `None` for any other
+/// script, which is read whole.
+fn dotnet_statements(script: &str, quoting: Quoting, no_profile: bool) -> Option<Vec<&str>> {
+  if quoting != Quoting::PowerShell || !no_profile {
+    return None;
+  }
+  dotnet::statements(script).filter(|statements| statements.iter().any(|statement| dotnet::call(statement).is_some()))
+}
+
+/// The part of a .NET `call` that only reads, written as `statement`: a known-safe read whose files are placed.
+fn dotnet_part(call: dotnet::Call, statement: &str, placing: Placing<'_>) -> CommandPart {
+  let judged = Judged::of(Kind::ReadOnly).known_safe().naming_no_file();
+  let mut part = CommandPart::new(vec![statement.trim().to_owned()], Some(call.name), &judged);
+  for file in &call.files {
+    placing.read(&mut part, file);
+  }
+  part
+}
+
+/// Checks the folders `part` must run in, from the `folders` of its line: one whose settings name what runs
+/// ([`Judged::folder_code`]) and the words that must lie inside ([`Judged::inside`]) are Unknown elsewhere. Git there
+/// (ORC-339) works in a repository that is not the run's: it holds as a write outside whatever it does, and a form
+/// that is the run's own only in its own repository ([`Judged::own_repository`]) is History / destructive anywhere
+/// but the worktree's root.
+fn place_folders(part: &mut CommandPart, judged: &Judged, placing: Placing<'_>, folders: Option<&[PathBuf]>) {
+  let mut outside = None;
+  if judged.folder_code && !placing.inside(part, ".") {
+    outside = Some(".");
+  }
+  for word in &judged.inside {
+    if !placing.inside(part, word) {
+      outside.get_or_insert(word.as_str());
+    }
+  }
+  if part.program() == Some("git")
+    && let Some(folder) = outside
+  {
+    part.outside_write.get_or_insert_with(|| folder.to_owned());
+  }
+  if judged.own_repository && !in_worktree_root(judged, placing, folders) {
+    part.at_least(CommandCategory::HistoryDestructive);
+  }
+}
+
+/// Whether git as `judged` runs in the worktree's own repository: its one `-C` folder, else every folder the part may
+/// run in (`folders`), is the worktree's root.
+fn in_worktree_root(judged: &Judged, placing: Placing<'_>, folders: Option<&[PathBuf]>) -> bool {
+  if judged.repository.is_none() && !judged.inside.is_empty() {
+    return false;
+  }
+  folders.is_some_and(|folders| {
+    folders.iter().all(|folder| match &judged.repository {
+      Some(repository) => placing
+        .scope
+        .folder(folder, repository)
+        .is_some_and(|path| placing.scope.is_worktree(&path)),
+      None => placing.scope.is_worktree(folder),
+    })
+  })
+}
 /// Places the arguments of `part` that may name a file, and the files `judged` says it reads, from the
 /// `folders` it runs in, or for `git -C <folder>` from that folder.
 fn place_arguments(

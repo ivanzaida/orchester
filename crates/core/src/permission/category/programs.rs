@@ -88,6 +88,9 @@ pub(super) struct Judged {
   /// It may write a tool's own cache outside the worktree (Cargo's registry index, npm's or pip's cache), or a
   /// lock file it resolves (`cargo tree` without `--frozen`).
   pub(super) updates_cache: bool,
+  /// A git form that is the run's own only in the worktree's own repository (`reset --hard`, `commit --amend`,
+  /// `rebase`, …; ORC-339): run anywhere but the worktree's root it is History / destructive.
+  pub(super) own_repository: bool,
 }
 
 impl Judged {
@@ -117,6 +120,7 @@ impl Judged {
       build_words: None,
       looks_up: false,
       updates_cache: false,
+      own_repository: false,
     }
   }
 
@@ -194,6 +198,12 @@ impl Judged {
   /// A command that may write a tool's cache or a lock file, as [`Self::updates_cache`] says.
   pub(super) const fn updating_cache(mut self) -> Self {
     self.updates_cache = true;
+    self
+  }
+
+  /// A git form that is the run's own only in the worktree's own repository, as [`Self::own_repository`] says.
+  pub(super) const fn in_own_repository(mut self) -> Self {
+    self.own_repository = true;
     self
   }
 

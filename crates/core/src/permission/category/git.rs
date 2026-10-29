@@ -7,6 +7,14 @@
 //! another git folder, or writes outside (`--output`, `--unsafe-paths`). A global option other than
 //! `-C <folder inside>` and the pager switches, a transport that runs a command (`ext::`), and any
 //! other subcommand are Unknown.
+//!
+//! The run's own worktree, its index and its branch are the run's (ORC-339, the person's decision of
+//! 2026-10-29): Orchester checkpoints them, so what git does there alone is Worktree, never the person's to
+//! decide: `commit --amend`, `stash drop`, `clean`, `reset --hard` to a commit of the branch, a `rebase` of the
+//! branch checked out. What reaches beyond them stays History / destructive: another branch or a tag, the
+//! repository's shared settings, its worktrees, `gc`, `prune` and `reflog expire`, `filter-branch`, a push; and a
+//! git whose `-C`, `--git-dir`, `--work-tree` or working folder lies outside the worktree and its writable folders
+//! is held as a write outside ([`super::CommandPart::writes_outside`]).
 
 use super::programs::{Judged, Kind, has_option, operands};
 use crate::permission::known_safe;
@@ -109,11 +117,14 @@ fn subcommand(args: &[String]) -> Option<(usize, &str, Vec<String>)> {
 /// `git` with `args`.
 pub(super) fn judge(args: &[String]) -> Judged {
   let Some((at, sub, folders)) = subcommand(args) else {
-    // `git` alone, or `git --version`, prints; any other global option is not read.
+    // `git` alone, or `git --version`, prints; any other global option is not read. The folders a
+    // `--git-dir` or `--work-tree` names must still be the run's.
     return if args.iter().all(|arg| arg == "--version") {
       Judged::of(Kind::ReadOnly)
     } else {
-      Judged::unknown()
+      let mut unknown = Judged::unknown();
+      unknown.inside.extend(pointed_folders(args));
+      unknown
     };
   };
   let rest = &args[at + 1..];
@@ -139,6 +150,29 @@ pub(super) fn judge(args: &[String]) -> Judged {
   judged.subcommand(at, sub.to_owned())
 }
 
+/// The folders git's global options `-C`, `--git-dir` and `--work-tree` name (`--git-dir=x` or `--git-dir x`),
+/// before the subcommand.
+fn pointed_folders(args: &[String]) -> Vec<String> {
+  let mut folders = Vec::new();
+  let mut args = args.iter();
+  while let Some(arg) = args.next() {
+    match arg.as_str() {
+      "-C" | "--git-dir" | "--work-tree" => folders.extend(args.next().cloned()),
+      "-c" | "--namespace" | "--config-env" => {
+        args.next();
+      }
+      arg if !arg.starts_with('-') => break,
+      arg => {
+        let value = arg
+          .strip_prefix("--git-dir=")
+          .or_else(|| arg.strip_prefix("--work-tree="));
+        folders.extend(value.map(str::to_owned));
+      }
+    }
+  }
+  folders
+}
+
 /// `sub` with its arguments `with_sub` (the subcommand first).
 fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
   let rest = &with_sub[1..];
@@ -149,18 +183,20 @@ fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
       Judged::unknown()
     }
     "tag" if has_option(rest, &["-s", "-u", "--sign", "--local-user"]) => Judged::unknown(),
-    "branch" | "tag" if has_option(rest, &["-d", "-D", "--delete", "-f", "--force", "-m", "-M", "-c", "-C"]) => {
-      Judged::of(Kind::Destructive)
-    }
     "branch" if known_safe::readable_arguments(&argv(with_sub)).is_some() => Judged::of(Kind::ReadOnly),
     "tag" if rest.iter().all(|arg| matches!(arg.as_str(), "-l" | "--list")) => Judged::of(Kind::ReadOnly),
-    "branch" | "tag" => Judged::of(Kind::Worktree),
+    // Another branch or a tag is no ref of the run's own: making, moving or deleting one is the person's.
+    "branch" | "tag" => Judged::of(Kind::Destructive),
     "stash" => stash(rest),
-    "reset" if has_option(rest, &["--hard", "--merge", "--keep"]) => Judged::of(Kind::Destructive),
+    "reset" if has_option(rest, &["--hard", "--merge", "--keep"]) => reset(rest),
     "reset" => Judged::of(Kind::Worktree),
-    "commit" if has_option(rest, &["--amend"]) => Judged::of(Kind::Destructive),
+    "commit" if has_option(rest, &["--amend"]) => Judged::of(Kind::Worktree).in_own_repository(),
     "clean" if has_option(rest, &["-n", "--dry-run"]) => Judged::of(Kind::ReadOnly),
-    "clean" | "reflog" | "gc" | "prune" => Judged::of(Kind::Destructive),
+    // Only the worktree's own untracked files.
+    "clean" => Judged::of(Kind::Worktree).in_own_repository(),
+    "reflog" => reflog(rest),
+    "gc" | "prune" => Judged::of(Kind::Destructive),
+    "rebase" => rebase(rest),
     "merge" | "cherry-pick" | "revert" | "pull" if has_option(rest, &["-s"]) => Judged::unknown(),
     "config" => config(rest),
     "remote" => remote(rest),
@@ -205,18 +241,103 @@ fn first_or_here(rest: &[String]) -> Vec<String> {
   vec![operands(rest).into_iter().next().unwrap_or_else(|| ".".to_owned())]
 }
 
+/// `git stash` lists and shows; `clear` empties the stash every worktree of the repository shares; the rest
+/// (`push`, `pop`, `apply`, `drop`) are the worktree's own work.
 fn stash(rest: &[String]) -> Judged {
   match rest.first().map(String::as_str) {
-    Some("drop" | "clear") => Judged::of(Kind::Destructive),
+    Some("clear") => Judged::of(Kind::Destructive),
     Some("list" | "show") => Judged::of(Kind::ReadOnly),
+    Some("drop") => Judged::of(Kind::Worktree).in_own_repository(),
     _ => Judged::of(Kind::Worktree),
   }
 }
 
+/// `git reset --hard` (or `--merge`, `--keep`) moves the run's own branch and its worktree (ORC-339, the person's
+/// decision of 2026-10-29: Orchester checkpoints the run's worktree, so nothing there is the person's to decide):
+/// to `HEAD`, a commit counted from it (`HEAD~2`, `@^`, `ORIG_HEAD`) or a commit by its id. Any other name may be
+/// another branch's commit, which stays History / destructive.
+fn reset(rest: &[String]) -> Judged {
+  match operands(rest).as_slice() {
+    [] => Judged::of(Kind::Worktree).in_own_repository(),
+    [target] if own_commit(target) => Judged::of(Kind::Worktree).in_own_repository(),
+    _ => Judged::of(Kind::Destructive),
+  }
+}
+
+/// Whether `target` names `HEAD` or a commit counted from it, or a commit by its id (7 to 64 hex digits).
+fn own_commit(target: &str) -> bool {
+  let base = target.find(['~', '^']).map_or(target, |at| &target[..at]);
+  let counted = target[base.len()..]
+    .chars()
+    .all(|c| matches!(c, '~' | '^') || c.is_ascii_digit());
+  let hex = (7..=64).contains(&base.len()) && base.chars().all(|c| c.is_ascii_hexdigit());
+  counted && (matches!(base, "HEAD" | "@" | "ORIG_HEAD") || hex)
+}
+
+/// `git reflog` (or `show`) with `git log`'s known-safe options reads; `expire` and `delete` discard what recovers
+/// lost commits.
+fn reflog(rest: &[String]) -> Judged {
+  if matches!(rest.first().map(String::as_str), Some("expire" | "delete")) {
+    return Judged::of(Kind::Destructive);
+  }
+  let mut log = vec!["log".to_owned()];
+  log.extend(rest.iter().cloned());
+  if known_safe::readable_arguments(&argv(&log)).is_some() {
+    Judged::of(Kind::ReadOnly)
+  } else {
+    Judged::unknown()
+  }
+}
+
+/// `git rebase` of the branch checked out, the run's own, onto one upstream: options that keep it to that branch
+/// and at most one operand. A second operand checks out another branch and rebases it, `--update-refs` moves other
+/// branches, and any other option stays History / destructive.
+fn rebase(rest: &[String]) -> Judged {
+  const PLAIN: [&str; 19] = [
+    "--abort",
+    "--continue",
+    "--skip",
+    "--quit",
+    "--autostash",
+    "--no-autostash",
+    "--autosquash",
+    "--no-autosquash",
+    "--keep-empty",
+    "--root",
+    "-q",
+    "--quiet",
+    "-v",
+    "--verbose",
+    "--fork-point",
+    "--no-fork-point",
+    "--rebase-merges",
+    "-r",
+    "--committer-date-is-author-date",
+  ];
+  let mut args = rest.iter();
+  let mut operands = 0;
+  while let Some(arg) = args.next() {
+    match arg.as_str() {
+      "--onto" if args.next().is_some() => {}
+      arg if arg.starts_with("--onto=") => {}
+      arg if PLAIN.contains(&arg) => {}
+      arg if !arg.starts_with('-') => operands += 1,
+      _ => return Judged::of(Kind::Destructive),
+    }
+  }
+  if operands <= 1 {
+    Judged::of(Kind::Worktree).in_own_repository()
+  } else {
+    Judged::of(Kind::Destructive)
+  }
+}
+
 /// `git config` that only reads: `--get` (and its kin) or `--list`, or one name alone, in the
-/// repository's own file. The user's (`--global`) and the system's are read as credential locations;
-/// any other file, and every write, is Unknown: a setting can name a program git starts
-/// (`core.sshCommand`, `core.pager`, `core.fsmonitor`, an alias with `!`).
+/// repository's own file. The user's (`--global`) and the system's are read as credential locations.
+/// Any other form may write: in the worktree's own file (`--worktree`) it is Unknown, as a setting can name a
+/// program git starts (`core.sshCommand`, `core.pager`, `core.fsmonitor`, an alias with `!`); in any other file,
+/// shared by every worktree of the repository or beyond it, History / destructive (the person's decision of
+/// 2026-10-29).
 fn config(rest: &[String]) -> Judged {
   const READING: [&str; 7] = [
     "--get",
@@ -231,11 +352,18 @@ fn config(rest: &[String]) -> Judged {
   const PLAIN: [&str; 6] = ["--local", "--worktree", "--null", "-z", "--name-only", "--includes"];
   let (options, names): (Vec<&String>, Vec<&String>) = rest.iter().partition(|arg| arg.starts_with('-'));
   let options: Vec<&str> = options.into_iter().map(String::as_str).collect();
+  let writes = || {
+    if options.contains(&"--worktree") && !options.iter().any(|option| SCOPES.contains(option)) {
+      Judged::unknown()
+    } else {
+      Judged::of(Kind::Destructive)
+    }
+  };
   if options
     .iter()
     .any(|option| !(READING.contains(option) || SCOPES.contains(option) || PLAIN.contains(option)))
   {
-    return Judged::unknown();
+    return writes();
   }
   let names: Vec<&str> = names.into_iter().map(String::as_str).collect();
   let reads = match names.as_slice() {
@@ -245,7 +373,7 @@ fn config(rest: &[String]) -> Judged {
     _ => false,
   };
   match (reads, options.iter().any(|option| SCOPES.contains(option))) {
-    (false, _) => Judged::unknown(),
+    (false, _) => writes(),
     (true, false) => Judged::of(Kind::ReadOnly),
     (true, true) => Judged::of(Kind::ReadOnly).secret(),
   }
@@ -293,12 +421,12 @@ fn ls_remote(rest: &[String]) -> Judged {
   }
 }
 
-/// `git worktree list` reads; `add` writes its folder; anything else is Unknown.
+/// `git worktree list` reads; every other action (`add`, `remove`, `move`, `prune`, …) changes the repository's
+/// worktrees, which are not the run's own: History / destructive (the person's decision of 2026-10-29).
 fn worktree(rest: &[String]) -> Judged {
-  match rest.split_first() {
-    Some((action, _)) if action == "list" => Judged::of(Kind::ReadOnly),
-    Some((action, args)) if action == "add" => Judged::writing(Kind::Writes, operands(args)),
-    _ => Judged::unknown(),
+  match rest.first().map(String::as_str) {
+    Some("list") => Judged::of(Kind::ReadOnly),
+    _ => Judged::of(Kind::Destructive),
   }
 }
 
