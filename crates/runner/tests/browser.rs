@@ -1,11 +1,13 @@
 //! The project's browser with the real Chrome, Edge, Brave or Chromium of this computer, on pages the test serves on
 //! loopback (`browser/site.rs`): it starts at the first use, opens a run's tab and reads it over CDP, keeps each run to
 //! its own tabs, closes a run's tabs when the run ends (and not while it is paused), keeps nothing of a closed tab and
-//! stops with the runner; the agents' browser tools through the relay (`browser/tools.rs`); the *Browser* window's
-//! side of it is in [`window`]. Where no browser is found each test says so and checks nothing. Needs `git` for the
-//! scheduler's projects. Run with `cargo test -p orchester-runner --features test-agent --test browser browser_`.
+//! stops with the runner; what a run's tab someone else closed answers (`browser/closed.rs`); the agents' browser
+//! tools through the relay (`browser/tools.rs`); the *Browser* window's side of it is in [`window`]. Where no browser
+//! is found each test says so and checks nothing. Needs `git` for the scheduler's projects. Run with
+//! `cargo test -p orchester-runner --features test-agent --test browser browser_`.
 
 mod browser {
+  mod closed;
   pub mod site;
   mod tools;
 }

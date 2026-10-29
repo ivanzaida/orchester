@@ -390,7 +390,10 @@ not jump to another project by itself.
      `<select>` lists and the headed restart (`cargo test -p orchester-runner --features test-agent --test browser
      browser_`), the stored setting of decision 14 (`cargo test -p orchester-store --test app_db browser_window`), and
      the window's state with its frames decoded to RGBA and the auto-open rule (`cargo test -p orchester-workspace
-     --features test-support --test browser_window browser_window_`).
+     --features test-support --test browser_window browser_window_`). Since ORC-195 a run's tab the person closed
+     from the window answers the run's next call on it that the person closed it, and one the browser reported closed
+     (its page, or the person in the browser's own window) says that, both pointing to `browser_open`; the runner keeps
+     only those tabs' ids, per run, until the run ends (`orchester-runner --test browser browser_runs_tab`).
    - **P4d.** The *Browser* window itself, on that state.
 
 ## Not in scope

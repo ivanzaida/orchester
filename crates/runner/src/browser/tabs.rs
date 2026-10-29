@@ -5,7 +5,8 @@
 //!
 //! A tab that is no longer kept, closed or taken from an ended run, is no longer listened to: its followers (the
 //! window's, and a run's tab's log, [`super::log::follow`]) end with it, so a browser that runs as long as the runner
-//! keeps nothing of closed tabs.
+//! keeps nothing of closed tabs. Of a run's tab that someone other than the run closed, only its id and who closed it
+//! are kept, until the run ends, so the run's next call on it says so ("Tabs").
 
 use std::{
   collections::HashMap,
@@ -17,6 +18,7 @@ use orchester_ipc::browser::TabOwner;
 use tokio::task::JoinHandle;
 
 use super::{
+  BrowserError,
   cdp::{Cdp, SessionId, TargetId},
   tab::TabState,
 };
@@ -26,8 +28,19 @@ pub(super) struct Tabs {
   cdp: Weak<Cdp>,
   tabs: Vec<Tab>,
   current: HashMap<RunId, TargetId>,
+  /// Each run's tabs that someone other than the run closed, until the run ends.
+  closed: HashMap<RunId, Vec<(TargetId, ClosedBy)>>,
   /// Held by each run's tab's log follower while it runs.
   followers: Arc<()>,
+}
+
+/// Who closed a tab, other than the run whose it was.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ClosedBy {
+  /// The person, from the *Browser* window.
+  Person,
+  /// The browser reported it closed: its page closed itself, or the person closed it in the browser's own window.
+  Browser,
 }
 
 pub(super) struct Tab {
@@ -59,6 +72,7 @@ impl Tabs {
       cdp: Arc::downgrade(cdp),
       tabs: Vec::new(),
       current: HashMap::new(),
+      closed: HashMap::new(),
       followers: Arc::new(()),
     }
   }
@@ -142,19 +156,49 @@ impl Tabs {
     }
   }
 
-  /// `run`'s tabs, no longer its: the run ended.
+  /// `run`'s tabs, no longer its: the run ended. What was kept of its tabs others closed goes too.
   pub(super) fn take(&mut self, run: RunId) -> Vec<TargetId> {
     let taken = self.of(run);
     self.tabs.retain(|tab| tab.owner != TabOwner::Run { run });
     self.current.remove(&run);
+    self.closed.remove(&run);
     taken
   }
 
-  /// A tab the browser closed, whoever closed it; whether it was kept.
+  /// A tab its run closed; whether it was kept.
   pub(super) fn forget(&mut self, target: &TargetId) -> bool {
-    let before = self.tabs.len();
-    self.tabs.retain(|tab| &tab.target != target);
-    self.tabs.len() != before
+    self.remove(target).is_some()
+  }
+
+  /// A tab `by` closed, whoever's it is; whether it was kept. A run's is remembered for the run until it ends.
+  pub(super) fn closed_by(&mut self, target: &TargetId, by: ClosedBy) -> bool {
+    let Some(owner) = self.remove(target) else {
+      return false;
+    };
+    if let TabOwner::Run { run } = owner {
+      self.closed.entry(run).or_default().push((target.clone(), by));
+    }
+    true
+  }
+
+  /// Why `target` is not one of `run`'s open tabs: someone other than the run closed it, or else it is not the run's.
+  pub(super) fn refused(&self, run: RunId, target: &TargetId) -> BrowserError {
+    let by = self
+      .closed
+      .get(&run)
+      .and_then(|closed| closed.iter().find(|(tab, _)| tab == target))
+      .map(|(_, by)| *by);
+    match by {
+      Some(ClosedBy::Person) => BrowserError::ClosedByPerson(target.clone()),
+      Some(ClosedBy::Browser) => BrowserError::ClosedInBrowser(target.clone()),
+      None => BrowserError::NotRunsTab(target.clone()),
+    }
+  }
+
+  /// Removes `target`; its owner, when it was kept.
+  fn remove(&mut self, target: &TargetId) -> Option<TabOwner> {
+    let at = self.tabs.iter().position(|tab| &tab.target == target)?;
+    Some(self.tabs.remove(at).owner)
   }
 
   /// Whether `target`'s page loads now; whether that changed what was kept.
