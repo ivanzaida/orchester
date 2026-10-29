@@ -18,7 +18,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, project, scheduler_with, wait_for, with_default_reviewer};
+use self::support::{PATIENCE, Setup, TestProject, project, reviewer::with_default_reviewer, scheduler_with, wait_for};
 
 /// A Claude Code Builder in `mode` that asks before every command, in a project with the default reviewer.
 fn asking(brief: &'static str, mode: ApprovalMode) -> TestProject {

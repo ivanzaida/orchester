@@ -22,7 +22,7 @@ use orchester_core::{
 use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, TestProject, project, scheduler_with, wait_for, with_default_reviewer};
+use self::support::{Setup, TestProject, project, reviewer::with_default_reviewer, scheduler_with, wait_for};
 
 /// What the fake estimator reports it spent: 120 + 30 (cache writes) + 7 counted.
 const COUNTED: u64 = 157;
