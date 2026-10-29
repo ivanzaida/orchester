@@ -279,6 +279,7 @@ fn service_tools_save_a_definition_as_get_service_reads_it() {
     }] },
     "run_data": { "kind": "run_folder", "folder": "runs/{{run}}/team" },
     "ui_driver": "mcp",
+    "ui_start": "{{url}}/teams/{{seed.team_id}}",
     "owned_paths": ["server/**"],
   });
   desktop.ok("save_service_draft", &save(None, full.clone()));

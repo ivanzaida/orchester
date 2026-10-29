@@ -16,7 +16,7 @@ use orchester_core::{
   service::{
     Capture, CapturePath, HttpPath, NeedsError, OwnedPath, Readiness, ReadyCheck, ReadyTimeout, RelativeFolder,
     RunData, RunFolder, Seed, SeedHeader, SeedRequest, SeedRequests, Service, ServiceName, ServiceValue,
-    ServiceVariables, Stack, StackName, UiDriver,
+    ServiceVariables, Stack, StackName, UiDriver, UiStart,
   },
   store::ResourceStore,
 };
@@ -94,6 +94,7 @@ fn team_server() -> Service {
     RunFolder::new("runs/{{run}}/team").expect("a folder"),
   ))
   .with_ui_driver(UiDriver::Mcp)
+  .with_ui_start(UiStart::new("{{url}}/teams/{{seed.team_id}}").expect("a place"))
   .with_owned_paths(vec![OwnedPath::new("server/**").expect("a path")])
   .expect("owned paths")
 }

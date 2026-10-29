@@ -55,8 +55,8 @@ pub(super) const SPECS: &[Spec] = &[
     name: "get_service",
     description: "One service (its draft if it has one, otherwise its latest version): where it stands, its \
                   definition in the shape save_service_draft takes (name, program, arguments, working_folder, \
-                  variables as {plain} or {secret: NAME}, needs, readiness, seed, run_data, ui_driver, owned_paths), \
-                  and its revision, which save_service_draft's expected_revision takes.",
+                  variables as {plain} or {secret: NAME}, needs, readiness, seed, run_data, ui_driver, ui_start, \
+                  owned_paths), and its revision, which save_service_draft's expected_revision takes.",
     schema: schema_for_type::<InService>,
     read_only: true,
   },

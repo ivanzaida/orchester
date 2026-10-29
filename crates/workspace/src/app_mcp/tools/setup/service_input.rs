@@ -83,6 +83,9 @@ pub struct ServiceDefinition {
   /// How agents see and use the service's UI; left out, none.
   #[serde(default)]
   pub ui_driver: DefinitionUiDriver,
+  /// Where `ui_open` starts, e.g. `{{url}}/teams/{{seed.team_id}}`; left out, the driver decides.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub ui_start: Option<String>,
   /// Repository path patterns the service owns, e.g. `web/cloud/**`.
   #[serde(default)]
   pub owned_paths: Vec<String>,

@@ -1,6 +1,6 @@
 //! The JSON shape of a service's and a stack's body in the project database. Reading it runs every constructor
 //! again, so a stored body that breaks a rule is refused instead of loaded. Fields a definition may leave out
-//! (arguments, variables, needs, seed, run data, UI driver, owned paths) read as their defaults.
+//! (arguments, variables, needs, seed, run data, UI driver, UI start, owned paths) read as their defaults.
 
 use std::collections::BTreeMap;
 
@@ -10,7 +10,7 @@ use thiserror::Error;
 use super::{
   Capture, CapturePath, HttpPath, LogPattern, OwnedPath, Readiness, ReadyCheck, ReadyTimeout, RelativeFolder, RunData,
   RunFolder, Seed, SeedHeader, SeedRequest, SeedRequests, Service, ServiceError, ServiceName, ServiceValue,
-  ServiceVariables, Stack, StackName, UiDriver,
+  ServiceVariables, Stack, StackName, UiDriver, UiStart,
 };
 use crate::{
   resource::{CommandArg, CommandError, CommandProgram, FieldName, FieldNameError, HttpMethod, VariableName},
@@ -50,6 +50,8 @@ struct ServiceFields {
   run_data: RunDataFields,
   #[serde(default)]
   ui_driver: UiDriverFields,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  ui_start: Option<String>,
   #[serde(default)]
   owned_paths: Vec<String>,
 }
@@ -199,6 +201,7 @@ impl From<&Service> for ServiceFields {
         UiDriver::Native => UiDriverFields::Native,
         UiDriver::Mcp => UiDriverFields::Mcp,
       },
+      ui_start: service.ui_start().map(|start| start.as_str().to_owned()),
       owned_paths: service
         .owned_paths()
         .iter()
@@ -250,7 +253,10 @@ impl TryFrom<ServiceFields> for Service {
     .with_run_data(run_data)
     .with_ui_driver(ui_driver)
     .with_owned_paths(owned_paths)?;
-    Ok(service)
+    Ok(match fields.ui_start {
+      Some(start) => service.with_ui_start(UiStart::new(&start)?),
+      None => service,
+    })
   }
 }
 
