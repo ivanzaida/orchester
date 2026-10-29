@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::Answerer;
-use crate::permission::ApprovalMode;
+use crate::{permission::ApprovalMode, time::Timestamp};
 
 /// The project's *Allow Autopilot for agents in this project*; off until a person turns it on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -52,6 +52,14 @@ pub enum ManualBecause {
   Project,
   /// The run was switched to Manual for itself.
   Run,
+}
+
+/// When a run was switched to Manual for itself, and who switched it: its Conversation's row *Switched to Manual for
+/// this run* says so. Only the first switch counts, as nothing switches a run back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ManualSwitch {
+  pub at: Timestamp,
+  pub by: Answerer,
 }
 
 /// The mode a run's step answers its agent's requests in.

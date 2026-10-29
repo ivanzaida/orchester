@@ -226,6 +226,7 @@ fn publish_error(error: &StoreError) -> ToolError {
     StoreError::Publish(PublishError::ConnectionMissing) => "connection_missing",
     StoreError::Publish(PublishError::Permissions(_)) => "permissions_not_enforced",
     StoreError::Publish(PublishError::VersionLimit) => "version_limit",
+    StoreError::NotAdmin => "not_admin",
     _ => "project_data",
   };
   ToolError::refused(code, vec![messages::store_error(error)])

@@ -138,6 +138,7 @@ impl From<StoreError> for ToolError {
       StoreError::Module(_) => "invalid_module",
       StoreError::TaskNotEditable { .. } => "task_not_editable",
       StoreError::SharedTask(_) | StoreError::SharedProject | StoreError::NotSharedTask(_) => "shared_task",
+      StoreError::NotAdmin => "not_admin",
       StoreError::PipelineNotPublished(_) => "pipeline_not_published",
       StoreError::DraftChanged(_) => "draft_changed",
       _ => "project_data",

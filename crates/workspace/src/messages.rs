@@ -91,6 +91,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::TaskNotHeld(_) => Message::new("tasks.bulk.notHeld"),
     StoreError::TaskRunActive(_) => Message::new("tasks.delete.stopRunFirst"),
     StoreError::SharedTask(_) | StoreError::SharedProject => Message::new("sharing.errors.serverOnly"),
+    StoreError::NotAdmin => Message::new("sharing.errors.notAdmin"),
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),

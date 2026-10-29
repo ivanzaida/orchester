@@ -54,7 +54,7 @@ pub use self::{
     allowing_tool, always_prefixes, answering, answering_in_project, auto_approves, auto_verdict, autopilot_check,
     autopilot_step, codex_denial, denial_message, denial_with_message, listing, permitted, without_reviewer,
   },
-  approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause},
+  approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause, ManualSwitch},
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
   completion::{CompletedBy, REPORT_ARTIFACT, RunArtifact, RunCompletion, UnknownCompleter, last_report, run_delivers},

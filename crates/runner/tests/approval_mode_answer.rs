@@ -20,10 +20,11 @@ use orchester_core::{
   },
   resource::{CommandEnvironment, VariableName},
   run::{
-    AllowAutopilot, AnswerKind, AnswerRecord, Answerer, ApprovalAnswer, CameToPerson, PendingToolApproval,
-    PersonReason, RequestAnswer, Run,
+    AllowAutopilot, AnswerKind, AnswerRecord, Answerer, ApprovalAnswer, CameToPerson, ManualSwitch,
+    PendingToolApproval, PersonReason, RequestAnswer, Run,
   },
   store::SettingsStore,
+  time::Timestamp,
 };
 use orchester_ipc::Event;
 use orchester_runner::execution::Scheduler;
@@ -292,9 +293,13 @@ async fn approval_mode_answer_drop_to_manual_looks_again_at_a_waiting_request() 
   let mut started = Started::new(asking("Run `cat ../../../README.md`.", ApprovalMode::Autopilot)).await;
   let (request, came) = started.came_to_person().await;
   assert_eq!(came.reason, PersonReason::Outside);
+  let switch = ManualSwitch {
+    at: Timestamp::now(),
+    by: Answerer::Person,
+  };
   started
     .db()
-    .switch_run_to_manual(started.id)
+    .switch_run_to_manual(started.id, switch)
     .expect("switched to Manual");
   // Manual's reviewer approves the read, which no longer waits for the person.
   let run = tokio::time::timeout(PATIENCE, started.ended())

@@ -127,13 +127,17 @@ zeroize.workspace = true
 # Gives lurq's window class and the window the executable's embedded icon (`system_icon`): neither lurq
 # nor winit loads icon resources or sets class icons. Brings the window of the app that has the data folder
 # open to the front (`startup::front`). Holds the MCP server's port so no other socket can share it
-# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds.
+# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds. Suspends a frozen window's thread
+# and unwinds its stack for its hang report (`hang_reports::stack::windows`: `Diagnostics_Debug`, and `Kernel` for
+# `RtlVirtualUnwind`).
 [target.'cfg(windows)'.dependencies]
 socket2.workspace = true
 # Toasts with the app's AppUserModelID and the taskbar's overlay badge (`notifications::os::windows`).
 windows.workspace = true
 windows-sys = { workspace = true, features = [
   "Win32_Networking_WinSock",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_Kernel",
   "Win32_System_LibraryLoader",
   "Win32_System_Threading",
   "Win32_UI_WindowsAndMessaging",

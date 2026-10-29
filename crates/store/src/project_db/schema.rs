@@ -67,6 +67,7 @@ mod runner_failures;
 mod services;
 mod shared_configuration;
 mod shared_members;
+mod shared_publishes;
 mod sharing;
 mod sources;
 mod steering;
