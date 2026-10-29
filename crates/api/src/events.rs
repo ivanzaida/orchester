@@ -414,9 +414,12 @@ pub struct ResourceRenamed {
   pub name: String,
 }
 
+/// A resource archived (`archived` true) or restored (false): one delta both ways, so a client tells them apart
+/// without reading the resource again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResourceArchived {
   pub resource: ResourceId,
+  pub archived: bool,
 }
 
 /// The session or this person's membership ended; the stream closes after it. Not a delta: it is the connection's,

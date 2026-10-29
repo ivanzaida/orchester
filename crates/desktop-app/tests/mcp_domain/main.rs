@@ -7,6 +7,7 @@
 mod accounts;
 mod accounts_window;
 mod api_providers;
+mod approval_answers;
 mod approval_settings;
 mod automation_permissions;
 mod base_moved;

@@ -1,15 +1,15 @@
-//! Manual's reviewer in the worker (`orchester_core::run::review`, `docs/design/approval-modes.md`): in Manual, a
-//! request the rules leave to a person waits under review, without asking the person (no dialog, no *Needs you*),
-//! while the reviewer judges it on the blocking pool, so the worker keeps following its agent; it asks
-//! the person once the reviewer asks, fails or times out. A hard rule asks the person at once. An approval answers the
-//! request as the reviewer's; anything else leaves it to the person with what the reviewer said. Autopilot has no
-//! reviewer: what it does not approve itself asks the person at once, as every request does in a project without a
-//! reviewer to ask (no connection a reviewer runs on, or the chosen one gone). A person who answers first wins, and
-//! the review is stopped; so is a review whose run turned Autopilot meanwhile (its project allowed it), whose result
-//! is then dropped. A Codex escalation (a command outside its sandbox) is reviewed under the same
-//! hard rules, which keep it from the reviewer where the step's network is off or it only reads. What a
-//! review that asked a model cost is recorded when it ends, dropped or not, and counts like a turn of the
-//! agent's ([`ledger`]).
+//! The reviewer in the worker (`orchester_core::run::review`, `docs/design/approval-modes.md`): a request the run's
+//! mode asks the reviewer about waits under review, without asking the person (no dialog, no *Needs you*), while the
+//! reviewer judges it on the blocking pool, so the worker keeps following its agent; it asks the person once the
+//! reviewer asks, fails or times out, with why (`orchester_core::run::after_review`). Manual asks it whether to approve
+//! what the profile does not allow, after its hard rules, which ask the person at once. Autopilot asks it one question
+//! about a request Orchester could not place: whether it touches anything outside the run's roots. An approval answers
+//! the request as the reviewer's. In a project without a reviewer to ask (no connection a reviewer runs on, or the
+//! chosen one gone) such a request asks the person at once. A person who answers first wins, and the review is
+//! stopped; a review whose run changed mode meanwhile is dropped, and the request is answered by the mode it is in
+//! now. A Codex escalation (a command outside its sandbox) is reviewed under the same hard rules, which keep it from
+//! the reviewer where the step's network is off or it only reads. What a review that asked a model cost is recorded
+//! when it ends, dropped or not, and counts like a turn of the agent's ([`ledger`]).
 
 mod estimate;
 mod ledger;
@@ -20,10 +20,15 @@ mod setup;
 use std::time::Duration;
 
 use orchester_core::{
-  permission::{AgentPermissions, category::build_variables},
+  permission::{AgentPermissions, category::build_variables, roots::RunRoots},
   run::{
-    ApprovalSubject, DecidedBy, PendingToolApproval,
-    review::{Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
+    ApprovalSubject, CameToPerson, DecidedBy, PendingToolApproval, PersonReason, RequestAnswer, ReviewQuestion,
+    after_review,
+    review::{
+      Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion,
+      StepLimit, step_limit,
+    },
+    without_reviewer,
   },
   store::{ActivityStore, RunStore, SettingsStore, TaskStore},
   time::Timestamp,
@@ -45,15 +50,24 @@ const REVIEW_TIMEOUT: Duration = Duration::from_secs(60);
 /// How many of the agent's last messages the reviewer reads.
 const MESSAGES_READ: usize = 3;
 
-/// A review under way: the request it is about, and the work that reviews it, stopped when dropped.
+/// A review under way: the request it is about, what the reviewer was asked, and the work that reviews it, stopped
+/// when dropped.
 pub(in super::super) struct Reviewing {
   approval: String,
+  question: ReviewQuestion,
   work: JoinHandle<Review>,
   _stop: StopReview,
 }
 
-/// Ready once the review under way in `slot` ends: the request, and what auto mode did with it.
-pub(super) async fn next(slot: &mut Option<Reviewing>) -> (String, Review) {
+/// A review that ended: the request, what the reviewer was asked, and what it did.
+pub(super) struct Reviewed {
+  approval: String,
+  question: ReviewQuestion,
+  review: Review,
+}
+
+/// Ready once the review under way in `slot` ends.
+pub(super) async fn next(slot: &mut Option<Reviewing>) -> Reviewed {
   let Some(reviewing) = slot.as_mut() else {
     return std::future::pending().await;
   };
@@ -65,25 +79,26 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> (String, Review) {
     }
   });
   let reviewing = slot.take().expect("the review awaited above is under way");
-  (reviewing.approval, review)
+  Reviewed {
+    approval: reviewing.approval,
+    question: reviewing.question,
+    review,
+  }
 }
 
 impl Worker {
-  /// Starts the reviewer's review of `approval`, which waits for the person, when its run is in Manual;
-  /// `escalation`: Codex asks to run it outside its sandbox.
+  /// Starts the reviewer's review of `approval` on `question`, which keeps it from the person until it ends; why the
+  /// request comes to the person at once instead: no reviewer to ask, or one of Manual's hard rules. `escalation`:
+  /// Codex asks to run it outside its sandbox.
   pub(in super::super) fn start_review(
     &mut self,
     watch: &mut Watch,
     approval: &PendingToolApproval,
-    escalation: bool,
-  ) -> Result<Option<Reviewing>, StoreError> {
-    if watch.approval_mode()?.is_autopilot() {
-      return Ok(None);
-    }
-    // A project without a reviewer to ask leaves each request to the person at once, with nothing reviewed.
+    (question, escalation): (ReviewQuestion, bool),
+  ) -> Result<Result<Reviewing, CameToPerson>, StoreError> {
     let setup = self.reviewer(watch)?;
     if matches!(setup, ReviewerSetup::Missing) {
-      return Ok(None);
+      return Ok(Err(without_reviewer(question)));
     }
     let subject = ApprovalSubject::of(approval, &self.scope);
     let permissions = watch
@@ -106,11 +121,24 @@ impl Worker {
     };
     // A hard rule asks the person at once; anything else waits, without asking, for the reviewer.
     let ignored = ignored_build_output(self.scope.worktree(), &subject, permissions.as_ref());
-    if let Some(hold) = hold_now((&subject, permissions.as_ref(), escalation), (&push, &ignored), &input) {
+    let (hold, roots) = match question {
+      ReviewQuestion::Request => (
+        hold_now((&subject, permissions.as_ref(), escalation), (&push, &ignored), &input),
+        None,
+      ),
+      ReviewQuestion::Roots => (
+        match step_limit(&subject, permissions.as_ref(), &ignored) {
+          StepLimit::Held(hold) => Some(hold),
+          StepLimit::Within | StepLimit::Unread => input.as_ref().err().copied(),
+        },
+        Some(roots_question(self.roots.as_ref(), push.branch.as_deref())),
+      ),
+    };
+    if let Some(hold) = hold {
       watch
         .db
         .record_review(approval.run, &approval.id, &Review::Held { hold })?;
-      return Ok(None);
+      return Ok(Err(CameToPerson::held(hold)));
     }
     // Marked last, after everything that can fail: a request marked under review always gets its review.
     watch.db.set_reviewing(approval.run, &approval.id, true)?;
@@ -121,6 +149,7 @@ impl Worker {
       push,
       ignored,
       escalation,
+      roots,
       input,
       runtime: Handle::current(),
       timeout: REVIEW_TIMEOUT,
@@ -137,52 +166,65 @@ impl Worker {
       _held: self.reviews_held.clone(),
     };
     let work = tokio::task::spawn_blocking(move || setup.review(job, &ledger));
-    Ok(Some(Reviewing {
+    Ok(Ok(Reviewing {
       approval: approval.id.clone(),
+      question,
       work,
       _stop: stop,
     }))
   }
 
-  /// Records what the reviewer did with request `id`, and answers it when the reviewer approved, unless the
-  /// person answered first or the run is no longer in Manual.
-  pub(in super::super) async fn apply_review(
-    &mut self,
-    watch: &mut Watch,
-    (id, review): (String, Review),
-  ) -> Result<(), StoreError> {
+  /// Records what the reviewer did with its request, and answers it when the reviewer approved, unless the person
+  /// answered first; else the request comes to the person with why. A review whose run changed mode meanwhile is
+  /// dropped, and the request is answered by the mode it is in now.
+  pub(super) async fn apply_review(&mut self, watch: &mut Watch, reviewed: Reviewed) -> Result<(), StoreError> {
+    let Reviewed {
+      approval: id,
+      question,
+      review,
+    } = reviewed;
     let waiting = watch.approval.as_ref().is_some_and(|(approval, _)| approval.id == id);
     let run = watch.invocation.run;
     if !waiting || watch.stop.is_some() {
       return Ok(());
     }
-    if watch.approval_mode()?.is_autopilot() {
-      // The run turned Autopilot meanwhile, which has no reviewer: its result is dropped, and the person decides now.
+    let autopilot = watch.in_autopilot()?;
+    if autopilot != (question == ReviewQuestion::Roots) {
       watch.db.set_reviewing(run, &id, false)?;
-      return self.ask_person(watch);
+      let waiting = watch.approval.take().expect("the waiting request was matched above");
+      return self.route(watch, waiting, Timestamp::now()).await;
     }
     if let Err(error) = watch.db.record_review(run, &id, &review) {
       // The review is lost, but the request must not stay hidden: the person decides.
       watch.db.set_reviewing(run, &id, false)?;
-      self.ask_person(watch)?;
+      let unsure = CameToPerson::because(PersonReason::ReviewerUnsure);
+      self.ask_person(watch, (&id, &unsure), autopilot)?;
       return Err(error);
     }
-    if !review.approves() {
-      // The person decides, and now reads why auto mode left it to them.
-      return self.ask_person(watch);
-    }
+    let answer = match after_review(question, &review) {
+      Ok(answer) => answer,
+      // The person decides, and now reads why the reviewer left it to them.
+      Err(came) => return self.ask_person(watch, (&id, &came), autopilot),
+    };
     let (approval, awaiting) = watch.approval.take().expect("the waiting request was matched above");
     let subject = ApprovalSubject::of(&approval, &self.scope);
-    let settled = Settled::reviewed(&subject, review);
+    let settled = Settled::reviewed(&subject, review, answer);
     if let Err(rejection) = self.settle(watch, &approval, awaiting, settled).await? {
-      tracing::debug!(?rejection, "auto mode's approval did not reach the agent");
+      tracing::debug!(?rejection, "the reviewer's approval did not reach the agent");
     }
     Ok(())
   }
 
-  /// The waiting request asks the person from now on: the agent's time stops counting, and the app shows
-  /// it.
-  fn ask_person(&self, watch: &mut Watch) -> Result<(), StoreError> {
+  /// The waiting request `id` comes to the person from now on, for `came`, under Autopilot or Manual (`autopilot`):
+  /// the agent's time stops counting, and the app shows it.
+  fn ask_person(
+    &self,
+    watch: &mut Watch,
+    (id, came): (&str, &CameToPerson),
+    autopilot: bool,
+  ) -> Result<(), StoreError> {
+    watch.db.record_came_to_person(watch.invocation.run, id, Some(came))?;
+    watch.asked_in_autopilot = autopilot;
     watch.invocation.timing.wait_for_person(Timestamp::now());
     // A person's wait never holds one of the computer's QA slots.
     self.qa.release(watch.invocation.id);
@@ -192,6 +234,14 @@ impl Worker {
       task: self.task,
     });
     Ok(())
+  }
+
+  /// What the step's own permissions make of `subject` in Autopilot (`orchester_core::run::review::step_limit`),
+  /// asking git which of its Cargo builds' target directories the worktree ignores where the step only reads.
+  pub(in super::super) fn step_limit(&self, watch: &Watch, subject: &ApprovalSubject) -> StepLimit {
+    let permissions = watch.invocation.permissions.as_ref().map(|launch| launch.permissions());
+    let ignored = ignored_build_output(self.scope.worktree(), subject, permissions);
+    step_limit(subject, permissions, &ignored)
   }
 
   /// What the reviewer reads about `approval`: the request as recorded (already redacted), the step,
@@ -278,15 +328,33 @@ impl Worker {
 }
 
 impl Settled {
-  /// The reviewer's approval of a request about `subject`, as it is recorded and marked.
-  fn reviewed(subject: &ApprovalSubject, review: Review) -> Self {
+  /// The reviewer's approval of a request about `subject`, as it is recorded and marked, with its reason.
+  fn reviewed(subject: &ApprovalSubject, review: Review, answer: RequestAnswer) -> Self {
     let category = match subject {
       ApprovalSubject::Command(command) => Some(command.category()),
       ApprovalSubject::McpTool { .. } => None,
     };
     Self {
       review: Some(review),
+      answer,
       ..Self::by(DecidedBy::Reviewer, category)
     }
+  }
+}
+
+/// Autopilot's question about a request of a run on `branch` with `roots`; none when they could not be read, which
+/// the reviewer then reads as nothing being inside.
+fn roots_question(roots: Option<&RunRoots>, branch: Option<&str>) -> RootsQuestion {
+  RootsQuestion {
+    roots: roots
+      .map(|roots| {
+        roots
+          .roots()
+          .iter()
+          .map(|root| root.path().display().to_string())
+          .collect()
+      })
+      .unwrap_or_default(),
+    branch: branch.unwrap_or_default().to_owned(),
   }
 }

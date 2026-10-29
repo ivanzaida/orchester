@@ -237,6 +237,7 @@ fn approval() -> ShownApproval {
     auto_approving: false,
     review: None,
     reviewing: false,
+    came_to_person: None,
   }
 }
 
