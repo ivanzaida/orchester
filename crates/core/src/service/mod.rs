@@ -8,17 +8,19 @@ mod error;
 mod folder;
 mod name;
 mod needs;
+mod placeholder;
 mod readiness;
 mod seed;
 mod stack;
 mod value;
 
 pub use self::{
-  definition::{RunData, Service, UiDriver},
+  definition::{RunData, Service, UiDriver, UiStart},
   error::ServiceError,
   folder::{OwnedPath, RelativeFolder, RunFolder},
   name::{ServiceName, StackName},
   needs::{NeedsError, StartPlan},
+  placeholder::{FilledSeedRequest, Placeholder, PlaceholderError, PlaceholderPlace, RunValues, check_placeholders},
   readiness::{HttpPath, LogPattern, Readiness, ReadyCheck, ReadyTimeout},
   seed::{Capture, CapturePath, Seed, SeedHeader, SeedRequest, SeedRequests},
   stack::Stack,

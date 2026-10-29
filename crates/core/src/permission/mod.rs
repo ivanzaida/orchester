@@ -6,6 +6,7 @@
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
 //! in a bypass mode.
 
+mod approval_mode;
 pub(crate) mod canonical;
 pub mod capability;
 pub mod category;
@@ -18,6 +19,7 @@ pub mod mcp;
 mod narrow;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
+pub mod roots;
 pub mod widening;
 pub mod writable;
 
@@ -27,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  approval_mode::ApprovalMode,
   launch::{LaunchPermissions, OutsideCommands},
   local_file::{ProgramPlace, program_place, resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
@@ -238,9 +241,14 @@ pub struct AgentPermissions {
   /// off, as before it existed.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   auto_approve: bool,
+  /// Left out of the stored form while Manual, so every profile saved before approval modes existed reads as
+  /// Manual with its commands as they were ([`crate::resource::AgentProfile`]'s schema 5).
+  #[serde(default, skip_serializing_if = "ApprovalMode::is_manual")]
+  approval_mode: ApprovalMode,
 }
 
 impl AgentPermissions {
+  /// Manual, the stricter approval mode; see [`Self::set_approval_mode`].
   pub const fn new(repository: RepositoryAccess, commands: CommandPermission, network: NetworkAccess) -> Self {
     Self {
       repository,
@@ -249,6 +257,7 @@ impl AgentPermissions {
       network,
       interactive_tool_approvals: false,
       auto_approve: false,
+      approval_mode: ApprovalMode::Manual,
     }
   }
 
@@ -312,6 +321,15 @@ impl AgentPermissions {
     self.auto_approve = enabled;
   }
 
+  pub const fn approval_mode(&self) -> ApprovalMode {
+    self.approval_mode
+  }
+
+  /// Switching to Autopilot widens ([`widening::Widening::Autopilot`]); switching to Manual never does. Either way
+  /// the allowed commands stay as they are: Manual runs them at once, Autopilot needs no list.
+  pub const fn set_approval_mode(&mut self, mode: ApprovalMode) {
+    self.approval_mode = mode;
+  }
   pub const fn set_repository(&mut self, repository: RepositoryAccess) {
     self.repository = repository;
   }

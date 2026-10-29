@@ -15,7 +15,7 @@ use orchester_core::{
     mcp::{McpServer, McpServerSelection},
   },
   id::ConnectionId,
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, WritableFolders},
+  permission::{AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, NetworkAccess, WritableFolders},
   resource::{AgentProfile, ModelId, RepositoryAccess},
   store::McpServerStore,
 };
@@ -97,6 +97,9 @@ pub struct Permissions {
   /// Approve automatically (don't ask me): Orchester answers what would ask a person.
   #[serde(default)]
   pub approve_automatically: bool,
+  /// Who answers tool requests; left out, manual. Switching to autopilot is a person's decision.
+  #[serde(default)]
+  pub approval_mode: Approvals,
 }
 
 /// Repository access, as the tools name it.
@@ -132,6 +135,27 @@ pub enum Commands {
   AskBefore,
   Allowed,
   AnyInWorktree,
+}
+
+/// The approval mode, as the tools name it.
+#[derive(Clone, Copy, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum Approvals {
+  /// Every tool request in the worktree is approved at once; work outside it, pushes and other refs ask a person.
+  Autopilot,
+  /// The allowed commands run at once; anything else goes to the reviewer, then to a person.
+  #[default]
+  Manual,
+}
+
+impl From<Approvals> for ApprovalMode {
+  fn from(mode: Approvals) -> Self {
+    match mode {
+      Approvals::Autopilot => Self::Autopilot,
+      Approvals::Manual => Self::Manual,
+    }
+  }
 }
 
 pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> Result<Value, ToolError> {
@@ -260,6 +284,7 @@ fn permissions(given: &Permissions, root: &Path) -> Result<AgentPermissions, Too
     AgentPermissions::new(given.repository.into(), commands, network).with_writable_folders(folders);
   permissions.set_interactive_tool_approvals(given.ask_before_tool_calls);
   permissions.set_auto_approve(given.approve_automatically);
+  permissions.set_approval_mode(given.approval_mode.into());
   Ok(permissions)
 }
 

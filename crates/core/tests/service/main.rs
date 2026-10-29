@@ -1,7 +1,9 @@
-//! Services and stacks: the invariants their constructors keep, and how needs resolve into start steps.
+//! Services and stacks: the invariants their constructors keep, how needs resolve into start steps, and how
+//! placeholders are checked and filled.
 
 mod definition;
 mod needs;
+mod placeholder;
 mod seed;
 
 use orchester_core::{
