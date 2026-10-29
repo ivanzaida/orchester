@@ -279,6 +279,12 @@ impl AgentConnection {
       None => self.catalog().map_or(&[], ModelCatalog::models),
     }
   }
+
+  /// Whether this connection's CLI, of the version its last check found, can run Autopilot, or why not
+  /// (`crate::permission::autopilot_support`).
+  pub fn autopilot_support(&self) -> crate::permission::AutopilotSupport {
+    crate::permission::autopilot_support(self.provider, self.version())
+  }
 }
 
 impl TryFrom<Connection> for AgentConnection {

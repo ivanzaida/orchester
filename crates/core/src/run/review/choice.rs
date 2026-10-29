@@ -26,11 +26,10 @@ pub struct ReviewerChoice {
   pub effort: Option<String>,
 }
 
-/// The settings of auto mode in a project: whether new runs use it, and the reviewer a person chose
+/// The reviewer Manual asks before the person (`docs/design/approval-modes.md`): the one a person chose in the project
 /// (`None`: the default, [`resolve_reviewer`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AutoModeSettings {
-  pub new_runs: bool,
   pub reviewer: Option<ReviewerChoice>,
 }
 

@@ -6,6 +6,8 @@ mod agents_browser;
 mod agents_cases;
 mod agents_library;
 mod api_providers;
+mod approval_modes;
+mod auto_mode;
 mod browser;
 mod cards;
 mod changes;
@@ -82,7 +84,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 55] = [
+pub const ALL: [Scenario; 58] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -101,6 +103,9 @@ pub const ALL: [Scenario; 55] = [
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
+  Scenario::of("cards-auto-mode", auto_mode::seed),
+  Scenario::of("approval-modes", approval_modes::seed),
+  Scenario::of("approval-modes-project", approval_modes::project),
   Scenario::of("decisions", decisions::seed),
   Scenario::of("deliverables", deliverables::seed),
   Scenario::of("delivery", delivery::seed),

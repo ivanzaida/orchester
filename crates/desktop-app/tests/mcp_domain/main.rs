@@ -7,7 +7,8 @@
 mod accounts;
 mod accounts_window;
 mod api_providers;
-mod approve_everything;
+mod approval_answers;
+mod approval_settings;
 mod automation_permissions;
 mod base_moved;
 mod basics;
@@ -15,6 +16,7 @@ mod board;
 mod cloud_accounts;
 mod completion;
 mod connections_window;
+mod decisions_reach_person;
 mod delivery;
 mod drafts;
 mod gates;

@@ -3,10 +3,10 @@
 //! bar, a tab's mark): a tool request waiting for a decision (also one whose task cannot be read), a question
 //! with suggested answers, each step of a run waiting on a plan or on an agent's question, a decision after a
 //! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged
-//! (not once its task is Done or Canceled, or its work reached its base branch without Orchester), one that
-//! committed nothing and waits to be completed or, as its pipeline expects changes, for the person's decision
-//! (`tasks::delivery`, ORC-93), a run
-//! recorded interrupted, and the project's memory records waiting for approval, together one item. A run
+//! (not once its work reached its base branch without Orchester), one that committed nothing and waits to be
+//! completed (not once it was) or, as its pipeline expects changes, for the person's decision (`tasks::delivery`,
+//! ORC-93), a run recorded interrupted, and the project's memory records waiting for approval, together one item.
+//! Nothing of a task that is Done or Canceled waits, whatever its latest run says (ORC-150). A run
 //! that reads interrupted only because no runner looks after it is none: a runner records it once one does.
 //! A merge that stopped at conflicts is known only to the session that tried it, so it is not counted here.
 //! Approvals and questions with suggested answers are answered in place, through their cards in the run's
@@ -24,7 +24,7 @@ use orchester_core::{
   question::{Answer, AskedQuestions, QuestionState},
   resource::WithoutCommits,
   run::{Answerer, DecidedBy, RunNumber, TaskPhase, ToolApprovalDecision},
-  task::{Task, organization::WorkflowStatus},
+  task::Task,
   time::Timestamp,
 };
 use orchester_store::StoreError;
@@ -228,7 +228,7 @@ impl ProjectTasks {
       .map(|shown| self.approval_item(shown))
       .collect();
     items.extend(self.waiting_choices().filter_map(|asked| self.choice_item(asked)));
-    for task in self.tasks.iter() {
+    for task in self.tasks.iter().filter(|task| !closed(task)) {
       self.run_items(task, &mut items);
     }
     items.extend(self.blocked_delivery());
@@ -243,7 +243,11 @@ impl ProjectTasks {
         },
       });
     }
-    items.retain(|item| !self.answered.iter().any(|answered| answered.covers(item)));
+    let closed: HashSet<TaskId> = self.tasks.iter().filter(|task| closed(task)).map(Task::id).collect();
+    items.retain(|item| {
+      item.task.as_ref().is_none_or(|task| !closed.contains(&task.id))
+        && !self.answered.iter().any(|answered| answered.covers(item))
+    });
     items.sort_by_key(|item| item.since);
     items
   }
@@ -326,7 +330,8 @@ impl ProjectTasks {
         },
         latest.updated_at,
       )),
-      TaskPhase::Succeeded if settled_by_person(task) => None,
+      // A run completed already, by the Orchester say while its shared task waits for the server's Done, waits no more.
+      TaskPhase::Succeeded if latest.completed => None,
       TaskPhase::Succeeded if latest.nothing_to_merge => Some((nothing_to_merge_wait(latest), latest.updated_at)),
       TaskPhase::Succeeded => self.merge_wait(latest),
       _ => None,
@@ -404,12 +409,10 @@ impl ProjectTasks {
   }
 }
 
-/// Whether the person settled `task` themselves, Done or Canceled, so its work waits to be merged no more.
-fn settled_by_person(task: &Task) -> bool {
-  matches!(
-    task.organization().status(),
-    WorkflowStatus::Done | WorkflowStatus::Canceled
-  )
+/// Whether `task` is closed, Done or Canceled: nothing of it waits for the person, whatever its latest run says
+/// (ORC-150).
+fn closed(task: &Task) -> bool {
+  task.organization().status().is_closed()
 }
 
 /// What `latest`, which passed every step and committed nothing, waits for: to be completed, or, as its pipeline
@@ -453,6 +456,7 @@ impl InPlace {
       entries: &[],
       conversation: &conversation,
       pending: &self.requests.pending,
+      reviewing: &self.requests.reviewing,
       decided: &self.requests.decided,
       questions: &self.requests.questions,
       merge: self.detail.merge.as_ref(),

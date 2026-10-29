@@ -71,6 +71,19 @@ pub enum ErrorCode {
   /// API 3: an invite by email to an address that has an open one to the same project (or to the server) already.
   /// The error names that invite and when it was sent ([`SharingErrorDetails::Invite`]); revoking it lets a new one go.
   InviteOpen,
+  /// API 3 (S5, row 72): a write of the team's configuration by someone who is neither the project's owner nor the
+  /// server's admin.
+  NotAdmin,
+  /// API 3 (S5): a publish based on a version that is no longer the latest; the error carries the latest
+  /// ([`SharingErrorDetails::Version`]).
+  VersionConflict,
+  /// API 3 (S5): a publish to an archived resource.
+  Archived,
+  /// API 3 (S5): a body names skill parts the project does not have; the error lists their hashes
+  /// ([`SharingErrorDetails::Files`]).
+  MissingFiles,
+  /// API 3 (S5): an uploaded file whose content is not the hash its path names.
+  HashMismatch,
   RateLimited,
   Internal,
 }
@@ -104,6 +117,10 @@ pub enum SharingErrorDetails {
   Revision {
     current: Box<crate::SharedTask>,
   },
+  /// A resource's `409 revision_conflict`: the resource as it is now.
+  ResourceRevision {
+    current: Box<crate::SharedResource>,
+  },
   /// A module's `409 revision_conflict`: the module as it is now.
   ModuleRevision {
     current: Box<crate::SharedModule>,
@@ -111,6 +128,18 @@ pub enum SharingErrorDetails {
   /// `409 module_exists`: the module that has the name.
   Module {
     module: Box<crate::SharedModule>,
+  },
+  /// A resource's `409 slug_taken`: the resource of its kind that has the slug.
+  Resource {
+    resource: Box<crate::SharedResource>,
+  },
+  /// `409 version_conflict`: the resource's latest version.
+  Version {
+    latest: Box<crate::SharedVersion>,
+  },
+  /// `422 missing_files`: the skill parts a body names that the project does not have.
+  Files {
+    hashes: Vec<orchester_core::blob::ContentHash>,
   },
   Claim {
     #[serde(deserialize_with = "required_claim")]

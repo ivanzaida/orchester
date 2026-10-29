@@ -137,7 +137,6 @@ fn auto_mode_reviewer_is_the_one_a_person_chose_or_unavailable() {
   let codex = cli("Codex · Kontur", AgentProvider::CodexCli, &["gpt-5.5-codex"]);
   let openai = native("OpenAI", AgentProvider::OpenAiApi, "gpt-5.5");
   let chose = |connection: &Connection| AutoModeSettings {
-    new_runs: false,
     reviewer: Some(ReviewerChoice {
       connection: connection.id(),
       model: model("gpt-5.5-codex"),

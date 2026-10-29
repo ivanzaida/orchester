@@ -41,6 +41,7 @@ impl ImportStore for ProjectDb {
       check_exists(&transaction, *entity)?;
     }
     for (copy, body) in batch.copies().iter().zip(&bodies) {
+      super::shared_publishes::ensure_may_create(&transaction, copy.resource().kind())?;
       insert(&transaction, batch.key(), copy, body)?;
     }
     for (position, resolved) in batch.resolved().iter().enumerate() {

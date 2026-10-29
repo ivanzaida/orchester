@@ -186,10 +186,15 @@ pub fn approval(shown: &ShownApproval, project: ProjectId, translate: &Translate
     "step": shown.step.as_deref(),
     "read_only_step": shown.read_only,
     "waiting_since": wire::time(request.requested_at),
+    // Auto mode's reviewer is judging it: it waits for the reviewer, not for a person, until the review ends.
+    "reviewing": shown.reviewing,
     // What auto mode did with it, and which model reviewed; absent when auto mode did not look at it.
     "auto_mode": shown.review.as_ref(),
     // The hard rule that held it, as the card says it; absent unless a hard rule held it.
     "hold_cause": shown.hold_cause().map(|cause| translate.text(&cause)),
+    // Why the run's approval mode brought it to the person (`outside`, `notAllowed`, `reviewerUnsure`,
+    // `reviewerDenied`, `push`, `refs`) with the path, ref or reviewer's reason; absent while the reviewer judges it.
+    "came_to_you": shown.came_to_person.as_ref(),
     "link": shown.task.as_deref().and_then(|key| wire::task_link(project, key, TaskPage::Conversation)),
   })
 }

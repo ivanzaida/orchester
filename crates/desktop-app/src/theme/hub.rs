@@ -121,10 +121,12 @@ pub enum HubSpacing {
   SubY,
   /// 28: a step's sub-head and its rules from the box's side (`mwisw`, `XWrFf` in `w31Kt`).
   Indent,
+  /// 44: a block under a radio row from the box's side, past the radio and its gap (`A6i2K3`, `clbbm` in 07).
+  Nested,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 14] = [
+  pub const ALL: [Self; 15] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -139,6 +141,7 @@ impl HubSpacing {
     Self::FieldGap,
     Self::SubY,
     Self::Indent,
+    Self::Nested,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -161,6 +164,7 @@ impl HubSpacing {
       Self::FieldGap => "hub_field_gap",
       Self::SubY => "hub_sub_y",
       Self::Indent => "hub_indent",
+      Self::Nested => "hub_nested",
     }
   }
 
@@ -176,6 +180,7 @@ impl HubSpacing {
       Self::FieldY => 11.0,
       Self::FieldGap => 16.0,
       Self::SubY => 7.0,
+      Self::Nested => 44.0,
     }
   }
 }

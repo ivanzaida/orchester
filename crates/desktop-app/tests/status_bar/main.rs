@@ -18,7 +18,7 @@ use orchester_app::{
   i18n,
   mcp::{McpKind, McpSettings, McpStatus, ServerState},
   navigation::press::OpenIn,
-  routes::{OverviewTab, ProjectPage, Route, TaskView},
+  routes::{OverviewTab, ProjectPage, Route},
   shell::status_bar::{
     BarAction, BarFacts, BarProps, CloudFacts, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView,
     Stopping,
@@ -122,8 +122,13 @@ impl Bar {
     self.tree.pass_headless(&mut self.app);
   }
 
-  /// The words of the tooltip of the element `id`, once the pointer rested on it.
-  fn tooltip(&mut self, id: &str) -> Option<Vec<String>> {
+  /// The words of the card `card` on hover, once the pointer rested on the element `id`.
+  fn card(&mut self, id: &str, card: &str) -> Option<Vec<String>> {
+    self.rest_on(id);
+    self.texts(card)
+  }
+
+  fn rest_on(&mut self, id: &str) {
     let bounds = self.bounds(id);
     let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     self.tree.mouse_move(x, y);
@@ -132,7 +137,6 @@ impl Bar {
       .tree
       .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
     self.tree.pass_headless(&mut self.app);
-    self.texts(&format!("{id}-tooltip"))
   }
 
   fn asked(&self) -> Vec<BarAction> {
@@ -172,14 +176,12 @@ fn runner(state: RunnerState) -> RunnerFacts {
 fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
   ProjectFacts {
     id: project_id(),
-    name: "Kontur".to_owned(),
     repo_root: PathBuf::from(ROOT),
     runner,
     tasks: Some(tasks),
     read_failure: None,
     undecided_runs: 0,
     limits: Vec::new(),
-    revision: 0,
   }
 }
 
@@ -234,6 +236,8 @@ fn approval() -> ShownApproval {
     asking: None,
     auto_approving: false,
     review: None,
+    reviewing: false,
+    came_to_person: None,
   }
 }
 

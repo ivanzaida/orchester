@@ -6,6 +6,7 @@
 
 use std::{future::Future, time::Duration};
 
+use orchester_api::sse::{SseEvent, SseParser};
 use orchester_core::{
   command::{SecretVariable, redact_secrets},
   native::model::{ModelError, StreamEvent},
@@ -21,7 +22,6 @@ use serde::Deserialize;
 use crate::{
   endpoint::{Endpoint, Timing},
   retry,
-  sse::{SseEvent, SseParser},
 };
 
 /// The most of an error answer that is read.
@@ -153,7 +153,7 @@ impl Http {
   }
 
   /// Reads `response`'s events into `take` until it says the response ended; a stream that ends
-  /// before that has failed. Every event is bounded by the parser ([`crate::sse::MAX_EVENT`]).
+  /// before that has failed. Every event is bounded by the parser ([`orchester_api::sse::MAX_EVENT`]).
   pub(crate) async fn read_events(
     &self,
     response: &mut Response,

@@ -1,6 +1,6 @@
 //! Widenings shared by the profile editor and the domain tools.
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform, moves_to_another_account},
+  connection::{AgentProvider, invocation::Platform, mcp::McpServerSelection, moves_to_another_account},
   id::ResourceId,
   permission::{AgentPermissions, widening::Widening},
   resource::AgentProfile,
@@ -47,11 +47,10 @@ pub fn reasons(
   {
     reasons.push(Message::new("appMcp.widens.account"));
   }
-  if profile.mcp_servers().ids().iter().any(|server| {
-    !latest
-      .as_ref()
-      .is_some_and(|version| version.body().mcp_servers().ids().contains(server))
-  }) {
+  let servers = latest
+    .as_ref()
+    .map_or_else(McpServerSelection::none, |version| version.body().mcp_servers().clone());
+  if profile.mcp_servers().adds_to(&servers) {
     reasons.push(Message::new("appMcp.widens.mcpServers"));
   }
   Ok(reasons)
@@ -67,5 +66,15 @@ pub fn message(widening: Widening) -> Message {
     Widening::AutoApprove => "appMcp.widens.autoApprove",
     Widening::Browser => "appMcp.widens.browser",
     Widening::BrowserSite => "appMcp.widens.browserSite",
+    Widening::Autopilot => "appMcp.widens.autopilot",
   })
+}
+
+/// Whether what `reasons` say widens answers requests in a person's place (approving automatically, or Autopilot):
+/// automation may then make the change only when a person also lets it answer approvals. The window's question and
+/// the domain tools both follow this rule.
+pub fn answers_in_persons_place(reasons: &[Message]) -> bool {
+  [Widening::AutoApprove, Widening::Autopilot]
+    .into_iter()
+    .any(|widening| reasons.contains(&message(widening)))
 }

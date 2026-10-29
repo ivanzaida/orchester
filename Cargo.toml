@@ -94,9 +94,11 @@ keyring-core = "1"
 # 0.49: a synthetic paste shortcut (an MCP client's Ctrl+V) no longer reads the person's clipboard; a paste event
 # before insertion, clipboard images and files, file drops on elements and runtime-decoded images, unused yet;
 # 0.51.2: what the mounting code puts on a component's root (`.id(..)`, a Draggable's handlers) survives its own render;
+# 0.52.1: a screenshot of an occluded macOS window (a hidden QA app) completes; 0.53: trackpad swipes between pages
+# (`on_history_swipe`, the window's back and forward);
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.51.2", default-features = false }
+lurq = { version = "0.53.0", default-features = false }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"
@@ -225,3 +227,10 @@ zstd = { version = "0.13", default-features = false }
 # dependency but not the workspace crates, which stay debuggable.
 [profile.dev.package."*"]
 opt-level = 2
+
+# Line tables only, the least debug info that still gives GlitchTip a frame's function, file and line from the
+# uploaded debug files. On Windows (MSVC) it lands in a `.pdb` beside each program, which no installer or zip
+# packs; on macOS `packed` keeps it out of the binaries too, in a `.dSYM` beside them.
+[profile.release]
+debug = "line-tables-only"
+split-debuginfo = "packed"

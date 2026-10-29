@@ -16,7 +16,8 @@ use orchester_core::{
   },
   id::ConnectionId,
   permission::{
-    AgentPermissions, AllowedCommands, BrowserPermission, CommandPermission, NetworkAccess, WritableFolders,
+    AgentPermissions, AllowedCommands, ApprovalMode, BrowserPermission, CommandPermission, NetworkAccess,
+    WritableFolders,
     browser::{AllowedSites, BrowserAccess},
   },
   resource::{AgentProfile, ModelId, RepositoryAccess},
@@ -100,6 +101,9 @@ pub struct Permissions {
   /// Approve automatically (don't ask me): Orchester answers what would ask a person.
   #[serde(default)]
   pub approve_automatically: bool,
+  /// Who answers tool requests; left out, manual. Switching to autopilot is a person's decision.
+  #[serde(default)]
+  pub approval_mode: Approvals,
   /// The browser: Orchester's browser tools for its agents. Left out, a profile being changed keeps its own and a
   /// new profile has it off.
   pub browser: Option<Browser>,
@@ -151,6 +155,27 @@ pub enum Commands {
   AskBefore,
   Allowed,
   AnyInWorktree,
+}
+
+/// The approval mode, as the tools name it.
+#[derive(Clone, Copy, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum Approvals {
+  /// Every tool request in the worktree is approved at once; work outside it, pushes and other refs ask a person.
+  Autopilot,
+  /// The allowed commands run at once; anything else goes to the reviewer, then to a person.
+  #[default]
+  Manual,
+}
+
+impl From<Approvals> for ApprovalMode {
+  fn from(mode: Approvals) -> Self {
+    match mode {
+      Approvals::Autopilot => Self::Autopilot,
+      Approvals::Manual => Self::Manual,
+    }
+  }
 }
 
 pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> Result<Value, ToolError> {
@@ -290,6 +315,7 @@ fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Res
   permissions.set_interactive_tool_approvals(given.ask_before_tool_calls);
   permissions.set_auto_approve(given.approve_automatically);
   permissions.set_browser(browser);
+  permissions.set_approval_mode(given.approval_mode.into());
   Ok(permissions)
 }
 

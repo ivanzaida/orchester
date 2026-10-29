@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
-use orchester_workspace::agents::editor::Action;
+use orchester_workspace::agents::{editor::Action, widening::answers_in_persons_place};
 
 use super::{
   permissions::Section,
@@ -16,6 +16,9 @@ use crate::{
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   ui::message::message_text,
 };
+
+/// The widening of turning Autopilot on (`orchester_workspace::agents::widening::message`).
+const AUTOPILOT: &str = "appMcp.widens.autopilot";
 
 /// The signals a question's answer changes.
 #[derive(Clone)]
@@ -34,19 +37,41 @@ impl Asking {
   }
 }
 
-/// What the pending candidate widens, at its section; `None` without one, or for a stale publication.
-pub fn widening(ctx: &mut Ctx, asking: &Asking) -> Option<(Section, Element)> {
+fn only_autopilot(reasons: &[orchester_workspace::messages::Message]) -> bool {
+  matches!(reasons, [reason] if reason.key == AUTOPILOT)
+}
+
+/// Whether turning Autopilot on waits for the person to allow it, which the draft bar says (07b).
+pub fn autopilot_waits(pending: &Pending) -> bool {
+  pending
+    .0
+    .as_ref()
+    .is_some_and(|asked| asked.reasons.iter().any(|reason| reason.key == AUTOPILOT))
+}
+
+/// What the pending candidate widens, at its section; `None` without one, or for a stale publication. Turning
+/// Autopilot on alone asks *Allow Autopilot for `profile`?* (07b), or for *this profile* while it has no role.
+pub fn widening(ctx: &mut Ctx, asking: &Asking, profile: &str) -> Option<(Section, Element)> {
   let asked = asking.pending.get().0?;
   if asked.request.action == Action::PublishStale {
     return None;
   }
   let section = asked.reasons.first().map_or(Section::Connection, Section::of);
-  let reasons: Vec<Arc<str>> = asked.reasons.iter().map(|reason| message_text(ctx, reason)).collect();
-  let automation = if asked
-    .reasons
-    .iter()
-    .any(|reason| reason.key == "appMcp.widens.autoApprove")
-  {
+  let (title, reasons): (Arc<str>, Vec<Arc<str>>) = if only_autopilot(&asked.reasons) {
+    let title = if profile.is_empty() {
+      ctx.t("agents.permissions.approvals.widen.untitled")
+    } else {
+      ctx.t_args("agents.permissions.approvals.widen.title", [("profile", profile)])
+    };
+    (title, vec![ctx.t("agents.permissions.approvals.widen.reason")])
+  } else {
+    (
+      ctx.t("agents.widenTitle"),
+      asked.reasons.iter().map(|reason| message_text(ctx, reason)).collect(),
+    )
+  };
+  // The domain tools' rule: what answers requests in a person's place also needs automation to answer approvals.
+  let automation = if answers_in_persons_place(&asked.reasons) {
     Guarded::ApprovalWidening
   } else {
     Guarded::PermissionWidening
@@ -57,7 +82,7 @@ pub fn widening(ctx: &mut Ctx, asking: &Asking) -> Option<(Section, Element)> {
     look: WidenLook::Card,
     affirming: false,
     automation,
-    title: ctx.t("agents.widenTitle"),
+    title,
     reasons: reasons.into(),
     confirm: ctx.t("agents.confirm"),
     keep: ctx.t("agents.keepEditing"),

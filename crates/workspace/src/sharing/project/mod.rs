@@ -7,6 +7,7 @@
 mod automatic;
 mod claim_ends;
 mod claims;
+mod configuration;
 pub mod convert;
 pub mod discovery;
 pub mod first_link;
@@ -17,7 +18,7 @@ pub mod lookup;
 mod make_local;
 mod members;
 mod modules;
-mod organization;
+pub(super) mod organization;
 mod share;
 pub mod share_task;
 pub mod state;
@@ -73,13 +74,15 @@ impl ProjectServer {
     Self::among(servers, entries, repo_root, Behalf::Background)
   }
 
+  /// Records too whether the person signed in to the server is its admin, who changes the team's configuration
+  /// (row 72): the project's database refuses a member's drafts by it.
   fn among(
     servers: &Servers,
     entries: &[ServerEntry],
     repo_root: &Path,
     behalf: Behalf,
   ) -> Result<Option<Self>, SharingError> {
-    let db = ProjectDb::open(repo_root)?;
+    let mut db = ProjectDb::open(repo_root)?;
     let Some(link) = db.sharing()? else {
       return Ok(None);
     };
@@ -88,6 +91,10 @@ impl ProjectServer {
       .find(|entry| entry.stored.id == link.server)
       .cloned()
       .ok_or(SharingError::ServerMissing)?;
+    let admin = entry.stored.account.as_ref().is_some_and(|account| account.admin);
+    if db.server_admin()? != admin {
+      db.set_server_admin(admin)?;
+    }
     Ok(Some(Self {
       servers: servers.clone(),
       entry,

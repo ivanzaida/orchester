@@ -55,14 +55,11 @@ struct Started {
 impl Started {
   async fn new(project: &TestProject, reviewer: Option<ReviewerChoice>) -> Self {
     let root = project.repo.path();
-    let settings = AutoModeSettings {
-      new_runs: true,
-      reviewer,
-    };
+    let settings = AutoModeSettings { reviewer };
     ProjectDb::open(root)
       .expect("open")
       .save_auto_mode_settings(&settings)
-      .expect("auto mode for new runs");
+      .expect("the reviewer");
     let (scheduler, events) = scheduler_with(root, project.vault.clone());
     let id = scheduler
       .start_run(IdempotencyKey::generate(), project.task)

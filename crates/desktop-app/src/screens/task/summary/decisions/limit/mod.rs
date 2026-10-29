@@ -36,7 +36,7 @@ use orchester_workspace::{
 
 use self::card::RaiseCard;
 use super::{Said, TaskContext, action::decision_action, arranged, pointing::Pointing};
-use crate::{navigation::pointed::PointedCard, services::Services};
+use crate::{mcp::input_gate::InputGate, navigation::pointed::PointedCard, services::Services};
 
 /// A suggested budget is the current one and half again, rounded up to this.
 const SUGGESTION_STEP: u64 = 100_000;
@@ -183,6 +183,8 @@ pub struct RaiseLimit {
   text: Signal<String>,
   seeded: Signal<bool>,
   asked: Signal<Option<Raising>>,
+  person_only: Signal<bool>,
+  gate: Option<InputGate>,
   pointing: Pointing,
   input: ElementRef,
 }
@@ -195,6 +197,8 @@ impl Component for RaiseLimit {
       text: ctx.signal(String::new()),
       seeded: ctx.signal(false),
       asked: ctx.signal(None),
+      person_only: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
       pointing: Pointing::new(ctx),
       input: ElementRef::new(),
     }
@@ -229,6 +233,8 @@ impl Component for RaiseLimit {
       online: props.online,
       pointing: &self.pointing,
       input: &self.input,
+      gate: self.gate.as_ref(),
+      person_only: &self.person_only,
     }
     .render(ctx);
     let parts: Vec<Element> = std::iter::once(raise)

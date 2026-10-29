@@ -18,7 +18,7 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
-    "approveEverythingPersonOnly": "Only a person turns on approving everything in each run: it lets every auto mode run answer its own requests. Input from an MCP client is taken only while you let automation change agent permissions.",
+    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is.",
     "baseBranch": {
       "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
     }
@@ -33,8 +33,8 @@
   },
   "autoModeHold": {
     "secrets": "Auto mode didn’t review this: it reads a credential location or store.",
-    "unreadable": "Auto mode didn’t review this: Orchester couldn’t read all of it, and the step’s network is off or the step only reads the repository.",
-    "destructive": "Auto mode didn’t review this: it rewrites or discards history, or deletes outside the worktree.",
+    "unreadable": "Auto mode didn’t review this: Orchester found no command in it that it could read.",
+    "destructive": "Auto mode didn’t review this: it rewrites or discards history beyond the run’s own branch, changes git beyond the run’s worktree, or deletes outside the worktree.",
     "push": "Auto mode didn’t review this: it pushes something other than the run’s own branch to origin, or forces the push.",
     "readOnlyStep": "Auto mode didn’t review this: the step only reads the repository, and this command may write.",
     "networkOff": "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install.",
@@ -479,6 +479,7 @@
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
       "reportReady": "Every step passed: its report waits to be completed",
+      "completed": "Every step passed: completed",
       "committedNothing": "Committed nothing, but its pipeline expects changes",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
@@ -739,6 +740,8 @@
       "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
+      "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
+      "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
@@ -1443,6 +1446,14 @@
       "fileTooLarge": "{{path}} is larger than {{max}} KiB, the most a reference file holds."
     }
   },
+  "services": {
+    "errors": {
+      "duplicateService": "More than one published service is named {{service}}.",
+      "needNotPublished": "{{service}} needs {{need}}, which is not a published service. Publish {{need}} first.",
+      "serviceNotPublished": "{{service}} is not a published service. Publish it first.",
+      "needsCycle": "The services' needs form a cycle: {{cycle}}. A service cannot start after itself."
+    }
+  },
   "sources": {
     "personOnly": "Adding a source lets agents read more without asking: a person confirms it in the window.",
     "check": {
@@ -1497,6 +1508,7 @@
       "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
+      "retired": "{{tool}} was retired with auto mode and changes nothing. Use {{replacement}} instead.",
       "personsPoints": "A person set this task’s story points; automation does not change them.",
       "pointsOffScale": "Story points are 1, 2, 3, 5, 8, 13 or 21.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
@@ -1566,7 +1578,7 @@
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
       "promptPersonOnly": "This changes what agents are told, which a person decides in Orchester: they publish it in the window or apply the Orchestrator's proposal, or let automation decide by turning on Let automation change agent permissions in Settings › What automation may do. Saving a draft stays open to automation.",
-      "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
+      "autoApproveNeedsAnswers": "Approving automatically and Autopilot answer requests in a person's place, so they also need Let automation answer approvals, which a person turns on in the window.",
       "mcpProgramAndUrl": "A server is either a program (program) or a remote server (url), not both.",
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
@@ -1597,6 +1609,24 @@
         "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
       }
     },
+    "services": {
+      "errors": {
+        "invalid": "The definition is not valid: {{reason}}",
+        "nameNotEditable": "A service keeps the name it was made with; save its definition under that name.",
+        "stackNameNotEditable": "A stack keeps the name it was made with; leave out the name or give the same one.",
+        "serviceNameTaken": "Another service is named {{name}}. Give the new service a name of its own.",
+        "stackNameTaken": "Another stack is named {{name}}. Give the new stack a name of its own."
+      },
+      "widens": {
+        "newService": "A new service runs its program whenever a run starts it: with your rights, network access and no sandbox, in the run's worktree, on files its agents wrote. Allow it only where you would let those agents do that.",
+        "firstVersion": "A service's first version lets runs start its program with your rights, network access and no sandbox, so a person publishes it.",
+        "program": "The service would run {{program}} where it ran {{before}}.",
+        "arguments": "The service's arguments would change, and with them what its program does.",
+        "workingFolder": "The service's program would start in another folder, where it may run other code.",
+        "variables": "The service's variables would change: a variable can change what its program loads, where it connects or what it trusts.",
+        "seed": "The service's seed would change: what it runs, or the requests it sends, once the service is ready."
+      }
+    },
     "widens": {
       "repository": "Write access to the repository, which the latest version does not give.",
       "writableFolder": "A writable folder outside the worktree that the latest version does not give.",
@@ -1606,8 +1636,10 @@
       "autoApprove": "Approving automatically, where the latest version asks a person.",
       "browser": "The browser, which the latest version does not give.",
       "browserSite": "Allowed sites of the browser that the latest version does not list.",
+      "autopilot": "Autopilot, which approves the agents' tool requests in the worktree without asking, where the latest version is Manual.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
-      "reviewerAccount": "Auto mode's reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
+      "reviewer": "Another reviewer would approve requests in every Manual run in your place.",
+      "reviewerAccount": "The reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
       "account": "Its agents would run on another account than the latest version's: another sign-in, and possibly another organisation's provider, would get the project's work.",
       "program": "{{program}} is not a copy of the CLI found on the search path.",
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
@@ -1937,7 +1969,9 @@
       "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was changed. If {{own}} is how your team reaches this server, connect to it by that address.",
       "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account; nothing was sent.",
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
-      "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent."
+      "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
+      "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
+      "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

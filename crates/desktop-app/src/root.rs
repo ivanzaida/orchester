@@ -26,7 +26,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  chrome, lifecycle,
+  chrome, hang_reports, lifecycle,
   mcp::{self, McpLink, WindowLink},
   navigation::{
     Navigation,
@@ -108,12 +108,16 @@ impl Component for Root {
           },
         )
       }
-      Start::Problem(problem) => Column::new()
-        .id(WINDOW_ID)
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Pct(100.0))
-        .child(startup::window(ctx, problem))
-        .into(),
+      Start::Problem(problem) => {
+        let beat = hang_reports::beat::beat(ctx, &link);
+        Column::new()
+          .id(WINDOW_ID)
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Pct(100.0))
+          .with_children(beat)
+          .child(startup::window(ctx, problem))
+          .into()
+      }
     }
   }
 }
@@ -197,6 +201,8 @@ impl Component for SessionWindow {
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
+    let link = ctx.props::<SessionProps>().link.clone();
+    let beat = hang_reports::beat::beat(ctx, &link);
     // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification.
     let notifications = sign_in
       .is_signed_in()
@@ -222,6 +228,7 @@ impl Component for SessionWindow {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(projects)
+      .with_children(beat)
       .with_children(notifications)
       .child(framed);
     // Behind the gate no shortcut opens a tab or a screen.

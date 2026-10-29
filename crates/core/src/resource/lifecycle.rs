@@ -1,5 +1,5 @@
-//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills and test suites share one
-//! lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
+//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills, test suites, services and
+//! stacks share one lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
 //! versions, so publishing affects new runs only.
 
 use std::{fmt, num::NonZeroU32};
@@ -12,6 +12,7 @@ use crate::{
   id::{ResourceId, VersionId},
   name::Name,
   permission::capability::PermissionProblem,
+  service::NeedsError,
   time::Timestamp,
 };
 
@@ -23,6 +24,8 @@ pub enum ResourceKind {
   Tool,
   Skill,
   TestSuite,
+  Service,
+  Stack,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -298,6 +301,10 @@ pub enum PublishError {
   /// An agent profile's connection cannot enforce its permissions.
   #[error(transparent)]
   Permissions(#[from] PermissionProblem),
+  /// A service or stack names a service that is not published, or the needs form a cycle
+  /// ([`crate::service::PublishNeeds`]).
+  #[error(transparent)]
+  Needs(#[from] NeedsError),
 }
 
 /// Publishes `draft` as the version after `latest`. The caller persists the version and

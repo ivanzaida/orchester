@@ -76,6 +76,10 @@ pub enum StoreError {
   /// Nothing was changed.
   #[error("the project's task list is shared; this change is made on the server")]
   SharedProject,
+  /// The resource is the team's configuration of a shared project, which only its owner or the server's admin changes
+  /// (`docs/architecture/server.md`, row 72): a member has no drafts of it. Nothing was changed.
+  #[error("only an admin changes the team's configuration")]
+  NotAdmin,
   /// The task was kept *Not shared* when the project joined a server project: it is read-only until
   /// *Share task* uploads it. Nothing was changed.
   #[error("task {0} is not shared; it is read-only")]

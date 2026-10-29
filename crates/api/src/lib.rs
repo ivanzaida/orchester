@@ -15,7 +15,9 @@ mod invites;
 mod joins;
 mod modules;
 mod projects;
+mod resources;
 mod server_admin;
+pub mod sse;
 pub mod statements;
 mod tasks;
 #[cfg(feature = "test-support")]
@@ -32,5 +34,6 @@ pub use invites::*;
 pub use joins::*;
 pub use modules::*;
 pub use projects::*;
+pub use resources::*;
 pub use server_admin::*;
 pub use tasks::*;

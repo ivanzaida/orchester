@@ -9,7 +9,6 @@ mod models;
 mod review;
 #[path = "../fake_server/mod.rs"]
 mod server;
-mod sse;
 mod wire;
 
 use std::{sync::Arc, time::Duration};

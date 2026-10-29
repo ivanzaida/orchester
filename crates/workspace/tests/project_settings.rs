@@ -2,11 +2,15 @@
 use std::{fs, time::Duration};
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ConnectionId, ProjectId},
   limits::{ProjectLimits, QaSlots},
   name::Name,
   project::{Project, ProjectKey},
-  run::review::AutoModeSettings,
+  resource::ModelId,
+  run::{
+    AllowAutopilot, Answerer,
+    review::{AutoModeSettings, ReviewerChoice},
+  },
   store::SettingsStore,
   tokens::TokenBudget,
 };
@@ -125,13 +129,18 @@ fn project_settings_environment_requires_confirmation_and_refuses_a_stale_baseli
   assert_eq!(db.project_environment().expect("saved"), wide);
 }
 #[test]
-fn project_settings_auto_mode_needs_a_reviewer_and_refuses_stale_changes() {
+fn project_settings_auto_mode_reviewer_needs_a_person_and_a_connection_and_refuses_stale_changes() {
   let (repo, mut db) = project();
   let base = AutoModeSettings::default();
   let asked = AutoModeSettings {
-    new_runs: true,
-    ..base.clone()
+    reviewer: Some(ReviewerChoice {
+      connection: ConnectionId::generate(),
+      model: ModelId::new("claude-haiku-4-5-20251001").expect("model"),
+      effort: None,
+    }),
   };
+  assert!(project_settings::reviewer_widens(&base, &asked));
+  assert!(!project_settings::reviewer_widens(&base, &base));
   assert_eq!(
     project_settings::save_auto_mode_in(repo.path(), &base, &asked, false)
       .expect_err("person")
@@ -140,7 +149,7 @@ fn project_settings_auto_mode_needs_a_reviewer_and_refuses_stale_changes() {
   );
   assert!(
     project_settings::save_auto_mode_in(repo.path(), &base, &asked, true).is_err(),
-    "no reviewer"
+    "the chosen connection is not in the project"
   );
   assert_eq!(db.auto_mode_settings().expect("unchanged"), base);
   // A narrow change still cannot overwrite a baseline that changed outside the page.
@@ -152,6 +161,40 @@ fn project_settings_auto_mode_needs_a_reviewer_and_refuses_stale_changes() {
     "projectSettings.changedOutside"
   );
   assert_eq!(db.auto_mode_settings().expect("kept"), asked);
+}
+
+#[test]
+fn project_settings_approval_mode_effective_allow_autopilot_is_turned_on_by_a_person_alone() {
+  let (repo, db) = project();
+  assert!(
+    !project_settings::load_in(repo.path())
+      .expect("load")
+      .allow_autopilot
+      .is_on()
+  );
+  assert_eq!(
+    project_settings::save_allow_autopilot_in(repo.path(), true, Answerer::Automation)
+      .expect_err("person only")
+      .key,
+    "projectSettings.autopilotPersonOnly"
+  );
+  assert_eq!(db.allow_autopilot().expect("unchanged"), AllowAutopilot::OFF);
+  assert_eq!(
+    project_settings::save_allow_autopilot_in(repo.path(), true, Answerer::Person).expect("a person"),
+    AllowAutopilot::ON
+  );
+  assert!(
+    project_settings::load_in(repo.path())
+      .expect("load")
+      .allow_autopilot
+      .is_on()
+  );
+  // Turning it off is anyone's.
+  assert_eq!(
+    project_settings::save_allow_autopilot_in(repo.path(), false, Answerer::Automation).expect("off"),
+    AllowAutopilot::OFF
+  );
+  assert_eq!(db.allow_autopilot().expect("saved"), AllowAutopilot::OFF);
 }
 
 #[test]

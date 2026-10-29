@@ -1,9 +1,9 @@
 //! What a run keeps of its approvals, as the task page and the status bar show it: whether Orchester
 //! auto-approves its requests (the run's own choice — *Approve everything in this run*, the run's switch,
-//! *Stop* — else whether a profile one of its steps pinned approves automatically, or auto mode's *approve
-//! everything in each run* covers it, `orchester_core::run::auto_approves`), its rules from Approve similar and
-//! Always allow, and how its requests were answered. The desktop writes the run's choice and revokes rules; the
-//! runner reads both at each request, so a change applies from the next one.
+//! *Stop* — else whether a profile one of its steps pinned approves automatically, or the run is in Autopilot,
+//! `orchester_core::run::auto_approves`), its mode, its rules from Approve similar and Always allow, and how its
+//! requests were answered. The desktop writes the run's choice, switches it to Manual and revokes rules; the runner
+//! reads them at each request, so a change applies from the next one.
 
 use std::{path::Path, sync::Arc};
 
@@ -11,7 +11,7 @@ use orchester_core::{
   id::RunId,
   resource::{AgentProfile, ModelId},
   run::{
-    Answerer, ApprovalRule, ApprovalRuleId, Run, StepExecutor, TaskPhase, auto_approves,
+    Answerer, ApprovalRule, ApprovalRuleId, EffectiveMode, ManualSwitch, Run, StepExecutor, TaskPhase, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -26,19 +26,8 @@ use super::detail::run_store_error;
 pub fn auto_approving(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
   Ok(auto_approves(
     db.run_auto_approve(run.id())?,
-    profile_approves(db, run) || everything(db, run.id())?.is_some(),
+    profile_approves(db, run) || db.run_approval_mode(run.id())?.is_autopilot(),
   ))
-}
-
-/// Who turned on auto mode's *approve everything in each run*, while it covers `run`, which uses auto mode now.
-pub fn everything(db: &ProjectDb, run: RunId) -> Result<Option<Answerer>, StoreError> {
-  let setting = db.approve_everything()?;
-  Ok(
-    setting
-      .covers(db.run_auto_mode(run)?)
-      .then(|| setting.turned_on_by())
-      .flatten(),
-  )
 }
 
 /// Whether `latest`, the latest run of `task`, is active and auto-approves: a run the status bar counts as
@@ -90,8 +79,9 @@ pub enum RunApprovalChange {
   AutoApprove(bool),
   /// Revoke a rule of Approve similar: its requests ask again from the next one.
   Revoke(ApprovalRuleId),
-  /// Use auto mode for the run's requests, or stop.
-  AutoMode(bool),
+  /// Switch the run to Manual for itself, for good: nothing switches it back to Autopilot. A narrowing, so the person
+  /// or automation alike, as the switch records.
+  SwitchToManual(Answerer),
 }
 
 /// Applies `change` to run `run` of the project at `repo_root`.
@@ -101,11 +91,17 @@ pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Resu
     RunApprovalChange::AutoApprove(chosen) => db.set_run_auto_approve(run, Some(chosen)),
     // A rule revoked already, or one of Always allow, stays as it is.
     RunApprovalChange::Revoke(rule) => db.revoke_approval_rule(run, rule, Timestamp::now()).map(|_| ()),
-    RunApprovalChange::AutoMode(on) => db.set_run_auto_mode(run, on),
+    RunApprovalChange::SwitchToManual(by) => db.switch_run_to_manual(
+      run,
+      ManualSwitch {
+        at: Timestamp::now(),
+        by,
+      },
+    ),
   }
 }
 
-/// The reviewer of a project's auto mode, as the app names it: the connection and the model.
+/// The reviewer Manual asks, as the app names it: the connection and the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewerShown {
   pub connection: Arc<str>,
@@ -113,7 +109,7 @@ pub struct ReviewerShown {
   pub effort: Option<String>,
 }
 
-/// The project's reviewer, or why auto mode has none.
+/// The project's reviewer, or why it has none.
 pub fn reviewer_of(db: &ProjectDb) -> Result<Result<ReviewerShown, ReviewerUnavailable>, StoreError> {
   let settings = db.auto_mode_settings()?;
   let connections = db.connections()?;
@@ -124,7 +120,7 @@ pub fn reviewer_of(db: &ProjectDb) -> Result<Result<ReviewerShown, ReviewerUnava
   }))
 }
 
-/// Why auto mode has no reviewer, as the app says it.
+/// Why the project has no reviewer, as the app says it.
 pub const fn unavailable_key(why: ReviewerUnavailable) -> &'static str {
   match why {
     ReviewerUnavailable::NoConnection => "runs.autoMode.unavailable.noConnection",
@@ -134,18 +130,18 @@ pub const fn unavailable_key(why: ReviewerUnavailable) -> &'static str {
   }
 }
 
-/// A run's auto mode, and the project's reviewer or why it has none.
+/// A run's approval mode, and the project's reviewer or why it has none.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AutoModeState {
-  pub on: bool,
+pub struct RunModeState {
+  pub mode: EffectiveMode,
   pub reviewer: Result<ReviewerShown, ReviewerUnavailable>,
 }
 
-/// [`AutoModeState`] of run `run` of the project at `repo_root`.
-pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, StoreError> {
+/// [`RunModeState`] of run `run` of the project at `repo_root`.
+pub fn run_mode_in(repo_root: &Path, run: RunId) -> Result<RunModeState, StoreError> {
   let db = ProjectDb::open(repo_root)?;
-  Ok(AutoModeState {
-    on: db.run_auto_mode(run)?,
+  Ok(RunModeState {
+    mode: db.run_approval_mode(run)?,
     reviewer: reviewer_of(&db)?,
   })
 }
@@ -153,12 +149,14 @@ pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, Store
 /// What a run keeps of its approvals.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunApprovals {
-  /// The run's own auto-approval choice; `None` follows its profiles and auto mode's setting.
+  /// The run's own auto-approval choice; `None` follows its profiles and its mode.
   pub chosen: Option<bool>,
   /// A profile one of its steps pinned approves automatically.
   pub profile: bool,
-  /// Who turned on auto mode's *approve everything in each run*, while it covers the run ([`everything`]).
-  pub everything: Option<Answerer>,
+  /// The mode the run answers its agents' requests in now.
+  pub mode: EffectiveMode,
+  /// When and by whom the run was switched to Manual for itself, once it was and that was recorded.
+  pub switched: Option<ManualSwitch>,
   pub rules: Vec<ApprovalRule>,
   pub counts: DecisionCounts,
 }
@@ -168,20 +166,25 @@ impl RunApprovals {
     Ok(Self {
       chosen: db.run_auto_approve(run.id())?,
       profile: profile_approves(db, run),
-      everything: everything(db, run.id())?,
+      mode: db.run_approval_mode(run.id())?,
+      switched: db.run_manual_switch(run.id())?,
       rules: db.approval_rules(run.id())?,
       counts: db.decision_counts(run.id())?,
     })
   }
 
-  /// Whether Orchester auto-approves the run's requests now.
-  pub const fn auto_approving(&self) -> bool {
-    auto_approves(self.chosen, self.profile || self.everything.is_some())
+  /// Whether the run may still be switched to Manual for itself: it is in Autopilot and has not ended.
+  pub fn may_switch_to_manual(&self, run: &Run) -> bool {
+    self.mode.is_autopilot() && !run.status().is_terminal()
   }
 
-  /// Who turned on auto mode's *approve everything in each run*, while it answers the run's requests: the run's own
-  /// choice (*Stop*) did not take it back.
-  pub fn approved_by_setting(&self) -> Option<Answerer> {
-    self.everything.filter(|_| self.chosen != Some(false))
+  /// Whether Orchester auto-approves the run's requests now.
+  pub const fn auto_approving(&self) -> bool {
+    auto_approves(self.chosen, self.profile || self.mode.is_autopilot())
+  }
+
+  /// Whether Autopilot answers the run's requests: the run is in it, and its own choice (*Stop*) did not take it back.
+  pub fn approved_by_autopilot(&self) -> bool {
+    self.mode.is_autopilot() && self.chosen != Some(false)
   }
 }

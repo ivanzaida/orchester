@@ -102,6 +102,47 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   served.ok("save_profile_draft", &auto);
 }
 
+/// Manual → Autopilot widens what agents do unasked and answers requests in a person's place: over MCP it needs both
+/// of a person's switches, as the window's question does. Switching back to Manual is always taken. `get_profile`
+/// reads the mode.
+#[test]
+fn approval_mode_mcp_profile_autopilot_is_person_only() {
+  let mut served = served();
+  let manual = served.most_restrictive();
+  assert_eq!(manual["approval_mode"], "manual", "a new profile is Manual");
+  served.ok("save_profile_draft", &profile("Pilot", Some(manual.clone())));
+  let read = json!({ "project": "Kontur", "profile": "Pilot" });
+  let mut autopilot = manual.clone();
+  autopilot["approval_mode"] = json!("autopilot");
+  let mut pilot = profile("Pilot", Some(autopilot));
+  pilot["profile"] = json!("Pilot");
+  let refused = served.refused("save_profile_draft", &pilot);
+  assert_person_only(&refused);
+  assert!(refused["reasons"].to_string().contains("Autopilot"), "{refused}");
+  let kept = served.ok("get_profile", &read);
+  assert_eq!(kept["profile"]["permissions"]["approval_mode"], "manual", "{kept}");
+  served.let_automation_widen(true);
+  let answers = served.refused("save_profile_draft", &pilot);
+  assert_eq!(
+    answers["code"], "automation_not_allowed",
+    "Autopilot needs both switches"
+  );
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("a person lets automation answer approvals");
+  let saved = served.ok("save_profile_draft", &pilot);
+  assert_eq!(saved["profile"]["permissions"]["approval_mode"], "autopilot");
+  let read_back = served.ok("get_profile", &read);
+  assert_eq!(read_back["profile"]["permissions"]["approval_mode"], "autopilot");
+  served.let_automation_widen(false);
+  let mut back = profile("Pilot", Some(manual));
+  back["profile"] = json!("Pilot");
+  let saved = served.ok("save_profile_draft", &back);
+  assert_eq!(saved["profile"]["permissions"]["approval_mode"], "manual");
+}
+
 #[test]
 fn domain_widening_the_browser_needs_a_person() {
   let mut served = served();

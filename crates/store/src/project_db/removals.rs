@@ -59,6 +59,7 @@ pub(super) fn remove(
   let resource = load_resources(&transaction, "WHERE id = ?1", [id.to_string()])?
     .pop()
     .ok_or(StoreError::ResourceNotFound(id))?;
+  super::shared_publishes::ensure_may_change(&transaction, id)?;
   if removed_at(&transaction, id)?.is_some() {
     return Err(StoreError::ResourceNotFound(id));
   }

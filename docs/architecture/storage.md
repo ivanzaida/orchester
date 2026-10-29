@@ -475,9 +475,12 @@ immutable published versions `v1..vN`. Runs pin versions; publishing affects new
 
 | Table | Purpose |
 | --- | --- |
-| `resources` | id, kind (`agent_profile`, `instruction`, `pipeline`, `tool`), slug, name, archived |
+| `resources` | id, kind (`agent_profile`, `instruction`, `pipeline`, `tool`), slug, name, archived; in a shared project (S5) `sharing` (`shared` with the server revision, `not_shared` for one kept local at a join, empty for a local project's) |
 | `resource_drafts` | resource id, body, based-on version, updated at |
-| `resource_versions` | id, resource id, number, body, content hash, published at; unique (resource, number) |
+| `resource_versions` | id, resource id, number, body, content hash, published at; unique (resource, number); S5: the publisher (server user id and name), set once on a version published here before the project was shared, otherwise immutable like the rest |
+| `shared_version_bodies` (S5) | per version cached from the server: the server's body unchanged, its SHA-256, and the local body with this computer's bindings in place of the references, which reads of the version return |
+| `shared_version_references` (S5) | per cached version and in its order: each connection, MCP server, secret or shared tool its body names, by its id on the publisher's computer, with its name and role |
+| `reference_bindings` (S5) | per reference (kind and id on the publisher's computer): its name and role, the local connection, MCP server or secret it means here (none while unbound), how it was bound (`name`, `role`, `person`), changed at |
 | `resource_imports` | a resource copied from another project (Import resources): import key, source project (id and name), source resource (id and name; no name for copies made before it was kept), source version (none for a draft), imported at; unique (import key, source resource). For display only: the copy does not follow its source |
 | `import_resolutions` | per import key and in plan order, each source resource, connection, MCP server or secret the import did not copy: its kind, id and name in the source, and this project's own used in its place (none when left unresolved). For display only: what an imported copy shows of its import |
 | `connections` | kind (GitHub, agent provider, MCP), name, settings, keychain reference, status, last check |

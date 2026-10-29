@@ -1,12 +1,13 @@
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
 use sentry::protocol::{Context, DeviceContext, Event, Map, OsContext};
 
 use crate::{paths::PathRules, secrets};
 
 /// The tags Orchester sets on its reports, the only ones a report keeps: `process`, which of its programs
-/// reported (the app or the runner).
-pub const ORCHESTER_TAGS: &[&str] = &["process"];
+/// reported (the app or the runner), and on the app's report of a frozen window `screen`, the kind of screen it
+/// showed, and `stack`, whether the window's thread's stack was captured.
+pub const ORCHESTER_TAGS: &[&str] = &["process", "screen", "stack"];
 
 /// Removes everything private from an error report before it may leave the computer.
 ///
@@ -61,6 +62,7 @@ impl ReportScrubber {
         .map(|thread| self.thread(thread))
         .collect::<Vec<_>>()
         .into(),
+      debug_meta: Cow::Owned(self.debug_meta(event.debug_meta.into_owned())),
       contexts: system_contexts(event.contexts),
       tags: self.tags(event.tags),
       ..Event::default()

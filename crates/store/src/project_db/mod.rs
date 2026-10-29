@@ -1,8 +1,8 @@
 mod activity;
 mod agent_files;
 mod always_allow;
+mod approval_modes;
 mod approval_rules;
-mod approve_everything;
 mod attachments;
 mod auto_mode;
 mod automatic_status;
@@ -53,9 +53,11 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
+mod reference_bindings;
 mod removals;
 mod repository;
 mod repository_import;
+mod request_answers;
 mod resolutions;
 mod resources;
 mod reviewer_usage;
@@ -66,9 +68,13 @@ mod runner_failures;
 mod runs;
 mod schema;
 mod secrets;
+mod service_needs;
+mod shared_events;
 mod shared_members;
 mod shared_modules;
+mod shared_publishes;
 mod shared_tasks;
+mod shared_versions;
 mod sharing;
 mod sources;
 mod step_outputs;
@@ -109,13 +115,17 @@ pub use self::{
   orchestrator_reports::KeptReport,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
+  reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
   runs::RunBranch,
+  shared_events::{SharedEvent, SharedSnapshot},
   shared_members::SharedMember,
   shared_modules::{CachedModule, CachedModuleChange},
+  shared_publishes::{PublishState, WaitingPublish},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
+  shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
 };

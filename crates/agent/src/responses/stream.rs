@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 
+use orchester_api::sse::SseEvent;
 use orchester_core::{
   connection::WireApi,
   native::{
@@ -20,7 +21,6 @@ use orchester_core::{
 use serde_json::Value;
 
 use super::stream_error;
-use crate::sse::SseEvent;
 
 /// A complete response.
 #[derive(Clone, Debug, PartialEq)]

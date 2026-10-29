@@ -239,7 +239,8 @@ impl Editor {
       allowed: self.allowed.clone(),
       work: self.work.clone(),
     };
-    let (section, mut asked) = match questions::widening(ctx, &asking) {
+    let role = self.fields.role.get();
+    let (section, mut asked) = match questions::widening(ctx, &asking, role.trim()) {
       Some((section, question)) => (Some(section), Some(question)),
       None => (None, None),
     };
@@ -319,6 +320,7 @@ impl Editor {
           .as_ref()
           .and_then(|entry| props.listed.draft_times.get(&entry.id).copied()),
         publishable: self.publishable(props),
+        autopilot_waits: questions::autopilot_waits(&self.pending.get()),
         actions,
       },
     )

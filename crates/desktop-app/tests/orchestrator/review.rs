@@ -152,7 +152,7 @@ fn orchestrator_merge_proposal_needs_committed_work() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let delivery = screen.delivery();
   let key = screen.draft_with(delivery, "Keep going", ("Keep working.", &["It keeps working."]));
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   screen.go(OrchestratorChat::New);
   call(
     &mut screen,

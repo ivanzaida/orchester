@@ -186,6 +186,11 @@ fn agents_page_spacing_matches_the_design() {
     Dimension::Px(40.0),
     "NPPl4 and a7PAf leave 40 at each side"
   );
+  assert_eq!(
+    app.theme().spacing_value(theme::HubSpacing::Nested.role()),
+    Dimension::Px(44.0),
+    "A6i2K3 in 07 starts 44 from the box's side, past its radio"
+  );
 }
 
 #[test]
@@ -558,5 +563,32 @@ fn theme_agents_active_task_role_matches_rx5w5() {
     assert_eq!(style.weight, FontWeight::Normal);
     assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
     assert_eq!(&*style.font_family, "Geist");
+  }
+}
+
+/// A quiet approval row of the Conversation (`Event · switched to Manual` `ARwiU`, ORC-353): its lead in 12
+/// `text_secondary` 1.3, its detail in 12 `text_muted` 1.4, 36 in past a message's avatar, in both modes.
+#[test]
+fn theme_conversation_approval_row_follows_the_design() {
+  use theme::{ConversationSpacing, ConversationText};
+  for mode in [Mode::Dark, Mode::Light] {
+    let app = themed(mode);
+    let theme = app.theme();
+    for (role, line_height, color) in [
+      (ConversationText::ApprovalLead, 1.3, PaletteColor::TextSecondary),
+      (ConversationText::ApprovalDetail, 1.4, PaletteColor::TextMuted),
+    ] {
+      let style = theme.typography_style(role.role());
+      assert_eq!(
+        (style.font_size, style.weight, style.line_height, &*style.font_family),
+        (12.0, FontWeight::Normal, line_height, "Geist"),
+        "{role:?}"
+      );
+      assert_eq!(style.color, theme.palette_color(color), "{role:?} in {}", mode.name());
+    }
+    assert_eq!(
+      theme.spacing_value(ConversationSpacing::ApprovalRow.role()),
+      Dimension::Px(36.0)
+    );
   }
 }

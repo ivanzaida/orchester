@@ -16,6 +16,7 @@ mod native;
 mod orchestrator;
 mod pipelines;
 mod refusals;
+mod scenario_names;
 mod settings;
 
 use std::{
@@ -347,7 +348,8 @@ fn seed_deliverables_leaves_runs_that_committed_nothing() {
       "report run ready to complete",
       "outside run ready to complete",
       "committed nothing, changes expected",
-      "report run completed"
+      "report run completed",
+      "report run, task set Done without completing"
     ]
   );
   for (index, task) in seed.seeded.tasks.iter().enumerate() {
