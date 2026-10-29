@@ -8,8 +8,12 @@ be added later, so domain logic must not depend on the desktop app.
   `docs/evidence/design-consistency-audit-2026-09-23.md`. All project data in the designs is illustrative fixture data;
   never ship it as real data or defaults.
 - Work plan and backlog: `docs/plan.md`. Take tasks from it and move them to its *Done* list when finished.
-- Design source: `data/orchester.pen`; the new app's (`crates/desktop-app`) is `data/orchester2.pen`. Both are
-  encrypted — read them only through the `pencil` MCP, never Read/Grep.
+- Design source: `crates/desktop-app/design/orchester.pen`, the desktop app's design with its `· redesign` boards
+  (committed 2026-10-29; it replaces the Pencil document `87147a2b-…` that briefs named before). It is encrypted —
+  read it only through the `pencil` MCP, passing the absolute path of `crates/desktop-app/design/orchester.pen` in
+  your own checkout or worktree as `filePath`; never Read/Grep it. The person edits it in Pencil from the main
+  checkout and commits it; design steps change it only in the document the person has open and leave the commit to
+  the person. `data/orchester.pen` and `data/orchester2.pen` are older designs: do not use them.
 
 Cross-agent skill layout:
 
@@ -34,7 +38,7 @@ Workspace layout:
   workspace member since 2026-10-24: it does not build, and its source stays only to look up code and behaviour. Never
   change it, build it or port anything to it.
 - `crates/desktop-app` (`orchester-app`, binary `orchester`; `orchester-app` before 2026-10-24): the lurq app in the
-  `orchester2.pen` design. Its own `version` in its `Cargo.toml` is the app's release version: raising it on `master`
+  `crates/desktop-app/design/orchester.pen` design. Its own `version` in its `Cargo.toml` is the app's release version: raising it on `master`
   releases the Windows app (`.github/workflows/app-release.yml`, `docs/stable-build.md` "Releases from CI").
   Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
   settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP

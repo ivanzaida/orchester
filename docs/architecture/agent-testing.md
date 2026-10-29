@@ -1,7 +1,7 @@
 # Orchester — agent testing: services, stacks, test suites and UI drivers
 
 Date: 2026-10-28. Status: **agreed direction** (the person, in chat, 2026-10-28). Design: the desktop file
-`C:/Users/lurkm/.pencil/documents/87147a2b-89b6-4bf9-ac60-a41596df72da/orchester.pen`, board
+`crates/desktop-app/design/orchester.pen`, board
 `Agent testing · redesign` (`eWydp`).
 
 ## Why

@@ -12,12 +12,11 @@ what is actually on screen.
 
 ## Inputs
 
-- The app: `orchester-app` (`crates/desktop-app`, design `data/orchester2.pen`; see
-  "orchester-app" below) or the deprecated `orchester-desktop` (`crates/desktop`, design
-  `data/orchester.pen`).
-- The screens and states to check, each with its Pencil node id: for orchester-app a frame of
-  `data/orchester2.pen` (layers below); for the deprecated desktop see the screen table in
-  `docs/design/orchester-workspace.md`.
+- The app: `orchester-app` (`crates/desktop-app`, design `crates/desktop-app/design/orchester.pen`; see
+  "orchester-app" below). The deprecated `orchester-desktop` and its `data/orchester.pen` are not verified any more,
+  and `data/orchester2.pen` is an older design of the new app: do not compare against either.
+- The screens and states to check, each with its Pencil node id: a frame of
+  `crates/desktop-app/design/orchester.pen`, usually on a `· redesign` board the brief names.
 - The branch/worktree with the implementation.
 
 ## Procedure
@@ -100,11 +99,11 @@ run waits for the person instead, unless they ask for the step again.
 
 ## orchester-app: start, connect, reach the state
 
-**Design frames.** `data/orchester2.pen`, through the `pencil` MCP or, where the main checkout has
-it, the read-only wrapper in its `.tmp/kontur-design/` (`./px.sh <pen> <js>`; `Get("<layer>",
-{depth: 1})` lists a layer's frames, `Export(["<frame>"], "png", "<dir>", {scale: 1})` exports
-one). The layers: Overview `vgqpM`, Tasks `BnbgX`, Task page `iwrwB`, New task `ZLTEI`. A frame is
-the whole window at 1440 × 900 (exports are 1442 × 902 with the frame's 1 px outline); a
+**Design frames.** `crates/desktop-app/design/orchester.pen`, through the `pencil` MCP with the absolute path of
+that file in your own worktree as `filePath` (read-only: `get_app_state`, Get and Export only; never edit it). Its
+boards are named `<Area> · redesign` (Tasks, Task page, Project settings, Agents, Startup, Status bar, …); the brief
+names the board and frame ids, and the board's Notes row and `docs/design/<area>.md` say what each frame shows. A
+frame is the whole window at 1440 × 900 (exports are 1442 × 902 with the frame's 1 px outline); a
 `… · full page` frame shows the whole scroll height, so compare the window first, then scroll the
 app and compare the rest.
 
