@@ -326,6 +326,7 @@ automatically (which additionally needs AA).
 | `writable_folders`      | array<string>                                 | no   | Folders outside the worktree the agent may write (write access only).     |
 | `ask_before_tool_calls` | boolean                                       | no   | Ask a person before each MCP or app tool call.                             |
 | `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. |
+| `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gate AP), the reverse never asks. |
 
 ### `publish_profile` — changes data · gate AP for broader or re-worded profiles
 
