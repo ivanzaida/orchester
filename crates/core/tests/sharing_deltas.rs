@@ -5,8 +5,8 @@ use orchester_core::{
   name::Name,
   run::TaskPhase,
   sharing::{
-    CachedClaim, CachedRunStatus, CachedTask, ClaimKind, DeltaOutcome, RunProgress, SharedPerson, TagRemap,
-    TaskChange, TaskDelta, TaskDeltaKind, TaskRevision, remap_tags,
+    CachedClaim, CachedRunStatus, CachedTask, ClaimKind, DeltaOutcome, RunProgress, SharedPerson, TagRemap, TaskChange,
+    TaskDelta, TaskDeltaKind, TaskRevision, remap_tags,
   },
   task::{
     TaskLimits, TaskStatus,
