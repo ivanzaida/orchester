@@ -35,6 +35,7 @@ pub fn run_owners(root: &Path, runs: &[RunId]) -> Result<HashMap<RunId, RunOwner
       continue;
     };
     let Some(task) = db.task(run.task())? else {
+      tracing::debug!(run = %id, task = %run.task(), "a browser tab's run has no task in the project's database");
       continue;
     };
     let agent = match working_profile(&run) {

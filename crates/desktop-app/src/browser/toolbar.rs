@@ -1,9 +1,10 @@
 //! The window's panel under the title bar (`Body` `JiHDn`, `Panel` `DsHim`) and its toolbar (`Toolbar` `Zv6Z5`): back,
 //! forward and reload; the address line, which ends with the owner of the tab shown (*Run #102 · ORC-107*, *Your
-//! tab*); and *Open in a browser window* (decision 7). Under the toolbar the line that says what an agent did or that
-//! the person's input holds it (`page::activity`), and a line when the browser could not do what was asked; then the
-//! page. Without a browser the toolbar is faded and takes no input (`07` `YEv2c`); with the browser in a window of its
-//! own the address line shows the tab as it was and the button is gone (`05` `GjcAk`).
+//! tab*) and has the focus while the strip is empty (`06` `eCCuU`, given by the root); and *Open in a browser window*
+//! (decision 7). Under the toolbar the line that says what an agent did or that the person's input holds it
+//! (`page::activity`), and a line when the browser could not do what was asked; then the page. Without a browser the
+//! toolbar is faded and takes no input (`07` `YEv2c`); with the browser in a window of its own the address line shows
+//! the tab as it was and the button is gone (`05` `GjcAk`).
 
 use std::sync::Arc;
 
@@ -88,7 +89,7 @@ pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> E
 
 fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
   let tab = showing.shown().cloned();
-  let usable = !showing.unavailable() && showing.mode() == BrowserMode::Headless;
+  let usable = showing.usable();
   let navigate = |ctx: &mut Ctx, (id, glyph, key): (&str, Icon, &str), to: Navigation| {
     let button = IconButton::new(id, glyph, ctx.t(key));
     match tab.clone().filter(|_| usable) {
@@ -187,10 +188,9 @@ impl Component for Address {
       .filter(|address| address != "about:blank")
       .unwrap_or_default();
     self.follow(shown.as_ref().map(|tab| tab.id.clone()), &address);
-    let usable = !showing.unavailable() && showing.mode() == BrowserMode::Headless;
-    let input = self.input(ctx, &showing, shown.as_ref().map(|tab| tab.id.clone()), usable);
+    let input = self.input(ctx, &showing, shown.as_ref().map(|tab| tab.id.clone()));
     let owner = shown.as_ref().map(|tab| owner(ctx, &tab.owner));
-    let stroke = if self.focused.get() || (showing.strip.is_empty() && usable) {
+    let stroke = if self.focused.get() {
       PaletteColor::BorderFocus
     } else {
       PaletteColor::Border
@@ -226,7 +226,7 @@ impl Address {
     }
   }
 
-  fn input(&self, ctx: &Ctx, showing: &Showing, tab: Option<BrowserTabId>, usable: bool) -> TextInput {
+  fn input(&self, ctx: &Ctx, showing: &Showing, tab: Option<BrowserTabId>) -> TextInput {
     let theme = ctx.theme();
     let resolve = |color| {
       FormTextRole {
@@ -248,6 +248,7 @@ impl Address {
       .placeholder(&placeholder)
       .caret_color(PaletteColor::TextPrimary)
       .id("browser-address")
+      .ref_element(showing.address.clone())
       .describe("a11y_name", ctx.t("browser.toolbar.address"))
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -277,7 +278,11 @@ impl Address {
           }
         }
       });
-    if usable { input } else { input.focusable(false) }
+    if showing.usable() {
+      input
+    } else {
+      input.focusable(false)
+    }
   }
 }
 

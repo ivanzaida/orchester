@@ -14,6 +14,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
+    events::KeyboardEvent,
   },
   components::Column,
   core::{ElementRef, Signal},
@@ -24,6 +25,7 @@ use parking_lot::Mutex;
 
 use super::{
   commands::Commands,
+  keys,
   link::{BrowserLink, Show},
   model::{self, Indicator},
   notice, page,
@@ -45,6 +47,11 @@ pub struct BrowserRoot {
   page: ElementRef,
   page_size: Signal<Option<(u32, u32)>>,
   wanted: Signal<Wanted>,
+  /// The address line's text input, and Ctrl+L asking for its focus.
+  address: ElementRef,
+  focus_address: Signal<bool>,
+  /// Whether the window showed *Empty* at the last render: the address line takes the focus when it starts to.
+  was_empty: Mutex<bool>,
   /// The request last acted on.
   handled: Mutex<Option<u64>>,
   /// What the browser was last asked to screencast.
@@ -97,6 +104,9 @@ impl Component for BrowserRoot {
       page: ctx.element_ref(),
       page_size: ctx.signal(None),
       wanted: ctx.signal(Wanted::default()),
+      address: ctx.element_ref(),
+      focus_address: ctx.signal(false),
+      was_empty: Mutex::new(false),
       handled: Mutex::new(None),
       sent: Mutex::new(None),
       known: Mutex::new(None),
@@ -154,9 +164,11 @@ impl Component for BrowserRoot {
       commands,
       marks,
       person: self.hooks(&project),
+      address: self.address.clone(),
     };
     self.screencast(ctx, &showing, now);
     self.keep_ticking(&showing, now);
+    self.focus_address(ctx, &showing);
     let body = self.body(ctx, &showing);
     chrome::secondary(ctx, body, |ctx, bar, lights| {
       title_bar::content(ctx, bar, lights, &showing)
@@ -309,7 +321,27 @@ impl BrowserRoot {
     }
   }
 
-  /// The toolbar over the page, in the window's panel (`Body` `JiHDn`, `Panel` `DsHim`).
+  /// Gives the address line the focus when Ctrl+L asks for it, and when the window starts to show *Empty*, whose
+  /// address line has the focus (`06` `eCCuU`).
+  fn focus_address(&self, ctx: &mut Ctx, showing: &Showing) {
+    let empty = showing.found == Lookup::Found && showing.usable() && showing.strip.is_empty();
+    let became_empty = {
+      let mut was_empty = self.was_empty.lock();
+      let became = empty && !*was_empty;
+      *was_empty = empty;
+      became
+    };
+    let asked = self.focus_address.get();
+    if asked {
+      self.focus_address.set(false);
+    }
+    if asked || became_empty {
+      ctx.focus(&self.address);
+    }
+  }
+
+  /// The toolbar over the page, in the window's panel (`Body` `JiHDn`, `Panel` `DsHim`), which takes the window's
+  /// shortcuts before the page (`keys`).
   fn body(&self, ctx: &mut Ctx, showing: &Showing) -> Element {
     let failed = self.failed.get();
     let content = if showing.found == Lookup::Looking {
@@ -330,7 +362,14 @@ impl BrowserRoot {
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
       .child(content);
-    toolbar::panel(ctx, showing, failed, page_area.into())
+    let focus = self.focus_address.clone();
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .on_key_down(keys::handler(showing.clone(), move || focus.set(true)))
+      .on_key_up(|event: KeyboardEvent| keys::swallow_up(&event))
+      .child(toolbar::panel(ctx, showing, failed, page_area.into()))
+      .into()
   }
 }
 

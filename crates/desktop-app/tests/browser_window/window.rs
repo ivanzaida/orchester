@@ -1,9 +1,9 @@
 //! The Browser window headless, on a session whose project's browser is fed as its runner would report it: its tabs
 //! with their owners and the toolbar (`01`), the states drawn instead of a page (`05`, `06`, `07`), what Orchester
-//! draws over the page (`02`, `03`, `04`), its frame; and the main window opening it by itself when an agent starts
-//! browsing, and from its app menu. The window's own tree is mounted beside the main window's, on the same app, as lurq
-//! mounts a secondary window. A state that needs the browser found (every one but *Browser not found*) is checked only
-//! where this computer has Chrome, Edge, Brave or Chromium, and says so where it has none.
+//! draws over the page (`02`, `03`, `04`), its frame and its shortcuts; and the main window opening it by itself when
+//! an agent starts browsing, and from its app menu. The window's own tree is mounted beside the main window's, on the
+//! same app, as lurq mounts a secondary window. A state that needs the browser found (every one but *Browser not
+//! found*) is checked only where this computer has Chrome, Edge, Brave or Chromium, and says so where it has none.
 
 use std::{
   io::Cursor,
@@ -15,7 +15,11 @@ use std::{
 use image::{ImageFormat, Rgb, RgbImage};
 use lurq::{app::Tree, node::element::ElementRef};
 use orchester_app::{
-  browser::{BrowserLink, BrowserRoot},
+  browser::{
+    BrowserLink, BrowserRoot,
+    keys::{self, BrowserShortcut},
+  },
+  navigation::shortcuts::Keys,
   test_support::Window,
   ui::loader,
 };
@@ -95,6 +99,26 @@ impl Browser {
 
   fn shows(&mut self, id: &str) -> bool {
     self.tree.get_element_by_id(id).is_some()
+  }
+
+  fn focused(&self) -> Option<String> {
+    self
+      .tree
+      .focused_element()
+      .and_then(|element| element.id().map(str::to_owned))
+  }
+
+  /// Presses `key` with the platform's command key (Ctrl, Cmd on macOS).
+  fn command(&mut self, key: &str) {
+    let (ctrl, meta) = (!cfg!(target_os = "macos"), cfg!(target_os = "macos"));
+    let code = format!("Key{}", key.to_uppercase());
+    self
+      .tree
+      .key_down_with_meta(key.to_owned(), code.clone(), false, ctrl, false, meta);
+    self
+      .tree
+      .key_up_with_meta(key.to_owned(), code, false, ctrl, false, meta);
+    self.pass();
   }
 }
 
@@ -263,6 +287,12 @@ fn browser_window_stands_in_for_the_page_when_there_is_none() {
   browser.feed(BrowserEvent::Changed(BrowserState::default()));
   browser.until_shown("browser-empty");
   assert!(browser.text("browser-empty").contains("No pages yet"));
+  browser.pass();
+  assert_eq!(
+    browser.focused().as_deref(),
+    Some("browser-address"),
+    "the empty window waits for an address"
+  );
   browser.feed(state("T1", BrowserMode::Headed).0);
   browser.until_shown("browser-headed");
   assert!(
@@ -304,8 +334,90 @@ fn browser_window_opens_by_itself_when_an_agent_starts_browsing() {
 #[test]
 fn browser_app_menu_opens_the_window() {
   let mut window = Window::open();
+  let services = window.launch.services().expect("the session started").clone();
+  let root = window.data.repo("repo-kontur");
+  let state = services.runners.browser_window();
+  state.receive_for_test(&root, "Kontur", self::state("T1", BrowserMode::Headless).0);
   window.press("app-menu");
   window.until("the app menu lists Browser", |window| {
     window.texts("menu-browser").is_some()
   });
+  assert_eq!(state.shown_project(), None, "closed until asked for");
+  window.press("menu-browser");
+  window.until("the window opened on Kontur, whose browser has tabs", |_| {
+    state.shown_project().as_deref() == Some(root.as_path())
+  });
+}
+
+/// The platform's command key with `key`: Ctrl+`key`, Cmd+`key` on macOS.
+fn command(key: &'static str) -> Keys<'static> {
+  Keys {
+    key,
+    code: "",
+    ctrl: !cfg!(target_os = "macos"),
+    meta: cfg!(target_os = "macos"),
+    ..Keys::default()
+  }
+}
+
+#[test]
+fn browser_shortcuts_are_the_platforms_command_keys_and_ctrl_tab() {
+  for (key, shortcut) in [
+    ("t", BrowserShortcut::NewTab),
+    ("w", BrowserShortcut::CloseTab),
+    ("l", BrowserShortcut::Address),
+    ("r", BrowserShortcut::Reload),
+  ] {
+    assert_eq!(keys::shortcut(command(key)), Some(shortcut), "{key}");
+  }
+  let ctrl_tab = Keys {
+    key: "Tab",
+    code: "Tab",
+    ctrl: true,
+    ..Keys::default()
+  };
+  assert_eq!(keys::shortcut(ctrl_tab), Some(BrowserShortcut::NextTab));
+  assert_eq!(
+    keys::shortcut(Keys {
+      shift: true,
+      ..ctrl_tab
+    }),
+    Some(BrowserShortcut::PreviousTab)
+  );
+  assert_eq!(
+    keys::shortcut(Keys {
+      key: "t",
+      ..Keys::default()
+    }),
+    None,
+    "a plain key is the page's"
+  );
+  assert_eq!(
+    keys::shortcut(Keys {
+      shift: true,
+      ..command("t")
+    }),
+    None,
+    "Shift makes another shortcut"
+  );
+}
+
+#[test]
+fn browser_window_shortcuts_reach_the_address_line_and_the_browser() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.feed(state("P1", BrowserMode::Headless).0);
+  browser.until_shown("browser-page");
+  browser.command("l");
+  assert_eq!(
+    browser.focused().as_deref(),
+    Some("browser-address"),
+    "Ctrl+L puts the focus in the address line"
+  );
+  assert!(!browser.shows("browser-failed"));
+  // No runner is connected here: the tab Ctrl+T asks the project's browser for is refused, and the window says so.
+  browser.command("t");
+  browser.until_shown("browser-failed");
 }

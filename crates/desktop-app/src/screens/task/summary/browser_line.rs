@@ -16,10 +16,12 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::RunId;
-use orchester_ipc::browser::TabOwner;
 
 use crate::{
-  browser::{BrowserLink, model},
+  browser::{
+    BrowserLink,
+    model::{self, RunTabs},
+  },
   services::Services,
   theme::{ExtraSpacing, IconSize},
   ui::{
@@ -61,27 +63,16 @@ impl Component for BrowserLine {
         }
       }
     });
-    let tabs: Vec<_> = browser
-      .view(&root)
-      .map(|view| {
-        view
-          .tabs()
-          .iter()
-          .filter(|tab| tab.owner == TabOwner::Run { run })
-          .cloned()
-          .collect()
-      })
-      .unwrap_or_default();
-    let Some(first) = tabs.first().map(|tab| tab.id.clone()) else {
+    let Some(RunTabs { count, hosts, first }) = browser.view(&root).and_then(|view| model::run_tabs(&view, run)) else {
       return Element::new();
     };
-    let hosts = model::hosts(tabs.iter().map(|tab| tab.url.as_str())).join(", ");
-    let count = if tabs.len() == 1 {
+    let hosts = hosts.join(", ");
+    let tabs = if count == 1 {
       ctx.t_args("summary.browser.tabs.one", [("hosts", hosts.as_str())])
     } else {
       ctx.t_args(
         "summary.browser.tabs.other",
-        [("count", tabs.len().to_string().as_str()), ("hosts", hosts.as_str())],
+        [("count", count.to_string().as_str()), ("hosts", hosts.as_str())],
       )
     };
     let link = BrowserLink::of(ctx);
@@ -102,7 +93,7 @@ impl Component for BrowserLine {
     .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextPrimary));
     Row::new()
       .id("task-browser")
-      .describe("tabs", tabs.len().to_string())
+      .describe("tabs", count.to_string())
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
       .spacing(SpacingSize::Sm)
@@ -117,7 +108,7 @@ impl Component for BrowserLine {
           .nowrap(),
       )
       .child(
-        Text::new(&count)
+        Text::new(&tabs)
           .id("task-browser-tabs")
           .variant(TypographyStyle::Description)
           .flex(1.0)

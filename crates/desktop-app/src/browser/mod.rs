@@ -3,11 +3,13 @@
 //! pages at a time from the screencast frames its runner sends (`orchester_workspace::browser`) and sends the person's
 //! input back. Its title bar holds the mark, the project switcher (`switcher`), the tabs with their owners and *+*
 //! (`strip`, `tab`, `overflow`); under it the toolbar (`toolbar`), the line that says what an agent did, and the page
-//! (`page`) or what stands in its place (`notice`). The main window opens it ([`BrowserLink`]): the app menu's
-//! *Browser*, a run's *Browser* line on its Summary, and by itself when an agent starts browsing ([`AutoOpen`]).
+//! (`page`) or what stands in its place (`notice`); its shortcuts are in `keys`. The main window opens it
+//! ([`BrowserLink`]): the app menu's *Browser*, a run's *Browser* line on its Summary, and by itself when an agent
+//! starts browsing ([`AutoOpen`]).
 
 mod commands;
 pub mod fit;
+pub mod keys;
 mod link;
 pub mod model;
 mod notice;

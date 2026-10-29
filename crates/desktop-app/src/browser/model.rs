@@ -277,6 +277,31 @@ pub fn tab_to_show(
   open(last).or_else(|| strip.all().next().map(|tab| tab.id.clone()))
 }
 
+/// What a run's *Browser* line on its Summary says (`10 · Run · Browser line` `RGeKO`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunTabs {
+  pub count: usize,
+  /// Their hosts, each once.
+  pub hosts: Vec<String>,
+  /// The run's first tab, which *Show* opens the window on.
+  pub first: BrowserTabId,
+}
+
+/// The tabs of `run` among `view`'s; `None` while it has none, and the line is not shown.
+pub fn run_tabs(view: &BrowserView, run: RunId) -> Option<RunTabs> {
+  let tabs: Vec<&BrowserTab> = view
+    .tabs()
+    .iter()
+    .filter(|tab| tab.owner == TabOwner::Run { run })
+    .collect();
+  let first = tabs.first()?.id.clone();
+  Some(RunTabs {
+    count: tabs.len(),
+    hosts: hosts(tabs.iter().map(|tab| tab.url.as_str())),
+    first,
+  })
+}
+
 /// The hosts of `tabs`' addresses, each once, in their order: the run line's *localhost:5173, docs.rs*.
 pub fn hosts<'a>(tabs: impl IntoIterator<Item = &'a str>) -> Vec<String> {
   let mut hosts: Vec<String> = Vec::new();
@@ -320,7 +345,27 @@ pub fn typed_address(typed: &str) -> Option<String> {
   if typed.contains("://") || typed.starts_with("about:") {
     return Some(typed.to_owned());
   }
-  let host = typed.split(['/', ':']).next().unwrap_or_default();
+  // An IPv6 address is bracketed and holds colons of its own (`[::1]:8080`).
+  let host = if typed.starts_with('[') {
+    typed.split_inclusive(']').next().unwrap_or_default()
+  } else {
+    typed.split(['/', ':']).next().unwrap_or_default()
+  };
   let local = host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host.ends_with(".localhost");
   Some(format!("{}://{typed}", if local { "http" } else { "https" }))
+}
+
+/// The tab after `shown` in the strip's order (before it, unless `forward`), around the ends: Ctrl+Tab and
+/// Ctrl+Shift+Tab. The first (or last) when none is shown; `None` with no tab.
+pub fn cycled(strip: &Strip, shown: Option<&BrowserTabId>, forward: bool) -> Option<BrowserTabId> {
+  let tabs: Vec<&StripTab> = strip.all().collect();
+  let count = tabs.len();
+  let at = shown.and_then(|shown| tabs.iter().position(|tab| &tab.id == shown));
+  let next = match (at, forward) {
+    (Some(at), true) => (at + 1) % count,
+    (Some(at), false) => (at + count - 1) % count,
+    (None, true) => 0,
+    (None, false) => count.checked_sub(1)?,
+  };
+  tabs.get(next).map(|tab| tab.id.clone())
 }

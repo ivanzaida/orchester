@@ -40,6 +40,8 @@ struct Pressed {
   held: Option<MouseButton>,
   /// When the last press was, for a double click.
   last: Option<Instant>,
+  /// The last press's click count, which its release carries: the page fires `dblclick` on the release.
+  clicks: u8,
 }
 
 impl PageInput {
@@ -82,14 +84,19 @@ impl PageInput {
           let double = pressed.last.is_some_and(|last| now.duration_since(last) < DOUBLE_CLICK);
           pressed.held = Some(button);
           pressed.last = if double { None } else { Some(now) };
-          if double { 2 } else { 1 }
+          pressed.clicks = if double { 2 } else { 1 };
+          pressed.clicks
         };
         send.mouse(&event, (MouseAction::Pressed, button, clicks));
       })
       .on_mouse_up(move |event: MouseEvent| {
         let (send, pressed) = &up;
-        pressed.lock().held = None;
-        send.mouse(&event, (MouseAction::Released, button(event.button), 1));
+        let clicks = {
+          let mut pressed = pressed.lock();
+          pressed.held = None;
+          pressed.clicks.max(1)
+        };
+        send.mouse(&event, (MouseAction::Released, button(event.button), clicks));
       })
       .on_mouse_move(move |event: MouseEvent| {
         let (send, pressed) = &moved;
@@ -167,8 +174,9 @@ impl Sender {
     self.send(input, true);
   }
 
+  /// A key the window took for a shortcut (`browser::keys`) does not reach the page.
   fn key(&self, event: &KeyboardEvent, action: KeyAction) {
-    if !self.element.focused() || event.text_input_focused {
+    if !self.element.focused() || event.text_input_focused || event.default_prevented() {
       return;
     }
     event.prevent_default();

@@ -8,9 +8,12 @@ use std::{
   sync::Arc,
 };
 
-use lurq::app::{
-  component::DevtoolsInspectable,
-  ctx::{Ctx, StreamEmitter},
+use lurq::{
+  app::{
+    component::DevtoolsInspectable,
+    ctx::{Ctx, StreamEmitter},
+  },
+  core::ElementRef,
 };
 use orchester_core::id::RunId;
 use orchester_ipc::browser::{BrowserMode, BrowserTabId, TabOwner};
@@ -53,6 +56,8 @@ pub struct Showing {
   pub marks: Marks,
   /// What the person did in the window, which the root keeps.
   pub person: PersonHooks,
+  /// The address line's text input, which Ctrl+L and the empty strip give the focus.
+  pub address: ElementRef,
 }
 
 /// Two showings are the same while the project, its browser and what the window knows of it are.
@@ -83,6 +88,11 @@ impl Showing {
   /// The browser cannot be used: no browser was found.
   pub fn unavailable(&self) -> bool {
     self.found == Lookup::Missing
+  }
+
+  /// The window drives the browser: one was found and it is not in a window of its own.
+  pub fn usable(&self) -> bool {
+    !self.unavailable() && self.mode() == BrowserMode::Headless
   }
 }
 

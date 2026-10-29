@@ -1,7 +1,7 @@
 //! The strip's tabs (`docs/design/browser.md`, "Tabs"): agents' tabs first in the order they opened with one task's
 //! tabs together, then the person's; one dot by precedence *waits for you* › *acting* › *new*; the tab the window
-//! shows, which follows an agent to its new tab only while the person leaves the window alone; and the words the
-//! address line and the run line take from the tabs' addresses.
+//! shows, which follows an agent to its new tab only while the person leaves the window alone, and the one Ctrl+Tab
+//! shows; the words the address line and the run line take from the tabs' addresses, and the run line's tabs.
 
 use std::{
   collections::HashMap,
@@ -12,7 +12,8 @@ use std::{
 };
 
 use orchester_app::browser::model::{
-  Indicator, Marks, Owner, PERSON_HOLD, host, hosts, shown_address, strip, tab_to_show, typed_address,
+  Indicator, Marks, Owner, PERSON_HOLD, RunTabs, cycled, host, hosts, run_tabs, shown_address, strip, tab_to_show,
+  typed_address,
 };
 use orchester_core::{id::RunId, run::RunNumber};
 use orchester_ipc::browser::{
@@ -245,5 +246,75 @@ fn browser_addresses_read_as_the_address_line_and_the_run_line_say_them() {
   );
   assert_eq!(typed_address("docs.rs").as_deref(), Some("https://docs.rs"));
   assert_eq!(typed_address("https://a.test").as_deref(), Some("https://a.test"));
+  assert_eq!(
+    typed_address("[::1]:8080/x").as_deref(),
+    Some("http://[::1]:8080/x"),
+    "the IPv6 loopback is a local host"
+  );
   assert_eq!(typed_address("   "), None);
+}
+
+#[test]
+fn browser_ctrl_tab_cycles_the_strip_around_its_ends() {
+  let run = RunId::generate();
+  let tabs = vec![
+    tab("A", TabOwner::Run { run }),
+    tab("B", TabOwner::Run { run }),
+    tab("P", TabOwner::Person),
+  ];
+  let shown = strip(
+    &view(tabs, Some("A"), Vec::new()),
+    &HashMap::new(),
+    &Marks::default(),
+    Instant::now(),
+  );
+  assert_eq!(cycled(&shown, Some(&id("A")), true), Some(id("B")));
+  assert_eq!(
+    cycled(&shown, Some(&id("P")), true),
+    Some(id("A")),
+    "after the last, the first"
+  );
+  assert_eq!(
+    cycled(&shown, Some(&id("A")), false),
+    Some(id("P")),
+    "before the first, the last"
+  );
+  assert_eq!(cycled(&shown, None, true), Some(id("A")));
+  assert_eq!(cycled(&shown, None, false), Some(id("P")));
+  let empty = strip(
+    &view(Vec::new(), None, Vec::new()),
+    &HashMap::new(),
+    &Marks::default(),
+    Instant::now(),
+  );
+  assert_eq!(cycled(&empty, None, true), None);
+}
+
+#[test]
+fn browser_run_line_counts_only_the_runs_tabs_with_each_host_once() {
+  let (run, other) = (RunId::generate(), RunId::generate());
+  let mut docs = tab("D", TabOwner::Run { run });
+  docs.url = "https://docs.rs/reqwest".to_owned();
+  let tabs = vec![
+    tab("O", TabOwner::Run { run: other }),
+    tab("A", TabOwner::Run { run }),
+    tab("P", TabOwner::Person),
+    docs,
+    tab("B", TabOwner::Run { run }),
+  ];
+  let view = view(tabs, Some("A"), Vec::new());
+  assert_eq!(
+    run_tabs(&view, run),
+    Some(RunTabs {
+      count: 3,
+      hosts: vec!["localhost:5173".to_owned(), "docs.rs".to_owned()],
+      first: id("A"),
+    }),
+    "another run's tabs and the person's are not counted; Show opens the run's first"
+  );
+  assert_eq!(
+    run_tabs(&view, RunId::generate()),
+    None,
+    "a run without tabs has no line"
+  );
 }

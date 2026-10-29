@@ -50,7 +50,7 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
     .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
     .box_shadow(ShadowStyle::Md)
     .on_mouse_down(|event: MouseEvent| event.stop_propagation());
-  for (index, option) in select.list.options.iter().enumerate() {
+  for (index, option) in (0_u32..).zip(&select.list.options) {
     let (commands, browser, root, tab) = (showing.commands.clone(), browser.clone(), root.clone(), tab.clone());
     let id = select.list.select;
     let row = pressable(move || {
@@ -58,7 +58,7 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
       commands.send(BrowserCommand::ChooseOption {
         tab: tab.clone(),
         select: id,
-        index: u32::try_from(index).unwrap_or(u32::MAX),
+        index,
       });
     })
     .id(format!("browser-select-option-{index}"))
@@ -93,7 +93,6 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
       Element::from(row)
     });
   }
-  let (browser, root) = (browser, root);
   Some(
     Row::new()
       .id("browser-select")
