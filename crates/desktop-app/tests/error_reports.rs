@@ -75,7 +75,10 @@ fn error_reports_an_error_line_is_one_scrubbed_event_and_a_warning_none() {
   assert_eq!(event.release.as_deref(), Some(RELEASE));
   assert_eq!(event.environment.as_deref(), Some("qa"));
   let message = event.message.as_deref().expect("the line's message and fields");
-  assert!(message.starts_with("cannot save the task error=cannot read ~"), "{message}");
+  assert!(
+    message.starts_with("cannot save the task error=cannot read ~"),
+    "{message}"
+  );
   assert!(message.ends_with("key=<redacted>"), "{message}");
   let sent = format!("{event:?}");
   for removed in ["acme-secret", "sk-ant-api03", "a warning", "Rust Tracing"] {
