@@ -4,7 +4,8 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    Draft, DraftSaved, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber, publish,
+    Draft, DraftSaved, PublishError, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Slug, Version,
+    VersionNumber, publish,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -35,12 +36,7 @@ impl ProjectDb {
       .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     check_kind::<B>(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?;
-    let latest = load_versions::<B>(
-      &transaction,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?
-    .pop();
+    let latest = used_here::<B>(&transaction, resource)?;
     let changed = edit(draft, latest)?;
     let saved = save_draft(&transaction, resource, &changed)?;
     transaction.commit()?;
@@ -79,12 +75,7 @@ impl ProjectDb {
       }
     }
     let stored = load_draft::<B>(&transaction, resource)?;
-    let published = load_versions::<B>(
-      &transaction,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?
-    .pop();
+    let published = used_here::<B>(&transaction, resource)?;
     let current = stored
       .as_ref()
       .map(Draft::body)
@@ -144,12 +135,7 @@ impl ProjectDb {
       .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     check_kind::<B>(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
-    let latest = load_versions::<B>(
-      &transaction,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?
-    .pop();
+    let latest = used_here::<B>(&transaction, resource)?;
     let number = latest.as_ref().map(Version::number);
     let draft = prepare(draft, latest)?;
     let version = publish_prepared(&transaction, resource, draft, number, now)?;
@@ -181,12 +167,7 @@ impl ProjectDb {
       .pop()
       .ok_or(StoreError::ResourceNotFound(id))?;
     let draft = load_draft::<B>(&transaction, id)?;
-    let latest = load_versions::<B>(
-      &transaction,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [id.to_string()],
-    )?
-    .pop();
+    let latest = used_here::<B>(&transaction, id)?;
     match update(resource, draft, latest)? {
       ResourceUpdate::SaveDraft(draft) => {
         save_draft(&transaction, id, &draft)?;
@@ -285,16 +266,11 @@ impl ResourceStore for ProjectDb {
     self.publish_checked(resource, None, None, now)
   }
 
-  /// The version this computer uses: a teammate's version that waits for the person's *Use v<N> here* is left out
-  /// ([`super::shared_versions`]), so runs, preflight and editors keep the one before it.
+  /// The version this computer uses ([`used_here`]): a teammate's version that waits for the person's *Use v<N> here*
+  /// is left out, so runs, preflight, editors and publishing keep the one before it.
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
     check_kind::<B>(&self.connection, resource)?;
-    let mut found = load_versions(
-      &self.connection,
-      "WHERE resource_id = ?1 AND id NOT IN (SELECT version_id FROM waiting_versions) ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?;
-    Ok(found.pop())
+    used_here(&self.connection, resource)
   }
 
   fn versions<B: ResourceBody>(&self, resource: ResourceId) -> Result<Vec<Version<B>>, StoreError> {
@@ -334,19 +310,15 @@ fn publish_checked<B: ResourceBody>(
     return Err(StoreError::DraftChanged(resource));
   }
   draft.body().check_publishable()?;
-  let latest = load_versions::<B>(
-    connection,
-    "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-    [resource.to_string()],
-  )?
-  .pop()
-  .map(|version| version.number());
+  let latest = used_here::<B>(connection, resource)?.map(|version| version.number());
   if expected_latest.is_some_and(|expected| expected != latest) {
     return Err(StoreError::DraftChanged(resource));
   }
   publish_prepared(connection, resource, draft, latest, now)
 }
 
+/// Publishes `draft`, which must be based on `latest`, the version used here, as the version after the newest one
+/// this computer has: a teammate's version that waits keeps its number, and the one published here supersedes it.
 fn publish_prepared<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
@@ -356,7 +328,17 @@ fn publish_prepared<B: ResourceBody>(
 ) -> Result<Version<B>, StoreError> {
   draft.body().check_publishable()?;
   super::service_needs::check(connection, resource, draft.body())?;
-  let version = publish(draft, latest, now)?;
+  if draft.based_on() != latest {
+    return Err(
+      PublishError::StaleDraft {
+        based_on: draft.based_on(),
+        latest,
+      }
+      .into(),
+    );
+  }
+  let newest = newest_number(connection, resource)?;
+  let version = publish(draft.rebased(newest), newest, now)?;
   connection.execute(
     "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
     params![
@@ -371,7 +353,37 @@ fn publish_prepared<B: ResourceBody>(
     "DELETE FROM resource_drafts WHERE resource_id = ?1",
     [resource.to_string()],
   )?;
+  super::shared_versions::stop_waiting(connection, resource, version.number())?;
   Ok(version)
+}
+
+/// The version this computer uses of `resource`: its newest, except a teammate's version that waits for the person's
+/// *Use v<N> here* ([`super::shared_versions`]). Runs, editors, Always allow and publishing all start from it.
+pub(super) fn used_here<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+) -> Result<Option<Version<B>>, StoreError> {
+  Ok(
+    load_versions(
+      connection,
+      "WHERE resource_id = ?1 AND id NOT IN (SELECT version_id FROM waiting_versions) ORDER BY number DESC LIMIT 1",
+      [resource.to_string()],
+    )?
+    .pop(),
+  )
+}
+
+/// The number of the newest version this computer has of `resource`, waiting or not; the next version follows it.
+pub(super) fn newest_number(
+  connection: &Connection,
+  resource: ResourceId,
+) -> Result<Option<VersionNumber>, StoreError> {
+  let number: Option<i64> = connection.query_row(
+    "SELECT MAX(number) FROM resource_versions WHERE resource_id = ?1",
+    [resource.to_string()],
+    |row| row.get(0),
+  )?;
+  number.map(version_number).transpose()
 }
 
 pub(super) fn save_draft<B: ResourceBody>(

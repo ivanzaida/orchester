@@ -14,7 +14,9 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{
   ProjectDb,
-  resources::{check_kind, decode, encode, kind_text, load_resources, load_versions, parse_kind, version_number},
+  resources::{
+    check_kind, decode, encode, kind_text, load_resources, load_versions, newest_number, parse_kind, version_number,
+  },
 };
 use crate::{
   StoreError,
@@ -270,12 +272,7 @@ impl ProjectDb {
 
   /// The number of the newest version this computer has of `resource`, cached from a server or published here.
   pub fn latest_version_number(&self, resource: ResourceId) -> Result<Option<VersionNumber>, StoreError> {
-    let number: Option<i64> = self.connection.query_row(
-      "SELECT MAX(number) FROM resource_versions WHERE resource_id = ?1",
-      [resource.to_string()],
-      |row| row.get(0),
-    )?;
-    number.map(version_number).transpose()
+    newest_number(&self.connection, resource)
   }
 
   /// The cached versions whose references name `target`, by resource and number.
@@ -356,7 +353,11 @@ struct CachedRow {
 }
 
 /// Version `number` of `resource` and the versions before it wait no more.
-fn stop_waiting(connection: &Connection, resource: ResourceId, number: VersionNumber) -> Result<(), StoreError> {
+pub(super) fn stop_waiting(
+  connection: &Connection,
+  resource: ResourceId,
+  number: VersionNumber,
+) -> Result<(), StoreError> {
   connection.execute(
     "DELETE FROM waiting_versions WHERE version_id IN \
      (SELECT id FROM resource_versions WHERE resource_id = ?1 AND number <= ?2)",

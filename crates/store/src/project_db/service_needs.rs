@@ -8,7 +8,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-use super::resources::{kind_text, load_resources, load_versions};
+use super::resources::{kind_text, load_resources, used_here};
 use crate::StoreError;
 
 /// Refused with [`PublishError::Needs`] when `body`, published as `resource`, would name a service that is not
@@ -28,12 +28,7 @@ pub(super) fn check<B: ResourceBody>(
   )?;
   let mut published = Vec::with_capacity(others.len());
   for other in others {
-    let latest = load_versions::<Service>(
-      connection,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [other.id().to_string()],
-    )?
-    .pop();
+    let latest = used_here::<Service>(connection, other.id())?;
     published.extend(latest.map(|version| version.body().clone()));
   }
   needs.check(&published).map_err(PublishError::from)?;
