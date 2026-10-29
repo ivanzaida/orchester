@@ -115,6 +115,11 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// `modules-short`: a module on a project with nothing merged yet.
 pub fn short(kontur: &mut Kontur) -> Result<(), SeedError> {
   tasks::seed(kontur)?;
+  checkout(kontur)
+}
+
+/// *Checkout*, open from 3 days ago to 4 days ahead, with two of the project's Todo tasks moved in on its first day.
+pub fn checkout(kontur: &mut Kontur) -> Result<(), SeedError> {
   let details = details(
     kontur,
     ("Checkout", "Card form and the order summary"),

@@ -18,6 +18,7 @@ mod import;
 mod interrupted;
 mod lifecycle;
 mod live;
+mod loading_states;
 mod long_chats;
 mod memory;
 mod modules;
@@ -81,7 +82,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 52] = [
+pub const ALL: [Scenario; 53] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -134,6 +135,7 @@ pub const ALL: [Scenario; 52] = [
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),
+  Scenario::of("loading-states", loading_states::seed),
 ];
 
 /// The scenario called `name`.
