@@ -36,7 +36,10 @@ impl StripFit {
   /// Where the tab at `index` starts and ends in the strip, a divider before tab `divider` counted.
   pub fn span(&self, index: usize, divider: Option<usize>) -> (f32, f32) {
     let start: f32 = self.widths.iter().take(index).map(|width| width + gap()).sum();
-    let start = start + divider.filter(|at| *at <= index && *at > 0).map_or(0.0, |_| DIVIDER_WIDTH + gap());
+    let start = start
+      + divider
+        .filter(|at| *at <= index && *at > 0)
+        .map_or(0.0, |_| DIVIDER_WIDTH + gap());
     (start, start + self.widths.get(index).copied().unwrap_or_default())
   }
 
@@ -84,7 +87,11 @@ pub fn fit(room: f32, count: usize, shown: Option<usize>, divider: bool) -> Stri
   let free = (room - gap() * (count - 1) as f32 - lines).max(0.0);
   let equal = free / count as f32;
   if equal >= SHOWN_MIN_WIDTH || shown.is_none() || count == 1 {
-    let floor = if shown.is_some() { SHOWN_MIN_WIDTH } else { TAB_MIN_WIDTH };
+    let floor = if shown.is_some() {
+      SHOWN_MIN_WIDTH
+    } else {
+      TAB_MIN_WIDTH
+    };
     let width = equal.clamp(floor, TAB_MAX_WIDTH);
     return StripFit {
       widths: vec![width; count],

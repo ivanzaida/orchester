@@ -11,7 +11,7 @@ use std::{
 
 use lurq::{
   app::{
-    component::Component,
+    component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
   },
   components::Column,
@@ -26,7 +26,7 @@ use super::{
   link::{BrowserLink, Show},
   model::{self, Indicator},
   notice, page,
-  state::{self, Found, MarksByProject, PersonHooks, Showing},
+  state::{self, Lookup, MarksByProject, PersonHooks, Showing},
   title_bar, toolbar,
 };
 use crate::chrome;
@@ -43,13 +43,18 @@ pub struct BrowserRoot {
   /// The page area, whose size the screencast takes.
   page: ElementRef,
   page_size: Signal<Option<(u32, u32)>>,
-  /// A tab asked for, by a request or the person, that is not shown yet.
-  wanted: Signal<Option<BrowserTabId>>,
+  wanted: Signal<Wanted>,
   /// The request last acted on.
-  handled: Mutex<u64>,
+  handled: Mutex<Option<u64>>,
   /// What the browser was last asked to screencast.
   sent: Mutex<Option<Sent>>,
 }
+
+/// A tab asked for, by a request or the person, that is not shown yet.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Wanted(Option<BrowserTabId>);
+
+impl DevtoolsInspectable for Wanted {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Sent {
@@ -88,8 +93,8 @@ impl Component for BrowserRoot {
       tick,
       page: ctx.element_ref(),
       page_size: ctx.signal(None),
-      wanted: ctx.signal(None),
-      handled: Mutex::new(0),
+      wanted: ctx.signal(Wanted::default()),
+      handled: Mutex::new(None),
       sent: Mutex::new(None),
     }
   }
@@ -121,8 +126,14 @@ impl Component for BrowserRoot {
       .as_ref()
       .map(|view| model::strip(view, &owners, &marks, now))
       .unwrap_or_default();
-    let name: Arc<str> = view.as_ref().map_or_else(|| project_name(&project), |view| Arc::from(view.name()));
-    ctx.window().set_title(ctx.t_args("browser.window.title", [("project", name.as_ref())]).to_string());
+    let name: Arc<str> = view
+      .as_ref()
+      .map_or_else(|| project_name(&project), |view| Arc::from(view.name()));
+    ctx.window().set_title(
+      ctx
+        .t_args("browser.window.title", [("project", name.as_ref())])
+        .to_string(),
+    );
     let commands = Commands::new(
       services.runners.clone(),
       services.runtime.clone(),
@@ -143,7 +154,9 @@ impl Component for BrowserRoot {
     self.screencast(ctx, &showing, now);
     self.keep_ticking(&showing, now);
     let body = self.body(ctx, &showing);
-    chrome::secondary(ctx, body, |ctx, bar, lights| title_bar::content(ctx, bar, lights, &showing))
+    chrome::secondary(ctx, body, |ctx, bar, lights| {
+      title_bar::content(ctx, bar, lights, &showing)
+    })
   }
 }
 
@@ -154,12 +167,12 @@ impl BrowserRoot {
       return;
     };
     let mut handled = self.handled.lock();
-    if asked.sequence < *handled || (*handled != 0 && asked.sequence == *handled) {
+    if handled.is_some_and(|handled| asked.sequence <= handled) {
       return;
     }
-    *handled = asked.sequence.max(1);
+    *handled = Some(asked.sequence);
     if let Some(tab) = &asked.tab {
-      self.wanted.set(Some(tab.clone()));
+      self.wanted.set(Wanted(Some(tab.clone())));
     }
   }
 
@@ -180,7 +193,7 @@ impl BrowserRoot {
           marks.update(|marks| marks.0.entry(project.clone()).or_default().used(tab, now));
         }
       },
-      move |tab| wanted.set(Some(tab.clone())),
+      move |tab| wanted.set(Wanted(Some(tab.clone()))),
       move || look.update(|look| *look += 1),
     )
   }
@@ -189,7 +202,7 @@ impl BrowserRoot {
   fn screencast(&self, ctx: &mut Ctx, showing: &Showing, now: Instant) {
     let window = ctx.window().info();
     let size = self.page_size(ctx);
-    let wanted = self.wanted.get();
+    let Wanted(wanted) = self.wanted.get();
     let target = showing.view.as_ref().and_then(|view| {
       model::tab_to_show(
         &showing.strip,
@@ -201,11 +214,15 @@ impl BrowserRoot {
     let headless = showing.mode() == BrowserMode::Headless && !window.is_minimized;
     let viewport = size.and_then(|(width, height)| {
       let scale = (window.scale_factor * 100.0).round() as u32;
-      Viewport::new(width, height, scale.clamp(Viewport::MIN_SCALE_PERCENT, Viewport::MAX_SCALE_PERCENT))
+      Viewport::new(
+        width,
+        height,
+        scale.clamp(Viewport::MIN_SCALE_PERCENT, Viewport::MAX_SCALE_PERCENT),
+      )
     });
     let next = Sent {
       project: showing.project.as_ref().clone(),
-      tab: target.clone().filter(|_| headless).zip(viewport),
+      tab: target.filter(|_| headless).zip(viewport),
     };
     let mut sent = self.sent.lock();
     if sent.as_ref() == Some(&next) {
@@ -223,12 +240,18 @@ impl BrowserRoot {
           tab: tab.clone(),
           viewport: *viewport,
         });
-        self.marks.update(|marks| marks.0.entry(next.project.clone()).or_default().seen(tab));
+        self
+          .marks
+          .update(|marks| marks.0.entry(next.project.clone()).or_default().seen(tab));
         if wanted.as_ref() == Some(tab) {
-          self.wanted.set(None);
+          self.wanted.set(Wanted::default());
         }
       }
-      None if sent.as_ref().is_some_and(|before| before.tab.is_some() && before.project == next.project) => {
+      None
+        if sent
+          .as_ref()
+          .is_some_and(|before| before.tab.is_some() && before.project == next.project) =>
+      {
         showing.commands.send_quietly(BrowserCommand::StopShowing);
       }
       None => {}
@@ -254,7 +277,10 @@ impl BrowserRoot {
       .strip
       .all()
       .any(|tab| matches!(tab.indicator, Some(Indicator::Acting | Indicator::Waits)))
-      || showing.marks.last_input().is_some_and(|at| now.saturating_duration_since(at) < model::PERSON_HOLD);
+      || showing
+        .marks
+        .last_input()
+        .is_some_and(|at| now.saturating_duration_since(at) < model::PERSON_HOLD);
     if timed {
       self.interval.start();
     } else {
@@ -265,7 +291,7 @@ impl BrowserRoot {
   /// The toolbar over the page, in the window's panel (`Body` `JiHDn`, `Panel` `DsHim`).
   fn body(&self, ctx: &mut Ctx, showing: &Showing) -> Element {
     let failed = self.failed.get();
-    let content = if showing.found == Found::Looking {
+    let content = if showing.found == Lookup::Looking {
       Element::new()
     } else if showing.unavailable() {
       notice::not_found(ctx, showing)
@@ -289,5 +315,9 @@ impl BrowserRoot {
 
 /// The name of the project at `root` until its runner reports its browser: its folder's.
 fn project_name(root: &Path) -> Arc<str> {
-  Arc::from(root.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned()))
+  Arc::from(
+    root
+      .file_name()
+      .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
+  )
 }

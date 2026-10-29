@@ -79,7 +79,7 @@ impl Component for Tab {
     let hovered = self.hovered.get();
     let (pick, hooks) = (tab.id.clone(), showing.person.clone());
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
-    let closing = (showing.commands.clone(), tab.id.clone());
+    let closing = (showing.commands, tab.id.clone());
     let middle = closing.clone();
     let button = in_title_bar(pressable(move || hooks.pick(&pick)))
       .id(id.clone())
@@ -113,17 +113,30 @@ impl Component for Tab {
       button
     };
     let (glyph, text, style) = match (shown, hovered) {
-      (true, _) => (PaletteColor::TextSecondary, PaletteColor::TextPrimary, TypographyStyle::Label),
-      (false, true) => (PaletteColor::TextMuted, PaletteColor::TextSecondary, TypographyStyle::Description),
-      (false, false) => (PaletteColor::TextMuted, PaletteColor::TextMuted, TypographyStyle::Description),
+      (true, _) => (
+        PaletteColor::TextSecondary,
+        PaletteColor::TextPrimary,
+        TypographyStyle::Label,
+      ),
+      (false, true) => (
+        PaletteColor::TextMuted,
+        PaletteColor::TextSecondary,
+        TypographyStyle::Description,
+      ),
+      (false, false) => (
+        PaletteColor::TextMuted,
+        PaletteColor::TextMuted,
+        TypographyStyle::Description,
+      ),
     };
     button
       .child(tab_icon(&tab, glyph, &id))
       .child(
-        Row::new()
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0))
-          .child(Truncated::new(format!("{id}-label"), label, style).color(text).render(ctx)),
+        Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
+          Truncated::new(format!("{id}-label"), label, style)
+            .color(text)
+            .render(ctx),
+        ),
       )
       .with_children(with_close.then(|| close_button(ctx, closing, &id)))
   }
@@ -141,7 +154,10 @@ pub fn label(ctx: &Ctx, tab: &StripTab) -> Arc<str> {
     tab.title.clone()
   };
   match tab.key() {
-    Some(key) => ctx.t_args("browser.tabs.agentLabel", [("key", key.as_ref()), ("title", title.as_str())]),
+    Some(key) => ctx.t_args(
+      "browser.tabs.agentLabel",
+      [("key", key.as_ref()), ("title", title.as_str())],
+    ),
     None => Arc::from(title),
   }
 }
@@ -207,7 +223,11 @@ pub fn inline_dot(indicator: Indicator, id: String) -> Row {
 }
 
 /// The tab's × (`Close` `S5R4Ws`).
-fn close_button(ctx: &mut Ctx, (commands, tab): (super::commands::Commands, orchester_ipc::browser::BrowserTabId), id: &str) -> Element {
+fn close_button(
+  ctx: &mut Ctx,
+  (commands, tab): (super::commands::Commands, orchester_ipc::browser::BrowserTabId),
+  id: &str,
+) -> Element {
   in_title_bar(Button::empty())
     .id(format!("{id}-close"))
     .describe("a11y_name", ctx.t("browser.tabs.close"))

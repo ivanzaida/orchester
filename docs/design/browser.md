@@ -4,8 +4,9 @@ Status: draft for the person's review (2026-10-28). The person decided decisions
 port and keep-running decisions (11, 12) the same day; decisions 13 to 15 (binary frames, the window opening by
 itself, focus) with ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and
 starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359:
-the `browser_*` tools offered to steps through the runner's relay); and the window's plumbing (ORC-378: its IPC, the
-screencast, the person's input and tabs, the window's state). The window itself and the settings are not yet.
+the `browser_*` tools offered to steps through the runner's relay); the window's plumbing (ORC-378: its IPC, the
+screencast, the person's input and tabs, the window's state); and the window itself (ORC-379, P4d). The Settings
+section is not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -369,7 +370,23 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
      browser_`), the stored setting of decision 14 (`cargo test -p orchester-store --test app_db browser_window`), and
      the window's state with its frames decoded to RGBA and the auto-open rule (`cargo test -p orchester-workspace
      --features test-support --test browser_window browser_window_`).
-   - **P4d.** The *Browser* window itself, on that state.
+   - **P4d.** Done (ORC-379): the *Browser* window itself, on that state (`orchester-app`'s `browser/`): a secondary
+     lurq window named `browser` (`lurq_windows`), its title bar with the mark, the project switcher and the tabs
+     (crowded, then scrolling with fades and the overflow button and menu), the toolbar with the tab's owner, the page
+     drawn from the frames with the person's pointer, wheel and keys sent back, the agent-acting line and ring, the
+     person's hold, dialogs and `<select>` lists of the person's tabs, *Empty*, *Browser not found* and *Opened in a
+     browser window*; opened from the app menu's *Browser*, a run's Summary line *Browser · 2 tabs · … › Show*, and by
+     itself when an agent starts browsing. The tab owners' task keys, run numbers and agent names are read from the
+     project's database (`orchester_workspace::browser::run_owners`). Tests: `cargo test -p orchester-app --test
+     browser_window browser_` and `--test theme browser_roles`. QA scenarios, each played by the QA app from a fixture
+     the seed leaves beside the data (`test_support::browser_qa`), its page the sample page this computer's browser
+     renders: `browser` (01, and the switcher 01b), `browser-many` (01c), `browser-overflow` (01d, 01e), `browser-acting`
+     (02; a press on the page reaches 02b; its first run's Summary has the Browser line 10), `browser-dialog` (03),
+     `browser-select` (04), `browser-headed` (05), `browser-empty` (06), `browser-not-found` (07); start them with
+     `no_runner`, so no runner reports its own browser over the fixture. Not yet: an input method's composition (lurq
+     gives it only to its own text inputs; what it commits arrives as keys), copy and paste bridged to the system
+     clipboard, the cursor's shape over links and fields, the file chooser, the status bar's *Browser 3 tabs*, Settings ›
+     Browser (*Open Settings › Browser* opens Settings), and bringing an open window to the front (no lurq command).
 
 ## Not in scope
 

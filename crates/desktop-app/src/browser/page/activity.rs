@@ -1,8 +1,8 @@
-//! The line under the toolbar about the agent of the tab shown (`Activity` `WTzV9`): while it acts, a blue dot, *Builder
-//! is acting in this tab* and what it did last (*· typed 8 in Max attempts*), and at the line's end that the person's
-//! input makes it wait (`02 · Agent is acting` `UKAkY`); while the person's input holds it, an amber hand, *You're
-//! using this tab* and how long it waits (`02b · You use the tab` `k7xvx`). There is no take-over control: using the
-//! page is taking over.
+//! The line under the toolbar about the agent of the tab shown (`Activity` `WTzV9`): while it acts, a blue dot,
+//! *Builder is acting in this tab* and what it did last (*· typed 8 in Max attempts*), and at the line's end that the
+//! person's input makes it wait (`02 · Agent is acting` `UKAkY`); while the person's input holds it, an amber hand,
+//! *You're using this tab* and how long it waits (`02b · You use the tab` `k7xvx`). There is no take-over control:
+//! using the page is taking over.
 
 use std::{sync::Arc, time::Instant};
 

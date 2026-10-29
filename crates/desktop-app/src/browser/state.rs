@@ -28,14 +28,14 @@ use crate::services::browser_lookup::BrowserLookup;
 
 /// Whether the browser agents use was found on this computer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Found {
+pub enum Lookup {
   Looking,
   Found,
   /// None found (`07` `YEv2c`).
   Missing,
 }
 
-impl DevtoolsInspectable for Found {}
+impl DevtoolsInspectable for Lookup {}
 
 /// The project the window shows, as its parts draw it.
 #[derive(Clone)]
@@ -47,7 +47,7 @@ pub struct Showing {
   /// Counts the changes of every project's browser.
   pub revision: u64,
   pub strip: Strip,
-  pub found: Found,
+  pub found: Lookup,
   pub commands: Commands,
   /// The person's own use of the project's tabs.
   pub marks: Marks,
@@ -82,7 +82,7 @@ impl Showing {
 
   /// The browser cannot be used: no browser was found.
   pub fn unavailable(&self) -> bool {
-    self.found == Found::Missing
+    self.found == Lookup::Missing
   }
 }
 
@@ -186,7 +186,7 @@ pub fn follow_work(ctx: &mut Ctx, runners: &Runners) -> u64 {
 }
 
 /// Whether the browser was found, looked up off the UI thread; looked up again when `look` moves.
-pub fn found(ctx: &mut Ctx, lookup: &BrowserLookup, look: u64) -> Found {
+pub fn found(ctx: &mut Ctx, lookup: &BrowserLookup, look: u64) -> Lookup {
   let lookup = lookup.clone();
   let state = ctx
     .future(look, move |_| {
@@ -195,14 +195,14 @@ pub fn found(ctx: &mut Ctx, lookup: &BrowserLookup, look: u64) -> Found {
         let found = tokio::task::spawn_blocking(move || lookup.find())
           .await
           .map_err(|error| error.to_string())?;
-        Ok::<Found, String>(match found {
+        Ok::<Lookup, String>(match found {
           Ok(program) => {
             tracing::debug!(browser = program.name(), "the Browser window found the browser");
-            Found::Found
+            Lookup::Found
           }
           Err(unavailable) => {
             tracing::info!(reason = unavailable.reason(), "the Browser window found no browser");
-            Found::Missing
+            Lookup::Missing
           }
         })
       }
@@ -213,9 +213,9 @@ pub fn found(ctx: &mut Ctx, lookup: &BrowserLookup, look: u64) -> Found {
     (Some(found), _) => *found,
     (None, Some(error)) => {
       tracing::error!(%error, "looking for the browser failed");
-      Found::Missing
+      Lookup::Missing
     }
-    (None, None) => Found::Looking,
+    (None, None) => Lookup::Looking,
   }
 }
 

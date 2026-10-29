@@ -21,7 +21,10 @@ mod tab;
 mod title_bar;
 mod toolbar;
 
-pub use self::link::{AutoOpen, BrowserLink, Show};
+pub use self::{
+  link::{AutoOpen, BrowserLink, Show},
+  root::BrowserRoot,
+};
 
 /// The window's name for the app's MCP tools (`lurq_windows`, a tool's `window`).
 pub const WINDOW_NAME: &str = "browser";

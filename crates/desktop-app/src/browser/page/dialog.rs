@@ -1,13 +1,14 @@
-//! A JavaScript dialog of the person's own tab (`03 · JavaScript dialog` `t08Ur`), which a headless frame does not show:
-//! drawn over the page only, on the scrim, near its top: where it comes from (*localhost:5173 says*), its message, a
-//! field for a prompt's answer, and its buttons: OK for an alert, Cancel and OK for a confirm or a prompt, Stay and
-//! Leave for a page that asks before it unloads. The answer goes back to the tab (`Page.handleJavaScriptDialog`). An
-//! agent's tab never shows one: the runner dismisses it and tells the agent.
+//! A JavaScript dialog of the person's own tab (`03 · JavaScript dialog` `t08Ur`), which a headless frame does not
+//! show: drawn over the page only, on the scrim, near its top: where it comes from (*localhost:5173 says*), its
+//! message, a field for a prompt's answer, and its buttons: OK for an alert, Cancel and OK for a confirm or a prompt,
+//! Stay and Leave for a page that asks before it unloads. The answer goes back to the tab
+//! (`Page.handleJavaScriptDialog`). An agent's tab never shows one: the runner dismisses it and tells the agent.
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
+    events::MouseEvent,
     theme::{BorderSize, PaletteColor, ShadowStyle, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
@@ -105,53 +106,65 @@ impl Component for Dialog {
     });
     let ok = ActionButton::new("browser-dialog-ok", ButtonKind::Primary, ctx.t(ok_key)).on_click(answer(true));
     let field = (dialog.kind == DialogKind::Prompt).then(|| {
-      FieldInput::new("browser-dialog-answer", ctx.t("browser.dialog.answer"), self.answer.clone()).render(ctx)
+      FieldInput::new(
+        "browser-dialog-answer",
+        ctx.t("browser.dialog.answer"),
+        self.answer.clone(),
+      )
+      .render(ctx)
     });
-    let card = Column::new()
-      .id("browser-dialog-box")
-      .describe("kind", kind_name(dialog.kind))
-      .width(Dimension::Px(DIALOG_WIDTH))
-      .padding(BrowserSpacing::Dialog.role())
-      .spacing(lurq::app::theme::SpacingSize::Md)
-      .background(PaletteColor::SurfaceRaised)
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
-      .rounded(lurq::app::theme::RadiusSize::Lg)
-      .box_shadow(ShadowStyle::Lg)
-      .child(
-        Row::new()
-          .spacing(crate::theme::ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(icon(Icon::Globe, IconSize::Base, PaletteColor::TextMuted))
-          .child(
-            Text::new(&ctx.t_args("browser.dialog.says", [("origin", origin.as_str())]))
-              .id("browser-dialog-origin")
-              .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextMuted),
-          ),
-      )
-      .child(
-        Text::new(&message)
-          .id("browser-dialog-message")
-          .variant(BrowserText::DialogMessage.role())
-          .width(Dimension::Pct(100.0)),
-      )
-      .with_children(field)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .justify(Justify::End)
-          .with_children(cancel)
-          .child(ok),
-      );
+    let actions = Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .justify(Justify::End)
+      .with_children(cancel)
+      .child(ok);
+    let card = card(ctx, (dialog.kind, &origin, &message), field, actions);
     Column::new()
       .id("browser-dialog")
       .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
       .background(ExtraColor::Scrim.role())
       .padding(Padding::new().top(lurq::app::theme::SpacingSize::Xl))
       .align_items(Alignment::Center)
+      // The page under the scrim takes no input while its dialog waits.
+      .on_mouse_down(|event: MouseEvent| event.stop_propagation())
+      .on_mouse_up(|event: MouseEvent| event.stop_propagation())
       .child(card)
   }
+}
+
+/// The dialog's card: where it comes from, its message, a prompt's field and its buttons.
+fn card(ctx: &Ctx, (kind, origin, message): (DialogKind, &str, &str), field: Option<Element>, actions: Row) -> Column {
+  Column::new()
+    .id("browser-dialog-box")
+    .describe("kind", kind_name(kind))
+    .width(Dimension::Px(DIALOG_WIDTH))
+    .padding(BrowserSpacing::Dialog.role())
+    .spacing(lurq::app::theme::SpacingSize::Md)
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .rounded(lurq::app::theme::RadiusSize::Lg)
+    .box_shadow(ShadowStyle::Lg)
+    .child(
+      Row::new()
+        .spacing(crate::theme::ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::Globe, IconSize::Base, PaletteColor::TextMuted))
+        .child(
+          Text::new(&ctx.t_args("browser.dialog.says", [("origin", origin)]))
+            .id("browser-dialog-origin")
+            .variant(TypographyStyle::Description)
+            .color(PaletteColor::TextMuted),
+        ),
+    )
+    .child(
+      Text::new(message)
+        .id("browser-dialog-message")
+        .variant(BrowserText::DialogMessage.role())
+        .width(Dimension::Pct(100.0)),
+    )
+    .with_children(field)
+    .child(actions)
 }
 
 const fn kind_name(kind: DialogKind) -> &'static str {

@@ -28,7 +28,12 @@ use crate::{
 
 /// The list under the `<select>` of `tab` the person opened, while it is open.
 pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) -> Option<Element> {
-  let select = showing.view.as_ref()?.select().filter(|select| &select.tab == tab)?.clone();
+  let select = showing
+    .view
+    .as_ref()?
+    .select()
+    .filter(|select| &select.tab == tab)?
+    .clone();
   let browser = Services::of(ctx).runners.browser_window();
   let root = showing.project.as_ref().clone();
   let element = select.list.element;
@@ -80,7 +85,10 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
         .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)),
     );
     rows = rows.child(if option.disabled {
-      row.opacity(DISABLED_OPACITY).hit_test(lurq::node::HitTestBehavior::None).into()
+      row
+        .opacity(DISABLED_OPACITY)
+        .hit_test(lurq::node::HitTestBehavior::None)
+        .into()
     } else {
       Element::from(row)
     });

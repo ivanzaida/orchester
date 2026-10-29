@@ -12,7 +12,10 @@ use super::BrowserState;
 /// A page of the fixture: its title and address.
 type Page = (&'static str, &'static str);
 
-const ORDERS: Page = ("orders-sync · Kontur Admin", "http://localhost:5173/endpoints/orders-sync");
+const ORDERS: Page = (
+  "orders-sync · Kontur Admin",
+  "http://localhost:5173/endpoints/orders-sync",
+);
 const REQWEST: Page = (
   "Client in reqwest - Rust",
   "https://docs.rs/reqwest/latest/reqwest/struct.Client.html",
@@ -25,13 +28,25 @@ const DELIVERIES: Page = ("Deliveries · Kontur Admin", "http://localhost:5173/d
 const PULLS: Page = ("Pull requests · GitHub", "https://github.com/kontur/kontur/pulls");
 /// More pages, for the crowded and the overflowing strips.
 const MORE: [Page; 12] = [
-  ("Rate limits · Kontur API reference", "https://docs.kontur.test/api/rate-limits"),
+  (
+    "Rate limits · Kontur API reference",
+    "https://docs.kontur.test/api/rate-limits",
+  ),
   ("Pricing · Stripe Docs", "https://docs.stripe.com/pricing"),
   ("Sign in · Kontur staging", "https://staging.kontur.test/sign-in"),
-  ("Session cookies - HTTP | MDN", "https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies"),
-  ("Login redirect loop after session refresh", "https://github.com/kontur/kontur/issues/412"),
+  (
+    "Session cookies - HTTP | MDN",
+    "https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies",
+  ),
+  (
+    "Login redirect loop after session refresh",
+    "https://github.com/kontur/kontur/issues/412",
+  ),
   ("Settings · Kontur Admin", "http://localhost:5173/settings"),
-  ("tokio::time::sleep - Rust", "https://docs.rs/tokio/latest/tokio/time/fn.sleep.html"),
+  (
+    "tokio::time::sleep - Rust",
+    "https://docs.rs/tokio/latest/tokio/time/fn.sleep.html",
+  ),
   ("Timeouts · Kontur Admin", "http://localhost:5173/settings/timeouts"),
   ("Dashboard · Kontur Admin", "http://localhost:5173/dashboard"),
   ("Charts · Kontur Admin", "http://localhost:5173/charts"),

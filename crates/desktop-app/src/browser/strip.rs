@@ -13,7 +13,10 @@ use lurq::{
   },
   components::{Row, ScrollHorizontal, Stack},
   core::{ElementRef, Signal},
-  layout::{Alignment, layout_kind::{Justify, ScrollState}},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+  },
   node::{Element, Gradient, GradientStop, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_ipc::browser::{BrowserCommand, BrowserTabId};
@@ -125,7 +128,11 @@ impl Strip {
   fn measured_room(&self) -> f32 {
     let room = self.room.clone();
     self.element.observe_rect(move |rect| {
-      if rect.width > 0.0 && room.get_untracked().is_none_or(|known| (known - rect.width).abs() > 0.5) {
+      if rect.width > 0.0
+        && room
+          .get_untracked()
+          .is_none_or(|known| (known - rect.width).abs() > 0.5)
+      {
         room.set(Some(rect.width));
       }
     });
@@ -133,7 +140,12 @@ impl Strip {
   }
 
   /// Scrolls the tab shown into view when it changes.
-  fn follow(&self, fitted: &StripFit, (shown, index, divider): (Option<&BrowserTabId>, Option<usize>, Option<usize>), room: f32) {
+  fn follow(
+    &self,
+    fitted: &StripFit,
+    (shown, index, divider): (Option<&BrowserTabId>, Option<usize>, Option<usize>),
+    room: f32,
+  ) {
     let (Some(shown), Some(index)) = (shown, index) else {
       return;
     };

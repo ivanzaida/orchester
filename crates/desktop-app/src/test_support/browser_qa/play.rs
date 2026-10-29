@@ -6,7 +6,9 @@
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use orchester_ipc::browser::{BrowserEvent, BrowserMode, BrowserState as Reported, BrowserTab, BrowserTabId, ScreencastFrame, TabOwner};
+use orchester_ipc::browser::{
+  BrowserEvent, BrowserMode, BrowserState as Reported, BrowserTab, BrowserTabId, ScreencastFrame, TabOwner,
+};
 use orchester_workspace::browser::{BrowserWindow, run_owners};
 use tokio::{task::JoinHandle, time::sleep};
 
@@ -94,7 +96,11 @@ pub fn play(
           window.receive_frame_for_test(&root, frame);
         }
       }
-      for event in scene.events.iter().filter(|event| matches!(event, BrowserEvent::AgentActed { .. })) {
+      for event in scene
+        .events
+        .iter()
+        .filter(|event| matches!(event, BrowserEvent::AgentActed { .. }))
+      {
         feed(event.clone());
       }
     }
@@ -148,7 +154,11 @@ fn other_project(window: &BrowserWindow, root: &Path) {
     BrowserEvent::Changed(Reported {
       tabs: vec![
         tab("qa-other-1", "docs.rs", "https://docs.rs/"),
-        tab("qa-other-2", "Releases · GitHub", "https://github.com/ivanzaida/orchester/releases"),
+        tab(
+          "qa-other-2",
+          "Releases · GitHub",
+          "https://github.com/ivanzaida/orchester/releases",
+        ),
       ],
       shown: None,
       mode: BrowserMode::Headless,

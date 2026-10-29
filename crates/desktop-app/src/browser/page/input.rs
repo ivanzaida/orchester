@@ -60,7 +60,7 @@ impl PageInput {
     let send = Sender {
       showing: showing.clone(),
       tab: tab.clone(),
-      element: element.clone(),
+      element,
       css,
     };
     let (down, up, moved, wheel, key_down, key_up) = (

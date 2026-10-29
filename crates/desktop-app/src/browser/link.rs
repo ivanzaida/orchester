@@ -10,7 +10,7 @@ use std::{
 };
 
 use lurq::app::{
-  WindowOptions, WindowOpener,
+  WindowOpener, WindowOptions,
   component::{Component, DevtoolsInspectable},
   ctx::{Ctx, StreamEmitter},
 };
@@ -43,6 +43,8 @@ struct Inner {
   opener: WindowOpener,
   /// The main window's, where *Open Settings › Browser* goes.
   navigation: Navigation,
+  /// The OS window title the window opens with, before it names its project (*Browser*).
+  title: Arc<str>,
   /// Whether the window is open.
   open: Mutex<bool>,
   asked: watch::Sender<Option<Show>>,
@@ -58,12 +60,15 @@ impl PartialEq for BrowserLink {
 impl DevtoolsInspectable for BrowserLink {}
 
 impl BrowserLink {
-  pub fn new(services: Services, opener: WindowOpener, navigation: Navigation) -> Self {
+  /// The link of a session's window: `services`, the app's `opener`, the window's `navigation`, and the `title` the
+  /// Browser window opens with.
+  pub fn new(services: Services, opener: WindowOpener, navigation: Navigation, title: Arc<str>) -> Self {
     Self {
       inner: Arc::new(Inner {
         services,
         opener,
         navigation,
+        title,
         open: Mutex::new(false),
         asked: watch::Sender::new(None),
       }),
@@ -102,9 +107,8 @@ impl BrowserLink {
     *open = true;
     tracing::info!(project = %project.display(), "the Browser window opens");
     let link = self.clone();
-    let title = String::from(WINDOW_NAME);
     self.inner.opener.open_with(
-      WindowOptions::new(title, WINDOW_WIDTH, WINDOW_HEIGHT)
+      WindowOptions::new(self.inner.title.to_string(), WINDOW_WIDTH, WINDOW_HEIGHT)
         .undecorated()
         .window_name(WINDOW_NAME),
       move |app, tree| {
@@ -141,9 +145,7 @@ impl Component for AutoOpen {
   type Props = BrowserLink;
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self {
-      handled: Mutex::new(0),
-    }
+    Self { handled: Mutex::new(0) }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<lurq::node::Element> {

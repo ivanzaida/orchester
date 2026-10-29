@@ -58,7 +58,10 @@ pub fn mark(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
     .child(icon(Icon::MousePointerClick, IconSize::Lg, PaletteColor::Info))
     .child(
       Row::new()
-        .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Tight.role()))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Snug.role(),
+          ExtraSpacing::Tight.role(),
+        ))
         .rounded(RadiusSize::Sm)
         .background(PaletteColor::Info)
         .child(Text::new(&name).variant(BrowserText::AgentTag.role()).nowrap()),

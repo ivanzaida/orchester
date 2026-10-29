@@ -56,7 +56,12 @@ pub enum BrowserText {
 }
 
 impl BrowserText {
-  pub const ALL: [Self; 4] = [Self::SwitcherInitial, Self::Address, Self::DialogMessage, Self::AgentTag];
+  pub const ALL: [Self; 4] = [
+    Self::SwitcherInitial,
+    Self::Address,
+    Self::DialogMessage,
+    Self::AgentTag,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())

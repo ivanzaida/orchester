@@ -82,13 +82,13 @@ fn framed(
   close: Close,
   content: impl FnOnce(&mut Ctx, ChromeTitleBar, Option<Element>) -> ChromeTitleBar,
 ) -> Element {
-  let lights = cfg!(target_os = "macos").then(|| {
-    ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close.clone()))
-  });
+  let controls = controls(ctx, &close);
+  let lights = cfg!(target_os = "macos")
+    .then(|| ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close)));
   let bar = ChromeTitleBar::new()
     .background(PaletteColor::SurfaceBase)
     .border_bottom(None)
-    .controls(controls(ctx, &close));
+    .controls(controls);
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
   let title_bar = content(ctx, bar, lights);
   WindowChrome::new()

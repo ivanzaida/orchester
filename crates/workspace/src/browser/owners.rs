@@ -38,7 +38,9 @@ pub fn run_owners(root: &Path, runs: &[RunId]) -> Result<HashMap<RunId, RunOwner
       continue;
     };
     let agent = match working_profile(&run) {
-      Some(profile) => db.resource(profile)?.map(|resource| Arc::from(resource.name().as_str())),
+      Some(profile) => db
+        .resource(profile)?
+        .map(|resource| Arc::from(resource.name().as_str())),
       None => None,
     };
     owners.insert(

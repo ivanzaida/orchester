@@ -119,7 +119,7 @@ impl Switcher {
       .map(|(index, (root, name))| {
         let view = browser.view(&root);
         let current = root == *showing.project;
-        let choose = (link.clone(), self.open.clone(), root.clone());
+        let choose = (link.clone(), self.open.clone(), root);
         row(ctx, index, (&name, view.as_ref(), current, now), choose)
       })
       .collect();
@@ -128,7 +128,11 @@ impl Switcher {
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
-          .padding(Padding::horizontal(SpacingSize::Sm).top(SpacingSize::Sm).bottom(SpacingSize::Xs))
+          .padding(
+            Padding::horizontal(SpacingSize::Sm)
+              .top(SpacingSize::Sm)
+              .bottom(SpacingSize::Xs),
+          )
           .child(
             Text::new(&ctx.t("browser.switcher.section"))
               .variant(ShellText::MenuSection.role())
@@ -153,7 +157,10 @@ impl Switcher {
 }
 
 /// The projects the menu lists, by name: the person's, then those only a runner reported.
-fn listed(registered: Vec<RegisteredProject>, browser: &orchester_workspace::browser::BrowserWindow) -> Vec<(PathBuf, Arc<str>)> {
+fn listed(
+  registered: Vec<RegisteredProject>,
+  browser: &orchester_workspace::browser::BrowserWindow,
+) -> Vec<(PathBuf, Arc<str>)> {
   let mut listed: Vec<(PathBuf, Arc<str>)> = registered
     .into_iter()
     .map(|project| (project.repo_root, Arc::from(project.name.as_str())))

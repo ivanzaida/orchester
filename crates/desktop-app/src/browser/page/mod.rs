@@ -14,11 +14,7 @@ mod select;
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::Ctx,
-    theme::PaletteColor,
-  },
+  app::{component::Component, ctx::Ctx, theme::PaletteColor},
   components::{Image, Stack},
   core::{ElementRef, Signal},
   images::ImageData,
@@ -39,6 +35,9 @@ pub struct Scale {
 }
 
 impl Scale {
+  /// A CSS pixel is a logical pixel: before the first frame, the page is the area's own size.
+  const SAME: Self = Self { x: 1.0, y: 1.0 };
+
   /// `frame`'s CSS pixels drawn over `width` × `height` logical pixels.
   fn of(frame: &RgbaFrame, (width, height): (f32, f32)) -> Self {
     let (css_width, css_height) = frame.css_size();
@@ -76,11 +75,19 @@ impl Component for Page {
     let tab = showing.shown().cloned();
     let frame = view.and_then(|view| view.frame()).cloned();
     let image = frame.as_ref().map(|frame| self.image_of(frame));
-    let scale = frame.as_ref().zip(size).map(|(frame, size)| Scale::of(frame, size));
+    let scale = frame
+      .as_ref()
+      .zip(size)
+      .map_or(Scale::SAME, |(frame, size)| Scale::of(frame, size));
     let mut page = Stack::new()
       .id("browser-page")
       .describe("tab", tab.as_ref().map_or("", BrowserTabId::as_str).to_owned())
-      .describe("frame", frame.as_ref().map_or(String::new(), |frame| frame.sequence().to_string()))
+      .describe(
+        "frame",
+        frame
+          .as_ref()
+          .map_or(String::new(), |frame| frame.sequence().to_string()),
+      )
       .ref_element(self.element.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -101,11 +108,13 @@ impl Component for Page {
     let person = view
       .and_then(|view| view.tabs().iter().find(|open| open.id == tab))
       .is_some_and(|open| open.owner == TabOwner::Person);
-    let page = self
-      .input
-      .attach(page, (&showing, &tab), (self.element.clone(), frame.as_ref().map(|frame| frame.css_size())));
-    let mark = scale.and_then(|scale| mark::mark(ctx, &showing, &tab, scale));
-    let select = scale.and_then(|scale| select::list(ctx, &showing, &tab, scale));
+    let page = self.input.attach(
+      page,
+      (&showing, &tab),
+      (self.element.clone(), frame.as_ref().map(|frame| frame.css_size())),
+    );
+    let mark = mark::mark(ctx, &showing, &tab, scale);
+    let select = select::list(ctx, &showing, &tab, scale);
     let dialog = person.then(|| dialog::dialog(ctx, &showing, &tab)).flatten();
     page.with_children(mark).with_children(select).with_children(dialog)
   }

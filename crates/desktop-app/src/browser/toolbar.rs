@@ -61,7 +61,12 @@ pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> E
     .id("browser-body")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .padding(Padding::new().left(SpacingSize::Sm).right(SpacingSize::Sm).bottom(SpacingSize::Sm))
+    .padding(
+      Padding::new()
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .bottom(SpacingSize::Sm),
+    )
     .background(PaletteColor::SurfaceBase)
     .child(
       Column::new()
@@ -101,7 +106,11 @@ fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
       None => button.render(ctx),
     }
   };
-  let back = navigate(ctx, ("browser-back", Icon::ArrowLeft, "browser.toolbar.back"), Navigation::Back);
+  let back = navigate(
+    ctx,
+    ("browser-back", Icon::ArrowLeft, "browser.toolbar.back"),
+    Navigation::Back,
+  );
   let forward = navigate(
     ctx,
     ("browser-forward", Icon::ArrowRight, "browser.toolbar.forward"),
@@ -142,11 +151,7 @@ fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
     // The 4 more before the address line (`Gap` `K8rnhr`).
     .child(Row::new().padding(Padding::new().left(SpacingSize::Xs)))
     .child(address)
-    .with_children(open_in_window.map(|button| {
-      Row::new()
-        .padding(Padding::new().left(SpacingSize::Xs))
-        .child(button)
-    }));
+    .with_children(open_in_window.map(|button| Row::new().padding(Padding::new().left(SpacingSize::Xs)).child(button)));
   if showing.unavailable() {
     row.opacity(DISABLED_OPACITY).into()
   } else {
@@ -272,11 +277,7 @@ impl Address {
           }
         }
       });
-    if usable {
-      input
-    } else {
-      input.focusable(false)
-    }
+    if usable { input } else { input.focusable(false) }
   }
 }
 
@@ -288,7 +289,10 @@ fn owner(ctx: &Ctx, owner: &Owner) -> Element {
       Icon::Bot,
       ctx.t_args(
         "browser.toolbar.ownerRun",
-        [("number", known.number.get().to_string()), ("key", known.key.to_string())],
+        [
+          ("number", known.number.get().to_string()),
+          ("key", known.key.to_string()),
+        ],
       ),
     ),
     Owner::Run { known: None, .. } => (Icon::Bot, Arc::from("")),

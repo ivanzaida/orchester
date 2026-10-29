@@ -7,7 +7,10 @@
 mod play;
 mod tabs;
 
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+  fs, io,
+  path::{Path, PathBuf},
+};
 
 use orchester_core::id::RunId;
 use serde_json::{Value, json};
@@ -99,7 +102,12 @@ impl Fixture {
       Err(error) => return Err(format!("{}: {error}", path.display())),
     };
     let value: Value = serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?;
-    let field = |name: &str| value.get(name).and_then(Value::as_str).ok_or_else(|| format!("no `{name}` in the fixture"));
+    let field = |name: &str| {
+      value
+        .get(name)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("no `{name}` in the fixture"))
+    };
     let state = field("state")?;
     let state = BrowserState::ALL
       .into_iter()
@@ -110,7 +118,12 @@ impl Fixture {
       .and_then(Value::as_array)
       .ok_or("no `runs` in the fixture")?
       .iter()
-      .map(|run| run.as_str().and_then(|run| run.parse().ok()).ok_or("a run that is not a run id"))
+      .map(|run| {
+        run
+          .as_str()
+          .and_then(|run| run.parse().ok())
+          .ok_or("a run that is not a run id")
+      })
       .collect::<Result<Vec<RunId>, _>>()?;
     Ok(Some(Self {
       state,

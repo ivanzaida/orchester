@@ -44,7 +44,10 @@ impl Indicator {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Owner {
   /// A run's, by its task key and number; `None` until the run is read.
-  Run { run: RunId, known: Option<KnownRun> },
+  Run {
+    run: RunId,
+    known: Option<KnownRun>,
+  },
   Person,
 }
 
@@ -264,11 +267,9 @@ pub fn tab_to_show(
       _ => None,
     };
     let followed = run.filter(|_| idle).and_then(|run| {
-      strip
-        .agents
-        .iter()
-        .rev()
-        .find(|tab| tab.indicator == Some(Indicator::New) && matches!(tab.owner, Owner::Run { run: of, .. } if of == run))
+      strip.agents.iter().rev().find(|tab| {
+        tab.indicator == Some(Indicator::New) && matches!(tab.owner, Owner::Run { run: of, .. } if of == run)
+      })
     });
     return Some(followed.map_or(shown, |tab| tab.id.clone()));
   }

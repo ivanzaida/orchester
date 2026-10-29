@@ -167,7 +167,12 @@ impl Component for SessionWindow {
       (services.session_start, mcp::domain::translate(ctx.i18n().clone())),
       services.runners.clone(),
     ));
-    let browser = BrowserLink::new(services.clone(), ctx.window_opener(), navigation.clone());
+    let browser = BrowserLink::new(
+      services.clone(),
+      ctx.window_opener(),
+      navigation.clone(),
+      ctx.t("browser.window.titleAlone"),
+    );
     Self {
       router,
       account_tabs: AccountTabs::new(services.cloud.sign_in_state().account()),
