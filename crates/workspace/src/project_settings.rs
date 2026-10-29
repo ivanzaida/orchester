@@ -12,6 +12,7 @@ use orchester_core::{
   code_index::CodeIndexSetting,
   connection::{AgentConnection, Connection},
   limits::ProjectLimits,
+  permission::ApprovalMode,
   resource::ModelId,
   run::{
     AllowAutopilot, Answerer, ProjectRule, ProjectRuleId,
@@ -25,7 +26,10 @@ use orchester_store::{ProjectDb, StoreError};
 pub use repository::{RepositoryRead, check_repository_in, repository_in};
 
 use crate::{
-  agents::form::{effort_options, listed_models},
+  agents::{
+    data::published_profiles,
+    form::{effort_options, listed_models},
+  },
   budget::{
     LimitsErrors, ReadLimits, minutes_text, read_agent_slots, read_budget, read_minutes, read_optional_budget,
     read_qa_slots,
@@ -44,6 +48,9 @@ pub struct Settings {
   pub auto_mode: AutoModeSettings,
   /// *Allow Autopilot for agents in this project*; off until a person turns it on.
   pub allow_autopilot: AllowAutopilot,
+  /// The roles of the profiles whose published version is set to Autopilot, by slug: what new runs would use while
+  /// the project allows it.
+  pub autopilot_profiles: Vec<String>,
   pub connections: Vec<Connection>,
   /// The project's active approval rules, oldest first (*Approve for every run of this project*).
   pub approval_rules: Vec<ProjectRule>,
@@ -59,6 +66,11 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     code_index: db.code_index()?,
     auto_mode: db.auto_mode_settings()?,
     allow_autopilot: db.allow_autopilot()?,
+    autopilot_profiles: published_profiles(&db)?
+      .into_iter()
+      .filter(|entry| entry.profile.permissions().approval_mode() == ApprovalMode::Autopilot)
+      .map(|entry| entry.profile.role().as_str().to_owned())
+      .collect(),
     connections: db.connections()?,
     approval_rules: db
       .project_approval_rules()?

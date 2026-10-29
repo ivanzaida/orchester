@@ -1,4 +1,4 @@
-//! General's identity and repository settings, and Runs' auto mode with its reviewer and *Approved for every run*
+//! General's identity and repository settings, and Runs' Approvals with its reviewer and *Approved for every run*
 //! (`12` `wQy6o`), a page under Runs with Revoke.
 use orchester_core::store::SettingsStore;
 
@@ -141,6 +141,76 @@ fn project_settings_approval_mode_effective_saves_a_persons_switch_at_once_and_t
     });
     page.saved();
   }
+}
+
+/// Publishes a profile named `role` on the project's first agent connection, in `mode`.
+fn published_profile(page: &Settings, role: &str, mode: orchester_core::permission::ApprovalMode) {
+  use orchester_core::{
+    connection::invocation::Platform,
+    name::Name,
+    permission::AgentPermissions,
+    resource::{AgentProfile, ModelId, PromptText, ProviderSettings},
+    time::Timestamp,
+  };
+  use orchester_workspace::agents::data::{self, ProjectAgents};
+  let listed = ProjectAgents::load_in(&page.repo).expect("agents");
+  let connection = &listed.connections[0];
+  let mut permissions = AgentPermissions::most_restrictive(connection.provider(), Platform::current());
+  permissions.set_approval_mode(mode);
+  let profile = AgentProfile::new(
+    Name::new(role).expect("role"),
+    "Builds the change".into(),
+    PromptText::new("Implement the approved plan.").expect("instructions"),
+    connection.id(),
+    ModelId::new("sonnet").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_permissions(permissions);
+  let mut db = page.db();
+  let id = data::create_profile(&mut db, &profile, Timestamp::now()).expect("profile");
+  data::publish(&mut db, id, Timestamp::now()).expect("publish");
+}
+
+/// Approvals as `m0eUB` and `tvmsJ` draw it: *Allow Autopilot* with what On and Off mean, Off naming the published
+/// profiles set to Autopilot; the reviewer for Manual's requests; the old auto-mode switches gone.
+#[test]
+fn project_settings_approval_mode_effective_off_names_the_profiles_set_to_autopilot() {
+  use orchester_core::permission::ApprovalMode;
+  let mut page = Settings::new(true);
+  assert!(page.text("settings-auto").starts_with("Approvals"));
+  assert_eq!(
+    page.text("settings-auto-allow-autopilot-hint"),
+    "Off · every agent runs as Manual"
+  );
+  assert_eq!(
+    page.text("settings-auto-reviewer-hint"),
+    "For Manual requests off the allowed list"
+  );
+  let words = page.text("settings-auto");
+  for gone in ["New runs use auto mode", "approve everything"] {
+    assert!(!words.contains(gone), "{gone} is gone: {words}");
+  }
+  published_profile(&page, "Fixer", ApprovalMode::Autopilot);
+  published_profile(&page, "Builder", ApprovalMode::Autopilot);
+  published_profile(&page, "Reviewer", ApprovalMode::Manual);
+  // Runs reads the settings again when it opens.
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-auto-allow-autopilot-row");
+  page.until("the profiles named", |p| {
+    p.text("settings-auto-allow-autopilot-hint")
+      == "Off · every agent runs as Manual · Builder and Fixer are set to Autopilot"
+  });
+  page.click("settings-allow-autopilot");
+  page.until("Autopilot allowed", |p| {
+    p.db().allow_autopilot().expect("saved").is_on()
+  });
+  page.saved();
+  assert_eq!(
+    page.text("settings-auto-allow-autopilot-hint"),
+    "On · profiles set to Autopilot approve their own requests · only you can turn it on"
+  );
+  let estimates = page.text("settings-estimate-points-hint");
+  assert!(estimates.contains("uses the reviewer’s model"), "{estimates}");
 }
 
 #[test]

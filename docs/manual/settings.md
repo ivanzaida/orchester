@@ -141,10 +141,10 @@ Tabs: **General · Runs · Context · Connections · Secrets · Sharing**.
 
 | Group | Setting | Default | Notes |
 |---|---|---|---|
-| Auto mode | **New runs use auto mode** | Off | A reviewer model answers what the rules leave to you. The switch and the reviewer save as you change them; turning it on or changing its reviewer is person-only (automation's change is put back). |
-| | **Reviewer** | First Claude Code connection with Haiku 4.5 | Connection, model, effort. Not an API-provider connection. |
+| Approvals | **Allow Autopilot for agents in this project** | Off | On, agent profiles set to Autopilot approve their own requests; off, every agent runs as Manual and the hint names the profiles set to Autopilot. Saves as you change it; turning it on is person-only (an MCP client's input is refused, with the reason under the row), turning it off is anyone's. |
+| | **Reviewer** | First Claude Code connection with Haiku 4.5 | For Manual requests off the allowed list. Connection, model, effort. Not an API-provider connection. Changing it is person-only (automation's change is put back). |
 | | **Approved for every run** | — | The rules from *Approve for every run of this project* (QA app starts while `tools/qa-app.ps1` is unchanged), on a page of their own with *Revoke*. |
-| Estimates | **Let Orchester estimate story points** | Off | Per project. Estimates new and changed tasks with auto mode's reviewer model (tokens count toward the daily budget). Points you set are never changed. Person-only. |
+| Estimates | **Let Orchester estimate story points** | Off | Per project. Estimates new and changed tasks with the reviewer's model (tokens count toward the daily budget). Points you set are never changed. Person-only. |
 | Limits (apply to new runs) | **Run budget** | No limit | Tokens prefilled in New task. |
 | | **Daily budget** | 20,000,000 tokens | All runs, the chat, reviews and estimates; new work waits once it's used. Empty = no limit. |
 | | **Time limit** | No limit | Minutes of active agent time per run, prefilled in New task. |

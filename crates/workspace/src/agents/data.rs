@@ -168,7 +168,9 @@ pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Err
   Ok(entries)
 }
 
-fn published_profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
+/// The project's agent profiles as their latest published versions, ordered by slug; a profile never published is
+/// left out.
+pub(crate) fn published_profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
   let mut entries = Vec::new();
   for resource in store.resources(ResourceKind::AgentProfile)? {
     let latest = store.latest_version(resource.id())?;
