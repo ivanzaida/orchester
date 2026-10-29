@@ -19,6 +19,7 @@ pub mod mcp;
 mod narrow;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
+pub mod roots;
 pub mod widening;
 pub mod writable;
 
