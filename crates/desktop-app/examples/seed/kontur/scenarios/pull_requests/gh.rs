@@ -1,7 +1,8 @@
 //! The fake `gh` of the `pull-requests` scenario: a command script (`gh.cmd` on Windows, a shell script
 //! elsewhere) in `.orchester/qa-bin` that answers the read-only commands a sync runs from files beside it,
 //! as the real `gh` 2.97 answers them (`crates/core/tests/fixtures/github`), and opens a pull request with the
-//! next number when asked to. `gh-mode.txt` picks the answer.
+//! next number when asked to. `gh-mode.txt` picks the answer. The answers are in `gh-answers`, not a folder named
+//! `gh`, which the program itself is called on macOS and Linux.
 
 use std::{
   fs,
@@ -30,7 +31,7 @@ const RESET_MINUTES: i64 = 120;
 /// Answers the program's path.
 pub fn install(kontur: &Kontur, pull_requests: &[PullRequest]) -> Result<PathBuf, SeedError> {
   let bin = kontur.repo.join(".orchester").join("qa-bin");
-  let answers = bin.join("gh");
+  let answers = bin.join("gh-answers");
   fs::create_dir_all(&answers).map_err(|error| io(&answers, error))?;
   let (open, closed): (Vec<&PullRequest>, Vec<&PullRequest>) = pull_requests
     .iter()
@@ -225,7 +226,7 @@ mod program {
   /// the open list's.
   pub fn write(bin: &Path, first_open: &str) -> Result<PathBuf, SeedError> {
     let script = format!(
-      "@echo off\r\nsetlocal\r\nset \"HERE=%~dp0\"\r\nset /p MODE=<\"%HERE%gh-mode.txt\"\r\nset \"A=%HERE%gh\\\"\r\n\
+      "@echo off\r\nsetlocal\r\nset \"HERE=%~dp0\"\r\nset /p MODE=<\"%HERE%gh-mode.txt\"\r\nset \"A=%HERE%gh-answers\\\"\r\n\
        if \"%~1\"==\"--version\" (type \"%A%version.txt\" & exit /b 0)\r\n\
        if \"%~1\"==\"auth\" goto auth\r\nif \"%~1 %~2\"==\"pr list\" goto list\r\n\
        if \"%~1 %~2\"==\"pr view\" goto view\r\nif \"%~2\"==\"--allow-escape-sequences\" goto compare\r\n\
@@ -274,7 +275,7 @@ mod program {
   /// the open list's.
   pub fn write(bin: &Path, first_open: &str) -> Result<PathBuf, SeedError> {
     let script = format!(
-      "#!/bin/sh\nhere=$(dirname \"$0\")\na=\"$here/gh\"\nmode=$(cat \"$here/gh-mode.txt\")\n\
+      "#!/bin/sh\nhere=$(dirname \"$0\")\na=\"$here/gh-answers\"\nmode=$(cat \"$here/gh-mode.txt\")\n\
        case \"$1 $2\" in\n\
        \"--version \"*) cat \"$a/version.txt\"; exit 0;;\n\
        \"auth \"*) case \"$mode\" in\n\
