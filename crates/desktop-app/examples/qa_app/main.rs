@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   if let (Some(_), Some(services)) = (&reports, launch.services()) {
     services
       .runners
-      .send_error_reports(error_reports::for_runners(Environment::Qa));
+      .set_error_reports(Some(&error_reports::for_runners(Environment::Qa)));
   }
   // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
   // `trash` beside its data instead, never to the person's own.

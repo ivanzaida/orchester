@@ -32,7 +32,7 @@ fn main() {
   if let (Some(environment), Some(_), Some(services)) = (environment, &reports, launch.services()) {
     services
       .runners
-      .send_error_reports(error_reports::for_runners(environment));
+      .set_error_reports(Some(&error_reports::for_runners(environment)));
   }
   // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
   // a trash of their own.

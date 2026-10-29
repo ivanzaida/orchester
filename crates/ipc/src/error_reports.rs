@@ -1,9 +1,11 @@
 //! Whether a runner sends error reports (`docs/error-reports.md`): the app tells the runner it starts through
 //! [`ENVIRONMENT_VARIABLE`] and [`RELEASE_VARIABLE`], since the runner never reads the person's setting in
-//! `orchester.db`. A runner started without them sends nothing, and keeps what it was started with until it exits.
+//! `orchester.db`. A runner started without them sends nothing until the app turns its reports on with
+//! [`crate::Command::SetErrorReports`], which also turns them off again.
 
 use std::ffi::OsStr;
 
+use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 /// The environment the runner's reports name (`production`, `qa`); set only while the app sends reports.
@@ -12,10 +14,26 @@ pub const ENVIRONMENT_VARIABLE: &str = "ORCHESTER_ERROR_REPORTS";
 pub const RELEASE_VARIABLE: &str = "ORCHESTER_ERROR_REPORTS_RELEASE";
 
 /// The environment and the release of the reports a runner sends.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Named")]
 pub struct ErrorReports {
   environment: String,
   release: String,
+}
+
+/// [`ErrorReports`] as a message carries them, before both are checked to be text.
+#[derive(Deserialize)]
+struct Named {
+  environment: String,
+  release: String,
+}
+
+impl TryFrom<Named> for ErrorReports {
+  type Error = &'static str;
+
+  fn try_from(named: Named) -> Result<Self, Self::Error> {
+    Self::new(&named.environment, &named.release).ok_or("error reports name an empty environment or release")
+  }
 }
 
 impl ErrorReports {

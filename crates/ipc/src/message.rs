@@ -21,7 +21,7 @@ use orchester_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{chat::ChatTools, rejection::Rejection, work::WorkSummary};
+use crate::{ErrorReports, chat::ChatTools, rejection::Rejection, work::WorkSummary};
 
 /// Identifies a request within one connection, so its reply can be matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -263,6 +263,11 @@ pub enum Command {
   /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
   /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.
   EstimateTask { task: TaskId },
+  /// The person turned error reports on, with the app's environment and release, or off (`None`), while this runner
+  /// runs (protocol 33): it applies at once. Off drops the reports still waiting to leave, and the runner sends none
+  /// until they are turned on again; a runner started later is told when it starts
+  /// ([`crate::error_reports`]). Answered with [`Reply::ErrorReportsSet`], whether this build sends reports or not.
+  SetErrorReports { reports: Option<ErrorReports> },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -443,6 +448,8 @@ pub enum Reply {
     task: TaskId,
     outcome: orchester_core::task::estimate::EstimateOutcome,
   },
+  /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
+  ErrorReportsSet,
   Rejected(Rejection),
 }
 
