@@ -63,7 +63,9 @@ fn tasks(fixture: &Fixture) -> ProjectTasks {
 /// Whether the card of `request` in the conversation of `task` waits for the person.
 fn card_waits(fixture: &Fixture, task: TaskId, request: &PendingToolApproval) -> bool {
   let read = InPlace::read(fixture.repo.path(), task).expect("read the task");
-  let card = read.card(&approval_key(&request.id), false).expect("the request's card");
+  let card = read
+    .card(&approval_key(&request.id), false)
+    .expect("the request's card");
   assert!(matches!(card.kind, ItemKind::Approval(_)));
   waits_for_you(&card)
 }

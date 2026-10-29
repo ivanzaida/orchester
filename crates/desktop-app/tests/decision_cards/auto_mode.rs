@@ -59,5 +59,10 @@ fn card_auto_mode_approved_reads_approved_by_auto_mode() {
     text(&mut window, &format!("{card}-asked")),
     "tail -n 40 target/webhook-tests.log"
   );
-  assert!(window.tree.get_element_by_id(&format!("{card}-answer-myself")).is_none());
+  assert!(
+    window
+      .tree
+      .get_element_by_id(&format!("{card}-answer-myself"))
+      .is_none()
+  );
 }
