@@ -1,7 +1,8 @@
 //! Following one shared project's event stream (`docs/architecture/server.md`, "Live updates"): connected from the
 //! cache's cursor, or without one the first time, read until it ends, and connected again after a wait that starts at
 //! 1 s and doubles to 60 s, with jitter, the connection monitor's [`Schedule`]. A stream that opened starts the waits
-//! over. `401` stops it signed out; `403` and `revoked` stop it and the list reads *not a member*.
+//! over. `401` stops it signed out; `403` and `revoked` stop it and the list reads *not a member*. Each step says the
+//! project's [`SyncState`]: *live* once the stream opened, *reconnecting* or *offline* while it waits, *not a member*.
 
 use std::{path::Path, time::Duration};
 
@@ -9,9 +10,12 @@ use orchester_api::{
   Event, SharedTask,
   client::{EventStream, StreamEnd},
 };
-use orchester_core::id::TaskId;
+use orchester_core::{id::TaskId, time::Timestamp};
 
-use super::apply::{self, Applied, Pages};
+use super::{
+  SyncState,
+  apply::{self, Applied, Pages},
+};
 use crate::{
   background,
   sharing::{Schedule, SharingError, connection},
@@ -27,6 +31,9 @@ pub trait Source: Send + Sync {
 
   /// The cache took a change from the stream.
   fn changed(&self);
+
+  /// The project's stream reached `state`.
+  fn state(&self, state: SyncState);
 }
 
 /// The waits between connections: the system clock in the app, a settable one in tests.
@@ -69,6 +76,8 @@ enum Ending {
 /// Follows the stream of the project whose cache is at `root` until it stops for good.
 pub async fn follow(source: &impl Source, root: &Path, clock: &impl Clock) -> Stopped {
   let mut failures = 0;
+  // When the connects that failed in a row began; offline counts from it.
+  let mut trouble_since = None;
   loop {
     let (opened, ending) = connect(source, root).await;
     match ending {
@@ -81,12 +90,19 @@ pub async fn follow(source: &impl Source, root: &Path, clock: &impl Clock) -> St
           // The blocking pool is shutting down with the window.
           Err(_) => {}
         }
+        source.state(SyncState::NotMember);
         return Stopped::NotMember;
       }
       Ending::Stream(end) => tracing::debug!(?end, "a project's event stream ended"),
       Ending::Cache(error) => tracing::warn!(%error, "a project's events could not be applied"),
     }
-    failures = if opened { 1 } else { failures + 1 };
+    if opened {
+      (failures, trouble_since) = (1, None);
+    } else {
+      failures += 1;
+    }
+    let since = *trouble_since.get_or_insert_with(Timestamp::now);
+    source.state(SyncState::after_failure(failures, since));
     clock.wait(Schedule::DEFAULT.backoff(failures, clock.jitter())).await;
   }
 }
@@ -98,7 +114,10 @@ async fn connect(source: &impl Source, root: &Path) -> (bool, Ending) {
     Err(error) => return (false, Ending::Cache(error)),
   };
   match source.open(cursor).await {
-    Ok(mut stream) => (true, read(source, root, &mut stream).await),
+    Ok(mut stream) => {
+      source.state(SyncState::Live);
+      (true, read(source, root, &mut stream).await)
+    }
     Err(end) => (false, Ending::Stream(end)),
   }
 }

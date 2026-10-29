@@ -1,12 +1,17 @@
 //! The shared projects' live event streams (`docs/architecture/server.md`, "Live updates"): one per shared project on
 //! this computer while its server takes this computer's token and the person is a member, each following the project's
-//! events into its cache ([`stream`], [`apply`]). Started with the connection monitor and kept in step with the
-//! servers and the projects: a project shared, joined or made local, a sign-in or sign-out starts or ends its stream.
+//! events into its cache ([`stream`], [`apply`]) and saying how it stands ([`state`]). Started with the connection
+//! monitor and kept in step with the servers and the projects: a project shared, joined or made local, a sign-in or
+//! sign-out starts or ends its stream.
 
 mod apply;
+mod state;
 pub mod stream;
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+  collections::{HashMap, HashSet},
+  path::PathBuf,
+};
 
 use orchester_api::{
   SharedTask,
@@ -15,7 +20,11 @@ use orchester_api::{
 use orchester_core::id::{ProjectId, TaskId};
 use tokio::task::JoinHandle;
 
-pub use self::stream::{Clock, Source, Stopped, SystemClock, follow};
+pub(super) use self::state::SyncStates;
+pub use self::{
+  state::SyncState,
+  stream::{Clock, Source, Stopped, SystemClock, follow},
+};
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
 use crate::background;
 
@@ -52,11 +61,20 @@ impl Drop for Following {
   }
 }
 
-/// Keeps one stream for each of `projects` that follows its server now, and ends the others.
+/// Keeps one stream for each of `projects` that follows its server now, and ends the others; the projects whose person
+/// is no longer a member read so, and those without a stream have no state.
 fn keep(servers: &Servers, streams: &mut HashMap<PathBuf, Following>, projects: Vec<ProjectServer>) {
   let mut kept = HashMap::new();
-  for project in projects.into_iter().filter(|project| follows(servers, project)) {
+  let mut not_members = Vec::new();
+  for project in projects {
     let root = project.repo_root().to_owned();
+    if project.link().removed_at.is_some() {
+      not_members.push(root);
+      continue;
+    }
+    if !follows(servers, &project) {
+      continue;
+    }
     let id = project.link().project;
     let running = streams
       .remove(&root)
@@ -65,6 +83,8 @@ fn keep(servers: &Servers, streams: &mut HashMap<PathBuf, Following>, projects: 
     kept.insert(root, following);
   }
   *streams = kept;
+  let followed: HashSet<PathBuf> = streams.keys().cloned().collect();
+  servers.keep_sync_states(&followed, not_members);
 }
 
 /// Whether `project`'s server can stream to this computer: someone is signed in there, and the person is a member.
@@ -133,5 +153,9 @@ impl Source for Live {
 
   fn changed(&self) {
     self.servers.shared_changed();
+  }
+
+  fn state(&self, state: SyncState) {
+    self.servers.set_sync_state(self.project.repo_root(), state);
   }
 }
