@@ -16,6 +16,7 @@ mod primary;
 mod refusal;
 pub(super) mod run_again;
 mod run_line;
+mod run_mode;
 
 use std::sync::Arc;
 

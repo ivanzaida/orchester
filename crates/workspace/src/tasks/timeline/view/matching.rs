@@ -45,7 +45,7 @@ pub(super) fn matches(item: &Item, needle: &str, rendered: Rendered<'_>) -> bool
         || notice.commits.iter().any(|commit| found(&commit.subject))
         || notice.overlapping.iter().any(|path| found(path))
     }
-    ItemKind::Step(_) | ItemKind::End(_) => false,
+    ItemKind::Step(_) | ItemKind::SwitchedToManual(_) | ItemKind::End(_) => false,
   }
 }
 

@@ -165,6 +165,7 @@ fn step_named(edit: &PipelineEdit, named: &str) -> Result<StepKey, ToolError> {
 
 pub(super) fn create_error(error: &CreateError) -> ToolError {
   let code = match error {
+    CreateError::Store(orchester_store::StoreError::NotAdmin) => "not_admin",
     CreateError::Store(_) => "project_data",
     CreateError::NoSlug => "invalid_name",
     CreateError::SlugTaken { .. } => "name_taken",

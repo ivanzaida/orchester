@@ -11,7 +11,7 @@ use orchester_core::{
   id::RunId,
   resource::{AgentProfile, ModelId},
   run::{
-    ApprovalRule, ApprovalRuleId, EffectiveMode, Run, StepExecutor, TaskPhase, auto_approves,
+    Answerer, ApprovalRule, ApprovalRuleId, EffectiveMode, ManualSwitch, Run, StepExecutor, TaskPhase, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -79,8 +79,9 @@ pub enum RunApprovalChange {
   AutoApprove(bool),
   /// Revoke a rule of Approve similar: its requests ask again from the next one.
   Revoke(ApprovalRuleId),
-  /// Switch the run to Manual for itself, for good: nothing switches it back to Autopilot.
-  SwitchToManual,
+  /// Switch the run to Manual for itself, for good: nothing switches it back to Autopilot. A narrowing, so the person
+  /// or automation alike, as the switch records.
+  SwitchToManual(Answerer),
 }
 
 /// Applies `change` to run `run` of the project at `repo_root`.
@@ -90,7 +91,13 @@ pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Resu
     RunApprovalChange::AutoApprove(chosen) => db.set_run_auto_approve(run, Some(chosen)),
     // A rule revoked already, or one of Always allow, stays as it is.
     RunApprovalChange::Revoke(rule) => db.revoke_approval_rule(run, rule, Timestamp::now()).map(|_| ()),
-    RunApprovalChange::SwitchToManual => db.switch_run_to_manual(run),
+    RunApprovalChange::SwitchToManual(by) => db.switch_run_to_manual(
+      run,
+      ManualSwitch {
+        at: Timestamp::now(),
+        by,
+      },
+    ),
   }
 }
 
@@ -148,6 +155,8 @@ pub struct RunApprovals {
   pub profile: bool,
   /// The mode the run answers its agents' requests in now.
   pub mode: EffectiveMode,
+  /// When and by whom the run was switched to Manual for itself, once it was and that was recorded.
+  pub switched: Option<ManualSwitch>,
   pub rules: Vec<ApprovalRule>,
   pub counts: DecisionCounts,
 }
@@ -158,9 +167,15 @@ impl RunApprovals {
       chosen: db.run_auto_approve(run.id())?,
       profile: profile_approves(db, run),
       mode: db.run_approval_mode(run.id())?,
+      switched: db.run_manual_switch(run.id())?,
       rules: db.approval_rules(run.id())?,
       counts: db.decision_counts(run.id())?,
     })
+  }
+
+  /// Whether the run may still be switched to Manual for itself: it is in Autopilot and has not ended.
+  pub fn may_switch_to_manual(&self, run: &Run) -> bool {
+    self.mode.is_autopilot() && !run.status().is_terminal()
   }
 
   /// Whether Orchester auto-approves the run's requests now.

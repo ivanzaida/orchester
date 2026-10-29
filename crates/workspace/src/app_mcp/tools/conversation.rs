@@ -154,7 +154,8 @@ fn merged_by_chat(mut entry: Value, merged: Option<ChatMerge>) -> Value {
   entry
 }
 
-/// `item` as the tool gives it; `None` for what other tools give (steps, tool calls, approvals, problems).
+/// `item` as the tool gives it; `None` for what other tools give (steps, tool calls, approvals and the run's approval
+/// mode, problems).
 fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
   let step_of = || {
     item
@@ -209,7 +210,12 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
       step_of(),
       base_moved::shown(mark),
     ),
-    ItemKind::Step(_) | ItemKind::Mark(_) | ItemKind::Approval(_) | ItemKind::Tools(_) | ItemKind::Problem(_) => {
+    ItemKind::Step(_)
+    | ItemKind::Mark(_)
+    | ItemKind::Approval(_)
+    | ItemKind::SwitchedToManual(_)
+    | ItemKind::Tools(_)
+    | ItemKind::Problem(_) => {
       return None;
     }
   };

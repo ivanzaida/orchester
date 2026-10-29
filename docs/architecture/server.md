@@ -101,7 +101,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 27 | Offline-first | Without the server, a shared project works as usual. Every change goes into a local outbox with the revision it was based on, and is sent in order after reconnect. Organization fields merge automatically, as in 26; title, brief, criteria, pipeline and limits that both sides changed go to the person. A task created offline has a temporary number until the server assigns one; its links, references and keys are remapped, and the person sees the change ([Offline and the outbox](#offline-and-the-outbox)). **Replaces 8** | user (2026-10-15) |
 | 28 | Claims offline | Offline, a run may start only on a task whose claim is already the person's; row 5's staleness applies: once the claim would be stale by the last heartbeat the server answered, nothing new starts until the server confirms the claim. Taking a new task needs the server ([Claims](#claims)) | user (2026-10-15) |
 | 29 | Shared progress | Shared: who took the task, the run phase, which pipeline step it is on, what it waits for (a person, a limit, a question, an approval: kinds only, no content), each step's result (passed, failed, unverified, unchanged), the branch and the pull request. Local only: transcripts, diffs, prompts, tool calls and secrets ([Shared run progress](#shared-run-progress)). Both ways (row 53). **Extends S3** | user (2026-10-15) |
-| 30 | Shared team configuration | Shared: pipelines, agent profiles, instructions, skills and the project's ~~command~~ tools (**changed by 52:** every kind). Publishing creates a version on the server; drafts stay local until published (**changed by 72:** only admins, the project's owner or the server's admin, publish and keep drafts of shared resources; members read and run with them). Per person and local: connections, accounts, MCP servers' credentials, secrets and environment. A published version names what it needs by name and role, resolved on each computer, with a visible *missing on this computer* state ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29) |
+| 30 | Shared team configuration | Shared: pipelines, agent profiles, instructions, skills and the project's ~~command~~ tools (**changed by 52:** every kind). Publishing creates a version on the server; drafts stay local until published (**changed by 72:** only admins, the project's owner or the server's admin, publish and keep drafts of shared resources; members read and run with them). (**Changed by 74:** besides the team's pipelines, a person may keep pipelines of their own that stay on their computer and are never sent.) Per person and local: connections, accounts, MCP servers' credentials, secrets and environment. A published version names what it needs by name and role, resolved on each computer, with a visible *missing on this computer* state ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29) |
 | 31 | The deprecated app | `crates/desktop` is frozen as of 2026-10-15 and never updated again (AGENTS.md). Its S2a–c sharing screens stay exactly as they are; after S4 they show read-only offline states that no longer apply, by design. Every phase touches only the new app, `orchester-workspace`, core, api and server | user (2026-10-15) |
 | 32 | Create & run offline | The task is saved with its temporary key and nothing more. Once it has its number and the server can give the claim, the task and the temporary-key notice offer *Start*; the run starts only when the person presses it. Nothing starts on its own | user (2026-10-15) |
 | 33 | Tags offline | Creating a tag works offline (it waits in the outbox); renaming, merging and deleting need the server, since they rewrite other people's tasks ([Tags](#tags)) | coordinator (2026-10-15) |
@@ -123,7 +123,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 49 | Server and project addresses | A team server runs at its owner's own address (`orchester.userdomain.com`) and holds several projects, each at its own address (`orchester.userdomain.com/project-a`). The owner creates projects on the server by name and slug. The project address is the server project's identity; the repository remote is kept as a hint, compared with `origin` when someone links a local checkout, with a warning on a mismatch. Everyone clones and sets up the code themselves; the server never touches code ([Servers and project addresses](#servers-and-project-addresses)). **Replaces 10, changes 11, 12 and 16** | user (2026-10-15) |
 | 50 | One connection per server | The app connects to a server once, with one device token per server. Each local project is linked to one project on it. Access is per project: an invite to project-a grants project-a only. **Replaces the wording of 40** | user (2026-10-15) |
 | 51 | Joining | Invites go by email through the cloud (row 43): B downloads Orchester, signs in to the cloud, accepts the invite to project-a, and links their local checkout through the join review. The code fallback for networks without the internet stays (row 45). Team servers have no passwords and trust the cloud's identity tokens, verified locally (rows 42, 46) | user (2026-10-15) |
-| 52 | What a project shares | Shared in a project: tasks (with organization, claims and progress) and all team configuration: pipelines, agent profiles, instructions, skills (stored in the database, files written at step start) and tools of every kind. Local: runs, worktrees, transcripts, connections, CLI accounts, secrets (and, by row 30, environment). **Changes 30. Changed by 72:** only admins (the project's owner or the server's admin) change the team configuration; members read it and run with it | user (2026-10-15; changed 2026-10-29) |
+| 52 | What a project shares | Shared in a project: tasks (with organization, claims and progress) and all team configuration: pipelines, agent profiles, instructions, skills (stored in the database, files written at step start) and tools of every kind. Local: runs, worktrees, transcripts, connections, CLI accounts, secrets (and, by row 30, environment). **Changes 30. Changed by 72:** only admins (the project's owner or the server's admin) change the team configuration; members read it and run with it. **Changed by 74:** a person's local pipelines are local too, never sent; a shared task that names one keeps only its name and whose it is | user (2026-10-15; changed 2026-10-29) |
 | 53 | Live progress both ways | A sees when B's task goes in progress or done, with its step, and B sees A's the same way (row 29) | user (2026-10-15) |
 | 54 | The cloud's database | Orchester Cloud's database is PostgreSQL, not SQLite. Team servers stay on SQLite ([Framework and storage](#framework-and-storage)). **Narrows 13 to team servers** | user (2026-10-15) |
 | 55 | Skill limits | A skill part up to 1 MiB, a version up to 16 MiB in all, at most 256 parts, for local and shared skills alike; each part uploaded by its hash, no general chunked upload; Import from repository goes down from 4 MiB to 1 MiB per file ([Skills in the database](#skills-in-the-database)) | user (2026-10-15) |
@@ -145,6 +145,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 71 | Modules offline | Until S4 builds the outbox, module writes in a shared project fail at once offline, as task writes do; with S4 a create waits in the outbox with the id made on the desktop, a change with its revision (in `conflict` when met by a newer one), and a move in its task's change ([Modules](#modules)). **Under 27** | user (ORC-78, 2026-10-22) |
 | 72 | Who changes the team's configuration | In a shared project, the team's configuration (pipelines, agent profiles, instructions, skills, tools of every kind) is changed only by admins: the project's owner or the team server's admin. Members read it and run with it, on the desktop and in the web app; they have no drafts of shared resources. Admins change it in both places; every write of S5's resource endpoints answers a member `403 not_admin`. Core decides it with `sharing::may_change_configuration` ([Shared configuration](#shared-configuration)). **Changes 30 and 52** | user (2026-10-29) |
 | 73 | Snapshot and deltas | The project stream sends a client without a cursor, or with one older than the 30-day retention, a paged snapshot (`snapshot.begin`, `snapshot.tasks` pages of 64, `snapshot.end { cursor }`) with the project, members, tags, modules and tasks, later resources; a cursor inside the retention gets only the deltas after it, and `reset` goes away. Every delta carries `id`, `by`, `actor` (person or Orchester) and `at`; `task.changed` holds only the changed fields with `revision` and `base`, and a client applies it only when its cached revision equals `base`, otherwise it reads the task again; its own changes come back and are skipped by revision. The deltas are the record of who did what; there is no `activity` event, and the server's Activity feed stays. Not included: presence, typing, docs and plugins ([Events](#events)). **Extends 7 and 22; replaces the `task`, `members`, `tags`, `project`, `modules`, `resources` and `reset` kinds** | user (ORC-392, 2026-10-29) |
+| 74 | Local pipelines in a shared project | In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
 
 ## Processes and crates
 
@@ -489,15 +490,17 @@ environment variables or secrets. The fields above are all it gets.
 
 ## Shared configuration
 
-Rows 30 and 52. Pipelines, agent profiles, instructions, skills and tools of every kind (command, HTTP, database)
+Rows 30, 52 and 74. Pipelines, agent profiles, instructions, skills and tools of every kind (command, HTTP, database)
 are shared resources of the server project. What a tool needs that belongs to the person (its secrets, the MCP
-servers and connections around it) stays on each computer and is bound there.
+servers and connections around it) stays on each computer and is bound there. Besides the team's pipelines, each
+person may keep [local pipelines](#local-pipelines) that are never sent.
 
 | Part | Where it lives |
 | --- | --- |
 | Resource (id, kind, slug, name, archived) | Server; cached locally. Ids are the sharer's `ResourceId`s, kept on upload as task ids are |
 | Published versions (`v1..vN`, immutable) | Server; numbered by the server; cached locally with who published them and when |
 | Draft | Local only, per admin, based on a server version. Publishing sends it. A member has none (row 72) |
+| A person's local pipeline, its drafts and versions (row 74) | Local only, per person; never sent. A shared task that names one keeps only its name and whose it is |
 | Connections, CLI accounts, MCP servers and their credentials, secrets, environment | Local only, per person |
 
 **Who publishes** (row 72). Only admins change the team's configuration: the project's owner or the team server's
@@ -563,6 +566,40 @@ data. Core does the walk with `import`'s reference functions; it is not written 
 reference; any other local connection, MCP server or secret becomes a new reference with its kind, name and
 role. Nothing about it is sent beyond those three words: never its settings, account, credentials, values or
 program.
+### Local pipelines
+
+Row 74 (the person, 2026-10-29). In a shared project a person may keep pipelines of their own beside the team's. The
+team's pipelines stay shared and admin-only (row 72); a local pipeline stays on the person's computer and is never
+sent to the team server.
+
+- **Kind.** A local pipeline is a local resource of the project, as every resource of a project that is not shared.
+  Making it, editing its draft, publishing its versions, archiving and running it need no admin: members and admins
+  alike. Publishing it makes a local version only (numbered on this computer), never a server version and never an
+  outbox entry. The resource's `sharing` is empty, as for a local project's resources; core's
+  `sharing::may_change_configuration` answers only for shared resources.
+- **Share and sync.** Share's `POST …/resources/import`, Join's upload and sync never upload a local pipeline: the
+  upload takes only shared resources, and nothing else about a local pipeline reaches the server. Share and the Join
+  review list it under *Stays on this computer*, and *What sharing sends* says *Pipelines you keep only on this
+  computer* among what stays here. At Join, *Keep on this computer* on a pipeline keeps it as a local pipeline,
+  runnable as before, instead of *Not shared*; other kinds kept at Join stay *Not shared* as before.
+- **Steps.** A local pipeline's steps may use the team's profiles (pinned to the team's versions, resolved with this
+  computer's bindings like any run) and the person's own local profiles. The team's profiles stay read-only for a
+  member; the pipeline only names them.
+- **Tasks.** A shared task that names a local pipeline keeps on the server only its name and kind: `TaskContent`'s
+  `pipeline` becomes `slug | { local: { name, of: user id } } | null`. The body, the steps and the versions never
+  leave the computer. The person who made it runs the task with it as with any pipeline. Other members see *a local
+  pipeline of <person>* and cannot run the task with it: *Run* is unavailable with that reason until they choose a
+  team pipeline or one of their own in the task's *Pipeline*, which changes the task as any edit does (row 18). A
+  run's progress (row 29) names the pipeline the same way.
+- **Promotion.** An admin may *Publish for the team* on their own local pipeline, after a confirmation. It is
+  uploaded with its id and slug (a taken slug asks for a free one) and becomes a team resource from that version
+  on: the new version is the team's `v1`, and the earlier local versions stay on this computer as its history, kept
+  by the runs that pinned them. It is unavailable while a step uses a local profile, with that reason: the profile is
+  published for the team first, or the step picks a team profile. Tasks that named it as local name its slug from
+  then on. A member has no *Publish for the team*; they ask an admin.
+- **Make local.** Make local keeps local pipelines as they are; they were never the server's. Tasks that named
+  another person's local pipeline keep its name and show it as missing, as an unresolved pipeline does today.
+
 
 ### Skills in the database
 
@@ -842,7 +879,7 @@ Invite      { id, kind: "server"|"project"|"account", email|null, project|null, 
               by: UserRef, delivery: "cloud"|"code", expires_at }                                       // API 3
 Project     { id, slug, address, key, name, remote_hint|null, role: "owner"|"member"|null, next_number } // API 3: slug, address, remote_hint (was remote)
 Member      { user: UserRef, role, added_at }
-TaskContent { title, brief, criteria: [string], pipeline: slug|null,
+TaskContent { title, brief, criteria: [string], pipeline: slug|{ local: { name, of: user id } }|null, // local: row 74
               limits: { budget_tokens, max_duration_ms }|null,
               ...Organization, module: module id|null }                                     // module: ORC-78
 Organization { workflow: "backlog"|"todo"|"in_progress"|"in_review"|"done"|"canceled",
@@ -1899,7 +1936,7 @@ later through the same import. Keeping them as live local-only tasks beside the 
 would have two sources, and the rules for them have no good answers.
 
 **Not shared:** daily token budgets and usage, conversations and memory, connections, CLI accounts, secrets,
-environment, task and project sources, limits settings, and the code itself.
+environment, task and project sources, limits settings, the person's local pipelines (row 74), and the code itself.
 
 ## Platforms
 

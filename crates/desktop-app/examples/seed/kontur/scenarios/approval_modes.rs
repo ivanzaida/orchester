@@ -1,191 +1,111 @@
-//! `cards-approval-modes`: how each tool request was answered by the run's approval mode, and why one came to the
-//! person (`docs/design/approval-modes.md`, 04 `H6kPd`, 04b `p6tXIO`, 04c `vZcoN`). Each task is a Feature delivery
-//! run at work on Implement:
+//! `approval-modes`: one task per run approval mode the task page's status line names (`docs/design/approval-modes.md`,
+//! 04 `H6kPd`, 04b `p6tXIO`, 04c `vZcoN`), each a Feature delivery run at work on Implement, in a project that allows
+//! Autopilot: one whose agent started in Autopilot (the *Autopilot* chip with *Switch to Manual for this run*); one
+//! the person switched to Manual for itself (*Manual · this run*, and the Conversation's row *Switched to Manual for
+//! this run* by you, Builder's profile staying on Autopilot); and one whose agent's profile is Manual (*Manual ·
+//! profile*). `approval-modes-project`: the Autopilot run alone, in a project that does not allow Autopilot (*Manual ·
+//! project*).
 //!
-//! - *Add retry to webhook sender*: six commands Autopilot approved (three rows and *· 3 more*), then a file outside
-//!   the worktree that came to the person, with its path;
-//! - *Cap Retry-After at 60 s*: a command the profile allowed, one the reviewer approved with its reason, then one the
-//!   reviewer was not sure about;
-//! - one task per other reason a request comes to the person: the reviewer denied it, it is not on the allowed list, a
-//!   push to a remote, another branch.
-//!
-//! Its runs are recorded, not executed, as `cards-auto-mode`'s are: a step with a request that came to the person is
-//! recorded waiting for them (`cards::hold`).
+//! Allowing Autopilot and setting a profile to Autopilot are a person's alone in the app, so the seed records them.
+//! Its runs are recorded, not executed, as the `cards` scenario's are: a runner that attaches ends them, so start the
+//! QA copy without one; without a runner they read interrupted and keep their chip, as they have not ended.
 
 use orchester_core::{
-  run::{
-    AnswerKind, CameToPerson, DecidedBy, Invocation, PendingToolApproval, PersonReason, RequestAnswer, Run,
-    ToolApprovalDecision,
+  permission::{
+    AgentPermissions, ApprovalMode, CommandPermission, LaunchPermissions, NetworkAccess, OutsideCommands,
+    RepositoryAccess,
   },
+  run::{AllowAutopilot, Answerer, Invocation, ManualSwitch},
+  store::ActivityStore,
   time::Timestamp,
 };
 
-use super::cards::{at_work, hold};
+use super::cards::at_work;
 use crate::kontur::{Kontur, SeedError};
 
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
-/// The agent that asks, Implement's.
-const AGENT: &str = "Builder";
 
-/// How the run's mode answered a request.
+/// The mode a task's run is left in.
 #[derive(Clone, Copy)]
-enum Answered {
-  /// Approved without the person: by Autopilot, the profile or the reviewer (with its reason).
-  Approved(AnswerKind, Option<&'static str>),
-  /// It came to the person for this reason, with what the card names.
-  Came(PersonReason, Option<&'static str>),
+enum Mode {
+  /// Its agent started in Autopilot.
+  Autopilot,
+  /// Its agent started in Autopilot, then the person switched the run to Manual for itself.
+  SwitchedByYou,
+  /// Its agent's profile is Manual.
+  Profile,
 }
 
-type Asked = (&'static str, Answered);
+/// A task's title, the mode its run is left in, and the state it is seeded as.
+type Seeded = (&'static str, Mode, &'static str);
 
-const AUTOPILOT: [Asked; 7] = [
+const TASKS: [Seeded; 3] = [
+  ("Retry failed webhook deliveries", Mode::Autopilot, "run in Autopilot"),
   (
-    "cargo build -p webhooks",
-    Answered::Approved(AnswerKind::Autopilot, None),
+    "Paginate the contacts export",
+    Mode::SwitchedByYou,
+    "run switched to Manual by you",
   ),
-  (
-    "cargo test -p webhooks retry",
-    Answered::Approved(AnswerKind::Autopilot, None),
-  ),
-  ("cargo fmt -p webhooks", Answered::Approved(AnswerKind::Autopilot, None)),
-  (
-    "cargo clippy -p webhooks",
-    Answered::Approved(AnswerKind::Autopilot, None),
-  ),
-  ("git diff --stat", Answered::Approved(AnswerKind::Autopilot, None)),
-  (
-    "cargo test -p webhooks",
-    Answered::Approved(AnswerKind::Autopilot, None),
-  ),
-  (
-    "Add-Content 'C:\\Users\\dana\\.cargo\\config.toml' 'net.retry = 5'",
-    Answered::Came(PersonReason::Outside, Some("C:\\Users\\dana\\.cargo\\config.toml")),
-  ),
-];
-
-const MANUAL: [Asked; 3] = [
-  ("cargo test -p webhooks", Answered::Approved(AnswerKind::Profile, None)),
-  (
-    "rm -rf target/fixtures-tmp",
-    Answered::Approved(
-      AnswerKind::Reviewer,
-      Some("Deletes generated fixtures inside the worktree."),
-    ),
-  ),
-  (
-    "curl -sI https://staging.example.com/webhooks",
-    Answered::Came(
-      PersonReason::ReviewerUnsure,
-      Some("Sends a request to an outside host; can't tell whether it only tests the retry path."),
-    ),
-  ),
-];
-
-const DENIED: [Asked; 1] = [(
-  "cargo add reqwest --features json",
-  Answered::Came(
-    PersonReason::ReviewerDenied,
-    Some("Adds a new dependency the task doesn't ask for."),
-  ),
-)];
-const NOT_ALLOWED: [Asked; 1] = [(
-  "cat ~/.ssh/id_ed25519.pub",
-  Answered::Came(PersonReason::NotAllowed, None),
-)];
-const PUSH: [Asked; 1] = [("git push origin HEAD", Answered::Came(PersonReason::Push, None))];
-const REFS: [Asked; 1] = [(
-  "git update-ref refs/heads/main 4e1c9d2",
-  Answered::Came(PersonReason::Refs, Some("refs/heads/main")),
-)];
-
-const TASKS: [(&str, &[Asked], &str); 6] = [
-  (
-    "Add retry to webhook sender",
-    &AUTOPILOT,
-    "Autopilot rows and a file outside the worktree",
-  ),
-  (
-    "Cap Retry-After at 60 s",
-    &MANUAL,
-    "profile and reviewer rows and the reviewer unsure",
-  ),
-  ("Add a JSON client", &DENIED, "a command the reviewer denied"),
-  ("Read the deploy key", &NOT_ALLOWED, "a command not on the allowed list"),
-  ("Publish the retry branch", &PUSH, "a push to a remote"),
-  ("Move main to the fix", &REFS, "a change to another branch"),
+  ("Trim the audit log", Mode::Profile, "run in Manual by its profile"),
 ];
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  kontur.db.save_allow_autopilot(AllowAutopilot::ON)?;
+  runs(kontur, &TASKS)
+}
+
+/// The Autopilot run in a project that does not allow Autopilot: *Manual · project*.
+pub fn project(kontur: &mut Kontur) -> Result<(), SeedError> {
+  kontur.db.save_allow_autopilot(AllowAutopilot::OFF)?;
+  runs(
+    kontur,
+    &[(
+      "Retry failed webhook deliveries",
+      Mode::Autopilot,
+      "run in Manual by the project",
+    )],
+  )
+}
+
+fn runs(kontur: &mut Kontur, tasks: &[Seeded]) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   let pipeline = &catalogue.feature_delivery;
-  for (index, (title, asked, state)) in TASKS.into_iter().enumerate() {
-    let minutes = i64::try_from(TASKS.len() - index).expect("a short list") * 30;
+  for (index, &(title, mode, state)) in tasks.iter().enumerate() {
+    let minutes = i64::try_from(tasks.len() - index).expect("a short list") * 30;
     let (created, started) = (kontur.ago(minutes + 20), kontur.ago(minutes));
     let mut task = kontur.task((title, title, &CRITERIA), Some(pipeline), created)?;
     let (run, invocation) = at_work(kontur, &mut task, pipeline, started)?;
     kontur.seeded(&task, state);
-    let mut waits = false;
-    for (call, (command, answered)) in asked.iter().enumerate() {
-      // A minute into the agent's turn, then 15 s apart.
-      let offset = 60_000 + i64::try_from(call).expect("a short list") * 15_000;
-      let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + offset);
-      let request = request((&run, &invocation), (call, command), at);
-      kontur.db.request_tool_approval(&request)?;
-      waits |= answer(kontur, &request, *answered)?;
+    if matches!(mode, Mode::Profile) {
+      continue;
     }
-    hold(kontur, run, (&invocation, waits))?;
+    launched_in_autopilot(kontur, &invocation)?;
+    if matches!(mode, Mode::SwitchedByYou) {
+      // Five minutes into the agent's turn.
+      let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 5 * 60_000);
+      kontur.db.switch_run_to_manual(
+        run.id(),
+        ManualSwitch {
+          at,
+          by: Answerer::Person,
+        },
+      )?;
+    }
   }
   Ok(())
 }
 
-/// The `call`-th request of `invocation` to run `command`, asked at `at`.
-fn request(
-  (run, invocation): (&Run, &Invocation),
-  (call, command): (usize, &str),
-  at: Timestamp,
-) -> PendingToolApproval {
-  PendingToolApproval {
-    id: format!("{}:call_{}", invocation.id, call + 1),
-    run: run.id(),
-    execution: invocation.execution,
-    invocation: invocation.id,
-    agent: AGENT.to_owned(),
-    command: true,
-    scope: None,
-    server: "command".to_owned(),
-    action: command.to_owned(),
-    target: None,
-    requested_at: at,
-    native: None,
-  }
-}
-
-/// Records how the run's mode answered `request`; whether it waits for the person.
-fn answer(kontur: &mut Kontur, request: &PendingToolApproval, answered: Answered) -> Result<bool, SeedError> {
-  let run = request.run;
-  match answered {
-    Answered::Approved(kind, reason) => {
-      let decided_by = match kind {
-        AnswerKind::Profile => DecidedBy::Permissions,
-        AnswerKind::Reviewer => DecidedBy::Reviewer,
-        AnswerKind::Autopilot | AnswerKind::Person => DecidedBy::AutoApproved,
-      };
-      let decided = Timestamp::from_unix_millis(request.requested_at.unix_millis() + 2_000);
-      kontur.db.claim_tool_approval(run, &request.id, decided_by, decided)?;
-      let answer = reason.map_or_else(|| RequestAnswer::by(kind), RequestAnswer::reviewer);
-      kontur.db.record_request_answer(run, &request.id, &answer)?;
-      kontur
-        .db
-        .delivered_tool_approval(run, &request.id, ToolApprovalDecision::Approved)?;
-      Ok(false)
-    }
-    Answered::Came(reason, detail) => {
-      let came = CameToPerson {
-        reason,
-        detail: detail.map(str::to_owned),
-      };
-      kontur.db.record_came_to_person(run, &request.id, Some(&came))?;
-      Ok(true)
-    }
-  }
+/// `invocation`'s agent started with a profile set to Autopilot.
+fn launched_in_autopilot(kontur: &mut Kontur, invocation: &Invocation) -> Result<(), SeedError> {
+  let mut permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AskBefore,
+    NetworkAccess::Off,
+  );
+  permissions.set_approval_mode(ApprovalMode::Autopilot);
+  kontur.db.save_invocation_permissions(
+    invocation.id,
+    &LaunchPermissions::new(permissions, OutsideCommands::PermissionPrompt),
+  )?;
+  Ok(())
 }

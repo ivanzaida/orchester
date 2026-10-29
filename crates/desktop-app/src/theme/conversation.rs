@@ -26,15 +26,22 @@ pub enum ConversationText {
   /// 13.5/600 `text_primary`: what an empty, loading or failed chat says (`AGhHg`, `SmQgm`, `cqjZ2` in
   /// `B67XdS`).
   StateTitle,
+  /// 12 `text_secondary`, 1.3: what a quiet approval row says first (`Lead` `s2VVp` in `Event · switched to Manual`
+  /// `ARwiU`).
+  ApprovalLead,
+  /// 12 `text_muted`, 1.4: who and when, after it (`Detail` `HBTWT` in `ARwiU`).
+  ApprovalDetail,
 }
 
 impl ConversationText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 7] = [
     Self::Name,
     Self::Divider,
     Self::ProblemDetail,
     Self::ResultTitle,
     Self::StateTitle,
+    Self::ApprovalLead,
+    Self::ApprovalDetail,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -48,6 +55,8 @@ impl ConversationText {
       Self::ProblemDetail => "conversation_problem_detail",
       Self::ResultTitle => "conversation_result_title",
       Self::StateTitle => "conversation_state_title",
+      Self::ApprovalLead => "conversation_approval_lead",
+      Self::ApprovalDetail => "conversation_approval_detail",
     }
   }
 
@@ -58,6 +67,8 @@ impl ConversationText {
       Self::ProblemDetail => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
       Self::ResultTitle => style(12.5, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
       Self::StateTitle => style(13.5, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
+      Self::ApprovalLead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::ApprovalDetail => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
     }
   }
 }
@@ -73,10 +84,19 @@ pub enum ConversationSpacing {
   ProblemRow,
   /// 9: the run state chip's sides (`Run state · Following live` `AQbG3`).
   StateChip,
+  /// 36: a quiet approval row's icon, in past a message's 24 avatar and its 12 gap (`Icon` `it7oR` in `Event ·
+  /// switched to Manual` `wE0eF`, 04b `p6tXIO`).
+  ApprovalRow,
 }
 
 impl ConversationSpacing {
-  pub const ALL: [Self; 4] = [Self::ToolRows, Self::Mark, Self::ProblemRow, Self::StateChip];
+  pub const ALL: [Self; 5] = [
+    Self::ToolRows,
+    Self::Mark,
+    Self::ProblemRow,
+    Self::StateChip,
+    Self::ApprovalRow,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -88,6 +108,7 @@ impl ConversationSpacing {
       Self::Mark => "conversation_mark",
       Self::ProblemRow => "conversation_problem_row",
       Self::StateChip => "conversation_state_chip",
+      Self::ApprovalRow => "conversation_approval_row",
     }
   }
 
@@ -96,6 +117,7 @@ impl ConversationSpacing {
       Self::ToolRows => 20.0,
       Self::Mark => 29.0,
       Self::ProblemRow | Self::StateChip => 9.0,
+      Self::ApprovalRow => 36.0,
     }
   }
 }

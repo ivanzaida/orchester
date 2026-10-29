@@ -289,8 +289,9 @@ fn shared_configuration_migration_runs_forward() {
     .expect("version");
   drop(db);
 
-  // Before shared configuration's migration, which ORC-346's request answers follow.
-  let old = copied_at_version(&repo.path().join(".orchester").join("orchester.db"), current - 2);
+  // Before shared configuration's migration, which ORC-346's request answers and the run's switch to Manual
+  // (ORC-353) follow.
+  let old = copied_at_version(&repo.path().join(".orchester").join("orchester.db"), current - 3);
   let mut db = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(db.resource_sharing(builder).expect("local"), None);
   assert_eq!(
