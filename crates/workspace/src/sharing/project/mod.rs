@@ -17,7 +17,7 @@ pub mod lookup;
 mod make_local;
 mod members;
 mod modules;
-mod organization;
+pub(super) mod organization;
 mod share;
 pub mod share_task;
 pub mod state;

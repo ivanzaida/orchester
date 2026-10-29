@@ -169,7 +169,7 @@ impl Servers {
 /// The shared projects on this computer whose folder can be read, whichever account's: each keeps in step with its
 /// server while another account is signed in, through its own account's servers only, so a checkout another account
 /// linked and this one opened later reaches no server of that other account's.
-pub(super) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
+pub(in crate::sharing) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
   let owners = match servers.inner.workspace.server_owners() {
     Ok(owners) => owners,
     Err(error) => {
