@@ -204,8 +204,9 @@ impl AgentsScreen {
         frame(ctx, project, head, body)
       }
       Shown::New(_) | Shown::Edit(..) => {
+        let head = list::reading_head(ctx, &self.nav);
         let body = reading::profile(ctx, &self.nav);
-        frame(ctx, project, Head::default(), body)
+        frame(ctx, project, head, body)
       }
     }
   }

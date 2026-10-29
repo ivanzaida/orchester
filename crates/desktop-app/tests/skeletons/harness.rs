@@ -60,6 +60,16 @@ impl Held {
     self.window.tree.get_element_by_id(id).is_some()
   }
 
+  pub fn click(&mut self, id: &str) {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .unwrap_or_else(|| panic!("{id} exists"))
+      .click();
+    self.window.pass();
+  }
+
   pub fn bounds(&mut self, id: &str) -> ElementRect {
     self
       .window

@@ -1,6 +1,6 @@
 //! A module's page while it is read (`06 · Module · loading` `e0ZdI` in `Modules · redesign` `oEELJ`): the crumb's way
-//! back, New task in module, the tab names, the section headings and the property names stay real; the module's name,
-//! its state and facts, *More actions*, its description, its tasks and the burndown line are bones in the Summary's own
+//! back, New task in module, *More actions*, the tab names, the section headings and the property names stay real; the
+//! module's name, its state and facts, its description, its tasks and the burndown line are bones in the Summary's own
 //! geometry, the lower rows fading. *Reading the module…* (`modules.page.reading`) names it.
 
 use lurq::{
@@ -23,18 +23,18 @@ use crate::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
+    icon_button::IconButton,
     pressable::opening,
     skeleton::{self, Skeleton, bone, fading},
     tabs::{PageTab, page_tabs},
   },
 };
 
-/// The name's bone and the facts' (`e0ZdI`), the state chip's, the crumb's, and *More actions*' square.
+/// The name's bone and the facts' (`e0ZdI`), the state chip's and the crumb's.
 const NAME: f32 = 218.0;
 const CHIP: (f32, f32) = (48.0, 20.0);
 const FACTS: f32 = 434.0;
 const CRUMB: f32 = 88.0;
-const MORE: f32 = 28.0;
 /// The tasks' lines: a group head's label, or a task's key and title.
 const TASKS: [(bool, f32); 6] = [
   (true, 76.0),
@@ -70,11 +70,13 @@ pub(super) fn page(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), tab:
       skeleton::line(ctx, TypographyStyle::Description, FACTS).into(),
     ],
   );
+  // *More actions* stays real; it waits for the module.
+  let more = IconButton::new("module-more-reading", Icon::Ellipsis, ctx.t("modules.page.more")).render(ctx);
   let top = header::header(header::Header {
     id: "module-header",
     back: Some(back(ctx, project)),
     title: skeleton::line(ctx, TypographyStyle::Heading, NAME).into(),
-    actions: vec![new_task.into(), skeleton::button(MORE).into()],
+    actions: vec![new_task.into(), more],
     status,
     tabs,
   });
@@ -114,12 +116,16 @@ fn back(ctx: &mut Ctx, project: ProjectId) -> Element {
 /// The Summary's column: Description and its lines, Tasks with its count and its rows, and the burndown line.
 fn column(ctx: &Ctx) -> Column {
   let head = |key: &str| Text::new(&ctx.t(key)).variant(TaskText::SectionTitle.role()).nowrap();
+  // The description's lines touch, as the lines of one wrapped text do.
   let description = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
     .child(head("modules.summary.description"))
-    .child(skeleton::line(ctx, TaskText::Brief.role(), 828.0))
-    .child(skeleton::line(ctx, TaskText::Brief.role(), 566.0));
+    .child(
+      Column::new()
+        .child(skeleton::line(ctx, TaskText::Brief.role(), 828.0))
+        .child(skeleton::line(ctx, TaskText::Brief.role(), 566.0)),
+    );
   let rows = TASKS
     .iter()
     .map(|(group, title)| {

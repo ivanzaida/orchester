@@ -39,6 +39,11 @@ fn skeletons_review_shows_the_merge_queues_and_the_pull_requests_bones_after_a_m
   assert!(held.exists("review-hub-title"), "the hub's title stays real");
   held.page(ProjectPage::PullRequests(Default::default()));
   held.skeleton("pull-requests-loading");
+  assert!(held.exists("pull-requests-refresh"), "Refresh stays real");
+  assert!(
+    held.exists("pull-requests-repository-loading-bones") && held.exists("pull-requests-sync-status-loading-bones"),
+    "the repository and the sync line are bones in their own lines"
+  );
 }
 
 #[test]
@@ -85,6 +90,19 @@ fn skeletons_agents_shows_the_profiles_bones_after_a_moment() {
   held.page(ProjectPage::Agents);
   held.skeleton("agents-loading");
   assert!(held.exists("agents-hub-tab-profiles"), "the hub's tabs stay real");
+}
+
+#[test]
+fn skeletons_agents_profile_keeps_the_heads_buttons() {
+  let mut held = Held::new();
+  held.page(ProjectPage::Agents);
+  held.skeleton("agents-loading");
+  held.click("agents-new");
+  held.until("agents-reading-page");
+  assert!(
+    held.exists("agents-import") && held.exists("agents-new"),
+    "Import agents and New agent stay real over a profile's bones"
+  );
 }
 
 #[test]

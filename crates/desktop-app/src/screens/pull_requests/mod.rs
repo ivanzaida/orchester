@@ -142,16 +142,19 @@ impl Component for PullRequestsScreen {
     let page = frame();
     let Some(list) = list else {
       // Until the stored list is known the heading, the tabs and the query stand over the rows' bones.
-      let page = page.child(header::header(ctx, None, &Shown::Syncing, now));
       return match loaded.error {
         Some(error) if !pending => {
           let reread = self.reread.clone();
-          page.child(states::failed(ctx, &error, move || reread.update(|count| *count += 1)))
+          page
+            .child(header::header(ctx, None, &Shown::Syncing, now))
+            .child(states::failed(ctx, &error, move || reread.update(|count| *count += 1)))
         }
         _ => {
           let id = project.open.project.id();
+          let header = header::reading(ctx);
           let query = query::query(ctx, &self.choices);
           page
+            .child(header)
             .child(query::tabs(ctx, id, (tab, true), None))
             .child(query)
             .child(states::reading(ctx))
