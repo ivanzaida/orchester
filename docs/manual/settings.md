@@ -113,7 +113,7 @@ The Chromium-based browser agents' pages open in, headless, in Orchester's own p
 | Browser program | **Browser** | The one found | The browser found on this computer (Windows: Microsoft Edge, then Google Chrome; macOS: Google Chrome, Microsoft Edge, Brave, Chromium), or the one you chose. None found: a notice says what was looked for and where, with *Look again*, and agents' browser tools answer that the browser is unavailable. |
 | | **Program** | — | Its path, and *Choose another program…* (*Choose a program…* when none is found): any Chromium-based browser's program (Edge, Chrome, Brave or Chromium; on macOS its app may be chosen). Anything else is refused under the row with the reason, and nothing changes. The runner starts the program chosen here. |
 | | **Browser profiles** | — | The folder holding one profile per project, beside the application database, with *Copy*. |
-| Browser window | **Open the Browser window when an agent starts browsing** | On | Opens the window without taking focus. The window is not in this version yet: the switch keeps your choice for it. |
+| Browser window | **Open the Browser window when an agent starts browsing** | On | Opens the window and brings it to the front. The window is not in this version yet: the switch keeps your choice for it. |
 
 ### 1.6 Orchester Cloud
 

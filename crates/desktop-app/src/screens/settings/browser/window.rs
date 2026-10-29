@@ -1,7 +1,8 @@
 //! *Browser window* (`Browser window` `GoSUF` in `j3Lre`): *Open the Browser window when an agent starts browsing*,
-//! on until a person turns it off (the person's decision 2026-10-29; the frame draws it off). The Browser window is not
-//! in this version yet, so the switch only keeps the choice for it, as the group's note says. A change shows at once
-//! and is saved off the UI thread; one that was not saved says why under the row.
+//! on until a person turns it off (the person's decision 2026-10-29; the frame draws it off). Its hint says the window
+//! takes focus (decision 15 in `docs/design/browser.md`; the frame's hint predates it). The Browser window is not in
+//! this version yet, so the switch only keeps the choice for it, as the group's note says. A change shows at once and
+//! is saved off the UI thread; one that was not saved says why under the row.
 
 use lurq::{
   app::{

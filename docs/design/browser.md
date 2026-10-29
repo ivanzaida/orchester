@@ -188,8 +188,10 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   window will say the same, and every browser tool answers `browser_unavailable` with that reason (no silent gap,
   `AGENTS.md` rule 0). The section also shows the folder of the browser profiles with Copy, and the switch *Open the
   Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29; decision 14), the
-  application setting `app_settings.browser_window_opens_itself` the window's rule reads. Until the window is built,
-  the switch keeps the choice only, as the note under it says.
+  application setting `app_settings.browser_window_opens_itself` the window's rule reads. Its hint says the window
+  *opens and takes focus*, after decision 15; `j3Lre` and `NZECi` were drawn before it with *It opens without taking
+  focus*, a deliberate departure. Until the window is built, the switch keeps the choice only, as the note under it
+  says.
 
 ### Starting it and connecting
 
