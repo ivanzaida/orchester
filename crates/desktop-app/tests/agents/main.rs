@@ -1,6 +1,7 @@
 //! Agents in the real headless window, with its own project and database.
 mod actions;
 mod active;
+mod approval_modes;
 mod approvals;
 mod failure;
 mod harness;

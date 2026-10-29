@@ -1,6 +1,6 @@
 //! Connection enforcement beside a profile's page (`Connection enforcement` `Lj9fe` in 01c): the CLI and when it was
-//! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, Approvals and the repository's
-//! agent files too, and that the limits apply to new runs after publishing.
+//! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, the approval mode and the
+//! repository's agent files too, and that the limits apply to new runs after publishing.
 use std::sync::Arc;
 
 use lurq::{
@@ -10,9 +10,9 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  connection::{AgentConnection, CheckResult, invocation::Platform},
+  connection::{AgentConnection, AgentProvider, CheckResult, invocation::Platform},
   permission::{
-    AgentPermissions, RepositoryAccess,
+    AgentPermissions, ApprovalMode, AutopilotMechanism, AutopilotSupport, CantEnforce, RepositoryAccess,
     capability::{PermissionOption, Support, support},
   },
 };
@@ -92,25 +92,27 @@ fn rows(
     } else {
       setting(ctx, connection, permissions, option)
     };
-    rows.push(row(ctx, key, &mechanism, State::Enforced(enforced)));
+    rows.push(row(ctx, key, &ctx.t(key), &mechanism, State::Enforced(enforced)));
   }
   let available = !connection.provider().is_native();
-  let unavailable = "agents.nativeUnavailable";
   rows.push(row(
     ctx,
     "agents.mcp",
-    &ctx.t(if available { "agents.mcpLoading" } else { unavailable }),
+    &ctx.t("agents.mcp"),
+    &ctx.t(if available {
+      "agents.mcpLoading"
+    } else {
+      "agents.nativeUnavailable"
+    }),
     State::Enforced(available),
   ));
+  let (mode, enforced) = approval_mode(ctx, connection, permissions.approval_mode());
   rows.push(row(
     ctx,
     "agents.approvals",
-    &ctx.t(if available {
-      "agents.approvalMechanism"
-    } else {
-      unavailable
-    }),
-    State::Enforced(available),
+    &ctx.t("agents.enforcement.approvalMode.title"),
+    &mode,
+    State::Enforced(enforced),
   ));
   let files = ctx.t(if listed.agent_files.is_on() {
     "agents.agentFilesOn"
@@ -120,10 +122,45 @@ fn rows(
   rows.push(row(
     ctx,
     "agents.agentFiles",
+    &ctx.t("agents.agentFiles"),
     &ctx.t("agents.repositoryFilesMechanism"),
     State::Value(files),
   ));
   rows
+}
+
+/// The Approval mode row (07, 07b, 07d `J0MveH`): the profile's mode and how its connection's CLI hands requests to
+/// Orchester in it, and whether it can. A CLI that can't hand them runs Autopilot as Manual, and says why
+/// (`docs/design/approval-modes.md` › Enforcement); Manual starts as before on every CLI.
+fn approval_mode(ctx: &Ctx, connection: &AgentConnection, mode: ApprovalMode) -> (Arc<str>, bool) {
+  let cli = || {
+    ctx.t(match connection.provider() {
+      AgentProvider::CodexCli => "agents.enforcement.approvalMode.cli.codex",
+      _ => "agents.enforcement.approvalMode.cli.claudeCode",
+    })
+  };
+  let (how, enforced) = match (mode, connection.autopilot_support()) {
+    (ApprovalMode::Manual, _) => (ctx.t("agents.enforcement.approvalMode.manual"), true),
+    (ApprovalMode::Autopilot, AutopilotSupport::Enforced(AutopilotMechanism::Orchester)) => {
+      (ctx.t("agents.enforcement.approvalMode.native"), true)
+    }
+    (ApprovalMode::Autopilot, AutopilotSupport::Enforced(_)) => (
+      ctx.t_args("agents.enforcement.approvalMode.autopilot", [("cli", cli())]),
+      true,
+    ),
+    (ApprovalMode::Autopilot, AutopilotSupport::CantEnforce(why)) => {
+      let key = match why {
+        CantEnforce::CliTooOld { .. } => "agents.enforcement.approvalMode.cantEnforce",
+        CantEnforce::VersionUnknown { .. } => "agents.enforcement.approvalMode.versionUnknown",
+      };
+      (ctx.t_args(key, [("cli", cli())]), false)
+    }
+  };
+  let line = ctx.t_args(
+    "agents.enforcement.approvalMode.line",
+    [("mode", super::permissions::mode_name(ctx, mode)), ("how", how)],
+  );
+  (line, enforced)
 }
 
 /// `Claude Code · 2.1.173 · checked 16:40`.
@@ -200,7 +237,8 @@ enum State {
   Value(Arc<str>),
 }
 
-fn row(ctx: &Ctx, key: &str, mechanism: &str, state: State) -> Element {
+/// A row named by `key` (its id), saying `label`, what enforces it and `state` at its end.
+fn row(ctx: &Ctx, key: &str, label: &str, mechanism: &str, state: State) -> Element {
   let (end, color) = match state {
     State::Enforced(true) => (ctx.t("agents.enforcedState"), PaletteColor::Success),
     State::Enforced(false) => (ctx.t("agents.enforcementUnavailable"), PaletteColor::Warning),
@@ -218,7 +256,7 @@ fn row(ctx: &Ctx, key: &str, mechanism: &str, state: State) -> Element {
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
-        .child(Text::new(&ctx.t(key)).variant(ExtraTypography::Strong.role()))
+        .child(Text::new(label).variant(ExtraTypography::Strong.role()))
         .child(
           Text::new(mechanism)
             .variant(HubText::Hint.role())
