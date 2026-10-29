@@ -112,7 +112,7 @@ impl Worker {
       }));
     }
     // Read again at each request: disallowing Autopilot, or switching the run to Manual, stops it from the next one.
-    let autopilot = watch.db.run_approval_mode(approval.run)?.is_autopilot();
+    let autopilot = watch.approval_mode()?.is_autopilot();
     // The project's *Approved for every run* rules answer only in Manual (`docs/design/approval-modes.md`).
     if !autopilot && let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, &subject) {
       return Ok(Some(Settled {

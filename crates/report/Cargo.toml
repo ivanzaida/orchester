@@ -9,5 +9,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The client options the app and the runner report with (`client`): the panic hook, the stack trace, the OS and CPU
+# contexts, and the loaded modules with their debug IDs (`debug-images`), by which GlitchTip matches a report's raw
+# frames to the uploaded PDBs. Without a transport: each program that sends turns on its own.
+client = ["sentry/backtrace", "sentry/contexts", "sentry/debug-images", "sentry/panic"]
+
 [dependencies]
 sentry.workspace = true

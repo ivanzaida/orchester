@@ -28,9 +28,9 @@ use orchester_core::{
   id::{AgentAccountId, ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
   orchester_tools::ProjectTool,
-  permission::category::CommandScope,
+  permission::{ApprovalMode, category::CommandScope},
   question::QuestionRequest,
-  run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
+  run::{Answerer, ApprovalAnswer, EffectiveMode, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
@@ -287,6 +287,17 @@ impl Watch {
       idle_continuations: 0,
       plan_reached: false,
     })
+  }
+
+  /// The mode this agent's requests are answered in now (`docs/design/approval-modes.md`): by its profile's approval
+  /// mode as it started, the project's *Allow Autopilot* and its run's switch to Manual, read again at each request.
+  pub(super) fn approval_mode(&self) -> Result<EffectiveMode, StoreError> {
+    let profile = self
+      .invocation
+      .permissions
+      .as_ref()
+      .map_or(ApprovalMode::Manual, |launch| launch.permissions().approval_mode());
+    self.db.approval_mode(self.invocation.run, profile)
   }
 
   /// Ready once a call the relay holds for a person can no longer be answered: a Claude Code call waiting

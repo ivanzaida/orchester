@@ -139,13 +139,17 @@ impl Component for ModuleField {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FieldProps>().clone();
-    // The task as read again wins: what was stored meanwhile is shown.
-    let mut stored = self.stored.lock();
-    if *stored != props.current {
+    // The task as read again wins: what was stored meanwhile is shown. The lock is released before `set`, whose
+    // watcher reads `stored` at once: holding it there deadlocked the window when the module changed elsewhere.
+    let changed = {
+      let mut stored = self.stored.lock();
+      let changed = *stored != props.current;
       *stored = props.current;
+      changed
+    };
+    if changed {
       self.chosen.set(ModuleChoice(props.current));
     }
-    drop(stored);
     let mut options = vec![SelectOption::new(ModuleChoice(None), ctx.t("task.module.none"))];
     options.extend(
       props

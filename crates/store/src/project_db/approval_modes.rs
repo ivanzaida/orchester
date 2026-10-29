@@ -1,9 +1,11 @@
 //! Approval modes (`orchester_core::run::EffectiveMode`): the project's *Allow Autopilot for agents in this project*
-//! and each run's switch to Manual, which the runner reads at each request.
+//! and each run's switch to Manual, which the runner reads at each request with its step's profile mode.
 
 use orchester_core::{
   id::RunId,
-  run::{AllowAutopilot, EffectiveMode, ProfileMode},
+  permission::ApprovalMode,
+  run::{AllowAutopilot, EffectiveMode},
+  store::ActivityStore,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -59,13 +61,24 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// The mode `run` answers its agents' requests in now. Agent profiles have no approval mode yet (ORC-343 adds it),
-  /// so each counts as Manual until then.
-  pub fn run_approval_mode(&self, run: RunId) -> Result<EffectiveMode, StoreError> {
+  /// The mode a step of `run` whose profile asks for `profile` answers its agent's requests in now.
+  pub fn approval_mode(&self, run: RunId, profile: ApprovalMode) -> Result<EffectiveMode, StoreError> {
     Ok(EffectiveMode::of(
-      ProfileMode::Manual,
+      profile,
       self.allow_autopilot()?,
       self.run_switched_to_manual(run)?,
     ))
+  }
+
+  /// The mode `run` answers its agents' requests in now, by the profile its latest agent started with; Manual, by the
+  /// profile, before any agent started.
+  pub fn run_approval_mode(&self, run: RunId) -> Result<EffectiveMode, StoreError> {
+    let profile = self
+      .invocations(run)?
+      .iter()
+      .rev()
+      .find_map(|invocation| invocation.permissions.as_ref())
+      .map_or(ApprovalMode::Manual, |launch| launch.permissions().approval_mode());
+    self.approval_mode(run, profile)
   }
 }

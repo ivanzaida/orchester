@@ -132,6 +132,7 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<ReadRun, ToolErr
     entries: &transcript,
     conversation: &conversation,
     pending: &requests.pending,
+    reviewing: &requests.reviewing,
     decided: &requests.decided,
     questions: &requests.questions,
     merge: detail.merge.as_ref(),

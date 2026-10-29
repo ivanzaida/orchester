@@ -250,7 +250,7 @@ fn writable_folders_are_stored_only_when_there_are_some() {
   let json = serde_json::to_string(&some).expect("serializes");
   assert!(json.contains(r#""writable_folders":[".orchester/target"]"#), "{json}");
   assert_eq!(serde_json::from_str::<AgentPermissions>(&json).expect("reads"), some);
-  assert_eq!(AgentProfile::SCHEMA, 4);
+  assert_eq!(AgentProfile::SCHEMA, 5);
   let body = serde_json::json!({"any": "schema 3 body"});
   assert_eq!(AgentProfile::upgrade(3, body.clone()), Some(body));
 }

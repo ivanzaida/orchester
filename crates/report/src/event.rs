@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
 use sentry::protocol::{Context, DeviceContext, Event, Map, OsContext};
 
@@ -61,6 +61,7 @@ impl ReportScrubber {
         .map(|thread| self.thread(thread))
         .collect::<Vec<_>>()
         .into(),
+      debug_meta: Cow::Owned(self.debug_meta(event.debug_meta.into_owned())),
       contexts: system_contexts(event.contexts),
       tags: self.tags(event.tags),
       ..Event::default()

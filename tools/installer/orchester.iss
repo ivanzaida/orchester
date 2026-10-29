@@ -71,7 +71,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; The app first: if it still runs although the check below let the install go on, its file is the first that cannot
-; be replaced, before the runner is.
+; be replaced, before the runner is. Each program is named alone, never by a wildcard: the PDBs the release build
+; writes beside them (orchester.pdb, orchester_runner.pdb) are GlitchTip's, to resolve error reports, and are never
+; installed.
 Source: "{#ProgramDir}\orchester.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProgramDir}\orchester-runner.exe"; DestDir: "{app}"; Flags: ignoreversion
 

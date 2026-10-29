@@ -1,15 +1,17 @@
 //! Starting a project's runner against `orchester-fake-runner`: a late runner is waited for, a
-//! runner that fails to start is started once more, and a held project is not.
+//! runner that fails to start is started once more, and a held project is not. Each start tells
+//! the runner whether it sends error reports.
 //!
 //! `cargo test -p orchester-ipc --features test-runner --test runner_start runner_start_`
 
 use std::{
+  ffi::OsStr,
   fs, io,
   path::Path,
   sync::{Arc, OnceLock},
 };
 
-use orchester_ipc::{LaunchError, RunnerClient};
+use orchester_ipc::{ErrorReports, LaunchError, RunnerClient};
 use parking_lot::Mutex;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::MakeWriter;
@@ -62,11 +64,16 @@ fn project(plan: &str) -> TempDir {
   project
 }
 
-fn starts(project: &Path) -> usize {
+fn start_lines(project: &Path) -> Vec<String> {
   fs::read_to_string(project.join("starts"))
     .expect("the fake runner notes every start")
     .lines()
-    .count()
+    .map(str::to_owned)
+    .collect()
+}
+
+fn starts(project: &Path) -> usize {
+  start_lines(project).len()
 }
 
 fn retry_warnings(project: &Path) -> usize {
@@ -79,7 +86,41 @@ fn retry_warnings(project: &Path) -> usize {
 }
 
 async fn launch(project: &Path) -> Result<RunnerClient, LaunchError> {
-  RunnerClient::launch(Path::new(FAKE_RUNNER), project).await
+  RunnerClient::launch(Path::new(FAKE_RUNNER), project, None).await
+}
+
+#[tokio::test]
+async fn runner_start_tells_the_runner_whether_it_sends_error_reports() {
+  let reporting = project("exit-first");
+  let reports = ErrorReports::new("qa", "orchester@1.2.3").expect("both are text");
+
+  let client = RunnerClient::launch(Path::new(FAKE_RUNNER), reporting.path(), Some(&reports)).await;
+
+  assert!(client.is_ok(), "{:?}", client.err());
+  assert_eq!(
+    start_lines(reporting.path()),
+    ["start qa orchester@1.2.3"; 2],
+    "the second start is told too"
+  );
+
+  let silent = project("delay 0");
+  let client = launch(silent.path()).await;
+  assert!(client.is_ok(), "{:?}", client.err());
+  assert_eq!(start_lines(silent.path()), ["start"]);
+}
+
+#[test]
+fn runner_start_reports_need_an_environment_and_a_release() {
+  let qa = Some(OsStr::new("qa"));
+  let release = Some(OsStr::new("orchester@1.2.3"));
+  assert_eq!(
+    ErrorReports::from_variables(qa, release),
+    ErrorReports::new("qa", "orchester@1.2.3")
+  );
+  assert_eq!(ErrorReports::from_variables(None, release), None);
+  assert_eq!(ErrorReports::from_variables(qa, None), None);
+  assert_eq!(ErrorReports::from_variables(Some(OsStr::new("")), release), None);
+  assert_eq!(ErrorReports::new("qa", ""), None);
 }
 
 /// Slow by design: the runner answers after eleven seconds.
@@ -131,7 +172,7 @@ async fn runner_start_does_not_retry_a_project_another_runner_holds() {
 async fn runner_start_does_not_retry_a_missing_program() {
   let project = project("exit");
 
-  let error = RunnerClient::launch(&project.path().join("missing-runner"), project.path())
+  let error = RunnerClient::launch(&project.path().join("missing-runner"), project.path(), None)
     .await
     .err();
 

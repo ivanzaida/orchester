@@ -22,6 +22,8 @@ pub enum Widening {
   ToolCallsUnasked,
   /// Approving automatically where a person was asked.
   AutoApprove,
+  /// Autopilot where the approval mode was Manual ([`super::ApprovalMode::is_stricter_than`]).
+  Autopilot,
 }
 
 impl AgentPermissions {
@@ -53,6 +55,10 @@ impl AgentPermissions {
         Widening::ToolCallsUnasked,
       ),
       (self.auto_approve && !base.auto_approve, Widening::AutoApprove),
+      (
+        base.approval_mode.is_stricter_than(self.approval_mode),
+        Widening::Autopilot,
+      ),
     ]
     .into_iter()
     .filter_map(|(widens, widening)| widens.then_some(widening))

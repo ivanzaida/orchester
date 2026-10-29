@@ -11,8 +11,10 @@ add.
 
 ## When reports are sent
 
-Today only the desktop app sends reports, of its panics and of the ERROR lines of its log, to the GlitchTip project
-`desktop` (`orchester_app::error_reports`, `orchester_app::app_log::error_reports`). The runner sends none yet.
+The desktop app and its runners send reports, of their panics and of the ERROR lines of their logs, to the GlitchTip
+project `desktop` (`orchester_app::error_reports`, `orchester_app::app_log::error_reports`,
+`orchester_runner::error_reports`), with the same client options (`orchester_report::client`). The tag `process` says
+which sent it: `app` or `runner`.
 
 - **Only ERROR lines.** A WARN, INFO or lower line sends nothing and is no breadcrumb either. The app logs at WARN
   what a person causes or expects (wrong input, a program that is not installed, a network that is down, a file with
@@ -28,17 +30,29 @@ Today only the desktop app sends reports, of its panics and of the ERROR lines o
 - **Only the installed app and QA copies.** The installed app reports as environment `production`. A QA copy that
   `tools/qa-app.ps1` starts reports as `qa`, and so does a release build started with `ORCHESTER_APP_MCP_DISCOVERY`.
   Other debug builds, `cargo run --release` and the tests never start the client.
+- **The runner reports only when the app says so.** The runner never reads `orchester.db`. While the app's own
+  client runs, every runner it starts gets the environment variables `ORCHESTER_ERROR_REPORTS` (the app's environment)
+  and `ORCHESTER_ERROR_REPORTS_RELEASE` (the app's release); a runner started without them sends nothing, and the app
+  removes them from a runner's environment when it does not report. A runner keeps what it was started with until it
+  exits. Debug builds of the runner, a QA copy's among them, and the tests never report.
 - **No other data.** The client sends no default personal data (`send_default_pii` is off), no traces and no
-  sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`.
-- **Sent before exit.** When the app exits, it waits up to two seconds for pending reports to leave. The panic is
-  still written to the app's log file.
+  sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`, for the runner's reports
+  too.
+- **Sent before exit.** When the app or a runner exits, it waits up to two seconds for pending reports to leave. The
+  panic is still written to the app's log file, and a runner's to its stderr; its log file and stderr stay as they
+  are.
 
 ## What a report carries
 
 - **What went wrong**: the error message and the type of the error (for a crash, `panic`).
 - **Where it happened**: the stack frames. Each frame keeps the function, the module, the source file and the line
   and column. A file inside the Orchester source tree is shown relative to it, for example
-  `crates/runner/src/main.rs`.
+  `crates/runner/src/main.rs`. Each frame also keeps the memory address of its instruction.
+- **Which program files were loaded** (debug images): for each, its file name without its folder (for example
+  `orchester.exe` or `ntdll.dll`), the file name of its debug file (`orchester.pdb`), its debug and code ids, and
+  where in memory it was loaded and how big it is. A release build's frames have no names on the person's computer,
+  because its PDB is not installed: GlitchTip finds the uploaded debug file by the image's debug id and turns each
+  frame's address into its function, file and line.
 - **How serious it was**: the level (error, fatal, warning and so on).
 - **Which Orchester**: the release (the version) and the environment (for example `production`).
 - **Which computer, roughly**: the operating system's name and version, and the CPU architecture (for example
@@ -57,11 +71,12 @@ Today only the desktop app sends reports, of its panics and of the ERROR lines o
 - Tags that Orchester did not set itself.
 - Everything else in the system details: the computer's model, memory, disks, time zone, OS build and kernel.
   Other details are removed too: the runtime, the app and the GPU.
-- From stack frames: the lines of source code around the failing line, variable values, memory addresses and the
-  path of the program file.
+- From stack frames: the lines of source code around the failing line, variable values, every memory address but
+  the instruction's, and the path of the program file.
+- From debug images: the folders of the program file and of its debug file, and the system SDK's details.
 - From the error: how it was caught and which thread it happened on. From threads: their names.
-- The list of loaded program files (debug images), installed modules, the SDK's details, the culprit, the
-  transaction, the logger name, and the parameters of a log message (its text is kept as the message).
+- Installed modules, the SDK's details, the culprit, the transaction, the logger name, and the parameters of a log
+  message (its text is kept as the message).
 
 ## What is changed in the text that stays
 

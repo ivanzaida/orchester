@@ -11,15 +11,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::Answerer;
-
-/// The approval mode an agent profile asks for (not a tool's [`crate::resource::ApprovalMode`]).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProfileMode {
-  Autopilot,
-  #[default]
-  Manual,
-}
+use crate::permission::ApprovalMode;
 
 /// The project's *Allow Autopilot for agents in this project*; off until a person turns it on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -73,12 +65,12 @@ pub enum EffectiveMode {
 impl EffectiveMode {
   /// The mode of a step whose profile asks for `profile`, in a project whose setting is `project`, in a run that was
   /// `switched_to_manual` or not.
-  pub const fn of(profile: ProfileMode, project: AllowAutopilot, switched_to_manual: bool) -> Self {
+  pub const fn of(profile: ApprovalMode, project: AllowAutopilot, switched_to_manual: bool) -> Self {
     match (profile, project.is_on(), switched_to_manual) {
-      (ProfileMode::Manual, _, _) => Self::Manual(ManualBecause::Profile),
-      (ProfileMode::Autopilot, false, _) => Self::Manual(ManualBecause::Project),
-      (ProfileMode::Autopilot, true, true) => Self::Manual(ManualBecause::Run),
-      (ProfileMode::Autopilot, true, false) => Self::Autopilot,
+      (ApprovalMode::Manual, _, _) => Self::Manual(ManualBecause::Profile),
+      (ApprovalMode::Autopilot, false, _) => Self::Manual(ManualBecause::Project),
+      (ApprovalMode::Autopilot, true, true) => Self::Manual(ManualBecause::Run),
+      (ApprovalMode::Autopilot, true, false) => Self::Autopilot,
     }
   }
 
@@ -90,6 +82,6 @@ impl EffectiveMode {
 /// The mode of a step whose profile and project keep their defaults: Manual, by the profile.
 impl Default for EffectiveMode {
   fn default() -> Self {
-    Self::of(ProfileMode::Manual, AllowAutopilot::OFF, false)
+    Self::of(ApprovalMode::Manual, AllowAutopilot::OFF, false)
   }
 }

@@ -54,6 +54,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub(crate) use self::git::own_commit;
 pub use self::{
   build_output::{BuildOutput, build_variables},
   part::{CommandPart, SimilarCommand},
@@ -532,9 +533,13 @@ fn worktree_program(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> 
 }
 
 /// A part Orchester could not read, with where its redirections go placed all the same: what it writes
-/// outside the worktree, or a credential location it names, still counts.
+/// outside the worktree, or a credential location it names, still counts. What its words may name is noted as
+/// what it touches, unless they were not read to the end.
 fn unknown(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
-  redirected(CommandPart::unknown(words), raw, placing)
+  let mut part = CommandPart::unknown(words);
+  part.unplaced = raw.unread;
+  placing.touch_words(&mut part);
+  redirected(part, raw, placing)
 }
 
 /// `part` with the files its redirections read and write placed.

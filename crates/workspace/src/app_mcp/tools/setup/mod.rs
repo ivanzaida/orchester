@@ -1,7 +1,7 @@
 //! The tools that set a project up as its configuration screens do: the project itself, agent
-//! connections, agent profiles, pipelines, instructions, skills and project settings, and the end of a run's
-//! work (its changes, and merging them, or completing a run that committed nothing). They are listed apart from
-//! the tools that drive work ([`super::listed`]), so only the app that serves them offers them; no tool takes or
+//! connections, agent profiles, pipelines, instructions, skills, services and stacks, and project settings, and the end
+//! of a run's work (its changes, and merging them, or completing a run that committed nothing). They are listed apart
+//! from the tools that drive work ([`super::listed`]), so only the app that serves them offers them; no tool takes or
 //! returns a secret's value.
 
 mod accounts;
@@ -24,8 +24,11 @@ mod profiles;
 mod project;
 mod project_tools;
 mod secrets;
+mod service_input;
+mod services;
 mod skill_input;
 mod skills;
+mod stacks;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -436,6 +439,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(project_tools::SPECS)
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
+    .chain(services::SPECS)
     .map(tool)
     .collect()
 }
@@ -456,6 +460,9 @@ pub async fn call(
   }
   if named(secrets::SPECS) {
     return Some(secrets::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(self::services::SPECS) {
+    return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
   }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;

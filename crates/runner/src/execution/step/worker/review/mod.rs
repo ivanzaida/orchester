@@ -77,7 +77,7 @@ impl Worker {
     approval: &PendingToolApproval,
     escalation: bool,
   ) -> Result<Option<Reviewing>, StoreError> {
-    if watch.db.run_approval_mode(approval.run)?.is_autopilot() {
+    if watch.approval_mode()?.is_autopilot() {
       return Ok(None);
     }
     // A project without a reviewer to ask leaves each request to the person at once, with nothing reviewed.
@@ -85,8 +85,6 @@ impl Worker {
     if matches!(setup, ReviewerSetup::Missing) {
       return Ok(None);
     }
-    // The agent's last messages may still wait to be written.
-    self.flush(watch)?;
     let subject = ApprovalSubject::of(approval, &self.scope);
     let permissions = watch
       .invocation
@@ -158,7 +156,7 @@ impl Worker {
     if !waiting || watch.stop.is_some() {
       return Ok(());
     }
-    if watch.db.run_approval_mode(run)?.is_autopilot() {
+    if watch.approval_mode()?.is_autopilot() {
       // The run turned Autopilot meanwhile, which has no reviewer: its result is dropped, and the person decides now.
       watch.db.set_reviewing(run, &id, false)?;
       return self.ask_person(watch);

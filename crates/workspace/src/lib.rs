@@ -6,6 +6,7 @@
 
 pub mod accounts;
 pub mod activity;
+pub mod agent_testing;
 pub mod agents;
 pub mod app_mcp;
 pub mod app_paths;

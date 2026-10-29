@@ -1,7 +1,10 @@
 use orchester_core::{
   id::{ClaimId, UserId},
   run::TaskPhase,
-  sharing::{CLAIM_STALE_MS, Claim, ClaimEnd, ClaimError, ClaimKind, TaskRevision, claim_end},
+  sharing::{
+    CLAIM_STALE_MS, Claim, ClaimEnd, ClaimError, ClaimKind, MemberRole, TaskRevision, claim_end,
+    may_change_configuration,
+  },
   time::Timestamp,
 };
 fn at(ms: i64) -> Timestamp {
@@ -128,6 +131,16 @@ fn s1b_revision_rejects_invalid_and_overflow() {
       .next()
       .is_err()
   );
+}
+
+/// Row 72: only the project's owner or the server's admin changes the team's configuration; a member reads it.
+#[test]
+fn configuration_is_changed_only_by_an_owner_or_the_server_admin() {
+  assert!(may_change_configuration(Some(MemberRole::Owner), false));
+  assert!(may_change_configuration(Some(MemberRole::Member), true));
+  assert!(may_change_configuration(None, true));
+  assert!(!may_change_configuration(Some(MemberRole::Member), false));
+  assert!(!may_change_configuration(None, false));
 }
 
 #[test]

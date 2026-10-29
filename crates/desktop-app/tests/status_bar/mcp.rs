@@ -49,11 +49,6 @@ fn status_mcp_item_names_the_address_or_why_agents_cannot_reach_it() {
   };
   let development = McpKind::Development { file: None };
   for (server, kind, words) in [
-    (
-      ServerState::Listening { port: port(47821) },
-      McpKind::Installation,
-      "MCP 127.0.0.1:47821",
-    ),
     (taken, McpKind::Installation, "MCP port 47821 taken"),
     (refused, McpKind::Installation, "MCP port 47821 refused"),
     (ServerState::Off, McpKind::Installation, "MCP off"),
@@ -68,11 +63,38 @@ fn status_mcp_item_names_the_address_or_why_agents_cannot_reach_it() {
     // Agents control the window only through a server that listens.
     assert_eq!(bar.texts("status-window-control").is_some(), listening, "{words}");
   }
+  // The installed app's server listening is quiet: the health dot's card names its address.
+  let mut quiet = Bar::of(with(
+    ServerState::Listening { port: port(47821) },
+    McpKind::Installation,
+  ));
+  assert!(quiet.texts("status-mcp").is_none());
+}
+
+#[test]
+fn status_health_card_names_the_address_and_the_agents_connected() {
+  let mut facts = with(ServerState::Listening { port: port(47821) }, McpKind::Installation);
+  facts.mcp.clients = vec![
+    client("claude-code", "2.1.296", true),
+    client("codex-mcp-client", "0.159.2", true),
+    client("gone", "1.0", false),
+  ];
+  let mut bar = Bar::of(facts);
+  let card = bar
+    .card("status-health", "status-health-card")
+    .expect("the card shows on hover");
+  assert!(
+    card.iter().any(|text| text == "127.0.0.1:47821 · 2 agents connected"),
+    "{card:?}"
+  );
 }
 
 #[test]
 fn status_mcp_popover_names_the_address_the_agents_and_window_control() {
-  let mut facts = with(ServerState::Listening { port: port(47821) }, McpKind::Installation);
+  let mut facts = with(
+    ServerState::Listening { port: port(47821) },
+    McpKind::Development { file: None },
+  );
   facts.mcp.clients = vec![
     client("claude-code", "2.1.296", true),
     client("codex-mcp-client", "0.159.2", true),
@@ -85,7 +107,6 @@ fn status_mcp_popover_names_the_address_the_agents_and_window_control() {
   for words in [
     "Orchester MCP server",
     "Listening on 127.0.0.1:47821",
-    "http://127.0.0.1:47821/mcp",
     "2 agents connected: claude-code, codex-mcp-client",
     "Agents can control this window",
     "On",

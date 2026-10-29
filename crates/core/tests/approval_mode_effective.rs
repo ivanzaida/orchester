@@ -5,10 +5,13 @@
 
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
-  permission::category::{CommandCategory, CommandScope},
+  permission::{
+    ApprovalMode,
+    category::{CommandCategory, CommandScope},
+  },
   run::{
     AllowAutopilot, Answerer, ApprovalSubject, AutoAsk, AutoVerdict, AutopilotPersonOnly, EffectiveMode,
-    ManualBecause, PendingToolApproval, ProfileMode, ToolReach, auto_approves, auto_verdict,
+    ManualBecause, PendingToolApproval, ToolReach, auto_approves, auto_verdict,
   },
   time::Timestamp,
 };
@@ -60,7 +63,7 @@ fn answered(subject: &ApprovalSubject, chosen: Option<bool>, mode: EffectiveMode
 
 #[test]
 fn approval_mode_effective_is_autopilot_only_when_profile_project_and_run_all_let_it() {
-  use ProfileMode::{Autopilot, Manual};
+  use ApprovalMode::{Autopilot, Manual};
   let (allowed, disallowed) = (AllowAutopilot::ON, AllowAutopilot::OFF);
   let cases = [
     (Autopilot, allowed, false, EffectiveMode::Autopilot),
@@ -81,7 +84,7 @@ fn approval_mode_effective_is_autopilot_only_when_profile_project_and_run_all_le
 
 #[test]
 fn approval_mode_effective_defaults_are_manual_by_the_profile_with_autopilot_disallowed() {
-  assert_eq!(ProfileMode::default(), ProfileMode::Manual);
+  assert_eq!(ApprovalMode::default(), ApprovalMode::Manual);
   assert_eq!(AllowAutopilot::default(), AllowAutopilot::OFF);
   assert!(!AllowAutopilot::default().is_on());
   assert_eq!(EffectiveMode::default(), EffectiveMode::Manual(ManualBecause::Profile));

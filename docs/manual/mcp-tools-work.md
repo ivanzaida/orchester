@@ -36,8 +36,9 @@ does. Returns the new state.
 ### `update_project_limits` — changes data
 
 Changes a project's limits, as Project settings › Runs › Limits does. Limits left out stay as they are; invalid ones are
-refused with why. There is **no maximum** for token or time limits; `null` means *no limit*. Returns the limits as
-saved.
+refused with why. There is **no maximum** for token or time limits; `null` means *no limit*. Raising the daily budget
+or setting it to `null` lets runs it stopped go on, a person's decision: refused as `automation_not_allowed` (nothing
+saved) unless a person turned on *Let automation answer approvals*; lowering it is not. Returns the limits as saved.
 
 | Parameter                     | Type            | Req. | Description                                                                                  |
 |-------------------------------|-----------------|------|----------------------------------------------------------------------------------------------|
@@ -345,7 +346,8 @@ what holds now.
 
 Tool requests waiting for a decision, oldest first (kind, command or tool, arguments, agent, run, task, since when),
 and the plans runs wait on (version, step, excerpt) with decisions on their earlier versions and `decided_by`. Each
-links to its card on the task's Conversation.
+links to its card on the task's Conversation. A request auto mode's reviewer still judges has `reviewing: true`: it
+waits for the reviewer, not for a person, until the review ends (`get_run`'s `awaiting.approvals` mark it the same).
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 

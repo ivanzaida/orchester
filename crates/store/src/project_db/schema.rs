@@ -63,6 +63,7 @@ mod run_completions;
 mod run_rebases;
 mod run_resolutions;
 mod runner_failures;
+mod services;
 mod shared_members;
 mod sharing;
 mod sources;

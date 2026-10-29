@@ -289,7 +289,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_approvals",
-    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_plan gives a plan's whole text), and the decisions on their earlier versions with decided_by (person, or automation through this server). Each links to its card on its task's Conversation in the app. Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. `run` needs `project`.",
+    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when, and `reviewing` while auto mode's reviewer still judges it (it waits for the reviewer, not for a person, until the review ends); and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_plan gives a plan's whole text), and the decisions on their earlier versions with decided_by (person, or automation through this server). Each links to its card on its task's Conversation in the app. Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. `run` needs `project`.",
     schema: schema_for_type::<approvals::ListApprovals>,
     read_only: true,
   },
@@ -319,7 +319,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "update_project_limits",
-    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved, null for no limit.",
+    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Raising or removing the daily budget lets runs it stopped go on, so it is refused as automation_not_allowed unless a person turned on Let automation answer approvals. Returns the limits as saved, null for no limit.",
     schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },

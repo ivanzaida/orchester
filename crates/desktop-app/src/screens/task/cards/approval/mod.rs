@@ -3,14 +3,16 @@
 //! ([`answers`]) and what automation may do with it. The answers are the approval dialog's, given here (D6);
 //! which a request offers is core's decision (`tasks::approvals::ApprovalChoices`), read with the project's
 //! waiting requests. *Deny with a message* puts its editor in place of the answers ([`message`], `D2fdTQ`) until
-//! *Back*. Once it is answered, or its agent stopped waiting, it is a quiet row that says how, by whom and when
-//! ([`decided`]), with a denial's message; as soon as the runner takes the person's answer, before the run is read
-//! again.
+//! *Back*. While auto mode's reviewer judges it, it is a quiet row until the person chooses to answer it
+//! ([`reviewing`]). Once it is answered, or its agent stopped waiting, it is a quiet row that says how, by whom and
+//! when ([`decided`]), with a denial's message; as soon as the runner takes the person's answer, before the run is
+//! read again.
 
 mod answers;
 mod decided;
 mod message;
 mod request;
+mod reviewing;
 mod words;
 
 use std::sync::{
@@ -69,6 +71,8 @@ struct ApprovalView {
   field: ElementRef,
   /// The editor just opened: its field takes the focus at the next render.
   focus_field: Arc<AtomicBool>,
+  /// The person chose to answer a request auto mode's reviewer is still judging: the whole card shows.
+  answer_myself: Signal<bool>,
 }
 
 impl Component for ApprovalView {
@@ -82,6 +86,7 @@ impl Component for ApprovalView {
       message: ctx.signal(String::new()),
       field: ElementRef::new(),
       focus_field: Arc::default(),
+      answer_myself: ctx.signal(false),
     }
   }
 
@@ -97,6 +102,9 @@ impl Component for ApprovalView {
     }
     if decisions.lost() {
       return decided::row(ctx, &id, request, &Decided::Lost);
+    }
+    if card.reviewing && !self.answer_myself.get() {
+      return reviewing::row(ctx, &id, request, &self.answer_myself);
     }
     let (shown, reviewing) = shown(ctx, &place, &request.id);
     let answering = Answering {

@@ -97,7 +97,8 @@ impl SeedHeader {
   }
 }
 
-/// One HTTP request of a seed. The URL and the body keep their placeholders (`{{url}}`, `{{team_id}}`) as written.
+/// One HTTP request of a seed. The URL and the body keep their placeholders (`{{url}}`, `{{seed.team_id}}`) as
+/// written.
 #[derive(Clone, PartialEq, Eq)]
 pub struct SeedRequest {
   method: HttpMethod,

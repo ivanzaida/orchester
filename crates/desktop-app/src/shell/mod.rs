@@ -4,7 +4,7 @@
 //! (`Content wrap` `cV43B` in `S5HDKf`, `jJ0BM` in `kkGWj`). *Jump to* opens over the content panel
 //! (`jump`). The title bar belongs to the window chrome (`crate::chrome`).
 
-mod clock;
+pub(crate) mod clock;
 pub mod jump;
 pub mod needs_you;
 pub mod sidebar;
