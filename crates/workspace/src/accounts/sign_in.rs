@@ -51,9 +51,6 @@ impl Workspace {
   pub fn open_sign_in(&self, id: AgentAccountId) -> Result<SignInTerminal, AccountsError> {
     let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     let cli = account.cli();
-    if !account.is_default() && !cli.supports_accounts_on(Platform::current()) {
-      return Err(AccountsError::Unsupported);
-    }
     if let Some(folder) = account.folder().path()
       && !folder.is_dir()
     {

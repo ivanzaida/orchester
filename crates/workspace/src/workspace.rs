@@ -33,6 +33,7 @@ use parking_lot::Mutex;
 
 pub use self::orchestrator_consent::OrchestratorConsent;
 use crate::{
+  accounts::folders::found,
   messages::{self, Message},
   project_setup::NewProject,
   tasks::data::ProjectTasks,
@@ -143,7 +144,9 @@ impl ListedData {
 #[derive(Clone)]
 pub struct Workspace {
   pub(crate) db: Arc<Mutex<AppDb>>,
-  /// Where Orchester creates new agent accounts' folders; `None` where it has none on this platform.
+  /// Where Orchester creates new agent accounts' folders, as the file system resolves it; `None` where it has none
+  /// on this platform. Resolved once, so a folder created in it is stored as found and still counts as the one
+  /// Orchester made when it goes to the trash (on macOS the temporary folders lie behind the link `/var`).
   pub(crate) account_root: Option<Arc<Path>>,
   /// Where removed accounts' folders go when the person asks; none until the app gives one.
   pub(crate) trash: crate::accounts::trash::SharedTrash,
@@ -167,7 +170,7 @@ impl Workspace {
   pub fn new(db: AppDb) -> Self {
     Self {
       db: Arc::new(Mutex::new(db)),
-      account_root: account_root().map(Arc::from),
+      account_root: account_root().map(|root| Arc::from(found(&root))),
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
@@ -191,7 +194,7 @@ impl Workspace {
   /// This workspace with new agent accounts' folders created in `root` instead of Orchester's application data.
   #[must_use]
   pub fn with_account_root(mut self, root: &Path) -> Self {
-    self.account_root = Some(Arc::from(root));
+    self.account_root = Some(Arc::from(found(root)));
     self
   }
 

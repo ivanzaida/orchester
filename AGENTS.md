@@ -14,9 +14,9 @@ be added later, so domain logic must not depend on the desktop app.
 Cross-agent skill layout:
 
 - Repository skills are authored and committed only under `.claude/skills/`.
-- `.agents/skills` is a local Windows junction to `.claude/skills` so Codex and Claude load the same files. It is
-  git-ignored; run `powershell -File tools/setup-agent-skills.ps1` to recreate it. Never edit skills through the
-  junction path or add wrappers there.
+- `.agents/skills` is a local link to `.claude/skills` (a junction on Windows, a relative symbolic link on macOS) so
+  Codex and Claude load the same files. It is git-ignored; run `powershell -File tools/setup-agent-skills.ps1`
+  (`pwsh` on macOS) to recreate it. Never edit skills through the link or add wrappers there.
 - At the start of a Codex turn, if `.agents/skills` is missing, run that script. If the skill catalog was already
   initialized, read the matching `.claude/skills/<name>/SKILL.md` directly.
 - Skill files carry YAML frontmatter for Claude Code's loader; other agents ignore it and read the body.
@@ -75,8 +75,10 @@ Hard requirements:
    program search path, Library data location, `.app` bundle) is checked with `cargo check`/`clippy --target
    aarch64-apple-darwin` on Windows until it has been run on a Mac. Known gaps today: a macOS process group does not
    hold what leaves it on purpose (`setsid`), and agents outlive a runner that is killed with SIGKILL or aborts (no
-   kill-on-close Job Object); CLIs and tools outside the usual install folders are not found when the app is started
-   from Finder (the user's shell `PATH` is not read); the `.app` is signed ad hoc and not notarized.
+   kill-on-close Job Object), and the same holds for the Git programs of local integration, whose database and
+   `.orchester` folder macOS checks instead of holding (`docs/architecture/storage.md`); CLIs and tools outside the
+   usual install folders are not found when the app is started from Finder (the user's shell `PATH` is not read); the
+   `.app` is signed ad hoc and not notarized.
 1. Before writing or reviewing Rust code, read `.claude/skills/rust-code-quality/SKILL.md` and follow it.
 2. Before touching the visual layer (screen, panel, row, field, dialog, control, interaction, user-facing text,
    layout/text/scroll defect), read `.claude/skills/lurq-ui/SKILL.md` with its `references/`, and

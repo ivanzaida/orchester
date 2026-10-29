@@ -159,6 +159,100 @@ fn local_integration_sqlite_parent_and_database_are_pinned_while_sidecars_stay_d
   fs::rename(metadata.join("orchester.db"), metadata.join("released.db")).expect("pin releases normally");
 }
 
+/// Removal deletes only the held file: one swapped in under its name stays, and nothing is left behind.
+#[test]
+fn local_integration_conditional_removal_deletes_only_the_held_file() {
+  let dir = directory();
+  let path = LocalPath::new("owned.txt").expect("path");
+  let original = dir.path().join("owned.txt");
+  fs::write(&original, "reviewed").expect("original");
+  let mut file = OwnedFile::open(dir.path(), &path, true).expect("open").expect("exists");
+  let reviewed = digest(&file.read().expect("reviewed"));
+  file.remove(&reviewed).expect("the held file is removed");
+  assert!(!original.exists());
+
+  fs::write(&original, "reviewed").expect("original again");
+  let mut file = OwnedFile::open(dir.path(), &path, true).expect("open").expect("exists");
+  let reviewed = digest(&file.read().expect("reviewed"));
+  #[cfg(unix)]
+  {
+    fs::rename(&original, dir.path().join("old.txt")).expect("private swap");
+    fs::write(&original, "foreign replacement").expect("replacement");
+    assert!(matches!(
+      file.remove(&reviewed),
+      Err(LocalGitError::State(LocalError::Stale))
+    ));
+    assert_eq!(fs::read(&original).expect("replacement stays"), b"foreign replacement");
+  }
+  #[cfg(windows)]
+  {
+    assert!(fs::rename(&original, dir.path().join("old.txt")).is_err());
+    file.remove(&reviewed).expect("the held file is removed");
+  }
+  let names: Vec<_> = fs::read_dir(dir.path())
+    .expect("list")
+    .map(|entry| entry.expect("entry").file_name())
+    .collect();
+  assert!(
+    names
+      .iter()
+      .all(|name| !name.to_string_lossy().starts_with(".orchester-removing-")),
+    "{names:?}"
+  );
+}
+
+/// Unix cannot hold a name, so the store is checked instead: its folder and files are reached without a link, and
+/// each is a regular file of one link.
+#[cfg(unix)]
+#[test]
+fn local_integration_sqlite_parent_database_and_sidecars_are_checked_without_following_links() {
+  use std::os::unix::fs::symlink;
+
+  use orchester_exec::local_git::owned::StoreOwnership;
+  let refused = |root: &std::path::Path| StoreOwnership::acquire(root).is_err();
+  let store = |dir: &tempfile::TempDir| {
+    let metadata = dir.path().join(".orchester");
+    fs::create_dir(&metadata).expect("private metadata");
+    fs::write(metadata.join("orchester.db"), b"private database fixture").expect("private fixture");
+    metadata
+  };
+
+  let plain = directory();
+  let metadata = store(&plain);
+  fs::write(metadata.join("orchester.db-wal"), b"").expect("sidecar");
+  StoreOwnership::acquire(plain.path()).expect("a plain store with a sidecar");
+
+  let missing = directory();
+  fs::create_dir(missing.path().join(".orchester")).expect("metadata without a database");
+  assert!(refused(missing.path()), "a store without its database");
+
+  let linked_folder = directory();
+  let elsewhere = directory();
+  store(&elsewhere);
+  symlink(
+    elsewhere.path().join(".orchester"),
+    linked_folder.path().join(".orchester"),
+  )
+  .expect("link");
+  assert!(refused(linked_folder.path()), "a linked .orchester");
+
+  let linked_database = directory();
+  let metadata = store(&linked_database);
+  fs::rename(metadata.join("orchester.db"), metadata.join("real.db")).expect("move");
+  symlink(metadata.join("real.db"), metadata.join("orchester.db")).expect("link");
+  assert!(refused(linked_database.path()), "a linked database");
+
+  let hard_linked = directory();
+  let metadata = store(&hard_linked);
+  fs::hard_link(metadata.join("orchester.db"), metadata.join("second.db")).expect("hard link");
+  assert!(refused(hard_linked.path()), "a database of two links");
+
+  let linked_sidecar = directory();
+  let metadata = store(&linked_sidecar);
+  symlink(elsewhere.path().join("outside"), metadata.join("orchester.db-wal")).expect("link");
+  assert!(refused(linked_sidecar.path()), "a sidecar linked elsewhere");
+}
+
 #[cfg(windows)]
 #[test]
 fn local_integration_parent_chain_alone_prevents_rename_or_removal_before_git_or_store_opens() {

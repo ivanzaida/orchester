@@ -1,4 +1,6 @@
 use std::io;
+#[cfg(target_os = "macos")]
+use std::path::Path;
 
 use orchester_core::integration::local::ProcessIdentity;
 
@@ -19,4 +21,18 @@ pub fn capture(pid: u32) -> io::Result<Option<ProcessIdentity>> {
 /// A reused PID is not the recorded process. Unreadable identity is an error, never proof of completion.
 pub fn still_running(identity: &ProcessIdentity) -> io::Result<bool> {
   Ok(capture(identity.pid)?.is_some_and(|current| current.pid == identity.pid && current.started == identity.started))
+}
+
+/// The identity of our own child `pid` that exited before [`capture`] could read it, while it is not reaped: its PID
+/// stays ours until then and its start time stays readable, but its image no longer has a path, so the program it was
+/// started from (`program`) stands for it. `None` once it is gone.
+#[cfg(target_os = "macos")]
+pub fn capture_exited_child(pid: u32, program: &Path) -> io::Result<Option<ProcessIdentity>> {
+  Ok(platform::started(pid)?.map(|started| ProcessIdentity {
+    pid,
+    containment: None,
+    executor: None,
+    started,
+    executable: crate::local_git::digest(program.to_string_lossy().as_bytes()),
+  }))
 }

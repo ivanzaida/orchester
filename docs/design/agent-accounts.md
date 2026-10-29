@@ -46,7 +46,7 @@ Checked 2026-10-12 on Windows 11 with Claude Code 2.1.296 and Codex CLI 0.159.2,
 | `CODEX_HOME=<folder> codex login status` answers `Not logged in`; `codex login` signs in (browser), `--device-auth` for a device code; `--with-api-key` / `--with-access-token` read a secret from stdin. Orchester never uses those two. | verified |
 | `codex app-server` (v2 protocol, schema generated with `generate-json-schema`) has `account/read` → `{account: {type: "chatgpt", email, planType} \| {type: "apiKey"} \| …, requiresOpenaiAuth}`, `account/rateLimits/read`, `account/login/start` (`chatgpt` → `authUrl`; `chatgptDeviceCode` → `verificationUrl` + `userCode`), `account/login/completed`, `account/updated`, `account/logout`. | verified (schema); behaviour per home unverified |
 | Codex keeps its sign-in in `auth.json` in `CODEX_HOME` unless `cli_auth_credentials_store` moves it to the OS keyring; whether a keyring entry is per home. | **unverified** |
-| macOS: Claude Code keeps its OAuth sign-in in the login Keychain; whether each `CLAUDE_CONFIG_DIR` gets its own Keychain item. | **unverified, blocking for macOS** — must be checked on a Mac before Claude accounts other than Default ship there (state `E96CI` › *Not supported on macOS yet*) |
+| macOS: Claude Code keeps its OAuth sign-in in the login Keychain; whether each `CLAUDE_CONFIG_DIR` gets its own Keychain item. | **verified on a Mac, 2026-10-29** (Claude Code 2.1.312, macOS 26): Default's item is `Claude Code-credentials`; a sign-in with `CLAUDE_CONFIG_DIR` set made a second item, `Claude Code-credentials-<8 hex>`, while Default stayed signed in; signing that folder out removed only its item. Claude accounts other than Default work on macOS, and the *Not supported on macOS yet* state (`E96CI`) is gone |
 | Claude Code reports plan limits only during a turn (`rate_limit_event`); Codex can be asked any time (`account/rateLimits/read`). | Claude: rechecked 2026-10-20 on 2.1.296, no turn-free read; Codex read: schema and a signed-out scratch home checked 2026-10-20 (0.137.0), see [Plan limits read on their own](#plan-limits-read-on-their-own) |
 | gh: `GH_CONFIG_DIR` isolates `hosts.yml`; gh itself holds several accounts per host with one active (`gh auth switch` changes it for every program). Git pushes go through git's credential helper, which follows `GH_CONFIG_DIR` only if git runs with it. | partly from gh docs; push path **unverified** |
 
@@ -109,7 +109,7 @@ All in **Accounts** (`hgOl2`, x 63228, y 2000), dark, 1440 wide screens and 1896
 | `IOyJl` | Settings · Accounts · Add account · name and folder | In-place panel (no dialog): steps 1–2, CLI option cards, Name, Folder (new folder Orchester creates / a folder you already use), *Create folder and sign in*; the list shows *Freelance · Not added yet* |
 | `ohqHW` | Settings · Accounts · Add account · sign in in a terminal | Step 2: Orchester opened a terminal running `claude auth login` for the folder; waiting line, *Check again*, the PowerShell command for one's own terminal, *Finish later* / *Open the terminal again* |
 | `GE7a3` | Settings · Accounts · sign-in step · states | Signed in (Claude, Codex with `account/read`), still not signed in after the terminal closed, same account as another, macOS Terminal + zsh command, CLI not found, folder inside a repository, folder already an account's |
-| `E96CI` | Settings · Accounts · account states | Row + details for Checking, Not signed in (with command), Sign-in expired, CLI not found, Sign-in unknown, Folder missing, Same account as another, Not supported on macOS yet |
+| `E96CI` | Settings · Accounts · account states | Row + details for Checking, Not signed in (with command), Sign-in expired, CLI not found, Sign-in unknown, Folder missing, Same account as another (its *Not supported on macOS yet* state is retired, decision 10) |
 | `HzJSR` | Settings · Accounts · Work · Used by · remove in place | *Used by 4* tab with connections per project; in-place *Remove Work?* with the replacement account select, the finished-runs line and the opt-in *Also move the folder to the Recycle Bin* |
 | `yEJPZ` | Settings · Accounts · rename and remove · states | Rename in the header; remove unavailable while a run is on the account; remove an account in a brought folder (folder stays, *No account* option); Default can't be removed |
 | `WaKJN` | Connections · Add connection · Claude Code CLI · choosing its account | New *Account* row after *Program*, menu open: accounts with identity, plan use and state, *Add or manage accounts…*; check reads *ana@example.com on Work* |
@@ -137,7 +137,6 @@ add it to them once the tab is approved.
 | Folder missing | folder-x `$danger` | runs don't start | Choose folder…, Remove |
 | Same account as another | signed in, identity line *same account as Work* | runs start; limits are shared | Keep both / Remove (at creation) |
 | In use by a running run | — | Remove unavailable until it ends | Rename still allowed |
-| Not supported on this platform yet | ban, muted | only Default is used for that CLI on this Mac | — |
 | Connection whose account is signed out | connection status *Sign-in required* / *Client signed out* | its runs don't start | Open the account in Settings, Edit connection |
 
 ## Flows
@@ -216,8 +215,7 @@ reset, read stale or *Not reported yet*.
   source, `observed_at`, `age_seconds`, state and windows, a window whose reset has passed since with its use unknown.
 - **Not in the design yet:** the hint's age line, *Check now* and its error, and the new notes are not drawn in
   `orchester2.pen`; they reuse the hint's note style and the account panel's secondary button.
-- **macOS:** the same on both platforms; Claude Code accounts other than Default remain *Not supported on macOS yet*,
-  so *Check now* shows only for Default there.
+- **macOS:** the same on both platforms.
 
 ## Security and privacy
 
@@ -251,7 +249,7 @@ and `shell.json` (`shell.status.planLimits.*`). Main strings as drawn:
 | `accounts.group.count` | {count} accounts |
 | `accounts.default.name` | Default |
 | `accounts.default.identity` | The CLI's own folder · sign in to use it |
-| `accounts.status.{signedIn,checking,notSignedIn,expired,unknown,cliMissing,folderMissing,unsupported}` | Signed in · Checking… · Not signed in · Sign-in expired · Sign-in unknown · CLI not found · Folder missing · Not supported on macOS yet |
+| `accounts.status.{signedIn,checking,notSignedIn,expired,unknown,cliMissing,folderMissing}` | Signed in · Checking… · Not signed in · Sign-in expired · Sign-in unknown · CLI not found · Folder missing |
 | `accounts.details.{signedInAs,plan,signedInWith,folder,checkedWith,lastChecked}` | Signed in as · Plan · Signed in with · Folder · Checked with · Last checked |
 | `accounts.details.planNote` | Claude Code reports limits only while it runs, so they are as of the last run on this account. Use outside Orchester shows up with the next report. |
 | `accounts.details.runsGet` | Orchester starts {program} with {variable} set to this folder. The CLI then uses this folder's sign-in, settings, skills and saved sessions; what is in {defaultFolder} does not apply. |
@@ -284,7 +282,7 @@ and `shell.json` (`shell.status.planLimits.*`). Main strings as drawn:
 v1: Settings › Accounts for Claude Code and Codex (list, add with a new or brought folder, sign in in a terminal,
 check, rename, remove in place); Default per CLI and the migration; the connection's Account field and every
 read-back drawn here; plan readings per account; the limit-reached choice and waiting runs; macOS support for Codex
-accounts, and for Claude accounts only once the Keychain check passes.
+and Claude accounts (the Keychain check passed, decision 10).
 
 Later: GitHub accounts; fallback order per connection; copying settings from Default; Codex sign-in through App
 Server (`account/login/start`, browser opened by Orchester) instead of a terminal (reading Codex limits outside runs
@@ -320,5 +318,5 @@ recommended; still open. 4, 9 and 10 not answered yet.
 8. **GitHub.** Recommended: not in v1 (keep the expected-login check); add as `GH_CONFIG_DIR` accounts once
    `git push` through the credential helper is verified per folder.
 9. **Same account twice.** Recommended: allow, with the plain note that limits are shared. Alternative: refuse.
-10. **macOS Claude accounts.** Recommended: verify per-folder Keychain items on a Mac before v1; until then show
-    *Not supported on macOS yet* for Claude accounts other than Default.
+10. **macOS Claude accounts.** Decided: per-folder Keychain items were verified on a Mac (2026-10-29), so Claude
+    accounts other than Default work on macOS as on Windows.

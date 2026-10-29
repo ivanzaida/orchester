@@ -556,3 +556,23 @@ fn run_processes_audit_lookup_treats_exit_between_queries_as_gone() {
     result.text()
   );
 }
+
+/// A child that exited is still described by its start time until it is reaped, as when it was alive.
+#[cfg(target_os = "macos")]
+#[test]
+fn run_processes_start_time_of_an_exited_child_waiting_to_be_reaped() {
+  let folder = folder();
+  let program = copy(folder.path(), "zombie");
+  let mut child = Sleeper::start(&program);
+  let pid = child.0.id();
+  let alive = identity::read(pid).expect("BSD identity").expect("live");
+  let micros = alive.bsd.pbi_start_tvsec * 1_000_000 + alive.bsd.pbi_start_tvusec;
+  assert_eq!(identity::started_even_exited(pid).expect("alive"), Some(micros));
+  child.0.kill().expect("end owned stand-in");
+  while identity::read(pid).expect("identity").is_some() {
+    std::thread::sleep(Duration::from_millis(5));
+  }
+  assert_eq!(identity::started_even_exited(pid).expect("exited"), Some(micros));
+  child.0.wait().expect("reap");
+  assert_eq!(identity::started_even_exited(pid).expect("reaped"), None);
+}
