@@ -110,7 +110,12 @@ impl SourceRow {
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Fine.role())
       // In a row of its own the path gives up room and ends in an ellipsis, its whole value in a tooltip.
-      .child(Row::new().width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0)).child(path))
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .min_width(Dimension::Px(0.0))
+          .child(path),
+      )
       .with_children(self.note.as_deref().map(|note| {
         Text::new(note)
           .id(format!("{}-note", self.id))

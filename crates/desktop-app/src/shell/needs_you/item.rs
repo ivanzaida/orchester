@@ -220,7 +220,11 @@ pub(super) fn expanded(
         .spacing(ExtraSpacing::Fine.role())
         .with_children(ask(ctx, id, item))
         // A question says where its run stands (`a2DwV` in `Z4HeE3`); a request's card says it (`YDJsC`).
-        .with_children(matches!(item.waiting.kind, WaitingKind::Choice(_)).then(|| place(ctx, id, item)).flatten()),
+        .with_children(
+          matches!(item.waiting.kind, WaitingKind::Choice(_))
+            .then(|| place(ctx, id, item))
+            .flatten(),
+        ),
     )
     .child(card)
     .into()
