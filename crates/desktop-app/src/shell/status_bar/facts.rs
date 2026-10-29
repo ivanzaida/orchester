@@ -49,7 +49,6 @@ pub enum Stopping {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectFacts {
   pub id: ProjectId,
-  pub name: String,
   pub repo_root: PathBuf,
   pub runner: RunnerFacts,
   /// The tasks as they stand with the runner's state; `None` while they are read.
@@ -60,8 +59,6 @@ pub struct ProjectFacts {
   pub undecided_runs: usize,
   /// The accounts the project's connections run on that reported plan limits, by CLI.
   pub limits: Vec<AccountLimits>,
-  /// The revision of the project's data: whether its name and folder may show is asked again when it changes.
-  pub revision: u64,
 }
 
 /// An account a project's connection runs on, with the newest plan reading its CLI reported, and where that came from:
@@ -90,6 +87,8 @@ pub struct RunnerFacts {
   pub next_attempt: Option<Instant>,
   /// When its current problem began: the drop, or the failed start.
   pub trouble_since: Option<SystemTime>,
+  /// When it came online, while it is online or stopping.
+  pub online_since: Option<SystemTime>,
   /// What it works on, while it is online or stopping and has said so.
   pub work: Option<WorkSummary>,
   /// Runs whose agents were at work when it dropped, while no runner is back.
@@ -104,13 +103,13 @@ impl RunnerFacts {
       return Self::starting();
     };
     let state = status.state_for(repo_root);
+    // While the window closes the runner stops at checkpoints, and what it last reported still counts.
+    let attached = matches!(state, RunnerState::Online | RunnerState::Stopping);
     Self {
-      // While the window closes the runner stops at checkpoints, and what it last reported still counts.
-      work: matches!(state, RunnerState::Online | RunnerState::Stopping)
-        .then(|| status.work().cloned())
-        .flatten(),
+      work: attached.then(|| status.work().cloned()).flatten(),
       next_attempt: status.until(),
       trouble_since: status.trouble_since(),
+      online_since: attached.then(|| status.online_since()).flatten(),
       interrupted: status.interrupted(),
       state,
     }
@@ -121,6 +120,7 @@ impl RunnerFacts {
       state: RunnerState::Starting,
       next_attempt: None,
       trouble_since: None,
+      online_since: None,
       work: None,
       interrupted: 0,
     }

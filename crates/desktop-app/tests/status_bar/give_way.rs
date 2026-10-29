@@ -1,96 +1,46 @@
-//! The order in which the bar gives way on a narrow window.
+//! The order in which the bar gives way on a narrow window (`Narrow` in `Status bar · redesign`): words go first,
+//! icons, actions and the health dot stay.
 
 use super::*;
 
-/// The bar at 960 with everything shown: the version gives way, then the counts' words, then the project's name,
-/// which is still whole at 960; the hand, the counts, *Review*, *Stop* and MCP stay.
-#[test]
-fn status_gives_way_in_its_order_at_960() {
+fn several_at_once() -> BarFacts {
   let tasks = ProjectTasks {
-    pending_tool_approvals: Arc::new(vec![approval()]),
     auto_approving: Arc::new(vec![auto_approving()]),
     ..ProjectTasks::default()
   };
-  let project = || {
-    Some(kontur(
-      RunnerFacts {
-        work: Some(WorkSummary {
-          agent_slots: NonZeroU32::new(4).expect("slots"),
-          runs: Vec::new(),
-        }),
-        ..runner(RunnerState::Online)
+  BarFacts {
+    mcp: McpStatus {
+      kind: McpKind::Qa {
+        folder: PathBuf::from(".tmp/qa/orc-242/mcp"),
+        file: None,
       },
-      tasks.clone(),
-    ))
-  };
-  let mut wide = Bar::of(facts(project()));
-  assert!(wide.width("status-version") > 0.0, "the version shows at 1440");
-  let mut narrow = Bar::at(960, facts(project()));
-  assert_eq!(narrow.width("status-version"), 0.0, "the version gives way at 960");
-  assert_eq!(
-    narrow.width("status-project-text"),
-    wide.width("status-project-text"),
-    "the project's name stays whole at 960"
-  );
-  for id in [
-    "status-needs-you-value",
-    "status-agents-value",
-    "status-queued-value",
-    "status-approvals-review",
-    "status-auto-approving-stop",
-    "status-mcp",
-  ] {
+      ..listening()
+    },
+    ..facts(Some(kontur(runner(RunnerState::Online), tasks)))
+  }
+}
+
+/// `25 · Narrow · several at once` (`vtjRN`): on a narrow bar the window control's words give way first; *Stop*,
+/// MCP and the dot stay.
+#[test]
+fn status_gives_way_in_its_order_when_narrow() {
+  let mut wide = Bar::of(several_at_once());
+  assert!(wide.width("status-window-control") > 0.0);
+  let mut narrow = Bar::at(520, several_at_once());
+  for id in ["status-auto-approving-stop", "status-mcp", "status-health"] {
     assert!(narrow.width(id) > 0.0, "{id} never gives way");
   }
-}
-
-/// A project's name cut on a narrow window keeps itself and its folder in its tooltip.
-#[test]
-fn status_project_name_cut_says_name_and_folder_in_its_tooltip() {
-  let name = "Kontur platform, billing, the partner portal and the reporting service";
-  let project = ProjectFacts {
-    name: name.to_owned(),
-    ..kontur(runner(RunnerState::Online), ProjectTasks::default())
-  };
-  let mut wide = Bar::of(facts(Some(project.clone())));
-  let whole = wide.width("status-project-text");
-  let mut narrow = Bar::at(600, facts(Some(project)));
-  let cut = narrow.width("status-project-text");
-  assert!(cut > 0.0 && cut < whole, "the name is cut: {cut} of {whole}");
-  assert_eq!(
-    narrow.tooltip("status-project-text"),
-    Some(vec![format!("{name} · {ROOT}")])
+  assert!(
+    narrow.width("status-window-control") < wide.width("status-window-control"),
+    "the window control's words give way first"
   );
 }
 
-/// The counts' labels give way together: at any width all show or none does.
+/// The health dot never gives way, at any width.
 #[test]
-fn status_count_labels_give_way_as_one_group() {
-  let project = || Some(kontur(runner(RunnerState::Online), ProjectTasks::default()));
-  let labels = ["status-agents-label", "status-queued-label", "status-needs-you-label"];
-  let mut dropped_somewhere = false;
-  for width in (300..=1440).rev().step_by(10) {
-    let mut bar = Bar::at(width, facts(project()));
-    let shown: Vec<bool> = labels.iter().map(|id| bar.width(id) > 0.0).collect();
-    assert!(shown.iter().all(|shows| *shows == shown[0]), "at {width}: {shown:?}");
-    dropped_somewhere |= !shown[0];
+fn status_health_dot_never_gives_way() {
+  for width in (300..=1440).rev().step_by(20) {
+    let mut bar = Bar::at(width, several_at_once());
+    assert!(bar.width("status-health") > 0.0, "at {width}");
   }
-  assert!(dropped_somewhere, "the labels give way somewhere above 300");
-}
-
-/// The project's name outlasts the counts' labels: while they show, it is whole.
-#[test]
-fn status_project_name_outlasts_the_count_labels() {
-  let project = || Some(kontur(runner(RunnerState::Online), ProjectTasks::default()));
-  let whole = Bar::of(facts(project())).width("status-project-text");
-  let mut cut_somewhere = false;
-  for width in (300..=1440).rev().step_by(10) {
-    let mut bar = Bar::at(width, facts(project()));
-    let name = bar.width("status-project-text");
-    if bar.width("status-agents-label") > 0.0 {
-      assert!(name >= whole - 0.5, "at {width} the name is cut while the labels show");
-    }
-    cut_somewhere |= name < whole - 0.5;
-  }
-  assert!(cut_somewhere, "the name is cut somewhere above 300");
 }
