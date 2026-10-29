@@ -60,8 +60,12 @@ pub fn users_in(root: &Path, id: ResourceId, kind: ResourceKind) -> Result<Users
   let users = match kind {
     ResourceKind::AgentProfile | ResourceKind::Tool => step_users(&db, id).map(Users::Steps),
     ResourceKind::Skill => skill_reach(&db, id).map(Users::Reach),
-    // No step runs a test suite yet.
-    ResourceKind::Instruction | ResourceKind::Pipeline | ResourceKind::TestSuite => Ok(Users::Steps(Vec::new())),
+    // No step runs a test suite, service or stack yet.
+    ResourceKind::Instruction
+    | ResourceKind::Pipeline
+    | ResourceKind::TestSuite
+    | ResourceKind::Service
+    | ResourceKind::Stack => Ok(Users::Steps(Vec::new())),
   };
   users.map_err(|error| messages::store_error(&error))
 }
@@ -75,7 +79,7 @@ pub fn remove_in(root: &Path, id: ResourceId, mode: RemoveMode) -> Result<Remova
 }
 
 /// What removing a resource of `kind` changed besides its own list: a profile's or tool's removal resets pipeline
-/// drafts. No screen lists test suites yet.
+/// drafts. No screen lists test suites, services or stacks yet.
 pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
   match kind {
     ResourceKind::AgentProfile => &[Outside::Profiles, Outside::Pipelines],
@@ -83,7 +87,7 @@ pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
     ResourceKind::Instruction => &[Outside::Instructions],
     ResourceKind::Skill => &[Outside::Skills],
     ResourceKind::Pipeline => &[Outside::Pipelines],
-    ResourceKind::TestSuite => &[],
+    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => &[],
   }
 }
 
