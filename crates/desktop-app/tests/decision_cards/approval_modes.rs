@@ -8,16 +8,23 @@ use super::{Window, cards, click, laid_out, opened_in, text};
 
 const SCENARIO: &str = "cards-approval-modes";
 
-/// Scrolls the chat to its start: it opened on the card that waits, under the rows.
-fn to_start(window: &mut Window) {
-  let bounds = laid_out(window, "conversation-chat");
-  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
-  window.tree.mouse_move(x, y);
-  window.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::Start);
-  window.tree.scroll(x, y, 0.0, 5000.0, ScrollPhase::Scroll);
-  window.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::End);
-  window.pass();
-  window.pass();
+/// Scrolls the chat up until `id` is inside it: the chat opened on the card that waits, under the rows.
+fn into_view(window: &mut Window, id: &str) {
+  let chat = laid_out(window, "conversation-chat");
+  let (x, y) = (chat.x + chat.width / 2.0, chat.y + chat.height / 2.0);
+  for _ in 0..40 {
+    let shown = laid_out(window, id);
+    if shown.y >= chat.y && shown.y + shown.height <= chat.y + chat.height {
+      return;
+    }
+    window.tree.mouse_move(x, y);
+    window.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::Start);
+    window.tree.scroll(x, y, 0.0, 60.0, ScrollPhase::Scroll);
+    window.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::End);
+    window.pass();
+    window.pass();
+  }
+  panic!("{id} never came into the chat's view");
 }
 
 /// The card whose reason line shows, once it does.
@@ -112,7 +119,7 @@ fn card_approval_autopilot_rows_of_a_step_show_three_and_how_many_more() {
     .find(|id| id.ends_with("-more"))
     .expect("how many more follow");
   assert_eq!(text(&mut window, &more), "· 3 more");
-  to_start(&mut window);
+  into_view(&mut window, &more);
   click(&mut window, &more);
   window.until("all six rows", |window| leads(window).len() == 6);
   assert!(

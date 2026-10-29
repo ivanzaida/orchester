@@ -31,9 +31,7 @@ use orchester_core::{
   id::StepExecutionId,
   integration::RunMerge,
   question::AskedQuestions,
-  run::{
-    AnswerRecord, DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus,
-  },
+  run::{AnswerRecord, DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
   time::Timestamp,
 };
 
