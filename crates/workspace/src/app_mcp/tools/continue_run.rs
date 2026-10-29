@@ -34,6 +34,7 @@ use crate::{
     error::ToolError,
     services::{Services, blocking},
   },
+  decisions::DecisionKind,
   messages::Message,
   sharing::project::WorkClaim,
   tasks::{
@@ -66,7 +67,8 @@ pub struct ContinueRun {
 pub enum Choice {
   /// For a run stopped at its token budget or its time limit: continue with this token budget, above
   /// what the run used, and this time limit in whole minutes, above the active time the run used.
-  /// Both are required; there is no maximum, and `null` is no limit.
+  /// Both are required; there is no maximum, and `null` is no limit. Refused as automation_not_allowed unless a
+  /// person turned on Let automation answer approvals.
   RaiseLimits {
     #[serde(deserialize_with = "wire::nullable")]
     #[schemars(required)]
@@ -76,7 +78,8 @@ pub enum Choice {
     time_limit_minutes: Option<u64>,
   },
   /// For a run stopped at a step's budget: continue with this budget for that step, above what the
-  /// step used. Required; there is no maximum, and `null` is no budget for the step in this run.
+  /// step used. Required; there is no maximum, and `null` is no budget for the step in this run. Refused as
+  /// automation_not_allowed unless a person turned on Let automation answer approvals.
   RaiseStepBudget {
     #[serde(deserialize_with = "wire::nullable")]
     #[schemars(required)]
@@ -124,18 +127,23 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
   continue_as(services, args, Answerer::Automation).await
 }
 
-/// `continue_run` decided by `by`: automation's decision on a waiting run needs the person's consent, while a
-/// person's (the Orchestrator chat's proposal a person applied) is recorded as theirs and needs none.
+/// `continue_run` decided by `by`: automation's decision on a waiting run, or its raise of a limit that stopped one,
+/// needs the person's consent, while a person's (the Orchestrator chat's proposal a person applied) is recorded as
+/// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
+/// is still used up.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {
-    let decides = matches!(
-      args.choice,
-      Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept | Choice::ResolveConflicts { .. }
-    );
-    if decides && by == Answerer::Automation {
-      crate::decisions::DecisionKind::Stuck.require(&reading.workspace)?;
+    let decision = match args.choice {
+      Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept | Choice::ResolveConflicts { .. } => {
+        Some(DecisionKind::Stuck)
+      }
+      Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => Some(DecisionKind::Limit),
+      Choice::Resume => None,
+    };
+    if let Some(decision) = decision.filter(|_| by == Answerer::Automation) {
+      decision.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
     let jobs = reading.jobs.of(project.project.id());

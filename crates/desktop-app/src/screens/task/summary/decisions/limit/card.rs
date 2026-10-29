@@ -2,6 +2,8 @@
 //! in `CqVv3`): what was used (`Used` `w85KN`: the tokens with a meter, the active agent time), the new limit's field
 //! with its read-back beside what continuing does (`Input row` `SeVqB`), and the actions (`Ty1jk`): *Continue with
 //! …*, which names the new limit, *Remove the limit* and what removing does. The runner's refusal is said under them.
+//! Raising a limit is a person's decision: window input from an MCP client takes it only while the person lets
+//! automation answer approvals.
 
 use std::sync::Arc;
 
@@ -19,7 +21,9 @@ use orchester_core::{
   run::RunLimit,
   tokens::{TokenBudget, compact_tokens},
 };
-use orchester_workspace::{budget::whole_minutes, display, messages::Message, tasks::raise::Raise};
+use orchester_workspace::{
+  budget::whole_minutes, decisions::DecisionKind, display, messages::Message, tasks::raise::Raise,
+};
 
 use super::{
   super::{
@@ -31,6 +35,7 @@ use super::{
   Raising, Stop, Unit,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::{DecisionText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -59,6 +64,10 @@ pub struct RaiseCard<'a> {
   pub pointing: &'a Pointing,
   /// The new limit's input, which the page focuses when the panel opened it at the card.
   pub input: &'a ElementRef,
+  pub gate: Option<&'a InputGate>,
+  /// Window input pressed *Continue with …* or *Remove the limit* while the person does not let automation decide
+  /// for them.
+  pub person_only: &'a Signal<bool>,
 }
 
 impl RaiseCard<'_> {
@@ -95,6 +104,12 @@ impl RaiseCard<'_> {
       .child(self.actions(ctx, unit, read.ok(), (pending, offline.clone())))
       .child(removing)
       .with_children(offline.map(|reason| reason_line("raise-limit-offline", &reason)))
+      .with_children(self.person_only.get().then(|| {
+        field_error(
+          "raise-limit-person-only",
+          &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
+        )
+      }))
       .with_children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))));
     self.pointing.ring(card).into()
   }
@@ -338,11 +353,18 @@ impl RaiseCard<'_> {
 
   fn press(&self, button: ActionButton, raise: Raise) -> ActionButton {
     let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.stop.run.id());
+    let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
     button.on_click(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
       if action.state().get_untracked().is_pending() {
         return;
       }
+      if !input_may_decide(gate.as_ref(), Guarded::Decision(DecisionKind::Limit)) {
+        tracing::warn!("synthetic input raised a run's limit without consent; not taken");
+        person_only.set(true);
+        return;
+      }
+      person_only.set(false);
       asked.set(Some(Raising));
       action.run((Raising, raise.command(run)));
     })
