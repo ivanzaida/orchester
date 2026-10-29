@@ -196,15 +196,37 @@ impl Cdp {
   }
 
   /// The events of the target of `session` from now on, or the browser's own for `None`. The receiver ends with the
-  /// connection; dropping it stops the listening.
+  /// connection and at [`Cdp::unsubscribe`]; dropping it stops the listening.
   pub fn subscribe(&self, session: Option<SessionId>) -> mpsc::UnboundedReceiver<CdpEvent> {
     let (events, receiver) = mpsc::unbounded_channel();
     let mut state = self.routes.state.lock();
     // A closed connection reports nothing: the sender is dropped here, so the receiver ends at once.
     if !state.closed {
+      state.listeners.retain(|listener| !listener.events.is_closed());
       state.listeners.push(Listener { session, events });
     }
     receiver
+  }
+
+  /// Stops all listening to the target of `session`, which closed or is no longer followed: each of its receivers
+  /// ends.
+  pub fn unsubscribe(&self, session: &SessionId) {
+    self
+      .routes
+      .state
+      .lock()
+      .listeners
+      .retain(|listener| listener.session.as_ref() != Some(session));
+  }
+
+  /// How many receivers listen: those still held, of every session and the browser's own.
+  pub fn listeners(&self) -> usize {
+    let state = self.routes.state.lock();
+    state
+      .listeners
+      .iter()
+      .filter(|listener| !listener.events.is_closed())
+      .count()
   }
 
   /// The browser's targets: its tabs and the rest.

@@ -53,7 +53,7 @@ impl ProjectBrowser {
           Err(error) => Err(rejection(&error)),
         };
       }
-      BrowserCommand::CloseTab { tab } => self.close_tab(&tab).await,
+      BrowserCommand::CloseTab { tab } => self.close_window_tab(&tab).await,
       BrowserCommand::AnswerDialog { tab, accept, text } => self.answer_dialog(&tab, accept, text).await,
       BrowserCommand::ChooseOption { tab, select, index } => self.choose_option(&tab, select, index).await,
       BrowserCommand::OpenInWindow => self.restart(BrowserMode::Headed).await,
@@ -136,7 +136,7 @@ impl ProjectBrowser {
   }
 
   /// Closes `tab`, the person's or an agent's: an agent's next call on it answers that it is closed.
-  async fn close_tab(&self, tab: &BrowserTabId) -> Result<(), BrowserError> {
+  async fn close_window_tab(&self, tab: &BrowserTabId) -> Result<(), BrowserError> {
     let reached = self.window_tab(tab).await?;
     self.window.forget(&reached.target);
     reached.cdp.close_target(&reached.target).await?;
@@ -307,11 +307,13 @@ fn rejection(error: &BrowserError) -> Rejection {
     BrowserError::Unavailable(_) | BrowserError::Start(_) => Rejection::BrowserUnavailable {
       detail: error.to_string(),
     },
-    BrowserError::NoSuchTab(_) | BrowserError::NotRunsTab(_) => Rejection::NoSuchTab,
-    BrowserError::Cdp(_) | BrowserError::NotOpened { .. } | BrowserError::NoHistory(_) | BrowserError::Element(_) => {
-      Rejection::Failed {
-        detail: error.to_string(),
-      }
-    }
+    BrowserError::NoSuchTab(_) | BrowserError::NotRunsTab(_) | BrowserError::NoTab => Rejection::NoSuchTab,
+    BrowserError::Cdp(_)
+    | BrowserError::NotOpened { .. }
+    | BrowserError::NoHistory(_)
+    | BrowserError::Element(_)
+    | BrowserError::StaleRef(_) => Rejection::Failed {
+      detail: error.to_string(),
+    },
   }
 }

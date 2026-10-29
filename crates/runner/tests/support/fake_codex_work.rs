@@ -126,6 +126,19 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
   ("Wait for a message", SteerAnswer::Take),
 ];
 
+/// The prompts whose work uses Orchester's tools ([`fake_codex_tools::report`]).
+const TOOL_PROMPTS: [&str; 9] = [
+  "Use Orchester's tools",
+  "Use the file tools",
+  "Use the run tools",
+  "Use the process tools",
+  "Run the check twice",
+  "Use the index tools",
+  "Use the skill tools",
+  "Start the QA app",
+  "Use the browser tools",
+];
+
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   if let Some(step) = super::fake_codex_cell::work(session, prompt, structured) {
     return step;
@@ -159,19 +172,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
   }
-  if [
-    "Use Orchester's tools",
-    "Use the file tools",
-    "Use the run tools",
-    "Use the process tools",
-    "Run the check twice",
-    "Use the index tools",
-    "Use the skill tools",
-    "Start the QA app",
-  ]
-  .iter()
-  .any(|words| prompt.contains(words))
-  {
+  if TOOL_PROMPTS.iter().any(|words| prompt.contains(words)) {
     fake_codex_tools::report(session.orchester.as_mut(), &session.cwd, prompt);
   }
   if prompt.contains("Hold the QA app") {

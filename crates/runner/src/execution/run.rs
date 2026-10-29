@@ -44,6 +44,7 @@ use super::{
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
+use crate::browser::ProjectBrowser;
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
 /// was freed by another run in a way it was not woken for. More slots wake it at once.
@@ -76,6 +77,7 @@ pub(super) struct TaskContext {
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) qa: Arc<QaApps>,
+  pub(super) browser: Arc<ProjectBrowser>,
   pub(super) disks: DiskGuard,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
@@ -112,6 +114,8 @@ pub(super) struct RunTask {
   pub(super) board: Arc<Board>,
   /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slots.
   pub(super) qa: Arc<QaApps>,
+  /// The project's browser, whose tabs the run's browser tools open and drive.
+  pub(super) browser: Arc<ProjectBrowser>,
   /// The disk guard's reading of free space, and how often it looks while agents work.
   pub(super) disks: DiskGuard,
   /// When the disk guard looks at the free space next while agents work.
@@ -159,6 +163,7 @@ impl RunTask {
       relay: context.relay,
       board: context.board,
       qa: context.qa,
+      browser: context.browser,
       disks: context.disks,
       next_disk_check: Instant::now(),
       waits_for_workspace: false,

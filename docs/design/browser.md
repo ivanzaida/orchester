@@ -2,10 +2,10 @@
 
 Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
 port and keep-running decisions (11, 12) the same day; decisions 13 to 15 (binary frames, the window opening by
-itself, focus) with ORC-378. P1 (the core rules, ORC-355) is built, P2's first half (ORC-358: finding and starting the
-browser, the CDP client, the project browser's lifecycle and the run-to-tabs map), and the window's plumbing (ORC-378:
-its IPC, the screencast, the person's input and tabs, the window's state); the tools, the window itself and the
-settings are not yet.
+itself, focus) with ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and
+starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359:
+the `browser_*` tools offered to steps through the runner's relay); and the window's plumbing (ORC-378: its IPC, the
+screencast, the person's input and tabs, the window's state). The window itself and the settings are not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -334,8 +334,8 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
 1. **P1 · Core rules (non-UI).** Done (ORC-355): tool catalog and inputs, the Browser permission with allowed sites,
    policy rows, person-only widening over MCP (`save_profile_draft`'s `permissions.browser`). Tests:
    `cargo test -p orchester-core --test browser browser_`, and the MCP refusal in
-   `cargo test -p orchester-app --test mcp_domain domain_widening_the_browser`. The tools are not offered to steps yet
-   (`StepTools` does not list them): the runner serves them in P2.
+   `cargo test -p orchester-app --test mcp_domain domain_widening_the_browser`. `StepTools` lists the tools since
+   P2b, which the runner serves.
 2. **P2 · Runner and tools (non-UI).** Finding and starting headless Chromium on both platforms, the CDP client, the
    tools, run tabs closed at run end. Tests with a real Edge/Chrome on a local page served by the test
    (`orchester-runner --test browser`), skipped with a visible reason where no browser is found. After P2 agents can
@@ -343,7 +343,18 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
    - **P2a.** Done (ORC-358): finding and starting the browser (`cargo test -p orchester-exec --test browser
      browser_`), the CDP client, the project's browser started at its first use and stopped with the runner, and each
      run's tabs closed when it ends (`cargo test -p orchester-runner --features test-agent --test browser browser_`).
-   - **P2b.** The `browser_*` tools on the runs' tabs, offered to steps.
+   - **P2b.** Done (ORC-359): the `browser_*` tools on the runs' tabs (`orchester-runner`'s
+     `execution/step/browser/`), offered through the runner's relay to Claude Code and Codex steps with *Browser* and
+     network on, read-only steps included, each call decided by the policy and asked about by the runner; downloads and
+     the camera, microphone, location and notification permissions are denied when the browser starts. A tab that
+     closes (`browser_close`, its run's end, or the browser) is no longer listened to and its log's follower ends, so
+     the browser that runs as long as the runner keeps nothing of closed tabs; a screenshot's folder is checked to stay
+     in the worktree before any part of it is made. Tests: the tools end to end through the fake CLIs (`cargo test -p
+     orchester-runner --features test-agent --test browser browser_tools`), closed tabs in `browser_closed_tabs_`, the
+     offering and the approvals in `cargo test -p orchester-core --test browser browser_`. Not
+     yet: the native agent, which gets none of Orchester's relay tools today; the agent's actions waiting while the
+     person drives a tab (P4, with the window); the approval card's reason when *Approve similar* is unavailable for
+     `browser_eval` still reads as for a check (P4).
 3. **P3 · Design (designer).** Drawn 2026-10-28, board `Browser · redesign` `lcNez` in the new `orchester.pen`,
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and

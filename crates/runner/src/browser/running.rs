@@ -1,5 +1,5 @@
-//! A started browser: its process, its one CDP connection and its tabs; how it starts, opens a tab, loads a page and
-//! stops.
+//! A started browser: its process, its one CDP connection and its tabs, the runs' and the person's; how it starts,
+//! opens a tab, loads a page and stops.
 
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
@@ -12,7 +12,9 @@ use tokio::{task::JoinHandle, time::Instant};
 use super::{
   BrowserError,
   cdp::{self, Cdp, CdpError, SessionId, TargetId},
+  log,
   process::BrowserProcess,
+  tab::TabState,
   tabs::Tabs,
   window::{self, Window},
 };
@@ -23,7 +25,9 @@ const START_LIMIT: Duration = Duration::from_secs(30);
 /// How often the start looks for the debugging port's file.
 const PORT_POLL: Duration = Duration::from_millis(50);
 /// How long a page may take to load.
-const LOAD_LIMIT: Duration = Duration::from_secs(30);
+pub const LOAD_LIMIT: Duration = Duration::from_secs(30);
+/// The permissions a page may ask for that are denied, by their names in the Permissions API.
+const DENIED_PERMISSIONS: [&str; 4] = ["camera", "microphone", "geolocation", "notifications"];
 /// How long `Browser.close` may take to be answered, and the browser to exit after it.
 const CLOSE_LIMIT: Duration = Duration::from_secs(5);
 const EXIT_GRACE: Duration = Duration::from_secs(5);
@@ -69,11 +73,12 @@ impl Running {
     tracing::info!(browser = found.name(), ?mode, "the project's browser started");
     let port = devtools_port(profile, &process).await?;
     let cdp = Arc::new(Cdp::connect(&port.websocket_url()).await?);
-    let tabs = Arc::new(Mutex::new(Tabs::default()));
+    let tabs = Arc::new(Mutex::new(Tabs::new(&cdp)));
     let targets = cdp.subscribe(None);
     cdp
       .call(None, "Target.setDiscoverTargets", json!({ "discover": true }))
       .await?;
+    block(&cdp).await?;
     let generation = window.started();
     tokio::spawn(window::follow_targets(
       targets,
@@ -102,8 +107,9 @@ impl Running {
     self.process.exit().is_none() && !self.cdp.is_closed()
   }
 
-  /// Opens a blank tab of `owner`'s and attaches to it; its events are followed for the window from the start. A tab
-  /// that could not be attached is closed again.
+  /// Opens a blank tab of `owner`'s and attaches to it; its events are followed for the window from the start, and a
+  /// run's tab's console messages, requests and dialogs are recorded for its tools ([`log::follow`]). A tab that could
+  /// not be attached is closed again.
   pub(super) async fn open(&self, owner: TabOwner) -> Result<(TargetId, SessionId), BrowserError> {
     let target = self.cdp.create_tab("about:blank").await?;
     let session = match self.cdp.attach(&target).await {
@@ -115,22 +121,39 @@ impl Running {
         return Err(error.into());
       }
     };
-    let events = self.cdp.subscribe(Some(session.clone()));
-    let follower = tokio::spawn(window::follow_tab(
+    let state = Arc::new(TabState::default());
+    let window_follower = tokio::spawn(window::follow_tab(
       Arc::clone(&self.cdp),
       window::Followed {
         target: target.clone(),
         session: session.clone(),
         owner,
       },
-      events,
+      self.cdp.subscribe(Some(session.clone())),
       Arc::clone(&self.tabs),
       Arc::clone(&self.window),
     ));
-    // The tab is its owner's from the moment it is attached: a failure below leaves it to them.
-    self.tabs.lock().add(owner, target.clone(), session.clone(), follower);
+    {
+      let mut tabs = self.tabs.lock();
+      if matches!(owner, TabOwner::Run { .. }) {
+        tokio::spawn(log::follow(
+          self.cdp.subscribe(Some(session.clone())),
+          Arc::downgrade(&self.cdp),
+          session.clone(),
+          Arc::clone(&state),
+          tabs.follower(),
+        ));
+      }
+      // The tab is its owner's from the moment it is attached: a failure below leaves it to them.
+      tabs.add(owner, (target.clone(), session.clone()), state, window_follower);
+    }
     self.window.changed();
     self.cdp.call(Some(&session), "Page.enable", json!({})).await?;
+    if matches!(owner, TabOwner::Run { .. }) {
+      for domain in ["Runtime.enable", "Network.enable", "Log.enable"] {
+        self.cdp.call(Some(&session), domain, json!({})).await?;
+      }
+    }
     Ok((target, session))
   }
 
@@ -150,6 +173,24 @@ impl Running {
       exit => tracing::warn!(?exit, "the project's browser was ended"),
     }
   }
+}
+
+/// Blocks what the agents' browser never does (`docs/design/browser.md`, "Permissions and policy"): downloads, and
+/// the permissions a page may prompt for, denied on every site.
+async fn block(cdp: &Cdp) -> Result<(), CdpError> {
+  cdp
+    .call(None, "Browser.setDownloadBehavior", json!({ "behavior": "deny" }))
+    .await?;
+  for permission in DENIED_PERMISSIONS {
+    cdp
+      .call(
+        None,
+        "Browser.setPermission",
+        json!({ "permission": { "name": permission }, "setting": "denied" }),
+      )
+      .await?;
+  }
+  Ok(())
 }
 
 /// Navigates the tab of `session` to `url` and waits for that navigation's load.

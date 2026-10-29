@@ -235,7 +235,10 @@ async fn browser_person_click_and_typing_reach_the_page() {
   let site = pages().await;
   let desktop = Desktop::new();
   let run = RunId::generate();
-  let target = browser.open_tab(run, &format!("{site}form")).await.expect("opened");
+  let target = browser
+    .open_tab(run, &format!("{site}window-form"))
+    .await
+    .expect("opened");
   let tab = tab_of(&target);
   desktop
     .serve(
@@ -306,7 +309,10 @@ async fn browser_select_list_is_drawn_by_the_window_and_its_choice_set() {
   let mut desktop = Desktop::new();
   desktop.serve(&browser, BrowserCommand::Subscribe).await;
   let run = RunId::generate();
-  let target = browser.open_tab(run, &format!("{site}form")).await.expect("opened");
+  let target = browser
+    .open_tab(run, &format!("{site}window-form"))
+    .await
+    .expect("opened");
   let tab = tab_of(&target);
   desktop
     .serve(
