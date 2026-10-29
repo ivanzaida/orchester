@@ -428,7 +428,11 @@ fn tasks_board_layout_the_columns_cards_scroll_together_under_their_heads() {
     moved.iter().all(|(_, each)| (each - shift).abs() < 0.5),
     "the cards moved together: {moved:?}"
   );
-  assert_eq!(seeded.bounds("tasks-board-column-backlog-head").y, head.y, "the heads stay");
+  assert_eq!(
+    seeded.bounds("tasks-board-column-backlog-head").y,
+    head.y,
+    "the heads stay"
+  );
 
   // A reading of the tasks keeps the cards where they are; a search puts them back at their top.
   seeded.window.projects().feed(seeded.project).saved();
