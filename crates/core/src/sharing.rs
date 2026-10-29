@@ -4,6 +4,7 @@ mod cached;
 mod delta;
 mod references;
 mod similar;
+mod widens;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -16,6 +17,7 @@ pub use self::{
     named, resolve,
   },
   similar::similar_titles,
+  widens::{SharedBody, VersionWidening, widens},
 };
 use crate::{
   id::{ClaimId, UserId},
