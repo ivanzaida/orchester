@@ -14,7 +14,8 @@ mod batch;
 mod catalog;
 mod plan;
 mod record;
-mod references;
+/// Also the walk of shared versions' references ([`crate::sharing::resolve`]).
+pub(crate) mod references;
 
 pub use self::{
   batch::{CopiedResource, ImportBatch, ImportError, Provenance, Resolved},
@@ -34,7 +35,7 @@ pub enum Entity {
 }
 
 impl Entity {
-  const fn uuid(self) -> uuid::Uuid {
+  pub(crate) const fn uuid(self) -> uuid::Uuid {
     match self {
       Self::Resource(id) => id.as_uuid(),
       Self::Connection(id) => id.as_uuid(),
