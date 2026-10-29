@@ -28,9 +28,9 @@ use crate::{
   },
 };
 
-/// The reviewer's selects (`Claude · Work` `JbMwq`, `Opus 5.5` `WffcY`, `Effort · Medium` `M0RSI`).
+/// The reviewer's selects (`Claude · Work` `d5VoC`, `Opus 5.5` `jEztM`, `Effort · Medium` `mqIoa` in Approvals 02c `m0eUB`).
 const CONNECTION_WIDTH: f32 = 130.0;
-const MODEL_WIDTH: f32 = 104.0;
+const MODEL_WIDTH: f32 = 156.0;
 const EFFORT_WIDTH: f32 = 120.0;
 
 pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Group {
