@@ -72,6 +72,7 @@ mod service_needs;
 mod shared_events;
 mod shared_members;
 mod shared_modules;
+mod shared_publishes;
 mod shared_tasks;
 mod shared_versions;
 mod sharing;
@@ -122,6 +123,7 @@ pub use self::{
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::SharedMember,
   shared_modules::{CachedModule, CachedModuleChange},
+  shared_publishes::{PublishState, WaitingPublish},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,

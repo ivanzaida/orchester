@@ -5,13 +5,15 @@
 //! wait 1 s doubling to 60 s with jitter, on a settable clock; the project's state moves through *live*,
 //! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
 //! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
-//! without *Check again*. The team's configuration comes with it ([`config`]).
+//! without *Check again*. The team's configuration comes with it ([`config`]), and its admins publish it from here
+//! ([`publish`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
 mod config;
 mod desktop;
 mod http;
+mod publish;
 mod server;
 #[path = "../support/mod.rs"]
 mod support;
@@ -140,6 +142,11 @@ struct Workspace {
 
 impl Workspace {
   fn linked(server: &TeamServer) -> Self {
+    Self::linked_as(server, MemberRole::Member)
+  }
+
+  /// [`Self::linked`], the person's role in the project `role`.
+  fn linked_as(server: &TeamServer, role: MemberRole) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -152,7 +159,7 @@ impl Workspace {
       server: ServerId::generate(),
       project: server.project,
       key: ProjectKey::new("ORC").expect("key"),
-      role: Some(MemberRole::Member),
+      role: Some(role),
       joined_at: Timestamp::from_unix_millis(1),
       cursor: 0,
       last_synced_at: Timestamp::from_unix_millis(1),

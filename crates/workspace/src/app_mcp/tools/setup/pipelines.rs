@@ -366,6 +366,7 @@ fn publish_code(error: &StoreError) -> &'static str {
     StoreError::DraftChanged(_) => "draft_changed",
     StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => "not_publishable",
     StoreError::Publish(PublishError::VersionLimit) => "version_limit",
+    StoreError::NotAdmin => "not_admin",
     _ => "project_data",
   }
 }

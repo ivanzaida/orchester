@@ -5,8 +5,9 @@ use sentry::protocol::{Context, DeviceContext, Event, Map, OsContext};
 use crate::{paths::PathRules, secrets};
 
 /// The tags Orchester sets on its reports, the only ones a report keeps: `process`, which of its programs
-/// reported (the app or the runner).
-pub const ORCHESTER_TAGS: &[&str] = &["process"];
+/// reported (the app or the runner), and on the app's report of a frozen window `screen`, the kind of screen it
+/// showed, and `stack`, whether the window's thread's stack was captured.
+pub const ORCHESTER_TAGS: &[&str] = &["process", "screen", "stack"];
 
 /// Removes everything private from an error report before it may leave the computer.
 ///
