@@ -35,7 +35,7 @@ changed only through the pencil-design MCP server. Every name, path, command and
 |---|---|---|---|
 | `OXFBX` | Agents · redesign (`ZsU3S`) | Row 7 · Approval modes (ORC-342) | The row holding the profile frames and the notes |
 | `J1ixkr` | Agents | 07 · Permissions · Approvals · Manual | Approvals first after Repository access: Autopilot / Manual radio rows with one line each; Manual selected with *Allowed commands* (chips, add field) right under it and *Ask before MCP actions that require approval*; the decisions note; *Commands and network* becomes *Network*; enforcement row *Approval mode · Manual* |
-| `VOpn8` | Agents | 07b · Permissions · Approvals · Autopilot | Autopilot selected with *Still asks you* (outside the worktree, Sources and temp folders · pushes to a remote · refs other than the run's branch), the in-place widening *Allow Autopilot for Builder?*, draft bar *Approvals · Manual → Autopilot*, enforcement row *Approval mode · Autopilot* |
+| `VOpn8` | Agents | 07b · Permissions · Approvals · Autopilot | Autopilot selected with *Still asks you* (outside the worktree, Sources and temp folders · pushes to a remote · refs other than the run's branch), the in-place widening *Allow Autopilot for Builder?* as the last row inside the Approvals card (`E5U3S`, as `SqDvZ` sits in `01c`), draft bar *Approvals · Manual → Autopilot*, enforcement row *Approval mode · Autopilot* |
 | `Ejpm9` | Agents | 07c · … · Autopilot · light | 07b in the light theme |
 | `J0MveH` | Agents | 07d · Approval mode · connection enforcement | The enforcement row per CLI and mode: Claude Code and Codex, Autopilot and Manual (Enforced), an older Codex that can't hand requests to Orchester (Not enforced · runs as Manual) |
 | `NiVRV` | Agents | Notes · approval modes | Decisions, what changed, what must be built, open questions |
@@ -51,6 +51,8 @@ Reused: the window `qlXhJ` with its body overrides copied from `01c` (`WAWHr`), 
 card of `CqVv3`; the *What changed* panel of `T7qrB`; `Tag chip` `FK4CS` for the mode chip; `Badge/Warning`,
 `Badge/Neutral`, `Button/Primary`, `Button/Secondary`, `Toggle/Switch on/off`. No component, variable or existing frame
 was changed; `02 · Runs` and `01c` stay as the earlier design, superseded for their auto-mode parts by the frames above.
+Gaps and paddings in the new frames use the `$spacing_*` variables where a value matches one (the 28 px window padding
+and the copied rows' 2/6/10/14 px values have no variable). The Claude Code version reads 2.1.173 everywhere.
 
 ## Copy
 
