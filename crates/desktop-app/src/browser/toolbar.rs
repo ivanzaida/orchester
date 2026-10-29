@@ -242,7 +242,7 @@ impl Address {
     };
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let (value, commands) = (self.value.clone(), showing.commands.clone());
-    let hooks = showing.person.clone();
+    let (hooks, address) = (showing.person.clone(), showing.address.clone());
     let input = TextInput::styled(
       self.value.clone(),
       resolve(BrowserText::Address.role(), PaletteColor::TextPrimary),
@@ -258,8 +258,9 @@ impl Address {
     .single_line()
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false))
+    // Every key reaches every handler: an Enter on the page is the page's.
     .on_key_down(move |event: KeyboardEvent| {
-      if event.key != "Enter" {
+      if event.key != "Enter" || !address.focused() {
         return;
       }
       event.prevent_default();

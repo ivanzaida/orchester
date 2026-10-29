@@ -1,9 +1,11 @@
 //! The person's input on the page (`docs/design/browser.md`, "The person's input"): lurq's pointer, wheel and keyboard
-//! events on the page become `PersonInput`s in the page's CSS pixels, sent to the tab shown. A press focuses the page;
-//! keys reach the tab only while the page has the focus, so typing in the address line stays there, and a key the page
-//! takes (Tab, arrows, Backspace) does not also move the window's focus. A key that types sends its text with it.
-//! Each input marks the tab as used, so its agent waits (`02b` `k7xvx`). An input method's composition is not sent
-//! yet: lurq gives it only to a text input of its own; what it commits arrives as keys.
+//! events on the page become `PersonInput`s in the page's CSS pixels, sent to the tab shown. A press gives the page the
+//! focus, which a hidden text input holds for it; keys reach the tab only while it has the focus, so typing in the
+//! address line stays there, and a key the page takes (Tab, arrows, Backspace) does not also move the window's focus.
+//! A key that types sends its text with it. The hidden input is there for input methods, which lurq lets compose only
+//! in a focused text input: the text one commits is sent as `PersonInput::Text`, and its candidates show where the
+//! page was pressed. A composition under way is not sent, as lurq shows it in the input and tells no handler of it;
+//! nor is a key the composition takes. Each input marks the tab as used, so its agent waits (`02b` `k7xvx`).
 
 use std::{
   sync::Arc,
@@ -13,10 +15,11 @@ use std::{
 use lurq::{
   app::{
     ctx::Ctx,
-    events::{KeyboardEvent, MouseButton as Button, MouseEvent, ScrollEvent},
+    events::{KeyboardEvent, MouseButton as Button, MouseEvent, ScrollEvent, TextInputEvent},
   },
-  components::Stack,
-  core::ElementRef,
+  components::{Stack, TextInput},
+  core::{ElementRef, Signal},
+  node::{HitTestBehavior, dimension::Dimension},
 };
 use orchester_ipc::browser::{
   BrowserCommand, BrowserTabId, KeyAction, Modifiers, MouseAction, MouseButton, PersonInput,
@@ -28,10 +31,22 @@ use crate::browser::state::Showing;
 /// Two presses this close in time are a double click.
 const DOUBLE_CLICK: Duration = Duration::from_millis(500);
 
-/// What the page remembers of the pointer between events.
+/// The hidden input is not seen, nor its caret or a composition in it; one pixel square, so lurq lays it out and gives
+/// an input method its place.
+const HIDDEN_OPACITY: f32 = 0.0;
+const HIDDEN_SIZE: f32 = 1.0;
+
+/// What the page remembers of the pointer between events, and the hidden input that holds its focus.
 #[derive(Clone)]
 pub struct PageInput {
   pressed: Arc<Mutex<Pressed>>,
+  text: ElementRef,
+  /// The hidden input's value, kept empty: what it would take goes to the tab.
+  value: Signal<String>,
+  /// Where the page was last pressed, from its top left, where the hidden input stands.
+  at: Signal<(f32, f32)>,
+  /// A press asked for the page's focus, which the next render gives the hidden input.
+  focus: Signal<bool>,
 }
 
 #[derive(Default)]
@@ -45,41 +60,58 @@ struct Pressed {
 }
 
 impl PageInput {
-  pub fn new(_ctx: &mut Ctx) -> Self {
+  pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       pressed: Arc::new(Mutex::new(Pressed::default())),
+      text: ctx.element_ref(),
+      value: ctx.signal(String::new()),
+      at: ctx.signal((0.0, 0.0)),
+      focus: ctx.signal(false),
     }
   }
 
-  /// `page` with the handlers that send the person's input to `tab`; `css` is the frame's size in CSS pixels, once a
-  /// frame came.
+  /// `page` with the handlers that send the person's input to `tab`, and the hidden input; `css` is the frame's size
+  /// in CSS pixels, once a frame came.
   pub fn attach(
     &self,
+    ctx: &mut Ctx,
     page: Stack,
     (showing, tab): (&Showing, &BrowserTabId),
     (element, css): (ElementRef, Option<(u32, u32)>),
   ) -> Stack {
+    if self.focus.get() {
+      ctx.focus(&self.text);
+      self.focus.set(false);
+    }
     let send = Sender {
       showing: showing.clone(),
       tab: tab.clone(),
       element,
       css,
+      text: self.text.clone(),
     };
-    let (down, up, moved, wheel, key_down, key_up) = (
+    let (down, up, moved) = (
+      (send.clone(), self.clone()),
       (send.clone(), self.pressed.clone()),
       (send.clone(), self.pressed.clone()),
-      (send.clone(), self.pressed.clone()),
-      send.clone(),
-      send.clone(),
-      send,
     );
+    let (wheel, key_down, key_up, typed) = (send.clone(), send.clone(), send.clone(), send);
+    let (x, y) = self.at.get();
+    let hidden = TextInput::new(self.value.clone())
+      .id("browser-page-text")
+      .ref_element(self.text.clone())
+      .absolute(x, y, Dimension::Px(HIDDEN_SIZE), Dimension::Px(HIDDEN_SIZE))
+      .hit_test(HitTestBehavior::None)
+      .opacity(HIDDEN_OPACITY)
+      .single_line()
+      .on_input(move |event: TextInputEvent| typed.committed(&event));
     page
-      .focusable(true)
       .on_mouse_down(move |event: MouseEvent| {
-        let (send, pressed) = &down;
+        let (send, input) = &down;
+        input.pressed_at(send, &event);
         let button = button(event.button);
         let clicks = {
-          let mut pressed = pressed.lock();
+          let mut pressed = input.pressed.lock();
           let now = Instant::now();
           let double = pressed.last.is_some_and(|last| now.duration_since(last) < DOUBLE_CLICK);
           pressed.held = Some(button);
@@ -109,6 +141,14 @@ impl PageInput {
       })
       .on_key_down(move |event: KeyboardEvent| key_down.key(&event, KeyAction::Down))
       .on_key_up(move |event: KeyboardEvent| key_up.key(&event, KeyAction::Up))
+      .child(hidden)
+  }
+
+  /// A press on the page moves the hidden input there and asks for the focus.
+  fn pressed_at(&self, send: &Sender, event: &MouseEvent) {
+    let bounds = send.element.bounds();
+    self.at.set((event.x - bounds.x, event.y - bounds.y));
+    self.focus.set(true);
   }
 }
 
@@ -119,6 +159,8 @@ struct Sender {
   tab: BrowserTabId,
   element: ElementRef,
   css: Option<(u32, u32)>,
+  /// The hidden input, whose focus is the page's.
+  text: ElementRef,
 }
 
 impl Sender {
@@ -174,9 +216,10 @@ impl Sender {
     self.send(input, true);
   }
 
-  /// A key the window took for a shortcut (`browser::keys`) does not reach the page.
+  /// A key the window took for a shortcut (`browser::keys`) does not reach the page, nor one an input method's
+  /// composition takes: what the composition commits comes as text (`Self::committed`).
   fn key(&self, event: &KeyboardEvent, action: KeyAction) {
-    if !self.element.focused() || event.text_input_focused || event.default_prevented() {
+    if !self.text.focused() || event.default_prevented() || event.composing {
       return;
     }
     event.prevent_default();
@@ -190,6 +233,15 @@ impl Sender {
       modifiers: modifiers(event.alt, event.ctrl, event.meta, event.shift),
     };
     self.send(input, action == KeyAction::Down);
+  }
+
+  /// The text an input method committed in the hidden input goes to the tab; the input keeps nothing.
+  fn committed(&self, event: &TextInputEvent) {
+    event.prevent_default();
+    if event.keyboard.composing && !event.keyboard.key.is_empty() {
+      let text = event.keyboard.key.clone();
+      self.send(PersonInput::Text { text }, true);
+    }
   }
 }
 

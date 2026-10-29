@@ -18,6 +18,8 @@ use std::{
 };
 
 use orchester_core::id::RunId;
+#[cfg(feature = "test-support")]
+use orchester_ipc::browser::BrowserCommand;
 use orchester_ipc::browser::{BrowserEvent, ScreencastFrame};
 use orchester_store::StoreError;
 use parking_lot::Mutex;
@@ -51,6 +53,8 @@ impl Default for BrowserWindow {
         showing: Mutex::new(None),
         changes: watch::Sender::new(0),
         started: watch::Sender::new(None),
+        #[cfg(feature = "test-support")]
+        recorded: Mutex::new(None),
       }),
     }
   }
@@ -63,6 +67,9 @@ struct Inner {
   /// Counts the changes of every project's browser and of its frames.
   changes: watch::Sender<u64>,
   started: watch::Sender<Option<StartedBrowsing>>,
+  /// The window's requests with their project, kept instead of sent while a test records them.
+  #[cfg(feature = "test-support")]
+  recorded: Mutex<Option<Vec<(PathBuf, BrowserCommand)>>>,
 }
 
 struct Project {
@@ -233,5 +240,38 @@ impl BrowserWindow {
   #[doc(hidden)]
   pub fn receive_frame_for_test(&self, root: &Path, frame: ScreencastFrame) {
     self.receive_frame(root, frame);
+  }
+
+  /// From now on the window's requests are kept, each answered as carried out, instead of sent to a runner: for tests
+  /// of what the window asks, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn record_commands_for_test(&self) {
+    self.inner.recorded.lock().get_or_insert_with(Vec::new);
+  }
+
+  /// The requests kept since the last call, each with the project it was for.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn recorded_commands_for_test(&self) -> Vec<(PathBuf, BrowserCommand)> {
+    self
+      .inner
+      .recorded
+      .lock()
+      .as_mut()
+      .map(std::mem::take)
+      .unwrap_or_default()
+  }
+
+  /// Keeps `command` for the project at `root` while a test records the requests; gives it back otherwise.
+  #[cfg(feature = "test-support")]
+  pub(crate) fn record(&self, root: &Path, command: BrowserCommand) -> Result<(), BrowserCommand> {
+    match self.inner.recorded.lock().as_mut() {
+      Some(kept) => {
+        kept.push((root.to_path_buf(), command));
+        Ok(())
+      }
+      None => Err(command),
+    }
   }
 }

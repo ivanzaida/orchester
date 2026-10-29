@@ -412,8 +412,11 @@ not jump to another project by itself.
      first run's Summary has the Browser line 10), `browser-window-dialog` (03), `browser-window-select` (04),
      `browser-window-headed` (05), `browser-window-empty` (06), `browser-window-not-found` (07); start them with
      `no_runner`, so no runner reports
-     its own browser over the fixture. Not yet: an input method's composition (lurq gives it only to its own text
-     inputs; what it commits arrives as keys), copy and paste bridged to the system clipboard, the cursor's shape over
+     its own browser over the fixture. The page's focus is a hidden text input of lurq's, at the point pressed, so an
+     input method composes there and what it commits is sent as text (`Input.insertText`); tests of the person's
+     input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
+     Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the
+     page gets the text only once committed), copy and paste bridged to the system clipboard, the cursor's shape over
      links and fields, the file chooser, the status bar's *Browser 3 tabs*, bringing an open window to the front
      (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
      report the history; they fade only without a tab to go through).

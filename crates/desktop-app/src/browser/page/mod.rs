@@ -1,9 +1,9 @@
 //! The page (`Page` `Dqgop`): the latest screencast frame of the tab shown, drawn as one image as it was decoded off
-//! the UI thread (`orchester_workspace::browser::RgbaFrame`), and the person's pointer, wheel and keys sent back to the
-//! tab in the page's CSS pixels (`input`). Over it Orchester draws what a headless frame does not show (`docs/design/
-//! browser.md`, "What frames do not show"): the ring and name where an agent acted (`mark`, `02` `UKAkY`), a
-//! JavaScript dialog of the person's tab over the page only (`dialog`, `03` `t08Ur`), and a `<select>` list under its
-//! field in the menu's look (`select`, `04` `r31HX`).
+//! the UI thread (`orchester_workspace::browser::RgbaFrame`), and the person's pointer, wheel, keys and an input
+//! method's text sent back to the tab, in the page's CSS pixels (`input`). Over it Orchester draws what a headless
+//! frame does not show (`docs/design/browser.md`, "What frames do not show"): the ring and name where an agent acted
+//! (`mark`, `02` `UKAkY`), a JavaScript dialog of the person's tab over the page only (`dialog`, `03` `t08Ur`), and a
+//! `<select>` list under its field in the menu's look (`select`, `04` `r31HX`).
 
 pub mod activity;
 mod dialog;
@@ -109,6 +109,7 @@ impl Component for Page {
       .and_then(|view| view.tabs().iter().find(|open| open.id == tab))
       .is_some_and(|open| open.owner == TabOwner::Person);
     let page = self.input.attach(
+      ctx,
       page,
       (&showing, &tab),
       (self.element.clone(), frame.as_ref().map(|frame| frame.css_size())),
