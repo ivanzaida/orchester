@@ -17,8 +17,6 @@ mod http;
 pub mod responses;
 #[cfg(feature = "http")]
 mod retry;
-#[cfg(feature = "http")]
-pub mod sse;
 
 pub use self::files::FileTools;
 #[cfg(feature = "http")]

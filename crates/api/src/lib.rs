@@ -17,6 +17,7 @@ mod modules;
 mod projects;
 mod resources;
 mod server_admin;
+pub mod sse;
 pub mod statements;
 mod tasks;
 #[cfg(feature = "test-support")]

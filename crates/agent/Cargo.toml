@@ -13,9 +13,11 @@ workspace = true
 # The model clients over HTTP and SSE. Without it the crate is the file and search tool executors only,
 # which the runner serves to every agent CLI.
 default = ["http"]
-http = ["dep:reqwest", "dep:rustls", "dep:serde", "dep:serde_json", "dep:tokio"]
+http = ["dep:orchester-api", "dep:reqwest", "dep:rustls", "dep:serde", "dep:serde_json", "dep:tokio"]
 
 [dependencies]
+# The SSE parser of the model streams (`orchester_api::sse`), shared with the server's event stream.
+orchester-api = { workspace = true, optional = true }
 orchester-core.workspace = true
 # Starts ripgrep for `list_files` and `search` the way Orchester starts every program (no console
 # window, a process group of its own on macOS, the full search path).
