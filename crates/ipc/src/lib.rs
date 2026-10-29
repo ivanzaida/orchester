@@ -13,6 +13,7 @@ mod chat;
 mod client;
 pub mod daily_log;
 mod error;
+pub mod error_reports;
 mod exit_code;
 pub mod frame;
 mod handshake;
@@ -29,6 +30,7 @@ mod work;
 pub use chat::{ChatToken, ChatTools};
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
 pub use error::{FrameError, IpcError};
+pub use error_reports::ErrorReports;
 pub use exit_code::EXIT_PROJECT_LOCKED;
 pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]

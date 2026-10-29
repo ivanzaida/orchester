@@ -121,7 +121,10 @@ fn gate_shows_on_a_first_run_and_nothing_behind_it_is_reachable() {
   );
   assert_eq!(window.text("gate-footer-cloud"), default_host());
   assert_eq!(window.text("orchester-advanced-meta"), "default");
-  assert!(has(&mut window, "status-version"));
+  assert!(
+    !has(&mut window, "status-version"),
+    "the gate's bar keeps only the MCP item; the version is in its card (K8VUO)"
+  );
 
   let tabs = window.navigation().tabs().tabs().len();
   window.navigation().go(Route::Settings);
@@ -148,7 +151,7 @@ fn gate_shows_on_a_first_run_and_nothing_behind_it_is_reachable() {
     window.text("gate-footer-note"),
     "Signing in needs the internet once. After that, Orchester works offline."
   );
-  assert!(!has(&mut window, "status-version"), "the version gives way at 960");
+  assert!(has(&mut window, "status-mcp"), "the MCP item stays at 960");
 }
 
 #[test]

@@ -478,7 +478,7 @@ async fn a_runner_asked_to_quit_does_not_wait_for_an_index_build() {
   let held = hold_index_lock(root);
   let mut client = tokio::time::timeout(
     Duration::from_secs(10),
-    RunnerClient::launch(Path::new(env!("CARGO_BIN_EXE_orchester-runner")), root),
+    RunnerClient::launch(Path::new(env!("CARGO_BIN_EXE_orchester-runner")), root, None),
   )
   .await
   .expect("launch in time")

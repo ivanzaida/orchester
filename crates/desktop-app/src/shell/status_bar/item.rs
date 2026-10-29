@@ -1,8 +1,8 @@
 //! Parts of the status bar's items (`Status item` `wnnsD`): 26 high, 8 at each side, a 12 icon and an
 //! 11 label in `text_muted`, 6 apart. Items that do something take the `hover` fill under the pointer and
-//! never take the focus: the status bar is pointer-only (`ui::pressable`). An action beside an item
-//! (*Restart runner*, *Review*, *Stop*) is 11/500 `text_primary`, 3 at its sides, so two actions read 6
-//! apart. Text an item shortens keeps its full value in a tooltip (handover §3.3).
+//! never take the focus: the status bar is pointer-only (`ui::pressable`). An action (*Restart runner*,
+//! *Review*, *Stop*) is the compact button (`Button/Size/Compact` `SHKod`), 6 from the next one. Text an
+//! item shortens keeps its full value in a tooltip (handover §3.3).
 
 use lurq::{
   app::{
@@ -17,6 +17,7 @@ use lurq::{
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
+    button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     pressable::Press,
     tooltip::Truncated,
@@ -30,22 +31,16 @@ const DOT_SIZE: f32 = 6.0;
 
 /// The order in which the parts of the bar give way when the window is narrow (lurq `shrink_order`):
 /// the bar is one line, so both of its groups give way in one order, each part down to its limit before
-/// the next shrinks at all (handover §3.3). The room between the groups goes first, then the words of
-/// the window-control item; then what the waiting approval asks, which run auto-approves, the times and
-/// clocks, the version, the counts' labels (together), the project's name, the activity's words, the words
-/// after how many requests wait, and last the runner's words. The hand, the counts, *Review*, *Stop* and MCP
-/// never give way.
+/// the next shrinks at all (handover §3.3, `Narrow` in `Status bar · redesign`). The room between the groups
+/// goes first, then the words of the window-control item; then which run auto-approves, the times and clocks,
+/// the activity's words, and last the runner's words. Icons, *Open*, *Stop*, MCP and the health dot never
+/// give way.
 pub mod give_way {
   pub const ROOM: i32 = -1;
   pub const WINDOW_CONTROL: i32 = 0;
-  pub const ASKS: i32 = 1;
   pub const RUN: i32 = 2;
   pub const TIMES: i32 = 3;
-  pub const VERSION: i32 = 4;
-  pub const COUNT_LABELS: i32 = 6;
-  pub const PROJECT: i32 = 7;
   pub const ACTIVITY: i32 = 8;
-  pub const APPROVAL_WORDS: i32 = 9;
   pub const RUNNER_WORDS: i32 = 10;
 }
 
@@ -115,17 +110,23 @@ pub fn time_part(id: &str, time: impl Into<Element>) -> Element {
     .into()
 }
 
-/// An action beside an item, with the element id `id`.
+/// An action beside an item, with the element id `id`: the compact button, 6 before what follows it.
 pub fn action(id: &str, text: &str, press: Press) -> Element {
-  pressed(id, press)
-    .padding(Padding::horizontal(ExtraSpacing::Fine.role()))
-    .describe("a11y_name", text.to_owned())
-    .child(
-      Text::new(text)
-        .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextPrimary)
-        .nowrap(),
-    )
+  Row::new()
+    .height(Dimension::Px(ITEM_HEIGHT))
+    .padding(Padding::new().right(ExtraSpacing::Snug.role()))
+    .align_items(Alignment::Center)
+    .child(button(id, text, press))
+    .into()
+}
+
+/// The compact button (`Button/Size/Compact` `SHKod`) with the element id `id`, inside an item: 22 high,
+/// `surface_raised` inside a `border_strong` stroke, an 11.5 `text_primary` label, 10 at each side.
+pub fn button(id: &str, text: &str, press: Press) -> Element {
+  ActionButton::new(id.to_owned(), ButtonKind::Secondary, text.to_owned())
+    .compact()
+    .tight()
+    .press(press)
     .into()
 }
 

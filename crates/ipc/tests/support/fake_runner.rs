@@ -7,7 +7,8 @@
 //! - `locked`: exits as a runner does when another one holds the project.
 //!
 //! Serving means accepting the desktop, answering the handshake and holding the connection until
-//! the desktop closes it. Every start appends a line to the project's `starts` file.
+//! the desktop closes it. Every start appends a line to the project's `starts` file: `start`, and
+//! the environment and release of the error reports it was started with, if any.
 
 use std::{
   fs::{self, OpenOptions},
@@ -18,18 +19,22 @@ use std::{
 };
 
 use orchester_ipc::{
-  EXIT_PROJECT_LOCKED, Endpoint, IpcError, Request,
+  EXIT_PROJECT_LOCKED, Endpoint, ErrorReports, IpcError, Request,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
 
 fn main() -> ExitCode {
   let root = PathBuf::from(std::env::args_os().nth(1).expect("the project root argument"));
+  let start = match ErrorReports::of_this_process() {
+    Some(reports) => format!("start {} {}\n", reports.environment(), reports.release()),
+    None => "start\n".to_owned(),
+  };
   OpenOptions::new()
     .create(true)
     .append(true)
     .open(root.join("starts"))
-    .and_then(|mut starts| starts.write_all(b"start\n"))
+    .and_then(|mut starts| starts.write_all(start.as_bytes()))
     .expect("note the start");
   let plan = fs::read_to_string(root.join("fake-runner")).expect("read the fake-runner file");
   let mut words = plan.split_whitespace();

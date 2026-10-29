@@ -352,6 +352,8 @@ orchester-exec.workspace = true
 # The codebase index of each run's base revision, built before its first step.
 orchester-index.workspace = true
 orchester-ipc.workspace = true
+# The client options and the scrubber of the runner's error reports, the app's too (`error_reports`).
+orchester-report = { workspace = true, features = ["client"] }
 orchester-store.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
@@ -359,9 +361,13 @@ parking_lot.workspace = true
 serde_json.workspace = true
 # The run app relay uses a bounded loopback HTTP client and decodes/re-encodes PNGs without metadata.
 reqwest = { workspace = true, features = ["blocking"] }
+# Also the ring crypto provider the error reports' reqwest client takes (`error_reports`).
 rustls.workspace = true
 base64.workspace = true
 image.workspace = true
+# Sends the runner's panics and ERROR log lines to GlitchTip when the app says so (`error_reports`): the tracing
+# layer and the HTTP transport over reqwest and rustls, already built for the app with the same features.
+sentry = { workspace = true, features = ["reqwest", "rustls-no-provider", "tracing"] }
 # The empty folder auto mode's reviewer runs in, removed after the review; already a test dependency.
 tempfile.workspace = true
 thiserror.workspace = true
@@ -376,5 +382,7 @@ orchester-store = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
+# Sentry's test transport, which keeps a test's error reports instead of sending them (`tests/error_reports.rs`).
+sentry = { workspace = true, features = ["test"] }
 tempfile.workspace = true
 tokio.workspace = true

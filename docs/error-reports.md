@@ -11,8 +11,10 @@ add.
 
 ## When reports are sent
 
-Today only the desktop app sends reports, of its panics and of the ERROR lines of its log, to the GlitchTip project
-`desktop` (`orchester_app::error_reports`, `orchester_app::app_log::error_reports`). The runner sends none yet.
+The desktop app and its runners send reports, of their panics and of the ERROR lines of their logs, to the GlitchTip
+project `desktop` (`orchester_app::error_reports`, `orchester_app::app_log::error_reports`,
+`orchester_runner::error_reports`), with the same client options (`orchester_report::client`). The tag `process` says
+which sent it: `app` or `runner`.
 
 - **Only ERROR lines.** A WARN, INFO or lower line sends nothing and is no breadcrumb either. The app logs at WARN
   what a person causes or expects (wrong input, a program that is not installed, a network that is down, a file with
@@ -28,10 +30,17 @@ Today only the desktop app sends reports, of its panics and of the ERROR lines o
 - **Only the installed app and QA copies.** The installed app reports as environment `production`. A QA copy that
   `tools/qa-app.ps1` starts reports as `qa`, and so does a release build started with `ORCHESTER_APP_MCP_DISCOVERY`.
   Other debug builds, `cargo run --release` and the tests never start the client.
+- **The runner reports only when the app says so.** The runner never reads `orchester.db`. While the app's own
+  client runs, every runner it starts gets the environment variables `ORCHESTER_ERROR_REPORTS` (the app's environment)
+  and `ORCHESTER_ERROR_REPORTS_RELEASE` (the app's release); a runner started without them sends nothing, and the app
+  removes them from a runner's environment when it does not report. A runner keeps what it was started with until it
+  exits. Debug builds of the runner, a QA copy's among them, and the tests never report.
 - **No other data.** The client sends no default personal data (`send_default_pii` is off), no traces and no
-  sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`.
-- **Sent before exit.** When the app exits, it waits up to two seconds for pending reports to leave. The panic is
-  still written to the app's log file.
+  sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`, for the runner's reports
+  too.
+- **Sent before exit.** When the app or a runner exits, it waits up to two seconds for pending reports to leave. The
+  panic is still written to the app's log file, and a runner's to its stderr; its log file and stderr stay as they
+  are.
 
 ## What a report carries
 

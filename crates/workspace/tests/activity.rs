@@ -280,22 +280,6 @@ fn activity_work_that_did_not_happen_replaces_its_success_without_a_failure() {
   assert_eq!(recent, ["notSynced", "synced"]);
 }
 
-#[test]
-fn activity_slot_keeps_a_run_waiting_for_a_decision_beside_approvals() {
-  let mut waiting = ActivityLog::default();
-  waiting.record_needs_you(
-    None,
-    Message::new("waits"),
-    Target::Nothing,
-    std::time::SystemTime::now(),
-  );
-  assert!(activity_slot(Some(&RunnerState::Online), &waiting).beside_approvals());
-  let mut running = ActivityLog::default();
-  running.start(spec("build"), Instant::now());
-  assert!(!activity_slot(Some(&RunnerState::Online), &running).beside_approvals());
-  assert!(!activity_slot(Some(&RunnerState::Starting), &waiting).beside_approvals());
-}
-
 /// The same work done after all settles its earlier failure: a save that failed and then went
 /// through no longer holds the slot.
 #[test]

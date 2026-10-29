@@ -132,7 +132,16 @@ fn status_plan_limits_say_which_account_reached_its_limit_and_open_its_windows()
 /// 9 from the bar, their end 12 from the bar's).
 #[test]
 fn status_plan_limits_and_mcp_popovers_switch_in_one_press() {
-  let mut bar = bar(vec![limits(account(AccountCli::ClaudeCode, "Work"), 42.0, false)]);
+  // A QA copy's server shows its item while it listens; the installed app's is quiet.
+  let mut facts = facts(Some(ProjectFacts {
+    limits: vec![limits(account(AccountCli::ClaudeCode, "Work"), 42.0, false)],
+    ..kontur(runner(RunnerState::Online), ProjectTasks::default())
+  }));
+  facts.mcp.kind = orchester_app::mcp::McpKind::Qa {
+    folder: PathBuf::from(".tmp/qa/orc-242/mcp"),
+    file: None,
+  };
+  let mut bar = Bar::of(facts);
   bar.press("status-plan-limits");
   assert!(bar.texts("status-plan-limits-popover").is_some(), "plan limits open");
   bar.press("status-mcp");
