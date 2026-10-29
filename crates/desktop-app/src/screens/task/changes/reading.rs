@@ -35,21 +35,26 @@ const LINES: [f32; 18] = [
   174.0,
 ];
 
-/// The tab's toolbar and panes in bones.
+/// The tab's toolbar and panes in bones, while the changes are read.
 pub fn bones(ctx: &mut Ctx) -> Element {
+  let bones = panes(ctx);
+  Skeleton::new("changes-loading", ctx.t("changes.loading"))
+    .fills()
+    .show(ctx, bones)
+}
+
+/// The tab's toolbar and panes as bones, for the skeleton of whatever is read.
+pub fn panes(ctx: &Ctx) -> Column {
   let panes = Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .align_items(Alignment::Start)
     .child(files(ctx))
     .child(diff(ctx));
-  let bones = Column::new()
+  Column::new()
     .width(Dimension::Pct(100.0))
     .child(toolbar(ctx))
-    .child(panes);
-  Skeleton::new("changes-loading", ctx.t("changes.loading"))
-    .fills()
-    .show(ctx, bones)
+    .child(panes)
 }
 
 /// The toolbar: its marks real, the base, the checkpoint, the totals and *Try locally* bones.

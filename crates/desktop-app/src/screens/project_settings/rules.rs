@@ -88,7 +88,8 @@ impl Component for Rules {
       .child(head);
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
       // No loading frame draws the rules' page: their rows' bones stand in the outline the rules take.
-      let bones = crate::ui::skeleton::list(ctx, "settings-rules-reading", &[(180.0, 240.0), (150.0, 210.0)]);
+      let bones =
+        |ctx: &mut Ctx| crate::ui::skeleton::list(ctx, "settings-rules-reading", &[(180.0, 240.0), (150.0, 210.0)]);
       return page::scroll(content.child(work::pending(ctx, &state, &self.revision, bones)));
     };
     self.stored.set(Some(read.clone()));

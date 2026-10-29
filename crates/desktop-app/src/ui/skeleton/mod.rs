@@ -10,7 +10,10 @@
 
 mod rows;
 
-use std::sync::{Arc, OnceLock};
+use std::{
+  sync::{Arc, OnceLock},
+  time::Instant,
+};
 
 use lurq::{
   animation::{AnimatableProperty, Animation, Easing, Keyframes, KeyframesId, StepPosition},
@@ -39,6 +42,7 @@ pub struct Skeleton {
   id: Arc<str>,
   label: Arc<str>,
   room: Room,
+  since: Option<Instant>,
 }
 
 /// The room a skeleton takes where it stands.
@@ -58,6 +62,7 @@ impl Skeleton {
       id: id.into(),
       label: label.into(),
       room: Room::Width,
+      since: None,
     }
   }
 
@@ -74,12 +79,20 @@ impl Skeleton {
     self
   }
 
+  /// The reading began at `started`, before this skeleton was made: a skeleton that stands in for another one of the
+  /// same reading, in another part of the screen, keeps its delay rather than starting it again.
+  pub const fn since(mut self, started: Instant) -> Self {
+    self.since = Some(started);
+    self
+  }
+
   /// The skeleton with `bones`, which show under `<id>-bones` once the reading took [`SKELETON_DELAY`].
   pub fn show(self, ctx: &mut Ctx, bones: impl Into<Element>) -> Element {
     let props = SkeletonProps {
       id: self.id,
       label: self.label,
       room: self.room,
+      since: self.since,
     };
     ctx.mount_keyed_with::<Delayed>(&format!("skeleton-{}", props.id), props, vec![bones.into()])
   }
@@ -90,25 +103,36 @@ struct SkeletonProps {
   id: Arc<str>,
   label: Arc<str>,
   room: Room,
+  since: Option<Instant>,
 }
 
 impl DevtoolsInspectable for SkeletonProps {}
 
 struct Delayed {
   shown: Signal<bool>,
-  /// Shows the bones once the reading took [`SKELETON_DELAY`].
-  _delay: Timeout,
+  /// Shows the bones once the reading took [`SKELETON_DELAY`]; none when it already had.
+  _delay: Option<Timeout>,
 }
 
 impl Component for Delayed {
   type Props = SkeletonProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let shown = ctx.signal(false);
+    let since = ctx.props::<SkeletonProps>().since;
+    let left = since.map_or(SKELETON_DELAY, |started| {
+      SKELETON_DELAY.saturating_sub(started.elapsed())
+    });
+    let shown = ctx.signal(left.is_zero());
+    if left.is_zero() {
+      return Self { shown, _delay: None };
+    }
     let show = shown.clone();
-    let delay = ctx.create_timeout(SKELETON_DELAY, move || show.set(true));
+    let delay = ctx.create_timeout(left, move || show.set(true));
     delay.start();
-    Self { shown, _delay: delay }
+    Self {
+      shown,
+      _delay: Some(delay),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {

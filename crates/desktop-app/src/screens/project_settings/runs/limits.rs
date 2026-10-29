@@ -201,7 +201,6 @@ impl Component for Limits {
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(data) = state.data.clone().or_else(|| self.stored.get()) else {
-      let bones = bones(ctx);
       return work::pending(ctx, &state, &self.revision, bones);
     };
     if self.stored.get_untracked().is_none() {

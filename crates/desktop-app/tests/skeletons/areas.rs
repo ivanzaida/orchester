@@ -1,8 +1,8 @@
 //! Each area's skeleton while its reads are held: none of its bones before the delay, its bones after it.
 
 use orchester_app::routes::{
-  AccountsView, FilesView, ModuleListTab, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route,
-  TaskView,
+  AccountsView, FilesView, InstructionsView, ModuleListTab, OrchestratorChat, OverviewTab, ProjectPage,
+  ProjectSettingsTab, Route, TaskView,
 };
 
 use crate::harness::Held;
@@ -87,6 +87,29 @@ fn skeletons_agents_shows_the_profiles_bones_after_a_moment() {
   assert!(held.exists("agents-hub-tab-profiles"), "the hub's tabs stay real");
 }
 
+#[test]
+fn skeletons_instruction_import_shows_the_reviews_bones_after_a_moment() {
+  let mut held = Held::new();
+  held.hold.set(false);
+  held.page(ProjectPage::Instructions(InstructionsView::default()));
+  held.until("instructions-new");
+  held.window.until("the instructions are read", |window| {
+    window.tree.get_element_by_id("instructions-loading").is_none()
+  });
+  held.hold.set(true);
+  held.page(ProjectPage::Instructions(InstructionsView::Import));
+  held.skeleton("instruction-import-loading");
+  assert!(held.exists("instruction-import-title"), "the page's title stays real");
+  assert!(
+    held.exists("instruction-import-notice"),
+    "the notice's fixed words stay real"
+  );
+  held.release("instruction-import-create");
+  assert!(
+    !held.exists("instruction-import-loading"),
+    "the review takes the bones' place"
+  );
+}
 #[test]
 fn skeletons_project_settings_shows_the_tabs_bones_after_a_moment() {
   let mut held = Held::new();

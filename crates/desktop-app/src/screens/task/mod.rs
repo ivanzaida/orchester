@@ -26,6 +26,8 @@ mod reading;
 mod sharing;
 pub(crate) mod summary;
 
+use std::time::Instant;
+
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::Column,
@@ -87,13 +89,16 @@ struct PageProps {
 impl lurq::app::component::DevtoolsInspectable for PageProps {}
 
 /// Finds the task the path names among the project's tasks; once found, shows its frame.
-struct TaskPage;
+struct TaskPage {
+  /// When the page opened: its reading began then, the task's after the project's tasks.
+  opened: Instant,
+}
 
 impl Component for TaskPage {
   type Props = PageProps;
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self
+    Self { opened: Instant::now() }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -105,6 +110,7 @@ impl Component for TaskPage {
           key: &props.key,
           kept: props.kept,
           title: None,
+          since: self.opened,
         };
         return page(reading::page(ctx, &task, &props.view));
       }
@@ -131,6 +137,7 @@ impl Component for TaskPage {
       key: props.key,
       kept,
       view: props.view,
+      opened: self.opened,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
   }
@@ -199,6 +206,8 @@ struct FrameProps {
   /// The task is one kept *Not shared*: its page's links keep its own address.
   kept: bool,
   view: TaskView,
+  /// When the page opened, which the reading skeleton's delay runs from.
+  opened: Instant,
 }
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
@@ -430,6 +439,7 @@ fn reading_page(ctx: &mut Ctx, props: &FrameProps) -> Element {
     key: &props.key,
     kept: props.kept,
     title: listed_title(props),
+    since: props.opened,
   };
   reading::page(ctx, &task, &props.view)
 }

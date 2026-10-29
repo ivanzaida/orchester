@@ -65,7 +65,6 @@ impl Component for Runs {
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      let bones = bones(ctx);
       return page::scroll(work::pending(ctx, &state, &self.revision, bones));
     };
     self.stored.set(Some(read.clone()));

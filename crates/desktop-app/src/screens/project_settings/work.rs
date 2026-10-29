@@ -252,13 +252,13 @@ pub fn error(ctx: &Ctx, save: &Save) -> Option<Element> {
     .error
     .map(|e| field_error("settings-save-error", &message_text(ctx, &e)).into())
 }
-/// What a tab shows before its settings are read: why reading failed with Try again, or `bones` in its skeleton,
-/// named *Reading project settings…* (`project_settings.reading`).
-pub fn pending(
+/// What a tab shows before its settings are read: why reading failed with Try again, or the `bones` it builds in its
+/// skeleton, named *Reading project settings…* (`project_settings.reading`).
+pub fn pending<T: Into<Element>>(
   ctx: &mut Ctx,
   state: &FutureState<Read, Message>,
   revision: &Signal<u64>,
-  bones: impl Into<Element>,
+  bones: impl FnOnce(&mut Ctx) -> T,
 ) -> Element {
   match &state.error {
     Some(error) => {
@@ -270,6 +270,9 @@ pub fn pending(
         move || revision.update(|r| *r += 1),
       )
     }
-    None => Skeleton::new("settings-loading", ctx.t("project_settings.reading")).show(ctx, bones),
+    None => {
+      let bones = bones(ctx);
+      Skeleton::new("settings-loading", ctx.t("project_settings.reading")).show(ctx, bones)
+    }
   }
 }

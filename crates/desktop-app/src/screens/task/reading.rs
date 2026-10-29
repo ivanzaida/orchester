@@ -4,7 +4,7 @@
 //! the Changes count are bones until the run is read; under the tabs, the open tab's own skeleton. *Reading the task…*
 //! (`task.page.loading`) names it.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use lurq::{
   app::{
@@ -37,28 +37,33 @@ const MORE: f32 = 28.0;
 /// A chat avatar (`qU0XW`).
 const AVATAR: f32 = 28.0;
 
-/// The task the page reads: its project, its key, whether it is kept *Not shared*, and its title once its row is known.
+/// The task the page reads: its project, its key, whether it is kept *Not shared*, its title once its row is known,
+/// and when the page began reading it: the project's tasks first, then the task, one reading whose skeleton's delay
+/// runs once.
 pub struct Reading<'a> {
   pub project: ProjectId,
   pub key: &'a TaskKey,
   pub kept: bool,
   pub title: Option<Arc<str>>,
+  pub since: Instant,
 }
 
 /// The page of `task` on `view` while it is read.
 pub fn page(ctx: &mut Ctx, task: &Reading<'_>, view: &TaskView) -> Element {
   let header = header(ctx, task, view);
+  let skeleton = Skeleton::new("task-loading", ctx.t("task.page.loading")).since(task.since);
   let body = match view.tab() {
     TaskTab::Conversation => {
       let bones = conversation(ctx);
-      Skeleton::new("task-loading", ctx.t("task.page.loading"))
-        .fills()
-        .show(ctx, bones)
+      skeleton.fills().show(ctx, bones)
     }
-    TaskTab::Changes => super::changes::reading::bones(ctx),
+    TaskTab::Changes => {
+      let bones = super::changes::reading::panes(ctx);
+      skeleton.fills().show(ctx, bones)
+    }
     TaskTab::Summary => {
       let bones = super::summary::reading::bones(ctx);
-      let body = Skeleton::new("task-loading", ctx.t("task.page.loading")).show(ctx, bones);
+      let body = skeleton.show(ctx, bones);
       ScrollVertical::new(body).id("task-summary-scroll").flex(1.0).into()
     }
   };
