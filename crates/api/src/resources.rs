@@ -35,7 +35,7 @@ impl SharedResourceKind {
     }
   }
 
-  /// The shared kind of a core kind; `None` for a test suite, which stays local.
+  /// The shared kind of a core kind; `None` for a test suite, a service or a stack, which stay local.
   pub const fn from_core(kind: ResourceKind) -> Option<Self> {
     match kind {
       ResourceKind::Pipeline => Some(Self::Pipeline),
@@ -43,7 +43,7 @@ impl SharedResourceKind {
       ResourceKind::Instruction => Some(Self::Instruction),
       ResourceKind::Skill => Some(Self::Skill),
       ResourceKind::Tool => Some(Self::Tool),
-      ResourceKind::TestSuite => None,
+      ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => None,
     }
   }
 }
