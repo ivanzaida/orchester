@@ -58,7 +58,7 @@ fn orchestrator_resolve_card_note_reads_as_one_paragraph() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let delivery = screen.delivery();
   let key = screen.draft_with(delivery, "Add retry", ("Add a retry.", &["It retries."]));
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   screen.go(OrchestratorChat::New);
   screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
   screen.until("the started run", |screen| outcomes(screen).len() == 1);

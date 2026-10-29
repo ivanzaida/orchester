@@ -158,7 +158,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::question::Answering {}
     impl $inspect for crate::tasks::question::Draft {}
     impl $inspect for crate::tasks::run_again::RunAgainCheck {}
-    impl $inspect for crate::tasks::run_approvals::AutoModeState {}
+    impl $inspect for crate::tasks::run_approvals::RunModeState {}
     impl $inspect for crate::tasks::run_approvals::RunApprovalChange {}
     impl $inspect for crate::tasks::timeline::load::Loaded {}
     impl $inspect for crate::tasks::timeline::load::Requests {}

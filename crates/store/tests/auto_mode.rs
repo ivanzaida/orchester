@@ -1,33 +1,24 @@
-//! Auto mode in the project database: the project's setting for new runs and the reviewer a person chose, each
-//! run's own choice taken from it when the run is created, and the agent's last messages the reviewer
-//! reads. `cargo test -p orchester-store --test auto_mode auto_mode`.
+//! Manual's reviewer in the project database: the reviewer a person chose, where origin pushed as a run started, and
+//! the agent's last messages the reviewer reads. `cargo test -p orchester-store --test auto_mode auto_mode`.
 
 mod support;
 
-use std::time::Duration;
-
 use orchester_core::{
   connection::stream::AgentEvent,
-  id::{ConnectionId, IdempotencyKey},
+  id::ConnectionId,
   resource::ModelId,
-  revision::Revision,
-  run::{
-    Answerer, ApproveEverything, BranchName, NewRun,
-    review::{AutoModeSettings, ReviewerChoice},
-  },
-  store::{ActivityStore, RunStore},
+  run::review::{AutoModeSettings, ReviewerChoice},
+  store::ActivityStore,
 };
-use support::{at, budget, started_run};
+use orchester_store::AutoModeSave;
+use support::{at, started_run};
 
 #[test]
-fn auto_mode_new_runs_take_the_projects_setting() {
+fn auto_mode_keeps_the_reviewer_a_person_chose_and_the_runs_origin() {
   let (_repo, mut db, run, _) = started_run();
   assert_eq!(db.auto_mode_settings().expect("read"), AutoModeSettings::default());
-  assert!(!AutoModeSettings::default().new_runs, "off until a person turns it on");
-  assert!(!db.run_auto_mode(run.id()).expect("read"));
 
   let settings = AutoModeSettings {
-    new_runs: true,
     reviewer: Some(ReviewerChoice {
       connection: ConnectionId::generate(),
       model: ModelId::new("claude-sonnet-5-5").expect("model"),
@@ -37,32 +28,9 @@ fn auto_mode_new_runs_take_the_projects_setting() {
   db.save_auto_mode_settings(&settings).expect("save");
   assert_eq!(db.auto_mode_settings().expect("read"), settings);
   // Back to the default reviewer: no connection, model or effort is read.
-  let default = AutoModeSettings {
-    new_runs: true,
-    reviewer: None,
-  };
+  let default = AutoModeSettings::default();
   db.save_auto_mode_settings(&default).expect("save");
   assert_eq!(db.auto_mode_settings().expect("read"), default);
-  db.save_auto_mode_settings(&settings).expect("save");
-  // A run created before keeps its own choice; a new one takes the setting.
-  assert!(!db.run_auto_mode(run.id()).expect("read"));
-  let next = NewRun {
-    task: run.task(),
-    snapshot: run.snapshot().clone(),
-    branch: BranchName::new("orchester/orc-1-run-2").expect("branch"),
-    base: Revision::new(&"b".repeat(40)).expect("revision"),
-    base_branch: None,
-    budget: Some(budget(1_000_000)),
-    max_duration: Some(Duration::from_secs(1_800)),
-  };
-  let second = db
-    .create_run(IdempotencyKey::generate(), next, at(20))
-    .expect("second run");
-  assert!(db.run_auto_mode(second.id()).expect("read"));
-  db.set_run_auto_mode(second.id(), false).expect("turn off");
-  assert!(!db.run_auto_mode(second.id()).expect("read"));
-  db.set_run_auto_mode(run.id(), true).expect("turn on");
-  assert!(db.run_auto_mode(run.id()).expect("read"));
   // Where origin pushed as the run started.
   assert_eq!(db.run_origin(run.id()).expect("read"), None);
   db.record_run_origin(run.id(), Some("https://example.invalid/kontur.git"))
@@ -98,42 +66,29 @@ fn auto_mode_reads_the_agents_last_messages_oldest_first() {
 }
 
 #[test]
-fn auto_mode_update_changes_what_is_stored() {
+fn auto_mode_update_and_compare_and_save_change_what_is_stored() {
   let (_repo, mut db, ..) = started_run();
   let reviewer = ReviewerChoice {
     connection: ConnectionId::generate(),
     model: ModelId::new("claude-sonnet-5-5").expect("model"),
     effort: Some("high".to_owned()),
   };
-  db.save_auto_mode_settings(&AutoModeSettings {
-    new_runs: false,
-    reviewer: Some(reviewer.clone()),
-  })
-  .expect("save");
-  // A change of one setting keeps the other as stored.
-  let saved = db
-    .update_auto_mode_settings(|stored| AutoModeSettings {
-      new_runs: true,
-      ..stored
-    })
-    .expect("update");
-  assert_eq!(saved.reviewer, Some(reviewer));
-  assert!(saved.new_runs);
+  let chosen = AutoModeSettings {
+    reviewer: Some(reviewer),
+  };
+  let saved = db.update_auto_mode_settings(|_| chosen.clone()).expect("update");
+  assert_eq!(saved, chosen);
   assert_eq!(db.auto_mode_settings().expect("read"), saved);
-}
-
-#[test]
-fn auto_mode_approve_everything_is_off_until_saved_and_keeps_who_turned_it_on() {
-  let (_repo, mut db, ..) = started_run();
-  assert_eq!(db.approve_everything().expect("read"), ApproveEverything::OFF);
-  for setting in [
-    ApproveEverything::on(Answerer::Person),
-    ApproveEverything::on(Answerer::Automation),
-    ApproveEverything::OFF,
-  ] {
-    db.save_approve_everything(setting).expect("save");
-    assert_eq!(db.approve_everything().expect("read"), setting);
-  }
-  // Auto mode's other settings are their own.
-  assert_eq!(db.auto_mode_settings().expect("read"), AutoModeSettings::default());
+  // A save from a stale base is refused and changes nothing; one from the stored base is taken.
+  let default = AutoModeSettings::default();
+  assert_eq!(
+    db.save_auto_mode_if_current(&default, &default).expect("save"),
+    AutoModeSave::ChangedOutside
+  );
+  assert_eq!(db.auto_mode_settings().expect("read"), chosen);
+  assert_eq!(
+    db.save_auto_mode_if_current(&chosen, &default).expect("save"),
+    AutoModeSave::Saved
+  );
+  assert_eq!(db.auto_mode_settings().expect("read"), default);
 }

@@ -1,10 +1,11 @@
-//! Auto mode (`Auto mode` `WSQqT` in `02 · Runs`): its switch, *approve everything in each run* and the reviewer,
-//! saved as soon as they change, like the page's other settings, and the project's approval rules. Turning it on or
-//! changing its active reviewer widens what the reviewer approves in the person's place, so only a person's input does
-//! it (or automation's under both of its opt-ins, [`Guarded::ApprovalWidening`]); such a change from other input is put
-//! back and said under the group.
+//! Approvals (`Auto mode` `WSQqT` in `02 · Runs`, its auto-mode parts superseded by `m0eUB` / `tvmsJ` of
+//! `docs/design/approval-modes.md`): *Allow Autopilot for agents in this project* and Manual's reviewer, saved as soon
+//! as they change, like the page's other settings, and the project's approval rules. Choosing another reviewer widens
+//! what is approved in the person's place in every Manual run, so only a person's input does it (or automation's under
+//! both of its opt-ins, [`Guarded::ApprovalWidening`]); such a change from other input is put back and said under the
+//! group.
+mod autopilot;
 mod controls;
-mod everything;
 mod feedback;
 mod rules;
 
@@ -70,9 +71,9 @@ pub struct AutoMode {
   attempted: Signal<Asked>,
   failed: Signal<bool>,
   gate: Option<InputGate>,
-  /// An MCP client's input asked to turn on *approve everything in each run* and was refused.
-  everything_refused: Signal<bool>,
-  /// Whether the input that made the last edit may widen auto mode, read while it was delivered.
+  /// An MCP client's input asked to allow Autopilot and was refused.
+  autopilot_refused: Signal<bool>,
+  /// Whether the input that made the last edit may choose another reviewer, read while it was delivered.
   may_widen: Arc<AtomicBool>,
   /// A widening from input that may not make it was put back; said under the group until the next change.
   refused: Signal<bool>,
@@ -93,7 +94,7 @@ impl Component for AutoMode {
       attempted: ctx.signal(Asked(None)),
       failed: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
-      everything_refused: ctx.signal(false),
+      autopilot_refused: ctx.signal(false),
       may_widen: Arc::new(AtomicBool::new(true)),
       refused: ctx.signal(false),
     };
@@ -164,8 +165,8 @@ impl Component for AutoMode {
   }
 }
 impl AutoMode {
-  /// Notes whether the input being delivered may widen auto mode: a person's always; an MCP client's only under the
-  /// stored opt-ins. Called from a control's handler, or a watcher it sets off.
+  /// Notes whether the input being delivered may choose another reviewer: a person's always; an MCP client's only
+  /// under the stored opt-ins. Called from a control's handler, or a watcher it sets off.
   fn note_input(&self) {
     let may = input_may_decide(self.gate.as_ref(), Guarded::ApprovalWidening);
     self.may_widen.store(may, Ordering::SeqCst);
@@ -277,16 +278,15 @@ impl AutoMode {
     let confirmed = self.may_widen.load(Ordering::SeqCst);
     self.failed.set(false);
     self.refused.set(false);
-    if !confirmed && project_settings::auto_widens(&base, &asked, settings.auto_runs) {
-      tracing::warn!("input that may not widen auto mode changed it; put back");
+    if !confirmed && project_settings::reviewer_widens(&base, &asked) {
+      tracing::warn!("input that may not choose another reviewer changed it; put back");
       self.attempted.set(Asked(None));
       self.fill(settings);
       self.refused.set(true);
       return;
     }
     self.attempted.set(Asked(Some(asked.clone())));
-    // The workspace refuses a widening it was not told a person (or automation under its opt-ins) made, so a run
-    // that turned Auto since the page read cannot let other input widen it.
+    // The workspace refuses a widening it was not told a person (or automation under its opt-ins) made.
     save.run((
       props.tab.project.open.repo_root.clone(),
       Change::Auto { base, asked, confirmed },

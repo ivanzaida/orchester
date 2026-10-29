@@ -124,7 +124,7 @@ fn ends(db: &ProjectDb) -> Vec<(i64, RunEnd)> {
 #[test]
 fn orchestrator_run_end_lands_in_the_conversation_that_started_the_run() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   let delivery = screen.delivery();
   let key = screen.draft_on(delivery, "Read the readme");
   screen.go(OrchestratorChat::New);
@@ -173,7 +173,7 @@ fn run_of(db: &ProjectDb, seq: i64) -> RunId {
 #[test]
 fn orchestrator_run_end_merged_in_orchester_no_longer_waits() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  screen.auto_mode(true);
+  screen.allow_autopilot(true);
   let delivery = screen.delivery();
   let key = screen.draft_on(delivery, "Read the changelog");
   screen.go(OrchestratorChat::New);

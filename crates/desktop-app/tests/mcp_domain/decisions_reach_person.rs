@@ -1,15 +1,12 @@
 //! Decisions always reach the person, whatever the approval mode (ORC-348, `docs/design/approval-modes.md`,
-//! "Decisions"): with auto mode on for the project and every run, and *approve everything in each run* on, an
-//! MCP client's answer to a question, a plan, a run that waits for a person, a limit or a merge's conflicts is
-//! refused until the person lets automation answer approvals, and the Orchestrator chat only proposes them until
-//! its own switch and that one are on. The Summary's limit card is in `person_decisions::limits`.
+//! "Decisions"): with Autopilot allowed in the project, an MCP client's answer to a question, a plan, a run that
+//! waits for a person, a limit or a merge's conflicts is refused until the person lets automation answer approvals,
+//! and the Orchestrator chat only proposes them until its own switch and that one are on. The Summary's limit card
+//! is in `person_decisions::limits`.
 
 use std::path::Path;
 
-use orchester_core::{
-  run::{Answerer, ApproveEverything, review::AutoModeSettings},
-  store::{RunStore, TaskStore},
-};
+use orchester_core::{run::AllowAutopilot, store::RunStore};
 use orchester_store::ProjectDb;
 use orchester_workspace::{app_mcp::ToolError, workspace::OrchestratorConsent};
 use serde_json::{Value, json};
@@ -19,22 +16,12 @@ use super::{
   orchestrator_chat::{allow, chat, chat_call, task_run},
 };
 
-/// Today's nearest to Autopilot: new runs and every run of the project at `repo` use auto mode, and auto mode
-/// approves everything in each run, as the person turned it on.
+/// The project at `repo` allows Autopilot, as the person turned it on.
 pub(super) fn autopilot(repo: &Path) {
-  let mut db = ProjectDb::open(repo).expect("the project's data");
-  db.update_auto_mode_settings(|current| AutoModeSettings {
-    new_runs: true,
-    reviewer: current.reviewer,
-  })
-  .expect("auto mode for new runs");
-  db.save_approve_everything(ApproveEverything::on(Answerer::Person))
-    .expect("approve everything in each run");
-  for task in db.tasks().expect("tasks") {
-    for run in db.runs_of_task(task.id()).expect("runs").into_iter().flatten() {
-      db.set_run_auto_mode(run.id(), true).expect("the run's auto mode");
-    }
-  }
+  ProjectDb::open(repo)
+    .expect("the project's data")
+    .save_allow_autopilot(AllowAutopilot::ON)
+    .expect("Autopilot allowed");
 }
 
 /// `continue_run` on a run the tools find nowhere, with `choice`: the consent is checked before the run is read.

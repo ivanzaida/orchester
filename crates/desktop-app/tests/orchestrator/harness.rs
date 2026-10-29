@@ -22,7 +22,7 @@ use orchester_core::{
     AgentProfile, AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText,
     ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
-  run::review::AutoModeSettings,
+  run::AllowAutopilot,
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
@@ -470,15 +470,12 @@ the agent logged: {agent}"
       .expect("the person's choice is kept");
   }
 
-  /// The project's *New runs use auto mode*.
-  pub fn auto_mode(&self, on: bool) {
+  /// The project's *Allow Autopilot for agents in this project*, as a person turns it on or off.
+  pub fn allow_autopilot(&self, on: bool) {
     self
       .db()
-      .update_auto_mode_settings(|current| AutoModeSettings {
-        new_runs: on,
-        reviewer: current.reviewer,
-      })
-      .expect("auto mode saved");
+      .save_allow_autopilot(if on { AllowAutopilot::ON } else { AllowAutopilot::OFF })
+      .expect("Allow Autopilot saved");
   }
 
   /// The person's *Let automation change agent permissions*.

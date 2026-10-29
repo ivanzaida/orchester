@@ -6,9 +6,9 @@
 //! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
 mod agent_text;
+mod autopilot;
 mod code_block;
 mod denied;
-mod everything;
 mod jump;
 #[allow(
   dead_code,

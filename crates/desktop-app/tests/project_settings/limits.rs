@@ -3,7 +3,7 @@
 use lurq::app::events::with_synthetic_input;
 use orchester_core::{
   limits::{AgentSlots, ProjectLimits, QaSlots},
-  run::{Answerer, ApproveEverything, review::AutoModeSettings},
+  run::AllowAutopilot,
   store::SettingsStore,
   tokens::TokenBudget,
 };
@@ -15,17 +15,12 @@ use super::{
   harness::Settings,
 };
 
-/// Today's nearest to Autopilot (ORC-341 builds it): new runs use auto mode, which approves everything in each run,
-/// as the person turned it on.
+/// The project allows Autopilot, as the person turned it on.
 fn autopilot(page: &Settings) {
-  let mut db = page.db();
-  db.update_auto_mode_settings(|current| AutoModeSettings {
-    new_runs: true,
-    reviewer: current.reviewer,
-  })
-  .expect("auto mode for new runs");
-  db.save_approve_everything(ApproveEverything::on(Answerer::Person))
-    .expect("approve everything in each run");
+  page
+    .db()
+    .save_allow_autopilot(AllowAutopilot::ON)
+    .expect("Autopilot allowed");
 }
 
 fn daily(page: &Settings) -> Option<u64> {

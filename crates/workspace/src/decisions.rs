@@ -3,8 +3,8 @@ use orchester_store::StoreError;
 
 use crate::{app_mcp::ToolError, messages::Message, workspace::Workspace};
 
-/// The decision being taken, independent of the transport that delivers it. No approval mode (auto mode, *approve
-/// everything in each run*) takes any of them: each is the person's unless they let automation answer approvals
+/// The decision being taken, independent of the transport that delivers it. No approval mode (Autopilot, Manual's
+/// reviewer) takes any of them: each is the person's unless they let automation answer approvals
 /// (`docs/design/approval-modes.md`, "Decisions").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecisionKind {

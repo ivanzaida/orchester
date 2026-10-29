@@ -91,7 +91,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
   let asked = db.questions(run.id())?;
   let (questions, proposed) = orchestrated::awaiting(&root, &run, (&asked, &conversation))?;
   let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
-  let auto_mode = db.run_auto_mode(run.id())?;
+  let approval_mode = db.run_approval_mode(run.id())?;
   let worktree = worktree_state(&db, &root, run.id())?;
   let merge = merge_state(&db, (&root, &services.programs), &run)?;
   let view = run_view(&db, run)?;
@@ -138,7 +138,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     },
     "steps": steps,
     "plans": decided,
-    "auto_mode": auto_mode,
+    "approval_mode": approval_mode,
     "worktree": worktree,
     "merge": merge,
     "delivery": super::merge_queue::run_delivery(&db, run.id())?,

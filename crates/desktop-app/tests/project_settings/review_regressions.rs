@@ -62,11 +62,11 @@ fn project_settings_review_limits_revert_during_save_is_committed() {
 }
 
 #[test]
-fn project_settings_review_default_model_edit_in_auto_mode_saves_a_persons_change_at_once() {
+fn project_settings_review_default_model_edit_with_autopilot_allowed_saves_a_persons_change_at_once() {
   let mut page = Settings::new(true);
-  page.click("settings-auto-new-runs");
-  page.until("auto mode on", |p| {
-    p.db().auto_mode_settings().expect("settings").new_runs
+  page.click("settings-allow-autopilot");
+  page.until("Autopilot allowed", |p| {
+    p.db().allow_autopilot().expect("settings").is_on()
   });
   page.saved();
   page.choose("settings-reviewer-model", "sonnet");
@@ -83,16 +83,16 @@ fn project_settings_review_default_model_edit_in_auto_mode_saves_a_persons_chang
 }
 
 #[test]
-fn project_settings_review_reselecting_a_reviewer_in_auto_mode_saves_each_choice() {
+fn project_settings_review_reselecting_a_reviewer_with_autopilot_allowed_saves_each_choice() {
   let mut page = Settings::new(true);
   page.choose("settings-reviewer-connection", "Claude Code");
   page.until("initial reviewer saved", |p| {
     p.db().auto_mode_settings().expect("settings").reviewer.is_some()
   });
   page.saved();
-  page.click("settings-auto-new-runs");
-  page.until("auto mode on", |p| {
-    p.db().auto_mode_settings().expect("settings").new_runs
+  page.click("settings-allow-autopilot");
+  page.until("Autopilot allowed", |p| {
+    p.db().allow_autopilot().expect("settings").is_on()
   });
   page.saved();
   // Remount Runs from storage so its reviewer is settled before the edits.

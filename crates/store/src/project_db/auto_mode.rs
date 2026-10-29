@@ -1,5 +1,5 @@
-//! Auto mode (`orchester_core::run::review`): the project's setting, each run's own choice, what auto mode
-//! did with a request (`tool_approvals.review`), and the agent's last messages its reviewer reads.
+//! Manual's reviewer (`orchester_core::run::review`): the project's choice, what the reviewer did with a request
+//! (`tool_approvals.review`), and the agent's last messages it reads.
 
 use orchester_core::{
   connection::stream::AgentEvent,
@@ -15,20 +15,18 @@ use crate::{
   rows::{corrupt, decode_json, encode_json},
 };
 
-/// Outcome of a compare-and-save, including a refused caller policy.
+/// Outcome of a compare-and-save.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AutoModeSave {
   Saved,
   ChangedOutside,
-  Refused,
 }
 
 const REVIEW: &str = "tool approval review";
 const REVIEW_SCHEMA: u32 = 1;
 
 impl ProjectDb {
-  /// Whether new runs use auto mode, and the reviewer a person chose; off, with the default reviewer,
-  /// until a person changes them.
+  /// The reviewer a person chose; the default reviewer until a person changes it.
   pub fn auto_mode_settings(&self) -> Result<AutoModeSettings, StoreError> {
     read_auto_mode(&self.connection)
   }
@@ -51,24 +49,15 @@ impl ProjectDb {
     Ok(settings)
   }
 
-  /// Whether an existing run uses the project's reviewer, independent of the new-run default.
-  pub fn has_auto_mode_runs(&self) -> Result<bool, StoreError> {
-    read_auto_mode_runs(&self.connection)
-  }
-
-  /// Checks the baseline and the caller's authority against existing runs in the write transaction.
+  /// Saves `asked` only while the stored settings are still `base`, checked in the write transaction.
   pub fn save_auto_mode_if_current(
     &mut self,
     base: &AutoModeSettings,
     asked: &AutoModeSettings,
-    permitted: impl FnOnce(bool) -> bool,
   ) -> Result<AutoModeSave, StoreError> {
     let transaction = self.connection.transaction()?;
     if read_auto_mode(&transaction)? != *base {
       return Ok(AutoModeSave::ChangedOutside);
-    }
-    if !permitted(read_auto_mode_runs(&transaction)?) {
-      return Ok(AutoModeSave::Refused);
     }
     write_auto_mode(&transaction, asked)?;
     transaction.commit()?;
@@ -95,28 +84,6 @@ impl ProjectDb {
         .optional()?
         .flatten(),
     )
-  }
-
-  /// Whether `run` uses auto mode.
-  pub fn run_auto_mode(&self, run: RunId) -> Result<bool, StoreError> {
-    self
-      .connection
-      .query_row("SELECT auto_mode FROM runs WHERE id = ?1", [run.to_string()], |row| {
-        row.get(0)
-      })
-      .optional()?
-      .ok_or_else(|| corrupt("run", format!("{run} is not stored")))
-  }
-
-  pub fn set_run_auto_mode(&mut self, run: RunId, on: bool) -> Result<(), StoreError> {
-    let changed = self.connection.execute(
-      "UPDATE runs SET auto_mode = ?2 WHERE id = ?1",
-      params![run.to_string(), on],
-    )?;
-    if changed == 0 {
-      return Err(corrupt("run", format!("{run} is not stored")));
-    }
-    Ok(())
   }
 
   /// Records what auto mode did with request `id` of `run`, while it waits.
@@ -202,44 +169,35 @@ pub(super) fn decode_review(stored: Option<String>) -> Result<Option<Review>, St
   stored.map(|text| decode_json(REVIEW, REVIEW_SCHEMA, &text)).transpose()
 }
 
-fn read_auto_mode_runs(connection: &Connection) -> Result<bool, StoreError> {
-  Ok(
-    connection.query_row("SELECT EXISTS(SELECT 1 FROM runs WHERE auto_mode = 1)", [], |row| {
-      row.get(0)
-    })?,
-  )
-}
-
 fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreError> {
-  let stored: Option<(bool, String, Option<String>, Option<String>)> = connection
+  let stored: Option<(String, Option<String>, Option<String>)> = connection
     .query_row(
-      "SELECT new_runs, model, connection, effort FROM project_auto_mode WHERE id = 1",
+      "SELECT model, connection, effort FROM project_auto_mode WHERE id = 1",
       [],
-      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )
     .optional()?;
-  let Some((new_runs, model, connection, effort)) = stored else {
+  let Some((model, Some(connection), effort)) = stored else {
     return Ok(AutoModeSettings::default());
   };
-  let reviewer = match connection {
-    None => None,
-    Some(connection) => Some(ReviewerChoice {
-      connection: connection
-        .parse::<ConnectionId>()
-        .map_err(|_| corrupt("auto mode reviewer connection", connection))?,
-      model: ModelId::new(&model).map_err(|_| corrupt("auto mode model", model))?,
-      effort,
-    }),
+  let reviewer = ReviewerChoice {
+    connection: connection
+      .parse::<ConnectionId>()
+      .map_err(|_| corrupt("auto mode reviewer connection", connection))?,
+    model: ModelId::new(&model).map_err(|_| corrupt("auto mode model", model))?,
+    effort,
   };
-  Ok(AutoModeSettings { new_runs, reviewer })
+  Ok(AutoModeSettings {
+    reviewer: Some(reviewer),
+  })
 }
 
 fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Result<(), StoreError> {
   let reviewer = settings.reviewer.as_ref();
   connection.execute(
-    "INSERT INTO project_auto_mode (id, new_runs, model, connection, effort) VALUES (1, ?1, ?2, ?3, ?4)        ON CONFLICT (id) DO UPDATE SET new_runs = excluded.new_runs, model = excluded.model,        connection = excluded.connection, effort = excluded.effort",
+    "INSERT INTO project_auto_mode (id, model, connection, effort) VALUES (1, ?1, ?2, ?3) \
+     ON CONFLICT (id) DO UPDATE SET model = excluded.model, connection = excluded.connection, effort = excluded.effort",
     params![
-      settings.new_runs,
       reviewer.map_or(DEFAULT_REVIEW_MODEL, |choice| choice.model.as_str()),
       reviewer.map(|choice| choice.connection.to_string()),
       reviewer.and_then(|choice| choice.effort.as_deref()),
