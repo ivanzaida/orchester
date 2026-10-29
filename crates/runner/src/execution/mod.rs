@@ -548,6 +548,7 @@ impl Scheduler {
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),
+      browser: self.inner.browser.clone(),
       disks: self.inner.disks.clone(),
       controls,
       settled: settled.clone(),

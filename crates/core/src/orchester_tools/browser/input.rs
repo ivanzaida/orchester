@@ -203,6 +203,27 @@ impl BrowserCall {
       _ => None,
     }
   }
+
+  /// The tab the call names; `None` for the run's current tab, and for `browser_tabs` and `browser_open`, which name
+  /// none.
+  pub const fn tab(&self) -> Option<&TabId> {
+    match self {
+      Self::Tabs | Self::Open { .. } => None,
+      Self::Navigate { tab, .. }
+      | Self::Close { tab }
+      | Self::ReadPage { tab, .. }
+      | Self::PageText { tab, .. }
+      | Self::Click { tab, .. }
+      | Self::Type { tab, .. }
+      | Self::Key { tab, .. }
+      | Self::Scroll { tab, .. }
+      | Self::Screenshot { tab, .. }
+      | Self::Console { tab, .. }
+      | Self::Network { tab, .. }
+      | Self::Wait { tab, .. }
+      | Self::Eval { tab, .. } => tab.as_ref(),
+    }
+  }
 }
 
 /// The fields of `arguments`, refused when the tool does not take one of them.

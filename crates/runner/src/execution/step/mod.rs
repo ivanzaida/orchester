@@ -8,6 +8,7 @@ mod answer;
 pub(super) mod app_server;
 mod approval;
 mod base_notice;
+mod browser;
 mod checks;
 mod claude_approval;
 mod cli_version;

@@ -20,7 +20,9 @@ const START_LIMIT: Duration = Duration::from_secs(30);
 /// How often the start looks for the debugging port's file.
 const PORT_POLL: Duration = Duration::from_millis(50);
 /// How long a page may take to load.
-const LOAD_LIMIT: Duration = Duration::from_secs(30);
+pub const LOAD_LIMIT: Duration = Duration::from_secs(30);
+/// The permissions a page may ask for that are denied, by their names in the Permissions API.
+const DENIED_PERMISSIONS: [&str; 4] = ["camera", "microphone", "geolocation", "notifications"];
 /// How long `Browser.close` may take to be answered, and the browser to exit after it.
 const CLOSE_LIMIT: Duration = Duration::from_secs(5);
 const EXIT_GRACE: Duration = Duration::from_secs(5);
@@ -47,12 +49,13 @@ impl Running {
     tracing::info!(browser = found.name(), "the project's browser started");
     let port = devtools_port(profile, &process).await?;
     let cdp = Arc::new(Cdp::connect(&port.websocket_url()).await?);
-    let tabs = Arc::new(Mutex::new(RunTabs::default()));
+    let tabs = Arc::new(Mutex::new(RunTabs::new(&cdp)));
     let destroyed = cdp.subscribe(None);
     cdp
       .call(None, "Target.setDiscoverTargets", json!({ "discover": true }))
       .await?;
     tokio::spawn(forget_closed(destroyed, Arc::clone(&tabs)));
+    block(&cdp).await?;
     Ok(Self { process, cdp, tabs })
   }
 
@@ -77,6 +80,24 @@ impl Running {
       exit => tracing::warn!(?exit, "the project's browser was ended"),
     }
   }
+}
+
+/// Blocks what the agents' browser never does (`docs/design/browser.md`, "Permissions and policy"): downloads, and
+/// the permissions a page may prompt for, denied on every site.
+async fn block(cdp: &Cdp) -> Result<(), CdpError> {
+  cdp
+    .call(None, "Browser.setDownloadBehavior", json!({ "behavior": "deny" }))
+    .await?;
+  for permission in DENIED_PERMISSIONS {
+    cdp
+      .call(
+        None,
+        "Browser.setPermission",
+        json!({ "permission": { "name": permission }, "setting": "denied" }),
+      )
+      .await?;
+  }
+  Ok(())
 }
 
 /// Navigates the tab of `session` to `url` and waits for that navigation's load.

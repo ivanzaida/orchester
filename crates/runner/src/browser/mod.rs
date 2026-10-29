@@ -11,8 +11,10 @@
 //! (`AGENTS.md`, rule 0).
 
 pub mod cdp;
+mod log;
 mod process;
 mod running;
+mod tab;
 mod tabs;
 
 use std::{
@@ -24,13 +26,19 @@ use orchester_core::id::RunId;
 use orchester_exec::browser::{self as program, BrowserProgram, BrowserUnavailable};
 use orchester_store::{AppDb, ProjectDb, location::browser_profiles_beside};
 use parking_lot::Mutex;
-use serde_json::Value;
+use serde_json::{Value, json};
 use thiserror::Error;
 
 use self::{
   cdp::{Cdp, CdpError, TargetId, TargetInfo},
   running::Running,
+  tab::TabState,
   tabs::RunTabs,
+};
+pub use self::{
+  log::{ConsoleMessage, Request, TabLog},
+  running::LOAD_LIMIT,
+  tab::Tab,
 };
 
 #[derive(Debug, Error)]
@@ -44,8 +52,22 @@ pub enum BrowserError {
   Cdp(#[from] CdpError),
   #[error("{url} did not open: {reason}")]
   NotOpened { url: String, reason: String },
-  #[error("tab {0} is not one of this run's open tabs")]
+  #[error("tab {0} is not one of this run's open tabs: browser_tabs lists them")]
   NotRunsTab(TargetId),
+  #[error("this run has no open tab: open a page with browser_open first")]
+  NoTab,
+  #[error("{0} is stale or was never read: read the page again with browser_read_page and use a ref it gives")]
+  StaleRef(String),
+}
+
+/// What a running browser's connection listens to ([`ProjectBrowser::listening`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Listening {
+  /// The receivers of its events still held: the runner's own of the browser's events, each open tab's log follower,
+  /// and any wait in progress.
+  pub receivers: usize,
+  /// The tabs whose console messages, requests and dialogs are still followed.
+  pub followed_logs: usize,
 }
 
 /// The project's browser, started at its first use.
@@ -89,8 +111,9 @@ impl ProjectBrowser {
     }
   }
 
-  /// Opens a new tab for `run` on `url` and waits for its load, within a time limit. The tab is `run`'s from the
-  /// moment it is attached: a load that fails leaves it to the run, which closes it or has it closed at its end.
+  /// Opens a new tab for `run` on `url` and waits for its load, within a time limit; it becomes the run's current
+  /// tab. The tab is `run`'s from the moment it is attached: a load that fails leaves it to the run, which closes it
+  /// or has it closed at its end. From then on the tab's console messages, requests and dialogs are recorded.
   pub async fn open_tab(&self, run: RunId, url: &str) -> Result<TargetId, BrowserError> {
     let (cdp, tabs) = self.connection().await?;
     let target = cdp.create_tab("about:blank").await?;
@@ -103,24 +126,79 @@ impl ProjectBrowser {
         return Err(error.into());
       }
     };
-    tabs.lock().add(run, target.clone(), session.clone());
+    let state = Arc::new(TabState::default());
+    {
+      let mut tabs = tabs.lock();
+      tokio::spawn(log::follow(
+        cdp.subscribe(Some(session.clone())),
+        Arc::downgrade(&cdp),
+        session.clone(),
+        Arc::clone(&state),
+        tabs.follower(),
+      ));
+      tabs.add(run, target.clone(), session.clone(), state);
+    }
+    for domain in ["Runtime.enable", "Network.enable", "Log.enable"] {
+      cdp.call(Some(&session), domain, json!({})).await?;
+    }
     running::load(&cdp, &session, url).await?;
     Ok(target)
   }
 
+  /// `run`'s tab `tab`, or its current one for `None`; refused for a tab that is not the run's, and when the run has
+  /// none open. Does not start the browser.
+  pub async fn tab(&self, run: RunId, tab: Option<&TargetId>) -> Result<Tab, BrowserError> {
+    let running = self.running.lock().await;
+    let Some(running) = running.as_ref() else {
+      return Err(tab.map_or(BrowserError::NoTab, |tab| BrowserError::NotRunsTab(tab.clone())));
+    };
+    let tabs = running.tabs.lock();
+    let target = match tab {
+      Some(tab) => tab.clone(),
+      None => tabs.current(run).ok_or(BrowserError::NoTab)?,
+    };
+    let (session, state) = tabs
+      .session(run, &target)
+      .ok_or_else(|| BrowserError::NotRunsTab(target.clone()))?;
+    Ok(Tab::new(target, Arc::clone(&running.cdp), session, state))
+  }
+
   /// Sends `method` with `params` to `tab`, one of `run`'s tabs; refused for any other tab.
   pub async fn call(&self, run: RunId, tab: &TargetId, method: &str, params: Value) -> Result<Value, BrowserError> {
-    let (cdp, session) = {
+    Ok(self.tab(run, Some(tab)).await?.call(method, params).await?)
+  }
+
+  /// Loads `url` in `tab`, one of `run`'s tabs, which becomes its current one, and waits for the load.
+  pub async fn load(&self, run: RunId, tab: &Tab, url: &str) -> Result<(), BrowserError> {
+    self.make_current(run, tab.id()).await;
+    tab.load(url).await
+  }
+
+  /// `run`'s current tab, which a call that names none acts on; `None` while it has none open.
+  pub async fn current(&self, run: RunId) -> Option<TargetId> {
+    let running = self.running.lock().await;
+    running.as_ref().and_then(|running| running.tabs.lock().current(run))
+  }
+
+  async fn make_current(&self, run: RunId, tab: &TargetId) {
+    if let Some(running) = self.running.lock().await.as_ref() {
+      running.tabs.lock().make_current(run, tab);
+    }
+  }
+
+  /// Closes `tab`, one of `run`'s tabs, which is no longer the run's.
+  pub async fn close_tab(&self, run: RunId, tab: &TargetId) -> Result<(), BrowserError> {
+    let cdp = {
       let running = self.running.lock().await;
-      running
-        .as_ref()
-        .and_then(|running| {
-          let session = running.tabs.lock().session(run, tab)?;
-          Some((Arc::clone(&running.cdp), session))
-        })
-        .ok_or_else(|| BrowserError::NotRunsTab(tab.clone()))?
+      let running = running.as_ref().ok_or_else(|| BrowserError::NotRunsTab(tab.clone()))?;
+      let mut tabs = running.tabs.lock();
+      if tabs.session(run, tab).is_none() {
+        return Err(BrowserError::NotRunsTab(tab.clone()));
+      }
+      tabs.forget(tab);
+      Arc::clone(&running.cdp)
     };
-    Ok(cdp.call(Some(&session), method, params).await?)
+    Ok(cdp.close_target(tab).await?)
   }
 
   /// `run`'s open tabs, in the order they opened; none while the browser does not run, which this does not start.
@@ -139,6 +217,16 @@ impl ProjectBrowser {
     listed.retain(|target| own.contains(&target.id));
     listed.sort_by_key(|target| own.iter().position(|id| id == &target.id));
     Ok(listed)
+  }
+
+  /// What the running browser's connection still listens to, so that closed tabs are seen to leave nothing behind;
+  /// nothing while it does not run.
+  pub async fn listening(&self) -> Listening {
+    let running = self.running.lock().await;
+    running.as_ref().map_or_else(Listening::default, |running| Listening {
+      receivers: running.cdp.listeners(),
+      followed_logs: running.tabs.lock().followed(),
+    })
   }
 
   /// `run` ended: its tabs are no longer its and close. Every tab is tried; the first failure is returned.
