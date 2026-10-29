@@ -125,6 +125,7 @@ pub const fn hold_cause(hold: ReviewHold) -> Message {
     ReviewHold::TooLong => "autoModeHold.tooLong",
     ReviewHold::Escalation => "autoModeHold.escalation",
     ReviewHold::ProjectProgram => "autoModeHold.projectProgram",
+    ReviewHold::Browser => "autoModeHold.browser",
   })
 }
 

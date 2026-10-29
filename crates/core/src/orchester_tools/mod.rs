@@ -18,8 +18,11 @@
 //! - A read or search outside the worktree never reaches a credential location, a `.git` folder or Orchester's own
 //!   files, and is cut to a size ([`OutsideReads`]).
 //! - The step's skills are listed and read by name, each within its own files ([`StepSkills`]).
+//! - The project's browser is opened, read and acted in through the browser tools, under the profile's *Browser*
+//!   permission and its allowed sites ([`browser`]).
 
 mod app;
+pub mod browser;
 mod catalog;
 mod changes;
 mod files;

@@ -34,8 +34,9 @@
 //! whole line and judges what no word names (the paths `xargs` reads from its input), and a credential or share its
 //! words name still holds it. A Codex escalation (a command outside its sandbox)
 //! always goes to the person. Orchester's `run_check` and `start_qa_app` (a project program outside every
-//! sandbox) and a request too long to be reviewed whole go to the person too; a project rule a person made
-//! for `start_qa_app` answers before auto mode looks ([`crate::run::ProjectRule`]).
+//! sandbox), its browser tools (a page of a site the profile does not allow, or JavaScript in a page) and a request
+//! too long to be reviewed whole go to the person too; a project rule a person made for `start_qa_app` answers before
+//! auto mode looks ([`crate::run::ProjectRule`]).
 
 use std::path::PathBuf;
 
@@ -43,7 +44,7 @@ use serde::{Deserialize, Serialize};
 
 use super::push::{PushFacts, disguised_git, is_push, reviewable_push};
 use crate::{
-  orchester_tools::auto_approvable,
+  orchester_tools::{SERVER, auto_approvable, browser::BrowserTool},
   permission::{
     AgentPermissions, NetworkAccess, RepositoryAccess,
     category::{CommandCategory, CommandPart},
@@ -77,6 +78,8 @@ pub enum ReviewHold {
   Escalation,
   /// It runs one of the project's programs, outside every sandbox.
   ProjectProgram,
+  /// It goes to or acts on a page of a site the profile does not allow, or runs JavaScript in a page.
+  Browser,
 }
 
 /// What the hard rules know besides the request: the step's recorded permissions, where a push of the
@@ -178,9 +181,13 @@ pub fn unread_parts(subject: &ApprovalSubject) -> usize {
   }
 }
 
-/// The hard rule for a call of an MCP tool: Orchester's `run_check` never goes to the reviewer.
+/// The hard rule for a call of an MCP tool: Orchester's `run_check`, `start_qa_app` and browser tools never go to the
+/// reviewer.
 fn tool_hold(subject: &ApprovalSubject, permissions: Option<&AgentPermissions>) -> Option<ReviewHold> {
   match subject {
+    ApprovalSubject::McpTool { server, tool, .. } if server == SERVER && BrowserTool::from_name(tool).is_some() => {
+      Some(ReviewHold::Browser)
+    }
     ApprovalSubject::McpTool { server, tool, .. } if !auto_approvable(server, tool) => Some(ReviewHold::ProjectProgram),
     _ => permissions.is_none().then_some(ReviewHold::PermissionsUnknown),
   }

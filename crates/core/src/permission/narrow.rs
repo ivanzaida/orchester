@@ -82,6 +82,8 @@ impl AgentPermissions {
     effective.set_interactive_tool_approvals(self.interactive_tool_approvals() || step.interactive_tool_approvals);
     // A step does not narrow who answers: the profile's auto-approval holds for each of its steps.
     effective.set_auto_approve(self.auto_approve);
+    // A step narrows the browser only through its network: without network it gets no browser tool.
+    effective.set_browser(self.browser.clone());
     effective
   }
 }

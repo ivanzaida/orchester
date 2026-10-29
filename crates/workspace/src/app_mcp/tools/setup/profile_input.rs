@@ -15,7 +15,10 @@ use orchester_core::{
     mcp::{McpServer, McpServerSelection},
   },
   id::ConnectionId,
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, WritableFolders},
+  permission::{
+    AgentPermissions, AllowedCommands, BrowserPermission, CommandPermission, NetworkAccess, WritableFolders,
+    browser::{AllowedSites, BrowserAccess},
+  },
   resource::{AgentProfile, ModelId, RepositoryAccess},
   store::McpServerStore,
 };
@@ -34,7 +37,7 @@ use crate::{
     data::{ProfileChange, ProjectAgents, apply_in},
     folders::with_folder,
     form::{ModelSelection, ProfileForm, effort_options, listed_models},
-    permissions::{not_enforceable, with_command},
+    permissions::{not_enforceable, with_command, with_site},
     servers,
   },
   app_mcp::{
@@ -97,6 +100,21 @@ pub struct Permissions {
   /// Approve automatically (don't ask me): Orchester answers what would ask a person.
   #[serde(default)]
   pub approve_automatically: bool,
+  /// The browser: Orchester's browser tools for its agents. Left out, a profile being changed keeps its own and a
+  /// new profile has it off.
+  pub browser: Option<Browser>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct Browser {
+  /// on: its agents get the browser tools, which needs network on.
+  pub access: Network,
+  /// Hosts its agents open and act on without asking, e.g. docs.rs or *.example.com; any other site asks a person.
+  /// Kept while the browser is off.
+  #[serde(default)]
+  pub allowed_sites: Vec<String>,
 }
 
 /// Repository access, as the tools name it.
@@ -117,6 +135,7 @@ impl From<Access> for RepositoryAccess {
   }
 }
 
+/// Off or on, as the tools name network access and the browser.
 #[derive(Clone, Copy, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[schemars(crate = "rmcp::schemars")]
@@ -148,7 +167,12 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       .transpose()?;
     let connection = agent_named(&db, &args.connection)?;
     let permissions = match &args.permissions {
-      Some(given) => permissions(given, &root)?,
+      Some(given) => {
+        let kept = existing.map_or_else(BrowserPermission::off, |entry| {
+          entry.profile.permissions().browser().clone()
+        });
+        permissions(given, &root, kept)?
+      }
       None => existing.map_or_else(
         || AgentPermissions::most_restrictive(connection.provider(), Platform::current()),
         |entry| entry.profile.permissions().clone(),
@@ -228,8 +252,9 @@ fn form(
   })
 }
 
-/// The permissions given, each command and folder checked as the editor adds it.
-fn permissions(given: &Permissions, root: &Path) -> Result<AgentPermissions, ToolError> {
+/// The permissions given, each command, folder and site checked as the editor adds it; `kept` is the browser
+/// permission when none is given.
+fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Result<AgentPermissions, ToolError> {
   let invalid = |reason| refused("invalid_permissions", reason);
   let commands = match given.commands {
     Commands::AskBefore => CommandPermission::AskBefore,
@@ -256,11 +281,30 @@ fn permissions(given: &Permissions, root: &Path) -> Result<AgentPermissions, Too
     Network::Off => NetworkAccess::Off,
     Network::On => NetworkAccess::On,
   };
+  let browser = match &given.browser {
+    Some(browser) => browser_permission(browser, network).map_err(invalid)?,
+    None => kept,
+  };
   let mut permissions =
     AgentPermissions::new(given.repository.into(), commands, network).with_writable_folders(folders);
   permissions.set_interactive_tool_approvals(given.ask_before_tool_calls);
   permissions.set_auto_approve(given.approve_automatically);
+  permissions.set_browser(browser);
   Ok(permissions)
+}
+
+/// The browser permission given, each site checked as the editor adds it; on needs network on.
+fn browser_permission(given: &Browser, network: NetworkAccess) -> Result<BrowserPermission, Message> {
+  let access = match given.access {
+    Network::Off => BrowserAccess::Off,
+    Network::On if network == NetworkAccess::Off => return Err(Message::new("appMcp.errors.browserNeedsNetwork")),
+    Network::On => BrowserAccess::On,
+  };
+  let mut sites = AllowedSites::none();
+  for site in &given.allowed_sites {
+    sites = with_site(&sites, site)?;
+  }
+  Ok(BrowserPermission::new(access, sites))
 }
 
 /// Refused where the editor offers no such choice on `connection`: permissions its CLI does not

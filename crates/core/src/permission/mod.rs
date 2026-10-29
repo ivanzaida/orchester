@@ -1,11 +1,13 @@
 //! What an agent may do while it works on a task (`docs/design/orchester-workspace.md`, "Agent
 //! permissions"): repository access, the folders outside the worktree it may also write to
-//! ([`writable`]), which commands it may run and whether it has network access.
+//! ([`writable`]), which commands it may run, whether it has network access, and whether it gets the
+//! browser and on which sites ([`browser`]).
 //! Permissions belong to an agent profile version; a pipeline step can only narrow them
 //! ([`StepPermissions`]). Which options a connection's CLI can enforce is decided by
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
 //! in a bypass mode.
 
+pub mod browser;
 pub(crate) mod canonical;
 pub mod capability;
 pub mod category;
@@ -27,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  browser::BrowserPermission,
   launch::{LaunchPermissions, OutsideCommands},
   local_file::{ProgramPlace, program_place, resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
@@ -238,6 +241,9 @@ pub struct AgentPermissions {
   /// off, as before it existed.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   auto_approve: bool,
+  /// The *Browser* permission. Left out of the stored form while off with no site, as before it existed.
+  #[serde(default, skip_serializing_if = "BrowserPermission::is_unset")]
+  browser: BrowserPermission,
 }
 
 impl AgentPermissions {
@@ -249,6 +255,7 @@ impl AgentPermissions {
       network,
       interactive_tool_approvals: false,
       auto_approve: false,
+      browser: BrowserPermission::off(),
     }
   }
 
@@ -326,5 +333,15 @@ impl AgentPermissions {
 
   pub const fn set_network(&mut self, network: NetworkAccess) {
     self.network = network;
+  }
+
+  /// The *Browser* permission as chosen, whatever the network access; the step's tools need both
+  /// ([`crate::orchester_tools::browser::offered`]).
+  pub const fn browser(&self) -> &BrowserPermission {
+    &self.browser
+  }
+
+  pub fn set_browser(&mut self, browser: BrowserPermission) {
+    self.browser = browser;
   }
 }

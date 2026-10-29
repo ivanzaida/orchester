@@ -26,7 +26,7 @@
 
 use serde_json::{Value, json};
 
-use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, ToolCall, catalog::input_schema};
+use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, ToolCall, browser::BrowserTool, catalog::input_schema};
 use crate::{
   permission::{AgentPermissions, NetworkAccess},
   resource::RepositoryAccess,
@@ -62,9 +62,13 @@ pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<Too
 }
 
 /// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
-/// `run_check` or `start_qa_app`, which run programs outside every sandbox.
+/// `run_check` or `start_qa_app`, which run programs outside every sandbox, or of its browser tools
+/// ([`super::browser`]), which can send anything to any site.
 pub fn auto_approvable(server: &str, tool: &str) -> bool {
-  server != SERVER || (tool != OrchesterTool::RunCheck.as_str() && tool != OrchesterTool::StartQaApp.as_str())
+  server != SERVER
+    || (tool != OrchesterTool::RunCheck.as_str()
+      && tool != OrchesterTool::StartQaApp.as_str()
+      && BrowserTool::from_name(tool).is_none())
 }
 
 /// The tools one step is offered, with their policy, the checks `run_check` runs, and the run's sources, which the

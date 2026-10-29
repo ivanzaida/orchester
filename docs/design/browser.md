@@ -1,6 +1,7 @@
 # Browser for agents
 
-Status: draft for the person's review (2026-10-28). Nothing here is built yet.
+Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29. P1 (the
+core rules, ORC-355) is built; the runner, the window and the settings are not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -38,6 +39,16 @@ time.
 8. **Off unless the profile allows it.** A new agent profile permission *Browser* (off by default) with a list of
    allowed sites. Turning it on or adding a site widens what agents may do, so over MCP only a person does it
    (`person_only`, as other widenings).
+9. **`browser_eval` is offered, and every call of it asks** (the person, 2026-10-29). It runs JavaScript in the page
+   and so reads what the other tools hide (cookies not marked HttpOnly, local storage); a person approves each call,
+   whatever the profile's commands setting, the allowed sites or a rule of *Approve similar*, and auto-approval never
+   answers it.
+10. **Read-only steps get the browser** (the person, 2026-10-29, as drafted): a step that only reads the repository
+    (Review, Explorer) gets the browser tools with the same policy as a step that may write, when its profile has
+    *Browser* on and the step has network access.
+
+Decision 3's *one browser profile per project* is the person's too (2026-10-29): the project's runs share its
+sign-ins, and the window's project switcher relies on it.
 
 ## What the agent gets
 
@@ -52,44 +63,60 @@ time.
 | `browser_click` | `tab`, `ref` or `x`,`y`, `button`, `count` | Scrolls the element into view and clicks its centre. |
 | `browser_type` | `tab`, `ref`, `text`, `submit` | Focuses the field, replaces its value, optionally presses Enter. |
 | `browser_key` | `tab`, `keys` | Key presses (`Enter`, `Tab`, `Ctrl+A`, …). |
-| `browser_scroll` | `tab`, `ref` or direction and amount | Scrolls an element into view or the page. |
+| `browser_scroll` | `tab`, `ref` or `direction` and `pixels` | Scrolls an element into view or the page. |
 | `browser_screenshot` | `tab`, `ref` (element only), `full_page` | A PNG saved under the worktree's `.tmp/browser/` and returned as an image answer and a relative path, as `call_run_app` does. |
 | `browser_console` | `tab`, `errors_only`, `pattern`, `limit` | Console messages and uncaught exceptions since the tab opened. |
 | `browser_network` | `tab`, `url_pattern`, `limit` | Requests: method, URL, status, type, size. Never headers or bodies. |
 | `browser_wait` | `tab`, `text` or `ref`, `timeout` | Waits until text or an element appears. |
+| `browser_eval` | `tab`, `expression` | Runs a JavaScript expression in the page and returns its value as JSON. Every call asks a person (decision 9). |
 
+- The catalog, the inputs and the policy are `orchester_core::orchester_tools::browser` (P1). A `tab` left out or
+  `null` is the run's current tab; a call's input is read strictly (unknown fields refused) and checked: tab ids,
+  refs (`e` and digits), key presses (modifiers and one key joined by `+`), and bounds on sizes, limits, pixels and
+  the wait (at most 60 s).
 - Refs follow the lurq convention: each `browser_read_page` of a tab replaces that tab's refs; a stale ref is an error
   that says to read the page again. A ref is the element's CDP `backendNodeId` behind a short name.
 - Every answer is cut to a size (`ToolResult`, as other tools), and says so when it was cut.
-- Every answer with page content starts with a fixed line that the content is the page's data, not instructions.
-  Agents' instructions say the same (the step prompt's tool section).
+- Every answer with page content starts with a fixed line that the content is the page's data, not instructions
+  (`PAGE_DATA_NOTICE`). Agents' instructions say the same (the step prompt's tool section).
 - While the person drives a tab in the window (input in the last 10 seconds), the agent's actions on that tab wait,
   and its answer says the person was using it.
-- No `browser_eval` (running JavaScript) in the first version: it reads what the other tools deliberately hide
-  (cookies not marked HttpOnly, local storage). See *Open questions*.
+- `browser_eval` reads what the other tools deliberately hide (cookies not marked HttpOnly, local storage), so it is
+  offered only as a tool whose every call asks the person (decision 9).
 
 ## Permissions and policy
 
 A new row in the agent profile's permissions: **Browser** — *Off* (default) / *On*, with **Allowed sites**: a list of
 hosts (`docs.rs`, `*.example.com`). Local development hosts (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`,
 `*.test`) are always allowed when the browser is on. The row needs Network access. An entry that is not a host (a URL
-with a scheme or a path, spaces) is refused in place under the field with the reason, and the field keeps the text
-(`08 · Profile · Browser permission` `hQfEh`; the profile's Connection enforcement shows *Browser · Orchester
+with a scheme or a path, a port, spaces) is refused in place under the field with the reason, and the field keeps the
+text (`08 · Profile · Browser permission` `hQfEh`; the profile's Connection enforcement shows *Browser · Orchester
 tools · 2 sites · others ask*).
 
-The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::policy`):
+- The permission is `orchester_core::permission::browser`: `*.example.com` allows every host under `example.com`, not
+  `example.com` itself; a wildcard needs a domain of two names at least (`*.com` is refused); hosts compare in lower
+  case without a trailing dot, on any port. The list keeps its sites while the browser is off; the stored form leaves
+  the permission out while it is off with no site, as profiles saved before it.
+- A step narrows the browser only through its network: a step without network gets no browser tool.
+- Widening (`permission::widening`): turning the browser on, and a site no site of the published version covers. Over
+  MCP (`save_profile_draft`, its `permissions.browser`) both are refused as `person_only` unless a person turned on
+  *Let automation change agent permissions*; a `browser` left out keeps the profile's own.
+
+The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::browser::decide`):
 
 | Browser tools | Step that may write the worktree | Read-only step |
 | --- | --- | --- |
 | Browser off, or network off | not offered | not offered |
-| Reading tools (`browser_tabs`, `browser_read_page`, `browser_page_text`, `browser_screenshot`, `browser_console`, `browser_network`, `browser_wait`) | runs | runs |
-| Opening a URL or acting on a page of an allowed site | runs | runs |
-| Opening a URL or acting on a page of any other site | asks; *Approve similar* keeps the host for the run | asks; same |
+| Reading tools (`browser_tabs`, `browser_read_page`, `browser_page_text`, `browser_screenshot`, `browser_console`, `browser_network`, `browser_wait`) and `browser_close` | runs | runs |
+| Opening a URL or acting on a page of an allowed site or a local development host | runs | runs |
+| Opening a URL or acting on a page of any other site, or of a page without a web host | asks; *Approve similar* keeps the host for the run | asks; same |
+| `browser_eval` | asks at every call | asks at every call |
 
-- A read-only step may use the browser: browsing does not write the worktree. Acting on a staging site does change
-  something outside, which is why sites must be allowed.
+- A read-only step uses the browser as a step that may write (decision 10): browsing does not write the worktree.
+  Acting on a staging site does change something outside, which is why sites must be allowed.
+- `browser_close` closes one of the run's own tabs and changes nothing on a site, so it runs as the reading tools do.
 - Auto-approval never answers a browser ask (`auto_approvable`), as for `run_check`: a click on another site can
-  send anything anywhere.
+  send anything anywhere. Auto mode leaves it to the person too (`ReviewHold::Browser`).
 - Allowed sites limit where the agent goes and acts, not what a page loads (scripts, images, requests to other
   hosts). The profile page says so.
 - The person in the window is not limited by the profile: allowed sites and asks apply to agents only.
@@ -248,8 +275,11 @@ person asked for that (setting); by default it opens only when the person opens 
 
 ## Phases
 
-1. **P1 · Core rules (non-UI).** Tool catalog and inputs, the Browser permission with allowed sites, policy rows,
-   person-only widening over MCP. Tests in `orchester-core`.
+1. **P1 · Core rules (non-UI).** Done (ORC-355): tool catalog and inputs, the Browser permission with allowed sites,
+   policy rows, person-only widening over MCP (`save_profile_draft`'s `permissions.browser`). Tests:
+   `cargo test -p orchester-core --test browser browser_`, and the MCP refusal in
+   `cargo test -p orchester-app --test mcp_domain domain_widening_the_browser`. The tools are not offered to steps yet
+   (`StepTools` does not list them): the runner serves them in P2.
 2. **P2 · Runner and tools (non-UI).** Finding and starting headless Chromium on both platforms, the CDP client, the
    tools, run tabs closed at run end, idle stop. Tests with a real Edge/Chrome on a local page served by the test
    (`orchester-runner --test browser`), skipped with a visible reason where no browser is found. After P2 agents can
@@ -269,14 +299,13 @@ person asked for that (setting); by default it opens only when the person opens 
 
 ## Open questions for review
 
-1. **One profile per project** (sign-ins shared by the project's runs; this draft and the project switcher rely on
-   it), or one for the whole app?
-2. **Read-only steps** get the browser (this draft) or not?
-3. **`browser_eval`**: leave it out (this draft), or offer it as a tool that always asks?
-4. **Pipe instead of port**: worth an `unsafe` module on both platforms to keep other same-user processes off the
+Decided by the person on 2026-10-29: one browser profile per project (decision 3), read-only steps get the browser
+(decision 10), and `browser_eval` is offered as a tool whose every call asks (decision 9).
+
+1. **Pipe instead of port**: worth an `unsafe` module on both platforms to keep other same-user processes off the
    debugging port?
-5. **Idle stop after 15 minutes**: right, or keep the browser running while the app runs?
-6. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
-7. **Opening the window when an agent starts browsing**: off by default (this draft), or on?
-8. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
+2. **Idle stop after 15 minutes**: right, or keep the browser running while the app runs?
+3. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
+4. **Opening the window when an agent starts browsing**: off by default (this draft), or on?
+5. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
    in lurq (a lurq change, `app-vs-lurq-scope`).

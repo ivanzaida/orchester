@@ -4,7 +4,10 @@
 //! cannot). Automation may narrow freely; widening is a person's decision unless a person lets automation
 //! make it (*Let automation change agent permissions*).
 
-use super::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess};
+use super::{
+  AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess,
+  browser::{BrowserAccess, BrowserPermission},
+};
 
 /// One way permissions are broader than those they are compared with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -22,6 +25,10 @@ pub enum Widening {
   ToolCallsUnasked,
   /// Approving automatically where a person was asked.
   AutoApprove,
+  /// The browser where it was off.
+  Browser,
+  /// An allowed site of the browser that no site of the base covers.
+  BrowserSite,
 }
 
 impl AgentPermissions {
@@ -34,6 +41,7 @@ impl AgentPermissions {
         .unwrap_or_default()
     };
     let base_folders = granted(base);
+    let (browser, browser_site) = browser_widens(&base.browser, &self.browser);
     [
       (
         self.repository == RepositoryAccess::Write && base.repository == RepositoryAccess::ReadOnly,
@@ -53,11 +61,23 @@ impl AgentPermissions {
         Widening::ToolCallsUnasked,
       ),
       (self.auto_approve && !base.auto_approve, Widening::AutoApprove),
+      (browser, Widening::Browser),
+      (browser_site, Widening::BrowserSite),
     ]
     .into_iter()
     .filter_map(|(widens, widening)| widens.then_some(widening))
     .collect()
   }
+}
+
+/// Whether `next` turns the browser on where `base` has it off, and whether it allows a site no site of `base` covers.
+/// Sites apply only while the browser is on, so a list kept while it is off widens nothing.
+fn browser_widens(base: &BrowserPermission, next: &BrowserPermission) -> (bool, bool) {
+  if next.access() == BrowserAccess::Off {
+    return (false, false);
+  }
+  let site = next.sites().entries().iter().any(|site| !base.sites().covers(site));
+  (base.access() == BrowserAccess::Off, site)
 }
 
 /// Whether `next` lets commands run that `base` does not. Any command in the worktree is the widest; an

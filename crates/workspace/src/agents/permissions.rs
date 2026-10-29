@@ -7,6 +7,7 @@ use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPrefix, CommandPrefixError,
+    browser::{AllowedSite, AllowedSiteError, AllowedSites, AllowedSitesError},
     capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable, support},
   },
 };
@@ -117,4 +118,32 @@ pub fn with_command(list: &AllowedCommands, typed: &str) -> Result<AllowedComman
 pub fn without_command(list: &AllowedCommands, removed: &CommandPrefix) -> AllowedCommands {
   let rest = list.entries().iter().filter(|kept| *kept != removed).cloned().collect();
   AllowedCommands::new(rest).expect("a shorter list keeps its entries unique")
+}
+
+/// `list` with the browser's allowed site `typed` added, or why it cannot be: an entry that is not a host is refused
+/// with its reason.
+pub fn with_site(list: &AllowedSites, typed: &str) -> Result<AllowedSites, Message> {
+  let invalid = |key: &'static str| Message::new(key).with("site", typed.trim().to_owned());
+  let site = AllowedSite::new(typed).map_err(|error| match error {
+    AllowedSiteError::Blank => Message::new("agents.permissions.siteInvalid.blank"),
+    AllowedSiteError::Spaces => invalid("agents.permissions.siteInvalid.spaces"),
+    AllowedSiteError::Scheme => invalid("agents.permissions.siteInvalid.scheme"),
+    AllowedSiteError::Path => invalid("agents.permissions.siteInvalid.path"),
+    AllowedSiteError::Port => invalid("agents.permissions.siteInvalid.port"),
+    AllowedSiteError::Credentials => invalid("agents.permissions.siteInvalid.credentials"),
+    AllowedSiteError::Wildcard => invalid("agents.permissions.siteInvalid.wildcard"),
+    AllowedSiteError::TooBroad(_) => invalid("agents.permissions.siteInvalid.tooBroad"),
+    AllowedSiteError::NotAscii => invalid("agents.permissions.siteInvalid.notAscii"),
+    AllowedSiteError::NotAHost(_) => invalid("agents.permissions.siteInvalid.notAHost"),
+  })?;
+  let mut entries = list.entries().to_vec();
+  entries.push(site);
+  AllowedSites::new(entries).map_err(|error| match error {
+    AllowedSitesError::Duplicate(site) => {
+      Message::new("agents.permissions.siteInvalid.duplicate").with("site", site.to_string())
+    }
+    AllowedSitesError::TooMany => {
+      Message::new("agents.permissions.siteInvalid.tooMany").with("max", AllowedSites::MAX_ENTRIES.to_string())
+    }
+  })
 }

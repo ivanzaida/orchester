@@ -42,7 +42,8 @@
     "permissionsUnknown": "Auto mode didn’t review this: the step’s permissions weren’t recorded, so nothing tells what is within them.",
     "tooLong": "Auto mode didn’t review this: the request is longer than a review reads whole.",
     "escalation": "Auto mode didn’t review this: Codex asks to run it outside its sandbox.",
-    "projectProgram": "Auto mode didn’t review this: it runs one of the project’s programs, outside every sandbox."
+    "projectProgram": "Auto mode didn’t review this: it runs one of the project’s programs, outside every sandbox.",
+    "browser": "Auto mode didn’t review this: it uses the browser on a site the profile doesn’t allow, or runs JavaScript in a page."
   },
   "attachments": {
     "refused": {
@@ -970,6 +971,20 @@
         "duplicate": "{{command}} is already allowed.",
         "tooMany": "At most {{max}} commands can be allowed."
       },
+      "siteInvalid": {
+        "blank": "Type a host first, such as staging.example.com.",
+        "spaces": "{{site}} is not a host: a site is one host, without spaces.",
+        "scheme": "Enter {{site}} without its scheme (https://): a host such as staging.example.com.",
+        "path": "Enter {{site}} without a path, query or fragment: a host such as staging.example.com.",
+        "port": "Enter {{site}} without a port: every port of an allowed host is allowed.",
+        "credentials": "Enter {{site}} without a user name or password.",
+        "wildcard": "In {{site}}, a * may only start the entry, as in *.example.com.",
+        "tooBroad": "{{site}} would allow too many sites: name a domain under it, as in *.example.com.",
+        "notAscii": "Enter {{site}} in its ASCII form (xn--…).",
+        "notAHost": "{{site}} is not a host: letters, digits and - between dots, or an IPv6 address in brackets.",
+        "duplicate": "{{site}} is already allowed.",
+        "tooMany": "At most {{max}} sites can be allowed."
+      },
       "folderInvalid": {
         "repository": "The repository cannot be read, so the folder cannot be checked.",
         "blank": "Type a folder first.",
@@ -1521,6 +1536,7 @@
       "effortNotOffered": "{{model}} does not list the effort {{effort}}. list_models gives the efforts each model takes.",
       "commandsNeedAllowed": "Allowed commands are listed only with the commands choice allowed.",
       "foldersNeedWrite": "Extra writable folders apply only with write access to the repository.",
+      "browserNeedsNetwork": "The browser needs network access: turn network on, or leave the browser off.",
       "nativeNoSwitches": "On a connection whose agents Orchester runs itself, the approval switches and MCP servers are not offered in this version.",
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
       "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
@@ -1588,6 +1604,8 @@
       "network": "Network access, which the latest version does not give.",
       "toolCallsUnasked": "Tool calls no longer asked about, which the latest version asks about.",
       "autoApprove": "Approving automatically, where the latest version asks a person.",
+      "browser": "The browser, which the latest version does not give.",
+      "browserSite": "Allowed sites of the browser that the latest version does not list.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
       "reviewerAccount": "Auto mode's reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
       "account": "Its agents would run on another account than the latest version's: another sign-in, and possibly another organisation's provider, would get the project's work.",
