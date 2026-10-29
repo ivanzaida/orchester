@@ -11,7 +11,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, shared_publishes};
 use crate::{
   StoreError,
   rows::{corrupt, decode_body, decode_document, encode_json, parse},
@@ -143,6 +143,7 @@ impl ProjectDb {
       .connection
       .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     check_kind::<B>(&transaction, resource)?;
+    shared_publishes::ensure_may_change(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
     let latest = load_versions::<B>(
       &transaction,
@@ -212,6 +213,7 @@ impl ResourceStore for ProjectDb {
   ) -> Result<Resource, StoreError> {
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
+    shared_publishes::ensure_may_create(&transaction, B::KIND)?;
     let taken: bool = transaction.query_row(
       "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
       params![kind_text(B::KIND), slug.as_str()],
@@ -327,6 +329,7 @@ fn publish_checked<B: ResourceBody>(
   now: Timestamp,
 ) -> Result<Version<B>, StoreError> {
   check_kind::<B>(connection, resource)?;
+  shared_publishes::ensure_may_change(connection, resource)?;
   let draft = load_draft::<B>(connection, resource)?.ok_or(StoreError::NoDraft(resource))?;
   if expected.is_some_and(|expected| draft.body() != expected) {
     return Err(StoreError::DraftChanged(resource));
@@ -345,6 +348,8 @@ fn publish_checked<B: ResourceBody>(
   publish_prepared(connection, resource, draft, latest, now)
 }
 
+/// Publishes `draft` as the version after `latest`. In a shared project the callers checked that the person is an
+/// admin, and the version waits for the server ([`super::shared_publishes`]).
 fn publish_prepared<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
@@ -369,6 +374,7 @@ fn publish_prepared<B: ResourceBody>(
     "DELETE FROM resource_drafts WHERE resource_id = ?1",
     [resource.to_string()],
   )?;
+  shared_publishes::record(connection, resource, &version, latest)?;
   Ok(version)
 }
 
@@ -379,6 +385,7 @@ pub(super) fn save_draft<B: ResourceBody>(
 ) -> Result<DraftSaved, StoreError> {
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
+  shared_publishes::ensure_may_change(connection, resource)?;
   let base = match draft.based_on() {
     Some(number) => load_versions::<B>(
       connection,
