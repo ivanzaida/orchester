@@ -1,6 +1,8 @@
 //! Agent profile editor logic: the form, the model choices of a connection and the
 //! Draft saved → Publish vN → Published vN lifecycle through the project database.
 
+#[path = "agents/approval_mode.rs"]
+mod approval_mode;
 #[path = "agents/concurrency.rs"]
 mod concurrency;
 #[path = "agents/servers.rs"]

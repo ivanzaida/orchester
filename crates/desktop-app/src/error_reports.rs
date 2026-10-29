@@ -18,6 +18,7 @@ use sentry::{
   integrations::{
     backtrace::{AttachStacktraceIntegration, ProcessStacktraceIntegration},
     contexts::ContextIntegration,
+    debug_images::DebugImagesIntegration,
     panic::PanicIntegration,
   },
   protocol::{Context, Event, Value},
@@ -81,7 +82,8 @@ impl Environment {
 /// `before_send`, after a log line's fields are put into its message ([`with_fields_in_message`]). Sentry's defaults
 /// keep PII, traces and sessions off. The integrations are named here rather than left to `sentry::init`, so a client
 /// made from these options alone (a test's) reports the same way: the panic hook, the OS and CPU contexts, the stack
-/// where an ERROR line was logged, and the stack trace's frames marked as the app's or not.
+/// where an ERROR line was logged, the stack trace's frames marked as the app's or not, and the loaded modules with
+/// their debug IDs, by which GlitchTip resolves a release build's frame addresses in its uploaded PDBs.
 pub fn options(environment: Environment) -> ClientOptions {
   let scrubber = ReportScrubber::for_this_build();
   ClientOptions::new()
@@ -96,6 +98,7 @@ pub fn options(environment: Environment) -> ClientOptions {
     .add_integration(PanicIntegration::default())
     .add_integration(AttachStacktraceIntegration)
     .add_integration(ProcessStacktraceIntegration)
+    .add_integration(DebugImagesIntegration::new())
     .before_send(move |event| Some(scrubber.scrub(with_fields_in_message(event))))
 }
 

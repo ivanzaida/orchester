@@ -58,6 +58,9 @@ pub enum ServiceError {
   DuplicateCapture(FieldName),
   #[error("a seed of HTTP requests needs at least one request")]
   NoSeedRequests,
+  /// The place is not repeated: its query string may hold a token.
+  #[error("the place `ui_open` starts is empty, or has spaces or control characters")]
+  UiStart,
   #[error("the stack `{0}` has no services")]
   EmptyStack(StackName),
   #[error("the stack `{stack}` lists `{service}` twice")]

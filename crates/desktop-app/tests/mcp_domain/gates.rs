@@ -102,6 +102,31 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   served.ok("save_profile_draft", &auto);
 }
 
+/// Manual → Autopilot widens what agents do unasked: a person's decision over MCP unless they let automation widen.
+/// Switching back to Manual is always taken.
+#[test]
+fn domain_approval_mode_profile_autopilot_is_person_only() {
+  let mut served = served();
+  let manual = served.most_restrictive();
+  assert_eq!(manual["approval_mode"], "manual", "a new profile is Manual");
+  served.ok("save_profile_draft", &profile("Pilot", Some(manual.clone())));
+  let mut autopilot = manual.clone();
+  autopilot["approval_mode"] = json!("autopilot");
+  let mut pilot = profile("Pilot", Some(autopilot));
+  pilot["profile"] = json!("Pilot");
+  let refused = served.refused("save_profile_draft", &pilot);
+  assert_person_only(&refused);
+  assert!(refused["reasons"].to_string().contains("Autopilot"), "{refused}");
+  served.let_automation_widen(true);
+  let saved = served.ok("save_profile_draft", &pilot);
+  assert_eq!(saved["profile"]["permissions"]["approval_mode"], "autopilot");
+  served.let_automation_widen(false);
+  let mut back = profile("Pilot", Some(manual));
+  back["profile"] = json!("Pilot");
+  let saved = served.ok("save_profile_draft", &back);
+  assert_eq!(saved["profile"]["permissions"]["approval_mode"], "manual");
+}
+
 #[test]
 fn domain_what_a_profile_tells_its_agents_reaches_them_only_through_a_person() {
   let mut served = served();
