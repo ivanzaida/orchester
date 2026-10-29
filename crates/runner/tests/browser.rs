@@ -185,6 +185,58 @@ async fn browser_opens_a_runs_tab_reads_it_and_closes_the_runs_tabs_at_its_end()
   );
 }
 
+/// A program chosen in Settings › Browser that is no Chromium-based browser's is never passed over for the one
+/// installed: the browser is unavailable and says why.
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_chosen_in_settings_that_cannot_be_used_is_unavailable_with_the_reason() {
+  let data = tempfile::tempdir().expect("temporary folder");
+  let database = data.path().join("orchester.db");
+  let gone = data.path().join("gone").join("chrome");
+  orchester_store::AppDb::open(&database)
+    .expect("the application database")
+    .set_browser_program(Some(&gone))
+    .expect("the choice is kept");
+  let browser = ProjectBrowser::new(data.path().join("profile")).with_settings(database);
+
+  let refused = browser
+    .open_tab(RunId::generate(), "about:blank")
+    .await
+    .expect_err("the chosen program is gone");
+  let BrowserError::Unavailable(unavailable) = refused else {
+    panic!("unavailable, not {refused}");
+  };
+  assert_eq!(
+    unavailable.reason(),
+    format!(
+      "the program chosen in Settings › Browser cannot be used: {} does not exist",
+      gone.display()
+    )
+  );
+  assert!(!data.path().join("profile").exists(), "nothing started");
+}
+
+/// The program chosen in Settings › Browser is the one that starts: here the installed one, chosen by its path.
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_starts_the_program_chosen_in_settings() {
+  if !browser_installed() {
+    return;
+  }
+  let installed = orchester_exec::browser::find().expect("installed");
+  let data = tempfile::tempdir().expect("temporary folder");
+  let database = data.path().join("orchester.db");
+  orchester_store::AppDb::open(&database)
+    .expect("the application database")
+    .set_browser_program(Some(installed.path()))
+    .expect("the choice is kept");
+  let browser = ProjectBrowser::new(data.path().join("profile")).with_settings(database);
+  let site = pages().await;
+  let run = RunId::generate();
+
+  let tab = browser.open_tab(run, &format!("{site}chosen")).await.expect("opened");
+  assert_eq!(title(&browser, run, &tab).await, "Page chosen");
+  browser.stop().await;
+}
+
 /// Waits until `browser` listens to what `expected` says, its log followers ending on their own tasks.
 async fn listening(browser: &ProjectBrowser, expected: Listening) {
   let settled = tokio::time::timeout(PATIENCE, async {

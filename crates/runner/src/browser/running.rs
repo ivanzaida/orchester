@@ -3,7 +3,7 @@
 
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
-use orchester_exec::browser::{self as program, DevToolsActivePort};
+use orchester_exec::browser::{self as program, BrowserProgram, DevToolsActivePort};
 use orchester_ipc::browser::{BrowserMode, TabOwner};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -51,12 +51,14 @@ impl Drop for Publisher {
 }
 
 impl Running {
-  /// Finds the browser, starts it on `profile`, headless or in a window of its own as `mode` says, and connects to
-  /// it. A browser that does not get as far as the connection is ended.
-  pub(super) async fn start(profile: &Path, mode: BrowserMode, window: &Arc<Window>) -> Result<Self, BrowserError> {
-    let found = tokio::task::spawn_blocking(program::find)
-      .await
-      .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??;
+  /// Starts `found` on `profile`, headless or in a window of its own as `mode` says, and connects to it. A browser
+  /// that does not get as far as the connection is ended.
+  pub(super) async fn start(
+    found: &BrowserProgram,
+    profile: &Path,
+    mode: BrowserMode,
+    window: &Arc<Window>,
+  ) -> Result<Self, BrowserError> {
     fs::create_dir_all(profile).map_err(|error| {
       BrowserError::Start(format!(
         "the profile folder {} cannot be made: {error}",
@@ -66,8 +68,8 @@ impl Running {
     DevToolsActivePort::remove(profile)
       .map_err(|error| BrowserError::Start(format!("an earlier browser's debugging port file stays: {error}")))?;
     let command = match mode {
-      BrowserMode::Headless => program::headless(&found, profile)?,
-      BrowserMode::Headed => program::headed(&found, profile)?,
+      BrowserMode::Headless => program::headless(found, profile)?,
+      BrowserMode::Headed => program::headed(found, profile)?,
     };
     let process = BrowserProcess::start(&command)?;
     tracing::info!(browser = found.name(), ?mode, "the project's browser started");

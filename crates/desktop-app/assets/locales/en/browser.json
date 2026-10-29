@@ -12,6 +12,7 @@
         "one": "1 tab",
         "other": "{{count}} tabs"
       },
+      "separator": "·",
       "acting": "acting",
       "note": "Each project opens pages in its own browser profile, with its own sign-ins."
     },

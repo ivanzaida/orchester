@@ -206,7 +206,7 @@ fn row(
         .id(format!("browser-project-{index}-acting"))
         .spacing(SpacingSize::Xs)
         .align_items(Alignment::Center)
-        .child(Text::new("·").variant(TypographyStyle::Caption))
+        .child(Text::new(&ctx.t("browser.switcher.separator")).variant(TypographyStyle::Caption))
         .child(
           Row::new()
             .width(Dimension::Px(ACTING_DOT))

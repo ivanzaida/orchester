@@ -17,11 +17,12 @@ use crate::routes::{
 pub const PARAMS: &[&str] = &["tab", "account", "panel", "server", "step", "ask", "invite", "project"];
 
 /// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`.
-const TABS: [(&str, &str); 7] = [
+const TABS: [(&str, &str); 8] = [
   ("automation", "settings tab automation"),
   ("general", "settings tab general"),
   ("notifications", "settings tab notifications"),
   ("accounts", "settings tab accounts"),
+  ("browser", "settings tab browser"),
   ("orchester", "settings tab orchester"),
   ("connect", "settings tab connect"),
   ("invite", "settings tab invite"),
@@ -112,6 +113,7 @@ pub fn route(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route
     "automation" => automation(args),
     "general" => Ok(Route::General),
     "notifications" => Ok(Route::Notifications),
+    "browser" => Ok(Route::Browser),
     "accounts" => accounts(args, lookup).map(Route::Accounts),
     "orchester" => orchester(args, lookup).map(Route::Orchester),
     "connect" => connect(args, lookup).map(Route::Orchester),

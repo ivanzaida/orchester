@@ -20,6 +20,7 @@ pub use self::lock::{AppLock, AppLockError, LockHolder};
 
 pub(crate) const APP_DATABASE: &str = "orchester.db";
 const LOG_DIR: &str = "logs";
+const BROWSER_PROFILES: &str = "browser";
 
 /// Where the application database and the application log of one build live. A plain record: any
 /// pair of paths is valid.
@@ -66,6 +67,13 @@ pub fn app_database_path() -> io::Result<PathBuf> {
 /// The application database for an executable at `executable`.
 pub fn app_database_beside(executable: &Path) -> PathBuf {
   executable.with_file_name(APP_DATABASE)
+}
+
+/// The folder of the projects' browser profiles beside the application database `database` (`docs/design/browser.md`,
+/// "Starting it and connecting"): one folder in it per project, named by the project's id; `None` for a database
+/// without a folder.
+pub fn browser_profiles_beside(database: &Path) -> Option<PathBuf> {
+  database.parent().map(|folder| folder.join(BROWSER_PROFILES))
 }
 
 /// The folder of the application log of the running build.

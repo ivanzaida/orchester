@@ -177,6 +177,101 @@ fn browser_unavailable_keeps_its_reason() {
   );
 }
 
+/// A chosen program, and the folders [`orchester_exec::browser::find_in`] looks in, on Windows and macOS.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod chosen {
+  use std::{fs, path::Path};
+
+  use orchester_exec::browser::{NotABrowser, chosen, find_in};
+
+  /// Where an install of Google Chrome below `folder` puts its program, as the platform finds it.
+  #[cfg(target_os = "macos")]
+  const CHROME: &str = "Google Chrome.app/Contents/MacOS/Google Chrome";
+  #[cfg(target_os = "windows")]
+  const CHROME: &str = r"Google\Chrome\Application\chrome.exe";
+  /// Another browser's program, which is not Chromium-based.
+  #[cfg(target_os = "macos")]
+  const FIREFOX: &str = "Firefox.app/Contents/MacOS/firefox";
+  #[cfg(target_os = "windows")]
+  const FIREFOX: &str = r"Mozilla Firefox\firefox.exe";
+
+  fn install(folder: &Path, program: &str) -> std::path::PathBuf {
+    let path = folder.join(program);
+    fs::create_dir_all(path.parent().expect("a folder above")).expect("make its folder");
+    fs::write(&path, "").expect("write a stand-in program");
+    path
+  }
+
+  #[test]
+  fn browser_chosen_program_of_a_chromium_based_browser_is_taken_with_its_name() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = install(folder.path(), CHROME);
+    let taken = chosen(&program).expect("Google Chrome's program");
+
+    assert_eq!(taken.name(), "Google Chrome");
+    assert_eq!(taken.path(), program);
+  }
+
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn browser_chosen_app_bundle_stands_for_the_program_inside_it() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = install(folder.path(), "Brave Browser.app/Contents/MacOS/Brave Browser");
+    let taken = chosen(&folder.path().join("Brave Browser.app")).expect("Brave's bundle");
+
+    assert_eq!(taken.name(), "Brave");
+    assert_eq!(taken.path(), program);
+  }
+
+  #[cfg(target_os = "windows")]
+  #[test]
+  fn browser_chosen_chrome_exe_under_a_chromium_folder_is_chromium() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = install(folder.path(), r"Chromium\Application\CHROME.EXE");
+
+    assert_eq!(chosen(&program).expect("Chromium's program").name(), "Chromium");
+  }
+
+  #[test]
+  fn browser_chosen_program_that_is_not_a_chromium_based_browser_is_refused_with_the_reason() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let firefox = install(folder.path(), FIREFOX);
+    let missing = folder.path().join("gone").join("chrome");
+
+    assert_eq!(chosen(&firefox), Err(NotABrowser::NotChromium(firefox.clone())));
+    assert_eq!(
+      chosen(&firefox).expect_err("refused").to_string(),
+      format!(
+        "{} is not a Chromium-based browser's program: choose Microsoft Edge, Google Chrome, Brave or Chromium",
+        firefox.display()
+      )
+    );
+    assert_eq!(chosen(&missing), Err(NotABrowser::Missing(missing.clone())));
+    assert_eq!(
+      chosen(folder.path()),
+      Err(NotABrowser::Folder(folder.path().to_path_buf()))
+    );
+  }
+
+  #[test]
+  fn browser_find_in_looks_only_in_the_folders_it_is_given() {
+    let empty = tempfile::tempdir().expect("temporary folder");
+    let unavailable = find_in(&[empty.path().to_path_buf()]).expect_err("nothing is installed there");
+    assert!(
+      unavailable
+        .reason()
+        .ends_with(&format!(" in {}", empty.path().display())),
+      "{unavailable}"
+    );
+    assert!(unavailable.reason().contains("Google Chrome"), "{unavailable}");
+
+    let installed = tempfile::tempdir().expect("temporary folder");
+    let program = install(installed.path(), CHROME);
+    let found = find_in(&[empty.path().to_path_buf(), installed.path().to_path_buf()]).expect("found there");
+    assert_eq!((found.name(), found.path()), ("Google Chrome", program.as_path()));
+  }
+}
+
 #[cfg(target_os = "macos")]
 mod macos {
   use std::path::{Path, PathBuf};

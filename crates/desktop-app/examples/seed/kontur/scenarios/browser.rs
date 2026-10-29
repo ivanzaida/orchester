@@ -1,77 +1,59 @@
-//! The Browser window's QA states (`Browser · redesign` `lcNez`, ORC-379): the `tasks` project, and beside the app's
-//! database the fixture the QA app plays into the window's state (`orchester_app::test_support::browser_qa`): which
-//! state, the project, and the latest runs of the tasks that have runs, KON-12's first, whose agents own the tabs.
-//! The QA app opens the window by itself as an agent starting to browse does, on a page the computer's own browser
-//! renders when it has one.
+//! `browser`, `browser-not-found` and `browser-chosen`: Settings › Browser (`09 · Settings · Browser` `j3Lre`, `09b ·
+//! … not found` `NZECi` in `Browser · redesign`), deterministic and fixture-only. The QA app looks for installed
+//! browsers only in [`FOLDER`] beside the database when the seed made it (`examples/qa_app`), never in the computer's
+//! own places; the programs there are empty stand-ins, which no QA copy starts. `browser`: Google Chrome is installed
+//! there. `browser-not-found`: nothing is. `browser-chosen`: Chrome is, and Chromium in `programs/` beside it is the
+//! program chosen in Settings.
 
-use std::fs;
-
-use orchester_app::test_support::browser_qa::{BrowserState, Fixture};
-use orchester_core::{
-  id::RunId,
-  store::{RunStore, TaskStore},
+use std::{
+  fs,
+  path::{Path, PathBuf},
 };
 
-use super::tasks;
-use crate::kontur::{Kontur, PROJECT_NAME, SeedError};
+use orchester_store::AppDb;
 
-pub fn default(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Default)
-}
+use crate::kontur::{Kontur, SeedError, io_error as io};
 
-pub fn many(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Many)
-}
+/// The folder beside the application database the QA app looks for installed browsers in.
+pub const FOLDER: &str = "browsers";
 
-pub fn overflow(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Overflow)
-}
+/// Where an install of Google Chrome, and of Chromium, below a folder puts its program.
+#[cfg(target_os = "windows")]
+const CHROME: &str = r"Google\Chrome\Application\chrome.exe";
+#[cfg(not(target_os = "windows"))]
+const CHROME: &str = "Google Chrome.app/Contents/MacOS/Google Chrome";
+#[cfg(target_os = "windows")]
+const CHROMIUM: &str = r"Chromium\Application\chrome.exe";
+#[cfg(not(target_os = "windows"))]
+const CHROMIUM: &str = "Chromium.app/Contents/MacOS/Chromium";
 
-pub fn acting(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Acting)
-}
-
-pub fn dialog(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Dialog)
-}
-
-pub fn select(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Select)
-}
-
-pub fn headed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Headed)
-}
-
-pub fn empty(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::Empty)
+pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  kontur.catalogue()?;
+  install(&beside(&kontur.app_database, FOLDER), CHROME).map(drop)
 }
 
 pub fn not_found(kontur: &mut Kontur) -> Result<(), SeedError> {
-  seed(kontur, BrowserState::NotFound)
+  kontur.catalogue()?;
+  let folder = beside(&kontur.app_database, FOLDER);
+  fs::create_dir_all(&folder).map_err(io(&folder))
 }
 
-fn seed(kontur: &mut Kontur, state: BrowserState) -> Result<(), SeedError> {
-  tasks::project(kontur)?;
-  let first = kontur.find("KON-12")?;
-  let mut tasks = kontur.db.tasks()?;
-  tasks.sort_by_key(|task| task.id() != first.id());
-  let mut runs: Vec<RunId> = Vec::new();
-  for task in tasks {
-    let latest = kontur
-      .db
-      .runs_of_task(task.id())?
-      .into_iter()
-      .filter_map(Result::ok)
-      .next_back();
-    runs.extend(latest.map(|run| run.id()));
-  }
-  let fixture = Fixture {
-    state,
-    project: kontur.repo.clone(),
-    name: PROJECT_NAME.to_owned(),
-    runs,
-  };
-  let path = kontur.app_database.with_file_name(Fixture::FILE);
-  fs::write(&path, fixture.to_json().to_string()).map_err(|source| SeedError::Io { path, source })
+pub fn chosen(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  let chromium = install(&beside(&kontur.app_database, "programs"), CHROMIUM)?;
+  AppDb::open(&kontur.app_database)?.set_browser_program(Some(&chromium))?;
+  Ok(())
+}
+
+fn beside(database: &Path, name: &str) -> PathBuf {
+  database.parent().unwrap_or(Path::new(".")).join(name)
+}
+
+/// An empty stand-in for a browser's `program` below `folder`.
+fn install(folder: &Path, program: &str) -> Result<PathBuf, SeedError> {
+  let path = folder.join(program);
+  let parent = path.parent().unwrap_or(folder);
+  fs::create_dir_all(parent).map_err(io(parent))?;
+  fs::write(&path, "").map_err(io(&path))?;
+  Ok(path)
 }

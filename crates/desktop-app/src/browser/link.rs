@@ -84,9 +84,9 @@ impl BrowserLink {
     &self.inner.services
   }
 
-  /// Settings in the main window, where the browser program is chosen.
+  /// Settings › Browser in the main window, where the browser program is chosen.
   pub fn open_settings(&self) {
-    self.inner.navigation.go(Route::Settings);
+    self.inner.navigation.go(Route::Browser);
   }
 
   /// Shows the browser of the project at `project`, its `tab` when given, opening the window if it is closed.

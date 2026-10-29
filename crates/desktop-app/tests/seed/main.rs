@@ -4,12 +4,14 @@
 //! newer build left, what the seed refuses (`refusals`) and its command line (`command_line`). Needs `git`.
 
 mod agents;
+mod browser;
 #[path = "../../examples/seed/cli.rs"]
 mod cli;
 mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod names;
 mod native;
 mod orchestrator;
 mod pipelines;
@@ -169,72 +171,6 @@ fn seed_every_scenario_builds_a_repository_and_registers_kontur() {
     assert_eq!(project.id, seed.seeded.project);
     assert_eq!(project.repo_root, seed.seeded.repo);
   }
-}
-
-#[test]
-fn seed_names_every_scenario_once() {
-  let names: Vec<&str> = scenarios::ALL.iter().map(|scenario| scenario.name()).collect();
-  assert_eq!(
-    names,
-    [
-      "agents",
-      "agents-library",
-      "agents-browser",
-      "agents-empty",
-      "agents-no-connections",
-      "agents-unreadable",
-      "empty",
-      "tasks",
-      "tasks-memory",
-      "memory-only",
-      "memory",
-      "task-states",
-      "conversation",
-      "long-chats",
-      "orchestrator",
-      "orchestrator-not-set-up",
-      "changes",
-      "cards",
-      "decisions",
-      "deliverables",
-      "delivery",
-      "delivery-blocked",
-      "delivery-empty",
-      "overview-quiet",
-      "overview-states",
-      "interrupted",
-      "unreadable-db",
-      "tasks-unreadable",
-      "live",
-      "lifecycle",
-      "connections",
-      "api-providers",
-      "native",
-      "project-settings",
-      "project-settings-shared",
-      "pipelines",
-      "pipelines-empty",
-      "pipelines-publish",
-      "accounts",
-      "settings",
-      "pull-requests",
-      "pull-request-feedback",
-      "sources",
-      "sources-unreadable",
-      "usage",
-      "usage-empty",
-      "usage-bare",
-      "import",
-      "import-done",
-      "modules",
-      "modules-short",
-      "modules-none"
-    ]
-  );
-  for name in names {
-    assert_eq!(scenarios::named(name).map(|scenario| scenario.name()), Some(name));
-  }
-  assert!(scenarios::named("Tasks").is_none());
 }
 
 #[test]

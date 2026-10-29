@@ -7,6 +7,7 @@ mod agents_cases;
 mod agents_library;
 mod api_providers;
 mod browser;
+mod browser_window;
 mod cards;
 mod changes;
 mod connections;
@@ -82,19 +83,19 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 61] = [
+pub const ALL: [Scenario; 64] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
-  Scenario::of("browser", browser::default),
-  Scenario::of("browser-many", browser::many),
-  Scenario::of("browser-overflow", browser::overflow),
-  Scenario::of("browser-acting", browser::acting),
-  Scenario::of("browser-dialog", browser::dialog),
-  Scenario::of("browser-select", browser::select),
-  Scenario::of("browser-headed", browser::headed),
-  Scenario::of("browser-empty", browser::empty),
-  Scenario::of("browser-not-found", browser::not_found),
+  Scenario::of("browser-window", browser_window::default),
+  Scenario::of("browser-window-many", browser_window::many),
+  Scenario::of("browser-window-overflow", browser_window::overflow),
+  Scenario::of("browser-window-acting", browser_window::acting),
+  Scenario::of("browser-window-dialog", browser_window::dialog),
+  Scenario::of("browser-window-select", browser_window::select),
+  Scenario::of("browser-window-headed", browser_window::headed),
+  Scenario::of("browser-window-empty", browser_window::empty),
+  Scenario::of("browser-window-not-found", browser_window::not_found),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
@@ -132,6 +133,9 @@ pub const ALL: [Scenario; 61] = [
   Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),
+  Scenario::of("browser", browser::seed),
+  Scenario::of("browser-not-found", browser::not_found),
+  Scenario::of("browser-chosen", browser::chosen),
   Scenario::of("pull-requests", pull_requests::seed),
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),

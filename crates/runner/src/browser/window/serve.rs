@@ -175,7 +175,8 @@ impl ProjectBrowser {
     };
     self.window.show(None);
     let profile = self.profile.clone()?;
-    let started = running.insert(Running::start(&profile, mode, &self.window).await?);
+    let found = self.program().await?;
+    let started = running.insert(Running::start(&found, &profile, mode, &self.window).await?);
     let mut failed = None;
     for (owner, url) in reopen {
       let opened = match started.open(owner).await {

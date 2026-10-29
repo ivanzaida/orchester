@@ -1,8 +1,9 @@
 //! The page of Settings (`Header` `t7cJ0W` and `Tabs` `xEFQ0` in `01 · General` `l838Ty` of the new
 //! `orchester.pen`): the title with what Settings is on its line and, at its end, whether the open tab's changes were
-//! saved (General, Notifications and Automation, whose changes save as they are made), then the five page tabs
-//! *General · Notifications · Accounts · Automation · Orchester Cloud*, each a place of its own, and the open tab
-//! under them. A sub-page of a tab keeps its tab current; a press on the current tab goes back to the tab itself.
+//! saved (General, Notifications, Automation and Browser, whose changes save as they are made), then the six page tabs
+//! *General · Notifications · Accounts · Automation · Browser · Orchester Cloud* (`EPO9U` in `09 · Settings · Browser`
+//! `j3Lre`), each a place of its own, and the open tab under them. A sub-page of a tab keeps its tab current; a press
+//! on the current tab goes back to the tab itself.
 
 use std::sync::Arc;
 
@@ -80,6 +81,12 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
       ctx.t("settings.tabs.automation"),
       (tab == SettingsTab::Automation, true),
       Route::Settings,
+    ),
+    tab_to(
+      "settings-tab-browser",
+      ctx.t("settings.tabs.browser"),
+      (tab == SettingsTab::Browser, true),
+      Route::Browser,
     ),
     tab_to(
       "settings-tab-orchester",

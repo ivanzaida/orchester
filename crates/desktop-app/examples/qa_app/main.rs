@@ -56,9 +56,14 @@ fn main() -> Result<(), Box<dyn Error>> {
   // database is open and while its setting allows; kept to the end of `main`.
   let _reports = error_reports::start(Environment::Qa, launch.workspace());
   // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
-  // `trash` beside its data instead, never to the person's own.
+  // `trash` beside its data instead, never to the person's own. The seed's `browser` scenarios put the browsers
+  // Settings › Browser finds in `browsers` beside the data; with that folder there, it looks in it only.
   if let (Some(workspace), Some(folder)) = (launch.workspace(), location.database.parent()) {
     workspace.use_trash(Arc::new(FolderTrash::new(&folder.join("trash"))));
+    let browsers = folder.join("browsers");
+    if browsers.is_dir() {
+      workspace.look_for_browsers_in(&[browsers]);
+    }
   }
   let cloud = AccountCloud::start();
   if let Some(services) = launch.services() {

@@ -1,10 +1,11 @@
 //! The project's browser (`docs/design/browser.md`, decisions 3, 4 and 6, "The browser process"): one headless
 //! Chromium per project, owned by its runner, the only process that talks to it ([`cdp`]). It starts on the first use
 //! by any of the project's runs or by the person in the *Browser* window, on the project's own profile folder
-//! ([`profile_of`]), and keeps running until the runner exits ([`ProjectBrowser::stop`]); one that ended on its own
-//! starts again at the next use. Each tab a run opens belongs to that run, which reaches only its own tabs; they close
-//! when the run ends (completed, cancelled, failed; a merged run had completed), and pausing keeps them. The tabs the
-//! person opens in the window are the person's, and no run reaches them.
+//! ([`profile_of`]), with the program the person chose in Settings › Browser or else the one installed, and keeps
+//! running until the runner exits ([`ProjectBrowser::stop`]); one that ended on its own starts again at the next use.
+//! Each tab a run opens belongs to that run, which reaches only its own tabs; they close when the run ends (completed,
+//! cancelled, failed; a merged run had completed), and pausing keeps them. The tabs the person opens in the window are
+//! the person's, and no run reaches them.
 //!
 //! The window sees and drives every tab through the runner (`window`): the browser's state, the screencast of the tab
 //! it shows, the person's input, dialogs and `<select>` lists, and the restart in a browser window of its own.
@@ -27,9 +28,9 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_exec::browser::BrowserUnavailable;
+use orchester_exec::browser::{self as program, BrowserProgram, BrowserUnavailable};
 use orchester_ipc::browser::{AgentAction, BrowserEvent, BrowserMode, BrowserTabId, ScreencastFrame, TabOwner};
-use orchester_store::ProjectDb;
+use orchester_store::{AppDb, ProjectDb, location::browser_profiles_beside};
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
@@ -47,7 +48,7 @@ pub use self::{
 
 #[derive(Debug, Error)]
 pub enum BrowserError {
-  /// No browser can be used: none is installed, or the profile folder is unknown.
+  /// No browser can be used: none is installed, the one chosen cannot be used, or the profile folder is unknown.
   #[error(transparent)]
   Unavailable(#[from] BrowserUnavailable),
   #[error("the browser could not start: {0}")]
@@ -85,24 +86,41 @@ pub struct Listening {
 /// The project's browser, started at its first use.
 pub struct ProjectBrowser {
   profile: Result<PathBuf, BrowserUnavailable>,
+  /// The application database whose Settings › Browser may name the program; `None`: the one installed.
+  settings: Option<PathBuf>,
   running: Mutex<Option<Running>>,
   window: Arc<Window>,
 }
 
 impl ProjectBrowser {
-  /// The browser of the project at `project_root`, on its profile folder ([`profile_of`]).
+  /// The browser of the project at `project_root`, on its profile folder ([`profile_of`]), with the program Settings ›
+  /// Browser names in the application database beside the runner.
   pub fn of_project(project_root: &Path) -> Self {
-    Self::on(profile_of(project_root))
+    let profile = profile_of(project_root);
+    // Without the application database the profile folder is unknown too, and its error says why.
+    let settings = app_database().ok();
+    Self {
+      settings,
+      ..Self::on(profile)
+    }
   }
 
-  /// A browser on the profile folder `profile`.
+  /// A browser on the profile folder `profile`, with the program installed.
   pub fn new(profile: PathBuf) -> Self {
     Self::on(Ok(profile))
+  }
+
+  /// This browser with the program Settings › Browser names in the application database `database`.
+  #[must_use]
+  pub fn with_settings(mut self, database: PathBuf) -> Self {
+    self.settings = Some(database);
+    self
   }
 
   fn on(profile: Result<PathBuf, BrowserUnavailable>) -> Self {
     Self {
       profile,
+      settings: None,
       running: Mutex::new(None),
       window: Arc::new(Window::default()),
     }
@@ -295,11 +313,23 @@ impl ProjectBrowser {
     }
     if running.is_none() {
       let profile = self.profile.clone()?;
-      *running = Some(Running::start(&profile, BrowserMode::Headless, &self.window).await?);
+      let found = self.program().await?;
+      *running = Some(Running::start(&found, &profile, BrowserMode::Headless, &self.window).await?);
     }
     Ok(MutexGuard::map(running, |running| {
       running.as_mut().expect("a browser runs: it was kept or started above")
     }))
+  }
+
+  /// The program the browser starts with: the one chosen in Settings › Browser, else the one installed
+  /// ([`chosen_or_found`]).
+  async fn program(&self) -> Result<BrowserProgram, BrowserError> {
+    let settings = self.settings.clone();
+    Ok(
+      tokio::task::spawn_blocking(move || chosen_or_found(settings.as_deref()))
+        .await
+        .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??,
+    )
   }
 }
 
@@ -307,15 +337,39 @@ impl ProjectBrowser {
 /// the person's own browser profile and never inside a repository. Unavailable, with the reason, when either part
 /// cannot be known.
 pub fn profile_of(project_root: &Path) -> Result<PathBuf, BrowserUnavailable> {
-  let location = orchester_store::location::app_data_location()
-    .map_err(|error| BrowserUnavailable::new(format!("the application data folder is unknown: {error}")))?;
-  let data = location
-    .database
-    .parent()
+  let profiles = browser_profiles_beside(&app_database()?)
     .ok_or_else(|| BrowserUnavailable::new("the application database has no folder"))?;
   let project = ProjectDb::open_read_only(project_root)
     .map_err(|error| BrowserUnavailable::new(format!("the project cannot be read: {error}")))?
     .project()
     .id();
-  Ok(data.join("browser").join(project.to_string()))
+  Ok(profiles.join(project.to_string()))
+}
+
+/// The application database beside the runner, as the app that started it keeps it.
+fn app_database() -> Result<PathBuf, BrowserUnavailable> {
+  orchester_store::location::app_data_location()
+    .map(|location| location.database)
+    .map_err(|error| BrowserUnavailable::new(format!("the application data folder is unknown: {error}")))
+}
+
+/// The program Settings › Browser names in the application database `settings` when the person chose one, else the
+/// one installed; `None` (a test's browser) or a database not made yet is the one installed. A chosen program that
+/// is no Chromium-based browser's (any more) is unavailable, saying so: the person's choice is never passed over.
+/// Blocks on SQLite and, on Windows, on the registry.
+fn chosen_or_found(settings: Option<&Path>) -> Result<BrowserProgram, BrowserUnavailable> {
+  let chosen = match settings {
+    Some(database) if database.is_file() => AppDb::open_read_only(database)
+      .and_then(|settings| settings.browser_program())
+      .map_err(|error| BrowserUnavailable::new(format!("Settings › Browser cannot be read: {error}")))?,
+    _ => None,
+  };
+  match chosen {
+    Some(program) => program::chosen(&program).map_err(|refused| {
+      BrowserUnavailable::new(format!(
+        "the program chosen in Settings › Browser cannot be used: {refused}"
+      ))
+    }),
+    None => program::find(),
+  }
 }

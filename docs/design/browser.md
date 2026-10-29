@@ -1,12 +1,13 @@
 # Browser for agents
 
 Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
-port and keep-running decisions (11, 12) the same day; decisions 13 to 15 (binary frames, the window opening by
-itself, focus) with ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and
-starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359:
-the `browser_*` tools offered to steps through the runner's relay); the window's plumbing (ORC-378: its IPC, the
-screencast, the person's input and tabs, the window's state); and the window itself (ORC-379, P4d). The Settings
-section is not yet.
+port and keep-running decisions (11, 12) the same day, and that the Browser window opens when an agent starts
+browsing by default (open question 2); decisions 13 to 15 (binary frames, the window opening by itself, focus) with
+ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and starting the browser,
+the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359: the `browser_*`
+tools offered to steps through the runner's relay); the profile's Browser row (ORC-368), Settings › Browser (ORC-369),
+the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state) and the
+window itself (ORC-379, P4d) are built too.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -174,11 +175,23 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
 - Other platforms: unavailable, saying that the browser is not supported there yet.
 - `orchester_exec::browser::find` (ORC-358). None found is `BrowserUnavailable`, shown as `browser_unavailable: no
   Chromium-based browser is installed: looked for … in …`.
-- A new Settings section *Browser* shows which one was found and lets the person choose another Chromium-based
-  browser's program. None found: the setting and the *Browser* window say so, and every browser tool answers
-  `browser_unavailable` with that reason (no silent gap, `AGENTS.md` rule 0). The section also shows the folder of
-  the browser profiles and the switch *Open the Browser window when an agent starts browsing* (on, decision 14)
-  (`09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`).
+- Settings › *Browser* (ORC-369, `09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`) shows which one
+  was found, by its name and program, and lets the person choose another Chromium-based browser's program
+  (*Choose another program…*). A chosen program is taken by its name (`orchester_exec::browser::chosen`): on Windows
+  `msedge.exe`, `chrome.exe` (Chromium's under a folder named so) or `brave.exe`; on macOS the program of Google
+  Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
+  is refused under the row with the reason, and nothing changes. The choice is an application setting
+  (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser, headless or
+  in a window of its own; a chosen program that is gone later is unavailable with that reason, never passed over for
+  the one installed.
+- None found: the section says so with what was looked for and where, how to fix it and *Look again*; the *Browser*
+  window will say the same, and every browser tool answers `browser_unavailable` with that reason (no silent gap,
+  `AGENTS.md` rule 0). The section also shows the folder of the browser profiles with Copy, and the switch *Open the
+  Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29; decision 14), the
+  application setting `app_settings.browser_window_opens_itself` the window's rule reads. Its hint says the window
+  *opens and takes focus*, after decision 15; `j3Lre` and `NZECi` were drawn before it with *It opens without taking
+  focus*, a deliberate departure. Until the window is built, the switch keeps the choice only, as the note under it
+  says.
 
 ### Starting it and connecting
 
@@ -229,8 +242,9 @@ A secondary lurq window (`WindowOpener::open_with`, window name `browser`), one 
 run's Summary line *Browser · 2 tabs · localhost:5173, docs.rs › Show* (`10 · Run · Browser line` `RGeKO`) and
 from the status bar item *Browser 3 tabs* of the main window, which is there while the project's browser has tabs; both
 switch the window to that project and tab. It also opens by itself, showing that project, when an agent of a run
-opens the run's first tab, unless the person turned that off in Settings › Browser (decision 14); a window that opens
-so takes focus, as lurq opens windows (decision 15). Once open, it does not jump to another project by itself.
+opens the run's first tab, unless the person turned that off in Settings › Browser (on by default: the person,
+2026-10-29; decision 14); a window that opens so takes focus, as lurq opens windows (decision 15). Once open, it does
+not jump to another project by itself.
 
 ### Projects
 
@@ -364,6 +378,13 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
    - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
      described under "Permissions and policy" above.
+   - **P4b.** Done (ORC-369): Settings › Browser, with the program chosen there started by the runner, and its
+     switch stored as decision 14's setting. Tests: `cargo test -p orchester-app --test settings_browser browser_`,
+     `cargo test -p orchester-workspace --test browser_settings`, `cargo test -p orchester-store --test
+     browser_settings`, the chosen program in `cargo test -p orchester-exec --test browser browser_` and
+     `orchester-runner --test browser browser_`. QA: the seed's scenarios `browser` (found), `browser-not-found` and
+     `browser-chosen` (another program chosen), whose browsers the QA app looks for in `browsers/` beside its data
+     only.
    - **P4c.** Done (ORC-378): the window's plumbing, no window yet. The IPC (`cargo test -p orchester-ipc --test
      browser`), the runner's screencast with backpressure, the person's input, navigation and own tabs, dialogs,
      `<select>` lists and the headed restart (`cargo test -p orchester-runner --features test-agent --test browser
@@ -380,13 +401,14 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
      project's database (`orchester_workspace::browser::run_owners`). Tests: `cargo test -p orchester-app --test
      browser_window browser_` and `--test theme browser_roles`. QA scenarios, each played by the QA app from a fixture
      the seed leaves beside the data (`test_support::browser_qa`), its page the sample page this computer's browser
-     renders: `browser` (01, and the switcher 01b), `browser-many` (01c), `browser-overflow` (01d, 01e), `browser-acting`
-     (02; a press on the page reaches 02b; its first run's Summary has the Browser line 10), `browser-dialog` (03),
-     `browser-select` (04), `browser-headed` (05), `browser-empty` (06), `browser-not-found` (07); start them with
-     `no_runner`, so no runner reports its own browser over the fixture. Not yet: an input method's composition (lurq
-     gives it only to its own text inputs; what it commits arrives as keys), copy and paste bridged to the system
-     clipboard, the cursor's shape over links and fields, the file chooser, the status bar's *Browser 3 tabs*, Settings ›
-     Browser (*Open Settings › Browser* opens Settings), and bringing an open window to the front (no lurq command).
+     renders: `browser-window` (01, and the switcher 01b), `browser-window-many` (01c), `browser-window-overflow` (01d,
+     01e), `browser-window-acting` (02; a press on the page reaches 02b; its first run's Summary has the Browser line
+     10), `browser-window-dialog` (03), `browser-window-select` (04), `browser-window-headed` (05),
+     `browser-window-empty` (06), `browser-window-not-found` (07); start them with `no_runner`, so no runner reports
+     its own browser over the fixture. Not yet: an input method's composition (lurq gives it only to its own text
+     inputs; what it commits arrives as keys), copy and paste bridged to the system clipboard, the cursor's shape over
+     links and fields, the file chooser, the status bar's *Browser 3 tabs*, and bringing an open window to the front
+     (no lurq command).
 
 ## Not in scope
 
@@ -402,6 +424,7 @@ Decided by the person on 2026-10-29: one browser profile per project (decision 3
 (decision 10), `browser_eval` is offered as a tool whose every call asks (decision 9), CDP over a port and not a pipe
 (decision 11), and the browser keeps running until the runner exits, with no idle stop (decision 12). Decided with
 ORC-378: screencast frames as a binary IPC message (decision 13), the window opening by itself when an agent starts
-browsing, on by default (decision 14), and such a window taking focus, with no lurq change (decision 15).
+browsing, on by default (decision 14, the person's decision of 2026-10-29; turned off in Settings › Browser), and
+such a window taking focus, with no lurq change (decision 15).
 
 None open.

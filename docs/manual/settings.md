@@ -4,7 +4,7 @@ Settings live in several places:
 
 | Where | What | Kept in |
 |---|---|---|
-| **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
+| **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Browser · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; agents' browser; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
 | **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Context · Connections · Secrets · Sharing | Project, GitHub, base branch, base-moved notices, repository agent files; auto mode, estimates, limits, environment; sources, code index; connections; secrets; sharing | Project database (base branch per computer; secret values in the OS keychain) |
 | **Memory › Settings** | How task and project memory save; how much each agent gets | Project database |
 | **Orchestrator settings** | The chat's connection, model and effort (versioned) | Project database |
@@ -16,9 +16,9 @@ Settings live in several places:
 *Let Orchester estimate story points*, and the widening confirmations in Project settings (auto mode, environment,
 adding a source, turning repository agent files on) take only a person's input. Input from an MCP client is refused
 visibly: "A change brought by automation was not taken: only you change this setting, here in the window." Turning a
-permission *off* is always taken. General and Notifications have no such gate.
+permission *off* is always taken. General, Notifications and Browser have no such gate.
 
-**Saving.** General, Notifications and Automation save as they change (the header shows "All changes saved",
+**Saving.** General, Notifications, Automation and Browser save as they change (the header shows "All changes saved",
 "Saving…" or "A change was not saved"). Project settings › General, Runs and Context save when a field is left or a
 switch flipped; Connections and Secrets save per action. While an autosaving tab has an unsaved or failed change, the
 other tabs wait ("Save or fix the changes in this section before opening another."). A change made elsewhere shows
@@ -26,7 +26,8 @@ other tabs wait ("Save or fix the changes in this section before opening another
 
 ## 1. App settings (`/settings`)
 
-Tabs: **General · Notifications · Accounts · Automation · Orchester Cloud**. `/settings` opens on Automation.
+Tabs: **General · Notifications · Accounts · Automation · Browser · Orchester Cloud**. `/settings` opens on
+Automation.
 
 ### 1.1 General
 
@@ -102,7 +103,19 @@ Every row is off until a person turns it on (except as noted), and only a person
 | | **Continue interrupted runs** | Off | The chat continues a run interrupted by a crash, runner loss or *Quit now* from its last checkpoint (once; not again within 10 minutes). Limit stops, canceled runs and runs without worktree stay yours. |
 | | **Write with git** | Off | The chat may commit, create/switch branches, pull, push (never force), merge, revert, tag and fetch when you ask. Reset, clean, branch/tag deletion, force push, discarding and rebase stay cards. |
 
-### 1.5 Orchester Cloud
+### 1.5 Browser
+
+The Chromium-based browser agents' pages open in, headless, in Orchester's own profile per project
+(`docs/design/browser.md`).
+
+| Group | Setting | Default | What |
+|---|---|---|---|
+| Browser program | **Browser** | The one found | The browser found on this computer (Windows: Microsoft Edge, then Google Chrome; macOS: Google Chrome, Microsoft Edge, Brave, Chromium), or the one you chose. None found: a notice says what was looked for and where, with *Look again*, and agents' browser tools answer that the browser is unavailable. |
+| | **Program** | — | Its path, and *Choose another program…* (*Choose a program…* when none is found): any Chromium-based browser's program (Edge, Chrome, Brave or Chromium; on macOS its app may be chosen). Anything else is refused under the row with the reason, and nothing changes. The runner starts the program chosen here. |
+| | **Browser profiles** | — | The folder holding one profile per project, beside the application database, with *Copy*. |
+| Browser window | **Open the Browser window when an agent starts browsing** | On | Opens the window and brings it to the front. The window is not in this version yet: the switch keeps your choice for it. |
+
+### 1.6 Orchester Cloud
 
 One column:
 
