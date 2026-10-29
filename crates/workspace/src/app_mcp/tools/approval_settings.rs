@@ -280,7 +280,12 @@ fn approvals_json(db: &ProjectDb, project: ProjectId) -> Result<Value, ToolError
 fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> {
   let mut runs = Vec::new();
   for task in db.tasks()? {
-    for run in db.runs_of_task(task.id()).map_err(run_store_error)?.into_iter().flatten() {
+    for run in db
+      .runs_of_task(task.id())
+      .map_err(run_store_error)?
+      .into_iter()
+      .flatten()
+    {
       if run.status().is_terminal() {
         continue;
       }

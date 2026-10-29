@@ -178,7 +178,9 @@ fn approval_mode_mcp_retired_auto_mode_tools_name_the_tools_that_replace_them() 
       .find(|tool| tool["name"] == retired)
       .unwrap_or_else(|| panic!("{retired} stays listed for one release"));
     assert!(
-      listed["description"].as_str().is_some_and(|told| told.contains(replacement)),
+      listed["description"]
+        .as_str()
+        .is_some_and(|told| told.contains(replacement)),
       "{retired}: {listed}"
     );
     // Whatever it is given, it changes nothing and says what to use instead.
