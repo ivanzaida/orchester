@@ -1,12 +1,18 @@
 //! Finding the browser on Windows: Microsoft Edge, installed with Windows, then Google Chrome; each from the registry's
 //! `App Paths`, the machine's and then the person's, then from its usual install folders. The registry is read with
-//! `%SystemRoot%\System32\reg.exe`, named by its full path, so no `unsafe` registry call is needed.
+//! `%SystemRoot%\System32\reg.exe`, named by its full path, so no `unsafe` registry call is needed. A program the
+//! person chose is known by its file name: `msedge.exe`, `chrome.exe` (Chromium's when a folder above it is named so)
+//! or `brave.exe`.
 
-use std::{env, path::PathBuf, time::Duration};
+use std::{
+  env,
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_core::command::{Command, CommandRunner};
 
-use super::{BrowserProgram, BrowserUnavailable, first_installed, registry_default_value};
+use super::{BrowserProgram, BrowserUnavailable, first_installed, listed, registry_default_value};
 use crate::ProcessRunner;
 
 /// Each browser's name, its program's file name, and where its installer puts it below an install folder.
@@ -39,6 +45,32 @@ pub(super) fn find() -> Result<BrowserProgram, BrowserUnavailable> {
     candidates,
     "the registry's App Paths, Program Files and the local application data",
   )
+}
+
+pub(super) fn find_in(folders: &[PathBuf]) -> Result<BrowserProgram, BrowserUnavailable> {
+  let candidates = BROWSERS
+    .iter()
+    .flat_map(|&(name, _, below)| folders.iter().map(move |folder| (name, folder.join(below))));
+  first_installed(candidates, &listed(folders))
+}
+
+pub(super) fn program_in(path: &Path) -> PathBuf {
+  path.to_path_buf()
+}
+
+/// The browser whose program `program` is, by its file name in any case.
+pub(super) fn named(program: &Path) -> Option<&'static str> {
+  let file = program.file_name()?.to_str()?.to_ascii_lowercase();
+  let under_chromium = program
+    .components()
+    .any(|part| part.as_os_str().eq_ignore_ascii_case("Chromium"));
+  match file.as_str() {
+    "msedge.exe" => Some("Microsoft Edge"),
+    "brave.exe" => Some("Brave"),
+    "chrome.exe" if under_chromium => Some("Chromium"),
+    "chrome.exe" => Some("Google Chrome"),
+    _ => None,
+  }
 }
 
 /// The program `hive`'s `App Paths` name for `file`; `None` when the key is missing or cannot be read, which leaves

@@ -1,11 +1,12 @@
 //! The application database next to the executable: known projects, the session log used to
 //! detect that the previous run of Orchester ended abnormally, whose each project is ([`owners`]), the state of the
 //! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
-//! is ([`server_owners`]), the application's own settings ([`settings`]), among them the Usage dashboard's warning
-//! threshold, the person's agent CLI accounts ([`accounts`]) and the plan limits read of them outside runs
-//! ([`plan_reads`]).
+//! is ([`server_owners`]), the application's own settings ([`settings`], Settings › Browser's in [`browser`]), among
+//! them the Usage dashboard's warning threshold, the person's agent CLI accounts ([`accounts`]) and the plan limits
+//! read of them outside runs ([`plan_reads`]).
 
 mod accounts;
+mod browser;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
@@ -82,6 +83,7 @@ CREATE TABLE ui_state (
   settings::ORCHESTRATOR_WRITES_GIT_MIGRATION,
   cloud::API_ADDRESS_MIGRATION,
   settings::ERROR_REPORTS_MIGRATION,
+  browser::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
@@ -133,6 +135,14 @@ impl AppDb {
   pub fn open(path: &Path) -> Result<Self, StoreError> {
     Ok(Self {
       connection: migrate::open(path, MIGRATIONS)?,
+    })
+  }
+
+  /// Opens `path` only to read it, as the runner reads the settings it follows: every write is refused and no
+  /// migration runs, so the database must be at this build's schema, which the app that owns it brought it to.
+  pub fn open_read_only(path: &Path) -> Result<Self, StoreError> {
+    Ok(Self {
+      connection: migrate::open_read_only(path, MIGRATIONS)?,
     })
   }
 

@@ -1,11 +1,13 @@
 //! The Chromium-based browser Orchester's agents browse with (`docs/design/browser.md`, "The browser process"): which
-//! one is installed ([`find`]), the command that starts it headless on a project's own profile folder ([`headless`]),
-//! and the debugging address it writes into that folder once it listens ([`DevToolsActivePort`]). Orchester ships no
+//! one is installed ([`find`]), or the program the person chose in Settings › Browser when it is a Chromium-based
+//! browser's ([`chosen`]), the command that starts it headless on a project's own profile folder ([`headless`]), and
+//! the debugging address it writes into that folder once it listens ([`DevToolsActivePort`]). Orchester ships no
 //! browser: none found is an explicit [`BrowserUnavailable`] with its reason, never a silent gap.
 //!
 //! - Windows (`windows`): Microsoft Edge, then Google Chrome, from the registry's `App Paths` and the usual install
-//!   folders.
-//! - macOS ([`macos`]): Google Chrome, Microsoft Edge, Brave, Chromium in `/Applications` and `~/Applications`.
+//!   folders; a chosen program is `msedge.exe`, `chrome.exe` (Google Chrome or Chromium) or `brave.exe`.
+//! - macOS ([`macos`]): Google Chrome, Microsoft Edge, Brave, Chromium in `/Applications` and `~/Applications`; a
+//!   chosen program is one of theirs, or their app bundle.
 //! - Other platforms: unavailable, saying so.
 
 #[cfg(target_os = "macos")]
@@ -70,10 +72,51 @@ impl BrowserUnavailable {
   }
 }
 
+/// Why a program the person chose cannot be the browser (Settings › Browser, *Choose another program…*).
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum NotABrowser {
+  #[error("{} does not exist", .0.display())]
+  Missing(PathBuf),
+  #[error("{} is a folder, not a program", .0.display())]
+  Folder(PathBuf),
+  #[error(
+    "{} is not a Chromium-based browser's program: choose Microsoft Edge, Google Chrome, Brave or Chromium",
+    .0.display()
+  )]
+  NotChromium(PathBuf),
+  /// Its path is not Unicode, which the application database cannot keep exactly.
+  #[error("{} is not a Unicode path", .0.display())]
+  NotUnicode(PathBuf),
+}
+
 /// The browser installed on this computer, in the platform's order of preference. Blocks: on Windows it reads the
 /// registry through `reg.exe`.
 pub fn find() -> Result<BrowserProgram, BrowserUnavailable> {
   platform::find()
+}
+
+/// The browser installed in one of `folders` only, in the platform's order of preference, as [`find`] looks in its
+/// install folders: what a test or a QA copy looks in instead of this computer's own places.
+pub fn find_in(folders: &[PathBuf]) -> Result<BrowserProgram, BrowserUnavailable> {
+  platform::find_in(folders)
+}
+
+/// The program at `path`, which the person chose, when it is a Chromium-based browser's (Microsoft Edge, Google
+/// Chrome, Brave or Chromium, known by its program's name); on macOS `path` may be its app bundle. Refused, with the
+/// reason, for anything else.
+pub fn chosen(path: &Path) -> Result<BrowserProgram, NotABrowser> {
+  if path.to_str().is_none() {
+    return Err(NotABrowser::NotUnicode(path.to_path_buf()));
+  }
+  let program = platform::program_in(path);
+  if !program.exists() {
+    return Err(NotABrowser::Missing(path.to_path_buf()));
+  }
+  if !program.is_file() {
+    return Err(NotABrowser::Folder(path.to_path_buf()));
+  }
+  let name = platform::named(&program).ok_or_else(|| NotABrowser::NotChromium(path.to_path_buf()))?;
+  Ok(BrowserProgram { name, path: program })
 }
 
 /// The first of `candidates`, each a browser's name and where its program would be, whose program is a file;
@@ -95,6 +138,16 @@ pub fn first_installed(
     "no Chromium-based browser is installed: looked for {} in {looked}",
     names.join(", ")
   )))
+}
+
+/// `folders` as [`first_installed`] names where it looked.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn listed(folders: &[PathBuf]) -> String {
+  folders
+    .iter()
+    .map(|folder| folder.display().to_string())
+    .collect::<Vec<_>>()
+    .join(", ")
 }
 
 /// The command that starts `program` headless on `profile`, the project's own profile folder, with its debugging port

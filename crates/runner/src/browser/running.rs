@@ -2,7 +2,7 @@
 
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
-use orchester_exec::browser::{self as program, DevToolsActivePort};
+use orchester_exec::browser::{self as program, BrowserProgram, DevToolsActivePort};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::{sync::mpsc, time::Instant};
@@ -32,12 +32,9 @@ pub(super) struct Running {
 }
 
 impl Running {
-  /// Finds the browser, starts it headless on `profile` and connects to it. A browser that does not get as far as the
-  /// connection is ended.
-  pub(super) async fn start(profile: &Path) -> Result<Self, BrowserError> {
-    let found = tokio::task::spawn_blocking(program::find)
-      .await
-      .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??;
+  /// Starts `found` headless on `profile` and connects to it. A browser that does not get as far as the connection is
+  /// ended.
+  pub(super) async fn start(found: &BrowserProgram, profile: &Path) -> Result<Self, BrowserError> {
     fs::create_dir_all(profile).map_err(|error| {
       BrowserError::Start(format!(
         "the profile folder {} cannot be made: {error}",
@@ -46,7 +43,7 @@ impl Running {
     })?;
     DevToolsActivePort::remove(profile)
       .map_err(|error| BrowserError::Start(format!("an earlier browser's debugging port file stays: {error}")))?;
-    let process = BrowserProcess::start(&program::headless(&found, profile)?)?;
+    let process = BrowserProcess::start(&program::headless(found, profile)?)?;
     tracing::info!(browser = found.name(), "the project's browser started");
     let port = devtools_port(profile, &process).await?;
     let cdp = Arc::new(Cdp::connect(&port.websocket_url()).await?);
