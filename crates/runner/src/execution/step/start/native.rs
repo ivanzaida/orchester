@@ -86,7 +86,7 @@ impl RunTask {
     let mut placed = self.place_skills(execution, step, info)?;
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let instructions = self.repository_files(connection, worktree, &mut placed.skills)?;
-    let enforced = self.enforced(&step.key, body, provider)?;
+    let enforced = self.enforced(&step.key, body, connection)?;
     let mut prepared = self.prepare_native(&enforced, worktree, &index, placed.folder.as_deref())?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;

@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Attribution;
 
-/// The kinds of resource a server project shares: every kind of core's but the test suite.
+/// The kinds of resource a server project shares: every kind of core's but agent testing's (test suite, service,
+/// stack).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SharedResourceKind {
@@ -35,7 +36,7 @@ impl SharedResourceKind {
     }
   }
 
-  /// The shared kind of a core kind; `None` for a test suite, a service or a stack, which stay local.
+  /// The shared kind of a core kind; `None` for agent testing's test suites, services and stacks, which stay local.
   pub const fn from_core(kind: ResourceKind) -> Option<Self> {
     match kind {
       ResourceKind::Pipeline => Some(Self::Pipeline),

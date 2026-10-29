@@ -49,6 +49,42 @@ design source is `crates/desktop-app/design/orchester.pen`, read and changed onl
   the profile says why.
 - No modals: every setting here is a row on its page; the Autopilot widening is the existing in-place question.
 
+## Enforcement
+
+Built in ORC-347 (`orchester_core::permission::EffectiveApprovalMode`, `autopilot_support`; the runner's
+`step::start`). Checked on this machine with Claude Code 2.1.301 and Codex 0.159.2 (2026-10-29), and against the
+fake CLIs of the runner tests (`cargo test -p orchester-runner --features test-agent --test approval_mode_launch
+approval_mode_launch`). Autopilot turns the CLI's own permission prompt off: its allow rules, its read-only command
+classifier and its MCP rules decide nothing, and every tool request it makes reaches Orchester, which answers it. A
+Manual step starts exactly as before. Bypass modes (`--dangerously-skip-permissions`, `--permission-mode
+bypassPermissions`, Codex's `danger-full-access` or approval policy `never`) are never used: they would hand nothing
+to Orchester.
+
+| CLI | Autopilot options | Works from | Manual |
+|---|---|---|---|
+| Claude Code | `--mcp-config <relay config> --permission-prompt-tool mcp__Orchester__approve` and `--settings {"permissions":{"ask":["Bash"]}}`; no `--allowedTools "Bash(<prefix>:*)"` and no `mcp__<server>` rules; a writing step in `--permission-mode acceptEdits`, a read-only one in `default`. The whole-tool ask rule is checked before `acceptEdits` and the read-only classifier, so every command asks, and every call of the profile's MCP servers asks for want of a rule. Claude Code's own file tools stay on `--disallowedTools` (the agent uses Orchester's, which keep to the worktree); Orchester's own tools keep their `mcp__Orchester__<tool>` rules, as Orchester runs them itself | 2.1.89 (the oldest version `--permission-prompt-tool` and the whole-tool ask rule were checked with; `CLAUDE_CODE_AUTOPILOT`) | as before: allowed commands by rule, the rest through the prompt |
+| Claude Code on DeepSeek (or another API provider) | the same: the prompt is the CLI's, whatever model API it talks to | as Claude Code | as before |
+| Codex | the same `codex app-server` arguments; the thread's approval policy `{"granular":{"sandbox_approval":true,"rules":true,"mcp_elicitations":true,"request_permissions":false,"skill_approval":false}}` with `approvalsReviewer: "user"`, and no MCP tool exempt from approval. Every request Codex makes reaches Orchester: an escalation out of its sandbox, a command an execpolicy rule asks about, an MCP call that needs approval. Commands inside the sandbox make no request: the sandbox keeps their writes in the worktree and the writable folders | 0.159.0 (the oldest version App Server accepted the granular policy with the user as reviewer; `CODEX_AUTOPILOT`). Older versions lack it, so Orchester's App Server path does not support them for Manual either | as before: `rules` only with *Ask before running commands*, `mcp_elicitations` only with *Ask before MCP actions* |
+| Codex on an API provider | the same | as Codex | as before |
+| Native agents (Anthropic API, OpenAI API) | nothing to turn off: Orchester runs every tool call itself | every version | as before |
+
+What the CLIs still do by themselves in Autopilot: Codex reads outside the worktree and, with network on, reaches the
+network from inside its sandbox without a request; the user's own Codex execpolicy `allow` rules run a command outside
+the sandbox unasked (as in Manual, `docs/interactive-tool-approvals.md`); Claude Code's web tools, offered only with
+network on, ask per domain and are refused by the prompt as in Manual.
+
+**Can't enforce.** A CLI older than the version above, or one no check has found the version of, never runs
+Autopilot: the step runs as Manual (`EffectiveApprovalMode::Manual` with `ManualReason::CantEnforce`), its launch
+recorded as Manual, and the runner logs why. The profile's Connection enforcement reads it from
+`AgentConnection::autopilot_support()`: `AutopilotSupport::Enforced(<mechanism>)`, or
+`AutopilotSupport::CantEnforce(CliTooOld { installed, required } | VersionUnknown { required })` for 07d's *Not
+enforced · runs as Manual* row (the UI is a separate task).
+
+Because any Autopilot step can fall back so (a later check can find an older CLI), an Autopilot profile's own
+commands setting must be enforceable on its connection as in Manual: `AgentPermissions::enforced_on` refuses it
+otherwise, so preflight, saving a profile and a run's permission change refuse what the fallback could not start. On
+Claude Code this refuses *Any command in the worktree* in Autopilot too, as in Manual (it cannot confine commands).
+
 ## Frames
 
 | Node | Board | Frame | What it shows |
@@ -109,7 +145,8 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
 2. Whether a run switched to Manual for itself may go back to Autopilot while its profile and project allow it (not
    drawn; the chip just reads *Manual · this run*).
 3. Whether *Approved by autopilot* rows group per step (*… and 3 more*) or always list each request.
-4. The exact Claude Code and Codex options that turn the CLI's own prompt off while still handing requests outside
-   the worktree to Orchester, and which CLI versions can't (07d's *Not enforced* row is illustrative).
+4. ~~The exact Claude Code and Codex options that turn the CLI's own prompt off while still handing requests outside
+   the worktree to Orchester, and which CLI versions can't.~~ Decided in ORC-347: see
+   [Enforcement](#enforcement).
 5. Whether the old *Approved for every run* rules apply in Autopilot to requests that still ask (outside the
    worktree), or only in Manual.

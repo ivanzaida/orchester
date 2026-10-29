@@ -22,10 +22,16 @@ fn resources_a_resource_of_every_shared_kind_round_trips() {
 }
 
 #[test]
-fn resources_a_test_suite_is_not_a_shared_kind() {
-  assert_eq!(SharedResourceKind::from_core(ResourceKind::TestSuite), None);
-  let suite = resource(ResourceId::generate(), "test_suite");
-  assert!(serde_json::from_value::<SharedResource>(suite).is_err());
+fn resources_agent_testing_kinds_are_not_shared_kinds() {
+  for (kind, name) in [
+    (ResourceKind::TestSuite, "test_suite"),
+    (ResourceKind::Service, "service"),
+    (ResourceKind::Stack, "stack"),
+  ] {
+    assert_eq!(SharedResourceKind::from_core(kind), None);
+    let local = resource(ResourceId::generate(), name);
+    assert!(serde_json::from_value::<SharedResource>(local).is_err());
+  }
 }
 
 #[test]

@@ -40,6 +40,9 @@
 //!   other tools still have no rule and ask.
 //! - The disallowed list repeats what `--tools` leaves out that the permissions deny, so a tool list that grows in a
 //!   later CLI version does not widen them.
+//! - Autopilot (`super::approval_enforcement`): every command asks as with *Ask before running commands*, the allowed
+//!   list (Manual's) gives no rule, and the MCP servers' tools get none either, so each command and MCP call reaches
+//!   the permission prompt tool, where Orchester answers it.
 //! - A folder the agent may read but must not change (the shared code index, which `--add-dir` makes a working
 //!   directory, where `acceptEdits` accepts edits) gets an `Edit(//<folder>/**)` deny rule, which covers every built-in
 //!   edit tool. Claude Code writes rule paths the POSIX way: `C:\x` is `//c/x`. Whether a model turn is denied is
@@ -81,7 +84,10 @@ pub fn permission_args(
   folders: PermissionFolders<'_>,
 ) -> Vec<String> {
   let permissions = enforced.permissions();
+  // Autopilot: Orchester answers every command and MCP call, so the CLI gets no rule that would run one by itself.
+  let autopilot = permissions.hands_requests_to_orchester();
   let commands = match permissions.commands() {
+    CommandPermission::Allowed(_) if autopilot => &[],
     CommandPermission::Allowed(commands) => commands.entries(),
     // A person decides each command: the ask rule below sends every one to them.
     CommandPermission::AskBefore => &[],
@@ -105,7 +111,9 @@ pub fn permission_args(
   // Commands always reach a person in the end, which `dontAsk` would deny before asking.
   let mode = if accepts_edits { "acceptEdits" } else { "default" };
   offered.push(COMMAND_TOOL);
-  let mcp: Vec<String> = if ask_tools {
+  let mcp: Vec<String> = if autopilot {
+    Vec::new()
+  } else if ask_tools {
     exempt.claude_rules()
   } else {
     mcp.iter().map(|server| format!("mcp__{server}")).collect()
