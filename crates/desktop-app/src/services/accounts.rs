@@ -9,7 +9,7 @@ use lurq::app::{
 };
 use orchester_core::{
   account::{AccountState, AgentAccount, same_sign_in},
-  connection::{AgentProvider, ConnectionAccount, invocation::Platform, plan_limits::LimitReading},
+  connection::{AgentProvider, ConnectionAccount, plan_limits::LimitReading},
   id::AgentAccountId,
   time::Timestamp,
 };
@@ -110,13 +110,12 @@ pub fn account_name(ctx: &Ctx, account: &AgentAccount) -> String {
 
 /// What keeps runs from starting on `account`, in a few words (`M42rM`: "sign-in expired"); `None` when nothing does.
 pub fn short_state(ctx: &Ctx, account: &AgentAccount) -> Option<String> {
-  let key = match account.state(Platform::current()) {
+  let key = match account.state() {
     AccountState::SignedIn | AccountState::Unknown | AccountState::NotChecked => return None,
     AccountState::NotSignedIn => "connections.account.short.notSignedIn",
     AccountState::Expired => "connections.account.short.expired",
     AccountState::CliMissing => "connections.account.short.cliMissing",
     AccountState::FolderMissing => "connections.account.short.folderMissing",
-    AccountState::Unsupported => "connections.account.short.unsupported",
   };
   Some(ctx.t(key).to_string())
 }
@@ -144,7 +143,7 @@ pub fn identity_detail(
       "connections.account.signedInInline",
     ),
   };
-  if account.state(Platform::current()) == AccountState::NotChecked {
+  if account.state() == AccountState::NotChecked {
     return ctx.t(not_checked).to_string();
   }
   let identity = account.last_check().and_then(|check| check.known_identity());

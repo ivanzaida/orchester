@@ -33,11 +33,11 @@ fn status(seeded: &Seeded, key: &str) -> WorkflowStatus {
   stored(seeded, key).organization().status()
 }
 
-/// Whether the board shows the card of `key` in the column `column`.
+/// Whether the board shows the card of `key` among the cards of the column `column`, which scroll apart from its head.
 pub fn in_column(seeded: &mut Seeded, key: &str, column: &str) -> bool {
   seeded
     .window
-    .texts(&format!("tasks-board-column-{column}"))
+    .texts(&format!("tasks-board-column-{column}-cards"))
     .is_some_and(|texts| texts.iter().any(|text| text == key))
 }
 

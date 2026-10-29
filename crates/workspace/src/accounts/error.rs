@@ -39,9 +39,6 @@ pub enum AccountsError {
   /// The folder holds or lies in another account's folder, or a CLI's own folder: binning it takes part of that.
   #[error("the folder holds or lies in another account's folder")]
   HoldsAnotherAccount,
-  /// Claude Code accounts other than Default on macOS (decision 10).
-  #[error("accounts other than Default are not supported for this CLI on this platform yet")]
-  Unsupported,
   #[error("the CLI is not on the PATH")]
   CliMissing,
   #[error("the account's folder {0} is gone")]
@@ -71,7 +68,7 @@ impl AccountsError {
       Self::Folder(FolderProblem::OutsideCredentialPlaces) => Message::new("accounts.errors.folderOutside"),
       Self::Folder(FolderProblem::AccountsFolder) => Message::new("accounts.errors.accountsFolder"),
       Self::CreateFolder(_) => Message::new("accounts.errors.createFolder"),
-      Self::NoFolderHere | Self::Unsupported => Message::new("accounts.errors.unsupported"),
+      Self::NoFolderHere => Message::new("accounts.errors.unsupported"),
       Self::Removal(RemovalError::Default) => Message::new("accounts.errors.removeDefault"),
       Self::Removal(RemovalError::InUse) => Message::new("accounts.errors.inUse"),
       Self::Removal(RemovalError::NotAnotherAccount) => Message::new("accounts.errors.moveTarget"),

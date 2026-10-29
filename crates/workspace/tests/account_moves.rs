@@ -2,6 +2,8 @@
 //! bins a folder that holds another account's; connections that follow an account or its folder are checked again
 //! there; and a trash that fails says the account was removed and where its folder stays.
 
+mod account_places;
+
 use std::{fs, path::PathBuf, sync::Arc};
 
 use orchester_core::{
@@ -190,11 +192,12 @@ fn account_moves_connections_that_follow_a_folder_are_checked_again_there() {
 
 #[test]
 fn account_moves_choosing_a_folder_checks_the_accounts_connections_there() {
-  let Setup { data, workspace } = setup();
+  let Setup { workspace, .. } = setup();
   let client = add(&workspace, AccountCli::Codex, "Client");
   let (repo, connection) = project_on(&workspace, &client);
   fs::remove_dir_all(client.folder().path().expect("a folder")).expect("the folder goes");
-  let chosen = data.path().join("codex-client-elsewhere");
+  let place = account_places::in_credential_place();
+  let chosen = place.path().join("codex-client-elsewhere");
   fs::create_dir_all(&chosen).expect("the person's folder");
   workspace
     .choose_agent_account_folder(client.id(), &chosen)

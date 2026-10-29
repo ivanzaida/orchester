@@ -48,6 +48,15 @@ impl Delivery {
       Self::Waiting | Self::NothingToMerge => None,
     }
   }
+
+  /// `phase`, of the run this tells of, as the task's page reads it: one that passed every step reads as merged once
+  /// a person merged its work without Orchester.
+  pub fn phase(&self, phase: TaskPhase) -> TaskPhase {
+    match (phase, self) {
+      (TaskPhase::Succeeded, Self::MergedOutside(_)) => TaskPhase::Merged,
+      (phase, _) => phase,
+    }
+  }
 }
 
 /// What became of `run`'s work, a succeeded run that Orchester did not merge, in the checkout at `repo_root`.

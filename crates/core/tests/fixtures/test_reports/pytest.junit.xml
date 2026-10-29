@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="1" failures="1" skipped="1" tests="4" time="0.052" timestamp="2026-10-29T10:00:00.000000" hostname="build"><testcase classname="tests.test_math" name="test_adds" file="tests/test_math.py" line="3" time="0.001" /><testcase classname="tests.test_math" name="test_subtracts" file="tests/test_math.py" line="7" time="0.002"><failure message="assert 8 == 2&#10; +  where 8 = sub(5, 3)">def test_subtracts():
+        print("subtracting 5 - 3")
+&gt;       assert sub(5, 3) == 2
+E       assert 8 == 2
+E        +  where 8 = sub(5, 3)
+
+tests/test_math.py:10: AssertionError</failure><system-out>subtracting 5 - 3
+</system-out></testcase><testcase classname="tests.test_math" name="test_downloads" file="tests/test_math.py" line="12" time="0.000"><skipped type="pytest.skip" message="needs a network">tests/test_math.py:13: needs a network</skipped></testcase><testcase classname="tests.test_db" name="test_connects" file="tests/test_db.py" line="5" time="0.003"><error message="failed on setup with &quot;ConnectionRefusedError: [Errno 111] Connection refused&quot;">@pytest.fixture
+    def database():
+&gt;       return connect("localhost", 5432)
+E       ConnectionRefusedError: [Errno 111] Connection refused
+
+tests/conftest.py:4: ConnectionRefusedError</error></testcase></testsuite></testsuites>

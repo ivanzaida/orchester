@@ -1,6 +1,8 @@
 #![allow(unsafe_code)]
 //! libproc's combined BSD/identity record, audit-token path lookup and signal APIs have no safe wrapper.
 //! ABI: apple-oss-distributions/xnu: bsd/sys/proc_info_private.h and libsyscall/wrappers/libproc/libproc.h.
+//! `sysctl(KERN_PROC_PID)` fills bsd/sys/sysctl.h's `kinfo_proc`, which libc does not describe; only its first field,
+//! the start time, is read.
 //!
 //! `proc_pidpath_audittoken` exists since macOS 11, the oldest the app supports, and is linked directly from
 //! libSystem. `proc_signal_with_audittoken` first ships in macOS 15 (xnu-11215), so it is looked up at run time: a
@@ -135,5 +137,51 @@ impl AuditToken {
     } else {
       Err(io::Error::last_os_error())
     }
+  }
+}
+
+/// `sizeof(struct kinfo_proc)` on 64-bit macOS; its first field, `kp_proc.p_un.__p_starttime`, is a `timeval`.
+const KINFO_PROC_SIZE: usize = 648;
+
+/// The start time of `pid` in microseconds from `sysctl(KERN_PROC_PID)`, which still describes a process that exited
+/// and waits to be reaped, as `proc_pidinfo` no longer does; `None` once it is gone.
+pub(crate) fn started_even_exited(pid: u32) -> io::Result<Option<u64>> {
+  let pid = i32::try_from(pid).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid process id"))?;
+  let mut name = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid];
+  let mut record = [0u8; KINFO_PROC_SIZE];
+  let mut length = record.len();
+  // SAFETY: the name holds its stated 4 integers; the buffer is writable for `length` bytes, which sysctl updates to
+  // what it wrote; no new value is set.
+  let result = unsafe {
+    libc::sysctl(
+      name.as_mut_ptr(),
+      4,
+      record.as_mut_ptr().cast(),
+      &mut length,
+      std::ptr::null_mut(),
+      0,
+    )
+  };
+  if result != 0 {
+    return Err(io::Error::last_os_error());
+  }
+  match length {
+    0 => Ok(None),
+    KINFO_PROC_SIZE => {
+      // SAFETY: the buffer holds a whole kinfo_proc, whose first bytes are a timeval; it may be unaligned.
+      let start: libc::timeval = unsafe { std::ptr::read_unaligned(record.as_ptr().cast()) };
+      let micros = u64::try_from(start.tv_sec)
+        .ok()
+        .and_then(|seconds| seconds.checked_mul(1_000_000))
+        .zip(u64::try_from(start.tv_usec).ok())
+        .and_then(|(seconds, micros)| seconds.checked_add(micros));
+      micros
+        .map(Some)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "process start time out of range"))
+    }
+    _ => Err(io::Error::new(
+      io::ErrorKind::InvalidData,
+      "unexpected process record size",
+    )),
   }
 }

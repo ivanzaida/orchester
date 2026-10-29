@@ -217,7 +217,8 @@ pub(super) fn set_executable(_file: &File, _value: bool) -> Result<(), LocalGitE
   // Windows has no POSIX working-file executable mode; Git index mode is set separately.
   Ok(())
 }
-pub(super) fn remove(file: &File) -> Result<(), LocalGitError> {
+/// Deletes the held `file` through its handle, which cannot reach another entry of its name.
+pub(super) fn remove(_directory: &Directory, _name: &OsStr, file: &File) -> Result<(), LocalGitError> {
   let disposition = FILE_DISPOSITION_INFO { DeleteFile: true };
   let size = mem::size_of::<FILE_DISPOSITION_INFO>() as u32;
   // SAFETY: the owned regular handle was opened with DELETE and without sharing deletion/writes.

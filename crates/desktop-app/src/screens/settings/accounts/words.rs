@@ -59,11 +59,6 @@ pub(super) fn look(shown: Shown) -> Look {
         "accounts.status.folderMissing",
         PaletteColor::Danger,
       ),
-      AccountState::Unsupported => look(
-        PaletteColor::TextMuted,
-        "accounts.status.unsupported",
-        PaletteColor::TextSecondary,
-      ),
       AccountState::NotChecked => look(
         PaletteColor::TextMuted,
         "accounts.status.notChecked",
@@ -173,11 +168,6 @@ pub(super) fn identity(ctx: &Ctx, account: &AgentAccount, accounts: &[AgentAccou
       AccountState::FolderMissing => email.map_or_else(
         || t(ctx, "accounts.identity.folderGone"),
         |email| ta(ctx, "accounts.identity.whenLastRead", [("email", email)]),
-      ),
-      AccountState::Unsupported => ta(
-        ctx,
-        "accounts.identity.unsupported",
-        [("cli", t(ctx, cli_key(account.cli())))],
       ),
       AccountState::NotChecked => t(ctx, "accounts.identity.notChecked"),
     },

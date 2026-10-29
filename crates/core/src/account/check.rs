@@ -108,8 +108,6 @@ pub enum AccountState {
   Unknown,
   CliMissing,
   FolderMissing,
-  /// Not supported on this platform yet (Claude Code accounts other than Default on macOS).
-  Unsupported,
 }
 
 impl AccountState {
@@ -123,12 +121,11 @@ impl AccountState {
       Self::Unknown => "sign_in_unknown",
       Self::CliMissing => "cli_not_found",
       Self::FolderMissing => "folder_missing",
-      Self::Unsupported => "not_supported",
     }
   }
 
-  /// Whether a run may start on the account: never on one that is not signed in, misses its folder or is not
-  /// supported here. Not checked yet and unknown sign-ins start, and the run says so if the CLI refuses.
+  /// Whether a run may start on the account: never on one that is not signed in or misses its folder. Not
+  /// checked yet and unknown sign-ins start, and the run says so if the CLI refuses.
   pub const fn lets_runs_start(self) -> bool {
     matches!(
       self,
