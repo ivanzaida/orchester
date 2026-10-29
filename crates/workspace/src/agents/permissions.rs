@@ -1,13 +1,15 @@
 //! How agent permissions read (`docs/design/orchester-workspace.md`, "Agent permissions"): the
-//! options' keys, and the allowed commands as the editor adds and removes them. Which options are
+//! options' keys, the allowed commands and the browser's allowed sites as the editor adds and removes
+//! them, and the browser turned on and off with the network it needs. Which options are
 //! enforceable is decided in core (`orchester_core::permission::capability`); this module only names
 //! them. The sentences built from them are each app's.
 
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   permission::{
-    AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPrefix, CommandPrefixError,
-    browser::{AllowedSite, AllowedSiteError, AllowedSites, AllowedSitesError},
+    AgentPermissions, AllowedCommands, AllowedCommandsError, BrowserPermission, CommandPrefix, CommandPrefixError,
+    NetworkAccess,
+    browser::{AllowedSite, AllowedSiteError, AllowedSites, AllowedSitesError, BrowserAccess},
     capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable, support},
   },
 };
@@ -146,4 +148,37 @@ pub fn with_site(list: &AllowedSites, typed: &str) -> Result<AllowedSites, Messa
       Message::new("agents.permissions.siteInvalid.tooMany").with("max", AllowedSites::MAX_ENTRIES.to_string())
     }
   })
+}
+
+/// `list` without the site `removed`.
+pub fn without_site(list: &AllowedSites, removed: &AllowedSite) -> AllowedSites {
+  let rest = list.entries().iter().filter(|kept| *kept != removed).cloned().collect();
+  AllowedSites::new(rest).expect("a shorter list keeps its entries unique")
+}
+
+/// Sets `permissions`' network access. The browser needs network access, so turning network off turns the browser off
+/// too, keeping its allowed sites.
+pub fn set_network(permissions: &mut AgentPermissions, network: NetworkAccess) {
+  permissions.set_network(network);
+  if network == NetworkAccess::Off {
+    let sites = permissions.browser().sites().clone();
+    permissions.set_browser(BrowserPermission::new(BrowserAccess::Off, sites));
+  }
+}
+
+/// Turns `permissions`' browser on or off, keeping its allowed sites, or says why it cannot be on: it needs network
+/// access.
+pub fn set_browser_access(permissions: &mut AgentPermissions, access: BrowserAccess) -> Result<(), Message> {
+  if access == BrowserAccess::On && permissions.network() == NetworkAccess::Off {
+    return Err(Message::new("appMcp.errors.browserNeedsNetwork"));
+  }
+  let sites = permissions.browser().sites().clone();
+  permissions.set_browser(BrowserPermission::new(access, sites));
+  Ok(())
+}
+
+/// Sets `permissions`' allowed sites of the browser, keeping whether it is on.
+pub fn set_sites(permissions: &mut AgentPermissions, sites: AllowedSites) {
+  let access = permissions.browser().access();
+  permissions.set_browser(BrowserPermission::new(access, sites));
 }
