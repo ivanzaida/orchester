@@ -105,7 +105,7 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
     services.runners.chat_changed(&open.repo_root);
   }
   // The Orchestrator completed a run that committed nothing (ORC-93): its task is Done now. A shared task's Done goes
-  // to the team server now rather than with the next sync; the feed reads the tasks again once the server took it.
+  // to the team server now rather than with the minute's round; the feed reads the tasks again once the server took it.
   if followed.completed {
     services.changes.record(open.project.id(), Outside::Tasks);
     services.servers.send_automatic_statuses().await;
