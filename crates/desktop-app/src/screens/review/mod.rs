@@ -5,7 +5,7 @@
 //! is not a tab: it keeps its page.
 //!
 //! The Merge queue counts the runs in the queue; the Pull requests the open ones the stored list holds, read again
-//! when the project's runs or data change. A count of none, or one not read yet, is left out.
+//! when the project's runs or data change. A count of none is left out; one read for the first time is a bone.
 
 use lurq::{
   app::{
@@ -128,29 +128,35 @@ impl Component for ReviewTabs {
         .ready()
         .map(|tasks| orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()))
     });
+    let queue_reading = feed.tasks.with(|tasks| matches!(tasks, crate::project::TasksState::Loading));
     let deps = (project.open.repo_root.clone(), feed.revision.get(), feed.states.get());
-    let open = ctx
-      .future(deps, |(root, ..)| async move {
-        background::run(move || load_list_in(&root)).await?.map_err(|error| {
-          tracing::error!(%error, "cannot count the project's pull requests");
-          error.message()
-        })
+    let hold = crate::services::Services::of(ctx).hold;
+    let listed = ctx
+      .future(deps, move |(root, ..)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || load_list_in(&root)).await?.map_err(|error| {
+            tracing::error!(%error, "cannot count the project's pull requests");
+            error.message()
+          })
+        }
       })
       .state()
-      .get()
-      .data
-      .and_then(|list| match list {
-        PullRequestList::Linked(linked) if linked.synced_at.is_some() => Some(linked.count(PullRequestTab::Open)),
-        _ => None,
-      });
+      .get();
+    let list_reading = listed.is_pending() && listed.data.is_none();
+    let open = listed.data.and_then(|list| match list {
+      PullRequestList::Linked(linked) if linked.synced_at.is_some() => Some(linked.count(PullRequestTab::Open)),
+      _ => None,
+    });
     let navigation = Navigation::of(ctx);
     let id = project.open.project.id();
     let tabs: Vec<PageTab> = ReviewTab::ALL
       .into_iter()
       .map(|choice| {
-        let count = match choice {
-          ReviewTab::MergeQueue => queued,
-          ReviewTab::PullRequests => open,
+        let (count, reading) = match choice {
+          ReviewTab::MergeQueue => (queued, queue_reading),
+          ReviewTab::PullRequests => (open, list_reading),
         };
         let shown = PageTab::to(
           format!("review-hub-tab-{}", choice.name()),
@@ -160,6 +166,7 @@ impl Component for ReviewTabs {
         );
         match count {
           Some(count) if count > 0 => shown.count(count, false),
+          None if reading => shown.count_reading(),
           _ => shown,
         }
       })

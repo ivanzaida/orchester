@@ -36,7 +36,8 @@ use crate::{
   ui::{
     field::field_error,
     message::message_text,
-    state::{load_error, loading},
+    skeleton::Skeleton,
+    state::load_error,
   },
 };
 
@@ -192,16 +193,19 @@ impl OwnSaves {
 
 pub fn load(ctx: &mut Ctx, root: PathBuf, revision: u64, own: &OwnSaves) -> FutureState<Read, Message> {
   let saved = Arc::clone(&own.read);
+  let hold = crate::services::Services::of(ctx).hold;
   let mut state = ctx
     .future((root, revision), move |(root, revision)| {
       let saved = saved.lock().take();
       if saved.is_none() {
         tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
       }
+      let hold = hold.clone();
       async move {
         if let Some(settings) = saved {
           return Ok(Read(settings, revision));
         }
+        hold.released().await;
         background::run(move || project_settings::load_in(&root).map(|settings| Read(settings, revision)))
           .await?
           .map_err(|e| messages::store_error(&e))
@@ -256,7 +260,14 @@ pub fn error(ctx: &Ctx, save: &Save) -> Option<Element> {
     .error
     .map(|e| field_error("settings-save-error", &message_text(ctx, &e)).into())
 }
-pub fn pending(ctx: &Ctx, state: &FutureState<Read, Message>, revision: &Signal<u64>) -> Element {
+/// What a tab shows before its settings are read: why reading failed with Try again, or `bones` in its skeleton,
+/// named *Reading project settings…* (`project_settings.reading`).
+pub fn pending(
+  ctx: &mut Ctx,
+  state: &FutureState<Read, Message>,
+  revision: &Signal<u64>,
+  bones: impl Into<Element>,
+) -> Element {
   match &state.error {
     Some(error) => {
       let revision = revision.clone();
@@ -267,6 +278,6 @@ pub fn pending(ctx: &Ctx, state: &FutureState<Read, Message>, revision: &Signal<
         move || revision.update(|r| *r += 1),
       )
     }
-    None => loading("settings-loading", &ctx.t("project_settings.reading")).into(),
+    None => Skeleton::new("settings-loading", ctx.t("project_settings.reading")).show(ctx, bones),
   }
 }

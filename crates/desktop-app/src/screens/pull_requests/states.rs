@@ -7,7 +7,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{id::ProjectId, repository::GitHubRepo};
 use orchester_workspace::{messages::Message, pull_requests::list::PullRequestTab};
 
-use super::table;
+use super::{row, table};
 use crate::{
   navigation::Navigation,
   routes::{ConnectionsView, ProjectPage, Route},
@@ -25,13 +25,20 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
-    state::{EmptyState, load_error, loading},
+    skeleton::{self, Skeleton, bone, fading, round_bone},
+    state::{EmptyState, load_error},
+    table::TableRow,
   },
 };
 
 /// `State · Pull requests are unavailable` and the glyph tile of an empty tab (`k3euSu`).
 const UNAVAILABLE_WIDTH: f32 = 520.0;
 const GLYPH_TILE: f32 = 36.0;
+/// A reading row's number, linked task, state chip and checks bones (`z3yU9o`).
+const NUMBER: f32 = 32.0;
+const LINKED: f32 = 88.0;
+const CHIP: (f32, f32) = (56.0, 20.0);
+const CHECKS: f32 = 78.0;
 
 /// The project has no linked GitHub repository: Open Connections.
 pub(super) fn unavailable(ctx: &mut Ctx, project: ProjectId, name: &str) -> Element {
@@ -61,12 +68,70 @@ pub(super) fn unavailable(ctx: &mut Ctx, project: ProjectId, name: &str) -> Elem
     .into()
 }
 
-/// The table's header over the loader, while the first sync reads the pull requests.
-pub(super) fn reading(ctx: &Ctx) -> Column {
+/// Each row's bones while the pull requests are read: its title's, its branches' and its state's.
+const READING: [(f32, f32, f32); 8] = [
+  (348.0, 162.0, 104.0),
+  (284.0, 162.0, 104.0),
+  (414.0, 162.0, 104.0),
+  (262.0, 162.0, 104.0),
+  (326.0, 162.0, 104.0),
+  (304.0, 162.0, 104.0),
+  (240.0, 162.0, 104.0),
+  (370.0, 162.0, 104.0),
+];
+
+/// The table while the pull requests are read (`08 Review · Pull requests · loading` `z3yU9o`): its column names over
+/// each row's number and title, branches and linked task, state chip and review, and checks as bones in the rows'
+/// own geometry, the lower rows fading. *Reading pull requests from GitHub…* (`pull_requests.reading`) names it. The
+/// loaded list has no design yet: these bones follow the built rows.
+pub(super) fn reading(ctx: &mut Ctx) -> Column {
+  let rows = READING
+    .iter()
+    .enumerate()
+    .map(|(at, (title, branches, state))| {
+      let identity = Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(SpacingSize::Xs)
+        .child(
+          Row::new()
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(skeleton::line(ctx, ExtraTypography::Strong.role(), NUMBER))
+            .child(skeleton::line(ctx, ExtraTypography::Strong.role(), *title)),
+        )
+        .child(
+          Row::new()
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(skeleton::line(ctx, TypographyStyle::Description, *branches))
+            .child(skeleton::line(ctx, TypographyStyle::Description, LINKED)),
+        );
+      let state_cell = Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(bone(CHIP.0, CHIP.1).rounded(ExtraRadius::Full.role()))
+        .child(skeleton::line(ctx, TypographyStyle::Description, *state - CHIP.0));
+      let checks = Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(round_bone(IconSize::Md.size()))
+        .child(skeleton::line(ctx, TypographyStyle::Description, CHECKS));
+      Row::new().width(Dimension::Pct(100.0)).child(
+        TableRow::new(format!("pull-requests-reading-{at}"))
+          .height(row::ROW_HEIGHT)
+          .cell(row::PULL_REQUEST, identity)
+          .cell(row::STATE, state_cell)
+          .cell(row::CHECKS, checks)
+          .cell(row::OPEN, bone(IconSize::Md.size(), IconSize::Md.size())),
+      )
+    })
+    .collect();
+  let bones = Column::new().width(Dimension::Pct(100.0)).with_children(fading(rows));
   Column::new()
     .width(Dimension::Pct(100.0))
     .child(table::header(ctx))
-    .child(loading("pull-requests-loading", &ctx.t("pull_requests.reading")))
+    .child(Skeleton::new("pull-requests-loading", ctx.t("pull_requests.reading")).show(ctx, bones))
 }
 
 /// The stored list cannot be read: why, and Try again.

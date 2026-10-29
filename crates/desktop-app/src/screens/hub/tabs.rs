@@ -144,6 +144,8 @@ impl Component for HubTabs {
       feed.hub_counts.set(None);
     }
     let counts = feed.hub_counts.get();
+    // The first count is still read: each tab's count is a bone until it is known.
+    let counting = counts.is_none() && read.is_pending();
     let unread = feed.hub_unread.get();
     let navigation = Navigation::of(ctx);
     let id = project.open.project.id();
@@ -156,6 +158,7 @@ impl Component for HubTabs {
         match counts.map(|counts| choice.count(&counts)) {
           // A tab whose own read failed shows no count.
           Some((count, waits)) if count > 0 && unread & choice.bit() == 0 => open.count(count, waits),
+          None if counting => open.count_reading(),
           _ => open,
         }
       })

@@ -4,10 +4,14 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
-  components::Column,
+  app::{
+    ctx::Ctx,
+    theme::{SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Spacer, Text},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::memory::read::ProjectMemory;
 
@@ -22,13 +26,16 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::MemoryTab,
-  screens::hub::{self, Head, HubTab},
-  theme::HubSpacing,
+  screens::hub::{
+    self, Head, HubTab, bones,
+    parts::{boxed, group, note},
+  },
+  theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     notice::{Notice, NoticeTone},
-    state::loading,
+    skeleton::{self, Skeleton, fading},
   },
 };
 
@@ -85,19 +92,75 @@ fn content(
     return hub::list_body("memory-failed", failure.page(ctx));
   }
   let memory = match read {
-    Read::Reading | Read::Failed(..) => return loading("memory-loading", &ctx.t("memory.reading")).into(),
+    Read::Reading | Read::Failed(..) => return reading(ctx, state, view),
     Read::Ready(memory) => memory,
   };
   let Some(view) = view else {
-    return loading("memory-loading", &ctx.t("memory.reading")).into();
+    return reading(ctx, state, view);
   };
   // A record opened from the tab shows as its own page (05c, 05e).
   if let Some(page) = record_page::page(ctx, state, &memory, view.tab) {
     return page;
   }
   let pane = pane
-    .child(tabs::strip(ctx, state.project_id, (&memory, view.order), view.tab))
+    .child(tabs::strip(ctx, state.project_id, (Some(&memory), view.order), view.tab))
     .child(body(ctx, state, (project, &memory), view));
+  hub::list_body_wide(
+    "memory-main",
+    Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane),
+    PANE_WIDTH,
+  )
+}
+
+/// Each waiting proposal's bones while the records are read: its kind, its origin and its text.
+const PROPOSALS: [(f32, f32, f32); 3] = [(42.0, 328.0, 412.0), (42.0, 392.0, 378.0), (32.0, 256.0, 230.0)];
+/// The proposal's actions while it is read: Approve, Edit and Reject.
+const ACTIONS: [f32; 3] = [100.0, 72.0, 88.0];
+
+/// The tab while the records are read (`08 Agents · Memory · loading` `izf4z`): the pills keep their names with bone
+/// counts, the note and the *Waiting for your approval* heading stay; each proposal's kind, origin, text and its
+/// Approve · Edit · Reject are bones in the card's geometry, the lower ones fading. *Reading memory…*
+/// (`memory.reading`) names it.
+fn reading(ctx: &mut Ctx, state: &MemoryState, view: Option<View>) -> Element {
+  let (order, shown) = view.map_or((Order::of(1), MemoryTab::Waiting), |view| (view.order, view.tab));
+  let strip = tabs::strip(ctx, state.project_id, (None, order), shown);
+  let cards = PROPOSALS
+    .iter()
+    .map(|(kind, origin, text)| {
+      let actions = Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(ACTIONS.iter().map(|width| skeleton::button(*width)))
+        .child(Spacer::new().flex(1.0))
+        .child(Text::new(&ctx.t("memory.proposal.note")).variant(HubText::Hint.role()).nowrap());
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::Row.role()))
+        .spacing(SpacingSize::Md)
+        .child(
+          Row::new()
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(skeleton::line(ctx, HubText::Hint.role(), *kind))
+            .child(skeleton::line(ctx, HubText::Hint.role(), *origin)),
+        )
+        .child(skeleton::line(ctx, TypographyStyle::Body, *text))
+        .child(actions)
+    })
+    .collect();
+  let cards: Vec<Element> = fading(cards).into_iter().map(Element::from).collect();
+  let queue = group(
+    "memory-reading-queue",
+    bones::head(ctx, "memory-reading-queue", &ctx.t("memory.tabs.queueTitle"), Some(80.0)),
+    boxed("memory-reading-queue-rows", cards),
+  );
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Row.role())
+    .child(strip)
+    .child(note("memory-tab-note", Icon::Info, &ctx.t("memory.tabs.waitingNote")))
+    .child(Skeleton::new("memory-loading", ctx.t("memory.reading")).show(ctx, queue));
   hub::list_body_wide(
     "memory-main",
     Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane),

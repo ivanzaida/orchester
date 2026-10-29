@@ -29,14 +29,15 @@ use super::super::{
 };
 use crate::{
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
-    state::{load_error, loading},
+    skeleton::{self, Skeleton},
+    state::load_error,
   },
 };
 
@@ -44,6 +45,19 @@ use crate::{
 const ENVIRONMENT_HEIGHT: f32 = 132.0;
 /// How many names the row's hint shows before it counts the rest.
 const HINT_NAMES: usize = 2;
+
+/// The Environment group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading and the
+/// Variables label real, the count and the names line bones, Edit a bone of its size.
+pub(super) fn bones(ctx: &mut Ctx) -> Element {
+  let row = SettingRow::new("settings-environment-reading", ctx.t("project_settings.variablesLabel"))
+    .info(ctx.t("project_settings.environmentInfo"))
+    .hint_reading(264.0)
+    .control(skeleton::line(ctx, ExtraTypography::Lead.role(), 58.0))
+    .control(skeleton::button(72.0));
+  Group::new("settings-environment-reading-section", ctx.t("project_settings.environment"))
+    .row(row.render(ctx))
+    .into()
+}
 
 #[derive(Clone, Eq)]
 struct Stored(CommandEnvironment, u64);
@@ -199,15 +213,17 @@ impl Environment {
   }
   fn read(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Stored, Message> {
     let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
+    let hold = crate::services::Services::of(ctx).hold;
     let mut state = ctx
-      .future(
-        (props.project.open.repo_root.clone(), revision),
-        |(root, revision)| async move {
+      .future((props.project.open.repo_root.clone(), revision), move |(root, revision)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
           background::run(move || load_in(&root).map(|environment| Stored(environment, revision)))
             .await?
             .map_err(|e| messages::store_error(&e))
-        },
-      )
+        }
+      })
       .state()
       .get();
     if state.data.as_ref().is_some_and(|read| read.1 != revision) {
@@ -215,7 +231,7 @@ impl Environment {
     }
     state
   }
-  fn pending(&self, ctx: &Ctx, state: &FutureState<Stored, Message>) -> Element {
+  fn pending(&self, ctx: &mut Ctx, state: &FutureState<Stored, Message>) -> Element {
     match &state.error {
       Some(e) => {
         let revision = self.revision.clone();
@@ -226,7 +242,10 @@ impl Environment {
           move || revision.update(|r| *r += 1),
         )
       }
-      None => loading("settings-environment-loading", &ctx.t("project_settings.reading")).into(),
+      None => {
+        let bones = bones(ctx);
+        Skeleton::new("settings-environment-loading", ctx.t("project_settings.reading")).show(ctx, bones)
+      }
     }
   }
   /// The row: the variables' count and Edit, and while open the editor under it.

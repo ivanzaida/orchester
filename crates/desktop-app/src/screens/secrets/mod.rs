@@ -32,7 +32,7 @@ use crate::{
   services::Services,
   ui::{
     message::message_text,
-    state::{load_error, loading},
+    state::load_error,
   },
 };
 
@@ -93,7 +93,7 @@ impl Component for SecretsScreen {
     else {
       return kit::scroll(match loaded.error {
         Some(ref error) if !loaded.is_pending() => self.failed(ctx, error),
-        _ => loading("secrets-loading", &ctx.t("secrets.reading")).into(),
+        _ => list::reading(ctx, &self.view),
       });
     };
     kit::scroll(self.body(ctx, (&project, shown), &listed))

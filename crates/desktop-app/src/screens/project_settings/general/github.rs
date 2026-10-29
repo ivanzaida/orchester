@@ -28,16 +28,19 @@ use super::super::{
 };
 use crate::{
   services::Services,
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     github_mark::github_mark,
     icon::Icon,
     icon_button::IconButton,
     message::message_text,
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
+
+/// The repository's bone while it is read (`GitHub repository` in `XvyXm`).
+const REPOSITORY_BONE: f32 = 58.0;
 
 #[derive(Clone, PartialEq)]
 struct Read(RepositoryRead, u64);
@@ -92,7 +95,18 @@ pub fn rows(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save, r
     let reading = SettingRow::new("settings-github-repo", ctx.t("project_settings.githubRepo"));
     let reading = match error {
       Some(error) => reading.toned(error, Tone::Danger),
-      None => reading.under(loading("settings-github-loading", &ctx.t("project_settings.reading"))),
+      // The row stands; only the repository it names is a bone while it is read (`XvyXm`).
+      None => {
+        let bone = Row::new()
+          .spacing(ExtraSpacing::Pair.role())
+          .align_items(Alignment::Center)
+          .child(github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary))
+          .child(skeleton::line(ctx, ProjectSettingsText::MonoValue.role(), REPOSITORY_BONE));
+        let bone = Skeleton::new("settings-github-loading", ctx.t("project_settings.reading"))
+          .inline()
+          .show(ctx, bone);
+        reading.hint(ctx.t("project_settings.githubRepoHint")).control(bone)
+      }
     };
     return vec![reading.render(ctx)];
   };

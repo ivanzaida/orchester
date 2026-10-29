@@ -9,18 +9,31 @@ mod estimates;
 mod limits;
 
 use lurq::{
-  app::{component::Component, ctx::Ctx},
-  components::Column,
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::SpacingSize,
+  },
+  components::{Column, Row},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::tasks::outside::Outside;
 
 use super::{
-  SectionStatuses, TabProps, page,
+  SectionStatuses, TabProps,
+  kit::{Group, SettingRow},
+  page,
   work::{self, Read},
 };
-use crate::theme::ExtraSpacing;
+use crate::{
+  theme::ExtraSpacing,
+  ui::skeleton::{self, fading},
+};
+
+/// The reviewer's connection, model and effort selects (`Reviewer` in `lUFjj`).
+const REVIEWER: (f32, f32, f32) = (142.0, 116.0, 132.0);
 
 pub(super) struct Runs {
   stored: Signal<Option<Read>>,
@@ -56,7 +69,8 @@ impl Component for Runs {
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(work::pending(ctx, &state, &self.revision));
+      let bones = bones(ctx);
+      return page::scroll(work::pending(ctx, &state, &self.revision, bones));
     };
     self.stored.set(Some(read.clone()));
     let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
@@ -83,4 +97,49 @@ impl Component for Runs {
         .child(environment),
     )
   }
+}
+
+/// The Runs tab while its settings are read (`10 · Project settings · Runs · loading` `lUFjj`): every group heading,
+/// row label, help line and unit stays; the switches, the reviewer's connection, model and effort, the approved-rules
+/// count, the budgets and limits and the variables line are bones in their own fields, the lower groups fading.
+fn bones(ctx: &mut Ctx) -> Column {
+  let reviewer = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(skeleton::select(ctx, REVIEWER.0, 76.0))
+    .child(skeleton::select(ctx, REVIEWER.1, 60.0))
+    .child(skeleton::select(ctx, REVIEWER.2, 70.0));
+  let rows = [
+    SettingRow::new("settings-auto-on-reading", ctx.t("project_settings.newRuns"))
+      .info(ctx.t("project_settings.autoDetail"))
+      .hint(ctx.t("project_settings.autoHint"))
+      .control(skeleton::switch()),
+    SettingRow::new("settings-auto-reviewer-reading", ctx.t("project_settings.reviewer"))
+      .info(ctx.t("project_settings.reviewerDetail"))
+      .hint(ctx.t("project_settings.reviewerHint"))
+      .control(reviewer),
+    SettingRow::new("settings-auto-rules-reading", ctx.t("project_settings.projectRules"))
+      .info(ctx.t("project_settings.projectRulesDetail"))
+      .hint_reading(266.0)
+      .control(skeleton::count())
+      .control(skeleton::chevron()),
+  ]
+  .map(|row| row.render(ctx));
+  let auto = Group::new("settings-auto-reading", ctx.t("project_settings.auto")).rows(rows);
+  let row = SettingRow::new("settings-estimates-reading-row", ctx.t("project_settings.estimates.label"))
+    .hint(ctx.t("project_settings.estimates.hint"))
+    .info(ctx.t("project_settings.estimates.info"))
+    .control(skeleton::switch())
+    .render(ctx);
+  let estimates = Group::new("settings-estimates-reading", ctx.t("project_settings.estimates.title")).row(row);
+  let groups: Vec<Column> = vec![
+    Column::new().width(Dimension::Pct(100.0)).child(auto),
+    Column::new().width(Dimension::Pct(100.0)).child(estimates),
+    Column::new().width(Dimension::Pct(100.0)).child(limits::bones(ctx)),
+    Column::new().width(Dimension::Pct(100.0)).child(environment::bones(ctx)),
+  ];
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Roomy.role())
+    .with_children(fading(groups))
 }

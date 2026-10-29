@@ -3,7 +3,11 @@
 //! signed in under it, its state and a chevron: a press opens its page. The accounts the person added come first,
 //! Default (the CLI's own folder) last. The note under the groups says whose accounts they are.
 
-use lurq::{app::ctx::Ctx, components::Column, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::TypographyStyle},
+  components::Column,
+  node::Element,
+};
 use orchester_core::account::{AccountCli, AccountState, AgentAccount};
 
 use super::{
@@ -13,12 +17,13 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
-  theme::IconSize,
+  theme::{IconSize, SettingsSpacing},
   ui::{
     agent_mark::AgentMark,
     button::{ActionButton, ButtonKind},
     icon::Icon,
     setting_rows::{SettingGroup, SettingRow, group_note, opens_mark, row_tile, status},
+    skeleton::{self, Skeleton, fading},
   },
 };
 
@@ -56,6 +61,64 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
     pane = pane.child(group);
   }
   pane.child(group_note("accounts-note", &t(ctx, "accounts.note")))
+}
+
+/// Each CLI's accounts while they are read: each one's name, who is signed in under it and its state.
+const READING: [(AccountCli, &[(f32, f32, f32)]); 2] = [
+  (AccountCli::ClaudeCode, &[(30.0, 144.0, 52.0), (34.0, 270.0, 52.0)]),
+  (AccountCli::Codex, &[(24.0, 180.0, 56.0), (34.0, 298.0, 44.0)]),
+];
+
+/// The list while the accounts are read (`14 · App settings · Accounts · loading` `SXKNI`): Add account works, each CLI's
+/// group keeps its heading and every row the CLI maker's mark; the counts and each account's name, its folder or
+/// e-mail line and its sign-in state are bones, the lower group fading. *Reading the accounts…* (`accounts.reading`)
+/// names it.
+pub(in crate::screens::settings) fn reading(ctx: &mut Ctx) -> Element {
+  let navigation = Navigation::of(ctx);
+  let groups: Vec<Column> = READING
+    .iter()
+    .enumerate()
+    .map(|(index, (cli, accounts))| {
+      let rows: Vec<Element> = accounts
+        .iter()
+        .enumerate()
+        .map(|(at, (name, line, state))| {
+          let end = lurq::components::Row::new()
+            .spacing(lurq::app::theme::SpacingSize::Md)
+            .align_items(lurq::layout::Alignment::Center)
+            .child(skeleton::status(ctx, *state))
+            .child(opens_mark());
+          SettingRow::new(format!("account-reading-{}-{at}", cli.as_str()), "")
+            .label_reading(*name)
+            .hint_reading(*line)
+            .lead(mark_tile(ctx, *cli))
+            .control(end)
+            .render(ctx)
+        })
+        .collect();
+      let mut group = SettingGroup::new(format!("accounts-reading-{}", cli.as_str()), t(ctx, cli_key(*cli)))
+        .meta_reading(skeleton::line(ctx, TypographyStyle::Description, 60.0))
+        .rows(rows);
+      if index == 0 {
+        group = group.end(
+          ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
+            .icon(Icon::Plus)
+            .small()
+            .opens(navigation.to(Route::Accounts(AccountsView {
+              account: None,
+              panel: AccountsPanel::Add,
+            }))),
+        );
+      }
+      Column::new().width(lurq::node::dimension::Dimension::Pct(100.0)).child(group)
+    })
+    .collect();
+  let pane = Column::new()
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .spacing(SettingsSpacing::Page.role())
+    .with_children(fading(groups))
+    .child(group_note("accounts-note", &t(ctx, "accounts.note")));
+  Skeleton::new("settings-accounts-loading", t(ctx, "accounts.reading")).show(ctx, pane)
 }
 
 /// An account's state as a dot and its word, in the state's colors.

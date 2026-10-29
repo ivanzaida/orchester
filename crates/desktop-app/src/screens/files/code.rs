@@ -46,7 +46,7 @@ use crate::{
     code_box::Copier,
     icon::Icon,
     kbd::key_cap,
-    state::loading,
+    skeleton::{self, Skeleton, bone, fading},
   },
 };
 
@@ -61,7 +61,7 @@ pub fn pane(ctx: &mut Ctx, page: &Page<'_>) -> Element {
   let content = match (&page.path, &page.read) {
     (None, _) => states::no_file(ctx, page),
     (Some(Err(error)), _) => states::refused(ctx, page, error),
-    (Some(Ok(_)), None | Some(Shown::Reading)) => loading("files-file-loading", &ctx.t("files.readingFile")).into(),
+    (Some(Ok(file)), None | Some(Shown::Reading)) => reading(ctx, file),
     (Some(Ok(_)), Some(Shown::Failed(failure))) => states::unreadable(ctx, failure),
     (Some(Ok(file)), Some(Shown::Read(read))) => match read {
       FileView::Text(text) => text_pane(ctx, page, file, text),
@@ -80,6 +80,48 @@ pub fn pane(ctx: &mut Ctx, page: &Page<'_>) -> Element {
     .min_width(Dimension::Px(0.0))
     .background(ExtraColor::CodeBackground.role())
     .child(content)
+    .into()
+}
+
+/// Each line's bone while the file is read (`09 Files · loading` `i8ZHec`); 0 for a blank line.
+const READING: [f32; 22] = [
+  326.0, 456.0, 0.0, 262.0, 566.0, 414.0, 0.0, 196.0, 500.0, 360.0, 304.0, 0.0, 240.0, 544.0, 392.0, 446.0, 0.0,
+  282.0, 370.0, 206.0, 478.0, 0.0,
+];
+/// A line's height and its number's bone while the file is read.
+const READING_LINE: f32 = 22.0;
+const NUMBER_BONE: f32 = 14.0;
+
+/// The file while it is read: its path real in its head, and its lines' numbers and words as bones, the lower ones
+/// fading. *Reading the file* (`files.readingFile`) names it.
+fn reading(ctx: &mut Ctx, file: &FilePath) -> Element {
+  let lines = READING
+    .iter()
+    .map(|words| {
+      let line = Row::new()
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(READING_LINE))
+        .padding(Padding::horizontal(SpacingSize::Lg))
+        .spacing(SpacingSize::Xl)
+        .align_items(Alignment::Center)
+        .child(bone(NUMBER_BONE, 8.0));
+      if *words > 0.0 {
+        line.child(skeleton::line(ctx, lurq::app::theme::TypographyStyle::Mono, *words))
+      } else {
+        line
+      }
+    })
+    .collect();
+  let lines = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::vertical(SpacingSize::Sm))
+    .with_children(fading(lines));
+  let bones = Skeleton::new("files-file-loading", ctx.t("files.readingFile")).show(ctx, lines);
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(head_row(file))
+    .child(bones)
     .into()
 }
 

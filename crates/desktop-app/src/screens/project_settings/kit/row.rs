@@ -23,6 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     pressable::opening,
+    skeleton,
     tooltip::Tooltip,
   },
 };
@@ -62,6 +63,8 @@ pub(crate) struct SettingRow {
   under: Vec<Element>,
   open: Option<Open>,
   item: bool,
+  /// The label's and the hint's bones, while they are read.
+  bones: (Option<f32>, Option<f32>),
 }
 
 impl SettingRow {
@@ -80,6 +83,7 @@ impl SettingRow {
       under: Vec::new(),
       open: None,
       item: false,
+      bones: (None, None),
     }
   }
 
@@ -127,6 +131,18 @@ impl SettingRow {
   /// The hint line in `tone`.
   pub(crate) fn toned(mut self, hint: impl Into<Arc<str>>, tone: Tone) -> Self {
     self.hint = Some((hint.into(), tone));
+    self
+  }
+
+  /// The label is not read yet: its bone, `width` long, in its place.
+  pub(crate) fn label_reading(mut self, width: f32) -> Self {
+    self.bones.0 = Some(width);
+    self
+  }
+
+  /// The hint line is not read yet: its bone, `width` long, in its place.
+  pub(crate) fn hint_reading(mut self, width: f32) -> Self {
+    self.bones.1 = Some(width);
     self
   }
 
@@ -183,16 +199,27 @@ impl SettingRow {
     } else {
       label
     };
+    let label: Element = match self.bones.0 {
+      Some(width) => skeleton::line(ctx, self.label_style, width).into(),
+      None => label.into(),
+    };
     let info = self.info.map(|info| {
       let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
     });
-    let hint = self.hint.map(|(hint, tone)| {
+    let hint = self.hint.map(|(hint, tone)| -> Element {
       Text::new(&hint)
         .id(format!("{id}-hint"))
         .variant(ProjectSettingsText::Hint.role())
         .color(tone.color())
         .width(Dimension::Pct(100.0))
+        .into()
+    });
+    let hint = hint.or_else(|| {
+      self
+        .bones
+        .1
+        .map(|width| skeleton::line(ctx, ProjectSettingsText::Hint.role(), width).into())
     });
     let heading = Row::new()
       .spacing(ExtraSpacing::Snug.role())

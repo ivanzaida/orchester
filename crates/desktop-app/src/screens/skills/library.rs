@@ -14,14 +14,15 @@ use super::{PageProps, repository, state::Panel, words};
 use crate::{
   routes::SkillsFilter,
   screens::hub::{
-    self,
-    parts::{Entry, Tone, boxed, group, head, note, status},
+    self, bones,
+    parts::{Entry, Tone, boxed, group, head, note, status, tile},
   },
   theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     pressable::Press,
+    skeleton::{self, Skeleton, fading},
   },
 };
 
@@ -73,6 +74,51 @@ impl Component for Library {
     ));
     hub::list_body("skills-list", pane)
   }
+}
+
+/// Each scope's skills while they are read: its heading's key, and each skill's name, scope line and version state.
+const READING: [(&str, &[(f32, f32, f32)]); 3] = [
+  ("skills.groups.project", &[(74.0, 328.0, 60.0), (70.0, 224.0, 64.0)]),
+  ("skills.groups.roles", &[(110.0, 270.0, 70.0), (30.0, 232.0, 104.0)]),
+  ("skills.groups.pipelines", &[(74.0, 246.0, 96.0)]),
+];
+
+/// The list while the skills are read (`06 Agents · Skills · loading` `sQ4sB`): the group headings, the skill tile's
+/// icon and the repository's fixed words real; the summary line, the counts, each skill's name, scope line and version
+/// state bones, the lower groups fading. *Reading skills…* (`skills.reading`) names it.
+pub(super) fn reading(ctx: &mut Ctx) -> Element {
+  let mut groups: Vec<Column> = READING
+    .iter()
+    .enumerate()
+    .map(|(at, (key, skills))| {
+      let id = format!("skills-reading-{at}");
+      let rows = skills.iter().map(|(name, line, state)| -> Element {
+        let lead = tile(Icon::GraduationCap, false).into();
+        bones::entry(ctx, Some(lead), (*name, *line), vec![bones::status(ctx, *state).into()]).into()
+      });
+      group(&id, bones::head(ctx, &id, &ctx.t(key), Some(14.0)), boxed(&format!("{id}-rows"), rows))
+    })
+    .collect();
+  let files = Entry::new("skills-reading-files", ctx.t("skills.repositoryFiles"))
+    .end(skeleton::switch())
+    .end(skeleton::button(30.0))
+    .into();
+  let import = bones::entry(ctx, None, (146.0, 0.0), Vec::new())
+    .id("skills-reading-import")
+    .into();
+  groups.push(group(
+    "skills-reading-found",
+    bones::head(ctx, "skills-reading-found", &ctx.t("skills.repositoryTitle"), Some(34.0)),
+    boxed("skills-reading-found-rows", [files, import]),
+  ));
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Groups.role())
+    .child(skeleton::line(ctx, HubText::Hint.role(), 194.0))
+    .with_children(fading(groups))
+    .child(note("skills-versions-note", Icon::History, &ctx.t("skills.versionsNote")));
+  let body = Skeleton::new("skills-loading", ctx.t("skills.reading")).show(ctx, pane);
+  hub::list_body("skills-reading-list", body)
 }
 
 /// The scopes' groups in the list's order, the one the route names first.

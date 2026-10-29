@@ -14,6 +14,7 @@ mod list_row;
 mod more;
 mod page;
 mod properties;
+mod reading;
 mod save;
 mod summary;
 mod tasks;
@@ -34,7 +35,8 @@ use crate::{
   ui::{
     icon::Icon,
     message::message_text,
-    state::{EmptyState, load_error, loading},
+    skeleton::{self, Skeleton},
+    state::{EmptyState, load_error},
   },
 };
 
@@ -78,7 +80,11 @@ pub fn new_module(ctx: &mut Ctx, project: &ShownProject) -> Element {
 pub fn edit_module(ctx: &mut Ctx, project: &ShownProject, module: ModuleId) -> Element {
   let found = match project.feed.tasks.get() {
     TasksState::Ready(tasks) => tasks.modules.iter().find(|stored| stored.id() == module).cloned(),
-    TasksState::Loading => return screen(loading("module-loading", &ctx.t("modules.page.reading")).into()),
+    TasksState::Loading => {
+      // No loading frame draws Edit module: its fields' bones stand in one outline until the module is read.
+      let bones = skeleton::list(ctx, "module-form-reading", &[(60.0, 320.0), (90.0, 420.0), (80.0, 160.0)]);
+      return screen(Skeleton::new("module-loading", ctx.t("modules.page.reading")).show(ctx, bones));
+    }
     TasksState::Failed(error) => {
       let feed = project.feed.clone();
       let words = message_text(ctx, &error);

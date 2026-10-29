@@ -131,17 +131,15 @@ fn usage_page_shows_code_index_use_of_every_invocation() {
 }
 
 #[test]
-fn usage_page_shows_dashes_and_what_it_reads_while_it_reads() {
+fn usage_page_shows_the_figures_names_over_bones_while_it_reads() {
   let mut page = Seeded::prepared("usage", true, |_| {});
   page.go(UsageQuery::default());
   page.until("the page", |page| page.shows("usage-tokens-reading"));
-  assert_eq!(page.text("usage-summary-spent-value"), DASH);
+  // The figures keep their names; their values are bones (`11 Usage · loading` `P74Xv`), never a fake 0 or a dash.
+  assert_eq!(page.text("usage-summary-spent"), "Spent tokens");
+  assert!(!page.shows("usage-summary-spent-value"), "no value while reading");
   assert!(!page.shows("usage-summary-spent-change"), "no change while reading");
-  assert_eq!(
-    page.text("usage-tokens-reading"),
-    "Reading token usage from Kontur’s runs…"
-  );
-  assert_eq!(page.text("usage-limits-reading"), "Reading plan limit snapshots…");
+  assert!(page.shows("usage-limits-reading"), "the plan limits read on their own");
 }
 
 #[test]

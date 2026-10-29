@@ -6,14 +6,11 @@
 //! work meanwhile; the views count with bones. It pulses gently, and stays still with reduced motion (`ui::skeleton`).
 //! *Reading Kontur's tasks…* (`tasks.loading`) stays its name for tools.
 
+use std::sync::Arc;
+
 use lurq::{
-  app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, Timeout},
-    theme::SpacingSize,
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row},
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -24,8 +21,8 @@ use super::{
 };
 use crate::{
   routes::TaskListTab,
-  theme::{ExtraSpacing, SKELETON_DELAY, SKELETON_FADE, TasksSpacing},
-  ui::skeleton::{bone, pulsing, round_bone},
+  theme::{ExtraSpacing, TasksSpacing},
+  ui::skeleton::{Skeleton, bone, fading, round_bone},
 };
 
 /// A row's cells (`Row bone` `C8Z6Wd`): the status dot, the key, the actions' room, the priority and the age.
@@ -85,70 +82,30 @@ pub enum Place {
   Board(TaskListTab, Columns),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct SkeletonProps {
-  pub place: Place,
-  /// *Reading Kontur's tasks…*, its name for tools.
-  pub label: std::sync::Arc<str>,
-}
-
-impl DevtoolsInspectable for SkeletonProps {}
-
-pub struct Skeleton {
-  shown: Signal<bool>,
-  /// Shows the bones once the reading took [`SKELETON_DELAY`].
-  _delay: Timeout,
-}
-
-impl Component for Skeleton {
-  type Props = SkeletonProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    let shown = ctx.signal(false);
-    let show = shown.clone();
-    let delay = ctx.create_timeout(SKELETON_DELAY, move || show.set(true));
-    delay.start();
-    Self { shown, _delay: delay }
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<SkeletonProps>().clone();
-    let shown = self.shown.get();
-    let frame = Column::new()
-      .id("tasks-loading")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .describe("a11y_name", props.label.clone())
-      .describe("state", if shown { "skeleton" } else { "waiting" });
-    if !shown {
-      return frame;
-    }
-    let bones = match props.place {
-      Place::List => list(),
-      Place::Board(tab, columns) => kanban::skeleton::board(ctx, (tab, columns)),
-    };
-    frame.child(pulsing(bones))
-  }
+/// The skeleton at `place`, named *Reading Kontur's tasks…* (`label`) for tools.
+pub fn skeleton(ctx: &mut Ctx, place: Place, label: Arc<str>) -> Element {
+  let bones = match place {
+    Place::List => list(),
+    Place::Board(tab, columns) => kanban::skeleton::board(ctx, (tab, columns)),
+  };
+  Skeleton::new("tasks-loading", label).fills().show(ctx, bones)
 }
 
 /// The list's skeleton: its lines, 2 apart, each 28 from the panel's right edge as the rows are.
 fn list() -> Column {
-  let fading = LINES.len() - SKELETON_FADE.len();
+  let lines = LINES
+    .iter()
+    .map(|line| match *line {
+      Line::Group(label) => group(label),
+      Line::Row(title, tag, state) => row(title, tag, state),
+    })
+    .collect();
   Column::new()
     .id("tasks-loading-rows")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().right(TasksSpacing::Sides.role()))
     .spacing(ExtraSpacing::Tight.role())
-    .with_children(LINES.iter().enumerate().map(|(index, line)| {
-      let line = match *line {
-        Line::Group(label) => group(label),
-        Line::Row(title, tag, state) => row(title, tag, state),
-      };
-      match index.checked_sub(fading) {
-        Some(fade) => line.opacity(SKELETON_FADE[fade]),
-        None => line,
-      }
-    }))
+    .with_children(fading(lines))
 }
 
 /// A group head's bones: its chevron, label and count.

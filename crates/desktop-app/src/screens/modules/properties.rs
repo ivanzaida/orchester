@@ -41,6 +41,7 @@ use crate::{
     menu::{MenuItem, menu, menu_panel},
     message::message_text,
     pressable::pressable,
+    skeleton,
   },
 };
 
@@ -341,6 +342,27 @@ fn opener((id, key): (&str, &str), value: Element, control: &Control) -> Element
   };
   let chevron = open.then(|| icon(Icon::ChevronUp, IconSize::Sm, PaletteColor::TextMuted));
   property((id, key), value, Some((row, chevron)))
+}
+
+/// The properties while the module is read (`06 · Module · loading` `e0ZdI`): their names real, each value a bone.
+pub(super) fn bones(ctx: &Ctx) -> Column {
+  let rows = [
+    ("module-reading-state", "modules.properties.state", 60.0),
+    ("module-reading-start", "modules.properties.start", 60.0),
+    ("module-reading-target", "modules.properties.target", 60.0),
+    ("module-reading-created", "modules.properties.created", 98.0),
+  ]
+  .map(|(id, key, width)| {
+    let value = skeleton::line(ctx, TypographyStyle::Description, width).into();
+    property((id, &ctx.t(key)), value, None)
+  });
+  Column::new()
+    .width(Dimension::Px(PROPERTIES_WIDTH))
+    .flex_shrink(0.0)
+    .padding(Padding::new().left(ModulesSpacing::Properties.role()))
+    .spacing(ExtraSpacing::Tight.role())
+    .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .with_children(rows)
 }
 
 /// A property's row: its key and value; `press`, the surface that opens its control and what ends it.

@@ -229,6 +229,6 @@ fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
 }
 
 /// The state column's width (`State` `T5CHp`).
-const STATE_WIDTH: f32 = 170.0;
+pub(super) const STATE_WIDTH: f32 = 170.0;
 /// The row menu's width (`Row menu` `v8j3h`).
 const MENU_WIDTH: f32 = 200.0;

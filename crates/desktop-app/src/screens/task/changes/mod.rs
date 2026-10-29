@@ -16,6 +16,7 @@ pub(crate) mod files;
 pub(crate) mod listed;
 mod load;
 mod open_file;
+pub(super) mod reading;
 mod states;
 mod toolbar;
 

@@ -23,11 +23,16 @@ use orchester_workspace::{app_paths, background};
 use super::frame;
 use crate::{
   services::Services,
+  theme::ExtraTypography,
   ui::{
     copied_value::CopiedValue,
     setting_rows::{HintTone, SettingGroup, SettingRow, value},
+    skeleton::{self, Skeleton},
   },
 };
+
+/// A path's bone while it is read (`Application data` in `JVv11`).
+const PATH_BONE: f32 = 162.0;
 
 /// The tab, scrolling under the header.
 pub fn tab(ctx: &mut Ctx) -> Element {
@@ -65,11 +70,13 @@ impl Component for ThisComputer {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let workspace = Services::of(ctx).workspace;
+    let services = Services::of(ctx);
+    let (workspace, hold) = (services.workspace, services.hold);
     let places = ctx
       .future((), move |()| {
-        let workspace = workspace.clone();
+        let (workspace, hold) = (workspace.clone(), hold.clone());
         async move {
+          hold.released().await;
           background::run(move || Places {
             database: workspace.database_path(),
             log: app_paths::log_dir()
@@ -132,8 +139,9 @@ struct PlaceKeys {
   unknown: &'static str,
 }
 
-/// A file or folder of this computer with Copy, what it holds in the row's tooltip; `None` while it is read, when the
-/// row holds only its words, and `Some(None)` when it is unknown, which the row says.
+/// A file or folder of this computer with Copy, what it holds in the row's tooltip; `None` while it is read, when its
+/// path is a bone and Copy waits for it (`13 · App settings · General · loading` `JVv11`), and `Some(None)` when it is
+/// unknown, which the row says.
 fn place(ctx: &mut Ctx, keys: &PlaceKeys, path: Option<Option<&PathBuf>>) -> Element {
   let row = SettingRow::new(keys.id, ctx.t(keys.title)).info(ctx.t(keys.description));
   let row = match path {
@@ -151,7 +159,13 @@ fn place(ctx: &mut Ctx, keys: &PlaceKeys, path: Option<Option<&PathBuf>>) -> Ele
       row.control(copy)
     }
     Some(None) => row.toned_hint(ctx.t(keys.unknown), HintTone::Danger),
-    None => row,
+    None => {
+      let bone = skeleton::line(ctx, ExtraTypography::PropertyMono.role(), PATH_BONE);
+      let bone = Skeleton::new(format!("{}-reading", keys.id), ctx.t("settings.reading"))
+        .inline()
+        .show(ctx, bone);
+      row.control(bone)
+    }
   };
   row.render(ctx)
 }

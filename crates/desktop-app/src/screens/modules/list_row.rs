@@ -27,6 +27,7 @@ use crate::{
     icon::{Icon, icon},
     meter::{MeterTone, meter},
     pressable::Press,
+    skeleton::{self, bone},
     tooltip::Truncated,
   },
 };
@@ -98,6 +99,45 @@ pub fn row(
     .describe("state", words::state_key(details.state()))
     .child(line)
     .into()
+}
+
+/// A module's row while the modules are read (`05 · Modules · loading` `beo7S`): its mark, name, description, forecast,
+/// dates and progress as bones in the row's own geometry; `(name, description, forecast)` are their lengths.
+pub fn bones(ctx: &Ctx, (name, description, forecast): (f32, f32, f32)) -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ROW_HEIGHT))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .child(bone(IconSize::Md.size(), IconSize::Md.size()))
+    .child(
+      Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(skeleton::line(ctx, ExtraTypography::Strong.role(), name))
+        .child(skeleton::line(ctx, ExtraTypography::Note.role(), description)),
+    )
+    .child(skeleton::line(ctx, TypographyStyle::Description, forecast))
+    .child(
+      Row::new()
+        .width(Dimension::Px(DATES_WIDTH))
+        .flex_shrink(0.0)
+        .justify(Justify::End)
+        .child(skeleton::line(ctx, TypographyStyle::Caption, DATES_WIDTH - 26.0)),
+    )
+    .child(
+      Row::new()
+        .width(Dimension::Px(PROGRESS_WIDTH))
+        .flex_shrink(0.0)
+        .spacing(SpacingSize::Sm)
+        .justify(Justify::End)
+        .align_items(Alignment::Center)
+        .child(bone(METER_WIDTH, 3.0))
+        .child(skeleton::line(ctx, TypographyStyle::Description, PROGRESS_WIDTH - METER_WIDTH - 16.0)),
+    )
 }
 
 /// The name and the description after it, each cut to its room.

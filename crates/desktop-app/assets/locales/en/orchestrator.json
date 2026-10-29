@@ -270,6 +270,7 @@
       "dismissedTitle": "Start {{task}} · dismissed"
     },
     "historyPanel": {
+      "reading": "Reading conversations…",
       "search": "Search conversations",
       "today": "TODAY",
       "yesterday": "YESTERDAY",

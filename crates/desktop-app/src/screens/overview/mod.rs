@@ -50,7 +50,7 @@ use orchester_workspace::{
   tasks::{attention, data::ProjectTasks},
 };
 
-use self::skeleton::{BonesProps, bones};
+use self::skeleton::bones;
 use crate::{
   lifecycle::recovery::RecoveryNotice,
   project::{ShownProject, TasksState},
@@ -231,11 +231,7 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
   let id = project.open.project.id();
   let account_ids: Vec<_> = around.accounts.0.iter().map(|account| account.id()).collect();
   let near = near_limits(&account_ids, &around.readings, around.now);
-  let row_bones = |id: &'static str, titles| BonesProps {
-    id,
-    height: section::LINE_HEIGHT,
-    titles,
-  };
+  let line = section::LINE_HEIGHT;
   let main = Column::new()
     .id("overview-main")
     .flex(1.0)
@@ -244,7 +240,7 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
     .child(
       digest::frame("overview-waits")
         .child(digest::reading_head(ctx))
-        .child(bones(ctx, row_bones("overview-waits-bones", WAIT_BONES))),
+        .child(bones(ctx, project, ("overview-waits-bones", line), WAIT_BONES)),
     )
     .child(
       section::section("overview-at-work")
@@ -254,7 +250,7 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
           None,
           None,
         ))
-        .child(bones(ctx, row_bones("overview-at-work-bones", RUN_BONES))),
+        .child(bones(ctx, project, ("overview-at-work-bones", line), RUN_BONES)),
     )
     .child(
       section::section("overview-queue")
@@ -264,16 +260,12 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
           None,
           None,
         ))
-        .child(bones(ctx, row_bones("overview-queue-bones", RUN_BONES))),
+        .child(bones(ctx, project, ("overview-queue-bones", line), RUN_BONES)),
     );
-  let side_bones = BonesProps {
-    id: "overview-landed-bones",
-    height: section::SIDE_LINE_HEIGHT,
-    titles: SIDE_BONES,
-  };
+  let side_bones = ("overview-landed-bones", section::SIDE_LINE_HEIGHT);
   let side = side_column()
     .with_children(limits::limits(ctx, (&near, &around.accounts), &[], around.now))
-    .child(landed::reading(ctx).child(bones(ctx, side_bones)))
+    .child(landed::reading(ctx).child(bones(ctx, project, side_bones, SIDE_BONES)))
     .child(delivery::delivery(
       ctx,
       id,

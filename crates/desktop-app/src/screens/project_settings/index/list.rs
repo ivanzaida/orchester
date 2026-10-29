@@ -23,9 +23,12 @@ use crate::{
     chip::{BadgeTone, badge},
     icon::Icon,
     message::message_text,
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
+
+/// The bone of what the indexes' row lists, while it is read.
+const LIST_BONE: f32 = 160.0;
 
 /// How many indexes are kept and their size, for the group's heading; nothing until they are read, or with none.
 pub fn total(ctx: &Ctx, state: &FutureState<Listed, Message>) -> Option<Arc<str>> {
@@ -55,12 +58,11 @@ pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebui
     return vec![reading.toned(message_text(ctx, error), Tone::Danger).render(ctx)];
   }
   let Some(list) = &state.data else {
+    // The row stands; only what it lists is a bone while it is read (`A value still reading in a loaded group`).
     let words = ctx.t("project_settings.reading");
-    return vec![
-      reading
-        .under(loading("settings-index-list-loading", &words))
-        .render(ctx),
-    ];
+    let bone = skeleton::line(ctx, lurq::app::theme::TypographyStyle::Description, LIST_BONE);
+    let bone = Skeleton::new("settings-index-list-loading", words).inline().show(ctx, bone);
+    return vec![reading.control(bone).render(ctx)];
   };
   if list.0.0.is_empty() {
     return vec![

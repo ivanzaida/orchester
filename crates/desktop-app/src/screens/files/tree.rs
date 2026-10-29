@@ -31,7 +31,7 @@ use crate::{
     icon_button::IconButton,
     message::message_text,
     pressable::{opening, pressable},
-    state::loading,
+    skeleton::{self, Skeleton, bone, fading},
   },
 };
 
@@ -82,7 +82,7 @@ pub fn panel(ctx: &mut Ctx, page: &Page<'_>, list: &Shown<FileList>) -> Element 
       .into()
   };
   let content: Element = match list {
-    Shown::Reading => gutter(loading("files-tree-loading", &ctx.t("files.reading")).into()),
+    Shown::Reading => gutter(reading(ctx)),
     Shown::Failed(failure) => gutter(
       Text::new(&message_text(ctx, &failure.message()))
         .id("files-tree-error")
@@ -123,6 +123,47 @@ pub fn panel(ctx: &mut Ctx, page: &Page<'_>, list: &Shown<FileList>) -> Element 
     .child(gutter(head.into()))
     .child(content)
     .into()
+}
+
+/// The tree's rows while they are read (`09 Files · loading` `i8ZHec`): each one's level, folder or file, and name.
+const READING: [(u8, bool, f32); 9] = [
+  (0, true, 92.0),
+  (0, true, 50.0),
+  (0, true, 40.0),
+  (1, true, 112.0),
+  (2, false, 96.0),
+  (2, false, 80.0),
+  (0, true, 50.0),
+  (0, false, 92.0),
+  (0, false, 80.0),
+];
+
+/// The rows' bones in the rows' own geometry, the lower ones fading. *Reading the files* (`files.reading`) names them.
+fn reading(ctx: &mut Ctx) -> Element {
+  let rows = READING
+    .iter()
+    .map(|(level, folder, name)| {
+      let chevron: Element = if *folder {
+        bone(CHEVRON_ROOM - 4.0, CHEVRON_ROOM - 4.0).into()
+      } else {
+        Row::new().width(Dimension::Px(CHEVRON_ROOM)).into()
+      };
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(ROW_HEIGHT))
+        .padding(Padding::new().left(Dimension::Px(f32::from(*level) * LEVEL_INDENT)))
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(Row::new().width(Dimension::Px(CHEVRON_ROOM)).child(chevron))
+        .child(bone(IconSize::Md.size(), IconSize::Md.size()))
+        .child(skeleton::line(ctx, TypographyStyle::Description, *name))
+    })
+    .collect();
+  let bones = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .with_children(fading(rows));
+  Skeleton::new("files-tree-loading", ctx.t("files.reading")).show(ctx, bones)
 }
 
 type Choose = Arc<dyn Fn(&TreeRow, OpenIn) + Send + Sync>;

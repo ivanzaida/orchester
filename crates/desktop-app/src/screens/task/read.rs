@@ -58,11 +58,13 @@ pub fn runs(detail: &TaskDetail) -> bool {
 
 /// Reads `task` of the project at `root`, again whenever `again` changes.
 pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> TaskRead {
-  let programs = Services::of(ctx).programs;
+  let services = Services::of(ctx);
+  let (programs, hold) = (services.programs, services.hold);
   let load = ctx.future((root, task, again), move |(root, task, _)| {
     tracing::trace!(target: crate::app_log::READ_LOG, read = "task");
-    let programs = programs.clone();
+    let (programs, hold) = (programs.clone(), hold.clone());
     async move {
+      hold.released().await;
       background::run(move || TaskDetail::load_settled(&root, task, &programs))
         .await?
         .map(|detail| LoadedTask(Arc::new(detail)))

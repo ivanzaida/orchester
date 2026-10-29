@@ -22,6 +22,7 @@ mod local_integration;
 mod memory;
 mod orchestrated;
 mod read;
+mod reading;
 mod sharing;
 pub(crate) mod summary;
 
@@ -57,7 +58,7 @@ use crate::{
   ui::{
     icon::Icon,
     message::message_text,
-    state::{EmptyState, load_error, loading},
+    state::{EmptyState, load_error},
   },
 };
 
@@ -98,7 +99,15 @@ impl Component for TaskPage {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<PageProps>().clone();
     let found = match props.project.feed.tasks.get() {
-      TasksState::Loading => return page(loading("task-loading", &ctx.t("task.page.loading"))),
+      TasksState::Loading => {
+        let task = reading::Reading {
+          project: props.project.open.project.id(),
+          key: &props.key,
+          kept: props.kept,
+          title: None,
+        };
+        return page(reading::page(ctx, &task, &props.view));
+      }
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
       // A task kept Not shared keeps its key from before the join, which a shared task may have too: its own
       // address names it. A link to a key no shared task has still finds it.
@@ -336,7 +345,25 @@ impl Component for TaskFrame {
     };
     let root = props.project.open.repo_root.clone();
     let (detail, stale) = match read::task(ctx, root.clone(), props.task, again) {
-      TaskRead::Loading => return loading("task-loading", &ctx.t("task.page.loading")).into(),
+      TaskRead::Loading => {
+        // The task's row is known from the project's tasks: its key and title stand over the bones.
+        let title = match feed.tasks.get() {
+          TasksState::Ready(tasks) => tasks
+            .tasks
+            .iter()
+            .chain(tasks.not_shared.iter())
+            .find(|task| task.id() == props.task)
+            .map(|task| std::sync::Arc::from(task.details().title.as_str())),
+          TasksState::Loading | TasksState::Failed(_) => None,
+        };
+        let task = reading::Reading {
+          project: props.project.open.project.id(),
+          key: &props.key,
+          kept: props.kept,
+          title,
+        };
+        return reading::page(ctx, &task, &props.view);
+      }
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
     };

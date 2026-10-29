@@ -37,7 +37,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::Press,
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
 
@@ -114,9 +114,12 @@ impl Component for GettingStarted {
             list.child(step_line(ctx, props.project, line))
           })
       }
-      (None, None) => list
-        .child(start_head(&head_title, None))
-        .child(loading("overview-start-reading", &ctx.t("overview.start.reading")).padding(SpacingSize::Md)),
+      (None, None) => {
+        // The list's steps are bones under its real head while the project's setup is read.
+        let bones = skeleton::list(ctx, "overview-start-steps", &[(160.0, 280.0), (140.0, 240.0), (180.0, 260.0)]);
+        let bones = Skeleton::new("overview-start-reading", ctx.t("overview.start.reading")).show(ctx, bones);
+        list.child(start_head(&head_title, None)).child(bones)
+      }
     };
     Column::new()
       .id("overview-start")

@@ -28,6 +28,7 @@ mod line_draw;
 mod place;
 pub(crate) mod plot;
 mod read;
+mod reading;
 mod series;
 mod states;
 mod summary;
@@ -205,7 +206,7 @@ impl UsageScreen {
   fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, requery: &Requery) -> Vec<Element> {
     let saved = self.saved.clone();
     let mut sections: Vec<Element> = states::unread_runs(ctx, dashboard).into_iter().collect();
-    sections.push(summary::summary(ctx, Some(dashboard)));
+    sections.push(summary::summary(ctx, dashboard));
     if let Some(empty) = states::empty(ctx, dashboard, requery) {
       let menu = threshold::menu(ctx, dashboard, &saved);
       let compact = limits_legend::compact(ctx, dashboard, menu);

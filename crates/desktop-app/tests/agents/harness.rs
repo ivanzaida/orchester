@@ -66,7 +66,8 @@ impl Agents {
       .window
       .navigation()
       .go(Route::Project(project_id(), ProjectPage::Agents));
-    self.until("agents", |s| s.exists("agents-new"));
+    // *New profile* stands over the bones while the profiles read (ORC-110).
+    self.until("agents", |s| s.exists("agents-new") && !s.exists("agents-loading"));
   }
   pub fn open(&mut self, id: ResourceId) {
     self.go();
