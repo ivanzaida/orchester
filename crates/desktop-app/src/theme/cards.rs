@@ -62,6 +62,12 @@ impl CardsText {
     TypographyStyle::extra(self.name())
   }
 
+  /// The height of one wrapped line of this text in `theme`, in pixels.
+  pub fn line_height(self, theme: &Theme) -> f32 {
+    let text = theme.typography_style(self.role());
+    text.font_size * text.line_height
+  }
+
   const fn name(self) -> &'static str {
     match self {
       Self::Title => "cards_title",

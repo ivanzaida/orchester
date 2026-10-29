@@ -178,8 +178,7 @@ impl DecisionView {
       return Vec::new();
     }
     let id = &decision.id;
-    let style = ctx.theme().typography_style(CardsText::Context.role());
-    let line = style.font_size * style.line_height;
+    let line = CardsText::Context.line_height(ctx.theme());
     let lines = self.lines.clone();
     self.words.observe_rect(move |rect| {
       let counted = laid_out_lines(rect.height, line);
