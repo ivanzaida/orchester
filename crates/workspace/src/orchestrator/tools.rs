@@ -6,7 +6,7 @@
 //! chat's project by its id, never by a name. Publishing a draft, canceling, merging a run, answering an agent's
 //! question, sending a run's agents a message and deciding how a stopped run goes on wait for the person
 //! ([`super::change`]) unless the person's switch lets the chat do it itself (publishing, merging, answering; never
-//! canceling or deciding how a stopped run goes on), and so does starting a run unless auto mode is on for the project
+//! canceling or deciding how a stopped run goes on), and so does starting a run unless the project allows Autopilot
 //! ([`super::proposal`]). An interrupted run is continued only under the person's switch ([`super::guard`]), and a
 //! finished run is merged in a turn nobody asked for only under the person's switches ([`super::auto_merge`]). The
 //! chat's own `init_repository` is always the person's to apply ([`super::repository`]); its git tools read always,
@@ -85,7 +85,7 @@ pub const TOOLS: [&str; 60] = [
   "get_plan",
   "hold_queue",
   "release_queue",
-  "get_approval_settings",
+  "get_approvals",
   "list_pipelines",
   "get_pipeline",
   "save_pipeline_draft",

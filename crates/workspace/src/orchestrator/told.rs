@@ -33,7 +33,7 @@ pub(super) fn in_chat(tool: &Tool) -> Option<String> {
 /// What the agent reads of `run_task`: here it proposes the start, unless the project allows Autopilot.
 const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that the task could run now (a draft is \
   queued and started, a queued task starts, an ended one runs again) and starts nothing. The person starts or \
-  dismisses it in the conversation. When the project allows Autopilot (get_approval_settings' allow_autopilot), it \
+  dismisses it in the conversation. When the project allows Autopilot (get_approvals' allow_autopilot), it \
   starts the run instead, through the same checks, and answers with the run, but never in a turn Orchester started \
   by itself: there it only proposes. A task marked Blocked (its blocked_reason) is refused as task_blocked, naming \
   the reason: you never start or propose it; the person may start it in the app. Refusals name why.";

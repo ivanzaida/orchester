@@ -1,5 +1,5 @@
 //! A run the Orchestrator's agent asks for waits for a person (`docs/design/orchester-workspace.md`, "Project
-//! orchestrator conversation": review before work starts), unless auto mode is on for the project
+//! orchestrator conversation": review before work starts), unless the project allows Autopilot
 //! ([`super::tools`]). The agent's `run_task` checks that the task could run now, as Orchester's own `run_task` tool
 //! checks it, and starts nothing: the conversation keeps a proposed start with the pipeline it would run, and the
 //! agent is told it waits for the person. The person starts it, through the same `run_task` tool any client of the

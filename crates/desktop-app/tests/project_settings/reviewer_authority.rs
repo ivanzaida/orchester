@@ -13,8 +13,8 @@ fn project_settings_reviewer_change_for_a_manual_run_is_a_persons() {
   let original = page.db().auto_mode_settings().expect("reviewer A");
   let run = run_fixture::started_run(&mut page.db());
   assert!(matches!(
-    domain::call(&page, "set_approval_settings", json!({"project":"Kontur",
-      "reviewer":{"connection":"Claude Code","model":"sonnet"}})).expect_err("automation OFF"),
+    domain::call(&page, "set_reviewer", json!({"project":"Kontur",
+      "connection":"Claude Code","model":"sonnet"})).expect_err("automation OFF"),
     orchester_workspace::app_mcp::ToolError::Refused { code, .. } if code == "automation_not_allowed"
   ));
   // The window's own input from automation is put back too.

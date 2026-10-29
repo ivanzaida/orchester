@@ -49,35 +49,54 @@ saved) unless a person turned on *Let automation answer approvals*; lowering it 
 | `agent_slots`                 | integer \| null | no   | Agents working at once across runs, **1–16**. Applied at once by the runner: more lets queued work start; fewer stops no agent and holds new work. |
 | `qa_slots`                    | integer \| null | no   | QA apps (`start_qa_app`) runs may have open at once, **1–16**. Applies from the next start; a start beyond it waits until one closes. |
 
-### `get_auto_mode` — read-only
+### Approval modes
 
-A project's auto mode settings: whether new runs use it, `approve_everything` (`{on, turned_on_by}`, `turned_on_by`
-`person`, `automation` or null), and which connection, model and effort review requests (or why auto mode has no
-reviewer). Parameter: `project` (req.).
+Each agent profile has an **approval mode** (`save_profile_draft`'s `permissions.approval_mode`, see
+[setup](mcp-tools-setup.md#save_profile_draft--changes-data--gate-ap-for-widening)): **Autopilot** approves every
+tool request at once, except work outside the run's worktree, its Sources and the agent's temp folders, pushes to a
+remote and refs other than the run's branch, which still come to the person; **Manual** runs the profile's allowed
+commands, asks the project's reviewer about the rest, and leaves what the reviewer denies or is unsure about to the
+person. A run's step is in Autopilot only when its profile says Autopilot, the project allows it (*Allow Autopilot for
+agents in this project*, Project settings › Runs) and the run was not switched to Manual. Decisions (questions, plans,
+limits, conflicts) always come to the person in both modes.
 
-### `set_auto_mode` — changes data · gate AA
+### `get_approvals` — read-only
 
-Changes the project's auto mode settings. **Auto mode**: a reviewer model answers the requests the rules leave to the
-person, approving only those that clearly serve the task.
+A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
-| Parameter            | Type              | Req. | Description                                                 |
-|----------------------|-------------------|------|-------------------------------------------------------------|
-| `project`            | string            | yes  | The project's id, or its name.                              |
-| `new_runs`           | boolean \| null   | no   | Whether runs created from now on use auto mode.             |
-| `approve_everything` | boolean \| null   | no   | *With auto mode on, approve everything in each run* (below). |
-| `reviewer`           | Reviewer \| null  | no   | The reviewer; unchanged when left out.                      |
+- `allow_autopilot` — *Allow Autopilot for agents in this project*.
+- `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
+  or `unavailable` with why the project has none.
+- `runs` — each run of the project that has not ended: `id`, `number`, `task`, `link`, and `approval_mode`: `{"mode":
+  "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
+  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
 
-**`approve_everything`** (ORC-199, per project, off by default, kept on this computer only like the other auto mode
-settings): every run that uses auto mode answers from its start as *Approve everything in this run* would — worktree
-commands, reads (also outside the worktree, such as a dependency's checkout) and MCP calls run without a card,
-recorded as `auto_approved`; network commands, writes outside the worktree, secrets, installs, destructive and unread
-commands still ask, and the reviewer still reviews them. The runner reads it at each request, so turning it or a run's
-auto mode off stops it from the next request; a run's own *Stop* wins over it. Turning it on also needs *Let automation
-change agent permissions* (`person_only` otherwise); turning it off alone needs no gate.
+### `set_allow_autopilot` — changes data · person only to turn on
 
-**Reviewer**: `connection` (string | null — an agent connection: Claude Code, Codex, or a native one on the Anthropic
-API; left out = the default reviewer, the first Claude Code connection with Haiku 4.5), `model` (string | null —
-the connection's default when left out), `effort` (string | null).
+Turns the project's *Allow Autopilot for agents in this project* on or off. `false` is always taken: every agent of
+the project then runs as Manual. `true` is refused as `person_only` whatever automation may do: only a person allows
+Autopilot, in Project settings › Runs (asking for it while it is on already changes nothing). Parameters: `project`,
+`allow_autopilot` (boolean) — both required. Answers as `get_approvals`.
+
+### `set_reviewer` — changes data · gate AA, and AP for another reviewer
+
+Chooses the reviewer Manual asks before the person. Refused as `automation_not_allowed` unless AA is on; a reviewer
+other than the current one also needs AP (`person_only`), and one on another account says so among the reasons.
+Answers as `get_approvals`.
+
+| Parameter    | Type           | Req. | Description                                                                                                   |
+|--------------|----------------|------|---------------------------------------------------------------------------------------------------------------|
+| `project`    | string         | yes  | The project's id, or its name.                                                                                |
+| `connection` | string \| null | no   | An agent connection: Claude Code, Codex, or a native one on the Anthropic API; left out = the default reviewer, the first Claude Code connection with Haiku 4.5. |
+| `model`      | string \| null | no   | A model of that connection; its default when left out.                                                        |
+| `effort`     | string \| null | no   | An effort the model takes; the connection's default when left out.                                            |
+
+### Retired: `get_auto_mode`, `set_auto_mode`, `set_run_auto_mode`
+
+Auto mode was replaced by approval modes. For one release these names stay listed, change nothing and answer the
+error `retired`, whose message names the tool to use instead: `get_auto_mode` → `get_approvals`; `set_auto_mode` →
+`set_allow_autopilot` and `set_reviewer` (*New runs use auto mode* and *approve everything in each run* are gone: a
+profile's approval mode and the project's *Allow Autopilot* take their place); `set_run_auto_mode` → `set_run_manual`.
 
 ---
 
@@ -310,9 +329,13 @@ Refusals: `run_merged`, `worktree_removed`, `worktree_in_merge`, `run_not_ended`
 `step_cannot_write`, `no_writing_step`, `integration_running`, `automation_not_allowed`. Decisions are recorded as
 automation's.
 
-### `set_run_auto_mode` — changes data · gate AA
+### `set_run_manual` — changes data
 
-Turns one run's auto mode on or off. Parameters: `project`, `run`, `enabled` (boolean) — all required.
+Switches one run to Manual for itself, as its status line's *Switch to Manual for this run* does: its agents'
+requests no longer go through Autopilot but through the profile's allowed commands, the reviewer, then the person. A
+narrowing, so always taken, whatever the person's switches; a run never goes back to Autopilot. Refused as `run_ended`
+for a run that ended. Parameters: `project`, `run` — both required. Answers the run's `id`, `number` and
+`approval_mode` (as `get_approvals` gives it).
 
 ### `remove_worktree` — changes data
 
