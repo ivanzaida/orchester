@@ -80,7 +80,7 @@ fn run_status(run: &RunStatus) -> Result<CachedRunStatus, SharingError> {
   })
 }
 
-fn limits(limits: &SharedLimits) -> Result<TaskLimits, SharingError> {
+pub fn limits(limits: &SharedLimits) -> Result<TaskLimits, SharingError> {
   let budget = limits
     .budget_tokens
     .map(TokenBudget::new)

@@ -116,8 +116,8 @@ The design describes more than this version implements. The following are shown 
 - A workflow-status picker on the task page or in the form (the board moves tasks between statuses); creating tags in
   the window and *Manage tags* (existing tags are toggled on the board; new ones only over MCP); Blocked / blocked-by
   fields (over MCP only).
-- The run's *Approvals* section (changing a run's permissions or auto mode in the window — over MCP:
-  `set_run_auto_mode`).
+- The run's *Approvals* section (changing a run's permissions, or switching it to Manual, in the window — over MCP:
+  `set_run_manual`).
 - *Always allow…* on approval cards; a per-category approval policy.
 - Run artifacts other than step reports (the Summary's *Output* lists the reports); *Ask agent* on the Ready card (use
   *Send follow-up*); the Conversation's step rail, filter and search.

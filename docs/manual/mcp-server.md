@@ -111,10 +111,12 @@ automation may do; nothing over MCP or synthetic input can flip them:
 
 | Switch | Off by default; when off… |
 |---|---|
-| **Let automation answer approvals** (AA) | `decide_approval`, `decide_plan`, `answer_question`, `set_auto_mode`, `set_run_auto_mode`, `continue_run`'s retry/return/accept/resolve and `raise_limits`/`raise_step_budget`, `update_project_limits` raising or removing the daily budget, `complete_run` with `anyway`, and profiles that approve automatically are refused as `automation_not_allowed`. Auto mode never stands in for it. |
-| **Let automation change agent permissions** (AP) | Every *widening* of what agents may do is refused as `person_only`: broader profile permissions, MCP servers added/widened/turned on, a CLI program not found on the search path, non-harmless environment variables, running a CLI on an API provider, another account, new command tools or tool program changes, publishing pipelines that are weaker or new, publishing instructions/skills/re-worded profiles, turning repository agent files on, moving a task to another pipeline. **Narrowing is always allowed.** |
+| **Let automation answer approvals** (AA) | `decide_approval`, `decide_plan`, `answer_question`, `set_reviewer`, `continue_run`'s retry/return/accept/resolve and `raise_limits`/`raise_step_budget`, `update_project_limits` raising or removing the daily budget, `complete_run` with `anyway`, and profiles that approve automatically or are set to Autopilot are refused as `automation_not_allowed`. Neither Autopilot nor the reviewer stands in for it. |
+| **Let automation change agent permissions** (AP) | Every *widening* of what agents may do is refused as `person_only`: broader profile permissions (a profile set to Autopilot included), another reviewer, MCP servers added/widened/turned on, a CLI program not found on the search path, non-harmless environment variables, running a CLI on an API provider, another account, new command tools or tool program changes, publishing pipelines that are weaker or new, publishing instructions/skills/re-worded profiles, turning repository agent files on, moving a task to another pipeline. **Narrowing is always allowed.** |
 
-Further person-only switches concern the Orchestrator chat (see [orchestrator-chat.md](orchestrator-chat.md)).
+Allowing Autopilot in a project (`set_allow_autopilot` true) is a person's alone, whatever these switches say: it is
+always `person_only` over MCP. Turning it off and switching a run to Manual (`set_run_manual`) are narrowings, always
+taken. Further person-only switches concern the Orchestrator chat (see [orchestrator-chat.md](orchestrator-chat.md)).
 
 ### The input gate (applied to every call, in order)
 

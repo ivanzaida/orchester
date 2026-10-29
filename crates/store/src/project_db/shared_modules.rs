@@ -174,7 +174,7 @@ fn rekey(transaction: &Transaction<'_>, local: ModuleId, shared: ModuleId) -> Re
   Ok(())
 }
 
-fn write(transaction: &Transaction<'_>, cached: &[CachedModule]) -> Result<(), StoreError> {
+pub(super) fn write(transaction: &Transaction<'_>, cached: &[CachedModule]) -> Result<(), StoreError> {
   // A name can pass from one module to another between two reads: each module's name is set aside first.
   for module in cached {
     transaction.execute(

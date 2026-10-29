@@ -24,6 +24,13 @@ pub struct Agents {
 }
 impl Agents {
   pub fn new(connection: bool) -> Self {
+    Self::with(connection.then_some(CODEX_VERSION))
+  }
+  /// The project with a Codex connection whose last check found `version`, the one Autopilot needs or newer.
+  pub fn on_codex(version: &str) -> Self {
+    Self::with(Some(version))
+  }
+  fn with(codex_version: Option<&str>) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data::at(
@@ -33,9 +40,9 @@ impl Agents {
     let launch = data.launch();
     let project = data.add_kontur(launch.workspace().expect("workspace"));
     let root = project.repo_root;
-    if connection {
+    if let Some(version) = codex_version {
       let mut db = ProjectDb::open(&root).expect("database");
-      db.create_connection(&codex(&root)).expect("connection");
+      db.create_connection(&codex(&root, version)).expect("connection");
     }
     Self {
       window: Window::of(data, launch),
@@ -164,7 +171,9 @@ pub fn changed(profile: &AgentProfile) -> AgentProfile {
   .with_permissions(profile.permissions().clone())
   .with_mcp_servers(profile.mcp_servers().clone())
 }
-fn codex(root: &std::path::Path) -> AgentConnection {
+/// The Codex version `Agents::new` checks: older than Autopilot needs (`CODEX_AUTOPILOT`).
+const CODEX_VERSION: &str = "0.139.0";
+fn codex(root: &std::path::Path, version: &str) -> AgentConnection {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Test Codex").expect("name"),
@@ -177,7 +186,7 @@ fn codex(root: &std::path::Path) -> AgentConnection {
     .record_check(ConnectionCheck {
       at: Timestamp::now(),
       result: CheckResult::Available {
-        version: "0.139.0".into(),
+        version: version.into(),
         sign_in: SignIn::SignedIn,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,

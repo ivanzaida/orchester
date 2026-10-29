@@ -184,8 +184,34 @@
           "untitled": "Allow Autopilot for this profile?",
           "reason": "Autopilot approves this agent’s tool requests in the worktree without asking you."
         },
+        "notAllowed": {
+          "title": "Not allowed in {{project}}",
+          "hint": "{{project}} doesn’t allow Autopilot, so {{profile}}’s runs there use Manual. The choice stays for projects that allow it.",
+          "untitled": "{{project}} doesn’t allow Autopilot, so this profile’s runs there use Manual. The choice stays for projects that allow it."
+        },
+        "usedIn": {
+          "title": "Used in {{project}}",
+          "hint": "What {{profile}}’s runs use in {{project}} now: allowed commands run at once; anything else goes to the reviewer, then to you.",
+          "untitled": "What this profile’s runs use in {{project}} now: allowed commands run at once; anything else goes to the reviewer, then to you."
+        },
+        "openSettings": "Open Project settings › Runs",
         "change": "Approvals · {{from}} → {{to}}",
         "waiting": "Approvals · {{from}} → {{to}} · waits for you to allow it"
+      }
+    },
+    "enforcement": {
+      "approvalMode": {
+        "title": "Approval mode",
+        "line": "{{mode}} · {{how}}",
+        "autopilot": "Orchester answers every request; {{cli}}’s own prompt is off",
+        "manual": "Orchester answers: allowed list, then the reviewer, then you",
+        "native": "Orchester answers every request; it runs each tool call itself",
+        "cantEnforce": "Can’t hand its requests to Orchester · runs as Manual until {{cli}} is updated",
+        "versionUnknown": "No check has found its version · runs as Manual until {{cli}} is checked",
+        "cli": {
+          "claudeCode": "Claude Code",
+          "codex": "Codex"
+        }
       }
     },
     "whenAsked": "When the agent asks",
@@ -249,7 +275,6 @@
     "mcpCount": "{{selected}} of {{total}} servers",
     "mcpSelection": "{{selected}} of {{total}}",
     "mcpLoading": "Only selected, enabled servers available to this connection are loaded.",
-    "approvalMechanism": "Orchester · requests go to Needs you",
     "approvalsAsk": "MCP actions requiring approval ask you",
     "approvalsAuto": "Eligible requests are approved automatically",
     "approvalsDefault": "The connection’s approval rules apply",

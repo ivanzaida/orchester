@@ -142,15 +142,15 @@ fn domain_profiles_and_the_reviewer_move_to_another_account_only_when_a_person_l
     .workspace
     .set_automation_answers_approvals(true)
     .expect("the setting is saved");
-  let reviewer = json!({ "project": "Kontur", "reviewer": { "connection": "Claude · Lab" } });
-  let refused = served.refused("set_approval_settings", &reviewer);
+  let reviewer = json!({ "project": "Kontur", "connection": "Claude · Lab" });
+  let refused = served.refused("set_reviewer", &reviewer);
   assert_eq!(
     refused["code"], "person_only",
     "the reviewer on another account: {refused}"
   );
   served.let_automation_widen(true);
   served.ok("save_profile_draft", &moved);
-  served.ok("set_approval_settings", &reviewer);
+  served.ok("set_reviewer", &reviewer);
 }
 
 /// So the Orchestrator chat can say how much quota is left: each account's latest plan limits reading, from a read or a

@@ -220,8 +220,9 @@ fixed address instead (see *The new app's MCP server* below).
   after a step's budget, `resume` after the daily budget, `allow_retry` or `return_to` with `step` and
   `note` after a step used up its retries or broke again; every value is given, read with the page's
   rules; refused with `not_stopped_at_limit`, `choice_not_offered`, `invalid_limit`, `group_budget`,
-  `step_not_offered` or `task_blocked`), `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
-  see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
+  `step_not_offered` or `task_blocked`), `set_run_manual`, `get_approvals`, `set_allow_autopilot` and
+  `set_reviewer` (approval modes, see below; auto mode's `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode`
+  answer `retired` for one release), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
   `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
@@ -619,8 +620,11 @@ with the request: the activity marks *approved by auto mode*, and under the row,
 and the conversation's card a line of its own says what auto mode did, the reviewer's reason quoted on
 one line (cut at 200 characters, line breaks and double quotation marks removed), never inside a mark or
 chip. The run's Approvals count *Approved by auto mode* and, once the person decided, *Auto mode asked
-you*. `get_auto_mode` reads a project's setting and reviewer; `set_auto_mode` (new runs, reviewer) and
-`set_run_auto_mode` change them only while *Let automation answer approvals* is on; `list_approvals`
+you*. Approval modes (`docs/design/approval-modes.md`) replaced the auto mode switches: `get_approvals`
+reads a project's *Allow Autopilot*, its reviewer and each running run's mode with why; `set_allow_autopilot`
+turns Autopilot off for anyone and on for a person only (`person_only` over MCP); `set_reviewer` needs *Let
+automation answer approvals* (and *change agent permissions* for another reviewer); `set_run_manual` is always
+taken; `get_auto_mode`, `set_auto_mode` and `set_run_auto_mode` answer `retired`, naming these. `list_approvals`
 carries what auto mode did with each request and which model reviewed it.
 Not done yet: turning auto mode on while a request waits does not review that request.
 

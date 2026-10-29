@@ -48,7 +48,7 @@ queue. Set with the *Priority* chip of New/Edit task, on the board (card menu, b
 rows are by priority), or over MCP.
 
 **Story points.** 1, 2, 3, 5, 8, 13, 21. Shown as "5 pt" (set by a person) or "~5 pt" (Orchester's estimate). With
-*Let Orchester estimate story points* on (a per-project switch in Project settings › Runs › Estimates), Orchester estimates new and changed tasks using auto mode's reviewer model
+*Let Orchester estimate story points* on (a per-project switch in Project settings › Runs › Estimates), Orchester estimates new and changed tasks using the reviewer's model
 and the project's merged tasks as examples; a person's value always wins. Points are effort sizes, not money or
 tokens: no budget reads them. Delivery metrics show them.
 
@@ -200,7 +200,7 @@ it. Orchester never signs in for you: it opens a terminal running the CLI's own 
 
 **API provider.** A Claude Code or Codex connection can *Run on: An API provider* instead of its own sign-in: a base
 URL (Claude Code: Anthropic Messages API; Codex: OpenAI Responses API), an API key from a project secret, and models
-typed by hand. Only on the Default account; no plan limits are read; auto mode's reviewer does not run on it.
+typed by hand. Only on the Default account; no plan limits are read; the reviewer does not run on it.
 
 **Plan limits.** How much of each account's 5-hour and weekly windows is used. Codex reports with each turn and is
 also read on its own; Claude Code reports during a turn or on *Check now*. A run whose account hits its limit stops
@@ -265,7 +265,15 @@ There is no time-out: the agent's active time stops while it waits.
 Orchester answers commands its classifier knows to read or stay in the worktree, and MCP tool calls; it never
 approves network, writes outside the worktree, credential reads, installs, history rewrites or unparsed commands.
 
-**Auto mode.** A separate **reviewer model** judges the requests the rules leave to a person and approves only what
+**Approval mode.** Each agent profile is **Autopilot** or **Manual** (the default). Autopilot approves the agent's
+tool requests at once, except work outside the run's worktree, its Sources and the agent's temp folders, pushes to a
+remote and refs other than the run's branch, which still come to the person. Manual runs the profile's allowed
+commands, asks the project's **reviewer** about the rest, and leaves what it denies or is unsure about to the person.
+A step is in Autopilot only when its profile says so, the project allows it (*Allow Autopilot for agents in this
+project*, Project settings › Runs, off until a person turns it on) and the run was not switched to Manual; a run can
+switch itself to Manual, never back. Questions, plans, limits and conflicts always come to the person.
+
+**Reviewer.** A separate model judges the requests a Manual step's rules leave to a person and approves only what
 clearly serves the task. Hard rules go to the person first (credential reads, unparsed parts, history rewrites,
 deletes outside the worktree, anything outside the step's permissions); the reviewer fails closed. Its tokens count
 toward the run's and the daily budget. It never answers `run_check` or `start_qa_app`.

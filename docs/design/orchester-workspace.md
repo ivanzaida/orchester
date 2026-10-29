@@ -1360,7 +1360,7 @@ an estimate never conflicts with a person's edit.
   from, off until a person turned it on, the person's decision of 2026-10-20), saving a task (form, Create & run, `create_task`,
   `update_task`) asks the project's runner (`EstimateTask`, IPC protocol 30). The runner asks nothing for a task with a
   person's points, or whose automation points or a recorded request were made from the same brief and criteria (a title
-  change alone asks nothing). Otherwise it asks auto mode's reviewer's connection and model (as `get_auto_mode` names
+  change alone asks nothing). Otherwise it asks auto mode's reviewer's connection and model (as `get_approvals` names
   them), in the reviewer's isolation, with the title, brief, criteria, the project's merged tasks most like it with their
   points and actual effort, and the median effort per points value. A request that asked a model is recorded with its
   tokens (`estimate_usage`): its own kind of usage, counted toward the daily budget and named under `estimates` in

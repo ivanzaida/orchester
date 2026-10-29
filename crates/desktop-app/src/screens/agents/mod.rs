@@ -146,6 +146,8 @@ impl Component for AgentsScreen {
       outside.of(Outside::Connections),
       outside.of(Outside::Pipelines),
       outside.of(Outside::Instructions) + outside.of(Outside::Skills),
+      // The project's Allow Autopilot, which a profile set to Autopilot reads (02e).
+      outside.of(Outside::AutoMode),
       self.profiles.count(&project.feed),
       // The profiles' active uses: the runs that run them start and end.
       project.feed.states.get(),
