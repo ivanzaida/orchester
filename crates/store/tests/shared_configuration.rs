@@ -96,9 +96,14 @@ fn shared_configuration_caches_a_version_with_both_bodies() {
   assert_eq!(stored.number(), VersionNumber::FIRST);
   assert_eq!(stored.body(), &version.local_body);
   assert_eq!(stored.published_at(), at(20));
-  assert_eq!(db.latest_version::<Instruction>(id).expect("latest"), Some(stored.clone()));
   assert_eq!(
-    db.cached_version::<Instruction>(id, VersionNumber::FIRST).expect("read").as_ref(),
+    db.latest_version::<Instruction>(id).expect("latest"),
+    Some(stored.clone())
+  );
+  assert_eq!(
+    db.cached_version::<Instruction>(id, VersionNumber::FIRST)
+      .expect("read")
+      .as_ref(),
     Some(&version)
   );
 
@@ -115,11 +120,17 @@ fn shared_configuration_caches_a_version_with_both_bodies() {
   assert_eq!(read.local_body, rebound);
   assert_eq!(read.server_body, version.server_body);
   assert_eq!(
-    db.latest_version::<Instruction>(id).expect("latest").expect("a version").body(),
+    db.latest_version::<Instruction>(id)
+      .expect("latest")
+      .expect("a version")
+      .body(),
     &rebound
   );
   assert_eq!(
-    db.version::<Instruction>(id, VersionNumber::FIRST).expect("version").expect("v1").id(),
+    db.version::<Instruction>(id, VersionNumber::FIRST)
+      .expect("version")
+      .expect("v1")
+      .id(),
     stored.id()
   );
 }
@@ -127,13 +138,14 @@ fn shared_configuration_caches_a_version_with_both_bodies() {
 #[test]
 fn shared_configuration_keeps_a_version_published_here_and_names_its_publisher_once() {
   let (repo, mut db, _run, _execution) = started_run();
-  let builder = db.resources(orchester_core::resource::ResourceKind::AgentProfile).expect("profiles")[0].id();
-  let published = db
-    .latest_version::<AgentProfile>(builder)
-    .expect("latest")
-    .expect("v1");
+  let builder = db
+    .resources(orchester_core::resource::ResourceKind::AgentProfile)
+    .expect("profiles")[0]
+    .id();
+  let published = db.latest_version::<AgentProfile>(builder).expect("latest").expect("v1");
   assert_eq!(
-    db.cached_version::<AgentProfile>(builder, VersionNumber::FIRST).expect("read"),
+    db.cached_version::<AgentProfile>(builder, VersionNumber::FIRST)
+      .expect("read"),
     None,
     "a version published here is not cached until the server confirms it"
   );
@@ -161,7 +173,11 @@ fn shared_configuration_keeps_a_version_published_here_and_names_its_publisher_o
     .expect("cached");
   assert_eq!(read.publisher, version.publisher);
   let raw = database(repo.path());
-  assert!(raw.execute("UPDATE resource_versions SET publisher_name = 'Taras'", []).is_err());
+  assert!(
+    raw
+      .execute("UPDATE resource_versions SET publisher_name = 'Taras'", [])
+      .is_err()
+  );
   assert!(raw.execute("UPDATE resource_versions SET body = '{}'", []).is_err());
 }
 
@@ -225,7 +241,10 @@ fn shared_configuration_sets_and_changes_a_binding() {
 #[test]
 fn shared_configuration_marks_a_resource_shared() {
   let (repo, mut db, _run, _execution) = started_run();
-  let builder = db.resources(orchester_core::resource::ResourceKind::AgentProfile).expect("profiles")[0].id();
+  let builder = db
+    .resources(orchester_core::resource::ResourceKind::AgentProfile)
+    .expect("profiles")[0]
+    .id();
   assert_eq!(db.resource_sharing(builder).expect("local"), None);
 
   db.set_resource_sharing(builder, Some(ResourceSharing::Shared(revision(3))))
@@ -260,11 +279,11 @@ fn shared_configuration_marks_a_resource_shared() {
 #[test]
 fn shared_configuration_migration_runs_forward() {
   let (repo, db, _run, _execution) = started_run();
-  let builder = db.resources(orchester_core::resource::ResourceKind::AgentProfile).expect("profiles")[0].id();
-  let published = db
-    .latest_version::<AgentProfile>(builder)
-    .expect("latest")
-    .expect("v1");
+  let builder = db
+    .resources(orchester_core::resource::ResourceKind::AgentProfile)
+    .expect("profiles")[0]
+    .id();
+  let published = db.latest_version::<AgentProfile>(builder).expect("latest").expect("v1");
   let current: u32 = database(repo.path())
     .pragma_query_value(None, "user_version", |row| row.get(0))
     .expect("version");

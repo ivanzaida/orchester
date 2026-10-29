@@ -65,9 +65,10 @@ impl ProjectDb {
   /// Marks resource `id` as the server's or as kept local, or clears the mark (`None`) when the project is local again.
   pub fn set_resource_sharing(&mut self, id: ResourceId, sharing: Option<ResourceSharing>) -> Result<(), StoreError> {
     let (text, revision) = match sharing {
-      Some(ResourceSharing::Shared(revision)) => {
-        (Some("shared"), Some(tokens_column("resource revision", revision.get())?))
-      }
+      Some(ResourceSharing::Shared(revision)) => (
+        Some("shared"),
+        Some(tokens_column("resource revision", revision.get())?),
+      ),
       Some(ResourceSharing::NotShared) => (Some("not_shared"), None),
       None => (None, None),
     };
