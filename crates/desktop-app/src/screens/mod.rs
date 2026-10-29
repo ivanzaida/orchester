@@ -62,6 +62,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::RotateToken) => settings::asking_rotation(ctx),
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General),
     Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
+    Ok(Route::Browser) => settings::screen(ctx, settings::SettingsTab::Browser),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
     Ok(Route::Invite(target)) => settings::invite(ctx, target),

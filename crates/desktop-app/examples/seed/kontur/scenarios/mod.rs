@@ -5,6 +5,7 @@ mod agents;
 mod agents_cases;
 mod agents_library;
 mod api_providers;
+mod browser;
 mod cards;
 mod changes;
 mod connections;
@@ -80,7 +81,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 51] = [
+pub const ALL: [Scenario; 54] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -120,6 +121,9 @@ pub const ALL: [Scenario; 51] = [
   Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),
+  Scenario::of("browser", browser::seed),
+  Scenario::of("browser-not-found", browser::not_found),
+  Scenario::of("browser-chosen", browser::chosen),
   Scenario::of("pull-requests", pull_requests::seed),
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),

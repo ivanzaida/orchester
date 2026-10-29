@@ -61,6 +61,7 @@ pub struct SettingGroup {
   title: Arc<str>,
   meta: Option<Arc<str>>,
   end: Option<Element>,
+  notice: Option<Element>,
   rows: Vec<Element>,
   note: Option<Arc<str>>,
 }
@@ -73,9 +74,17 @@ impl SettingGroup {
       title: title.into(),
       meta: None,
       end: None,
+      notice: None,
       rows: Vec::new(),
       note: None,
     }
+  }
+
+  /// A notice between the heading and the box, 4 further from the box (`Not found` `PzLrb` in `09b · … not found`
+  /// `NZECi`).
+  pub fn notice(mut self, notice: impl Into<Element>) -> Self {
+    self.notice = Some(notice.into());
+    self
   }
 
   /// A count or when it was read, after the title in 12 `text_muted` (`Count` `e8kTSZ`, `Meta` `F5yRK`).
@@ -149,11 +158,18 @@ impl From<SettingGroup> for Element {
         .clip()
         .with_children(cells)
     });
+    let notice = group.notice.map(|notice| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::new().bottom(SpacingSize::Xs))
+        .child(notice)
+    });
     Column::new()
       .id(group.id.to_string())
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(heading)
+      .with_children(notice)
       .with_children(rows)
       .with_children(group.note.map(|note| group_note(&format!("{}-note", group.id), &note)))
       .into()
@@ -173,6 +189,7 @@ pub fn group_note(id: &str, text: &str) -> Text {
 pub struct SettingRow {
   id: Arc<str>,
   label: Arc<str>,
+  detail: Option<Element>,
   hint: Option<(Arc<str>, HintTone)>,
   info: Option<Arc<str>>,
   lead: Option<Element>,
@@ -191,6 +208,7 @@ impl SettingRow {
     Self {
       id: id.into(),
       label: label.into(),
+      detail: None,
       hint: None,
       info: None,
       lead: None,
@@ -201,6 +219,13 @@ impl SettingRow {
       selected: false,
       opens: None,
     }
+  }
+
+  /// A value on a line of its own between the label and the hint, such as a program's path (`Path` `M2Pwq` in
+  /// `09 · Settings · Browser` `j3Lre`).
+  pub fn detail(mut self, detail: impl Into<Element>) -> Self {
+    self.detail = Some(detail.into());
+    self
   }
 
   /// One short line under the label.
@@ -267,8 +292,8 @@ impl SettingRow {
     self
   }
 
-  /// The label with its (i), and the hint under them.
-  fn text(&self, ctx: &mut Ctx) -> Column {
+  /// The label with its (i), its detail and the hint under them.
+  fn text(&mut self, ctx: &mut Ctx) -> Column {
     let label = Text::new(&self.label)
       .id(format!("{}-label", self.id))
       .variant(ExtraTypography::Strong.role())
@@ -295,6 +320,7 @@ impl SettingRow {
           .child(label)
           .with_children(info),
       )
+      .with_children(self.detail.take())
       .with_children(self.hint.as_ref().map(|(hint, tone)| {
         Text::new(hint)
           .id(format!("{}-hint", self.id))
@@ -304,7 +330,7 @@ impl SettingRow {
       }))
   }
 
-  pub fn render(self, ctx: &mut Ctx) -> Element {
+  pub fn render(mut self, ctx: &mut Ctx) -> Element {
     let text = self.text(ctx);
     let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SettingsSpacing::RowY.role());
     let padding = if self.dependent {

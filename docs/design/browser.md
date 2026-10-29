@@ -1,9 +1,10 @@
 # Browser for agents
 
 Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
-port and keep-running decisions (11, 12) the same day. P1 (the core rules, ORC-355) is built, and P2's first half
-(ORC-358: finding and starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map);
-the tools, the window and the settings are not yet.
+port and keep-running decisions (11, 12) the same day, and that the Browser window opens when an agent starts
+browsing by default (open question 2). P1 (the core rules, ORC-355) is built, P2's first half (ORC-358: finding and
+starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map), and Settings › Browser
+(ORC-369); the tools and the window are not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -153,11 +154,19 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
 - Other platforms: unavailable, saying that the browser is not supported there yet.
 - `orchester_exec::browser::find` (ORC-358). None found is `BrowserUnavailable`, shown as `browser_unavailable: no
   Chromium-based browser is installed: looked for … in …`.
-- A new Settings section *Browser* shows which one was found and lets the person choose another Chromium-based
-  browser's program. None found: the setting and the *Browser* window say so, and every browser tool answers
-  `browser_unavailable` with that reason (no silent gap, `AGENTS.md` rule 0). The section also shows the folder of
-  the browser profiles and the switch *Open the Browser window when an agent starts browsing* (off)
-  (`09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`).
+- Settings › *Browser* (ORC-369, `09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`) shows which one
+  was found, by its name and program, and lets the person choose another Chromium-based browser's program
+  (*Choose another program…*). A chosen program is taken by its name (`orchester_exec::browser::chosen`): on Windows
+  `msedge.exe`, `chrome.exe` (Chromium's under a folder named so) or `brave.exe`; on macOS the program of Google
+  Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
+  is refused under the row with the reason, and nothing changes. The choice is an application setting
+  (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser; a chosen
+  program that is gone later is unavailable with that reason, never passed over for the one installed.
+- None found: the section says so with what was looked for and where, how to fix it and *Look again*; the *Browser*
+  window will say the same, and every browser tool answers `browser_unavailable` with that reason (no silent gap,
+  `AGENTS.md` rule 0). The section also shows the folder of the browser profiles with Copy, and the switch *Open the
+  Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29), an application setting.
+  Until the window is built, the switch keeps the choice only, as the note under it says.
 
 ### Starting it and connecting
 
@@ -207,8 +216,8 @@ chrome `Window/Browser` `lfxcu` (title bar `Rc27N`, project switcher `u4BK9L`, t
 A secondary lurq window (`WindowOpener::open_with`, window name `browser`), one for the whole app. It opens from the
 run's Summary line *Browser · 2 tabs · localhost:5173, docs.rs › Show* (`10 · Run · Browser line` `RGeKO`) and
 from the status bar item *Browser 3 tabs* of the main window, which is there while the project's browser has tabs; both
-switch the window to that project and tab. It opens without taking focus when an agent's tab appears only if the
-person asked for that (setting); by default it opens only when the person opens it.
+switch the window to that project and tab. It also opens without taking focus when an agent starts browsing, unless
+the person turned that off (Settings › Browser, on by default: the person, 2026-10-29).
 
 ### Projects
 
@@ -320,6 +329,12 @@ person asked for that (setting); by default it opens only when the person opens 
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
+   - **P4b.** Done (ORC-369): Settings › Browser, with the program chosen there started by the runner. Tests:
+     `cargo test -p orchester-app --test settings_browser browser_`, `cargo test -p orchester-workspace --test
+     browser_settings`, `cargo test -p orchester-store --test browser_settings`, the chosen program in
+     `cargo test -p orchester-exec --test browser browser_` and `orchester-runner --test browser browser_`. QA:
+     the seed's scenarios `browser` (found), `browser-not-found` and `browser-chosen` (another program chosen),
+     whose browsers the QA app looks for in `browsers/` beside its data only.
 
 ## Not in scope
 
@@ -333,9 +348,11 @@ person asked for that (setting); by default it opens only when the person opens 
 
 Decided by the person on 2026-10-29: one browser profile per project (decision 3), read-only steps get the browser
 (decision 10), `browser_eval` is offered as a tool whose every call asks (decision 9), CDP over a port and not a pipe
-(decision 11), and the browser keeps running until the runner exits, with no idle stop (decision 12).
+(decision 11), the browser keeps running until the runner exits, with no idle stop (decision 12), and the Browser
+window opens when an agent starts browsing by default (formerly open question 2; the person turns it off in Settings ›
+Browser).
 
 1. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
-2. **Opening the window when an agent starts browsing**: off by default (this draft), or on?
+2. **Opening the window when an agent starts browsing**: decided, on by default (see above).
 3. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
    in lurq (a lurq change, `app-vs-lurq-scope`).
