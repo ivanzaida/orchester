@@ -26,6 +26,10 @@ const CHROMIUM: &str = "Chromium.app/Contents/MacOS/Chromium";
 #[cfg(target_os = "windows")]
 const CHROMIUM: &str = r"Chromium\Application\chrome.exe";
 #[cfg(target_os = "macos")]
+const EDGE: &str = "Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
+#[cfg(target_os = "windows")]
+const EDGE: &str = r"Microsoft\Edge\Application\msedge.exe";
+#[cfg(target_os = "macos")]
 const FIREFOX: &str = "Firefox.app/Contents/MacOS/firefox";
 #[cfg(target_os = "windows")]
 const FIREFOX: &str = r"Mozilla Firefox\firefox.exe";
@@ -165,6 +169,33 @@ fn browser_another_chromium_based_program_is_taken_and_kept() {
       orchester_exec::browser::chosen(&chromium).expect("Chromium")
     ),
     "kept in the application database"
+  );
+}
+
+#[test]
+fn browser_a_second_program_chosen_in_a_row_is_shown_as_taken() {
+  let mut page = Page::open(&[CHROME]);
+  let chromium = page.install("elsewhere", CHROMIUM);
+  let edge = page.install("elsewhere", EDGE);
+
+  page.choose(&chromium);
+  page.window.until("Chromium chosen", |window| {
+    window.text("settings-browser-found-text") == "Chromium"
+  });
+  page.choose(&edge);
+  page.window.until("Microsoft Edge chosen after Chromium", |window| {
+    window.text("settings-browser-found-text") == "Microsoft Edge"
+  });
+  assert_eq!(
+    page.window.text("settings-browser-program-path"),
+    edge.display().to_string()
+  );
+  assert_eq!(
+    page.workspace.browser_settings().expect("read").browser,
+    orchester_workspace::workspace::AgentsBrowser::Chosen(
+      orchester_exec::browser::chosen(&edge).expect("Microsoft Edge")
+    ),
+    "what Settings shows is what agents get"
   );
 }
 

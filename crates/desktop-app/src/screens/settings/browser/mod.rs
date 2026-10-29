@@ -25,7 +25,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_exec::browser::NotABrowser;
+use orchester_exec::browser::{BrowserProgram, NotABrowser};
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -60,13 +60,14 @@ struct Read(Arc<BrowserSettings>);
 
 impl DevtoolsInspectable for Read {}
 
-/// What came of *Choose another program…*.
+/// What came of *Choose another program…*. Each program taken is a different choice, so the section is read again
+/// after each, the second of two in a row too.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Choice {
   /// The picker closed without a program.
   Closed,
   /// The program is kept as agents' browser.
-  Taken,
+  Taken(BrowserProgram),
   /// The program is not a Chromium-based browser's: nothing changed.
   Refused(NotABrowser),
 }
@@ -150,7 +151,7 @@ fn choose_action(ctx: &mut Ctx, workspace: &Workspace) -> ChooseAction {
         return Ok(Choice::Closed);
       };
       match background::run(move || workspace.choose_browser_program(&program)).await? {
-        Ok(_) => Ok(Choice::Taken),
+        Ok(taken) => Ok(Choice::Taken(taken)),
         Err(ChooseBrowserError::NotABrowser(reason)) => Ok(Choice::Refused(reason)),
         Err(ChooseBrowserError::Store(error)) => {
           tracing::error!(%error, "the browser program chosen was not saved");
