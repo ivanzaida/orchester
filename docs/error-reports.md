@@ -33,8 +33,12 @@ which sent it: `app` or `runner`.
 - **The runner reports only when the app says so.** The runner never reads `orchester.db`. While the app's own
   client runs, every runner it starts gets the environment variables `ORCHESTER_ERROR_REPORTS` (the app's environment)
   and `ORCHESTER_ERROR_REPORTS_RELEASE` (the app's release); a runner started without them sends nothing, and the app
-  removes them from a runner's environment when it does not report. A runner keeps what it was started with until it
-  exits. Debug builds of the runner, a QA copy's among them, and the tests never report.
+  removes them from a runner's environment when it does not report. When the setting changes, the app tells every
+  running runner at once (`Runners::set_error_reports`, IPC `SetErrorReports`, protocol 33). Turned off, a runner sends
+  nothing more: the reports still waiting to leave are dropped, and only one already on its way can still arrive.
+  Turned on, it sends from then on. A runner that is starting is told once it is connected; one the app cannot reach
+  starts with the setting the next time. Debug builds of the runner, a QA copy's among them, and the tests never
+  report.
 - **No other data.** The client sends no default personal data (`send_default_pii` is off), no traces and no
   sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`, for the runner's reports
   too.

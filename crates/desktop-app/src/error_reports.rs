@@ -101,7 +101,7 @@ pub fn start(environment: Environment, workspace: Option<&Workspace>) -> Option<
   Some(guard)
 }
 
-/// What the runners the app starts once its client runs ([`start`]) are told (`Runners::send_error_reports`): the
+/// What the runners the app starts once its client runs ([`start`]) are told (`Runners::set_error_reports`): the
 /// same environment and [`RELEASE`], since a runner ships with the app.
 pub fn for_runners(environment: Environment) -> ErrorReports {
   ErrorReports::new(environment.name(), RELEASE).expect("an environment's name and the release are never empty")
