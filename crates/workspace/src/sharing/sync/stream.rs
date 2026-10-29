@@ -6,12 +6,18 @@
 use std::{path::Path, time::Duration};
 
 use orchester_api::{
-  Event, SharedTask,
+  Event, SharedResource, SharedTask, Versions,
   client::{EventStream, StreamEnd},
 };
-use orchester_core::id::TaskId;
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  resource::VersionNumber,
+};
 
-use super::apply::{self, Applied, Pages};
+use super::{
+  apply::{self, Applied, Pages},
+  config,
+};
 use crate::{
   background,
   sharing::{Schedule, SharingError, connection},
@@ -24,6 +30,13 @@ pub trait Source: Send + Sync {
 
   /// Reads `task` as the server has it now.
   fn task(&self, task: TaskId) -> impl Future<Output = Result<SharedTask, SharingError>> + Send;
+
+  /// Reads one page of `resource`'s versions after `after`, from v1 without it.
+  fn versions(
+    &self,
+    resource: ResourceId,
+    after: Option<VersionNumber>,
+  ) -> impl Future<Output = Result<Versions, SharingError>> + Send;
 
   /// The cache took a change from the stream.
   fn changed(&self);
@@ -127,10 +140,7 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
         let Some(pages) = pages.take() else {
           return Ending::Stream(StreamEnd::Unreadable);
         };
-        blocking(root, move |root| {
-          apply::snapshot(root, &pages, end.cursor).map(|()| Applied::Changed)
-        })
-        .await
+        snapshot(source, root, pages, end.cursor).await
       }
       event => blocking(root, move |root| apply::delta(root, &event)).await,
     };
@@ -138,6 +148,7 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
       Ok(Applied::Unchanged) => continue,
       Ok(Applied::Changed) => Ok(()),
       Ok(Applied::Read { task, cursor }) => read_again(source, root, task, cursor).await,
+      Ok(Applied::Published { resource, cursor }) => published(source, root, *resource, cursor).await,
       Err(error) => Err(error),
     };
     match result {
@@ -147,6 +158,18 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
       Err(error) => return Ending::Cache(error),
     }
   }
+}
+
+/// Keeps the snapshot's resources with their versions, then takes the snapshot at `cursor`: a stream that breaks
+/// before takes the snapshot again on its next connect.
+async fn snapshot(source: &impl Source, root: &Path, pages: Pages, cursor: u64) -> Result<Applied, SharingError> {
+  for resource in pages.resources() {
+    config::sync(source, root, resource.clone()).await?;
+  }
+  blocking(root, move |root| {
+    apply::snapshot(root, &pages, cursor).map(|()| Applied::Changed)
+  })
+  .await
 }
 
 /// Reads `task` again and writes it with `cursor`; a task the server no longer has only moves the cursor.
@@ -160,7 +183,18 @@ async fn read_again(source: &impl Source, root: &Path, task: TaskId, cursor: u64
   }
 }
 
-async fn blocking<T: Send + 'static>(
+/// Keeps the published `resource` with its new versions, then moves the cursor to `cursor`.
+async fn published(
+  source: &impl Source,
+  root: &Path,
+  resource: SharedResource,
+  cursor: u64,
+) -> Result<(), SharingError> {
+  config::sync(source, root, resource).await?;
+  blocking(root, move |root| apply::skip(root, cursor)).await
+}
+
+pub(super) async fn blocking<T: Send + 'static>(
   root: &Path,
   work: impl FnOnce(&Path) -> Result<T, SharingError> + Send + 'static,
 ) -> Result<T, SharingError> {

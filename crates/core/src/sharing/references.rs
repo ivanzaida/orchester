@@ -56,6 +56,14 @@ pub enum ConnectionRole {
 }
 
 impl ConnectionRole {
+  const ALL: [Self; 5] = [
+    Self::Agent(AgentProvider::CodexCli),
+    Self::Agent(AgentProvider::ClaudeCodeCli),
+    Self::Agent(AgentProvider::AnthropicApi),
+    Self::Agent(AgentProvider::OpenAiApi),
+    Self::GitHub,
+  ];
+
   pub const fn of(kind: &ConnectionKind) -> Self {
     match kind {
       ConnectionKind::Agent(provider) => Self::Agent(*provider),
@@ -72,6 +80,11 @@ impl ConnectionRole {
       Self::Agent(AgentProvider::OpenAiApi) => "openai_api",
       Self::GitHub => "github",
     }
+  }
+
+  /// The role a reference carries as [`Self::as_str`] writes it; `None` for one this version does not know.
+  pub fn parse(role: &str) -> Option<Self> {
+    Self::ALL.into_iter().find(|known| known.as_str() == role)
   }
 }
 
