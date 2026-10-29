@@ -1,8 +1,7 @@
 # Approval modes: Autopilot or Manual per agent profile
 
 Designed for ORC-342 (2026-10-29) from the person's decision of the same day; the implementation is ORC-341. The
-design source is the desktop redesign file `orchester.pen` (Pencil document `87147a2b-…/orchester.pen`), read and
-changed only through the pencil-design MCP server. Every name, path, command and time in the frames is illustrative
+design source is `crates/desktop-app/design/orchester.pen`, read and changed only through the pencil MCP server. Every name, path, command and time in the frames is illustrative
 (Kontur, Builder, Fixer, KON-12, dana), never shipped data. Exports at scale 1: `.tmp/design/ORC-342/<node id>.png`.
 
 ## Decisions
