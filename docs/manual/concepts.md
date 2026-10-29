@@ -48,7 +48,7 @@ queue. Set with the *Priority* chip of New/Edit task, on the board (card menu, b
 rows are by priority), or over MCP.
 
 **Story points.** 1, 2, 3, 5, 8, 13, 21. Shown as "5 pt" (set by a person) or "~5 pt" (Orchester's estimate). With
-*Let Orchester estimate story points* on (a per-project switch in Project settings › Runs › Estimates), Orchester estimates new and changed tasks using the reviewer's model
+*Let Orchester estimate story points* on (a per-project switch in Project settings › Runs › Estimates), Orchester estimates new and changed tasks using the reviewer's model (Runs › Approvals)
 and the project's merged tasks as examples; a person's value always wins. Points are effort sizes, not money or
 tokens: no budget reads them. Delivery metrics show them.
 

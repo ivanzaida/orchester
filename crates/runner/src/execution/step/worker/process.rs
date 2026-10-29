@@ -58,7 +58,7 @@ impl Worker {
           Some(ProcessEvent::Exited(exit)) => return self.finish(watch, &exit),
           None => return self.finish(watch, &ProcessExit::WaitFailed { reason: String::new() }),
         },
-        _ = flush.tick() => self.flush(&mut watch)?,
+        _ = flush.tick() => self.tick(&mut watch).await?,
         decision = self.decisions.recv(), if deciding => match decision {
           Some(decision) => self.decide(&mut watch, decision).await?,
           None => deciding = false,
@@ -74,12 +74,7 @@ impl Worker {
         // Ending the agent ends its prompt too: once it is stopping, a closed prompt is expected.
         closed = watch.relay_closed(), if watch.stop.is_none() => self.relay_closed(&mut watch, closed)?,
         stop = self.stops.recv(), if listening => match stop {
-          Some(stop) => {
-            if self.receive_stop(&mut watch, stop).await? {
-              grace.as_mut().reset(Instant::now() + TURN_GRACE);
-              grace_armed = true;
-            }
-          }
+          Some(stop) => grace_armed |= self.stop_with_grace(&mut watch, stop, grace.as_mut()).await?,
           None => listening = false,
         },
         () = &mut grace, if grace_armed && watch.stop.is_none() => {
@@ -88,6 +83,21 @@ impl Worker {
         }
       }
     }
+  }
+
+  /// Carries out `stop`; when its turn now has [`TURN_GRACE`] to end on its own, `grace` ends it then. Whether it
+  /// does.
+  async fn stop_with_grace(
+    &mut self,
+    watch: &mut Watch,
+    stop: Stop,
+    grace: std::pin::Pin<&mut tokio::time::Sleep>,
+  ) -> Result<bool, StoreError> {
+    let armed = self.receive_stop(watch, stop).await?;
+    if armed {
+      grace.reset(Instant::now() + TURN_GRACE);
+    }
+    Ok(armed)
   }
 
   /// A line the CLI wrote: what it says, the messages sent now it can take, and a stop that waited for it.

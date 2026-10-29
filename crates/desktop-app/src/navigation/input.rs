@@ -1,5 +1,6 @@
 //! The window's input for history and tabs, acting on the active tab. The mouse's side buttons go back
-//! and forward on release, as a browser does (the shell reports them as `Other(4)` and `Other(5)`). The
+//! and forward on release, as a browser does (the shell reports them as `Other(4)` and `Other(5)`), and so
+//! does a trackpad swipe between pages that no scrolling list under the pointer took. The
 //! key listener is the last node of the tree: keyboard events visit nodes from the root down in order,
 //! so every control has seen a key before it and can claim it with `prevent_default`. The window's title
 //! bar is not among them: lurq hands keys to the chrome's overlay, where it lies, after the page and this
@@ -11,7 +12,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     component::DevtoolsInspectable,
-    events::{KeyboardEvent, MouseButton, MouseEvent},
+    events::{HistoryDirection, HistorySwipeEvent, KeyboardEvent, MouseButton, MouseEvent},
   },
   components::Column,
   node::{Element, dimension::Dimension},
@@ -64,7 +65,7 @@ impl FirstKeys {
 /// `content` filling the window, with the history and tab input around it while `active`; none while the
 /// closing panel holds the window. `first` takes keys before all of it.
 pub fn window_input(navigation: &Navigation, content: Element, (active, first): (bool, FirstKeys)) -> Column {
-  let (mouse, keys) = (navigation.clone(), navigation.clone());
+  let (mouse, swipe, keys) = (navigation.clone(), navigation.clone(), navigation.clone());
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
@@ -83,6 +84,16 @@ pub fn window_input(navigation: &Navigation, content: Element, (active, first): 
         _ => return,
       }
       event.prevent_default();
+    })
+    .on_history_swipe(move |event: HistorySwipeEvent| {
+      if !active || event.default_prevented() {
+        return;
+      }
+      match event.direction {
+        HistoryDirection::Back => swipe.back(),
+        HistoryDirection::Forward => swipe.forward(),
+      }
+      event.stop_propagation();
     })
     .child(content)
     .child(Column::new().on_key_down(move |event: KeyboardEvent| {
