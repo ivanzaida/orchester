@@ -210,6 +210,11 @@ impl McpServerSelection {
     self.0.contains(&server)
   }
 
+  /// Whether this selection chooses a server `base` does not, which widens what agents may do.
+  pub fn adds_to(&self, base: &Self) -> bool {
+    self.0.iter().any(|server| !base.contains(*server))
+  }
+
   /// The servers of `servers` this selection gives an agent (chosen and on) that list tools to run
   /// without asking, in `servers`' order, with those tools.
   pub fn exempt_tools<'a>(&self, servers: &'a [McpServer]) -> Vec<(&'a McpServerName, &'a ExemptTools)> {

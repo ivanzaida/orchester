@@ -15,8 +15,9 @@ use rusqlite::{Connection, params};
 
 use self::support::{copied_at_version, started_run};
 
-/// The migrations from approval modes on: auto mode's settings read once, then when and by whom a run was switched.
-const APPROVAL_MODE_MIGRATIONS: u32 = 2;
+/// The migrations from approval modes on: auto mode's settings read once, the shared configuration's, then when and by
+/// whom a run was switched.
+const APPROVAL_MODE_MIGRATIONS: u32 = 3;
 
 fn database(repo: &Path) -> PathBuf {
   repo.join(".orchester").join("orchester.db")
