@@ -210,3 +210,10 @@ zstd = { version = "0.13", default-features = false }
 # dependency but not the workspace crates, which stay debuggable.
 [profile.dev.package."*"]
 opt-level = 2
+
+# Line tables only, the least debug info that still gives GlitchTip a frame's function, file and line from the
+# uploaded debug files. On Windows (MSVC) it lands in a `.pdb` beside each program, which no installer or zip
+# packs; on macOS `packed` keeps it out of the binaries too, in a `.dSYM` beside them.
+[profile.release]
+debug = "line-tables-only"
+split-debuginfo = "packed"

@@ -14,7 +14,10 @@ use orchester_report::ReportScrubber;
 use orchester_workspace::workspace::Workspace;
 use sentry::{
   ClientInitGuard, ClientOptions,
-  integrations::{backtrace::ProcessStacktraceIntegration, contexts::ContextIntegration, panic::PanicIntegration},
+  integrations::{
+    backtrace::ProcessStacktraceIntegration, contexts::ContextIntegration, debug_images::DebugImagesIntegration,
+    panic::PanicIntegration,
+  },
 };
 
 use crate::mcp::{Build, DISCOVERY_VARIABLE};
@@ -71,7 +74,8 @@ impl Environment {
 /// The client's options for `environment`: GlitchTip's `desktop` project, [`RELEASE`], and the scrubber as
 /// `before_send`. Sentry's defaults keep PII, traces and sessions off. The integrations are named here rather than
 /// left to `sentry::init`, so a client made from these options alone (a test's) reports panics the same way: the
-/// panic hook, the OS and CPU contexts, and the stack trace's frames marked as the app's or not.
+/// panic hook, the OS and CPU contexts, the stack trace's frames marked as the app's or not, and the loaded modules
+/// with their debug IDs, by which GlitchTip resolves a release build's frame addresses in its uploaded PDBs.
 pub fn options(environment: Environment) -> ClientOptions {
   let scrubber = ReportScrubber::for_this_build();
   ClientOptions::new()
@@ -84,6 +88,7 @@ pub fn options(environment: Environment) -> ClientOptions {
     .add_integration(ContextIntegration::default())
     .add_integration(PanicIntegration::default())
     .add_integration(ProcessStacktraceIntegration)
+    .add_integration(DebugImagesIntegration::new())
     .before_send(move |event| Some(scrubber.scrub(event)))
 }
 

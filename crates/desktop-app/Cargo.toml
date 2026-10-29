@@ -95,8 +95,16 @@ rfd.workspace = true
 rustls.workspace = true
 # Sends the app's panics to GlitchTip (`error_reports`): the panic hook, the stack trace, the OS and CPU contexts and
 # the HTTP transport over reqwest and rustls, which orchester-api's client already builds. A Sentry client with its
-# queue, rate limits and envelopes is not a few lines of code. Without `debug-images`, sessions, logs or metrics.
-sentry = { workspace = true, features = ["backtrace", "contexts", "panic", "reqwest", "rustls-no-provider"] }
+# queue, rate limits and envelopes is not a few lines of code. `debug-images` lists the loaded modules with their
+# debug IDs, so GlitchTip matches a report's raw frames to the uploaded PDBs. Without sessions, logs or metrics.
+sentry = { workspace = true, features = [
+  "backtrace",
+  "contexts",
+  "debug-images",
+  "panic",
+  "reqwest",
+  "rustls-no-provider",
+] }
 # Arguments and results of the app's MCP tools.
 serde_json.workspace = true
 # The data folder of a test's window (`test_support`, feature `test-support` only).
