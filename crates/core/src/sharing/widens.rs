@@ -8,14 +8,12 @@ use std::collections::BTreeSet;
 
 use crate::{
   connection::mcp::McpServerSelection,
-  id::SecretId,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
     widening::{CommandWidening, Widening, changed_variables},
   },
   resource::{
-    AgentProfile, CommandEnvironment, HttpAuth, HttpRequest, Instruction, Pipeline, RequestTarget, Skill, Tool,
-    ToolAction,
+    AgentProfile, CommandEnvironment, HttpRequest, Instruction, Pipeline, RequestTarget, Skill, Tool, ToolAction,
   },
   secret::tool_uses,
 };
@@ -107,7 +105,10 @@ impl SharedBody for Tool {
     if previous.is_some_and(|previous| previous.access() != self.access()) {
       widenings.push(VersionWidening::Access);
     }
-    if secret(self).is_some_and(|secret| !previous.is_some_and(|previous| tool_uses(previous, secret))) {
+    if self
+      .secret()
+      .is_some_and(|secret| !previous.is_some_and(|previous| tool_uses(previous, secret)))
+    {
       widenings.push(VersionWidening::Secret);
     }
     widenings
@@ -154,18 +155,6 @@ fn granted(action: &ToolAction) -> Vec<VersionWidening> {
       .collect(),
     ToolAction::Http(_) => vec![VersionWidening::Address],
     ToolAction::DatabaseQuery(_) => vec![VersionWidening::Database],
-  }
-}
-
-/// The secret `tool` sends or connects with; command tools hold none.
-fn secret(tool: &Tool) -> Option<SecretId> {
-  match tool.action() {
-    ToolAction::Http(request) => match request.auth() {
-      HttpAuth::Bearer { secret } => Some(secret),
-      HttpAuth::None => None,
-    },
-    ToolAction::DatabaseQuery(query) => Some(query.credentials()),
-    ToolAction::Command(_) => None,
   }
 }
 

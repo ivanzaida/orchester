@@ -1,21 +1,29 @@
 //! The shared projects' live event streams (`docs/architecture/server.md`, "Live updates"): one per shared project on
 //! this computer while its server takes this computer's token and the person is a member, each following the project's
-//! events into its cache ([`stream`], [`apply`]). Started with the connection monitor and kept in step with the
-//! servers and the projects: a project shared, joined or made local, a sign-in or sign-out starts or ends its stream.
+//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]). Started with the
+//! connection monitor and kept in step with the servers and the projects: a project shared, joined or made local, a
+//! sign-in or sign-out starts or ends its stream.
 
 mod apply;
+mod config;
 pub mod stream;
 
 use std::{collections::HashMap, path::PathBuf};
 
 use orchester_api::{
-  SharedTask,
+  SharedTask, Versions,
   client::{ClientError, EventStream, StreamEnd},
 };
-use orchester_core::id::{ProjectId, TaskId};
+use orchester_core::{
+  id::{ProjectId, ResourceId, TaskId},
+  resource::VersionNumber,
+};
 use tokio::task::JoinHandle;
 
-pub use self::stream::{Clock, Source, Stopped, SystemClock, follow};
+pub use self::{
+  config::bind,
+  stream::{Clock, Source, Stopped, SystemClock, follow},
+};
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
 use crate::background;
 
@@ -127,6 +135,16 @@ impl Source for Live {
       .servers
       .with_token_for(Behalf::Background, self.project.entry(), |client, token| async move {
         client.task(&token, project, task).await
+      })
+      .await
+  }
+
+  async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
+    let project = self.project.link().project;
+    self
+      .servers
+      .with_token_for(Behalf::Background, self.project.entry(), |client, token| async move {
+        client.versions(&token, project, resource, after).await
       })
       .await
   }

@@ -21,7 +21,9 @@ use orchester_core::{
     WorktreeFailure, preflight,
   },
   sharing::TaskRevision,
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorkspaceStore, WorktreeStore},
+  store::{
+    ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, TaskStore, WorkspaceStore, WorktreeStore,
+  },
   task::{Task, TaskStatus},
   time::Timestamp,
 };
@@ -118,11 +120,14 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
   };
   let published = Published::read(db).map_err(store)?;
   let connections = db.connections().map_err(store)?;
+  let (mcp_servers, secrets) = (db.mcp_servers().map_err(store)?, db.secrets().map_err(store)?);
   let problems = preflight(PreflightInput {
     pipeline: pipeline.as_ref().map(Version::body),
     profiles: &published.profiles,
     tools: &published.tools,
     connections: &connections,
+    mcp_servers: &mcp_servers,
+    secrets: &secrets,
   });
   if !problems.is_empty() {
     return Err(Rejection::Preflight { problems });

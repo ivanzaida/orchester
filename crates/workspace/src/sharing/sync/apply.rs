@@ -1,12 +1,16 @@
 //! Applying a shared project's events to its cache (`docs/architecture/server.md`, "Cursor and applying events"): the
 //! snapshot's pages replace the confirmed cache at `snapshot.end`; each delta is applied with core's rules
 //! ([`CachedTask::apply`], [`remap_tags`]) and the cursor advances in the same transaction. A task delta the cache
-//! cannot take asks for that one task to be read again. Members are read when Sharing shows them and resources arrive
-//! with S5: their deltas only move the cursor. Blocking: the stream runs these on the blocking pool.
+//! cannot take asks for that one task to be read again, and a published resource for its new versions
+//! ([`super::config`]). Members are read when Sharing shows them, and a resource's rename and archived mark are not
+//! kept apart from a version yet: their deltas only move the cursor. Blocking: the stream runs these on the blocking
+//! pool.
 
 use std::{num::NonZeroU32, path::Path};
 
-use orchester_api::{Delta, Event, SharedTask, SnapshotBegin, TaskChanged, TaskClaim, TaskRun, client::StreamEnd};
+use orchester_api::{
+  Delta, Event, SharedResource, SharedTask, SnapshotBegin, TaskChanged, TaskClaim, TaskRun, client::StreamEnd,
+};
 use orchester_core::{
   id::TaskId,
   name::Name,
@@ -38,6 +42,11 @@ impl Pages {
   pub(super) fn extend(&mut self, tasks: Vec<SharedTask>) {
     self.tasks.extend(tasks);
   }
+
+  /// The project's resources, each with its latest version number.
+  pub(super) fn resources(&self) -> &[SharedResource] {
+    &self.begin.resources
+  }
 }
 
 /// What a delta did to the cache.
@@ -49,6 +58,11 @@ pub(super) enum Applied {
   /// The cache cannot take it: `task` is read again and written with the cursor `cursor`.
   Read {
     task: TaskId,
+    cursor: u64,
+  },
+  /// `resource` was published: its new versions are read, then the cursor moves to `cursor`.
+  Published {
+    resource: Box<SharedResource>,
     cursor: u64,
   },
 }
@@ -109,11 +123,16 @@ pub(super) fn delta(root: &Path, event: &Event) -> Result<Applied, SharingError>
     }
     Event::ModuleCreated(delta) => (delta.id, Some(module(&delta.change.module)?)),
     Event::ModuleChanged(delta) => (delta.id, Some(module(&delta.change.module)?)),
+    Event::ResourcePublished(delta) => {
+      return Ok(Applied::Published {
+        resource: Box::new(delta.change.resource.clone()),
+        cursor: delta.id,
+      });
+    }
     Event::MemberAdded(Delta { id, .. })
     | Event::MemberRemoved(Delta { id, .. })
     | Event::MemberRoleChanged(Delta { id, .. })
     | Event::ProjectChanged(Delta { id, .. })
-    | Event::ResourcePublished(Delta { id, .. })
     | Event::ResourceRenamed(Delta { id, .. })
     | Event::ResourceArchived(Delta { id, .. }) => (*id, None),
     Event::SnapshotBegin(_) | Event::SnapshotTasks(_) | Event::SnapshotEnd(_) | Event::Revoked(_) => {
@@ -143,7 +162,8 @@ pub(super) fn read(root: &Path, task: &SharedTask, cursor: u64) -> Result<(), Sh
   Ok(())
 }
 
-/// Moves the cursor past a delta of a task the server no longer has.
+/// Moves the cursor past a delta whose change is written already or that has nothing to write: one of a task the server
+/// no longer has, or a published resource [`super::config`] kept.
 pub(super) fn skip(root: &Path, cursor: u64) -> Result<(), SharingError> {
   ProjectDb::open(root)?.take_shared_event(&SharedEvent::default(), cursor, Timestamp::now())?;
   Ok(())
