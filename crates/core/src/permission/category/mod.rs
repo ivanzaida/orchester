@@ -45,6 +45,7 @@ mod programs;
 mod reason;
 mod scripts;
 mod sed_script;
+mod shells;
 mod toolchains;
 mod variables;
 mod words;
@@ -62,6 +63,7 @@ pub use self::{
 use self::{
   place::{Line, Placing},
   programs::{Judged, Kind},
+  shells::shell_script,
   variables::is_assignment,
   words::{Quoting, RawPart},
 };
@@ -508,8 +510,6 @@ fn enters_plainly(args: &[String]) -> bool {
   matches!(args, [target] if !target.starts_with(['-', '~']) && !target.contains(['*', '?', '[']))
 }
 
-/// A part Orchester could not read, with where its redirections go placed all the same: what it writes
-/// outside the worktree, or a credential location it names, still counts.
 /// A program written with a folder that is no shell: an executable built in the worktree runs like a
 /// script of it (a regular file there, no link on its way, not in `.git` or `.orchester/`); any other is
 /// Unknown.
@@ -531,6 +531,8 @@ fn worktree_program(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> 
   redirected(part, raw, placing)
 }
 
+/// A part Orchester could not read, with where its redirections go placed all the same: what it writes
+/// outside the worktree, or a credential location it names, still counts.
 fn unknown(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
   redirected(CommandPart::unknown(words), raw, placing)
 }
@@ -567,71 +569,3 @@ const SHELLS: [&str; 5] = ["bash", "sh", "zsh", "pwsh", "powershell"];
 
 /// The programs that may print the status an earlier command left ([`RawPart::status`]).
 const STATUS_PRINTERS: [&str; 3] = ["echo", "write-output", "write-host"];
-
-/// For a shell, the script it runs and its quoting, or `Some(None)` when it runs one Orchester cannot
-/// read (a script file, an encoded command) or is started with an option that is not listed (a startup
-/// file, another working folder); `None` for any other program.
-fn shell_script(program: &str, args: &[String]) -> Option<Option<(String, Quoting)>> {
-  match program {
-    "bash" | "sh" | "zsh" => Some(posix_script(args)),
-    "pwsh" | "powershell" => Some(powershell_script(args)),
-    _ => None,
-  }
-}
-
-/// `bash -c script` with listed options before it: clusters of option letters that change no file
-/// read at start-up, `-o name`, `--login`, `--noprofile`, `--norc`.
-fn posix_script(args: &[String]) -> Option<(String, Quoting)> {
-  const LETTERS: &str = "abefhklmnptuvxBCHP";
-  let mut args = args.iter();
-  while let Some(arg) = args.next() {
-    match arg.as_str() {
-      "--login" | "--noprofile" | "--norc" => {}
-      "-o" | "+o" => {
-        args.next()?;
-      }
-      cluster if cluster.starts_with('-') && cluster.len() > 1 => {
-        let letters = &cluster[1..];
-        if !letters.chars().all(|letter| letter == 'c' || LETTERS.contains(letter)) {
-          return None;
-        }
-        if letters.contains('c') {
-          return args.next().map(|script| (script.clone(), Quoting::Bash));
-        }
-      }
-      _ => return None,
-    }
-  }
-  None
-}
-
-/// `pwsh -Command script` with listed parameters before it (matched without case).
-fn powershell_script(args: &[String]) -> Option<(String, Quoting)> {
-  const SWITCHES: [&str; 10] = [
-    "-noprofile",
-    "-nop",
-    "-noninteractive",
-    "-noni",
-    "-nologo",
-    "-nol",
-    "-mta",
-    "-sta",
-    "-noexit",
-    "-noprofileloadtime",
-  ];
-  const VALUED: [&str; 4] = ["-executionpolicy", "-ep", "-outputformat", "-of"];
-  let mut args = args.iter();
-  while let Some(arg) = args.next() {
-    let lower = arg.to_lowercase();
-    if lower.len() >= 2 && "-command".starts_with(&lower) {
-      let script = args.map(String::as_str).collect::<Vec<_>>().join(" ");
-      return (!script.is_empty()).then_some((script, Quoting::PowerShell));
-    }
-    if VALUED.contains(&lower.as_str()) {
-      args.next()?;
-    } else if !SWITCHES.contains(&lower.as_str()) {
-      return None;
-    }
-  }
-  None
-}
