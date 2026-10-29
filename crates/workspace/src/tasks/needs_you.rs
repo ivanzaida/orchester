@@ -453,6 +453,7 @@ impl InPlace {
       entries: &[],
       conversation: &conversation,
       pending: &self.requests.pending,
+      reviewing: &self.requests.reviewing,
       decided: &self.requests.decided,
       questions: &self.requests.questions,
       merge: self.detail.merge.as_ref(),

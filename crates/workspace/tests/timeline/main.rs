@@ -419,6 +419,7 @@ fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
       decided_by: None,
       decided_at: None,
       review: None,
+      reviewing: false,
       for_project: false,
       note: None,
     }),

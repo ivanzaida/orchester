@@ -78,8 +78,6 @@ impl Worker {
     if !watch.db.run_auto_mode(approval.run)? {
       return Ok(None);
     }
-    // The agent's last messages may still wait to be written.
-    self.flush(watch)?;
     let subject = ApprovalSubject::of(approval, &self.scope);
     let permissions = watch
       .invocation

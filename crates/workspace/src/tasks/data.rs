@@ -220,10 +220,9 @@ impl ProjectTasks {
   pub fn read(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
     let (not_shared, kept_tags) = kept(db)?;
-    let under_review = db.reviewing_tool_approvals()?;
     let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(db, repo_root)?
       .into_iter()
-      .partition(|shown| under_review.contains(&shown.approval.id));
+      .partition(|shown| shown.reviewing);
     let asked = db.waiting_questions()?;
     let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
     let (mut group_holds, grouped, previous_in_group) = group_holds(db)?;

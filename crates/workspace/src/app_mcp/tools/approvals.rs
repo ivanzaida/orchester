@@ -186,6 +186,8 @@ pub fn approval(shown: &ShownApproval, project: ProjectId, translate: &Translate
     "step": shown.step.as_deref(),
     "read_only_step": shown.read_only,
     "waiting_since": wire::time(request.requested_at),
+    // Auto mode's reviewer is judging it: it waits for the reviewer, not for a person, until the review ends.
+    "reviewing": shown.reviewing,
     // What auto mode did with it, and which model reviewed; absent when auto mode did not look at it.
     "auto_mode": shown.review.as_ref(),
     // The hard rule that held it, as the card says it; absent unless a hard rule held it.

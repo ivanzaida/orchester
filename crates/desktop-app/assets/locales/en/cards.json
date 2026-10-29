@@ -115,6 +115,9 @@
         "runsCheck": "Runs the check {{value}}"
       },
       "reviewing": "Auto mode is reviewing it; you can still answer.",
+      "checkingCommand": "Auto mode is checking this command…",
+      "checkingTool": "Auto mode is checking this tool call…",
+      "answerMyself": "Answer myself",
       "command": "Command",
       "arguments": "Arguments",
       "agent": "Agent",

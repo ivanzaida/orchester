@@ -194,6 +194,7 @@ fn seed_names_every_scenario_once() {
       "orchestrator-not-set-up",
       "changes",
       "cards",
+      "cards-auto-mode",
       "decisions",
       "deliverables",
       "delivery",

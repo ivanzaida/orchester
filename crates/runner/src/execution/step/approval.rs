@@ -290,6 +290,10 @@ impl Worker {
       requested_at: Timestamp::now(),
       native: shown.native,
     };
+    // The agent's last messages are written first: auto mode's reviewer reads them, and the app, which reads the
+    // project again as they arrive, never finds the request between its recording and its mark as under review,
+    // when it would wait for the person.
+    self.flush(watch)?;
     watch.db.request_tool_approval(&approval)?;
     if let Some(settled) = self.answer_itself(watch, &approval)? {
       // Recorded and delivered like a person's answer; a call that can no longer take it ends the

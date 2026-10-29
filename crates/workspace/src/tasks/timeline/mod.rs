@@ -123,6 +123,9 @@ pub struct ApprovalCard {
   pub decided_at: Option<Timestamp>,
   /// What auto mode did with it, once it is answered; while it waits, the shown request says.
   pub review: Option<orchester_core::run::review::Review>,
+  /// While it waits: auto mode's reviewer is judging it, so it waits for the reviewer, not for the person (who may
+  /// still answer it).
+  pub reviewing: bool,
   /// The person approved it for every run of the project ([`orchester_core::run::DecidedToolApproval::for_project`]).
   pub for_project: bool,
   /// The words its denial told the agent, when it was denied with a message.
@@ -172,8 +175,10 @@ pub struct Sources<'a> {
   /// The run's transcript.
   pub entries: &'a [Entry],
   pub conversation: &'a Conversation,
-  /// Its tool requests waiting for a decision, and the ones decided.
+  /// Its tool requests waiting for a decision, the ids of those auto mode's reviewer is judging, and the ones
+  /// decided.
   pub pending: &'a [PendingToolApproval],
+  pub reviewing: &'a [String],
   pub decided: &'a [DecidedToolApproval],
   /// Its agents' questions with suggested answers.
   pub questions: &'a [AskedQuestions],
@@ -421,6 +426,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
       decided_by: None,
       decided_at: None,
       review: None,
+      reviewing: sources.reviewing.contains(&request.id),
       for_project: false,
       note: None,
     });
@@ -436,6 +442,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
       decided_by: decided.decided_by,
       decided_at: Some(decided.decided_at),
       review: decided.review.clone(),
+      reviewing: false,
       for_project: decided.for_project,
       note: decided.note.clone(),
     });
@@ -578,12 +585,13 @@ fn run_end(run: &RunView, merge: Option<&RunMerge>) -> Option<Item> {
   })
 }
 
-/// Whether `item` waits for the person: an open question, a plan that waits, a pending request.
+/// Whether `item` waits for the person: an open question, a plan that waits, a pending request auto mode's reviewer
+/// is not judging.
 pub fn waits_for_you(item: &Item) -> bool {
   match &item.kind {
     ItemKind::Question { entry, .. } => entry.state == EntryState::Question { open: true },
     ItemKind::Plan(card) => card.waiting,
-    ItemKind::Approval(card) => card.decided.is_none(),
+    ItemKind::Approval(card) => card.decided.is_none() && !card.reviewing,
     ItemKind::Choice(card) => card.waiting(),
     _ => false,
   }

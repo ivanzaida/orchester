@@ -234,6 +234,7 @@ fn approval() -> ShownApproval {
     asking: None,
     auto_approving: false,
     review: None,
+    reviewing: false,
   }
 }
 
