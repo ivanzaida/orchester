@@ -54,6 +54,37 @@ pub struct ReviewedTask {
   pub criteria: Vec<String>,
 }
 
+/// A part of the command Orchester could not read to the end, and why it stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnreadPart {
+  /// Which simple command of the line it is, from 1.
+  pub at: usize,
+  pub why: UnreadWhy,
+}
+
+/// Why Orchester stopped reading a part of a command.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnreadWhy {
+  /// It runs a script file or inline code, whose content Orchester does not read.
+  Script,
+  /// Its program, subcommand, option or form (a variable, a substitution, a command in the background) is not one
+  /// Orchester knows.
+  Unknown,
+}
+
+impl UnreadWhy {
+  /// The reason as the reviewer reads it.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Script => "it runs a script file or inline code whose content Orchester does not read",
+      Self::Unknown => {
+        "its program, subcommand, option or form (a variable, a substitution, a background command) is not one \
+         Orchester's parser knows"
+      }
+    }
+  }
+}
+
 /// Everything the reviewer reads, within its sizes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewInput {
@@ -61,8 +92,8 @@ pub struct ReviewInput {
   step: ReviewedStep,
   task: ReviewedTask,
   messages: Vec<String>,
-  /// How many parts of the command Orchester could not read to the end.
-  unread: usize,
+  /// The parts of the command Orchester could not read to the end.
+  unread: Vec<UnreadPart>,
   /// The names of the project's variables that change what a build runs, never their values.
   build_variables: Vec<String>,
 }
@@ -117,14 +148,14 @@ impl ReviewInput {
       step,
       task,
       messages,
-      unread: 0,
+      unread: Vec::new(),
       build_variables: Vec::new(),
     })
   }
 
-  /// The input, telling the reviewer that Orchester could not read `parts` parts of the command.
+  /// The input, telling the reviewer which `parts` of the command Orchester could not read to the end, and why.
   #[must_use]
-  pub const fn with_unread(mut self, parts: usize) -> Self {
+  pub fn with_unread(mut self, parts: Vec<UnreadPart>) -> Self {
     self.unread = parts;
     self
   }
@@ -143,8 +174,13 @@ impl ReviewInput {
   }
 
   /// How many parts of the command Orchester could not read to the end.
-  pub const fn unread(&self) -> usize {
-    self.unread
+  pub fn unread(&self) -> usize {
+    self.unread.len()
+  }
+
+  /// The parts of the command Orchester could not read to the end, and why.
+  pub fn unread_parts(&self) -> &[UnreadPart] {
+    &self.unread
   }
 
   pub const fn request(&self) -> &ReviewedRequest {

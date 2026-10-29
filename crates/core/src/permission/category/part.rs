@@ -253,6 +253,11 @@ impl CommandPart {
     self.writes_output
   }
 
+  /// Whether it may write a tool's cache or a lock file.
+  pub const fn updates_cache(&self) -> bool {
+    self.updates_cache
+  }
+
   /// Whether it runs without a person on its own (the user's decision, `docs/plan.md` C4): a read of the
   /// known-safe tables, without a redirection into a file, of nothing outside the worktree and its
   /// writable folders and of no credential.

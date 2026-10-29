@@ -23,25 +23,29 @@ pub fn run_delivers(task: &Task, run: &Run) -> Deliverable {
 /// The name of the artifact a completed run keeps its last step's report as.
 pub const REPORT_ARTIFACT: &str = "Report";
 
-/// Who completed a run.
+/// Who completed a run: who pressed *Complete task*, or who closed its task while the run waited to be completed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CompletedBy {
-  /// A person, from the task's Summary.
+  /// A person, from the task's Summary, or by closing the task on this computer.
   Person,
-  /// An MCP client: through Orchester's MCP server (`complete_run`), or with window input on the task's Summary.
+  /// An MCP client: through Orchester's MCP server (`complete_run`, or a change of the task's status), or with window
+  /// input.
   Automation,
   /// The Orchestrator, on its own, as it would merge the run (*Let the Orchestrator merge finished runs on its own*).
   Orchestrator,
+  /// A member of the shared project, who closed the task on its team server (ORC-150).
+  Member,
 }
 
 impl CompletedBy {
-  pub const ALL: [Self; 3] = [Self::Person, Self::Automation, Self::Orchestrator];
+  pub const ALL: [Self; 4] = [Self::Person, Self::Automation, Self::Orchestrator, Self::Member];
 
   pub const fn as_str(self) -> &'static str {
     match self {
       Self::Person => "person",
       Self::Automation => "automation",
       Self::Orchestrator => "orchestrator",
+      Self::Member => "member",
     }
   }
 }

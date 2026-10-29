@@ -154,28 +154,36 @@ fn builds_hold_while_git_does_not_ignore_their_output() {
 fn builds_that_change_sources_or_point_elsewhere_still_hold() {
   let fixture = Fixture::new();
   let scope = fixture.scope();
+  // A Cargo form Orchester does not read to the end still builds and writes: it holds as a write in a read-only step
+  // (no longer as unreadable, ORC-339).
   for (command, hold) in [
     ("cargo fmt", ReviewHold::ReadOnlyStep),
     ("cargo fmt --all", ReviewHold::ReadOnlyStep),
-    ("cargo fix --allow-dirty", ReviewHold::Unreadable),
+    ("cargo fix --allow-dirty", ReviewHold::ReadOnlyStep),
     ("cargo clippy --fix", ReviewHold::ReadOnlyStep),
     ("cargo add serde", ReviewHold::ReadOnlyStep),
     ("cargo install ripgrep", ReviewHold::ReadOnlyStep),
-    ("cargo publish", ReviewHold::Unreadable),
+    ("cargo publish", ReviewHold::ReadOnlyStep),
     ("cargo run -p orchester-app", ReviewHold::ReadOnlyStep),
     ("cargo doc --open", ReviewHold::ReadOnlyStep),
     ("cargo clean", ReviewHold::ReadOnlyStep),
-    ("cargo test --manifest-path ../other/Cargo.toml", ReviewHold::Unreadable),
+    (
+      "cargo test --manifest-path ../other/Cargo.toml",
+      ReviewHold::ReadOnlyStep,
+    ),
     ("cargo test --manifest-path Cargo.toml", ReviewHold::ReadOnlyStep),
-    ("cargo test --target-dir ../../outside", ReviewHold::Unreadable),
+    ("cargo test --target-dir ../../outside", ReviewHold::ReadOnlyStep),
     ("cargo test --target-dir .git/build", ReviewHold::ReadOnlyStep),
     ("cargo test --target-dir .", ReviewHold::ReadOnlyStep),
     ("cargo test --target-dir a --target-dir b", ReviewHold::ReadOnlyStep),
     ("cargo test > results.txt", ReviewHold::ReadOnlyStep),
     ("cargo test && touch notes.md", ReviewHold::ReadOnlyStep),
-    ("CARGO_TARGET_DIR=/elsewhere cargo test", ReviewHold::Unreadable),
-    ("cargo test --config build.target-dir=\"x\"", ReviewHold::Unreadable),
-    ("cargo test -Zunstable-options --artifact-dir x", ReviewHold::Unreadable),
+    ("CARGO_TARGET_DIR=/elsewhere cargo test", ReviewHold::ReadOnlyStep),
+    ("cargo test --config build.target-dir=\"x\"", ReviewHold::ReadOnlyStep),
+    (
+      "cargo test -Zunstable-options --artifact-dir x",
+      ReviewHold::ReadOnlyStep,
+    ),
   ] {
     assert_eq!(held(&fixture, &scope, command), Some(hold), "{command}");
   }
@@ -297,7 +305,7 @@ fn builds_point_their_outputs_only_inside_the_worktree() {
     assert_eq!(classified.category(), CommandCategory::Unknown, "{command}");
     assert_eq!(
       held(&fixture, &scope, &command),
-      Some(ReviewHold::Unreadable),
+      Some(ReviewHold::ReadOnlyStep),
       "{command}"
     );
   }

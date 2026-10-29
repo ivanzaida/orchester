@@ -64,12 +64,21 @@ pub(super) fn disguised_git(command: &ClassifiedCommand) -> bool {
       && command
         .parts()
         .iter()
-        .any(|part| part.words().iter().any(|word| word.contains("push")) && !plain_push(part)))
+        .any(|part| part.words().iter().any(|word| word.contains("push")) && !plain_push(part) && !stash_push(part)))
 }
 
-/// Whether `part` runs `git push`, with whatever options come before it.
+/// Whether `part` runs `git push`, with whatever options come before it; `git stash push` keeps its work in the
+/// worktree's own stash and pushes nothing.
 pub(super) fn is_push(part: &CommandPart) -> bool {
-  part.program() == Some("git") && part.words().iter().skip(1).any(|word| word == "push")
+  part.program() == Some("git") && part.words().iter().skip(1).any(|word| word == "push") && !stash_push(part)
+}
+
+/// Whether `part` is `git stash push`, written plainly: no option before `stash`.
+fn stash_push(part: &CommandPart) -> bool {
+  part
+    .words()
+    .get(..3)
+    .is_some_and(|head| head == ["git", "stash", "push"])
 }
 
 /// Whether the push `parts[at]` may go to the reviewer under `facts`.

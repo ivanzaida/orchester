@@ -472,9 +472,13 @@ fn latest_run_and_agent(
   let mut shown = LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited);
   let agent = super::at_work::step_agent(db, latest, shown.step.as_ref())?;
   shown.agent = agent.as_ref().map(|found| found.provider);
-  if matches!(latest.status(), RunStatus::Interrupted(_)) {
-    let removed = db.worktree_removal(latest.id())?.is_some();
-    shown.ended_for_run_again = can_run_again_after(latest, removed);
+  match latest.status() {
+    RunStatus::Interrupted(_) => {
+      let removed = db.worktree_removal(latest.id())?.is_some();
+      shown.ended_for_run_again = can_run_again_after(latest, removed);
+    }
+    RunStatus::Succeeded => shown.completed = db.run_completion(latest.id())?.is_some(),
+    _ => {}
   }
   Ok((shown, agent))
 }

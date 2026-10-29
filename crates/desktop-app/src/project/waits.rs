@@ -95,6 +95,7 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
       Ok(()) => {
         let started = keep(services, open, &checks, (switches, true)).await?;
         followed.kept |= started.kept;
+        followed.completed |= started.completed;
         followed.turn = started.turn;
       }
       Err(error) => tracing::info!(%error, "no runner attached for the turn an agent's wait starts; it starts later"),
@@ -103,9 +104,11 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
   if followed.kept || followed.turn.is_some() {
     services.runners.chat_changed(&open.repo_root);
   }
-  // The Orchestrator completed a run that committed nothing (ORC-93): its task is Done now.
+  // The Orchestrator completed a run that committed nothing (ORC-93): its task is Done now. A shared task's Done goes
+  // to the team server now rather than with the next sync; the feed reads the tasks again once the server took it.
   if followed.completed {
     services.changes.record(open.project.id(), Outside::Tasks);
+    services.servers.send_automatic_statuses().await;
   }
   if let Some(turn) = followed.turn {
     answer(services, i18n, open, (turn, true)).await;
