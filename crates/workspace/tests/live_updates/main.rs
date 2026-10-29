@@ -9,6 +9,7 @@
 mod config;
 mod http;
 mod server;
+mod widening;
 
 use std::{
   collections::HashMap,

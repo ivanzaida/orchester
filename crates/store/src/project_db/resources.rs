@@ -285,11 +285,13 @@ impl ResourceStore for ProjectDb {
     self.publish_checked(resource, None, None, now)
   }
 
+  /// The version this computer uses: a teammate's version that waits for the person's *Use v<N> here* is left out
+  /// ([`super::shared_versions`]), so runs, preflight and editors keep the one before it.
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
     check_kind::<B>(&self.connection, resource)?;
     let mut found = load_versions(
       &self.connection,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+      "WHERE resource_id = ?1 AND id NOT IN (SELECT version_id FROM waiting_versions) ORDER BY number DESC LIMIT 1",
       [resource.to_string()],
     )?;
     Ok(found.pop())

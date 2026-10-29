@@ -73,6 +73,10 @@ pub enum SharingError {
   /// by does this; the person connects to it by `own`.
   #[error("the server reported a project address on another server, {own}")]
   ForeignAddress { own: ServerAddress },
+  /// Only a person does this: *Use v<N> here* and binding a reference widen what agents may do here, so automation is
+  /// refused and nothing changed.
+  #[error("only a person does this; nothing was changed")]
+  PersonOnly,
 }
 
 impl From<Message> for SharingError {
@@ -117,6 +121,7 @@ impl SharingError {
       Self::TwoFactorOff => Message::new("sharing.errors.twoFactorOff"),
       Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
       Self::UnprovenServer => Message::new("sharing.errors.unprovenServer"),
+      Self::PersonOnly => Message::new("sharing.errors.personOnly"),
     }
   }
 }

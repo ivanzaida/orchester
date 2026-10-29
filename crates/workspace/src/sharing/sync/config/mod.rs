@@ -4,9 +4,11 @@
 //! is, and a local body with this computer's bindings in place of the references ([`bindings`]). Runs pin and read the
 //! local body as they do any version. A reference that is not bound keeps the publisher's id, which matches nothing
 //! here, so preflight reports it missing. When a person binds a reference, the local bodies that name it are written
-//! again ([`bind`]). Skills are not kept yet: their parts travel apart from their bodies, by hash.
+//! again ([`bind`]). A teammate's version that widens what agents may do here waits for the person's *Use v<N> here*
+//! ([`waiting`]). Skills are not kept yet: their parts travel apart from their bodies, by hash.
 
 mod bindings;
+mod waiting;
 
 use std::path::Path;
 
@@ -16,7 +18,8 @@ use orchester_api::{
 use orchester_core::{
   name::Name,
   resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, ResourceKind, Slug, Tool},
-  sharing::{Binding, resolve},
+  run::Answerer,
+  sharing::{Binding, SharedBody, resolve},
   store::{ConnectionStore, McpServerStore, SecretStore},
   time::Timestamp,
 };
@@ -26,6 +29,7 @@ use orchester_store::{
 };
 use serde_json::Value;
 
+pub use self::waiting::{Waiting, use_here, waiting};
 use super::stream::{Source, blocking};
 use crate::sharing::{SharingError, project::convert};
 
@@ -54,9 +58,10 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
 
 /// Binds the reference of `choice` to the local connection, MCP server or secret a person chose (`None` unbinds it),
 /// and writes again the local body of every cached version that names it; returns how many changed. Only a person
-/// binds: binding an MCP server or a secret widens what agents may do or what a tool sends, so no MCP tool reaches
-/// this.
-pub fn bind(root: &Path, choice: BoundReference) -> Result<usize, SharingError> {
+/// binds: binding an MCP server or a secret widens what agents may do or what a tool sends, so automation is refused
+/// ([`SharingError::PersonOnly`]) and no MCP tool reaches this.
+pub fn bind(root: &Path, choice: BoundReference, by: Answerer) -> Result<usize, SharingError> {
+  waiting::person_only(by)?;
   let mut db = ProjectDb::open(root)?;
   let target = bindings::binding_target(choice);
   let kept = db
@@ -116,11 +121,13 @@ fn resource(shared: &SharedResource) -> Result<Resource, SharingError> {
   ))
 }
 
-fn cache_version<B: ResourceBody>(
+fn cache_version<B: ResourceBody + SharedBody>(
   db: &mut ProjectDb,
   version: &SharedVersion,
   bindings: &[Binding],
 ) -> Result<(), SharingError> {
+  let local_body = local_body::<B>(&version.body, bindings)?;
+  let waits_here = waiting::waits(db, version.resource, version.number, &local_body)?;
   let cached = CachedVersion {
     number: version.number,
     published_at: Timestamp::from_unix_millis(version.published.at),
@@ -128,7 +135,8 @@ fn cache_version<B: ResourceBody>(
     server_body: version.body.clone(),
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
-    local_body: local_body::<B>(&version.body, bindings)?,
+    local_body,
+    waits_here,
   };
   db.cache_shared_version(version.resource, &cached)?;
   Ok(())
