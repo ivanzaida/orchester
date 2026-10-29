@@ -39,6 +39,8 @@ pub struct RunnerStatus {
   until: Option<Instant>,
   /// When the current problem (reconnecting, then failed) began.
   trouble_since: Option<SystemTime>,
+  /// When the runner came online, while it is online or stopping.
+  online_since: Option<SystemTime>,
   /// What the runner last reported working on; `None` until it attached and after it dropped.
   work: Option<Arc<WorkSummary>>,
   /// Runs whose agents were at work when the runner dropped: interrupted until a runner is back.
@@ -54,6 +56,7 @@ impl RunnerStatus {
       state: RunnerState::Stopped,
       until: None,
       trouble_since: None,
+      online_since: None,
       work: None,
       interrupted: 0,
     }
@@ -66,6 +69,7 @@ impl RunnerStatus {
       state: RunnerState::Starting,
       until: None,
       trouble_since: None,
+      online_since: None,
       work: None,
       interrupted: 0,
     }
@@ -92,6 +96,11 @@ impl RunnerStatus {
   /// When the runner's current problem began: the drop, or the failed start.
   pub fn trouble_since(&self) -> Option<SystemTime> {
     self.trouble_since
+  }
+
+  /// When the runner came online, while it is online or stopping.
+  pub fn online_since(&self) -> Option<SystemTime> {
+    self.online_since
   }
 
   /// What the connected runner works on; `None` while that is unknown.
@@ -135,6 +144,11 @@ impl RunnerStatus {
       (false, _) => None,
       (true, Some(since)) => Some(since),
       (true, None) => Some(SystemTime::now()),
+    };
+    self.online_since = match (&next, self.online_since) {
+      (RunnerState::Online, None) => Some(SystemTime::now()),
+      (RunnerState::Online | RunnerState::Stopping, since) => since,
+      _ => None,
     };
     self.state = next;
     true

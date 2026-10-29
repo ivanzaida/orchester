@@ -17,7 +17,7 @@ use orchester_core::id::ServerId;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
-  sharing::{Connection, ServerEntry, Servers},
+  sharing::{Connection, ServerEntry, Servers, sync::SyncState},
 };
 
 use super::{
@@ -59,6 +59,16 @@ impl ServerState {
       Self::Offline => "offline",
       Self::SignedOut => "signed-out",
       Self::CertificateChanged => "certificate-changed",
+    }
+  }
+
+  /// The state once the project's live stream stands at `stream`: a stream that waits to connect again shows its
+  /// server connecting, or offline once the waits reached their longest, also while the server answered otherwise.
+  const fn streamed(self, stream: Option<SyncState>) -> Self {
+    match (self, stream) {
+      (Self::Connected, Some(SyncState::Reconnecting { .. })) => Self::Connecting,
+      (Self::Connected | Self::Connecting, Some(SyncState::Offline { .. })) => Self::Offline,
+      (state, _) => state,
     }
   }
 }
@@ -106,9 +116,23 @@ impl ServerFacts {
       },
     }
   }
+
+  /// The item once the shown project's live stream stands at `stream` ([`ServerState::streamed`]); the project's
+  /// server is the one the item names.
+  pub fn streamed(self, stream: Option<SyncState>) -> Self {
+    match self {
+      Self::One { id, name, state } => Self::One {
+        id,
+        name,
+        state: state.streamed(stream),
+      },
+      facts => facts,
+    }
+  }
 }
 
-/// The servers as the item shows them for the project at `project_root`, read again whenever a connection changes.
+/// The servers as the item shows them for the project at `project_root`, read again whenever a connection or the
+/// project's live stream changes.
 pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathBuf>) -> ServerFacts {
   let revision = ctx
     .stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
@@ -128,15 +152,18 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
     .future(
       (revision, project_root, servers.clone()),
       |(_, root, servers)| async move {
-        background::run(move || {
+        background::run(move || -> Result<ServerFacts, ()> {
           let entries = servers.entries().map_err(|error| {
             tracing::warn!(%error, "the status bar could not read the servers");
           })?;
           // A project whose database cannot be read names no server here; its own screens say why.
-          let linked = root
-            .and_then(|root| ProjectDb::open(&root).and_then(|db| db.sharing()).ok().flatten())
-            .map(|link| link.server);
-          Ok::<_, ()>(ServerFacts::of(&entries, linked))
+          let Some((root, link)) = root.and_then(|root| {
+            let link = ProjectDb::open(&root).and_then(|db| db.sharing()).ok().flatten()?;
+            Some((root, link))
+          }) else {
+            return Ok(ServerFacts::of(&entries, None));
+          };
+          Ok(ServerFacts::of(&entries, Some(link.server)).streamed(servers.sync_state(&root)))
         })
         .await
         .map_err(drop)?
@@ -148,20 +175,22 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
     .unwrap_or_default()
 }
 
-/// The item, or nothing when no server is in use.
+/// The item, or nothing when no server is in use or it is connected: connected is quiet, the health dot's card says
+/// it (`13 · Team server offline or signed out` `BfW9V`).
 pub fn item(ctx: &Ctx, facts: &ServerFacts, dispatch: &Dispatch) -> Option<Element> {
-  let (id, words, state) = match facts {
+  let (id, state) = match facts {
     ServerFacts::None => return None,
-    ServerFacts::One { id, name, state } => (Some(*id), one_words(ctx, name, *state), *state),
-    ServerFacts::Several { count, worst } => (None, several_words(ctx, *count, *worst), *worst),
+    ServerFacts::One { id, state, .. } => (Some(*id), *state),
+    ServerFacts::Several { worst, .. } => (None, *worst),
   };
   let (icon, color) = match state {
-    ServerState::Connected => (Icon::Server, PaletteColor::TextMuted),
+    ServerState::Connected => return None,
     ServerState::Connecting => (Icon::LoaderCircle, PaletteColor::TextMuted),
     ServerState::Offline => (Icon::WifiOff, PaletteColor::Warning),
     ServerState::SignedOut => (Icon::LogOut, PaletteColor::Warning),
     ServerState::CertificateChanged => (Icon::ShieldAlert, PaletteColor::Danger),
   };
+  let words = words(ctx, facts)?;
   let route = Route::Orchester(id.map_or_else(OrchesterView::default, OrchesterView::server));
   Some(
     pressed("status-server", go(dispatch, route))
@@ -171,6 +200,15 @@ pub fn item(ctx: &Ctx, facts: &ServerFacts, dispatch: &Dispatch) -> Option<Eleme
       .child(label(&words, color))
       .into(),
   )
+}
+
+/// What the item, or the health dot's card, says of the servers; nothing when none is in use.
+pub(super) fn words(ctx: &Ctx, facts: &ServerFacts) -> Option<String> {
+  match facts {
+    ServerFacts::None => None,
+    ServerFacts::One { name, state, .. } => Some(one_words(ctx, name, *state)),
+    ServerFacts::Several { count, worst } => Some(several_words(ctx, *count, *worst)),
+  }
 }
 
 fn one_words(ctx: &Ctx, name: &str, state: ServerState) -> String {

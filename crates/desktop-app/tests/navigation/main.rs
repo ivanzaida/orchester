@@ -9,7 +9,9 @@ mod strip;
 #[path = "../support/mod.rs"]
 mod support;
 
-use lurq::app::events::MouseButton;
+use std::{thread, time::Duration};
+
+use lurq::app::events::{MouseButton, ScrollPhase};
 use orchester_app::{
   navigation::{
     shortcuts::{Keys, Shortcut, shortcut},
@@ -438,6 +440,40 @@ fn side_buttons_and_keys_move_through_history_and_tabs() {
   assert_eq!(navigation.tabs_now().tabs().len(), 2, "a new tab opened");
   key(&mut window, "w", "KeyW", &Modifier::Command);
   assert_eq!(navigation.tabs_now().tabs().len(), 1, "the new tab closed");
+}
+
+#[test]
+fn trackpad_swipes_between_pages_move_through_history() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  navigation.go(project(ProjectPage::Usage(Box::default())));
+  window.pass();
+  window.tree.set_history_swipes(true);
+  swipe(&mut window, 20.0);
+  assert_eq!(
+    navigation.route_now(),
+    Route::AllProjects,
+    "fingers to the right go back"
+  );
+  // A swipe that starts right after one is taken for its momentum.
+  thread::sleep(Duration::from_millis(200));
+  swipe(&mut window, -20.0);
+  assert_eq!(
+    navigation.route_now(),
+    project(ProjectPage::Usage(Box::default())),
+    "fingers to the left go forward"
+  );
+}
+
+/// Two fingers across the middle of the window, eight moves of `dx` sideways.
+fn swipe(window: &mut Window, dx: f32) {
+  let (x, y) = (700.0, 400.0);
+  window.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::Start);
+  for _ in 0..8 {
+    window.tree.scroll(x, y, dx, 0.0, ScrollPhase::Scroll);
+  }
+  window.tree.scroll(x, y, 0.0, 0.0, ScrollPhase::End);
+  window.pass();
 }
 
 enum Modifier {

@@ -78,7 +78,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 4 | v1 scope | Shared: tasks (title, brief, criteria, pipeline, limits, status), their organization (workflow status, priority, tags, blocking links and the manual Blocked reason, with its history; rows 23–24), the claim, the run's progress (row 29), and the team's configuration (row 30). The server assigns task numbers. Local: runs, worktrees, transcripts, Activity, conversations, memory, connections, accounts, secrets, environment, limits settings and drafts. **Extended by 29, changed by 30** | user (confirmed 2026-10-03; organization added 2026-10-03; changed 2026-10-15) |
 | 5 | Claim | Atomic "take if free" on the server. Starting work on a task takes the claim. Heartbeat every 60 s; no heartbeat for 15 min makes it stale; a stale claim can be taken over after confirmation, and the takeover is recorded. Manual Take and Release exist ([Claims](#claims)). **Extended by 28** | user |
 | 6 | Concurrency | Every shared task has a revision. A change names the revision it was made on; a mismatch returns a conflict with the current task, and the desktop shows the other person's change instead of overwriting it. **Extended by 27:** a change waiting in the outbox keeps the revision it was made on | user |
-| 7 | Live updates | Server-Sent Events with a resume cursor; the desktop reconnects with backoff ([Live updates](#live-updates)) | user (confirmed 2026-10-03) |
+| 7 | Live updates | Server-Sent Events with a resume cursor; the desktop reconnects with backoff ([Live updates](#live-updates)). **Extended by 73:** a snapshot on connect, then deltas that say who did what | user (confirmed 2026-10-03) |
 | 8 | Offline | ~~Without the server, a shared project's task list is read-only from the local cache, in a visible offline state. Changes wait for the connection; nothing is queued silently~~ **Replaced by 27** | user (confirmed 2026-10-03; replaced 2026-10-15) |
 | 9 | Configuration | ~~Application level: Settings › Servers (several servers, each signed in; the status bar shows the connection).~~ Project level: Project settings › Sharing, *Local only* (default) or *Shared on <server>*. **The application level is replaced by 40** | user (confirmed 2026-10-03; changed 2026-10-15) |
 | 10 | Project identity | ~~A server project is identified by the normalized URL of the repository's `origin` remote, unique per server; the server enforces it~~ **Replaced by 49:** the project's address is its identity; the remote is a hint | user (replaced 2026-10-15) |
@@ -93,7 +93,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 19 | Removing a server project | Not in v1 | user |
 | 20 | Joining with local tasks | A review list of the joiner's local tasks, all ticked; ticked ones are uploaded with new numbers and keep their id and former key; unticked ones are archived as *Not shared* ([Two people share one repository](#two-people-share-one-repository)) | user (flow 2026-10-02, archive confirmed 2026-10-03) |
 | 21 | Token | The server generates it at sign-in; nobody is shown it; the desktop keeps it in the keychain; when it expires, the person signs in again with their password. Expiry after 30 days without use. **Replaced by 42, 45 and 46:** the team server issues a device token when a device joins with a cloud identity token or a code; there is no password to sign in again with | user (expiry confirmed 2026-10-03; replaced 2026-10-15) |
-| 22 | Two computers, retention | A heartbeat from any of a person's computers keeps their claims fresh. Events are kept 30 days; an older cursor makes the desktop reload the full list. **Extended by 44:** a new computer joins through the cloud or a pairing code | user |
+| 22 | Two computers, retention | A heartbeat from any of a person's computers keeps their claims fresh. Events are kept 30 days; an older cursor makes the desktop reload the full list (**under 73:** the stream sends it the snapshot). **Extended by 44:** a new computer joins through the cloud or a pairing code | user |
 | 23 | Task organization | ORC-39's organization is shared: workflow status, priority, tags, blocking links (a task and its gate, Review or Merge) and the manual Blocked reason are fields of a shared task, changed under its revision, with core's rules (`task::organization`). Its history is shared: every change is recorded with who made it and whether a person or Orchester did ([Task organization](#task-organization)) | user (2026-10-03) |
 | 24 | Tags | Tags belong to the server project. Members create, rename, merge and delete them under ORC-39's local rules (names unique without regard to case; merge unions into the target; delete and merge rewrite the affected tasks and record their history) | user (2026-10-03) |
 | 25 | Member roles | Owners and admins change a member's role (`PATCH …/members/{user}`); demoting or removing the last owner is refused (`409 last_owner`), so a sole owner first makes someone else an owner and can then step down or leave | user (2026-10-03) |
@@ -101,7 +101,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 27 | Offline-first | Without the server, a shared project works as usual. Every change goes into a local outbox with the revision it was based on, and is sent in order after reconnect. Organization fields merge automatically, as in 26; title, brief, criteria, pipeline and limits that both sides changed go to the person. A task created offline has a temporary number until the server assigns one; its links, references and keys are remapped, and the person sees the change ([Offline and the outbox](#offline-and-the-outbox)). **Replaces 8** | user (2026-10-15) |
 | 28 | Claims offline | Offline, a run may start only on a task whose claim is already the person's; row 5's staleness applies: once the claim would be stale by the last heartbeat the server answered, nothing new starts until the server confirms the claim. Taking a new task needs the server ([Claims](#claims)) | user (2026-10-15) |
 | 29 | Shared progress | Shared: who took the task, the run phase, which pipeline step it is on, what it waits for (a person, a limit, a question, an approval: kinds only, no content), each step's result (passed, failed, unverified, unchanged), the branch and the pull request. Local only: transcripts, diffs, prompts, tool calls and secrets ([Shared run progress](#shared-run-progress)). Both ways (row 53). **Extends S3** | user (2026-10-15) |
-| 30 | Shared team configuration | Shared: pipelines, agent profiles, instructions, skills and the project's ~~command~~ tools (**changed by 52:** every kind). Publishing creates a version on the server; drafts stay local until published. Per person and local: connections, accounts, MCP servers' credentials, secrets and environment. A published version names what it needs by name and role, resolved on each computer, with a visible *missing on this computer* state ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15) |
+| 30 | Shared team configuration | Shared: pipelines, agent profiles, instructions, skills and the project's ~~command~~ tools (**changed by 52:** every kind). Publishing creates a version on the server; drafts stay local until published (**changed by 72:** only admins, the project's owner or the server's admin, publish and keep drafts of shared resources; members read and run with them). (**Changed by 74:** besides the team's pipelines, a person may keep pipelines of their own that stay on their computer and are never sent.) Per person and local: connections, accounts, MCP servers' credentials, secrets and environment. A published version names what it needs by name and role, resolved on each computer, with a visible *missing on this computer* state ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29) |
 | 31 | The deprecated app | `crates/desktop` is frozen as of 2026-10-15 and never updated again (AGENTS.md). Its S2a–c sharing screens stay exactly as they are; after S4 they show read-only offline states that no longer apply, by design. Every phase touches only the new app, `orchester-workspace`, core, api and server | user (2026-10-15) |
 | 32 | Create & run offline | The task is saved with its temporary key and nothing more. Once it has its number and the server can give the claim, the task and the temporary-key notice offer *Start*; the run starts only when the person presses it. Nothing starts on its own | user (2026-10-15) |
 | 33 | Tags offline | Creating a tag works offline (it waits in the outbox); renaming, merging and deleting need the server, since they rewrite other people's tasks ([Tags](#tags)) | coordinator (2026-10-15) |
@@ -123,7 +123,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 49 | Server and project addresses | A team server runs at its owner's own address (`orchester.userdomain.com`) and holds several projects, each at its own address (`orchester.userdomain.com/project-a`). The owner creates projects on the server by name and slug. The project address is the server project's identity; the repository remote is kept as a hint, compared with `origin` when someone links a local checkout, with a warning on a mismatch. Everyone clones and sets up the code themselves; the server never touches code ([Servers and project addresses](#servers-and-project-addresses)). **Replaces 10, changes 11, 12 and 16** | user (2026-10-15) |
 | 50 | One connection per server | The app connects to a server once, with one device token per server. Each local project is linked to one project on it. Access is per project: an invite to project-a grants project-a only. **Replaces the wording of 40** | user (2026-10-15) |
 | 51 | Joining | Invites go by email through the cloud (row 43): B downloads Orchester, signs in to the cloud, accepts the invite to project-a, and links their local checkout through the join review. The code fallback for networks without the internet stays (row 45). Team servers have no passwords and trust the cloud's identity tokens, verified locally (rows 42, 46) | user (2026-10-15) |
-| 52 | What a project shares | Shared in a project: tasks (with organization, claims and progress) and all team configuration: pipelines, agent profiles, instructions, skills (stored in the database, files written at step start) and tools of every kind. Local: runs, worktrees, transcripts, connections, CLI accounts, secrets (and, by row 30, environment). **Changes 30** | user (2026-10-15) |
+| 52 | What a project shares | Shared in a project: tasks (with organization, claims and progress) and all team configuration: pipelines, agent profiles, instructions, skills (stored in the database, files written at step start) and tools of every kind. Local: runs, worktrees, transcripts, connections, CLI accounts, secrets (and, by row 30, environment). **Changes 30. Changed by 72:** only admins (the project's owner or the server's admin) change the team configuration; members read it and run with it. **Changed by 74:** a person's local pipelines are local too, never sent; a shared task that names one keeps only its name and whose it is | user (2026-10-15; changed 2026-10-29) |
 | 53 | Live progress both ways | A sees when B's task goes in progress or done, with its step, and B sees A's the same way (row 29) | user (2026-10-15) |
 | 54 | The cloud's database | Orchester Cloud's database is PostgreSQL, not SQLite. Team servers stay on SQLite ([Framework and storage](#framework-and-storage)). **Narrows 13 to team servers** | user (2026-10-15) |
 | 55 | Skill limits | A skill part up to 1 MiB, a version up to 16 MiB in all, at most 256 parts, for local and shared skills alike; each part uploaded by its hash, no general chunked upload; Import from repository goes down from 4 MiB to 1 MiB per file ([Skills in the database](#skills-in-the-database)) | user (2026-10-15) |
@@ -143,6 +143,9 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 69 | Burndown and progress | Computed on each desktop, not served: core and the workspace already compute them from the tasks, their organization history and the moves, which every member's cache holds; serving them would put a second copy of those rules on the server, and their unit (story points, estimates) and the forecast's throughput are this computer's. The server keeps what they need: every move, with who and when ([Modules](#modules)) | architect (ORC-78, 2026-10-22) |
 | 70 | Modules at Share, Join and Make local | Share and Join upload every local module; one of a name the server project has becomes that module, its id replacing the local one in its tasks and moves; the upload records each uploaded task in a module as a move at the upload's time; earlier moves stay local, as organization history does. Make local keeps the modules, each task's module and the moves ([Modules](#modules)) | architect (ORC-78, 2026-10-22) |
 | 71 | Modules offline | Until S4 builds the outbox, module writes in a shared project fail at once offline, as task writes do; with S4 a create waits in the outbox with the id made on the desktop, a change with its revision (in `conflict` when met by a newer one), and a move in its task's change ([Modules](#modules)). **Under 27** | user (ORC-78, 2026-10-22) |
+| 72 | Who changes the team's configuration | In a shared project, the team's configuration (pipelines, agent profiles, instructions, skills, tools of every kind) is changed only by admins: the project's owner or the team server's admin. Members read it and run with it, on the desktop and in the web app; they have no drafts of shared resources. Admins change it in both places; every write of S5's resource endpoints answers a member `403 not_admin`. Core decides it with `sharing::may_change_configuration` ([Shared configuration](#shared-configuration)). **Changes 30 and 52** | user (2026-10-29) |
+| 73 | Snapshot and deltas | The project stream sends a client without a cursor, or with one older than the 30-day retention, a paged snapshot (`snapshot.begin`, `snapshot.tasks` pages of 64, `snapshot.end { cursor }`) with the project, members, tags, modules and tasks, later resources; a cursor inside the retention gets only the deltas after it, and `reset` goes away. Every delta carries `id`, `by`, `actor` (person or Orchester) and `at`; `task.changed` holds only the changed fields with `revision` and `base`, and a client applies it only when its cached revision equals `base`, otherwise it reads the task again; its own changes come back and are skipped by revision. The deltas are the record of who did what; there is no `activity` event, and the server's Activity feed stays. Not included: presence, typing, docs and plugins ([Events](#events)). **Extends 7 and 22; replaces the `task`, `members`, `tags`, `project`, `modules`, `resources` and `reset` kinds** | user (ORC-392, 2026-10-29) |
+| 74 | Local pipelines in a shared project | In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
 
 ## Processes and crates
 
@@ -297,7 +300,7 @@ A claim says who has taken a task into work. A task has at most one; the server 
 | *Take* (manual) | Takes the claim if the task has none: an atomic check-and-set on the server. Held by someone else: refused with the holder, since when and whether the claim is stale. Needs the server |
 | Starting work on a shared task: Create & run, Start, Run again, continuing a paused or interrupted run, Send & continue, a follow-up message | Online: the desktop takes the claim first, or confirms that this person holds it, then asks the runner. Held by someone else: nothing starts and the desktop names the holder. Offline: see *Offline* below. Pause and cancel never need the claim |
 | Heartbeat | Every 60 s while the desktop runs and is signed in, one request per server names the claimed tasks in the projects this desktop has joined, except those whose latest run here was merged or cancelled (their claim ends). The server refreshes those the caller still holds and returns the ones they lost. The desktop records the server time of the last answered heartbeat per server |
-| Stale | No heartbeat for 15 min. Shown as stale, not as free. The server sends a `task` event when a claim becomes stale and when a stale claim is refreshed, so watchers never compute staleness from an old heartbeat ([Live updates](#live-updates)) |
+| Stale | No heartbeat for 15 min. Shown as stale, not as free. The server sends a `task.claim` delta (`stale`, `refreshed`) when a claim becomes stale and when a stale claim is refreshed, so watchers never compute staleness from an old heartbeat ([Live updates](#live-updates)) |
 | *Take over* | Only a stale claim, after an explicit confirmation in place that names the holder and the last heartbeat. The request names the claim it saw; if that claim changed or was refreshed meanwhile, the request is refused. The takeover is recorded (from, to, when) and the old holder is told on their next connection. Needs the server |
 | *Release* | By the holder, while none of their runs of the task has an agent at work. Offline it waits in the outbox; the claim stays the person's until the server took the release |
 | Run cancelled | The claim is released (the cancelled progress is reported; waits in the outbox while offline) |
@@ -381,7 +384,8 @@ Tags belong to the server project and replace the project's local tags while it 
 merge and delete them with ORC-39's rules: a name is a core `Name`, unique in the project without regard to case
 (`409 tag_exists`); merge moves every assignment of a tag into another and removes it (`409 same_tag` for itself);
 delete removes the tag from every task. Merge and delete rewrite each affected task in one transaction, raise its
-revision, write its history row and send its `task` event, then a `tags` event.
+revision, write its history row and send its `task.changed` delta, then a `tag.merged` or `tag.deleted` delta
+(row 73).
 
 **Offline.** Creating a tag works offline: the tag gets a temporary id locally, the create waits in the outbox
 (with an idempotency key), and task changes that assign it wait behind it. When the server answers, or answers
@@ -394,8 +398,8 @@ team*.
 
 Owners (and admins) change a member's role with `PATCH …/members/{user}` (row 25), in the server admin (row 63);
 the desktop shows members and roles read-only. The last owner can be neither
-made a member nor removed (`409 last_owner`). Role changes are audited and send a `members` event. Members and roles
-need the server; they never wait in the outbox.
+made a member nor removed (`409 last_owner`). Role changes are audited and send a `member.role_changed` delta
+(row 73). Members and roles need the server; they never wait in the outbox.
 
 ## Modules
 
@@ -425,10 +429,12 @@ modules and which tasks are in them. The server calls core's module rules and ad
 - **Idempotency.** A module create and a module change carry an idempotency key; the server keeps the first answer
   per (project, user, key) for 30 days in `change_keys`, as [Idempotency](#idempotency) says, and answers a repeat
   with it. A move travels in the task change (`PATCH …/tasks/{task}`), whose key comes with S4 (N6a).
-- **Events.** A create, a change and an upload that adds modules send a `modules` event with the project's
-  modules. A move sends the task's `task` event (its snapshot has `module`); the moves themselves are read with
-  `GET …/modules?after=<the last sequence the cache has>`, which S2d's stream does when a `task` event changes a
-  task's module.
+- **Events.** ~~A create, a change and an upload that adds modules send a `modules` event with the project's
+  modules; a move sends the task's `task` event.~~ **Replaced by 73:** a create sends `module.created` and a change
+  `module.changed`, each with the module; an upload sends `module.created` for each module it adds. A move sends the
+  task's `task.changed` with `module`; the moves themselves are read with
+  `GET …/modules?after=<the last sequence the cache has>`, which S2d's stream does when a `task.changed` changes a
+  task's module ([Events](#events)).
 - **Share** (S2b, row 70). The first checkout's link uploads every module of the project (`modules` in
   `POST …/link`) and each task's `module` in `UploadTask`. An uploaded module keeps its id, or becomes the project's
   module of its name when the project has one (`mapped` in the answer lists them). The server records each uploaded
@@ -484,16 +490,25 @@ environment variables or secrets. The fields above are all it gets.
 
 ## Shared configuration
 
-Rows 30 and 52. Pipelines, agent profiles, instructions, skills and tools of every kind (command, HTTP, database)
+Rows 30, 52 and 74. Pipelines, agent profiles, instructions, skills and tools of every kind (command, HTTP, database)
 are shared resources of the server project. What a tool needs that belongs to the person (its secrets, the MCP
-servers and connections around it) stays on each computer and is bound there.
+servers and connections around it) stays on each computer and is bound there. Besides the team's pipelines, each
+person may keep [local pipelines](#local-pipelines) that are never sent.
 
 | Part | Where it lives |
 | --- | --- |
 | Resource (id, kind, slug, name, archived) | Server; cached locally. Ids are the sharer's `ResourceId`s, kept on upload as task ids are |
 | Published versions (`v1..vN`, immutable) | Server; numbered by the server; cached locally with who published them and when |
-| Draft | Local only, per person, based on a server version. Publishing sends it |
+| Draft | Local only, per admin, based on a server version. Publishing sends it. A member has none (row 72) |
+| A person's local pipeline, its drafts and versions (row 74) | Local only, per person; never sent. A shared task that names one keeps only its name and whose it is |
 | Connections, CLI accounts, MCP servers and their credentials, secrets, environment | Local only, per person |
+
+**Who publishes** (row 72). Only admins change the team's configuration: the project's owner or the team server's
+admin. They edit drafts, publish versions, create, import, rename and archive resources and upload their files, on
+the desktop and in the web app. A member reads every resource and its versions and runs with them, but has no drafts
+of shared resources; every write of the resource endpoints answers a member `403 not_admin`. The server and the
+desktop decide it with one core function, `sharing::may_change_configuration`, from the person's project role and
+whether they are the server's admin.
 
 **Publishing.** *Publish* sends the draft as a new version based on the version it was edited from. The server gives
 it the next number when that base is still the latest. If someone published meanwhile, the server refuses with the
@@ -551,6 +566,40 @@ data. Core does the walk with `import`'s reference functions; it is not written 
 reference; any other local connection, MCP server or secret becomes a new reference with its kind, name and
 role. Nothing about it is sent beyond those three words: never its settings, account, credentials, values or
 program.
+### Local pipelines
+
+Row 74 (the person, 2026-10-29). In a shared project a person may keep pipelines of their own beside the team's. The
+team's pipelines stay shared and admin-only (row 72); a local pipeline stays on the person's computer and is never
+sent to the team server.
+
+- **Kind.** A local pipeline is a local resource of the project, as every resource of a project that is not shared.
+  Making it, editing its draft, publishing its versions, archiving and running it need no admin: members and admins
+  alike. Publishing it makes a local version only (numbered on this computer), never a server version and never an
+  outbox entry. The resource's `sharing` is empty, as for a local project's resources; core's
+  `sharing::may_change_configuration` answers only for shared resources.
+- **Share and sync.** Share's `POST …/resources/import`, Join's upload and sync never upload a local pipeline: the
+  upload takes only shared resources, and nothing else about a local pipeline reaches the server. Share and the Join
+  review list it under *Stays on this computer*, and *What sharing sends* says *Pipelines you keep only on this
+  computer* among what stays here. At Join, *Keep on this computer* on a pipeline keeps it as a local pipeline,
+  runnable as before, instead of *Not shared*; other kinds kept at Join stay *Not shared* as before.
+- **Steps.** A local pipeline's steps may use the team's profiles (pinned to the team's versions, resolved with this
+  computer's bindings like any run) and the person's own local profiles. The team's profiles stay read-only for a
+  member; the pipeline only names them.
+- **Tasks.** A shared task that names a local pipeline keeps on the server only its name and kind: `TaskContent`'s
+  `pipeline` becomes `slug | { local: { name, of: user id } } | null`. The body, the steps and the versions never
+  leave the computer. The person who made it runs the task with it as with any pipeline. Other members see *a local
+  pipeline of <person>* and cannot run the task with it: *Run* is unavailable with that reason until they choose a
+  team pipeline or one of their own in the task's *Pipeline*, which changes the task as any edit does (row 18). A
+  run's progress (row 29) names the pipeline the same way.
+- **Promotion.** An admin may *Publish for the team* on their own local pipeline, after a confirmation. It is
+  uploaded with its id and slug (a taken slug asks for a free one) and becomes a team resource from that version
+  on: the new version is the team's `v1`, and the earlier local versions stay on this computer as its history, kept
+  by the runs that pinned them. It is unavailable while a step uses a local profile, with that reason: the profile is
+  published for the team first, or the step picks a team profile. Tasks that named it as local name its slug from
+  then on. A member has no *Publish for the team*; they ask an admin.
+- **Make local.** Make local keeps local pipelines as they are; they were never the server's. Tasks that named
+  another person's local pipeline keep its name and show it as missing, as an unresolved pipeline does today.
+
 
 ### Skills in the database
 
@@ -618,9 +667,9 @@ state through a watch channel.
 | `config` | Resource sync, publishing, references and bindings |
 | `state` | The sync state per server, project and task, for the status bar, the lists and the MCP tools |
 
-The minute-by-minute poll of S2b (`sharing::project::work`) ends with S2d: the stream replaces it. A full read of the
-project (tasks, tags, members, resources) remains for the first open, a `reset` event, and *Check again*. The
-heartbeat loop stays.
+The minute-by-minute poll of S2b (`sharing::project::work`) ends with S2d: the stream replaces it. The stream's
+snapshot ([Events](#events)) gives the first open and a cursor past the retention the whole project; a full read
+(tasks, tags, members, resources) remains for *Check again*. The heartbeat loop stays.
 
 ### Entries
 
@@ -673,17 +722,20 @@ renaming, merging or deleting tags, binding references. These need the server an
 
 ### Cursor and applying events
 
-- The stream starts from `sharing.event_cursor`. Each event is applied and the cursor advanced in one transaction,
-  so a crash replays at most the event it was applying; applying is idempotent (a snapshot not newer than the cached
-  revision changes nothing).
-- A `task` event replaces the task's confirmed snapshot (its revision, content, organization, claim and progress).
-  When the person has waiting changes for it, their view is recomputed on top: core's `ContentMerge` and
-  `TaskOrganization::rebase` of the waiting change over the new snapshot. A clean merge rebases the waiting entry to
-  the new revision; a field both changed puts the entry in `conflict` before it is even sent, so the person learns it
-  as soon as possible.
-- The person's own changes come back as events too; the cache has them already and skips them.
-- `reset` (cursor older than 30 days) reloads the project and continues from the cursor the task list returns; waiting
-  entries are rebased on the reloaded tasks the same way.
+- The stream starts from `sharing.event_cursor`, or without a cursor the first time. Each delta is applied and the
+  cursor advanced in one transaction, so a crash replays at most the delta it was applying; applying is idempotent (a
+  `revision` not newer than the cached one changes nothing). The kinds are those of [Events](#events) (row 73).
+- A `task.changed` whose `base` equals the cached revision is applied to the task's confirmed state (its fields, and
+  the new `revision`); one whose `base` differs makes the desktop read the task again and take it as the confirmed
+  state. `task.created` adds a task, `task.claim` replaces its claim and `task.run` its run's phase and step.
+- When the person has waiting changes for a task whose confirmed state moved, their view is recomputed on top: core's
+  `ContentMerge` and `TaskOrganization::rebase` of the waiting change over the new state. A clean merge rebases the
+  waiting entry to the new revision; a field both changed puts the entry in `conflict` before it is even sent, so the
+  person learns it as soon as possible.
+- The person's own changes come back as deltas too; the cache has them already and skips them by revision.
+- A cursor older than 30 days, or none, gets the snapshot ([Events](#events)): at `snapshot.end` the desktop replaces
+  the confirmed cache and continues from its `cursor`; waiting entries are rebased on the snapshot's tasks the same
+  way.
 
 ### Conflicts
 
@@ -736,22 +788,77 @@ renaming, merging or deleting tags, binding references. These need the server an
   the protocol (`id:` and `Last-Event-ID`). axum serves it without another crate.
 - **Events.** The server appends one row to `events` in the transaction of every change and wakes the streams.
   Each stream then reads the events after its cursor from the database, so a slow client misses nothing. Event `id`
-  is the event's sequence number.
-- **Kinds.** `task` (the full task snapshot, with organization, module, claim and progress; also when a claim becomes
-  stale or a stale claim is refreshed), `members`, `tags`, `project` (`{ id, key, name }`), `modules` (`{ modules:
-  [Module] }` after a module is made or changed, or an upload adds modules; schema 7, [Modules](#modules)),
-  `resources` (new: a resource's
-  metadata and latest version number after a create, publish, rename or archive; the body is read with `GET …/versions`),
-  `reset` (the cursor is older than the retention, 30 days) and `revoked` (the session or membership ended).
+  is the event's sequence number. The kinds are those of [Events](#events) below (row 73).
 - **Staleness transitions.** A sweep once a minute marks claims whose last heartbeat is 15 minutes old and sends their
-  `task` event; a heartbeat that refreshes a marked claim clears the mark and sends one. Heartbeats that only keep a
-  fresh claim fresh send nothing. This closes S1b's open minor (watchers could not see staleness).
+  `task.claim` delta (`stale`); a heartbeat that refreshes a marked claim clears the mark and sends one (`refreshed`).
+  Heartbeats that only keep a fresh claim fresh send nothing. This closes S1b's open minor (watchers could not see
+  staleness).
 - **Keep-alive.** A comment line every 20 s; `X-Accel-Buffering: no` for nginx.
-- **Desktop.** On open, the desktop subscribes from the cache's cursor; the server replays what it missed. Reconnects
-  back off from 1 s, doubling to 60 s, with jitter. `401` means *signed out*; `403` or `revoked` means *no longer a
-  member*. Applying follows [Cursor and applying events](#cursor-and-applying-events).
+- **Desktop.** On open, the desktop subscribes from the cache's cursor, or without one the first time; the server
+  sends the snapshot or replays what it missed. Reconnects back off from 1 s, doubling to 60 s, with jitter. `401`
+  means *signed out*; `403` or `revoked` means *no longer a member*. Applying follows
+  [Cursor and applying events](#cursor-and-applying-events).
 - **Connection state** per server: *connected*, *reconnecting*, *offline*, *signed out*, *not a member* (per
   project). The status bar shows it for the servers of open shared projects.
+
+### Events
+
+The person's decision of 2026-10-29 (row 73): a snapshot on connect, then deltas that say who did what. It replaces
+the earlier kinds `task` (a full task on every change), `members`, `tags`, `project`, `modules` (ORC-78), the planned
+`resources` (API 3) and `reset`; S2d builds it, S5 adds the resource deltas.
+
+**Connect.** A client without a cursor, or with one older than the 30-day retention, first gets a paged snapshot. A
+client with a cursor inside the retention gets only the deltas after it. There is no `reset` event: a cursor too old
+to resume from simply gets the snapshot.
+
+| Kind | Payload |
+| --- | --- |
+| `snapshot.begin` | `{ project: Project, members: [Member], tags: [Tag], modules: [Module] }`, and with S5 `resources: [Resource]` (each with its latest version number) |
+| `snapshot.tasks` | `{ tasks: [Task] }`, at most 64 tasks a page, as many pages as the project needs |
+| `snapshot.end` | `{ cursor }`: the sequence of the last event the snapshot includes |
+
+- The snapshot is read in one database transaction, so it is one consistent state; `cursor` is the last sequence at
+  that moment, and the deltas after it follow on the same stream. Snapshot events carry no SSE `id:`; the desktop's
+  cursor moves only at `snapshot.end` and with each delta.
+- The desktop keeps the pages aside and, at `snapshot.end`, replaces the project's confirmed cache (project, members,
+  tags, modules, tasks, later resources) and sets the cursor in one transaction. A stream that breaks before
+  `snapshot.end` leaves the cache as it was, and the next connect sends the snapshot again.
+
+**Deltas.** Every delta carries `id` (its sequence), `by: UserRef` (who did it), `actor: "person"|"orchester"` (a
+person's own action, or Orchester acting for them: a run, the staleness sweep, a merge) and `at`, beside the fields
+of its kind:
+
+| Kind | Fields |
+| --- | --- |
+| `task.created` | `task: Task`, the full task (a create, an import, an upload at Share or Join) |
+| `task.changed` | `task` (its id), `revision` (after the change), `base` (the revision it was made on), and only the fields that changed: content `title`, `brief`, `criteria`, `pipeline`, `limits`, `status`, `module`; organization `priority`, `workflow`, `tags_added`, `tags_removed`, `blocked_by` (the task's blocking links `[{ task, gate }]` as they are now), `blocked_reason` |
+| `task.claim` | `task`, `claim: Claim\|null` (as it is now), `action`: `taken`, `released`, `taken_over`, `completed` (a merge), `stale` or `refreshed` (the sweep and a heartbeat, `actor` `orchester`, `by` the holder) |
+| `task.run` | `task`, `number`, `phase`, `step: { key, name }\|null`, `phase_since`, `updated_at`; light: the rest of the task's `RunStatus` (waiting kind, step results, branch, pull request) is read with the task |
+| `tag.created` | `tag: Tag` |
+| `tag.renamed` | `tag: Tag` (its new name) |
+| `tag.deleted` | `tag` (its id); every task it is removed from sends its own `task.changed` |
+| `tag.merged` | `from` (the tag that goes away), `into: Tag`; every rewritten task sends its own `task.changed` |
+| `module.created` | `module: Module` |
+| `module.changed` | `module: Module` (a module change replaces its fields as a whole, row 68); a task's move is its `task.changed` `module`, and the moves' history is still read with `GET …/modules?after=` |
+| `member.added` | `member: Member` |
+| `member.removed` | `user` (its id) |
+| `member.role_changed` | `user`, `role` |
+| `project.changed` | `project: { id, key, name }` |
+| `resource.published` | `resource` with its metadata and the new version number; the body is read with `GET …/versions` (S5) |
+| `resource.renamed` | `resource`, `name` (S5) |
+| `resource.archived` | `resource`, `archived`: `true` when it was archived, `false` when it was restored (S5) |
+| `revoked` | `{}`: the session or this person's membership ended; the stream closes after it |
+
+**Applying.** A client applies `task.changed` only when its cached revision of that task equals `base`; otherwise it
+reads that task again (`GET …/tasks/{task}`) and takes it as the confirmed state. A client's own changes come back as
+deltas too; it already has them and skips them by revision (a delta whose `revision` is not newer than the cached one
+changes nothing). The other kinds are applied as they come and are idempotent.
+
+**Who did what.** The deltas are the record of who did what: each names the person and whether Orchester acted for
+them, so a client can show it next to the change. There is no separate `activity` event; the server's Activity feed
+stays as it is.
+
+**Not included:** ephemeral events (presence, typing), docs and plugins.
 
 ## API
 
@@ -772,7 +879,7 @@ Invite      { id, kind: "server"|"project"|"account", email|null, project|null, 
               by: UserRef, delivery: "cloud"|"code", expires_at }                                       // API 3
 Project     { id, slug, address, key, name, remote_hint|null, role: "owner"|"member"|null, next_number } // API 3: slug, address, remote_hint (was remote)
 Member      { user: UserRef, role, added_at }
-TaskContent { title, brief, criteria: [string], pipeline: slug|null,
+TaskContent { title, brief, criteria: [string], pipeline: slug|{ local: { name, of: user id } }|null, // local: row 74
               limits: { budget_tokens, max_duration_ms }|null,
               ...Organization, module: module id|null }                                     // module: ORC-78
 Organization { workflow: "backlog"|"todo"|"in_progress"|"in_review"|"done"|"canceled",
@@ -827,8 +934,9 @@ Every response carries `Orchester-Server-Time` (the server's clock, for stalenes
 ### Endpoints
 
 Auth column: **none**; **user** (any signed-in user); **member** (of the project); **owner** (owner of the project
-or admin); **admin**; **holder** (member holding the task's claim). The *Since* column marks what API 3 adds or
-changes; the rest is built (S1a, S1b).
+or admin); **admin**; **admin (row 72)** (the project's owner or the server's admin, core's
+`sharing::may_change_configuration`; a member gets `403 not_admin`); **holder** (member holding the task's claim).
+The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b).
 
 | Method and path | Auth | Request | Response | Errors | Since |
 | --- | --- | --- | --- | --- | --- |
@@ -880,14 +988,14 @@ changes; the rest is built (S1a, S1b).
 | `POST /projects/{id}/modules` | member | `{ idempotency_key, id, module: ModuleFields }` | `201 { module }` at revision 1; a repeated key returns the first answer | `409 module_exists { module }`, `409 id_taken`, `422 module { reason: "target_before_start" }`, `422 invalid` | ORC-78 |
 | `PATCH /projects/{id}/modules/{module}` | member | `{ idempotency_key, revision, module: ModuleFields }` (the fields as a whole) | `{ module }`; the same fields change nothing; a repeated key returns the first answer | `404`, `409 revision_conflict { current: Module }`, `409 module_exists { module }`, `422 module { reason }`, `422 invalid` | ORC-78 |
 | `GET /projects/{id}/resources` | member | | `{ resources: [Resource], cursor }` | | new in 3 (S5) |
-| `GET /projects/{id}/resources/{resource}/versions?after={n}` | member | | `{ versions: [Version] }`, oldest first, at most 64 or 1 MiB (then `next`) | `404` | new in 3 (S5) |
-| `POST /projects/{id}/resources` | member | `{ idempotency_key, id, kind, slug, name, version: { body, references } }` | `201 { resource, version }` (v1) | `409 slug_taken { resource }`, `409 id_taken`, `422 invalid { reason }` | new in 3 (S5) |
-| `POST /projects/{id}/resources/import` | member | `{ idempotency_key, resources: [UploadResource] }` | `201 { resources: [Resource] }`; version numbers kept | `409 slug_taken { resource }`, `409 id_taken`, `422 invalid` | new in 3 (S5) |
-| `POST /projects/{id}/resources/{resource}/versions` | member | `{ idempotency_key, based_on, body, references }` | `201 { version }` with the next number | `409 version_conflict { latest: Version }`, `409 archived`, `422 missing_files { hashes }`, `422 invalid { reason }` | new in 3 (S5) |
-| `PATCH /projects/{id}/resources/{resource}` | member | `{ idempotency_key, revision, name?, archived? }` | `{ resource }` | `409 revision_conflict { current }`, `422 invalid` | new in 3 (S5) |
-| `PUT /projects/{id}/files/{sha256}` | member | raw bytes (`application/octet-stream`), at most 1 MiB | `201`, or `200` when the server has it; idempotent by its hash | `422 hash_mismatch`, `413 payload_too_large` | new in 3 (S5, row 37) |
+| `GET /projects/{id}/resources/{resource}/versions?after={n}` | member | | `{ versions: [Version], next? }`: the versions after `after` (all without it), oldest first, at most 64 or 1 MiB; `next`, the `after` of the following page, only when there is one | `404` | new in 3 (S5) |
+| `POST /projects/{id}/resources` | admin (row 72) | `{ idempotency_key, id, kind, slug, name, version: { body, references } }` | `201 { resource, version }` (v1) | `403 not_admin`, `409 slug_taken { resource }`, `409 id_taken`, `422 invalid { reason }` | new in 3 (S5); admin row 72 |
+| `POST /projects/{id}/resources/import` | admin (row 72) | `{ idempotency_key, resources: [UploadResource] }` | `201 { resources: [Resource] }`; version numbers kept | `403 not_admin`, `409 slug_taken { resource }`, `409 id_taken`, `422 invalid` | new in 3 (S5); admin row 72 |
+| `POST /projects/{id}/resources/{resource}/versions` | admin (row 72) | `{ idempotency_key, based_on, body, references }` | `201 { version }` with the next number | `403 not_admin`, `409 version_conflict { latest: Version }`, `409 archived`, `422 missing_files { hashes }`, `422 invalid { reason }` | new in 3 (S5); admin row 72 |
+| `PATCH /projects/{id}/resources/{resource}` | admin (row 72) | `{ idempotency_key, revision, name?, archived? }` | `{ resource }` | `403 not_admin`, `409 revision_conflict { current }`, `422 invalid` | new in 3 (S5); admin row 72 |
+| `PUT /projects/{id}/files/{sha256}` | admin (row 72) | raw bytes (`application/octet-stream`), at most 1 MiB | `201`, or `200` when the server has it; idempotent by its hash | `403 not_admin`, `422 hash_mismatch`, `413 payload_too_large` | new in 3 (S5, row 37); admin row 72 |
 | `GET /projects/{id}/files/{sha256}` | member | | raw bytes | `404` | new in 3 (S5, row 37) |
-| `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403`, `429 rate_limited` | `resources` kind in 3; `modules` kind ORC-78 |
+| `GET /projects/{id}/events` | member | `Last-Event-ID` header (none, or older than 30 days: the snapshot first) | `text/event-stream`: `snapshot.begin`, `snapshot.tasks`, `snapshot.end`; `task.created`, `task.changed`, `task.claim`, `task.run`; `tag.created`, `tag.renamed`, `tag.deleted`, `tag.merged`; `module.created`, `module.changed`; `member.added`, `member.removed`, `member.role_changed`; `project.changed`; `resource.published`, `resource.renamed`, `resource.archived` (S5); `revoked` | `401`, `403`, `429 rate_limited` | row 73 (S2d): these kinds replace `task`, `members`, `tags`, `project`, `modules` (ORC-78), the planned `resources` (3) and `reset` |
 | `GET /admin/users` | admin | | `{ users: [User] }` | | |
 | `DELETE /admin/users/{id}/cloud` | admin | | `{ user }`: the account linked to no cloud identity, audited | `404 not_found` | new in 3 ([Codes](#codes)) |
 | ~~`POST /admin/users`~~ | | | | | removed in 3: accounts come from invites |
@@ -914,13 +1022,22 @@ A skill's parts are not in its body: the body lists them by path, hash, size and
 uploaded first with `PUT …/files/{sha256}`. A create, import or publish that names a part the project lacks answers
 `422 missing_files`; one over core's `SkillLimits` answers `422 invalid { reason: "skill_size" }` ([Skills in the
 database](#skills-in-the-database)). `hash` is core's content hash of the body. Import keeps ids and version numbers and names the uploader as each
-version's publisher, with the original `published_at`.
+version's publisher, with the original `published_at`. A `Reference` carries its kind beside its id, so the id's type
+follows from it: a connection's or an MCP server's id is a `ConnectionId`, a secret's a `SecretId`, a tool's a
+`ResourceId`. Every write of these endpoints, file uploads included, answers a member `403 not_admin` with no details.
+
+The contract is `orchester-api`'s `resources.rs` (`SharedResource`, `SharedVersion`, `Reference`, `UploadResource`,
+the requests `ResourceCreate`, `ResourcesImport`, `VersionPublish`, `ResourcePatch`, and the answers) and its client's
+`client/resources.rs`: `resources`, `versions`, `create_resource`, `import_resources`, `publish_version`,
+`update_resource`, `upload_file` (`FileStored::Created` for `201`, `Known` for `200`) and `file`. The error details are
+`SharingErrorDetails`' `Resource` (`slug_taken`), `Version` (`version_conflict`), `Files` (`missing_files`),
+`ResourceRevision` (`revision_conflict`) and `Reason` (`invalid`).
 
 **Progress reports.** `PUT …/run` replaces the task's report. The server checks the shape (step keys unique, `step`
 among `steps`, `waiting_for` only with `waiting`, `stuck` or `stopped_at_limit`; a URL that is `https`), stores it,
-and sends the `task` event. It derives nothing else from it except the claim ends of row 15. Today's contract
-(ORC-284, `orchester-api`'s `RunReport` and `Client::report_run`) carries `number`, `phase`, `step` (its name),
-`started_at` and `phase_since`; row 29's other fields come with S3. Only the holder reports (`409 not_holder` with
+and sends the `task.run` delta (row 73). It derives nothing else from it except the claim ends of row 15. Today's
+contract (ORC-284, `orchester-api`'s `RunReport` and `Client::report_run`) carries `number`, `phase`, `step` (its
+name), `started_at` and `phase_since`; row 29's other fields come with S3. Only the holder reports (`409 not_holder` with
 the claim otherwise); `merged` completes the claim, `cancelled` releases it (as `DELETE …/claim` does), and every other
 phase is stored as the task's `run` with the claim kept. A server without the route answers `404 not_found` or
 `405 method_not_allowed`, which the desktop takes as *not supported* ([Claims](#claims)).
@@ -946,13 +1063,14 @@ so task snapshots and history describe the same organization. Unknown tag ids re
 
 **Sharing resource limits.** Heartbeats accept at most 256 ids and 12 requests per 60-second window per session.
 Excess requests receive `429 rate_limited` with `Retry-After`; a heartbeat that only refreshes freshness emits no
-event or full task snapshot. Freshness is authoritative on subsequent task reads and takeover checks. SSE admits
+delta. Freshness is authoritative on subsequent task reads and takeover checks. SSE admits
 at most 8 simultaneous streams per session and 16 per user, including connections through trusted proxies, with
 `429 rate_limited` and `Retry-After: 1` when full. Disconnects and revocations release that capacity.
 
 Event retention is pruned on successful sharing writes at most once per minute, with an index on `(project, at)`;
 replay excludes expired rows between prunes. Replay batches up to 64 events and 1 MiB of payload (a single larger
-snapshot is sent alone), preserving order while bounding memory and database round trips.
+event is sent alone), preserving order while bounding memory and database round trips. A cursor below the project's
+expired event cursor floor gets the snapshot of [Events](#events) (row 73).
 
 Event sequence numbers remain globally monotonic in S1b. Gaps can reveal that another project changed, but never
 its identity or event data; this metadata tradeoff is accepted for S1b. A task-id collision outside the caller's
@@ -1680,7 +1798,7 @@ milliseconds. Rows marked *3* are new or changed for API 3.
 | `resource_versions` (*3*) | resource, number (unique per resource), body (JSON), hash, based on, published by / at |
 | `files` (*3*) | project, sha256, size, content (zstd); unique (project, sha256): the parts of skill versions |
 | `version_references` (*3*) | version, reference id, kind, name, role |
-| `events` | append-only: sequence, project, kind (*3*: adds `resources`; schema 7: adds `modules`, the table rebuilt with its sequence carried over), payload, at; older than 30 days removed |
+| `events` | append-only: sequence, project, kind (*3*: adds `resources`; schema 7: adds `modules`, the table rebuilt with its sequence carried over; S2d: the delta kinds of [Live updates](#live-updates) replace them, row 73), by, actor, payload, at; older than 30 days removed |
 | `audit_events` | append-only: actor, action, target, address, at |
 
 **Numbers.** Task numbers come from `projects.next_task_number`, read and raised in the inserting transaction; version
@@ -1818,7 +1936,7 @@ later through the same import. Keeping them as live local-only tasks beside the 
 would have two sources, and the rules for them have no good answers.
 
 **Not shared:** daily token budgets and usage, conversations and memory, connections, CLI accounts, secrets,
-environment, task and project sources, limits settings, and the code itself.
+environment, task and project sources, limits settings, the person's local pipelines (row 74), and the code itself.
 
 ## Platforms
 
@@ -1915,12 +2033,26 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
 - [ ] Repository skill folders are no longer loaded: Codex always disables them, the native agent and `list_skills`
   offer Orchester's skills only; *Repository agent files* covers `AGENTS.md` only.
 
-**S2d · Live task list and claims.**
-- [ ] Server: the staleness sweep and its `task` events; a test with the settable clock sees a claim's event when it
-  becomes stale and when it is refreshed, and none for a refresh of a fresh claim.
-- [ ] The SSE parser moved to `orchester-api`; the client reads the event stream.
-- [ ] One stream per open shared project, resumed from the cached cursor, with backoff and `reset` handled; two
-  workspaces on one project see each other's changes within a second on loopback. The minute poll is gone.
+**S2d · Live task list and claims** (row 73).
+- [ ] Server: the event kinds of [Live updates](#live-updates) replace `task`, `members`, `tags`, `project`, `modules`
+  and `reset`; every delta carries `id`, `by`, `actor` and `at`, and `events` rows keep them. Tests: each change
+  endpoint appends its delta with the right fields (a `task.changed` holds only the fields that changed, with
+  `revision` and `base`); a tag delete or merge appends `tag.deleted`/`tag.merged` and a `task.changed` per rewritten
+  task.
+- [ ] Server: the connect snapshot. A stream without a cursor, or with one older than the 30-day retention, gets
+  `snapshot.begin`, `snapshot.tasks` pages of 64 and `snapshot.end { cursor }`, then the deltas after that cursor; a
+  cursor inside the retention gets only the deltas after it. A test with 130 tasks sees three pages, and a change made
+  while the snapshot is sent arrives as a delta after `snapshot.end`.
+- [ ] Server: the staleness sweep and its `task.claim` deltas; a test with the settable clock sees `stale` when a claim
+  becomes stale and `refreshed` when it is refreshed, and none for a refresh of a fresh claim. Take, release, takeover
+  and a merge's completion send `taken`, `released`, `taken_over` and `completed`.
+- [ ] Server: `task.run` on every accepted progress report, with `number`, `phase`, `step`, `phase_since` and
+  `updated_at` only.
+- [ ] The SSE parser moved to `orchester-api`; the client reads the event stream and its kinds.
+- [ ] One stream per open shared project, resumed from the cached cursor, with backoff; the snapshot replaces the cache
+  in one transaction at `snapshot.end`; a `task.changed` whose `base` is not the cached revision makes the desktop
+  read that task again; its own changes are skipped by revision. Two workspaces on one project see each other's
+  changes within a second on loopback. The minute poll is gone.
 - [ ] Take, Release and Take over on the task row and page; a lost claim is announced.
 
 **S3 · Shared run progress** (extended by row 29).
@@ -1951,7 +2083,11 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
 
 **S5 · Shared configuration** (rows 30, 35–37).
 - [ ] Server: `resources`, `resource_versions`, `version_references`, `files`, the endpoints of API 3 with core's body
-  checks, `resources` events.
+  checks; the `resource.published`, `resource.renamed` and `resource.archived` deltas (each with `by`, `actor` and
+  `at`) and the project's resources in the connect snapshot's `snapshot.begin` (row 73; they replace the planned
+  `resources` kind).
+- [ ] The desktop applies the resource deltas to its resource cache and reads a published version's body with
+  `GET …/versions`; a stream test sees each of the three deltas name who made the change.
 - [ ] Core: references of a body and their resolution through bindings, reusing `import`'s walk; *widens* over two
   versions.
 - [ ] Store and workspace: the resource cache with local bodies, bindings, `RemoteResourceStore`, skill parts uploaded
@@ -1971,8 +2107,8 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
 - [x] Store and workspace: the module cache, `RemoteTaskStore`'s module writes through `TaskWriter` (the Modules page,
   the task form's and task page's module picker, the domain tools), sync of modules and moves, Share and Join
   uploads, Make local; `crates/workspace/tests/shared_modules.rs` on loopback.
-- [ ] With S4: module creates and changes in the outbox (row 71); with S2d: the `modules` event and a `task` event's
-  module applied from the stream.
+- [ ] With S4: module creates and changes in the outbox (row 71); with S2d: `module.created` and `module.changed`,
+  and a `task.changed` delta's `module`, applied from the stream (row 73).
 
 **Later.** Cloud sign-in by magic link, Google and GitHub (row 48); comments on tasks; notifications; Postgres for
 several server instances.

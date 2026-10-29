@@ -1,10 +1,11 @@
-//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills and test suites
-//! share one lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
-//! versions, so publishing affects new runs only.
+//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills, test suites,
+//! services and stacks share one lifecycle — one editable draft and immutable published versions
+//! `v1..vN`. Runs pin versions, so publishing affects new runs only.
 //!
-//! Bodies reference other resources, connections and secrets by id only, except a test suite, which
-//! names its secrets and the services it needs ([`TestSuite`]). Which published version of a
-//! referenced resource is used is decided when a run snapshots its configuration, not inside a body.
+//! Bodies reference other resources, connections and secrets by id only, except a test suite, a
+//! service and a stack, which name their secrets and the services they need ([`TestSuite`],
+//! [`crate::service`]). Which published version of a referenced resource is used is decided when a
+//! run snapshots its configuration, not inside a body.
 
 mod agent_profile;
 mod instruction;
@@ -48,7 +49,10 @@ pub use self::{
   },
   variable::{UnknownVariable, Variable, VariableGroup, VariableType},
 };
-use crate::permission::AgentPermissions;
+use crate::{
+  permission::AgentPermissions,
+  service::{PublishNeeds, Service, Stack},
+};
 
 /// Content of a versioned resource kind, stored as JSON. Deserializing re-runs the domain
 /// constructors, so a stored body that breaks a rule is rejected instead of loaded.
@@ -69,6 +73,12 @@ pub trait ResourceBody: Serialize + DeserializeOwned + PartialEq {
   fn check_publishable(&self) -> Result<(), PublishError> {
     Ok(())
   }
+
+  /// The needs a service or stack must find among the project's published services to be published; `None`
+  /// for every other kind.
+  fn publish_needs(&self) -> Option<PublishNeeds<'_>> {
+    None
+  }
 }
 
 impl ResourceBody for AgentProfile {
@@ -78,10 +88,14 @@ impl ResourceBody for AgentProfile {
   /// 3: MCP servers (2026-09-28). Profiles of schemas 1 and 2 get none.
   /// 4: extra writable folders in the permissions (2026-09-28), left out while there are none, so
   /// profiles of schema 3 have the same shape.
-  const SCHEMA: u32 = 4;
+  /// 5: the approval mode in the permissions (2026-10-29, `docs/design/approval-modes.md`), left out while Manual,
+  /// so every older profile reads as Manual with its commands kept: *Allowed commands* keeps its list as Manual's,
+  /// *Ask before running commands* keeps asking (Manual with no list of its own), and *Any command in the
+  /// worktree* stays as it was, Manual too, until a person switches it to Autopilot.
+  const SCHEMA: u32 = 5;
 
   fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {
-    if schema == 3 {
+    if matches!(schema, 3 | 4) {
       return Some(body);
     }
     let fields = body.as_object_mut()?;
@@ -163,4 +177,22 @@ impl ResourceBody for Skill {
 impl ResourceBody for TestSuite {
   const KIND: ResourceKind = ResourceKind::TestSuite;
   const SCHEMA: u32 = 1;
+}
+
+impl ResourceBody for Service {
+  const KIND: ResourceKind = ResourceKind::Service;
+  const SCHEMA: u32 = 1;
+
+  fn publish_needs(&self) -> Option<PublishNeeds<'_>> {
+    Some(PublishNeeds::Service(self))
+  }
+}
+
+impl ResourceBody for Stack {
+  const KIND: ResourceKind = ResourceKind::Stack;
+  const SCHEMA: u32 = 1;
+
+  fn publish_needs(&self) -> Option<PublishNeeds<'_>> {
+    Some(PublishNeeds::Stack(self))
+  }
 }

@@ -1,4 +1,4 @@
-//! General's identity and repository settings, and Runs' auto mode with its reviewer and *Approved for every run*
+//! General's identity and repository settings, and Runs' Approvals with its reviewer and *Approved for every run*
 //! (`12` `wQy6o`), a page under Runs with Revoke.
 use orchester_core::store::SettingsStore;
 
@@ -46,7 +46,7 @@ fn project_settings_general_turns_off_telling_working_agents_when_the_base_branc
 }
 
 #[test]
-fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
+fn project_settings_auto_mode_without_a_reviewer_says_why() {
   let mut page = Settings::new(false);
   assert!(
     page
@@ -57,8 +57,6 @@ fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
   assert!(!page.exists("settings-reviewer-model"));
   assert!(!page.exists("settings-reviewer-effort"));
   assert!(page.text("settings-auto-open-connections").contains("Open Connections"));
-  page.click("settings-auto-new-runs");
-  assert!(!page.db().auto_mode_settings().expect("auto mode").new_runs);
   page.click("settings-auto-open-connections");
   assert!(matches!(
     page.window.navigation().route_now(),
@@ -66,30 +64,30 @@ fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
   ));
 }
 
-/// Without its opt-ins, automation's input cannot widen auto mode: turning it on, or changing its reviewer once it is
-/// on, is put back and said under the group, and nothing is stored; a person's change then saves.
+/// Automation's input cannot widen what is approved in the person's place: its allowing Autopilot is refused and its
+/// change of the reviewer is put back, each said under its place, and nothing is stored; a person's change then saves.
 #[test]
-fn project_settings_auto_mode_widening_from_automation_is_put_back() {
+fn project_settings_approval_mode_effective_widening_from_automation_is_put_back() {
   use lurq::app::events::with_synthetic_input;
   let mut page = Settings::new(true);
-  with_synthetic_input(|| page.click("settings-auto-new-runs"));
-  page.until("the refusal", |p| p.exists("settings-auto-person-only"));
-  assert!(!page.db().auto_mode_settings().expect("unchanged").new_runs);
-  assert!(!page.switch_on("settings-auto-new-runs"));
-  page.click("settings-auto-new-runs");
+  with_synthetic_input(|| page.click("settings-allow-autopilot"));
+  page.until("the refusal", |p| p.exists("settings-allow-autopilot-person-only"));
+  assert!(!page.db().allow_autopilot().expect("unchanged").is_on());
+  assert!(!page.switch_on("settings-allow-autopilot"));
+  page.click("settings-allow-autopilot");
   page.until("a person's switch saved", |p| {
-    p.db().auto_mode_settings().expect("saved").new_runs
+    p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  assert!(!page.exists("settings-auto-person-only"));
-  let on = page.db().auto_mode_settings().expect("on");
+  assert!(!page.exists("settings-allow-autopilot-person-only"));
+  let before = page.db().auto_mode_settings().expect("the reviewer");
   with_synthetic_input(|| page.choose("settings-reviewer-model", "sonnet"));
   page.until("the reviewer put back", |p| p.exists("settings-auto-person-only"));
   for _ in 0..10 {
     page.window.tree.tick_futures();
     page.window.pass();
   }
-  assert_eq!(page.db().auto_mode_settings().expect("kept"), on);
+  assert_eq!(page.db().auto_mode_settings().expect("kept"), before);
   page.choose("settings-reviewer-model", "sonnet");
   page.until("a person's reviewer saved", |p| {
     p.db()
@@ -101,25 +99,22 @@ fn project_settings_auto_mode_widening_from_automation_is_put_back() {
   page.saved();
 }
 
-/// A person's switch saves at once and shows the new value while it saves; nothing is asked and no input is locked.
+/// A person's switch saves at once; nothing is asked and no input is locked.
 #[test]
-fn project_settings_auto_mode_saves_a_persons_switch_at_once_and_turns_off() {
+fn project_settings_approval_mode_effective_saves_a_persons_switch_at_once_and_turns_off() {
   let mut page = Settings::new(true);
-  page.click("settings-auto-new-runs");
+  page.click("settings-allow-autopilot");
   assert_eq!(page.text("project-settings-save-status"), "Saving…");
-  assert!(
-    page.switch_on("settings-auto-new-runs"),
-    "the switch shows On while it saves"
-  );
   assert!(!page.exists("settings-auto-question"), "nothing is asked");
   assert!(!page.window.link.input_gate().protecting());
-  page.until("auto mode saved", |p| {
-    p.db().auto_mode_settings().expect("saved").new_runs
+  page.until("Autopilot allowed", |p| {
+    p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
-  page.click("settings-auto-new-runs");
-  page.until("auto mode off", |p| {
-    !p.db().auto_mode_settings().expect("saved").new_runs
+  assert!(page.switch_on("settings-allow-autopilot"));
+  page.click("settings-allow-autopilot");
+  page.until("Autopilot not allowed", |p| {
+    !p.db().allow_autopilot().expect("saved").is_on()
   });
   page.saved();
   page.choose("settings-reviewer-connection", "Claude Code");
@@ -148,6 +143,76 @@ fn project_settings_auto_mode_saves_a_persons_switch_at_once_and_turns_off() {
   }
 }
 
+/// Publishes a profile named `role` on the project's first agent connection, in `mode`.
+fn published_profile(page: &Settings, role: &str, mode: orchester_core::permission::ApprovalMode) {
+  use orchester_core::{
+    connection::invocation::Platform,
+    name::Name,
+    permission::AgentPermissions,
+    resource::{AgentProfile, ModelId, PromptText, ProviderSettings},
+    time::Timestamp,
+  };
+  use orchester_workspace::agents::data::{self, ProjectAgents};
+  let listed = ProjectAgents::load_in(&page.repo).expect("agents");
+  let connection = &listed.connections[0];
+  let mut permissions = AgentPermissions::most_restrictive(connection.provider(), Platform::current());
+  permissions.set_approval_mode(mode);
+  let profile = AgentProfile::new(
+    Name::new(role).expect("role"),
+    "Builds the change".into(),
+    PromptText::new("Implement the approved plan.").expect("instructions"),
+    connection.id(),
+    ModelId::new("sonnet").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_permissions(permissions);
+  let mut db = page.db();
+  let id = data::create_profile(&mut db, &profile, Timestamp::now()).expect("profile");
+  data::publish(&mut db, id, Timestamp::now()).expect("publish");
+}
+
+/// Approvals as `m0eUB` and `tvmsJ` draw it: *Allow Autopilot* with what On and Off mean, Off naming the published
+/// profiles set to Autopilot; the reviewer for Manual's requests; the old auto-mode switches gone.
+#[test]
+fn project_settings_approval_mode_effective_off_names_the_profiles_set_to_autopilot() {
+  use orchester_core::permission::ApprovalMode;
+  let mut page = Settings::new(true);
+  assert!(page.text("settings-auto").starts_with("Approvals"));
+  assert_eq!(
+    page.text("settings-auto-allow-autopilot-hint"),
+    "Off · every agent runs as Manual"
+  );
+  assert_eq!(
+    page.text("settings-auto-reviewer-hint"),
+    "For Manual requests off the allowed list"
+  );
+  let words = page.text("settings-auto");
+  for gone in ["New runs use auto mode", "approve everything"] {
+    assert!(!words.contains(gone), "{gone} is gone: {words}");
+  }
+  published_profile(&page, "Fixer", ApprovalMode::Autopilot);
+  published_profile(&page, "Builder", ApprovalMode::Autopilot);
+  published_profile(&page, "Reviewer", ApprovalMode::Manual);
+  // Runs reads the settings again when it opens.
+  page.tab("general", "settings-project-name");
+  page.tab("runs", "settings-auto-allow-autopilot-row");
+  page.until("the profiles named", |p| {
+    p.text("settings-auto-allow-autopilot-hint")
+      == "Off · every agent runs as Manual · Builder and Fixer are set to Autopilot"
+  });
+  page.click("settings-allow-autopilot");
+  page.until("Autopilot allowed", |p| {
+    p.db().allow_autopilot().expect("saved").is_on()
+  });
+  page.saved();
+  assert_eq!(
+    page.text("settings-auto-allow-autopilot-hint"),
+    "On · profiles set to Autopilot approve their own requests · only you can turn it on"
+  );
+  let estimates = page.text("settings-estimate-points-hint");
+  assert!(estimates.contains("uses the reviewer’s model"), "{estimates}");
+}
+
 #[test]
 fn project_settings_github_check_reads_origin_and_says_when_no_github_remote_exists() {
   let mut page = Settings::new(false);
@@ -173,7 +238,7 @@ fn project_settings_approved_for_every_run_opens_its_rules_and_revokes_one() {
   assert!(page.text("settings-auto-rules-row").contains("No rules"));
   let rule = {
     let mut db = page.db();
-    let run = super::run_fixture::auto_run(&mut db);
+    let run = super::run_fixture::started_run(&mut db);
     let scope = ProjectScope::of(&ApprovalSubject::McpTool {
       server: "Orchester".to_owned(),
       tool: "start_qa_app".to_owned(),

@@ -25,6 +25,29 @@ pub enum UiDriver {
   Mcp,
 }
 
+/// Where `ui_open` starts, e.g. `{{url}}/teams/{{seed.team_id}}` or an app's route; its placeholders are kept as
+/// written.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct UiStart(String);
+
+impl UiStart {
+  pub const MAX_CHARS: usize = 4096;
+
+  pub fn new(value: &str) -> Result<Self, ServiceError> {
+    let valid = !value.is_empty()
+      && value.chars().count() <= Self::MAX_CHARS
+      && !value.chars().any(|c| c.is_whitespace() || c.is_control());
+    if !valid {
+      return Err(ServiceError::UiStart);
+    }
+    Ok(Self(value.to_owned()))
+  }
+
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+}
+
 /// A program Orchester starts for a run, without a shell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Service {
@@ -38,6 +61,7 @@ pub struct Service {
   seed: Seed,
   run_data: RunData,
   ui_driver: UiDriver,
+  ui_start: Option<UiStart>,
   owned_paths: Vec<OwnedPath>,
 }
 
@@ -56,6 +80,7 @@ impl Service {
       seed: Seed::None,
       run_data: RunData::None,
       ui_driver: UiDriver::None,
+      ui_start: None,
       owned_paths: Vec::new(),
     }
   }
@@ -109,6 +134,12 @@ impl Service {
     self
   }
 
+  #[must_use]
+  pub fn with_ui_start(mut self, start: UiStart) -> Self {
+    self.ui_start = Some(start);
+    self
+  }
+
   /// The repository path patterns this service owns, each once.
   pub fn with_owned_paths(mut self, paths: Vec<OwnedPath>) -> Result<Self, ServiceError> {
     let mut seen = BTreeSet::new();
@@ -157,6 +188,11 @@ impl Service {
 
   pub const fn ui_driver(&self) -> UiDriver {
     self.ui_driver
+  }
+
+  /// Where `ui_open` starts; `None` leaves it to the driver.
+  pub const fn ui_start(&self) -> Option<&UiStart> {
+    self.ui_start.as_ref()
   }
 
   pub fn owned_paths(&self) -> &[OwnedPath] {

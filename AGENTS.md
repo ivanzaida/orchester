@@ -110,6 +110,7 @@ Hard requirements:
    `crates/desktop-app/src/mcp/bind/windows.rs`, `crates/desktop-app/src/appearance/motion/windows.rs`,
    `crates/desktop-app/src/notifications/os/windows/toast.rs`,
    `crates/desktop-app/src/notifications/os/windows/badge.rs`, `crates/desktop-app/src/notifications/os/macos.rs`,
+   `crates/desktop-app/src/hang_reports/stack/windows.rs`,
    `crates/agent/src/files/entry/windows.rs`, `crates/core/src/permission/remote_drive.rs`,
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
    `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`,

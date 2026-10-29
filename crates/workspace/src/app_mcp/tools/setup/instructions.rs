@@ -422,6 +422,7 @@ fn write_error(error: &WriteError) -> ToolError {
     WriteError::Store(StoreError::Publish(PublishError::BlankInstruction)) => "blank_text",
     WriteError::Store(StoreError::Publish(PublishError::StaleDraft { .. })) => "stale_draft",
     WriteError::Store(StoreError::Publish(PublishError::VersionLimit)) => "version_limit",
+    WriteError::Store(StoreError::NotAdmin) => "not_admin",
     WriteError::Store(_) => "project_data",
   };
   ToolError::refused(code, vec![error.message()])

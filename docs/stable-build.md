@@ -134,8 +134,13 @@ its releases (`server-v*` tags) are in the private platform repository `ivanzaid
 **What it builds**, on a Windows runner: `cargo build --release --locked -p orchester-app -p
 orchester-runner` as the installed app (`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/install.ps1`
 builds it: the MCP server on its fixed address, the token in Credential Manager), with the C
-runtime linked in so the programs start without the Visual C++ Redistributable. The release
-`app-v<version>`, tagged on the pushed commit, has:
+runtime linked in so the programs start without the Visual C++ Redistributable. The workspace's
+release profile keeps line tables (`debug = "line-tables-only"`), which on Windows land in a PDB
+beside each program (`orchester.pdb`, `orchester_runner.pdb`; on macOS in a `.dSYM`, by
+`split-debuginfo = "packed"`): GlitchTip resolves an error report's frame addresses with them
+(`docs/error-reports.md`). A release uploads both PDBs with their programs to GlitchTip before the
+release is created (*Debug files in GlitchTip* below). Neither the installer, the zip nor the
+release has a PDB. The release `app-v<version>`, tagged on the pushed commit, has:
 
 - `Orchester-<version>-setup.exe`, the installer (Inno Setup, `tools/installer/orchester.iss`):
   for the current user, without administrator rights, into `%LOCALAPPDATA%\Programs\Orchester`
@@ -178,12 +183,38 @@ it at an existing install only if that is the one you want to update (see *Insta
 the program's rename* above).
 
 **Not signed.** Neither the programs nor the installer carry a code signature, so SmartScreen
-warns (*More info*, then *Run anyway*); no secret is needed. Signing would be one step before
-packing, with a certificate in the repository's secrets.
+warns (*More info*, then *Run anyway*). Signing would be one step before packing, with a
+certificate in the repository's secrets.
+
+**Debug files in GlitchTip.** After *Build*, the Windows job uploads `orchester.exe` with
+`orchester.pdb` and `orchester-runner.exe` with `orchester_runner.pdb` to the GlitchTip project
+`desktop` of the organization `orchester-desktop` at `https://errors.orchester.cloud`, with
+`sentry-cli debug-files upload` (GlitchTip takes it through its `difs` assemble API), without
+sources. sentry-cli's version is pinned in the workflow and its download checked against the
+SHA-256 Sentry's release registry gives for it
+(`https://release-registry.services.sentry.io/apps/sentry-cli/<version>`, the file
+`sentry-cli-Windows-x86_64.exe`); raise both together. The step fails unless GlitchTip has stored
+both PDBs, and then the release is not created: its error reports would show only addresses.
+
+- **The token** is the Actions secret `GLITCHTIP_AUTH_TOKEN` (*Settings › Secrets and variables
+  › Actions › New repository secret* on GitHub). Create it in GlitchTip, signed in as a member of
+  `orchester-desktop`: *Profile › Auth Tokens › Create New Token*, with the scope `project:write`
+  (which also lets the token read the project's debug files, below). The workflow passes it to
+  sentry-cli only in its environment, never on a command line, and GitHub masks it in the log. A
+  release run without the secret stops before the build, with *No GlitchTip token*; replace the
+  secret when the token is revoked.
+- **The dry run** uploads nothing and says so with the notice *No debug files upload*.
+- **To check a release's debug files**, open the release run's *Upload the debug files to
+  GlitchTip* step: it logs each PDB's debug ID (such as `77c4e9bf-…-1`) and the files sentry-cli
+  uploaded. GlitchTip lists a project's debug files with their debug IDs at
+  `GET https://errors.orchester.cloud/api/0/projects/orchester-desktop/desktop/files/dsyms/`
+  (`Authorization: Bearer <token>`); both IDs of the release are among them. The real test is a
+  report: a panic in the installed release shows in its GlitchTip issue with function names, files
+  and lines in its frames, not bare addresses.
 
 **Dry run.** *Actions › App release › Run workflow*, on any branch, with *dry_run* ticked: it
 builds and packs both files and keeps them, with the checksums, as the run's artifact for 7 days,
-and releases nothing. Every run costs CI minutes.
+and releases nothing, and uploads no debug files. Every run costs CI minutes.
 
 macOS is not built by CI yet; `tools/package-macos.sh` makes `Orchester.app` on a Mac and would be
 the base of a later job on a macOS runner (a bundle signed ad hoc is refused by Gatekeeper on other
@@ -216,8 +247,9 @@ fixed address instead (see *The new app's MCP server* below).
   after a step's budget, `resume` after the daily budget, `allow_retry` or `return_to` with `step` and
   `note` after a step used up its retries or broke again; every value is given, read with the page's
   rules; refused with `not_stopped_at_limit`, `choice_not_offered`, `invalid_limit`, `group_budget`,
-  `step_not_offered` or `task_blocked`), `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
-  see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
+  `step_not_offered` or `task_blocked`), `set_run_manual`, `get_approvals`, `set_allow_autopilot` and
+  `set_reviewer` (approval modes, see below; auto mode's `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode`
+  answer `retired` for one release), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
   `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
@@ -615,8 +647,11 @@ with the request: the activity marks *approved by auto mode*, and under the row,
 and the conversation's card a line of its own says what auto mode did, the reviewer's reason quoted on
 one line (cut at 200 characters, line breaks and double quotation marks removed), never inside a mark or
 chip. The run's Approvals count *Approved by auto mode* and, once the person decided, *Auto mode asked
-you*. `get_auto_mode` reads a project's setting and reviewer; `set_auto_mode` (new runs, reviewer) and
-`set_run_auto_mode` change them only while *Let automation answer approvals* is on; `list_approvals`
+you*. Approval modes (`docs/design/approval-modes.md`) replaced the auto mode switches: `get_approvals`
+reads a project's *Allow Autopilot*, its reviewer and each running run's mode with why; `set_allow_autopilot`
+turns Autopilot off for anyone and on for a person only (`person_only` over MCP); `set_reviewer` needs *Let
+automation answer approvals* (and *change agent permissions* for another reviewer); `set_run_manual` is always
+taken; `get_auto_mode`, `set_auto_mode` and `set_run_auto_mode` answer `retired`, naming these. `list_approvals`
 carries what auto mode did with each request and which model reviewed it.
 Not done yet: turning auto mode on while a request waits does not review that request.
 

@@ -12,6 +12,7 @@ use orchester_core::{
   resource::{
     AgentProfile, Draft, ModelId, Pipeline, PublishError, ResourceKind, Slug, StepKind, Version, VersionNumber,
   },
+  run::AllowAutopilot,
   store::{ConnectionStore, McpServerStore, ResourceStore, SettingsStore},
   time::Timestamp,
 };
@@ -111,6 +112,9 @@ pub struct ProjectAgents {
   /// Whether the project's agents may load the repository's own agent files (Project settings ›
   /// General), which the enforcement panel shows beside the profile's permissions.
   pub agent_files: RepositoryAgentFiles,
+  /// The project's *Allow Autopilot for agents in this project* (Project settings › Runs): off, a profile set to
+  /// Autopilot runs as Manual here, which its page says (02e). Read for the screen only; off otherwise.
+  pub allow_autopilot: AllowAutopilot,
   /// The published rules and skills that reach profiles by their scope; read for the screen only.
   pub prompts: Arc<super::prompts::PromptSources>,
 }
@@ -132,6 +136,7 @@ impl ProjectAgents {
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
       agent_files: store.repository_agent_files()?,
+      allow_autopilot: AllowAutopilot::OFF,
       prompts: Arc::default(),
     })
   }
@@ -140,11 +145,13 @@ impl ProjectAgents {
     Self::load(&ProjectDb::open(repo_root)?)
   }
 
-  /// Editor data plus pipeline uses, active runs and the rules and skills that reach profiles, for the screen.
+  /// Editor data plus pipeline uses, active runs, the project's Allow Autopilot and the rules and skills that reach
+  /// profiles, for the screen.
   pub fn for_screen(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let mut listed = Self::load(&db)?;
     listed.usage = Arc::new(super::usage::Usage::load(&db)?);
+    listed.allow_autopilot = db.allow_autopilot()?;
     listed.prompts = Arc::new(super::prompts::PromptSources::load(&db)?);
     Ok(listed)
   }
@@ -168,7 +175,9 @@ pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Err
   Ok(entries)
 }
 
-fn published_profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
+/// The project's agent profiles as their latest published versions, ordered by slug; a profile never published is
+/// left out.
+pub(crate) fn published_profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
   let mut entries = Vec::new();
   for resource in store.resources(ResourceKind::AgentProfile)? {
     let latest = store.latest_version(resource.id())?;

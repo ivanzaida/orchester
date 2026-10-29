@@ -11,7 +11,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
   run::{AcceptRefusal, AutoAsk, PreflightInput, PreflightProblem, RunLimit, WorktreeFailure, preflight},
-  store::{ConnectionStore, ResourceStore, TaskStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
 };
@@ -260,7 +260,7 @@ fn chosen_is_latest(db: &ProjectDb, details: &TaskDetails, chosen: VersionNumber
 
 /// Problems the runner would refuse the run for, as far as the configuration shows them. The
 /// runner checks again and also checks the repository.
-pub(crate) fn check(
+pub fn check(
   db: &ProjectDb,
   details: &TaskDetails,
   selected_version: VersionNumber,
@@ -275,6 +275,8 @@ pub(crate) fn check(
     profiles: &latest::<AgentProfile>(db, ResourceKind::AgentProfile)?,
     tools: &latest::<Tool>(db, ResourceKind::Tool)?,
     connections: &connections,
+    mcp_servers: &db.mcp_servers()?,
+    secrets: &db.secrets()?,
   }))
 }
 
@@ -314,6 +316,8 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::ApprovalGate { step: key } => step("runs.preflight.approvalGate", key),
     PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
+    PreflightProblem::McpServerMissing { step: key } => step("runs.preflight.mcpServerMissing", key),
+    PreflightProblem::SecretMissing { step: key } => step("runs.preflight.secretMissing", key),
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
     PreflightProblem::NativeNotAvailable { step: key } => step("runs.preflight.nativeNotAvailable", key),
     PreflightProblem::ConnectionNotUsable { step: key, .. } => step("runs.preflight.connectionNotUsable", key),

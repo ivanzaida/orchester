@@ -1,12 +1,13 @@
 //! The decision cards of a task's conversation, headless at 1440 × 900 on the QA seed's `cards` scenario: a
 //! question its step waits on, questions with suggested answers (waiting, several answers, answered by the
 //! person and by automation, ended before an answer), a command waiting for approval and the ways one ends
-//! (approved once, denied, approved by automation, ended without an answer), and plans. The window's runner
-//! program does not exist: an answer reaches no runner, and the card says why ([`answering`]); a run recorded
-//! at work is interrupted, so what its agent asked in its turn no longer waits, unless the seed holds its step
-//! waiting for the person. Needs `git`.
+//! (approved once, denied, approved by automation, ended without an answer), and plans; on `cards-auto-mode`, a
+//! command as auto mode's review leaves it ([`auto_mode`]). The window's runner program does not exist: an answer
+//! reaches no runner, and the card says why ([`answering`]); a run recorded at work is interrupted, so what its
+//! agent asked in its turn no longer waits, unless the seed holds its step waiting for the person. Needs `git`.
 
 mod answering;
+mod auto_mode;
 mod deny_message;
 #[allow(
   dead_code,
@@ -28,13 +29,13 @@ use orchester_app::{
 use orchester_core::{id::ProjectId, project::TaskKey, time::Timestamp};
 use support::{Data, Window};
 
-/// A window on the `cards` scenario, seeded in the window's own data folder.
-fn seeded() -> (Window, Seeded) {
+/// A window on `scenario`, seeded in the window's own data folder.
+fn seeded(scenario: &str) -> (Window, Seeded) {
   let data = Data::new();
   let request = SeedRequest {
     data_dir: data.dir.path().to_path_buf(),
     repo: data.dir.path().join("repo-cards"),
-    scenario: scenarios::named("cards").expect("a known scenario"),
+    scenario: scenarios::named(scenario).expect("a known scenario"),
     fake_codex: None,
     now: Timestamp::now(),
   };
@@ -52,7 +53,12 @@ fn card_of(title: &str, prefix: &str) -> (Window, String) {
 
 /// [`card_of`], with the seeded project and the task's key.
 fn opened(title: &str, prefix: &str) -> (Window, String, (ProjectId, TaskKey)) {
-  let (mut window, seeded) = seeded();
+  opened_in("cards", title, prefix)
+}
+
+/// [`opened`] on `scenario`.
+fn opened_in(scenario: &str, title: &str, prefix: &str) -> (Window, String, (ProjectId, TaskKey)) {
+  let (mut window, seeded) = seeded(scenario);
   let task = seeded
     .tasks
     .iter()

@@ -49,8 +49,9 @@ orchester-core.workspace = true
 orchester-exec.workspace = true
 # The daily log file (`app_log`), shared with the deprecated desktop, and how a session ended.
 orchester-ipc.workspace = true
-# The scrubber every error report passes through before it leaves (`error_reports`, `docs/error-reports.md`).
-orchester-report.workspace = true
+# The client options every error report is sent with, the runner's too, and the scrubber it passes through before it
+# leaves (`error_reports`, `docs/error-reports.md`).
+orchester-report = { workspace = true, features = ["client"] }
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
@@ -95,11 +96,13 @@ rfd.workspace = true
 rustls.workspace = true
 # Sends the app's panics and ERROR log lines to GlitchTip (`error_reports`, `app_log`): the panic hook, the tracing
 # layer, the stack trace, the OS and CPU contexts and the HTTP transport over reqwest and rustls, which orchester-api's
-# client already builds. A Sentry client with its queue, rate limits and envelopes is not a few lines of code. Without
-# `debug-images`, sessions, logs or metrics.
+# client already builds. A Sentry client with its queue, rate limits and envelopes is not a few lines of code.
+# `debug-images` lists the loaded modules with their debug IDs, so GlitchTip matches a report's raw frames to the
+# uploaded PDBs. Without sessions, logs or metrics.
 sentry = { workspace = true, features = [
   "backtrace",
   "contexts",
+  "debug-images",
   "panic",
   "reqwest",
   "rustls-no-provider",
@@ -124,13 +127,17 @@ zeroize.workspace = true
 # Gives lurq's window class and the window the executable's embedded icon (`system_icon`): neither lurq
 # nor winit loads icon resources or sets class icons. Brings the window of the app that has the data folder
 # open to the front (`startup::front`). Holds the MCP server's port so no other socket can share it
-# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds.
+# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds. Suspends a frozen window's thread
+# and unwinds its stack for its hang report (`hang_reports::stack::windows`: `Diagnostics_Debug`, and `Kernel` for
+# `RtlVirtualUnwind`).
 [target.'cfg(windows)'.dependencies]
 socket2.workspace = true
 # Toasts with the app's AppUserModelID and the taskbar's overlay badge (`notifications::os::windows`).
 windows.workspace = true
 windows-sys = { workspace = true, features = [
   "Win32_Networking_WinSock",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_Kernel",
   "Win32_System_LibraryLoader",
   "Win32_System_Threading",
   "Win32_UI_WindowsAndMessaging",

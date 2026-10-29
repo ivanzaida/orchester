@@ -24,6 +24,13 @@ pub struct Agents {
 }
 impl Agents {
   pub fn new(connection: bool) -> Self {
+    Self::with(connection.then_some(CODEX_VERSION))
+  }
+  /// The project with a Codex connection whose last check found `version`, the one Autopilot needs or newer.
+  pub fn on_codex(version: &str) -> Self {
+    Self::with(Some(version))
+  }
+  fn with(codex_version: Option<&str>) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data::at(
@@ -33,9 +40,9 @@ impl Agents {
     let launch = data.launch();
     let project = data.add_kontur(launch.workspace().expect("workspace"));
     let root = project.repo_root;
-    if connection {
+    if let Some(version) = codex_version {
       let mut db = ProjectDb::open(&root).expect("database");
-      db.create_connection(&codex(&root)).expect("connection");
+      db.create_connection(&codex(&root, version)).expect("connection");
     }
     Self {
       window: Window::of(data, launch),
@@ -43,8 +50,14 @@ impl Agents {
     }
   }
   pub fn profile(&self, published: bool) -> ResourceId {
+    self.profile_with(published, |_| {})
+  }
+  /// A profile with the most restrictive permissions as `change` leaves them.
+  pub fn profile_with(&self, published: bool, change: impl FnOnce(&mut AgentPermissions)) -> ResourceId {
     let listed = ProjectAgents::load_in(&self.root).expect("agents");
     let c = &listed.connections[0];
+    let mut permissions = AgentPermissions::most_restrictive(c.provider(), Platform::current());
+    change(&mut permissions);
     let profile = AgentProfile::new(
       Name::new("Builder").expect("name"),
       "Builds the change".into(),
@@ -53,7 +66,7 @@ impl Agents {
       ModelId::new("test-model").expect("model"),
       ProviderSettings::default(),
     )
-    .with_permissions(AgentPermissions::most_restrictive(c.provider(), Platform::current()));
+    .with_permissions(permissions);
     let mut db = ProjectDb::open(&self.root).expect("database");
     let id = data::create_profile(&mut db, &profile, Timestamp::now()).expect("profile");
     if published {
@@ -157,7 +170,9 @@ pub fn changed(profile: &AgentProfile) -> AgentProfile {
   .with_permissions(profile.permissions().clone())
   .with_mcp_servers(profile.mcp_servers().clone())
 }
-fn codex(root: &std::path::Path) -> AgentConnection {
+/// The Codex version `Agents::new` checks: older than Autopilot needs (`CODEX_AUTOPILOT`).
+const CODEX_VERSION: &str = "0.139.0";
+fn codex(root: &std::path::Path, version: &str) -> AgentConnection {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Test Codex").expect("name"),
@@ -170,7 +185,7 @@ fn codex(root: &std::path::Path) -> AgentConnection {
     .record_check(ConnectionCheck {
       at: Timestamp::now(),
       result: CheckResult::Available {
-        version: "0.139.0".into(),
+        version: version.into(),
         sign_in: SignIn::SignedIn,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,

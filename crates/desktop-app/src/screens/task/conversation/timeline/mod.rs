@@ -17,6 +17,7 @@ mod entry;
 mod message;
 mod proposal;
 mod result;
+mod switched;
 mod working;
 
 use std::{collections::HashMap, sync::Arc};
@@ -31,7 +32,7 @@ use lurq::{
 use orchester_core::{
   id::{InvocationId, ProjectId, StepExecutionId},
   project::TaskKey,
-  run::{Answerer, DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
+  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
 use orchester_workspace::tasks::{
   conversation::orchestrator::{ChatMerge, Proposal},
@@ -205,9 +206,8 @@ impl Toggles {
 /// What a row of the list shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Line {
-  /// At the run's start, while auto mode's *approve everything in each run* answers its requests: who turned it on
-  /// ([`divider::everything`]).
-  Everything(Answerer),
+  /// At the run's start, while Autopilot answers its requests ([`divider::autopilot`]).
+  Autopilot,
   /// Shared with the tab's built timeline (`super::built`), so a render of the list copies none of it.
   Row(Arc<Row>),
   /// What the merge queue did with the run ([`delivery`]), shared with the built timeline too.
@@ -233,7 +233,7 @@ impl lurq::app::component::DevtoolsInspectable for RowProps {}
 impl RowProps {
   fn of(line: Line) -> Self {
     let key = match &line {
-      Line::Everything(_) => "conversation-approve-everything".into(),
+      Line::Autopilot => "conversation-autopilot".into(),
       Line::Row(row) => row.key().clone(),
       Line::Delivery(line) => line.key.clone(),
       Line::Proposal(proposal) => proposal.key(),
@@ -269,12 +269,12 @@ fn with_delivery(rows: &[Arc<Row>], delivery: &[Placed]) -> Vec<Line> {
 /// The chat of `rows` with the merge queue's lines (`delivery`) among them, what the timeline `items` show, then the
 /// Orchestrator chat's `proposals` for the run, then `working`, the working line while an agent works; *Jump to latest*
 /// under it while it does not follow the run, with what arrived since (`arrived` counts the transcript's entries, the
-/// conversation's messages and the proposals so far; the queue's lines count too). `everything`, who turned on auto
-/// mode's *approve everything in each run* while it answers the run's requests, leads the rows.
+/// conversation's messages and the proposals so far; the queue's lines count too). `autopilot`, whether Autopilot
+/// answers the run's requests, leads the rows with its line.
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
-  (rows, delivery, everything): (&[Arc<Row>], &[Placed], Option<Answerer>),
+  (rows, delivery, autopilot): (&[Arc<Row>], &[Placed], bool),
   (items, proposals): (&[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
 ) -> Element {
@@ -284,11 +284,11 @@ pub(super) fn chat(
     .iter()
     .find(|item| waits_for_you(item))
     .map(|item| item.key.to_string());
-  let lead = usize::from(everything.is_some());
+  let lead = usize::from(autopilot);
   let reveal = follow.follow(rows.len() + delivery.len() + lead, arrived, waiting);
   let rows: Arc<Vec<RowProps>> = Arc::new(
-    everything
-      .map(Line::Everything)
+    autopilot
+      .then_some(Line::Autopilot)
       .into_iter()
       .chain(with_delivery(rows, delivery))
       .chain(
@@ -360,9 +360,9 @@ impl Component for RowView {
     let content = match &props.line {
       Line::Working(working) => ctx.mount_keyed::<working::WorkingLine>("conversation-working-line", working.clone()),
       Line::JumpRoom => follow::jump_room(),
-      Line::Everything(by) => {
+      Line::Autopilot => {
         let timeline = Timeline::of(ctx);
-        divider::everything(ctx, &timeline, *by)
+        divider::autopilot(ctx, &timeline)
       }
       Line::Row(row) => row_content(ctx, row),
       Line::Delivery(line) => {
@@ -401,7 +401,8 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
   }
 }
 
-/// A person's message, a card, a problem, a return or restart, a step's result or the run's end.
+/// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a step's result or the
+/// run's end.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => person_message(ctx, ((timeline.project, &timeline.chat_project.root), entry)),
@@ -411,6 +412,7 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     ItemKind::Problem(entry) => entry::problem_row(ctx, timeline, &item.key, entry),
     ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
     ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
+    ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),
     ItemKind::Result(card) => result::card(ctx, timeline, card),
     ItemKind::End(end) => divider::end(ctx, timeline, end, item.at),
     // An agent's message, a step and a tool group are rows of their own (`Row::Agent`, `Row::Step`).

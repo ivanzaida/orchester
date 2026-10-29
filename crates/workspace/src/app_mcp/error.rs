@@ -30,6 +30,8 @@ pub enum Missing {
   Account,
   PullRequest,
   Module,
+  Service,
+  Stack,
 }
 
 impl Missing {
@@ -52,6 +54,8 @@ impl Missing {
       Self::Account => "account_not_found",
       Self::PullRequest => "pull_request_not_found",
       Self::Module => "module_not_found",
+      Self::Service => "service_not_found",
+      Self::Stack => "stack_not_found",
     }
   }
 }
@@ -134,6 +138,7 @@ impl From<StoreError> for ToolError {
       StoreError::Module(_) => "invalid_module",
       StoreError::TaskNotEditable { .. } => "task_not_editable",
       StoreError::SharedTask(_) | StoreError::SharedProject | StoreError::NotSharedTask(_) => "shared_task",
+      StoreError::NotAdmin => "not_admin",
       StoreError::PipelineNotPublished(_) => "pipeline_not_published",
       StoreError::DraftChanged(_) => "draft_changed",
       _ => "project_data",

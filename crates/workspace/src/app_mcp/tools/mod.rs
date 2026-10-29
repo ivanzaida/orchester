@@ -3,8 +3,8 @@
 //! services the screens use; none of them holds a rule of its own.
 
 mod across;
+mod approval_settings;
 mod approvals;
-mod auto_mode;
 mod base_moved;
 mod continue_run;
 mod conversation;
@@ -252,22 +252,46 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
-    name: "set_run_auto_mode",
-    description: "Turns a run's auto mode on or off: a reviewer model answers the requests the rules leave to the person, approving only those that clearly serve the task. Refused unless a person turned on Let automation answer approvals in the app.",
-    schema: schema_for_type::<auto_mode::SetRunAutoMode>,
+    name: "get_approvals",
+    description: "A project's approvals: whether it allows Autopilot for its agents (allow_autopilot: Allow Autopilot for agents in this project), which connection, model and effort review Manual's requests (reviewer, or why it has none), and each run that has not ended (runs: id, number, task, link) with the approval mode it answers its agents' requests in now (approval_mode: mode autopilot, or manual with because profile, project or run). A step is in Autopilot only when its agent profile says Autopilot (get_profile's permissions.approval_mode), the project allows it and the run was not switched to Manual.",
+    schema: schema_for_type::<approval_settings::GetApprovals>,
+    read_only: true,
+  },
+  Spec {
+    name: "set_allow_autopilot",
+    description: "Turns a project's Allow Autopilot for agents in this project on or off, as Project settings › Runs does. false stops allowing Autopilot, so every agent of the project runs as Manual, and is always taken. true is refused as person_only, whatever automation may do: only a person allows Autopilot, in the app (asking for it while it is on already changes nothing). Answers as get_approvals does.",
+    schema: schema_for_type::<approval_settings::SetAllowAutopilot>,
+    read_only: false,
+  },
+  Spec {
+    name: "set_reviewer",
+    description: "Chooses the reviewer Manual asks before the person, as Project settings › Runs does: an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer. Refused as automation_not_allowed unless a person turned on Let automation answer approvals, and another reviewer than the current one also needs Let automation change agent permissions (person_only). Answers as get_approvals does.",
+    schema: schema_for_type::<approval_settings::SetReviewer>,
+    read_only: false,
+  },
+  Spec {
+    name: "set_run_manual",
+    description: "Switches a run to Manual for itself, as its status line does: its agents' requests no longer go through Autopilot, but through the profile's allowed commands, then the reviewer, then the person. A run never goes back to Autopilot. Always taken for a run that has not ended, whatever the person's switches (refused as run_ended otherwise); answers with the run's approval mode and why it is Manual (profile, project or run).",
+    schema: schema_for_type::<approval_settings::SetRunManual>,
     read_only: false,
   },
   Spec {
     name: "get_auto_mode",
-    description: "A project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it (and who turned that on), and which connection, model and effort review requests (or why auto mode has no reviewer).",
-    schema: schema_for_type::<auto_mode::GetAutoMode>,
+    description: "Retired with auto mode: changes nothing and answers the error retired. Use get_approvals.",
+    schema: schema_for_type::<approval_settings::Retired>,
     read_only: true,
   },
   Spec {
     name: "set_auto_mode",
-    description: "Changes a project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it as Approve everything in this run does, and the reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer). Refused unless a person turned on Let automation answer approvals in the app; turning approve_everything on is also refused as person_only unless a person turned on Let automation change agent permissions. Turning approve_everything off alone is always taken.",
-    schema: schema_for_type::<auto_mode::SetAutoMode>,
-    read_only: false,
+    description: "Retired with auto mode: changes nothing and answers the error retired. Use set_allow_autopilot and set_reviewer.",
+    schema: schema_for_type::<approval_settings::Retired>,
+    read_only: true,
+  },
+  Spec {
+    name: "set_run_auto_mode",
+    description: "Retired with auto mode: changes nothing and answers the error retired. Use set_run_manual.",
+    schema: schema_for_type::<approval_settings::Retired>,
+    read_only: true,
   },
   Spec {
     name: "remove_worktree",
@@ -289,7 +313,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_approvals",
-    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_plan gives a plan's whole text), and the decisions on their earlier versions with decided_by (person, or automation through this server). Each links to its card on its task's Conversation in the app. Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. `run` needs `project`.",
+    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when, and `reviewing` while auto mode's reviewer still judges it (it waits for the reviewer, not for a person, until the review ends); and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_plan gives a plan's whole text), and the decisions on their earlier versions with decided_by (person, or automation through this server). Each links to its card on its task's Conversation in the app. Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. `run` needs `project`.",
     schema: schema_for_type::<approvals::ListApprovals>,
     read_only: true,
   },
@@ -319,7 +343,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "update_project_limits",
-    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved, null for no limit.",
+    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Raising or removing the daily budget lets runs it stopped go on, so it is refused as automation_not_allowed unless a person turned on Let automation answer approvals. Returns the limits as saved, null for no limit.",
     schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },
@@ -448,7 +472,7 @@ async fn dispatch(
   }
 }
 
-/// The tools that answer what agents wait for, auto mode's settings, the pull requests and the daily report.
+/// The tools that answer what agents wait for, the project's approvals, the pull requests and the daily report.
 async fn dispatch_answers(
   services: &Services,
   translate: &Translate,
@@ -463,9 +487,13 @@ async fn dispatch_answers(
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "answer_question" => questions::answer_question(services, parse(arguments)?, SentBy::Client).await,
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
-    "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
-    "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
-    "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
+    "get_approvals" => approval_settings::get_approvals(services, parse(arguments)?).await,
+    "set_allow_autopilot" => approval_settings::set_allow_autopilot(services, parse(arguments)?).await,
+    "set_reviewer" => approval_settings::set_reviewer(services, parse(arguments)?).await,
+    "set_run_manual" => approval_settings::set_run_manual(services, parse(arguments)?).await,
+    "get_auto_mode" => Err(approval_settings::retired(name, "get_approvals")),
+    "set_auto_mode" => Err(approval_settings::retired(name, "set_allow_autopilot and set_reviewer")),
+    "set_run_auto_mode" => Err(approval_settings::retired(name, "set_run_manual")),
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "list_modules" => modules::list_modules(services, parse(arguments)?).await,

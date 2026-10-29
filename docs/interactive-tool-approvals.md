@@ -540,21 +540,35 @@ build that fills the same caches does. A held request says why in plain words, o
 command may write.*): on its approval card, in the task's conversation and in the Needs you panel, and as
 `hold_cause` beside `auto_mode` in `list_approvals` and `get_run`.
 
-**Partly unread reads in a confined step** (ORC-95). A part Orchester could not read to the end holds the request
-as *unreadable* in a step whose network is off or that only reads, but not when its program only reads under any
-option (`ls`, `cat`, `head`, `tail`, `wc`, `grep`, `cut`, `diff`, `stat`, `echo`, PowerShell's `Get-Content`,
-`Get-ChildItem`, `Select-String`, …; `CommandPart::only_reads`) or `xargs` with listed options runs such a program
-(`find src -name '*.rs' | xargs grep -n x`), every path its words name was placed and it redirects into no file.
-Such a part writes nothing and starts nothing whatever Orchester did not read of it (`grep -R`, an `ls` option the
-tables do not list), so the request goes to the reviewer, which sees the whole line and is told how many parts were
-not read; a credential location or a share (`\\host\…`) its words name still holds it, and auto mode never approves
-it by itself. What no word names is the reviewer's to judge: the paths `xargs` takes from its standard input, and
-what a link leads to when an option follows links (`grep -R`, `du -L`). A PowerShell cmdlet given a path on another
-provider (`Get-Content env:GH_TOKEN`, `Get-ChildItem Cert:\`), a comma array or a parameter that sets a variable is
-not among those programs. `sort`, `uniq`, `tree`, `file`, `sed`, `awk`, `find` and `rg` are not either (some option
-of each writes or starts a program), nor `jq` (it reads the environment); a command substitution, a variable that
-is not a literal, `xargs` running any other program, a path that cannot be placed (`~bob`) and a script stay
-unreadable.
+**Unread parts go to the reviewer in every step** (ORC-339, the person's decision of 2026-10-29; before it ORC-95
+held them as *unreadable* in a step whose network is off or that only reads, unless their program only reads). A
+part Orchester could not read to the end (an unknown program, subcommand or option, a variable or substitution, a
+script whose content it does not read) is no reason to ask the person: the request goes to the reviewer with the
+whole command, its working folder, the step's permissions and, for each such part, its number and why Orchester
+stopped reading (`ReviewInput::unread_parts`, `why_orchester_stopped_reading` in the step's facts). The reviewer
+approves it in a step that only reads or has the network off when its words show it only reads, and asks when it
+may write there, reach the network while it is off, or run a script it cannot see; in every step it asks when such
+a command may reach the network to send or fetch, write outside the worktree, read a credential, install, delete
+outside the worktree or rewrite history. What Orchester did read of such a part still holds it: a redirect into a
+file, a write outside, an install or a tool's cache (and any Cargo form it does not know, the 2026-10-18 decision)
+in a read-only step; a credential location, a share or a PowerShell path on another provider (`Get-Content
+env:GH_TOKEN`, `Get-ChildItem Cert:\`, `-Credential`), which hold as *secrets*; and every other part of the line,
+each checked on its own. Only a request with no command Orchester could read at all is still held as *unreadable*.
+The classifier reads what agents here run: `git log -L<a>,<b>:<file>` (the file placed), `-S` and `-G`, and in
+`pwsh -NoProfile -Command` the .NET calls that only read, each statement alone (`[System.IO.Path]::GetFullPath(…)`
+and the other string operations of `Path`, `[System.IO.File]::Exists` / `ReadAllText`, `[System.IO.Directory]::
+Exists` / `GetFiles` with their paths placed), beside the `Get-*` readers.
+
+**Git in the run's own worktree** (ORC-339, the person's decision of 2026-10-29). The run's worktree, its index
+and its branch are the run's, and Orchester checkpoints them: git that stays there is Worktree (or Read-only), which
+the rules or auto mode's reviewer answer: `commit --amend`, `stash push/pop/apply/drop`, `reset --soft/--mixed/--hard` to
+`HEAD`, a commit counted from it or a commit id, `revert`, `cherry-pick`, `merge`, a `rebase` of the branch checked
+out onto one upstream, `clean`, `reflog` (show). What reaches beyond them stays *History / destructive*: another
+branch or a tag (made, moved or deleted), `reset --hard` to another branch's name, `rebase` of another branch or
+with `--update-refs`, `worktree add/remove/prune`, `config` outside the worktree's own file, `gc`, `prune`,
+`reflog expire`, `stash clear`, `filter-branch`, `filter-repo`, `update-ref`, and a push (its own rules). A git whose
+`-C`, `--git-dir`, `--work-tree` or working folder lies outside the worktree and its writable folders holds as a
+write outside.
 
 **Waiting requests.** The dialog shows one request at a time, oldest first, with *1 of 3 waiting* and ‹ ›.
 *Decide later* (or Esc) closes it and answers nothing: the agent keeps waiting with its active time stopped, the

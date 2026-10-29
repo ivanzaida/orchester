@@ -113,6 +113,8 @@ pub struct LatestRun {
   pub merged_into: Option<Arc<str>>,
   /// It passed every step and committed nothing, so there is nothing to merge ([`super::delivery`]).
   pub nothing_to_merge: bool,
+  /// It was completed without a merge, or settled so when its task was closed (ORC-93, ORC-150, [`super::data`]).
+  pub completed: bool,
   /// It ended so that its task can run again after it, by core's `can_run_again_after`: it failed or was cancelled, or
   /// it was interrupted and a person removed its worktree (ORC-63) ([`super::data`] reads the removal).
   pub ended_for_run_again: bool,
@@ -160,6 +162,7 @@ impl LatestRun {
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
       nothing_to_merge: false,
+      completed: false,
       ended_for_run_again: can_run_again_after(run, false),
       number: run.number(),
       updated_at,
@@ -226,6 +229,7 @@ impl LatestRun {
       TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
       TaskPhase::Interrupted => with_checkpoint("tasks.progress.interrupted", "tasks.progress.interruptedNoCheckpoint"),
+      TaskPhase::Succeeded if self.completed => Message::new("tasks.progress.completed"),
       TaskPhase::Succeeded if self.nothing_to_merge => match self.deliverable.without_commits() {
         WithoutCommits::Completes => Message::new("tasks.progress.reportReady"),
         WithoutCommits::Flagged => Message::new("tasks.progress.committedNothing"),

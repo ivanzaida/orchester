@@ -23,14 +23,10 @@ impl AutoMode {
     }
     button
       .on_click(move || {
+        // A retry uses the reviewer the controls show now.
         if !tab.outside()
-          && let Ok(mut asked) = tab.draft()
+          && let Ok(asked) = tab.draft()
         {
-          // The switch reads back storage after failure; retain only its requested state.
-          // Reviewer retry always uses the current visible controls.
-          if let Some(attempt) = tab.attempted.get_untracked().0 {
-            asked.new_runs = attempt.new_runs;
-          }
           // Retrying makes the change again: whoever presses it must be one who may.
           tab.note_input();
           tab.request(&props, &save, asked);

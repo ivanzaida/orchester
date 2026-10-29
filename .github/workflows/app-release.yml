@@ -8,8 +8,12 @@
 # A push to master that changes the file releases only when neither the tag nor a release `app-v<version>` exists yet,
 # so other edits of that file, and the same run again, release nothing.
 #
-# The programs and the installer are not signed, so Windows SmartScreen warns about them; no secret is needed. Signing
-# would be one step before packing, with a certificate kept in the repository's secrets. macOS is not built here:
+# A release uploads the programs' PDBs to GlitchTip before it is created, with the repository secret
+# GLITCHTIP_AUTH_TOKEN, and fails without it; a dry run skips the upload. The PDBs never go into the zip, the
+# installer or the release.
+#
+# The programs and the installer are not signed, so Windows SmartScreen warns about them. Signing would be one step
+# before packing, with a certificate kept in the repository's secrets. macOS is not built here:
 # tools/package-macos.sh makes Orchester.app on a Mac, for a later job on a macOS runner.
 name: App release
 
@@ -118,6 +122,18 @@ jobs:
       # The C runtime linked into the programs, so they start on a Windows without the Visual C++ Redistributable.
       RUSTFLAGS: -C target-feature=+crt-static
     steps:
+      # A release without its PDBs in GlitchTip would show unreadable stacks, so a release stops here, before the
+      # build, when the token for the upload below is missing.
+      - name: Check the GlitchTip token
+        if: ${{ needs.prepare.outputs.release == 'true' }}
+        env:
+          GLITCHTIP_AUTH_TOKEN: ${{ secrets.GLITCHTIP_AUTH_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$GLITCHTIP_AUTH_TOKEN" ]; then
+            echo "::error title=No GlitchTip token::The repository secret GLITCHTIP_AUTH_TOKEN is missing; a release uploads its PDBs to GlitchTip with it (docs/stable-build.md, \"Releases from CI\")."
+            exit 1
+          fi
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -134,6 +150,74 @@ jobs:
               exit 1
             }
           }
+      # GlitchTip (project `desktop` of organization `orchester-desktop`) resolves the release's error reports to
+      # function, file and line with the two PDBs, which go there with their programs and never to the person.
+      # sentry-cli, pinned and checked against its SHA-256 from Sentry's release registry
+      # (https://release-registry.services.sentry.io/apps/sentry-cli/<version>), uploads them through GlitchTip's
+      # chunk upload and `difs` assemble API, without sources, and waits until GlitchTip has stored them. The token
+      # comes from the repository secret in the environment only, never on a command line, so it never reaches the log.
+      - name: Upload the debug files to GlitchTip
+        if: ${{ needs.prepare.outputs.release == 'true' }}
+        shell: pwsh
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.GLITCHTIP_AUTH_TOKEN }}
+          SENTRY_URL: https://errors.orchester.cloud
+          SENTRY_ORG: orchester-desktop
+          SENTRY_PROJECT: desktop
+          SENTRY_DISABLE_UPDATE_CHECK: "true"
+          SENTRY_CLI_VERSION: 3.8.2
+          SENTRY_CLI_SHA256: 50009f23c49d6e9ff7624204c7035855303b49c5e326708ee783c1fdf783ac83
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:SENTRY_AUTH_TOKEN) {
+            Write-Output "::error title=No GlitchTip token::The repository secret GLITCHTIP_AUTH_TOKEN is missing."
+            exit 1
+          }
+          $tools = Join-Path $env:RUNNER_TEMP "sentry-cli"
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $cli = Join-Path $tools "sentry-cli.exe"
+          Invoke-WebRequest -UseBasicParsing -OutFile $cli `
+            -Uri "https://downloads.sentry-cdn.com/sentry-cli/$env:SENTRY_CLI_VERSION/sentry-cli-Windows-x86_64.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cli).Hash.ToLowerInvariant()
+          if ($hash -ne $env:SENTRY_CLI_SHA256) {
+            Write-Output "::error::sentry-cli $env:SENTRY_CLI_VERSION has the SHA-256 $hash, not $env:SENTRY_CLI_SHA256; it is not run."
+            exit 1
+          }
+
+          # Only the two programs and their PDBs, in a folder of their own, so nothing else of target/ is uploaded.
+          $built = (Resolve-Path "target/release").Path
+          $files = Join-Path $env:RUNNER_TEMP "debug-files"
+          New-Item -ItemType Directory -Force -Path $files | Out-Null
+          foreach ($file in "orchester.exe", "orchester.pdb", "orchester-runner.exe", "orchester_runner.pdb") {
+            Copy-Item -LiteralPath (Join-Path $built $file) -Destination $files
+          }
+
+          # Each PDB's debug ID, which its program names too: the upload fails unless it finds both. The loop's
+          # output is the upload's `--id` arguments, so its messages go to the log by Write-Host.
+          $ids = foreach ($pdb in "orchester.pdb", "orchester_runner.pdb") {
+            $checked = & $cli debug-files check --json (Join-Path $files $pdb)
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $checked = $checked | Out-String | ConvertFrom-Json
+            if (-not $checked.is_usable -or $checked.type -ne "pdb") {
+              Write-Host "::error::$pdb is not a usable PDB: $($checked.problem)"
+              exit 1
+            }
+            $id = $checked.variants[0].debug_id
+            Write-Host "$pdb has the debug ID $id ($($checked.features))."
+            "--id"
+            $id
+          }
+
+          & $cli debug-files upload --no-sources --require-all @ids --wait-for 600 $files
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error title=Debug files not uploaded::sentry-cli could not upload the PDBs to GlitchTip; the release is not created."
+            exit $LASTEXITCODE
+          }
+      - name: Skip the debug files upload
+        if: ${{ needs.prepare.outputs.release != 'true' }}
+        shell: bash
+        run: |
+          echo "::notice title=No debug files upload::A dry run uploads no PDBs to GlitchTip; a release does."
       - name: Pack the zip and the installer
         shell: pwsh
         env:
@@ -144,7 +228,8 @@ jobs:
           $built = (Resolve-Path "target/release").Path
 
           # The zip holds one folder, Orchester-<version>, with both programs: the app starts the runner from beside
-          # itself, so orchester.exe alone does not work.
+          # itself, so orchester.exe alone does not work. The PDBs the build writes beside them (orchester.pdb,
+          # orchester_runner.pdb) are GlitchTip's, to resolve error reports, and never go to the person.
           $folder = Join-Path $out "Orchester-$env:VERSION"
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           foreach ($program in "orchester.exe", "orchester-runner.exe") {
@@ -153,6 +238,13 @@ jobs:
           Copy-Item -LiteralPath "tools/installer/portable-readme.txt" -Destination (Join-Path $folder "README.txt")
           $zip = "Orchester-$env:VERSION-windows-x64.zip"
           Compress-Archive -Path $folder -DestinationPath (Join-Path $out $zip)
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $packed = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $out $zip))
+          try { $pdbs = @($packed.Entries | Where-Object { $_.Name -like "*.pdb" }) } finally { $packed.Dispose() }
+          if ($pdbs.Count -gt 0) {
+            Write-Output "::error::$zip holds debug files ($($pdbs.FullName -join ', ')); they go to GlitchTip, not into the zip."
+            exit 1
+          }
 
           # Inno Setup 6, installed only on this runner when its image does not have it.
           $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source

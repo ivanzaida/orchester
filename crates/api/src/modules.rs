@@ -133,9 +133,3 @@ pub struct Modules {
   pub modules: Vec<SharedModule>,
   pub changes: Vec<SharedModuleChange>,
 }
-
-/// A `modules` event: the project's modules after a create, a change or an upload.
-#[derive(Serialize, Deserialize)]
-pub struct ModulesChanged {
-  pub modules: Vec<SharedModule>,
-}

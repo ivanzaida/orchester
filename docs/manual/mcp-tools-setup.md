@@ -81,7 +81,8 @@ accepted; turning on puts the repository's text into every agent's prompt and is
 | `enabled` | boolean | yes  | Whether agents load the repository's agent files. |
 
 Related project tools in the work reference: `list_projects`, `set_code_index`, `update_project_limits`,
-`get_auto_mode`, `set_auto_mode`.
+`get_approvals`, `set_allow_autopilot`, `set_reviewer` (auto mode's `get_auto_mode` and `set_auto_mode` are retired:
+they answer `retired`, naming these).
 
 ---
 
@@ -299,7 +300,8 @@ project's.
 Narrowing is always accepted. Anything **broader than the latest published version** (for a new profile: broader
 than the most restrictive permissions its CLI enforces, with no MCP server) is `person_only` unless AP is on: write
 access, writable folders, broader commands, network on, MCP servers, no longer asking before tool calls, approving
-automatically (which additionally needs AA).
+automatically and Autopilot (both answer requests in a person's place, so they additionally need AA, as the
+window's question does).
 
 | Parameter           | Type                   | Req. | Description                                                                                   |
 |---------------------|------------------------|------|-----------------------------------------------------------------------------------------------|
@@ -326,6 +328,11 @@ automatically (which additionally needs AA).
 | `writable_folders`      | array<string>                                 | no   | Folders outside the worktree the agent may write (write access only).     |
 | `ask_before_tool_calls` | boolean                                       | no   | Ask a person before each MCP or app tool call.                             |
 | `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. |
+| `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gate AP, and AA as approving automatically), the reverse never asks. |
+
+`get_profile` gives the same permissions object, `approval_mode` included. A profile set to Autopilot runs as Manual
+where its project does not allow Autopilot or its run was switched to Manual: `get_approvals` gives the mode each
+running run is in, and why ([work › Approval modes](mcp-tools-work.md#approval-modes)).
 
 ### `publish_profile` — changes data · gate AP for broader or re-worded profiles
 

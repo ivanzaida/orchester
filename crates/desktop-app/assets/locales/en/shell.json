@@ -132,7 +132,6 @@
       "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
     },
     "status": {
-      "projectCut": "{{name}} · {{folder}}",
       "runner": {
         "starting": "Runner starting",
         "online": "Runner online",
@@ -172,14 +171,6 @@
         "review": "Review"
       },
       "approvals": {
-        "waiting": {
-          "one": "approval waiting",
-          "other": "approvals waiting"
-        },
-        "asksCommand": "· {{agent}} asks to run {{command}} · {{task}}",
-        "asksTool": "· {{agent}} asks to use {{server}} {{tool}} · {{task}}",
-        "firstLineMore": "{{line}} …",
-        "review": "Review",
         "auto": "Auto-approving",
         "autoOne": "· Run {{run}} · {{task}}",
         "autoOther": "· {{count}} runs",
@@ -199,12 +190,6 @@
         "other": "Open"
       },
       "dismiss": "Dismiss",
-      "agents": "Agents",
-      "queued": "Queued",
-      "needsYou": {
-        "one": "needs you",
-        "other": "need you"
-      },
       "unknown": "—",
       "mcpListening": "MCP {{address}}",
       "mcpPortTaken": "MCP port {{port}} taken",
@@ -212,7 +197,7 @@
       "mcpUnavailable": "MCP unavailable",
       "mcpQa": "MCP :{{port}} · QA",
       "mcpDevelopment": "MCP :{{port}}",
-      "windowControl": "Agents can control this window",
+      "windowControl": "Agents control the window",
       "version": "v{{version}}",
       "unread": {
         "first": "Tasks couldn't be read · {{reason}}",
@@ -246,13 +231,13 @@
         "note": "Limits are per account and shared by every project that uses it. Codex accounts are read every few minutes while this is open; Claude windows are as of the last run or Check now on the account."
       },
       "server": {
-        "connected": "{{server}}",
+        "connected": "{{server}} · connected",
         "connecting": "{{server}} · connecting",
         "offline": "{{server}} offline",
         "signedOut": "{{server}} · signed out",
         "certificateChanged": "{{server}} · certificate changed",
         "several": {
-          "connected": "{{count}} servers",
+          "connected": "{{count}} servers · connected",
           "connecting": "{{count}} servers · connecting",
           "offline": "{{count}} servers · one offline",
           "signedOut": "{{count}} servers · one signed out",
@@ -263,7 +248,40 @@
       "mcpLockedQa": "MCP :{{port}} · QA · sign-in required",
       "mcpLockedDevelopment": "MCP :{{port}} · sign-in required",
       "mcpLockedShort": "MCP · sign-in required",
-      "cloudOffline": "Orchester Cloud · offline"
+      "cloudOffline": "Orchester Cloud · offline",
+      "health": {
+        "since": "since {{time}}",
+        "agents": "Agents",
+        "agentsValue": "{{working}} of {{slots}} at work",
+        "queued": "Queued",
+        "queuedValue": {
+          "one": "{{count}} task",
+          "other": "{{count}} tasks"
+        },
+        "server": "Team server",
+        "mcp": "MCP server",
+        "mcpQa": ":{{port}} · QA",
+        "mcpDevelopment": ":{{port}}",
+        "mcpClients": {
+          "one": "{{address}} · {{count}} agent connected",
+          "other": "{{address}} · {{count}} agents connected"
+        },
+        "version": "Orchester",
+        "note": "Press to open the runner log. Tokens are on the usage card.",
+        "triedLabel": "Tried",
+        "tried": {
+          "one": "{{count}} time",
+          "other": "{{count}} times"
+        },
+        "nextLabel": "Next try",
+        "nextIn": "in {{seconds}} s",
+        "nextNow": "now",
+        "lostLabel": "Runs waiting",
+        "lost": {
+          "one": "{{count}} run lost its agent",
+          "other": "{{count}} runs lost their agents"
+        }
+      }
     },
     "needsYou": {
       "one": "{{count}} needs you",
@@ -355,7 +373,8 @@
         "title": "Orchester's MCP server",
         "since": "Refusing every tool · since {{time}}",
         "body": "Agents and other MCP clients still connect to {{address}}, but every tool answers “sign in required” until you sign in to Orchester Cloud in this window.",
-        "hint": "Signing in can't be done over MCP: only a person, in the window."
+        "hint": "Signing in can't be done over MCP: only a person, in the window.",
+        "version": "Orchester {{version}}"
       }
     },
     "cloud": {

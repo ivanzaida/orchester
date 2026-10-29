@@ -233,3 +233,39 @@ fn tasks_needs_you_board_with_nothing_waiting_says_so_with_rows_too() {
   seeded.until("the rows", |seeded| seeded.laid_out("tasks-board-lanes"));
   says_needs_you_is_empty(&mut seeded, "module");
 }
+
+/// ORC-150, as OP-26 was left: a task set Done while its report run waited to be completed is counted in Done and never
+/// in Needs you or Active, and the app settles the run's completion as the person's, who closed it.
+#[test]
+fn tasks_a_task_closed_while_its_report_waited_is_in_done_only_and_its_completion_settles() {
+  let mut seeded = Seeded::tasks("deliverables", TaskList::new(TaskListTab::Done));
+  let tasks = seeded.shown_tasks();
+  let closed = tasks
+    .tasks
+    .iter()
+    .find(|task| task.details().title.as_str() == "Summarize the outage")
+    .expect("the closed task");
+  let (id, key) = (closed.id(), closed.key().to_string());
+  let run = tasks
+    .phases
+    .get(&id)
+    .and_then(|latest| latest.run())
+    .expect("its run")
+    .id;
+  let db = orchester_store::ProjectDb::open(&seeded.repo).expect("the project");
+  seeded.until("the completion settled", |_| {
+    db.run_completion(run).expect("read").is_some()
+  });
+  let completion = db.run_completion(run).expect("read").expect("settled");
+  assert_eq!(completion.by, orchester_core::run::CompletedBy::Person);
+  seeded.until("the tasks read again", |seeded| {
+    seeded.view("needs_you") == "Needs you 3"
+  });
+  assert_eq!(
+    [seeded.view("active"), seeded.view("done")],
+    ["Active 3", "Done 2"],
+    "the completed report and the closed one are in Done only"
+  );
+  assert!(seeded.keys().contains(&key), "{key} is in Done");
+  assert!(!waiting(&seeded).contains(&key), "{key} waits for nothing");
+}

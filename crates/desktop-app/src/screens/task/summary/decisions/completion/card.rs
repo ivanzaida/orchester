@@ -145,6 +145,7 @@ pub fn completed(ctx: &Ctx, run: &RunView, completion: &RunCompletion) -> Elemen
     CompletedBy::Person => "decisions.complete.completedByYou",
     CompletedBy::Automation => "decisions.complete.completedByAutomation",
     CompletedBy::Orchestrator => "decisions.complete.completedByOrchestrator",
+    CompletedBy::Member => "decisions.complete.completedByMember",
   };
   let body = ctx.t_args(
     key,

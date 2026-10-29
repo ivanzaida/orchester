@@ -383,7 +383,7 @@ fn resources_agent_profiles_keep_their_permissions() {
   let stored: String = raw(repo.path())
     .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
     .unwrap();
-  assert!(stored.contains(r#""schema":4"#), "{stored}");
+  assert!(stored.contains(r#""schema":5"#), "{stored}");
 }
 
 /// Profiles stored before permissions existed (schema 1) read as read-only, commands confined to
@@ -431,7 +431,7 @@ fn resources_agent_profiles_before_permissions_read_with_the_safest_permissions(
     .query_row("SELECT body FROM resource_versions", [], |row| row.get(0))
     .unwrap();
   assert_eq!(unchanged, schema_1);
-  document["schema"] = 4.into();
+  document["schema"] = 5.into();
   raw
     .execute("UPDATE resource_drafts SET body = ?1", [document.to_string()])
     .unwrap();

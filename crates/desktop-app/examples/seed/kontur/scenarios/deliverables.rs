@@ -1,8 +1,10 @@
 //! `deliverables`: runs whose result is not a commit (ORC-93). Feature delivery runs that passed every step and
 //! committed nothing: one whose task delivers a report, ready to be completed; one whose task delivers work outside the
-//! repository, with a Pencil tool call a person approved; one whose pipeline expects changes, flagged; and a report run
-//! a person completed, its report kept as the run's *Report*. None has a design frame of its own yet: they reuse the
-//! Ready card (`hyzq2`), the warning notice (`iw9rS`) and the Summary's sections.
+//! repository, with a Pencil tool call a person approved; one whose pipeline expects changes, flagged; a report run a
+//! person completed, its report kept as the run's *Report*; and a report run whose task a person set Done without
+//! completing it, as OP-26 was left (ORC-150): the app settles its completion once it opens the project. None has a
+//! design frame of its own yet: they reuse the Ready card (`hyzq2`), the warning notice (`iw9rS`) and the Summary's
+//! sections.
 
 use orchester_core::{
   resource::{Deliverable, StepKey},
@@ -11,7 +13,7 @@ use orchester_core::{
     StepOutput, ToolApprovalDecision,
   },
   store::ActivityStore,
-  task::organization::ChangeActor,
+  task::organization::{ChangeActor, WorkflowStatus},
 };
 
 use crate::kontur::{Kontur, SeedError, catalogue::Published, run::Drive};
@@ -25,6 +27,7 @@ const SIGN_IN: &str = "Drew the sign-in page in Pencil: the form, its error stat
 const TIMEOUT: &str = "The timeout is already configurable; nothing needed to change.";
 const RETRY_POLICY: &str = "## Retry policy\nRetries back off from 1 s to 5 min and give up after six tries. It matches \
                             the brief.";
+const OUTAGE: &str = "## Outage\nThe queue's worker ran out of memory at 02:10 and restarted at 02:25.";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
@@ -77,6 +80,20 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     completed_at: at,
   };
   kontur.db.save_run_completion(&completion, Some(&report))?;
+  let closed = nothing_committed(
+    kontur,
+    feature,
+    (
+      ("Summarize the outage", "report run, task set Done without completing"),
+      Some(Deliverable::Report),
+    ),
+    (OUTAGE, 50),
+  )?;
+  kontur.db.close_task_organization(
+    closed.task(),
+    WorkflowStatus::Done,
+    (ChangeActor::Person, kontur.ago(10)),
+  )?;
   Ok(())
 }
 

@@ -91,7 +91,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
   let asked = db.questions(run.id())?;
   let (questions, proposed) = orchestrated::awaiting(&root, &run, (&asked, &conversation))?;
   let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
-  let auto_mode = db.run_auto_mode(run.id())?;
+  let approval_mode = db.run_approval_mode(run.id())?;
   let worktree = worktree_state(&db, &root, run.id())?;
   let merge = merge_state(&db, (&root, &services.programs), &run)?;
   let view = run_view(&db, run)?;
@@ -138,7 +138,8 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     },
     "steps": steps,
     "plans": decided,
-    "auto_mode": auto_mode,
+    "approval_mode": approval_mode,
+    "requests": request_answers(&db, run.id())?,
     "worktree": worktree,
     "merge": merge,
     "delivery": super::merge_queue::run_delivery(&db, run.id())?,
@@ -156,6 +157,24 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   });
   Ok((read, waiting, project))
+}
+
+/// How each tool request of `run` was answered by its approval mode, oldest first: `answered` (`autopilot`, `profile`,
+/// `reviewer` with its reason, `person`), absent while it waits; `came_to_you` with the reason its card shows, for one
+/// that came to the person and still waits there or was answered there.
+fn request_answers(db: &ProjectDb, run: RunId) -> Result<Vec<Value>, ToolError> {
+  Ok(
+    db.request_answers(run)?
+      .into_iter()
+      .map(|record| {
+        json!({
+          "id": record.request,
+          "answered": record.answer,
+          "came_to_you": record.came_to_person,
+        })
+      })
+      .collect(),
+  )
 }
 
 /// Whether `run`'s work was merged, as its task's Summary tells it: by Orchester, with the merge it recorded, or

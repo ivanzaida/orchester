@@ -401,6 +401,10 @@ N8: one slice per phase from N4 on
   Make local keeping them. Screens: shared marks in the five libraries, *Publish for the team* with the publisher on
   versions, *missing on this computer* with the binding picker, *v5 widens what agents may do here* with *Use v5
   here*, *Published here, not sent*, the publish conflict.
+- **Who edits** (decision 72). Only admins (the project's owner or the team server's admin, core's
+  `sharing::may_change_configuration`) edit, publish, create, import, rename and archive shared resources. A member
+  has no drafts of shared resources: the five libraries and the editors show them read-only, and the member runs
+  with the published versions; the server answers a member's write `403 not_admin`.
 - **Files.** `crates/store/src/`, `crates/workspace/src/sharing/sync/config.rs`,
   `sharing/project/{share,make_local}.rs`, the resource services under `pipelines/`, `agents/`, `instructions/`,
   `skills/`, `tools/`; app: the library and editor headers of `screens/{pipelines,agents,instructions,skills,tools}/`,

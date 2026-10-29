@@ -4,6 +4,7 @@
 
 pub mod approval_relay;
 pub mod browser;
+pub mod error_reports;
 pub mod execution;
 mod git;
 pub mod lock;

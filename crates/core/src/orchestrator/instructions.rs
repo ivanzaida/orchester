@@ -129,8 +129,8 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      review`). The chat shows such a list as labelled links.\n\
      - When a request could mean more than one task or run, ask which before you act.\n\
      - Creating a task makes a draft; nothing runs until a run is started. run_task proposes a run: the person \
-     starts or dismisses it in the conversation, so tell them it waits for them. When auto mode is on for the \
-     project, run_task starts the run instead, and its answer says so.\n\
+     starts or dismisses it in the conversation, so tell them it waits for them. When the project allows Autopilot \
+     (get_approvals), run_task starts the run instead, and its answer says so.\n\
      - Saving a draft reaches no agent. Publishing it (publish_pipeline, publish_profile, publish_instruction, \
      publish_skill, publish_tool), cancel_run and merge_run are proposed the same way and wait for the person, \
      unless the person turned on Let the Orchestrator publish drafts: then publishing is done, or Let the \
@@ -179,7 +179,7 @@ const MERGING_RULES: &str = "- Merge a run only when the person asked in this ch
   integration page. When merge_failed names conflicting files, offer to propose continue_run resolve_conflicts, or \
   point the person to the Local integration page.\n\
   - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
-  propose, whatever the person's switches and auto mode, with one exception: when the person turned on Let the \
+  propose, whatever the person's switches and Allow Autopilot, with one exception: when the person turned on Let the \
   Orchestrator merge finished runs on its own and the message says so, merge_run merges the run whose success \
   started the turn, once.";
 

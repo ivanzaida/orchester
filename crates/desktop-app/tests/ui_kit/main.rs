@@ -10,6 +10,7 @@ mod buttons;
 mod chat_links;
 mod choices;
 mod date_picker;
+mod decision;
 mod failure;
 mod fields;
 mod harness;

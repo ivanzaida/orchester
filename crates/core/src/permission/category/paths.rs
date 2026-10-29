@@ -332,6 +332,11 @@ impl CommandScope {
       .any(|root| root == path)
   }
 
+  /// Whether `path` is the worktree itself, as written or resolved.
+  pub(super) fn is_worktree(&self, path: &Path) -> bool {
+    path == self.worktree || resolved(path) == resolved(&self.worktree)
+  }
+
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it
   /// (the folders in it are [`Self::secret`] themselves).
   fn may_hold_secrets(&self, folder: &Path) -> bool {

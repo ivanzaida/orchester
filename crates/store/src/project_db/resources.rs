@@ -11,14 +11,16 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, shared_publishes};
 use crate::{
   StoreError,
   rows::{corrupt, decode_body, decode_document, encode_json, parse},
 };
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
-const SELECT_VERSIONS: &str = "SELECT id, number, body, published_at FROM resource_versions";
+/// A cached version of a shared resource reads as its local body, which this computer's bindings rewrite.
+const SELECT_VERSIONS: &str = "SELECT id, number, COALESCE(local_body, body), published_at FROM resource_versions \
+                               LEFT JOIN shared_version_bodies ON version_id = id";
 
 impl ProjectDb {
   /// Reads the draft and latest version under the write lock, then saves the returned draft.
@@ -141,6 +143,7 @@ impl ProjectDb {
       .connection
       .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     check_kind::<B>(&transaction, resource)?;
+    shared_publishes::ensure_may_change(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
     let latest = load_versions::<B>(
       &transaction,
@@ -210,6 +213,7 @@ impl ResourceStore for ProjectDb {
   ) -> Result<Resource, StoreError> {
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
+    shared_publishes::ensure_may_create(&transaction, B::KIND)?;
     let taken: bool = transaction.query_row(
       "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
       params![kind_text(B::KIND), slug.as_str()],
@@ -325,6 +329,7 @@ fn publish_checked<B: ResourceBody>(
   now: Timestamp,
 ) -> Result<Version<B>, StoreError> {
   check_kind::<B>(connection, resource)?;
+  shared_publishes::ensure_may_change(connection, resource)?;
   let draft = load_draft::<B>(connection, resource)?.ok_or(StoreError::NoDraft(resource))?;
   if expected.is_some_and(|expected| draft.body() != expected) {
     return Err(StoreError::DraftChanged(resource));
@@ -343,6 +348,8 @@ fn publish_checked<B: ResourceBody>(
   publish_prepared(connection, resource, draft, latest, now)
 }
 
+/// Publishes `draft` as the version after `latest`. In a shared project the callers checked that the person is an
+/// admin, and the version waits for the server ([`super::shared_publishes`]).
 fn publish_prepared<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
@@ -351,6 +358,7 @@ fn publish_prepared<B: ResourceBody>(
   now: Timestamp,
 ) -> Result<Version<B>, StoreError> {
   draft.body().check_publishable()?;
+  super::service_needs::check(connection, resource, draft.body())?;
   let version = publish(draft, latest, now)?;
   connection.execute(
     "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -366,6 +374,7 @@ fn publish_prepared<B: ResourceBody>(
     "DELETE FROM resource_drafts WHERE resource_id = ?1",
     [resource.to_string()],
   )?;
+  shared_publishes::record(connection, resource, &version, latest)?;
   Ok(version)
 }
 
@@ -376,6 +385,7 @@ pub(super) fn save_draft<B: ResourceBody>(
 ) -> Result<DraftSaved, StoreError> {
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
+  shared_publishes::ensure_may_change(connection, resource)?;
   let base = match draft.based_on() {
     Some(number) => load_versions::<B>(
       connection,
@@ -525,7 +535,7 @@ pub(super) fn encode<B: ResourceBody>(body: &B) -> Result<String, StoreError> {
 
 /// A stored body in the current shape; bodies of an older schema are upgraded as they are read
 /// (published versions are immutable, so they are not rewritten).
-fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
+pub(super) fn decode<B: ResourceBody>(text: &str) -> Result<B, StoreError> {
   const WHAT: &str = "resource body";
   let (schema, body) = decode_document(WHAT, text)?;
   if schema == B::SCHEMA {
@@ -559,10 +569,12 @@ pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
     ResourceKind::Tool => "tool",
     ResourceKind::Skill => "skill",
     ResourceKind::TestSuite => "test_suite",
+    ResourceKind::Service => "service",
+    ResourceKind::Stack => "stack",
   }
 }
 
-fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
+pub(super) fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
   match value {
     "agent_profile" => Ok(ResourceKind::AgentProfile),
     "instruction" => Ok(ResourceKind::Instruction),
@@ -570,6 +582,8 @@ fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
     "tool" => Ok(ResourceKind::Tool),
     "skill" => Ok(ResourceKind::Skill),
     "test_suite" => Ok(ResourceKind::TestSuite),
+    "service" => Ok(ResourceKind::Service),
+    "stack" => Ok(ResourceKind::Stack),
     other => Err(corrupt("resource kind", other)),
   }
 }

@@ -11,14 +11,14 @@ workspace = true
 
 [features]
 # The HTTP client the desktop talks to a server with (`client` module).
-client = ["dep:parking_lot", "dep:reqwest", "dep:rustls", "dep:rustls-platform-verifier", "dep:serde_json", "dep:thiserror"]
+client = ["dep:parking_lot", "dep:reqwest", "dep:rustls", "dep:rustls-platform-verifier"]
 # Tests that serve a certificate from a test authority trust it besides the operating system's store
 # (`client::trust_for_tests`); a stand-in cloud on loopback and the tests' cloud key (`test_support`), which the
 # desktop's tests here and the end-to-end tests of the private platform repository share.
 test-support = ["client", "identity"]
 # Orchester Cloud's identity tokens and signed key sets (`identity` module): signing for the cloud, verifying for team
 # servers.
-identity = ["dep:base64", "dep:ring", "dep:serde_json", "dep:thiserror"]
+identity = ["dep:base64", "dep:ring"]
 
 [dependencies]
 orchester-core.workspace = true
@@ -33,16 +33,17 @@ rustls = { workspace = true, optional = true }
 # The operating system's trust store, as reqwest uses it, wrapped to record the verified leaf (`client/recorded.rs`).
 rustls-platform-verifier = { workspace = true, optional = true }
 serde.workspace = true
-serde_json = { workspace = true, optional = true }
+# A shared resource version's body (`resources.rs`), core's stored JSON of its kind; already built for core.
+serde_json.workspace = true
 # A team server's certificate pin and check code: the SHA-256 of its certificate.
 sha2.workspace = true
-thiserror = { workspace = true, optional = true }
+# The SSE parser's error (`sse.rs`), besides the client's and the identity module's.
+thiserror.workspace = true
 # Passwords permit whitespace-only values; core's project SecretValue rejects them.
 # Wipe this JSON-boundary credential's memory on drop using the existing workspace dependency.
 zeroize.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 # The client's tests against a recording listener on loopback (`tests/cloud_address.rs`).
 tokio.workspace = true
 
@@ -56,4 +57,8 @@ required-features = ["identity"]
 
 [[test]]
 name = "cloud_address"
+required-features = ["client"]
+
+[[test]]
+name = "events_client"
 required-features = ["client"]

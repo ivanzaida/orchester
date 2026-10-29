@@ -5,6 +5,7 @@ use orchester_core::{
   name::{Name, NameError},
   resource::PublishError,
   secret::{SecretError, VaultError},
+  service::{NeedsError, ServiceName},
   task::EditError,
 };
 use orchester_store::StoreError;
@@ -90,6 +91,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::TaskNotHeld(_) => Message::new("tasks.bulk.notHeld"),
     StoreError::TaskRunActive(_) => Message::new("tasks.delete.stopRunFirst"),
     StoreError::SharedTask(_) | StoreError::SharedProject => Message::new("sharing.errors.serverOnly"),
+    StoreError::NotAdmin => Message::new("sharing.errors.notAdmin"),
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
@@ -136,7 +138,30 @@ pub fn store_error(error: &StoreError) -> Message {
       Message::new("agents.permissions.publish.connectionMissing")
     }
     StoreError::Publish(PublishError::Permissions(problem)) => crate::agents::permissions::not_enforceable(problem),
+    StoreError::Publish(PublishError::Needs(error)) => needs_error(error),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
+  }
+}
+
+/// Why a service or stack cannot be published: what it needs is not published, or the needs form a cycle.
+pub fn needs_error(error: &NeedsError) -> Message {
+  match error {
+    NeedsError::DuplicateService(service) => {
+      Message::new("services.errors.duplicateService").with("service", service.to_string())
+    }
+    NeedsError::Missing {
+      name,
+      needed_by: Some(service),
+    } => Message::new("services.errors.needNotPublished")
+      .with("service", service.to_string())
+      .with("need", name.to_string()),
+    NeedsError::Missing { name, needed_by: None } => {
+      Message::new("services.errors.serviceNotPublished").with("service", name.to_string())
+    }
+    NeedsError::Cycle(cycle) => {
+      let cycle: Vec<&str> = cycle.iter().map(ServiceName::as_str).collect();
+      Message::new("services.errors.needsCycle").with("cycle", cycle.join(" → "))
+    }
   }
 }
 

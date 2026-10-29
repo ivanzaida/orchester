@@ -289,7 +289,8 @@ fn approval_answers_auto_approval_never_approves_what_is_dangerous() {
     ("cargo add serde", AutoAsk::Installs),
     ("pip install requests", AutoAsk::Installs),
     ("git push --force", AutoAsk::Destructive),
-    ("git reset --hard", AutoAsk::Destructive),
+    // `git reset --hard` in the run's worktree is the run's own (ORC-339); another branch's commit is not.
+    ("git reset --hard origin/main", AutoAsk::Destructive),
     ("./regen.sh", AutoAsk::Unknown),
     ("echo $SECRET", AutoAsk::Unknown),
     ("git fetch origin", AutoAsk::Network),

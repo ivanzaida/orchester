@@ -171,6 +171,39 @@ fn domain_reads_say_why_auto_mode_left_a_request_to_the_person() {
   assert_eq!(same["hold_cause"], CAUSE, "{same}");
 }
 
+/// A request auto mode's reviewer is still judging is marked `reviewing` in `list_approvals` and in `get_run`; those
+/// its review left to the person are not.
+#[test]
+fn domain_reads_mark_the_requests_auto_mode_is_reviewing() {
+  let (mut served, _) = Served::seeded("cards-auto-mode");
+  let approvals = served.ok("list_approvals", &json!({ "project": "Kontur" }));
+  let marked: Vec<(&str, bool)> = list(&approvals, "approvals")
+    .iter()
+    .map(|approval| {
+      let action = approval["action"].as_str().expect("its command");
+      (action, approval["reviewing"].as_bool().expect("reviewing or not"))
+    })
+    .collect();
+  assert_eq!(
+    marked,
+    [
+      ("tail -n 3 CHANGELOG.md", true),
+      ("cargo update -p reqwest", false),
+      ("cargo tree -d", false),
+    ],
+    "{approvals}"
+  );
+  let reviewing = list(&approvals, "approvals")
+    .iter()
+    .find(|approval| approval["reviewing"] == true)
+    .expect("the request under review");
+  let number = reviewing["run"]["number"].as_u64().expect("its run").to_string();
+  let run = served.ok("get_run", &json!({ "project": "Kontur", "run": number }));
+  let waiting = list(&run["awaiting"], "approvals");
+  assert_eq!(waiting.len(), 1, "{run}");
+  assert_eq!(waiting[0]["reviewing"], true, "{run}");
+}
+
 #[test]
 fn domain_reads_existing_results_carry_links_the_router_opens() {
   let (mut served, seeded) = Served::seeded("cards");

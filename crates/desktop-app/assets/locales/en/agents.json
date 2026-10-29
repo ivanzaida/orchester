@@ -170,9 +170,68 @@
     "mcpDisabled": "Turned off in Connections",
     "addMcp": "Add an MCP server",
     "approvals": "Approvals",
+    "permissions": {
+      "approvals": {
+        "title": "Approvals",
+        "autopilot": {
+          "title": "Autopilot",
+          "hint": "Approves every tool request at once. Work outside the worktree, pushes and other branches still ask you."
+        },
+        "manual": {
+          "title": "Manual",
+          "hint": "Allowed commands run at once. Anything else goes to the reviewer first, then to you."
+        },
+        "allowedHint": "These run without asking, as do the profile’s file, network and MCP permissions.",
+        "anyCommand": "Set before approval modes: any command in the worktree runs without asking.",
+        "stillAsks": {
+          "title": "Still asks you",
+          "hint": "Autopilot never approves these; each waits in Needs you with its reason.",
+          "outside": "Outside the worktree, Sources and temp folders",
+          "push": "Pushes to a remote",
+          "refs": "Refs other than the run’s branch",
+          "note": "Sources are the folders the project lends to runs; temp folders are the agent’s own scratch folders."
+        },
+        "decisions": "In both modes decisions come to you: questions, plans, a step that needs a choice or ends unverified, limits and merge conflicts.",
+        "autoApprove": {
+          "title": "Approve automatically (don’t ask me)",
+          "hint": "Set before approval modes: Orchester answers every request in your place, also what Autopilot still asks you. Turn it off to use the mode above."
+        },
+        "widen": {
+          "title": "Allow Autopilot for {{profile}}?",
+          "untitled": "Allow Autopilot for this profile?",
+          "reason": "Autopilot approves this agent’s tool requests in the worktree without asking you."
+        },
+        "notAllowed": {
+          "title": "Not allowed in {{project}}",
+          "hint": "{{project}} doesn’t allow Autopilot, so {{profile}}’s runs there use Manual. The choice stays for projects that allow it.",
+          "untitled": "{{project}} doesn’t allow Autopilot, so this profile’s runs there use Manual. The choice stays for projects that allow it."
+        },
+        "usedIn": {
+          "title": "Used in {{project}}",
+          "hint": "What {{profile}}’s runs use in {{project}} now: allowed commands run at once; anything else goes to the reviewer, then to you.",
+          "untitled": "What this profile’s runs use in {{project}} now: allowed commands run at once; anything else goes to the reviewer, then to you."
+        },
+        "openSettings": "Open Project settings › Runs",
+        "change": "Approvals · {{from}} → {{to}}",
+        "waiting": "Approvals · {{from}} → {{to}} · waits for you to allow it"
+      }
+    },
+    "enforcement": {
+      "approvalMode": {
+        "title": "Approval mode",
+        "line": "{{mode}} · {{how}}",
+        "autopilot": "Orchester answers every request; {{cli}}’s own prompt is off",
+        "manual": "Orchester answers: allowed list, then the reviewer, then you",
+        "native": "Orchester answers every request; it runs each tool call itself",
+        "cantEnforce": "Can’t hand its requests to Orchester · runs as Manual until {{cli}} is updated",
+        "versionUnknown": "No check has found its version · runs as Manual until {{cli}} is checked",
+        "cli": {
+          "claudeCode": "Claude Code",
+          "codex": "Codex"
+        }
+      }
+    },
     "whenAsked": "When the agent asks",
-    "whenAskedHint": "Some CLIs still ask before actions these permissions allow. Requests outside them always wait for you.",
-    "auto": "Approve automatically (don’t ask me)",
     "toolCalls": "MCP approvals",
     "toolCallsHint": "Requests that require approval wait in Needs you. Tools allowed without asking in Connections keep their exemption.",
     "askTools": "Ask before MCP actions that require approval",
@@ -233,7 +292,6 @@
     "mcpCount": "{{selected}} of {{total}} servers",
     "mcpSelection": "{{selected}} of {{total}}",
     "mcpLoading": "Only selected, enabled servers available to this connection are loaded.",
-    "approvalMechanism": "Orchester · requests go to Needs you",
     "approvalsAsk": "MCP actions requiring approval ask you",
     "approvalsAuto": "Eligible requests are approved automatically",
     "approvalsDefault": "The connection’s approval rules apply",
@@ -267,7 +325,6 @@
     "noProfiles": "No profiles in {{project}}",
     "noConnectionTitle": "No connection yet",
     "roleSection": "Role",
-    "commandsNetwork": "Commands and network",
     "mcpNote": "The server keeps its own access to files and network. Only selected, enabled servers available to this connection are loaded.",
     "mcpTurnedOff": "{{transport}} · {{off}}",
     "notEnforcedState": "Not enforced",

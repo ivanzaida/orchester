@@ -135,6 +135,11 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
 }
 
 fn read(program: &str, args: &[String]) -> Judged {
+  // A path on another provider (`env:GH_TOKEN`, `Cert:\…`, a share) or `-Credential` may read a credential no
+  // placing sees: held as one, as an unread part now goes to auto mode's reviewer (ORC-339).
+  if reads_unplaced(args) {
+    return Judged::unknown().secret();
+  }
   if refused(args) {
     return Judged::unknown();
   }
@@ -158,6 +163,13 @@ pub(super) fn refused(args: &[String]) -> bool {
   args.iter().any(|arg| {
     unread(arg) || parameter(arg).is_some_and(|(name, _)| SETS_VARIABLE.contains(&name.to_lowercase().as_str()))
   })
+}
+
+/// Whether a reading cmdlet's `args` name a path no placing sees ([`on_provider`]) or pass `-Credential`.
+fn reads_unplaced(args: &[String]) -> bool {
+  args
+    .iter()
+    .any(|arg| on_provider(arg) || parameter(arg).is_some_and(|(name, _)| name.eq_ignore_ascii_case("credential")))
 }
 
 /// Reading cmdlets that are known-safe reads with [`KNOWN_READ_PARAMETERS`].
@@ -301,21 +313,25 @@ fn paths_globbed(args: &[String]) -> bool {
 }
 
 /// Whether `arg` cannot be read: a comma makes it an array of values (the quotes that would keep it one
-/// value are gone by now), or it (or the value attached to a parameter) names a path on a provider: any
-/// `::` (`Microsoft.PowerShell.Core\FileSystem::C:\…`, `…\Environment::`), a drive other than one
-/// letter (`env:PATH`, `HKCU:\…`, `Cert:\…`, `Variable:`, `Function:`, `WSMan:`), or a share (`\\host`,
-/// `//host`). A URL (`https://…`) is not.
+/// value are gone by now), or it names a path on a provider ([`on_provider`]).
 fn unread(arg: &str) -> bool {
+  arg.contains(',') || on_provider(arg)
+}
+
+/// Whether `arg` (or the value attached to a parameter) names a path on a provider: any `::`
+/// (`Microsoft.PowerShell.Core\FileSystem::C:\…`, `…\Environment::`), a drive other than one letter (`env:PATH`,
+/// `HKCU:\…`, `Cert:\…`, `Variable:`, `Function:`, `WSMan:`), or a share (`\\host`, `//host`). A URL (`https://…`)
+/// is not.
+fn on_provider(arg: &str) -> bool {
   let value = parameter(arg).map_or(Some(arg), |(_, attached)| attached);
-  arg.contains(',')
-    || value.is_some_and(|value| {
-      value.contains("::")
-        || value.starts_with("\\\\")
-        || value.starts_with("//")
-        || value.split_once(':').is_some_and(|(provider, rest)| {
-          let url = provider.chars().all(|c| c.is_ascii_alphanumeric()) && rest.starts_with("//");
-          let drive = provider.len() == 1 && provider.chars().all(|c| c.is_ascii_alphabetic());
-          !(url || drive)
-        })
-    })
+  value.is_some_and(|value| {
+    value.contains("::")
+      || value.starts_with("\\\\")
+      || value.starts_with("//")
+      || value.split_once(':').is_some_and(|(provider, rest)| {
+        let url = provider.chars().all(|c| c.is_ascii_alphanumeric()) && rest.starts_with("//");
+        let drive = provider.len() == 1 && provider.chars().all(|c| c.is_ascii_alphabetic());
+        !(url || drive)
+      })
+  })
 }

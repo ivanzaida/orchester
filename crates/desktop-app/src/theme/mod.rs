@@ -69,7 +69,7 @@ use lurq::{
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
-  cards::{CardsSpacing, CardsText},
+  cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
   chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius},
@@ -123,6 +123,8 @@ pub const DISABLED_OPACITY: f32 = 0.5;
 pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 /// A shortcut beside a tooltip's label (`n75PTn` in `b6q3OZ`).
 pub const SHORTCUT_OPACITY: f32 = 0.6;
+/// What a primary full-width button does, in `on_accent` under its label (`dwsGC` in `br5EG`).
+pub const CONSEQUENCE_ON_ACCENT_OPACITY: f32 = 0.75;
 /// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.
 pub const LOADER_TURN: Duration = Duration::from_secs(1);
 /// The poses of a loader's turn: 24, 15° apart. lurq draws a frame only when the pose changes, so a window

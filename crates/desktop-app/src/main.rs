@@ -5,6 +5,7 @@
 use orchester_app::{
   app_log, clipboard,
   error_reports::{self, Environment},
+  hang_reports,
   startup::{Launch, WindowPosition},
   window,
 };
@@ -24,9 +25,15 @@ fn main() {
   // where the window opens, or why there is no session.
   let mut launch = Launch::begin(runtime.handle(), log);
   // Error reports start here, once the database that holds the person's setting is open: a panic before this line is
-  // not reported. Kept to the end of `main`, whose drop sends what is still pending.
-  let _reports =
-    Environment::of_this_app().and_then(|environment| error_reports::start(environment, launch.workspace()));
+  // not reported. Kept to the end of `main`, whose drop sends what is still pending. The runners, which start once
+  // the window shows a project, report too.
+  let environment = Environment::of_this_app();
+  let reports = environment.and_then(|environment| error_reports::start(environment, launch.workspace()));
+  if let (Some(environment), Some(_), Some(services)) = (environment, &reports, launch.services()) {
+    services
+      .runners
+      .send_error_reports(error_reports::for_runners(environment));
+  }
   // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
   // a trash of their own.
   if let Some(workspace) = launch.workspace() {
@@ -34,7 +41,11 @@ fn main() {
   }
   // Only this window reads the accounts' plan limits on its own; tests and QA copies never read a real account.
   launch.read_plan_limits();
+  // A frozen window is reported while the error reports are sent, from this thread's first beat in the window until
+  // the window has closed: the work after it is not watched.
+  let watchdog = reports.as_ref().and_then(|_| hang_reports::Watchdog::start());
   window::open(&runtime, &launch, position);
+  drop(watchdog);
   // The window has closed and its server stopped: then the runners stop and the session records its end.
   clipboard::clear_at_exit();
   launch.end();
