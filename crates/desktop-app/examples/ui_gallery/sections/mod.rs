@@ -3,6 +3,7 @@
 
 mod actions;
 mod blocks;
+mod decisions;
 mod inputs;
 mod labels;
 mod overlays;
@@ -30,6 +31,7 @@ pub fn section(ctx: &mut Ctx, section: Section, state: &State) -> Element {
       .child(blocks::section(ctx, state))
       .child(overlays::section(ctx, state))
       .into(),
+    Section::Decisions => decisions::section(ctx, state),
   }
 }
 

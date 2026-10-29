@@ -57,10 +57,14 @@ pub enum ExtraTypography {
   MonoArea,
   /// 13/500, 1.2: a large button's label (`P8aXN` in `Create your first project` `rDzhV`).
   ButtonLarge,
+  /// 12/500, 1.4: the label of a full-width button with a consequence under it (`vKp3S` in `wWuSM`).
+  ButtonStacked,
+  /// 12 `text_muted`, 1.4: what a full-width button does, under its label (`lZNis` in `wWuSM`).
+  ButtonConsequence,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 21] = [
     Self::Display,
     Self::Strong,
     Self::Note,
@@ -80,6 +84,8 @@ impl ExtraTypography {
     Self::FormSection,
     Self::MonoArea,
     Self::ButtonLarge,
+    Self::ButtonStacked,
+    Self::ButtonConsequence,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -107,6 +113,8 @@ impl ExtraTypography {
       Self::FormSection => "form_section",
       Self::MonoArea => "mono_area",
       Self::ButtonLarge => "button_large",
+      Self::ButtonStacked => "button_stacked",
+      Self::ButtonConsequence => "button_consequence",
     }
   }
 
@@ -133,6 +141,8 @@ impl ExtraTypography {
       Self::FormSection => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
       Self::MonoArea => self::mono(sans(12.0, FontWeight::Normal, 1.7, palette.text_primary)),
       Self::ButtonLarge => sans(13.0, FontWeight::Medium, 1.2, palette.text_primary),
+      Self::ButtonStacked => sans(12.0, FontWeight::Medium, 1.4, palette.text_primary),
+      Self::ButtonConsequence => sans(12.0, FontWeight::Normal, 1.4, palette.text_muted),
     }
   }
 }

@@ -5,12 +5,16 @@
 //! pressed. A button that cannot be pressed now is faded to half; one whose feature is not built or
 //! not allowed shows a lock in place of its icon as well (`Create multiple` `Q9aeZ`), and says why
 //! beside it through [`super::unavailable::with_reason`].
+//!
+//! An answer of a decision card has its key in a cap after its label, 8 from it (`Button · Yes, all four` `n2JId`);
+//! one with a consequence is as wide as its parent, its label and the consequence under it at its start, 8 over and
+//! under and 12 at its sides, the cap 12 after them (`Option · Skip the exports` `wWuSM`).
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Button, Row, Text},
+  components::{Button, Column, Row, Text},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -18,11 +22,14 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
+  kbd::key_cap,
   pressable::{Focus, Press, inert},
 };
 use crate::{
   navigation::link::Open,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
+  theme::{
+    CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize,
+  },
 };
 
 /// The look of a button.
@@ -110,6 +117,8 @@ enum Hold {
   Unavailable(Arc<str>),
   /// An unavailable action whose design retains its ordinary glyph (Skills Publish).
   UnavailableWithIcon(Arc<str>),
+  /// Drawn as it is, but it no longer takes a press: an answer of a card that was answered.
+  Shown,
 }
 
 pub struct ActionButton {
@@ -136,6 +145,12 @@ pub struct ActionButton {
   applied: bool,
   /// What it holds is refused: its outline in `danger`.
   invalid: bool,
+  /// The key that presses it, in a cap after its label.
+  key: Option<Arc<str>>,
+  /// As wide as its parent, its words at its start, 8 over and under them.
+  stacked: bool,
+  /// What a press leads to, under its label, in a stacked button.
+  consequence: Option<Arc<str>>,
   element: Option<ElementRef>,
 }
 
@@ -159,12 +174,41 @@ impl ActionButton {
       held: false,
       applied: false,
       invalid: false,
+      key: None,
+      stacked: false,
+      consequence: None,
       element: None,
     }
   }
 
   pub fn icon(mut self, icon: Icon) -> Self {
     self.icon = Some(icon);
+    self
+  }
+
+  /// `keys` press it: their cap follows the label (`Kbd` in `n2JId`); the caller handles the keys.
+  pub fn key(mut self, keys: impl Into<Arc<str>>) -> Self {
+    self.key = Some(keys.into());
+    self
+  }
+
+  /// As wide as its parent, its icon and label at its start, 8 over and under them: an answer of an answered card
+  /// that had a consequence (`vl5ms` in `hm5wE`).
+  pub fn stacked(mut self) -> Self {
+    self.stacked = true;
+    self
+  }
+
+  /// What a press leads to, under the label: the button is [`Self::stacked`] (`wWuSM`).
+  pub fn consequence(mut self, words: impl Into<Arc<str>>) -> Self {
+    self.stacked = true;
+    self.consequence = Some(words.into());
+    self
+  }
+
+  /// Drawn as it is, but it no longer takes a press: an answer of a card that was answered (`hm5wE`).
+  pub fn shown(mut self) -> Self {
+    self.hold = Some(Hold::Shown);
     self
   }
 
@@ -292,6 +336,7 @@ impl ActionButton {
     match (&self.hold, &self.action) {
       (Some(Hold::Loading), _) => "loading",
       (Some(Hold::Unavailable(_) | Hold::UnavailableWithIcon(_)), _) => "unavailable",
+      (Some(Hold::Shown), _) => "shown",
       (Some(Hold::Disabled), _) | (None, None) => "disabled",
       (None, Some(_)) => "enabled",
     }
@@ -302,7 +347,7 @@ impl ActionButton {
     match self.hold {
       Some(Hold::Loading) => Some(Icon::LoaderCircle),
       Some(Hold::Unavailable(_)) => Some(Icon::Lock),
-      Some(Hold::Disabled | Hold::UnavailableWithIcon(_)) | None => self.icon,
+      Some(Hold::Disabled | Hold::UnavailableWithIcon(_) | Hold::Shown) | None => self.icon,
     }
   }
 }
@@ -355,40 +400,80 @@ impl ActionButton {
   }
 }
 
-impl From<ActionButton> for Element {
-  fn from(button: ActionButton) -> Self {
-    let color = if button.applied {
-      PaletteColor::TextPrimary
-    } else {
-      button.kind.content()
-    };
-    let (height, glyph, label) = button.metrics();
-    let mut frame = Button::empty()
-      .id(button.id.clone())
-      .height(Dimension::Px(height.value()))
-      .padding(Padding::horizontal(button.side()))
-      .spacing(ExtraSpacing::Snug.role())
+impl ActionButton {
+  /// The frame without its content: 28 high with its content centered, or stacked as wide as its parent, 8 over
+  /// and under and 12 at the sides, its content at the start.
+  fn frame(&self) -> Button {
+    let (height, ..) = self.metrics();
+    let frame = Button::empty()
+      .id(self.id.clone())
       .align_items(Alignment::Center)
-      .justify(Justify::Center)
       .rounded(RadiusSize::Md)
-      .describe("kind", button.kind.name())
-      .describe("state", button.state())
-      .describe("a11y_name", button.label.clone());
-    if button.fill || button.kind == ButtonKind::Select {
-      frame = frame.width(Dimension::Pct(100.0));
+      .describe("kind", self.kind.name())
+      .describe("state", self.state())
+      .describe("a11y_name", self.label.clone());
+    let frame = if self.stacked {
+      frame
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+        .spacing(SpacingSize::Md)
+        .justify(Justify::Start)
+    } else {
+      frame
+        .height(Dimension::Px(height.value()))
+        .padding(Padding::horizontal(self.side()))
+        .spacing(ExtraSpacing::Snug.role())
+        .justify(Justify::Center)
+    };
+    let frame = if self.fill || self.kind == ButtonKind::Select {
+      frame.width(Dimension::Pct(100.0))
+    } else {
+      frame
+    };
+    if self.bounded {
+      return frame.max_width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0));
     }
-    if button.bounded {
-      frame = frame.max_width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0));
-    }
-    if let Some(lead) = button.lead() {
-      frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
-    }
-    let label = Text::new(&button.label)
-      .id(format!("{}-label", button.id))
-      .variant(label)
+    frame
+  }
+
+  /// The label in `color`; stacked, the label and the consequence under it; then the key's cap.
+  fn slot(&self, color: PaletteColor) -> Element {
+    let (_, _, role) = self.metrics();
+    let label = Text::new(&self.label)
+      .id(format!("{}-label", self.id))
       .color(color)
       .nowrap();
-    let label = if button.bounded {
+    let cap = self.key.as_ref().map(|keys| key_cap(&format!("{}-key", self.id), keys));
+    if self.stacked {
+      let words = self.consequence.as_ref().map(|consequence| {
+        let words = Text::new(consequence)
+          .id(format!("{}-consequence", self.id))
+          .variant(ExtraTypography::ButtonConsequence.role())
+          .width(Dimension::Pct(100.0));
+        match self.kind {
+          ButtonKind::Primary => words
+            .color(ExtraColor::OnAccent.role())
+            .opacity(CONSEQUENCE_ON_ACCENT_OPACITY),
+          _ => words,
+        }
+      });
+      let text = Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(label.variant(ExtraTypography::ButtonStacked.role()))
+        .with_children(words);
+      return Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(SpacingSize::Md)
+        .align_items(Alignment::Center)
+        .child(text)
+        .with_children(cap)
+        .into();
+    }
+    let label = label.variant(role);
+    let label = if self.bounded {
       label
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0))
@@ -396,11 +481,36 @@ impl From<ActionButton> for Element {
     } else {
       label
     };
-    frame = button.kind.dressed(frame).child(if button.kind == ButtonKind::Select {
+    let label = if self.kind == ButtonKind::Select {
       label.flex(1.0).min_width(Dimension::Px(0.0))
     } else {
       label
-    });
+    };
+    match cap {
+      Some(cap) => Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(label)
+        .child(cap)
+        .into(),
+      None => label.into(),
+    }
+  }
+}
+
+impl From<ActionButton> for Element {
+  fn from(button: ActionButton) -> Self {
+    let color = if button.applied {
+      PaletteColor::TextPrimary
+    } else {
+      button.kind.content()
+    };
+    let (_, glyph, _) = button.metrics();
+    let mut frame = button.frame();
+    if let Some(lead) = button.lead() {
+      frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
+    }
+    frame = button.kind.dressed(frame).child(button.slot(color));
     if button.kind == ButtonKind::Select {
       frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
     }
@@ -434,6 +544,7 @@ impl From<ActionButton> for Element {
         )
         .into(),
       (Some(Hold::Loading), _) => inert(frame).cursor(CursorIcon::Progress).into(),
+      (Some(Hold::Shown), _) => inert(frame).cursor(CursorIcon::Default).into(),
       _ => inert(frame).opacity(DISABLED_OPACITY).into(),
     }
   }
