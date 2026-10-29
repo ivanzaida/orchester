@@ -1,8 +1,7 @@
-//! A fake team server on loopback for the live updates: one project with its tasks, the members' tokens, and an event
-//! log its streams follow. It serves the snapshot to a stream without `Last-Event-ID` and the deltas after the cursor
-//! to one with it, live as they are appended; lists the tasks and reads one; and takes a task change, a claim and a run
-//! report, each appending its delta. A member's session can be revoked, streams can be dropped or refused for a while,
-//! and every other request refused.
+//! A fake team server on loopback for the live updates: one project, its tasks, members' tokens and an event log. It
+//! streams the snapshot without `Last-Event-ID` and the deltas after the cursor with it, live; lists and reads tasks;
+//! takes a task change, a claim and a run report, each appending its delta. A session can be revoked, streams dropped
+//! or refused for a while, and every other request refused.
 
 use std::{
   io::{BufRead, BufReader, Read, Write},
