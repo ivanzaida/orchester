@@ -138,8 +138,9 @@ runtime linked in so the programs start without the Visual C++ Redistributable. 
 release profile keeps line tables (`debug = "line-tables-only"`), which on Windows land in a PDB
 beside each program (`orchester.pdb`, `orchester_runner.pdb`; on macOS in a `.dSYM`, by
 `split-debuginfo = "packed"`): GlitchTip resolves an error report's frame addresses with them
-(`docs/error-reports.md`). Neither the installer nor the zip packs a PDB. The release
-`app-v<version>`, tagged on the pushed commit, has:
+(`docs/error-reports.md`). A release uploads both PDBs with their programs to GlitchTip before the
+release is created (*Debug files in GlitchTip* below). Neither the installer, the zip nor the
+release has a PDB. The release `app-v<version>`, tagged on the pushed commit, has:
 
 - `Orchester-<version>-setup.exe`, the installer (Inno Setup, `tools/installer/orchester.iss`):
   for the current user, without administrator rights, into `%LOCALAPPDATA%\Programs\Orchester`
@@ -182,12 +183,38 @@ it at an existing install only if that is the one you want to update (see *Insta
 the program's rename* above).
 
 **Not signed.** Neither the programs nor the installer carry a code signature, so SmartScreen
-warns (*More info*, then *Run anyway*); no secret is needed. Signing would be one step before
-packing, with a certificate in the repository's secrets.
+warns (*More info*, then *Run anyway*). Signing would be one step before packing, with a
+certificate in the repository's secrets.
+
+**Debug files in GlitchTip.** After *Build*, the Windows job uploads `orchester.exe` with
+`orchester.pdb` and `orchester-runner.exe` with `orchester_runner.pdb` to the GlitchTip project
+`desktop` of the organization `orchester-desktop` at `https://errors.orchester.cloud`, with
+`sentry-cli debug-files upload` (GlitchTip takes it through its `difs` assemble API), without
+sources. sentry-cli's version is pinned in the workflow and its download checked against the
+SHA-256 Sentry's release registry gives for it
+(`https://release-registry.services.sentry.io/apps/sentry-cli/<version>`, the file
+`sentry-cli-Windows-x86_64.exe`); raise both together. The step fails unless GlitchTip has stored
+both PDBs, and then the release is not created: its error reports would show only addresses.
+
+- **The token** is the Actions secret `GLITCHTIP_AUTH_TOKEN` (*Settings › Secrets and variables
+  › Actions › New repository secret* on GitHub). Create it in GlitchTip, signed in as a member of
+  `orchester-desktop`: *Profile › Auth Tokens › Create New Token*, with the scope `project:write`
+  (which also lets the token read the project's debug files, below). The workflow passes it to
+  sentry-cli only in its environment, never on a command line, and GitHub masks it in the log. A
+  release run without the secret stops before the build, with *No GlitchTip token*; replace the
+  secret when the token is revoked.
+- **The dry run** uploads nothing and says so with the notice *No debug files upload*.
+- **To check a release's debug files**, open the release run's *Upload the debug files to
+  GlitchTip* step: it logs each PDB's debug ID (such as `77c4e9bf-…-1`) and the files sentry-cli
+  uploaded. GlitchTip lists a project's debug files with their debug IDs at
+  `GET https://errors.orchester.cloud/api/0/projects/orchester-desktop/desktop/files/dsyms/`
+  (`Authorization: Bearer <token>`); both IDs of the release are among them. The real test is a
+  report: a panic in the installed release shows in its GlitchTip issue with function names, files
+  and lines in its frames, not bare addresses.
 
 **Dry run.** *Actions › App release › Run workflow*, on any branch, with *dry_run* ticked: it
 builds and packs both files and keeps them, with the checksums, as the run's artifact for 7 days,
-and releases nothing. Every run costs CI minutes.
+and releases nothing, and uploads no debug files. Every run costs CI minutes.
 
 macOS is not built by CI yet; `tools/package-macos.sh` makes `Orchester.app` on a Mac and would be
 the base of a later job on a macOS runner (a bundle signed ad hoc is refused by Gatekeeper on other
