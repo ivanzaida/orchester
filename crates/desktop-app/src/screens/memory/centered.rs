@@ -1,7 +1,7 @@
 //! What a record list says in place of records, centered in the list's room: on the task's tab a bare glyph over the
 //! title, the explanation and the actions, in the middle of the list (`n3lxin` in `fQ33n`, `qLxGh` in `e8oWP4`);
 //! on the project's page the empty state's glyph tile and a smaller title, under a tab's filters (`KCGyF` in
-//! `C0OJpC`), or lower in a tab without records (`xFUjH` in `ejSHj`).
+//! `C0OJpC`).
 
 use std::sync::Arc;
 
@@ -51,12 +51,6 @@ impl Centered {
   /// As the project's page draws it under a tab's filters (`KCGyF`).
   pub fn page(mut self) -> Self {
     self.page = Some(MemorySpacing::StateTop);
-    self
-  }
-
-  /// As the project's page draws it in a tab without records (`xFUjH`).
-  pub fn empty_tab(mut self) -> Self {
-    self.page = Some(MemorySpacing::EmptyTabTop);
     self
   }
 

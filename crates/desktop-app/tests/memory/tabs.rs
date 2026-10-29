@@ -149,6 +149,18 @@ fn memory_search_with_no_match_names_the_tab_that_holds_one_and_opens_it_keeping
   assert_eq!(page.value("memory-search"), "kontur-ci-01", "the search is kept");
   let runner = page.record("CI runs on the self-hosted Windows runner").id();
   assert!(page.has(&format!("memory-record-{runner}")));
+  // Clearing the search keeps the field where the person typed, though Deprecated has no search of its own (05f).
+  page.window.set("memory-search", "");
+  page.until("the search cleared", |window| {
+    window.texts("memory-no-match").is_none() && window.texts("memory-tab-body-deprecated").is_some()
+  });
+  assert!(page.has("memory-search"), "the cleared search stays on Deprecated");
+  page.memory_tab(MemoryTab::Superseded);
+  page.memory_tab(MemoryTab::Deprecated);
+  assert!(
+    !page.has("memory-search"),
+    "Deprecated shows no search once opened afresh"
+  );
 }
 
 #[test]

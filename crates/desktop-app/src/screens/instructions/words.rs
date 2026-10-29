@@ -104,12 +104,14 @@ pub fn automation_version(ctx: &Ctx, state: VersionState) -> Arc<str> {
     _ => version(ctx, state),
   }
 }
-pub fn footer(ctx: &Ctx, tab: Tab, version: Option<orchester_core::resource::VersionNumber>) -> Arc<str> {
-  version.map_or_else(
+/// What the draft bar says under its status: a draft over a published version keeps that version for new runs until
+/// it is published (`WzPLr` in 02b), whichever tab it is on.
+pub fn footer(ctx: &Ctx, tab: Tab, state: VersionState) -> Arc<str> {
+  state.published().map_or_else(
     || ctx.t("instructions.newPublishNote"),
     |version| {
       ctx.t_args(
-        if matches!(tab, Tab::Roles | Tab::Steps) {
+        if state.has_draft() || matches!(tab, Tab::Roles | Tab::Steps) {
           "instructions.editingNote"
         } else {
           "instructions.publishNote"

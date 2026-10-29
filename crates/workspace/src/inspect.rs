@@ -152,6 +152,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::outside::OutsideChanges {}
     impl $inspect for crate::tasks::outside::OutsideCounts {}
     impl $inspect for crate::tasks::overview::OverviewTab {}
+    impl $inspect for crate::overview::delivery::OverviewDelivery {}
     impl $inspect for crate::tasks::plan::PlanReview {}
     impl $inspect for crate::tasks::ready_to_run::ProjectReadiness {}
     impl $inspect for crate::tasks::question::Answering {}

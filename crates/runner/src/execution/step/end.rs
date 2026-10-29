@@ -115,8 +115,8 @@ impl RunTask {
   /// then waits for the answer to the agent's question — also when the permission prompt closed only
   /// after the question was delivered (run 26), but not after any other failure of the turn — or
   /// continues to read messages queued for its agent meanwhile, or the run's pending notice that its
-  /// base branch moved (a writing step's); otherwise it fails when the agent
-  /// reported `failed` — also when its turn failed afterwards — or when the turn failed, and passes
+  /// base branch moved when it overlaps the run's changes (a writing step's, ORC-151); otherwise it fails when the
+  /// agent reported `failed` — also when its turn failed afterwards — or when the turn failed, and passes
   /// otherwise; a step that passes
   /// joins its work to the run's branch. A follow-up leaves no output: its answer is its
   /// reply in the conversation, and the step's output stays what it was.
@@ -147,7 +147,7 @@ impl RunTask {
       if !self.queued_for(execution)?.is_empty() {
         return self.save(execution, active, "saved to read messages");
       }
-      if self.notice_for(execution)?.is_some() {
+      if self.notice_for(execution, active.workspace.path())?.is_some() {
         return self.save(execution, active, "saved to merge the moved base");
       }
     }
@@ -305,7 +305,7 @@ impl RunTask {
     }
   }
 
-  fn checkpoint(&mut self, execution: StepExecutionId, revision: Revision) -> Result<(), ExecutionError> {
+  pub(super) fn checkpoint(&mut self, execution: StepExecutionId, revision: Revision) -> Result<(), ExecutionError> {
     self.transition(|run, now| run.record_checkpoint(execution, revision, now))
   }
 

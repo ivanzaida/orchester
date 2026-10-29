@@ -15,7 +15,7 @@ use crate::{
   routes::{AccountsPanel, AccountsView, Route},
   theme::IconSize,
   ui::{
-    agent_mark::{AgentMark, mark_icon},
+    agent_mark::AgentMark,
     button::{ActionButton, ButtonKind},
     icon::Icon,
     setting_rows::{SettingGroup, SettingRow, group_note, opens_mark, row_tile, status},
@@ -68,7 +68,7 @@ pub(super) fn state_line(ctx: &Ctx, id: &str, shown: Shown) -> Element {
 
 /// The CLI maker's mark in a row's tile.
 pub(super) fn mark_tile(ctx: &Ctx, cli: AccountCli) -> Element {
-  row_tile(mark_icon(ctx, AgentMark::of_cli(cli), IconSize::Md.size())).into()
+  row_tile(AgentMark::of_cli(cli).render(ctx, IconSize::Md)).into()
 }
 
 fn row(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount, navigation: &Navigation) -> Element {

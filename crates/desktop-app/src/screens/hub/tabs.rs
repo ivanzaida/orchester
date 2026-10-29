@@ -152,7 +152,7 @@ impl Component for HubTabs {
       .map(|choice| {
         let label = ctx.t(choice.label_key());
         let tab_id = format!("agents-hub-tab-{}", choice.name());
-        let open = PageTab::to(tab_id, label, choice == tab, navigation.to(choice.route(id)));
+        let open = PageTab::to(tab_id, label, choice == tab, navigation.to(choice.route(id))).compact();
         match counts.map(|counts| choice.count(&counts)) {
           // A tab whose own read failed shows no count.
           Some((count, waits)) if count > 0 && unread & choice.bit() == 0 => open.count(count, waits),

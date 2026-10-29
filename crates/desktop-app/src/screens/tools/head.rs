@@ -24,6 +24,7 @@ pub(super) fn crumb(ctx: &mut Ctx, p: &EditorProps) -> Element {
   let tools = Navigation::of(ctx).to(Route::Project(p.project.open.project.id(), ProjectPage::Tools));
   let new = ctx.t("tools.newTitle");
   page_head::crumb(
+    ctx,
     "tool-crumbs",
     (&ctx.t("hub.tabs.tools"), tools),
     p.entry.is_none().then_some(&*new),
@@ -102,16 +103,17 @@ pub(super) fn tabs(ctx: &mut Ctx, p: &EditorProps) -> Element {
       let key = format!("tool-tab-{}", tab.name());
       let Some(id) = p.entry.as_ref().map(|e| e.id) else {
         if tab != ToolTab::Configuration {
-          return PageTab::unavailable(key, label, ctx.t("tools.saveFirst"));
+          return PageTab::unavailable(key, label, ctx.t("tools.saveFirst")).compact();
         }
-        return PageTab::to(key, label, true, nav.to(Route::Project(project, ProjectPage::NewTool)));
+        return PageTab::to(key, label, true, nav.to(Route::Project(project, ProjectPage::NewTool))).compact();
       };
       let item = PageTab::to(
         key,
         label,
         tab == current,
         nav.to(Route::Project(project, ProjectPage::Tool(id, tab))),
-      );
+      )
+      .compact();
       match tab {
         ToolTab::UsageLog => item.explanation(ctx.t("tools.locked")),
         _ => item,

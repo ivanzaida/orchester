@@ -38,6 +38,8 @@ use crate::{
 
 /// `Page tab/*` height.
 const TAB_HEIGHT: f32 = 34.0;
+/// A compact page tab's height: the Agents hub's tabs and a tool's (`Tabs` `Cc3JP`).
+const COMPACT_TAB_HEIGHT: f32 = 32.0;
 /// `Segmented` height, and a text segment's (`c4p0b`) and an icon segment's width (`wsGU4`).
 const SEGMENTED_HEIGHT: f32 = 26.0;
 const TEXT_SEGMENT_HEIGHT: f32 = 22.0;
@@ -63,6 +65,7 @@ pub struct PageTab {
   badge: Option<usize>,
   /// How many there are, a number after the label, and whether it counts what waits for the person.
   count: Option<(usize, bool)>,
+  height: f32,
 }
 
 impl PageTab {
@@ -75,7 +78,15 @@ impl PageTab {
       explanation: None,
       badge: None,
       count: None,
+      height: TAB_HEIGHT,
     }
+  }
+
+  /// The tab 32 high instead of 34, as the Agents hub draws its tabs and a tool's (`Cc3JP`).
+  #[must_use]
+  pub const fn compact(mut self) -> Self {
+    self.height = COMPACT_TAB_HEIGHT;
+    self
   }
 
   /// A tab that `on_open` opens; `label` already holds its count, if any ([`counted`]).
@@ -132,7 +143,7 @@ impl PageTab {
       TabState::Unavailable(reason) => {
         let tab = inert(Button::empty())
           .id(self.id.clone())
-          .height(Dimension::Px(TAB_HEIGHT))
+          .height(Dimension::Px(self.height))
           .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
           .spacing(ExtraSpacing::Pair.role())
           .align_items(Alignment::Center)
@@ -165,7 +176,7 @@ impl PageTab {
     let button = open
       .map_or_else(|| Button::empty().focusable(false), Press::button)
       .id(self.id.clone())
-      .height(Dimension::Px(TAB_HEIGHT))
+      .height(Dimension::Px(self.height))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)

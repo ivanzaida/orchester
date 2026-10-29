@@ -60,7 +60,7 @@ impl Component for ScopePicker {
       .id("skill-scope")
       .ref_element(self.anchor.clone())
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ControlHeight::Md.value()))
+      .height(Dimension::Px(ControlHeight::Row.value()))
       .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
       .rounded(RadiusSize::Md)
       .background(PaletteColor::SurfaceInput)

@@ -1,4 +1,5 @@
-//! Markdown source editor with a line gutter, Body editor BNRcW in Skills gJurA.
+//! Markdown source editor: mono lines in a box as high as its parent leaves, scrolling inside it, 10 over and under
+//! them and 12 at their sides, with no line numbers (`Area` `IaAfU` in 03b `QbDWX`).
 use std::sync::Arc;
 
 use lurq::{
@@ -7,14 +8,12 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text, TextInput},
+  components::{Column, ScrollVertical, TextInput},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use crate::theme::ExtraSpacing;
-/// Line-number gutter in BNRcW.
-const GUTTER_WIDTH: f32 = 34.0;
 #[derive(Clone)]
 pub struct CodeEditor {
   id: Arc<str>,
@@ -61,6 +60,7 @@ impl Component for Editor {
     if !self.frame.is_attached() {
       return;
     }
+    // The input fills the box under its padding, so a press anywhere in it places the caret.
     let height = (self.frame.bounds().height - 2.0 * ExtraSpacing::Loose.value()).max(0.0);
     if (self.height.get_untracked() - height).abs() > 0.5 {
       self.height.set(height);
@@ -68,28 +68,19 @@ impl Component for Editor {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<CodeEditor>().clone();
-    let count = p.value.get().split('\n').count().max(1);
     let theme = ctx.theme();
     let style = FormTextRole {
       typography: crate::theme::skills::source(),
       color: PaletteColor::TextPrimary,
     }
     .resolve(&theme.typography(), &theme.palette());
-    let numbers = (1..=count).map(|n| {
-      Text::new(&n.to_string())
-        .id(format!("{}-line-{n}", p.id))
-        .variant(crate::theme::skills::gutter())
-        .height(theme.spacing_value(crate::theme::skills::source_line()))
-        .color(PaletteColor::TextMuted)
-    });
     let mut input = TextInput::styled(p.value, style)
       .id(p.id.to_string())
       .describe("a11y_name", p.name)
       .multiline()
       .rows(1, usize::MAX)
       .min_height(Dimension::Px(self.height.get()))
-      .width(Dimension::Pct(100.0))
-      .flex(1.0);
+      .width(Dimension::Pct(100.0));
     if p.locked {
       input = input
         .on_input(|e: lurq::app::events::TextInputEvent| e.prevent_default())
@@ -107,20 +98,9 @@ impl Component for Editor {
       .clip()
       .child(
         ScrollVertical::new(
-          Row::new()
+          Column::new()
             .width(Dimension::Pct(100.0))
-            .padding(
-              Padding::new()
-                .top(ExtraSpacing::Loose.role())
-                .bottom(ExtraSpacing::Loose.role()),
-            )
-            .spacing(SpacingSize::Md)
-            .child(
-              Column::new()
-                .width(Dimension::Px(GUTTER_WIDTH))
-                .align_items(lurq::layout::Alignment::End)
-                .with_children(numbers),
-            )
+            .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
             .child(input),
         )
         .width(Dimension::Pct(100.0))

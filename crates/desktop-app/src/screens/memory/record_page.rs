@@ -75,7 +75,7 @@ pub fn page(ctx: &mut Ctx, state: &MemoryState, memory: &Arc<ProjectMemory>, tab
     .spacing(HubSpacing::Sections.role())
     .child(top(ctx, state, (&record, editor.as_ref()), (tab, &memory.origins)));
   if state.opened.get() == Opened::Delete(id) {
-    let props = opened::delete(ctx, &record, among);
+    let props = opened::delete(&record, among);
     main = main.child(ctx.mount_keyed::<DeleteConfirm>(&format!("memory-delete-{id}"), props));
   }
   main = main.child(match editor.clone() {
@@ -91,7 +91,7 @@ pub fn page(ctx: &mut Ctx, state: &MemoryState, memory: &Arc<ProjectMemory>, tab
       },
     )
   } else {
-    proposal_side(ctx, state, editor.as_ref())
+    proposal_side(ctx, state, (&record, &memory.origins), editor.as_ref())
   };
   Some(hub::page_body(
     "memory-record",
@@ -114,7 +114,7 @@ fn top(
   };
   let list = ctx.t("memory.page.crumb");
   let here = tabs::name(ctx, tab);
-  let crumb = page_head::crumb("memory-record-crumb", (&list, back), Some(&here));
+  let crumb = page_head::crumb(ctx, "memory-record-crumb", (&list, back), Some(&here));
   let kind = record.content().kind();
   let review = record.status() == MemoryStatus::Proposed;
   let title = if review {
@@ -272,26 +272,39 @@ fn said(ctx: &Ctx, record: &Memory) -> Element {
   .into()
 }
 
-/// Beside a proposal under review: where it came from and the agent's confidence (`H2OVV` in 05e).
-fn proposal_side(ctx: &mut Ctx, state: &MemoryState, editor: Option<&EditorProps>) -> Element {
+/// Beside a proposal under review (`Source` `H2OVV` in 05e): where it was written, with its conversation, the agent's
+/// confidence, and that an edit keeps the author.
+fn proposal_side(
+  ctx: &mut Ctx,
+  state: &MemoryState,
+  (record, origins): (&Memory, &Origins),
+  editor: Option<&EditorProps>,
+) -> Element {
   let Some(props) = editor else {
     return Element::new();
   };
   let mut rows: Vec<Element> = Vec::new();
-  for (index, (label, value)) in props.facts.iter().enumerate() {
-    let mut row = Entry::new(format!("memory-review-fact-{index}"), label.clone()).hint(value.clone());
-    if index == 0
-      && let Some(task) = &props.source_task
-    {
-      let words = ctx.t_args("memory.editor.sourceLinkTask", [("task", task.to_string())]);
-      row = row.end(memory_parts::conversation_link(
+  if let Some(source) = opened::review_source(ctx, record, origins) {
+    let mut written = Entry::new("memory-review-fact-0", source.written).hint(source.source);
+    if let Some(task) = &props.source_task {
+      written = written.end(memory_parts::conversation_button(
         ctx,
         (state.project_id, task),
-        ("memory-review-source-link", &words),
+        "memory-review-source-link",
       ));
     }
-    rows.push(row.into());
+    rows.push(written.into());
+    rows.push(
+      Entry::new("memory-review-fact-1", ctx.t("memory.editor.confidence"))
+        .hint(source.confidence)
+        .into(),
+    );
   }
+  rows.push(
+    Entry::new("memory-review-fact-2", ctx.t("memory.editor.author"))
+      .hint(ctx.t("memory.editor.authorKept"))
+      .into(),
+  );
   let id = "memory-review-source";
   parts::group(
     id,

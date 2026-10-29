@@ -18,6 +18,7 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
+    "approveEverythingPersonOnly": "Only a person turns on approving everything in each run: it lets every auto mode run answer its own requests. Input from an MCP client is taken only while you let automation change agent permissions.",
     "baseBranch": {
       "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
     }
@@ -135,10 +136,59 @@
   },
   "overview": {
     "eyebrow": {
-      "key": "PROJECT KEY {{key}}",
-      "repository": "PROJECT KEY {{key}} · {{repository}}",
-      "branch": "PROJECT KEY {{key}} · {{branch}}",
-      "repositoryBranch": "PROJECT KEY {{key}} · {{repository}} · {{branch}}"
+      "key": "{{key}}",
+      "repository": "{{key}} · {{repository}}",
+      "branch": "{{key}} · {{branch}}",
+      "repositoryBranch": "{{key}} · {{repository}} · {{branch}}"
+    },
+    "queue": {
+      "slot": "Waiting for an agent slot",
+      "blocked": "Waiting for blocking tasks · {{tasks}}",
+      "previous": "Waiting for the previous task · {{task}}",
+      "held": "Held · new starts held",
+      "queued": "Queued",
+      "place": {
+        "next": "next",
+        "st": "{{place}}st",
+        "nd": "{{place}}nd",
+        "rd": "{{place}}rd",
+        "th": "{{place}}th"
+      }
+    },
+    "landed": {
+      "empty": "empty",
+      "waiting": {
+        "one": "{{count}} waits",
+        "other": "{{count}} wait"
+      },
+      "state": {
+        "queued": "{{task}} queued",
+        "syncing": "{{task}} syncing",
+        "rechecking": "{{task}} rechecking",
+        "integrating": "{{task}} integrating",
+        "approval": "{{task}} waits for you",
+        "blocked": "blocked: your checkout keeps delivery out",
+        "left": "{{task}} left the queue"
+      }
+    },
+    "start": {
+      "connect": {
+        "title": "Connect an agent CLI",
+        "none": "No agent connection signed in yet"
+      },
+      "profile": {
+        "title": "Publish an agent profile",
+        "none": "No published profile yet"
+      },
+      "pipeline": {
+        "title": "Publish a pipeline",
+        "none": "No published pipeline yet"
+      },
+      "task": {
+        "title": "Create the first task",
+        "none": "A brief with acceptance criteria; its pipeline runs it step by step in a worktree of its own",
+        "done": "{{count}} tasks"
+      }
     },
     "metrics": {
       "agentsWorking": {
@@ -954,7 +1004,10 @@
       },
       "fallback": {
         "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
-      }
+      },
+      "testNoRunner": "The project’s runner is not running, so the connection could not be tested. Wait until it is online, then test again.",
+      "testFailed": "The runner could not test the connection. The log has the details; test again.",
+      "testStale": "The connection’s key or endpoint changed while it was tested, so the result was not kept. Test it again."
     },
     "models": {
       "fetchInvalid": "The endpoint listed models that can’t be kept as they are; add them by hand.",

@@ -25,11 +25,11 @@ use super::{
   work::{self, Change, Saved, Work},
 };
 use crate::{screens::hub, theme::HubSpacing};
-/// A field's width in the *Skill* rows (`zalHn`, `MdHMb`) and the description's height.
+/// A field's width in the *Skill* rows (`zalHn`, `MdHMb`) and the description's least height, one line (`P1kVO`).
 const FIELD_WIDTH: f32 = 280.0;
-const DESCRIPTION_HEIGHT: f32 = 64.0;
-/// The body's editor, in a page that scrolls.
-const BODY_HEIGHT: f32 = 240.0;
+const DESCRIPTION_HEIGHT: f32 = 39.0;
+/// The body's editor (`Area` `IaAfU`); its lines scroll inside it.
+const BODY_HEIGHT: f32 = 130.0;
 /// The page's main column (`Pane` `FgUP6`) and its side (`Side` `jGRYJ`).
 const MAIN_WIDTH: f32 = 680.0;
 const SIDE_WIDTH: f32 = 424.0;
@@ -143,20 +143,25 @@ impl Component for Editor {
       .as_ref()
       .map_or_else(|| ctx.t("skills.new"), |e| e.name.clone());
     let changed = (dirty || parsed.is_err(), busy);
-    let mut pane = Column::new()
-      .id("skill-editor")
+    // The crumb, the head and the draft bar sit closer than the sections under them (`Top` `KVCXI`).
+    let mut top = Column::new()
+      .id("skill-top")
       .width(Dimension::Pct(100.0))
-      .spacing(HubSpacing::Sections.role())
+      .spacing(HubSpacing::Row.role())
       .child(self.crumb(ctx, &p, baseline.as_ref()))
       .child(self.page_head(ctx, &p, baseline.as_ref(), &title))
       .with_children(self.leave_question(ctx, busy))
       .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
-    pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get()) {
-      (Some(question), _) => pane.child(question),
-      (None, true) => pane.child(self.question(ctx, &p, baseline.as_ref())),
-      (None, false) => pane.child(self.bar(ctx, &p, baseline.as_ref(), changed)),
+    top = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get()) {
+      (Some(question), _) => top.child(question),
+      (None, true) => top.child(self.question(ctx, &p, baseline.as_ref())),
+      (None, false) => top.child(self.bar(ctx, &p, baseline.as_ref(), changed)),
     };
-    pane = pane
+    let pane = Column::new()
+      .id("skill-editor")
+      .width(Dimension::Pct(100.0))
+      .spacing(HubSpacing::Sections.role())
+      .child(top)
       .with_children(self.failure(ctx, &p))
       .with_children(self.reload_question(ctx, &p, busy))
       .with_children(self.form(ctx, &p, parsed.as_ref().err(), busy));

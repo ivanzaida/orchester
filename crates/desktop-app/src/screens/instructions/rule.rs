@@ -7,13 +7,13 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Select, SelectOption, Text},
+  components::{Column, Row, Select, SelectOption, Text, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::instructions::{
   data::ProjectInstructions,
-  form::{Events, FormErrors, ScopeChoice, Target},
+  form::{Events, FormErrors, ScopeChoice, SettingsError, Target},
 };
 
 use super::{fields::Fields, words};
@@ -21,7 +21,6 @@ use crate::{
   screens::hub::parts::{boxed, field, group, head},
   theme::{ExtraRadius, IconSize},
   ui::{
-    chip::TagChip,
     field::{FieldInput, SelectField, field_error, select_style},
     icon::{Icon, icon},
     message::message_text,
@@ -70,10 +69,19 @@ impl Fields {
         "instruction-event-field",
         &ctx.t("instructions.inject"),
         inject_hint.as_deref(),
-        self.event_field(ctx),
+        self.event_field(ctx, existing),
       )
       .into(),
     );
+    // A new rule's role, pipeline or step is chosen in the Scope section above, whose select says it is not chosen
+    // yet, and Create draft waits for it (02e).
+    let shown = errors.and_then(|e| e.settings).filter(|error| {
+      existing
+        || !matches!(
+          error,
+          SettingsError::RoleRequired | SettingsError::PipelineRequired | SettingsError::StepRequired
+        )
+    });
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -82,11 +90,7 @@ impl Fields {
         head("instruction-rule", &ctx.t("instructions.ruleTitle"), None, None),
         boxed("instruction-rule-rows", rows),
       ))
-      .with_children(
-        errors
-          .and_then(|e| e.settings)
-          .map(|error| field_error("instruction-settings-error", &message_text(ctx, &error.message()))),
-      )
+      .with_children(shown.map(|error| field_error("instruction-settings-error", &message_text(ctx, &error.message()))))
       .into()
   }
 
@@ -110,9 +114,10 @@ impl Fields {
     .into()
   }
 
-  /// Agent start · Agent resume · Start & resume; while the rule is being created the choice stays as it is.
-  fn event_field(&self, ctx: &Ctx) -> Element {
-    let role = matches!(self.scope.get(), ScopeChoice::AgentRole(_));
+  /// Agent start · Agent resume · Start & resume; while the rule is being created the choice stays as it is. A saved
+  /// role rule names its agents in the last one; a new rule's reads as drawn in 02e.
+  fn event_field(&self, ctx: &Ctx, existing: bool) -> Element {
+    let role = existing && matches!(self.scope.get(), ScopeChoice::AgentRole(_));
     let chosen = self.events.get();
     let segments = Events::ALL.into_iter().map(|event| {
       let (events, frozen) = (self.events.clone(), self.frozen.clone());
@@ -204,51 +209,48 @@ impl Fields {
     }
   }
 
-  /// All agents, or the roles and profiles it names, as chips in one 300 box.
+  /// All agents, or the roles and profiles it names, in one 300 select (`ofaBF` in `EsJ8r`): what it names on one
+  /// line, then the chevron; its menu names more or fewer.
   fn targets_field(&self, ctx: &Ctx, data: &ProjectInstructions, invalid: bool) -> Element {
-    let choices = target_choices(ctx, data);
-    let remove_labels = choices
-      .iter()
-      .map(|(target, label)| {
-        (
-          label.to_string(),
-          (
-            target.clone(),
-            ctx.t_args("instructions.removeTarget", [("name", label.as_ref())]),
-          ),
-        )
-      })
-      .collect::<std::collections::BTreeMap<_, _>>();
-    let options = choices
+    let options = target_choices(ctx, data)
       .into_iter()
       .map(|(target, label)| SelectOption::new(target, label));
-    let placeholder = ctx.t("instructions.addRole");
-    let targets = self.targets.clone();
-    let frozen = self.frozen.clone();
+    let placeholder = ctx.t("instructions.choose");
     let select = Select::multiple(self.targets.clone())
       .options(options.map(|option| option.disabled(self.frozen.get())))
       .style(select_style(ctx))
       .height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
       .width(Dimension::Pct(100.0))
       .trigger(move |state| {
-        let mut chips = Row::new()
+        let named = !state.selected_labels.is_empty();
+        let shown = if named {
+          state
+            .selected_labels
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<&str>>()
+            .join(", ")
+        } else {
+          placeholder.to_string()
+        };
+        Row::new()
           .width(Dimension::Pct(100.0))
           .align_items(Alignment::Center)
-          .spacing(SpacingSize::Xs);
-        for (index, label) in state.selected_labels.iter().enumerate() {
-          let mut chip = TagChip::new(format!("instruction-target-{index}"), label.as_ref());
-          if !frozen.get()
-            && let Some((target, remove_label)) = remove_labels.get(label.as_ref()).cloned()
-          {
-            let targets = targets.clone();
-            chip = chip.removable(remove_label, move || {
-              targets.update(|values| values.retain(|value| *value != target));
-            });
-          }
-          chips = chips.child(chip);
-        }
-        chips
-          .child(Text::new(&placeholder).variant(TypographyStyle::Caption).flex(1.0))
+          .spacing(SpacingSize::Sm)
+          .child(
+            Text::new(&shown)
+              .id("instruction-targets-value")
+              .variant(TypographyStyle::Description)
+              .color(if named {
+                PaletteColor::TextPrimary
+              } else {
+                PaletteColor::TextMuted
+              })
+              .nowrap()
+              .text_overflow(TextOverflow::Elipsis)
+              .width(Dimension::Px(0.0))
+              .flex(1.0),
+          )
           .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
       });
     Row::new()

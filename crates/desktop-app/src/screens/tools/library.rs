@@ -120,7 +120,7 @@ fn empty(ctx: &Ctx, nav: &Navigation, project: ProjectId) -> Element {
     .icon(Icon::Terminal)
     .opens(nav.to(Route::Project(project, ProjectPage::NewTool)));
   Entry::new("tools-empty", ctx.t("tools.emptyTitle"))
-    .tile(Icon::Wrench)
+    .tile(Icon::Terminal)
     .hint(ctx.t("tools.emptyDetail"))
     .end(add)
     .into()

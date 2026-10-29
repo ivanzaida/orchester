@@ -1,15 +1,17 @@
 //! Add provider (`10 · Add provider · own sign-in` `LaTB4`, `10b · on an API provider` `hc1vS`): a page in the
-//! Connections tab, never a dialog. The person chooses the kind (the native kinds are not available yet), names the
-//! connection, and gets the program found on the search path, which Orchester checks at once (its version, sign-in and
-//! models); the check says what it found under the program. Only a copy found on the search path is offered:
-//! choosing another file is not built in this app. Save connection waits for a check that recognized the CLI; one that
-//! is not signed in may be saved and reads Sign-in required. The CLI runs on its own sign-in, on an account, or on an
-//! API provider with a key ([`super::provider_form`]), which only a person chooses. The first reason it cannot be
-//! saved stays before the actions, or what comes after saving once it can be.
+//! Connections tab, never a dialog. The person chooses the kind, names the connection, and for a CLI gets the program
+//! found on the search path, which Orchester checks at once (its version, sign-in and models); the check says what it
+//! found under the program. Only a copy found on the search path is offered: choosing another file is not built in
+//! this app. Save connection waits for a check that recognized the CLI; one that is not signed in may be saved and
+//! reads Sign-in required. The CLI runs on its own sign-in, on an account, or on an API provider with a key
+//! ([`super::provider_form`]), which only a person chooses. The Anthropic API's native kind has its own fields instead
+//! ([`native`]); the OpenAI API's is locked until the runner runs its agents. The first reason it cannot be saved
+//! stays before the actions, or what comes after saving once it can be.
 
 mod check;
 mod kinds;
 pub(super) mod naming;
+mod native;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -44,6 +46,7 @@ use self::{
 };
 use super::{
   data::{self, Saved},
+  native_form::NativeForm,
   page::{Head, action_bar_noted, page},
   provider_form::ProviderForm,
 };
@@ -100,6 +103,8 @@ type SaveAction = FutureAction<(ConnectionDraft, RunsOn, Option<SecretValue>), S
 
 pub struct AddAgent {
   save: SaveAction,
+  /// Saves a native connection with the key typed for a new secret, if any.
+  save_native: native::SaveNative,
   kind: Signal<Kind>,
   name: Signal<String>,
   /// The name the page last suggested: while the field holds it, or nothing, choosing another CLI
@@ -114,6 +119,8 @@ pub struct AddAgent {
   account: Signal<String>,
   /// Whether it runs on an API provider instead, and the provider's fields.
   provider: ProviderForm,
+  /// A native connection's fields; the Anthropic API is the native kind this version runs.
+  native: NativeForm,
 }
 
 impl Component for AddAgent {
@@ -122,6 +129,7 @@ impl Component for AddAgent {
   fn create(ctx: &mut Ctx) -> Self {
     let page = Self {
       save: save_action(ctx),
+      save_native: native::save_action(ctx),
       kind: ctx.signal(Kind(AgentProvider::CodexCli)),
       name: ctx.signal(String::new()),
       suggested: ctx.signal(String::new()),
@@ -129,18 +137,29 @@ impl Component for AddAgent {
       recheck: ctx.signal(0),
       account: ctx.signal(String::new()),
       provider: ProviderForm::new(ctx),
+      native: NativeForm::new(ctx, AgentProvider::AnthropicApi),
     };
-    let save = page.save.clone();
     let project = ctx.props::<AddAgentProps>().project.open.project.id();
     let navigation = Navigation::of(ctx);
     let changes = Services::of(ctx).changes;
-    ctx.watch(&save.state(), move |state| {
+    let leave = move |id| {
+      navigation.replace(Route::Project(
+        project,
+        ProjectPage::Connections(ConnectionsView::of(id)),
+      ));
+      // After the form leaves: every screen that shows the project's connections reads them again, the status bar's
+      // accounts too.
+      changes.record(project, Outside::Connections);
+    };
+    let leave_native = leave.clone();
+    ctx.watch(&page.save.state(), move |state| {
       if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
-        let view = ConnectionsView::of(id);
-        navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
-        // After the form leaves: every screen that shows the project's connections reads them again, the
-        // status bar's accounts too.
-        changes.record(project, Outside::Connections);
+        leave(id);
+      }
+    });
+    ctx.watch(&page.save_native.state(), move |state| {
+      if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
+        leave_native(id);
       }
     });
     page
@@ -151,6 +170,9 @@ impl Component for AddAgent {
     let save = self.save.clone();
     let listed = data::load(ctx, props.project.open.repo_root.clone(), 0);
     let provider = self.kind.get().0;
+    if provider.is_native() {
+      return self.native_page(ctx, &props, &listed);
+    }
     let found = found(ctx, provider, self.recheck.get()).state().get();
     self.follow_sources(ctx, &props, provider, &listed, &found);
     let program = self.chosen(found.data.as_ref().map(|copies| copies.0.as_slice()));
@@ -298,15 +320,7 @@ impl AddAgent {
     accounts: &Accounts,
   ) -> Element {
     let provider = self.kind.get().0;
-    let name_error = listed.and_then(|listed| name_problem(ctx, listed, &self.name.get()));
-    let mut input = FieldInput::new("connection-name", ctx.t("connections.dialog.name"), self.name.clone());
-    if let Some(error) = &name_error {
-      input = input.error(error.clone());
-    }
-    let input = input.render(ctx);
-    let name = FormField::new("connection-name", ctx.t("connections.dialog.name"))
-      .hint(ctx.t("connections.dialog.nameHint"))
-      .render(ctx, input);
+    let name = self.name_row(ctx, listed);
     let program = program_row(
       ctx,
       (provider, self.provider.on()),
@@ -326,6 +340,19 @@ impl AddAgent {
       None,
       rows,
     )
+  }
+
+  /// The connection's name, with why it cannot be the connection's.
+  fn name_row(&self, ctx: &mut Ctx, listed: Option<&ProjectConnections>) -> Element {
+    let name_error = listed.and_then(|listed| name_problem(ctx, listed, &self.name.get()));
+    let mut input = FieldInput::new("connection-name", ctx.t("connections.dialog.name"), self.name.clone());
+    if let Some(error) = &name_error {
+      input = input.error(error.clone());
+    }
+    let input = input.render(ctx);
+    FormField::new("connection-name", ctx.t("connections.dialog.name"))
+      .hint(ctx.t("connections.dialog.nameHint"))
+      .render(ctx, input)
   }
 }
 

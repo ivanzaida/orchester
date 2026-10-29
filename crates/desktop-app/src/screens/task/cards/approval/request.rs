@@ -14,7 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{Answerer, PendingToolApproval, denial_message};
+use orchester_core::run::{Answerer, NativeCommandAsk, PendingToolApproval, denial_message};
 use orchester_workspace::{display, tasks::approvals::ShownApproval};
 
 use super::{
@@ -184,6 +184,13 @@ fn facts(
     }));
     rows.extend(
       request
+        .native
+        .map(|native| native_rows(ctx, id, native))
+        .into_iter()
+        .flatten(),
+    );
+    rows.extend(
+      request
         .scope
         .as_deref()
         .map(|said| row("note", "cards.approval.note", said, DetailValue::Text)),
@@ -206,6 +213,34 @@ fn facts(
     .width(Dimension::Pct(100.0))
     .with_children(rows)
     .into()
+}
+
+/// What else a native agent's command asks with (04.H9): the shell its string goes to, or none, and how long it may
+/// run before Orchester stops it.
+fn native_rows(ctx: &Ctx, id: &str, native: NativeCommandAsk) -> [Row; 2] {
+  let shell = match native.shell {
+    Some(shell) => ctx.t_args(
+      "cards.approval.shellValue",
+      [("shell", shell.name()), ("invocation", shell.invocation())],
+    ),
+    None => ctx.t("cards.approval.noShell"),
+  };
+  let seconds = native.time_limit_seconds.to_string();
+  let limit = ctx.t_args("cards.approval.timeLimitSeconds", [("seconds", seconds.as_str())]);
+  [
+    detail_row(
+      &format!("{id}-shell"),
+      &ctx.t("cards.approval.shell"),
+      &shell,
+      DetailValue::Mono,
+    ),
+    detail_row(
+      &format!("{id}-time-limit"),
+      &ctx.t("cards.approval.timeLimit"),
+      &limit,
+      DetailValue::Text,
+    ),
+  ]
 }
 
 /// The words Deny tells the agent, exactly: Orchester's for Claude Code, in its sentence; Codex's own for

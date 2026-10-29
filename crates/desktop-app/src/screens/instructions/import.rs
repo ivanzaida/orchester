@@ -15,7 +15,7 @@ use lurq::{
 use orchester_core::{
   agent_files::{
     RepositoryAgentFiles,
-    import::{Candidate, ImportItem, ItemKind, Unimportable},
+    import::{ImportItem, ItemKind},
   },
   id::IdempotencyKey,
   resource::ResourceKind,
@@ -36,6 +36,7 @@ use crate::{
     hub::{
       self,
       draft_bar::{DraftBar, Standing},
+      import_detail::item_detail,
       import_preview, import_result,
       import_rows::{Review, Unchosen, Viewed},
       page_head,
@@ -170,7 +171,7 @@ impl Import {
     let state = self.action.state().get();
     if let Some(Imported(created, total, files)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
       let back = &props.selection;
-      let list = ctx.t("instructions.title");
+      let list = ctx.t(back.opened_from_label());
       let result = import_result::Outcome {
         root: "instruction-import-result",
         id: "instruction-import",
@@ -179,7 +180,6 @@ impl Import {
         created,
         items: &scan.items,
         total: *total,
-        detail: item_detail,
         agent_files: *files,
       }
       .page(ctx);
@@ -290,8 +290,9 @@ fn top(ctx: &Ctx, props: &Props) -> Element {
   let back = &props.selection;
   let title = ctx.t("instructions.import");
   let crumb = page_head::crumb(
+    ctx,
     "instruction-import-crumbs",
-    (&ctx.t("instructions.title"), back.to(back.opened_from())),
+    (&ctx.t(back.opened_from_label()), back.to(back.opened_from())),
     Some(&title),
   );
   let detail = ctx.t_args(
@@ -321,42 +322,4 @@ fn top(ctx: &Ctx, props: &Props) -> Element {
         ),
     )
     .into()
-}
-/// What an item becomes, or why it cannot be imported (`Draft project instruction “AGENTS” · 84 lines`).
-pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
-  match &item.outcome {
-    Err(Unimportable::OnlyImports { targets }) => ctx.t_args(
-      "instructions.importOnlyPoints",
-      [
-        ("targets", targets.join(", ")),
-        (
-          "references",
-          targets
-            .iter()
-            .map(|target| format!("@{target}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-        ),
-      ],
-    ),
-    Ok(Candidate::Instruction { name, text }) => ctx.t_args(
-      "instructions.importInstruction",
-      [
-        ("name", name.as_str().to_owned()),
-        ("lines", text.as_str().lines().count().to_string()),
-      ],
-    ),
-    Ok(Candidate::Skill { name, files, .. }) => ctx.t_args(
-      match files.len() {
-        0 => "instructions.importSkillNone",
-        1 => "instructions.importSkillOne",
-        _ => "instructions.importSkill",
-      },
-      [("name", name.as_str().to_owned()), ("files", files.len().to_string())],
-    ),
-    Err(Unimportable::Empty) => ctx.t("instructions.importBlank"),
-    Err(Unimportable::NotText) => ctx.t("instructions.importNotText"),
-    Err(Unimportable::NoSkillFile) => ctx.t("instructions.importNoSkill"),
-    Err(Unimportable::UnsupportedFiles { .. }) => ctx.t("instructions.importUnsupported"),
-  }
 }

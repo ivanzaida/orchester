@@ -1,5 +1,5 @@
 //! The Skills editor keeps a visible body and a separate inspector at the task's 1440 size: the page scrolls, and
-//! the body's editor keeps its own height under its head (`Body` `FZ83A` in 03b).
+//! the body's editor keeps its own 130 under its head, with no line numbers (`Body` `FZ83A`, `Area` `IaAfU` in 03b).
 mod support;
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::resource::{InstructionScope, Skill};
@@ -24,7 +24,7 @@ fn skills_layout_keeps_body_and_inspector_visible_at_1440() {
     w.tree
       .get_element_by_id_mut("skill-body")
       .and_then(|e| e.bounds())
-      .is_some_and(|b| b.height > 180.0)
+      .is_some_and(|b| b.height > 100.0)
   });
   let body = w
     .tree
@@ -42,24 +42,14 @@ fn skills_layout_keeps_body_and_inspector_visible_at_1440() {
     .get_element_by_id_mut("skill-body-box")
     .and_then(|e| e.bounds())
     .expect("body area");
-  assert!(area.height > 200.0, "the editor keeps its body visible: {area:?}");
+  assert!((area.height - 130.0).abs() < 0.5, "the editor is 130 high: {area:?}");
   assert!(
     body.height >= area.height - 40.0,
     "the input fills the clickable editor: body={body:?}, area={area:?}"
   );
-  let first = w
-    .tree
-    .get_element_by_id_mut("skill-body-line-1")
-    .and_then(|e| e.bounds())
-    .expect("first line");
-  let second = w
-    .tree
-    .get_element_by_id_mut("skill-body-line-2")
-    .and_then(|e| e.bounds())
-    .expect("second line");
   assert!(
-    (second.y - first.y - 20.0).abs() < 0.1,
-    "line gutter follows source rows"
+    w.tree.get_element_by_id("skill-body-line-1").is_none(),
+    "the body has no line numbers"
   );
   assert!(
     inspector.width > 300.0 && inspector.x >= body.x + body.width,

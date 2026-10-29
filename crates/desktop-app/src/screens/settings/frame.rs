@@ -75,8 +75,13 @@ pub(super) fn page(
 }
 
 /// A tab's `pane` scrolling under the tabs in the scroll `id`.
-pub(super) fn column(id: &str, pane: impl Into<Element>) -> ScrollVertical {
-  ScrollVertical::new(
+///
+/// lurq 0.51 hands a scroll's offset to whichever scroll takes its place in the tree, whatever its id, so a tab or
+/// sub-page opened in place of a scrolled one came up scrolled as far (the Orchester Cloud tab 361 physical px down, a
+/// team server's page 203). Keyed by its id, each column keeps only its own offset. The key goes on a node inside the
+/// returned one: a component whose root this is puts its own key on that root.
+pub(super) fn column(id: &str, pane: impl Into<Element>) -> Element {
+  let scroll = ScrollVertical::new(
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding(
@@ -91,7 +96,13 @@ pub(super) fn column(id: &str, pane: impl Into<Element>) -> ScrollVertical {
   .id(id.to_owned())
   .width(Dimension::Pct(100.0))
   .flex(1.0)
-  .min_height(Dimension::Px(0.0))
+  .min_height(Dimension::Px(0.0));
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0))
+    .child(Element::from(scroll).key(id))
+    .into()
 }
 
 /// The column of groups (`Pane` `ZbG8J`): [`FORM_WIDTH`] wide at most, 28 between its groups.

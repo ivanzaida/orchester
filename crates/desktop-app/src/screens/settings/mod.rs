@@ -42,7 +42,7 @@ use parking_lot::Mutex;
 
 use self::save_state::SaveState;
 use crate::{
-  routes::{AccountsView, OrchesterView},
+  routes::{AccountsView, JoinTarget, OrchesterView},
   services::Services,
   ui::{
     message::message_text,
@@ -69,6 +69,8 @@ pub enum SettingsTab {
   Accounts(AccountsView),
   /// Settings › Orchester Cloud (`vPV73`), a team server's page (`C6qnY`) or *Connect a server* (`MrVql`).
   Orchester(OrchesterView),
+  /// Settings › Orchester Cloud's invite landing (`q7dWu` in `ZUuMT`), a sub-page of the Orchester Cloud tab.
+  Invite,
 }
 
 impl SettingsTab {
@@ -78,17 +80,26 @@ impl SettingsTab {
   }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 struct Props {
   tab: SettingsTab,
   /// Automation asks *Rotate the token?* in place (`shpsk`), as its route asks.
   rotation: bool,
+  /// The project the invite landing is for, on [`SettingsTab::Invite`].
+  invite: Option<JoinTarget>,
 }
 
 impl DevtoolsInspectable for Props {}
 
 pub fn screen(ctx: &mut Ctx, tab: SettingsTab) -> Element {
-  ctx.mount_keyed::<SettingsScreen>("settings", Props { tab, rotation: false })
+  ctx.mount_keyed::<SettingsScreen>(
+    "settings",
+    Props {
+      tab,
+      rotation: false,
+      invite: None,
+    },
+  )
 }
 
 /// Settings › Automation asking *Rotate the token?* under the access token.
@@ -98,6 +109,19 @@ pub fn asking_rotation(ctx: &mut Ctx) -> Element {
     Props {
       tab: SettingsTab::Automation,
       rotation: true,
+      invite: None,
+    },
+  )
+}
+
+/// Settings › Orchester Cloud's invite landing for `target`.
+pub fn invite(ctx: &mut Ctx, target: JoinTarget) -> Element {
+  ctx.mount_keyed::<SettingsScreen>(
+    "settings",
+    Props {
+      tab: SettingsTab::Invite,
+      rotation: false,
+      invite: Some(target),
     },
   )
 }
@@ -123,7 +147,7 @@ impl Component for SettingsScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { tab, rotation } = *ctx.props::<Props>();
+    let Props { tab, rotation, invite } = ctx.props::<Props>().clone();
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
     let workspace = Services::of(ctx).workspace;
@@ -146,6 +170,10 @@ impl Component for SettingsScreen {
       SettingsTab::Automation => automation::tab(ctx, rotation),
       SettingsTab::Orchester(view) => {
         ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view })
+      }
+      SettingsTab::Invite => {
+        let target = invite.expect("only `invite` opens the landing, and it names the project");
+        orchester::landing::tab(ctx, &target)
       }
       SettingsTab::Accounts(view) => match (&loaded.data, &loaded.error) {
         (_, Some(error)) if !loaded.is_pending() => self.failed(ctx, error),
@@ -196,5 +224,4 @@ fn accounts_pane(state: Element) -> Element {
     "settings-accounts-scroll",
     frame::pane("settings-accounts").child(state),
   )
-  .into()
 }

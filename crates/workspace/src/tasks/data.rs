@@ -11,9 +11,7 @@ use orchester_core::{
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, RunStatus, StepExecutor, TaskPhase, can_run_again_after},
-  store::{
-    ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore,
-  },
+  store::{ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
   task::Task,
   task_group::GroupHold,
   time::Timestamp,
@@ -128,6 +126,8 @@ pub struct ProjectTasks {
   pub lost_to_runner: usize,
   /// The active runs that auto-approve their agents' requests, oldest task first.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
+  /// Who works on the running runs, when the merged ones merged and the groups' order ([`super::at_work`]).
+  pub run_facts: Arc<super::at_work::RunFacts>,
   /// What answers sent from this window answer, which no longer waits ([`Self::with_answered`]).
   pub answered: Arc<Vec<super::answering::Answered>>,
   /// What waits for the person, once asked for ([`Self::waiting`]).
@@ -226,18 +226,20 @@ impl ProjectTasks {
       .partition(|shown| under_review.contains(&shown.approval.id));
     let asked = db.waiting_questions()?;
     let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
-    let (mut group_holds, grouped) = group_holds(db)?;
+    let (mut group_holds, grouped, previous_in_group) = group_holds(db)?;
     let mut unmerged = Unmerged::default();
     let LatestRuns {
       mut phases,
       counts,
       auto_approving,
+      mut facts,
     } = latest_runs(
       db,
       tasks.iter().chain(&not_shared),
       (&pending, &asking),
       (&mut group_holds, &mut unmerged),
     )?;
+    facts.previous_in_group = previous_in_group;
     if let Some(programs) = programs {
       unmerged.settle(programs, repo_root, &mut phases);
     }
@@ -291,6 +293,7 @@ impl ProjectTasks {
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
+      run_facts: Arc::new(facts),
       answered: Arc::default(),
       waiting_once: WaitingOnce::default(),
     })
@@ -324,11 +327,12 @@ impl ProjectTasks {
 }
 
 /// What one reading finds of the tasks' runs: the latest run of each task that has one, how many runs of each
-/// can be read, and the active runs that auto-approve.
+/// can be read, the active runs that auto-approve, who works on the running ones and when the merged ones merged.
 struct LatestRuns {
   phases: Phases,
   counts: BTreeMap<TaskId, usize>,
   auto_approving: Vec<AutoApprovingRun>,
+  facts: super::at_work::RunFacts,
 }
 
 /// The latest run of each of `tasks`, a run waiting in its turn on one of the `pending` tool requests or on
@@ -344,6 +348,7 @@ fn latest_runs<'a>(
     phases: Phases::new(),
     counts: BTreeMap::new(),
     auto_approving: Vec::new(),
+    facts: super::at_work::RunFacts::default(),
   };
   for task in tasks {
     let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
@@ -355,7 +360,7 @@ fn latest_runs<'a>(
         if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
           group_holds.remove(&task.id());
         }
-        let mut shown = latest_run(db, task, latest)?;
+        let (mut shown, agent) = latest_run_and_agent(db, task, latest)?;
         // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one at
         // a plan does.
         if shown.phase == TaskPhase::Running
@@ -366,6 +371,7 @@ fn latest_runs<'a>(
         if shown.phase == TaskPhase::Succeeded {
           unmerged.add(task.id(), latest);
         }
+        found.note(db, (latest, &shown), agent)?;
         if run_approvals::counts_as_auto_approving(db, task, latest)? {
           found.auto_approving.push(AutoApprovingRun {
             run: latest.id(),
@@ -384,21 +390,53 @@ fn latest_runs<'a>(
   Ok(found)
 }
 
-/// Why each task of a reviewed group that holds its work waits, and every task of a reviewed group.
-fn group_holds(
-  db: &ProjectDb,
-) -> Result<(BTreeMap<TaskId, GroupHold>, std::collections::BTreeSet<TaskId>), StoreError> {
+impl LatestRuns {
+  /// Keeps who works on `latest` while it runs (`agent`, its step's agent as reading it found it), and when it merged
+  /// once it was merged in Orchester.
+  fn note(
+    &mut self,
+    db: &ProjectDb,
+    (latest, shown): (&Run, &LatestRun),
+    agent: Option<super::at_work::FoundAgent>,
+  ) -> Result<(), StoreError> {
+    match shown.phase {
+      TaskPhase::Running => {
+        let at_work = super::at_work::read(db, latest, agent)?;
+        self.facts.at_work.insert(latest.id(), at_work);
+      }
+      TaskPhase::Merged => {
+        if let Some(merge) = db.run_merge(latest.id())? {
+          self.facts.merged_at.insert(latest.id(), merge.merged_at);
+        }
+      }
+      _ => {}
+    }
+    Ok(())
+  }
+}
+
+/// The reviewed groups as a reading keeps them: why each task of a group that holds its work waits, every grouped
+/// task, and the task before each in its group's order.
+type Groups = (
+  BTreeMap<TaskId, GroupHold>,
+  std::collections::BTreeSet<TaskId>,
+  BTreeMap<TaskId, TaskId>,
+);
+
+fn group_holds(db: &ProjectDb) -> Result<Groups, StoreError> {
   let mut holds = BTreeMap::new();
   let mut grouped = std::collections::BTreeSet::new();
+  let mut previous = BTreeMap::new();
   for group in db.task_groups()? {
     grouped.extend(group.tasks().iter().copied());
+    previous.extend(group.tasks().windows(2).map(|pair| (pair[1], pair[0])));
     if let Some(hold) = db.task_group_hold(group.key())? {
       for task in group.tasks() {
         holds.insert(*task, hold.clone());
       }
     }
   }
-  Ok((holds, grouped))
+  Ok((holds, grouped, previous))
 }
 
 /// When each record of the project's memory and of its tasks' memories that waits for a person's approval was
@@ -415,6 +453,15 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
 /// `latest`, a run of `task`, with when it last changed, what it waits for, who runs its step's agent and, once it was
 /// interrupted, whether a person removed its worktree so that its task runs again after it (ORC-63).
 pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
+  latest_run_and_agent(db, task, latest).map(|(shown, _)| shown)
+}
+
+/// [`latest_run`], with its step's agent as it was found, so that a running run's facts don't look it up again.
+fn latest_run_and_agent(
+  db: &ProjectDb,
+  task: &Task,
+  latest: &Run,
+) -> Result<(LatestRun, Option<super::at_work::FoundAgent>), StoreError> {
   let updated_at = db
     .events(latest.id())
     .map_err(run_store_error)?
@@ -423,36 +470,13 @@ pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<La
   let awaited = awaited(db, latest)?;
   let merge = db.run_merge(latest.id())?;
   let mut shown = LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited);
-  shown.agent = step_agent(db, latest, shown.step.as_ref())?;
+  let agent = super::at_work::step_agent(db, latest, shown.step.as_ref())?;
+  shown.agent = agent.as_ref().map(|found| found.provider);
   if matches!(latest.status(), RunStatus::Interrupted(_)) {
     let removed = db.worktree_removal(latest.id())?.is_some();
     shown.ended_for_run_again = can_run_again_after(latest, removed);
   }
-  Ok(shown)
-}
-
-/// The provider of the connection whose agent runs `step` of `run`, as its pinned profile names it; `None` for a tool
-/// step, or a profile or connection no longer found.
-fn step_agent(
-  db: &ProjectDb,
-  run: &Run,
-  step: Option<&CurrentStep>,
-) -> Result<Option<orchester_core::connection::AgentProvider>, StoreError> {
-  let Some(StepExecutor::Agent { profile, .. }) = step
-    .and_then(|step| run.snapshot().steps().get(step.number.checked_sub(1)?))
-    .map(|snapshot| snapshot.executor())
-  else {
-    return Ok(None);
-  };
-  let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? else {
-    return Ok(None);
-  };
-  Ok(
-    ConnectionStore::connection(db, version.body().connection())?.and_then(|connection| match connection.kind() {
-      orchester_core::connection::ConnectionKind::Agent(provider) => Some(*provider),
-      orchester_core::connection::ConnectionKind::GitHub { .. } => None,
-    }),
-  )
+  Ok((shown, agent))
 }
 
 /// Each step of `run` that waits on a decision on its plan or for an answer to its question, with the

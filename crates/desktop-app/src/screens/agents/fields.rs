@@ -12,7 +12,7 @@ use orchester_core::{
 };
 use orchester_workspace::agents::{
   data::{ProfileEntry, ProjectAgents},
-  form::{ModelSelection, ProfileErrors, ProfileForm, access_for_connection, stored_effort},
+  form::{ModelSelection, ProfileErrors, ProfileForm, access_for_connection, first_model, stored_effort},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,8 +87,8 @@ impl Fields {
       let connection = listed.connections.iter().find(|c| c.id().to_string() == *id);
       fields.model.set(
         connection
-          .and_then(|c| c.models().first())
-          .map_or_else(String::new, |m| m.id().as_str().to_owned()),
+          .and_then(first_model)
+          .map_or_else(String::new, |model| model.as_str().to_owned()),
       );
       fields.changed_connection.set(true);
       if let Some(connection) = connection {

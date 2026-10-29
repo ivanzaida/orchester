@@ -10,6 +10,7 @@ mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod native;
 mod orchestrator;
 mod pipelines;
 mod refusals;
@@ -198,6 +199,8 @@ fn seed_names_every_scenario_once() {
       "delivery",
       "delivery-blocked",
       "delivery-empty",
+      "overview-quiet",
+      "overview-states",
       "interrupted",
       "unreadable-db",
       "tasks-unreadable",
@@ -205,6 +208,7 @@ fn seed_names_every_scenario_once() {
       "lifecycle",
       "connections",
       "api-providers",
+      "native",
       "project-settings",
       "project-settings-shared",
       "pipelines",

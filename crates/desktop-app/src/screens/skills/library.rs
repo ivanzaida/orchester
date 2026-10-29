@@ -136,7 +136,8 @@ fn row(ctx: &Ctx, p: &PageProps, entry: &SkillEntry) -> Element {
     .into()
 }
 
-/// No skill yet (06b): what a skill is, with New skill.
+/// No skill yet (06b): what a skill is, with New skill; and when the repository has nothing to import either, a row
+/// saying so in the same box (`Skills · nothing yet, repository has nothing to import` in `VcE5a`).
 fn empty(ctx: &Ctx, p: &PageProps) -> Element {
   let name = p.project.open.project.name().as_str();
   let new = ActionButton::new("skills-empty-new", ButtonKind::Secondary, ctx.t("skills.new"))
@@ -146,10 +147,22 @@ fn empty(ctx: &Ctx, p: &PageProps) -> Element {
     .tile(Icon::GraduationCap)
     .hint(ctx.t_args("skills.emptyFirstDetail", [("project", name)]))
     .end(new);
+  let mut rows: Vec<Element> = vec![row.into()];
+  if p.data.repository.items.is_empty() {
+    rows.push(nothing_to_import(ctx));
+  }
   group(
     "skills-group-empty",
     head("skills-group-empty", &ctx.t("hub.tabs.skills"), None, None),
-    boxed("skills-group-empty-rows", [row.into()]),
+    boxed("skills-group-empty-rows", rows),
   )
   .into()
+}
+
+/// The repository has no agent files to import (06b): a quiet row in place of Import.
+pub(super) fn nothing_to_import(ctx: &Ctx) -> Element {
+  Entry::new("skills-nothing-to-import", ctx.t("skills.nothingTitle"))
+    .tile(Icon::FolderX)
+    .hint(ctx.t("skills.noRepository"))
+    .into()
 }

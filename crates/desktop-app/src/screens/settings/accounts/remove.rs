@@ -23,7 +23,6 @@ use orchester_workspace::accounts::AccountUses;
 
 use super::{
   Parts, Work,
-  state::paragraph,
   words::{folder, name, t, ta},
   work::Change,
 };
@@ -99,7 +98,14 @@ pub(super) fn confirmation(
     .iter()
     .filter(|other| other.cli() == account.cli() && other.id() != account.id())
     .collect();
-  if work.removal.move_to.get() == MoveChoice::Unset {
+  // The select starts on the first other account (`qkAfo` in `CTa4g`). A choice made for another account's question,
+  // or for an account removed since, is none of this question's options and would leave the select empty.
+  let offered = match work.removal.move_to.get() {
+    MoveChoice::Unset => false,
+    MoveChoice::NoAccount => true,
+    MoveChoice::To(target) => others.iter().any(|other| other.id() == target),
+  };
+  if !offered {
     work.removal.move_to.set(
       others
         .first()
@@ -120,7 +126,7 @@ pub(super) fn confirmation(
     )),
     None => None,
   };
-  let connections = connections_line(ctx, &shown, uses, blocked.is_some());
+  // While it can't be removed, the notice says only why (`w415U`): where the connections go is asked once it can.
   if let Some(reason) = blocked {
     let notice = SettingNotice::new("account-remove-blocked", NoticeTone::Info);
     let notice = match running {
@@ -131,18 +137,14 @@ pub(super) fn confirmation(
       )),
       None => notice.title(ta(ctx, "accounts.remove.title", [("account", shown)])),
     };
-    return notice
-      .part(paragraph("account-remove-connections", &connections))
-      .action(keep(ctx, work, account.id()))
-      .note(reason)
-      .into();
+    return notice.note(reason).into();
   }
   let mut panel = SettingPanel::new(
     "account-remove-question",
     ta(ctx, "accounts.remove.title", [("account", shown.clone())]),
   )
   .danger()
-  .text("account-remove-connections", &connections);
+  .text("account-remove-connections", &connections_line(ctx, &shown, uses));
   if uses.is_some_and(|uses| !uses.connections.is_empty()) {
     panel = panel.part(move_select(ctx, work, &others));
   }
@@ -160,9 +162,8 @@ pub(super) fn confirmation(
   panel.actions([confirm.into(), keep.into()]).into()
 }
 
-/// Which connections use the account and where they go: to the account the person chooses, or, while it can't be
-/// removed, where the person chooses once it can.
-fn connections_line(ctx: &Ctx, shown: &str, uses: Option<&AccountUses>, blocked: bool) -> String {
+/// Which connections use the account and that they go to the account the person chooses.
+fn connections_line(ctx: &Ctx, shown: &str, uses: Option<&AccountUses>) -> String {
   let Some(uses) = uses.filter(|uses| !uses.connections.is_empty()) else {
     return ta(ctx, "accounts.remove.none", [("account", shown.to_owned())]);
   };
@@ -173,20 +174,16 @@ fn connections_line(ctx: &Ctx, shown: &str, uses: Option<&AccountUses>, blocked:
     .collect();
   projects.dedup();
   let projects = projects.join(", ");
-  let (one, many) = if blocked {
-    (
-      "accounts.remove.connectionsOneBlocked",
-      "accounts.remove.connectionsBlocked",
-    )
-  } else {
-    ("accounts.remove.connectionsOne", "accounts.remove.connections")
-  };
   if uses.connections.len() == 1 {
-    ta(ctx, one, [("projects", projects), ("account", shown.to_owned())])
+    ta(
+      ctx,
+      "accounts.remove.connectionsOne",
+      [("projects", projects), ("account", shown.to_owned())],
+    )
   } else {
     ta(
       ctx,
-      many,
+      "accounts.remove.connections",
       [
         ("count", uses.connections.len().to_string()),
         ("projects", projects),

@@ -7,7 +7,9 @@
 use std::path::PathBuf;
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError},
+  connection::{
+    AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError, ConnectionKind,
+  },
   id::{ConnectionId, ProjectId},
   name::Name,
   secret::Secret,
@@ -28,6 +30,7 @@ use super::{
   widening,
 };
 use crate::{
+  agents::form::{effort_options, listed_models},
   app_mcp::{
     error::{Missing, ToolError},
     services::{Services, blocking},
@@ -35,7 +38,7 @@ use crate::{
   connections::{
     api_provider::save_on_provider_in,
     data::{ConnectionDraft, ProjectConnections, SaveError, recheck_in, save_in},
-    probe,
+    native, probe,
   },
   links::Link,
   messages::{self, Message},
@@ -198,15 +201,34 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
   .await
 }
 
+/// Checks a connection again as its page's *Check again* or *Test connection* does: a CLI is run here, a native
+/// connection is tested by the project's runner, which reads its key and lists its models (`connections::native`).
 pub async fn check_connection(services: &Services, args: InConnection) -> Result<Value, ToolError> {
+  let found = services.clone();
+  let named = args.connection.clone();
+  let (open, connection) = blocking(move || {
+    let open = found.project(&args.project)?;
+    let connection = connection_named(&ProjectDb::open(&open.repo_root)?, &named)?;
+    Ok((open, connection))
+  })
+  .await?;
+  let id = connection.id();
+  if matches!(connection.kind(), ConnectionKind::Agent(provider) if provider.is_native()) {
+    native::test_in(&services.runners, open.repo_root.clone(), id)
+      .await
+      .map_err(|reason| refused("not_checked", reason))?;
+  } else {
+    let root = open.repo_root.clone();
+    blocking(move || {
+      recheck_in(&root, id).map_err(|error| match error {
+        SaveError::NativeNotAvailable => refused("not_checked", error.message()),
+        other => ToolError::refused("project_data", vec![other.message()]),
+      })
+    })
+    .await?;
+  }
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let id = connection_named(&ProjectDb::open(&open.repo_root)?, &args.connection)?.id();
-    recheck_in(&open.repo_root, id).map_err(|error| match error {
-      SaveError::NativeNotAvailable => refused("not_checked", error.message()),
-      other => ToolError::refused("project_data", vec![other.message()]),
-    })?;
     services.changes.record(open.project.id(), Outside::Connections);
     let listed = ProjectConnections::load_in(&open.repo_root)?;
     let connection = match (listed.connection(id), listed.github_connection(id)) {
@@ -224,18 +246,19 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
   blocking(move || {
     let open = services.project(&args.project)?;
     let connection = agent_named(&ProjectDb::open(&open.repo_root)?, &args.connection)?;
-    let models: Vec<Value> = connection
-      .models()
+    let models: Vec<Value> = listed_models(&connection)
       .iter()
-      .map(|model| json!({ "id": model.id().as_str(), "efforts": model.efforts() }))
+      .map(|model| json!({ "id": model.as_str(), "efforts": effort_options(&connection, model) }))
       .collect();
     Ok(json!({
       "connection": connection.name().as_str(),
       "checked": connection.last_check().is_some(),
-      // An API provider's models are typed by a person, not listed by the CLI.
-      "source": match connection.api_provider() {
-        Some(_) => json!("api_provider"),
-        None => json!(connection.catalog().map(|catalog| catalog.source())),
+      // An API provider's models are typed by a person, not listed by the CLI; a native connection's are fetched
+      // from its endpoint or added by a person.
+      "source": match (connection.api(), connection.api_provider()) {
+        (Some(_), _) => json!("native"),
+        (None, Some(_)) => json!("api_provider"),
+        (None, None) => json!(connection.catalog().map(|catalog| catalog.source())),
       },
       "models": models,
       "link": Link::Connection(open.project.id(), connection.id()).path(),
@@ -283,7 +306,7 @@ pub(super) fn agent_json(connection: &AgentConnection, secrets: &[Secret], proje
     "status": connection.status_with(secrets).as_str(),
     "version": version,
     "checked_at": check.map(|check| wire::time(check.at)),
-    "models": connection.models().len(),
+    "models": listed_models(connection).len(),
     "account": connection.plan_account().map(|account| account.to_string()),
     "api_provider": connection.api_provider().map(|provider| provider_json(provider, secrets)),
     "link": Link::Connection(project, connection.id()).path(),

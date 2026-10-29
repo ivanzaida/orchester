@@ -121,7 +121,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
   } else {
     Entry::new("agents-none", ctx.t_args("agents.noProfiles", [("project", name)]))
       .tile(Icon::Bot)
-      .hint(ctx.t("agents.firstNote"))
+      .hint(ctx.t("agents.emptyNote"))
       .end(new_button(ctx, "agents-empty-new", ButtonKind::Secondary, listed, nav))
   };
   let mut pane = Column::new()

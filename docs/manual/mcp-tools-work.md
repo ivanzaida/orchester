@@ -50,19 +50,29 @@ saved.
 
 ### `get_auto_mode` — read-only
 
-A project's auto mode settings: whether new runs use it, and which connection, model and effort review requests (or
-why auto mode has no reviewer). Parameter: `project` (req.).
+A project's auto mode settings: whether new runs use it, `approve_everything` (`{on, turned_on_by}`, `turned_on_by`
+`person`, `automation` or null), and which connection, model and effort review requests (or why auto mode has no
+reviewer). Parameter: `project` (req.).
 
 ### `set_auto_mode` — changes data · gate AA
 
 Changes the project's auto mode settings. **Auto mode**: a reviewer model answers the requests the rules leave to the
 person, approving only those that clearly serve the task.
 
-| Parameter  | Type              | Req. | Description                                                 |
-|------------|-------------------|------|-------------------------------------------------------------|
-| `project`  | string            | yes  | The project's id, or its name.                              |
-| `new_runs` | boolean \| null   | no   | Whether runs created from now on use auto mode.             |
-| `reviewer` | Reviewer \| null  | no   | The reviewer; unchanged when left out.                      |
+| Parameter            | Type              | Req. | Description                                                 |
+|----------------------|-------------------|------|-------------------------------------------------------------|
+| `project`            | string            | yes  | The project's id, or its name.                              |
+| `new_runs`           | boolean \| null   | no   | Whether runs created from now on use auto mode.             |
+| `approve_everything` | boolean \| null   | no   | *With auto mode on, approve everything in each run* (below). |
+| `reviewer`           | Reviewer \| null  | no   | The reviewer; unchanged when left out.                      |
+
+**`approve_everything`** (ORC-199, per project, off by default, kept on this computer only like the other auto mode
+settings): every run that uses auto mode answers from its start as *Approve everything in this run* would — worktree
+commands, reads (also outside the worktree, such as a dependency's checkout) and MCP calls run without a card,
+recorded as `auto_approved`; network commands, writes outside the worktree, secrets, installs, destructive and unread
+commands still ask, and the reviewer still reviews them. The runner reads it at each request, so turning it or a run's
+auto mode off stops it from the next request; a run's own *Stop* wins over it. Turning it on also needs *Let automation
+change agent permissions* (`person_only` otherwise); turning it off alone needs no gate.
 
 **Reviewer**: `connection` (string | null — an agent connection: Claude Code, Codex, or a native one on the Anthropic
 API; left out = the default reviewer, the first Claude Code connection with Haiku 4.5), `model` (string | null —
@@ -252,8 +262,9 @@ The complete state of a run:
   commits), `not_merged`, `nothing_to_merge`, or `null` for a run that has not succeeded.
 - **`base_moved`**: notices that the base branch moved — branch and revision, tasks and commits that landed, files
   both sides changed, and state: `waits_for_writing_step`, `waits_until_work_goes_back` (with `waits_for_step`, when
-  only non-merging steps like Review/Verify are left), `kept_until_run_goes_on`, `waits_for_follow_up`, or `delivered`
-  (with the agent and step that read it).
+  only non-merging steps like Review/Verify are left), `kept_until_run_goes_on`, `waits_for_follow_up`, `delivered`
+  (with the agent and step that read it), or `merged_by_runner` (with `merged_by_runner.before_step` and
+  `merge_commit`: the move overlapped none of the run's changes, so Orchester merged it itself before that step).
 - **`delivery`** (merge queue; `null` without a Deliver step or if it never joined): `queued` (with `place`),
   `syncing`, `rechecking`, `integrating` (`integrate_step`, `files`), `waiting_for_approval`, `blocked`
   (`blocked.why`: `uncommitted_changes` + files, `other_branch_checked_out`, `operation_in_progress`,

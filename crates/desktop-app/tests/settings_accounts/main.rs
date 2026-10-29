@@ -288,6 +288,9 @@ fn settings_accounts_removes_an_account_in_place_and_moves_its_connections() {
         "asked on the account's page, not in a dialog"
       );
       assert!(joined(&mut window, "account-remove-question").contains("Remove Work from Orchester?"));
+      window.until("the other account already chosen (`qkAfo` in `CTa4g`)", |window| {
+        joined(window, "account-remove-move-to").contains("Default")
+      });
       click(&mut window, "account-remove-keep");
       window.until("the question gone", |window| !shown(window, "account-remove-question"));
       more(&mut window);

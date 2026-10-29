@@ -977,6 +977,17 @@ the other tones (Warning `warning_muted` in `warning`, Danger, Success) — `sur
 `text_muted` one (`pcNiB` keeps its `lock` mark, now in `info`). The file has no instance of `xnJyn` and no other
 stroked Info notice. Warning, Danger, Success and the callouts are unchanged. Exports: `.tmp/design/ORC-272/`.
 
+**Error reports switch (ORC-287, 2026-10-28, board `App settings · redesign` `iUmo3`, Row 2 `s2Lcr0`).** Settings ›
+General gets a group *Privacy* between *Plan limits* and *This computer*, with one row *Send error reports*: the hint
+*Errors and crashes go to Orchester's error tracker, without secrets, prompts, file contents or project names* (the same
+in both states) and under it the link *What a report carries* (`accent_text` 12/500, lucide `arrow-up-right` 12), which
+opens `docs/error-reports.md` (ORC-155). The switch is `Toggle/Switch on` `pPhPP` / `Toggle/Switch off` `WuXht` with its
+label hidden, as Automation's rows; the row is the settings row (padding 11/14, Label 13/500 `text_primary`, Hint 12
+`text_muted`). On by default. Frames: `01b · General · error reports on` `Z322E` (group `uMdRR`) and `01c · General ·
+error reports off` `mWn0J` (group `OUGvG`), copies of `01 · General` `l838Ty`, which is unchanged and does not show the
+row yet. Proposed copy namespace: `settings.general.privacy.*` (`title`, `error_reports.label`, `.hint`, `.link`).
+Exports: `.tmp/design/ORC-287/`.
+
 ## Presets
 
 Drawn 2026-10-01, not built. Group `Rg8DS` ("Presets · entry, choose, preview, finish setup, save", last in 03 / Pipelines at x 0 / y 5664, height 4264; the section is now 10024 high). It sits in 03 / Pipelines because a preset is mainly a way to get pipelines: *Add from preset* lives in the Pipelines library, presets replace the single starter of 03.A and 03.05, and the profiles and tools a preset creates exist for its pipelines. Fixture: Kontur (and Atlas in 03.D); the presets *Website content update* and *Kontur feature flow*, the dates, the commands and every count are illustrative. Proposed copy namespaces: `presets.*` (`presets.picker.*`, `presets.preview.*`, `presets.finishSetup.*`, `presets.save.*`, `presets.provenance.*`), `setup.startingPoint.*`.
@@ -1918,7 +1929,7 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 3. **Plan limits** — % used per window as a line: solid for weekly windows, dashed for 5-hour windows, hue by CLI; a current point and a legend with the current value and reset time (*Codex · weekly 41% resets Oct 4, 09:00*); a dashed warning threshold labelled with its value at its end (default 80%; see below); a reset marker (rotate-ccw and a `$border` rule) where a weekly window reset. Grouped by day, 5-hour windows are not drawn (they would be a comb of spikes) and their legend entries are dimmed but keep the current value; grouped by hour they are drawn (board `e5PbG`). Scope (decided 2026-09-30): the project view shows the same account-wide chart, labelled *shared by all projects · account-wide* — limits belong to the CLI account, so it uses snapshots from runs in every project.
 4. **Where tokens go** — three columns of horizontal bars, stacked by CLI and scaled to the column's largest row, with value and share: *By agent profile · step*, *By model* (mono), *By pipeline*. Selecting a row adds it as a filter.
 5. **Most expensive** — *Tasks* / *Runs* switch, sorted by spent tokens in the period. *Tasks*: Task (key in mono, title), Pipeline, Runs, Spent tokens, Cached input, Outcome (`DeizF`), chevron; a row opens the task; footer *5 of 38 tasks with runs in the period* · *Show all 38 →*. *Runs* (`sOQmy`): Run (*ORC-128 · Run 3* in mono, task title), Pipeline, Started, Agent time, Spent tokens, Cached input, Outcome, chevron; a row opens the run; footer *5 of 64 runs in the period · a row opens the run* · *Show all 64 →*.
-6. **Efficiency** — *Cache share* per day (one line in `$muted`, direct label on the last point); *Tokens before first edit*, median per invocation that changed a file, with and without code index (single-series bars in `$subtle` with invocation counts; invocations without an edit are left out and counted); *Failed runs* (count and share, tokens spent on them and their share of spent as a bar, the largest failed run and *Show failed tasks →*, which opens Tasks › Failed).
+6. **Efficiency** — *Cache share* per day (one line in `$muted`, direct label on the last point); *Tokens before first edit*, median per invocation that changed a file, with and without code index (single-series bars in `$subtle` with invocation counts; invocations without an edit are left out and counted); *Failed runs* (count and share, tokens spent on them and their share of spent as a bar, the largest failed run and *Show failed tasks →*, which opens Tasks › Active, where failed tasks are listed under *Stopped*).
 
 **Metrics.** Token counts are what the CLIs reported (see [Token budgets](#token-budgets)). *Spent* = input − cached input + output (= counted). *Cached* = cached input. *Output* includes reasoning. *Cache share* = cached input ÷ all input. *Runs* are runs with agent activity in the period; a run spanning the boundary counts in both periods, its tokens by turn time. *Agent time* is active agent time. *Failed runs* are runs whose latest attempt failed, as in the Overview filter. Values use the display rule (`31.6M`); tooltips and tables show exact grouped counts.
 
@@ -1982,6 +1993,52 @@ Work is counted in tasks, as the burndown counts it; nothing is money. `get_deli
 - *New module* (`/modules/new`) and *Edit module* (`/modules/<id>/edit`) are pages in the task form's style: the name as the title, the description, chips for State (Edit only), Start date and Target date, and Cancel with *Create module* or *Save changes* in the action bar. A refused save says why under the chips (another module's name, a change made meanwhile) and keeps what was typed.
 - Dates are picked, never typed, with the UI kit's date picker (`ui::date_picker`, 14): a month with ‹ ›, Monday-first weekdays, six weeks whatever the month, Today and Clear (both dates are optional); the chosen day filled, today outlined, the other end of the range tinted; days of the months around muted; on the Target date's calendar the days before the Start date are off, on the Start date's those after the Target date (core checks the order anyway). Arrows move a day or a week, PageUp and PageDown a month, Enter picks, Esc closes; the day the keyboard is on shows the focus ring. Month and weekday names are the app's words.
 - Loading and failures keep their words and Try again in the new layout; skeletons (05, 06) are ORC-110's and the failure cards (10–13) ORC-109's. MCP `navigate` takes `modules` with `tab` (open, closed), or `module` (new, or an id with `tab` summary or burndown, or `view` edit).
+
+## Overview
+
+Since ORC-115 (`Overview · redesign` `iRvT6` in the new `orchester.pen`: busy `LXhun`, quiet `HWznK`, new project
+`ArvFR`, loading `A3qRTI`, states `JzNRO`, notes `m9Zmzf`; `crates/desktop-app/src/screens/overview/`, data in
+`orchester_workspace::overview`) the Overview is one page that says what waits for the person, what is moving and what
+landed. The header is one row in every state: the project's name, the checkout in mono (*KON · repository · branch* as
+git names them), Import resources, Open Orchestrator and New task. The main column holds:
+
+- **Waiting for you**, the Orchestrator's digest pattern: one line per thing that waits (`tasks::attention`, what every
+  Needs you counts, the title bar's pill too), oldest first, at most six, each with its icon, what waits, task · run,
+  how long and one link to where it is decided (Review, Answer, Review plan, Decide, Raise limit, Summary, Merge,
+  Review records…), as the Needs you panel opens it. One that leads nowhere says why in place of its link. *Show all N
+  in Tasks* opens Tasks on Needs you. A run that passed every step waits here only while its merge waits for the
+  person; while the merge queue delivers it by itself it is on Landed's merge queue line.
+- **At work**, one line per run under way: key, title, the step's dashes and the step, the account and model its agent
+  runs on with the maker's mark, and how long it has run; the head says *N of M agent slots* as the runner reports
+  them. The account and model come with the tasks' reading (`tasks::at_work`: the latest launch's model and account,
+  else the profile's model and its connection's account); an agent without an account names its model only. While no
+  runner looks after the project, its runs keep their lines as read, with a pause mark and no age.
+- **Queue**, the queued tasks in start order with why each waits in the app's words (*Waiting for an agent slot*,
+  *Waiting for blocking tasks · KON-12*, *Waiting for the previous task · KON-17*, a group's hold) and its place
+  (*next*, *2nd*); *Hold new starts* holds or releases the project's new starts as the Tasks list's menu does. Drafts,
+  blocked or not, stay in Tasks.
+- When nothing waits, runs or is queued: the quiet card (slots in use, the queue empty, the last merge) and **Ready to
+  start**, the drafts that could be queued now. A project without tasks shows its getting-started list instead
+  (connect an agent CLI, publish a profile, publish a pipeline, create the first task, each done by the project's real
+  state, *N of 4 done*) with the Import resources hint.
+
+The side column (344) holds **Plan limits** (only accounts near or at a limit, from the session's readings and those
+kept; one whose window reset since its reading stays greyed, *unknown since reset*, with what it last read; *N runs on
+it* counts the runs at work on the account; *Accounts ↗* opens Settings › Accounts), **Landed** (the merge queue's state
+with *Review ↗* to Review › Merge queue, then *Today · N merged* up to five and *Earlier* up to three of the week before;
+merges only) and **Delivery** (the open modules by target date, up to three, with progress and their *Likely · 85% by*
+forecast, and the queued work's; *Delivery ↗* opens the Delivery view). While the tasks are read the heads and actions
+are real and the rows are bones after 300 ms; a page that can't be read is the failure card under the header, a section
+that fails alone (Delivery) its section row. Under the header: the runner away (information), the runner that gave up
+restarting (Restart runner, Open runner log), a shared project signed out of its team server (*Join again*), and a row
+with Open log and *Open task ↗* for each task whose latest run can't be read. *Completed today* and the tasks' tabs are
+gone; *Tokens today* is only in the sidebar's usage card. Failed tasks are listed in Tasks › Active under *Stopped*;
+Usage's *Show failed tasks* opens it, and Jump to no longer offers the old Overview tabs. The route's old `tab`
+(`?tab=needs_you`, `queued`, `failed`) still opens the Overview, which shows every section. QA seeds: `tasks` (busy),
+`delivery` and `delivery-blocked` (the merge queue), `overview-quiet` (quiet), `empty` (new project),
+`tasks-unreadable` (the page can't be read), `overview-states` (lists longer than they show, with *Show all N*; Plan
+limits near, reached and *unknown since reset*). No seed reaches the runner away or a runner that gave up restarting, a
+team-server sign-in that ended, or Delivery failing alone: they need a live runner, a team server or a damaged read.
 
 ## Sidebar
 

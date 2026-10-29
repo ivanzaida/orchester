@@ -8,6 +8,7 @@
       },
       "delivered": "told {{agent}} at {{time}}",
       "followUp": "waits for a follow-up",
+      "mergedByRunner": "merged by Orchester before {{step}} at {{time}}",
       "runGoesOn": "kept until the run goes on",
       "tasks": {
         "one": "{{branch}} moved to {{revision}} · 1 task landed · merge requested · {{state}}",
@@ -112,6 +113,11 @@
     },
     "engine": "{{provider}} / {{model}}",
     "engineNative": "{{engine}} · native",
+    "everything": {
+      "byAutomation": "Auto mode approves everything in this run · turned on by automation",
+      "byYou": "Auto mode approves everything in this run · turned on by you",
+      "settings": "Project settings"
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",

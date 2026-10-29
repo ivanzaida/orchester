@@ -2,7 +2,7 @@
 //! `…` beside *New task in module*: *Edit*, which opens Edit module, and *Close module*, which sets its state to
 //! Closed at once (*Reopen module* on a closed one, in the same pattern; the design does not draw it).
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::ctx::Ctx,
@@ -13,7 +13,7 @@ use lurq::{
 use orchester_core::module::{Module, ModuleDetails, ModuleState};
 use orchester_workspace::modules::data::ModulePage;
 
-use super::save::{SaveAction, SaveModule};
+use super::save::{SaveAction, SaveModule, Written};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -49,7 +49,7 @@ pub fn more(
   ctx: &mut Ctx,
   (project, page): (&ShownProject, &ModulePage),
   place: &MenuPlace,
-  save: &SaveAction,
+  save: (&SaveAction, &Written),
 ) -> Element {
   let open = place.open.clone();
   let button = IconButton::new("module-more", Icon::Ellipsis, ctx.t("modules.page.more"))
@@ -68,7 +68,7 @@ fn panel(
   ctx: &mut Ctx,
   (project, page): (&ShownProject, &ModulePage),
   open: &Signal<bool>,
-  save: &SaveAction,
+  (save, written): (&SaveAction, &Written),
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let module = &page.module;
@@ -85,11 +85,11 @@ fn panel(
       ModuleState::Open,
     ),
   };
-  let args = with_state(project, module, state);
-  let save = save.clone();
+  let (save, written) = (save.clone(), written.clone());
+  let (root, shown) = (project.open.repo_root.clone(), Arc::new(module.clone()));
   let close = MenuItem::new(id, ctx.t(key), move || {
     if !save.state().get_untracked().is_pending() {
-      save.run(args.clone());
+      save.run(with_state(&root, written.base(&shown), state));
     }
   })
   .icon(glyph)
@@ -102,7 +102,7 @@ fn panel(
 }
 
 /// The save that sets `module`'s state to `state`, its other details as they are.
-fn with_state(project: &ShownProject, module: &Module, state: ModuleState) -> SaveModule {
+fn with_state(root: &Path, module: Arc<Module>, state: ModuleState) -> SaveModule {
   let details = module.details();
   let changed = ModuleDetails::new(
     details.name().clone(),
@@ -112,8 +112,8 @@ fn with_state(project: &ShownProject, module: &Module, state: ModuleState) -> Sa
   )
   .expect("a stored module's dates are in order, and its state does not touch them");
   SaveModule {
-    root: project.open.repo_root.clone(),
-    module: Some(Arc::new(module.clone())),
+    root: root.to_path_buf(),
+    module: Some(module),
     details: changed,
   }
 }

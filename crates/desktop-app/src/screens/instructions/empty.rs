@@ -1,4 +1,5 @@
-//! Empty project B5A4Ux, including real repository findings T1w9U; findings that couldn't be read are one row in their
+//! The Instructions tab with no instruction yet (06b `VcE5a`): one quiet row in its box with Import from repository and
+//! New instruction, then the repository's real findings (T1w9U); findings that couldn't be read are one row in their
 //! box (`SsC16`).
 use lurq::{
   app::{
@@ -6,7 +7,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -20,29 +21,26 @@ use orchester_workspace::{
 use super::state::{Selection, Tab, View};
 use crate::{
   project::ShownProject,
-  screens::hub::parts::boxed,
-  theme::{ExtraSpacing, ExtraTypography},
+  screens::hub::{
+    self,
+    parts::{Entry, boxed},
+  },
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     failure::{Failure, LastFailure},
     icon::Icon,
-    state::EmptyState,
   },
 };
-// Empty state sG2xi and its top inset within the Instructions body.
-const EMPTY_WIDTH: f32 = 600.0;
 const FOUND_PATH_WIDTH: f32 = 200.0;
 #[derive(Clone)]
 pub struct Props {
   pub project: ShownProject,
   pub selection: Selection,
-  pub all_empty: bool,
-  /// The scope tab shown.
-  pub tab: Tab,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.all_empty == other.all_empty && self.tab == other.tab
+    self.project == other.project
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -75,7 +73,11 @@ impl Component for Empty {
       .state()
       .get();
     let failed = self.failure.follow(&read);
-    let mut empty = empty_state(ctx, &props);
+    let mut pane = Column::new()
+      .id("instructions-empty-page")
+      .width(Dimension::Pct(100.0))
+      .spacing(HubSpacing::Groups.role())
+      .child(boxed("instructions-empty-rows", [empty_row(ctx, &props)]));
     if let Some((error, retrying)) = failed {
       // The findings' box holds one row in place of its rows; the rest of the page works.
       let again = self.again.clone();
@@ -86,67 +88,42 @@ impl Component for Empty {
       )
       .retry(retrying, move || again.update(|n| *n += 1))
       .section(ctx);
-      empty = empty.child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding_top(crate::theme::instructions::discovery_offset())
-          .child(boxed("instructions-repository-unread", [row])),
-      );
+      pane = pane.child(boxed("instructions-repository-unread", [row]));
     } else if let Some(scan) = read.data.as_ref().filter(|scan| !scan.items.is_empty()) {
-      empty = empty.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));
+      pane = pane.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));
     }
-    ScrollVertical::new(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .align_items(Alignment::Center)
-        .padding_top(crate::theme::instructions::empty_top())
-        .child(Column::new().width(Dimension::Px(EMPTY_WIDTH)).child(empty)),
-    )
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .min_height(Dimension::Px(0.0))
+    hub::list_body("instructions-empty-list", pane)
   }
 }
-/// The empty state with its title for the scope shown, Import and New instruction.
-fn empty_state(ctx: &Ctx, props: &Props) -> EmptyState {
+/// The quiet row: what instructions are, with Import from repository and New instruction (06b).
+fn empty_row(ctx: &Ctx, props: &Props) -> Element {
   let (new, import) = (props.selection.clone(), props.selection.clone());
-  let tab = props.tab;
   let project = props.project.open.project.name().as_str();
-  let title = if props.all_empty {
-    ctx.t_args("instructions.emptyTitle", [("project", project)])
-  } else {
-    ctx.t_args(
-      "instructions.emptyScope",
-      [("project", project), ("scope", &ctx.t(tab.key()))],
-    )
-  };
-  EmptyState::new(
+  Entry::new(
     "instructions-empty",
-    Icon::BookOpen,
-    title,
-    ctx.t("instructions.emptyDetail"),
+    ctx.t_args("instructions.emptyTitle", [("project", project)]),
   )
-  .wide()
-  .unframed()
-  .note(ctx.t("instructions.emptyTabDetail"))
-  .action(
+  .tile(Icon::BookOpen)
+  .hint(ctx.t("instructions.emptyDetail"))
+  .end(
     ActionButton::new(
       "instructions-empty-import",
-      ButtonKind::Primary,
+      ButtonKind::Ghost,
       ctx.t("instructions.import"),
     )
     .icon(Icon::FolderOpen)
     .opens(import.to(View::Import)),
   )
-  .action(
+  .end(
     ActionButton::new(
       "instructions-empty-new",
       ButtonKind::Secondary,
       ctx.t("instructions.new"),
     )
     .icon(Icon::Plus)
-    .opens(new.to(View::new_rule(tab))),
+    .opens(new.to(View::new_rule(Tab::Project))),
   )
+  .into()
 }
 fn finding(glyph: Icon, source: &str, detail: &str) -> Element {
   Row::new()
@@ -197,7 +174,7 @@ fn findings(ctx: &mut Ctx, scan: &RepositoryScan, root: &str) -> Element {
     found = found.child(finding(
       Icon::FileText,
       &item.source,
-      &super::import::item_detail(ctx, item),
+      &crate::screens::hub::import_detail::item_detail(ctx, item),
     ));
   }
   for folder in orchester_core::agent_files::import::SKILL_FOLDERS {
@@ -214,11 +191,7 @@ fn findings(ctx: &mut Ctx, scan: &RepositoryScan, root: &str) -> Element {
       ));
     }
   }
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_top(crate::theme::instructions::discovery_offset())
-    .child(found.child(findings_foot(ctx)))
-    .into()
+  found.child(findings_foot(ctx)).into()
 }
 fn findings_head(ctx: &mut Ctx, count: usize, root: &str) -> Element {
   let path = crate::ui::tooltip::Truncated::new(

@@ -7,7 +7,10 @@ use std::{
 };
 
 use orchester_core::{
-  agent_files::import::{Found, FoundFile, INSTRUCTION_FILES, ImportItem, ItemKind, SKILL_FOLDERS, candidates},
+  agent_files::import::{
+    Candidate, Found, FoundFile, INSTRUCTION_FILES, ImportItem, ItemKind, SKILL_FOLDERS, candidates,
+  },
+  name::Name,
   native::scope::{FileScope, ScopeError, ScopeRoots},
   permission::RepositoryAccess,
   resource::{SKILL_FILE, SkillFilePath},
@@ -35,6 +38,30 @@ impl RepositoryScan {
       .collect();
     let skills = self.items.iter().filter(|i| i.kind == ItemKind::Skill).count();
     (files, skills)
+  }
+
+  /// The instruction files that can be imported, and how many skills folders (`.claude/skills`, `.agents/skills`)
+  /// hold the skills found (*AGENTS.md and 2 skills folders*, `HMf2M` in 03).
+  pub fn sources(&self) -> (Vec<&str>, usize) {
+    let files = self
+      .items
+      .iter()
+      .filter(|item| item.kind == ItemKind::Instruction && item.outcome.is_ok())
+      .map(|item| item.source.as_str())
+      .collect();
+    let folders = SKILL_FOLDERS
+      .iter()
+      .filter(|folder| {
+        self.items.iter().any(|item| {
+          item.kind == ItemKind::Skill
+            && item
+              .source
+              .strip_prefix(**folder)
+              .is_some_and(|rest| rest.starts_with('/'))
+        })
+      })
+      .count();
+    (files, folders)
   }
 }
 
@@ -282,7 +309,17 @@ fn scan_observing(repo_root: &Path, observer: AccessObserver<'_>) -> Result<Repo
       }
     }
   }
-  Ok(RepositoryScan {
-    items: Arc::new(candidates(found)),
-  })
+  let mut items = candidates(found);
+  items.iter_mut().for_each(name_by_stem);
+  Ok(RepositoryScan { items: Arc::new(items) })
+}
+
+/// An instruction file's draft is named by its stem, *AGENTS* for `AGENTS.md`, on the Skills and the Instructions
+/// side alike (`cC55E`, `P21bwh`); its source keeps the file's path.
+fn name_by_stem(item: &mut ImportItem) {
+  if let Ok(Candidate::Instruction { name, .. }) = &mut item.outcome
+    && let Some(stem) = name.as_str().strip_suffix(".md")
+  {
+    *name = Name::new(stem).expect("recognized root instruction filenames have a nonempty stem");
+  }
 }

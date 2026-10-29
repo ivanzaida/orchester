@@ -17,6 +17,8 @@ pub enum MemoryTab {
   Settings,
 }
 
+impl lurq::app::component::DevtoolsInspectable for MemoryTab {}
+
 impl MemoryTab {
   pub const ALL: [Self; 6] = [
     Self::Waiting,

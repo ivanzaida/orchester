@@ -4,6 +4,7 @@
 
 use orchester_app::{
   app_log, clipboard,
+  error_reports::{self, Environment},
   startup::{Launch, WindowPosition},
   window,
 };
@@ -22,6 +23,10 @@ fn main() {
   // Started before the window exists: the data folder's lock, the session, the runners' client and
   // where the window opens, or why there is no session.
   let mut launch = Launch::begin(runtime.handle(), log);
+  // Error reports start here, once the database that holds the person's setting is open: a panic before this line is
+  // not reported. Kept to the end of `main`, whose drop sends what is still pending.
+  let _reports =
+    Environment::of_this_app().and_then(|environment| error_reports::start(environment, launch.workspace()));
   // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
   // a trash of their own.
   if let Some(workspace) = launch.workspace() {

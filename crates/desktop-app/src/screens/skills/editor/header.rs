@@ -33,6 +33,7 @@ impl Editor {
     let back = p.page.view.panel.clone();
     let new = ctx.t("skills.new");
     page_head::crumb(
+      ctx,
       "skill-crumb",
       (&ctx.t("hub.tabs.skills"), back.to(back.library())),
       entry.is_none().then_some(&*new),

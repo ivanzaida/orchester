@@ -33,10 +33,26 @@ pub(super) enum Line {
     entry: InstructionEntry,
     step: Arc<str>,
   },
-  /// A rule whose pipeline or step was deleted.
-  Orphan(InstructionEntry),
+  /// A rule whose pipeline or step was deleted; `gone` says which, for its hint.
+  Orphan {
+    entry: InstructionEntry,
+    gone: Gone,
+  },
   /// A rule the person removed on this page.
   Removed(Arc<str>),
+}
+
+/// What an orphaned rule lost.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Gone {
+  /// Its pipeline was deleted.
+  Pipeline,
+  /// A pipeline draft removed its step; the pipeline still exists.
+  Step,
+}
+
+const fn orphan(gone: Gone) -> impl Fn(InstructionEntry) -> Line {
+  move |entry| Line::Orphan { entry, gone }
 }
 
 /// The groups in assembly order; `removed` are the rules removed on this page, by their part.
@@ -79,18 +95,27 @@ pub(super) fn groups(
     .collect()
 }
 
+/// Each role with its rules, the roles that have rules first (`YkHDc` in 02: Builder and Reviewer, then Planner and
+/// Explorer with *No rule*).
 fn roles(data: &ProjectInstructions, entries: &[InstructionEntry]) -> Vec<Line> {
   let mut roles = data.roles();
   roles.extend(entries.iter().filter_map(|entry| match entry.body.scope() {
     InstructionScope::AgentRole { role } => Some(role.clone()),
     _ => None,
   }));
+  let mut groups: Vec<_> = roles
+    .into_iter()
+    .map(|role| {
+      let rules: Vec<&InstructionEntry> = entries
+        .iter()
+        .filter(|e| matches!(e.body.scope(), InstructionScope::AgentRole { role: r } if *r == role))
+        .collect();
+      (role, rules)
+    })
+    .collect();
+  groups.sort_by_key(|(_, rules)| rules.is_empty());
   let mut rows = Vec::new();
-  for role in roles {
-    let rules: Vec<&InstructionEntry> = entries
-      .iter()
-      .filter(|e| matches!(e.body.scope(), InstructionScope::AgentRole { role: r } if *r == role))
-      .collect();
+  for (role, rules) in groups {
     rows.push(Line::Head {
       label: role.as_str().into(),
       count: rules.len(),
@@ -137,7 +162,7 @@ fn pipelines(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]
         |e| matches!(e.body.scope(), InstructionScope::Pipeline { pipeline } if data.pipeline(*pipeline).is_none()),
       )
       .cloned()
-      .map(Line::Orphan),
+      .map(orphan(Gone::Pipeline)),
   );
   rows
 }
@@ -192,7 +217,7 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
       rules
         .iter()
         .filter(|e| matches!(e.body.scope(), InstructionScope::Step { step, .. } if !pipeline.steps.iter().any(|s| &s.key == step)))
-        .map(|entry| Line::Orphan((*entry).clone())),
+        .map(|entry| orphan(Gone::Step)((*entry).clone())),
     );
   }
   rows.extend(
@@ -202,7 +227,7 @@ fn steps(ctx: &Ctx, data: &ProjectInstructions, entries: &[InstructionEntry]) ->
         |e| matches!(e.body.scope(), InstructionScope::Step { pipeline, .. } if data.pipeline(*pipeline).is_none()),
       )
       .cloned()
-      .map(Line::Orphan),
+      .map(orphan(Gone::Pipeline)),
   );
   rows
 }

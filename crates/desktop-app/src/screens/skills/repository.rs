@@ -2,8 +2,6 @@
 //! page's title and where it read, the notice that it only creates drafts, the groups of items found and the bar
 //! with what is chosen, Cancel and Create, with the opened item's preview beside them; then its result (`03c`
 //! `cC55E`). No repository file is written. Also *Found in this repository* on the Skills list.
-use std::sync::Arc;
-
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -15,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  agent_files::import::{Candidate, ImportItem, ItemKind, Unimportable},
+  agent_files::import::{ImportItem, ItemKind},
   id::IdempotencyKey,
 };
 use orchester_workspace::{
@@ -35,6 +33,7 @@ use crate::{
   screens::hub::{
     self,
     draft_bar::{DraftBar, Standing},
+    import_detail::item_detail,
     import_preview, import_result,
     import_rows::{Review, Unchosen, Viewed},
     page_head, parts as hub_parts,
@@ -126,7 +125,6 @@ impl Component for Import {
         created: &created.drafts,
         items: &p.data.repository.items,
         total: created.total,
-        detail: item_summary,
         agent_files: Some(p.data.agent_files),
       }
       .page(ctx);
@@ -134,16 +132,21 @@ impl Component for Import {
     }
     let items = &p.data.repository.items;
     let pending = state.is_pending();
+    // The notice says what Instructions' import says (`HfwWH` in 02c).
     let mut page = Column::new()
       .id("skills-import-review")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(review_top(ctx, &p))
       .child(
-        Notice::new("skill-import-notice", NoticeTone::Info, ctx.t("skills.importNotice"))
-          .icon(Icon::Info)
-          .body(ctx.t("skills.importNoticeDetail"))
-          .flat(),
+        Notice::new(
+          "skill-import-notice",
+          NoticeTone::Info,
+          ctx.t("instructions.importDraftsOnly"),
+        )
+        .icon(Icon::Info)
+        .body(ctx.t("instructions.importNote"))
+        .flat(),
       )
       .with_children(
         state
@@ -158,45 +161,13 @@ impl Component for Import {
       unchosen: self.unchosen.clone(),
       viewed: self.viewed.clone(),
       busy: pending,
-      detail: item_summary,
+      detail: item_detail,
     };
     page = page
       .with_children(review.groups(ctx))
       .child(self.review_bar(ctx, &p, items, pending));
-    let side = import_preview::preview(ctx, REVIEW, self.viewed.get().item(items), item_summary);
+    let side = import_preview::preview(ctx, REVIEW, self.viewed.get().item(items), item_detail);
     hub::item_body("skills-import-page", page, Some(side))
-  }
-}
-pub fn item_summary(ctx: &Ctx, item: &ImportItem) -> Arc<str> {
-  match &item.outcome {
-    Ok(Candidate::Instruction { name, .. }) => ctx.t_args(
-      "skills.importInstructionSummary",
-      [
-        ("name", name.to_string()),
-        (
-          "lines",
-          item.text.as_deref().unwrap_or_default().lines().count().to_string(),
-        ),
-      ],
-    ),
-    Ok(Candidate::Skill { name, files, .. }) => ctx.t_args(
-      if files.is_empty() {
-        "skills.importSkillSummary"
-      } else {
-        "skills.importSkillFilesSummary"
-      },
-      [
-        ("name", name.to_string()),
-        ("files", super::words::files(ctx, files.len()).to_string()),
-      ],
-    ),
-    Err(Unimportable::OnlyImports { targets }) => ctx.t_args("skills.onlyImports", [("targets", targets.join(", "))]),
-    Err(Unimportable::Empty) => ctx.t("skills.emptyFile"),
-    Err(Unimportable::NotText) => ctx.t("skills.notText"),
-    Err(Unimportable::NoSkillFile) => ctx.t("skills.noSkillFile"),
-    Err(Unimportable::UnsupportedFiles { paths }) => {
-      ctx.t_args("skills.unsupportedFiles", [("paths", paths.join(", "))])
-    }
   }
 }
 pub fn found(ctx: &mut Ctx, p: &PageProps) -> Element {
@@ -280,14 +251,7 @@ impl Component for Found {
       control,
     );
     let items = &p.data.repository.items;
-    let of = |kind| items.iter().filter(|i| i.kind == kind).count();
-    let found = super::words::types(ctx, of(ItemKind::Instruction), of(ItemKind::Skill));
-    let open = ActionButton::new("skills-found-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
-      .icon(crate::ui::icon::Icon::FolderOpen)
-      .opens(p.view.panel.to(super::state::Panel::Import));
-    let import = hub_parts::Entry::new("skills-found-import", found)
-      .hint(ctx.t("skills.foundImportHint"))
-      .end(open);
+    let rows: Vec<Element> = std::iter::once(files.into()).chain(import_row(ctx, &p)).collect();
     let count = ctx.t_args("skills.repositoryCount", [("count", items.len().to_string())]);
     let mut panel = hub_parts::group(
       "skills-repository-settings",
@@ -297,7 +261,7 @@ impl Component for Found {
         Some(&count),
         None,
       ),
-      hub_parts::boxed("skills-repository-rows", [files.into(), import.into()]),
+      hub_parts::boxed("skills-repository-rows", rows),
     );
     if self.asking.get() {
       panel = panel.child(self.question(ctx, &p));
@@ -313,6 +277,23 @@ impl Component for Found {
     }
     panel
   }
+}
+
+/// Import with what the repository holds; with nothing found, a quiet row saying so, unless the library is empty too:
+/// then the empty box says it (06b).
+fn import_row(ctx: &Ctx, p: &PageProps) -> Option<Element> {
+  if p.data.repository.items.is_empty() {
+    return (!p.data.listed.entries.is_empty()).then(|| super::library::nothing_to_import(ctx));
+  }
+  let open = ActionButton::new("skills-found-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
+    .icon(Icon::FolderOpen)
+    .opens(p.view.panel.to(super::state::Panel::Import));
+  Some(
+    hub_parts::Entry::new("skills-found-import", super::words::found(ctx, &p.data.repository))
+      .hint(ctx.t("skills.foundImportHint"))
+      .end(open)
+      .into(),
+  )
 }
 impl Found {
   fn question(&self, ctx: &Ctx, p: &PageProps) -> Element {
@@ -404,6 +385,7 @@ fn review_top(ctx: &Ctx, p: &PageProps) -> Element {
   let back = p.view.panel.clone();
   let title = ctx.t("skills.import");
   let crumb = page_head::crumb(
+    ctx,
     "skill-import-crumb",
     (&ctx.t("hub.tabs.skills"), back.to(back.library())),
     Some(&title),

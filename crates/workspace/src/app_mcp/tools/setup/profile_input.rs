@@ -33,7 +33,7 @@ use crate::{
   agents::{
     data::{ProfileChange, ProjectAgents, apply_in},
     folders::with_folder,
-    form::{ModelSelection, ProfileForm, effort_options},
+    form::{ModelSelection, ProfileForm, effort_options, listed_models},
     permissions::{not_enforceable, with_command},
     servers,
   },
@@ -192,7 +192,7 @@ fn form(
   let model = args.model.trim();
   let listed = ModelId::new(model)
     .ok()
-    .filter(|id| connection.models().iter().any(|listed| listed.id() == id));
+    .filter(|id| listed_models(connection).contains(id));
   // A connection on an API provider takes the effort its CLI does (`ProfileForm`), not a listed one.
   if let (Some(effort), Some(id)) = (&args.effort, &listed)
     && connection.api_provider().is_none()

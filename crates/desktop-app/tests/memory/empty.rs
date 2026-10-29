@@ -44,8 +44,14 @@ fn memory_empty_project_tabs_say_they_have_no_records() {
     (MemoryTab::Rejected, "No rejected records"),
   ] {
     page.memory_tab(tab);
-    assert_eq!(page.text("memory-empty-title"), title, "{tab:?}");
+    assert_eq!(page.text("memory-empty-label"), title, "{tab:?}");
+    assert!(page.has("memory-empty-rows"), "{tab:?} says so in one row in its box");
     assert!(!page.has("memory-search"), "{tab:?} hides its search");
+    assert_eq!(
+      page.has("memory-empty-new"),
+      tab == MemoryTab::Active,
+      "only Active's row has New record"
+    );
   }
   let rejected = page.text("memory-empty");
   assert!(
@@ -53,6 +59,16 @@ fn memory_empty_project_tabs_say_they_have_no_records() {
     "{rejected}"
   );
   assert!(!page.has("memory-panel"), "no side panel");
+}
+
+#[test]
+fn memory_empty_active_row_opens_the_new_record_editor() {
+  let mut page = Page::seeded("tasks");
+  page.memory_tab(MemoryTab::Active);
+  page.window.press("memory-empty-new");
+  page.until("the new record's editor", |window| {
+    window.texts("memory-editor-new").is_some()
+  });
 }
 
 #[test]

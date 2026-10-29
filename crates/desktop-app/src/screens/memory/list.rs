@@ -161,7 +161,7 @@ fn entry(
     return ctx.mount_keyed::<RecordEditor>(&format!("memory-editor-{}-{}", memory.id(), memory.revision()), props);
   }
   if opened == Opened::Delete(memory.id()) {
-    let props = opened::delete(ctx, memory, input.among());
+    let props = opened::delete(memory, input.among());
     return ctx.mount_keyed::<DeleteConfirm>(&format!("memory-delete-{}", memory.id()), props);
   }
   if input.task_tab && memory.status() == MemoryStatus::Proposed {

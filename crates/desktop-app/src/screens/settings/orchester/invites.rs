@@ -139,13 +139,13 @@ fn answered(ctx: &mut Ctx, (id, shown): (&str, Signal<FutureState<Outcome, Said>
         .into(),
       );
     }
+    // `Notice · info` `ktYJP` in `at7XI`.
     Some(Outcome::Waiting { server }) if waiting => parts.push(
       Callout::new(
         format!("{id}-waiting"),
-        CalloutTone::Warning,
+        CalloutTone::Info,
         ctx.t("cloud.invites.approval.title"),
       )
-      .icon(Icon::Hourglass)
       .body(ctx.t_args("cloud.invites.approval.body", [("server", server.as_str())]))
       .into(),
     ),

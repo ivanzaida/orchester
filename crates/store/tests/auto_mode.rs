@@ -12,7 +12,7 @@ use orchester_core::{
   resource::ModelId,
   revision::Revision,
   run::{
-    BranchName, NewRun,
+    Answerer, ApproveEverything, BranchName, NewRun,
     review::{AutoModeSettings, ReviewerChoice},
   },
   store::{ActivityStore, RunStore},
@@ -120,4 +120,20 @@ fn auto_mode_update_changes_what_is_stored() {
   assert_eq!(saved.reviewer, Some(reviewer));
   assert!(saved.new_runs);
   assert_eq!(db.auto_mode_settings().expect("read"), saved);
+}
+
+#[test]
+fn auto_mode_approve_everything_is_off_until_saved_and_keeps_who_turned_it_on() {
+  let (_repo, mut db, ..) = started_run();
+  assert_eq!(db.approve_everything().expect("read"), ApproveEverything::OFF);
+  for setting in [
+    ApproveEverything::on(Answerer::Person),
+    ApproveEverything::on(Answerer::Automation),
+    ApproveEverything::OFF,
+  ] {
+    db.save_approve_everything(setting).expect("save");
+    assert_eq!(db.approve_everything().expect("read"), setting);
+  }
+  // Auto mode's other settings are their own.
+  assert_eq!(db.auto_mode_settings().expect("read"), AutoModeSettings::default());
 }

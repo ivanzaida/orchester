@@ -64,7 +64,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
-    Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),
+    Ok(Route::Invite(target)) => settings::invite(ctx, target),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }
@@ -94,7 +94,8 @@ fn project_screen(ctx: &mut Ctx, project: ProjectId, page: &ProjectPage) -> Elem
 /// The screen of the open `project` that `page` names.
 fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
   match page {
-    ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
+    // The Overview shows every section on one page; a tab older links name lands on it all the same.
+    ProjectPage::Overview(_) => overview::screen(ctx, project),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::MergeQueue => {

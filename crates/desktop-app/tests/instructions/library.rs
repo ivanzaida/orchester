@@ -60,6 +60,12 @@ fn instructions_removed_step_rule_stays_listed_selectable_and_can_be_reassigned(
     "removed-step rule remains in the library"
   );
   assert!(screen.text("instruction-library").contains("Z removed step"));
+  let hint = screen.text(&format!("instruction-{orphan}"));
+  assert!(hint.contains("its step was removed"), "{hint}");
+  assert!(
+    !hint.contains("pipeline was deleted"),
+    "the pipeline still exists: {hint}"
+  );
   screen.click(&format!("instruction-{orphan}"));
   screen.until("removed rule selected", |s| {
     s.text("instruction-prompt") == "Removed step text"

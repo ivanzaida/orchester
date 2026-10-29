@@ -1,10 +1,11 @@
-//! The invite landing (`Join · invite accepted · choose the checkout` `xeFRB`, its states in `d8oDsO`): after a project
-//! invite is accepted and this computer joined its server, which local checkout to link to the project. The one
-//! checkout linked to it already, or the only one whose `origin` matches the project's hint, opens the join review at
-//! once; otherwise the page lists the checkouts with how each compares ([`rows`]), adds a folder Orchester doesn't know
-//! yet, or shows the `git clone` to run first (Orchester never clones). *Continue to the join review* opens it in the
-//! chosen project; nothing is sent until the review is confirmed. *Later* leaves the invite accepted: the server's
-//! entry in Settings › Orchester lists the project with *Link a checkout…*.
+//! The invite landing (`Invite landing` `q7dWu` in `ZUuMT`, its states in `d8oDsO`): after a project invite is
+//! accepted and this computer joined its server, which local checkout to link to the project. It is a sub-page of
+//! Settings › Orchester Cloud, in the tab's column with its crumb back and its own head (16/600, as `03b · Account`'s).
+//! The one checkout linked to it already, or the only one whose `origin` matches the project's hint, opens the join
+//! review at once; otherwise the page lists the checkouts with how each compares ([`rows`]), adds a folder Orchester
+//! doesn't know yet, or shows the `git clone` to run first (Orchester never clones). *Continue to the join review*,
+//! under the checkouts, opens it in the chosen project; nothing is sent until the review is confirmed. *Later* leaves
+//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*.
 
 mod adding;
 mod rows;
@@ -15,12 +16,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::Element,
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
@@ -35,24 +33,19 @@ use parking_lot::Mutex;
 use super::{Said, sharing_said};
 use crate::{
   navigation::Navigation,
-  routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route, Screen},
+  routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route},
+  screens::settings::frame,
   services::{
     Services,
     path_picker::{PathKind, PathPicker},
   },
-  theme::{ExtraSpacing, TaskFormSpacing},
   ui::{
-    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     icon::Icon,
     notice::{Notice, NoticeTone},
     state::{load_error, loading},
   },
 };
-
-/// The page's header (`Head` in `xeFRB`) and its body (`Body`), which is narrower.
-const HEAD_WIDTH: f32 = 1000.0;
-const BODY_WIDTH: f32 = 720.0;
 
 #[derive(Clone, PartialEq)]
 struct Props {
@@ -92,8 +85,8 @@ pub(super) enum Added {
 
 impl DevtoolsInspectable for Added {}
 
-/// The invite landing for `target`.
-pub fn screen(ctx: &mut Ctx, target: &JoinTarget) -> Element {
+/// The invite landing for `target`, as the Orchester Cloud tab's column.
+pub fn tab(ctx: &mut Ctx, target: &JoinTarget) -> Element {
   ctx.mount_keyed::<LandingPage>(
     &format!("orchester-landing-{}-{}", target.server, target.slug()),
     Props { target: target.clone() },
@@ -171,13 +164,13 @@ impl Component for LandingPage {
         if self.open_at_once(ctx, &landing, &target) {
           loading("orchester-landing-opening", &ctx.t("sharing.landing.opening")).into()
         } else {
-          let header = self.header(ctx, Some(&landing), &target);
           let body = if self.later.get() {
             self.waits(ctx, &landing)
           } else {
-            rows::body(ctx, &landing, (&self.picked, &self.add))
+            let actions = self.actions(ctx, &landing, &target);
+            rows::body(ctx, &landing, (&self.picked, &self.add), actions)
           };
-          return page(header, body);
+          return page(ctx, Some(&landing), &target, body);
         }
       }
       (None, Some(reason)) => {
@@ -191,8 +184,7 @@ impl Component for LandingPage {
       }
       (None, None) => loading("orchester-landing-loading", &ctx.t("sharing.landing.reading")).into(),
     };
-    let header = self.header(ctx, None, &target);
-    page(header, body)
+    page(ctx, None, &target, body)
   }
 }
 
@@ -217,62 +209,16 @@ impl LandingPage {
     true
   }
 
-  /// The breadcrumb, *Join Kontur on Kontur team*, what happens next, *Later* and *Continue to the join review*.
-  fn header(&self, ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget) -> Element {
-    let navigation = Navigation::of(ctx);
-    let server = target.server;
-    let to_orchester = Route::Orchester(OrchesterView::server(server));
-    let project = landing.map_or_else(|| target.slug().to_owned(), |landing| landing.project.name.clone());
-    let crumbs = breadcrumb(
-      ctx,
-      "orchester-landing-crumbs",
-      CrumbSeparator::Chevron,
-      vec![
-        Crumb::to(ctx.t(Screen::Settings.title_key()), navigation.to(Route::Settings)),
-        Crumb::to(ctx.t("settings.tabs.orchester"), navigation.to(to_orchester)),
-        Crumb::here(ctx.t_args("sharing.landing.crumb", [("project", project.as_str())])),
-      ],
-    );
-    let text = title(ctx, landing, &project);
+  /// *Later* and *Continue to the join review*, at the end of the row under the checkouts (`Actions` `JZzjA`).
+  fn actions(&self, ctx: &mut Ctx, landing: &Landing, target: &JoinTarget) -> [Element; 2] {
+    let later = self.later.clone();
     let later = ActionButton::new(
       "orchester-landing-later",
       ButtonKind::Ghost,
       ctx.t("sharing.landing.later"),
     )
-    .on_click({
-      let later = self.later.clone();
-      move || later.set(true)
-    });
-    let go_on = self.continue_button(ctx, landing, target);
-    let column = Column::new()
-      .width(Dimension::Px(HEAD_WIDTH))
-      .spacing(SpacingSize::Sm)
-      .child(crumbs)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Md)
-          // The actions stand level with the description, under the title (`xeFRB`).
-          .align_items(Alignment::End)
-          .child(text)
-          .child(Spacer::new().width(Dimension::Px(0.0)))
-          .child(later)
-          .child(go_on),
-      );
-    Column::new()
-      .id("orchester-landing-head")
-      .width(Dimension::Pct(100.0))
-      .align_items(Alignment::Center)
-      .padding(
-        Padding::new()
-          .top(TaskFormSpacing::PageTop.role())
-          .left(SpacingSize::Xl)
-          .right(SpacingSize::Xl)
-          .bottom(ExtraSpacing::Section.role()),
-      )
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(column)
-      .into()
+    .on_click(move || later.set(true));
+    [later.into(), self.continue_button(ctx, landing, target).into()]
   }
 
   /// *Kontur waits in Settings › Orchester* (`Later` in `d8oDsO`): the invite stays accepted and nothing is linked;
@@ -316,7 +262,7 @@ impl LandingPage {
   }
 
   /// *Continue to the join review*, once a checkout that can be linked is picked; it sends nothing.
-  fn continue_button(&self, ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget) -> ActionButton {
+  fn continue_button(&self, ctx: &mut Ctx, landing: &Landing, target: &JoinTarget) -> ActionButton {
     let button = ActionButton::new(
       "orchester-landing-continue",
       ButtonKind::Primary,
@@ -327,14 +273,12 @@ impl LandingPage {
       .picked
       .get()
       .0
-      .or_else(|| landing.and_then(rows::first_match))
+      .or_else(|| rows::first_match(landing))
       .filter(|picked| {
-        landing.is_some_and(|landing| {
-          landing
-            .checkouts
-            .iter()
-            .any(|checkout| checkout.id == *picked && checkout.choosable())
-        })
+        landing
+          .checkouts
+          .iter()
+          .any(|checkout| checkout.id == *picked && checkout.choosable())
       });
     match picked {
       Some(project) => {
@@ -346,57 +290,37 @@ impl LandingPage {
   }
 }
 
-/// *Join Kontur on Kontur team* and who this computer is there, once the project is read.
-fn title(ctx: &Ctx, landing: Option<&Landing>, project: &str) -> Column {
+/// The crumb back to Orchester Cloud, *Join Kontur on Kontur team* with who this computer is there once the project is
+/// read, and `body` under them, in the tab's scrolling column.
+fn page(ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget, body: Element) -> Element {
+  let navigation = Navigation::of(ctx);
+  let project = landing.map_or_else(|| target.slug().to_owned(), |landing| landing.project.name.clone());
   let (title, lead) = match landing {
     Some(landing) => (
       ctx.t_args(
         "sharing.landing.title",
-        [("project", project), ("server", landing.entry.stored.name.as_str())],
+        [
+          ("project", project.as_str()),
+          ("server", landing.entry.stored.name.as_str()),
+        ],
       ),
       rows::lead(ctx, landing),
     ),
-    None => (ctx.t_args("sharing.landing.titlePending", [("project", project)]), None),
+    None => (
+      ctx.t_args("sharing.landing.titlePending", [("project", project.as_str())]),
+      None,
+    ),
   };
-  Column::new()
-    .flex(1.0)
-    .spacing(SpacingSize::Xs)
-    .child(
-      Text::new(&title)
-        .id("orchester-landing-title")
-        .variant(TypographyStyle::Heading),
-    )
-    .with_children(lead.map(|lead| {
-      Text::new(&lead)
-        .id("orchester-landing-lead")
-        .variant(TypographyStyle::Description)
-        .width(Dimension::Pct(100.0))
-    }))
-}
-
-/// The header over the scrolled body.
-fn page(header: Element, body: Element) -> Element {
-  Column::new()
-    .id(format!("screen-{}", Screen::Settings.name()))
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .child(header)
-    .child(
-      ScrollVertical::new(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .align_items(Alignment::Center)
-          .padding(Padding::symmetric(SpacingSize::Xl, SpacingSize::Xl))
-          .child(
-            Column::new()
-              .width(Dimension::Px(HEAD_WIDTH))
-              .child(Column::new().width(Dimension::Px(BODY_WIDTH)).child(body)),
-          ),
-      )
-      .id("orchester-landing-scroll")
-      .flex(1.0),
-    )
-    .into()
+  let lead = lead.map(|lead| frame::lead("orchester-landing-lead", &lead).into());
+  let pane = frame::pane("orchester-landing-page")
+    .child(frame::crumb(
+      "orchester-landing-crumb",
+      &ctx.t("settings.tabs.orchester"),
+      navigation.to(Route::Orchester(OrchesterView::default())),
+    ))
+    .child(frame::head("orchester-landing-head", None, (&title, lead), Vec::new()))
+    .child(body);
+  frame::column("orchester-landing-scroll", pane)
 }
 
 /// The project the target names, with this computer's checkouts.

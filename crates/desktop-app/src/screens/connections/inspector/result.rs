@@ -1,7 +1,8 @@
-//! What a check pressed in the inspector (Test connection, Refresh models, Check again) does, in place above the
-//! footer's actions: while it runs, what it asks and how long the CLI has to answer each question; then whether it
-//! passed, what it found and when, which stays until the next check. The footer's sentence above it says what to do.
-//! Drawn as Add connection's check row (`Check row` `nL8Cy`): the inspector's design has no state of its own for it.
+//! What a check pressed in the inspector (Test connection, Fetch models, Refresh models, Check again) does, in place
+//! above the footer's actions: while it runs, what it asks and how long the CLI has to answer each question, or which
+//! host the runner asks for a native connection; then whether it passed, what it found and when, which stays until the
+//! next check. The footer's sentence above it says what to do. Drawn as Add connection's check row (`Check row`
+//! `nL8Cy`): the inspector's design has no state of its own for it.
 
 use std::sync::Arc;
 
@@ -15,7 +16,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  connection::{AgentConnection, ConnectionStatus, GitHubConnection, GitHubState},
+  connection::{AgentConnection, ApiEndpoint, ConnectionStatus, GitHubConnection, GitHubState},
   time::Timestamp,
 };
 use orchester_workspace::{connections::probe::COMMAND_TIMEOUT, display, messages::Message};
@@ -24,7 +25,10 @@ use super::{Inspecting, Tested};
 use crate::{
   screens::connections::words::{CHECKING, Shown, Tone, agent_status, checked_version, github_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
-  ui::{icon::icon, message::message_text},
+  ui::{
+    icon::{Icon, icon},
+    message::message_text,
+  },
 };
 
 /// The result box of an agent connection, once a check was pressed on it here.
@@ -32,7 +36,7 @@ pub(super) fn agent(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspec
   let program = ctx.t(provider_key(connection.provider()));
   let said = match inspecting.tested? {
     Tested::Checking => checking(ctx, "connections.result.checkingCli", &program),
-    Tested::Failed(error) => failed(ctx, error),
+    Tested::Failed(error, at) => failed(ctx, error).at(at),
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
@@ -55,6 +59,44 @@ pub(super) fn agent(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspec
   Some(said.render(ctx, inspecting.now))
 }
 
+/// The result box of a native connection to `api`, once Test connection or Fetch models was pressed on it here: the
+/// host the runner asks while it tests, then what the model API said and how many models the connection has.
+pub(super) fn native(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  api: &ApiEndpoint,
+  inspecting: &Inspecting<'_>,
+) -> Option<Element> {
+  let host = api.base_url().host();
+  let said = match inspecting.tested? {
+    Tested::Checking => Said {
+      shown: CHECKING,
+      heading: ctx.t(CHECKING.key),
+      detail: ctx.t_args("connections.result.checkingApi", [("host", host)]),
+      at: None,
+    },
+    Tested::Failed(error, at) => failed(ctx, error).at(at),
+    Tested::Unread(error) => unread(ctx, error),
+    Tested::Checked => {
+      let check = connection.last_check()?;
+      let status = connection.status_with(&inspecting.listed.secrets);
+      let models = api.models().models().len().to_string();
+      let balance = check.result.balance().unwrap_or_default();
+      let args = [("host", host), ("models", models.as_str()), ("balance", balance)];
+      let key = match (status, check.result.balance()) {
+        (ConnectionStatus::Connected, _) => "connections.result.apiAnswered",
+        (ConnectionStatus::KeyRejected, _) => "connections.result.keyRejected",
+        (ConnectionStatus::BillingProblem, Some(_)) => "connections.result.billingBalance",
+        (ConnectionStatus::BillingProblem, None) => "connections.result.billing",
+        (ConnectionStatus::KeyMissing, _) => "connections.result.nativeKeyMissing",
+        _ => "connections.result.unreachable",
+      };
+      Said::found(ctx, agent_status(status), ctx.t_args(key, args), check.at)
+    }
+  };
+  Some(said.render(ctx, inspecting.now))
+}
+
 /// The result box of a GitHub connection in `state`, once a check was pressed on it here.
 pub(super) fn github(
   ctx: &Ctx,
@@ -64,7 +106,7 @@ pub(super) fn github(
 ) -> Option<Element> {
   let said = match inspecting.tested? {
     Tested::Checking => checking(ctx, "connections.result.checkingGh", ""),
-    Tested::Failed(error) => failed(ctx, error),
+    Tested::Failed(error, at) => failed(ctx, error).at(at),
     Tested::Unread(error) => unread(ctx, error),
     Tested::Checked => {
       let at = connection.last_check()?.at;
@@ -136,6 +178,11 @@ struct Said {
 }
 
 impl Said {
+  /// What a check pressed at `at` said, with its time at the right (`Time` `hFbL8` in 05g).
+  fn at(self, at: Timestamp) -> Self {
+    Self { at: Some(at), ..self }
+  }
+
   /// A check that ran at `at` and ended in `shown`: passed, found a problem it names, or failed.
   fn found(ctx: &Ctx, shown: Shown, detail: Arc<str>, at: Timestamp) -> Self {
     let key = match shown.tone {
@@ -158,11 +205,18 @@ impl Said {
         .variant(TypographyStyle::Caption)
         .nowrap()
     });
+    // The heading's glyph says how the test went (05g, 05h, 05k): passed, found a problem, or failed.
+    let glyph = match self.shown.tone {
+      Tone::Success => Icon::CircleCheck,
+      Tone::Warning => Icon::TriangleAlert,
+      Tone::Danger | Tone::Muted => Icon::CircleX,
+      Tone::Busy => self.shown.icon,
+    };
     let top = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)
-      .child(icon(self.shown.icon, IconSize::Base, self.shown.tone.color()))
+      .child(icon(glyph, IconSize::Base, self.shown.tone.color()))
       .child(
         Text::new(&self.heading)
           .id("connection-test-result-heading")

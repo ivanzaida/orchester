@@ -1,8 +1,8 @@
 //! Checkpoint commits and merges: everything a step changed in its worktree, committed on the
-//! worktree's branch (or the commits its agent made there itself), and a step branch merged back
-//! into the run's branch — both with the repository's git identity.
+//! worktree's branch (or the commits its agent made there itself), a step branch merged back
+//! into the run's branch, and the moved base merged into it (ORC-151) — with the repository's git identity.
 
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 use orchester_core::revision::Revision;
 
@@ -65,7 +65,7 @@ pub(super) fn head(worktree: &Path) -> Result<Revision, WorktreeError> {
   Revision::new(&head).map_err(|_| WorktreeError::UnexpectedRevision(head))
 }
 
-/// How merging a step's branch back went.
+/// How merging a step's branch back, or the moved base, went.
 pub(super) enum Merge {
   /// The run's branch is at this commit now: the step branch fast-forwarded it, a merge commit
   /// joined them, or it had nothing new.
@@ -77,13 +77,29 @@ pub(super) enum Merge {
 /// Merges `branch` into the branch checked out in `worktree` (the run's), with `message` when it
 /// takes a merge commit.
 pub(super) fn merge(worktree: &Path, branch: &str, message: &str) -> Result<Merge, WorktreeError> {
+  merge_with(worktree, &["merge", "--no-edit", "-m", message, branch], branch)
+}
+
+/// Merges `revision`, where the run's base branch moved, into the branch checked out in `worktree` (the run's) with a
+/// merge commit of `message`, never a fast-forward, as a writing agent is told to merge it (ORC-151).
+pub(super) fn merge_moved_base(worktree: &Path, revision: &Revision, message: &str) -> Result<Merge, WorktreeError> {
+  let revision = revision.as_str();
+  merge_with(
+    worktree,
+    &["merge", "--no-ff", "--no-edit", "-m", message, revision],
+    revision,
+  )
+}
+
+/// `git merge` with `args` of `what` in `worktree`; a merge that conflicts is undone.
+fn merge_with(worktree: &Path, args: &[&str], what: &str) -> Result<Merge, WorktreeError> {
   let git = Git::new(worktree);
-  if let Err(refusal) = git.attempt(&["merge", "--no-edit", "-m", message, branch])? {
+  if let Err(refusal) = git.attempt(args)? {
     // A conflict leaves a merge in progress; a refusal before merging (such as local changes in
     // the way) does not, and is a failure of git rather than of the step.
     if !git.answer(&["rev-parse", "--quiet", "--verify", "MERGE_HEAD"])? {
       return Err(WorktreeError::Git {
-        command: format!("merge {branch}"),
+        command: format!("merge {what}"),
         code: None,
         stderr: refusal,
       });
@@ -93,4 +109,32 @@ pub(super) fn merge(worktree: &Path, branch: &str, message: &str) -> Result<Merg
     return Ok(Merge::Conflict(files.lines().map(str::to_owned).collect()));
   }
   head(worktree).map(Merge::Merged)
+}
+
+/// The files that both the work in `worktree` — committed, uncommitted and untracked — and `revision`, where the run's
+/// base branch moved, changed since they forked, in path order (ORC-151).
+pub(super) fn overlap(worktree: &Path, revision: &Revision) -> Result<Vec<String>, WorktreeError> {
+  let git = Git::new(worktree);
+  let fork = git.stdout(&["merge-base", "HEAD", revision.as_str()])?;
+  let theirs = paths(&git, &["diff", "--name-only", "--no-renames", &fork, revision.as_str()])?;
+  let mut ours = paths(&git, &["diff", "--name-only", "--no-renames", &fork])?;
+  ours.extend(paths(&git, &["ls-files", "--others", "--exclude-standard"])?);
+  Ok(ours.intersection(&theirs).cloned().collect())
+}
+
+/// The paths `git` lists with `args`, one per line, as written.
+fn paths(git: &Git<'_>, args: &[&str]) -> Result<BTreeSet<String>, WorktreeError> {
+  let args: Vec<&str> = ["-c", "core.quotepath=false"]
+    .into_iter()
+    .chain(args.iter().copied())
+    .collect();
+  Ok(
+    git
+      .stdout(&args)?
+      .lines()
+      .map(str::trim)
+      .filter(|path| !path.is_empty())
+      .map(str::to_owned)
+      .collect(),
+  )
 }

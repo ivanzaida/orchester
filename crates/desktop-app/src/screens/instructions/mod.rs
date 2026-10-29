@@ -10,7 +10,7 @@ mod editor_notes;
 mod empty;
 mod fields;
 mod frame;
-mod import;
+pub(crate) mod import;
 mod leaving;
 mod library;
 mod library_groups;
@@ -37,7 +37,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{background, instructions::data::ProjectInstructions, messages, tasks::outside::Outside};
-use state::{Selection, Tab, View};
+use state::{Selection, View};
 
 use crate::{
   project::ShownProject,
@@ -212,7 +212,7 @@ impl InstructionsScreen {
         );
       }
       View::Rule(_, None, _) if data.entries.is_empty() => {
-        return frame::empty(ctx, &project, (&data, Tab::Project), &self.selection);
+        return frame::empty(ctx, &project, &self.selection);
       }
       View::Rule(_, None, _) => return library::list(ctx, &data, &self.selection),
       View::Rule(tab, Some(id), panel) => {

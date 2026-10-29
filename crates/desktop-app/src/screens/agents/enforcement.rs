@@ -77,10 +77,12 @@ pub fn status(ctx: &Ctx, permissions: &AgentPermissions, connection: &AgentConne
     return (Tone::Warning, ctx.t("agents.cannotBlockNetwork"));
   }
   if orchester_workspace::agents::permissions::fully_enforced(permissions, connection.provider()) {
-    (
-      Tone::Success,
-      ctx.t_args("agents.enforced", [("provider", connection.name().as_str())]),
-    )
+    // A native agent's tools and commands are Orchester's own (`docs/architecture/native-agent.md` §5.4).
+    let enforced = match connection.provider().is_native() {
+      true => ctx.t("agents.enforcedByOrchester"),
+      false => ctx.t_args("agents.enforced", [("provider", connection.name().as_str())]),
+    };
+    (Tone::Success, enforced)
   } else {
     (Tone::Warning, ctx.t("agents.notEnforcedState"))
   }

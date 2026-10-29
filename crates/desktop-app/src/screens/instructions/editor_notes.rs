@@ -6,7 +6,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Column, Row, Text},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::Variable;
@@ -88,53 +88,51 @@ pub fn warning(ctx: &Ctx, fields: &Fields, availability: &Availability) -> Optio
     ),
     None => ctx.t("instructions.unavailableDetailAnyAgent"),
   };
-  let mut note = Notice::new("instruction-publication-warning", NoticeTone::Warning, title)
+  let note = Notice::new("instruction-publication-warning", NoticeTone::Warning, title)
     .stacked()
     .body(detail);
-  if variable == Variable::RunRevision {
-    let events = fields.events.clone();
-    let frozen = fields.frozen.clone();
-    let resume = ActionButton::new(
-      "instruction-warning-resume",
-      ButtonKind::Secondary,
-      ctx.t("instructions.injectResume"),
-    )
-    .icon(Icon::CalendarClock)
-    .on_click(move || {
-      if !frozen.get_untracked() {
-        events.set(Events::Resume);
-      }
-    });
-    let text = fields.text.clone();
-    let frozen = fields.frozen.clone();
-    let base = ActionButton::new(
-      "instruction-warning-base",
-      ButtonKind::Secondary,
-      ctx.t_args(
-        "instructions.useBaseRevision",
-        [("expression", "{{run.base_revision}}")],
-      ),
-    )
-    .icon(Icon::Replace)
-    .on_click(move || {
-      if !frozen.get_untracked() {
-        text.update(|raw| {
-          *raw = orchester_workspace::instructions::tokens::replace_variable(
-            raw,
-            Variable::RunRevision,
-            Variable::RunBaseRevision,
-          )
-        });
-      }
-    });
-    let base = if fields.frozen.get() || availability.unavailable.contains(&Variable::RunBaseRevision) {
-      base.disabled()
-    } else {
-      base
-    };
-    note = note
-      .action(if fields.frozen.get() { resume.disabled() } else { resume })
-      .action(base);
+  if variable != Variable::RunRevision {
+    return Some(note.into());
   }
-  Some(note.into())
+  // The revision can be replaced by the base revision; what the rule does without it is chosen under the notice
+  // (`TYInP`, `hPvK0` in 02d).
+  let text = fields.text.clone();
+  let frozen = fields.frozen.clone();
+  let base = ActionButton::new(
+    "instruction-warning-base",
+    ButtonKind::Secondary,
+    ctx.t_args(
+      "instructions.useBaseRevision",
+      [("expression", "{{run.base_revision}}")],
+    ),
+  )
+  .on_click(move || {
+    if !frozen.get_untracked() {
+      text.update(|raw| {
+        *raw = orchester_workspace::instructions::tokens::replace_variable(
+          raw,
+          Variable::RunRevision,
+          Variable::RunBaseRevision,
+        )
+      });
+    }
+  });
+  let base = if fields.frozen.get() || availability.unavailable.contains(&Variable::RunBaseRevision) {
+    base.disabled()
+  } else {
+    base
+  };
+  Some(
+    Column::new()
+      .id("instruction-unavailable")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .child(note.action(base))
+      .child(super::variable_detail::policy(
+        ctx,
+        (&fields.events, &fields.frozen),
+        variable,
+      ))
+      .into(),
+  )
 }

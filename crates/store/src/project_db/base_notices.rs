@@ -1,7 +1,7 @@
 //! When the base branch moves (ORC-54, `orchester_core::base_move`): `base_heads`, where each base branch was last
 //! seen; `base_notices`, the notices to runs that it moved, at most one pending per run, a newer one replacing it
-//! (written by the desktop, their delivery by the runner); and `project_base_notices`, Project settings' switch for
-//! them, on without a row.
+//! (written by the desktop, their delivery or the runner's own merge of them by the runner, ORC-151); and
+//! `project_base_notices`, Project settings' switch for them, on without a row.
 
 use orchester_core::{
   base_move::{BaseHead, BaseNotice, LandedCommit, LandedTask, NoticeDelivery},
@@ -22,7 +22,7 @@ use crate::{
 const SCHEMA: u32 = 1;
 const BODY: &str = "base notice";
 const COLUMNS: &str = "id, run_id, task_id, branch, revision, body, noticed_at, deliver_after, execution_id, \
-                       invocation_id, delivered_at";
+                       invocation_id, delivered_at, merged_revision";
 
 /// What landed, as a notice's body keeps it.
 #[derive(Serialize, Deserialize)]
@@ -130,6 +130,53 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
+  /// Records that the runner merged `notice` into the run's worktree itself at `at`, with the merge commit `merged`,
+  /// as `execution` started (ORC-151), while it is still pending as it was read: `false`, with nothing stored, once a
+  /// newer move replaced it or it was delivered already.
+  pub fn merge_base_notice(
+    &mut self,
+    notice: &BaseNotice,
+    (execution, merged): (StepExecutionId, &Revision),
+    at: Timestamp,
+  ) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE base_notices SET execution_id = ?1, merged_revision = ?2, delivered_at = ?3 \
+       WHERE id = ?4 AND revision = ?5 AND delivered_at IS NULL",
+      params![
+        execution.to_string(),
+        merged.as_str(),
+        at.unix_millis(),
+        notice.id.to_string(),
+        notice.revision.as_str(),
+      ],
+    )?;
+    Ok(changed == 1)
+  }
+
+  /// Records that pending `notice` overlaps the run's changes also in `files` (ORC-151), as the runner found them in
+  /// the agent's worktree or as its own merge conflicted in them: they join its overlapping files, so that a writing
+  /// step's agent takes it as a notice that overlaps the run's changes. `false`, with nothing stored, once a newer move
+  /// replaced it or it was delivered already.
+  pub fn note_base_notice_overlap(&mut self, notice: &BaseNotice, files: &[String]) -> Result<bool, StoreError> {
+    let mut overlapping: Vec<String> = notice.overlapping.iter().chain(files).cloned().collect();
+    overlapping.sort();
+    overlapping.dedup();
+    let body = Body {
+      commits: notice.commits.clone(),
+      tasks: notice.tasks.clone(),
+      overlapping,
+    };
+    let changed = self.connection.execute(
+      "UPDATE base_notices SET body = ?1 WHERE id = ?2 AND revision = ?3 AND delivered_at IS NULL",
+      params![
+        encode_json(BODY, SCHEMA, &body)?,
+        notice.id.to_string(),
+        notice.revision.as_str(),
+      ],
+    )?;
+    Ok(changed == 1)
+  }
+
   /// The notices to `task`'s runs, oldest first.
   pub fn base_notices(&self, task: TaskId) -> Result<Vec<BaseNotice>, StoreError> {
     self.notices_where("task_id", &task.to_string())
@@ -176,7 +223,7 @@ impl ProjectDb {
 type NoticeRow = (
   (String, String, String, String, String, String),
   (i64, i64),
-  (Option<String>, Option<String>, Option<i64>),
+  (Option<String>, Option<String>, Option<i64>, Option<String>),
 );
 
 fn read_row(row: &Row<'_>) -> rusqlite::Result<NoticeRow> {
@@ -190,7 +237,7 @@ fn read_row(row: &Row<'_>) -> rusqlite::Result<NoticeRow> {
       row.get(5)?,
     ),
     (row.get(6)?, row.get(7)?),
-    (row.get(8)?, row.get(9)?, row.get(10)?),
+    (row.get(8)?, row.get(9)?, row.get(10)?, row.get(11)?),
   ))
 }
 
@@ -199,13 +246,18 @@ fn notice_of(
 ) -> Result<BaseNotice, StoreError> {
   let body: Body = decode_json(BODY, SCHEMA, &body)?;
   let delivery = match delivered {
-    (Some(execution), Some(invocation), Some(at)) => NoticeDelivery::Delivered {
+    (Some(execution), Some(invocation), Some(at), None) => NoticeDelivery::Delivered {
       execution: parse("step execution id", &execution)?,
       invocation: parse("invocation id", &invocation)?,
       at: Timestamp::from_unix_millis(at),
     },
-    (None, None, None) => NoticeDelivery::Pending,
-    _ => return Err(corrupt("base notice", "a delivery without its invocation")),
+    (Some(execution), None, Some(at), Some(merged)) => NoticeDelivery::Merged {
+      execution: parse("step execution id", &execution)?,
+      revision: Revision::new(&merged).map_err(|error| corrupt("base merge revision", error))?,
+      at: Timestamp::from_unix_millis(at),
+    },
+    (None, None, None, None) => NoticeDelivery::Pending,
+    _ => return Err(corrupt("base notice", "a delivery without its invocation or merge")),
   };
   Ok(BaseNotice {
     id: parse("notice id", &id)?,

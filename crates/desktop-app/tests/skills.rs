@@ -117,8 +117,9 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   s.go(ProjectPage::Skills(Default::default()));
   assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
   let found = s.text("skills-repository-settings");
+  // By file and folder (`HMf2M` in 03): CLAUDE.md only points to AGENTS.md, so it is not named.
   assert!(
-    found.contains("3 items") && found.contains("2 instructions, 1 skill"),
+    found.contains("3 items") && found.contains("AGENTS.md and 1 skills folder"),
     "{found}"
   );
   s.click("skills-import-open");

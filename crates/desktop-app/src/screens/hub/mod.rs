@@ -7,6 +7,7 @@
 
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
+pub(crate) mod import_detail;
 pub(crate) mod import_preview;
 pub(crate) mod import_result;
 pub(crate) mod import_rows;

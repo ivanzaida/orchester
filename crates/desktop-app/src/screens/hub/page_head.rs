@@ -22,23 +22,30 @@ use crate::{
   },
 };
 
-/// ← `list`, back to the tab's list, then `here` on a new item.
-pub(crate) fn crumb(id: &str, (list, back): (&str, Open), here: Option<&str>) -> Element {
+/// ← `list`, back to the tab's list, then `/` and `here` on a page of its own (`Crumb` `pPjI1` in 03c, `bnei1` in 02c).
+pub(crate) fn crumb(ctx: &Ctx, id: &str, (list, back): (&str, Open), here: Option<&str>) -> Element {
   let back = opening(back)
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
     .child(Text::new(list).variant(HubText::Crumb.role()));
+  let here = here.map(|here| {
+    [
+      Text::new(&ctx.t("hub.crumbSeparator"))
+        .id(format!("{id}-separator"))
+        .variant(HubText::Crumb.role()),
+      Text::new(here)
+        .id(format!("{id}-here"))
+        .variant(HubText::Crumb.role())
+        .color(PaletteColor::TextSecondary),
+    ]
+  });
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(back)
-    .with_children(here.map(|here| {
-      Text::new(here)
-        .variant(HubText::Crumb.role())
-        .color(PaletteColor::TextSecondary)
-    }))
+    .with_children(here.into_iter().flatten())
     .into()
 }
 

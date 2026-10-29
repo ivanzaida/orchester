@@ -10,7 +10,7 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -134,25 +134,41 @@ pub(super) fn page(ctx: &mut Ctx, work: &Work) -> Column {
     .row(cli_row(ctx, draft, cli))
     .row(name_row(ctx, draft, cli))
     .row(folder_row(ctx, draft, cli, problem.as_ref()));
-  let existing = draft.folder.get() == FolderChoice::Existing;
-  let (after, hint) = if existing {
-    (
-      t(ctx, "accounts.add.afterBrought"),
-      t(ctx, "accounts.add.afterBroughtHint"),
-    )
-  } else {
-    (
-      t(ctx, "accounts.add.after"),
-      ta(ctx, "accounts.add.afterHint", [("command", login_command(cli))]),
-    )
-  };
-  let second = SettingGroup::new("account-add-step-2", t(ctx, "accounts.add.step2"))
-    .row(SettingRow::new("account-add-after", after).hint(hint).render(ctx));
+  let second = SettingGroup::new("account-add-step-2", t(ctx, "accounts.add.step2")).row(after_row(ctx, draft, cli));
   let blocked = problem.is_some();
   heading(ctx, frame::pane("account-add-page"))
     .child(first)
     .child(second)
     .child(footer(ctx, work, blocked))
+}
+
+/// *After the folder is made* (or *added*): what comes next, and in its tooltip what the folder is: where Orchester
+/// creates a new one and that it starts empty, or that a brought one is never deleted.
+fn after_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
+  let row = if draft.folder.get() == FolderChoice::Existing {
+    SettingRow::new("account-add-after", t(ctx, "accounts.add.afterBrought"))
+      .hint(t(ctx, "accounts.add.afterBroughtHint"))
+      .info(ta(
+        ctx,
+        "accounts.add.afterBroughtInfo",
+        [("variable", cli.folder_variable().to_owned())],
+      ))
+  } else {
+    let row = SettingRow::new("account-add-after", t(ctx, "accounts.add.after")).hint(ta(
+      ctx,
+      "accounts.add.afterHint",
+      [("command", login_command(cli))],
+    ));
+    match planned_folder(ctx, draft, cli) {
+      Some(folder) => row.info(ta(
+        ctx,
+        "accounts.add.afterInfo",
+        [("path", folder), ("folder", own_folder_text(cli))],
+      )),
+      None => row,
+    }
+  };
+  row.render(ctx)
 }
 
 /// *CLI*: Claude Code or Codex.
@@ -200,30 +216,38 @@ fn name_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Element {
   row.render(ctx)
 }
 
-/// *Folder*: a new one Orchester creates or one the person already uses, and for that one its path, *Choose…* and
-/// why it can't be an account's.
-fn folder_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli, problem: Option<&Message>) -> Element {
-  let workspace = Services::of(ctx).workspace;
-  let chosen = draft.folder.get();
-  let planned = workspace
+/// The folder Orchester would create for a new account of `cli` named as typed so far; none on a computer where it has
+/// no folder for new accounts.
+fn planned_folder(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Option<String> {
+  Services::of(ctx)
+    .workspace
     .planned_folder(cli, draft.name.get().trim())
-    .map(|folder| folder.display().to_string());
+    .map(|folder| folder.display().to_string())
+}
+
+/// *Folder*: a new one Orchester creates or one the person already uses, and for that one its path, *Choose…* and
+/// why it can't be an account's. The options say what the folder is, not its path (`gw62M`, `zJwuL`); the path of a
+/// new one is in *After the folder is made*'s tooltip.
+fn folder_row(ctx: &mut Ctx, draft: &Draft, cli: AccountCli, problem: Option<&Message>) -> Element {
+  let chosen = draft.folder.get();
+  let planned = planned_folder(ctx, draft, cli).is_some();
+  let new_detail = if planned {
+    t(ctx, "accounts.add.folderNewDetail")
+  } else {
+    t(ctx, "accounts.add.noFolderHere")
+  };
   let new = folder_option(
     ("account-add-folder-new", &t(ctx, "accounts.add.folderNew")),
-    &planned.clone().unwrap_or_else(|| t(ctx, "accounts.add.noFolderHere")),
+    &new_detail,
     chosen == FolderChoice::New,
     planned
-      .is_some()
       .then(|| draft.folder.clone())
       .map(|signal| move || signal.set(FolderChoice::New)),
   );
   let existing_detail = ta(
     ctx,
     "accounts.add.folderExistingDetail",
-    [
-      ("program", cli.program().to_owned()),
-      ("variable", cli.folder_variable().to_owned()),
-    ],
+    [("program", cli.program().to_owned())],
   );
   let signal = draft.folder.clone();
   let existing = folder_option(
@@ -346,7 +370,6 @@ fn folder_problem(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Option<Messa
 fn footer(ctx: &mut Ctx, work: &Work, blocked: bool) -> Element {
   let navigation = Navigation::of(ctx);
   let draft = work.draft.clone();
-  let cli = draft.cli.get().0;
   let existing = draft.folder.get() == FolderChoice::Existing;
   let name = Name::new(&draft.name.get()).ok();
   let ready = name.is_some() && !blocked && (!existing || !draft.path.get().trim().is_empty());
@@ -388,9 +411,9 @@ fn footer(ctx: &mut Ctx, work: &Work, blocked: bool) -> Element {
     .align_items(Alignment::Start)
     .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
     .child(
-      Text::new(&ta(ctx, "accounts.add.folderNote", [("folder", own_folder_text(cli))]))
+      Text::new(&t(ctx, "accounts.add.folderNote"))
         .id("account-add-note")
-        .variant(lurq::app::theme::TypographyStyle::Description)
+        .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),

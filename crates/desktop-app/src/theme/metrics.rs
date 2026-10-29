@@ -210,6 +210,8 @@ pub enum ControlHeight {
   Lg,
   /// 26: a picker and a command trigger in a page's header (`ZQd2D`, `qXoBR`).
   Picker,
+  /// 30: a field and a select in a row of a skill's page (`E0hdWm`, `zEYs7` in 03b `QbDWX`).
+  Row,
 }
 
 impl ControlHeight {
@@ -222,6 +224,7 @@ impl ControlHeight {
       Self::Inspector => 26.0,
       Self::Lg => 36.0,
       Self::Picker => 26.0,
+      Self::Row => 30.0,
     }
   }
 }

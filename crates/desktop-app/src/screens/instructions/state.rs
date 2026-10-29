@@ -65,6 +65,14 @@ impl Selection {
       _ => View::default(),
     }
   }
+  /// What a crumb back to [`opened_from`](Self::opened_from) reads: *Instructions* for the first tab, else the tab's
+  /// name (*Agent roles*).
+  pub fn opened_from_label(&self) -> &'static str {
+    match self.opened_from().tab() {
+      Some(tab) if tab != Tab::default() => tab.key(),
+      _ => "instructions.title",
+    }
+  }
   /// A view the person chose; held for the leave question while the rule shown has unsaved edits.
   pub fn open(&self, view: View) {
     if self.dirty.get_untracked() || self.busy.get_untracked() {

@@ -14,7 +14,10 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  agent_files::{RepositoryAgentFiles, import::ImportItem},
+  agent_files::{
+    RepositoryAgentFiles,
+    import::{ImportItem, Unimportable},
+  },
   id::ProjectId,
   resource::ResourceKind,
 };
@@ -49,8 +52,6 @@ pub(crate) struct Outcome<'a> {
   pub items: &'a [ImportItem],
   /// How many items the import was chosen from.
   pub total: usize,
-  /// Why an item cannot be imported.
-  pub detail: fn(&Ctx, &ImportItem) -> Arc<str>,
   /// The project's Repository agent files, when it could be read.
   pub agent_files: Option<RepositoryAgentFiles>,
 }
@@ -145,6 +146,7 @@ impl Outcome<'_> {
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
       .child(page_head::crumb(
+        ctx,
         &format!("{id}-result-crumb"),
         (list, back.clone()),
         Some(&title),
@@ -216,10 +218,9 @@ impl Outcome<'_> {
       .filter(|item| !self.created.iter().any(|draft| draft.source == item.source))
       .enumerate()
       .map(|(index, item)| {
-        let (why, color) = if item.outcome.is_err() {
-          ((self.detail)(ctx, item), PaletteColor::Warning)
-        } else {
-          (ctx.t("skills.notSelected"), PaletteColor::TextMuted)
+        let (why, color) = match &item.outcome {
+          Err(why) => (unimportable(ctx, why), PaletteColor::Warning),
+          Ok(_) => (ctx.t("skills.notSelected"), PaletteColor::TextMuted),
         };
         row(&format!("{id}-omitted-{index}"), &item.source, (&why, color), None)
       })
@@ -309,4 +310,15 @@ fn draft_label(ctx: &Ctx, draft: &CreatedDraft) -> Arc<str> {
       ("files", words::files(ctx, draft.files).to_string()),
     ],
   )
+}
+
+/// Why an item made no draft, the same whether Instructions or Skills imported it (*No SKILL.md was found.*, `IRCx0`).
+fn unimportable(ctx: &Ctx, why: &Unimportable) -> Arc<str> {
+  match why {
+    Unimportable::OnlyImports { targets } => ctx.t_args("skills.onlyImports", [("targets", targets.join(", "))]),
+    Unimportable::Empty => ctx.t("skills.emptyFile"),
+    Unimportable::NotText => ctx.t("skills.notText"),
+    Unimportable::NoSkillFile => ctx.t("skills.noSkillFile"),
+    Unimportable::UnsupportedFiles { paths } => ctx.t_args("skills.unsupportedFiles", [("paths", paths.join(", "))]),
+  }
 }

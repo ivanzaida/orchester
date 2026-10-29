@@ -102,7 +102,7 @@
       "answerAgents": {
         "title": "Let the Orchestrator answer agents",
         "label": "Answer agents",
-        "hint": "Answer their questions and message them without your click",
+        "hint": "Read their questions and answer, or tell you with a recommendation",
         "description": "Lets the Orchestrator's chat answer agents' questions and send messages to a run's agents without your click, and start a turn by itself when an agent asks or waits for a message. Off: it proposes each answer as a card you apply, and tells you when an agent waits. Approvals and plan decisions stay yours. Only you can change this, here in the window.",
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",

@@ -4,7 +4,8 @@
 //! icon and 11/500 `text_secondary` words, 8 apart, and a link in `accent_text`): finished steps in a row
 //! folded into one (*01–04 · 4 steps done · 16:20–16:24 · Show them*, `list-collapse`), the steps a failure
 //! kept from starting, a return or restart (*Review returned the work to 03 Implement · attempt 2 · 16:31*,
-//! `corner-down-left`) and the run's end, with the Orchestrator's row under a merge its chat carried out.
+//! `corner-down-left`) and the run's end, with the Orchestrator's row under a merge its chat carried out; at the run's
+//! start, that auto mode approves everything in it (`shield-check`; no frame draws it, so it is an event divider).
 
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use lurq::{
 use orchester_core::{
   connection::{AgentProvider, EndpointPreset, EngineVendor},
   orchestrator::{FromOrchestrator, SentWay},
+  run::Answerer,
   time::Timestamp,
   tokens::compact_tokens,
 };
@@ -37,6 +39,8 @@ use super::{
   message::{orchestrator_note, person_note},
 };
 use crate::{
+  navigation::Navigation,
+  routes::{ProjectPage, ProjectSettingsTab, Route},
   theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -269,6 +273,25 @@ pub(super) fn folded(ctx: &Ctx, timeline: &Timeline, key: &Arc<str>, steps: &[(A
   )
 }
 
+/// The run's first line while auto mode's *approve everything in each run* answers its requests (ORC-199): "Auto
+/// mode approves everything in this run · turned on by you", with *Project settings*, where it is turned off.
+pub(super) fn everything(ctx: &mut Ctx, timeline: &Timeline, by: Answerer) -> Element {
+  let text = ctx.t(match by {
+    Answerer::Person => "conversation.everything.byYou",
+    Answerer::Automation => "conversation.everything.byAutomation",
+  });
+  let settings = Navigation::of(ctx).to(Route::Project(
+    timeline.project,
+    ProjectPage::Settings(ProjectSettingsTab::Runs),
+  ));
+  event(
+    "conversation-approve-everything".into(),
+    Icon::ShieldCheck,
+    &text,
+    Some((ctx.t("conversation.everything.settings"), Press::Open(settings))),
+  )
+}
+
 /// "05 Review, 06 Fix notes and 07 Docs & cleanup did not start".
 pub(super) fn not_started(ctx: &Ctx, steps: &[StepHead]) -> Element {
   let labels: Vec<Arc<str>> = steps
@@ -401,22 +424,27 @@ fn labelled(ctx: &Ctx, timeline: &Timeline, name: &Arc<str>) -> Arc<str> {
 
 /// Orchester's notice that the base branch moved (ORC-54): "master moved to 1a2b3c4 · 2 tasks landed · merge
 /// requested · told Builder at 16:31", or, past the steps that merge it (ORC-65), "… · waits until the work goes back
-/// to Implement".
+/// to Implement", or, when it overlapped none of the run's changes (ORC-151), "… · merged by Orchester before Check at
+/// 16:31".
 pub(super) fn base_moved(ctx: &Ctx, key: &str, mark: &BaseMovedMark) -> Element {
   let notice = &mark.notice;
+  let time = notice.settled().map(|(_, at)| display::clock(at)).unwrap_or_default();
   let state = match &mark.state {
     NoticeState::WritingStep => ctx.t("conversation.baseMoved.writingStep"),
     NoticeState::WorkGoesBack { step } => ctx.t_args("conversation.baseMoved.workGoesBack", [("step", &**step)]),
     NoticeState::RunGoesOn => ctx.t("conversation.baseMoved.runGoesOn"),
     NoticeState::FollowUp => ctx.t("conversation.baseMoved.followUp"),
     NoticeState::Delivered { agent, step } => {
-      let time = notice.delivered().map(|(_, at)| display::clock(at)).unwrap_or_default();
       let agent = if agent.is_empty() { step } else { agent };
       ctx.t_args(
         "conversation.baseMoved.delivered",
         [("agent", &**agent), ("time", time.as_str())],
       )
     }
+    NoticeState::MergedByRunner { step } => ctx.t_args(
+      "conversation.baseMoved.mergedByRunner",
+      [("step", &**step), ("time", time.as_str())],
+    ),
   };
   let (what, count) = if notice.tasks.is_empty() {
     ("commits", notice.commits.len())

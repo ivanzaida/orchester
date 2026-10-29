@@ -176,7 +176,9 @@ const SPECS: &[Spec] = &[
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
                   state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
                   that never merge the base such as Review or Verify are left, kept_until_run_goes_on, \
-                  waits_for_follow_up, or delivered with the agent and step that read it). delivery is the run's \
+                  waits_for_follow_up, delivered with the agent and step that read it, or merged_by_runner with \
+                  merged_by_runner.before_step and merge_commit when it overlapped none of the run's changes and \
+                  Orchester merged it itself before that step started). delivery is the run's \
                   place in the project's merge queue (null when its pipeline has no Deliver step or it never joined): \
                   state queued (place: its place in line), syncing, rechecking, integrating (integrate_step, \
                   files), waiting_for_approval, blocked (blocked.why: uncommitted_changes with files, \
@@ -257,13 +259,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_auto_mode",
-    description: "A project's auto mode settings: whether new runs use it, and which connection, model and effort review requests (or why auto mode has no reviewer).",
+    description: "A project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it (and who turned that on), and which connection, model and effort review requests (or why auto mode has no reviewer).",
     schema: schema_for_type::<auto_mode::GetAutoMode>,
     read_only: true,
   },
   Spec {
     name: "set_auto_mode",
-    description: "Changes a project's auto mode settings: whether new runs use it, and the reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer). Refused unless a person turned on Let automation answer approvals in the app.",
+    description: "Changes a project's auto mode settings: whether new runs use it, whether each run in auto mode approves everything in it as Approve everything in this run does, and the reviewer (an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer). Refused unless a person turned on Let automation answer approvals in the app; turning approve_everything on is also refused as person_only unless a person turned on Let automation change agent permissions. Turning approve_everything off alone is always taken.",
     schema: schema_for_type::<auto_mode::SetAutoMode>,
     read_only: false,
   },

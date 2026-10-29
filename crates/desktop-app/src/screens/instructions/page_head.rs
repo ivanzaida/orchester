@@ -150,7 +150,7 @@ pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
       }
     }
   };
-  let sub = words::footer(ctx, tab, state.published());
+  let sub = words::footer(ctx, tab, state);
   // `instruction-save`: its status keeps the id the rule's save state had (`instruction-save-status`).
   let mut draft = DraftBar::new("instruction-save", standing, status).sub(sub);
   for action in actions {
