@@ -28,7 +28,7 @@ use orchester_core::{
   id::{AgentAccountId, ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
   orchester_tools::ProjectTool,
-  permission::{ApprovalMode, category::CommandScope},
+  permission::{ApprovalMode, category::CommandScope, roots::RunRoots},
   question::QuestionRequest,
   run::{Answerer, ApprovalAnswer, EffectiveMode, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   store::ActivityStore,
@@ -50,7 +50,8 @@ use super::{
 };
 use crate::{private_file::PrivateFile, supervisor::Supervised};
 
-/// Transcript entries are written at least this often while the CLI prints…
+/// Transcript entries are written at least this often while the CLI prints, and a request that came to the person
+/// by Autopilot's rules looks this often whether its run dropped to Manual…
 const FLUSH_INTERVAL: Duration = Duration::from_millis(250);
 /// …or as soon as this many are waiting.
 const FLUSH_BATCH: usize = 64;
@@ -192,6 +193,9 @@ pub(in super::super) struct Worker {
   pub(in super::super) answers: mpsc::UnboundedReceiver<QuestionAnswer>,
   /// Where the agent's commands run and may write, which classifies the commands it asks about.
   pub(in super::super) scope: CommandScope,
+  /// The run's roots, which Autopilot answers its requests by; `None` when they could not be read, so that nothing
+  /// counts as inside.
+  pub(in super::super) roots: Option<RunRoots>,
   /// The agent profile of the step, which Always allow of a command adds to.
   pub(in super::super) profile: Option<ResourceId>,
   /// The checks the step is offered, whose access rules decide whether a `run_check` call may be approved similar
@@ -234,6 +238,9 @@ pub(super) struct Watch {
   pause_requested: bool,
   /// The approval waiting for a person, and the call it answers.
   pub(super) approval: Option<(PendingToolApproval, Awaiting)>,
+  /// The waiting approval came to the person by Autopilot's rules: should the run drop to Manual, Manual's rules look
+  /// at it again ([`Worker::recheck_mode`]).
+  pub(super) asked_in_autopilot: bool,
   /// The question the agent waits on in its turn, and the request or call its answers go to.
   pub(super) question: Option<(QuestionRequest, AwaitingAnswer)>,
 
@@ -278,6 +285,7 @@ impl Watch {
       after_command: None,
       pause_requested: false,
       approval: None,
+      asked_in_autopilot: false,
       question: None,
       approved_calls: HashSet::new(),
       steering: steer::Steering::default(),
@@ -298,6 +306,11 @@ impl Watch {
       .as_ref()
       .map_or(ApprovalMode::Manual, |launch| launch.permissions().approval_mode());
     self.db.approval_mode(self.invocation.run, profile)
+  }
+
+  /// Whether Autopilot answers this agent's requests now: the run is in it, and its own *Stop* did not take it back.
+  pub(super) fn in_autopilot(&self) -> Result<bool, StoreError> {
+    Ok(self.approval_mode()?.is_autopilot() && self.db.run_auto_approve(self.invocation.run)? != Some(false))
   }
 
   /// Ready once a call the relay holds for a person can no longer be answered: a Claude Code call waiting
@@ -347,6 +360,13 @@ impl Worker {
   /// Whether a native agent does the work.
   pub(super) const fn is_native(&self) -> bool {
     matches!(self.driver, Driver::Native(_))
+  }
+
+  /// The worker's regular beat: what waits is written, and a request Autopilot brought to the person is looked at
+  /// again should its run have dropped to Manual ([`Worker::recheck_mode`]).
+  async fn tick(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    self.flush(watch)?;
+    self.recheck_mode(watch).await
   }
 
   /// Follows the agent until it ends, then tells the run how it ended, once the reviews it started have

@@ -37,7 +37,7 @@ impl Worker {
           Some(NativeUpdate::Ended(end)) => return self.finish_native(watch, end),
           None => return self.finish_native(watch, Err("the native agent ended without saying how".to_owned())),
         },
-        _ = flush.tick() => self.flush(&mut watch)?,
+        _ = flush.tick() => self.tick(&mut watch).await?,
         decision = self.decisions.recv(), if deciding => match decision {
           Some(decision) => self.decide(&mut watch, decision).await?,
           None => deciding = false,

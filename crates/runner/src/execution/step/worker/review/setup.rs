@@ -23,7 +23,8 @@ use orchester_core::{
     ApprovalSubject,
     review::{
       AutoReview, HoldRules, PushFacts, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold,
-      ReviewInput, ReviewSpend, Reviewed, ReviewerKind, resolve_reviewer, review_hold, review_request,
+      ReviewInput, ReviewSpend, Reviewed, ReviewerKind, RootsQuestion, resolve_reviewer, review_hold, review_request,
+      review_roots,
     },
   },
   secret::{SecretValue, SecretVault},
@@ -147,6 +148,8 @@ pub(super) struct ReviewJob {
   pub(super) ignored: Vec<PathBuf>,
   /// Codex asks to run the command outside its sandbox.
   pub(super) escalation: bool,
+  /// Autopilot's question about the run's roots, asked instead of Manual's whether to approve.
+  pub(super) roots: Option<RootsQuestion>,
   pub(super) input: Result<ReviewInput, ReviewHold>,
   pub(super) runtime: Handle,
   pub(super) timeout: Duration,
@@ -209,6 +212,7 @@ impl ReviewerSetup {
       push,
       ignored,
       escalation,
+      roots,
       input,
       runtime,
       timeout,
@@ -225,10 +229,13 @@ impl ReviewerSetup {
       escalation,
       build_output: &ignored,
     };
-    let rules = (&subject, &hold_rules);
+    let ask = move |reviewer: Option<&dyn RequestReviewer>| match roots {
+      Some(question) => review_roots(reviewer, (&subject, question, &hold_rules), input),
+      None => review_request(reviewer, (&subject, &hold_rules), input),
+    };
     match self {
-      Self::Missing => review_request(None, rules, input),
-      Self::Unreachable { model } => review_request(Some(&Unreachable { model }), rules, input),
+      Self::Missing => ask(None),
+      Self::Unreachable { model } => ask(Some(&Unreachable { model })),
       Self::Native {
         client, model, effort, ..
       } => {
@@ -240,7 +247,7 @@ impl ReviewerSetup {
           timeout,
           stop,
         };
-        review_request(Some(&reviewer), rules, input)
+        ask(Some(&reviewer))
       }
       Self::Cli {
         kind,
@@ -254,7 +261,7 @@ impl ReviewerSetup {
           Ok(place) => place,
           Err(error) => {
             tracing::warn!(%error, "cannot make the folder a review runs in");
-            return review_request(Some(&Unreachable { model }), rules, input);
+            return ask(Some(&Unreachable { model }));
           }
         };
         let runner = SupervisedRunner { runtime, timeout, stop };
@@ -263,7 +270,7 @@ impl ReviewerSetup {
           ReviewerKind::Codex => Box::new(CodexReviewer::new(&executable, (model, effort), folder, runner)),
           _ => Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner)),
         };
-        let done = review_request(Some(reviewer.as_ref()), rules, input);
+        let done = ask(Some(reviewer.as_ref()));
         // The folder goes only after the reviewer, which runs in it, has ended.
         drop(place);
         done

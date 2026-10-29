@@ -17,7 +17,7 @@ use orchester_core::{
   permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
   resource::{AgentProfile, ModelId, VersionNumber},
   run::{
-    PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves,
+    CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves,
     review::{Review, ReviewHold},
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -93,6 +93,9 @@ pub struct ShownApproval {
   /// Auto mode's reviewer is judging it: it waits for the reviewer, not for the person, until the review ends (the
   /// runner stops a review after a minute and asks the person then).
   pub reviewing: bool,
+  /// Why it came to the person by the run's approval mode, as its card says it; `None` while the reviewer judges it
+  /// and for a request recorded before reasons were.
+  pub came_to_person: Option<CameToPerson>,
 }
 
 impl ShownApproval {
@@ -206,9 +209,12 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
   let task = run.as_ref().and_then(|run| db.task(run.task()).ok().flatten());
   // `.ok()`: an unreadable review only loses why auto mode left the request to the person.
   let review = db.tool_approval_review(approval.run, &approval.id).ok().flatten();
+  // `.ok()`: an unreadable reason only loses the card's words for why it came to the person.
+  let came_to_person = db.came_to_person(approval.run, &approval.id).ok().flatten();
   ShownApproval {
     review,
     reviewing,
+    came_to_person,
     provider,
     vendor: connection.as_ref().map(AgentConnection::vendor),
     model,

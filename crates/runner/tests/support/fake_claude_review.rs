@@ -41,6 +41,10 @@ pub fn review(args: &[String]) -> ExitCode {
   if prompt.contains("Give the task's story points.") {
     return estimate(&prompt);
   }
+  log_line(&format!(
+    "roots {}",
+    prompt.contains("does the request touch anything outside the roots")
+  ));
   if prompt.contains("Reviewer babbles") {
     println!("Sure, that looks fine to me.");
     return ExitCode::SUCCESS;
@@ -114,9 +118,6 @@ fn estimate(prompt: &str) -> ExitCode {
 
 /// Appends where the reviewer runs to the file `FAKE_REVIEW_LOG` names, if any.
 fn log_place(args: &[String]) {
-  let Some(log) = std::env::var_os("FAKE_REVIEW_LOG") else {
-    return;
-  };
   let cwd = std::env::current_dir().expect("a working folder");
   let empty = std::fs::read_dir(&cwd).is_ok_and(|mut entries| entries.next().is_none());
   let instructions = args
@@ -124,16 +125,22 @@ fn log_place(args: &[String]) {
     .find(|pair| pair[0] == "--system-prompt-file")
     .and_then(|pair| std::fs::read_to_string(&pair[1]).ok())
     .is_some_and(|text| text.contains("untrusted data"));
+  log_line(&format!(
+    "pid {}\ncwd {}\nempty {empty}\ninstructions {instructions}",
+    std::process::id(),
+    cwd.display()
+  ));
+}
+
+/// Appends `line` to the file `FAKE_REVIEW_LOG` names, if any.
+fn log_line(line: &str) {
+  let Some(log) = std::env::var_os("FAKE_REVIEW_LOG") else {
+    return;
+  };
   let mut file = std::fs::OpenOptions::new()
     .create(true)
     .append(true)
     .open(log)
     .expect("open the review log");
-  writeln!(
-    file,
-    "pid {}\ncwd {}\nempty {empty}\ninstructions {instructions}",
-    std::process::id(),
-    cwd.display()
-  )
-  .expect("write the review log");
+  writeln!(file, "{line}").expect("write the review log");
 }
