@@ -30,7 +30,10 @@ fn settings_mcp_listening_names_the_address_and_never_the_token() {
     !shown.everything().iter().any(|text| text.contains(&token)),
     "the token never shows unasked"
   );
-  assert!(shown.says("status-mcp", &format!("MCP 127.0.0.1:{port}")));
+  assert!(
+    shown.texts("status-mcp").is_none(),
+    "listening, the installed app's server is quiet in the bar"
+  );
   assert!(
     shown.link.input_gate().protecting(),
     "while the section shows, clients' window input is refused"
@@ -53,7 +56,7 @@ fn settings_mcp_port_taken_is_said_and_another_port_moves_the_server() {
   type_port(&mut shown, &next.to_string());
   shown.click("settings-mcp-use-port");
   shown.until("listening on the new port", |shown| {
-    shown.says("status-mcp", &format!("MCP 127.0.0.1:{next}"))
+    shown.texts("status-mcp").is_none() && shown.says("settings-mcp", &format!("127.0.0.1:{next}"))
   });
   assert!(shown.says("settings-mcp", &format!("127.0.0.1:{next}")));
   drop(holder);
@@ -86,8 +89,9 @@ fn settings_mcp_off_listens_nowhere_until_turned_on() {
     "Nothing listens while the server is off. The address and the token stay as they are."
   ));
   shown.click("settings-mcp-enabled-switch");
+  // Listening, the installed app's server is quiet in the bar.
   shown.until("listening again", |shown| {
-    shown.says("status-mcp", &format!("MCP 127.0.0.1:{port}"))
+    shown.texts("status-mcp").is_none() && shown.says("settings-mcp", &format!("127.0.0.1:{port}"))
   });
 }
 
@@ -167,8 +171,11 @@ fn settings_mcp_unreadable_token_offers_no_commands() {
 
 #[test]
 fn settings_mcp_status_popover_opens_over_the_bar_at_the_window_end() {
-  let mut shown = Shown::installed(free_port(), Arc::default());
-  shown.until("listening", Shown::listening);
+  // The installed app's server listening is quiet; a taken port shows the item.
+  let holder = TcpListener::bind(("127.0.0.1", 0)).expect("another program's port");
+  let port = holder.local_addr().expect("its address").port();
+  let mut shown = Shown::installed(port, Arc::default());
+  shown.until("port taken", |shown| shown.texts("status-mcp").is_some());
   shown.click("status-mcp");
   let [x, y, width, height] = shown.bounds("status-mcp-popover");
   let [bar_x, bar_y, bar_width, _] = shown.bounds("status-bar");
@@ -178,6 +185,7 @@ fn settings_mcp_status_popover_opens_over_the_bar_at_the_window_end() {
     12.0,
     "its end 12 from the window's (QqBCj)"
   );
+  drop(holder);
 }
 
 #[test]

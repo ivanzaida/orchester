@@ -148,20 +148,22 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
     .unwrap_or_default()
 }
 
-/// The item, or nothing when no server is in use.
+/// The item, or nothing when no server is in use or it is connected: connected is quiet, the health dot's card says
+/// it (`13 · Team server offline or signed out` `BfW9V`).
 pub fn item(ctx: &Ctx, facts: &ServerFacts, dispatch: &Dispatch) -> Option<Element> {
-  let (id, words, state) = match facts {
+  let (id, state) = match facts {
     ServerFacts::None => return None,
-    ServerFacts::One { id, name, state } => (Some(*id), one_words(ctx, name, *state), *state),
-    ServerFacts::Several { count, worst } => (None, several_words(ctx, *count, *worst), *worst),
+    ServerFacts::One { id, state, .. } => (Some(*id), *state),
+    ServerFacts::Several { worst, .. } => (None, *worst),
   };
   let (icon, color) = match state {
-    ServerState::Connected => (Icon::Server, PaletteColor::TextMuted),
+    ServerState::Connected => return None,
     ServerState::Connecting => (Icon::LoaderCircle, PaletteColor::TextMuted),
     ServerState::Offline => (Icon::WifiOff, PaletteColor::Warning),
     ServerState::SignedOut => (Icon::LogOut, PaletteColor::Warning),
     ServerState::CertificateChanged => (Icon::ShieldAlert, PaletteColor::Danger),
   };
+  let words = words(ctx, facts)?;
   let route = Route::Orchester(id.map_or_else(OrchesterView::default, OrchesterView::server));
   Some(
     pressed("status-server", go(dispatch, route))
@@ -171,6 +173,15 @@ pub fn item(ctx: &Ctx, facts: &ServerFacts, dispatch: &Dispatch) -> Option<Eleme
       .child(label(&words, color))
       .into(),
   )
+}
+
+/// What the item, or the health dot's card, says of the servers; nothing when none is in use.
+pub(super) fn words(ctx: &Ctx, facts: &ServerFacts) -> Option<String> {
+  match facts {
+    ServerFacts::None => None,
+    ServerFacts::One { name, state, .. } => Some(one_words(ctx, name, *state)),
+    ServerFacts::Several { count, worst } => Some(several_words(ctx, *count, *worst)),
+  }
 }
 
 fn one_words(ctx: &Ctx, name: &str, state: ServerState) -> String {
