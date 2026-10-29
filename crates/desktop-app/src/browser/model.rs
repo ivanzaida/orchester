@@ -246,13 +246,12 @@ fn grouped(tabs: Vec<(Option<Arc<str>>, StripTab)>) -> Vec<StripTab> {
 }
 
 /// The tab the window shows: `wanted`, asked for by the person or a request, while it is open; else the tab `shown`,
-/// unless the window follows its agent to a new tab of the same run, which it does only while the person has not used
-/// the window for [`PERSON_HOLD`]; else the tab shown `last`; else the first.
+/// unless an agent of its run just `opened` a tab, which the window follows only while the person has not used it for
+/// [`PERSON_HOLD`]; else the tab shown `last`; else the first.
 pub fn tab_to_show(
   strip: &Strip,
   (wanted, shown, last): (Option<&BrowserTabId>, Option<&BrowserTabId>, Option<&BrowserTabId>),
-  marks: &Marks,
-  now: Instant,
+  (opened, marks, now): (&[BrowserTabId], &Marks, Instant),
 ) -> Option<BrowserTabId> {
   let open = |tab: Option<&BrowserTabId>| tab.filter(|tab| strip.find(tab).is_some()).cloned();
   if let Some(wanted) = open(wanted) {
@@ -267,9 +266,11 @@ pub fn tab_to_show(
       _ => None,
     };
     let followed = run.filter(|_| idle).and_then(|run| {
-      strip.agents.iter().rev().find(|tab| {
-        tab.indicator == Some(Indicator::New) && matches!(tab.owner, Owner::Run { run: of, .. } if of == run)
-      })
+      strip
+        .agents
+        .iter()
+        .rev()
+        .find(|tab| opened.contains(&tab.id) && matches!(tab.owner, Owner::Run { run: of, .. } if of == run))
     });
     return Some(followed.map_or(shown, |tab| tab.id.clone()));
   }

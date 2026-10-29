@@ -1,8 +1,7 @@
 //! Plays a [`Fixture`] into the session's Browser window state, as the project's runner would report its browser: the
-//! scene's tabs, the tabs the person looked at shown one after the other, the page's frame and what else the runner
-//! reports. An agent starting to browse opens the window, as the setting lets it by default. While the window is open
-//! the agent's action is reported again, so it stays *acting*, and a runner that reports its own browser over the
-//! fixture's is played over again.
+//! scene's tabs with the one shown, the page's frame and what else the runner reports. An agent starting to browse
+//! opens the window, as the setting lets it by default. While the window is open the agent's action is reported again,
+//! so it stays *acting*, and a runner that reports its own browser over the fixture's is played over again.
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -47,13 +46,8 @@ pub fn play(
     let root = fixture.project.clone();
     let feed = |event: BrowserEvent| window.receive_for_test(&root, &name, event);
     other_project(&window, &root);
-    feed(BrowserEvent::Changed(with_shown(&scene.reported, None)));
-    open(&window, &root, runs.first().copied(), &feed).await;
-    for tab in &scene.looked_at {
-      feed(BrowserEvent::Changed(with_shown(&scene.reported, Some(tab))));
-      sleep(STEP).await;
-    }
     feed(BrowserEvent::Changed(scene.reported.clone()));
+    open(&window, &root, runs.first().copied(), &feed).await;
     let height = if fixture.state == BrowserState::Acting {
       PAGE_HEIGHT - ACTIVITY_HEIGHT
     } else {
@@ -164,11 +158,4 @@ fn other_project(window: &BrowserWindow, root: &Path) {
       mode: BrowserMode::Headless,
     }),
   );
-}
-
-fn with_shown(reported: &Reported, shown: Option<&BrowserTabId>) -> Reported {
-  Reported {
-    shown: shown.cloned(),
-    ..reported.clone()
-  }
 }

@@ -192,25 +192,31 @@ fn browser_shows_the_tab_asked_for_and_follows_an_agent_only_while_left_alone() 
   let mut marks = Marks::default();
   marks.seen(&id("A"));
   let shown = strip(&view, &owners, &marks, now);
+  let opened = [id("B")];
   assert_eq!(
-    tab_to_show(&shown, (Some(&id("P")), Some(&id("A")), None), &marks, now),
+    tab_to_show(&shown, (Some(&id("P")), Some(&id("A")), None), (&opened, &marks, now)),
     Some(id("P")),
     "a tab asked for wins"
   );
   assert_eq!(
-    tab_to_show(&shown, (None, Some(&id("A")), None), &marks, now),
+    tab_to_show(&shown, (None, Some(&id("A")), None), (&opened, &marks, now)),
     Some(id("B")),
-    "left alone, the window follows the agent to its run's new tab"
+    "left alone, the window follows the agent to the tab its run just opened"
+  );
+  assert_eq!(
+    tab_to_show(&shown, (None, Some(&id("A")), None), (&[], &marks, now)),
+    Some(id("A")),
+    "a tab that was there before, looked at or not, does not pull the window"
   );
   marks.used(&id("A"), now);
   let shown = strip(&view, &owners, &marks, now);
   assert_eq!(
-    tab_to_show(&shown, (None, Some(&id("A")), None), &marks, now),
+    tab_to_show(&shown, (None, Some(&id("A")), None), (&opened, &marks, now)),
     Some(id("A")),
     "while the person uses the window it stays"
   );
   assert_eq!(
-    tab_to_show(&shown, (Some(&id("gone")), None, Some(&id("B"))), &marks, now),
+    tab_to_show(&shown, (Some(&id("gone")), None, Some(&id("B"))), (&[], &marks, now)),
     Some(id("B")),
     "a tab that closed is not shown; the one shown last is"
   );

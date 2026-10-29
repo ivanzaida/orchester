@@ -4,6 +4,7 @@
 //! closes (`docs/design/browser.md`, "Projects", "The page").
 
 use std::{
+  collections::HashSet,
   path::{Path, PathBuf},
   sync::Arc,
   time::{Duration, Instant},
@@ -48,6 +49,8 @@ pub struct BrowserRoot {
   handled: Mutex<Option<u64>>,
   /// What the browser was last asked to screencast.
   sent: Mutex<Option<Sent>>,
+  /// The tabs of the project shown as the window last saw them: a tab not among them just opened.
+  known: Mutex<Option<(PathBuf, HashSet<BrowserTabId>)>>,
 }
 
 /// A tab asked for, by a request or the person, that is not shown yet.
@@ -96,6 +99,7 @@ impl Component for BrowserRoot {
       wanted: ctx.signal(Wanted::default()),
       handled: Mutex::new(None),
       sent: Mutex::new(None),
+      known: Mutex::new(None),
     }
   }
 
@@ -198,17 +202,23 @@ impl BrowserRoot {
     )
   }
 
-  /// Asks the browser to screencast the tab to show at the page area's size, or to stop.
+  /// Asks the browser to screencast the tab to show at the page area's size, or to stop. The tab shown is the one the
+  /// window last asked for while it is open: the runner reports it only once it switched.
   fn screencast(&self, ctx: &mut Ctx, showing: &Showing, now: Instant) {
     let window = ctx.window().info();
     let size = self.page_size(ctx);
     let Wanted(wanted) = self.wanted.get();
+    let opened = self.opened(showing);
+    let mut sent = self.sent.lock();
+    let asked = sent
+      .as_ref()
+      .filter(|sent| sent.project == *showing.project)
+      .and_then(|sent| sent.tab.as_ref().map(|(tab, _)| tab.clone()));
     let target = showing.view.as_ref().and_then(|view| {
       model::tab_to_show(
         &showing.strip,
-        (wanted.as_ref(), view.shown(), view.last_shown()),
-        &showing.marks,
-        now,
+        (wanted.as_ref(), asked.as_ref().or(view.shown()), view.last_shown()),
+        (&opened, &showing.marks, now),
       )
     });
     let headless = showing.mode() == BrowserMode::Headless && !window.is_minimized;
@@ -224,7 +234,6 @@ impl BrowserRoot {
       project: showing.project.as_ref().clone(),
       tab: target.filter(|_| headless).zip(viewport),
     };
-    let mut sent = self.sent.lock();
     if sent.as_ref() == Some(&next) {
       return;
     }
@@ -257,6 +266,18 @@ impl BrowserRoot {
       None => {}
     }
     *sent = Some(next);
+  }
+
+  /// The tabs of the project shown that opened since the window last saw its tabs; none when it first sees them.
+  fn opened(&self, showing: &Showing) -> Vec<BrowserTabId> {
+    let now: HashSet<BrowserTabId> = showing.strip.all().map(|tab| tab.id.clone()).collect();
+    let mut known = self.known.lock();
+    let opened = match known.as_ref() {
+      Some((project, before)) if project == showing.project.as_ref() => now.difference(before).cloned().collect(),
+      _ => Vec::new(),
+    };
+    *known = Some((showing.project.as_ref().clone(), now));
+    opened
   }
 
   /// The page area's size in logical pixels, once it was laid out; watched from now on.

@@ -1,5 +1,5 @@
-//! The tabs each QA state shows, after the board's frames: which runs own which pages, the tab shown, the tabs the
-//! person has looked at, and what else the runner reports (an agent's action, a dialog, a `<select>` list).
+//! The tabs each QA state shows, after the board's frames: which runs own which pages, the tab shown, and what else
+//! the runner reports (an agent's action, a dialog, a `<select>` list).
 
 use orchester_core::id::RunId;
 use orchester_ipc::browser::{
@@ -71,39 +71,36 @@ pub const RETRY_POLICY: ElementBox = ElementBox {
 /// What a QA state reports.
 pub struct Scene {
   pub reported: Reported,
-  /// The tabs to show before the one shown, so the window counts them looked at.
-  pub looked_at: Vec<BrowserTabId>,
   /// Reported once after the state, and again while the window is open.
   pub events: Vec<BrowserEvent>,
   /// What the page's `Max attempts` field holds.
   pub attempts: u32,
 }
 
-/// The scene of `state`, its agents' tabs owned by `runs` in turn.
+/// The scene of `state`, its agents' tabs owned by `runs` in turn. The window has looked at no agent's tab but the
+/// one it shows, so the others are *new* until the person shows them.
 pub fn scene(state: BrowserState, runs: &[RunId]) -> Scene {
   let run = |index: usize| TabOwner::Run {
     run: runs[index % runs.len().max(1)],
   };
   let mut tabs = Tabs::default();
   if runs.is_empty() || matches!(state, BrowserState::Empty | BrowserState::NotFound) {
-    return tabs.scene(None, Vec::new(), 5);
+    return tabs.scene(None, 5);
   }
   let shown = tabs.add(run(0), ORDERS);
-  let reqwest = tabs.add(run(0), REQWEST);
-  // An agent's tab the person has not looked at: its dot is white.
+  tabs.add(run(0), REQWEST);
   if state != BrowserState::Acting {
     tabs.add(run(0), RETRY_AFTER);
   }
   let deliveries = tabs.add(run(1), DELIVERIES);
-  let mut looked = vec![reqwest, deliveries.clone()];
   let extra = match state {
     BrowserState::Many => 4,
     BrowserState::Overflow => 14,
     _ => 0,
   };
-  for index in 0..extra {
-    looked.push(tabs.add(run(2 + index / 3), MORE[index % MORE.len()]));
-  }
+  let more: Vec<BrowserTabId> = (0..extra)
+    .map(|index| tabs.add(run(2 + index / 3), MORE[index % MORE.len()]))
+    .collect();
   let yours = tabs.add(TabOwner::Person, ORDERS);
   tabs.add(TabOwner::Person, PULLS);
   let acting = |tab: BrowserTabId, summary: &str, element: Option<ElementBox>| BrowserEvent::AgentActed {
@@ -123,14 +120,15 @@ pub fn scene(state: BrowserState, runs: &[RunId]) -> Scene {
     ),
     BrowserState::Dialog => (yours.clone(), vec![confirm(yours)], 5),
     BrowserState::Select => (yours.clone(), vec![retry_policy(yours)], 5),
-    BrowserState::Overflow => {
-      let middle = looked[looked.len() / 2].clone();
-      looked.push(shown);
-      (middle, vec![acting(deliveries, "clicked Retry", None)], 5)
-    }
+    // A tab in the middle of the strip, so it scrolls to show it (`01e` `cmofl`).
+    BrowserState::Overflow => (
+      more[more.len() / 2].clone(),
+      vec![acting(deliveries, "clicked Retry", None)],
+      5,
+    ),
     _ => (shown, vec![acting(deliveries, "clicked Retry", None)], 5),
   };
-  let mut scene = tabs.scene(Some(shown), looked, attempts);
+  let mut scene = tabs.scene(Some(shown), attempts);
   if state == BrowserState::Headed {
     scene.reported.mode = BrowserMode::Headed;
   }
@@ -154,14 +152,13 @@ impl Tabs {
     id
   }
 
-  fn scene(self, shown: Option<BrowserTabId>, looked_at: Vec<BrowserTabId>, attempts: u32) -> Scene {
+  fn scene(self, shown: Option<BrowserTabId>, attempts: u32) -> Scene {
     Scene {
       reported: Reported {
         tabs: self.0,
         shown,
         mode: BrowserMode::Headless,
       },
-      looked_at,
       events: Vec::new(),
       attempts,
     }
