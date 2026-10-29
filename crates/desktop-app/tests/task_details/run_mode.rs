@@ -121,3 +121,34 @@ fn run_mode_switch_to_manual_narrows_the_run_updates_the_chip_and_adds_the_conve
   let detail = page.text(&format!("{ROW}-detail"));
   assert!(detail.starts_with("by you · "), "{detail}");
 }
+
+#[test]
+fn run_mode_seeded_approval_modes_reach_every_chip_for_qa() {
+  let mut page = Page::seeded("approval-modes");
+  let key = page.key("run in Autopilot");
+  page.open(&key, TaskTab::Summary, CHIP);
+  assert_eq!(page.text(CHIP), "Autopilot");
+  assert_eq!(page.text(SWITCH), "Switch to Manual for this run");
+  let key = page.key("run in Manual by its profile");
+  page.open(&key, TaskTab::Summary, CHIP);
+  assert_eq!(page.text(CHIP), "Manual · profile");
+  let key = page.key("run switched to Manual by you");
+  page.open(&key, TaskTab::Summary, CHIP);
+  assert_eq!(page.text(CHIP), "Manual · this run");
+  assert!(!page.has(SWITCH));
+  page.open(&key, TaskTab::Conversation, ROW);
+  let detail = page.text(&format!("{ROW}-detail"));
+  assert!(
+    detail.starts_with("by you · ") && detail.ends_with(" · Builder’s profile stays on Autopilot"),
+    "{detail}"
+  );
+}
+
+#[test]
+fn run_mode_seeded_project_without_autopilot_reads_manual_project() {
+  let mut page = Page::seeded("approval-modes-project");
+  let key = page.key("run in Manual by the project");
+  page.open(&key, TaskTab::Summary, CHIP);
+  assert_eq!(page.text(CHIP), "Manual · project");
+  assert!(!page.has(SWITCH));
+}
