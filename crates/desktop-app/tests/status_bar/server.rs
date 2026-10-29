@@ -62,7 +62,7 @@ fn status_bar_server_item_follows_the_connection() {
     next: Instant::now(),
   };
   for (connection, words, state) in [
-    (Some(Connection::Connected), "Kontur team", ServerState::Connected),
+    (Some(Connection::Connected), "", ServerState::Connected),
     (Some(reconnecting), "Kontur team · connecting", ServerState::Connecting),
     (Some(offline), "Kontur team offline", ServerState::Offline),
     (
@@ -73,15 +73,15 @@ fn status_bar_server_item_follows_the_connection() {
   ] {
     let servers = ServerFacts::of(&[entry("Kontur team", connection)], None);
     assert!(matches!(servers, ServerFacts::One { state: shown_state, .. } if shown_state == state));
-    assert_eq!(shown(servers), words);
+    assert_eq!(shown(servers), words, "connected is quiet");
   }
   assert_eq!(shown(ServerFacts::of(&[], None)), "", "no server, no item");
 }
 
 #[test]
 fn status_bar_server_item_names_the_projects_server_or_counts_two() {
-  let kontur = entry("Kontur team", Some(Connection::Connected));
-  let lab = entry("Lab", Some(Connection::SignedOut));
+  let kontur = entry("Kontur team", Some(Connection::SignedOut));
+  let lab = entry("Lab", Some(Connection::Connected));
   let both = ServerFacts::of(&[kontur.clone(), lab.clone()], None);
   assert_eq!(
     both,
@@ -92,7 +92,7 @@ fn status_bar_server_item_names_the_projects_server_or_counts_two() {
   );
   assert_eq!(shown(both), "2 servers · one signed out");
   let linked = ServerFacts::of(&[kontur.clone(), lab], Some(kontur.stored.id));
-  assert_eq!(shown(linked.clone()), "Kontur team");
+  assert_eq!(shown(linked.clone()), "Kontur team · signed out");
   let mut bar = Bar::of(BarFacts {
     servers: linked,
     ..facts(None)

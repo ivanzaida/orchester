@@ -101,6 +101,7 @@ pub fn item(ctx: &mut Ctx, facts: &CloudFacts, dispatch: &Dispatch) -> Option<El
       .to_string(),
     body: ctx.t("shell.cloud.body").to_string(),
     hint: ctx.t("shell.cloud.hint").to_string(),
+    note: None,
   };
   Some(hover_card(ctx, anchor, card))
 }

@@ -3,6 +3,7 @@
 //! checkpoints) and records them in the project database.
 
 pub mod approval_relay;
+pub mod error_reports;
 pub mod execution;
 mod git;
 pub mod lock;

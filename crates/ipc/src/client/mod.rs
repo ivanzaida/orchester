@@ -18,7 +18,7 @@ use tokio::{
 
 pub use self::process::RunnerProcess;
 use crate::{
-  ClientStream, Endpoint, Event, IpcError, Request,
+  ClientStream, Endpoint, ErrorReports, Event, IpcError, Request,
   frame::{FrameReader, FrameWriter},
   handshake, server_process_id,
 };
@@ -76,15 +76,19 @@ pub struct RunnerClient {
 
 impl RunnerClient {
   /// Starts `runner_exe` for the project at `project_root` (see [`RunnerProcess`] for how it is
-  /// ended), connects to it and performs the handshake. A start that fails for a
-  /// [transient](LaunchError::is_transient) reason is tried once more, after the first runner has
-  /// ended, so two runners never hold the project.
-  pub async fn launch(runner_exe: &Path, project_root: &Path) -> Result<Self, LaunchError> {
+  /// ended), connects to it and performs the handshake. The runner sends error reports only with
+  /// `reports` ([`ErrorReports`]). A start that fails for a [transient](LaunchError::is_transient)
+  /// reason is tried once more, after the first runner has ended, so two runners never hold the project.
+  pub async fn launch(
+    runner_exe: &Path,
+    project_root: &Path,
+    reports: Option<&ErrorReports>,
+  ) -> Result<Self, LaunchError> {
     let endpoint = Endpoint::for_project(project_root)?;
-    match Self::attempt(runner_exe, project_root, &endpoint).await {
+    match Self::attempt(runner_exe, project_root, reports, &endpoint).await {
       Err(Failed { error, ended: true }) if error.is_transient() => {
         tracing::warn!(project = %project_root.display(), %error, "the runner did not start; starting it once more");
-        Self::attempt(runner_exe, project_root, &endpoint)
+        Self::attempt(runner_exe, project_root, reports, &endpoint)
           .await
           .map_err(|failed| failed.error)
       }
@@ -93,8 +97,14 @@ impl RunnerClient {
   }
 
   /// One start of the runner; a runner that fails to start is ended before this returns.
-  async fn attempt(runner_exe: &Path, project_root: &Path, endpoint: &Endpoint) -> Result<Self, Failed> {
-    let mut process = RunnerProcess::spawn(runner_exe, project_root).map_err(|error| Failed { error, ended: true })?;
+  async fn attempt(
+    runner_exe: &Path,
+    project_root: &Path,
+    reports: Option<&ErrorReports>,
+    endpoint: &Endpoint,
+  ) -> Result<Self, Failed> {
+    let mut process =
+      RunnerProcess::spawn(runner_exe, project_root, reports).map_err(|error| Failed { error, ended: true })?;
     let error = match open(endpoint, &mut process).await {
       Ok((commands, events)) => {
         return Ok(Self {

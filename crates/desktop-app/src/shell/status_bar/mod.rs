@@ -1,22 +1,26 @@
-//! The status bar (`Status bar` `sMpGe` of `q9mf0k`; handover §3.3), for the active tab's project: on the
-//! left the project, its folder in the name's tooltip, the runner and the activity slot; on the right the project's
-//! counts, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
-//! the team server's item (`X39PHh`), Orchester Cloud while it cannot be reached (`ZSB6h`), the app's MCP server and
-//! the version. Today's tokens show in the sidebar's usage card instead (`Hub pages` `ZRBS5`). The sign-in gate has a
-//! bar of its own ([`gate()`]).
-//! Every item shows only measured data. A screen outside a project shows the activity and the app's items
-//! only, its events named by their project. A startup screen's bar has the version only.
+//! The status bar (`Status bar` `sMpGe` of `q9mf0k`, redesigned in `Status bar · redesign` `bZVXG`; handover §3.3),
+//! for the active tab's project. Calm, it holds two things: on the left the activity slot (the latest event or the
+//! operation under way), at the right end the health dot, whose card on hover holds the runner, the agents, the
+//! queue, the team server, the MCP server and the version (`health`). Everything else shows only while it needs the
+//! person: on the left the runner while it is not online, a failure nobody opened, tasks that could not be read and
+//! runs interrupted when Orchester closed; on the right, in this order, runs that auto-approve with *Stop*, the plan
+//! limits, a team server that is not connected (`X39PHh`), Orchester Cloud while it cannot be reached (`ZSB6h`),
+//! whether agents may control the window and the MCP server unless the installed app's server listens, then the
+//! dot. The project's name, its counts and the waiting requests show elsewhere (the switcher, the health card,
+//! *Needs you* in the title bar), today's tokens on the sidebar's usage card. The sign-in gate has a bar of its own
+//! ([`gate()`]). Every item shows only measured data. A screen outside a project shows the activity and the app's
+//! items only, its events named by their project. A startup screen's bar has the version only.
 //!
 //! [`StatusBar`] gathers what the bar shows from the window ([`BarFacts`]) and does what its items ask
 //! (`act`); [`StatusBarView`] draws it, so a test can hand it any state.
 
 mod act;
 mod activity;
-mod approvals;
+mod auto_approving;
 mod cloud;
-mod counts;
 mod facts;
 mod gate;
+mod health;
 mod item;
 mod mcp;
 mod operations;
@@ -29,11 +33,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, StreamEmitter},
-    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Row, Spacer},
   core::ElementRef,
-  layout::{Alignment, layout_kind::ShrinkLimit},
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{connection::plan_limits::PlanReadings, id::ProjectId};
@@ -43,12 +47,13 @@ use orchester_workspace::{
     bar::{self, ActivitySlot},
   },
   recovery::RecoveryState,
+  runner::state::RunnerState,
   tasks::outside::Outside,
 };
 
 use self::{
   act::Stopper,
-  item::{frame, give_way, glyph, item, label},
+  item::{give_way, glyph, item, label},
 };
 pub use self::{
   cloud::CloudFacts,
@@ -68,8 +73,7 @@ use crate::{
     accounts::{self, Accounts},
     plan_limits as readings,
   },
-  theme::ExtraColor,
-  ui::{icon::Icon, tooltip::Truncated},
+  ui::icon::Icon,
 };
 
 /// `Status bar` height.
@@ -163,14 +167,12 @@ fn shown(projects: &Projects, project: ProjectId, recovery: &RecoveryState) -> O
   let read_failure = first_failure.or_else(|| feed.stale.get().map(ReadFailure::Again));
   let facts = ProjectFacts {
     id: project,
-    name: open.project.name().as_str().to_owned(),
     repo_root: open.repo_root,
     runner,
     tasks,
     read_failure,
     undecided_runs: recovery.undecided(project),
     limits: Vec::new(),
-    revision: feed.revision.get(),
   };
   Some((facts, feed))
 }
@@ -297,21 +299,10 @@ impl Component for StatusBarView {
     let slot = bar::activity_slot(project.map(|project| &project.runner.state), &facts.log);
     let mut left = Vec::new();
     let mut right = Vec::new();
-    if let Some(project) = project {
-      left.push(project_item(ctx, project));
+    // Online, the health dot stands for the runner; in any other state it says so first (`vNIo3`, `a7yNee`).
+    if let Some(project) = project.filter(|project| project.runner.state != RunnerState::Online) {
       left.extend(runner::runner(ctx, &project.runner, &dispatch));
-      right.extend(counts::counts(ctx, project, &dispatch));
     }
-    // A runner problem comes first: nothing can be answered without the runner.
-    let waiting = match (project, &slot) {
-      (_, ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
-      (Some(project), _) => project.tasks.as_ref().map_or_else(Vec::new, |tasks| {
-        approvals::approvals(ctx, project, &tasks.pending_tool_approvals, &dispatch)
-      }),
-    };
-    // A run that waits for the person's decision keeps its item beside the waiting requests; any other
-    // activity gives way to them.
-    let beside = waiting.is_empty() || slot.beside_approvals();
     // Tasks that could not be read are the project's own unresolved failure: they take the slot until a
     // reading succeeds. Then the runs the previous session left interrupted stay pinned until the person
     // decides about them (`uZTnL`), also while the runner starts; only a runner problem comes first.
@@ -322,15 +313,13 @@ impl Component for StatusBarView {
       (Some(failure), _, ActivitySlot::Activity(_)) => left.extend(activity::read_failure(ctx, failure, &dispatch)),
       (None, Some(project), _) => left.extend(recovery::pinned(ctx, project, &dispatch)),
       (_, _, ActivitySlot::Hidden) => {}
-      (None, None, ActivitySlot::Activity(slot)) if beside => {
+      (None, None, ActivitySlot::Activity(slot)) => {
         left.extend(activity::activity(ctx, (slot, &facts.log), project, &dispatch));
       }
-      (None, None, ActivitySlot::Activity(_)) => {}
     }
-    // The requests and the runs that answer their own follow the counts (`xommZ`).
-    right.extend(waiting);
+    // The right group in the design's order (`18 · Several at once` `y0SDOa`), the dot always last.
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
-      right.extend(approvals::auto_approving(
+      right.extend(auto_approving::auto_approving(
         ctx,
         &tasks.auto_approving,
         &facts.stopping,
@@ -342,7 +331,8 @@ impl Component for StatusBarView {
     }
     right.extend(server::item(ctx, &facts.servers, &dispatch));
     right.extend(cloud::item(ctx, &facts.cloud, &dispatch));
-    right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
+    right.extend(mcp::app_items(ctx, (&facts.mcp, &self.bar), &dispatch));
+    right.extend(health::health(ctx, &facts, &dispatch));
     Row::new()
       .id("status-bar")
       .ref_element(self.bar.clone())
@@ -364,50 +354,9 @@ impl Component for StatusBarView {
   }
 }
 
-/// *Kontur* (`ZQiMf`), its folder in a mono tooltip from the item's start while the pointer rests on it,
-/// the item in the `hover` fill with its words in `text_secondary` (`f5nEqj`, `C9Phsz` in `z61KIT`); once
-/// the name is cut, the tooltip says both.
-fn project_item(ctx: &mut Ctx, project: &ProjectFacts) -> Element {
-  let folder = project.repo_root.display().to_string();
-  if !crate::ui::local_metadata::allowed(
-    ctx,
-    Some(project.repo_root.clone()),
-    vec![folder.clone(), project.name.clone()],
-    project.revision,
-  ) {
-    return label(&ctx.t("local_integration.hiddenMetadata"), PaletteColor::TextMuted).into();
-  }
-  let both = ctx.t_args(
-    "shell.status.projectCut",
-    [("name", project.name.as_str()), ("folder", folder.as_str())],
-  );
-  let name = Truncated::new("status-project-text", project.name.as_str(), TypographyStyle::Caption)
-    .color(PaletteColor::TextMuted)
-    .hint(folder, both)
-    .mono()
-    .framed(PaletteColor::TextSecondary, |row, hovered| {
-      let row = frame(row).rounded(RadiusSize::Sm);
-      if hovered {
-        row
-          .background(ExtraColor::Hover.role())
-          .child(glyph(Icon::HardDrive, PaletteColor::TextSecondary))
-      } else {
-        row.child(glyph(Icon::HardDrive, PaletteColor::TextMuted))
-      }
-    })
-    .render(ctx);
-  Row::new()
-    .id("status-project")
-    .flex_shrink(1.0)
-    .shrink_order(give_way::PROJECT)
-    .shrink_limit(ShrinkLimit::Content)
-    .child(name)
-    .into()
-}
-
 /// The status bar of a startup screen (`Status bar` `xmswq` of `N0Lpc`): the version only.
 pub fn version_only(ctx: &mut Ctx) -> Element {
-  let version = ctx.t_args("shell.status.version", [("version", env!("CARGO_PKG_VERSION"))]);
+  let version = gate::version(ctx);
   Row::new()
     .id("status-bar")
     .width(Dimension::Pct(100.0))

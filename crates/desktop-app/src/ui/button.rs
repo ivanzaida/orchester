@@ -132,6 +132,8 @@ pub struct ActionButton {
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
   compact: bool,
+  /// 10 at each side instead of 12 (`SHKod`).
+  tight: bool,
   /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
   small: bool,
   /// 36 high with a 13/500 label.
@@ -165,6 +167,7 @@ impl ActionButton {
       focus: Focus::Pointer,
       fill: false,
       compact: false,
+      tight: false,
       small: false,
       large: false,
       bounded: false,
@@ -271,6 +274,13 @@ impl ActionButton {
     self
   }
 
+  /// 10 at each side instead of 12: a compact action of the status bar (`Button/Size/Compact` `SHKod` in
+  /// `Status bar · redesign`).
+  pub fn tight(mut self) -> Self {
+    self.tight = true;
+    self
+  }
+
   /// 24 high, its icon and label as a button's: an action inside a command row (`Command row` `PEnj5`).
   pub fn small(mut self) -> Self {
     self.small = true;
@@ -364,9 +374,10 @@ impl ActionButton {
     }
   }
 
-  /// The room at each side of its content: 12, a large button's 16, or 14 when it is not primary.
+  /// The room at each side of its content: 12, a tight one's 10, a large button's 16, or 14 when it is not primary.
   fn side(&self) -> SpacingSize {
     match (self.large, self.kind) {
+      (false, _) if self.tight => ExtraSpacing::Loose.role(),
       (false, _) => SpacingSize::Md,
       (true, ButtonKind::Primary) => SpacingSize::Lg,
       (true, _) => ExtraSpacing::Inset.role(),
