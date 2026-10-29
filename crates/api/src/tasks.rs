@@ -243,7 +243,7 @@ pub struct TaskChanges {
   #[serde(default, with = "wire::optional_actor")]
   pub actor: Option<ChangeActor>,
 }
-fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+pub(crate) fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
   T::deserialize(d).map(Some)
 }
 
