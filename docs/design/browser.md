@@ -1,7 +1,9 @@
 # Browser for agents
 
-Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29. P1 (the
-core rules, ORC-355) is built; the runner, the window and the settings are not yet.
+Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
+port and keep-running decisions (11, 12) the same day. P1 (the core rules, ORC-355) is built, and P2's first half
+(ORC-358: finding and starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map);
+the tools, the window and the settings are not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -20,9 +22,8 @@ time.
    shows one project's pages at a time from CDP screencast frames and sends the person's mouse, wheel, keys and text
    back through CDP. To the person it is part of Orchester, as Claude desktop's browser pane is part of Claude.
 3. **One browser per project, owned by its runner.** The runner starts it on the first browser tool call of any of
-   the project's runs, with the project's own browser profile, and stops it when the runner exits or after 15
-   minutes without a run or the *Browser* window using it. Sign-ins persist in that profile across runs and app
-   restarts, apart from the person's own browser.
+   the project's runs, with the project's own browser profile, and keeps it running until the runner exits
+   (decision 12). Sign-ins persist in that profile across runs and app restarts, apart from the person's own browser.
 4. **Only the runner talks to Chromium.** The app gets frames and sends the person's input through the runner's IPC
    channel (`orchester-ipc`). The app never opens a CDP connection, and a future server's runner can be watched the
    same way.
@@ -46,6 +47,16 @@ time.
 10. **Read-only steps get the browser** (the person, 2026-10-29, as drafted): a step that only reads the repository
     (Review, Explorer) gets the browser tools with the same policy as a step that may write, when its profile has
     *Browser* on and the step has network access.
+11. **CDP over a port, not a pipe** (the person, 2026-10-29). The browser listens with `--remote-debugging-port=0` on
+    127.0.0.1, on a free port it picks and writes into `DevToolsActivePort` in the project's own profile folder, where
+    the runner reads it back. No `unsafe` module: `--remote-debugging-pipe` would need inherited handles 3 and 4 on
+    both platforms. Another process of the same user can reach the port, which opens nothing it could not already
+    read from the profile on disk (*Connection and dependency*).
+12. **The browser keeps running until the runner exits** (the person, 2026-10-29): from its first use, with no idle
+    stop. It ends with the runner: on Windows by its kill-on-close Job Object, however the runner ends; on macOS the
+    runner closes it (`Browser.close`, then its process group) as it exits. Known gap on macOS, as for agents
+    (`AGENTS.md`, rule 0): a runner killed with SIGKILL, or one that aborts, leaves the browser running; the next start
+    on that profile then fails while the old browser holds it, and says so.
 
 Decision 3's *one browser profile per project* is the person's too (2026-10-29): the project's runs share its
 sign-ins, and the window's project switcher relies on it.
@@ -143,9 +154,14 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
 
 ### Finding the browser
 
-- Windows: Microsoft Edge (always installed), then Google Chrome, from the registry's `App Paths` and the usual
-  install folders.
-- macOS: Google Chrome, Microsoft Edge, Brave, Chromium in `/Applications` and `~/Applications`.
+- Windows: Microsoft Edge (always installed), then Google Chrome, from the registry's `App Paths` (the machine's,
+  then the person's, read with `%SystemRoot%\System32\reg.exe`, so no `unsafe` registry call) and the usual install
+  folders (`Program Files (x86)`, `Program Files`, the local application data).
+- macOS: Google Chrome, Microsoft Edge, Brave, Chromium in `/Applications` and `~/Applications`; a preferred browser
+  in either folder comes before the next.
+- Other platforms: unavailable, saying that the browser is not supported there yet.
+- `orchester_exec::browser::find` (ORC-358). None found is `BrowserUnavailable`, shown as `browser_unavailable: no
+  Chromium-based browser is installed: looked for … in …`.
 - A new Settings section *Browser* shows which one was found and lets the person choose another Chromium-based
   browser's program. None found: the setting and the *Browser* window say so, and every browser tool answers
   `browser_unavailable` with that reason (no silent gap, `AGENTS.md` rule 0). The section also shows the folder of
@@ -158,26 +174,38 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   never the person's own browser profile. Its own `--user-data-dir` makes it a separate browser process even while
   the person's Edge or Chrome is open; Chrome 136+ also refuses remote debugging on the default profile.
 - Flags: `--headless=new`, `--user-data-dir=<that folder>`, `--remote-debugging-port=0`, `--no-first-run`,
-  `--no-default-browser-check`, `--disable-extensions`, `--disable-sync`, `--mute-audio`. *Open in a browser window*
-  starts the same without `--headless`.
+  `--no-default-browser-check`, `--disable-extensions`, `--disable-sync`, `--mute-audio`, then `about:blank`
+  (`orchester_exec::browser::headless`). *Open in a browser window* starts the same without `--headless`.
+- The runner starts it as it starts agents (`supervisor`): in a kill-on-close Job Object on Windows, leading its own
+  process group on macOS; its output goes to the runner's log at debug level.
 - Chromium writes `DevToolsActivePort` into the profile folder: the port, and the browser's WebSocket path
-  (`/devtools/browser/<uuid>`). The runner waits for the file and connects to `ws://127.0.0.1:<port>/<path>`.
+  (`/devtools/browser/<uuid>`). The runner removes an earlier browser's file first, waits for the new one (30 s; a
+  browser that exits first, as one does whose profile another browser holds, fails at once) and connects to
+  `ws://127.0.0.1:<port>/<path>`.
 - One WebSocket per browser. A run's new tab is `Target.createTarget`; `Target.attachToTarget {flatten: true}` gives a
-  `sessionId`, and every command to that tab carries it on the same connection. The runner keeps `targetId → run`.
-- Stopping: `Browser.close`, then the process tree through `orchester-exec` if it has not exited.
-- Platform code (finding the program, the process group and stopping it) lives in `orchester-exec` behind
-  `cfg(target_os)`, as other programs it runs.
+  `sessionId`, and every command to that tab carries it on the same connection. The runner keeps `targetId → run`
+  (`orchester_runner::browser`): a call on a tab that is not the run's is refused, and a tab the browser reports
+  destroyed (`Target.setDiscoverTargets`) is forgotten.
+- A run's tabs close (`Target.closeTarget`) when its task settles it completed, cancelled or failed, or when a person
+  cancels or stops it while no task runs it; a merged run had completed. Pausing, a limit, a wait for a person and an
+  interruption keep them.
+- Stopping, as the runner exits: `Browser.close`, then the process tree if it has not exited within 5 s. A browser
+  that ended on its own starts again at the next use, without the tabs it had.
+- Platform code (finding the program) lives in `orchester-exec` behind `cfg(target_os)`; the process tree is held and
+  ended as the runner's other children are.
 
 ### Connection and dependency
 
-CDP is JSON messages over a WebSocket. The workspace has no WebSocket client, so the runner adds `tokio-tungstenite`
-(client only, no TLS: loopback only; new crates `tungstenite`, `sha1`, `utf-8`, the rest is already in the tree). The
-app does not get it (decision 4). The CDP client itself is Orchester's own small module (send a command, await its
-answer by id, route events by session): only about forty CDP methods are used, so a CDP crate is not worth its size.
+CDP is JSON messages over a WebSocket. The workspace had no WebSocket client, so the runner adds `tokio-tungstenite`
+(client only, no TLS: loopback only; new crates `tungstenite`, `sha1`, `data-encoding`, the rest is already in the
+tree) and pulls `futures-util`, already built, for the socket's stream and sink. The app does not get them (decision
+4). The CDP client itself is Orchester's own small module (`orchester_runner::browser::cdp`: send a command, await
+its answer by id within a time limit, 30 s unless the call gives another; route events by session; typed errors):
+only about forty CDP methods are used, so a CDP crate is not worth its size.
 
 A loopback debugging port can be reached by any process of the same user. That process can already read the profile's
 cookies from disk, so the port opens nothing a same-user process does not already have. `--remote-debugging-pipe`
-would close it, but needs inherited handles 3 and 4 (`unsafe` on both platforms); see *Open questions*.
+would close it, but needs inherited handles 3 and 4 (`unsafe` on both platforms), which decision 11 declines.
 
 ## The *Browser* window
 
@@ -274,10 +302,10 @@ person asked for that (setting); by default it opens only when the person opens 
 
 - `orchester-core`: the tool names, schemas and inputs (`orchester_tools::browser`), the policy rows, the profile
   permission and the allowed-site matching (pure rules, tested in `crates/core/tests/`).
-- `orchester-exec`: finding and starting the program on each platform.
-- `orchester-runner`: the project's browser (start, connect, idle stop, headed/headless switch), the CDP client, the
-  run-to-tabs map, the tool calls (`execution/step/browser/`, beside `qa_app/`), and the screencast and input for the
-  window.
+- `orchester-exec`: finding the program on each platform and its headless command (`browser`).
+- `orchester-runner`: the project's browser (start, connect, stop with the runner, headed/headless switch) and its
+  run-to-tabs map (`browser`), the CDP client (`browser::cdp`), the tool calls (`execution/step/browser/`, beside
+  `qa_app/`), and the screencast and input for the window.
 - `orchester-ipc`: the window's requests and events.
 - `orchester-workspace`: the window's state (tabs, the tab shown, frames) and the profile permission.
 - `orchester-app`: the *Browser* window, the Settings section, the profile row, the run page's *Browser* line.
@@ -290,9 +318,13 @@ person asked for that (setting); by default it opens only when the person opens 
    `cargo test -p orchester-app --test mcp_domain domain_widening_the_browser`. The tools are not offered to steps yet
    (`StepTools` does not list them): the runner serves them in P2.
 2. **P2 · Runner and tools (non-UI).** Finding and starting headless Chromium on both platforms, the CDP client, the
-   tools, run tabs closed at run end, idle stop. Tests with a real Edge/Chrome on a local page served by the test
+   tools, run tabs closed at run end. Tests with a real Edge/Chrome on a local page served by the test
    (`orchester-runner --test browser`), skipped with a visible reason where no browser is found. After P2 agents can
    use the browser; the person cannot see it yet, which the profile's Browser row says.
+   - **P2a.** Done (ORC-358): finding and starting the browser (`cargo test -p orchester-exec --test browser
+     browser_`), the CDP client, the project's browser started at its first use and stopped with the runner, and each
+     run's tabs closed when it ends (`cargo test -p orchester-runner --features test-agent --test browser browser_`).
+   - **P2b.** The `browser_*` tools on the runs' tabs, offered to steps.
 3. **P3 · Design (designer).** Drawn 2026-10-28, board `Browser · redesign` `lcNez` in the new `orchester.pen`,
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
@@ -309,12 +341,10 @@ person asked for that (setting); by default it opens only when the person opens 
 ## Open questions for review
 
 Decided by the person on 2026-10-29: one browser profile per project (decision 3), read-only steps get the browser
-(decision 10), and `browser_eval` is offered as a tool whose every call asks (decision 9).
+(decision 10), `browser_eval` is offered as a tool whose every call asks (decision 9), CDP over a port and not a pipe
+(decision 11), and the browser keeps running until the runner exits, with no idle stop (decision 12).
 
-1. **Pipe instead of port**: worth an `unsafe` module on both platforms to keep other same-user processes off the
-   debugging port?
-2. **Idle stop after 15 minutes**: right, or keep the browser running while the app runs?
-3. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
-4. **Opening the window when an agent starts browsing**: off by default (this draft), or on?
-5. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
+1. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
+2. **Opening the window when an agent starts browsing**: off by default (this draft), or on?
+3. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
    in lurq (a lurq change, `app-vs-lurq-scope`).

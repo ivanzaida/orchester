@@ -2,7 +2,7 @@
 //! unverified or was not run again on an unchanged revision ([`orchester_core::run::StuckDecision`]). Its task ended
 //! when it began to wait, so the decision is carried out on the stored run: one more retry, the work returned to an
 //! agent step, or an accepted step continues the run in a new task as any continued run does — the accepted step
-//! passes there as a step passes (`step::accepted`); a stop fails it.
+//! passes there as a step passes (`step::accepted`); a stop fails it, which closes its browser tabs.
 
 use orchester_core::{
   id::RunId,
@@ -74,6 +74,7 @@ impl Scheduler {
       run,
       task: stored.task(),
     });
+    self.inner.browser.end_run(run);
     Ok(())
   }
 }
