@@ -278,7 +278,9 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
 - **The agent acting** (`02 · Agent is acting` `UKAkY`): a line under the toolbar says what the agent did last
   (*Builder is acting in this tab · typed 8 in Max attempts*), and a ring with the agent's name marks the element it
   acted on. Orchester draws both from the runner's report of the action (element box, tool, short summary), not
-  CDP. There is no take-over control: the person's input in the tab makes the agent wait
+  CDP: each browser tool call that opens a page, goes through its history or acts on it reports what it did once
+  carried out, with the element's accessible name and its box as the page has them then; the reading tools and
+  `browser_close` do not. There is no take-over control: the person's input in the tab makes the agent wait
   (`02b · You use the tab` `k7xvx`: *You're using this tab · Builder waits until 10 s after your last input*).
 - **Empty** (`06 · Empty` `eCCuU`): no tabs; the address line is focused (*Type an address*) and a card says when
   agents' tabs appear. **Not found** (`07 · Browser not found` `YEv2c`): the reason, *Open Settings › Browser*,

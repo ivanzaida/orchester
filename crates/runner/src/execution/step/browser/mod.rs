@@ -10,10 +10,11 @@
 //! that asks, so every CLI runs these tools unasked.
 //!
 //! Every answer with page content starts with [`PAGE_DATA_NOTICE`], and a JavaScript dialog the page opened is
-//! dismissed and named in the next answer on its tab. Nobody watches the browser yet: the person's *Browser* window is
-//! the design's P4.
+//! dismissed and named in the next answer on its tab. Each call that acts on a page is reported to the person's
+//! *Browser* window once carried out, for *Agent is acting* ([`acted`]).
 
 mod act;
+mod acted;
 mod keys;
 mod logs;
 mod navigation;
@@ -33,6 +34,7 @@ use orchester_core::{
 };
 use thiserror::Error;
 
+use self::acted::Acted;
 use super::orchester_tools::Looked;
 use crate::browser::{BrowserError, ProjectBrowser, Tab, cdp::TargetId};
 
@@ -142,9 +144,31 @@ impl StepBrowser {
     }
   }
 
+  /// What `call` answers; one that acts is then reported to the window.
   async fn answer(&self, call: BrowserCall) -> Result<Answer, ToolError> {
+    let acted = Acted::of(&call);
     let tab = call.tab().cloned();
-    let tab = tab.as_ref();
+    let answer = self.carry_out(call, tab.as_ref()).await?;
+    if let Some(acted) = acted {
+      self.report(tab.as_ref(), acted).await;
+    }
+    Ok(answer)
+  }
+
+  /// Tells the window what an agent did on the run's tab `tab` (its current one for `None`, which `browser_open` just
+  /// made the tab it opened). A report that fails is logged: the call was carried out, and its answer stands.
+  async fn report(&self, tab: Option<&TabId>, acted: Acted) {
+    let reported = async {
+      let tab = self.tab(tab).await?;
+      let action = acted.on(&tab).await;
+      self.browser.agent_acted(self.run, tab.id(), action).await
+    };
+    if let Err(error) = reported.await {
+      tracing::warn!(run = %self.run, %error, "the agent's action was not reported to the browser window");
+    }
+  }
+
+  async fn carry_out(&self, call: BrowserCall, tab: Option<&TabId>) -> Result<Answer, ToolError> {
     match call {
       BrowserCall::Tabs => self.list().await.map(Answer::from),
       BrowserCall::Open { url, new_tab } => self.open(&url, new_tab).await.map(Answer::from),

@@ -2,8 +2,9 @@
 //! script in `support/fake_browser_tools.rs`), with the real browser on the pages of [`super::site`]: a read-only step
 //! whose profile has *Browser* on reads, types, clicks, waits, scrolls, takes screenshots under `.tmp/browser/`, reads
 //! the console and the network, goes back in history and closes its tab, on its own tabs only; `browser_eval` asks
-//! even on a local page, an allowed site opens without asking and any other site asks. A step without *Browser* is
-//! offered none of them, and no screenshot is saved through a link out of the worktree.
+//! even on a local page, an allowed site opens without asking and any other site asks. Each action is told to the
+//! subscribed *Browser* window. A step without *Browser* is offered none of them, and no screenshot is saved through a
+//! link out of the worktree.
 
 use std::{fs, path::Path};
 
@@ -17,7 +18,12 @@ use orchester_core::{
   },
   run::{Answerer, ApprovalAnswer, RunStatus},
 };
+use orchester_ipc::{
+  Event,
+  browser::{AgentAction, BrowserCommand, BrowserEvent},
+};
 use orchester_store::ProjectDb;
+use tokio::sync::mpsc;
 
 use super::site;
 use crate::{
@@ -65,13 +71,25 @@ fn call_of(calls: &[String], tool: &str, index: usize) -> String {
     .unwrap_or_else(|| panic!("no call {index} of {tool}: {calls:?}"))
 }
 
-/// Runs the fake's browser script in `project`, with another run's tab open, answering its two asks: `browser_eval`
-/// approved, the site that is not allowed denied. The run.
-async fn run_script(project: &TestProject) -> RunId {
+/// What the fake's browser script did: its run, and what the *Browser* window was told the run's agent did.
+struct Script {
+  id: RunId,
+  acted: Vec<AgentAction>,
+}
+
+/// Runs the fake's browser script in `project`, with another run's tab open and the window subscribed, answering its
+/// two asks: `browser_eval` approved, the site that is not allowed denied.
+async fn run_script(project: &TestProject) -> Script {
   let root = project.repo.path();
   let profile = tempfile::tempdir().expect("temporary folder");
   let (scheduler, mut events) = scheduler(root);
   let scheduler = scheduler.with_browser_profile(profile.path().to_path_buf());
+  let (desktop, mut window) = mpsc::unbounded_channel();
+  scheduler
+    .browser()
+    .serve(BrowserCommand::Subscribe, &desktop)
+    .await
+    .expect("subscribed");
   let site = site::serve().await;
   let other = scheduler
     .browser()
@@ -109,7 +127,44 @@ async fn run_script(project: &TestProject) -> RunId {
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded, "{:?}", calls(root, id));
   scheduler.browser().stop().await;
-  id
+  let mut acted = Vec::new();
+  while let Ok(event) = window.try_recv() {
+    if let Event::Browser(BrowserEvent::AgentActed { run, action, .. }) = event {
+      assert_eq!(run, id, "only the run's own agent acted");
+      acted.push(action);
+    }
+  }
+  Script { id, acted }
+}
+
+/// The window was told each action the agent carried out on a page, in order, with the element's name and box; the
+/// calls that only read, and those that failed, are not actions.
+fn told_the_window(acted: &[AgentAction]) {
+  let tools: Vec<&str> = acted.iter().map(|action| action.tool.as_str()).collect();
+  assert_eq!(
+    tools,
+    [
+      "browser_open",
+      "browser_type",
+      "browser_click",
+      "browser_key",
+      "browser_scroll",
+      "browser_scroll",
+      "browser_open",
+      "browser_navigate",
+      "browser_eval",
+    ],
+    "{acted:#?}"
+  );
+  let typed = &acted[1];
+  assert_eq!(typed.summary, "typed 3 characters in Name");
+  let field = typed.element.expect("the field's box");
+  assert!(field.width > 0 && field.height > 0, "{field:?}");
+  assert_eq!(acted[2].summary, "clicked Save");
+  assert!(acted[2].element.is_some(), "the button's box");
+  assert_eq!((acted[3].summary.as_str(), acted[3].element), ("pressed Tab", None));
+  assert_eq!(acted[4].summary, "scrolled down");
+  assert_eq!(acted[7].summary, "went back");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -119,7 +174,7 @@ async fn browser_tools_work_on_the_runs_own_tabs_and_ask_where_the_policy_says()
   }
   let project = browsing(AgentProvider::CodexCli, BrowserAccess::On);
   let root = project.repo.path();
-  let id = run_script(&project).await;
+  let Script { id, acted } = run_script(&project).await;
   let calls = calls(root, id);
   let listed = reported(&ProjectDb::open(root).expect("open"), id, "orchester-tools: ");
   assert!(
@@ -153,6 +208,7 @@ async fn browser_tools_work_on_the_runs_own_tabs_and_ask_where_the_policy_says()
   took_screenshots(root, id, &calls);
   read_the_logs(root, id);
   went_back_and_followed_the_policy(root, id, &calls);
+  told_the_window(&acted);
 }
 
 /// Read, typed, clicked, waited, read the text, refused a stale ref, pressed a key and scrolled.
@@ -312,7 +368,7 @@ async fn browser_screenshots_are_refused_where_a_link_leads_their_folder_out_of_
   std::os::unix::fs::symlink(outside.path(), root.join(".tmp")).expect("a link");
   git(root, &["add", "--force", ".tmp"]);
   git(root, &["commit", "--quiet", "-m", "a scratch folder elsewhere"]);
-  let id = run_script(&project).await;
+  let id = run_script(&project).await.id;
 
   let calls = calls(root, id);
   for index in 0..3 {
@@ -335,7 +391,7 @@ async fn browser_tools_reach_claude_code_by_allow_rules_and_screenshots_come_bac
   }
   let project = browsing(AgentProvider::ClaudeCodeCli, BrowserAccess::On);
   let root = project.repo.path();
-  let id = run_script(&project).await;
+  let id = run_script(&project).await.id;
   let permissions = reported(&ProjectDb::open(root).expect("open"), id, "browser-permission: ");
   assert!(!permissions.is_empty());
   assert!(
