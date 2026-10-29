@@ -28,13 +28,14 @@ use super::{
 use crate::{project::ShownProject, services::Services};
 
 impl TasksScreen {
-  /// The board of the view the list is on, over `rows` as searched, filtered and ordered.
+  /// The board of the view the list is on, over `rows` as searched, filtered and ordered; `scroll_key` names what
+  /// narrows and orders them.
   pub(super) fn board(
     &self,
     ctx: &mut Ctx,
     shown: &Shown<'_>,
     (reading, rows): (&Reading, &[TaskRow]),
-    filtered: bool,
+    (filtered, scroll_key): (bool, String),
   ) -> Element {
     let (project, list) = (shown.project, shown.list);
     let view = list_view(list.tab());
@@ -72,6 +73,7 @@ impl TasksScreen {
         read_only,
         not_shared: shown.not_shared,
         filtered,
+        scroll_key,
         clear: Arc::new(move || {
           search.set(String::new());
           facets.set(Facets::default());
