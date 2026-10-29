@@ -12,7 +12,6 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountCheckResult, AccountState, AgentAccount},
-  connection::invocation::Platform,
   time::Timestamp,
 };
 use orchester_workspace::display;
@@ -118,7 +117,7 @@ fn folder_row(ctx: &mut Ctx, account: &AgentAccount) -> Element {
   } else {
     text
   };
-  let gone = account.state(Platform::current()) == AccountState::FolderMissing;
+  let gone = account.state() == AccountState::FolderMissing;
   let buttons = if gone {
     Vec::new()
   } else {

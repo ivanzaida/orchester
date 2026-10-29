@@ -178,7 +178,6 @@ fn account(ctx: &Ctx, problem: &AccountStartProblem) -> Arc<str> {
       "orchestrator.failure.accountFolderMissing",
       [("folder", folder.display().to_string().as_str())],
     ),
-    AccountStartProblem::Unsupported => ctx.t("orchestrator.failure.accountUnsupported"),
   }
 }
 

@@ -73,9 +73,10 @@ pub(super) const SPECS: &[Spec] = &[
                   else the project's, else the app's; relative folders are skipped) or an absolute path to an \
                   existing file outside the project's repository, and is stored as the file found, so the \
                   program itself is a fixed file; a path inside the repository is refused (run a script through \
-                  its interpreter: program powershell, arguments -File tools/check.ps1). That is not a sandbox: \
-                  the step runs the program in its worktree with your rights, network access and no sandbox, \
-                  and the program reads files the agents before it wrote (scripts, build files, configuration). \
+                  its interpreter: program powershell, or pwsh on macOS, arguments -File tools/check.ps1). That is \
+                  not a sandbox: the step runs the program in its worktree with your rights, network access and no \
+                  sandbox, and the program reads files the agents before it wrote (scripts, build files, \
+                  configuration). \
                   Each argument is passed as it is, no shell reads it. Variables are plain text: never a secret. \
                   Unless a person turned on Let automation change agent permissions, making a tool is refused as \
                   person_only, as is changing its program or arguments, letting more exit codes pass, or \

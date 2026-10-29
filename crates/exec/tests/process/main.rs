@@ -115,7 +115,18 @@ fn process_with_an_explicit_environment_sees_nothing_else() {
     .collect();
   assert!(names.contains(&"ORCHESTER_PROBE"), "{names:?}");
   // cmd.exe adds a few variables of its own (PROMPT, COMSPEC, PATHEXT); the parent's are gone.
+  #[cfg(windows)]
   assert!(!names.iter().any(|name| name.eq_ignore_ascii_case("PATH")), "{names:?}");
+  // On macOS every program gets the search path as its PATH (`search_path::macos::apply`): with no PATH of the
+  // parent's, only the usual folders and the program's own.
+  #[cfg(target_os = "macos")]
+  {
+    use orchester_exec::search_path::macos::{extend, home, usual_folders};
+    let mut folders = usual_folders(home().as_deref());
+    folders.push("/usr/bin".into());
+    let expected = format!("PATH={}", extend(None, &folders).to_string_lossy());
+    assert!(output.stdout.lines().any(|line| line == expected), "{}", output.stdout);
+  }
   assert!(
     !names.iter().any(|name| name.eq_ignore_ascii_case("CARGO")),
     "{names:?}"

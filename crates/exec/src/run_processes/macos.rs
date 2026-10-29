@@ -7,6 +7,7 @@ mod identity;
 
 use std::{io, mem};
 
+pub(super) use identity::started_even_exited as started;
 use identity::{AuditToken, read};
 
 use super::{Entry, Info};

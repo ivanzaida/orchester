@@ -158,7 +158,7 @@ const SPECS: &[Spec] = &[
     description: "The person's agent CLI accounts on this computer, which every project's connections can run on \
                   (Settings › Accounts): id, cli (claude_code or codex), name (null for a Default nobody renamed), \
                   whether it is the CLI's Default (its own folder), state (signed_in, not_signed_in, \
-                  sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_supported, not_checked), \
+                  sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_checked), \
                   whether Orchester created its folder or the person brought it, and the account it shares a \
                   sign-in with, if any, and its link in Settings › Accounts. No email and no folder are listed. \
                   plan_limits is the account's latest plan limits reading as its CLI gave it, or null when none is \

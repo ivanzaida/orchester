@@ -300,13 +300,11 @@ impl TaskDetail {
   /// Where the task stands, from its latest run; as for a task without runs while that run cannot
   /// be read.
   pub fn phase(&self) -> TaskPhase {
-    match (
-      TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref()),
-      &self.delivery,
-    ) {
-      (TaskPhase::Succeeded, Delivery::MergedOutside(_)) => TaskPhase::Merged,
-      (phase, _) => phase,
-    }
+    self.delivery.phase(TaskPhase::of(
+      &self.task,
+      self.run.as_ref().map(|run| &run.run),
+      self.merge.as_ref(),
+    ))
   }
 
   /// [`Self::load_in`] with what git, through `programs`, tells of the runs that passed every step and that

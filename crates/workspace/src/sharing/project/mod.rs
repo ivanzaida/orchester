@@ -5,6 +5,7 @@
 //! member, nothing is sent: the change fails at once and the list stays read-only.
 
 mod automatic;
+mod claim_ends;
 mod claims;
 pub mod convert;
 pub mod discovery;
@@ -34,6 +35,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
+  claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},

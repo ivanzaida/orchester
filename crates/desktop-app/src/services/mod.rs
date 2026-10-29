@@ -149,6 +149,7 @@ impl Services {
       self.runtime.spawn(sharing::project::work::run(
         self.servers.clone(),
         self.runners.run_changes(),
+        self.programs.clone(),
       )),
       self.runtime.spawn(sharing::cloud::keep_checking(self.cloud.clone())),
       self.runtime.spawn(sharing::cloud::keep_activity_to_the_account(
