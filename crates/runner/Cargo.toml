@@ -256,6 +256,10 @@ name = "codex_escalations"
 required-features = ["test-agent"]
 
 [[test]]
+name = "approval_mode_launch"
+required-features = ["test-agent"]
+
+[[test]]
 name = "codex_repository_settings"
 required-features = ["test-agent"]
 

@@ -29,6 +29,8 @@
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
+//! - Autopilot ([`super::EffectiveApprovalMode`]) hands every command to Orchester as asking before each one does,
+//!   whatever the commands setting, which is Manual's; whether the CLI's version can is [`super::autopilot_support`]'s.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -337,7 +339,12 @@ impl AgentPermissions {
       Mechanism::ClaudeAcceptEdits if self.lists_commands() => Mechanism::ClaudeEditRules,
       mechanism => mechanism,
     };
-    let commands = enforced(PermissionOption::of_commands(&self.commands))?;
+    // Autopilot hands every command to Orchester, as asking before each one does; its list is Manual's.
+    let commands = if self.hands_requests_to_orchester() {
+      enforced(PermissionOption::AskBeforeCommands)?
+    } else {
+      enforced(PermissionOption::of_commands(&self.commands))?
+    };
     let mut permissions = self.clone();
     let (network, network_stays_on) = match support(provider, platform, PermissionOption::of_network(self.network)) {
       Support::Enforced(mechanism) => (mechanism, None),
@@ -367,8 +374,10 @@ impl AgentPermissions {
     })
   }
 
+  /// Whether the CLI runs listed commands by rule: never in Autopilot, which gives it no rule.
   fn lists_commands(&self) -> bool {
-    matches!(&self.commands, CommandPermission::Allowed(list) if !list.is_empty())
+    !self.hands_requests_to_orchester()
+      && matches!(&self.commands, CommandPermission::Allowed(list) if !list.is_empty())
   }
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
