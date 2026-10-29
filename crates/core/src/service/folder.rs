@@ -16,19 +16,26 @@ fn stays_inside(value: &str) -> bool {
     && value.chars().count() <= MAX_PATH_CHARS
 }
 
-/// A folder inside the run's worktree, e.g. `web/team`; empty or `.` is the worktree itself. Surrounding spaces
-/// are not part of it.
+/// A folder inside the run's worktree, e.g. `web/team`; empty, `.` or `./` is the worktree itself. It is kept
+/// with forward slashes and without empty or `.` parts, so `web\team` and `./web/team/` are the same folder.
+/// Surrounding spaces are not part of it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RelativeFolder(String);
 
 impl RelativeFolder {
   pub fn new(value: &str) -> Result<Self, ServiceError> {
     let value = value.trim();
-    if !stays_inside(value) {
+    let parts: Vec<&str> = value
+      .split(['/', '\\'])
+      .filter(|part| !part.is_empty() && *part != ".")
+      .collect();
+    // Windows drops a part's trailing dots and spaces, so `...` or `web.` would name another folder than written.
+    let plain = parts.iter().all(|part| !part.ends_with(['.', ' ']));
+    let folder = parts.join("/");
+    if !plain || !stays_inside(value) || !stays_inside(&folder) {
       return Err(ServiceError::OutsideWorktree(value.to_owned()));
     }
-    let value = if value == "." { "" } else { value };
-    Ok(Self(value.to_owned()))
+    Ok(Self(folder))
   }
 
   /// The worktree itself.
@@ -40,7 +47,7 @@ impl RelativeFolder {
     self.0.is_empty()
   }
 
-  /// The folder as written, with forward or back slashes; empty for the worktree itself.
+  /// The folder with forward slashes; empty for the worktree itself.
   pub fn as_str(&self) -> &str {
     &self.0
   }

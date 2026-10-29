@@ -74,9 +74,17 @@ fn seed_request_urls_and_headers_are_valid() {
   for invalid in ["", "localhost/api", "ftp://host/x", "{{url}}/a b", "https://host/\n"] {
     assert_eq!(
       SeedRequest::new(HttpMethod::Get, invalid, None, Vec::new(), Vec::new()),
-      Err(ServiceError::SeedUrl(invalid.to_owned()))
+      Err(ServiceError::SeedUrl)
     );
   }
+  let tokened = SeedRequest::new(
+    HttpMethod::Get,
+    "https://host/a b?token=t0ken",
+    None,
+    Vec::new(),
+    Vec::new(),
+  );
+  assert!(!tokened.expect_err("a space").to_string().contains("t0ken"));
   let plain = |value: &str| ServiceValue::Plain(value.to_owned());
   assert_eq!(
     SeedHeader::new("X Team", plain("1")),

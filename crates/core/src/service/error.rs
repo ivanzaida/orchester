@@ -15,7 +15,10 @@ pub enum ServiceError {
     max = ServiceName::MAX_CHARS
   )]
   Name(String),
-  #[error("`{0}` is not a folder inside the worktree: a relative path without `..`, a drive or a leading separator")]
+  #[error(
+    "`{0}` is not a folder inside the worktree: a relative path without `..`, a drive, a leading separator or a \
+     part ending in a dot or space"
+  )]
   OutsideWorktree(String),
   #[error("the run's data folder must be a folder below the worktree, not the worktree itself")]
   RunFolderIsRoot,
@@ -40,8 +43,9 @@ pub enum ServiceError {
   LogPattern { pattern: String, reason: String },
   #[error("the readiness timeout must be between 1 and {max} seconds", max = ReadyTimeout::MAX_SECS)]
   ReadyTimeout,
-  #[error("`{0}` is not a request URL: an http(s) URL or a placeholder, without spaces or control characters")]
-  SeedUrl(String),
+  /// The URL is not repeated: its query string may hold a token.
+  #[error("a seed request's URL is not an http(s) URL or a placeholder without spaces or control characters")]
+  SeedUrl,
   #[error("`{0}` is not an HTTP header name")]
   HeaderName(String),
   #[error("the header `{0}` is set twice")]

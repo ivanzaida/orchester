@@ -120,7 +120,7 @@ impl SeedRequest {
     let starts = ["http://", "https://", "{{"].iter().any(|start| url.starts_with(start));
     let plain = !url.chars().any(|c| c.is_whitespace() || c.is_control());
     if !starts || !plain || url.chars().count() > Self::MAX_URL_CHARS {
-      return Err(ServiceError::SeedUrl(url.to_owned()));
+      return Err(ServiceError::SeedUrl);
     }
     let mut seen = BTreeSet::new();
     if let Some(header) = headers

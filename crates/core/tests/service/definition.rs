@@ -61,9 +61,21 @@ fn service_arguments_keep_placeholders_as_text() {
 #[test]
 fn service_working_folder_stays_inside_the_worktree() {
   assert_eq!(RelativeFolder::new(" web/team ").expect("inside").as_str(), "web/team");
-  assert!(RelativeFolder::new(".").expect("the worktree").is_root());
-  assert!(RelativeFolder::new("").expect("the worktree").is_root());
-  assert!(RelativeFolder::new(r"web\{{run}}").is_ok());
+  for worktree in ["", ".", "./", "./.", "././", r".\"] {
+    assert!(
+      RelativeFolder::new(worktree).expect("the worktree").is_root(),
+      "{worktree:?}"
+    );
+  }
+  assert_eq!(
+    RelativeFolder::new(r"web\{{run}}").expect("inside").as_str(),
+    "web/{{run}}"
+  );
+  assert_eq!(RelativeFolder::new(r"./web\team/"), RelativeFolder::new("web/team"));
+  assert_eq!(
+    RelativeFolder::new(".config/web").expect("a dot folder").as_str(),
+    ".config/web"
+  );
   for outside in [
     "../web",
     "web/../../x",
@@ -73,6 +85,11 @@ fn service_working_folder_stays_inside_the_worktree() {
     r"\\server\share",
     "C:/web",
     "C:web",
+    "./C:/web",
+    "...",
+    "web/...",
+    "web.",
+    "web /team",
   ] {
     assert_eq!(
       RelativeFolder::new(outside),
@@ -88,12 +105,16 @@ fn service_run_folder_is_a_folder_of_its_own() {
   assert_eq!(folder.as_str(), "runs/{{run}}/team-web");
   let web = service("web", &[]).with_run_data(RunData::RunFolder(folder));
   assert!(matches!(web.run_data(), RunData::RunFolder(_)));
-  assert_eq!(RunFolder::new("."), Err(ServiceError::RunFolderIsRoot));
-  assert_eq!(RunFolder::new(""), Err(ServiceError::RunFolderIsRoot));
-  assert!(matches!(
-    RunFolder::new("../runs"),
-    Err(ServiceError::OutsideWorktree(_))
-  ));
+  for worktree in ["", ".", "./", "./.", "././", r".\"] {
+    assert_eq!(
+      RunFolder::new(worktree),
+      Err(ServiceError::RunFolderIsRoot),
+      "{worktree:?}"
+    );
+  }
+  for outside in ["../runs", "...", "runs/..."] {
+    assert!(matches!(RunFolder::new(outside), Err(ServiceError::OutsideWorktree(_))));
+  }
   let database = service("db", &[]).with_run_data(RunData::DatabaseContainer);
   assert_eq!(database.run_data(), &RunData::DatabaseContainer);
 }
