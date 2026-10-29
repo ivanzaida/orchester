@@ -39,6 +39,7 @@ pub mod resource;
 pub mod revision;
 pub mod run;
 pub mod secret;
+pub mod service;
 pub mod sharing;
 pub mod source;
 pub mod store;

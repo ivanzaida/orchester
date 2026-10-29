@@ -103,6 +103,10 @@ parking_lot = "0.12"
 # (`orchester-core`'s `docs::blocks`), parsed as lurq's Markdown renders it. lurq's Markdown parses with it and keeps
 # no offsets; already built, with these features, through lurq's `markdown`, so it adds no crate.
 pulldown-cmark = { version = "0.13.4", default-features = false }
+# The log-line pattern a service is ready on (`orchester-core`'s `service::readiness`), checked when the service is
+# defined and matched when it starts. A regular expression engine is not a few lines of code; already built for
+# tree-sitter and sentry, so it adds no crate.
+regex = "1"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
 # The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in
