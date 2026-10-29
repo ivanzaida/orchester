@@ -17,7 +17,7 @@ use orchester_runner::browser::{BrowserError, ProjectBrowser, cdp::TargetId};
 use serde_json::json;
 use tokio::sync::mpsc;
 
-use super::{PATIENCE, browser_installed, observer, open_in_browser, pages};
+use super::{PATIENCE, browser_installed, closed, observer, open_in_browser, pages};
 
 /// The page of the form tests: a field, a button and a `<select>` at fixed places, in CSS pixels.
 pub const FORM: &str = r#"<!doctype html><html><head><title>Page form</title><style>body{margin:0}</style></head><body>
@@ -461,7 +461,7 @@ async fn browser_persons_tabs_stay_invisible_to_runs() {
     open_in_browser(&observer, &persons_target).await,
     "the person's tab stays"
   );
-  assert!(!open_in_browser(&observer, &runs_tab).await);
+  closed(&observer, &runs_tab).await;
   browser.stop().await;
 }
 

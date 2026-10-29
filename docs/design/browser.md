@@ -283,10 +283,17 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
 - **The person's input.** lurq's pointer, wheel, keyboard, text input and IME events become
   `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText` and `Input.imeSetComposition`, with
   coordinates in the page's CSS pixels.
-- **IPC.** New `orchester-ipc` requests (show tab, stop showing, input, window size) and events (frame, tabs changed,
-  load state, agent action with its element box, agent waiting, dialog, file chooser). A frame is one event with its
-  JPEG bytes; at 30 frames a second of a full-size page that is about 3 MB/s, well inside the channel and its 16 MiB
-  frame limit. Base64 in the JSON frame adds a third; a binary frame kind is an open question.
+- **IPC** (protocol 33, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+  viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
+  option, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its
+  tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent started browsing; an agent
+  acted, with its element box; a dialog opened or closed; a `<select>` list opened). A frame is one event with its JPEG
+  bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a full-size page that is
+  about 3 MB/s, well inside the channel and its 16 MiB frame limit. Only the latest frame waits in the runner, so
+  frames are dropped rather than queued, and the app decodes one at a time per project, keeping only the latest that
+  waits. The desktop subscribes once a runner attached; `orchester_workspace::browser::BrowserWindow` holds what the
+  window shows, `Runners::browser` sends its requests. Not yet: the agent waiting for the person's input, the file
+  chooser.
 
 ### What frames do not show, and what Orchester draws instead
 
@@ -332,6 +339,13 @@ so takes focus, as lurq opens windows (decision 15). Once open, it does not jump
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
+   - **P4c.** Done (ORC-378): the window's plumbing, no window yet. The IPC (`cargo test -p orchester-ipc --test
+     browser`), the runner's screencast with backpressure, the person's input, navigation and own tabs, dialogs,
+     `<select>` lists and the headed restart (`cargo test -p orchester-runner --features test-agent --test browser
+     browser_`), the stored setting of decision 14 (`cargo test -p orchester-store --test app_db browser_window`), and
+     the window's state with its frames decoded to RGBA and the auto-open rule (`cargo test -p orchester-workspace
+     --features test-support --test browser_window browser_window_`).
+   - **P4d.** The *Browser* window itself, on that state.
 
 ## Not in scope
 

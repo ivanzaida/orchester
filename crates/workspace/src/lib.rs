@@ -12,6 +12,7 @@ pub mod app_paths;
 pub mod attachments;
 pub mod background;
 pub mod base_moved;
+pub mod browser;
 pub mod budget;
 pub mod build;
 pub mod clock;

@@ -451,6 +451,16 @@ impl Workspace {
     self.db.lock().sends_error_reports()
   }
 
+  /// Whether the *Browser* window opens by itself when an agent starts browsing (Settings › Browser,
+  /// `docs/design/browser.md` decision 14); on until a person turns it off.
+  pub fn browser_window_opens_itself(&self) -> Result<bool, StoreError> {
+    self.db.lock().browser_window_opens_itself()
+  }
+
+  pub fn set_browser_window_opens_itself(&self, opens: bool) -> Result<(), StoreError> {
+    self.db.lock().set_browser_window_opens_itself(opens)
+  }
+
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
     self.db.lock().daily_report_schedule()

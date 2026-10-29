@@ -400,6 +400,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::NotAcceptable { .. }
       | Rejection::NoTurnToStop
       | Rejection::TurnNotStoppable
+      | Rejection::BrowserUnavailable { .. }
+      | Rejection::NoSuchTab
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -488,19 +490,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     ) => capacity_message(rejection),
     RunRequestError::Rejected(rejection @ Rejection::ShuttingDown) => capacity_message(rejection),
     RunRequestError::Rejected(Rejection::LimitNotRaised { .. }) => Message::new("runs.limit.notRaised"),
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
-      limit: RunLimit::Tokens,
-    }) => Message::new("runs.limit.tokensNotAboveUsed"),
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit: RunLimit::Time }) => {
-      Message::new("runs.limit.timeNotAboveUsed")
-    }
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
-      limit: RunLimit::StepBudget { .. },
-    }) => Message::new("runs.limit.stepNotAboveUsed"),
-    // An account's plan limit is not raised by Orchester; no runner refuses it for being too low.
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
-      limit: RunLimit::PlanLimit { .. },
-    }) => Message::new("runs.control.failed"),
+    RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit }) => limit_not_above_used(limit),
     RunRequestError::Rejected(Rejection::PermissionsNotEnforceable { step, .. }) => {
       Message::new("runs.permissions.errors.notEnforceable").with("step", step.to_string())
     }
@@ -528,9 +518,6 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun
-      | Rejection::LimitNotAboveUsed {
-        limit: RunLimit::DailyBudget | RunLimit::GroupBudget,
-      }
       | Rejection::ChatMessageNotFound
       | Rejection::ChatBusy
       | Rejection::NoOrchestrator
@@ -542,8 +529,21 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::RunAgainBlocked { .. }
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
+      | Rejection::BrowserUnavailable { .. }
+      | Rejection::NoSuchTab
       | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
+  }
+}
+
+/// Why a raised limit was refused for not being above what the run used.
+fn limit_not_above_used(limit: &RunLimit) -> Message {
+  match limit {
+    RunLimit::Tokens => Message::new("runs.limit.tokensNotAboveUsed"),
+    RunLimit::Time => Message::new("runs.limit.timeNotAboveUsed"),
+    RunLimit::StepBudget { .. } => Message::new("runs.limit.stepNotAboveUsed"),
+    // An account's plan limit is not raised by Orchester; no runner refuses it for being too low.
+    RunLimit::PlanLimit { .. } | RunLimit::DailyBudget | RunLimit::GroupBudget => Message::new("runs.control.failed"),
   }
 }
 
