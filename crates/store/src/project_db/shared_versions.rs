@@ -6,7 +6,7 @@
 use orchester_core::{
   blob::ContentHash,
   id::{ConnectionId, ResourceId, SecretId, VersionId},
-  resource::{ResourceBody, Version, VersionNumber},
+  resource::{Resource, ResourceBody, ResourceKind, Version, VersionNumber},
   sharing::{SharedPerson, TaskRevision},
   time::Timestamp,
 };
@@ -14,7 +14,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{
   ProjectDb,
-  resources::{check_kind, decode, encode, load_versions},
+  resources::{check_kind, decode, encode, kind_text, load_resources, load_versions, parse_kind, version_number},
 };
 use crate::{
   StoreError,
@@ -193,6 +193,113 @@ impl ProjectDb {
     )?;
     Ok(changed == 1)
   }
+
+  /// Keeps `resource` as the server's at `revision`. One this computer does not have is added with the server's id and
+  /// no draft (its versions come with [`Self::cache_shared_version`]); one it has takes the server's name. Another
+  /// local resource of its kind with its slug refuses it ([`StoreError::DuplicateSlug`]).
+  pub fn keep_shared_resource(&mut self, resource: &Resource, revision: TaskRevision) -> Result<(), StoreError> {
+    let id = resource.id();
+    let revision = tokens_column("resource revision", revision.get())?;
+    let transaction = self.connection.transaction()?;
+    match load_resources(&transaction, "WHERE id = ?1", [id.to_string()])?.pop() {
+      Some(kept) if kept.kind() != resource.kind() => {
+        return Err(StoreError::ResourceKindMismatch {
+          resource: id,
+          expected: resource.kind(),
+          found: kept.kind(),
+        });
+      }
+      Some(_) => {
+        transaction.execute(
+          "UPDATE resources SET name = ?2 WHERE id = ?1",
+          params![id.to_string(), resource.name().as_str()],
+        )?;
+      }
+      None => insert_resource(&transaction, resource)?,
+    }
+    transaction.execute(
+      "UPDATE resources SET sharing = 'shared', server_revision = ?2 WHERE id = ?1",
+      params![id.to_string(), revision],
+    )?;
+    transaction.commit()?;
+    Ok(())
+  }
+
+  /// The number of the newest version this computer has of `resource`, cached from a server or published here.
+  pub fn latest_version_number(&self, resource: ResourceId) -> Result<Option<VersionNumber>, StoreError> {
+    let number: Option<i64> = self.connection.query_row(
+      "SELECT MAX(number) FROM resource_versions WHERE resource_id = ?1",
+      [resource.to_string()],
+      |row| row.get(0),
+    )?;
+    number.map(version_number).transpose()
+  }
+
+  /// The cached versions whose references name `target`, by resource and number.
+  pub fn versions_naming(&self, target: ReferenceTarget) -> Result<Vec<NamingVersion>, StoreError> {
+    let (kind, id) = target_columns(target);
+    let mut statement = self.connection.prepare(
+      "SELECT resources.id, resources.kind, resource_versions.number FROM shared_version_references \
+       JOIN resource_versions ON resource_versions.id = shared_version_references.version_id \
+       JOIN resources ON resources.id = resource_versions.resource_id \
+       WHERE shared_version_references.kind = ?1 AND shared_version_references.target_id = ?2 \
+       ORDER BY resources.rowid, resource_versions.number",
+    )?;
+    let rows = statement
+      .query_map(params![kind, id], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, i64>(2)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(resource, kind, number)| {
+        Ok(NamingVersion {
+          resource: parse("resource id", &resource)?,
+          kind: parse_kind(&kind)?,
+          number: version_number(number)?,
+        })
+      })
+      .collect()
+  }
+}
+
+/// A cached version whose references name a given connection, MCP server or secret.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NamingVersion {
+  pub resource: ResourceId,
+  pub kind: ResourceKind,
+  pub number: VersionNumber,
+}
+
+/// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind.
+fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
+  let kind = kind_text(resource.kind());
+  let taken: bool = connection.query_row(
+    "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
+    params![kind, resource.slug().as_str()],
+    |row| row.get(0),
+  )?;
+  if taken {
+    return Err(StoreError::DuplicateSlug {
+      kind: resource.kind(),
+      slug: resource.slug().as_str().to_owned(),
+    });
+  }
+  connection.execute(
+    "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+    params![
+      resource.id().to_string(),
+      kind,
+      resource.slug().as_str(),
+      resource.name().as_str(),
+      resource.created_at().unix_millis()
+    ],
+  )?;
+  Ok(())
 }
 
 struct CachedRow {
@@ -254,12 +361,7 @@ fn write_references(
     [version.to_string()],
   )?;
   for (position, reference) in references.iter().enumerate() {
-    let (kind, target) = match reference.target {
-      ReferenceTarget::Connection(id) => ("connection", id.to_string()),
-      ReferenceTarget::McpServer(id) => ("mcp_server", id.to_string()),
-      ReferenceTarget::Secret(id) => ("secret", id.to_string()),
-      ReferenceTarget::Tool(id) => ("tool", id.to_string()),
-    };
+    let (kind, target) = target_columns(reference.target);
     connection.execute(
       "INSERT INTO shared_version_references (version_id, position, kind, target_id, name, role) \
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -274,6 +376,16 @@ fn write_references(
     )?;
   }
   Ok(())
+}
+
+/// The `kind` and `target_id` columns of a reference.
+fn target_columns(target: ReferenceTarget) -> (&'static str, String) {
+  match target {
+    ReferenceTarget::Connection(id) => ("connection", id.to_string()),
+    ReferenceTarget::McpServer(id) => ("mcp_server", id.to_string()),
+    ReferenceTarget::Secret(id) => ("secret", id.to_string()),
+    ReferenceTarget::Tool(id) => ("tool", id.to_string()),
+  }
 }
 
 fn load_references(connection: &Connection, version: &str) -> Result<Vec<VersionReference>, StoreError> {

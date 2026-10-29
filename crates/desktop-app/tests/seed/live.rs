@@ -7,7 +7,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, Version},
   run::{PreflightInput, preflight},
-  store::{ConnectionStore, ResourceStore, TaskStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
 };
 use orchester_store::ProjectDb;
 
@@ -76,12 +76,15 @@ fn seed_live_pipelines_pass_the_run_preflight_and_its_drafts_are_ready() {
   assert_eq!(gated, ["plan"]);
   let profiles = published::<AgentProfile>(&db).into_values().collect();
   let connections = db.connections().expect("connections");
+  let (mcp_servers, secrets) = (db.mcp_servers().expect("MCP servers"), db.secrets().expect("secrets"));
   for (name, (_, version)) in &pipelines {
     let problems = preflight(PreflightInput {
       pipeline: Some(version.body()),
       profiles: &profiles,
       tools: &BTreeMap::new(),
       connections: &connections,
+      mcp_servers: &mcp_servers,
+      secrets: &secrets,
     });
     assert!(problems.is_empty(), "{name} can run: {problems:?}");
   }

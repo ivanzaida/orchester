@@ -7,6 +7,7 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, BaseUrl, CatalogSource, CheckResult, Connection,
     ConnectionCheck, ConnectionKind, ConnectionStatus, EndpointPreset, GitHubHost, ModelCatalog, SignIn,
+    mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
   },
   id::{ConnectionId, RunId, SecretId},
   integration::{MergeKind, RunMerge},
@@ -15,7 +16,7 @@ use orchester_core::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
     capability::{PermissionOption, PermissionProblem, Unavailable},
   },
-  resource::{AgentProfile, Pipeline, ProviderSettings, StepKind},
+  resource::{AgentProfile, CommandProgram, Pipeline, ProviderSettings, StepKind},
   run::{BranchName, PreflightInput, PreflightProblem, StepFailure, TaskPhase, preflight},
   task::{Task, TaskStatus},
 };
@@ -52,6 +53,15 @@ fn connection(provider: AgentProvider, sign_in: SignIn) -> Connection {
 
 /// Preflight of the sample pipeline with every profile on `connection`, with `permissions`.
 fn problems_with(connection: &Connection, permissions: &AgentPermissions) -> Vec<PreflightProblem> {
+  problems_with_servers(connection, permissions, (&McpServerSelection::none(), &[]))
+}
+
+/// [`problems_with`], every profile choosing `chosen` and the project having `servers`.
+fn problems_with_servers(
+  connection: &Connection,
+  permissions: &AgentPermissions,
+  (chosen, servers): (&McpServerSelection, &[McpServer]),
+) -> Vec<PreflightProblem> {
   let mut config = Config::feature_delivery();
   for published in config.profiles.values_mut() {
     let body = published.body();
@@ -63,7 +73,8 @@ fn problems_with(connection: &Connection, permissions: &AgentPermissions) -> Vec
       body.model().clone(),
       ProviderSettings::default(),
     )
-    .with_permissions(permissions.clone());
+    .with_permissions(permissions.clone())
+    .with_mcp_servers(chosen.clone());
     *published = version(published.number().get(), moved);
   }
   preflight(PreflightInput {
@@ -71,7 +82,42 @@ fn problems_with(connection: &Connection, permissions: &AgentPermissions) -> Vec
     profiles: &config.profiles,
     tools: &BTreeMap::new(),
     connections: std::slice::from_ref(connection),
+    mcp_servers: servers,
+    secrets: &[],
   })
+}
+
+/// A profile that gives its agents an MCP server the project does not have, such as a shared version's reference not
+/// bound on this computer, does not run; a disabled one it has does.
+#[test]
+fn preflight_reports_an_mcp_server_missing_here() {
+  let permissions = AgentPermissions::before_permissions();
+  let codex = connection(AgentProvider::CodexCli, SignIn::SignedIn);
+  let mut server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("docs").expect("valid name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new("docs-mcp").expect("valid program"),
+      Vec::new(),
+      None,
+    )),
+    McpEnvironment::default(),
+    at(1),
+  )
+  .expect("valid server");
+  let chosen = McpServerSelection::new(vec![server.id()]).expect("one server");
+  let missing = problems_with_servers(&codex, &permissions, (&chosen, &[]));
+  assert!(missing.contains(&PreflightProblem::McpServerMissing { step: key("research") }));
+  assert!(
+    missing
+      .iter()
+      .all(|problem| matches!(problem, PreflightProblem::McpServerMissing { .. }))
+  );
+  server.set_enabled(false);
+  assert_eq!(
+    problems_with_servers(&codex, &permissions, (&chosen, std::slice::from_ref(&server))),
+    []
+  );
 }
 
 #[test]
@@ -205,6 +251,8 @@ fn preflight_reports_steps_whose_permissions_codex_cannot_enforce() {
     profiles: &profiles,
     tools: &BTreeMap::new(),
     connections: std::slice::from_ref(&codex),
+    mcp_servers: &[],
+    secrets: &[],
   });
   assert!(problems.contains(&PreflightProblem::PermissionsNotEnforceable {
     step: key("research"),
@@ -254,6 +302,8 @@ fn preflight_refuses_a_command_list_on_a_profile_that_asks() {
       profiles: &profiles,
       tools: &BTreeMap::new(),
       connections: std::slice::from_ref(&claude),
+      mcp_servers: &[],
+      secrets: &[],
     })
   };
   let asking = with_commands(CommandPermission::AskBefore);
@@ -279,6 +329,8 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
     profiles: &BTreeMap::new(),
     tools: &BTreeMap::new(),
     connections: &[],
+    mcp_servers: &[],
+    secrets: &[],
   });
   assert_eq!(
     problems[0],
@@ -290,6 +342,8 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
     profiles: &config.profiles,
     tools: &BTreeMap::new(),
     connections: &[],
+    mcp_servers: &[],
+    secrets: &[],
   });
   assert_eq!(none, [PreflightProblem::PipelineNotPublished]);
 }
