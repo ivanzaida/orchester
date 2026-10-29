@@ -1,6 +1,8 @@
-//! A profile page's permissions (`01c · Profile · permissions` `WAWHr`): Repository access with its extra writable
-//! folders, Commands and network, MCP servers as switches, and Approvals. An option the connection cannot enforce here
-//! cannot be chosen and says why; a widening change is asked about inside the section that widens it.
+//! A profile page's permissions (`01c · Profile · permissions` `WAWHr`, 07 `J1ixkr`): Repository access with its extra
+//! writable folders, Approvals with Manual's allowed commands, Network, and MCP servers as switches. An option the
+//! connection cannot enforce here cannot be chosen and says why; a widening change is asked about inside the section
+//! that widens it.
+mod approvals;
 mod commands;
 mod folders;
 
@@ -25,7 +27,7 @@ use orchester_workspace::{
   messages::Message,
 };
 
-pub(super) use self::{commands::CommandList, folders::FolderList};
+pub(super) use self::{approvals::mode_name, commands::CommandList, folders::FolderList};
 use super::fields::{Fields, Servers};
 use crate::{
   project::ShownProject,
@@ -44,19 +46,22 @@ use crate::{
 pub(super) enum Section {
   Connection,
   Repository,
-  Commands,
+  Network,
   Mcp,
   Approvals,
 }
 
 impl Section {
-  /// The section a widening reason is about.
+  /// The section a widening reason is about; the allowed commands are Manual's, in Approvals.
   pub(super) fn of(reason: &Message) -> Self {
     match reason.key {
       "appMcp.widens.repository" | "appMcp.widens.writableFolder" => Self::Repository,
-      "appMcp.widens.commands" | "appMcp.widens.network" => Self::Commands,
+      "appMcp.widens.network" => Self::Network,
       "appMcp.widens.mcpServers" => Self::Mcp,
-      "appMcp.widens.toolCallsUnasked" | "appMcp.widens.autoApprove" => Self::Approvals,
+      "appMcp.widens.commands"
+      | "appMcp.widens.toolCallsUnasked"
+      | "appMcp.widens.autoApprove"
+      | "appMcp.widens.autopilot" => Self::Approvals,
       _ => Self::Connection,
     }
   }
@@ -70,7 +75,7 @@ pub(super) struct Context<'a> {
   pub project: &'a ShownProject,
 }
 
-/// The four sections; `asked` opens in the one it names.
+/// The four sections, Approvals right after Repository access (07); `asked` opens in the one it names.
 pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Section, Element)>) -> Vec<Element> {
   let provider = context.fields.connection(context.listed).map(|c| c.provider());
   let (section, mut question) = match asked {
@@ -79,10 +84,10 @@ pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Sect
   };
   let mut take = |here: Section| if section == Some(here) { question.take() } else { None };
   let repository = repository(ctx, context, provider, take(Section::Repository));
-  let commands = commands_network(ctx, context, provider, take(Section::Commands));
+  let approvals = approvals::group(ctx, context, provider, take(Section::Approvals));
+  let network = network_section(ctx, context.fields, provider, take(Section::Network));
   let mcp = mcp(ctx, context, provider, take(Section::Mcp));
-  let approvals = approvals(ctx, context.fields, provider, take(Section::Approvals));
-  vec![repository, commands, mcp, approvals]
+  vec![repository, approvals, network, mcp]
 }
 
 fn section(id: &str, (title, count): (&str, Option<&str>), rows: Vec<Element>) -> Element {
@@ -185,28 +190,11 @@ fn repository(
   section("agent-repository", (&ctx.t("agents.repository"), None), rows)
 }
 
-fn commands_network(
-  ctx: &mut Ctx,
-  context: &Context<'_>,
-  provider: Option<AgentProvider>,
-  asked: Option<Element>,
-) -> Element {
-  let fields = context.fields;
-  let mut allowed = Column::new()
-    .id("agent-commands")
-    .width(Dimension::Pct(100.0))
-    .child(option_row(ctx, fields, provider, PermissionOption::AllowedCommands));
-  if let CommandPermission::Allowed(_) = fields.permissions.get().0.commands() {
-    allowed = allowed.child(ctx.mount_keyed::<CommandList>("agent-command-list", commands::props(context)));
-  }
-  let mut rows = vec![
-    option_row(ctx, fields, provider, PermissionOption::AskBeforeCommands),
-    allowed.into(),
-    option_row(ctx, fields, provider, PermissionOption::AnyCommand),
-    network(ctx, fields, provider),
-  ];
+/// *Network* (07 `I9OrmW`): the commands moved to Approvals.
+fn network_section(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, asked: Option<Element>) -> Element {
+  let mut rows = vec![network(ctx, fields, provider)];
   rows.extend(asked);
-  section("agent-network-section", (&ctx.t("agents.commandsNetwork"), None), rows)
+  section("agent-network-section", (&ctx.t("agents.network"), None), rows)
 }
 
 fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Element {
@@ -254,42 +242,6 @@ fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Eleme
         ))
     }))
     .into()
-}
-
-fn approvals(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, asked: Option<Element>) -> Element {
-  let available = provider.is_some_and(|p| !p.is_native());
-  if !available {
-    return unavailable_section(ctx, "agent-approvals", &ctx.t("agents.approvals"));
-  }
-  let mut rows = Vec::new();
-  for auto in [true, false] {
-    let (id, title, hint) = if auto {
-      ("agent-auto", "agents.auto", "agents.whenAskedHint")
-    } else {
-      ("agent-ask-tools", "agents.askTools", "agents.toolCallsHint")
-    };
-    let permissions = fields.permissions.get().0;
-    let on = if auto {
-      permissions.auto_approve()
-    } else {
-      permissions.interactive_tool_approvals()
-    };
-    let value = fields.permissions.clone();
-    let toggle = Toggle::new(id, ToggleKind::Switch, on, ctx.t(title))
-      .hide_label()
-      .on_change(move |on| {
-        value.update(|p| {
-          if auto {
-            p.0.set_auto_approve(on)
-          } else {
-            p.0.set_interactive_tool_approvals(on)
-          }
-        })
-      });
-    rows.push(field(id, &ctx.t(title), Some(&ctx.t(hint)), toggle).into());
-  }
-  rows.extend(asked);
-  section("agent-approvals", (&ctx.t("agents.approvals"), None), rows)
 }
 
 /// A section the connection offers nothing of (01e, a native connection).

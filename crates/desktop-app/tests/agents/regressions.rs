@@ -86,7 +86,7 @@ fn agents_selected_allowed_commands_keeps_prefixes_through_save() {
   );
   data::publish(&mut db, id, Timestamp::now()).expect("published prefix list");
   screen.open(id);
-  screen.click("agent-option-AllowedCommands");
+  // Manual shows its allowed commands under it (07).
   assert!(screen.text("agent-commands").contains("cargo test"));
   screen.set("agent-responsibility", "Keep command prefixes");
   screen.until("saved on its own", |s| {
@@ -138,11 +138,9 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
     .expect("API option");
   screen.click(&option);
   screen.set("agent-custom-model", "claude-test");
-  assert!(
-    screen
-      .text("agent-approvals")
-      .contains("does not offer approval switches")
-  );
+  assert!(screen.text("agent-mcp").contains("does not offer approval switches"));
+  // A native connection keeps Manual's allowed commands, without the MCP approvals switch.
+  assert!(screen.exists("agent-commands") && !screen.exists("agent-ask-tools"));
   screen.until("saved native on its own", |s| {
     s.listed().profile(id).expect("profile").profile.connection() == native.id()
   });
