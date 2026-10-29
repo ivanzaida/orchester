@@ -5,7 +5,7 @@
 //! switches, and a run never goes back; auto mode's tools answer `retired`, naming what replaces them. Filters:
 //! `approval_mode_effective` (the window's switch), `approval_mode_mcp` (the tools).
 use orchester_app::routes::{ProjectPage, ProjectSettingsTab, Route};
-use orchester_core::run::AllowAutopilot;
+use orchester_core::run::{AllowAutopilot, Answerer};
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
@@ -144,14 +144,17 @@ fn approval_mode_mcp_set_run_manual_is_taken_without_the_persons_switches() {
     .expect("the run's id")
     .parse()
     .expect("a run id");
-  assert!(
-    ProjectDb::open(&seeded.repo)
-      .expect("db")
-      .run_switched_to_manual(id)
-      .expect("read")
+  let db = ProjectDb::open(&seeded.repo).expect("db");
+  assert!(db.run_switched_to_manual(id).expect("read"));
+  let switch = db.run_manual_switch(id).expect("read").expect("recorded");
+  assert_eq!(
+    switch.by,
+    Answerer::Automation,
+    "its Conversation says automation switched it"
   );
-  // Switching again is taken too: a run only ever drops to Manual.
+  // Switching again is taken too: a run only ever drops to Manual, and the first switch stays the one recorded.
   served.ok("set_run_manual", &arguments);
+  assert_eq!(db.run_manual_switch(id).expect("read"), Some(switch));
   let read = served.ok("get_approvals", &json!({ "project": "Kontur" }));
   let listed = read["approvals"]["runs"]
     .as_array()

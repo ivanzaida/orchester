@@ -1,14 +1,22 @@
 //! The shared projects' live event streams (`docs/architecture/server.md`, "Live updates"): one per shared project on
 //! this computer while its server takes this computer's token and the person is a member, each following the project's
-//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]). Started with the
-//! connection monitor and kept in step with the servers and the projects: a project shared, joined or made local, a
-//! sign-in or sign-out starts or ends its stream.
+//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]) and saying how it stands
+//! ([`state`]). Started with the connection monitor and kept in step with the servers and the projects: a project
+//! shared, joined or made local, a sign-in or sign-out starts or ends its stream.
 
 mod apply;
 mod config;
+mod state;
 pub mod stream;
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+  collections::{HashMap, HashSet},
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use orchester_api::{
   SharedTask, Versions,
@@ -20,8 +28,10 @@ use orchester_core::{
 };
 use tokio::task::JoinHandle;
 
+pub(super) use self::state::SyncStates;
 pub use self::{
   config::{Waiting, bind, use_here, waiting},
+  state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
@@ -52,19 +62,31 @@ pub async fn run(servers: Servers) {
 struct Following {
   project: ProjectId,
   task: JoinHandle<()>,
+  /// Whether the stream is still the project's: an aborted one ends only at its next await, and says no state before.
+  current: Arc<AtomicBool>,
 }
 
 impl Drop for Following {
   fn drop(&mut self) {
+    self.current.store(false, Ordering::Release);
     self.task.abort();
   }
 }
 
-/// Keeps one stream for each of `projects` that follows its server now, and ends the others.
+/// Keeps one stream for each of `projects` that follows its server now, and ends the others; the projects whose person
+/// is no longer a member read so, and those without a stream have no state.
 fn keep(servers: &Servers, streams: &mut HashMap<PathBuf, Following>, projects: Vec<ProjectServer>) {
   let mut kept = HashMap::new();
-  for project in projects.into_iter().filter(|project| follows(servers, project)) {
+  let mut not_members = Vec::new();
+  for project in projects {
     let root = project.repo_root().to_owned();
+    if project.link().removed_at.is_some() {
+      not_members.push(root);
+      continue;
+    }
+    if !follows(servers, &project) {
+      continue;
+    }
     let id = project.link().project;
     let running = streams
       .remove(&root)
@@ -73,6 +95,8 @@ fn keep(servers: &Servers, streams: &mut HashMap<PathBuf, Following>, projects: 
     kept.insert(root, following);
   }
   *streams = kept;
+  let followed: HashSet<PathBuf> = streams.keys().cloned().collect();
+  servers.keep_sync_states(&followed, not_members);
 }
 
 /// Whether `project`'s server can stream to this computer: someone is signed in there, and the person is a member.
@@ -84,21 +108,34 @@ fn follows(servers: &Servers, project: &ProjectServer) -> bool {
 
 fn start(servers: &Servers, project: ProjectServer) -> Following {
   let id = project.link().project;
+  let current = Arc::new(AtomicBool::new(true));
   let live = Live {
     servers: servers.clone(),
     project,
+    current: current.clone(),
   };
   let task = tokio::spawn(async move {
-    let stopped = follow(&live, live.project.repo_root(), &SystemClock).await;
+    let root = live.project.repo_root();
+    let stopped = follow(&live, root, &SystemClock).await;
     tracing::debug!(?stopped, project = %live.project.link().project, "a project's event stream stopped");
+    // Signed out, the project has no state: its server's connection says so. Not a member stays.
+    if stopped == Stopped::SignedOut {
+      live.servers.set_sync_state(root, None, &live.current);
+    }
   });
-  Following { project: id, task }
+  Following {
+    project: id,
+    task,
+    current,
+  }
 }
 
 /// A shared project's stream through its server's stored trust and token.
 struct Live {
   servers: Servers,
   project: ProjectServer,
+  /// The stream's [`Following::current`].
+  current: Arc<AtomicBool>,
 }
 
 impl Source for Live {
@@ -151,5 +188,11 @@ impl Source for Live {
 
   fn changed(&self) {
     self.servers.shared_changed();
+  }
+
+  fn state(&self, state: SyncState) {
+    self
+      .servers
+      .set_sync_state(self.project.repo_root(), Some(state), &self.current);
   }
 }

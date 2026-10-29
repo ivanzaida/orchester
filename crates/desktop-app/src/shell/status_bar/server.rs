@@ -17,7 +17,7 @@ use orchester_core::id::ServerId;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
-  sharing::{Connection, ServerEntry, Servers},
+  sharing::{Connection, ServerEntry, Servers, sync::SyncState},
 };
 
 use super::{
@@ -59,6 +59,16 @@ impl ServerState {
       Self::Offline => "offline",
       Self::SignedOut => "signed-out",
       Self::CertificateChanged => "certificate-changed",
+    }
+  }
+
+  /// The state once the project's live stream stands at `stream`: a stream that waits to connect again shows its
+  /// server connecting, or offline once the waits reached their longest, also while the server answered otherwise.
+  const fn streamed(self, stream: Option<SyncState>) -> Self {
+    match (self, stream) {
+      (Self::Connected, Some(SyncState::Reconnecting { .. })) => Self::Connecting,
+      (Self::Connected | Self::Connecting, Some(SyncState::Offline { .. })) => Self::Offline,
+      (state, _) => state,
     }
   }
 }
@@ -106,9 +116,23 @@ impl ServerFacts {
       },
     }
   }
+
+  /// The item once the shown project's live stream stands at `stream` ([`ServerState::streamed`]); the project's
+  /// server is the one the item names.
+  pub fn streamed(self, stream: Option<SyncState>) -> Self {
+    match self {
+      Self::One { id, name, state } => Self::One {
+        id,
+        name,
+        state: state.streamed(stream),
+      },
+      facts => facts,
+    }
+  }
 }
 
-/// The servers as the item shows them for the project at `project_root`, read again whenever a connection changes.
+/// The servers as the item shows them for the project at `project_root`, read again whenever a connection or the
+/// project's live stream changes.
 pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathBuf>) -> ServerFacts {
   let revision = ctx
     .stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
@@ -128,15 +152,18 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
     .future(
       (revision, project_root, servers.clone()),
       |(_, root, servers)| async move {
-        background::run(move || {
+        background::run(move || -> Result<ServerFacts, ()> {
           let entries = servers.entries().map_err(|error| {
             tracing::warn!(%error, "the status bar could not read the servers");
           })?;
           // A project whose database cannot be read names no server here; its own screens say why.
-          let linked = root
-            .and_then(|root| ProjectDb::open(&root).and_then(|db| db.sharing()).ok().flatten())
-            .map(|link| link.server);
-          Ok::<_, ()>(ServerFacts::of(&entries, linked))
+          let Some((root, link)) = root.and_then(|root| {
+            let link = ProjectDb::open(&root).and_then(|db| db.sharing()).ok().flatten()?;
+            Some((root, link))
+          }) else {
+            return Ok(ServerFacts::of(&entries, None));
+          };
+          Ok(ServerFacts::of(&entries, Some(link.server)).streamed(servers.sync_state(&root)))
         })
         .await
         .map_err(drop)?
