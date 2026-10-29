@@ -6,10 +6,11 @@
 //! here, so preflight reports it missing. When a person binds a reference, the local bodies that name it are written
 //! again ([`bind`]). A teammate's version that widens what agents may do here waits for the person's *Use v<N> here*
 //! ([`waiting`]). Skills are not kept yet: their parts travel apart from their bodies, by hash. An admin publishes
-//! from this computer through [`RemoteResourceStore`].
+//! from this computer through [`RemoteResourceStore`]; Share uploads the project's own configuration ([`upload`]).
 
 mod bindings;
 mod publish;
+mod upload;
 mod waiting;
 
 use std::path::Path;
@@ -21,7 +22,7 @@ use orchester_core::{
   name::Name,
   resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, ResourceKind, Slug, Tool},
   run::Answerer,
-  sharing::{Binding, SharedBody, resolve},
+  sharing::{Binding, Reference, SharedBody, resolve},
   store::{ConnectionStore, McpServerStore, SecretStore},
   time::Timestamp,
 };
@@ -33,6 +34,7 @@ use serde_json::Value;
 
 pub use self::{
   publish::{ConfigServer, RemoteResourceStore},
+  upload::{keep_uploaded_configuration, upload_configuration},
   waiting::{Waiting, use_here, waiting},
 };
 use super::stream::{Source, blocking};
@@ -173,6 +175,20 @@ fn reference(shared: &SharedReference) -> VersionReference {
     },
     name: shared.name.clone(),
     role: shared.role.clone(),
+  }
+}
+
+/// A reference core made of a local id, as a version sent to the server carries it.
+fn shared_reference(reference: &Reference) -> SharedReference {
+  let target = match reference {
+    Reference::Connection { id, .. } => SharedTarget::Connection { id: *id },
+    Reference::McpServer { id, .. } => SharedTarget::McpServer { id: *id },
+    Reference::Secret { id, .. } => SharedTarget::Secret { id: *id },
+  };
+  SharedReference {
+    target,
+    name: reference.name().to_owned(),
+    role: reference.role().map(str::to_owned),
   }
 }
 

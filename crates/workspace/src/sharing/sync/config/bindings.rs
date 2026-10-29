@@ -46,6 +46,49 @@ pub(super) fn bind_new(db: &mut ProjectDb, references: &[SharedReference]) -> Re
   Ok(bound(&kept))
 }
 
+/// Binds each of `references` that has no binding yet to the entity it was made of: a version this computer uploaded
+/// names its own connections, MCP servers and secrets by their ids, so they mean the same here (Share).
+pub(super) fn bind_own(db: &mut ProjectDb, references: &[SharedReference]) -> Result<(), StoreError> {
+  let kept = db.reference_bindings()?;
+  for reference in references {
+    let own = match reference.target {
+      SharedTarget::Connection { id } => BoundReference::Connection {
+        reference: id,
+        bound: Some(Bound {
+          local: id,
+          by: BoundBy::Person,
+        }),
+      },
+      SharedTarget::McpServer { id } => BoundReference::McpServer {
+        reference: id,
+        bound: Some(Bound {
+          local: id,
+          by: BoundBy::Person,
+        }),
+      },
+      SharedTarget::Secret { id } => BoundReference::Secret {
+        reference: id,
+        bound: Some(Bound {
+          local: id,
+          by: BoundBy::Person,
+        }),
+      },
+      SharedTarget::Tool { .. } => continue,
+    };
+    let target = binding_target(own);
+    if kept.iter().any(|binding| binding_target(binding.reference) == target) {
+      continue;
+    }
+    db.set_reference_binding(&ReferenceBinding {
+      reference: own,
+      name: reference.name.clone(),
+      role: reference.role.clone(),
+      changed_at: Timestamp::now(),
+    })?;
+  }
+  Ok(())
+}
+
 /// The bindings of `kept` that bind their reference, as core resolves bodies with them. A reference whose role this
 /// version does not know stays unresolved: core names a connection and a secret by their role.
 pub(super) fn bound(kept: &[ReferenceBinding]) -> Vec<Binding> {

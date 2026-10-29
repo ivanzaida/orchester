@@ -5,8 +5,8 @@
 //! wait 1 s doubling to 60 s with jitter, on a settable clock; the project's state moves through *live*,
 //! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
 //! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
-//! without *Check again*. The team's configuration comes with it ([`config`]), and its admins publish it from here
-//! ([`publish`]).
+//! without *Check again*. The team's configuration comes with it ([`config`]), its admins publish it from here
+//! ([`publish`]), Share uploads it with its history and Make local keeps it ([`share`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
@@ -15,6 +15,7 @@ mod desktop;
 mod http;
 mod publish;
 mod server;
+mod share;
 #[path = "../support/mod.rs"]
 mod support;
 mod widening;
@@ -156,18 +157,7 @@ impl Workspace {
       Name::new("Orchester").expect("name"),
     );
     let mut db = ProjectDb::create(repo.path(), project).expect("the project database");
-    let link = SharingLink {
-      server: ServerId::generate(),
-      project: server.project,
-      key: ProjectKey::new("ORC").expect("key"),
-      role: Some(role),
-      joined_at: Timestamp::from_unix_millis(1),
-      cursor: 0,
-      last_synced_at: Timestamp::from_unix_millis(1),
-      removed_at: None,
-      address: Some("https://team.example/orchester".to_owned()),
-    };
-    db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
+    link(&mut db, server, role);
     let root = repo.path().to_owned();
     Self { _repo: repo, root }
   }
@@ -189,6 +179,23 @@ impl Workspace {
     let root = self.root.clone();
     tokio::spawn(async move { follow(&member, &root, &SystemClock).await })
   }
+}
+
+/// Links the project of `db` to the server's project, its cache empty and without a cursor, the person's role there
+/// `role`.
+fn link(db: &mut ProjectDb, server: &TeamServer, role: MemberRole) {
+  let link = SharingLink {
+    server: ServerId::generate(),
+    project: server.project,
+    key: ProjectKey::new("ORC").expect("key"),
+    role: Some(role),
+    joined_at: Timestamp::from_unix_millis(1),
+    cursor: 0,
+    last_synced_at: Timestamp::from_unix_millis(1),
+    removed_at: None,
+    address: Some("https://team.example/orchester".to_owned()),
+  };
+  db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
 }
 
 /// Waits until `seen` holds, at most `within`; `what` names it when it does not.
