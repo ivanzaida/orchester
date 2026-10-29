@@ -462,16 +462,7 @@ impl FieldBox {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .on_focus(move || gained.set(true))
-      .on_blur({
-        let regroup = regroup_on_leave(lost, props.value.clone(), props.group_separator.clone());
-        let on_leave = props.on_leave.clone();
-        move || {
-          regroup();
-          if let Some(commit) = &on_leave {
-            commit();
-          }
-        }
-      });
+      .on_blur(leave_field(lost, props));
     if props.masked {
       input = input.mask();
     }
@@ -570,20 +561,20 @@ fn clear_button(props: &FieldInput) -> Option<Button> {
 }
 
 /// Leaving the field ends its focus and, for a whole number, groups its digits once more: a value set
-/// without typing (pasted all at once, or by a tool) reads like a typed one.
-fn regroup_on_leave(
-  focused: Signal<bool>,
-  value: Signal<String>,
-  separator: Option<Arc<str>>,
-) -> impl Fn() + Send + Sync {
+/// without typing (pasted all at once, or by a tool) reads like a typed one. Then `props`' leave handler runs.
+fn leave_field(focused: Signal<bool>, props: &FieldInput) -> impl Fn() + Send + Sync + use<> {
+  let (value, separator) = (props.value.clone(), props.group_separator.clone());
+  let on_leave = props.on_leave.clone();
   move || {
     focused.set(false);
-    let Some(separator) = &separator else {
-      return;
-    };
-    let text = value.get_untracked();
-    if let Some(grouped) = regroup(&text, separator).filter(|grouped| *grouped != text) {
-      value.set(grouped);
+    if let Some(separator) = &separator {
+      let text = value.get_untracked();
+      if let Some(grouped) = regroup(&text, separator).filter(|grouped| *grouped != text) {
+        value.set(grouped);
+      }
+    }
+    if let Some(commit) = &on_leave {
+      commit();
     }
   }
 }
