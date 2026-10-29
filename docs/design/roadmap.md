@@ -94,7 +94,7 @@ changelog.
 ## The screens
 
 Pencil designs come first (on the *Orchester design* pipeline), in the desktop file
-`C:/Users/lurkm/.pencil/documents/87147a2b-89b6-4bf9-ac60-a41596df72da/orchester.pen`, using the Modules pages'
+`crates/desktop-app/design/orchester.pen`, using the Modules pages'
 geometry (`Modules · redesign` `oEELJ`, the task page's header). Confirmations are modals, new things are pages
 (decision 15). Rough wireframes for discussion (not a design to build from) are on the board `Roadmap ·
 wireframes` `HtxlM` of that file: 01 Timeline, 02 Now / Next / Later, 03 Releases, 03b Modules, 04 release Summary,
