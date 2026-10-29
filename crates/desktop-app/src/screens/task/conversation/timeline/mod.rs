@@ -3,12 +3,14 @@
 //! person: a step's divider, finished steps folded into one line,
 //! the steps a failure kept from starting, returns and restarts and the run's end ([`divider`]); an agent's
 //! message with its tool groups ([`message`], [`chips`]); the person's message, or the Orchestrator chat's; a card
-//! that waits for or records a decision ([`cards`], C3's); a problem row ([`entry`]); a step's result card
+//! that waits for or records a decision ([`cards`], C3's), or the quiet row of a request the run's approval mode
+//! approved, those of Autopilot grouped per step ([`approvals`]); a problem row ([`entry`]); a step's result card
 //! ([`result`]); what the merge queue did with the run, among them by time ([`delivery`]); after them the answers and
 //! messages the Orchestrator chat proposed that no one applied ([`proposal`]); and last, while an agent works, the
 //! working line ([`working`]). A person's choice to open or fold a step or a group is kept while the timeline grows
 //! ([`Toggles`]).
 
+mod approvals;
 mod cards;
 mod chips;
 mod delivery;
@@ -396,6 +398,7 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
     Row::NotStarted { steps, .. } => divider::not_started(ctx, steps),
     Row::Agent(agent) => message::agent_row(ctx, &timeline, agent),
     Row::Item(item) | Row::Line(item) => item_row(ctx, &timeline, item),
+    Row::Approvals { key, items, open } => approvals::rows(ctx, &timeline, (key, items), *open),
     Row::Entry { key, entry } => entry::tool_row(ctx, &timeline, key, entry),
   }
 }

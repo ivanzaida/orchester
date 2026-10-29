@@ -3,13 +3,15 @@
 //! Each step execution that ran has its header, then in the order they happened its agent's
 //! messages, the person's messages it took, its tool groups ([`group`]), the cards that wait for or
 //! record a person's decision (question, plan, tool approval) and its problems on their own; its
-//! result closes it. A tool request Orchester answered itself as it came (the profile's permissions, a
-//! rule of the run, auto-approval) is no card: its call's entry in the tool group carries the mark. An attempt that
+//! result closes it. A tool request the run's approval mode approved itself is a quiet row ([`approval`]), which
+//! follows the tool group its call is in rather than splitting it; one a rule of the run answered as it came is no
+//! card: its call's entry in the tool group carries the mark. An attempt that
 //! returned or restarted the work starts with its mark ([`mark`]). Orchester's notices that the base branch moved sit
 //! in the step that read them ([`base_moved`]). Messages and notices that wait for a step follow, and a run that
 //! ended closes with its end. What is shown of it is [`view`]'s; what the merge queue did with the run joins the
 //! shown rows by time ([`delivery`]).
 
+pub mod approval;
 pub mod base_moved;
 pub mod delivery;
 pub mod group;
@@ -23,18 +25,18 @@ pub mod view;
 use std::sync::Arc;
 
 use orchester_core::{
-  connection::stream::RunnerProblem,
   id::StepExecutionId,
   integration::RunMerge,
   question::AskedQuestions,
   run::{
-    DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunFailure, RunStatus, StepOutcome, StepResult,
+    AnswerRecord, DecidedToolApproval, PendingToolApproval, Plan, RunFailure, RunStatus, StepOutcome, StepResult,
     StepStatus,
   },
   time::Timestamp,
 };
 
 pub use self::{
+  approval::{ApprovalCard, approval_key, named_request},
   group::ToolGroup,
   mark::Mark,
   question::ChoiceCard,
@@ -109,29 +111,6 @@ pub struct NextStep {
   pub agent: Option<Arc<str>>,
 }
 
-/// A tool request a person decides (ORC-41): pending, decided or interrupted.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ApprovalCard {
-  pub request: PendingToolApproval,
-  /// The step whose agent asked.
-  pub step: Arc<str>,
-  /// `None` while it waits; `Some(None)` when it was interrupted.
-  pub decided: Option<Option<orchester_core::run::ToolApprovalDecision>>,
-  /// Who answered it, once it is answered and that was recorded.
-  pub decided_by: Option<orchester_core::run::DecidedBy>,
-  /// When it was answered or ended, once it was.
-  pub decided_at: Option<Timestamp>,
-  /// What auto mode did with it, once it is answered; while it waits, the shown request says.
-  pub review: Option<orchester_core::run::review::Review>,
-  /// While it waits: auto mode's reviewer is judging it, so it waits for the reviewer, not for the person (who may
-  /// still answer it).
-  pub reviewing: bool,
-  /// The person approved it for every run of the project ([`orchester_core::run::DecidedToolApproval::for_project`]).
-  pub for_project: bool,
-  /// The words its denial told the agent, when it was denied with a message.
-  pub note: Option<orchester_core::run::DenialNote>,
-}
-
 /// How a step execution ended, as its result card says.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResultCard {
@@ -180,6 +159,8 @@ pub struct Sources<'a> {
   pub pending: &'a [PendingToolApproval],
   pub reviewing: &'a [String],
   pub decided: &'a [DecidedToolApproval],
+  /// How the run's approval mode answered each request, as recorded.
+  pub answers: &'a [AnswerRecord],
   /// Its agents' questions with suggested answers.
   pub questions: &'a [AskedQuestions],
   pub merge: Option<&'a RunMerge>,
@@ -295,7 +276,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
       .filter(|plan| plan.execution == execution)
       .map(|plan| plan_item(run, plan, (&agent, &name))),
   );
-  between.extend(approval_items(sources, execution, &name));
+  between.extend(approval::approval_items(sources, execution, &name));
   between.extend(base_moved::items(run, Some(execution)));
   let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
   items.extend(result_item(run, sources.entries, execution));
@@ -304,9 +285,9 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
 
 /// The transcript of `execution` with `between` (its messages and cards) in time order: agent
 /// messages, tool groups, problems, messages and cards. Anything that is not a tool event ends the
-/// tool group before it, so a message sent between two tool calls splits their group. Of two at the
-/// same time, the message or card comes first. A step result the agent wrote is its result card's,
-/// not a message.
+/// tool group before it, so a message sent between two tool calls splits their group; a request's quiet
+/// row does not, and follows the group its call is in. Of two at the same time, the message or card
+/// comes first. A step result the agent wrote is its result card's, not a message.
 pub fn interleaved(
   entries: &[Entry],
   execution: StepExecutionId,
@@ -317,7 +298,9 @@ pub fn interleaved(
   let mut between = between.into_iter().peekable();
   let mut items = Vec::new();
   let mut tools: Vec<Entry> = Vec::new();
-  let flush = |tools: &mut Vec<Entry>, items: &mut Vec<Item>| {
+  // Quiet rows that came while a group grew: they follow it.
+  let mut quiet: Vec<Item> = Vec::new();
+  let flush = |tools: &mut Vec<Entry>, quiet: &mut Vec<Item>, items: &mut Vec<Item>| {
     if let Some(first) = tools.first() {
       items.push(Item {
         key: format!("tools-{}-{}", first.sequence, first.part).into(),
@@ -326,13 +309,18 @@ pub fn interleaved(
         kind: ItemKind::Tools(ToolGroup::new(std::mem::take(tools))),
       });
     }
+    items.append(quiet);
   };
   for entry in entries
     .iter()
     .filter(|entry| entry.execution == execution && !group::shown_as_card(entry))
   {
     while let Some(item) = between.next_if(|item| item.at <= entry.at) {
-      flush(&mut tools, &mut items);
+      if approval::is_quiet(&item) && !tools.is_empty() {
+        quiet.push(item);
+        continue;
+      }
+      flush(&mut tools, &mut quiet, &mut items);
       items.push(item);
     }
     if group::tool_kind(entry).is_some() {
@@ -348,7 +336,7 @@ pub fn interleaved(
       },
       _ => ItemKind::Problem(entry.clone()),
     };
-    flush(&mut tools, &mut items);
+    flush(&mut tools, &mut quiet, &mut items);
     items.push(Item {
       key: format!("entry-{}-{}", entry.sequence, entry.part).into(),
       execution: Some(execution),
@@ -356,7 +344,7 @@ pub fn interleaved(
       kind,
     });
   }
-  flush(&mut tools, &mut items);
+  flush(&mut tools, &mut quiet, &mut items);
   items.extend(between);
   items
 }
@@ -412,62 +400,6 @@ fn next_step(run: &RunView, plan: &Plan) -> Option<NextStep> {
     step: step.name.clone(),
     agent: step.agent.clone().filter(|_| !step.tool_step),
   })
-}
-
-fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<str>) -> Vec<Item> {
-  let pending = sources
-    .pending
-    .iter()
-    .filter(|request| request.execution == execution)
-    .map(|request| ApprovalCard {
-      request: request.clone(),
-      step: step.clone(),
-      decided: None,
-      decided_by: None,
-      decided_at: None,
-      review: None,
-      reviewing: sources.reviewing.contains(&request.id),
-      for_project: false,
-      note: None,
-    });
-  let decided = sources
-    .decided
-    .iter()
-    .filter(|decided| decided.request.execution == execution)
-    .filter(|decided| decided.decided_by.is_none_or(DecidedBy::answered_waiting))
-    .map(|decided| ApprovalCard {
-      request: decided.request.clone(),
-      step: step.clone(),
-      decided: Some(decided.decision),
-      decided_by: decided.decided_by,
-      decided_at: Some(decided.decided_at),
-      review: decided.review.clone(),
-      reviewing: false,
-      for_project: decided.for_project,
-      note: decided.note.clone(),
-    });
-  pending
-    .chain(decided)
-    .map(|card| Item {
-      key: approval_key(&card.request.id),
-      execution: Some(execution),
-      at: card.request.requested_at,
-      kind: ItemKind::Approval(card),
-    })
-    .collect()
-}
-
-/// The key of the card of tool request `id`.
-pub fn approval_key(id: &str) -> Arc<str> {
-  format!("approval-{id}").into()
-}
-
-/// The key of the card of the tool request problem `entry` names: one that ended without a decision.
-pub fn named_request(entry: &Entry) -> Option<Arc<str>> {
-  match &entry.kind {
-    EntryKind::Problem(RunnerProblem::DecisionInterrupted { request, .. }) => Some(approval_key(request)),
-    _ => None,
-  }
 }
 
 /// The key of the step whose items hold the item `key` among `items`; `None` when there is no such

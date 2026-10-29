@@ -152,12 +152,14 @@ pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
     Given::Deny,
     (ButtonKind::Secondary, Icon::Ban, "cards.approval.deny"),
   );
+  // A request that came by the run's approval mode, with its reason, is approved with *Approve* (04 `H6kPd`).
+  let approve = if answering.shown.is_some_and(|shown| shown.came_to_person.is_some()) {
+    "cards.approval.approve"
+  } else {
+    "cards.approval.approveOnce"
+  };
   let once = answering
-    .button(
-      ctx,
-      Given::ApproveOnce,
-      (ButtonKind::Primary, Icon::Check, "cards.approval.approveOnce"),
-    )
+    .button(ctx, Given::ApproveOnce, (ButtonKind::Primary, Icon::Check, approve))
     .element_ref(answering.once.clone());
   let row = Row::new()
     .id(format!("{id}-answers"))

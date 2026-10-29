@@ -1,5 +1,6 @@
 //! What a waiting tool request asks (`Approval card` `gwOaJ`, with the agent's note of `YDJsC`): *Approve
-//! command?* and since when it waits; what the agent wants and what waiting does; its category chip and the
+//! command?* and since when it waits; what the agent wants and what waiting does; why it came to the person by
+//! the run's approval mode ([`super::came`]); its category chip and the
 //! setting it asks under; why the classifier asks; that auto mode is reviewing it, or why it did not (the hard
 //! rule that held it, a note as *reviewing* is: no frame draws it); the command whole, or an MCP call's
 //! arguments, in a mono box with Copy; the agent · step · run · task, the working directory and the agent's
@@ -22,7 +23,7 @@ use super::{
     Place,
     frame::{head as card_head, note},
   },
-  words,
+  came, words,
 };
 use crate::{
   theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize},
@@ -60,8 +61,8 @@ pub(super) fn head(ctx: &Ctx, id: &str, request: &PendingToolApproval) -> Elemen
 }
 
 /// Everything between the head and the answers. In the Needs you panel the item already says what the agent
-/// asks, so the card starts at its subject (`YDJsC`). While a message is written the editor says what the agent is
-/// told (`editing`), so the body does not (`D2fdTQ`).
+/// asks, so the card starts at why it came to the person, or at its subject (`YDJsC`). While a message is written
+/// the editor says what the agent is told (`editing`), so the body does not (`D2fdTQ`).
 pub(super) fn body(
   ctx: &mut Ctx,
   id: &str,
@@ -79,6 +80,11 @@ pub(super) fn body(
         .into(),
     );
   }
+  body.extend(
+    shown
+      .and_then(|shown| shown.came_to_person.as_ref())
+      .map(|came| came::line(ctx, id, (place, request.agent.as_str()), came)),
+  );
   body.push(subject(ctx, id, request, shown));
   let reason = match words::own_reach(request) {
     Some(reach) => Some(words::own_reason(ctx, reach)),

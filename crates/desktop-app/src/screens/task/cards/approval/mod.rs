@@ -1,16 +1,19 @@
 //! A tool request an agent waits on (`Approval card` `gwOaJ`): on `surface_raised` in a `warning` stroke,
-//! radius 10, 14 by 16 inside and 12 between its parts: what it asks ([`request`]), its answers
-//! ([`answers`]) and what automation may do with it. The answers are the approval dialog's, given here (D6);
+//! radius 10, 14 by 16 inside and 12 between its parts: what it asks ([`request`]), with why it came to the person
+//! by the run's approval mode ([`came`]), its answers ([`answers`]) and what automation may do with it. The answers
+//! are the approval dialog's, given here (D6);
 //! which a request offers is core's decision (`tasks::approvals::ApprovalChoices`), read with the project's
 //! waiting requests. *Deny with a message* puts its editor in place of the answers ([`message`], `D2fdTQ`) until
 //! *Back*. While auto mode's reviewer judges it, it is a quiet row until the person chooses to answer it
 //! ([`reviewing`]). Once it is answered, or its agent stopped waiting, it is a quiet row that says how, by whom and
 //! when ([`decided`]), with a denial's message; as soon as the runner takes the person's answer, before the run is
-//! read again.
+//! read again. One the run's approval mode approved without the person is a quiet row of its own ([`quiet`]).
 
 mod answers;
+mod came;
 mod decided;
 mod message;
+mod quiet;
 mod request;
 mod reviewing;
 mod words;
@@ -28,6 +31,7 @@ use lurq::{
 use orchester_core::run::{Answerer, DecidedBy, ToolApprovalDecision};
 use orchester_workspace::tasks::{approvals::ShownApproval, timeline::ApprovalCard};
 
+pub(crate) use self::quiet::line as quiet_line;
 use self::{
   answers::{Answering, approval_answer},
   decided::Decided,
@@ -51,6 +55,9 @@ struct ApprovalProps {
 impl lurq::app::component::DevtoolsInspectable for ApprovalProps {}
 
 pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element {
+  if card.quiet().is_some() {
+    return quiet::line(ctx, &format!("cards-approval-{}", card.request.id), card, None);
+  }
   ctx.mount_keyed::<ApprovalView>(
     &format!("cards-approval-{}", card.request.id),
     ApprovalProps {

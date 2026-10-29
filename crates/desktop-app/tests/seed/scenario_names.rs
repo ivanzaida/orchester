@@ -26,6 +26,7 @@ fn seed_names_every_scenario_once() {
       "changes",
       "cards",
       "cards-auto-mode",
+      "cards-approval-modes",
       "decisions",
       "deliverables",
       "delivery",
