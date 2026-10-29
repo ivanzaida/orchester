@@ -4,6 +4,7 @@
 //! let go, in the same room, and a section that reads inside a shown page leaves the rest of the page as it is.
 
 mod areas;
+mod fits;
 mod harness;
 mod in_place;
 #[allow(

@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::usage::Period;
-use orchester_workspace::usage::{Dashboard, DashboardState};
+use orchester_workspace::usage::{Dashboard, DashboardState, UsageQuery};
 
 use super::{
   Requery, Views,
@@ -53,18 +53,18 @@ pub fn unread_runs(ctx: &Ctx, dashboard: &Dashboard) -> Option<Element> {
 const FAILED_HEIGHT: f32 = 350.0;
 
 /// While reading (`11 Usage · loading` `P74Xv`): the summary's names over bones, and the two charts' cards with
-/// their titles and switches over their bones.
-pub fn loading(ctx: &mut Ctx, project: Option<&str>, views: &Signal<Views>) -> Vec<Element> {
+/// their titles and switches over their bones; the chart's caption and days are `query`'s.
+pub fn loading(ctx: &mut Ctx, project: Option<&str>, views: &Signal<Views>, query: &UsageQuery) -> Vec<Element> {
   let reads = match project {
     Some(project) => ctx.t_args("usage.loading.tokens", [("project", project)]),
     None => ctx.t("usage.loading.tokensEverywhere"),
   };
-  let tokens_bones = reading::tokens(ctx, reads.clone());
+  let tokens_bones = reading::tokens(ctx, reads.clone(), (query, views.get().measure));
   let tokens = Card::new("usage-tokens", ctx.t("usage.tokens.title"))
     .trailing(tokens::measure_switch(ctx, views))
     .trailing(tokens::tokens_view_switch(ctx, views))
     .fill()
-    .body([state_room(tokens_bones)]);
+    .body(tokens_bones);
   let menu = IconButton::new("usage-limits-menu", Icon::Ellipsis, ctx.t("usage.limits.menu")).render(ctx);
   let limits_bones = reading::limits(ctx);
   let limits = Card::new("usage-limits", ctx.t("usage.limits.title"))

@@ -2,7 +2,8 @@
 //! and *12 / 18 tasks*, a 4 high meter of what is done, and its forecast (*Likely Nov 2 · 85% by Nov 4*, or why there
 //! is none); then the queued work with its 85% date, while any is queued. *Delivery ↗* opens the Delivery view. Read
 //! off the UI thread (`orchester_workspace::overview::delivery`) when the project's tasks were saved, never per frame;
-//! a reading that fails stands in the section's place with Try again (05 `JzNRO`).
+//! while it is read the modules are bones (`super::skeleton::delivery`), and a reading that fails stands in the
+//! section's place with Try again (05 `JzNRO`).
 
 use std::path::PathBuf;
 
@@ -32,6 +33,7 @@ use super::section::{SIDE_LINE_HEIGHT, head, line, link, section};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
+  services::Services,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::{Failure, LastFailure},
@@ -42,7 +44,7 @@ use crate::{
 };
 
 /// A meter's height (`O4fmlz`).
-const METER_HEIGHT: f32 = 4.0;
+pub(super) const METER_HEIGHT: f32 = 4.0;
 
 pub(super) fn delivery(ctx: &mut Ctx, project: ProjectId, root: PathBuf, saves: u64) -> Element {
   ctx.mount_keyed::<DeliverySection>("overview-delivery", DeliveryProps { project, root, saves })
@@ -75,13 +77,18 @@ impl Component for DeliverySection {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let DeliveryProps { project, root, saves } = ctx.props::<DeliveryProps>().clone();
-    let read = ctx.future((root, saves, self.tries.get()), |(root, ..)| async move {
-      background::run(move || OverviewDelivery::read_in(&root, Timestamp::now()))
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the project's delivery forecasts");
-          messages::store_error(&error)
-        })
+    let hold = Services::of(ctx).hold;
+    let read = ctx.future((root, saves, self.tries.get()), move |(root, ..)| {
+      let hold = hold.clone();
+      async move {
+        hold.released().await;
+        background::run(move || OverviewDelivery::read_in(&root, Timestamp::now()))
+          .await?
+          .map_err(|error| {
+            tracing::error!(%error, "cannot read the project's delivery forecasts");
+            messages::store_error(&error)
+          })
+      }
     });
     let state = read.state().get();
     let failed = self.last.follow(&state);
@@ -109,7 +116,7 @@ impl Component for DeliverySection {
       );
     }
     let Some(delivery) = state.data else {
-      return section;
+      return section.child(super::skeleton::delivery(ctx));
     };
     section
       .with_children(delivery.modules.iter().take(MODULES_SHOWN).map(|module| {

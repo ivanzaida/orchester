@@ -145,7 +145,7 @@ impl Component for UsageScreen {
       "usage-toolbar",
       ToolbarProps {
         project: name.clone(),
-        query,
+        query: query.clone(),
         dashboard: dashboard.clone(),
         requery: requery.clone(),
       },
@@ -157,7 +157,7 @@ impl Component for UsageScreen {
         let retry = self.retry.clone();
         states::load_failed(ctx, &error, move || retry.update(|count| *count += 1))
       }
-      (None, None) => states::loading(ctx, name.as_deref(), &self.views),
+      (None, None) => states::loading(ctx, name.as_deref(), &self.views, &query),
     };
     Column::new()
       .id(if name.is_some() {

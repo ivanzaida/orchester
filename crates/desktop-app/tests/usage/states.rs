@@ -2,6 +2,9 @@
 //! `cK32U`): the charts and tables of the seeded week, every chart as a table, reading, no runs today,
 //! filters that match nothing, and usage that cannot be read.
 
+use std::time::{Duration, Instant};
+
+use orchester_app::theme::SKELETON_DELAY;
 use orchester_core::usage::Period;
 use orchester_workspace::usage::UsageQuery;
 
@@ -140,6 +143,43 @@ fn usage_page_shows_the_figures_names_over_bones_while_it_reads() {
   assert!(!page.shows("usage-summary-spent-value"), "no value while reading");
   assert!(!page.shows("usage-summary-spent-change"), "no change while reading");
   assert!(page.shows("usage-limits-reading"), "the plan limits read on their own");
+}
+
+#[test]
+fn usage_page_chart_bones_stand_where_the_chart_will() {
+  let mut page = Seeded::prepared("usage", true, |_| {});
+  page.go(UsageQuery::default());
+  page.until("the page", |page| page.shows("usage-tokens-reading"));
+  page
+    .window
+    .tree
+    .tick_timers_at(Instant::now() + SKELETON_DELAY + Duration::from_millis(50));
+  page.window.pass();
+  // What the bars count, the days and the footnote are the period's: real while the figures read (`P74Xv`).
+  assert_eq!(page.text("usage-tokens-caption"), "spent tokens per day");
+  assert!(page.text("usage-tokens-footnote").starts_with("Spent = input"));
+  let card = page.bounds("usage-tokens");
+  let bones = page.bounds("usage-tokens-chart-bones");
+  page
+    .window
+    .launch
+    .services()
+    .expect("the session started")
+    .hold
+    .set(false);
+  page.until("the chart", |page| page.shows("usage-tokens-chart"));
+  let read = page.bounds("usage-tokens");
+  let chart = page.bounds("usage-tokens-chart");
+  assert!(
+    ((chart.1 - read.1) - (bones.1 - card.1)).abs() < 0.5,
+    "the chart stands where its bones stood in the card"
+  );
+  assert!(
+    (chart.3 - bones.3).abs() < 0.5,
+    "the chart is as high as its bones: {} vs {}",
+    chart.3,
+    bones.3
+  );
 }
 
 #[test]

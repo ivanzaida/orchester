@@ -12,7 +12,10 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
-  layout::Alignment,
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ShrinkLimit},
+  },
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, project::TaskKey};
@@ -36,6 +39,8 @@ const PRIMARY: f32 = 128.0;
 const MORE: f32 = 28.0;
 /// A chat avatar (`qU0XW`).
 const AVATAR: f32 = 28.0;
+/// A step divider's hairline.
+const DIVIDER: f32 = 1.0;
 
 /// The task the page reads: its project, its key, whether it is kept *Not shared*, its title once its row is known,
 /// and when the page began reading it: the project's tasks first, then the task, one reading whose skeleton's delay
@@ -178,10 +183,12 @@ enum Entry {
   Message(&'static [f32]),
   /// An event under a message: its mark and its words.
   Event(f32),
+  /// A question that ended without its answer: its box, its mark and its words.
+  Ended(f32),
 }
 
 /// The transcript's entries, oldest first (`WAW2N`).
-const TRANSCRIPT: [Entry; 12] = [
+const TRANSCRIPT: [Entry; 13] = [
   Entry::Step(262.0),
   Entry::Message(&[892.0, 392.0]),
   Entry::Event(218.0),
@@ -194,11 +201,25 @@ const TRANSCRIPT: [Entry; 12] = [
   Entry::Step(316.0),
   Entry::Message(&[696.0]),
   Entry::Message(&[980.0, 762.0, 414.0]),
+  Entry::Ended(520.0),
 ];
 
-/// The Conversation: the transcript's bones anchored to the composer, the older entries fading upward, and the
-/// composer keeping its surface with who it talks to, its hint and Send as bones.
+/// The run state chip's bone at the toolbar's end (`AQbG3`).
+const CHIP: (f32, f32) = (120.0, 24.0);
+/// The toolbar's height (`qLARF`).
+const TOOLBAR: f32 = 46.0;
+
+/// The Conversation: the toolbar with its chip a bone, the transcript's bones anchored to the composer, the older
+/// entries fading upward, and the composer keeping its surface with who it talks to, its hint and Send as bones.
 fn conversation(ctx: &Ctx) -> Column {
+  let toolbar = Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(TOOLBAR))
+    .padding_horizontal(SpacingSize::Section)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(Spacer::new().flex(1.0))
+    .child(bone(CHIP.0, CHIP.1).rounded(ExtraRadius::Full.role()));
   let composer = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::all(SpacingSize::Md))
@@ -218,15 +239,28 @@ fn conversation(ctx: &Ctx) -> Column {
         .child(skeleton::line(ctx, TypographyStyle::Description, 200.0))
         .child(skeleton::button(148.0)),
     );
-  transcript(ctx).child(composer)
-}
-
-/// The transcript's bones over its composer: anchored to its foot, the older entries fading upward, as the chat is.
-pub(super) fn transcript(ctx: &Ctx) -> Column {
-  let entries = TRANSCRIPT.iter().map(|entry| entry_bones(ctx, *entry)).collect();
   Column::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
+    .min_height(Dimension::Px(0.0))
+    .child(toolbar)
+    .child(transcript(ctx).child(composer))
+}
+
+/// The transcript's bones over its composer: anchored to its foot, the older entries fading upward, as the chat is.
+/// Where the room is short the oldest entries give way first, so the latest ones and the composer stay in view.
+pub(super) fn transcript(ctx: &Ctx) -> Column {
+  let entries: Vec<Row> = TRANSCRIPT.iter().map(|entry| entry_bones(ctx, *entry)).collect();
+  let entries = fading_up(entries).into_iter().zip(0..).map(|(entry, order)| {
+    entry
+      .flex_shrink(1.0)
+      .shrink_limit(ShrinkLimit::Drop)
+      .shrink_order(order)
+  });
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0))
     .padding(
       Padding::new()
         .top(SpacingSize::Lg)
@@ -235,8 +269,9 @@ pub(super) fn transcript(ctx: &Ctx) -> Column {
         .bottom(SpacingSize::Lg),
     )
     .spacing(SpacingSize::Lg)
-    .justify(lurq::layout::layout_kind::Justify::End)
-    .with_children(fading_up(entries))
+    .justify(Justify::End)
+    .clip()
+    .with_children(entries)
 }
 
 fn entry_bones(ctx: &Ctx, entry: Entry) -> Row {
@@ -249,8 +284,18 @@ fn entry_bones(ctx: &Ctx, entry: Entry) -> Row {
       .child(
         Row::new()
           .flex(1.0)
-          .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hover.role())),
+          .height(Dimension::Px(DIVIDER))
+          .background(ExtraColor::Hover.role()),
       ),
+    Entry::Ended(words) => Row::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+      .spacing(SpacingSize::Md)
+      .align_items(Alignment::Center)
+      .rounded(RadiusSize::Lg)
+      .border_inside(BorderSize::Sm, PaletteColor::Border)
+      .child(bone(12.0, 12.0))
+      .child(skeleton::line(ctx, TypographyStyle::Description, words)),
     Entry::Message(lines) => Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)

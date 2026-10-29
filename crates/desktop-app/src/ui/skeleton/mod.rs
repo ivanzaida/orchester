@@ -144,7 +144,10 @@ impl Component for Delayed {
       .describe("state", if shown { "skeleton" } else { "waiting" });
     let frame = match props.room {
       Room::Width => frame.width(Dimension::Pct(100.0)),
-      Room::Fills => frame.width(Dimension::Pct(100.0)).flex(1.0),
+      Room::Fills => frame
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0)),
       Room::Inline => frame.flex_shrink(0.0),
     };
     if !shown {
@@ -153,9 +156,14 @@ impl Component for Delayed {
     let bones = Column::new()
       .id(format!("{}-bones", props.id))
       .with_children(ctx.children().iter().cloned());
+    // Bones that fill take the frame's height, so panes in them fill it too and a transcript fits it.
     let bones = match props.room {
       Room::Inline => bones,
-      Room::Width | Room::Fills => bones.width(Dimension::Pct(100.0)),
+      Room::Width => bones.width(Dimension::Pct(100.0)),
+      Room::Fills => bones
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0)),
     };
     frame.child(pulsing(bones))
   }

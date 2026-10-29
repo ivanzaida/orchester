@@ -30,7 +30,7 @@ use crate::{
 /// plots line up (`Legend` `CuobA`).
 pub const LEGEND_HEIGHT: f32 = 72.0;
 /// An item's line, with the 6 under it a row of 22 (`EA7QF`).
-const ITEM_HEIGHT: f32 = 22.0;
+pub const ITEM_HEIGHT: f32 = 22.0;
 
 /// The legend over the chart.
 pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
@@ -69,7 +69,7 @@ pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element
         .with_children(items),
     )
     .child(
-      Text::new(&caption(ctx, dashboard, measure))
+      Text::new(&ctx.t(caption_key(measure, dashboard.grouping)))
         .id("usage-tokens-caption")
         .variant(TypographyStyle::Caption)
         .nowrap(),
@@ -77,16 +77,16 @@ pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element
     .into()
 }
 
-/// What the bars count, per day or per hour.
-fn caption(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> std::sync::Arc<str> {
-  ctx.t(match (measure, dashboard.grouping) {
+/// What the bars count, per day or per hour: its key.
+pub const fn caption_key(measure: Measure, grouping: Grouping) -> &'static str {
+  match (measure, grouping) {
     (Measure::Spent, Grouping::Day) => "usage.tokens.perDay.spent",
     (Measure::Cached, Grouping::Day) => "usage.tokens.perDay.cached",
     (Measure::Output, Grouping::Day) => "usage.tokens.perDay.output",
     (Measure::Spent, Grouping::Hour) => "usage.tokens.perHour.spent",
     (Measure::Cached, Grouping::Hour) => "usage.tokens.perHour.cached",
     (Measure::Output, Grouping::Hour) => "usage.tokens.perHour.output",
-  })
+  }
 }
 
 /// The ⓘ's room, no taller than the legend's line.

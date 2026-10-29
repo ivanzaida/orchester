@@ -43,16 +43,20 @@ pub fn bones(ctx: &mut Ctx) -> Element {
     .show(ctx, bones)
 }
 
-/// The tab's toolbar and panes as bones, for the skeleton of whatever is read.
+/// The tab's toolbar and panes as bones, for the skeleton of whatever is read: the panes fill the room left, as the
+/// loaded file list and diff do, and cut what does not fit.
 pub fn panes(ctx: &Ctx) -> Column {
   let panes = Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
+    .min_height(Dimension::Px(0.0))
     .align_items(Alignment::Start)
     .child(files(ctx))
     .child(diff(ctx));
   Column::new()
     .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0))
     .child(toolbar(ctx))
     .child(panes)
 }
@@ -95,8 +99,10 @@ fn files(ctx: &Ctx) -> Column {
     .collect();
   Column::new()
     .width(Dimension::Px(FILE_LIST_WIDTH))
+    .height(Dimension::Pct(100.0))
     .padding(Padding::vertical(SpacingSize::Sm))
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .clip()
     .with_children(fading(rows))
 }
 
@@ -133,7 +139,9 @@ fn diff(ctx: &Ctx) -> Column {
   Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
+    .height(Dimension::Pct(100.0))
     .background(ExtraColor::CodeBackground.role())
+    .clip()
     .child(head)
     .child(
       Column::new()
