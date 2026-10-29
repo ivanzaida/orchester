@@ -276,7 +276,7 @@ impl RunTask {
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;
-    let enforced = self.enforced(&step.key, body, provider)?;
+    let enforced = self.enforced(&step.key, body, connection)?;
     let writable = self.writable_folders(&enforced)?;
     let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
     let environment = self.environment()?;
@@ -311,7 +311,7 @@ impl RunTask {
       .attached_to(&continuation.messages)
       .map_err(|error| problem(format!("cannot read the messages' attachments: {error}")))?;
     let mut secrets = setup.activity_secrets();
-    let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
+    let (claude_exemptions, unapplied) = setup.claude_exemptions(cli::exempts_mcp_tools(enforced.permissions()));
     let checks = tools.checks().to_vec();
     secrets.extend(provider_key);
     let cli = Cli {

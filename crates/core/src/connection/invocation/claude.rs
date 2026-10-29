@@ -33,7 +33,9 @@
 //!   git.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
-//!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
+//!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used. An Autopilot step
+//!   (`crate::permission::EffectiveApprovalMode`) gets no command or MCP allow rule and every command asks, so each
+//!   request reaches the permission prompt; a Manual one starts as before.
 //! - Extra writable folders ([`crate::permission::writable`]), for an agent that edits files: one `--add-dir` each, so
 //!   its edit tools may write there as in the working directory (in `acceptEdits`; with edit rules, by the folder's
 //!   `Edit` allow rule). Its commands need nothing: Claude Code does not confine them to any folder. Checked 2026-09-28

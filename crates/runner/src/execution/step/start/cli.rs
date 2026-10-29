@@ -21,7 +21,7 @@ use orchester_core::{
     stream::RunnerProblem,
   },
   orchester_tools::{ProjectTool, SERVER},
-  permission::{CommandPermission, OutsideCommands, capability::EnforcedPermissions},
+  permission::{AgentPermissions, CommandPermission, OutsideCommands, capability::EnforcedPermissions},
   resource::{CommandEnvironment, ModelId},
   store::SettingsStore,
 };
@@ -127,7 +127,8 @@ impl RunTask {
       McpSetup::Codex(mcp) => {
         let CodexTools { server, listening } = self.codex_tools(tools)?;
         let mcp = mcp.with_orchester(server);
-        let mcp = if cli.enforced.permissions().interactive_tool_approvals() {
+        // Autopilot exempts no tool: every call that needs approval reaches Orchester.
+        let mcp = if exempts_mcp_tools(cli.enforced.permissions()) {
           mcp
         } else {
           mcp.without_exemptions()
@@ -181,6 +182,7 @@ impl RunTask {
       .and_then(|command| on_account(command, cli.account, AgentProvider::CodexCli))
       .map(|command| on_provider(command, cli.provider, AgentProvider::CodexCli))
       .map_err(|error| problem(error.to_string()))?;
+    let autopilot = cli.enforced.permissions().hands_requests_to_orchester();
     let mut secrets: Vec<_> = mcp.secrets().iter().chain(mcp.hidden()).cloned().collect();
     secrets.extend(cli.provider.map(|on| on.key_variable(AgentProvider::CodexCli)));
     let schema = (cli.resume.is_none()).then(|| {
@@ -196,9 +198,10 @@ impl RunTask {
         effort: cli.effort.map(str::to_owned),
         worktree: cli.worktree.to_path_buf(),
         access: cli.enforced.permissions().repository(),
-        command_approvals: *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
+        // Autopilot hands Orchester every request Codex makes: execpolicy prompts and MCP approvals too.
+        command_approvals: autopilot || *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
         sandbox_approvals: cli.enforced.outside_commands() == OutsideCommands::SandboxApproval,
-        tool_approvals: cli.enforced.permissions().interactive_tool_approvals(),
+        tool_approvals: autopilot || cli.enforced.permissions().interactive_tool_approvals(),
         network: cli.enforced.permissions().network(),
         writable_roots: cli.writable_roots.to_vec(),
         resume: cli.resume.map(str::to_owned),
@@ -252,4 +255,10 @@ fn on_provider(command: Command, provider: Option<&OnProvider<'_>>, cli: AgentPr
     Some(on) => on.apply(command, cli),
     None => command,
   }
+}
+
+/// Whether the tools an MCP server lists to run without asking skip the approval with `permissions`: only when a
+/// Manual step asks before MCP actions. In Autopilot every call that needs approval reaches Orchester.
+pub(super) const fn exempts_mcp_tools(permissions: &AgentPermissions) -> bool {
+  permissions.interactive_tool_approvals() && !permissions.hands_requests_to_orchester()
 }
