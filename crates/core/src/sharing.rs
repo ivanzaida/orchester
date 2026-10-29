@@ -22,6 +22,12 @@ pub enum MemberRole {
   Member,
 }
 
+/// Whether a person may change a shared project's team configuration (pipelines, agent profiles, instructions,
+/// skills, tools): only its owner or the server's admin, who may not be a member at all (server.md, row 72).
+pub const fn may_change_configuration(role: Option<MemberRole>, server_admin: bool) -> bool {
+  server_admin || matches!(role, Some(MemberRole::Owner))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClaimKind {
