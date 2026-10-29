@@ -31,7 +31,10 @@ const TODAY: [f32; 3] = [262.0, 218.0, 304.0];
 
 /// The page under the hub's head while the queue is read.
 pub(super) fn page(ctx: &mut Ctx) -> Element {
-  let queue = QUEUE.iter().map(|(title, state)| queue_row(ctx, *title, *state)).collect();
+  let queue = QUEUE
+    .iter()
+    .map(|(title, state)| queue_row(ctx, *title, *state))
+    .collect();
   let today = TODAY.iter().map(|title| today_row(ctx, *title)).collect();
   let bones = Column::new()
     .width(Dimension::Pct(100.0))
@@ -92,9 +95,10 @@ fn header(ctx: &Ctx) -> Row {
     .spacing(SpacingSize::Xl)
     .align_items(Alignment::Start)
     .child(
-      Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
-        Text::new(&ctx.t("delivery.queue.leadNoBase")).variant(DeliveryText::Lead.role()),
-      ),
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .child(Text::new(&ctx.t("delivery.queue.leadNoBase")).variant(DeliveryText::Lead.role())),
     )
     .child(base)
 }
@@ -120,7 +124,11 @@ fn queue_row(ctx: &Ctx, title: f32, state: f32) -> Row {
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(round_bone(IconSize::Md.size()))
-        .child(skeleton::line(ctx, DeliveryText::State.role(), state - IconSize::Md.size())),
+        .child(skeleton::line(
+          ctx,
+          DeliveryText::State.role(),
+          state - IconSize::Md.size(),
+        )),
     )
     .child(skeleton::line(ctx, ExtraTypography::Note.role(), state));
   let run = Column::new()
@@ -155,12 +163,11 @@ fn today_row(ctx: &Ctx, title: f32) -> Row {
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(round_bone(IconSize::Md.size()))
-    .child(
-      Row::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .child(skeleton::line(ctx, ExtraTypography::Strong.role(), title)),
-    )
+    .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(skeleton::line(
+      ctx,
+      ExtraTypography::Strong.role(),
+      title,
+    )))
     .child(bone(62.0, 9.0))
     .child(bone(40.0, 9.0))
 }

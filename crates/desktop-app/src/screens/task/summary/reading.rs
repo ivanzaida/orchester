@@ -48,7 +48,12 @@ pub fn bones(ctx: &Ctx) -> Row {
     .child(output(ctx));
   let values = PROPERTIES.iter().enumerate().map(|(at, (key, width))| {
     let value = skeleton::line(ctx, TypographyStyle::Description, *width);
-    properties::row(&format!("task-reading-property-{at}"), &ctx.t(key), value, TaskSpacing::PropertyRow.role())
+    properties::row(
+      &format!("task-reading-property-{at}"),
+      &ctx.t(key),
+      value,
+      TaskSpacing::PropertyRow.role(),
+    )
   });
   let properties = Column::new()
     .width(Dimension::Px(PROPERTIES_WIDTH))
@@ -87,7 +92,12 @@ fn run(ctx: &Ctx) -> Column {
     .align_items(Alignment::Center);
   for (at, name) in STEPS.iter().enumerate() {
     if at > 0 {
-      steps = steps.child(Row::new().flex(1.0).height(Dimension::Px(1.0)).background(PaletteColor::Border));
+      steps = steps.child(
+        Row::new()
+          .flex(1.0)
+          .height(Dimension::Px(1.0))
+          .background(PaletteColor::Border),
+      );
     }
     steps = steps.child(
       Row::new()
@@ -133,7 +143,11 @@ fn brief(ctx: &Ctx) -> Column {
         .child(Spacer::new().flex(1.0))
         .child(skeleton::button(96.0)),
     )
-    .with_children(BRIEF.iter().map(|width| skeleton::line(ctx, TaskText::Brief.role(), *width)))
+    .with_children(
+      BRIEF
+        .iter()
+        .map(|width| skeleton::line(ctx, TaskText::Brief.role(), *width)),
+    )
 }
 
 /// Acceptance criteria with its count, each criterion's number and words, a line under each.

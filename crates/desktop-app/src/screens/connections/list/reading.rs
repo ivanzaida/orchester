@@ -1,7 +1,8 @@
 //! Connections while they are read (`11 · Project settings · Connections · loading` `dlBtk`): Add provider and Add MCP
-//! server work, the Agent providers, GitHub and MCP servers headings stay, and GitHub's and MCP's rows keep their kind's
-//! tile; each connection's mark, name, program or account line and status, and each server's line and switch, are bones
-//! in the rows' own geometry, the lower groups fading. *Reading the connections…* (`connections.reading`) names it.
+//! server work, the Agent providers, GitHub and MCP servers headings stay, and GitHub's and MCP's rows keep their
+//! kind's tile; each connection's mark, name, program or account line and status, and each server's line and switch,
+//! are bones in the rows' own geometry, the lower groups fading. *Reading the connections…* (`connections.reading`)
+//! names it.
 
 use lurq::{
   app::{ctx::Ctx, theme::RadiusSize},
@@ -51,7 +52,12 @@ pub(super) fn groups(ctx: &mut Ctx, project: &ShownProject) -> Element {
     .enumerate()
     .map(|(at, (name, line, status))| {
       let lead = bone(TILE, TILE).rounded(RadiusSize::Md);
-      row(ctx, (&format!("connections-reading-{at}"), lead.into()), (*name, *line), skeleton::status(ctx, *status))
+      row(
+        ctx,
+        (&format!("connections-reading-{at}"), lead.into()),
+        (*name, *line),
+        skeleton::status(ctx, *status),
+      )
     })
     .collect::<Vec<_>>();
   let github = vec![row(
@@ -65,11 +71,26 @@ pub(super) fn groups(ctx: &mut Ctx, project: &ShownProject) -> Element {
     .enumerate()
     .map(|(at, (name, line))| {
       let lead = tile(ctx, MCP_GLYPH).into();
-      row(ctx, (&format!("connections-reading-mcp-{at}"), lead), (*name, *line), skeleton::switch())
+      row(
+        ctx,
+        (&format!("connections-reading-mcp-{at}"), lead),
+        (*name, *line),
+        skeleton::switch(),
+      )
     })
     .collect::<Vec<_>>();
-  let agents_add = add_button(ctx, "connections-add-agent", "connections.groups.addProvider", NewConnection::AgentProvider);
-  let mcp_add = add_button(ctx, "connections-add-mcp", "connections.groups.addMcp", NewConnection::McpServer);
+  let agents_add = add_button(
+    ctx,
+    "connections-add-agent",
+    "connections.groups.addProvider",
+    NewConnection::AgentProvider,
+  );
+  let mcp_add = add_button(
+    ctx,
+    "connections-add-mcp",
+    "connections.groups.addMcp",
+    NewConnection::McpServer,
+  );
   let groups = vec![
     Column::new().width(Dimension::Pct(100.0)).child(
       Group::new("connections-reading-agents", ctx.t("connections.groups.agentProviders"))

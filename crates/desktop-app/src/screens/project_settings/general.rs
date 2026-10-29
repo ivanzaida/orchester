@@ -167,14 +167,21 @@ fn bones(ctx: &mut Ctx) -> lurq::components::Column {
       .child(mono(ctx, width))
   };
   let project = [
-    SettingRow::new("settings-name-reading", ctx.t("project_settings.nameLabel"))
-      .control(skeleton::line(ctx, ProjectSettingsText::Value.role(), 40.0)),
+    SettingRow::new("settings-name-reading", ctx.t("project_settings.nameLabel")).control(skeleton::line(
+      ctx,
+      ProjectSettingsText::Value.role(),
+      40.0,
+    )),
     SettingRow::new("settings-key-reading", ctx.t("project_settings.keyLabel"))
       .hint(ctx.t("project_settings.keyHint"))
       .control(mono(ctx, 18.0)),
     SettingRow::new("settings-folder-reading", ctx.t("project_settings.folderLabel"))
       .hint(ctx.t("project_settings.folderHint"))
-      .control(marked(ctx, icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted).into(), 120.0)),
+      .control(marked(
+        ctx,
+        icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted).into(),
+        120.0,
+      )),
   ]
   .map(|row| row.render(ctx));
   let github = github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary);
@@ -182,18 +189,24 @@ fn bones(ctx: &mut Ctx) -> lurq::components::Column {
     SettingRow::new("settings-github-repo-reading", ctx.t("project_settings.githubRepo"))
       .info(ctx.t("project_settings.githubRepoDetail"))
       .hint(ctx.t("project_settings.githubRepoHint"))
-      .control(marked(ctx, github.into(), 58.0)),
-    SettingRow::new("settings-github-login-reading", ctx.t("project_settings.githubAccountLabel"))
-      .info(ctx.t("project_settings.githubAccountDetail"))
-      .hint_reading(152.0)
-      .control(mono(ctx, 42.0)),
+      .control(marked(ctx, github, 58.0)),
+    SettingRow::new(
+      "settings-github-login-reading",
+      ctx.t("project_settings.githubAccountLabel"),
+    )
+    .info(ctx.t("project_settings.githubAccountDetail"))
+    .hint_reading(152.0)
+    .control(mono(ctx, 42.0)),
     SettingRow::new("settings-base-branch-reading", ctx.t("project_settings.baseBranch"))
       .hint(ctx.t("project_settings.baseBranchShortHint"))
       .control(skeleton::select(ctx, BRANCH, 22.0)),
-    SettingRow::new("settings-base-moved-reading", ctx.t("project_settings.baseMovedSection"))
-      .info(ctx.t("project_settings.baseMovedDetail"))
-      .hint(ctx.t("project_settings.baseMovedHint"))
-      .control(skeleton::switch()),
+    SettingRow::new(
+      "settings-base-moved-reading",
+      ctx.t("project_settings.baseMovedSection"),
+    )
+    .info(ctx.t("project_settings.baseMovedDetail"))
+    .hint(ctx.t("project_settings.baseMovedHint"))
+    .control(skeleton::switch()),
     SettingRow::new("settings-files-reading", ctx.t("project_settings.agentFiles"))
       .info(ctx.t("project_settings.agentFilesDetail"))
       .hint(ctx.t("project_settings.agentFilesHint"))

@@ -82,7 +82,11 @@ pub fn edit_module(ctx: &mut Ctx, project: &ShownProject, module: ModuleId) -> E
     TasksState::Ready(tasks) => tasks.modules.iter().find(|stored| stored.id() == module).cloned(),
     TasksState::Loading => {
       // No loading frame draws Edit module: its fields' bones stand in one outline until the module is read.
-      let bones = skeleton::list(ctx, "module-form-reading", &[(60.0, 320.0), (90.0, 420.0), (80.0, 160.0)]);
+      let bones = skeleton::list(
+        ctx,
+        "module-form-reading",
+        &[(60.0, 320.0), (90.0, 420.0), (80.0, 160.0)],
+      );
       return screen(Skeleton::new("module-loading", ctx.t("modules.page.reading")).show(ctx, bones));
     }
     TasksState::Failed(error) => {

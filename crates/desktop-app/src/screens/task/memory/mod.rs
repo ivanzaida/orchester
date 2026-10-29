@@ -99,7 +99,11 @@ impl Component for TaskMemoryTab {
     let (list, side) = match read {
       Read::Reading => {
         // No loading frame draws a task's memory: its records' rows are bones in one outline until they are read.
-        let bones = skeleton::list(ctx, "memory-reading-rows", &[(220.0, 320.0), (180.0, 280.0), (240.0, 300.0)]);
+        let bones = skeleton::list(
+          ctx,
+          "memory-reading-rows",
+          &[(220.0, 320.0), (180.0, 280.0), (240.0, 300.0)],
+        );
         let reading = Skeleton::new("memory-loading", ctx.t("memory.reading")).show(ctx, bones);
         (Shown::Scrolls(reading), None)
       }

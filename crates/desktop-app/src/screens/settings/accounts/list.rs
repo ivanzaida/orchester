@@ -64,13 +64,13 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
 }
 
 /// Each CLI's accounts while they are read: each one's name, who is signed in under it and its state.
-const READING: [(AccountCli, &[(f32, f32, f32)]); 2] = [
+const READING: [(AccountCli, skeleton::RowBones); 2] = [
   (AccountCli::ClaudeCode, &[(30.0, 144.0, 52.0), (34.0, 270.0, 52.0)]),
   (AccountCli::Codex, &[(24.0, 180.0, 56.0), (34.0, 298.0, 44.0)]),
 ];
 
-/// The list while the accounts are read (`14 · App settings · Accounts · loading` `SXKNI`): Add account works, each CLI's
-/// group keeps its heading and every row the CLI maker's mark; the counts and each account's name, its folder or
+/// The list while the accounts are read (`14 · App settings · Accounts · loading` `SXKNI`): Add account works, each
+/// CLI's group keeps its heading and every row the CLI maker's mark; the counts and each account's name, its folder or
 /// e-mail line and its sign-in state are bones, the lower group fading. *Reading the accounts…* (`accounts.reading`)
 /// names it.
 pub(in crate::screens::settings) fn reading(ctx: &mut Ctx) -> Element {
@@ -110,7 +110,9 @@ pub(in crate::screens::settings) fn reading(ctx: &mut Ctx) -> Element {
             }))),
         );
       }
-      Column::new().width(lurq::node::dimension::Dimension::Pct(100.0)).child(group)
+      Column::new()
+        .width(lurq::node::dimension::Dimension::Pct(100.0))
+        .child(group)
     })
     .collect();
   let pane = Column::new()

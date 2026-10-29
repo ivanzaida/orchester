@@ -101,7 +101,11 @@ pub fn rows(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save, r
           .spacing(ExtraSpacing::Pair.role())
           .align_items(Alignment::Center)
           .child(github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary))
-          .child(skeleton::line(ctx, ProjectSettingsText::MonoValue.role(), REPOSITORY_BONE));
+          .child(skeleton::line(
+            ctx,
+            ProjectSettingsText::MonoValue.role(),
+            REPOSITORY_BONE,
+          ));
         let bone = Skeleton::new("settings-github-loading", ctx.t("project_settings.reading"))
           .inline()
           .show(ctx, bone);

@@ -51,7 +51,9 @@ pub fn page(ctx: &mut Ctx, task: &Reading<'_>, view: &TaskView) -> Element {
   let body = match view.tab() {
     TaskTab::Conversation => {
       let bones = conversation(ctx);
-      Skeleton::new("task-loading", ctx.t("task.page.loading")).fills().show(ctx, bones)
+      Skeleton::new("task-loading", ctx.t("task.page.loading"))
+        .fills()
+        .show(ctx, bones)
     }
     TaskTab::Changes => super::changes::reading::bones(ctx),
     TaskTab::Summary => {
@@ -261,7 +263,11 @@ fn entry_bones(ctx: &Ctx, entry: Entry) -> Row {
               .child(skeleton::line(ctx, TypographyStyle::Body, 60.0))
               .child(skeleton::line(ctx, TypographyStyle::Caption, 32.0)),
           )
-          .with_children(lines.iter().map(|width| skeleton::line(ctx, TypographyStyle::Body, *width))),
+          .with_children(
+            lines
+              .iter()
+              .map(|width| skeleton::line(ctx, TypographyStyle::Body, *width)),
+          ),
       ),
     Entry::Event(words) => Row::new()
       .width(Dimension::Pct(100.0))

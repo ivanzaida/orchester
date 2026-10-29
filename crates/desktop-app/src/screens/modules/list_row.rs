@@ -136,7 +136,11 @@ pub fn bones(ctx: &Ctx, (name, description, forecast): (f32, f32, f32)) -> Row {
         .justify(Justify::End)
         .align_items(Alignment::Center)
         .child(bone(METER_WIDTH, 3.0))
-        .child(skeleton::line(ctx, TypographyStyle::Description, PROGRESS_WIDTH - METER_WIDTH - 16.0)),
+        .child(skeleton::line(
+          ctx,
+          TypographyStyle::Description,
+          PROGRESS_WIDTH - METER_WIDTH - 16.0,
+        )),
     )
 }
 

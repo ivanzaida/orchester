@@ -72,7 +72,9 @@ impl Held {
   /// Waits until `id` is in the window, the window's timers left as they are.
   pub fn until(&mut self, id: &str) {
     let id = id.to_owned();
-    self.window.until(&id.clone(), move |window| window.tree.get_element_by_id(&id).is_some());
+    self
+      .window
+      .until(&id.clone(), move |window| window.tree.get_element_by_id(&id).is_some());
   }
 
   /// Lets the skeletons' delay pass, and lays the window out again.
@@ -90,7 +92,10 @@ impl Held {
     let bones = format!("{id}-bones");
     assert!(!self.exists(&bones), "{id}: a fast reading never flashes its bones");
     self.after_delay();
-    assert!(self.exists(&bones), "{id}: its bones show once the reading took a moment");
+    assert!(
+      self.exists(&bones),
+      "{id}: its bones show once the reading took a moment"
+    );
   }
 
   /// Lets the reads go and waits until `id` is in the window.

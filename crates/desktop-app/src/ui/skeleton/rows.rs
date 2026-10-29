@@ -91,9 +91,11 @@ pub fn unit_field(ctx: &Ctx, width: f32, value: f32, unit: &str) -> Row {
 
 /// [`field`] that opens a list: its chevron real at its end.
 pub fn select(ctx: &Ctx, width: f32, value: f32) -> Row {
-  field(ctx, width, value)
-    .child(Spacer::new().flex(1.0))
-    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
+  field(ctx, width, value).child(Spacer::new().flex(1.0)).child(icon(
+    Icon::ChevronDown,
+    IconSize::Md,
+    PaletteColor::TextMuted,
+  ))
 }
 /// A button that comes with the data: a bone of its size.
 pub fn button(width: f32) -> Column {

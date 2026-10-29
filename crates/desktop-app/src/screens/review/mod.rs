@@ -128,7 +128,9 @@ impl Component for ReviewTabs {
         .ready()
         .map(|tasks| orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()))
     });
-    let queue_reading = feed.tasks.with(|tasks| matches!(tasks, crate::project::TasksState::Loading));
+    let queue_reading = feed
+      .tasks
+      .with(|tasks| matches!(tasks, crate::project::TasksState::Loading));
     let deps = (project.open.repo_root.clone(), feed.revision.get(), feed.states.get());
     let hold = crate::services::Services::of(ctx).hold;
     let listed = ctx

@@ -61,7 +61,9 @@ pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebui
     // The row stands; only what it lists is a bone while it is read (`A value still reading in a loaded group`).
     let words = ctx.t("project_settings.reading");
     let bone = skeleton::line(ctx, lurq::app::theme::TypographyStyle::Description, LIST_BONE);
-    let bone = Skeleton::new("settings-index-list-loading", words).inline().show(ctx, bone);
+    let bone = Skeleton::new("settings-index-list-loading", words)
+      .inline()
+      .show(ctx, bone);
     return vec![reading.control(bone).render(ctx)];
   };
   if list.0.0.is_empty() {

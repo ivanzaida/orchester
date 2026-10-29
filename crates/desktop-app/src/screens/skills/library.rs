@@ -77,7 +77,7 @@ impl Component for Library {
 }
 
 /// Each scope's skills while they are read: its heading's key, and each skill's name, scope line and version state.
-const READING: [(&str, &[(f32, f32, f32)]); 3] = [
+const READING: [(&str, skeleton::RowBones); 3] = [
   ("skills.groups.project", &[(74.0, 328.0, 60.0), (70.0, 224.0, 64.0)]),
   ("skills.groups.roles", &[(110.0, 270.0, 70.0), (30.0, 232.0, 104.0)]),
   ("skills.groups.pipelines", &[(74.0, 246.0, 96.0)]),
@@ -96,7 +96,11 @@ pub(super) fn reading(ctx: &mut Ctx) -> Element {
         let lead = tile(Icon::GraduationCap, false).into();
         bones::entry(ctx, Some(lead), (*name, *line), vec![bones::status(ctx, *state).into()]).into()
       });
-      group(&id, bones::head(ctx, &id, &ctx.t(key), Some(14.0)), boxed(&format!("{id}-rows"), rows))
+      group(
+        &id,
+        bones::head(ctx, &id, &ctx.t(key), Some(14.0)),
+        boxed(&format!("{id}-rows"), rows),
+      )
     })
     .collect();
   let files = Entry::new("skills-reading-files", ctx.t("skills.repositoryFiles"))
@@ -108,7 +112,12 @@ pub(super) fn reading(ctx: &mut Ctx) -> Element {
     .into();
   groups.push(group(
     "skills-reading-found",
-    bones::head(ctx, "skills-reading-found", &ctx.t("skills.repositoryTitle"), Some(34.0)),
+    bones::head(
+      ctx,
+      "skills-reading-found",
+      &ctx.t("skills.repositoryTitle"),
+      Some(34.0),
+    ),
     boxed("skills-reading-found-rows", [files, import]),
   ));
   let pane = Column::new()
@@ -116,7 +125,11 @@ pub(super) fn reading(ctx: &mut Ctx) -> Element {
     .spacing(HubSpacing::Groups.role())
     .child(skeleton::line(ctx, HubText::Hint.role(), 194.0))
     .with_children(fading(groups))
-    .child(note("skills-versions-note", Icon::History, &ctx.t("skills.versionsNote")));
+    .child(note(
+      "skills-versions-note",
+      Icon::History,
+      &ctx.t("skills.versionsNote"),
+    ));
   let body = Skeleton::new("skills-loading", ctx.t("skills.reading")).show(ctx, pane);
   hub::list_body("skills-reading-list", body)
 }

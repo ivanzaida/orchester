@@ -1,8 +1,8 @@
-//! Orchester Cloud while it and the team servers are read (`16 · App settings · Orchester Cloud · loading` `Bq5lB`): the
-//! account card keeps its avatar frame and Sign out; the This computer, Invites, Team servers and Advanced headings,
-//! every row label and fixed help line, Connect a server and Change stay; the initials, name, two-factor state, e-mail,
-//! device, sign-in time, invites, each server's line and state and the cloud address are bones, the lower groups
-//! fading. *Reading Orchester Cloud and your team servers…* (`cloud.reading`) names it.
+//! Orchester Cloud while it and the team servers are read (`16 · App settings · Orchester Cloud · loading` `Bq5lB`):
+//! the account card keeps its avatar frame and Sign out; the This computer, Invites, Team servers and Advanced
+//! headings, every row label and fixed help line, Connect a server and Change stay; the initials, name, two-factor
+//! state, e-mail, device, sign-in time, invites, each server's line and state and the cloud address are bones, the
+//! lower groups fading. *Reading Orchester Cloud and your team servers…* (`cloud.reading`) names it.
 
 use lurq::{
   app::{
@@ -147,10 +147,14 @@ fn servers(ctx: &mut Ctx) -> SettingGroup {
 
 /// Advanced: the cloud address a bone, Change real.
 fn advanced(ctx: &mut Ctx) -> SettingGroup {
-  let change = ActionButton::new("orchester-reading-change", ButtonKind::Ghost, ctx.t("cloud.advanced.change"))
-    .icon(Icon::Pencil)
-    .small()
-    .disabled();
+  let change = ActionButton::new(
+    "orchester-reading-change",
+    ButtonKind::Ghost,
+    ctx.t("cloud.advanced.change"),
+  )
+  .icon(Icon::Pencil)
+  .small()
+  .disabled();
   let control = Row::new()
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)

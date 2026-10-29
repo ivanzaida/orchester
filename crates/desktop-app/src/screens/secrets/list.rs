@@ -71,7 +71,12 @@ pub(super) fn list(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View) -> Eleme
 }
 
 /// Each secret's bones while they are read: its name, what uses it and its masked value with when it was set.
-const READING: [(f32, f32, f32); 4] = [(112.0, 150.0, 130.0), (56.0, 156.0, 138.0), (82.0, 64.0, 96.0), (96.0, 222.0, 0.0)];
+const READING: [(f32, f32, f32); 4] = [
+  (112.0, 150.0, 130.0),
+  (56.0, 156.0, 138.0),
+  (82.0, 64.0, 96.0),
+  (96.0, 222.0, 0.0),
+];
 
 /// The list while the secrets are read (`12 · Project settings · Secrets · loading` `IHhqs`): the environments, Import
 /// from project and Add secret work, the key glyph and the note stay; the group's name and count and each secret's

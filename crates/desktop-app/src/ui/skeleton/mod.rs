@@ -26,10 +26,12 @@ use lurq::{
 };
 
 pub use self::rows::{
-  BoneRow, Words, button, chevron, count, field, group, line, lines, list, outline, select, status, switch,
-  unit_field,
+  BoneRow, Words, button, chevron, count, field, group, line, lines, list, outline, select, status, switch, unit_field,
 };
 use crate::theme::{ExtraRadius, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE, SKELETON_PULSE, SKELETON_STEPS};
+
+/// A list's rows while they are read: each row's bone widths, its name, the line under it and what stands at its end.
+pub type RowBones = &'static [(f32, f32, f32)];
 
 /// A part of a screen while it is read: under `id`, named by the screen's reading words, its bones once the reading
 /// took [`SKELETON_DELAY`].

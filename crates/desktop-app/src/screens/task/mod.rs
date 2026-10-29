@@ -345,25 +345,7 @@ impl Component for TaskFrame {
     };
     let root = props.project.open.repo_root.clone();
     let (detail, stale) = match read::task(ctx, root.clone(), props.task, again) {
-      TaskRead::Loading => {
-        // The task's row is known from the project's tasks: its key and title stand over the bones.
-        let title = match feed.tasks.get() {
-          TasksState::Ready(tasks) => tasks
-            .tasks
-            .iter()
-            .chain(tasks.not_shared.iter())
-            .find(|task| task.id() == props.task)
-            .map(|task| std::sync::Arc::from(task.details().title.as_str())),
-          TasksState::Loading | TasksState::Failed(_) => None,
-        };
-        let task = reading::Reading {
-          project: props.project.open.project.id(),
-          key: &props.key,
-          kept: props.kept,
-          title,
-        };
-        return reading::page(ctx, &task, &props.view);
-      }
+      TaskRead::Loading => return reading_page(ctx, &props),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
     };
@@ -440,6 +422,30 @@ impl TaskFrame {
 struct StaleRead(Option<Message>);
 
 impl lurq::app::component::DevtoolsInspectable for StaleRead {}
+
+/// The page while the task is read: its key, and its title once the project's tasks list it, over the bones.
+fn reading_page(ctx: &mut Ctx, props: &FrameProps) -> Element {
+  let task = reading::Reading {
+    project: props.project.open.project.id(),
+    key: &props.key,
+    kept: props.kept,
+    title: listed_title(props),
+  };
+  reading::page(ctx, &task, &props.view)
+}
+
+/// The task's title from the project's tasks; `None` while they are not read either.
+fn listed_title(props: &FrameProps) -> Option<std::sync::Arc<str>> {
+  match props.project.feed.tasks.get() {
+    TasksState::Ready(tasks) => tasks
+      .tasks
+      .iter()
+      .chain(tasks.not_shared.iter())
+      .find(|task| task.id() == props.task)
+      .map(|task| std::sync::Arc::from(task.details().title.as_str())),
+    TasksState::Loading | TasksState::Failed(_) => None,
+  }
+}
 
 /// The Conversation tab's mount point: its timeline (C1), with the composer (C2) and the decision cards (C3)
 /// inside it.

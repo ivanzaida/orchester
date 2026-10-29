@@ -82,7 +82,11 @@ impl Component for McpForm {
         }
         _ => {
           // No loading frame draws the server's form: its fields' bones stand in one outline until it is read.
-          let bones = skeleton::list(ctx, "connection-form-rows", &[(90.0, 320.0), (120.0, 280.0), (80.0, 240.0)]);
+          let bones = skeleton::list(
+            ctx,
+            "connection-form-rows",
+            &[(90.0, 320.0), (120.0, 280.0), (80.0, 240.0)],
+          );
           Skeleton::new("connection-form-loading", ctx.t("connections.reading")).show(ctx, bones)
         }
       };

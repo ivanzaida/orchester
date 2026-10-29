@@ -143,7 +143,12 @@ pub(super) fn panel(
 }
 
 /// The conversations the search finds, under their days, or why there are none.
-fn list(ctx: &mut Ctx, chats: &[ChatListing], (current, project): (Option<ChatId>, ProjectId), search: &str) -> Element {
+fn list(
+  ctx: &mut Ctx,
+  chats: &[ChatListing],
+  (current, project): (Option<ChatId>, ProjectId),
+  search: &str,
+) -> Element {
   let items = items(chats, (current, project), search);
   if items.is_empty() {
     let words = if chats.is_empty() {
@@ -214,9 +219,12 @@ fn reading(ctx: &mut Ctx) -> Element {
     })
     .collect();
   let bones = Column::new().width(Dimension::Pct(100.0)).with_children(fading(lines));
-  Skeleton::new("orchestrator-history-loading", ctx.t("orchestrator.historyPanel.reading"))
-    .fills()
-    .show(ctx, bones)
+  Skeleton::new(
+    "orchestrator-history-loading",
+    ctx.t("orchestrator.historyPanel.reading"),
+  )
+  .fills()
+  .show(ctx, bones)
 }
 
 /// The note at the panel's foot.

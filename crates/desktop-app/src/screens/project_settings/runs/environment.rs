@@ -54,9 +54,12 @@ pub(super) fn bones(ctx: &mut Ctx) -> Element {
     .hint_reading(264.0)
     .control(skeleton::line(ctx, ExtraTypography::Lead.role(), 58.0))
     .control(skeleton::button(72.0));
-  Group::new("settings-environment-reading-section", ctx.t("project_settings.environment"))
-    .row(row.render(ctx))
-    .into()
+  Group::new(
+    "settings-environment-reading-section",
+    ctx.t("project_settings.environment"),
+  )
+  .row(row.render(ctx))
+  .into()
 }
 
 #[derive(Clone, Eq)]
@@ -215,15 +218,18 @@ impl Environment {
     let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
     let hold = crate::services::Services::of(ctx).hold;
     let mut state = ctx
-      .future((props.project.open.repo_root.clone(), revision), move |(root, revision)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || load_in(&root).map(|environment| Stored(environment, revision)))
-            .await?
-            .map_err(|e| messages::store_error(&e))
-        }
-      })
+      .future(
+        (props.project.open.repo_root.clone(), revision),
+        move |(root, revision)| {
+          let hold = hold.clone();
+          async move {
+            hold.released().await;
+            background::run(move || load_in(&root).map(|environment| Stored(environment, revision)))
+              .await?
+              .map_err(|e| messages::store_error(&e))
+          }
+        },
+      )
       .state()
       .get();
     if state.data.as_ref().is_some_and(|read| read.1 != revision) {

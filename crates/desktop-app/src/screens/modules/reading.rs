@@ -36,7 +36,14 @@ const FACTS: f32 = 434.0;
 const CRUMB: f32 = 88.0;
 const MORE: f32 = 28.0;
 /// The tasks' lines: a group head's label, or a task's key and title.
-const TASKS: [(bool, f32); 6] = [(true, 76.0), (false, 262.0), (true, 76.0), (false, 306.0), (true, 54.0), (false, 218.0)];
+const TASKS: [(bool, f32); 6] = [
+  (true, 76.0),
+  (false, 262.0),
+  (true, 76.0),
+  (false, 306.0),
+  (true, 54.0),
+  (false, 218.0),
+];
 
 /// The header and the body of module `module`'s page on `tab` while it is read.
 pub(super) fn page(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), tab: ModuleTab) -> (Element, Element) {
@@ -131,7 +138,11 @@ fn column(ctx: &Ctx) -> Column {
         line
           .height(Dimension::Px(ROW_HEIGHT))
           .child(skeleton::line(ctx, TypographyStyle::Description, 48.0))
-          .child(skeleton::line(ctx, crate::theme::ExtraTypography::Strong.role(), *title))
+          .child(skeleton::line(
+            ctx,
+            crate::theme::ExtraTypography::Strong.role(),
+            *title,
+          ))
           .child(lurq::components::Spacer::new().flex(1.0))
           .child(skeleton::count())
       }

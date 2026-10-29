@@ -85,8 +85,8 @@ pub fn pane(ctx: &mut Ctx, page: &Page<'_>) -> Element {
 
 /// Each line's bone while the file is read (`09 Files · loading` `i8ZHec`); 0 for a blank line.
 const READING: [f32; 22] = [
-  326.0, 456.0, 0.0, 262.0, 566.0, 414.0, 0.0, 196.0, 500.0, 360.0, 304.0, 0.0, 240.0, 544.0, 392.0, 446.0, 0.0,
-  282.0, 370.0, 206.0, 478.0, 0.0,
+  326.0, 456.0, 0.0, 262.0, 566.0, 414.0, 0.0, 196.0, 500.0, 360.0, 304.0, 0.0, 240.0, 544.0, 392.0, 446.0, 0.0, 282.0,
+  370.0, 206.0, 478.0, 0.0,
 ];
 /// A line's height and its number's bone while the file is read.
 const READING_LINE: f32 = 22.0;

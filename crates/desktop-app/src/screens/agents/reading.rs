@@ -52,7 +52,8 @@ pub(super) fn list(ctx: &mut Ctx) -> Element {
         .align_items(Alignment::Center)
         .child(skeleton::line(ctx, HubText::Hint.role(), *uses))
         .child(bones::status(ctx, *state));
-      bones::entry(ctx, Some(bones::tile().into()), (*name, *line), vec![end.into()]).id(format!("agents-reading-{index}"))
+      bones::entry(ctx, Some(bones::tile().into()), (*name, *line), vec![end.into()])
+        .id(format!("agents-reading-{index}"))
     })
     .collect();
   let rows: Vec<Element> = fading(rows).into_iter().map(Element::from).collect();
@@ -95,7 +96,11 @@ pub(super) fn profile(ctx: &mut Ctx, nav: &AgentsNav) -> Element {
     .child(page_head::crumb(ctx, nav))
     .child(top)
     .with_children(fading(vec![role(ctx), connection(ctx)]))
-    .child(note("agents-reading-assignment", Icon::Info, &ctx.t("agents.assignmentNote")));
+    .child(note(
+      "agents-reading-assignment",
+      Icon::Info,
+      &ctx.t("agents.assignmentNote"),
+    ));
   let body = Skeleton::new("agents-loading", ctx.t("agents.reading")).show(ctx, pane);
   hub::list_body("agents-reading-page", body)
 }
@@ -114,7 +119,13 @@ fn role(ctx: &Ctx) -> Column {
     .child(skeleton::line(ctx, TypographyStyle::Description, 456.0))
     .child(skeleton::line(ctx, TypographyStyle::Description, 284.0));
   let rows = vec![
-    field("agents-reading-name", &t("agents.role"), Some(&t("agents.roleHint")), skeleton::field(ctx, FIELD, 42.0)).into(),
+    field(
+      "agents-reading-name",
+      &t("agents.role"),
+      Some(&t("agents.roleHint")),
+      skeleton::field(ctx, FIELD, 42.0),
+    )
+    .into(),
     field(
       "agents-reading-responsibility",
       &t("agents.responsibility"),
@@ -141,11 +152,9 @@ fn role(ctx: &Ctx) -> Column {
 fn connection(ctx: &Ctx) -> Column {
   let t = |key: &str| ctx.t(key);
   let select = |value: f32| {
-    skeleton::field(ctx, FIELD, value).child(lurq::components::Spacer::new().flex(1.0)).child(icon(
-      Icon::ChevronDown,
-      IconSize::Md,
-      PaletteColor::TextMuted,
-    ))
+    skeleton::field(ctx, FIELD, value)
+      .child(lurq::components::Spacer::new().flex(1.0))
+      .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
   };
   let connection = Row::new()
     .width(Dimension::Pct(100.0))
@@ -163,8 +172,20 @@ fn connection(ctx: &Ctx) -> Column {
     .child(skeleton::field(ctx, FIELD, 162.0));
   let rows = vec![
     connection.into(),
-    field("agents-reading-model", &t("agents.model"), Some(&t("agents.modelHint")), select(98.0)).into(),
-    field("agents-reading-effort", &t("agents.effort"), Some(&t("agents.effortHint")), select(22.0)).into(),
+    field(
+      "agents-reading-model",
+      &t("agents.model"),
+      Some(&t("agents.modelHint")),
+      select(98.0),
+    )
+    .into(),
+    field(
+      "agents-reading-effort",
+      &t("agents.effort"),
+      Some(&t("agents.effortHint")),
+      select(22.0),
+    )
+    .into(),
   ];
   group(
     "agents-reading-connection",

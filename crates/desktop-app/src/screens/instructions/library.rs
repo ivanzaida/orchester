@@ -66,11 +66,28 @@ enum Bone {
 const READING: [(Tab, &[Bone]); 4] = [
   (
     Tab::Roles,
-    &[Bone::Head(80.0), Bone::Rule(72.0, 94.0), Bone::Head(100.0), Bone::Rule(98.0, 136.0), Bone::Head(80.0)],
+    &[
+      Bone::Head(80.0),
+      Bone::Rule(72.0, 94.0),
+      Bone::Head(100.0),
+      Bone::Rule(98.0, 136.0),
+      Bone::Head(80.0),
+    ],
   ),
   (Tab::Project, &[Bone::Rule(74.0, 148.0), Bone::Rule(86.0, 150.0)]),
-  (Tab::Pipelines, &[Bone::Head(110.0), Bone::Rule(80.0, 150.0), Bone::Head(70.0)]),
-  (Tab::Steps, &[Bone::Head(108.0), Bone::Rule(80.0, 106.0), Bone::Head(70.0), Bone::Rule(68.0, 120.0)]),
+  (
+    Tab::Pipelines,
+    &[Bone::Head(110.0), Bone::Rule(80.0, 150.0), Bone::Head(70.0)],
+  ),
+  (
+    Tab::Steps,
+    &[
+      Bone::Head(108.0),
+      Bone::Rule(80.0, 106.0),
+      Bone::Head(70.0),
+      Bone::Rule(68.0, 120.0),
+    ],
+  ),
 ];
 
 /// The list while the rules are read: the order note and the four group headings real, the sub-heads, their counts
@@ -87,7 +104,11 @@ pub fn reading(ctx: &mut Ctx) -> Element {
         }
       });
       let count = (*tab == Tab::Project).then_some(14.0);
-      group(&id, bones::head(ctx, &id, &ctx.t(tab.key()), count), boxed(&format!("{id}-rows"), rows))
+      group(
+        &id,
+        bones::head(ctx, &id, &ctx.t(tab.key()), count),
+        boxed(&format!("{id}-rows"), rows),
+      )
     })
     .collect();
   let pane = Column::new()

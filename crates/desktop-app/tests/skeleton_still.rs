@@ -14,5 +14,8 @@ fn a_skeleton_stays_still_with_reduced_motion() {
   let mut host = Host::show();
   host.after_delay();
   assert!(host.has_bones(), "the bones show after the delay");
-  assert!(!host.tree.has_active_timeline(), "reduced motion: the bones stand still");
+  assert!(
+    !host.tree.has_active_timeline(),
+    "reduced motion: the bones stand still"
+  );
 }

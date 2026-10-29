@@ -103,7 +103,12 @@ fn content(
     return page;
   }
   let pane = pane
-    .child(tabs::strip(ctx, state.project_id, (Some(&memory), view.order), view.tab))
+    .child(tabs::strip(
+      ctx,
+      state.project_id,
+      (Some(&memory), view.order),
+      view.tab,
+    ))
     .child(body(ctx, state, (project, &memory), view));
   hub::list_body_wide(
     "memory-main",
@@ -133,7 +138,11 @@ fn reading(ctx: &mut Ctx, state: &MemoryState, view: Option<View>) -> Element {
         .align_items(Alignment::Center)
         .with_children(ACTIONS.iter().map(|width| skeleton::button(*width)))
         .child(Spacer::new().flex(1.0))
-        .child(Text::new(&ctx.t("memory.proposal.note")).variant(HubText::Hint.role()).nowrap());
+        .child(
+          Text::new(&ctx.t("memory.proposal.note"))
+            .variant(HubText::Hint.role())
+            .nowrap(),
+        );
       Column::new()
         .width(Dimension::Pct(100.0))
         .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::Row.role()))
@@ -152,7 +161,12 @@ fn reading(ctx: &mut Ctx, state: &MemoryState, view: Option<View>) -> Element {
   let cards: Vec<Element> = fading(cards).into_iter().map(Element::from).collect();
   let queue = group(
     "memory-reading-queue",
-    bones::head(ctx, "memory-reading-queue", &ctx.t("memory.tabs.queueTitle"), Some(80.0)),
+    bones::head(
+      ctx,
+      "memory-reading-queue",
+      &ctx.t("memory.tabs.queueTitle"),
+      Some(80.0),
+    ),
     boxed("memory-reading-queue-rows", cards),
   );
   let pane = Column::new()

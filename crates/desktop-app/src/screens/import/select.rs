@@ -193,7 +193,11 @@ fn content(ctx: &mut Ctx, state: &State, tab: ImportTab, source: &Source) -> Ele
   match source {
     Source::Listing => {
       // No loading frame draws Import: the projects' rows are bones in a list's outline while they are listed.
-      let bones = skeleton::list(ctx, "import-listing-rows", &[(140.0, 260.0), (120.0, 220.0), (160.0, 240.0)]);
+      let bones = skeleton::list(
+        ctx,
+        "import-listing-rows",
+        &[(140.0, 260.0), (120.0, 220.0), (160.0, 240.0)],
+      );
       Skeleton::new("import-listing", ctx.t("import.empty.listing")).show(ctx, bones)
     }
     Source::Unlisted(error) => Notice::new("import-unlisted", NoticeTone::Danger, message_text(ctx, error))

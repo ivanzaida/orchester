@@ -38,10 +38,7 @@ use crate::{
     Services,
     accounts::{self, Accounts},
   },
-  ui::{
-    message::message_text,
-    state::load_error,
-  },
+  ui::{message::message_text, state::load_error},
 };
 
 #[derive(Clone, PartialEq)]

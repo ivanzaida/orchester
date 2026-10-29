@@ -9,11 +9,7 @@ mod estimates;
 mod limits;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::Ctx,
-    theme::SpacingSize,
-  },
+  app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::{Column, Row},
   core::Signal,
   layout::Alignment,
@@ -126,17 +122,22 @@ fn bones(ctx: &mut Ctx) -> Column {
   ]
   .map(|row| row.render(ctx));
   let auto = Group::new("settings-auto-reading", ctx.t("project_settings.auto")).rows(rows);
-  let row = SettingRow::new("settings-estimates-reading-row", ctx.t("project_settings.estimates.label"))
-    .hint(ctx.t("project_settings.estimates.hint"))
-    .info(ctx.t("project_settings.estimates.info"))
-    .control(skeleton::switch())
-    .render(ctx);
+  let row = SettingRow::new(
+    "settings-estimates-reading-row",
+    ctx.t("project_settings.estimates.label"),
+  )
+  .hint(ctx.t("project_settings.estimates.hint"))
+  .info(ctx.t("project_settings.estimates.info"))
+  .control(skeleton::switch())
+  .render(ctx);
   let estimates = Group::new("settings-estimates-reading", ctx.t("project_settings.estimates.title")).row(row);
   let groups: Vec<Column> = vec![
     Column::new().width(Dimension::Pct(100.0)).child(auto),
     Column::new().width(Dimension::Pct(100.0)).child(estimates),
     Column::new().width(Dimension::Pct(100.0)).child(limits::bones(ctx)),
-    Column::new().width(Dimension::Pct(100.0)).child(environment::bones(ctx)),
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .child(environment::bones(ctx)),
   ];
   Column::new()
     .width(Dimension::Pct(100.0))

@@ -33,12 +33,7 @@ use super::{Status, TabProps};
 use crate::{
   project::{ProjectFeed, own::OwnChanges},
   services::Services,
-  ui::{
-    field::field_error,
-    message::message_text,
-    skeleton::Skeleton,
-    state::load_error,
-  },
+  ui::{field::field_error, message::message_text, skeleton::Skeleton, state::load_error},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]

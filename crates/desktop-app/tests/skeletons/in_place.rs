@@ -33,8 +33,17 @@ fn skeletons_a_value_still_read_keeps_the_rest_of_its_page() {
   let mut held = Held::new();
   held.go(Route::General);
   held.skeleton("settings-threshold-reading");
-  assert!(held.exists("settings-appearance"), "the theme, read already, stays as it is");
-  assert!(held.exists("settings-threshold-row"), "the threshold's row stands round its bone");
+  assert!(
+    held.exists("settings-appearance"),
+    "the theme, read already, stays as it is"
+  );
+  assert!(
+    held.exists("settings-threshold-row"),
+    "the threshold's row stands round its bone"
+  );
   held.release("settings-threshold-value");
-  assert!(!held.exists("settings-threshold-reading"), "the value takes its bone's place");
+  assert!(
+    !held.exists("settings-threshold-reading"),
+    "the value takes its bone's place"
+  );
 }

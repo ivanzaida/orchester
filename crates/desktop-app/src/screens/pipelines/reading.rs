@@ -32,7 +32,12 @@ const NAME: f32 = 228.0;
 const RUN: f32 = 92.0;
 const PUBLISH: f32 = 112.0;
 /// A step card's bones: its number, name and two lines (`Step card` in `T0MD3`).
-const CARDS: [(f32, f32, f32); 4] = [(44.0, 222.0, 118.0), (28.0, 172.0, 116.0), (40.0, 220.0, 70.0), (40.0, 128.0, 224.0)];
+const CARDS: [(f32, f32, f32); 4] = [
+  (44.0, 222.0, 118.0),
+  (28.0, 172.0, 116.0),
+  (40.0, 220.0, 70.0),
+  (40.0, 128.0, 224.0),
+];
 /// A select's or a field's frame in the step column, and its value's bone.
 const CONTROL: f32 = 240.0;
 
@@ -63,8 +68,13 @@ pub fn page(ctx: &mut Ctx, (project, pipeline): (ProjectId, ResourceId), tab: Ta
     ctx,
     "pipeline-tabs",
     [
-      PageTab::to("pipeline-tab-steps", ctx.t("pipelines.steps"), tab == Tab::Steps, open(PipelineView::Steps))
-        .count_reading(),
+      PageTab::to(
+        "pipeline-tab-steps",
+        ctx.t("pipelines.steps"),
+        tab == Tab::Steps,
+        open(PipelineView::Steps),
+      )
+      .count_reading(),
       PageTab::to(
         "pipeline-settings",
         ctx.t("pipelines.settingsTab"),
@@ -88,7 +98,10 @@ pub fn page(ctx: &mut Ctx, (project, pipeline): (ProjectId, ResourceId), tab: Ta
     .child(flow(ctx))
     .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(column(ctx)));
   let body = Skeleton::new("pipeline-loading", ctx.t("pipelines.reading")).show(ctx, steps);
-  parts::page().child(head).child(parts::body("pipeline-body", body)).into()
+  parts::page()
+    .child(head)
+    .child(parts::body("pipeline-body", body))
+    .into()
 }
 
 /// The flow: *ON TASK START* real, then the step cards in bones, the lower ones fading.
@@ -186,7 +199,13 @@ fn column(ctx: &Ctx) -> Column {
   let groups = fading(vec![
     skeleton::group(ctx, "pipeline-reading-step", real("pipelines.stepGroup"), None, step),
     skeleton::group(ctx, "pipeline-reading-flow", real("pipelines.flow"), None, flow),
-    skeleton::group(ctx, "pipeline-reading-gate-access", real("pipelines.gateAccess"), None, access),
+    skeleton::group(
+      ctx,
+      "pipeline-reading-gate-access",
+      real("pipelines.gateAccess"),
+      None,
+      access,
+    ),
   ]);
   Column::new()
     .width(Dimension::Pct(100.0))

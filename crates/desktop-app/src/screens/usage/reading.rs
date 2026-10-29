@@ -95,7 +95,9 @@ pub(super) fn limits(ctx: &mut Ctx) -> Element {
     })
     .collect();
   let bones = Column::new().width(Dimension::Pct(100.0)).with_children(fading(rows));
-  Skeleton::new("usage-limits-reading", ctx.t("usage.loading.limits")).fills().show(ctx, bones)
+  Skeleton::new("usage-limits-reading", ctx.t("usage.loading.limits"))
+    .fills()
+    .show(ctx, bones)
 }
 
 /// A figure's value, change and what it counts while the period is read, named `label`, under its real name.

@@ -38,7 +38,12 @@ pub(super) fn page(
   )
 }
 
-fn tabs(ctx: &mut Ctx, tab: SettingsTab, (accounts, reading): (Option<usize>, bool), navigation: &Navigation) -> Element {
+fn tabs(
+  ctx: &mut Ctx,
+  tab: SettingsTab,
+  (accounts, reading): (Option<usize>, bool),
+  navigation: &Navigation,
+) -> Element {
   // Each tab is a place of its own. The current one opens nothing, unless a sub-page of it shows: then it goes back.
   let tab_to = |id: &str, label: Arc<str>, (current, at_tab): (bool, bool), route: Route| {
     if current && at_tab {

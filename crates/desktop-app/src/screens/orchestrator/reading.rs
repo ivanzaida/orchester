@@ -69,10 +69,17 @@ fn yours(ctx: &Ctx, lines: &[f32]) -> Column {
     .spacing(SpacingSize::Sm)
     .rounded(RadiusSize::Lg)
     .background(ExtraColor::OwnMessage.role())
-    .with_children(lines.iter().map(|width| skeleton::line(ctx, TypographyStyle::Body, *width)));
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .child(Row::new().width(Dimension::Pct(100.0)).justify(Justify::End).child(bubble))
+    .with_children(
+      lines
+        .iter()
+        .map(|width| skeleton::line(ctx, TypographyStyle::Body, *width)),
+    );
+  Column::new().width(Dimension::Pct(100.0)).child(
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .justify(Justify::End)
+      .child(bubble),
+  )
 }
 
 /// The Orchestrator's answer: its avatar, its name and time, its lines and its action rows.
@@ -100,7 +107,11 @@ fn answer(ctx: &Ctx, lines: &[f32], actions: &[f32]) -> Column {
         .child(skeleton::line(ctx, TypographyStyle::Body, 78.0))
         .child(skeleton::line(ctx, TypographyStyle::Caption, 30.0)),
     )
-    .with_children(lines.iter().map(|width| skeleton::line(ctx, TypographyStyle::Body, *width)))
+    .with_children(
+      lines
+        .iter()
+        .map(|width| skeleton::line(ctx, TypographyStyle::Body, *width)),
+    )
     .with_children(rows);
   Column::new().width(Dimension::Pct(100.0)).child(
     Row::new()

@@ -180,46 +180,55 @@ impl SettingRow {
     self
   }
 
-  pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
-    let id = self.id;
+  /// The label, or its bone while it is read.
+  fn label(&self, ctx: &mut Ctx) -> Element {
+    if let Some(width) = self.bones.0 {
+      return skeleton::line(ctx, self.label_style, width).into();
+    }
     let label = Text::new(&self.label)
-      .id(format!("{id}-label"))
+      .id(format!("{}-label", self.id))
       .variant(self.label_style);
-    let label = match self.label_color {
-      Some(color) => label.color(color),
+    let label = match &self.label_color {
+      Some(color) => label.color(color.clone()),
       None => label,
     };
     // A label that is a list of names stays on its line and ends in an ellipsis where the row runs out.
-    let label = if self.cut_label {
+    if self.cut_label {
       label
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0))
+        .into()
     } else {
-      label
-    };
-    let label: Element = match self.bones.0 {
-      Some(width) => skeleton::line(ctx, self.label_style, width).into(),
-      None => label.into(),
-    };
+      label.into()
+    }
+  }
+
+  /// The hint under the label, or its bone while it is read.
+  fn hint_line(&self, ctx: &mut Ctx) -> Option<Element> {
+    if let Some((hint, tone)) = &self.hint {
+      return Some(
+        Text::new(hint)
+          .id(format!("{}-hint", self.id))
+          .variant(ProjectSettingsText::Hint.role())
+          .color(tone.color())
+          .width(Dimension::Pct(100.0))
+          .into(),
+      );
+    }
+    self
+      .bones
+      .1
+      .map(|width| skeleton::line(ctx, ProjectSettingsText::Hint.role(), width).into())
+  }
+
+  pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
+    let (label, hint) = (self.label(ctx), self.hint_line(ctx));
+    let id = self.id;
     let info = self.info.map(|info| {
       let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
-    });
-    let hint = self.hint.map(|(hint, tone)| -> Element {
-      Text::new(&hint)
-        .id(format!("{id}-hint"))
-        .variant(ProjectSettingsText::Hint.role())
-        .color(tone.color())
-        .width(Dimension::Pct(100.0))
-        .into()
-    });
-    let hint = hint.or_else(|| {
-      self
-        .bones
-        .1
-        .map(|width| skeleton::line(ctx, ProjectSettingsText::Hint.role(), width).into())
     });
     let heading = Row::new()
       .spacing(ExtraSpacing::Snug.role())

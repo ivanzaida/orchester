@@ -30,10 +30,7 @@ use crate::{
   routes::{SecretsPanel, SecretsView},
   screens::project_settings::kit,
   services::Services,
-  ui::{
-    message::message_text,
-    state::load_error,
-  },
+  ui::{message::message_text, state::load_error},
 };
 
 #[derive(Clone, PartialEq)]

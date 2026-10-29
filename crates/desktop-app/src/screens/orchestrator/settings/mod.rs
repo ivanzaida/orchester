@@ -142,7 +142,11 @@ impl Component for SettingsScreen {
       }
       (None, None) => {
         // No loading frame draws the Orchestrator's settings: their rows' bones stand in one outline until read.
-        let bones = skeleton::list(ctx, "orchestrator-settings-rows", &[(120.0, 300.0), (100.0, 260.0), (140.0, 220.0)]);
+        let bones = skeleton::list(
+          ctx,
+          "orchestrator-settings-rows",
+          &[(120.0, 300.0), (100.0, 260.0), (140.0, 220.0)],
+        );
         Skeleton::new("orchestrator-settings-loading", ctx.t("orchestrator.settings.loading")).show(ctx, bones)
       }
     };

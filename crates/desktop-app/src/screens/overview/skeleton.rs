@@ -41,5 +41,8 @@ pub(super) fn bones(ctx: &mut Ctx, project: &ShownProject, (id, height): (&str, 
     })
     .collect();
   let label = ctx.t_args("tasks.loading", [("project", project.open.project.name().as_str())]);
-  Skeleton::new(id, label).show(ctx, Column::new().width(Dimension::Pct(100.0)).with_children(fading(rows)))
+  Skeleton::new(id, label).show(
+    ctx,
+    Column::new().width(Dimension::Pct(100.0)).with_children(fading(rows)),
+  )
 }
