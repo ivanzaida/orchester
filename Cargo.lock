@@ -2907,6 +2907,7 @@ dependencies = [
  "chrono",
  "parking_lot",
  "pulldown-cmark",
+ "roxmltree",
  "serde",
  "serde_json",
  "tempfile",

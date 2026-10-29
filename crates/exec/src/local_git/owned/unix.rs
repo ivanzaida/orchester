@@ -7,7 +7,8 @@ use std::{
   sync::Arc,
 };
 
-use rustix::fs::{AtFlags, CWD, Mode, OFlags, mkdirat, openat, statat};
+use orchester_core::id::IdempotencyKey;
+use rustix::fs::{AtFlags, CWD, Mode, OFlags, RenameFlags, mkdirat, openat, renameat_with, statat, unlinkat};
 
 use super::super::{LocalError, LocalGitError};
 
@@ -160,7 +161,20 @@ pub(super) fn set_executable(file: &File, value: bool) -> Result<(), LocalGitErr
   permissions.set_mode(if value { mode | 0o111 } else { mode & !0o111 });
   file.set_permissions(permissions).map_err(|_| LocalGitError::Io)
 }
-pub(super) fn remove(_file: &File) -> Result<(), LocalGitError> {
-  // unlinkat cannot condition deletion on the identity of this opened inode.
-  Err(LocalError::ConditionalRemovalUnsupported.into())
+/// Removes `name` from `directory` only while it is still the held `file`. `unlinkat` cannot condition deletion on an
+/// inode, so the entry is first moved, without replacing anything, to a private name of the same directory; it is
+/// unlinked there once it proves to be the held file, and otherwise moved back and refused as stale.
+pub(super) fn remove(directory: &Directory, name: &OsStr, file: &File) -> Result<(), LocalGitError> {
+  directory.ensure_current()?;
+  directory.same_entry(name, file)?;
+  let private = OsString::from(format!(".orchester-removing-{}", IdempotencyKey::generate()));
+  renameat_with(&directory.file, name, &directory.file, &private, RenameFlags::NOREPLACE).map_err(map)?;
+  let held = directory.same_entry(&private, file);
+  if held.is_ok() {
+    return unlinkat(&directory.file, &private, AtFlags::empty()).map_err(map);
+  }
+  // Another entry took the name since it was checked (stale), or it cannot be told: it goes back and is not removed.
+  // A name taken again meanwhile keeps that entry under the private name, which says so.
+  renameat_with(&directory.file, &private, &directory.file, name, RenameFlags::NOREPLACE).map_err(map)?;
+  held
 }

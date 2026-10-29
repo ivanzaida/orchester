@@ -289,8 +289,9 @@ impl TasksScreen {
         return page.child(inset(self.no_rows(ctx, list.tab(), totals.get(list.tab()), filtered)));
       }
     }
+    let list_key = format!("tasks-rows-{:?}-{key:?}", list.tab());
     if self.display.get().layout == Layout::Board {
-      return page.child(self.board(ctx, shown, (&reading, &rows), filtered));
+      return page.child(self.board(ctx, shown, (&reading, &rows), (filtered, list_key)));
     }
     let highlight = list.highlight().map(ToString::to_string);
     let source = Source {
@@ -303,7 +304,6 @@ impl TasksScreen {
     let items = list::items(ctx, &source, &parts, &self.folded.get());
     // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes: a list keeps
     // its top row in place while its rows change, which these must not.
-    let list_key = format!("tasks-rows-{:?}-{key:?}", list.tab());
     let list_key = match self.place((list.tab(), key), list.highlight(), &items) {
       true => list_key,
       false => format!("{list_key}-awaiting"),

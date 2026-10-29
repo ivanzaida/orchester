@@ -93,7 +93,7 @@ fn wrapping(text: &str, role: TypographyStyle) -> Text {
 pub fn open(path: PathBuf) {
   let opening = thread::Builder::new().name("open-path".to_owned()).spawn(move || {
     if let Err(error) = external::open_path(&path) {
-      tracing::error!(%error, path = %path.display(), "cannot open a path from a startup screen");
+      tracing::warn!(%error, path = %path.display(), "cannot open a path from a startup screen");
     }
   });
   if let Err(error) = opening {

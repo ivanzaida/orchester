@@ -27,12 +27,7 @@ use lurq::{
   core::{ElementRef, Signal},
   node::Element,
 };
-use orchester_core::{
-  account::{AccountState, AgentAccount},
-  connection::invocation::Platform,
-  id::AgentAccountId,
-  time::Timestamp,
-};
+use orchester_core::{account::AgentAccount, id::AgentAccountId, time::Timestamp};
 use orchester_workspace::{accounts::AccountUses, background, messages::Message};
 
 use self::work::{ChangeAction, Changed, CheckAction, SignInAction};
@@ -106,7 +101,7 @@ impl Parts {
     } else if self.checking.contains(&account.id()) {
       words::Shown::Checking
     } else {
-      words::Shown::State(account.state(Platform::current()))
+      words::Shown::State(account.state())
     }
   }
 
@@ -235,12 +230,7 @@ impl Component for AccountsTab {
     let props = ctx.props::<Props>().clone();
     if !self.started.get() {
       self.started.set(true);
-      let checked = props
-        .accounts
-        .iter()
-        .filter(|account| account.state(Platform::current()) != AccountState::Unsupported)
-        .map(AgentAccount::id)
-        .collect();
+      let checked = props.accounts.iter().map(AgentAccount::id).collect();
       self.work.check_again(checked);
     }
     // The account whose page shows: the one the route names, while it is listed.

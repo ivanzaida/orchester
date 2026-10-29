@@ -1,10 +1,7 @@
 //! `settings`: the accounts in their states with the stand-in CLIs beside the database, plan readings, quiet hours and
 //! the daily report, as app Settings' QA reads them (ORC-104).
 
-use orchester_core::{
-  account::{AccountCli, AccountState},
-  connection::invocation::Platform,
-};
+use orchester_core::account::{AccountCli, AccountState};
 use orchester_store::AppDb;
 
 use super::{Seed, kontur::scenarios::settings};
@@ -18,20 +15,12 @@ fn seed_settings_writes_accounts_in_their_states_and_the_notifications() {
     accounts
       .iter()
       .find(|account| account.name().is_some_and(|known| known.as_str() == name))
-      .map(|account| account.state(Platform::current()))
+      .map(|account| account.state())
       .unwrap_or_else(|| panic!("no account {name}"))
   };
-  // Claude Code accounts other than Default are not supported on macOS yet.
-  let claude = |shown| {
-    if Platform::current() == Platform::MacOs {
-      AccountState::Unsupported
-    } else {
-      shown
-    }
-  };
-  assert_eq!(state("Work"), claude(AccountState::SignedIn));
-  assert_eq!(state("Personal"), claude(AccountState::SignedIn));
-  assert_eq!(state("Old"), claude(AccountState::Expired));
+  assert_eq!(state("Work"), AccountState::SignedIn);
+  assert_eq!(state("Personal"), AccountState::SignedIn);
+  assert_eq!(state("Old"), AccountState::Expired);
   assert_eq!(state("Client"), AccountState::SignedIn);
   assert_eq!(state("Archive"), AccountState::FolderMissing);
   let defaults = accounts

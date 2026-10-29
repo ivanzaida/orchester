@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use super::AgentProvider;
 use crate::{
   account::{AccountCli, AgentAccount},
-  connection::invocation::Platform,
   id::AgentAccountId,
 };
 
@@ -35,8 +34,6 @@ pub enum AccountStartProblem {
   NoAccount,
   #[error("the account's folder {folder} is gone", folder = folder.display())]
   FolderMissing { folder: PathBuf },
-  #[error("accounts other than Default are not supported for this CLI on this platform yet")]
-  Unsupported,
 }
 
 /// Whether an agent that ran on `before` (`None`: nothing ran yet) and now runs on `after` moves to another
@@ -91,26 +88,13 @@ impl ConnectionAccount {
     self.folder().map(|folder| (cli.folder_variable(), folder))
   }
 
-  /// Why a run of `provider` can't start on this account on `platform`, if it can't. `folder_exists` says whether
-  /// the account's folder is there.
-  pub fn start_problem(
-    &self,
-    provider: AgentProvider,
-    platform: Platform,
-    folder_exists: impl FnOnce(&Path) -> bool,
-  ) -> Option<AccountStartProblem> {
+  /// Why a run can't start on this account, if it can't. `folder_exists` says whether the account's folder is there.
+  pub fn start_problem(&self, folder_exists: impl FnOnce(&Path) -> bool) -> Option<AccountStartProblem> {
     match self {
       Self::Default => None,
       Self::Unassigned => Some(AccountStartProblem::NoAccount),
-      Self::Account { folder, .. } => {
-        if AccountCli::of(provider).is_some_and(|cli| !cli.supports_accounts_on(platform)) {
-          Some(AccountStartProblem::Unsupported)
-        } else if folder_exists(folder) {
-          None
-        } else {
-          Some(AccountStartProblem::FolderMissing { folder: folder.clone() })
-        }
-      }
+      Self::Account { folder, .. } if folder_exists(folder) => None,
+      Self::Account { folder, .. } => Some(AccountStartProblem::FolderMissing { folder: folder.clone() }),
     }
   }
 }

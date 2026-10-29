@@ -187,7 +187,9 @@ fn words(ctx: &Ctx, kind: ResourceKind, users: &Users) -> (Arc<str>, Arc<str>) {
     let key = match kind {
       ResourceKind::Instruction => "hub.remove.unusedInstruction",
       ResourceKind::Skill => "hub.remove.unusedSkill",
-      ResourceKind::AgentProfile | ResourceKind::Tool | ResourceKind::Pipeline => "hub.remove.unused",
+      ResourceKind::AgentProfile | ResourceKind::Tool | ResourceKind::Pipeline | ResourceKind::TestSuite => {
+        "hub.remove.unused"
+      }
     };
     return (ctx.t(key), ctx.t("hub.remove.confirm"));
   }

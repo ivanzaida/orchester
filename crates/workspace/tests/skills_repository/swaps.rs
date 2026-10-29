@@ -171,7 +171,7 @@ fn skills_repository_swap_to_fifo_before_open_does_not_block_or_read() {
   let f = Fixture::new();
   let note = f.skill().join("notes.md");
   write(&note, "Owned bytes");
-  let root = f.root.clone();
+  let root = f.root;
   let path = note.clone();
   let (send, receive) = mpsc::channel();
   let reader = std::thread::spawn(move || {

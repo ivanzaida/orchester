@@ -69,18 +69,10 @@ impl Family {
     Ok(child)
   }
   pub(in crate::local_git) fn identity(&self, child: &Child) -> Result<ProcessIdentity, LocalGitError> {
-    let mut identity = crate::run_processes::identity::capture(child.id())
+    let identity = crate::run_processes::identity::capture(child.id())
       .map_err(|_| LocalError::ProcessUncertain)?
       .ok_or(LocalError::ProcessUncertain)?;
-    identity.containment = Some(self.token.clone());
-    let executor = crate::run_processes::identity::capture(std::process::id())
-      .map_err(|_| LocalError::ProcessUncertain)?
-      .ok_or(LocalError::ProcessUncertain)?;
-    identity.executor = Some(orchester_core::integration::local::ExecutorIdentity {
-      pid: executor.pid,
-      started: executor.started,
-    });
-    Ok(identity)
+    super::record(&self.token, identity)
   }
   pub(in crate::local_git) fn resume(&self, child: &Child) -> Result<(), LocalGitError> {
     // SAFETY: the flags request a thread snapshot and the PID argument is ignored.
