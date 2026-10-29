@@ -106,10 +106,14 @@ fn bones(ctx: &mut Ctx) -> Column {
     .child(skeleton::select(ctx, REVIEWER.1, 60.0))
     .child(skeleton::select(ctx, REVIEWER.2, 70.0));
   let rows = [
-    SettingRow::new("settings-auto-on-reading", ctx.t("project_settings.newRuns"))
-      .info(ctx.t("project_settings.autoDetail"))
-      .hint(ctx.t("project_settings.autoHint"))
-      .control(skeleton::switch()),
+    // Its hint says whether Autopilot is allowed: a bone until the setting is read.
+    SettingRow::new(
+      "settings-auto-allow-autopilot-reading",
+      ctx.t("project_settings.allowAutopilot"),
+    )
+    .info(ctx.t("project_settings.allowAutopilotDetail"))
+    .hint_reading(300.0)
+    .control(skeleton::switch()),
     SettingRow::new("settings-auto-reviewer-reading", ctx.t("project_settings.reviewer"))
       .info(ctx.t("project_settings.reviewerDetail"))
       .hint(ctx.t("project_settings.reviewerHint"))
