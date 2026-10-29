@@ -158,7 +158,9 @@ fn files_tree_scrolls_to_the_file_shown_and_keeps_its_scrollbar_beside_the_rows(
   git(&files.repo, &["commit", "--quiet", "-m", "many"]);
   files.open(Some("zz.md"), Version::Checkout);
   files.window.until("the file's row scrolled into view", |w| {
-    w.tree.get_element_by_id("files-tree:zz.md").is_some()
+    w.tree
+      .get_element_by_id_mut("files-tree:zz.md")
+      .is_some_and(|row| row.bounds().is_some())
   });
   let (row, gutter, panel) = (
     files.bounds("files-tree:zz.md"),

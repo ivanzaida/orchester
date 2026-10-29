@@ -157,7 +157,8 @@ impl Secrets {
       .window
       .navigation()
       .go(Route::Project(project_id(), ProjectPage::Secrets(Default::default())));
-    self.until("secrets list", |s| s.exists("secrets-list"));
+    // The toolbar stands over the bones while the secrets read (ORC-110).
+    self.until("secrets list", |s| s.exists("secrets-list") && !s.exists("secrets-loading"));
   }
   /// The page of `secret`, opened from its row in the list.
   pub fn open(&mut self, secret: &Secret) {
