@@ -11,12 +11,14 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{
     AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+    capability::{PermissionOption, PermissionProblem, Unavailable},
   },
-  run::{Answerer, ApprovalAnswer, Run, RunStatus},
+  resource::StepKey,
+  run::{Answerer, ApprovalAnswer, PreflightProblem, Run, RunStatus},
   store::{ActivityStore, ConnectionStore},
   time::Timestamp,
 };
-use orchester_ipc::Event;
+use orchester_ipc::{Event, Rejection};
 use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use serde_json::json;
@@ -182,6 +184,34 @@ async fn approval_mode_launch_claude_too_old_runs_autopilot_as_manual() {
   assert!(argv.contains(" --allowedTools Bash(git:*) "), "{argv}");
   assert!(!argv.contains("--settings"), "{argv}");
   assert_eq!(launched_mode(&db, id), ApprovalMode::Manual);
+}
+
+/// *Any command in the worktree*, which Claude Code cannot confine, never passes preflight in Autopilot: on a CLI too
+/// old to hand its requests to Orchester the step would run as Manual, which cannot start it. Refused on a new CLI
+/// too, since the fallback depends on a version check that can change.
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_mode_launch_claude_autopilot_any_command_is_refused_before_it_starts() {
+  for version in ["2.1.88", "2.1.301"] {
+    let project = on_version(
+      AgentProvider::ClaudeCodeCli,
+      permissions(CommandPermission::AnyInWorktree, ApprovalMode::Autopilot),
+      version,
+    );
+    let (scheduler, _events) = scheduler(project.repo.path());
+    assert_eq!(
+      scheduler.start_run(IdempotencyKey::generate(), project.task).await,
+      Err(Rejection::Preflight {
+        problems: vec![PreflightProblem::PermissionsNotEnforceable {
+          step: StepKey::new("implement").expect("key"),
+          reason: PermissionProblem::NotEnforceable {
+            option: PermissionOption::AnyCommand,
+            reason: Unavailable::CannotConfineCommands,
+          },
+        }]
+      }),
+      "on {version}"
+    );
+  }
 }
 
 /// The approval policy of the run's first thread.

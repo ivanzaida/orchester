@@ -17,7 +17,7 @@ use orchester_core::{
     AgentPermissions, AllowedCommands, ApprovalMode, AutopilotMechanism, AutopilotSupport, CLAUDE_CODE_AUTOPILOT,
     CODEX_AUTOPILOT, CantEnforce, CommandPermission, CommandPrefix, EffectiveApprovalMode, ManualReason, NetworkAccess,
     RepositoryAccess, autopilot_support,
-    capability::{EnforcedPermissions, Mechanism, PermissionSetting},
+    capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
     claude::{PermissionFolders, permission_args},
   },
   time::Timestamp,
@@ -93,10 +93,50 @@ fn approval_mode_launch_claude_autopilot_gives_no_rule_that_runs_a_request_by_it
 }
 
 #[test]
+fn approval_mode_launch_claude_autopilot_refuses_what_its_manual_fallback_cannot_run() {
+  // *Any command in the worktree*, which Claude Code cannot confine, is refused in Autopilot too: where the CLI is
+  // too old or never checked, the step runs as Manual, which would run it.
+  for platform in PLATFORMS {
+    let autopilot = permissions(CommandPermission::AnyInWorktree, ApprovalMode::Autopilot);
+    assert_eq!(
+      autopilot.enforced_on(AgentProvider::ClaudeCodeCli, platform),
+      Err(PermissionProblem::NotEnforceable {
+        option: PermissionOption::AnyCommand,
+        reason: Unavailable::CannotConfineCommands,
+      })
+    );
+    let too_old = EffectiveApprovalMode::of(
+      autopilot.approval_mode(),
+      autopilot_support(AgentProvider::ClaudeCodeCli, Some("2.1.88")),
+    );
+    let unchecked = EffectiveApprovalMode::of(
+      autopilot.approval_mode(),
+      autopilot_support(AgentProvider::ClaudeCodeCli, None),
+    );
+    for effective in [too_old, unchecked] {
+      assert!(matches!(
+        effective,
+        EffectiveApprovalMode::Manual {
+          why: ManualReason::CantEnforce { .. }
+        }
+      ));
+      assert!(
+        autopilot
+          .clone()
+          .with_effective_mode(&effective)
+          .enforced_on(AgentProvider::ClaudeCodeCli, platform)
+          .is_err()
+      );
+    }
+    // Codex confines any command, so it runs Autopilot and its Manual fallback alike.
+    assert!(autopilot.enforced_on(AgentProvider::CodexCli, platform).is_ok());
+  }
+}
+
+#[test]
 fn approval_mode_launch_claude_autopilot_hands_every_command_and_mcp_call_to_the_prompt() {
-  // Even a Manual leftover of *Any command in the worktree*, which Claude Code cannot confine, runs in Autopilot:
-  // every command reaches Orchester.
-  let autopilot = permissions(CommandPermission::AnyInWorktree, ApprovalMode::Autopilot);
+  // Even a listed command, which Claude Code would run by rule in Manual, reaches Orchester in Autopilot.
+  let autopilot = permissions(git_only(), ApprovalMode::Autopilot);
   let enforced = autopilot
     .enforced_on(AgentProvider::ClaudeCodeCli, Platform::current())
     .expect("Autopilot hands commands to Orchester");

@@ -339,11 +339,15 @@ impl AgentPermissions {
       Mechanism::ClaudeAcceptEdits if self.lists_commands() => Mechanism::ClaudeEditRules,
       mechanism => mechanism,
     };
+    // Its commands setting must still be enforceable: Autopilot runs as Manual wherever the CLI cannot hand its
+    // requests to Orchester (too old, or never checked), and Manual runs it. So preflight, saving a profile and a
+    // run's permission change refuse what the runner's fallback could not start.
+    let manual_commands = enforced(PermissionOption::of_commands(&self.commands))?;
     // Autopilot hands every command to Orchester, as asking before each one does; its list is Manual's.
     let commands = if self.hands_requests_to_orchester() {
       enforced(PermissionOption::AskBeforeCommands)?
     } else {
-      enforced(PermissionOption::of_commands(&self.commands))?
+      manual_commands
     };
     let mut permissions = self.clone();
     let (network, network_stays_on) = match support(provider, platform, PermissionOption::of_network(self.network)) {

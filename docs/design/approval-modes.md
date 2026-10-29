@@ -80,6 +80,11 @@ recorded as Manual, and the runner logs why. The profile's Connection enforcemen
 `AutopilotSupport::CantEnforce(CliTooOld { installed, required } | VersionUnknown { required })` for 07d's *Not
 enforced · runs as Manual* row (the UI is a separate task).
 
+Because any Autopilot step can fall back so (a later check can find an older CLI), an Autopilot profile's own
+commands setting must be enforceable on its connection as in Manual: `AgentPermissions::enforced_on` refuses it
+otherwise, so preflight, saving a profile and a run's permission change refuse what the fallback could not start. On
+Claude Code this refuses *Any command in the worktree* in Autopilot too, as in Manual (it cannot confine commands).
+
 ## Frames
 
 | Node | Board | Frame | What it shows |
