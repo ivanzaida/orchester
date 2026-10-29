@@ -337,7 +337,7 @@ fn orchestrator_tools_say_init_repository_is_always_the_persons_to_apply() {
   let told = tool.description.map(|told| told.into_owned()).unwrap_or_default();
   for part in [
     "always a card the person applies",
-    "whatever auto mode and the person's switches say",
+    "whatever Autopilot and the person's switches say",
     "never adds a remote, pushes or changes git's settings",
     "has_commits",
     "git_not_found",

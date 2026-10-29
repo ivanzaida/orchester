@@ -1,7 +1,7 @@
 # MCP reference — work tools
 
 These tools drive a project's work through data: projects and limits, tasks and modules, runs, the waits of a run
-(approvals, questions, plans, messages), auto mode, worktrees, pull requests, and usage and delivery reports.
+(approvals, questions, plans, messages), approval modes, worktrees, pull requests, and usage and delivery reports.
 Conventions (naming, strict schemas, links, errors, gates) are in [mcp-server.md](mcp-server.md); project setup
 tools are in [mcp-tools-setup.md](mcp-tools-setup.md).
 
@@ -271,7 +271,7 @@ that cannot be read has no phase/state/tokens; its detail says why.
 
 The complete state of a run:
 
-- **Steps**, **state** and **tokens** (auto mode's reviewer included and shown apart), **active time**.
+- **Steps**, **state** and **tokens** (the reviewer's included and shown apart), **active time**.
 - For a run the runner interrupted after its own failure: reason `runner_failed` with `runner_failure`
   (`storage_contention` — project database stayed busy; `storage_failure` — database unavailable; `other`; `null`).
 - **What it waits for** (`awaiting`): agents' waiting questions with their options; steps waiting for a message with
@@ -369,7 +369,7 @@ what holds now.
 
 Tool requests waiting for a decision, oldest first (kind, command or tool, arguments, agent, run, task, since when),
 and the plans runs wait on (version, step, excerpt) with decisions on their earlier versions and `decided_by`. Each
-links to its card on the task's Conversation. A request auto mode's reviewer still judges has `reviewing: true`: it
+links to its card on the task's Conversation. A request the reviewer still judges has `reviewing: true`: it
 waits for the reviewer, not for a person, until the review ends (`get_run`'s `awaiting.approvals` mark it the same).
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).

@@ -144,12 +144,15 @@ pub async fn set_allow_autopilot(services: &Services, args: SetAllowAutopilot) -
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    let autopilot = db
-      .allow_autopilot()?
+    let current = db.allow_autopilot()?;
+    let autopilot = current
       .changed(args.allow_autopilot, Answerer::Automation)
       .map_err(|_| ToolError::refused("person_only", vec![autopilot_person_only()]))?;
-    db.save_allow_autopilot(autopilot)?;
-    services.changes.record(open.project.id(), Outside::AutoMode);
+    // Nothing to write when nothing changes: a person's Off between this read and a write would be undone.
+    if autopilot != current {
+      db.save_allow_autopilot(autopilot)?;
+      services.changes.record(open.project.id(), Outside::AutoMode);
+    }
     approvals_json(&db, open.project.id())
   })
   .await
@@ -169,13 +172,8 @@ pub async fn set_reviewer(services: &Services, args: SetReviewer) -> Result<Valu
   .await
 }
 
-/// A retired tool's answer: refused as `retired`, naming the tools that replace it.
-pub fn retired(name: &str) -> ToolError {
-  let replacement = match name {
-    "get_auto_mode" => "get_approvals",
-    "set_auto_mode" => "set_allow_autopilot and set_reviewer",
-    _ => "set_run_manual",
-  };
+/// Retired tool `name`'s answer: refused as `retired`, naming the tools that replace it.
+pub fn retired(name: &str, replacement: &str) -> ToolError {
   ToolError::refused(
     "retired",
     vec![
