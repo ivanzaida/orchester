@@ -1,7 +1,8 @@
 //! The pages the browser tests open, served on loopback until the test ends: `/form`, a guest book whose Save button
 //! writes a status, logs to the console, fetches `/api/save` and shows an alert; `/later`, a page to go back from;
-//! `/api/save`, a small JSON answer; the *Browser* window tests' `/window-form`, `/animated` and `/dialog`
-//! (`crate::window`); and any other `/<name>`, a page titled `Page <name>`.
+//! `/confirm`, whose Delete button asks with `confirm()`, writes the answer and throws; `/api/save`, a small JSON
+//! answer; the *Browser* window tests' `/window-form`, `/animated` and `/dialog` (`crate::window`); and any other
+//! `/<name>`, a page titled `Page <name>`.
 
 use tokio::{
   io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -22,6 +23,16 @@ function save() {
   console.error('oops ' + name);
   fetch('/api/save?name=' + encodeURIComponent(name));
   alert('Saved ' + name);
+}
+</script></body></html>"#;
+
+const CONFIRM: &str = r#"<!doctype html><html><head><title>Confirm</title></head><body><main>
+<button onclick="remove()">Delete</button>
+<p id="status">Nothing asked</p>
+</main><script>
+function remove() {
+  document.getElementById('status').textContent = confirm('Delete Ada?') ? 'Deleted' : 'Kept';
+  throw new Error('boom after the question');
 }
 </script></body></html>"#;
 
@@ -55,6 +66,7 @@ async fn answer(stream: TcpStream) {
       "text/html",
       "<!doctype html><html><head><title>Later</title></head><body><p>A later page.</p></body></html>".to_owned(),
     ),
+    "confirm" => ("text/html", CONFIRM.to_owned()),
     "api/save" => ("application/json", r#"{"saved":true}"#.to_owned()),
     "window-form" => ("text/html", crate::window::FORM.to_owned()),
     "animated" => ("text/html", crate::window::ANIMATED.to_owned()),

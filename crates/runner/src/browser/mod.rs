@@ -41,7 +41,7 @@ use self::{
   window::Window,
 };
 pub use self::{
-  log::{ConsoleMessage, Request, TabLog},
+  log::{ConsoleMessage, KEPT, Request, TabLog},
   running::LOAD_LIMIT,
   tab::Tab,
 };

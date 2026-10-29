@@ -32,7 +32,7 @@ use crate::{
 };
 
 /// A read-only profile on `provider` whose *Browser* is `access`, allowing `docs.example.invalid`.
-fn browsing(provider: AgentProvider, access: BrowserAccess) -> TestProject {
+pub(super) fn browsing(provider: AgentProvider, access: BrowserAccess) -> TestProject {
   let commands = match provider {
     AgentProvider::CodexCli => CommandPermission::AnyInWorktree,
     _ => CommandPermission::Allowed(AllowedCommands::default()),
@@ -51,18 +51,18 @@ fn browsing(provider: AgentProvider, access: BrowserAccess) -> TestProject {
 }
 
 /// The run's browser calls, `<tool> <ok|error>[ +image]: <first line>`, in order.
-fn calls(root: &Path, run: RunId) -> Vec<String> {
+pub(super) fn calls(root: &Path, run: RunId) -> Vec<String> {
   reported(&ProjectDb::open(root).expect("open"), run, "browser-call: ")
 }
 
 /// The lines of the answers of the run's calls of `tool`.
-fn answers(root: &Path, run: RunId, tool: &str) -> Vec<String> {
+pub(super) fn answers(root: &Path, run: RunId, tool: &str) -> Vec<String> {
   let prefix = format!("browser-answer: {tool} | ");
   reported(&ProjectDb::open(root).expect("open"), run, &prefix)
 }
 
 /// The call of `tool` at `index` among the run's calls of it.
-fn call_of(calls: &[String], tool: &str, index: usize) -> String {
+pub(super) fn call_of(calls: &[String], tool: &str, index: usize) -> String {
   calls
     .iter()
     .filter(|call| call.starts_with(&format!("{tool} ")))
