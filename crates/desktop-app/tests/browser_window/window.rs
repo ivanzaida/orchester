@@ -1,9 +1,10 @@
 //! The Browser window headless, on a session whose project's browser is fed as its runner would report it: its tabs
 //! with their owners and the toolbar (`01`), the states drawn instead of a page (`05`, `06`, `07`), what Orchester
-//! draws over the page (`02`, `03`, `04`), its frame and its shortcuts; and the main window opening it by itself when
-//! an agent starts browsing, and from its app menu. The window's own tree is mounted beside the main window's, on the
-//! same app, as lurq mounts a secondary window. A state that needs the browser found (every one but *Browser not
-//! found*) is checked only where this computer has Chrome, Edge, Brave or Chromium, and says so where it has none.
+//! draws over the page (`02`, `03`, `04`), its frame, its shortcuts and its tab strip's overflow (`01d`, `01e`); and
+//! the main window opening it by itself when an agent starts browsing, and from its app menu. The window's own tree is
+//! mounted beside the main window's, on the same app, as lurq mounts a secondary window. A state that needs the browser
+//! found (every one but *Browser not found*) is checked only where this computer has Chrome, Edge, Brave or Chromium,
+//! and says so where it has none.
 
 use std::{
   io::Cursor,
@@ -14,7 +15,10 @@ use std::{
 
 use image::{ImageFormat, Rgb, RgbImage};
 use lurq::{
-  app::{Tree, events::MouseButton},
+  app::{
+    Tree,
+    events::{MouseButton, ScrollPhase},
+  },
   node::element::ElementRef,
 };
 use orchester_app::{
@@ -422,6 +426,50 @@ fn browser_overflow_menu_lists_every_tab_in_rows_with_a_close_under_the_pointer(
   browser.tree.mouse_move(x, y);
   browser.until_shown("browser-overflow-1-close");
   assert!(!browser.shows("browser-overflow-2-close"));
+}
+
+#[test]
+fn browser_tab_strip_scrolls_sideways_with_a_mouse_wheel() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  let tabs = (0..20)
+    .map(|index| tab(&format!("P{index}"), TabOwner::Person, "Pull requests · GitHub"))
+    .collect();
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs,
+    shown: Some(BrowserTabId::new("P0")),
+    mode: BrowserMode::Headless,
+  }));
+  browser.until_shown("browser-overflow");
+  let bounds = |browser: &mut Browser, id: &str| {
+    browser
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let first = bounds(&mut browser, "browser-tab-0").x;
+  assert!(
+    !browser.shows("browser-tabs-fade-start"),
+    "the strip starts at its first tab"
+  );
+  let (x, y) = bounds(&mut browser, "browser-tab-1").center();
+  // A mouse wheel turned down, as lurq delivers it: a vertical delta only (`01e`, the strip scrolls with the wheel).
+  browser.tree.scroll(x, y, 0.0, -600.0, ScrollPhase::Scroll);
+  browser.pass();
+  browser.pass();
+  assert!(
+    bounds(&mut browser, "browser-tab-0").x < first - 100.0,
+    "the tabs moved to the left"
+  );
+  assert!(browser.shows("browser-tabs-fade-start"), "the cut start fades (01e)");
+  browser.tree.scroll(x, y, 0.0, 2000.0, ScrollPhase::Scroll);
+  browser.pass();
+  browser.pass();
+  assert_eq!(bounds(&mut browser, "browser-tab-0").x, first, "back at the first tab");
+  assert!(!browser.shows("browser-tabs-fade-start"));
 }
 
 #[test]

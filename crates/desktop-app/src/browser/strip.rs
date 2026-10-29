@@ -196,15 +196,27 @@ impl Strip {
   }
 
   /// The tabs in a viewport `visible` wide that scrolls sideways with the wheel, with a fade at each cut edge and no
-  /// scrollbar.
+  /// scrollbar. lurq's sideways scroller leaves a vertical wheel to the containers around it, so the strip scrolls
+  /// itself by the stronger of the two deltas: a mouse wheel and a trackpad's sideways swipe both move the tabs.
   fn viewport(&self, tabs: Row, visible: f32, (scroll, content): (f32, f32)) -> Element {
     let (scrolled, state) = (self.scrolled.clone(), self.scroll.clone());
+    let most = (content - visible).max(0.0);
     let scroller = ScrollHorizontal::new(tabs)
       .with_scroll_state(self.scroll.clone())
       .scrollbar(ScrollBarStyle::hidden())
       .width(Dimension::Px(visible))
       .height(Dimension::Px(TAB_HEIGHT))
-      .on_scroll(move |_: ScrollEvent| scrolled.set(state.scroll_x()));
+      .on_scroll(move |event: ScrollEvent| {
+        event.prevent_default();
+        let delta = if event.delta_y.abs() > event.delta_x.abs() {
+          event.delta_y
+        } else {
+          event.delta_x
+        };
+        let to = (scrolled.get_untracked() - delta).clamp(0.0, most);
+        state.set_scroll_pending(to, 0.0);
+        scrolled.set(to);
+      });
     let fade = |id: &str, angle: f32, left: f32| {
       Row::new()
         .id(id.to_owned())
