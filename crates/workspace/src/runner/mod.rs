@@ -33,7 +33,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState};
+use orchester_ipc::{AttachSession, ErrorReports, RefusedRun, Rejection, SessionEnd, WorkState};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -91,6 +91,8 @@ pub struct Runners {
 
 struct Inner {
   runner_exe: PathBuf,
+  /// Whether the runners started next send error reports, and in which environment and release.
+  reports: Mutex<Option<ErrorReports>>,
   runtime: Handle,
   /// How the previous session ended: each project's first runner attaches with it.
   previous_end: SessionEnd,
@@ -135,10 +137,13 @@ impl Runners {
     self.inner.shared.limits.subscribe()
   }
 
+  /// The runners of the program `runner_exe`. They send no error reports until
+  /// [`Self::send_error_reports`] says so.
   pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity, previous_end: SessionEnd) -> Self {
     Self {
       inner: Arc::new(Inner {
         runner_exe,
+        reports: Mutex::new(None),
         runtime,
         previous_end,
         shared: Arc::new(Shared {
@@ -290,10 +295,17 @@ impl Runners {
     Connection::spawn(
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
+      self.inner.reports.lock().clone(),
       root.to_path_buf(),
       Reporter::new(generation, name.clone(), status.clone(), self.inner.shared.clone()),
       session,
     )
+  }
+
+  /// The runners started from now on send their panics and ERROR lines as error reports with
+  /// `reports` (`orchester_ipc::error_reports`); a runner already running keeps what it was started with.
+  pub fn send_error_reports(&self, reports: ErrorReports) {
+    *self.inner.reports.lock() = Some(reports);
   }
 
   fn displayed(&self) -> Option<PathBuf> {

@@ -7,7 +7,7 @@ use std::{io, path::PathBuf, process::ExitCode, sync::Arc, time::Duration};
 
 use orchester_ipc::{EXIT_PROJECT_LOCKED, IpcError};
 use orchester_runner::{
-  WORKER_THREADS, approval_relay,
+  WORKER_THREADS, approval_relay, error_reports,
   lock::{LockError, RunnerLock},
   log_file, private_file, server,
   shutdown_signal::ShutdownSignal,
@@ -46,7 +46,8 @@ fn main() -> ExitCode {
     Err(_) => (None, None),
   };
   // The desktop reads stderr: it logs each line and reports it when the runner fails to start.
-  // The same events also go to the project's runner log, when the project has one.
+  // The same events also go to the project's runner log, when the project has one, and each
+  // ERROR line is an error report while the reports' client runs.
   let file_layer = log_file.map(|file| {
     tracing_subscriber::fmt::layer()
       .with_ansi(false)
@@ -60,7 +61,10 @@ fn main() -> ExitCode {
         .with_writer(io::stderr),
     )
     .with(file_layer)
+    .with(error_reports::layer())
     .init();
+  // Kept to the end of `main`, whose drop sends what is still pending.
+  let _reports = error_reports::start();
   if let Some(error) = log_error {
     tracing::warn!("runner log file unavailable, logging to stderr only: {error}");
   }

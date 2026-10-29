@@ -49,8 +49,9 @@ orchester-core.workspace = true
 orchester-exec.workspace = true
 # The daily log file (`app_log`), shared with the deprecated desktop, and how a session ended.
 orchester-ipc.workspace = true
-# The scrubber every error report passes through before it leaves (`error_reports`, `docs/error-reports.md`).
-orchester-report.workspace = true
+# The client options every error report is sent with, the runner's too, and the scrubber it passes through before it
+# leaves (`error_reports`, `docs/error-reports.md`).
+orchester-report = { workspace = true, features = ["client"] }
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
