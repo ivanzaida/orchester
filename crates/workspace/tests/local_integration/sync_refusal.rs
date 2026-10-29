@@ -104,8 +104,8 @@ fn saved_collision_intent(fixture: &Fixture) -> Checkout {
   assert!(
     ProjectDb::open(fixture.root())
       .expect("db")
-  // Git can overwrite case aliases even with --no-overwrite-ignore. A real signature refusal
-  // exercises unchanged-intent recovery on every volume without destroying the retained fixture.
+      // Git can overwrite case aliases even with --no-overwrite-ignore. A real signature refusal
+      // exercises unchanged-intent recovery on every volume without destroying the retained fixture.
       .save_local_operation(&operation, Some(session.operation().version()))
       .expect("save legacy intent")
   );
