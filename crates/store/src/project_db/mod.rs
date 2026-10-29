@@ -53,6 +53,7 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
+mod reference_bindings;
 mod removals;
 mod repository;
 mod repository_import;
@@ -70,6 +71,7 @@ mod service_needs;
 mod shared_members;
 mod shared_modules;
 mod shared_tasks;
+mod shared_versions;
 mod sharing;
 mod sources;
 mod step_outputs;
@@ -110,6 +112,7 @@ pub use self::{
   orchestrator_reports::KeptReport,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
+  reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
@@ -117,6 +120,7 @@ pub use self::{
   shared_members::SharedMember,
   shared_modules::{CachedModule, CachedModuleChange},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
+  shared_versions::{CachedVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
 };
