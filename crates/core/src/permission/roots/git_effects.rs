@@ -362,7 +362,8 @@ fn notes(rest: &[&str]) -> Option<GitEffect> {
 }
 
 /// `git config` that writes: the worktree's own file is its own; the user's or the system's lie beyond the
-/// repository and cannot be told here; any other is the repository's shared settings. Reading changes nothing.
+/// repository and cannot be told here; any other is the repository's shared settings. Reading changes nothing; an
+/// option or subcommand that removes, renames, adds or edits writes, whatever else it names.
 fn config(rest: &[&str]) -> Option<GitEffect> {
   const READS: [&str; 7] = [
     "--get",
@@ -373,9 +374,24 @@ fn config(rest: &[&str]) -> Option<GitEffect> {
     "--show-origin",
     "--show-scope",
   ];
+  const WRITES: [&str; 8] = [
+    "--unset",
+    "--unset-all",
+    "--remove-section",
+    "--rename-section",
+    "--add",
+    "--replace-all",
+    "--edit",
+    "-e",
+  ];
   let names = operands(rest, &["--file", "-f", "--type", "--default"]);
-  let reads = has(rest, &READS) || matches!(names.as_slice(), [_] | ["get", _]);
-  if reads || has(rest, &["--worktree"]) {
+  let writes = has(rest, &WRITES)
+    || matches!(
+      names.first(),
+      Some(&("set" | "unset" | "rename-section" | "remove-section" | "edit"))
+    );
+  let reads = has(rest, &READS) || matches!(names.as_slice(), [_] | ["get" | "list", ..]);
+  if (reads && !writes) || has(rest, &["--worktree"]) {
     return None;
   }
   if has(rest, &["--global", "--system", "--file", "-f"]) {

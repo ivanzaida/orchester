@@ -195,20 +195,29 @@ impl RunRoots {
     if command.parts().is_empty() {
       return RootsCheck::Unknown;
     }
+    let mut git_environment = false;
     command
       .parts()
       .iter()
-      .find_map(|part| self.part(part))
+      .find_map(|part| {
+        let check = self.part(part, git_environment);
+        git_environment |= sets_git_environment(part);
+        check
+      })
       .unwrap_or(RootsCheck::Inside)
   }
 
-  /// The first reason `part` is not inside: a path it touches, git's effect, a word not placed.
-  fn part(&self, part: &CommandPart) -> Option<RootsCheck> {
+  /// The first reason `part` is not inside: a path it touches, git's effect, a word not placed. After an earlier part
+  /// set a variable of git's own (`export GIT_DIR=…`), which repository git works on cannot be told.
+  fn part(&self, part: &CommandPart, git_environment: bool) -> Option<RootsCheck> {
     for touched in part.touches() {
       let check = RootPath::folder(self.platform, touched).map_or(RootsCheck::Unknown, |path| self.place(&path));
       if check != RootsCheck::Inside {
         return Some(check);
       }
+    }
+    if git_environment && runs_git(part) {
+      return Some(RootsCheck::Unknown);
     }
     self
       .git(part)
@@ -219,7 +228,7 @@ impl RunRoots {
   /// cannot be followed.
   fn git(&self, part: &CommandPart) -> Option<RootsCheck> {
     if part.program() != Some("git") {
-      let runs_git = part.words().iter().any(|word| is_git(word)) && part.category() != CommandCategory::ReadOnly;
+      let runs_git = runs_git(part) && part.category() != CommandCategory::ReadOnly;
       return runs_git.then_some(RootsCheck::Unknown);
     }
     Some(
@@ -247,4 +256,35 @@ fn folder(platform: Platform, path: &Path) -> Result<RootPath, RunRootsError> {
 fn is_git(word: &str) -> bool {
   let name = word.rsplit(['/', '\\']).next().unwrap_or(word).to_lowercase();
   name == "git" || name == "git.exe"
+}
+
+/// Whether `part` runs git, by itself or under another program.
+fn runs_git(part: &CommandPart) -> bool {
+  part.program() == Some("git") || part.words().iter().any(|word| is_git(word))
+}
+
+/// The shell's commands that set, export or remove a variable by its name.
+const SETTERS: [&str; 9] = [
+  "export", "declare", "typeset", "readonly", "local", "set", "setenv", "setx", "unset",
+];
+
+/// Whether `part`, not git itself, sets a variable git reads (`GIT_DIR`, `GIT_WORK_TREE`, any `GIT_…`) for the parts
+/// after it: an assignment (`export GIT_DIR=…`, `GIT_DIR=…`), a name a setter is given (`export GIT_DIR`), or
+/// PowerShell's `$env:GIT_DIR`.
+fn sets_git_environment(part: &CommandPart) -> bool {
+  if part.program() == Some("git") {
+    return false;
+  }
+  let setter = part
+    .words()
+    .first()
+    .is_some_and(|word| SETTERS.contains(&word.to_lowercase().as_str()));
+  part.words().iter().any(|word| {
+    let (word, powershell) = match word.get(..5).filter(|start| start.eq_ignore_ascii_case("$env:")) {
+      Some(_) => (&word[5..], true),
+      None => (word.as_str(), false),
+    };
+    let name = word.split('=').next().unwrap_or(word);
+    name.to_ascii_uppercase().starts_with("GIT_") && (powershell || setter || word.contains('='))
+  })
 }

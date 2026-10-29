@@ -198,13 +198,30 @@ fn approval_roots_main_checkout() {
   };
   for line in [
     "git config core.autocrlf false",
+    "git config --unset core.bare",
+    "git config --unset-all remote.origin.fetch",
+    "git config --remove-section remote.origin",
+    "git config --rename-section remote.origin remote.old",
+    "git config --add remote.origin.fetch x",
+    "git config --replace-all core.x y",
+    "git config --edit",
+    "git config -e",
+    "git config unset core.bare",
+    "git config edit",
     "git remote add fork x",
     "git gc",
     "git worktree prune",
   ] {
     assert_eq!(fixture.command(line), shared, "{line}");
   }
-  assert_eq!(fixture.command("git config --get core.autocrlf"), RootsCheck::Inside);
+  for line in [
+    "git config --get core.autocrlf",
+    "git config core.autocrlf",
+    "git config list",
+    "git config get core.autocrlf",
+  ] {
+    assert_eq!(fixture.command(line), RootsCheck::Inside, "{line}");
+  }
 }
 
 #[test]
@@ -277,9 +294,19 @@ fn approval_roots_unknown() {
     "git update-ref --stdin",
     "GIT_DIR=x git status",
     "git switch -",
+    // A variable of git's own set before it: which repository git works on cannot be told.
+    "export GIT_DIR={ROOT}/other/.git && git commit -am x",
+    "export GIT_WORK_TREE={ROOT}/other; git checkout -- .",
+    "GIT_DIR=src/.git; export GIT_DIR; git reset --hard",
+    "declare -x GIT_DIR=/x/.git && git status",
   ] {
     assert_eq!(fixture.command(line), RootsCheck::Unknown, "{line:?}");
   }
+  // A variable of another name changes nothing of git's.
+  assert_eq!(
+    fixture.command("export RUST_LOG=debug && git status"),
+    RootsCheck::Inside
+  );
   for path in ["", "~/notes.md", "~bob/x"] {
     assert_eq!(fixture.file(path), RootsCheck::Unknown, "{path:?}");
   }
@@ -414,7 +441,6 @@ fn approval_roots_windows_normalization() {
     r"c:\repo\.ORCHESTER\Worktrees\W1\src\lib.rs",
     r"\\?\C:\Repo\.orchester\worktrees\w1\src\lib.rs",
     "C:/Repo/.orchester/worktrees/w1/src/lib.rs",
-    "/c/Repo/.orchester/worktrees/w1/src/lib.rs",
     r"C:\Repo\.orchester\worktrees\w1\src\..\README.md",
     r"C:\Repo\.orchester\worktrees\w1\notes.txt.",
     r"C:\Repo\.orchester\worktrees\w1\notes.txt::$DATA",
@@ -430,8 +456,14 @@ fn approval_roots_windows_normalization() {
   );
   assert!(matches!(check(r"..\..\..\..\Users\x"), RootsCheck::Outside { .. }));
   assert!(matches!(check(r"C:\Repo-other\x"), RootsCheck::Outside { .. }));
-  // Rooted without a drive, or a drive without a root: which file it is cannot be told.
-  for path in [r"\Windows\x", "/etc/hosts", "C:x"] {
+  // Rooted without a drive, or a drive without a root: which file it is cannot be told. A file tool reads Git Bash's
+  // `/c/x` on the current drive, as `\c\x`.
+  for path in [
+    r"\Windows\x",
+    "/etc/hosts",
+    "C:x",
+    "/c/Repo/.orchester/worktrees/w1/src/lib.rs",
+  ] {
     assert_eq!(check(path), RootsCheck::Unknown, "{path}");
   }
 }
@@ -475,4 +507,21 @@ fn approval_roots_macos_normalization() {
   assert_eq!(alias("/private/tmp/x"), alias("/tmp/x"));
   assert_eq!(alias("/private/tmp/x").path(), Path::new("/tmp/x"));
   assert!(RootPath::new(Platform::MacOs, "relative", None).is_none());
+}
+
+/// `..` after a link: on POSIX the parent of the link's target, on Windows the folder that holds the link, as Win32
+/// takes `..` away from the text first.
+#[test]
+fn approval_roots_link_then_parent() {
+  let fixture = Fixture::new();
+  let through_link = fixture.file("out/../x");
+  #[cfg(unix)]
+  assert_eq!(through_link, fixture.outside(&fixture.root.join("x")));
+  #[cfg(windows)]
+  assert_eq!(through_link, RootsCheck::Inside);
+  #[cfg(unix)]
+  assert_eq!(
+    fixture.file("out/../elsewhere/notes.md"),
+    fixture.outside(&fixture.elsewhere.join("notes.md"))
+  );
 }

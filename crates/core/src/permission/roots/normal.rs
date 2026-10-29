@@ -1,6 +1,7 @@
 //! Paths as the run's roots compare them ([`super::RunRoots`]): absolute, with `.` and `..` taken away, links and
-//! junctions followed as far as they exist (on this platform only), and the spellings of one file made one: on Windows
-//! `\\?\` and `\\.\` prefixes, Git Bash's `/c/…`, `/` for `\`, any case, trailing dots and spaces and a stream
+//! junctions followed as far as they exist (on this platform only; on macOS before each `..`), and the spellings of
+//! one file made one: on Windows `\\?\` and `\\.\` prefixes, Git Bash's `/c/…` in a command, `/` for `\`, any case,
+//! trailing dots and spaces and a stream
 //! (`file::$DATA`); on macOS the `/private` aliases of `/var`, `/tmp` and `/etc`, and any case, as the default APFS
 //! volume ignores it. Each platform is read by its own rules on either, so both are tested on one machine.
 
@@ -17,10 +18,20 @@ pub struct RootPath {
 }
 
 impl RootPath {
-  /// `path` as `platform` reads it, relative to `base` when it is not absolute; `None` when it cannot be told: a
-  /// relative path without a base, one that starts with `~` (no shell expands it here), a Windows path rooted without
-  /// a drive (`\x`, `/etc/hosts`) or on a drive without a root (`C:x`), or a path whose links cannot be read.
+  /// `path` as `platform`'s own file functions read it (a file tool's, an MCP server's), relative to `base` when it is
+  /// not absolute; `None` when it cannot be told: a relative path without a base, one that starts with `~` (no shell
+  /// expands it here), a Windows path rooted without a drive (`\x`, `/etc/hosts`, Git Bash's `/c/x`, which Windows
+  /// reads on the current drive) or on a drive without a root (`C:x`), or a path whose links cannot be read.
   pub fn new(platform: Platform, path: &str, base: Option<&Self>) -> Option<Self> {
+    Self::read(platform, path, base, false)
+  }
+
+  /// A root folder, or a path a command touches, as written: absolute, or not a root. Git Bash's `/c/…` is `C:\…`.
+  pub(super) fn folder(platform: Platform, path: &Path) -> Option<Self> {
+    Self::read(platform, &path.to_string_lossy(), None, true)
+  }
+
+  fn read(platform: Platform, path: &str, base: Option<&Self>, git_bash: bool) -> Option<Self> {
     if path.is_empty() || path.starts_with('~') {
       return None;
     }
@@ -29,17 +40,16 @@ impl RootPath {
     } else {
       path.to_owned()
     };
-    let written = Self::of_names(platform, names(platform, &full)?)?;
+    let written = Self::of_names(platform, names(platform, &full, git_bash)?)?;
     if platform != Platform::current() {
       return Some(written);
     }
-    let found = existing(&written.shown).ok()?;
-    Self::of_names(platform, names(platform, &found.path.to_string_lossy())?)
-  }
-
-  /// A root folder, as written: absolute, or not a root.
-  pub(super) fn folder(platform: Platform, path: &Path) -> Option<Self> {
-    Self::new(platform, &path.to_string_lossy(), None)
+    let found = match platform {
+      Platform::Windows => existing(&written.shown).ok()?.path,
+      // On POSIX `link/..` is the parent of the link's target, not the folder that holds the link.
+      Platform::MacOs => followed(&full)?,
+    };
+    Self::of_names(platform, names(platform, &found.to_string_lossy(), git_bash)?)
   }
 
   /// The path of `names` (the root first), each spelling of one file made one.
@@ -97,12 +107,12 @@ fn is_relative(platform: Platform, path: &str) -> bool {
   }
 }
 
-/// The root of the absolute `path` and each name after it, `.` and `..` taken away; `None` when its root cannot be
-/// read.
-fn names(platform: Platform, path: &str) -> Option<Vec<String>> {
+/// The root of the absolute `path` and each name after it, `.` and `..` taken away (by its text, as Windows does);
+/// `None` when its root cannot be read. With `git_bash`, a Windows `/c/…` is `C:\…`.
+fn names(platform: Platform, path: &str, git_bash: bool) -> Option<Vec<String>> {
   let (root, rest) = match platform {
     Platform::MacOs => (String::new(), path.strip_prefix('/')?.to_owned()),
-    Platform::Windows => windows_root(&path.replace('/', "\\"))?,
+    Platform::Windows => windows_root(&path.replace('/', "\\"), git_bash)?,
   };
   let mut names = vec![root];
   for name in rest.split(separators(platform)) {
@@ -119,9 +129,26 @@ fn names(platform: Platform, path: &str) -> Option<Vec<String>> {
   Some(names)
 }
 
-/// A Windows path's root, a drive (`C:`) or a share (`\\host\share`), without `\\?\`, `\\.\` or `\\?\UNC\`; Git
-/// Bash's `\c\…` is `C:\…`.
-fn windows_root(path: &str) -> Option<(String, String)> {
+/// The absolute POSIX `path` with its links followed as far as they exist, each `..` applied after the links before
+/// it are followed; `None` when a link on its way cannot be read.
+fn followed(path: &str) -> Option<PathBuf> {
+  let mut current = PathBuf::from("/");
+  for name in path.split('/') {
+    match name {
+      "" | "." => {}
+      ".." => {
+        current = existing(&current).ok()?.path;
+        current.pop();
+      }
+      name => current.push(name),
+    }
+  }
+  existing(&current).ok().map(|found| found.path)
+}
+
+/// A Windows path's root, a drive (`C:`) or a share (`\\host\share`), without `\\?\`, `\\.\` or `\\?\UNC\`; with
+/// `git_bash`, Git Bash's `\c\…` is `C:\…`.
+fn windows_root(path: &str, git_bash: bool) -> Option<(String, String)> {
   if let Some(share) = path.strip_prefix(r"\\?\UNC\") {
     return share_root(share);
   }
@@ -132,7 +159,11 @@ fn windows_root(path: &str) -> Option<(String, String)> {
     return share_root(share);
   }
   let bytes = path.as_bytes();
-  if bytes.len() >= 2 && bytes[0] == b'\\' && bytes[1].is_ascii_alphabetic() && bytes.get(2).is_none_or(|c| *c == b'\\')
+  if git_bash
+    && bytes.len() >= 2
+    && bytes[0] == b'\\'
+    && bytes[1].is_ascii_alphabetic()
+    && bytes.get(2).is_none_or(|c| *c == b'\\')
   {
     return Some((
       format!("{}:", char::from(bytes[1]).to_ascii_uppercase()),
