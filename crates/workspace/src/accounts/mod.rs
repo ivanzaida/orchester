@@ -5,7 +5,7 @@
 //! system or a CLI; the UI calls it off the UI thread.
 
 mod error;
-mod folders;
+pub(crate) mod folders;
 pub mod sign_in;
 pub mod trash;
 mod uses;
@@ -18,7 +18,7 @@ use orchester_core::{
   },
   connection::{
     ConnectionAccount,
-    invocation::{Platform, account_environment, agent_environment},
+    invocation::{account_environment, agent_environment},
     plan_limits::{LimitReading, PlanLimits, PlanReadings, ReadingSource},
   },
   id::AgentAccountId,
@@ -102,9 +102,6 @@ impl Workspace {
   /// Adds an account, creating its folder or taking the person's, not checked yet: *Add account* checks a brought
   /// folder at once and a new one after the sign-in.
   pub fn add_agent_account(&self, new: NewAccount) -> Result<AgentAccount, AccountsError> {
-    if !new.cli.supports_accounts_on(Platform::current()) {
-      return Err(AccountsError::Unsupported);
-    }
     let folder = match new.folder {
       NewFolder::Create => {
         let folder = self

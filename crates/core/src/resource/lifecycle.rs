@@ -1,4 +1,4 @@
-//! Versioned configuration: agent profiles, instructions, pipelines, tools and skills share one
+//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills and test suites share one
 //! lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
 //! versions, so publishing affects new runs only.
 
@@ -22,6 +22,7 @@ pub enum ResourceKind {
   Pipeline,
   Tool,
   Skill,
+  TestSuite,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

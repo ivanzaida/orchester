@@ -376,8 +376,7 @@ const fn detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'stat
 /// What a connection signed out on `account` means and where to fix it (`M42rM`).
 fn signed_out_sentence(ctx: &Ctx, account: &orchester_core::account::AgentAccount) -> Arc<str> {
   let name = crate::services::accounts::account_name(ctx, account);
-  let expired = account.state(orchester_core::connection::invocation::Platform::current())
-    == orchester_core::account::AccountState::Expired;
+  let expired = account.state() == orchester_core::account::AccountState::Expired;
   match account.email().filter(|_| expired) {
     Some(email) => ctx.t_args(
       "connections.account.signedOutSentence",

@@ -13,7 +13,6 @@ use orchester_core::{
   attachment::input::AttachedFile,
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
-    invocation::Platform,
     stream::{AgentEvent, OutputStream},
   },
   conversation::MessageBody,
@@ -102,10 +101,7 @@ impl Turn {
     if !runs_orchestrator(provider) {
       return Err(TurnFailure::ConnectionGone);
     }
-    if let Some(problem) = connection
-      .account()
-      .start_problem(provider, Platform::current(), Path::is_dir)
-    {
+    if let Some(problem) = connection.account().start_problem(Path::is_dir) {
       return Err(TurnFailure::Account(problem));
     }
     let executable = connection

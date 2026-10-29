@@ -68,7 +68,7 @@ pub fn lanes(
         columns
           .iter()
           .zip(&lane.cells)
-          .map(|(column_model, cards)| column(ctx, (state, shared), (column_model, cards), Some(&lane.key))),
+          .map(|(column_model, cards)| column(ctx, (state, shared), (column_model, cards), &lane.key)),
       );
     rows = rows.child(cells);
   }

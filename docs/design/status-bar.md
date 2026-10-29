@@ -11,7 +11,7 @@ usage card, the project switcher).
 
 ## Where it is
 
-File: the desktop redesign file `orchester.pen` (Pencil document `87147a2b-…`), board **Status bar · redesign**
+File: the desktop design `crates/desktop-app/design/orchester.pen`, board **Status bar · redesign**
 `bZVXG`, right of *Roadmap · wireframes*. Every bar is an instance of the Shell component `Status bar` (`c6ZMl`)
 with its item slots overridden; actions are `Button/Size/Compact` (`SHKod`), dismiss is `Icon button/Compact`
 (`ss3au`), the event tooltip is `Tooltip` (`rHJ7R`). Hover cards use the Menu's surface roles (`surface_raised`,

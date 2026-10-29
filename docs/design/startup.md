@@ -11,7 +11,7 @@ download happen in place on the start page.
 
 ## Where it is
 
-File: the desktop redesign file `orchester.pen` (Pencil document `87147a2b-…`), board **Startup · redesign** `qzzYw`,
+File: the desktop design `crates/desktop-app/design/orchester.pen`, board **Startup · redesign** `qzzYw`,
 right of *Agent testing · redesign*. Startup screens are instances of `Window/Signed out` (`rMiiU`) with its MCP item
 off, so the status bar shows only the version (Status bar · redesign, decision 8); frame 14 swaps its title bar for
 `Window controls/macOS` (`x6yXo`). All projects is `Window/Project` (`qlXhJ`) with the sidebar off and one *All

@@ -4,7 +4,7 @@
 use std::{fs, path::Path};
 
 use orchester_core::{
-  account::{AccountCli, FolderProblem, MoveTo},
+  account::{AccountCli, FolderProblem, MoveTo, resolved},
   connection::{AgentConnection, AgentProvider, ConnectionAccount},
   id::{ConnectionId, ProjectId},
   name::Name,
@@ -85,7 +85,9 @@ fn account_of(repo: &Path, connection: ConnectionId) -> ConnectionAccount {
 fn accounts_a_new_account_gets_a_folder_orchester_creates() {
   let Setup { data, workspace } = setup();
   let planned = workspace.planned_folder(AccountCli::Codex, "Client").expect("a root");
-  assert_eq!(planned, data.path().join("accounts").join("codex-client"));
+  // Under the accounts' folder as the file system resolves it: macOS's temporary folders lie behind the link `/var`.
+  let root = resolved(&data.path().join("accounts")).expect("the accounts' folder resolves");
+  assert_eq!(planned, root.join("codex-client"));
   let added = workspace
     .add_agent_account(NewAccount {
       cli: AccountCli::Codex,
@@ -97,7 +99,7 @@ fn accounts_a_new_account_gets_a_folder_orchester_creates() {
   assert_eq!(added.folder().path(), Some(planned.as_path()));
   assert_eq!(
     workspace.planned_folder(AccountCli::Codex, "Client"),
-    Some(data.path().join("accounts").join("codex-client-2"))
+    Some(root.join("codex-client-2"))
   );
   let listed = workspace.agent_accounts().expect("listed");
   assert_eq!(listed.len(), 3, "two Defaults and Client");

@@ -1,10 +1,10 @@
-//! Versioned configuration: agent profiles, instructions, pipelines, tools and skills share one
-//! lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
+//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills and test suites
+//! share one lifecycle — one editable draft and immutable published versions `v1..vN`. Runs pin
 //! versions, so publishing affects new runs only.
 //!
-//! Bodies reference other resources, connections and secrets by id only. Which published
-//! version of a referenced resource is used is decided when a run snapshots its configuration,
-//! not inside a body.
+//! Bodies reference other resources, connections and secrets by id only, except a test suite, which
+//! names its secrets and the services it needs ([`TestSuite`]). Which published version of a
+//! referenced resource is used is decided when a run snapshots its configuration, not inside a body.
 
 mod agent_profile;
 mod instruction;
@@ -13,6 +13,7 @@ mod pipeline;
 mod prompt;
 mod removal;
 mod skill;
+mod test_suite;
 mod tool;
 mod variable;
 
@@ -35,6 +36,10 @@ pub use self::{
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
   removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
+  test_suite::{
+    ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,
+    TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,
+  },
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandEnvironment, CommandError, CommandProgram, CommandTimeout, DatabaseQuery, DeniedBehavior, ExitCodes,
@@ -153,4 +158,9 @@ impl ResourceBody for Skill {
       Ok(())
     }
   }
+}
+
+impl ResourceBody for TestSuite {
+  const KIND: ResourceKind = ResourceKind::TestSuite;
+  const SCHEMA: u32 = 1;
 }

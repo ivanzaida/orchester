@@ -1,5 +1,7 @@
 //! An OS-held project lease plus stable ownership of its metadata parent chain.
 
+#[cfg(unix)]
+use std::time::{Duration, Instant};
 use std::{fs::File, path::Path, sync::Arc};
 
 use orchester_core::integration::local::LocalPath;
@@ -26,11 +28,30 @@ impl IntegrationLease {
     };
     let file = opened.into_file();
     #[cfg(unix)]
-    rustix::fs::flock(&file, rustix::fs::FlockOperation::NonBlockingLockExclusive)
-      .map_err(|_| LocalError::ForeignOperation)?;
+    lock(&file)?;
     Ok(Self {
       _file: file,
       _directory: directory,
     })
+  }
+}
+
+/// How long the lease waits for a lock held only for a moment: a program started by `fork` and `exec` in another
+/// thread holds a copy of every descriptor, this one's too, until its `exec` closes it. Another operation holds the
+/// lease for far longer and is refused once the wait is over.
+#[cfg(unix)]
+const MOMENT: Duration = Duration::from_millis(500);
+
+#[cfg(unix)]
+fn lock(file: &File) -> Result<(), LocalGitError> {
+  let deadline = Instant::now() + MOMENT;
+  loop {
+    match rustix::fs::flock(file, rustix::fs::FlockOperation::NonBlockingLockExclusive) {
+      Ok(()) => return Ok(()),
+      Err(rustix::io::Errno::WOULDBLOCK) if Instant::now() < deadline => {
+        std::thread::sleep(Duration::from_millis(5));
+      }
+      Err(_) => return Err(LocalError::ForeignOperation.into()),
+    }
   }
 }
