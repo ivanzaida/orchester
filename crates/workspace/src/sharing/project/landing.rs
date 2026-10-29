@@ -22,7 +22,7 @@ use crate::{
   background,
   project_setup::NewProject,
   sharing::{RemoteMatch, ServerEntry, Servers, SharingError, remote_match},
-  workspace::OpenProject,
+  workspace::{OpenProject, Workspace},
 };
 
 /// A project an invite was to, and the local projects that could be linked to it.
@@ -196,18 +196,7 @@ impl Servers {
       if !folder.join(".git").exists() {
         return Err(CheckoutRefusal::NotGit);
       }
-      match workspace.open(&folder) {
-        Ok(open) => Ok(open),
-        Err(StoreError::NotInitialized(_)) => {
-          let name = folder_name(&folder);
-          let project = Project::new(ProjectId::generate(), ProjectKey::suggest(&name), name);
-          Ok(workspace.create(NewProject {
-            project,
-            repo_root: folder,
-          })?)
-        }
-        Err(error) => Err(error.into()),
-      }
+      Ok(open_or_add(&workspace, folder)?)
     })
     .await?
   }
@@ -241,13 +230,7 @@ fn checkout(
   (server, project): (ServerId, &SharedProject),
 ) -> Result<Checkout, StoreError> {
   let db = ProjectDb::open(root)?;
-  let linked = db.sharing()?.map(|link| {
-    if link.server == server && link.project == project.id {
-      Linked::This
-    } else {
-      Linked::Other(link.address)
-    }
-  });
+  let linked = linked_to(&db, server, project.id)?;
   let mut tasks: Vec<TaskKey> = db.tasks()?.iter().map(|task| task.key().clone()).collect();
   tasks.sort_by_key(TaskKey::number);
   let origin = checkout_origin(programs, root);
@@ -259,6 +242,32 @@ fn checkout(
     tasks,
     linked,
   })
+}
+
+/// What the project in `db` is linked to, seen from `project` on `server`; `None` while it is local.
+pub(super) fn linked_to(db: &ProjectDb, server: ServerId, project: ProjectId) -> Result<Option<Linked>, StoreError> {
+  Ok(db.sharing()?.map(|link| {
+    if link.server == server && link.project == project {
+      Linked::This
+    } else {
+      Linked::Other(link.address)
+    }
+  }))
+}
+
+/// Opens the project `folder` keeps, or adds the folder as a local project named after it. Blocking.
+pub(super) fn open_or_add(workspace: &Workspace, folder: PathBuf) -> Result<OpenProject, StoreError> {
+  match workspace.open(&folder) {
+    Err(StoreError::NotInitialized(_)) => {
+      let name = folder_name(&folder);
+      let project = Project::new(ProjectId::generate(), ProjectKey::suggest(&name), name);
+      workspace.create(NewProject {
+        project,
+        repo_root: folder,
+      })
+    }
+    opened => opened,
+  }
 }
 
 /// The name a folder's new project takes: the folder's own, else a word anyone recognises.

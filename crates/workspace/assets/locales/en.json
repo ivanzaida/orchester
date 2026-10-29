@@ -1955,6 +1955,16 @@
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
       "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent."
     },
+    "folder": {
+      "matches": "Its origin is {{hint}}, the repository this project names.",
+      "noHint": "{{project}} names no repository, so this folder's origin isn't compared.",
+      "differs": "Its origin is {{origin}}, but {{project}} names {{hint}}. Link it anyway only if this folder holds that project's code.",
+      "noOrigin": "This repository has no origin on a server, so it can't be compared with {{hint}}. It can still be linked.",
+      "notRepository": "This folder isn't the top of a git repository: it has no .git. Choose the folder of your checkout.",
+      "unreadable": "Orchester couldn't read this folder or its git remotes. Check that it exists and that you can open it.",
+      "linkedHere": "This folder is linked to {{project}} already, so it opens as it is.",
+      "linkedElsewhere": "This folder is linked to {{name}} already. A checkout links to one project, so choose another folder."
+    },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",
       "alreadyMember": "This person is already a member. Change their role in their row.",
