@@ -1,8 +1,11 @@
 //! A profile page's permissions (`01c · Profile · permissions` `WAWHr`): Repository access with its extra writable
-//! folders, Commands and network, MCP servers as switches, and Approvals. An option the connection cannot enforce here
-//! cannot be chosen and says why; a widening change is asked about inside the section that widens it.
+//! folders, Commands and network, the Browser with its allowed sites (`hQfEh`), MCP servers as switches, and
+//! Approvals. An option the connection cannot enforce here cannot be chosen and says why; a widening change is asked
+//! about inside the section that widens it.
+mod browser;
 mod commands;
 mod folders;
+mod sites;
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -20,12 +23,12 @@ use orchester_core::{
 use orchester_workspace::{
   agents::{
     data::ProjectAgents,
-    permissions::{option_detail, option_title},
+    permissions::{option_detail, option_title, set_network},
   },
   messages::Message,
 };
 
-pub(super) use self::{commands::CommandList, folders::FolderList};
+pub(super) use self::{commands::CommandList, folders::FolderList, sites::SiteList};
 use super::fields::{Fields, Servers};
 use crate::{
   project::ShownProject,
@@ -45,6 +48,7 @@ pub(super) enum Section {
   Connection,
   Repository,
   Commands,
+  Browser,
   Mcp,
   Approvals,
 }
@@ -55,6 +59,7 @@ impl Section {
     match reason.key {
       "appMcp.widens.repository" | "appMcp.widens.writableFolder" => Self::Repository,
       "appMcp.widens.commands" | "appMcp.widens.network" => Self::Commands,
+      "appMcp.widens.browser" | "appMcp.widens.browserSite" => Self::Browser,
       "appMcp.widens.mcpServers" => Self::Mcp,
       "appMcp.widens.toolCallsUnasked" | "appMcp.widens.autoApprove" => Self::Approvals,
       _ => Self::Connection,
@@ -70,7 +75,7 @@ pub(super) struct Context<'a> {
   pub project: &'a ShownProject,
 }
 
-/// The four sections; `asked` opens in the one it names.
+/// The five sections; `asked` opens in the one it names.
 pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Section, Element)>) -> Vec<Element> {
   let provider = context.fields.connection(context.listed).map(|c| c.provider());
   let (section, mut question) = match asked {
@@ -80,9 +85,10 @@ pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Sect
   let mut take = |here: Section| if section == Some(here) { question.take() } else { None };
   let repository = repository(ctx, context, provider, take(Section::Repository));
   let commands = commands_network(ctx, context, provider, take(Section::Commands));
+  let browser = browser::browser(ctx, context, take(Section::Browser));
   let mcp = mcp(ctx, context, provider, take(Section::Mcp));
   let approvals = approvals(ctx, context.fields, provider, take(Section::Approvals));
-  vec![repository, commands, mcp, approvals]
+  vec![repository, commands, browser, mcp, approvals]
 }
 
 fn section(id: &str, (title, count): (&str, Option<&str>), rows: Vec<Element>) -> Element {
@@ -134,8 +140,8 @@ pub(super) fn option_row(
           }
         }
         PermissionOption::AnyCommand => p.0.set_commands(CommandPermission::AnyInWorktree),
-        PermissionOption::NetworkOff => p.0.set_network(NetworkAccess::Off),
-        PermissionOption::NetworkOn => p.0.set_network(NetworkAccess::On),
+        PermissionOption::NetworkOff => set_network(&mut p.0, NetworkAccess::Off),
+        PermissionOption::NetworkOn => set_network(&mut p.0, NetworkAccess::On),
       })
     })
   } else {
@@ -222,8 +228,9 @@ fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Eleme
   let state = ctx.t(if on { "agents.on" } else { "agents.off" });
   let toggle = Toggle::new("agent-network", ToggleKind::Switch, on, state.clone()).hide_label();
   let toggle = if available {
-    toggle
-      .on_change(move |on| value.update(|p| p.0.set_network(if on { NetworkAccess::On } else { NetworkAccess::Off })))
+    toggle.on_change(move |on| {
+      value.update(|p| set_network(&mut p.0, if on { NetworkAccess::On } else { NetworkAccess::Off }))
+    })
   } else {
     toggle
   };

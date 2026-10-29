@@ -113,6 +113,15 @@ tools · 2 sites · others ask*).
 - Widening (`permission::widening`): turning the browser on, and a site no site of the published version covers. Over
   MCP (`save_profile_draft`, its `permissions.browser`) both are refused as `person_only` unless a person turned on
   *Let automation change agent permissions*; a `browser` left out keeps the profile's own.
+- The profile editor (ORC-368, `screens/agents/permissions/browser.rs` and `sites.rs`; the data through
+  `orchester_workspace::agents::permissions`): its own *Browser* section between *Commands and network* and *MCP
+  servers*. Without network the switch stays off and says why; turning network off turns the browser off and keeps its
+  sites. The allowed sites show while it is on. Both widenings are asked about in that section before the draft saves,
+  as other widenings are. Until P2, a note under the section says that agents get the browser once Orchester's
+  browser runs and that the person cannot watch their pages yet; it stands where the design's sign-in note will go
+  once the window exists. QA scenario: `agents-browser` (profiles *Browser on*, *Browser off*, *Browser without
+  network*). Tests: `cargo test -p orchester-app --test agents agents_browser_` and
+  `cargo test -p orchester-workspace --test agents browser_`.
 
 The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::browser::decide`):
 
@@ -329,6 +338,8 @@ person asked for that (setting); by default it opens only when the person opens 
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
+   - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
+     described under "Permissions and policy" above.
 
 ## Not in scope
 
