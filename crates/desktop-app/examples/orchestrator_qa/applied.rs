@@ -25,6 +25,7 @@ use orchester_workspace::{
     proposal::{self, Decision},
     tools::{self, ChatScope},
   },
+  tasks::usage::update_limits,
 };
 use serde_json::{Value, json};
 use tokio::runtime::Runtime;
@@ -71,16 +72,11 @@ pub fn conversation(
       on_its_own: false,
     },
   };
-  let limits = json!({ "project": prepared.project.to_string(), "daily_budget": null });
-  runtime
-    .block_on(app_mcp::call(
-      &asking.tools,
-      &asking.translate,
-      "update_project_limits",
-      object(limits)?,
-    ))
-    .ok_or("the app has update_project_limits")?
-    .map_err(|error| format!("the daily budget was not lifted: {error:?}"))?;
+  // The person's save there: lifting the daily budget is not automation's to take.
+  update_limits(&services.runners, &prepared.repo, |limits| {
+    Some(limits.with_daily_budget_limit(None))
+  })
+  .map_err(|error| format!("the daily budget was not lifted: {error}"))?;
   let (ready, going) = (
     pick(&db, ready_to_merge)?,
     pick(&db, |_, run| Ok(!run.status().is_terminal()))?,

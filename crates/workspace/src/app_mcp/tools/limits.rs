@@ -2,7 +2,8 @@
 //! Limits tab's checks and through its service, so a changed agent count reaches the project's
 //! runner at once. `list_projects` shows each project's limits as [`limits_json`] writes them.
 //! Limits answer no tool request in a person's place, so, like the code index, changing them needs
-//! no permission beyond the server's token.
+//! no permission beyond the server's token, except raising or removing the daily budget: that lets runs the day's
+//! budget stopped go on, a person's decision ([`DecisionKind::Limit`]) automation takes only with their consent.
 
 use std::path::Path;
 
@@ -23,6 +24,7 @@ use crate::{
     services::{Services, blocking},
   },
   budget::{LimitsErrors, ReadLimits, agent_slots, budget_error, qa_slots, time_limit, whole_minutes},
+  decisions::{DecisionKind, not_allowed},
   tasks::{
     outside::Outside,
     usage::{limits_in, update_limits},
@@ -40,7 +42,8 @@ pub struct UpdateProjectLimits {
   #[serde(default, deserialize_with = "wire::limit")]
   pub default_run_budget: Option<Option<u64>>,
   /// Tokens all runs of the project may use per day, with no maximum; `null` for no limit.
-  /// Unchanged when left out.
+  /// Unchanged when left out. Raising it or `null` is refused as automation_not_allowed (nothing
+  /// is saved) unless a person turned on Let automation answer approvals; lowering it is not.
   #[serde(default, deserialize_with = "wire::limit")]
   pub daily_budget: Option<Option<u64>>,
   /// Whole minutes of active agent time prefilled in New task, above 0; `null` for no default time
@@ -61,14 +64,24 @@ pub async fn update_project_limits(services: &Services, args: UpdateProjectLimit
   blocking(move || {
     let open = services.project(&args.project)?;
     let root = open.repo_root;
+    let may_raise = DecisionKind::Limit.read_consent(&services.workspace)?;
     // Read and written in one transaction: a person's save in the window cannot slip in between.
     // A refusal saves nothing; why is kept for the result.
     let mut refusal = None;
-    update_limits(&services.runners, &root, |stored| {
-      changed(stored, &args).map_err(|errors| refusal = Some(errors)).ok()
+    update_limits(&services.runners, &root, |stored| match changed(stored, &args) {
+      Err(errors) => {
+        refusal = Some(refused(*errors));
+        None
+      }
+      // Lowering it, or leaving it as it is, takes no consent.
+      Ok(limits) if stored.raises_daily_budget(limits) && !may_raise => {
+        refusal = Some(not_allowed());
+        None
+      }
+      Ok(limits) => Some(limits),
     })?;
-    if let Some(errors) = refusal {
-      return Err(refused(*errors));
+    if let Some(refusal) = refusal {
+      return Err(refusal);
     }
     services.changes.record(open.project.id(), Outside::Limits);
     Ok(json!({ "limits": limits_json(limits_in(&root)?) }))

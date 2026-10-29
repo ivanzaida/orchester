@@ -42,9 +42,14 @@ impl DecisionKind {
     if self.read_consent(workspace)? {
       return Ok(());
     }
-    Err(ToolError::refused(
-      "automation_not_allowed",
-      vec![Message::new("appMcp.errors.automationNotAllowed")],
-    ))
+    Err(not_allowed())
   }
+}
+
+/// A decision automation took without the person's consent, refused.
+pub(crate) fn not_allowed() -> ToolError {
+  ToolError::refused(
+    "automation_not_allowed",
+    vec![Message::new("appMcp.errors.automationNotAllowed")],
+  )
 }
