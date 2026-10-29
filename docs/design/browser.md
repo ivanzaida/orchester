@@ -3,8 +3,8 @@
 Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
 port and keep-running decisions (11, 12) the same day, and that the Browser window opens when an agent starts
 browsing by default (open question 2). P1 (the core rules, ORC-355) is built, P2's first half (ORC-358: finding and
-starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map), and Settings › Browser
-(ORC-369); the tools and the window are not yet.
+starting the browser, the CDP client, the project browser's lifecycle and the run-to-tabs map), the profile's Browser
+row (ORC-368) and Settings › Browser (ORC-369); the tools and the window are not yet.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -113,6 +113,15 @@ tools · 2 sites · others ask*).
 - Widening (`permission::widening`): turning the browser on, and a site no site of the published version covers. Over
   MCP (`save_profile_draft`, its `permissions.browser`) both are refused as `person_only` unless a person turned on
   *Let automation change agent permissions*; a `browser` left out keeps the profile's own.
+- The profile editor (ORC-368, `screens/agents/permissions/browser.rs` and `sites.rs`; the data through
+  `orchester_workspace::agents::permissions`): its own *Browser* section between *Commands and network* and *MCP
+  servers*. Without network the switch stays off and says why; turning network off turns the browser off and keeps its
+  sites. The allowed sites show while it is on. Both widenings are asked about in that section before the draft saves,
+  as other widenings are. Until P2, a note under the section says that agents get the browser once Orchester's
+  browser runs and that the person cannot watch their pages yet; it stands where the design's sign-in note will go
+  once the window exists. QA scenario: `agents-browser` (profiles *Browser on*, *Browser off*, *Browser without
+  network*). Tests: `cargo test -p orchester-app --test agents agents_browser_` and
+  `cargo test -p orchester-workspace --test agents browser_`.
 
 The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::browser::decide`):
 
@@ -329,6 +338,8 @@ the person turned that off (Settings › Browser, on by default: the person, 202
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
+   - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
+     described under "Permissions and policy" above.
    - **P4b.** Done (ORC-369): Settings › Browser, with the program chosen there started by the runner. Tests:
      `cargo test -p orchester-app --test settings_browser browser_`, `cargo test -p orchester-workspace --test
      browser_settings`, `cargo test -p orchester-store --test browser_settings`, the chosen program in
