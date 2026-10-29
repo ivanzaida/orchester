@@ -65,6 +65,11 @@ fn agents_approvals_shows_approving_automatically_while_it_is_on() {
 #[test]
 fn agents_turning_autopilot_on_is_asked_in_place_and_named_in_the_draft_bar() {
   let mut screen = Agents::new(true);
+  // 07b's project allows Autopilot; one that doesn't shows 02e instead (`approval_modes`).
+  orchester_store::ProjectDb::open(&screen.root)
+    .expect("database")
+    .save_allow_autopilot(orchester_core::run::AllowAutopilot::ON)
+    .expect("Autopilot allowed");
   let id = screen.profile(true);
   screen.open(id);
   screen.click("agent-mode-autopilot");
