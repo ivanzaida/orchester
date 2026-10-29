@@ -85,6 +85,35 @@ commands setting must be enforceable on its connection as in Manual: `AgentPermi
 otherwise, so preflight, saving a profile and a run's permission change refuse what the fallback could not start. On
 Claude Code this refuses *Any command in the worktree* in Autopilot too, as in Manual (it cannot confine commands).
 
+## Answering
+
+Built in ORC-346 (`orchester_core::run::{autopilot_step, after_review, RequestAnswer, CameToPerson}`, the runner's
+`step::answer` and `step::approval::route`). A rule a person made in the run (Approve similar, Always allow) answers in
+both modes. Then:
+
+- **Autopilot** places the request against the run's roots (`autopilot_check`: a command's parts, the folder a call of
+  Orchester's tools reads in; any other MCP call names nothing): `Inside` is approved by the rule, without the reviewer
+  and without a card; `Outside` and `MainCheckout` come to the person as `outside` (with the path), `Push` as `push`,
+  `OtherRef` as `refs` (with the ref); `Unknown` asks the reviewer one question (`ROOTS_QUESTION`, with the roots and
+  the run's branch, without Manual's hard rules): its approval answers, anything else brings it to the person as
+  `reviewerUnsure` with the reviewer's reason. The run's own *Stop* of auto-approval takes Autopilot back to Manual's
+  rules, as the status bar counts it.
+- **Manual** approves what the profile allows (a tool its server lists to run without asking, a command whose every
+  part the permissions run), then a project rule (*Approved for every run*), then the run's or the profile's
+  auto-approval; the rest goes to the reviewer after its hard rules. A hard rule brings it to the person at once (`push`,
+  `outside` for a write outside the folders, else `notAllowed`), as does a project without a reviewer (`notAllowed`);
+  the reviewer's ask is `reviewerDenied`, a review without a verdict `reviewerUnsure`.
+- The reviewer's verdict stays *approve* or *ask*: on Manual's question an ask reads as a denial, on Autopilot's as
+  doubt.
+- Each request records how it was answered (`autopilot`, `profile`, `reviewer` with its reason, `person`, which
+  includes automation answering in the person's place and the person's own rules) and, while it waits for the person
+  and after, why it came (`tool_approvals.answered_as`, `came_to_person`); `get_run`'s `requests` and `list_approvals`'
+  `came_to_you` show them.
+- A request that came to the person by Autopilot's rules is looked at again by Manual's rules once its run drops to
+  Manual (the worker reads the mode at its regular beat while such a request waits): it is no longer waiting for the
+  person while the reviewer judges it. A review whose run changed mode meanwhile is dropped, and the request is answered
+  by the mode it is in now.
+
 ## Frames
 
 | Node | Board | Frame | What it shows |
@@ -148,5 +177,5 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
 4. ~~The exact Claude Code and Codex options that turn the CLI's own prompt off while still handing requests outside
    the worktree to Orchester, and which CLI versions can't.~~ Decided in ORC-347: see
    [Enforcement](#enforcement).
-5. Whether the old *Approved for every run* rules apply in Autopilot to requests that still ask (outside the
-   worktree), or only in Manual.
+5. ~~Whether the old *Approved for every run* rules apply in Autopilot to requests that still ask (outside the
+   worktree), or only in Manual.~~ Decided in ORC-346: only in Manual (see [Answering](#answering)).

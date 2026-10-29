@@ -12,8 +12,16 @@ use rusqlite::{Connection, params};
 
 use self::support::{copied_at_version, started_run};
 
+/// The migrations after approval modes': ORC-346's request answers.
+const LATER_MIGRATIONS: u32 = 1;
+
 fn database(repo: &Path) -> PathBuf {
   repo.join(".orchester").join("orchester.db")
+}
+
+/// The schema version before approval modes, of a project whose schema is `latest`.
+const fn before_approval_modes(latest: u32) -> u32 {
+  latest - LATER_MIGRATIONS - 1
 }
 
 fn schema_version(database: &Path) -> u32 {
@@ -57,7 +65,7 @@ fn migrated((new_runs, everything): (bool, bool), run_auto_mode: bool) -> (bool,
   let (current, db, run, _) = started_run();
   drop(db);
   let latest = schema_version(&database(current.path()));
-  let old = copied_at_version(&database(current.path()), latest - 1);
+  let old = copied_at_version(&database(current.path()), before_approval_modes(latest));
   let raw = Connection::open(database(old.path())).expect("open the old database");
   raw
     .execute(
@@ -112,7 +120,7 @@ fn approval_mode_effective_migration_keeps_the_reviewer_and_drops_the_old_settin
   let (current, db, ..) = started_run();
   drop(db);
   let latest = schema_version(&database(current.path()));
-  let old = copied_at_version(&database(current.path()), latest - 1);
+  let old = copied_at_version(&database(current.path()), before_approval_modes(latest));
   let raw = Connection::open(database(old.path())).expect("open the old database");
   raw
     .execute(

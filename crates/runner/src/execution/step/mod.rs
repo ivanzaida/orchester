@@ -21,6 +21,7 @@ mod qa_app;
 pub(super) mod question;
 mod relay;
 mod relay_calls;
+mod roots;
 mod run_app;
 mod run_records;
 mod skills;
@@ -411,6 +412,7 @@ impl RunTask {
         &permissions,
         &self.db.project_environment()?,
       ),
+      roots: self.run_roots(execution, workspace.path()),
       profile: self.profile_of(execution),
       checks: self.checks_of(execution),
       root: self.root.clone(),

@@ -31,9 +31,10 @@ pub use self::{
     default_review_model, resolve_reviewer, reviewer_kind,
   },
   hold::{HoldRules, ReviewHold, review_hold, unread_parts},
-  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, UnreadPart, UnreadWhy},
+  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
-    DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_verdict, parse_verdict_text, review_prompt,
+    DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, ROOTS_QUESTION, parse_verdict, parse_verdict_text,
+    review_prompt,
   },
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
@@ -176,17 +177,41 @@ pub fn review_request(
   (subject, rules): (&ApprovalSubject, &HoldRules<'_>),
   input: Result<ReviewInput, ReviewHold>,
 ) -> AutoReview {
-  let held = |hold| AutoReview {
-    review: Review::Held { hold },
-    cost: None,
-  };
   if let Some(hold) = review_hold(subject, rules) {
     return held(hold);
   }
-  let input = match input {
-    Ok(input) => input.with_unread(unread_parts(subject)),
-    Err(hold) => return held(hold),
-  };
+  match input {
+    Ok(input) => ask(reviewer, &input.with_unread(unread_parts(subject))),
+    Err(hold) => held(hold),
+  }
+}
+
+/// Autopilot's one question about a request about `subject` that Orchester could not place: `reviewer`'s answer to
+/// `question` on `input`, without Manual's hard rules (Autopilot never asks the reviewer whether to approve); a request
+/// too long to be reviewed whole is held.
+pub fn review_roots(
+  reviewer: Option<&dyn RequestReviewer>,
+  (subject, question): (&ApprovalSubject, RootsQuestion),
+  input: Result<ReviewInput, ReviewHold>,
+) -> AutoReview {
+  match input {
+    Ok(input) => ask(
+      reviewer,
+      &input.with_unread(unread_parts(subject)).with_roots_question(question),
+    ),
+    Err(hold) => held(hold),
+  }
+}
+
+fn held(hold: ReviewHold) -> AutoReview {
+  AutoReview {
+    review: Review::Held { hold },
+    cost: None,
+  }
+}
+
+/// `reviewer`'s verdict on `input`, with what asking it cost; a failure when the project has none.
+fn ask(reviewer: Option<&dyn RequestReviewer>, input: &ReviewInput) -> AutoReview {
   let Some(reviewer) = reviewer else {
     return AutoReview {
       review: Review::Failed {
@@ -196,7 +221,7 @@ pub fn review_request(
       cost: None,
     };
   };
-  let reviewed = reviewer.review(&input);
+  let reviewed = reviewer.review(input);
   let cost = ReviewCost::of(&reviewed, reviewer.model());
   AutoReview {
     review: Review::of(reviewed.verdict, reviewer.model()),
