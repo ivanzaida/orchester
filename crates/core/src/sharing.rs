@@ -1,11 +1,17 @@
 //! Pure shared-task transitions. Storage serializes each transition with its task.
 
+mod cached;
+mod delta;
 mod similar;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::similar::similar_titles;
+pub use self::{
+  cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
+  delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
+  similar::similar_titles,
+};
 use crate::{
   id::{ClaimId, UserId},
   run::TaskPhase,
