@@ -367,3 +367,87 @@ fn tasks_board_layout_enter_never_confirms_a_deletion() {
   assert!(stored(&seeded, "KON-15"));
   escape(&mut seeded);
 }
+
+/// How far each card moved from where `before` had it, up and down.
+fn shifts(before: &[(String, ElementRect)], now: &[(String, ElementRect)]) -> Vec<(String, f32)> {
+  before
+    .iter()
+    .filter_map(|(id, was)| {
+      let is = now.iter().find(|(held, _)| held == id)?;
+      Some((id.clone(), is.1.y - was.y))
+    })
+    .collect()
+}
+
+#[test]
+fn tasks_board_layout_the_columns_cards_scroll_together_under_their_heads() {
+  // A window 600 high, shorter than the seed's tallest column.
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::new(TaskListTab::All), 600);
+  seeded.until("the layout switch", |seeded| seeded.laid_out("tasks-layout-board"));
+  seeded.click("tasks-layout-board");
+  seeded.until("the board", |seeded| seeded.laid_out("tasks-board-columns"));
+
+  // A column takes a card held low in it, under its last card: its drop target spans its whole visible height. KON-15
+  // shows only its top over the board's foot, where it is taken.
+  let (card, column) = (
+    seeded.bounds("task-card-KON-15"),
+    seeded.bounds("tasks-board-column-in_progress"),
+  );
+  let from = (card.x + card.width / 2.0, card.y + 10.0);
+  let to = (column.x + column.width / 2.0, column.y + column.height - 10.0);
+  seeded.window.tree.mouse_move(from.0, from.1);
+  seeded.window.tree.mouse_down(from.0, from.1, MouseButton::Left);
+  seeded.window.pass();
+  for step in 1..=8u8 {
+    let part = f32::from(step) / 8.0;
+    seeded
+      .window
+      .tree
+      .mouse_move(from.0 + (to.0 - from.0) * part, from.1 + (to.1 - from.1) * part);
+    seeded.window.pass();
+  }
+  seeded.until("the insertion line", |seeded| seeded.laid_out("tasks-board-insertion"));
+  release(&mut seeded, from);
+
+  let head = seeded.bounds("tasks-board-column-backlog-head");
+  let top = seeded.bounds("tasks-board-column-backlog-cards").y;
+  let before = cards(&mut seeded);
+  let columns = seeded.bounds("tasks-board-columns");
+  let (x, y) = (columns.x + columns.width / 2.0, columns.y + columns.height / 2.0);
+  seeded
+    .window
+    .tree
+    .scroll(x, y, 0.0, -2000.0, lurq::app::events::ScrollPhase::Scroll);
+  seeded.window.pass();
+
+  // Every column's cards moved up by as much, short ones too; the heads stayed.
+  let moved = shifts(&before, &cards(&mut seeded));
+  let shift = moved.first().map(|(_, shift)| *shift).expect("cards");
+  assert!(shift < -1.0, "the board scrolled: {moved:?}");
+  assert!(
+    moved.iter().all(|(_, each)| (each - shift).abs() < 0.5),
+    "the cards moved together: {moved:?}"
+  );
+  assert_eq!(
+    seeded.bounds("tasks-board-column-backlog-head").y,
+    head.y,
+    "the heads stay"
+  );
+
+  // A reading of the tasks keeps the cards where they are; a search puts them back at their top.
+  seeded.window.projects().feed(seeded.project).saved();
+  for _ in 0..20 {
+    seeded.window.tree.tick_futures();
+    seeded.window.pass();
+  }
+  let kept = shifts(&before, &cards(&mut seeded));
+  assert!(
+    kept.iter().all(|(_, each)| (each - shift).abs() < 0.5),
+    "still scrolled after a reading: {kept:?}"
+  );
+  seeded.go(TaskList::new(TaskListTab::All).with_search("e"));
+  seeded.until("the search's cards at their top", |seeded| {
+    seeded.laid_out("tasks-board-column-backlog-cards")
+      && (seeded.bounds("tasks-board-column-backlog-cards").y - top).abs() < 0.5
+  });
+}

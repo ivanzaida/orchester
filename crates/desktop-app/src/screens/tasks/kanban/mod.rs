@@ -20,6 +20,7 @@ mod bulk_menus;
 mod card;
 mod card_view;
 mod column;
+mod columns;
 pub mod display;
 mod drop;
 mod keys;
@@ -42,10 +43,10 @@ use lurq::{
     ctx::Ctx,
     events::KeyboardEvent,
   },
-  components::{Column, Row, Stack},
+  components::{Column, Stack},
   core::Signal,
-  layout::StackAlignment,
-  node::{Element, dimension::Dimension},
+  layout::{StackAlignment, layout_kind::ScrollState},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::{TagId, TaskId},
@@ -53,13 +54,14 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::tasks::{attention::NeedItem, close::Closing, data::ProjectTasks, list::TaskRow};
+use parking_lot::Mutex;
 
 pub use self::model::has_empty_columns;
 use self::{
   actions::BoardState,
   card::{CardModel, CardSource},
   card_view::lifted_frame,
-  column::{Shared, column, strip},
+  column::Shared,
   display::{Columns, Display},
   drop::Dropping,
   keys::{Grid, KeyContext, on_key},
@@ -94,6 +96,9 @@ pub struct BoardInput<'a> {
   /// The *Not shared* filter is on: the cards are read-only.
   pub not_shared: bool,
   pub filtered: bool,
+  /// What narrows and orders the rows (the view, the search, the filters and the sort): the cards start at their top
+  /// when it changes.
+  pub scroll_key: String,
   /// What clears the search and the filters.
   pub clear: Arc<dyn Fn() + Send + Sync>,
 }
@@ -128,6 +133,7 @@ pub fn board(ctx: &mut Ctx, input: BoardInput<'_>) -> Element {
       read_only: input.read_only,
       not_shared: input.not_shared,
       filtered: input.filtered,
+      scroll_key: input.scroll_key,
       tags: Arc::new(tags),
       clear: input.clear,
     },
@@ -147,6 +153,7 @@ struct BoardProps {
   read_only: Option<Arc<str>>,
   not_shared: bool,
   filtered: bool,
+  scroll_key: String,
   tags: Arc<Vec<(TagId, Arc<str>)>>,
   clear: Arc<dyn Fn() + Send + Sync>,
 }
@@ -165,6 +172,7 @@ impl PartialEq for BoardProps {
       && self.read_only == other.read_only
       && self.not_shared == other.not_shared
       && self.filtered == other.filtered
+      && self.scroll_key == other.scroll_key
       && self.tags == other.tags
   }
 }
@@ -173,6 +181,9 @@ impl DevtoolsInspectable for BoardProps {}
 
 struct Board {
   state: BoardState,
+  /// Where the columns' cards are scrolled, and what they were last put at their top for ([`Board::place`]).
+  scroll: ScrollState,
+  placed: Mutex<Option<String>>,
 }
 
 impl Component for Board {
@@ -192,7 +203,11 @@ impl Component for Board {
       }
       closer.keep();
     });
-    Self { state }
+    Self {
+      state,
+      scroll: ScrollState::new(),
+      placed: Mutex::new(None),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -229,6 +244,7 @@ impl Component for Board {
     ctx.provide(state.clone());
     ctx.provide(dropping.clone());
     state.clear_targets();
+    self.place(&props.scroll_key);
     let (asking, asked) = self.asking(&props, &closer, (&display, &columns, lanes.is_some()));
     let body = self.body(ctx, (&props, &display), (&columns, lanes.as_deref()), asked.as_ref());
     let bulk = self.bulk_cards(&props);
@@ -249,6 +265,7 @@ impl Component for Board {
       clipboard: ctx.use_context::<Clipboard>().unwrap_or_default(),
     };
     let floating = self.floating(ctx, &display, bulk);
+    // The board runs to the panel's right edge, where its scrollbar runs; what stands over it keeps 28 from there.
     Stack::new()
       .id("tasks-board")
       .width(Dimension::Pct(100.0))
@@ -261,10 +278,9 @@ impl Component for Board {
         Column::new()
           .width(Dimension::Pct(100.0))
           .height(Dimension::Pct(100.0))
-          .padding(lurq::node::padding::Padding::new().right(TasksSpacing::Sides.role()))
           .spacing(ExtraSpacing::Loose.role())
-          .with_children(lines)
-          .with_children(inline)
+          .with_children(lines.into_iter().map(inset))
+          .with_children(inline.map(inset))
           .child(body),
       )
       .with_children(floating)
@@ -354,33 +370,23 @@ impl Board {
       clear: props.clear.clone(),
       project: &props.project,
     };
-    if let Some(lanes) = lanes {
-      return lanes::lanes(ctx, (state, &shared), columns, lanes);
+    match lanes {
+      Some(lanes) => inset(lanes::lanes(ctx, (state, &shared), columns, lanes))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .into(),
+      None => columns::columns(ctx, (state, &shared), columns, &self.scroll),
     }
-    let parts: Vec<Element> = columns
-      .iter()
-      .map(|column_model| {
-        if folded(display, &column_model.key) {
-          // The collapsed Canceled strip stands out in a stronger stroke (`05 Collapsed and empty`).
-          let stroke = if column_model.key == ColumnKey::Status(WorkflowStatus::Canceled) {
-            lurq::app::theme::PaletteColor::BorderStrong
-          } else {
-            lurq::app::theme::PaletteColor::Border
-          };
-          strip(ctx, state, column_model, stroke)
-        } else {
-          column(ctx, (state, &shared), (column_model, &column_model.cards), None)
-        }
-      })
-      .collect();
-    Row::new()
-      .id("tasks-board-columns")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Loose.role())
-      .with_children(parts)
-      .into()
+  }
+
+  /// Puts the columns' cards back at their top when the board shows other rows: another view, search, filter or sort
+  /// (`scroll_key`), or a board opened anew; any other render leaves them where they are.
+  fn place(&self, scroll_key: &str) {
+    let mut placed = self.placed.lock();
+    if placed.as_deref() != Some(scroll_key) {
+      self.scroll.set_scroll_pending(0.0, 0.0);
+      *placed = Some(scroll_key.to_owned());
+    }
   }
 
   /// The selected cards the selection bar acts on. A read-only card is never acted on together: one selected before the
@@ -431,6 +437,14 @@ fn foot(part: impl Into<Element>) -> Element {
     .padding(lines::foot_room().right(TasksSpacing::Sides.role()))
     .child(part)
     .into()
+}
+
+/// `part` 28 from the board's right edge, where the page leaves that room to the scrollbar.
+fn inset(part: impl Into<Element>) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().right(TasksSpacing::Sides.role()))
+    .child(part)
 }
 
 /// What stands over the columns: why the last change did not happen, and where a canceled task went.
