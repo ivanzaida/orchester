@@ -2072,9 +2072,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lurq"
-version = "0.51.2"
+version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab8764848bceb46e309fdd56cf53bc876a47cb19fe82c56a00b8dbc09f918190"
+checksum = "968f9fc2910f69f42057744a78a5e6d534ba779b544ad96cfb3c34dc0c689812"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -4501,7 +4501,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
