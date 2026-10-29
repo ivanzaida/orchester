@@ -80,8 +80,11 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
 
 ## Open questions
 
-1. What existing profiles migrate to (proposed: Manual, with *Ask before running commands* → an empty allowed list and
-   *Any command in the worktree* → Autopilot only after the person allows it).
+1. ~~What existing profiles migrate to.~~ Decided in ORC-343: every existing profile is Manual (profile schema 5; the
+   mode is left out of the stored form while Manual, so older versions read as Manual and are not rewritten), its
+   commands kept as they were: *Allowed commands* keeps its list as Manual's, *Ask before running commands* keeps
+   asking (no list), *Any command in the worktree* stays as it was, Manual too, until the person switches it to
+   Autopilot.
 2. Whether a run switched to Manual for itself may go back to Autopilot while its profile and project allow it (not
    drawn; the chip just reads *Manual · this run*).
 3. Whether *Approved by autopilot* rows group per step (*… and 3 more*) or always list each request.

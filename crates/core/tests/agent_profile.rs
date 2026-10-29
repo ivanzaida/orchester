@@ -94,7 +94,7 @@ fn agent_profile_schema_1_bodies_get_the_permissions_before_permissions() {
   let upgraded = AgentProfile::upgrade(1, body.clone()).expect("schema 1 upgrades");
   let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
   assert_eq!(profile, original);
-  assert_eq!(AgentProfile::SCHEMA, 4);
+  assert_eq!(AgentProfile::SCHEMA, 5);
   assert!(AgentProfile::upgrade(0, body).is_none());
 }
 
