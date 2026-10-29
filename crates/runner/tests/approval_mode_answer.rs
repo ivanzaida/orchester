@@ -1,7 +1,8 @@
 //! Answering a tool request by the run's approval mode end to end (`docs/design/approval-modes.md`), with
 //! `orchester-fake-claude` as the agent and the reviewer: Autopilot approves what lies in the run's roots by its rule
-//! without the reviewer, brings a path outside them, a push and another ref to the person with that reason, and asks
-//! the reviewer one question about what it cannot place; Manual approves what the profile allows, asks the reviewer
+//! without the reviewer, brings a path outside them, a push, another ref and what the step's limits forbid to the
+//! person with that reason, and asks the reviewer one question about what it cannot place; Manual approves what the
+//! profile allows, asks the reviewer
 //! about the rest and brings what it denies, or everything when there is no reviewer, to the person; a request waiting
 //! for the person when the run drops to Manual is looked at again by Manual's rules. Each request records how and why
 //! it was answered. Needs `git`. Run with
@@ -203,6 +204,28 @@ async fn approval_mode_answer_autopilot_asks_the_reviewer_one_question_about_wha
   unsure.deny(request).await;
   unsure.ended().await;
   assert_eq!(unsure.logged("roots"), ["true"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_mode_answer_autopilot_keeps_the_step_limits() {
+  // A write in a step that only reads stays inside the roots, yet comes to the person without the reviewer:
+  // Autopilot never approves what the step forbids. (Claude Code cannot keep the network off, so its launch records
+  // it on; the network rule is checked in core's `approval_mode_answer`.)
+  let brief = "Run `touch notes.md`.";
+  let mut setup = builder(brief, ApprovalMode::Autopilot, CommandPermission::AskBefore);
+  if let Some(permissions) = setup.permissions.as_mut() {
+    permissions.set_repository(RepositoryAccess::ReadOnly);
+  }
+  let mut started = Started::new(with_default_reviewer(project(&setup))).await;
+  let (request, came) = started.came_to_person().await;
+  assert_eq!(came, CameToPerson::because(PersonReason::NotAllowed));
+  started.deny(request).await;
+  started.ended().await;
+  assert_eq!(
+    answered(&started.answers()[0]),
+    Some(&RequestAnswer::by(AnswerKind::Person))
+  );
+  assert!(started.logged("pid").is_empty(), "no reviewer ran");
 }
 
 #[tokio::test(flavor = "multi_thread")]

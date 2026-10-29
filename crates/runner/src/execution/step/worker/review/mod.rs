@@ -26,6 +26,7 @@ use orchester_core::{
     after_review,
     review::{
       Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion,
+      StepLimit, step_limit,
     },
     without_reviewer,
   },
@@ -126,7 +127,10 @@ impl Worker {
         None,
       ),
       ReviewQuestion::Roots => (
-        input.as_ref().err().copied(),
+        match step_limit(&subject, permissions.as_ref(), &ignored) {
+          StepLimit::Held(hold) => Some(hold),
+          StepLimit::Within | StepLimit::Unread => input.as_ref().err().copied(),
+        },
         Some(roots_question(self.roots.as_ref(), push.branch.as_deref())),
       ),
     };
@@ -230,6 +234,14 @@ impl Worker {
       task: self.task,
     });
     Ok(())
+  }
+
+  /// What the step's own permissions make of `subject` in Autopilot (`orchester_core::run::review::step_limit`),
+  /// asking git which of its Cargo builds' target directories the worktree ignores where the step only reads.
+  pub(in super::super) fn step_limit(&self, watch: &Watch, subject: &ApprovalSubject) -> StepLimit {
+    let permissions = watch.invocation.permissions.as_ref().map(|launch| launch.permissions());
+    let ignored = ignored_build_output(self.scope.worktree(), subject, permissions);
+    step_limit(subject, permissions, &ignored)
   }
 
   /// What the reviewer reads about `approval`: the request as recorded (already redacted), the step,

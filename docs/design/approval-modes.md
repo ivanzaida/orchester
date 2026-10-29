@@ -92,12 +92,17 @@ Built in ORC-346 (`orchester_core::run::{autopilot_step, after_review, RequestAn
 both modes. Then:
 
 - **Autopilot** places the request against the run's roots (`autopilot_check`: a command's parts, the folder a call of
-  Orchester's tools reads in; any other MCP call names nothing): `Inside` is approved by the rule, without the reviewer
-  and without a card; `Outside` and `MainCheckout` come to the person as `outside` (with the path), `Push` as `push`,
-  `OtherRef` as `refs` (with the ref); `Unknown` asks the reviewer one question (`ROOTS_QUESTION`, with the roots and
-  the run's branch, without Manual's hard rules): its approval answers, anything else brings it to the person as
-  `reviewerUnsure` with the reviewer's reason. The run's own *Stop* of auto-approval takes Autopilot back to Manual's
-  rules, as the status bar counts it.
+  Orchester's tools reads in, Orchester's other tools as inside; a call of another MCP server's tool is `Unknown`, as
+  its arguments may name any path and its tool may act on a remote service): `Inside` is approved by the rule, without
+  the reviewer and without a card; `Outside` and `MainCheckout` come to the person as `outside` (with the path), `Push`
+  as `push`, `OtherRef` as `refs` (with the ref); `Unknown` asks the reviewer one question (`ROOTS_QUESTION`, with the
+  roots and the run's branch): its approval answers, anything else brings it to the person as `reviewerUnsure` with the
+  reviewer's reason. The step's own limits hold in Autopilot too (`review::step_limit`, the profile's permissions kept
+  beside the mode): a credential read, a write in a read-only step, the network or an install while it is off, and
+  permissions not recorded come to the person as `notAllowed` without the reviewer, inside the roots or not, Codex
+  escalations included; a part Orchester could not read in a step that only reads or whose network is off goes to the
+  reviewer's question, which also asks whether it does what the step's facts forbid. The run's own *Stop* of
+  auto-approval takes Autopilot back to Manual's rules, as the status bar counts it.
 - **Manual** approves what the profile allows (a tool its server lists to run without asking, a command whose every
   part the permissions run), then a project rule (*Approved for every run*), then the run's or the profile's
   auto-approval; the rest goes to the reviewer after its hard rules. A hard rule brings it to the person at once (`push`,

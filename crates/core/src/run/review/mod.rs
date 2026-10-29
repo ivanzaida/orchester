@@ -30,7 +30,7 @@ pub use self::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
     default_review_model, resolve_reviewer, reviewer_kind,
   },
-  hold::{HoldRules, ReviewHold, review_hold, unread_parts},
+  hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
     DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, ROOTS_QUESTION, parse_verdict, parse_verdict_text,
@@ -187,13 +187,16 @@ pub fn review_request(
 }
 
 /// Autopilot's one question about a request about `subject` that Orchester could not place: `reviewer`'s answer to
-/// `question` on `input`, without Manual's hard rules (Autopilot never asks the reviewer whether to approve); a request
-/// too long to be reviewed whole is held.
+/// `question` on `input`. Of Manual's hard rules only the step's own limits under `rules` hold ([`step_limit`]), as
+/// Autopilot never asks the reviewer whether to approve; a request too long to be reviewed whole is held.
 pub fn review_roots(
   reviewer: Option<&dyn RequestReviewer>,
-  (subject, question): (&ApprovalSubject, RootsQuestion),
+  (subject, question, rules): (&ApprovalSubject, RootsQuestion, &HoldRules<'_>),
   input: Result<ReviewInput, ReviewHold>,
 ) -> AutoReview {
+  if let StepLimit::Held(hold) = step_limit(subject, rules.permissions, rules.build_output) {
+    return held(hold);
+  }
   match input {
     Ok(input) => ask(
       reviewer,

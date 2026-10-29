@@ -230,7 +230,7 @@ impl ReviewerSetup {
       build_output: &ignored,
     };
     let ask = move |reviewer: Option<&dyn RequestReviewer>| match roots {
-      Some(question) => review_roots(reviewer, (&subject, question), input),
+      Some(question) => review_roots(reviewer, (&subject, question, &hold_rules), input),
       None => review_request(reviewer, (&subject, &hold_rules), input),
     };
     match self {

@@ -1,10 +1,11 @@
 //! Answering a tool request by the run's approval mode (`docs/design/approval-modes.md`), and how each request
 //! records it. Autopilot answers by what the request touches ([`RootsCheck`]): inside the run's roots it is approved at
 //! once by the rule, without the reviewer and without a card; outside them (the main checkout too), a push, or a change
-//! to a ref other than the run's branch comes to the person with that reason; what Orchester could not place is one
-//! question to the reviewer, whether it touches anything outside the roots, whose "no" approves it. Manual approves
-//! what the profile's permissions allow, asks the reviewer about the rest, and brings what the reviewer denies or is
-//! unsure about to the person with the reviewer's reason.
+//! to a ref other than the run's branch comes to the person with that reason; so does, as `notAllowed`, what the
+//! step's own permissions forbid ([`StepLimit`]); what Orchester could not place (a call of another MCP server's tool
+//! too) is one question to the reviewer, whether it touches anything outside the roots or the step's limits, whose
+//! "no" approves it. Manual approves what the profile's permissions allow, asks the reviewer about the rest, and brings
+//! what the reviewer denies or is unsure about to the person with the reviewer's reason.
 //!
 //! The reviewer's verdict is approve or ask: an ask on Manual's question reads as a denial, on Autopilot's question
 //! (where it means "yes, or not sure") as doubt, and a review that gave no verdict as doubt too.
@@ -13,8 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{ApprovalSubject, DecidedBy, ToolReach};
 use crate::{
+  orchester_tools::SERVER,
   permission::roots::{RootsCheck, RunRoots, ToolRequest},
-  run::review::{Review, ReviewHold},
+  run::review::{Review, ReviewHold, StepLimit},
 };
 
 /// Who answered a request by the run's approval mode, as each request records it.
@@ -161,7 +163,8 @@ pub enum ModeStep {
 }
 
 /// What `subject` touches, compared with `roots`: a command by its parts, a call of Orchester's tools that reads
-/// outside the worktree by the folder it reads in; any other MCP call names nothing Orchester places.
+/// outside the worktree by the folder it reads in, any other call of Orchester's tools as inside. A call of another
+/// MCP server's tool cannot be placed: its arguments may name any path, and its tool may act on a remote service.
 pub fn autopilot_check(roots: &RunRoots, subject: &ApprovalSubject) -> RootsCheck {
   match subject {
     ApprovalSubject::Command(command) => roots.check(&ToolRequest::Command(command)),
@@ -169,20 +172,24 @@ pub fn autopilot_check(roots: &RunRoots, subject: &ApprovalSubject) -> RootsChec
       reach: ToolReach::Folder { folder, .. },
       ..
     } => roots.check(&ToolRequest::Files(std::slice::from_ref(folder))),
-    ApprovalSubject::McpTool { .. } => roots.check(&ToolRequest::McpTool { paths: &[] }),
+    ApprovalSubject::McpTool { server, .. } if server == SERVER => roots.check(&ToolRequest::McpTool { paths: &[] }),
+    ApprovalSubject::McpTool { .. } => RootsCheck::Unknown,
   }
 }
 
-/// Autopilot's step for a request that `check` placed.
-pub fn autopilot_step(check: &RootsCheck) -> ModeStep {
-  match check {
-    RootsCheck::Inside => ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot)),
-    RootsCheck::Outside { path } | RootsCheck::MainCheckout { path } => {
+/// Autopilot's step for a request that `check` placed, within or beyond the step's own `limit`: what leaves the roots
+/// comes to the person with why; what the step forbids as `notAllowed`; what Orchester could not place, or read in a
+/// limited step, is the reviewer's question.
+pub fn autopilot_step(check: &RootsCheck, limit: StepLimit) -> ModeStep {
+  match (check, limit) {
+    (RootsCheck::Outside { path } | RootsCheck::MainCheckout { path }, _) => {
       ModeStep::Person(CameToPerson::with(PersonReason::Outside, &path.display().to_string()))
     }
-    RootsCheck::Push => ModeStep::Person(CameToPerson::because(PersonReason::Push)),
-    RootsCheck::OtherRef { name } => ModeStep::Person(CameToPerson::with(PersonReason::Refs, name)),
-    RootsCheck::Unknown => ModeStep::Review(ReviewQuestion::Roots),
+    (RootsCheck::Push, _) => ModeStep::Person(CameToPerson::because(PersonReason::Push)),
+    (RootsCheck::OtherRef { name }, _) => ModeStep::Person(CameToPerson::with(PersonReason::Refs, name)),
+    (_, StepLimit::Held(hold)) => ModeStep::Person(CameToPerson::held(hold)),
+    (RootsCheck::Unknown, _) | (_, StepLimit::Unread) => ModeStep::Review(ReviewQuestion::Roots),
+    (RootsCheck::Inside, StepLimit::Within) => ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot)),
   }
 }
 

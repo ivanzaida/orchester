@@ -1,9 +1,10 @@
 //! How a request is answered (`orchester_core::run::ApprovalAnswer`, "Approval choices and waiting
 //! requests", `docs/design/approval-modes.md`): Orchester answers it itself by the run's approval mode. A rule of the
 //! run covers it in both modes (Approve similar, or a command Always allowed during the run). Autopilot approves what
-//! lies in the run's roots (`orchester_core::run::autopilot_step`), asks the reviewer about what it could not place,
-//! and brings the rest to the person. Manual approves what the profile's permissions allow (a tool its server lists to
-//! run without asking since the agent started, a command whose every part the step's permissions run on their own,
+//! lies in the run's roots within the step's own limits (`orchester_core::run::autopilot_step`), asks the reviewer
+//! about what it could not place, and brings the rest to the person. Manual approves what the profile's permissions
+//! allow (a tool its server lists to run without asking since the agent started, a command whose every part the step's
+//! permissions run on their own,
 //! `orchester_core::run::permitted`), then a rule of the project (Approve for every run of this project,
 //! `start_qa_app` only) and the run's own auto-approval or a profile's; the rest goes to the reviewer. Otherwise a
 //! person answers, and a wider answer first leaves what it promises: a rule, a profile version or a server setting, or
@@ -121,19 +122,19 @@ impl Worker {
       }));
     }
     if autopilot {
-      return Ok(self.autopilot(&subject, category));
+      return Ok(self.autopilot(watch, &subject, category));
     }
     self.manual(watch, approval, (&subject, category))
   }
 
   /// Autopilot's rule for `subject`: by what it touches compared with the run's roots, which cannot be placed when the
-  /// roots could not be read.
-  fn autopilot(&self, subject: &ApprovalSubject, category: Option<CommandCategory>) -> Itself {
+  /// roots could not be read, within the step's own limits (its network, repository access and credentials).
+  fn autopilot(&self, watch: &Watch, subject: &ApprovalSubject, category: Option<CommandCategory>) -> Itself {
     let check = self
       .roots
       .as_ref()
       .map_or(RootsCheck::Unknown, |roots| autopilot_check(roots, subject));
-    match autopilot_step(&check) {
+    match autopilot_step(&check, self.step_limit(watch, subject)) {
       ModeStep::Approve(answer) => Itself::Settled(Settled {
         answer,
         ..Settled::by(DecidedBy::AutoApproved, category)

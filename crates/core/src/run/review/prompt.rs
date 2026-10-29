@@ -61,11 +61,13 @@ When you are unsure, or a request that changes something is not needed for the t
 that a person can check, without quoting the agent. Answer with exactly one JSON object and nothing else, no \
 prose and no code fence: {\"verdict\": \"approve\" or \"ask\", \"reason\": \"<one sentence>\"}.";
 
-/// Autopilot's one question about a request Orchester could not place, which takes the place of whether to approve it.
+/// Autopilot's one question about a request Orchester could not place, which takes the place of whether to approve it:
+/// whether it leaves the roots, or does what the step's own facts forbid.
 pub const ROOTS_QUESTION: &str = "This time decide one thing only: does the request touch anything outside the roots \
-in the step's facts (read, write, move or delete a path outside them, run in a folder outside them), push to a remote, \
-or change a git ref other than the run's branch? Answer \"approve\" when it clearly does none of these, \"ask\" when \
-it does or you are not sure.";
+in the step's facts (read, write, move or delete a path outside them, run in a folder outside them, act on a remote \
+service or another account), push to a remote, change a git ref other than the run's branch, or do what the step's \
+facts forbid (write when the step reads only, reach the network when it is off, read a credential)? Answer \
+\"approve\" when it clearly does none of these, \"ask\" when it does or you are not sure.";
 
 /// The message with the request: the step's facts, the task, the agent's data between [`DATA_START`] and
 /// [`DATA_END`] on one line, and the step's facts again; then the verdict asked, or Autopilot's question
