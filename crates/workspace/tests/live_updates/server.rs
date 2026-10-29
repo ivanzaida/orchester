@@ -1,7 +1,8 @@
 //! A fake team server on loopback for the live updates: one project with its tasks, the members' tokens, and an event
 //! log its streams follow. It serves the snapshot to a stream without `Last-Event-ID` and the deltas after the cursor
-//! to one with it, live as they are appended; reads one task; and takes a task change, a claim and a run report, each
-//! appending its delta. A member's session can be revoked, and streams can be dropped or refused for a while.
+//! to one with it, live as they are appended; lists the tasks and reads one; and takes a task change, a claim and a run
+//! report, each appending its delta. A member's session can be revoked, streams can be dropped or refused for a while,
+//! and every other request refused.
 
 use std::{
   io::{BufRead, BufReader, Read, Write},
@@ -54,6 +55,7 @@ struct State {
   /// Streams opened before this generation end.
   generation: u64,
   refuse_streams: usize,
+  refuse_requests: bool,
   clock: i64,
 }
 
@@ -93,6 +95,7 @@ impl TeamServer {
         revoked: Vec::new(),
         generation: 0,
         refuse_streams: 0,
+        refuse_requests: false,
         clock: 1_000,
       }),
       appended: Condvar::new(),
@@ -158,6 +161,41 @@ impl TeamServer {
   /// Answers the next `count` streams `503`.
   pub fn refuse_streams(&self, count: usize) {
     self.state().refuse_streams = count;
+  }
+
+  /// Answers every request but the streams `503` while `refuse` holds.
+  pub fn refuse_requests(&self, refuse: bool) {
+    self.state().refuse_requests = refuse;
+  }
+
+  /// The member whose token is `token`.
+  pub fn member(&self, token: &str) -> UserRef {
+    self.state().member(token).expect("a member's token")
+  }
+
+  /// A task `id` titled `title` added to the project, its run claim held by `token`'s member; as the server has it.
+  pub fn claimed(&self, id: TaskId, title: &str, token: &str) -> SharedTask {
+    let mut state = self.state();
+    let holder = state.member(token).expect("a member's token");
+    let number = u32::try_from(state.tasks.len()).expect("a count") + 1;
+    let mut claimed = task(number, title, &holder);
+    claimed.id = id;
+    claimed.claim = Some(SharedClaim {
+      id: ClaimId::generate(),
+      holder,
+      kind: orchester_core::sharing::ClaimKind::Run,
+      since: 1,
+      heartbeat_at: 1,
+      stale: false,
+      taken_over_from: None,
+    });
+    state.tasks.push(claimed.clone());
+    claimed
+  }
+
+  /// The workflow status `task` has on the server.
+  pub fn workflow(&self, task: TaskId) -> WorkflowStatus {
+    self.state().task(task).content.workflow
   }
 }
 
@@ -340,8 +378,18 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     return refusal(&mut stream, 401, "unauthorized");
   };
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
+  let refused = shared.state.lock().expect("state").refuse_requests;
+  if refused && segments != ["events"] {
+    return refusal(&mut stream, 503, "unavailable");
+  }
   match (request.method.as_str(), segments.as_slice()) {
     ("GET", ["events"]) => events(shared, &request, &mut stream),
+    ("GET", ["tasks"]) => {
+      let state = shared.state.lock().expect("state");
+      let tasks = json!({ "tasks": state.tasks, "cursor": state.cursor() });
+      drop(state);
+      respond(&mut stream, 200, &tasks);
+    }
     ("GET", ["tasks", task]) => {
       let mut state = shared.state.lock().expect("state");
       let id = task.parse().expect("a task id");

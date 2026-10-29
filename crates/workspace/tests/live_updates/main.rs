@@ -3,11 +3,16 @@
 //! within a second; a connect without a cursor applies the snapshot and a reconnect resumes from the cursor; a delta
 //! the cache cannot take reads that task; `revoked` stops the stream and the list reads *not a member*; reconnects
 //! wait 1 s doubling to 60 s with jitter, on a settable clock; the project's state moves through *live*,
-//! *reconnecting*, *offline* and *not a member*.
+//! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
+//! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
+//! without *Check again*.
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
+mod desktop;
 mod server;
+#[path = "../support/mod.rs"]
+mod support;
 
 use std::{
   collections::HashMap,
@@ -17,6 +22,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use desktop::Desktop;
 use orchester_api::{
   ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch,
   client::{Client, ClientError, EventStream, PlainHttp, ServerAddress, StreamEnd},
@@ -28,14 +34,17 @@ use orchester_core::{
   run::TaskPhase,
   secret::SecretValue,
   sharing::{ClaimKind, MemberRole, TaskRevision},
+  task::organization::WorkflowStatus,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{CachedTask, ProjectDb, SharingLink};
 use orchester_workspace::sharing::{
   SharingError,
   sync::{Clock, Source, Stopped, SyncState, SystemClock, follow},
 };
 use server::TeamServer;
+use support::Fixture;
 use tempfile::TempDir;
 
 const ALICE: &str = "alice-token";
@@ -466,4 +475,75 @@ async fn live_updates_the_state_moves_through_live_reconnecting_offline_and_not_
   let stopped = tokio::time::timeout(LIVE, following).await.expect("stopped");
   assert_eq!(stopped.expect("the stream's task"), Stopped::NotMember);
   assert_eq!(member.states().last(), Some(&SyncState::NotMember), "revoked");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_the_desktops_state_is_live_reconnecting_not_a_member_and_none_once_local() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &["Status bar"]);
+  let desktop = Desktop::signed_in(&server, ALICE, Fixture::new(), &[]);
+  let streams = tokio::spawn(orchester_workspace::sharing::sync::run(desktop.servers.clone()));
+  let state = || desktop.servers.sync_state(desktop.root());
+  seen_within(LIVE, "live", || state() == Some(SyncState::Live)).await;
+  assert_eq!(desktop.servers.sync_states().len(), 1, "one state, the project's");
+
+  server.refuse_streams(1);
+  server.drop_streams();
+  seen_within(LIVE, "reconnecting", || {
+    matches!(state(), Some(SyncState::Reconnecting { .. }))
+  })
+  .await;
+  // About a second, then a refused connect and two more.
+  seen_within(Duration::from_secs(5), "live again", || {
+    state() == Some(SyncState::Live)
+  })
+  .await;
+
+  server.revoke(ALICE);
+  seen_within(LIVE, "not a member", || state() == Some(SyncState::NotMember)).await;
+
+  ProjectDb::open(desktop.root())
+    .expect("the project database")
+    .make_local()
+    .expect("made local");
+  desktop.servers.retry_now(desktop.server);
+  seen_within(LIVE, "no state once local", || state().is_none()).await;
+  streams.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_workflow_status_the_server_could_not_take_goes_with_the_minutes_round() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Status bar", support::at(10));
+  let mut run = fixture.started_run(task, support::at(11));
+  let claimed = server.claimed(task, "Status bar", ALICE);
+  let mut desktop = Desktop::signed_in(&server, ALICE, fixture, &[claimed]);
+  desktop.fixture.succeed(&mut run, support::at(12));
+  let waiting = || {
+    let db = ProjectDb::open(desktop.root()).expect("the project database");
+    db.automatic_statuses().expect("the waiting statuses")
+  };
+  assert_eq!(waiting().len(), 1, "the run moved its task to In review");
+
+  // The run's change is sent at once, while the server cannot take it.
+  server.refuse_requests(true);
+  desktop.servers.send_automatic_statuses().await;
+  assert_eq!(waiting().len(), 1, "it waits");
+  assert_eq!(server.workflow(task), WorkflowStatus::Todo);
+
+  // The server takes requests again; nobody asks to sync and no run changes.
+  server.refuse_requests(false);
+  let (_runs, changes) = tokio::sync::watch::channel(0);
+  let work = tokio::spawn(orchester_workspace::sharing::project::work::run(
+    desktop.servers.clone(),
+    changes,
+    Programs::processes(),
+  ));
+  let within = Duration::from_secs(5);
+  seen_within(within, "the status on the server", || {
+    server.workflow(task) == WorkflowStatus::InReview
+  })
+  .await;
+  seen_within(within, "nothing waits", || waiting().is_empty()).await;
+  work.abort();
 }

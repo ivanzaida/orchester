@@ -72,7 +72,7 @@ impl ProjectServer {
       if let Some(address) = address {
         store.db.record_project_address(&address)?;
       }
-      super::automatic::send(&mut store)
+      super::automatic::send(&mut store).map(drop)
     })
     .await??;
     self.servers.shared_changed();

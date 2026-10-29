@@ -7,6 +7,7 @@
 use std::{
   collections::{HashMap, HashSet},
   path::{Path, PathBuf},
+  sync::atomic::{AtomicBool, Ordering},
   time::Instant,
 };
 
@@ -50,10 +51,20 @@ impl Servers {
     self.inner.sync_states.lock().clone()
   }
 
-  /// The stream of the project at `root` reached `state`.
-  pub(super) fn set_sync_state(&self, root: &Path, state: SyncState) {
-    let previous = self.inner.sync_states.lock().insert(root.to_owned(), state);
-    if previous != Some(state) {
+  /// The stream of the project at `root` reached `state`, `None` for none, while it is `current`: one ended meanwhile
+  /// says nothing, as [`Self::keep_sync_states`] already settled its project's state. Checked under the same lock.
+  pub(super) fn set_sync_state(&self, root: &Path, state: Option<SyncState>, current: &AtomicBool) {
+    let previous = {
+      let mut states = self.inner.sync_states.lock();
+      if !current.load(Ordering::Acquire) {
+        return;
+      }
+      match state {
+        Some(state) => states.insert(root.to_owned(), state),
+        None => states.remove(root),
+      }
+    };
+    if previous != state {
       self.changed();
     }
   }

@@ -3,7 +3,8 @@
 //! server still has the status the run changed from and the person still holds the task. A status
 //! the server changed meanwhile stays the server's; one whose task the person no longer holds is
 //! not sent; either says so on the task. One that cannot be sent now (offline, signed out) waits.
-//! Statuses are sent as soon as a run changes, and with every sync.
+//! Statuses are sent as soon as a run changes, then again every minute while one waits
+//! ([`super::work`]), and with every full read (*Check again*).
 
 use orchester_api::TaskChanges;
 use orchester_core::task::{TaskUpdate, organization::ChangeActor};
@@ -20,10 +21,12 @@ const ATTEMPTS: usize = 3;
 
 impl Servers {
   /// Sends the waiting statuses of every shared project of the workspace, e.g. right after a run
-  /// changed; the projects whose server cannot be asked now keep theirs.
+  /// changed or in the minute's round; the projects whose server cannot be asked now keep theirs. The
+  /// screens hear of it only when a status waited.
   pub async fn send_automatic_statuses(&self) {
     let servers = self.clone();
     let sent = background::run(move || {
+      let mut waited = false;
       for project in super::work::shared_projects(&servers) {
         if project.writable().is_err() {
           continue;
@@ -33,25 +36,31 @@ impl Servers {
           .map_err(SharingError::from)
           .and_then(|db| RemoteTaskStore::new(db, project))
           .and_then(|mut store| send(&mut store));
-        if let Err(error) = result {
-          // By the server project's id: the project may be another account's, whose folders the log does not name.
-          tracing::warn!(%error, project = %shared, "cannot send the runs' workflow statuses");
+        match result {
+          Ok(sent) => waited |= sent,
+          Err(error) => {
+            waited = true;
+            // By the server project's id: the project may be another account's, whose folders the log does not name.
+            tracing::warn!(%error, project = %shared, "cannot send the runs' workflow statuses");
+          }
         }
       }
+      waited
     })
     .await;
-    if sent.is_ok() {
+    if matches!(sent, Ok(true)) {
       self.shared_changed();
     }
   }
 }
 
-/// Sends each waiting status of `store`'s project. The tasks and their claims are read from the
-/// server first, so a claim someone took over a moment ago (which raises no revision) is known.
-pub(super) fn send(store: &mut RemoteTaskStore) -> Result<(), SharingError> {
+/// Sends each waiting status of `store`'s project; whether any waited. The tasks and their claims are
+/// read from the server first, so a claim someone took over a moment ago (which raises no revision) is
+/// known.
+pub(super) fn send(store: &mut RemoteTaskStore) -> Result<bool, SharingError> {
   let waiting = store.db.automatic_statuses()?;
   if waiting.is_empty() {
-    return Ok(());
+    return Ok(false);
   }
   store.server.writable()?;
   let tasks = store.block_on(
@@ -73,7 +82,7 @@ pub(super) fn send(store: &mut RemoteTaskStore) -> Result<(), SharingError> {
       Err(error) => tracing::warn!(%error, task = %pending.task, "a run's workflow status waits"),
     }
   }
-  Ok(())
+  Ok(true)
 }
 
 fn send_one(store: &mut RemoteTaskStore, pending: &AutomaticStatus) -> Result<(), SharingError> {

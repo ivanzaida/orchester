@@ -11,6 +11,10 @@ pub mod stream;
 use std::{
   collections::{HashMap, HashSet},
   path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
 };
 
 use orchester_api::{
@@ -53,10 +57,13 @@ pub async fn run(servers: Servers) {
 struct Following {
   project: ProjectId,
   task: JoinHandle<()>,
+  /// Whether the stream is still the project's: an aborted one ends only at its next await, and says no state before.
+  current: Arc<AtomicBool>,
 }
 
 impl Drop for Following {
   fn drop(&mut self) {
+    self.current.store(false, Ordering::Release);
     self.task.abort();
   }
 }
@@ -96,21 +103,34 @@ fn follows(servers: &Servers, project: &ProjectServer) -> bool {
 
 fn start(servers: &Servers, project: ProjectServer) -> Following {
   let id = project.link().project;
+  let current = Arc::new(AtomicBool::new(true));
   let live = Live {
     servers: servers.clone(),
     project,
+    current: current.clone(),
   };
   let task = tokio::spawn(async move {
-    let stopped = follow(&live, live.project.repo_root(), &SystemClock).await;
+    let root = live.project.repo_root();
+    let stopped = follow(&live, root, &SystemClock).await;
     tracing::debug!(?stopped, project = %live.project.link().project, "a project's event stream stopped");
+    // Signed out, the project has no state: its server's connection says so. Not a member stays.
+    if stopped == Stopped::SignedOut {
+      live.servers.set_sync_state(root, None, &live.current);
+    }
   });
-  Following { project: id, task }
+  Following {
+    project: id,
+    task,
+    current,
+  }
 }
 
 /// A shared project's stream through its server's stored trust and token.
 struct Live {
   servers: Servers,
   project: ProjectServer,
+  /// The stream's [`Following::current`].
+  current: Arc<AtomicBool>,
 }
 
 impl Source for Live {
@@ -156,6 +176,8 @@ impl Source for Live {
   }
 
   fn state(&self, state: SyncState) {
-    self.servers.set_sync_state(self.project.repo_root(), state);
+    self
+      .servers
+      .set_sync_state(self.project.repo_root(), Some(state), &self.current);
   }
 }

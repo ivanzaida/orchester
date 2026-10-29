@@ -1,10 +1,11 @@
 //! The shared projects' background work, a task of the application's runtime beside the connection
 //! monitor and the live event streams (`docs/architecture/server.md`, "Claims", "Live updates", "The sync engine"):
-//! every minute, one heartbeat request per server names the claims the person holds in the projects this computer
-//! shares there, what they lost is written to the cache, and the claims of runs that ended are ended
-//! ([`super::claim_ends`]). The caches follow the servers through the streams ([`crate::sharing::sync`]), so nothing
-//! reads them every minute: a full read is left only for a person's request to sync now (*Check again*, *Try now*),
-//! which sends no heartbeat and so keeps to the server's limit of 12 heartbeats a minute.
+//! every minute, the workflow statuses that could not be sent yet are tried again ([`super::automatic`]), one
+//! heartbeat request per server names the claims the person holds in the projects this computer shares there, what
+//! they lost is written to the cache, and the claims of runs that ended are ended ([`super::claim_ends`]). The caches
+//! follow the servers through the streams ([`crate::sharing::sync`]), so nothing reads them every minute: a full read
+//! is left only for a person's request to sync now (*Check again*, *Try now*), which sends no heartbeat and so keeps to
+//! the server's limit of 12 heartbeats a minute.
 
 use std::{
   collections::{BTreeMap, HashMap},
@@ -74,9 +75,10 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
 }
 
 impl Servers {
-  /// The minute's round over every shared project of the workspace, by server: the heartbeat, then the end of the
-  /// claims whose runs ended.
+  /// The minute's round over every shared project of the workspace: the workflow statuses that wait, sent while the
+  /// claims they need are still held, then by server the heartbeat and the end of the claims whose runs ended.
   pub async fn keep_claims(&self, programs: &Programs) {
+    self.send_automatic_statuses().await;
     for projects in self.shared_by_server().await.values() {
       self.heartbeat(projects, programs).await;
       for project in projects {
