@@ -6,6 +6,7 @@
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
 //! in a bypass mode.
 
+mod approval_enforcement;
 mod approval_mode;
 pub(crate) mod canonical;
 pub mod capability;
@@ -29,6 +30,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  approval_enforcement::{
+    AutopilotMechanism, AutopilotSupport, CLAUDE_CODE_AUTOPILOT, CODEX_AUTOPILOT, CantEnforce, EffectiveApprovalMode,
+    ManualReason, autopilot_support,
+  },
   approval_mode::ApprovalMode,
   launch::{LaunchPermissions, OutsideCommands},
   local_file::{ProgramPlace, program_place, resolve_local, stays_local},

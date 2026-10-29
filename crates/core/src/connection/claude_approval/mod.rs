@@ -166,10 +166,12 @@ impl ClaudeApprovalScope {
   /// The scope of an invocation with the enforced `permissions` and the MCP servers `servers`; `None`
   /// when it asks a person for nothing and so needs no permission prompt. Commands ask whatever the
   /// repository access (`crate::permission::claude`): every one when the step asks before commands or
-  /// lists none, those outside the list otherwise.
+  /// lists none, those outside the list otherwise. In Autopilot every command and every call of the
+  /// servers' tools reaches Orchester (`crate::permission::EffectiveApprovalMode`).
   pub fn of(permissions: &AgentPermissions, servers: &[McpServerName]) -> Option<Self> {
-    let commands = *permissions.commands() != CommandPermission::AnyInWorktree;
-    let tools = permissions.interactive_tool_approvals();
+    let autopilot = permissions.hands_requests_to_orchester();
+    let commands = autopilot || *permissions.commands() != CommandPermission::AnyInWorktree;
+    let tools = autopilot || permissions.interactive_tool_approvals();
     (commands || tools).then(|| Self {
       commands,
       tools,
