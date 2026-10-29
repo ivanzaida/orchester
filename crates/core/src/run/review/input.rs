@@ -85,6 +85,15 @@ impl UnreadWhy {
   }
 }
 
+/// Autopilot's one question about a request Orchester could not place (`crate::run::ReviewQuestion::Roots`): whether
+/// it touches anything outside the run's roots, pushes to a remote, or changes a ref other than the run's branch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RootsQuestion {
+  /// The run's worktree, its Sources and the agent's own folders.
+  pub roots: Vec<String>,
+  pub branch: String,
+}
+
 /// Everything the reviewer reads, within its sizes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewInput {
@@ -96,6 +105,8 @@ pub struct ReviewInput {
   unread: Vec<UnreadPart>,
   /// The names of the project's variables that change what a build runs, never their values.
   build_variables: Vec<String>,
+  /// Autopilot's question, which replaces whether to approve the request.
+  roots: Option<RootsQuestion>,
 }
 
 impl ReviewInput {
@@ -150,6 +161,7 @@ impl ReviewInput {
       messages,
       unread: Vec::new(),
       build_variables: Vec::new(),
+      roots: None,
     })
   }
 
@@ -168,9 +180,21 @@ impl ReviewInput {
     self
   }
 
+  /// The input, asking the reviewer Autopilot's `question` instead of whether to approve the request.
+  #[must_use]
+  pub fn with_roots_question(mut self, question: RootsQuestion) -> Self {
+    self.roots = Some(question);
+    self
+  }
+
   /// The names of the project's variables that change what a build runs.
   pub fn build_variables(&self) -> &[String] {
     &self.build_variables
+  }
+
+  /// Autopilot's question, when the reviewer is asked it.
+  pub const fn roots_question(&self) -> Option<&RootsQuestion> {
+    self.roots.as_ref()
   }
 
   /// How many parts of the command Orchester could not read to the end.

@@ -74,6 +74,8 @@ fn problems_of(tool: Option<Tool>, gate: bool) -> Vec<PreflightProblem> {
     profiles: &config.profiles,
     tools: &tools,
     connections: &[],
+    mcp_servers: &[],
+    secrets: &[],
   })
   .into_iter()
   .filter(|problem| !matches!(problem, PreflightProblem::ConnectionMissing { .. }))
@@ -95,10 +97,14 @@ fn tool_step_preflight_accepts_published_command_tools_only() {
   .expect("valid tool");
   assert_eq!(
     problems_with(Some(database)),
-    [PreflightProblem::ToolNotRunnable {
-      step: key("checks"),
-      kind: ToolKind::Database,
-    }]
+    [
+      PreflightProblem::SecretMissing { step: key("checks") },
+      PreflightProblem::ToolNotRunnable {
+        step: key("checks"),
+        kind: ToolKind::Database,
+      }
+    ],
+    "its credentials are a secret this project does not have"
   );
   let guarded = Tool::new("", ToolAction::Command(command()), Some(access())).expect("valid tool");
   assert_eq!(

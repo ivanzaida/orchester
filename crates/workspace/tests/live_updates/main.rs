@@ -5,11 +5,13 @@
 //! wait 1 s doubling to 60 s with jitter, on a settable clock; the project's state moves through *live*,
 //! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
 //! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
-//! without *Check again*.
+//! without *Check again*. The team's configuration comes with it ([`config`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
+mod config;
 mod desktop;
+mod http;
 mod server;
 #[path = "../support/mod.rs"]
 mod support;
@@ -24,13 +26,14 @@ use std::{
 
 use desktop::Desktop;
 use orchester_api::{
-  ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch,
+  ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch, Versions,
   client::{Client, ClientError, EventStream, PlainHttp, ServerAddress, StreamEnd},
 };
 use orchester_core::{
-  id::{ProjectId, ServerId, TaskId},
+  id::{ProjectId, ResourceId, ServerId, TaskId},
   name::Name,
   project::{Project, ProjectKey},
+  resource::VersionNumber,
   run::TaskPhase,
   secret::SecretValue,
   sharing::{ClaimKind, MemberRole, TaskRevision},
@@ -115,6 +118,10 @@ impl Source for Member {
 
   async fn task(&self, task: TaskId) -> Result<SharedTask, SharingError> {
     Ok(self.client.task(&self.token, self.project, task).await?)
+  }
+
+  async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
+    Ok(self.client.versions(&self.token, self.project, resource, after).await?)
   }
 
   fn changed(&self) {}
@@ -380,6 +387,10 @@ impl Source for Unreachable {
   }
 
   async fn task(&self, _: TaskId) -> Result<SharedTask, SharingError> {
+    Err(SharingError::Offline)
+  }
+
+  async fn versions(&self, _: ResourceId, _: Option<VersionNumber>) -> Result<Versions, SharingError> {
     Err(SharingError::Offline)
   }
 

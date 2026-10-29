@@ -1,10 +1,13 @@
-//! A fake team server on loopback for the live updates: one project, its tasks, members' tokens and an event log. It
-//! streams the snapshot without `Last-Event-ID` and the deltas after the cursor with it, live; lists and reads tasks;
-//! takes a task change, a claim and a run report, each appending its delta. A session can be revoked, streams dropped
-//! or refused for a while, and every other request refused.
+//! A fake team server on loopback for the live updates: one project with its tasks and its resources, the members'
+//! tokens, and an event log its streams follow. It serves the snapshot to a stream without `Last-Event-ID` and the
+//! deltas after the cursor to one with it, live as they are appended; lists and reads tasks; publishes and serves
+//! resource versions ([`resources`]); and takes a task change, a claim and a run report, each appending its delta. A
+//! member's session can be revoked, streams dropped or refused for a while, and every other request refused.
+
+mod resources;
 
 use std::{
-  io::{BufRead, BufReader, Read, Write},
+  io::Write,
   net::{TcpListener, TcpStream},
   sync::{Arc, Condvar, Mutex, MutexGuard},
   thread,
@@ -13,8 +16,8 @@ use std::{
 
 use orchester_api::{
   Attribution, ClaimAction, ClaimTake, Delta, Event, RunReport, RunStatus, RunStep, SharedClaim, SharedProject,
-  SharedTag, SharedTask, SnapshotBegin, SnapshotEnd, SnapshotTasks, TaskChanged, TaskClaim, TaskContent, TaskPatch,
-  TaskRun, UserRef,
+  SharedResource, SharedTag, SharedTask, SharedVersion, SnapshotBegin, SnapshotEnd, SnapshotTasks, TaskChanged,
+  TaskClaim, TaskContent, TaskPatch, TaskRun, UserRef,
 };
 use orchester_core::{
   id::{ClaimId, ProjectId, TagId, TaskId, UserId},
@@ -24,7 +27,9 @@ use orchester_core::{
     organization::{ChangeActor, Priority, WorkflowStatus},
   },
 };
-use serde_json::{Value, json};
+use serde_json::json;
+
+use crate::http::{Request, refusal, respond, sse};
 
 /// The first event's sequence: the project had a history before the test.
 const FIRST_EVENT: u64 = 100;
@@ -45,6 +50,8 @@ struct State {
   members: Vec<(String, UserRef)>,
   tasks: Vec<SharedTask>,
   tags: Vec<SharedTag>,
+  resources: Vec<SharedResource>,
+  versions: Vec<SharedVersion>,
   /// Each delta's sequence and its SSE text.
   events: Vec<(u64, String)>,
   /// The `Last-Event-ID` of each stream opened, in order.
@@ -88,6 +95,8 @@ impl TeamServer {
           id: TagId::generate(),
           name: "backend".to_owned(),
         }],
+        resources: Vec::new(),
+        versions: Vec::new(),
         events: Vec::new(),
         connects: Vec::new(),
         reads: Vec::new(),
@@ -276,91 +285,6 @@ fn task(number: u32, title: &str, by: &UserRef) -> SharedTask {
   }
 }
 
-/// `event` as one SSE event: its kind as the name, its payload as the data.
-fn sse(id: Option<u64>, event: &Event) -> String {
-  let value = serde_json::to_value(event).expect("an event serializes");
-  let id = id.map(|id| format!("id: {id}\n")).unwrap_or_default();
-  format!(
-    "{id}event: {}\ndata: {}\n\n",
-    value["kind"].as_str().expect("a kind"),
-    value["data"]
-  )
-}
-
-/// One request: its method, path, headers with lower-cased names, and body.
-struct Request {
-  method: String,
-  path: String,
-  headers: Vec<(String, String)>,
-  body: Vec<u8>,
-}
-
-impl Request {
-  fn read(stream: &TcpStream) -> Option<Self> {
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    reader.read_line(&mut line).ok()?;
-    let mut parts = line.split_whitespace();
-    let (method, path) = (parts.next()?.to_owned(), parts.next()?.to_owned());
-    let mut headers = Vec::new();
-    loop {
-      let mut header = String::new();
-      reader.read_line(&mut header).ok()?;
-      let header = header.trim_end();
-      if header.is_empty() {
-        break;
-      }
-      let (name, value) = header.split_once(':')?;
-      headers.push((name.to_ascii_lowercase(), value.trim().to_owned()));
-    }
-    let length = headers
-      .iter()
-      .find(|(name, _)| name == "content-length")
-      .and_then(|(_, value)| value.parse().ok())
-      .unwrap_or(0);
-    let mut body = vec![0; length];
-    reader.read_exact(&mut body).ok()?;
-    Some(Self {
-      method,
-      path,
-      headers,
-      body,
-    })
-  }
-
-  fn header(&self, name: &str) -> Option<&str> {
-    self
-      .headers
-      .iter()
-      .find(|(header, _)| header == name)
-      .map(|(_, value)| value.as_str())
-  }
-
-  fn token(&self) -> Option<&str> {
-    self.header("authorization")?.strip_prefix("Bearer ")
-  }
-
-  fn json<T: serde::de::DeserializeOwned>(&self) -> T {
-    serde_json::from_slice(&self.body).expect("a request the contract reads")
-  }
-}
-
-fn respond(stream: &mut TcpStream, status: u16, body: &Value) {
-  let body = body.to_string();
-  let head = format!(
-    "HTTP/1.1 {status} Answer\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-    body.len()
-  );
-  // A client that hung up learns nothing; the test reads what reached it.
-  let _ = stream
-    .write_all(head.as_bytes())
-    .and_then(|()| stream.write_all(body.as_bytes()));
-}
-
-fn refusal(stream: &mut TcpStream, status: u16, error: &str) {
-  respond(stream, status, &json!({ "error": error, "message": "Refused" }));
-}
-
 fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
   let Some(request) = Request::read(&stream) else {
     return;
@@ -369,6 +293,7 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
   let Some(route) = request.path.strip_prefix(&prefix) else {
     return refusal(&mut stream, 404, "not_found");
   };
+  let (route, query) = route.split_once('?').unwrap_or((route, ""));
   let user = {
     let state = shared.state.lock().expect("state");
     request.token().and_then(|token| state.member(token))
@@ -395,6 +320,10 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
       state.reads.push(id);
       let task = state.task(id).clone();
       respond(&mut stream, 200, &json!({ "task": task }));
+    }
+    ("GET", ["resources", resource, "versions"]) => {
+      let page = shared.state.lock().expect("state").versions_page(resource, query);
+      respond(&mut stream, 200, &page);
     }
     ("PATCH", ["tasks", task]) => change(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("POST", ["tasks", task, "claim"]) => claim(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
@@ -585,7 +514,7 @@ fn snapshot(state: &State) -> String {
     members: Vec::new(),
     tags: state.tags.clone(),
     modules: Vec::new(),
-    resources: Vec::new(),
+    resources: state.resources.clone(),
   };
   let mut text = sse(None, &Event::SnapshotBegin(begin));
   for page in state.tasks.chunks(SnapshotTasks::PAGE) {

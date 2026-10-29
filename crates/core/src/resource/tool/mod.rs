@@ -167,6 +167,18 @@ impl Tool {
   pub const fn access(&self) -> Option<&AccessPolicy> {
     self.access.as_ref()
   }
+
+  /// The secret the tool sends or connects with; command tools hold none.
+  pub fn secret(&self) -> Option<SecretId> {
+    match &self.action {
+      ToolAction::Http(request) => match request.auth() {
+        HttpAuth::Bearer { secret } => Some(secret),
+        HttpAuth::None => None,
+      },
+      ToolAction::DatabaseQuery(query) => Some(query.credentials()),
+      ToolAction::Command(_) => None,
+    }
+  }
 }
 
 /// Converts a tool body of schema 1 (`{action, access}`, a command being only `{program, args}`) to

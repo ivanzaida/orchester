@@ -248,6 +248,10 @@ name = "approval_mode_effective"
 required-features = ["test-agent"]
 
 [[test]]
+name = "approval_mode_answer"
+required-features = ["test-agent"]
+
+[[test]]
 name = "stale_approvals"
 required-features = ["test-agent"]
 
