@@ -1,12 +1,108 @@
-//! Empty limits, validation, saving, status-bar readback and edits made outside the page.
+//! Empty limits, validation, saving, status-bar readback and edits made outside the page; raising or removing the
+//! daily budget as a person's decision (ORC-348, `docs/design/approval-modes.md`, "Decisions").
+use lurq::app::events::with_synthetic_input;
 use orchester_core::{
   limits::{AgentSlots, ProjectLimits, QaSlots},
+  run::{Answerer, ApproveEverything, review::AutoModeSettings},
   store::SettingsStore,
   tokens::TokenBudget,
 };
-use orchester_workspace::tasks::outside::Outside;
+use orchester_workspace::{app_mcp::ToolError, tasks::outside::Outside};
+use serde_json::json;
 
-use super::harness::Settings;
+use super::{
+  domain::{call, consent},
+  harness::Settings,
+};
+
+/// Today's nearest to Autopilot (ORC-341 builds it): new runs use auto mode, which approves everything in each run,
+/// as the person turned it on.
+fn autopilot(page: &Settings) {
+  let mut db = page.db();
+  db.update_auto_mode_settings(|current| AutoModeSettings {
+    new_runs: true,
+    reviewer: current.reviewer,
+  })
+  .expect("auto mode for new runs");
+  db.save_approve_everything(ApproveEverything::on(Answerer::Person))
+    .expect("approve everything in each run");
+}
+
+fn daily(page: &Settings) -> Option<u64> {
+  page
+    .db()
+    .project_limits()
+    .expect("limits")
+    .daily_budget_limit()
+    .map(TokenBudget::get)
+}
+
+#[test]
+fn decisions_reach_person_daily_budget_raise_over_mcp_waits_under_autopilot_until_the_person_lets_automation_answer() {
+  let page = Settings::new(false);
+  autopilot(&page);
+  for asked in [json!(null), json!(30_000_000)] {
+    let refused = call(
+      &page,
+      "update_project_limits",
+      json!({ "project": "Kontur", "daily_budget": asked }),
+    )
+    .expect_err("the person's");
+    assert!(
+      matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"),
+      "{asked}: {refused:?}"
+    );
+  }
+  assert_eq!(daily(&page), Some(20_000_000), "nothing saved");
+  let lowered = call(
+    &page,
+    "update_project_limits",
+    json!({ "project": "Kontur", "daily_budget": 10_000_000 }),
+  )
+  .expect("lowering it takes no consent");
+  assert_eq!(lowered["limits"]["daily_budget"], 10_000_000);
+  consent(&page);
+  let lifted = call(
+    &page,
+    "update_project_limits",
+    json!({ "project": "Kontur", "daily_budget": null }),
+  )
+  .expect("with the person's consent");
+  assert!(lifted["limits"]["daily_budget"].is_null(), "{lifted}");
+}
+
+#[test]
+fn decisions_reach_person_limits_tab_refuses_a_clients_daily_budget_raise_until_the_person_lets_automation_answer() {
+  let mut page = Settings::new(false);
+  autopilot(&page);
+  page.tab("limits", "settings-default-budget");
+  page.set("settings-daily-budget", "");
+  with_synthetic_input(|| page.leave());
+  page.until("the client's removal refused", |p| {
+    p.exists("settings-limits-person-only")
+  });
+  assert_eq!(daily(&page), Some(20_000_000), "nothing saved");
+  // Lowering it takes no consent.
+  page.set("settings-daily-budget", "10000000");
+  with_synthetic_input(|| page.leave());
+  page.saved();
+  assert_eq!(daily(&page), Some(10_000_000));
+  assert!(!page.exists("settings-limits-person-only"));
+  // The person's own edit removes it.
+  page.set("settings-daily-budget", "");
+  page.leave();
+  page.saved();
+  assert_eq!(daily(&page), None);
+  page.set("settings-daily-budget", "10000000");
+  page.leave();
+  page.saved();
+  consent(&page);
+  page.set("settings-daily-budget", "40000000");
+  with_synthetic_input(|| page.leave());
+  page.saved();
+  assert_eq!(daily(&page), Some(40_000_000), "with the person's consent");
+  assert!(!page.exists("settings-limits-person-only"));
+}
 
 #[test]
 fn project_settings_limits_show_no_limit_and_save_all_fields_without_a_maximum() {

@@ -36,8 +36,9 @@ does. Returns the new state.
 ### `update_project_limits` — changes data
 
 Changes a project's limits, as Project settings › Runs › Limits does. Limits left out stay as they are; invalid ones are
-refused with why. There is **no maximum** for token or time limits; `null` means *no limit*. Returns the limits as
-saved.
+refused with why. There is **no maximum** for token or time limits; `null` means *no limit*. Raising the daily budget
+or setting it to `null` lets runs it stopped go on, a person's decision: refused as `automation_not_allowed` (nothing
+saved) unless a person turned on *Let automation answer approvals*; lowering it is not. Returns the limits as saved.
 
 | Parameter                     | Type            | Req. | Description                                                                                  |
 |-------------------------------|-----------------|------|----------------------------------------------------------------------------------------------|

@@ -184,6 +184,16 @@ impl ProjectLimits {
     }
   }
 
+  /// Whether `to` lets the project's runs use more tokens per day than these limits: its daily budget is higher, or
+  /// it has none while these have one. Continuing a run the daily budget stopped this way is a person's decision.
+  pub fn raises_daily_budget(self, to: Self) -> bool {
+    match (self.daily_budget_limit(), to.daily_budget_limit()) {
+      (Some(_), None) => true,
+      (Some(before), Some(after)) => after.get() > before.get(),
+      (None, _) => false,
+    }
+  }
+
   /// The last finite daily budget, for callers of the legacy settings API.
   /// Enforcement uses `daily_budget_used`; new screens use `daily_budget_limit`.
   pub const fn daily_budget(self) -> TokenBudget {
