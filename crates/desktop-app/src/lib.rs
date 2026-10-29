@@ -13,6 +13,7 @@ pub mod brand;
 pub mod chrome;
 pub mod clipboard;
 pub mod error_reports;
+pub mod hang_reports;
 pub mod i18n;
 pub mod lifecycle;
 pub mod mcp;
