@@ -16,7 +16,7 @@ use lurq::{
 
 use super::{bone, round_bone};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, GroupText, IconSize},
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography, GroupText, IconSize, skeleton_line},
   ui::icon::{Icon, icon},
 };
 
@@ -30,16 +30,9 @@ const SWITCH: (f32, f32) = (28.0, 16.0);
 /// A line of words in `style`, `width` long: as high as the line, its bone in the middle as high as the design draws
 /// words of that size.
 pub fn line(ctx: &Ctx, style: impl Into<TypographyStyle>, width: f32) -> Row {
-  let text = ctx.theme().typography().get(style);
-  let high = match text.font_size {
-    size if size >= 20.0 => 16.0,
-    size if size >= 15.0 => 12.0,
-    size if size >= 13.0 => 10.0,
-    size if size >= 12.0 => 9.0,
-    _ => 8.0,
-  };
+  let (line_height, high) = skeleton_line(ctx.theme(), style);
   Row::new()
-    .height(Dimension::Px(text.font_size * text.line_height))
+    .height(Dimension::Px(line_height))
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .child(bone(width, high))
