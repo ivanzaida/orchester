@@ -1,7 +1,7 @@
 //! How the runner state and the activity log become the status bar's runner item and
 //! activity slot (states A–H in `keJ9Z`).
 
-use super::log::{ActivityLog, Outcome, Slot};
+use super::log::{ActivityLog, Slot};
 use crate::runner::state::RunnerState;
 
 /// The runner item (`N8rki`): which icon and label it shows.
@@ -42,14 +42,6 @@ pub enum ActivitySlot<'a> {
   RunnerProblem(RunnerBadge),
   /// A, C, D, F, H: the log's own priority.
   Activity(Slot<'a>),
-}
-
-impl ActivitySlot<'_> {
-  /// Whether the slot stays beside waiting tool approvals: a run waiting for the person's decision
-  /// (02.B6 `K8VQRC`) does, so neither hides the other; any other activity gives way to them.
-  pub fn beside_approvals(&self) -> bool {
-    matches!(self, Self::Activity(Slot::Failure(event)) if matches!(event.outcome(), Outcome::NeedsYou { .. }))
-  }
 }
 
 /// `runner` is `None` when no project is open (first launch, setup): there is no runner to

@@ -89,13 +89,6 @@ fn an_overview_wait_opens_its_task_by_browser_rules() {
 }
 
 #[test]
-fn a_status_bar_item_opens_its_page_by_browser_rules() {
-  let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
-  let place = seeded.route(OverviewTab::Queued);
-  control_opens_by_browser_rules(&mut seeded.window, "status-queued", &place);
-}
-
-#[test]
 fn a_project_row_of_all_projects_opens_its_overview_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   seeded.window.navigation().go(Route::AllProjects);

@@ -9,7 +9,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
-    theme::TypographyStyle,
+    theme::{PaletteColor, TypographyStyle},
   },
   components::Text,
   core::Signal,
@@ -36,12 +36,14 @@ pub enum Clock {
     limit: u32,
     next: Option<Instant>,
   },
+  /// When the runner's next reconnect attempt starts (*in 8 s*), as its card says it; *now* while one runs.
+  Until(Option<Instant>),
 }
 
 impl Clock {
   const fn ticks(&self) -> bool {
     match self {
-      Self::Since(_) | Self::Retry { .. } => true,
+      Self::Since(_) | Self::Retry { .. } | Self::Until(_) => true,
       Self::Active(clock) => clock.counting(),
     }
   }
@@ -51,8 +53,24 @@ impl Clock {
       Self::Since(since) => message_text(ctx, &display::duration(since.elapsed())).to_string(),
       Self::Active(clock) => compact(ctx, clock.at(Timestamp::now())),
       Self::Retry { attempt, limit, next } => retry(ctx, attempt, limit, next),
+      Self::Until(next) => match seconds_until(next) {
+        0 => ctx.t("shell.status.health.nextNow").to_string(),
+        seconds => ctx
+          .t_args("shell.status.health.nextIn", [("seconds", seconds.to_string())])
+          .to_string(),
+      },
     }
   }
+}
+
+/// Whole seconds until `next`, rounded up; 0 without one or once it passed.
+fn seconds_until(next: Option<Instant>) -> u128 {
+  next.map_or(0, |next| {
+    next
+      .saturating_duration_since(Instant::now())
+      .as_millis()
+      .div_ceil(1000)
+  })
 }
 
 /// *11m*, *40s*, *2h*: a step's active time as the sidebar's Running list shows it (`QDtA3`).
@@ -67,12 +85,7 @@ fn compact(ctx: &Ctx, time: Duration) -> String {
 }
 
 fn retry(ctx: &Ctx, attempt: u32, limit: u32, next: Option<Instant>) -> String {
-  let seconds = next.map_or(0, |next| {
-    next
-      .saturating_duration_since(Instant::now())
-      .as_millis()
-      .div_ceil(1000)
-  });
+  let seconds = seconds_until(next);
   let (attempt, limit) = (attempt.to_string(), limit.to_string());
   if seconds == 0 {
     return ctx
@@ -135,11 +148,15 @@ impl Component for Ticking {
     } else {
       self.interval.stop();
     }
-    // An agent's time in the Running list is Geist Mono (`QDtA3`); the status bar's times are its labels'.
-    let style = match clock {
-      Clock::Active(_) => ExtraTypography::MonoNote.role(),
-      Clock::Since(_) | Clock::Retry { .. } => TypographyStyle::Caption,
-    };
-    Text::new(&clock.text(ctx)).id(id).variant(style).nowrap()
+    // An agent's time in the Running list is Geist Mono (`QDtA3`); the status bar's times are its labels'; the
+    // runner card's next try is one of its values (`sJtJu` in `ediuF`).
+    let text = Text::new(&clock.text(ctx)).id(id).nowrap();
+    match clock {
+      Clock::Active(_) => text.variant(ExtraTypography::MonoNote.role()),
+      Clock::Since(_) | Clock::Retry { .. } => text.variant(TypographyStyle::Caption),
+      Clock::Until(_) => text
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextSecondary),
+    }
   }
 }
