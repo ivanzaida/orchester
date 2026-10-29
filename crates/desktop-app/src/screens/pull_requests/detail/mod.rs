@@ -413,7 +413,7 @@ fn open_action(ctx: &mut Ctx, open: &OpenProject, number: u64) -> OpenAction {
         background::run(move || external::open_url(&url))
           .await?
           .map_err(|error| {
-            tracing::error!(%error, number, "cannot open the pull request in the browser");
+            tracing::warn!(%error, number, "cannot open the pull request in the browser");
             orchester_workspace::pull_requests::open_failed()
           })
       };
