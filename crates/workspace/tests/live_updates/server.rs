@@ -2,21 +2,23 @@
 //! tokens, and an event log its streams follow. It serves the snapshot to a stream without `Last-Event-ID` and the
 //! deltas after the cursor to one with it, live as they are appended; reads one task; reads a resource's versions, one
 //! a page; and takes a task change, a claim and a run report, each appending its delta. A version published appends
-//! its `resource.published`. A member's session can be revoked, and streams can be dropped or refused for a while.
+//! its `resource.published`; its admins publish the team's configuration ([`publishing`]). A member's session can be
+//! revoked, and streams can be dropped or refused for a while.
+
+mod publishing;
 
 use std::{
   io::Write,
   net::{TcpListener, TcpStream},
-  num::NonZeroU32,
   sync::{Arc, Condvar, Mutex, MutexGuard},
   thread,
   time::Duration,
 };
 
 use orchester_api::{
-  Attribution, ClaimAction, ClaimTake, Delta, Event, Reference, ResourcePublished, RunReport, RunStatus, RunStep,
-  SharedClaim, SharedProject, SharedResource, SharedResourceKind, SharedTag, SharedTask, SharedVersion, SnapshotBegin,
-  SnapshotEnd, SnapshotTasks, TaskChanged, TaskClaim, TaskContent, TaskPatch, TaskRun, UserRef, Versions,
+  Attribution, ClaimAction, ClaimTake, Delta, Event, Reference, RunReport, RunStatus, RunStep, SharedClaim,
+  SharedProject, SharedResource, SharedResourceKind, SharedTag, SharedTask, SharedVersion, SnapshotBegin, SnapshotEnd,
+  SnapshotTasks, TaskChanged, TaskClaim, TaskContent, TaskPatch, TaskRun, UserRef, Versions,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -49,10 +51,14 @@ struct Shared {
 
 struct State {
   members: Vec<(String, UserRef)>,
+  /// The tokens of who changes the team's configuration: the owner, and whom the test makes an admin.
+  admins: Vec<String>,
   tasks: Vec<SharedTask>,
   tags: Vec<SharedTag>,
   resources: Vec<SharedResource>,
   versions: Vec<SharedVersion>,
+  /// The skill parts uploaded, by their hash.
+  files: Vec<(ContentHash, Vec<u8>)>,
   /// Each delta's sequence and its SSE text.
   events: Vec<(u64, String)>,
   /// The `Last-Event-ID` of each stream opened, in order.
@@ -87,9 +93,11 @@ impl TeamServer {
       .zip(1..)
       .map(|(title, number)| task(number, title, &creator))
       .collect();
+    let owner = members[0].0.clone();
     let shared = Arc::new(Shared {
       state: Mutex::new(State {
         members,
+        admins: vec![owner],
         tasks,
         tags: vec![SharedTag {
           id: TagId::generate(),
@@ -97,6 +105,7 @@ impl TeamServer {
         }],
         resources: Vec::new(),
         versions: Vec::new(),
+        files: Vec::new(),
         events: Vec::new(),
         connects: Vec::new(),
         reads: Vec::new(),
@@ -174,56 +183,42 @@ impl TeamServer {
   /// `body`, naming `references`. Appends its `resource.published`.
   pub fn publish(
     &self,
-    (id, kind, name): (ResourceId, SharedResourceKind, &str),
+    resource: (ResourceId, SharedResourceKind, &str),
     body: Value,
     references: Vec<Reference>,
   ) -> VersionNumber {
     let mut state = self.state();
     let by = state.members[0].1.clone();
-    let published = Attribution {
-      by: by.clone(),
-      at: state.tick(),
-    };
-    let based_on = state
-      .resources
-      .iter()
-      .find(|resource| resource.id == id)
-      .and_then(|resource| resource.latest);
-    let number = VersionNumber::new(
-      NonZeroU32::new(based_on.map_or(0, VersionNumber::get) + 1).expect("a version number above zero"),
-    );
-    state.versions.push(SharedVersion {
-      resource: id,
-      number,
-      body,
-      hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-      references,
-      based_on,
-      published: published.clone(),
-    });
-    let resource = if let Some(resource) = state.resources.iter_mut().find(|resource| resource.id == id) {
-      resource.latest = Some(number);
-      resource.updated = published;
-      resource.clone()
-    } else {
-      let resource = SharedResource {
-        id,
-        kind,
-        slug: name.to_lowercase().replace(' ', "-"),
-        name: name.to_owned(),
-        archived: false,
-        revision: TaskRevision::FIRST,
-        latest: Some(number),
-        created: published.clone(),
-        updated: published,
-      };
-      state.resources.push(resource.clone());
-      resource
-    };
-    state.append(&by, ResourcePublished { resource }, Event::ResourcePublished);
+    let version = state.publish_version(&by, resource, body, references);
     drop(state);
     self.shared.appended.notify_all();
-    number
+    version.number
+  }
+
+  /// `token`'s member changes the team's configuration from now on, as the server's admin does.
+  pub fn make_admin(&self, token: &str) {
+    self.state().admins.push(token.to_owned());
+  }
+
+  /// The versions of `resource` the server has, oldest first.
+  pub fn versions_of(&self, resource: ResourceId) -> Vec<SharedVersion> {
+    let state = self.state();
+    state
+      .versions
+      .iter()
+      .filter(|version| version.resource == resource)
+      .cloned()
+      .collect()
+  }
+
+  /// The content of the skill part `hash`, when it was uploaded.
+  pub fn file(&self, hash: &ContentHash) -> Option<Vec<u8>> {
+    let state = self.state();
+    state
+      .files
+      .iter()
+      .find(|(kept, _)| kept == hash)
+      .map(|(_, content)| content.clone())
   }
 }
 
@@ -329,9 +324,10 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     return refusal(&mut stream, 404, "not_found");
   };
   let (route, query) = route.split_once('?').unwrap_or((route, ""));
-  let user = {
+  let (user, admin) = {
     let state = shared.state.lock().expect("state");
-    request.token().and_then(|token| state.member(token))
+    let token = request.token().unwrap_or_default();
+    (state.member(token), state.admins.iter().any(|admin| admin == token))
   };
   let Some(user) = user else {
     return refusal(&mut stream, 401, "unauthorized");
@@ -353,6 +349,12 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     ("PATCH", ["tasks", task]) => change(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("POST", ["tasks", task, "claim"]) => claim(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("PUT", ["tasks", task, "run"]) => run(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
+    ("POST", ["resources", ..]) | ("PUT", ["files", _]) if !admin => publishing::not_admin(&mut stream),
+    ("POST", ["resources"]) => publishing::create(shared, &user, &request, &mut stream),
+    ("POST", ["resources", resource, "versions"]) => {
+      publishing::publish(shared, &user, resource, &request, &mut stream)
+    }
+    ("PUT", ["files", hash]) => publishing::upload(shared, hash, &request, &mut stream),
     _ => refusal(&mut stream, 404, "not_found"),
   }
 }
@@ -480,7 +482,7 @@ fn events(shared: &Shared, request: &Request, stream: &mut TcpStream) {
   let mut cursor = match last {
     Some(cursor) => cursor,
     None => {
-      text.push_str(&snapshot(&state));
+      text.push_str(&snapshot(&state, &token));
       state.cursor()
     }
   };
@@ -523,8 +525,10 @@ fn events(shared: &Shared, request: &Request, stream: &mut TcpStream) {
   }
 }
 
-/// The project as a member reads it now: its first page, its tasks, and the cursor the deltas follow.
-fn snapshot(state: &State) -> String {
+/// The project as `token`'s member reads it now: its first page with their role (the first member owns it), its tasks,
+/// and the cursor the deltas follow.
+fn snapshot(state: &State, token: &str) -> String {
+  let owner = state.members.first().is_some_and(|(first, _)| first == token);
   let begin = SnapshotBegin {
     project: SharedProject {
       id: ProjectId::generate(),
@@ -533,7 +537,7 @@ fn snapshot(state: &State) -> String {
       key: "ORC".to_owned(),
       name: "Orchester".to_owned(),
       remote_hint: None,
-      role: Some(MemberRole::Member),
+      role: Some(if owner { MemberRole::Owner } else { MemberRole::Member }),
       next_number: u64::try_from(state.tasks.len()).expect("a count") + 1,
     },
     members: Vec::new(),

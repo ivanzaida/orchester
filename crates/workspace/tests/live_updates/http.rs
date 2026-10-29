@@ -75,6 +75,10 @@ impl Request {
   pub fn json<T: serde::de::DeserializeOwned>(&self) -> T {
     serde_json::from_slice(&self.body).expect("a request the contract reads")
   }
+
+  pub fn bytes(&self) -> &[u8] {
+    &self.body
+  }
 }
 
 pub fn respond(stream: &mut TcpStream, status: u16, body: &Value) {

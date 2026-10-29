@@ -21,7 +21,7 @@ use orchester_core::{
 use tokio::task::JoinHandle;
 
 pub use self::{
-  config::bind,
+  config::{ConfigServer, RemoteResourceStore, bind},
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};

@@ -2,12 +2,14 @@
 //! updates", "Cursor and applying events"): two workspaces' caches see each other's task change, claim and run progress
 //! within a second; a connect without a cursor applies the snapshot and a reconnect resumes from the cursor; a delta
 //! the cache cannot take reads that task; `revoked` stops the stream and the list reads *not a member*; reconnects
-//! wait 1 s doubling to 60 s with jitter, on a settable clock. The team's configuration comes with it ([`config`]).
+//! wait 1 s doubling to 60 s with jitter, on a settable clock. The team's configuration comes with it ([`config`]), and
+//! its admins publish it from here ([`publish`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
 mod config;
 mod http;
+mod publish;
 mod server;
 
 use std::{
@@ -119,6 +121,11 @@ struct Workspace {
 
 impl Workspace {
   fn linked(server: &TeamServer) -> Self {
+    Self::linked_as(server, MemberRole::Member)
+  }
+
+  /// [`Self::linked`], the person's role in the project `role`.
+  fn linked_as(server: &TeamServer, role: MemberRole) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -131,7 +138,7 @@ impl Workspace {
       server: ServerId::generate(),
       project: server.project,
       key: ProjectKey::new("ORC").expect("key"),
-      role: Some(MemberRole::Member),
+      role: Some(role),
       joined_at: Timestamp::from_unix_millis(1),
       cursor: 0,
       last_synced_at: Timestamp::from_unix_millis(1),

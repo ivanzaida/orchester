@@ -103,30 +103,17 @@ impl ProjectDb {
 
   /// Keeps `version` of `resource` as the server confirmed it. A version this computer has already, e.g. one published
   /// here before the project was shared, keeps its row and gets the publisher; its bodies and references are replaced.
+  /// A version published here that still waits for the server and has its number moves up
+  /// ([`super::shared_publishes`]).
   pub fn cache_shared_version<B: ResourceBody>(
     &mut self,
     resource: ResourceId,
     version: &CachedVersion<B>,
   ) -> Result<Version<B>, StoreError> {
-    let local_body = encode(&version.local_body)?;
     let transaction = self.connection.transaction()?;
     check_kind::<B>(&transaction, resource)?;
-    let id = write_version(&transaction, resource, version, &local_body)?;
-    transaction.execute(
-      "INSERT INTO shared_version_bodies (version_id, server_body, sha256, local_body) VALUES (?1, ?2, ?3, ?4) \
-       ON CONFLICT (version_id) DO UPDATE SET server_body = excluded.server_body, sha256 = excluded.sha256, \
-       local_body = excluded.local_body",
-      params![
-        id.to_string(),
-        version.server_body.to_string(),
-        version.hash.as_str(),
-        local_body
-      ],
-    )?;
-    write_references(&transaction, id, &version.references)?;
-    let cached = load_versions::<B>(&transaction, "WHERE id = ?1", [id.to_string()])?
-      .pop()
-      .ok_or_else(|| corrupt("resource version", id))?;
+    super::shared_publishes::make_room(&transaction, resource, version.number)?;
+    let cached = keep_version(&transaction, resource, version)?;
     transaction.commit()?;
     Ok(cached)
   }
@@ -225,14 +212,12 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// The number of the newest version this computer has of `resource`, cached from a server or published here.
+  /// The number of the newest version this computer has of `resource`, cached from a server or published here before
+  /// the project was shared; a version published here that still waits for the server's number is not counted.
   pub fn latest_version_number(&self, resource: ResourceId) -> Result<Option<VersionNumber>, StoreError> {
-    let number: Option<i64> = self.connection.query_row(
-      "SELECT MAX(number) FROM resource_versions WHERE resource_id = ?1",
-      [resource.to_string()],
-      |row| row.get(0),
-    )?;
-    number.map(version_number).transpose()
+    super::shared_publishes::latest_confirmed(&self.connection, resource)?
+      .map(version_number)
+      .transpose()
   }
 
   /// The cached versions whose references name `target`, by resource and number.
@@ -309,6 +294,32 @@ struct CachedRow {
   server_body: String,
   hash: String,
   local_body: String,
+}
+
+/// Keeps `version` of `resource` as the server confirmed it, in `connection`'s transaction: its row, both bodies and
+/// its references.
+pub(super) fn keep_version<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+  version: &CachedVersion<B>,
+) -> Result<Version<B>, StoreError> {
+  let local_body = encode(&version.local_body)?;
+  let id = write_version(connection, resource, version, &local_body)?;
+  connection.execute(
+    "INSERT INTO shared_version_bodies (version_id, server_body, sha256, local_body) VALUES (?1, ?2, ?3, ?4) \
+     ON CONFLICT (version_id) DO UPDATE SET server_body = excluded.server_body, sha256 = excluded.sha256, \
+     local_body = excluded.local_body",
+    params![
+      id.to_string(),
+      version.server_body.to_string(),
+      version.hash.as_str(),
+      local_body
+    ],
+  )?;
+  write_references(connection, id, &version.references)?;
+  load_versions::<B>(connection, "WHERE id = ?1", [id.to_string()])?
+    .pop()
+    .ok_or_else(|| corrupt("resource version", id))
 }
 
 /// The id of `version`'s row: the one this computer has for its number, given the publisher if it had none, or a new

@@ -4,7 +4,8 @@
 //! (S2d) this runs when the project is opened, every minute
 //! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
 //! no longer has the person as a member (10.44); the cache then says since when. The workflow
-//! statuses this computer's runs reached go to the server then ([`super::automatic`]).
+//! statuses this computer's runs reached go to the server then ([`super::automatic`]), and so do the versions of the
+//! team's configuration published here while the server could not be reached ([`RemoteResourceStore`]).
 
 use orchester_api::ErrorCode;
 use orchester_core::time::Timestamp;
@@ -13,7 +14,7 @@ use orchester_store::ProjectDb;
 use super::{ProjectServer, convert, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
-  sharing::{ProjectAddress, SharingError},
+  sharing::{ProjectAddress, SharingError, sync::RemoteResourceStore},
 };
 
 impl ProjectServer {
@@ -59,6 +60,7 @@ impl ProjectServer {
         .map(convert::cached_module)
         .collect::<Result<Vec<_>, _>>()?;
       let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
+      let publishing = server.clone();
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
       store.db.cache_shared_tags(&tags)?;
       store.db.cache_shared_modules(&cached)?;
@@ -72,7 +74,9 @@ impl ProjectServer {
       if let Some(address) = address {
         store.db.record_project_address(&address)?;
       }
-      super::automatic::send(&mut store)
+      super::automatic::send(&mut store)?;
+      let db = ProjectDb::open(publishing.repo_root())?;
+      RemoteResourceStore::new(db, publishing)?.send_waiting()
     })
     .await??;
     self.servers.shared_changed();
