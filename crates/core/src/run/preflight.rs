@@ -15,10 +15,12 @@ use serde::{Deserialize, Serialize};
 use crate::{
   connection::{
     AccountStartProblem, AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform,
+    mcp::McpServer,
   },
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ResourceId, SecretId},
   permission::{CommandPermission, StepCommands, capability::PermissionProblem},
   resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
+  secret::Secret,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -43,6 +45,12 @@ pub enum PreflightProblem {
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
   ConnectionMissing { step: StepKey },
+  /// The profile gives its agents an MCP server this computer does not have, such as one a shared version names
+  /// that is not bound here.
+  McpServerMissing { step: StepKey },
+  /// The step's tool uses a secret this computer does not have, such as one a shared version names that is not
+  /// bound here.
+  SecretMissing { step: StepKey },
   /// The profile's connection is not an agent CLI, so it cannot run the step.
   UnsupportedProvider { step: StepKey },
   /// The profile's connection is to a native agent provider, which this version runs no agent on.
@@ -77,6 +85,9 @@ pub struct PreflightInput<'a> {
   /// Latest published version of each tool.
   pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
   pub connections: &'a [Connection],
+  pub mcp_servers: &'a [McpServer],
+  /// The secrets that are not archived.
+  pub secrets: &'a [Secret],
 }
 
 /// Every configuration problem that keeps the run from starting, in step order. Repository
@@ -102,6 +113,12 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
           problems.push(PreflightProblem::ApprovalGate { step: key() });
         }
         let tool = tool.and_then(|tool| input.tools.get(&tool)).map(Version::body);
+        if tool
+          .and_then(Tool::secret)
+          .is_some_and(|secret| !has_secret(input.secrets, secret))
+        {
+          problems.push(PreflightProblem::SecretMissing { step: key() });
+        }
         problems.extend(tool_problem(tool, key()));
         continue;
       }
@@ -117,6 +134,9 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
     match usable_provider(&connections, profile.body().connection(), key()) {
       Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
       Err(problem) => problems.push(problem),
+    }
+    if names_a_missing_server(profile.body(), input.mcp_servers) {
+      problems.push(PreflightProblem::McpServerMissing { step: key() });
     }
   }
   problems
@@ -134,6 +154,20 @@ fn tool_problem(tool: Option<&Tool>, step: StepKey) -> Option<PreflightProblem> 
     });
   }
   tool.access().map(|_| PreflightProblem::ToolAccessRules { step })
+}
+
+fn has_secret(secrets: &[Secret], id: SecretId) -> bool {
+  secrets.iter().any(|secret| secret.id() == id)
+}
+
+/// Whether `profile` chooses an MCP server that is not among `servers`. A disabled server is there: the agent starts
+/// without it, as the person chose.
+fn names_a_missing_server(profile: &AgentProfile, servers: &[McpServer]) -> bool {
+  profile
+    .mcp_servers()
+    .ids()
+    .iter()
+    .any(|id| !servers.iter().any(|server| server.id() == *id))
 }
 
 /// Whether the step narrows its commands to a list while its profile asks a person about commands: the

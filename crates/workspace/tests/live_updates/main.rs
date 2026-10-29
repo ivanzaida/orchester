@@ -2,10 +2,12 @@
 //! updates", "Cursor and applying events"): two workspaces' caches see each other's task change, claim and run progress
 //! within a second; a connect without a cursor applies the snapshot and a reconnect resumes from the cursor; a delta
 //! the cache cannot take reads that task; `revoked` stops the stream and the list reads *not a member*; reconnects
-//! wait 1 s doubling to 60 s with jitter, on a settable clock.
+//! wait 1 s doubling to 60 s with jitter, on a settable clock. The team's configuration comes with it ([`config`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
+mod config;
+mod http;
 mod server;
 
 use std::{
@@ -17,13 +19,14 @@ use std::{
 };
 
 use orchester_api::{
-  ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch,
+  ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch, Versions,
   client::{Client, ClientError, EventStream, PlainHttp, ServerAddress, StreamEnd},
 };
 use orchester_core::{
-  id::{ProjectId, ServerId, TaskId},
+  id::{ProjectId, ResourceId, ServerId, TaskId},
   name::Name,
   project::{Project, ProjectKey},
+  resource::VersionNumber,
   run::TaskPhase,
   secret::SecretValue,
   sharing::{ClaimKind, MemberRole, TaskRevision},
@@ -98,6 +101,10 @@ impl Source for Member {
 
   async fn task(&self, task: TaskId) -> Result<SharedTask, SharingError> {
     Ok(self.client.task(&self.token, self.project, task).await?)
+  }
+
+  async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
+    Ok(self.client.versions(&self.token, self.project, resource, after).await?)
   }
 
   fn changed(&self) {}
@@ -359,6 +366,10 @@ impl Source for Unreachable {
   }
 
   async fn task(&self, _: TaskId) -> Result<SharedTask, SharingError> {
+    Err(SharingError::Offline)
+  }
+
+  async fn versions(&self, _: ResourceId, _: Option<VersionNumber>) -> Result<Versions, SharingError> {
     Err(SharingError::Offline)
   }
 

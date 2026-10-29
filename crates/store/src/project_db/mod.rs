@@ -122,7 +122,7 @@ pub use self::{
   shared_members::SharedMember,
   shared_modules::{CachedModule, CachedModuleChange},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
-  shared_versions::{CachedVersion, ReferenceTarget, ResourceSharing, VersionReference},
+  shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
 };

@@ -567,7 +567,7 @@ pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
   }
 }
 
-fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
+pub(super) fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
   match value {
     "agent_profile" => Ok(ResourceKind::AgentProfile),
     "instruction" => Ok(ResourceKind::Instruction),
