@@ -30,7 +30,10 @@ use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
 pub use self::{
-  config::{ConfigServer, RemoteResourceStore, bind, keep_uploaded_configuration, upload_configuration},
+  config::{
+    ConfigServer, RemoteResourceStore, Waiting, bind, keep_uploaded_configuration, upload_configuration, use_here,
+    waiting,
+  },
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };

@@ -95,7 +95,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       Err(SharingError::Client(error)) => match (error.code(), error.details()) {
         (Some(ErrorCode::VersionConflict), Some(SharingErrorDetails::Version { latest })) => {
           let latest = latest.number;
-          self.catch_up::<B>(waiting.resource)?;
+          self.catch_up(waiting.resource, waiting.kind)?;
           self.db.record_publish_conflict(waiting.version, latest)?;
           Err(SharingError::VersionConflict { latest })
         }
@@ -233,15 +233,17 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       hash: version.hash.clone(),
       references: version.references.iter().map(reference).collect(),
       local_body: local.body().clone(),
+      // A version this computer published itself never waits for *Use v<N> here*.
+      waits_here: false,
     };
     self.db.confirm_publish::<B>(waiting.version, &confirmed)?;
     Ok(())
   }
 
-  /// Caches the versions of `resource` the server has and this computer does not, as the stream would; a teammate's
-  /// skill is not kept here yet.
-  fn catch_up<B: ResourceBody>(&mut self, resource: ResourceId) -> Result<(), SharingError> {
-    if B::KIND == ResourceKind::Skill {
+  /// Caches the versions of `resource`, of `kind`, the server has and this computer does not, as the stream would: a
+  /// teammate's that widens what agents may do here waits for *Use v<N> here*. A teammate's skill is not kept here yet.
+  fn catch_up(&mut self, resource: ResourceId, kind: ResourceKind) -> Result<(), SharingError> {
+    if kind == ResourceKind::Skill {
       return Ok(());
     }
     let mut after = self.db.latest_version_number(resource)?;
@@ -256,7 +258,14 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
     for version in &versions {
       let bound = bindings::bind_new(&mut self.db, &version.references)?;
-      cache_version::<B>(&mut self.db, version, &bound)?;
+      match kind {
+        ResourceKind::Pipeline => cache_version::<Pipeline>(&mut self.db, version, &bound)?,
+        ResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut self.db, version, &bound)?,
+        ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version, &bound)?,
+        ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version, &bound)?,
+        // Skills are left out above, and agent testing's kinds are never shared.
+        ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => {}
+      }
     }
     Ok(())
   }

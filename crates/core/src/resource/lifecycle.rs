@@ -207,6 +207,12 @@ impl<B> Draft<B> {
     self.body = body;
     self.updated_at = now;
   }
+
+  /// The same draft based on `based_on` instead.
+  #[must_use]
+  pub fn rebased(self, based_on: Option<VersionNumber>) -> Self {
+    Self { based_on, ..self }
+  }
 }
 
 impl<B: PartialEq> Draft<B> {

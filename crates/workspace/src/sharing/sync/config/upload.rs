@@ -199,6 +199,8 @@ fn keep_version<B: ResourceBody + Clone>(db: &mut ProjectDb, version: &SharedVer
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
     local_body: local.body().clone(),
+    // This computer published it, so it never waits for a *Use v<N> here*.
+    waits_here: false,
   };
   db.cache_shared_version(version.resource, &confirmed)?;
   Ok(())

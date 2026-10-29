@@ -120,14 +120,14 @@ impl ConfigServer for Publisher {
 }
 
 /// A person's computer: their project linked to the server's, and whether the server can be reached from it.
-struct Computer {
-  workspace: Workspace,
+pub(super) struct Computer {
+  pub(super) workspace: Workspace,
   token: &'static str,
   offline: Arc<AtomicBool>,
 }
 
 impl Computer {
-  fn new(server: &TeamServer, token: &'static str, role: MemberRole) -> Self {
+  pub(super) fn new(server: &TeamServer, token: &'static str, role: MemberRole) -> Self {
     Self {
       workspace: Workspace::linked_as(server, role),
       token,
@@ -139,7 +139,7 @@ impl Computer {
     self.workspace.db()
   }
 
-  fn go_offline(&self, offline: bool) {
+  pub(super) fn go_offline(&self, offline: bool) {
     self.offline.store(offline, Ordering::SeqCst);
   }
 
@@ -151,7 +151,7 @@ impl Computer {
   }
 
   /// Runs `work` with the person's store on a worker of the runtime, as the app does.
-  async fn store<T: Send + 'static>(
+  pub(super) async fn store<T: Send + 'static>(
     &self,
     server: &TeamServer,
     work: impl FnOnce(&mut RemoteResourceStore<Publisher>) -> T + Send + 'static,
