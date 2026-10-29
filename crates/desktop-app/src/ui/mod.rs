@@ -23,6 +23,7 @@ pub mod command_trigger;
 pub mod composer;
 pub mod copied_value;
 pub mod date_picker;
+pub mod decision;
 pub mod detail_row;
 pub mod enforcement_row;
 pub mod failure;
