@@ -17,6 +17,7 @@ mod entry;
 mod message;
 mod proposal;
 mod result;
+mod switched;
 mod working;
 
 use std::{collections::HashMap, sync::Arc};
@@ -400,7 +401,8 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
   }
 }
 
-/// A person's message, a card, a problem, a return or restart, a step's result or the run's end.
+/// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a step's result or the
+/// run's end.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => person_message(ctx, ((timeline.project, &timeline.chat_project.root), entry)),
@@ -410,6 +412,7 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     ItemKind::Problem(entry) => entry::problem_row(ctx, timeline, &item.key, entry),
     ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
     ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
+    ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),
     ItemKind::Result(card) => result::card(ctx, timeline, card),
     ItemKind::End(end) => divider::end(ctx, timeline, end, item.at),
     // An agent's message, a step and a tool group are rows of their own (`Row::Agent`, `Row::Step`).

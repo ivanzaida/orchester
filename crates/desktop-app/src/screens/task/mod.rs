@@ -346,7 +346,9 @@ impl Component for TaskFrame {
     let feed = &props.project.feed;
     // A change of the merge queue changes where the task's run stands in its delivery (ORC-19).
     let queue = crate::project::merge_queue::changes(ctx, &props.project.open.repo_root);
-    let saves = feed.revision.get() + feed.outside.get().tasks + queue;
+    // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
+    let outside = feed.outside.get();
+    let saves = feed.revision.get() + outside.tasks + outside.runs + queue;
     let again = ReadAgain {
       changes: feed.run_changes(self.live.get()),
       saves,

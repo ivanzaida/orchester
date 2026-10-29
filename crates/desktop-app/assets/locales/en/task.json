@@ -70,6 +70,15 @@
       "unreadable": "Run {{run}} · could not be read",
       "unreadableUnnumbered": "Its latest run could not be read"
     },
+    "run": {
+      "mode": {
+        "autopilot": "Autopilot",
+        "manualRun": "Manual · this run",
+        "manualProject": "Manual · project",
+        "manualProfile": "Manual · profile",
+        "switchToManual": "Switch to Manual for this run"
+      }
+    },
     "controls": {
       "start": "Start run",
       "pause": "Pause run",

@@ -1,5 +1,5 @@
-//! The team server's item (`X39PHh`): the project's server, or the one in use, or how many and the worst state; a
-//! press opens the server's entry in Settings › Orchester (or its list for several).
+//! The team server's item (`X39PHh`): the project's server, or the one in use, or how many and the worst state, with
+//! the project's live stream; a press opens the server's entry in Settings › Orchester (or its list for several).
 use std::time::Instant;
 
 use orchester_api::client::ServerAddress;
@@ -13,7 +13,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ServerAccount, StoredServer};
-use orchester_workspace::sharing::{Connection, ServerEntry};
+use orchester_workspace::sharing::{Connection, ServerEntry, sync::SyncState};
 
 use super::{Bar, facts};
 
@@ -76,6 +76,42 @@ fn status_bar_server_item_follows_the_connection() {
     assert_eq!(shown(servers), words, "connected is quiet");
   }
   assert_eq!(shown(ServerFacts::of(&[], None)), "", "no server, no item");
+}
+
+#[test]
+fn status_bar_server_item_follows_the_projects_live_stream() {
+  let kontur = entry("Kontur team", Some(Connection::Connected));
+  let since = Timestamp::from_unix_millis(1);
+  for (stream, words, state) in [
+    (None, "", ServerState::Connected),
+    (Some(SyncState::Live), "", ServerState::Connected),
+    (
+      Some(SyncState::Reconnecting { attempt: 2 }),
+      "Kontur team · connecting",
+      ServerState::Connecting,
+    ),
+    (
+      Some(SyncState::Offline { since }),
+      "Kontur team offline",
+      ServerState::Offline,
+    ),
+    (Some(SyncState::NotMember), "", ServerState::Connected),
+  ] {
+    let servers = ServerFacts::of(std::slice::from_ref(&kontur), Some(kontur.stored.id)).streamed(stream);
+    assert!(
+      matches!(servers, ServerFacts::One { state: shown_state, .. } if shown_state == state),
+      "{stream:?}"
+    );
+    assert_eq!(shown(servers), words, "{stream:?}");
+  }
+  let signed_out = entry("Kontur team", Some(Connection::SignedOut));
+  let servers = ServerFacts::of(std::slice::from_ref(&signed_out), Some(signed_out.stored.id))
+    .streamed(Some(SyncState::Offline { since }));
+  assert_eq!(
+    shown(servers),
+    "Kontur team · signed out",
+    "the server's own trouble leads"
+  );
 }
 
 #[test]
