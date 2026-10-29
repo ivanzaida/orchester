@@ -117,7 +117,7 @@ pub async fn set_run_manual(services: &Services, args: SetRunManual) -> Result<V
         vec![Message::new("runs.control.ended")],
       ));
     }
-    apply_in(&root, run.id(), RunApprovalChange::SwitchToManual)?;
+    apply_in(&root, run.id(), RunApprovalChange::SwitchToManual(Answerer::Automation))?;
     services.changes.record(open.project.id(), Outside::Runs);
     let state = run_mode_in(&root, run.id())?;
     Ok(json!({ "run": {

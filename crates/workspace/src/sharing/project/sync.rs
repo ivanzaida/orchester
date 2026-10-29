@@ -1,11 +1,12 @@
 //! Bringing a shared project's cache up to the server (`docs/architecture/server.md`, "Live
 //! updates"): its project, tags, modules and tasks are read and written to the cache, with when it last
-//! matched, then the moves of tasks into and out of modules the cache does not have yet. Until the live event stream
-//! (S2d) this runs when the project is opened, every minute
-//! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
-//! no longer has the person as a member (10.44); the cache then says since when. The workflow
-//! statuses this computer's runs reached go to the server then ([`super::automatic`]), and so do the versions of the
-//! team's configuration published here while the server could not be reached ([`RemoteResourceStore`]).
+//! matched, then the moves of tasks into and out of modules the cache does not have yet. The live event stream
+//! ([`crate::sharing::sync`]) keeps the cache in step otherwise; this full read runs only when the person asks
+//! (*Try now*, *Check again*). A server that answers `404` for the project
+//! no longer has the person as a member (10.44); the cache then says since when, and a member again is followed by its
+//! stream once more. The workflow statuses this computer's runs reached go to the server then ([`super::automatic`]),
+//! and so do the versions of the team's configuration published here that wait ([`RemoteResourceStore`]); the stream
+//! sends those too each time it connects.
 
 use orchester_api::ErrorCode;
 use orchester_core::time::Timestamp;
@@ -44,7 +45,7 @@ impl ProjectServer {
       .await?;
     let server = self.clone();
     // A link made before API 3 learns the project's address, its identity since, from the server; one on another
-    // server is not kept, and the tasks are synced all the same. This repeats every minute, so it is not a warning.
+    // server is not kept, and the tasks are synced all the same. This repeats at every read, so it is not a warning.
     let address = match self.link.address {
       None => ProjectAddress::reported(&project.address, &self.entry.address)
         .inspect_err(|error| tracing::debug!(%error, "the project's address was not recorded"))

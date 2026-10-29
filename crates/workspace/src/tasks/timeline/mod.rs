@@ -6,14 +6,17 @@
 //! result closes it. A tool request Orchester answered itself as it came (the profile's permissions, a
 //! rule of the run, auto-approval) is no card: its call's entry in the tool group carries the mark. An attempt that
 //! returned or restarted the work starts with its mark ([`mark`]). Orchester's notices that the base branch moved sit
-//! in the step that read them ([`base_moved`]). Messages and notices that wait for a step follow, and a run that
-//! ended closes with its end. What is shown of it is [`view`]'s; what the merge queue did with the run joins the
-//! shown rows by time ([`delivery`]).
+//! in the step that read them ([`base_moved`]), the run's switch to Manual in the step it was switched in
+//! ([`manual_switch`]). Messages and notices that wait for a step follow, and a run that ended closes with its end
+//! ([`end`]). What is shown of it is [`view`]'s; what the merge queue did with the run joins the shown rows by time
+//! ([`delivery`]).
 
 pub mod base_moved;
 pub mod delivery;
+mod end;
 pub mod group;
 pub mod load;
+pub mod manual_switch;
 pub mod mark;
 pub mod question;
 pub mod rail;
@@ -27,13 +30,11 @@ use orchester_core::{
   id::StepExecutionId,
   integration::RunMerge,
   question::AskedQuestions,
-  run::{
-    DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunFailure, RunStatus, StepOutcome, StepResult,
-    StepStatus,
-  },
+  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
   time::Timestamp,
 };
 
+use self::end::{mark_ended_on, run_end};
 pub use self::{
   group::ToolGroup,
   mark::Mark,
@@ -86,6 +87,8 @@ pub enum ItemKind {
   Result(ResultCard),
   /// Orchester told the run that its base branch moved ([`base_moved`]).
   BaseMoved(base_moved::BaseMovedMark),
+  /// The run was switched to Manual for itself ([`manual_switch`]).
+  SwitchedToManual(manual_switch::SwitchedToManual),
   /// The run ended.
   End(RunEnd),
 }
@@ -228,28 +231,11 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     .map(|entry| message_item(entry, None))
     .collect();
   waiting.extend(base_moved::items(run, None));
+  waiting.extend(manual_switch::item(run, None));
   waiting.sort_by_key(|item| item.at);
   items.extend(waiting);
   items.extend(run_end(run, sources.merge));
   items
-}
-
-/// Marks the last step that ran, and its result: the step the run ended on or stopped at.
-fn mark_ended_on(items: &mut [Item]) {
-  let last = items.iter().rev().find_map(|item| match &item.kind {
-    ItemKind::Step(head) => head.execution,
-    _ => None,
-  });
-  let Some(last) = last else {
-    return;
-  };
-  for item in items.iter_mut().filter(|item| item.execution == Some(last)) {
-    match &mut item.kind {
-      ItemKind::Step(head) => head.ended_on = true,
-      ItemKind::Result(card) => card.ended_on = true,
-      _ => {}
-    }
-  }
 }
 
 /// The run's step executions that ran, in the order they were created: the index of their attempt,
@@ -297,6 +283,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
   );
   between.extend(approval_items(sources, execution, &name));
   between.extend(base_moved::items(run, Some(execution)));
+  between.extend(manual_switch::item(run, Some(execution)));
   let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
   items.extend(result_item(run, sources.entries, execution));
   items
@@ -559,30 +546,6 @@ fn judges(run: &RunView, key: &orchester_core::resource::StepKey) -> bool {
     .steps()
     .iter()
     .any(|step| step.key == *key && step.on_failure.is_some())
-}
-
-fn run_end(run: &RunView, merge: Option<&RunMerge>) -> Option<Item> {
-  let end = match (run.run.status(), merge) {
-    (RunStatus::Succeeded, Some(merge)) => RunEnd::Merged(merge.into.as_str().into()),
-    (RunStatus::Succeeded, None) => RunEnd::Ready,
-    // It never started, so nothing ran that it could end after.
-    (RunStatus::Failed(RunFailure::WorktreeNotCreated(_)), _) => return None,
-    (RunStatus::Failed(_), _) => RunEnd::Failed(
-      run
-        .steps
-        .iter()
-        .find(|step| step.status == Some(StepStatus::Failed))
-        .map_or_else(|| "".into(), |step| step.name.clone()),
-    ),
-    (RunStatus::Cancelled, _) => RunEnd::Cancelled,
-    _ => return None,
-  };
-  Some(Item {
-    key: "end".into(),
-    execution: None,
-    at: run.finished_at.unwrap_or_else(|| run.run.created_at()),
-    kind: ItemKind::End(end),
-  })
 }
 
 /// Whether `item` waits for the person: an open question, a plan that waits, a pending request auto mode's reviewer

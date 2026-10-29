@@ -1,11 +1,12 @@
 //! A fake team server on loopback for the live updates: one project with its tasks and its resources, the members'
 //! tokens, and an event log its streams follow. It serves the snapshot to a stream without `Last-Event-ID` and the
-//! deltas after the cursor to one with it, live as they are appended; reads one task; reads a resource's versions, one
-//! a page; and takes a task change, a claim and a run report, each appending its delta. A version published appends
-//! its `resource.published`; its admins publish the team's configuration ([`publishing`]). A member's session can be
-//! revoked, and streams can be dropped or refused for a while.
+//! deltas after the cursor to one with it, live as they are appended; lists and reads tasks; publishes and serves
+//! resource versions ([`resources`]); and takes a task change, a claim and a run report, each appending its delta. Its
+//! admins publish the team's configuration ([`publishing`]). A member's session can be revoked, streams dropped or
+//! refused for a while, and every other request refused.
 
 mod publishing;
+mod resources;
 
 use std::{
   io::Write,
@@ -16,21 +17,20 @@ use std::{
 };
 
 use orchester_api::{
-  Attribution, ClaimAction, ClaimTake, Delta, Event, Reference, RunReport, RunStatus, RunStep, SharedClaim,
-  SharedProject, SharedResource, SharedResourceKind, SharedTag, SharedTask, SharedVersion, SnapshotBegin, SnapshotEnd,
-  SnapshotTasks, TaskChanged, TaskClaim, TaskContent, TaskPatch, TaskRun, UserRef, Versions,
+  Attribution, ClaimAction, ClaimTake, Delta, Event, RunReport, RunStatus, RunStep, SharedClaim, SharedProject,
+  SharedResource, SharedTag, SharedTask, SharedVersion, SnapshotBegin, SnapshotEnd, SnapshotTasks, TaskChanged,
+  TaskClaim, TaskContent, TaskPatch, TaskRun, UserRef,
 };
 use orchester_core::{
   blob::ContentHash,
-  id::{ClaimId, ProjectId, ResourceId, TagId, TaskId, UserId},
-  resource::VersionNumber,
+  id::{ClaimId, ProjectId, TagId, TaskId, UserId},
   sharing::{MemberRole, TaskRevision},
   task::{
     TaskStatus,
     organization::{ChangeActor, Priority, WorkflowStatus},
   },
 };
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::http::{Request, refusal, respond, sse};
 
@@ -68,6 +68,7 @@ struct State {
   /// Streams opened before this generation end.
   generation: u64,
   refuse_streams: usize,
+  refuse_requests: bool,
   clock: i64,
 }
 
@@ -112,6 +113,7 @@ impl TeamServer {
         revoked: Vec::new(),
         generation: 0,
         refuse_streams: 0,
+        refuse_requests: false,
         clock: 1_000,
       }),
       appended: Condvar::new(),
@@ -179,67 +181,45 @@ impl TeamServer {
     self.state().refuse_streams = count;
   }
 
-  /// The first member publishes the next version of resource `id`, a `kind` named `name` that is created with its v1:
-  /// `body`, naming `references`. Appends its `resource.published`.
-  pub fn publish(
-    &self,
-    resource: (ResourceId, SharedResourceKind, &str),
-    body: Value,
-    references: Vec<Reference>,
-  ) -> VersionNumber {
+  /// Answers every request but the streams `503` while `refuse` holds.
+  pub fn refuse_requests(&self, refuse: bool) {
+    self.state().refuse_requests = refuse;
+  }
+
+  /// The member whose token is `token`.
+  pub fn member(&self, token: &str) -> UserRef {
+    self.state().member(token).expect("a member's token")
+  }
+
+  /// A task `id` titled `title` added to the project, its run claim held by `token`'s member; as the server has it.
+  pub fn claimed(&self, id: TaskId, title: &str, token: &str) -> SharedTask {
     let mut state = self.state();
-    let by = state.members[0].1.clone();
-    let version = state.publish_version(&by, resource, body, references);
-    drop(state);
-    self.shared.appended.notify_all();
-    version.number
+    let holder = state.member(token).expect("a member's token");
+    let number = u32::try_from(state.tasks.len()).expect("a count") + 1;
+    let mut claimed = task(number, title, &holder);
+    claimed.id = id;
+    claimed.claim = Some(SharedClaim {
+      id: ClaimId::generate(),
+      holder,
+      kind: orchester_core::sharing::ClaimKind::Run,
+      since: 1,
+      heartbeat_at: 1,
+      stale: false,
+      taken_over_from: None,
+    });
+    state.tasks.push(claimed.clone());
+    claimed
   }
 
-  /// `token`'s member changes the team's configuration from now on, as the server's admin does.
-  pub fn make_admin(&self, token: &str) {
-    self.state().admins.push(token.to_owned());
-  }
-
-  /// The versions of `resource` the server has, oldest first.
-  pub fn versions_of(&self, resource: ResourceId) -> Vec<SharedVersion> {
-    let state = self.state();
-    state
-      .versions
-      .iter()
-      .filter(|version| version.resource == resource)
-      .cloned()
-      .collect()
-  }
-
-  /// The content of the skill part `hash`, when it was uploaded.
-  pub fn file(&self, hash: &ContentHash) -> Option<Vec<u8>> {
-    let state = self.state();
-    state
-      .files
-      .iter()
-      .find(|(kept, _)| kept == hash)
-      .map(|(_, content)| content.clone())
+  /// The workflow status `task` has on the server.
+  pub fn workflow(&self, task: TaskId) -> WorkflowStatus {
+    self.state().task(task).content.workflow
   }
 }
 
 impl State {
   fn cursor(&self) -> u64 {
     self.events.last().map_or(FIRST_EVENT - 1, |(id, _)| *id)
-  }
-
-  /// `GET …/resources/{resource}/versions?after=`: one version a page, so a resource with several takes several pages.
-  fn versions_page(&self, resource: &str, query: &str) -> Value {
-    let id: ResourceId = resource.parse().expect("a resource id");
-    let after: u32 = query
-      .strip_prefix("after=")
-      .map_or(0, |after| after.parse().expect("a version number"));
-    let mut newer = self
-      .versions
-      .iter()
-      .filter(|version| version.resource == id && version.number.get() > after);
-    let versions: Vec<SharedVersion> = newer.next().cloned().into_iter().collect();
-    let next = newer.next().and(versions.last()).map(|version| version.number);
-    serde_json::to_value(Versions { versions, next }).expect("versions serialize")
   }
 
   fn task(&mut self, id: TaskId) -> &mut SharedTask {
@@ -333,8 +313,18 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     return refusal(&mut stream, 401, "unauthorized");
   };
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
+  let refused = shared.state.lock().expect("state").refuse_requests;
+  if refused && segments != ["events"] {
+    return refusal(&mut stream, 503, "unavailable");
+  }
   match (request.method.as_str(), segments.as_slice()) {
     ("GET", ["events"]) => events(shared, &request, &mut stream),
+    ("GET", ["tasks"]) => {
+      let state = shared.state.lock().expect("state");
+      let tasks = json!({ "tasks": state.tasks, "cursor": state.cursor() });
+      drop(state);
+      respond(&mut stream, 200, &tasks);
+    }
     ("GET", ["tasks", task]) => {
       let mut state = shared.state.lock().expect("state");
       let id = task.parse().expect("a task id");
