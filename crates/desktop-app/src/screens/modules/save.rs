@@ -63,7 +63,11 @@ pub fn action(ctx: &mut Ctx) -> SaveAction {
   let Services { servers, programs, .. } = Services::of(ctx);
   ctx.future_action(move |args: SaveModule| {
     let (servers, programs) = (servers.clone(), programs.clone());
-    async move { background::run(move || write(&args, (&servers, &programs))).await.map_err(Refused)? }
+    async move {
+      background::run(move || write(&args, (&servers, &programs)))
+        .await
+        .map_err(Refused)?
+    }
   })
 }
 

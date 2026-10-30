@@ -5,9 +5,7 @@
 use std::{path::Path, process::Command};
 
 use orchester_app::routes::{ModuleListTab, ProjectPage, ProjectSettingsTab, Route};
-use orchester_core::{
-  integration::base::BaseChoice, run::BranchName, task::organization::WorkflowStatus,
-};
+use orchester_core::{integration::base::BaseChoice, run::BranchName, task::organization::WorkflowStatus};
 
 use super::harness::{Seeded, details, module_with};
 
@@ -18,7 +16,11 @@ fn git(repo: &Path, args: &[&str]) -> String {
     .args(args)
     .output()
     .expect("git runs");
-  assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+  assert!(
+    output.status.success(),
+    "git {args:?}: {}",
+    String::from_utf8_lossy(&output.stderr)
+  );
   String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
@@ -31,7 +33,10 @@ fn editing() -> (Seeded, orchester_core::id::ModuleId) {
   });
   let module = picked.expect("the module");
   git(&seeded.repo, &["branch", "staging"]);
-  git(&seeded.repo, &["remote", "add", "origin", "https://example.invalid/kontur.git"]);
+  git(
+    &seeded.repo,
+    &["remote", "add", "origin", "https://example.invalid/kontur.git"],
+  );
   git(&seeded.repo, &["update-ref", "refs/remotes/origin/hotfix-1.9", "HEAD"]);
   seeded.open(ProjectPage::EditModule(module), "module-base");
   seeded.click("module-base");
@@ -40,7 +45,13 @@ fn editing() -> (Seeded, orchester_core::id::ModuleId) {
 }
 
 fn base(seeded: &Seeded, module: orchester_core::id::ModuleId) -> BaseChoice {
-  seeded.db().module(module).expect("read").expect("the module").base().clone()
+  seeded
+    .db()
+    .module(module)
+    .expect("read")
+    .expect("the module")
+    .base()
+    .clone()
 }
 
 #[test]
@@ -72,7 +83,11 @@ fn module_base_branch_menu_offers_the_branches_and_the_form_saves_the_one_chosen
   seeded.click(&format!("module-base-branch-{staging}"));
   assert!(!seeded.shows("module-base-menu"), "a choice closes the menu");
   assert_eq!(seeded.text("module-base-value"), "staging");
-  assert_eq!(base(&seeded, module), BaseChoice::CheckedOut, "nothing is saved before Save");
+  assert_eq!(
+    base(&seeded, module),
+    BaseChoice::CheckedOut,
+    "nothing is saved before Save"
+  );
   seeded.click("module-editor-save");
   seeded.until("the module's page", |seeded| seeded.shows("module-summary"));
   let staging = BranchName::new("staging").expect("a branch");

@@ -117,12 +117,15 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
     };
     return panel.child(foot(&words, "module-base-reading")).into();
   };
-  panel = panel
-    .child(checked_out(ctx, read, chosen, base))
-    .child(separator(ctx));
+  panel = panel.child(checked_out(ctx, read, chosen, base)).child(separator(ctx));
   let typed = base.find.get().trim().to_lowercase();
   let matches = |name: &str| name.to_lowercase().contains(&typed);
-  let mut local: Vec<&BranchName> = read.choices.local.iter().filter(|branch| matches(branch.as_str())).collect();
+  let mut local: Vec<&BranchName> = read
+    .choices
+    .local
+    .iter()
+    .filter(|branch| matches(branch.as_str()))
+    .collect();
   // A branch set that the repository no longer has stays offered by its name, so the menu shows what is chosen.
   if let ModuleBasePick::Branch(BranchPick::Local(set)) = &pick
     && !read.choices.has_local(set)
@@ -154,10 +157,7 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
     panel = panel.child(heading(ctx, "modules.form.base.remote"));
   }
   for (index, remote) in remote.into_iter().enumerate() {
-    let creates = ctx.t_args(
-      "modules.form.base.creates",
-      [("branch", remote.local().as_str())],
-    );
+    let creates = ctx.t_args("modules.form.base.creates", [("branch", remote.local().as_str())]);
     let choice = ModuleBasePick::Branch(BranchPick::Remote(remote.clone()));
     panel = panel.child(option(
       (&format!("module-base-remote-{index}"), Icon::Cloud),
@@ -171,10 +171,7 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
 /// *Checked-out branch*, with the branch the checkout has now (`Option · Checked-out branch` `NPwra`).
 fn checked_out(ctx: &mut Ctx, read: &ModuleBaseRead, chosen: &Signal<BasePick>, base: &BaseChip) -> Element {
   let help = match &read.checked_out {
-    Some(branch) => ctx.t_args(
-      "modules.form.base.checkedOutNow",
-      [("branch", branch.as_str())],
-    ),
+    Some(branch) => ctx.t_args("modules.form.base.checkedOutNow", [("branch", branch.as_str())]),
     None => ctx.t("modules.form.base.checkedOutDetached"),
   };
   option(

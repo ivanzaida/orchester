@@ -44,9 +44,9 @@ pub enum ModuleBasePick {
 impl ModuleBasePick {
   /// The pick that keeps `base`.
   pub fn of(base: &BaseChoice) -> Self {
-    base
-      .branch()
-      .map_or(Self::CheckedOut, |branch| Self::Branch(BranchPick::Local(branch.clone())))
+    base.branch().map_or(Self::CheckedOut, |branch| {
+      Self::Branch(BranchPick::Local(branch.clone()))
+    })
   }
 
   /// The branch the module runs from once the pick is saved; `None` for the checked-out branch.
@@ -94,7 +94,9 @@ pub fn take_module_base_in(root: &Path, programs: &Programs, pick: &ModuleBasePi
   };
   match take_branch(&programs.git_work(), Path::new(GIT), (root, pick)) {
     Ok(branch) => Ok(BaseChoice::Branch(branch)),
-    Err(BranchPickError::Gone(branch)) => Err(Message::new("modules.baseBranchGone").with("branch", branch.to_string())),
+    Err(BranchPickError::Gone(branch)) => {
+      Err(Message::new("modules.baseBranchGone").with("branch", branch.to_string()))
+    }
     Err(BranchPickError::Git(error)) => {
       tracing::warn!(%error, "cannot take the module's base branch");
       Err(git_message(&error))
@@ -103,7 +105,11 @@ pub fn take_module_base_in(root: &Path, programs: &Programs, pick: &ModuleBasePi
 }
 
 /// Sets the base branch of module `module`, read as `before`, to `after`; a change made meanwhile is refused.
-pub fn save_module_base_in(root: &Path, module: ModuleId, (before, after): (&BaseChoice, BaseChoice)) -> Result<(), Message> {
+pub fn save_module_base_in(
+  root: &Path,
+  module: ModuleId,
+  (before, after): (&BaseChoice, BaseChoice),
+) -> Result<(), Message> {
   ProjectDb::open(root)
     .and_then(|mut db| db.set_module_base(module, before, after))
     .map(drop)
