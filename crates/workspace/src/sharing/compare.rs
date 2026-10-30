@@ -85,9 +85,14 @@ pub fn conflict(
   let (Some(newer), Some(mine)) = (by_number(latest), kept.iter().find(|version| version.id == mine)) else {
     return Ok(None);
   };
-  let base = base.and_then(by_number).map_or(Value::Null, |version| version.body.clone());
+  let base = base
+    .and_then(by_number)
+    .map_or(Value::Null, |version| version.body.clone());
   Ok(Some(ConflictComparison {
-    latest_changed: changes(&base, &newer.body).into_iter().map(|change| change.field).collect(),
+    latest_changed: changes(&base, &newer.body)
+      .into_iter()
+      .map(|change| change.field)
+      .collect(),
     against_latest: changes(&newer.body, &mine.body),
   }))
 }
@@ -109,7 +114,10 @@ pub fn history(repo_root: &Path, kind: ResourceKind, resource: ResourceId) -> Re
       number: version.number,
       published_at: version.published_at,
       publisher: publisher.clone(),
-      changed: changes(&before, &version.body).into_iter().map(|change| change.field).collect(),
+      changed: changes(&before, &version.body)
+        .into_iter()
+        .map(|change| change.field)
+        .collect(),
       used_here: used == Some(version.id),
     });
     before = version.body;

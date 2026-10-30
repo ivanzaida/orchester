@@ -370,12 +370,17 @@ async fn live_updates_after_a_version_conflict_the_admin_compares_and_opens_thei
     .expect("taken back as a draft");
   assert_eq!(bob.waiting(), []);
   let db = bob.db();
-  assert!(db.version::<Instruction>(style, number(3)).expect("read").is_none(), "v3 is gone");
+  assert!(
+    db.version::<Instruction>(style, number(3)).expect("read").is_none(),
+    "v3 is gone"
+  );
   let draft = db.draft::<Instruction>(style).expect("read").expect("a draft");
   assert_eq!((draft.body(), draft.based_on()), (&rule("Bob's"), Some(number(2))));
 
   bob
-    .store(&server, move |store| store.publish_draft::<Instruction>(style, Timestamp::now()))
+    .store(&server, move |store| {
+      store.publish_draft::<Instruction>(style, Timestamp::now())
+    })
     .await
     .expect("published on v2");
   assert_eq!(on_server(&server, style)[2], (3, Some(2), "Bob Lind".to_owned()));

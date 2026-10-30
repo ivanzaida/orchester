@@ -21,8 +21,7 @@ use orchester_core::{
   resource::{ResourceKind, VersionNumber},
 };
 use orchester_workspace::{
-  background,
-  messages,
+  background, messages,
   sharing::compare::{self, FieldChange, HistoryEntry},
 };
 
@@ -237,11 +236,10 @@ impl VersionsButton {
           .variant(HubText::Hint.role()),
       ),
       (_, Some(history)) => {
-        let rows = history
-          .iter()
-          .fold(Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Md), |rows, entry| {
-            rows.child(version_row(ctx, id, entry))
-          });
+        let rows = history.iter().fold(
+          Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Md),
+          |rows, entry| rows.child(version_row(ctx, id, entry)),
+        );
         panel.child(scrolled(id, rows))
       }
       _ => panel,
@@ -285,11 +283,13 @@ fn version_row(ctx: &Ctx, id: &str, entry: &HistoryEntry) -> Column {
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(Text::new(&line).variant(HubText::Value.role()).flex(1.0))
-        .with_children(
-          entry
-            .used_here
-            .then(|| status(&format!("{row}-used"), Tone::Success, &ctx.t("sharing.config.head.used"))),
-        ),
+        .with_children(entry.used_here.then(|| {
+          status(
+            &format!("{row}-used"),
+            Tone::Success,
+            &ctx.t("sharing.config.head.used"),
+          )
+        })),
     )
     .child(
       Text::new(&changed)

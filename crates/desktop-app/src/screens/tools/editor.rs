@@ -215,7 +215,13 @@ impl Component for ToolEditor {
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(head::crumb(ctx, &p))
-      .child(head::head(ctx, &p, (baseline.as_ref(), &title), more, (shared, versions)))
+      .child(head::head(
+        ctx,
+        &p,
+        (baseline.as_ref(), &title),
+        more,
+        (shared, versions),
+      ))
       .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
     pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
       _ if !may_change => pane.with_children(team.as_ref().map(|team| hub::team::line(ctx, "tool-team-line", team))),

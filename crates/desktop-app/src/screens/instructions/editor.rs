@@ -388,12 +388,17 @@ impl Editor {
     }
     let (work, fields, id) = (self.work.clone(), self.fields.clone(), entry.id);
     // The fields take the saved draft: the same reload a changed rule offers.
-    let reread: team::Reread =
-      std::sync::Arc::new(move || work.run(super::work::Write::Reload(id, fields.snapshot())));
+    let reread: team::Reread = std::sync::Arc::new(move || work.run(super::work::Write::Reload(id, fields.snapshot())));
     let waiting = team
       .and_then(|team| Some((team, team.standing(entry.id)?)))
       .and_then(|shared| {
-        team::waiting_bar(ctx, &props.project, shared, ("instruction", Outside::Instructions), reread)
+        team::waiting_bar(
+          ctx,
+          &props.project,
+          shared,
+          ("instruction", Outside::Instructions),
+          reread,
+        )
       });
     if let Some(waiting) = waiting {
       return waiting;

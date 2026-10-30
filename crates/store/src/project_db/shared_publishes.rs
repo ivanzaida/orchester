@@ -135,7 +135,11 @@ impl ProjectDb {
   /// resource's draft, the one kept here or else the newest version taken back, is then edited from the latest version
   /// the server numbered; nothing is merged. A version a run or a task here uses stays
   /// ([`StoreError::VersionInUse`]); nothing is changed then.
-  pub fn reopen_draft<B: ResourceBody + Clone>(&mut self, version: VersionId, now: Timestamp) -> Result<(), StoreError> {
+  pub fn reopen_draft<B: ResourceBody + Clone>(
+    &mut self,
+    version: VersionId,
+    now: Timestamp,
+  ) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
     transaction.pragma_update(None, "defer_foreign_keys", true)?;

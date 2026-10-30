@@ -114,8 +114,8 @@ impl Editor {
     let revision = props.revision.clone();
     // The page reads the saved profile anew into its fields, as after Discard draft.
     let reread: team::Reread = std::sync::Arc::new(move || revision.update(|n| *n += 1));
-    if let Some(bar) = standing
-      .and_then(|shared| team::waiting_bar(ctx, &props.project, shared, ("agent", Outside::Profiles), reread))
+    if let Some(bar) =
+      standing.and_then(|shared| team::waiting_bar(ctx, &props.project, shared, ("agent", Outside::Profiles), reread))
     {
       return bar;
     }
