@@ -149,7 +149,7 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
     snapshot,
     branch: BranchName::for_next_run(task.key(), earlier.len()),
     base,
-    base_branch,
+    base_branch: Some(base_branch),
     base_source,
     budget: limits.budget(),
     max_duration: limits.max_duration(),
@@ -398,19 +398,21 @@ fn origin_push_url(root: &Path) -> Option<String> {
 }
 
 /// Where a new run starts and the branch it delivers into, as its base branch `choice` says
-/// (`orchester_core::integration::base`): the checkout's `HEAD` and the branch it has checked out (none on a detached
-/// HEAD), or the tip of the branch set, wherever the checkout is. A branch set that is gone refuses the run.
-fn run_base(choice: &BaseChoice, root: &Path) -> Result<(Revision, Option<BranchName>), Rejection> {
+/// (`orchester_core::integration::base`): the checkout's `HEAD` and the branch it has checked out, or the tip of the
+/// branch set, wherever the checkout is. A detached `HEAD` with no branch set refuses the run, as does a branch set
+/// that is gone: neither leaves a branch to deliver into.
+fn run_base(choice: &BaseChoice, root: &Path) -> Result<(Revision, BranchName), Rejection> {
   let runner = ProcessRunner::new(GIT_TIMEOUT);
   match choice {
     BaseChoice::CheckedOut => {
       let base = base_revision(root)?;
       let branch = checked_out_branch(&runner, Path::new("git"), root)
-        .map_err(|error| failed("cannot read the checked-out branch", &error))?;
+        .map_err(|error| failed("cannot read the checked-out branch", &error))?
+        .ok_or_else(|| preflight_failed(PreflightProblem::NoBranchCheckedOut { head: base.clone() }))?;
       Ok((base, branch))
     }
     BaseChoice::Branch(branch) => match set_branch_tip(&runner, Path::new("git"), (root, branch)) {
-      Ok(tip) => Ok((tip, Some(branch.clone()))),
+      Ok(tip) => Ok((tip, branch.clone())),
       Err(RunBaseError::Missing(branch)) => Err(preflight_failed(PreflightProblem::BaseBranchMissing { branch })),
       Err(RunBaseError::Git(error)) => Err(failed("cannot read the base branch", &error)),
     },
