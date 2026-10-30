@@ -61,7 +61,8 @@ fn disguised_part(part: &CommandPart) -> bool {
     return false;
   };
   if git_like(first) {
-    return first != "git" || (words.iter().any(|word| word.contains("push")) && !plain_push(part) && !stash_push(part));
+    return first != "git"
+      || (words.iter().any(|word| word.contains("push")) && !plain_push(part) && !stash_push(part));
   }
   let program = file_name(first);
   let program = program.strip_suffix(".exe").unwrap_or(&program);
