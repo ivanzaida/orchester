@@ -3054,6 +3054,7 @@ dependencies = [
  "orchester-vault",
  "orchester-workspace",
  "parking_lot",
+ "ring",
  "rmcp",
  "rusqlite",
  "rustix 1.1.5",

@@ -278,6 +278,31 @@ fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
   );
 }
 
+/// ORC-413: `update_state` reads where this copy's own update stands; a test's build is a development copy, which does
+/// not update itself, and no check has named a newer release.
+#[test]
+fn update_state_says_a_development_copy_does_not_update_itself() {
+  let mut served = Served::start(true);
+  let session = served.session();
+  let tools = served.endpoint().tools(&session);
+  let tool = tools
+    .iter()
+    .find(|tool| tool["name"] == "update_state")
+    .expect("update_state is listed");
+  assert_eq!(tool["annotations"]["readOnlyHint"], true);
+  let (state, error) = tool_value(&served.call(&session, "update_state", &json!({})));
+  assert!(!error, "{state}");
+  assert_eq!(
+    state,
+    json!({
+      "state": "not_this_copy",
+      "reason": "development",
+      "newest": null,
+      "running": env!("CARGO_PKG_VERSION"),
+    })
+  );
+}
+
 #[test]
 fn every_lurq_tool_is_known_as_looking_or_input() {
   use orchester_app::mcp::input_gate::{INPUT, LOOKING};
@@ -297,7 +322,7 @@ fn every_lurq_tool_is_known_as_looking_or_input() {
 fn the_apps_own_tools_word_their_schemas_in_single_spaces() {
   let served = Served::start(true);
   let tools = served.endpoint().tools(&served.session());
-  for name in ["app_state", "navigate", "set_theme", "hold_reads"] {
+  for name in ["app_state", "navigate", "set_theme", "hold_reads", "update_state"] {
     let tool = tools
       .iter()
       .find(|tool| tool["name"] == name)

@@ -2,8 +2,8 @@
 //! detect that the previous run of Orchester ended abnormally, whose each project is ([`owners`]), the state of the
 //! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
 //! is ([`server_owners`]), the application's own settings ([`settings`]), among them the Usage dashboard's warning
-//! threshold, the person's agent CLI accounts ([`accounts`]) and the plan limits read of them outside runs
-//! ([`plan_reads`]).
+//! threshold, and its updates' ([`updates`]), the person's agent CLI accounts ([`accounts`]) and the plan limits read
+//! of them outside runs ([`plan_reads`]).
 
 mod accounts;
 mod cloud;
@@ -14,6 +14,7 @@ mod plan_reads;
 mod server_owners;
 mod servers;
 mod settings;
+mod updates;
 
 use std::path::{Path, PathBuf};
 
@@ -82,6 +83,7 @@ CREATE TABLE ui_state (
   settings::ORCHESTRATOR_WRITES_GIT_MIGRATION,
   cloud::API_ADDRESS_MIGRATION,
   settings::ERROR_REPORTS_MIGRATION,
+  updates::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

@@ -1,8 +1,8 @@
 //! The app's own MCP tools, served beside lurq's `lurq_*`: `app_state` reads where the window is,
 //! `navigate` takes the active tab somewhere, `set_theme` switches the colors, `sign_in_state` says whether the
-//! app is signed in to Orchester Cloud (the one tool that answers while it is not), and in debug builds
-//! `hold_reads` holds the project feeds' reads for QA. They run on the event-loop thread, with the tree
-//! and the app, like every other change to the window.
+//! app is signed in to Orchester Cloud (the one tool that answers while it is not), `update_state` where this copy's
+//! own update stands, and in debug builds `hold_reads` holds the project feeds' reads for QA. They run on the
+//! event-loop thread, with the tree and the app, like every other change to the window.
 
 mod app_state;
 mod error;
@@ -12,6 +12,7 @@ mod project_settings_route;
 mod set_theme;
 mod settings_route;
 mod sign_in_state;
+mod update_state;
 
 use lurq::mcp::McpTool;
 use orchester_workspace::links::with_usage_query;
@@ -25,6 +26,7 @@ pub use self::{
   set_theme::set_theme,
   settings_route::Lookup,
   sign_in_state::{SIGN_IN_STATE, sign_in_state},
+  update_state::update_state,
 };
 use super::{McpSettings, WindowLink};
 use crate::{
@@ -49,6 +51,7 @@ pub fn all(
     set_theme::tool(appearance.clone()),
   ];
   tools.extend(session.map(|services| sign_in_state::tool(services.cloud.clone())));
+  tools.extend(session.map(|services| update_state::tool(services.updates.clone())));
   if cfg!(debug_assertions)
     && let Some(services) = session
   {

@@ -16,6 +16,7 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
+  app_updates::AppUpdates,
   clock::Clock,
   close::CloseFlow,
   plan_limits::reads::PlanReads,
@@ -35,6 +36,7 @@ pub mod links;
 pub mod path_picker;
 pub mod plan_limits;
 pub mod reference_picker;
+pub mod updates;
 
 use self::links::Links;
 use crate::{mcp::chat::ChatServers, project::hold::ReadHold};
@@ -82,6 +84,9 @@ pub struct Services {
   /// The reads of the accounts' plan limits outside runs; they read only once the app's own window started them
   /// (`Launch::read_plan_limits`), never in a test or a QA copy.
   pub plan_reads: PlanReads,
+  /// This copy's updates: Settings › Updates and where its update stands. Orchester Cloud is asked only once the app's
+  /// own program started the checks (`Launch::check_for_updates`), never in a test or a QA example.
+  pub updates: AppUpdates,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -109,7 +114,12 @@ impl Services {
       &runtime,
     );
     let servers = Servers::new(workspace.clone(), vault.clone());
+    let database = workspace
+      .database_path()
+      .expect("a session opens its database from a file in its data folder");
+    let data_folder = database.parent().expect("a database file is in a folder");
     Self {
+      updates: updates::start(workspace.clone(), data_folder),
       close: CloseFlow::new(runners.clone(), jobs.clone(), runtime.clone()),
       recovery,
       plan_reads: PlanReads::new(workspace.clone(), runners.clone()),

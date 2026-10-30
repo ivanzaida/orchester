@@ -9,6 +9,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::SessionEnd;
 use orchester_workspace::{
   app_paths,
+  app_updates::{self, CHECK_EVERY},
   close::{CloseKind, session_end},
   runner::QUIET_STOP_TIMEOUT,
   secrets::Vault,
@@ -161,6 +162,16 @@ impl Launch {
     if let Some(running) = &mut self.running {
       let reads = running.services.plan_reads.clone();
       running.background.hold(running.services.runtime.spawn(reads.run()));
+    }
+  }
+
+  /// Asks Orchester Cloud for a newer release now and every [`CHECK_EVERY`] until the session ends, downloading it in
+  /// a copy that updates itself (`orchester_workspace::app_updates`). Only the app's own program does: a test's or a QA
+  /// example's window never asks the cloud.
+  pub fn check_for_updates(&mut self) {
+    if let Some(running) = &mut self.running {
+      let checks = app_updates::keep_checking(running.services.updates.clone(), CHECK_EVERY);
+      running.background.hold(running.services.runtime.spawn(checks));
     }
   }
 

@@ -39,6 +39,8 @@ fn main() {
   }
   // Only this window reads the accounts' plan limits on its own; tests and QA copies never read a real account.
   launch.read_plan_limits();
+  // Only this program checks for updates; tests and QA examples never ask Orchester Cloud.
+  launch.check_for_updates();
   // A frozen window is reported while the error reports are sent, from this thread's first beat in the window until
   // the window has closed: the work after it is not watched.
   let watchdog = reports.as_ref().and_then(|_| hang_reports::Watchdog::start());
