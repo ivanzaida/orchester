@@ -44,6 +44,15 @@ fn profile_with(screen: &Agents, permissions: AgentPermissions, publish: bool) -
   id
 }
 
+/// The sign-in note `vV87w` under the section, in the words `hQfEh` draws.
+fn assert_sign_in_note(screen: &mut Agents) {
+  assert_eq!(
+    screen.text("agent-browser-note-text"),
+    "Sign-ins with a password are yours, in the Browser window; they stay in this project’s browser profile. No \
+     browser tool takes a secret."
+  );
+}
+
 fn saved_browser(screen: &Agents, id: ResourceId) -> BrowserPermission {
   screen
     .listed()
@@ -78,12 +87,7 @@ fn agents_browser_row_stays_off_without_network_and_says_why() {
   assert!(screen.text("agent-browser-row").contains("Off"), "the switch stays off");
   let enforcement = screen.text("agent-enforcement-browser");
   assert!(enforcement.contains("Off · no browser tools"), "{enforcement}");
-  // Until Orchester's browser runs (P2), the section says so instead of showing a state it cannot have.
-  let note = screen.text("agent-browser-note");
-  assert!(
-    note.contains("once Orchester’s browser runs") && note.contains("can’t watch"),
-    "{note}"
-  );
+  assert_sign_in_note(&mut screen);
 }
 
 #[test]
@@ -115,6 +119,7 @@ fn agents_browser_on_lists_its_sites_and_what_limits_them() {
     "{enforcement}"
   );
   assert!(enforcement.contains("Enforced"), "{enforcement}");
+  assert_sign_in_note(&mut screen);
 
   // Turning network off turns the browser off with it; its sites are kept.
   let network_blocks = AgentPermissions::new(

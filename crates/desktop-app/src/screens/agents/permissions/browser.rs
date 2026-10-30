@@ -1,7 +1,6 @@
 //! A profile page's *Browser* section (`Browser` `z8R5Ot` in `08 · Profile · Browser permission` `hQfEh`): the
-//! Browser switch, which needs Network access, then while it is on the allowed sites ([`super::sites`]). Until
-//! Orchester's browser runs (`docs/design/browser.md`, P2), the section says that agents get it once it does and that
-//! the person cannot watch their pages yet.
+//! Browser switch, which needs Network access, then while it is on the allowed sites ([`super::sites`]). Under the
+//! section, the note on who signs in to pages (`Note` `vV87w`).
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
@@ -43,7 +42,7 @@ pub(super) fn browser(ctx: &mut Ctx, context: &Context<'_>, asked: Option<Elemen
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(section("agent-browser-section", (&ctx.t("agents.browser"), None), rows))
-    .child(note("agent-browser-note", Icon::Info, &ctx.t("agents.browserNotYet")))
+    .child(note("agent-browser-note", Icon::Info, &ctx.t("agents.browserSignIns")))
     .into()
 }
 
