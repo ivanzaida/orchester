@@ -22,3 +22,7 @@ pub(super) fn program_in(path: &Path) -> PathBuf {
 pub(super) fn named(_: &Path) -> Option<&'static str> {
   None
 }
+
+pub(super) fn version(_: &Path) -> Option<String> {
+  None
+}

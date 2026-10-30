@@ -22,7 +22,11 @@ fn shown(name: &str) -> AgentsBrowser {
 #[test]
 fn seed_browser_scenarios_reach_found_not_found_and_chosen() {
   assert!(
-    matches!(shown("browser"), AgentsBrowser::Found(program) if program.name() == "Google Chrome"),
+    matches!(
+      shown("browser"),
+      AgentsBrowser::Found(program)
+        if program.name() == "Google Chrome" && program.version() == Some("130.0.6723.92")
+    ),
     "browser"
   );
   assert!(
@@ -30,7 +34,10 @@ fn seed_browser_scenarios_reach_found_not_found_and_chosen() {
     "browser-not-found"
   );
   assert!(
-    matches!(shown("browser-chosen"), AgentsBrowser::Chosen(program) if program.name() == "Chromium"),
+    matches!(
+      shown("browser-chosen"),
+      AgentsBrowser::Chosen(program) if program.name() == "Chromium" && program.version().is_none()
+    ),
     "browser-chosen"
   );
 }

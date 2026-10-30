@@ -181,7 +181,7 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
 - `orchester_exec::browser::find` (ORC-358). None found is `BrowserUnavailable`, shown as `browser_unavailable: no
   Chromium-based browser is installed: looked for … in …`.
 - Settings › *Browser* (ORC-369, `09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`) shows which one
-  was found, by its name and program, and lets the person choose another Chromium-based browser's program
+  was found, by its name, version and program, and lets the person choose another Chromium-based browser's program
   (*Choose another program…*). A chosen program is taken by its name (`orchester_exec::browser::chosen`): on Windows
   `msedge.exe`, `chrome.exe` (Chromium's under a folder named so) or `brave.exe`; on macOS the program of Google
   Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
@@ -189,14 +189,16 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser, headless or
   in a window of its own; a chosen program that is gone later is unavailable with that reason, never passed over for
   the one installed.
+- The version is read from the install without starting the browser (`orchester_exec::browser::version`, ORC-182): on
+  macOS `CFBundleShortVersionString` in the app bundle's XML `Info.plist`, on Windows the newest folder named after a
+  version beside the program. A program whose install does not tell, such as one copied out of its bundle or install
+  folder, shows no version, never a guess.
 - None found: the section says so with what was looked for and where, how to fix it and *Look again*; the *Browser*
   window will say the same, and every browser tool answers `browser_unavailable` with that reason (no silent gap,
   `AGENTS.md` rule 0). The section also shows the folder of the browser profiles with Copy, and the switch *Open the
   Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29; decision 14), the
   application setting `app_settings.browser_window_opens_itself` the window's rule reads. Its hint says the window
-  *opens and takes focus*, after decision 15; `j3Lre` and `NZECi` were drawn before it with *It opens without taking
-  focus*, a deliberate departure. Until the window is built, the switch keeps the choice only, as the note under it
-  says.
+  *opens and takes focus*, after decision 15, as `j3Lre` and `NZECi` draw it.
 
 ### Starting it and connecting
 

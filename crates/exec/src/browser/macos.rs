@@ -8,6 +8,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
+pub(super) use super::version::in_bundle as version;
 use super::{BrowserProgram, BrowserUnavailable, first_installed, listed};
 
 /// Each browser's name and its program inside its app bundle, in order of preference.

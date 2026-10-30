@@ -1,8 +1,8 @@
 //! Settings › Browser (`09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`): the browser found with its
-//! program's path, or none found with what was looked for and *Look again*; *Choose another program…* taking a
-//! Chromium-based browser's program and refusing any other with the reason; the profiles' folder; and *Open the
-//! Browser window when an agent starts browsing*, on until turned off and kept. The installed browsers are looked for
-//! in the test's own folder only. Run with `cargo test -p orchester-app --test settings_browser browser_`.
+//! version and its program's path, or none found with what was looked for and *Look again*; *Choose another program…*
+//! taking a Chromium-based browser's program and refusing any other with the reason; the profiles' folder; and *Open
+//! the Browser window when an agent starts browsing*, on until turned off and kept. The installed browsers are looked
+//! for in the test's own folder only. Run with `cargo test -p orchester-app --test settings_browser browser_`.
 
 #![cfg(any(target_os = "macos", target_os = "windows"))]
 
@@ -43,6 +43,11 @@ struct Page {
 impl Page {
   /// Settings › Browser, with the installed browsers looked for in `installed/` of the test's folder only.
   fn open(installed: &[&str]) -> Self {
+    Self::installed(installed).shown()
+  }
+
+  /// The window with the browsers installed, before Settings › Browser is shown.
+  fn installed(installed: &[&str]) -> Self {
     let (mut window, stand_ins) = Window::with_stand_ins(Data::new());
     window.tree.resize(1440, 960);
     let workspace = window.launch.workspace().expect("the session started").clone();
@@ -56,12 +61,15 @@ impl Page {
       page.install("installed", program);
     }
     page.workspace.look_for_browsers_in(&[page.folder("installed")]);
-    let mut page = page;
-    page.window.navigation().go(Route::Browser);
-    page.window.until("Settings › Browser", |window| {
+    page
+  }
+
+  fn shown(mut self) -> Self {
+    self.window.navigation().go(Route::Browser);
+    self.window.until("Settings › Browser", |window| {
       window.texts("settings-browser-found-text").is_some()
     });
-    page
+    self
   }
 
   fn folder(&self, name: &str) -> PathBuf {
@@ -73,6 +81,23 @@ impl Page {
     fs::create_dir_all(path.parent().expect("a folder above")).expect("its folder");
     fs::write(&path, "").expect("a stand-in program");
     path
+  }
+
+  /// Makes the install around the stand-in `program` tell `version`.
+  #[cfg(target_os = "macos")]
+  fn tell_version(&self, program: &Path, version: &str) {
+    let contents = program.parent().and_then(Path::parent).expect("the bundle's Contents");
+    fs::write(
+      contents.join("Info.plist"),
+      format!("<plist><dict><key>CFBundleShortVersionString</key><string>{version}</string></dict></plist>"),
+    )
+    .expect("the bundle's Info.plist");
+  }
+
+  /// Makes the install around the stand-in `program` tell `version`.
+  #[cfg(target_os = "windows")]
+  fn tell_version(&self, program: &Path, version: &str) {
+    fs::create_dir(program.with_file_name(version)).expect("the version's folder");
   }
 
   /// *Choose another program…* with the picker handing over `program`.
@@ -94,6 +119,10 @@ fn browser_found_shows_its_name_its_program_and_the_profiles_folder() {
   assert_eq!(page.window.text("settings-tab-browser"), "Browser");
   assert_eq!(page.found(), "Google Chrome");
   assert!(
+    page.window.texts("settings-browser-found-version").is_none(),
+    "an install that does not tell shows no version"
+  );
+  assert!(
     page
       .window
       .text("settings-browser-found-hint")
@@ -110,6 +139,26 @@ fn browser_found_shows_its_name_its_program_and_the_profiles_folder() {
   let profiles = page.window.text("settings-browser-profiles-path");
   assert!(Path::new(&profiles).ends_with("browser"), "{profiles}");
   assert_eq!(page.window.text("settings-save-state"), "All changes saved");
+}
+
+#[test]
+fn browser_found_shows_the_version_its_install_tells_and_a_chosen_one_that_does_not_shows_none() {
+  let page = Page::installed(&[CHROME]);
+  page.tell_version(&page.folder("installed").join(CHROME), "130.0.6723.92");
+  let mut page = page.shown();
+
+  assert_eq!(page.found(), "Google Chrome");
+  assert_eq!(page.window.text("settings-browser-found-version"), "130.0.6723.92");
+
+  let chromium = page.install("elsewhere", CHROMIUM);
+  page.choose(&chromium);
+  page.window.until("Chromium chosen", |window| {
+    window.text("settings-browser-found-text") == "Chromium"
+  });
+  assert!(
+    page.window.texts("settings-browser-found-version").is_none(),
+    "no made-up version"
+  );
 }
 
 #[test]
