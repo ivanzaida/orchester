@@ -206,12 +206,14 @@ fn start(
       .map_err(|_| refused("needs_decision", "localIntegration.personRequired"))?;
     return Err(refused("needs_decision", "localIntegration.personRequired"));
   }
-  let policy = LegacyPolicy::new(&open.repo_root, run.id(), services.vault.clone())
-    .map_err(|_| refused("integration_preflight_failed", "localIntegration.preflightFailed"))?;
-  if let Some(evidence) = policy
-    .preflight()
-    .map_err(|_| refused("integration_preflight_failed", "localIntegration.preflightFailed"))?
-  {
+  let policy = LegacyPolicy::new(&open.repo_root, run.id(), services.vault.clone()).map_err(|error| {
+    tracing::warn!(%error, "cannot make the policy of merge_run");
+    refused("integration_preflight_failed", "localIntegration.preflightFailed")
+  })?;
+  if let Some(evidence) = policy.preflight().map_err(|error| {
+    tracing::warn!(%error, "the preflight of merge_run failed");
+    refused("integration_preflight_failed", "localIntegration.preflightFailed")
+  })? {
     return Err(refused(
       if evidence.kind == orchester_core::integration::local::ResultEvidenceKind::CompleteAncestry {
         "already_integrated"
