@@ -17,13 +17,16 @@ use orchester_core::{
   command::Command,
   connection::AgentProvider,
   id::{IdempotencyKey, RunId},
-  orchester_tools::OutputKept,
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
+  orchester_tools::{OutputKept, OutsideReadError, OutsideReads},
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess, category::CommandScope,
+  },
   run::{Answerer, ApprovalAnswer, DenialNote, PendingToolApproval, RUN_PLAINLY, Run, RunStatus},
   source::SourcePath,
 };
 use orchester_exec::run_capped;
 use orchester_ipc::Event;
+use orchester_runner::{browser::profiles_folder, execution::outside_read_refusals};
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
@@ -435,6 +438,34 @@ async fn orchester_tools_denied_with_a_message_tell_the_call_why() {
   let decided = db.decided_tool_approvals(id).expect("decided");
   assert_eq!(decided[0].note.as_ref().map(DenialNote::as_str), Some(WORDS));
   assert!(decided[1..].iter().all(|decided| decided.note.is_none()));
+}
+
+/// The folder of every project's browser profile is an entry of its own among the folders outside reads refuse: a read
+/// and a search under it are refused as Orchester's own files, with no relay's folder or other rule to cover it. The
+/// folder is where this test program's application data has it, on either platform.
+#[test]
+fn orchester_tools_refuse_a_read_under_the_browser_profiles_folder() {
+  let profiles = profiles_folder().expect("the folder is known");
+  let refused = outside_read_refusals(None);
+  assert!(refused.contains(&profiles), "{refused:?}");
+  std::fs::create_dir_all(&profiles).expect("the profiles folder");
+  let profile = tempfile::tempdir_in(&profiles).expect("a project's profile");
+  let cookies = profile.path().join("Cookies");
+  std::fs::write(&cookies, "a cookie").expect("a file of the profile");
+  let worktree = tempfile::tempdir().expect("a worktree");
+  let elsewhere = tempfile::tempdir().expect("a folder outside");
+  let notes = elsewhere.path().join("notes.txt");
+  std::fs::write(&notes, "notes").expect("a file outside");
+  let reads = OutsideReads::new(CommandScope::on_host(worktree.path(), &[]), &refused);
+
+  let read = reads.check(&cookies.to_string_lossy());
+  assert!(matches!(read, Err(OutsideReadError::Protected(_))), "{read:?}");
+  let search = reads.check_folder(&profile.path().to_string_lossy());
+  assert!(matches!(search, Err(OutsideReadError::Protected(_))), "{search:?}");
+  assert!(
+    reads.check(&notes.to_string_lossy()).is_ok(),
+    "other folders stay readable"
+  );
 }
 
 /// A program's output is read as it comes and kept within the cap, at the end the tool keeps, whatever it

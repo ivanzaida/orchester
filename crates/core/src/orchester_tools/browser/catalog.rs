@@ -21,8 +21,7 @@ impl BrowserTool {
       Self::Open => {
         "Open an http or https URL in the current tab or a new one and wait until it loads. Allowed sites and local \
          development hosts open at once; any other site asks a person first. file:, javascript:, data: and the \
-         browser's own pages are refused. The browser is headless and the person cannot watch its pages yet: say \
-         what you found, and take screenshots where they help."
+         browser's own pages are refused. Say what you found, and take screenshots where they help."
       }
       Self::Navigate => "Go back or forward in a tab's history, or reload it.",
       Self::Close => "Close one of this run's tabs.",

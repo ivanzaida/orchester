@@ -345,13 +345,19 @@ impl ProjectBrowser {
 /// the person's own browser profile and never inside a repository. Unavailable, with the reason, when either part
 /// cannot be known.
 pub fn profile_of(project_root: &Path) -> Result<PathBuf, BrowserUnavailable> {
-  let profiles = browser_profiles_beside(&app_database()?)
-    .ok_or_else(|| BrowserUnavailable::new("the application database has no folder"))?;
+  let profiles = profiles_folder()?;
   let project = ProjectDb::open_read_only(project_root)
     .map_err(|error| BrowserUnavailable::new(format!("the project cannot be read: {error}")))?
     .project()
     .id();
   Ok(profiles.join(project.to_string()))
+}
+
+/// The folder of every project's browser profile, `<application data>/browser/` beside `orchester.db`, where the
+/// cookies and sign-ins are.
+pub fn profiles_folder() -> Result<PathBuf, BrowserUnavailable> {
+  browser_profiles_beside(&app_database()?)
+    .ok_or_else(|| BrowserUnavailable::new("the application database has no folder"))
 }
 
 /// The application database beside the runner, as the app that started it keeps it.

@@ -303,7 +303,8 @@ by `read_external_file` and `search_external_file`.
   (`CommandScope::holds_credentials`; published sources such as a package registry's `src` are not credentials),
   anything in a `.git` folder, and Orchester's own state wherever it lies: the whole `<temp>/orchester-mcp` tree
   (every project's private files with MCP secrets and tokens), any `.orchester` folder but the run's worktree, any
-  `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's programs; device, stream, verbatim,
+  `orchester.db*` or `orchester-server.db*` file, the folder of Orchester's programs and the folder of every project's
+  browser profile (`<application data>/browser/`, with its cookies and sign-ins); device, stream, verbatim,
   drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line read. A read is
   numbered lines, each cut to 16 KiB, at most 56 KiB, with where to read on (`start_line`). A search lists the
   checked folder, keeps only the files a read would reach (each checked; the ones left out are neither counted nor

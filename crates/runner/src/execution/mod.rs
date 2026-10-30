@@ -77,7 +77,10 @@ use tokio::{
   task::JoinHandle,
 };
 
-pub use self::{attach::Attached, step::QaSlots};
+pub use self::{
+  attach::Attached,
+  step::{QaSlots, outside_read_refusals},
+};
 use self::{
   board::Board,
   control::Control,

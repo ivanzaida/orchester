@@ -93,6 +93,17 @@ impl<'a> ToolFolders<'a> {
 /// The hooks folder git gets when it lists the worktree's changes, empty, among the project's private files.
 const NO_HOOKS: &str = "no-hooks";
 
+/// The folders of Orchester's own files that `read_external_file` and `search_external_file` never reach, `relay`
+/// being the runner's program: every project's private files, the folder of Orchester's programs, and every project's
+/// browser profile with its cookies and sign-ins.
+pub fn outside_read_refusals(relay: Option<&Path>) -> Vec<PathBuf> {
+  let mut refused = vec![private_file::root()];
+  refused.extend(relay.and_then(Path::parent).map(Path::to_path_buf));
+  // Unknown only with the application data, and then no browser has a profile either ([`crate::browser::profile_of`]).
+  refused.extend(crate::browser::profiles_folder().ok());
+  refused
+}
+
 /// What the calls of one step run with.
 pub(in super::super) struct ToolHost {
   tools: StepTools,
@@ -404,8 +415,7 @@ impl RunTask {
         "cannot make the empty hooks folder of Orchester's tools: {error}"
       ))
     })?;
-    let mut refused = vec![private_file::root()];
-    refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
+    let refused = outside_read_refusals(self.relay.as_deref());
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
     let processes = RunProcesses::new(worktree, self.run.created_at()).map_err(|error| problem(error.to_string()))?;
     let runner = std::env::current_exe().map_err(|error| problem(error.to_string()))?;
