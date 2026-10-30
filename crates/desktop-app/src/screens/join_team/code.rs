@@ -1,8 +1,9 @@
-//! The code column (`With a code` in `B914L`): the team server's address and the code in Geist Mono, 36 high, what a
-//! code is under it, and *Join with the code*, *Joining…* while it joins. A wrong or expired code says so in the hint's
-//! place and marks its field (`aWsVx`); a server that does not answer says so under the button in a danger callout,
-//! with *Try again* under it, and both fields keep what was typed (`oOn6j`). What the join came to shows under the
-//! button. The column is a lurq form: Enter in either field joins as the button does.
+//! The code column (`With a code` in `B914L`): the team server's address and the code in Geist Mono, 36 high, each
+//! behind its glyph while it is empty, what a code is under them, and *Join with the code*, *Joining…* while it joins.
+//! A wrong or expired code says so in the hint's place and marks its field (`aWsVx`); a server that does not answer
+//! says so under the button in a danger callout, with *Try again* under it, and both fields keep what was typed
+//! (`oOn6j`). What the join came to shows under the button. The column is a lurq form: Enter in either field joins as
+//! the button does.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -59,6 +60,7 @@ pub(super) fn column(ctx: &mut Ctx, join: &CodeJoin, focus: bool) -> Element {
 fn address(ctx: &mut Ctx, join: &CodeJoin, refusal: Option<&CodeRefusal>) -> Element {
   let label = ctx.t("startup.join.code.address");
   let mut input = FieldInput::new(format!("{ID}-address"), label.clone(), join.address.clone())
+    .leading_while_empty(Icon::Server)
     .placeholder(ctx.t("startup.join.code.addressPlaceholder"))
     .text_style(StartupText::FieldMono.role())
     .box_height(ControlHeight::Lg.value())
@@ -83,6 +85,7 @@ fn code(ctx: &mut Ctx, join: &CodeJoin, refusal: Option<&CodeRefusal>) -> Elemen
   let label = ctx.t("startup.join.code.label");
   let wrong = refusal == Some(&CodeRefusal::WrongCode);
   let mut input = FieldInput::new(format!("{ID}-code"), label.clone(), join.code.clone())
+    .leading_while_empty(Icon::KeyRound)
     .placeholder(ctx.t("startup.join.code.placeholder"))
     .text_style(StartupText::FieldMono.role())
     .box_height(ControlHeight::Lg.value());

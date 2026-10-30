@@ -196,6 +196,22 @@ fn join_team_use_a_code_shows_the_account_card() {
 }
 
 #[test]
+fn join_team_code_fields_lead_with_their_glyphs_while_empty() {
+  let server = TeamServer::start();
+  let mut window = opened(&server, JoinWay::Code);
+  shows(&mut window, "join-team-code-address");
+  assert!(has(&mut window, "join-team-code-address-icon"));
+  assert!(has(&mut window, "join-team-code-code-icon"));
+
+  window.set("join-team-code-address", &server.url());
+  window.set("join-team-code-code", LATER_CODE);
+  window.until("the filled fields lose their glyphs", |window| {
+    window.tree.get_element_by_id("join-team-code-address-icon").is_none()
+      && window.tree.get_element_by_id("join-team-code-code-icon").is_none()
+  });
+}
+
+#[test]
 fn join_team_joins_with_a_code() {
   let server = TeamServer::start();
   let mut window = opened(&server, JoinWay::Code);
