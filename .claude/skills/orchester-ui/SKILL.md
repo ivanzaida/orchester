@@ -18,8 +18,9 @@ skill is the Orchester-specific layer: where things live and how to name them.
 ## The new app (`orchester-app`)
 
 `crates/desktop-app` (the `crates/desktop-app/design/orchester.pen` design: read it through the `pencil` MCP with
-the absolute path of that file in your own checkout as `filePath`; `data/orchester2.pen` is an older design, not
-used) follows the same two rules with its own
+the absolute path of that file in the project's main checkout as `filePath` — the folder holding `.orchester/`, not
+your worktree's copy, which Pencil has not open, so the MCP would silently answer from its active tab instead; see
+AGENTS.md › Design source; `data/orchester2.pen` is an older design, not used) follows the same two rules with its own
 files; the paths and the mapping tables below are the deprecated `orchester-desktop`'s.
 
 - Strings: one file per locale and area, `crates/desktop-app/assets/locales/<locale>/<area>.json`

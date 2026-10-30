@@ -168,6 +168,8 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
 | `task.conversation.approval.{autopilot,profile,reviewer}` | Approved by autopilot · Allowed by the profile · Approved by the reviewer |
 | `task.conversation.approval.switched` | Switched to Manual for this run |
 | `task.request.reason.{outside,notAllowed,reviewerUnsure,reviewerDenied,push,refs}` | Came to you: the path is outside the worktree, its Sources and {agent}'s temp folders. Autopilot never approves these. · Not on {agent}'s allowed list. · The reviewer wasn't sure: "{reason}" · The reviewer denied it: "{reason}" · Pushes to a remote always come to you, in Autopilot too. · Only the run's branch {branch} is the run's own; other refs come to you. |
+| `cards.approval.asks.{outside,notAllowed,push,refs}` (ORC-354) | {agent} asks to edit a file outside the worktree · {agent} asks to run a command not on its allowed list (the reviewer unsure or denying it too) · {agent} asks to push to a remote · {agent} asks to change another branch; for an MCP call `.outsideTool` / `.notAllowedTool`: … to reach outside the worktree · … to call a tool not on its allowed list |
+| `cards.approval.asks.meta`, `cards.approval.moreAnswers`, `cards.approval.quiet.listedAt` (ORC-354) | {step} · {time} · More answers (the card's other answers, folded under *Approve* and *Deny*) · · on the allowed list · {time} |
 
 ## Open questions
 
@@ -178,7 +180,12 @@ Proposed keys (agents: `agents.json`; project settings: `projectSettings.json`; 
    Autopilot.
 2. Whether a run switched to Manual for itself may go back to Autopilot while its profile and project allow it (not
    drawn; the chip just reads *Manual · this run*).
-3. Whether *Approved by autopilot* rows group per step (*… and 3 more*) or always list each request.
+3. ~~Whether *Approved by autopilot* rows group per step (*… and 3 more*) or always list each request.~~ Decided in
+   ORC-354: Autopilot's rows that follow one another in a step share one row of the chat, the first three shown and
+   the third saying *· 3 more*, which a press opens (`timeline::view::Row::Approvals`). A request's quiet row follows
+   the tool group its call is in rather than splitting it. The app's words are `cards.approval.quiet.*` and
+   `cards.approval.cameToYou.*` (the area files' rule), with *Approve* as `cards.approval.approve`; the seed's
+   `cards-approval-modes` scenario shows every row kind and card reason.
 4. ~~The exact Claude Code and Codex options that turn the CLI's own prompt off while still handing requests outside
    the worktree to Orchester, and which CLI versions can't.~~ Decided in ORC-347: see
    [Enforcement](#enforcement).

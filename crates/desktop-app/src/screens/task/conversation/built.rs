@@ -66,6 +66,7 @@ impl BuiltTimeline {
       pending: &loaded.pending,
       reviewing: &loaded.reviewing,
       decided: &loaded.decided,
+      answers: &loaded.answers,
       questions: &loaded.questions,
       merge: detail.merge.as_ref(),
     });

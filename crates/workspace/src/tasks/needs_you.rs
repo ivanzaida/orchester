@@ -458,6 +458,7 @@ impl InPlace {
       pending: &self.requests.pending,
       reviewing: &self.requests.reviewing,
       decided: &self.requests.decided,
+      answers: &self.requests.answers,
       questions: &self.requests.questions,
       merge: self.detail.merge.as_ref(),
     })

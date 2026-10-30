@@ -39,7 +39,7 @@ use super::{
 use crate::theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize};
 
 /// The avatar's box (`HO4bJ`) and how wide a person's bubble may grow, of the chat's width.
-const AVATAR_SIZE: f32 = 24.0;
+pub const AVATAR_SIZE: f32 = 24.0;
 const BUBBLE_WIDTH: f32 = 80.0;
 
 /// What a press on a link in a conversation does: the window's one handler ([`links::ChatLinks`]), which follows
