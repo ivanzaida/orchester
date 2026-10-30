@@ -7,3 +7,5 @@
 pub const SIGN_IN: &str = "qa-app-sign-in";
 /// Signed in, it also joins a stand-in team server with a code, so the account has a server that answers.
 pub const JOIN_TEAM: &str = "qa-app-join-team";
+/// That team server's project holds a task, so a checkout with tasks of its own joins through the review.
+pub const TEAM_HOLDS_TASK: &str = "qa-app-team-holds-task";

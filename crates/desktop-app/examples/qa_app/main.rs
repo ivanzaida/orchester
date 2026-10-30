@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Some(services) if sign_in => {
       signed_in::sign_in(services, runtime.handle(), &cloud);
       asked(qa_app_asks::JOIN_TEAM)
-        .then(|| team::join(services, &runtime))
+        .then(|| team::join(services, &runtime, asked(qa_app_asks::TEAM_HOLDS_TASK)))
         .transpose()?
     }
     Some(services) => {

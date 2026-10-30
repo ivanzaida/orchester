@@ -7,6 +7,8 @@
 //! - `ownership`: nobody signed in, so Ledger and Site are listed and two projects wait (`NpTDN`).
 //! - `ownership-signed-in`: the QA app signs in and joins a stand-in team server that lists Ledger (`LinZt`, `ggjyN`,
 //!   `xx4ST`; `Ib9ca` on Ledger's Sharing; `xQQbr`).
+//! - `ownership-join-review`: `ownership-signed-in` with a task on Ledger and one on the server's project, so Ledger
+//!   joins through the review (`AiCwO`), which says it moves into the account.
 //! - `ownership-ended`: `ownership` after the cloud ended the sign-in from another device (`qxq4t`, `CBmxe`).
 //! - `ownership-nothing-here`: only the account's two projects (`MvIpm`).
 //! - `invite-signed-out`: the catalogue, nobody signed in, and the server [`INVITE_SERVER`] in the account's list,
@@ -16,14 +18,16 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use orchester_api::test_support::account_cloud::{ACCOUNT, EMAIL};
 use orchester_core::{
-  id::{CloudAccountId, ProjectId, ServerId},
+  id::{CloudAccountId, IdempotencyKey, ProjectId, ServerId},
   project::{Project, ProjectKey},
   sharing::MemberRole,
+  store::TaskStore,
+  task::TaskDetails,
 };
 use orchester_store::{AppDb, CloudSignInEnd, EndedCloudSignIn, ProjectDb, SharingLink, StoredServer};
 
 use super::qa_app_asks;
-use crate::kontur::{Kontur, SeedError, files, git, io_error, name};
+use crate::kontur::{Kontur, SeedError, files, git, io_error, limits, name};
 
 const DAY: i64 = 24 * 60;
 /// Acme's id.
@@ -32,10 +36,12 @@ const ACME: &str = "0191c7c0-0000-7000-8000-0000000005e3";
 const ACME_ADDRESS: &str = "http://127.0.0.1:9";
 /// The server `navigate` names for the invite landing, with `"tab": "invite"` and `"project": "kontur"`.
 const INVITE_SERVER: &str = "0191c7c0-0000-7000-8000-0000000005e4";
+/// Ledger's repository, beside the application database.
+const LEDGER_FOLDER: &str = "repo-ledger";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   nothing_here(kontur)?;
-  let ledger = project(kontur, ("Ledger", "LED", "repo-ledger"), DAY, None)?;
+  let ledger = project(kontur, ("Ledger", "LED", LEDGER_FOLDER), DAY, None)?;
   git::set_origin(&ledger, "https://github.com/acme/ledger.git")?;
   project(kontur, ("Site", "SIT", "repo-site"), 7 * DAY, None).map(drop)
 }
@@ -44,6 +50,23 @@ pub fn signed_in(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur)?;
   kontur.ask_qa_app(qa_app_asks::SIGN_IN)?;
   kontur.ask_qa_app(qa_app_asks::JOIN_TEAM)
+}
+
+pub fn join_review(kontur: &mut Kontur) -> Result<(), SeedError> {
+  signed_in(kontur)?;
+  kontur.ask_qa_app(qa_app_asks::TEAM_HOLDS_TASK)?;
+  let details = TaskDetails {
+    title: name("Reconcile the bank exports"),
+    brief: String::new(),
+    acceptance_criteria: Vec::new(),
+    pipeline: None,
+    limits: limits(),
+  };
+  let mut ledger = ProjectDb::open(&kontur.app_database.with_file_name(LEDGER_FOLDER))?;
+  for task in ledger.create_tasks(IdempotencyKey::generate(), vec![details], kontur.ago(DAY))? {
+    kontur.seeded(&task, "joins through the review");
+  }
+  Ok(())
 }
 
 pub fn ended(kontur: &mut Kontur) -> Result<(), SeedError> {

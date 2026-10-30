@@ -63,6 +63,7 @@ fn seed_names_every_scenario_once() {
       "modules-none",
       "ownership",
       "ownership-signed-in",
+      "ownership-join-review",
       "ownership-ended",
       "ownership-nothing-here",
       "invite-signed-out"

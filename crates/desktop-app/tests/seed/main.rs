@@ -164,7 +164,9 @@ fn seed_every_scenario_builds_a_repository_and_registers_kontur() {
     let expected: &[&str] = match scenario.name() {
       "conversation" | "long-chats" => &["Kontur", "Atlas"],
       "import" | "import-done" => &["Kontur", "Personal website"],
-      "ownership" | "ownership-signed-in" | "ownership-ended" => &["Kontur", "Ledger", "Dotfiles", "Site"],
+      "ownership" | "ownership-signed-in" | "ownership-join-review" | "ownership-ended" => {
+        &["Kontur", "Ledger", "Dotfiles", "Site"]
+      }
       "ownership-nothing-here" => &["Kontur", "Dotfiles"],
       _ => &["Kontur"],
     };
