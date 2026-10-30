@@ -71,6 +71,18 @@ impl RunnerStatus {
     }
   }
 
+  /// The status of `project`'s runner in `state`, having last reported `work`. For tests of what reads the status,
+  /// which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn reported_for_test(project: PathBuf, state: RunnerState, work: WorkSummary) -> Self {
+    Self {
+      state,
+      work: Some(Arc::new(work)),
+      ..Self::starting(1, project)
+    }
+  }
+
   pub(super) fn generation(&self) -> u64 {
     self.generation
   }

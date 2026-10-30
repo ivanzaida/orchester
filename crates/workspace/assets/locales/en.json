@@ -610,8 +610,7 @@
       "slotWait": {
         "one": "{{detail}} · {{steps}} waits for an agent slot",
         "other": "{{detail}} · {{steps}} wait for an agent slot"
-      },
-      "slotWaitSeparator": ", "
+      }
     },
     "permissions": {
       "errors": {

@@ -173,7 +173,7 @@ fn detail(record: &RunRecord, waits: &[StepExecutionId], translate: &Translate) 
     1 => "runs.history.slotWait.one",
     _ => "runs.history.slotWait.other",
   };
-  let separator = translate.text(&Message::new("runs.history.slotWaitSeparator"));
+  let separator = translate.text(&Message::new("common.listSeparator"));
   translate.text(
     &Message::new(key)
       .with("detail", detail)

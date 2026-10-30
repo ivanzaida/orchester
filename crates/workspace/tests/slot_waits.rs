@@ -4,11 +4,20 @@
 
 mod support;
 
-use std::{path::Path, sync::Arc};
+use std::{
+  num::NonZeroU32,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
-use orchester_core::{id::StepExecutionId, resource::StepKey, run::StepStatus};
+use orchester_core::{
+  id::{RunId, StepExecutionId},
+  resource::StepKey,
+  run::StepStatus,
+};
+use orchester_ipc::{SlotWait, WorkSummary};
 use orchester_workspace::{
-  runner::RunnerStatus,
+  runner::{RunnerStatus, state::RunnerState},
   tasks::{
     detail::TaskDetail,
     progress::{ProgressState, progress, progress_with_waits},
@@ -66,10 +75,34 @@ fn slot_wait_names_only_the_steps_of_the_run() {
   assert!(waiting_steps(&run.run, &[of_another_run]).is_empty());
 }
 
-/// Nothing stores a wait: without a runner of the project online, no step waits for a slot.
+/// Nothing stores a wait: without a runner of the project online, no step waits for a slot, even though a stopped
+/// runner's status keeps what it last reported.
 #[test]
 fn slot_wait_is_none_while_the_runner_is_offline() {
   let root = Path::new("H:/projects/kontur");
-  assert!(slot_waits(None, root).is_empty());
+  let execution = StepExecutionId::generate();
+  let status = |project: &str, state| {
+    let work = WorkSummary {
+      agent_slots: NonZeroU32::MIN,
+      runs: Vec::new(),
+      slot_waits: vec![SlotWait {
+        run: RunId::generate(),
+        execution,
+      }],
+    };
+    RunnerStatus::reported_for_test(PathBuf::from(project), state, work)
+  };
+  let kontur = "H:/projects/kontur";
+  assert_eq!(
+    slot_waits(Some(&status(kontur, RunnerState::Online)), root),
+    [execution]
+  );
+  assert_eq!(
+    slot_waits(Some(&status(kontur, RunnerState::Stopping)), root),
+    [execution]
+  );
+  assert!(slot_waits(Some(&status(kontur, RunnerState::Stopped)), root).is_empty());
+  assert!(slot_waits(Some(&status("H:/projects/other", RunnerState::Online)), root).is_empty());
   assert!(slot_waits(Some(&RunnerStatus::none()), root).is_empty());
+  assert!(slot_waits(None, root).is_empty());
 }

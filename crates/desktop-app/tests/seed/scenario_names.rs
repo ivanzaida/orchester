@@ -39,6 +39,7 @@ fn seed_names_every_scenario_once() {
       "tasks-unreadable",
       "live",
       "lifecycle",
+      "slot-wait",
       "connections",
       "api-providers",
       "native",
