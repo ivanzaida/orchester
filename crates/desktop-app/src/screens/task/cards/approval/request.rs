@@ -3,7 +3,10 @@
 //! setting it asks under; why the classifier asks; that auto mode is reviewing it, or why it did not (the hard
 //! rule that held it, a note as *reviewing* is: no frame draws it); the command whole, or an MCP call's
 //! arguments, in a mono box with Copy; the agent · step · run · task, the working directory and the agent's
-//! note; and the words Deny tells the agent.
+//! note; and the words Deny tells the agent. A request that came to the person by the run's approval mode says
+//! less: what it asks on one line and why it came ([`came_body`], 04c `vZcoN`).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -14,7 +17,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{Answerer, NativeCommandAsk, PendingToolApproval, denial_message};
+use orchester_core::run::{Answerer, CameToPerson, NativeCommandAsk, PendingToolApproval, denial_message};
 use orchester_workspace::{display, tasks::approvals::ShownApproval};
 
 use super::{
@@ -22,6 +25,8 @@ use super::{
     Place,
     frame::{head as card_head, note},
   },
+  came,
+  decided::asked,
   words,
 };
 use crate::{
@@ -34,6 +39,38 @@ use crate::{
     message::message_text,
   },
 };
+
+/// "03 Implement" as the chat names the step the agent asks in (`zZoFw` in `YDJsC`), else its name.
+pub(super) fn step(place: &Place, shown: Option<&ShownApproval>) -> Option<Arc<str>> {
+  place
+    .step
+    .clone()
+    .or_else(|| shown.and_then(|shown| shown.step.clone()))
+}
+
+/// Between the head and the answers of a request that `came` to the person (`vO7CW`): what it asks on one mono
+/// line (`Body` `ZNwbH`), then why it came ([`came::line`]); in the Needs you panel, whose item says what it asks,
+/// only why. A note says when auto mode's reviewer judges it all the same.
+pub(super) fn came_body(
+  ctx: &Ctx,
+  id: &str,
+  (place, request): (&Place, &PendingToolApproval),
+  (came, reviewing): (&CameToPerson, bool),
+) -> Vec<Element> {
+  let action = (!place.in_panel).then(|| {
+    Text::new(&asked(ctx, request))
+      .id(format!("{id}-action"))
+      .variant(CardsText::Action.role())
+      .selectable(true)
+      .width(Dimension::Pct(100.0))
+      .into()
+  });
+  action
+    .into_iter()
+    .chain([came::line(ctx, id, (place, request.agent.as_str()), came)])
+    .chain(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()))
+    .collect()
+}
 
 /// *Approve command?* or *Approve tool action?*, and since when it waits.
 pub(super) fn head(ctx: &Ctx, id: &str, request: &PendingToolApproval) -> Element {
@@ -149,12 +186,7 @@ fn facts(
   (place, request): (&Place, &PendingToolApproval),
   shown: Option<&ShownApproval>,
 ) -> Element {
-  // "03 Implement" as the chat names the step (`zZoFw` in `YDJsC`), else its name.
-  let step = place
-    .step
-    .clone()
-    .or_else(|| shown.and_then(|shown| shown.step.clone()))
-    .unwrap_or_default();
+  let step = step(place, shown).unwrap_or_default();
   let run = place.run_number().to_string();
   let task = place.detail.task.key().to_string();
   let agent = ctx.t_args(
