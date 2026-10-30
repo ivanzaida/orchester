@@ -1,9 +1,12 @@
 //! All projects and the welcome of a first launch: what the list says of each project, opening one, removing one
-//! in place, the empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, and the person's teams
-//! ([`teams`]). Projects live in repositories of the test's own data folder.
+//! in place, the empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, the person's teams
+//! ([`teams`]) and that an agent CLI is not found ([`agent_cli`]). Projects live in repositories of the test's own
+//! data folder.
 //!
 //! `cargo test -p orchester-app --test all_projects all_projects`
 
+#[path = "all_projects/agent_cli.rs"]
+mod agent_cli;
 mod support;
 #[path = "all_projects/teams.rs"]
 mod teams;

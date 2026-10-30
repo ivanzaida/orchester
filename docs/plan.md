@@ -196,7 +196,9 @@ focus rings. Note the behaviour changes: `focus()` now scrolls into view; create
   file's folder, not links in the middle of a chain (refuse when any link on it lies inside the repository); the
   App Execution Alias exception accepts any file in `WindowsApps` without reading its reparse tag; launch checks skip
   programs stored by name or relative to the worktree before this change (show a problem for stored `InWorktree`
-  programs); agent CLI connections get no `program_place` check at launch; the deprecated app's MCP dialog saves with
+  programs); agent CLI connections get no `program_place` check at launch, and the file chosen on the start page gets
+  none either, so a file inside one project's repository, which agents can rewrite, can become the program of
+  connections in every listed project (`connections::choose_program`); the deprecated app's MCP dialog saves with
   `Allowed::Anything`; the Connections list shows a server whose secret is archived as plain "On".
 - Command (tool) steps run agent-written worktree content (`tools/check.ps1`, build.rs, cargo/npm/git configs) with
   the person's rights, network on and no sandbox (`crates/runner/src/execution/tool/mod.rs`), escaping a writing

@@ -38,6 +38,7 @@ use crate::{
   },
   connections::{
     api_provider::save_on_provider_in,
+    choose_program::chosen_message,
     data::{ConnectionDraft, ProjectConnections, SaveError, recheck_in, save_in},
     native, probe,
   },
@@ -377,24 +378,15 @@ fn not_found(provider: AgentProvider, searched: &[SearchFolder]) -> ToolError {
 
 /// Why the program file the client chose cannot be a CLI connection's program.
 fn chosen_refused(error: &ChosenProgramError) -> ToolError {
-  let named = |key: &'static str, path: &Path| Message::new(key).with("program", path.display().to_string());
-  match error {
-    ChosenProgramError::NotAbsolute(_) => refused("program_not_absolute", Message::new("errors.executableNotAbsolute")),
-    ChosenProgramError::NotLocal(path) => refused(
-      "program_not_local",
-      named("connections.mcp.errors.programNotLocal", path),
-    ),
-    ChosenProgramError::Missing(path) => refused("program_not_found", named("appMcp.errors.programMissing", path)),
-    ChosenProgramError::NotAFile(path) => refused("program_not_a_file", named("appMcp.errors.programNotAFile", path)),
-    ChosenProgramError::NotExecutable(path) => refused(
-      "program_not_executable",
-      named("appMcp.errors.programNotExecutable", path),
-    ),
-    ChosenProgramError::Unreadable { path, source } => refused(
-      "program_unreadable",
-      named("appMcp.errors.programUnreadable", path).with("reason", source.to_string()),
-    ),
-  }
+  let code = match error {
+    ChosenProgramError::NotAbsolute(_) => "program_not_absolute",
+    ChosenProgramError::NotLocal(_) => "program_not_local",
+    ChosenProgramError::Missing(_) => "program_not_found",
+    ChosenProgramError::NotAFile(_) => "program_not_a_file",
+    ChosenProgramError::NotExecutable(_) => "program_not_executable",
+    ChosenProgramError::Unreadable { .. } => "program_unreadable",
+  };
+  refused(code, chosen_message(error))
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {

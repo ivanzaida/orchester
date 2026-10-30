@@ -86,3 +86,13 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 - Copy: new strings go to `startup.*` (first start, the step line), `startup.join.*` (Cloud, code, teams, invites,
   errors), `startup.shared.*` (projects, link, clone, download) and `projects.header.*` (*Join a team*, *Open shared
   project…*, the team strip). The Cloud sign-in form reuses the Sign-in board's words.
+- Decision 9 as built (`crates/desktop-app/src/screens/all_projects/agent_cli.rs`):
+  - **Where.** The callout `SIbdo` and fix row `U4QvYO` of frame 14 `mruEH` sit on today's Welcome (`UQZRa`) and above
+    All projects' list, 1120 wide rather than the frame's 1040. The first-start page frame 14 is drawn on (01 `H9CZ1`)
+    is not built, so its Head, Ways, Local note and Footer are not either.
+  - **A first start has no connection to fix.** The chosen file is kept in the application database (`ui_state`,
+    `orchester-app.agentProgram.<program>`) and offered in Add connection.
+  - **What counts as not found.** With listed projects, a CLI connection's program file is gone and the search path has
+    no copy of that CLI. With none, neither CLI is on the search path and no chosen file exists; it then names `claude`.
+    A connection whose program is gone while a copy is on the search path shows nothing, since "not found" would be
+    false.

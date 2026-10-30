@@ -14,12 +14,32 @@ use orchester_core::connection::{candidates_in, searched_folder};
 pub enum FolderSource {
   /// The `PATH` this process inherited or the command sets.
   Inherited,
-  /// The `PATH` the user's login shell builds (macOS, read once at start).
+  /// The `PATH` the user's login shell builds (macOS, read at start and when a person asks again).
   LoginShell,
   /// One of the usual install folders of command-line programs (macOS).
   InstallFolder,
   /// The folder of the program that starts, so a CLI finds the Node.js installed beside it (macOS).
   ProgramFolder,
+}
+
+/// What a search of the search path looked at, so what it says of a program not found is true.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SearchBasis {
+  /// The `PATH` alone: Windows.
+  Path,
+  /// macOS, after a read of this login shell's `PATH` succeeded.
+  LoginShell { shell: String },
+  /// macOS, with no login shell's `PATH`: started from a terminal, or the read failed.
+  UsualFolders,
+}
+
+/// `path` as a person reads it: on `home`, written with `~`.
+pub fn shown_folder(path: &Path, home: Option<&Path>) -> String {
+  match home.and_then(|home| path.strip_prefix(home).ok()) {
+    Some(rest) if rest.as_os_str().is_empty() => "~".to_owned(),
+    Some(rest) => format!("~/{}", rest.display()),
+    None => path.display().to_string(),
+  }
 }
 
 /// One folder of the search path.
@@ -36,6 +56,15 @@ impl SearchFolder {
 
   pub const fn source(&self) -> FolderSource {
     self.source
+  }
+
+  /// The folder as a person reads it: on macOS the home folder is `~` (a Windows path stays whole).
+  pub fn shown(&self) -> String {
+    #[cfg(target_os = "macos")]
+    let home = super::macos::home();
+    #[cfg(not(target_os = "macos"))]
+    let home: Option<PathBuf> = None;
+    shown_folder(&self.path, home.as_deref())
   }
 }
 
@@ -84,7 +113,7 @@ impl SearchPath {
     use super::macos;
 
     let install = macos::usual_folders(macos::home().as_deref());
-    Self::merge(env::var_os("PATH").as_deref(), macos::login_shell_folders(), &install)
+    Self::merge(env::var_os("PATH").as_deref(), &macos::login_shell_folders(), &install)
   }
 
   /// This search path with `folder`, the started program's own, last when it is not on it yet.

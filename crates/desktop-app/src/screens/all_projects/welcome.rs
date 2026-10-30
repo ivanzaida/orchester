@@ -1,15 +1,15 @@
 //! The welcome of a first launch (`Content · Welcome` `MANaM` in `UQZRa`): the mark, what Orchester is for,
 //! *Create your first project*, *Open project folder…* and *Join a team* (no frame draws it: it leads to the start
-//! page's step until that page lands, ORC-293), the three steps to a first task, and a footer that says each project
-//! keeps its own instructions, tools, secrets and connections. Nothing is made up: no recent project, no activity, no
-//! runner.
+//! page's step until that page lands, ORC-293), the three steps to a first task, that an agent CLI is not found while
+//! none is ([`super::agent_cli`]), and a footer that says each project keeps its own instructions, tools, secrets and
+//! connections. Nothing is made up: no recent project, no activity, no runner.
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -43,7 +43,8 @@ const STEP_TILE: f32 = 32.0;
 const MARK_GAP: f32 = 4.0;
 const ACTIONS_GAP: f32 = 6.0;
 
-pub(super) fn welcome(ctx: &mut Ctx, open: &OpenAction) -> Element {
+/// The welcome, with that an agent CLI is not found under its introduction and steps when `cli` says so.
+pub(super) fn welcome(ctx: &mut Ctx, open: &OpenAction, cli: Option<Element>) -> Element {
   let inner = Row::new()
     .width(Dimension::Px(INNER_WIDTH))
     .spacing(ProjectsSpacing::WelcomeColumns.role())
@@ -52,7 +53,6 @@ pub(super) fn welcome(ctx: &mut Ctx, open: &OpenAction) -> Element {
     .child(steps(ctx));
   let main = Column::new()
     .width(Dimension::Pct(100.0))
-    .flex(1.0)
     .padding(Padding::symmetric(
       ProjectsSpacing::WelcomeEdge.role(),
       ProjectsSpacing::Wide.role(),
@@ -60,6 +60,30 @@ pub(super) fn welcome(ctx: &mut Ctx, open: &OpenAction) -> Element {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .child(inner);
+  let main: Element = match cli {
+    None => main.flex(1.0).into(),
+    // It does not fit at the window's smallest size with the warning, so only then the page scrolls; as high as it is
+    // when it fits, centred in the panel.
+    Some(cli) => Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
+      .justify(Justify::Center)
+      .child(
+        ScrollVertical::new(
+          main.spacing(SpacingSize::Section).child(
+            Column::new()
+              .width(Dimension::Pct(100.0))
+              .max_width(Dimension::Px(INNER_WIDTH))
+              .child(cli),
+          ),
+        )
+        .id("welcome-scroll")
+        .width(Dimension::Pct(100.0))
+        .max_height(Dimension::Pct(100.0)),
+      )
+      .into(),
+  };
   Column::new()
     .id(screen_id())
     .describe("state", "welcome")

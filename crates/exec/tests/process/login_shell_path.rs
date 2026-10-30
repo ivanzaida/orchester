@@ -10,8 +10,9 @@ use std::{
 };
 
 use orchester_exec::search_path::{
-  FolderSource, ProgramLookup, SearchPath,
-  login_shell::{self, LoginShellError, PATH_END, PATH_START},
+  FolderSource, ProgramLookup, SearchBasis, SearchPath,
+  login_shell::{self, LoginShellError, LoginShellPath, PATH_END, PATH_START},
+  shown_folder,
 };
 
 const PROGRAM: &str = "orchester-probe-cli";
@@ -92,6 +93,57 @@ fn login_shell_path_read_ends_at_the_deadline_while_a_background_job_holds_the_o
   let read = login_shell::read_with(Path::new(program), &args, timeout);
   assert!(matches!(read, Err(LoginShellError::TimedOut(_))), "{read:?}");
   assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+}
+
+#[test]
+fn login_shell_path_failed_read_keeps_what_an_earlier_read_found() {
+  let shell = Path::new("/bin/zsh");
+  let none = LoginShellPath::default().after_read(Err(LoginShellError::NoPath), shell);
+  assert_eq!(none, LoginShellPath::default());
+  assert_eq!(
+    none.basis(),
+    SearchBasis::UsualFolders,
+    "no read succeeded, so no shell is named"
+  );
+
+  let read = none.after_read(Ok(vec![PathBuf::from("/a/bin")]), shell);
+  assert_eq!(&**read.folders(), [PathBuf::from("/a/bin")]);
+  let zsh = SearchBasis::LoginShell {
+    shell: "zsh".to_owned(),
+  };
+  assert_eq!(read.basis(), zsh);
+
+  let kept = read
+    .clone()
+    .after_read(Err(LoginShellError::NoPath), Path::new("/bin/bash"));
+  assert_eq!(kept, read, "a failed read again loses nothing");
+
+  let again = kept.after_read(Ok(vec![PathBuf::from("/b/bin")]), Path::new("/bin/bash"));
+  assert_eq!(&**again.folders(), [PathBuf::from("/b/bin")]);
+  assert_eq!(
+    again.basis(),
+    SearchBasis::LoginShell {
+      shell: "bash".to_owned()
+    }
+  );
+}
+
+#[test]
+fn login_shell_path_folder_is_shown_with_the_home_folder_as_a_tilde() {
+  let home = Path::new("/Users/me");
+  assert_eq!(
+    shown_folder(Path::new("/Users/me/.local/bin"), Some(home)),
+    "~/.local/bin"
+  );
+  assert_eq!(shown_folder(home, Some(home)), "~");
+  assert_eq!(
+    shown_folder(Path::new("/opt/homebrew/bin"), Some(home)),
+    "/opt/homebrew/bin"
+  );
+  assert_eq!(
+    shown_folder(Path::new("/Users/me/.local/bin"), None),
+    "/Users/me/.local/bin"
+  );
 }
 
 #[test]

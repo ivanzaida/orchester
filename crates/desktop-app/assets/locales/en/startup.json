@@ -57,6 +57,19 @@
       "description": "Orchester keeps its data and its runner beside its program, so it can't open them. The log has the system's reason.",
       "step": "Start Orchester from its install folder, or install it again."
     },
+    "agentCli": {
+      "titleMac": "{{program}} isn't found on this Mac",
+      "title": "{{program}} isn't found on this computer",
+      "bodyLoginShell": "Apps started from Finder don't get your terminal's PATH. Orchester read it from your login shell ({{shell}}) and still can't find {{program}}. Local projects open; agents can't start until it's found.",
+      "bodyUsualFolders": "Orchester looked on your PATH and in the usual install folders and can't find {{program}}. Local projects open; agents can't start until it's found.",
+      "bodyPath": "Orchester looked in the folders on your PATH and can't find {{program}}. Local projects open; agents can't start until it's found.",
+      "choose": "Choose the {{program}} file…",
+      "chooseTitle": "Choose the {{program}} file",
+      "checkAgain": "Check again",
+      "lookedIn": "Looked in",
+      "folderInList": "{{folder}},",
+      "noFolders": "There are no folders on PATH to look in."
+    },
     "keepWorking": "To keep working",
     "database": "Database",
     "dataFolder": "Data folder",

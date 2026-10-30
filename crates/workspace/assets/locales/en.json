@@ -173,8 +173,7 @@
     },
     "start": {
       "connect": {
-        "title": "Connect an agent CLI",
-        "none": "No agent connection signed in yet"
+        "title": "Connect an agent CLI"
       },
       "profile": {
         "title": "Publish an agent profile",
@@ -1000,6 +999,11 @@
     }
   },
   "connections": {
+    "errors": {
+      "notTheCli": "{{file}} did not answer as {{program}}. Choose the {{program}} program file.",
+      "notRepointed": "{{project}}'s connection could not be changed. The log has the details.",
+      "programNotStorable": "{{file}} has characters Orchester can't store. Move it or choose a link with a plain name."
+    },
     "native": {
       "preset": {
         "notOffered": "This preset is not offered on this provider."
@@ -2207,6 +2211,10 @@
       "recordsInvalid": "Enter a whole number of records from {{min}} to {{max}}.",
       "tokensInvalid": "Enter a whole number of tokens from {{min}} to {{max}}."
     }
+  },
+  "warmWorkspaces": {
+    "notRemoved": "The old worktree wasn't removed: its run is working, it has uncommitted changes, or Git refused.",
+    "notChanged": "The workspace wasn't changed. It may be in use, or the log has the details."
   },
   "mergeQueue": {
     "refused": {
