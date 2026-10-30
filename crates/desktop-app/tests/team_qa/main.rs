@@ -1,21 +1,27 @@
 //! The QA app's team scenarios (`examples/qa_app/team`), each state on the headless window with the stand-in team
-//! server: what the person's presses reach on *Connect a server*, and what the session's own work reaches with Kontur
-//! linked and joined. Nothing here starts `tools/qa-app.ps1`; the running copy is the Verify step's.
+//! server: what the person's presses reach on the start page's *Join a team* with a code, and what the session's own
+//! work reaches with Kontur linked and joined. Nothing here starts `tools/qa-app.ps1`; the running copy is the Verify
+//! step's.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 
+use lurq::app::events::with_synthetic_input;
 use orchester_api::test_support::team_server::{TasksAnswer, TeamServer};
 use orchester_app::{
-  routes::{ProjectPage, Route, TaskList, TaskListTab},
+  routes::{JoinWay, ProjectPage, Route, TaskList, TaskListTab},
   test_support::{Data, Window, project_id},
 };
 use orchester_workspace::sharing::project::FirstDownload;
 use team::State;
 
-const WRONG_CODE_WORDS: &str = "That code isn't right, or it was used or has expired";
+const ADDRESS: &str = "join-team-code-address";
+const CODE_FIELD: &str = "join-team-code-code";
+const SUBMIT: &str = "join-team-code-submit";
+const WRONG: &str = "join-team-code-wrong";
+const WRONG_CODE_WORDS: &str = "Wrong or expired. A code works once, within 10 minutes: ask for a new one.";
 const OFFER: &str = "all-projects-offer";
 
 /// A window on Kontur, with `state` set up for its session, as the QA app opens it.
@@ -52,53 +58,67 @@ fn download(window: &Window) -> Option<FirstDownload> {
   window.projects().feed(project_id()).download.get()
 }
 
-#[test]
-fn team_qa_join_opens_with_the_address_typed_and_asks_nothing_yet() {
-  let (mut window, server) = driven(State::Join);
-  let typed = window
+fn value(window: &mut Window, id: &str) -> String {
+  window
     .tree
-    .get_element_by_id_mut("orchester-connect-address")
+    .get_element_by_id_mut(id)
     .and_then(|element| element.as_text_input())
-    .map(|input| input.value());
-  assert_eq!(typed, Some(server.url()));
-  assert!(window.texts("orchester-connect-continue").is_some());
-  assert!(window.texts("orchester-connect-join").is_none(), "Continue comes first");
+    .unwrap_or_else(|| panic!("{id} is a text input"))
+    .value()
+}
+
+#[test]
+fn team_qa_join_opens_on_the_code_with_the_address_typed_and_takes_no_mcp_press() {
+  let (mut window, server) = driven(State::Join);
+  assert_eq!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Code));
+  assert_eq!(value(&mut window, ADDRESS), server.url());
+  assert_eq!(value(&mut window, CODE_FIELD), "");
+
+  with_synthetic_input(|| window.press(SUBMIT));
+  let refused = format!("{SUBMIT}-person-only");
+  window.until("the press to be refused", |window| window.texts(&refused).is_some());
   assert_eq!(server.code_joins(), Vec::<bool>::new());
 }
 
 #[test]
 fn team_qa_join_refuses_a_wrong_code() {
   let (mut window, server) = driven(State::WrongCode);
-  let said = window.text("orchester-connect-join-error");
-  assert!(said.contains(WRONG_CODE_WORDS), "{said}");
+  assert_eq!(window.text(WRONG), WRONG_CODE_WORDS);
   assert_eq!(server.code_joins().len(), 1, "the press reached the server");
+  assert_eq!(value(&mut window, CODE_FIELD), "WRONG123");
 }
 
 #[test]
 fn team_qa_join_refuses_an_expired_code_in_the_same_words() {
   let (mut window, server) = driven(State::ExpiredCode);
-  let said = window.text("orchester-connect-join-error");
-  assert!(said.contains(WRONG_CODE_WORDS), "{said}");
+  assert_eq!(window.text(WRONG), WRONG_CODE_WORDS);
   assert_eq!(server.code_joins().len(), 1, "the press reached the server");
 }
 
 #[test]
-fn team_qa_join_says_nothing_answers() {
+fn team_qa_join_says_it_cannot_reach_the_server_and_keeps_what_was_typed() {
   let (mut window, server) = driven(State::Unreachable);
-  let said = window.text("orchester-connect-address-error");
-  assert!(
-    said.contains(&format!("Nothing answered at {}", server.url())),
-    "{said}"
+  assert_eq!(
+    window.text("join-team-code-unreachable-title"),
+    format!("Can't reach {}", server.url())
   );
+  assert!(window.texts("join-team-code-try-again").is_some());
+  assert_eq!(value(&mut window, ADDRESS), server.url());
+  assert!(!value(&mut window, CODE_FIELD).is_empty());
+  assert_eq!(server.code_joins(), Vec::<bool>::new());
 }
 
 #[test]
-fn team_qa_join_with_the_code_joins_and_leads_to_the_teams_projects() {
+fn team_qa_join_with_the_code_joins_and_leads_to_the_server_in_settings() {
   let (mut window, server) = driven(State::Joined);
-  let said = window.text("orchester-connect-joined");
-  assert!(said.contains("Connected to Acme as bohdan"), "{said}");
+  assert_eq!(window.text("join-team-code-joined-title"), "Joined Acme as bohdan");
   assert_eq!(server.code_joins().len(), 1);
-  assert!(window.texts("orchester-connect-join-review").is_some());
+
+  window.press("join-team-code-open");
+  assert!(
+    matches!(window.navigation().route_now(), Route::Orchester(_)),
+    "See your projects there opens the server's page"
+  );
 }
 
 #[test]

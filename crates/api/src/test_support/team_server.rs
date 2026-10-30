@@ -145,7 +145,8 @@ impl TeamServer {
   pub fn project(&self, slug: &str) -> Option<ProjectId> {
     let state = self.state.lock();
     let project = state.projects.iter().find(|project| project["slug"] == slug)?;
-    project["id"].as_str()?.parse().ok()
+    let id = project["id"].as_str().expect("`share` gives each project its id");
+    Some(id.parse().expect("`share` makes its ids in a project id's shape"))
   }
 }
 

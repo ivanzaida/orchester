@@ -10,7 +10,7 @@ pub const FILE: &str = "team-qa";
 /// What the QA copy does before its window shows, named as the seed's scenario.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
-  /// Connect a server with the stand-in's address typed.
+  /// *Join a team* with a code, the stand-in's address typed.
   Join,
   /// The code a person typed was wrong.
   WrongCode,
@@ -54,7 +54,8 @@ impl State {
     }
   }
 
-  /// Whether the QA copy presses in the window before it shows: *Join* is a person's, which an MCP client cannot press.
+  /// Whether the QA copy presses in the window before it shows: *Join with the code* is a person's, which an MCP client
+  /// cannot press.
   pub const fn drives(self) -> bool {
     matches!(
       self,

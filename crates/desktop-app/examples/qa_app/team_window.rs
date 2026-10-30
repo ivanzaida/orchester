@@ -64,7 +64,14 @@ pub fn open(
   );
   tree.resize(1440, 900);
   tree.pass_headless(&mut app);
-  team::drive::to(&mut app, &mut tree, (state, &link, server))?;
+  let shown = team::drive::to(&mut app, &mut tree, (state, &link, server)).and_then(|()| show(app, tree, position));
+  // Also on an error: `tools/qa-app.ps1` takes a discovery file left behind for a copy that started.
+  mcp_server.shutdown();
+  shown
+}
+
+/// Shows the window of `app` and `tree`, and returns once it closed.
+fn show(app: App, mut tree: Tree, position: Option<WindowPosition>) -> Result<(), Box<dyn Error>> {
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let title = app.i18n().t("shell.app.name");
   let window = WinitWindow::new(app, tree)
@@ -80,6 +87,5 @@ pub fn open(
     None => window,
   }
   .run();
-  mcp_server.shutdown();
   Ok(())
 }

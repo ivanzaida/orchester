@@ -1,6 +1,6 @@
-//! What a person does on *Connect a server* before the window shows, with the pointer of the example itself: *Join*
-//! takes no MCP client's press (`orchester-connect-join`, `PersonOnly`), so each result of a press is a scenario of its
-//! own.
+//! What a person does on the start page's *Join a team* with a code before the window shows, with the pointer of the
+//! example itself: *Join with the code* takes no MCP client's press (`join-team-code-submit`, `PersonOnly`), and Enter
+//! and *Try again* join the same way, so each result of a press is a scenario of its own.
 
 #[path = "../../gate_qa/window.rs"]
 mod window;
@@ -11,17 +11,16 @@ use lurq::app::{App, Tree};
 use orchester_api::test_support::team_server::{CODE, LATER_CODE, TeamServer};
 use orchester_app::{
   mcp::WindowLink,
-  routes::{OrchesterView, Route},
+  routes::{JoinWay, Route},
 };
 use window::Window;
 
 use super::State;
 
-const ADDRESS: &str = "orchester-connect-address";
-const CONTINUE: &str = "orchester-connect-continue";
-const JOIN_CODE: &str = "orchester-connect-code";
-const JOIN: &str = "orchester-connect-join";
-const JOIN_ERROR: &str = "orchester-connect-join-error";
+const ADDRESS: &str = "join-team-code-address";
+const CODE_FIELD: &str = "join-team-code-code";
+const SUBMIT: &str = "join-team-code-submit";
+const WRONG: &str = "join-team-code-wrong";
 /// A code the stand-in never made.
 const WRONG_CODE: &str = "WRONG123";
 
@@ -32,29 +31,24 @@ pub fn to(
   (state, link, server): (State, &WindowLink, &TeamServer),
 ) -> Result<(), Box<dyn Error>> {
   let mut window = Window { app, tree };
-  link.navigation()?.go(Route::Orchester(OrchesterView::connect()));
+  link.navigation()?.go(Route::JoinTeam(JoinWay::Code));
   window.until(ADDRESS)?;
   window.set(ADDRESS, &server.url())?;
   match state {
     State::Join => Ok(()),
-    State::Unreachable => {
-      window.press(CONTINUE)?;
-      window.until("orchester-connect-address-error")
-    }
-    State::WrongCode => join_with(&mut window, WRONG_CODE, JOIN_ERROR),
-    State::ExpiredCode => join_with(&mut window, LATER_CODE, JOIN_ERROR),
-    State::Joined => join_with(&mut window, CODE, "orchester-connect-joined"),
+    State::WrongCode => join_with(&mut window, WRONG_CODE, WRONG),
+    State::ExpiredCode => join_with(&mut window, LATER_CODE, WRONG),
+    State::Unreachable => join_with(&mut window, CODE, "join-team-code-unreachable"),
+    State::Joined => join_with(&mut window, CODE, "join-team-code-joined"),
     State::Offer | State::Downloading | State::DownloadFailed => {
       Err(format!("{state:?} opens the app's own window, with nothing to press").into())
     }
   }
 }
 
-/// Presses *Continue*, types `code`, presses *Join*, and waits for `shows`.
+/// Types `code`, presses *Join with the code*, and waits for `shows`.
 fn join_with(window: &mut Window<'_>, code: &str, shows: &str) -> Result<(), Box<dyn Error>> {
-  window.press(CONTINUE)?;
-  window.until(JOIN_CODE)?;
-  window.set(JOIN_CODE, code)?;
-  window.press(JOIN)?;
+  window.set(CODE_FIELD, code)?;
+  window.press(SUBMIT)?;
   window.until(shows)
 }

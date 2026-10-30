@@ -80,7 +80,7 @@ fn tasks(project: &Value, state: &Mutex<State>) -> (&'static str, Value) {
   let answer = state.lock().tasks;
   match answer {
     TasksAnswer::Serve => {
-      let key = project["key"].as_str().unwrap_or_default();
+      let key = project["key"].as_str().expect("`share` gives each project its key");
       let tasks: Vec<Value> = TASKS
         .iter()
         .enumerate()
