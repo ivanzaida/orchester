@@ -50,27 +50,8 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
     name: "Work".to_owned(),
     role: Some("codex_cli".to_owned()),
   };
-  let olha = SharedPerson {
-    id: UserId::generate(),
-    name: "olha".to_owned(),
-  };
-  let cached = |number: VersionNumber, body: &AgentProfile, references: Vec<VersionReference>, waits_here: bool| {
-    CachedVersion {
-      number,
-      published_at: Timestamp::now(),
-      publisher: olha.clone(),
-      server_body: serde_json::to_value(body).expect("a body"),
-      hash: ContentHash::new(&number.get().to_string().repeat(64)).expect("a hash"),
-      references,
-      local_body: body.clone(),
-      waits_here,
-    }
-  };
-  db.cache_shared_version(
-    id,
-    &cached(VersionNumber::FIRST, v1.body(), vec![work.clone()], false),
-  )
-  .expect("v1 cached");
+  db.cache_shared_version(id, &cached(VersionNumber::FIRST, v1.body(), vec![work.clone()], false))
+    .expect("v1 cached");
   let docs_reference = VersionReference {
     target: ReferenceTarget::McpServer(docs),
     name: "docs".to_owned(),
@@ -114,6 +95,28 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
       changed_at: Timestamp::now(),
     })
     .expect("kept");
+  }
+}
+
+/// Version `number` of a profile as the server confirmed it, published by the teammate olha.
+fn cached(
+  number: VersionNumber,
+  body: &AgentProfile,
+  references: Vec<VersionReference>,
+  waits_here: bool,
+) -> CachedVersion<AgentProfile> {
+  CachedVersion {
+    number,
+    published_at: Timestamp::now(),
+    publisher: SharedPerson {
+      id: UserId::generate(),
+      name: "olha".to_owned(),
+    },
+    server_body: serde_json::to_value(body).expect("a body"),
+    hash: ContentHash::new(&number.get().to_string().repeat(64)).expect("a hash"),
+    references,
+    local_body: body.clone(),
+    waits_here,
   }
 }
 
