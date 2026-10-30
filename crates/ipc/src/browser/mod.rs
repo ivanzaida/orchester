@@ -216,6 +216,19 @@ pub struct AgentAction {
   pub element: Option<ElementBox>,
 }
 
+/// The mouse cursor's shape over a page, which CDP does not report: found from the element under the pointer, and an
+/// arrow when nothing tells otherwise.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PageCursor {
+  #[default]
+  Arrow,
+  /// Over a link or a button.
+  Hand,
+  /// Over a field.
+  Text,
+}
+
 /// The window's requests to the project's runner, each answered with a [`BrowserReply`] or a rejection.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
@@ -269,6 +282,13 @@ pub enum BrowserCommand {
   CutSelection {
     tab: BrowserTabId,
   },
+  /// What the mouse cursor looks like over the point `x`, `y` of `tab`, in its CSS pixels: answered with
+  /// [`BrowserReply::Cursor`]. It reads the page and is no use of it: no agent waits for it.
+  CursorAt {
+    tab: BrowserTabId,
+    x: i32,
+    y: i32,
+  },
   /// *Open in a browser window*: the browser starts again headed on the same profile and reopens the tabs by their
   /// URLs ([`BrowserMode::Headed`]).
   OpenInWindow,
@@ -285,6 +305,8 @@ pub enum BrowserReply {
   TabOpened { tab: BrowserTabId },
   /// The text selected on the page; empty when nothing is, or in a password field, which never gives its text.
   Selection { text: String },
+  /// The mouse cursor's shape over the point asked about.
+  Cursor { cursor: PageCursor },
 }
 
 /// Without the selected text, which may be anything the person keeps on a page.
@@ -294,6 +316,7 @@ impl fmt::Debug for BrowserReply {
       Self::Done => formatter.write_str("Done"),
       Self::TabOpened { tab } => formatter.debug_struct("TabOpened").field("tab", tab).finish(),
       Self::Selection { text } => formatter.debug_struct("Selection").field("bytes", &text.len()).finish(),
+      Self::Cursor { cursor } => formatter.debug_struct("Cursor").field("cursor", cursor).finish(),
     }
   }
 }

@@ -1,21 +1,21 @@
 //! The *Browser* window's requests, served from the project's browser: the screencast of the tab shown, the person's
-//! input, copy, cut and navigation, the person's own tabs, dialogs, `<select>` lists, and the restart in a browser
-//! window of its own and back (`docs/design/browser.md`, "The *Browser* window", decision 7).
+//! input, copy, cut and navigation, the mouse cursor's shape, the person's own tabs, dialogs, `<select>` lists, and the
+//! restart in a browser window of its own and back (`docs/design/browser.md`, "The *Browser* window", decision 7).
 
 use std::sync::Arc;
 
 use orchester_ipc::{
   Event, Rejection,
   browser::{
-    BrowserCommand, BrowserEvent, BrowserMode, BrowserReply, BrowserState, BrowserTabId, Navigation, PersonInput,
-    SelectId, TabOwner, Viewport,
+    BrowserCommand, BrowserEvent, BrowserMode, BrowserReply, BrowserState, BrowserTabId, Navigation, PageCursor,
+    PersonInput, SelectId, TabOwner, Viewport,
   },
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use super::{
-  Shown, input,
+  Shown, cursor, input,
   order::{Arrived, Turn},
   select, selection,
 };
@@ -85,6 +85,12 @@ impl ProjectBrowser {
       BrowserCommand::ChooseOption { tab, select, index } => self.choose_option(&tab, select, index).await,
       BrowserCommand::CopySelection { tab } => return selected(self.selection(&tab, false, turn).await),
       BrowserCommand::CutSelection { tab } => return selected(self.selection(&tab, true, turn).await),
+      BrowserCommand::CursorAt { tab, x, y } => {
+        return match self.cursor_at(&tab, x, y).await {
+          Ok(cursor) => Ok(BrowserReply::Cursor { cursor }),
+          Err(error) => Err(rejection(&error)),
+        };
+      }
       BrowserCommand::OpenInWindow => self.restart(BrowserMode::Headed).await,
       BrowserCommand::BackToOrchester => self.restart(BrowserMode::Headless).await,
     };
@@ -152,6 +158,12 @@ impl ProjectBrowser {
     turn.come().await;
     let reached = self.window_tab(tab).await?;
     selection::take(&reached.cdp, &reached.session, cut, turn).await
+  }
+
+  /// The mouse cursor's shape at `x`, `y` of `tab`.
+  async fn cursor_at(&self, tab: &BrowserTabId, x: i32, y: i32) -> Result<PageCursor, BrowserError> {
+    let reached = self.window_tab(tab).await?;
+    cursor::at(&reached.cdp, &reached.session, x, y).await
   }
 
   async fn navigate(&self, tab: &BrowserTabId, to: &Navigation) -> Result<(), BrowserError> {

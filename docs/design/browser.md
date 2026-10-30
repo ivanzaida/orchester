@@ -364,9 +364,10 @@ not jump to another project by itself.
   request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
   once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
   until the dialog is).
-- **IPC** (protocol 36, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+- **IPC** (protocol 37, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
-  option, copy or cut the selection, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the
+  option, copy or cut the selection, the mouse cursor's shape at a point, *Open in a browser window*, *Back to
+  Orchester*) and events (`BrowserEvent`: the
   browser's state with its tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent
   started browsing; an agent
   acted, with its element box; an agent waits on a tab until a moment, sent again when new input pushes it back, and its
@@ -384,7 +385,7 @@ not jump to another project by itself.
 | JavaScript dialogs (`alert`, `confirm`, `prompt`, `beforeunload`) | `Page.javascriptDialogOpening`: on the person's own tabs, drawn in the window over the page area only and answered with `Page.handleJavaScriptDialog` (`03` `t08Ur`); on an agent's tab the runner dismisses it and tells the agent. |
 | File chooser | `Page.setInterceptFileChooserDialog`: the app's own native file dialog, files set with `DOM.setFileInputFiles`. Agents get none (the tool answers that a file was asked). |
 | `<select>` drop-down lists | The list drawn by the window in the app's menu style from the element's options; the choice set through CDP (`04` `r31HX`). |
-| Mouse cursor shape | Not reported by CDP: an arrow, a hand over links and buttons (hit test of the element under the pointer), a text cursor over fields. |
+| Mouse cursor shape | Not reported by CDP: an arrow, a hand over links and buttons, a text cursor over fields. While the pointer moves the window asks the runner what is under it (`CursorAt`, `DOM.getNodeForLocation`, then the element's computed `cursor` or what the element is), one question at a time and at most four a second, the last place it moved to included; once it stands still nothing is asked. An arrow by default and on any failure, and for any other cursor a page sets. It makes no agent wait. |
 | Copy and paste | Ctrl/Cmd+C, X, V bridged between the page and the system clipboard by the window, while the page has the focus, and never as key presses for the page. Copy and cut ask the tab shown for its selection (`CopySelection`, `CutSelection`, read through `Runtime.evaluate`): a field's own, or else the document's, also in shadow roots and same-origin frames; a cut deletes it where it can be edited, and a page's own `copy` and `cut` listeners do not run. A password field gives nothing, no selection leaves the clipboard as it is, and a cross-origin frame's selection is out of reach. Paste sends the clipboard's text as `PersonInput::Text`; images and files are not pasted. Up to 2 MiB of text either way (`MAX_CLIPBOARD_TEXT`), and past that the window's failure line says so. Each of them makes the tab's agent wait, as any input of the person's does. Agents get nothing of this, and the window refuses all three to synthetic input (an MCP client driving it). |
 | Sound | Muted (`--mute-audio`). |
 | Passkeys, the password manager, sites that refuse headless browsers | *Open in a browser window* (decision 7). |

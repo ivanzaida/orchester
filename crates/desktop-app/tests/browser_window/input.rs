@@ -23,7 +23,7 @@ const SCALE: f32 = 2.0;
 /// The window on an agent's tab `T1` that the agent just acted on, so its activity line shows over the page, with a
 /// frame as big in CSS pixels as the page is in logical ones, as the runner sizes it; the page's bounds then, and the
 /// activity line's.
-fn on_agents_tab() -> Option<(Browser, ElementRect, ElementRect)> {
+pub(super) fn on_agents_tab() -> Option<(Browser, ElementRect, ElementRect)> {
   if !browser_installed() {
     return None;
   }
@@ -53,7 +53,7 @@ fn on_agents_tab() -> Option<(Browser, ElementRect, ElementRect)> {
 }
 
 /// The point `(x, y)` of the page, from its top left in logical pixels, in the physical pixels lurq takes.
-fn at(page: ElementRect, x: f32, y: f32) -> (f32, f32) {
+pub(super) fn at(page: ElementRect, x: f32, y: f32) -> (f32, f32) {
   ((page.x + x) * SCALE, (page.y + y) * SCALE)
 }
 
@@ -423,4 +423,65 @@ fn browser_person_input_follows_the_tab_shown() {
   click(&mut browser, (x, y), "P1");
   key_down(&mut browser, "b", "KeyB");
   assert_eq!(one_sent(&browser, "P1"), key(KeyAction::Down, ("b", "KeyB"), Some("b")));
+}
+
+/// Each of the window's shortcuts, pressed and released with the focus on the page: the window does what it asks, and
+/// the page gets neither key event.
+#[test]
+fn browser_shortcuts_of_the_window_send_nothing_to_a_focused_page() {
+  let Some((mut browser, page, _)) = on_agents_tab() else {
+    return;
+  };
+  let t1 = BrowserTabId::new("T1");
+  let on_page = at(page, 100.0, 50.0);
+  for (name, asked) in [
+    ("t", BrowserCommand::OpenTab { url: None }),
+    ("w", BrowserCommand::CloseTab { tab: t1.clone() }),
+    (
+      "r",
+      BrowserCommand::Navigate {
+        tab: t1,
+        to: Navigation::Reload,
+      },
+    ),
+  ] {
+    click(&mut browser, on_page, "T1");
+    browser.command(name);
+    assert_eq!(
+      requests(&browser),
+      [asked],
+      "the command key and {name} are the window's"
+    );
+  }
+
+  click(&mut browser, on_page, "T1");
+  browser.command("l");
+  assert_eq!(requests(&browser), [], "the command key and l are the window's");
+  assert_eq!(browser.focused().as_deref(), Some("browser-address"));
+
+  // The tab shown stays `T1` until the runner says otherwise, so each goes from there, around the strip's ends.
+  for (shift, next) in [(false, "T2"), (true, "P1")] {
+    click(&mut browser, on_page, "T1");
+    browser
+      .tree
+      .key_down("Tab".to_owned(), "Tab".to_owned(), shift, true, false);
+    browser
+      .tree
+      .key_up("Tab".to_owned(), "Tab".to_owned(), shift, true, false);
+    browser.pass();
+    browser.pass();
+    let asked = requests(&browser);
+    assert!(
+      asked
+        .iter()
+        .any(|command| matches!(command, BrowserCommand::Show { tab, .. } if tab.as_str() == next)),
+      "Ctrl+Tab with Shift {shift} shows {next}: {asked:?}"
+    );
+    assert!(
+      !asked
+        .iter()
+        .any(|command| matches!(command, BrowserCommand::Input { .. })),
+      "Ctrl+Tab with Shift {shift} is the window's: {asked:?}"
+    );
+  }
 }

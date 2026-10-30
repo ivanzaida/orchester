@@ -237,6 +237,16 @@ async fn browser_hold_starts_on_a_copy_and_on_a_cut() {
   held.told_ended(AgentWaitEnd::Ran).await;
 }
 
+/// The window asking what the cursor looks like is no use of the tab: the pointer's own moves are.
+#[tokio::test]
+async fn browser_hold_does_not_start_on_the_question_of_the_cursors_shape() {
+  let mut held = Held::new().await;
+  let tab = held.tab_id();
+  drop(held.browser.arrived(BrowserCommand::CursorAt { tab, x: 1, y: 1 }));
+  assert_eq!(came_to(held.call()).await, PersonWait::NotHeld);
+  held.told_nothing_more();
+}
+
 #[tokio::test]
 async fn browser_hold_waits_until_ten_seconds_after_the_last_input_and_each_input_pushes_it_back() {
   let mut held = Held::new().await;

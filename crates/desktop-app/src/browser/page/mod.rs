@@ -2,13 +2,14 @@
 //! the UI thread (`orchester_workspace::browser::RgbaFrame`), and the person's pointer, wheel, keys and an input
 //! method's text sent back to the tab, in the page's CSS pixels (`input`). Over it Orchester draws what a headless
 //! frame does not show (`docs/design/browser.md`, "What frames do not show"): the ring and name where an agent acted
-//! (`mark`, `02` `UKAkY`), a JavaScript dialog of the person's tab over the page only (`dialog`, `03` `t08Ur`), and a
-//! `<select>` list under its field in the menu's look (`select`, `04` `r31HX`). What a page holds stays out of
-//! inspection: the frame is covered in the captures made for it (`cover`), and the text drawn from the page is
-//! sensitive.
+//! (`mark`, `02` `UKAkY`), a JavaScript dialog of the person's tab over the page only (`dialog`, `03` `t08Ur`), a
+//! `<select>` list under its field in the menu's look (`select`, `04` `r31HX`), and the mouse cursor's shape
+//! (`cursor`). What a page holds stays out of inspection: the frame is covered in the captures made for it (`cover`),
+//! and the text drawn from the page is sensitive.
 
 pub mod activity;
 mod cover;
+mod cursor;
 mod dialog;
 mod input;
 mod mark;
