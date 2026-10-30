@@ -1,7 +1,8 @@
-//! The window's requests to a project's browser (`orchester_ipc::browser::BrowserCommand`), sent to the project's
-//! runner off the UI thread. A request of the person's (navigating, opening or closing a tab, answering a dialog) the
-//! runner refuses or loses is logged and said in the window until the next one is carried out; what the window asks
-//! by itself or many times a second (which tab to screencast, the person's pointer and keys) is only logged.
+//! The window's requests to a project's browser (`orchester_ipc::browser::BrowserCommand`), handed to the project's
+//! runner in the order they are made, their answers awaited off the UI thread. A request of the person's (navigating,
+//! opening or closing a tab, answering a dialog) the runner refuses or loses is logged and said in the window until the
+//! next one is carried out; what the window asks by itself or many times a second (which tab to screencast, the
+//! person's pointer and keys) is only logged.
 
 use std::{
   path::{Path, PathBuf},
@@ -66,10 +67,13 @@ impl Commands {
   }
 
   fn dispatch(&self, command: BrowserCommand, said: bool, then: impl FnOnce(BrowserReply) + Send + 'static) {
-    let (runners, root, failed) = (self.runners.clone(), Arc::clone(&self.root), self.failed.clone());
+    let what = command_name(&command);
+    // Handed over here, not on the task below: the tasks start in no certain order, and the person's input reaches the
+    // page in the order it was made.
+    let answer = self.runners.browser(&self.root, command);
+    let (root, failed) = (Arc::clone(&self.root), self.failed.clone());
     self.runtime.spawn(async move {
-      let what = command_name(&command);
-      match runners.browser(&root, command).await {
+      match answer.await {
         Ok(reply) => {
           if said && failed.get_untracked() {
             failed.set(false);

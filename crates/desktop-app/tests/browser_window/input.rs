@@ -1,13 +1,10 @@
 //! The person's input on the page as the window sends it to the tab shown (`docs/design/browser.md`, "The person's
-//! input"): the window's requests are kept instead of sent to a runner, so neither a runner nor a browser runs. The
-//! display has two physical pixels to a logical one, as a Retina display does, and the page lies under the toolbar and
-//! an agent's activity line, so where the page was pressed is found in its CSS pixels from its own top left.
+//! input"), and what Enter in the address line asks: the window's requests are kept instead of sent to a runner, so
+//! neither a runner nor a browser runs. The display has two physical pixels to a logical one, as a Retina display does,
+//! and the page lies under the toolbar and an agent's activity line, so where the page was pressed is found in its CSS
+//! pixels from its own top left.
 
-use std::{
-  io::Cursor,
-  thread,
-  time::{Duration, Instant},
-};
+use std::io::Cursor;
 
 use image::{ImageFormat, Rgb, RgbImage};
 use lurq::{
@@ -15,8 +12,8 @@ use lurq::{
   core::ElementRect,
 };
 use orchester_ipc::browser::{
-  AgentAction, BrowserCommand, BrowserEvent, BrowserMode, BrowserTabId, KeyAction, Modifiers, MouseAction, MouseButton,
-  PersonInput, ScreencastFrame,
+  AgentAction, BrowserCommand, BrowserEvent, BrowserMode, BrowserState, BrowserTabId, KeyAction, Modifiers,
+  MouseAction, MouseButton, Navigation, PersonInput, ScreencastFrame,
 };
 
 use super::support::{Browser, browser_installed, state};
@@ -60,33 +57,36 @@ fn at(page: ElementRect, x: f32, y: f32) -> (f32, f32) {
   ((page.x + x) * SCALE, (page.y + y) * SCALE)
 }
 
-/// Waits for the window to send `count` of the person's inputs, which it sends off the UI thread; each with its tab.
-fn sent(browser: &Browser, count: usize) -> Vec<(BrowserTabId, PersonInput)> {
-  let deadline = Instant::now() + Duration::from_secs(10);
-  let (mut inputs, mut others) = (Vec::new(), Vec::new());
-  while inputs.len() < count {
-    assert!(
-      Instant::now() < deadline,
-      "timed out waiting for {count} inputs, sent {inputs:?} and {others:?}"
-    );
-    thread::sleep(Duration::from_millis(5));
-    for (root, command) in browser.state.recorded_commands_for_test() {
+/// The requests the window made since the last look, to the project shown. It hands each over as it is made, so they
+/// are all here by the end of the event that made them.
+fn requests(browser: &Browser) -> Vec<BrowserCommand> {
+  let recorded = browser.state.recorded_commands_for_test();
+  recorded
+    .into_iter()
+    .map(|(root, command)| {
       assert_eq!(root, browser.root, "the request goes to the project shown");
-      match command {
-        BrowserCommand::Input { tab, input } => inputs.push((tab, input)),
-        other => others.push(other),
-      }
-    }
-  }
-  inputs
+      command
+    })
+    .collect()
 }
 
-/// The only input sent next, to `tab`.
+/// The person's inputs among the requests since the last look, each with its tab.
+fn sent(browser: &Browser) -> Vec<(BrowserTabId, PersonInput)> {
+  requests(browser)
+    .into_iter()
+    .filter_map(|command| match command {
+      BrowserCommand::Input { tab, input } => Some((tab, input)),
+      _ => None,
+    })
+    .collect()
+}
+
+/// The only input sent since the last look, to `tab`.
 fn one_sent(browser: &Browser, tab: &str) -> PersonInput {
-  let mut inputs = sent(browser, 1);
+  let mut inputs = sent(browser);
+  assert_eq!(inputs.len(), 1, "one input, not {inputs:?}");
   let (to, input) = inputs.remove(0);
   assert_eq!(to, BrowserTabId::new(tab), "{input:?} goes to the tab shown");
-  assert!(inputs.is_empty(), "one input, not {inputs:?}");
   input
 }
 
@@ -94,7 +94,9 @@ fn one_sent(browser: &Browser, tab: &str) -> PersonInput {
 fn click(browser: &mut Browser, (x, y): (f32, f32), tab: &str) {
   browser.tree.mouse_down(x, y, Button::Left);
   browser.tree.mouse_up(x, y, Button::Left);
-  sent(browser, 2)
+  let inputs = sent(browser);
+  assert_eq!(inputs.len(), 2, "a press and a release, not {inputs:?}");
+  inputs
     .iter()
     .for_each(|(to, input)| assert_eq!(to, &BrowserTabId::new(tab), "{input:?}"));
   browser.pass();
@@ -103,6 +105,21 @@ fn click(browser: &mut Browser, (x, y): (f32, f32), tab: &str) {
     Some("browser-page-text"),
     "a press gives the page the focus"
   );
+}
+
+/// With the address line focused, what the window asks when `typed` is typed there and Enter pressed.
+fn enter_address(browser: &mut Browser, typed: &str) -> Vec<BrowserCommand> {
+  assert_eq!(browser.focused().as_deref(), Some("browser-address"));
+  browser
+    .tree
+    .get_element_by_id_mut("browser-address")
+    .and_then(|element| element.as_text_input())
+    .expect("the address line is a text input")
+    .set_value(typed);
+  browser.pass();
+  requests(browser);
+  key_down(browser, "Enter", "Enter");
+  requests(browser)
 }
 
 fn mouse(action: MouseAction, (x, y): (i32, i32), button: MouseButton, clicks: u8) -> PersonInput {
@@ -252,6 +269,125 @@ fn browser_person_keys_and_input_method_text_reach_the_tab() {
     hidden(&mut browser),
     (String::new(), None),
     "the hidden input keeps nothing"
+  );
+}
+
+#[test]
+fn browser_person_burst_of_inputs_is_sent_in_the_order_it_was_made() {
+  let Some((mut browser, page, _)) = on_agents_tab() else {
+    return;
+  };
+  requests(&browser);
+  let mut made = Vec::new();
+  for step in 0..200 {
+    let (x, y) = at(page, 10.0 + step as f32, 50.0);
+    browser.tree.mouse_move(x, y);
+    made.push(mouse(MouseAction::Moved, (10 + step, 50), MouseButton::None, 0));
+  }
+  let (x, y) = at(page, 300.0, 50.0);
+  browser.tree.mouse_down(x, y, Button::Left);
+  browser.tree.mouse_up(x, y, Button::Left);
+  made.push(mouse(MouseAction::Pressed, (300, 50), MouseButton::Left, 1));
+  made.push(mouse(MouseAction::Released, (300, 50), MouseButton::Left, 1));
+  let inputs: Vec<PersonInput> = sent(&browser).into_iter().map(|(_, input)| input).collect();
+  assert_eq!(inputs, made);
+}
+
+/// No key event of a composition reaches the page. A key the input method passes on with a text (a space after a Korean
+/// syllable) is not lost: lurq types it in the hidden input, so it reaches the page as text.
+#[test]
+fn browser_person_keys_of_a_composition_are_not_sent() {
+  let Some((mut browser, page, _)) = on_agents_tab() else {
+    return;
+  };
+  click(&mut browser, at(page, 100.0, 50.0), "T1");
+  browser.tree.ime(ImeEvent::Enabled);
+  browser.tree.ime(ImeEvent::Preedit {
+    text: "に".to_owned(),
+    cursor: Some((3, 3)),
+  });
+  for (name, code) in [("Process", "KeyA"), ("Enter", "Enter")] {
+    key_down(&mut browser, name, code);
+    browser
+      .tree
+      .key_up(name.to_owned(), code.to_owned(), false, false, false);
+    assert_eq!(sent(&browser), [], "{name} is the composition's, pressed and released");
+  }
+  key_down(&mut browser, " ", "Space");
+  assert_eq!(
+    one_sent(&browser, "T1"),
+    PersonInput::Text { text: " ".to_owned() },
+    "a key passed on keeps its text, without a key event"
+  );
+  browser
+    .tree
+    .key_up(" ".to_owned(), "Space".to_owned(), false, false, false);
+  assert_eq!(sent(&browser), [], "its release is the composition's");
+
+  browser.tree.ime(ImeEvent::Commit("日".to_owned()));
+  assert_eq!(one_sent(&browser, "T1"), PersonInput::Text { text: "日".to_owned() });
+  browser
+    .tree
+    .key_up("Enter".to_owned(), "Enter".to_owned(), false, false, false);
+  assert_eq!(
+    sent(&browser),
+    [],
+    "the release of the key that confirmed is the composition's"
+  );
+
+  key_down(&mut browser, "b", "KeyB");
+  assert_eq!(
+    one_sent(&browser, "T1"),
+    key(KeyAction::Down, ("b", "KeyB"), Some("b")),
+    "the next key is the page's again"
+  );
+}
+
+/// Input method candidates show where the hidden input stands.
+#[test]
+fn browser_person_press_moves_the_hidden_input_there() {
+  let Some((mut browser, page, _)) = on_agents_tab() else {
+    return;
+  };
+  click(&mut browser, at(page, 100.0, 50.0), "T1");
+  assert_eq!(browser.on_page("browser-page-text"), (100.0, 50.0, 1.0, 1.0));
+  click(&mut browser, at(page, 240.0, 130.0), "T1");
+  assert_eq!(browser.on_page("browser-page-text"), (240.0, 130.0, 1.0, 1.0));
+}
+
+#[test]
+fn browser_address_line_goes_to_the_typed_address_on_enter() {
+  let Some((mut browser, ..)) = on_agents_tab() else {
+    return;
+  };
+  browser.command("l");
+  assert_eq!(
+    enter_address(&mut browser, "docs.rs/reqwest"),
+    [BrowserCommand::Navigate {
+      tab: BrowserTabId::new("T1"),
+      to: Navigation::Address {
+        url: "https://docs.rs/reqwest".to_owned()
+      },
+    }],
+    "the tab shown goes there, and the page gets no key"
+  );
+}
+
+#[test]
+fn browser_address_line_opens_a_tab_on_enter_when_the_window_has_none() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.state.record_commands_for_test();
+  browser.feed(BrowserEvent::Changed(BrowserState::default()));
+  browser.until_shown("browser-empty");
+  browser.pass();
+  assert_eq!(
+    enter_address(&mut browser, "localhost:5173"),
+    [BrowserCommand::OpenTab {
+      url: Some("http://localhost:5173".to_owned())
+    }]
   );
 }
 

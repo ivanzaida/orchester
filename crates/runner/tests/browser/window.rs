@@ -59,7 +59,7 @@ impl Desktop {
 
   async fn serve(&self, browser: &ProjectBrowser, command: BrowserCommand) -> BrowserReply {
     browser
-      .serve(command, &self.sender)
+      .serve(browser.arrived(command), &self.sender)
       .await
       .expect("the browser carries it out")
   }
@@ -349,16 +349,12 @@ async fn browser_select_list_is_drawn_by_the_window_and_its_choice_set() {
     (0, 200, 300, 30)
   );
 
-  let refused = browser
-    .serve(
-      BrowserCommand::ChooseOption {
-        tab: tab.clone(),
-        select: list.select,
-        index: 2,
-      },
-      &desktop.sender,
-    )
-    .await;
+  let disabled = browser.arrived(BrowserCommand::ChooseOption {
+    tab: tab.clone(),
+    select: list.select,
+    index: 2,
+  });
+  let refused = browser.serve(disabled, &desktop.sender).await;
   assert!(
     matches!(refused, Err(Rejection::Failed { .. })),
     "a disabled option: {refused:?}"
@@ -550,7 +546,7 @@ async fn browser_person_navigates_and_the_restart_reopens_the_tabs() {
   };
   desktop.serve(&browser, forward.clone()).await;
   desktop.state(at("Page second")).await;
-  let none = browser.serve(forward, &desktop.sender).await;
+  let none = browser.serve(browser.arrived(forward), &desktop.sender).await;
   assert!(
     matches!(none, Err(Rejection::Failed { .. })),
     "no page forward: {none:?}"

@@ -308,7 +308,10 @@ not jump to another project by itself.
   screencast; the screencast stops while the window is closed or minimised.
 - **The person's input.** lurq's pointer, wheel, keyboard, text input and IME events become
   `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText` and `Input.imeSetComposition`, with
-  coordinates in the page's CSS pixels.
+  coordinates in the page's CSS pixels. Inputs reach a tab in the order the person made them: the app hands each
+  request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
+  once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
+  until the dialog is).
 - **IPC** (protocol 33, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
   option, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its

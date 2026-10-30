@@ -41,7 +41,10 @@ async fn close_from_window(browser: &ProjectBrowser, tab: &TargetId) {
   let close = BrowserCommand::CloseTab {
     tab: BrowserTabId::new(tab.as_str()),
   };
-  browser.serve(close, &desktop).await.expect("the window closes the tab");
+  browser
+    .serve(browser.arrived(close), &desktop)
+    .await
+    .expect("the window closes the tab");
 }
 
 #[tokio::test(flavor = "multi_thread")]

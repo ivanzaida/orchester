@@ -8,6 +8,7 @@ use orchester_ipc::{
   Command, Reply,
   browser::{BrowserCommand, BrowserReply},
 };
+use tokio::sync::oneshot;
 
 use super::{RequestError, RunRequestError, Runners};
 use crate::browser::BrowserWindow;
@@ -18,19 +19,42 @@ impl Runners {
     self.inner.shared.browser.clone()
   }
 
-  /// Sends the window's `command` to the browser of the project at `root`; the answer once it was carried out.
-  pub async fn browser(&self, root: &Path, command: BrowserCommand) -> Result<BrowserReply, RunRequestError> {
-    #[cfg(feature = "test-support")]
-    let Err(command) = self.inner.shared.browser.record(root, command) else {
-      return Ok(BrowserReply::Done);
-    };
-    match self.ask(Some(root), Command::Browser(command)).await? {
-      Reply::Browser(reply) => Ok(reply),
-      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
-      other => {
-        tracing::error!(?other, "unexpected reply to a Browser request");
-        Err(RunRequestError::Request(RequestError::Lost))
+  /// Sends the window's `command` to the browser of the project at `root`; the answer once it was carried out. The
+  /// command goes out at this call, before the future is awaited, so the window's requests reach the runner in the
+  /// order of these calls.
+  pub fn browser(
+    &self,
+    root: &Path,
+    command: BrowserCommand,
+  ) -> impl Future<Output = Result<BrowserReply, RunRequestError>> + Send + use<> {
+    let answer = self.browser_request(root, command);
+    async move {
+      match answer?.await.unwrap_or(Err(RequestError::Lost))? {
+        Reply::Browser(reply) => Ok(reply),
+        Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+        other => {
+          tracing::error!(?other, "unexpected reply to a Browser request");
+          Err(RunRequestError::Request(RequestError::Lost))
+        }
       }
     }
+  }
+
+  fn browser_request(
+    &self,
+    root: &Path,
+    command: BrowserCommand,
+  ) -> Result<oneshot::Receiver<Result<Reply, RequestError>>, RequestError> {
+    #[cfg(feature = "test-support")]
+    let command = match self.inner.shared.browser.record(root, command) {
+      Ok(()) => {
+        let (reply, answer) = oneshot::channel();
+        // `answer` is right here to take it.
+        drop(reply.send(Ok(Reply::Browser(BrowserReply::Done))));
+        return Ok(answer);
+      }
+      Err(command) => command,
+    };
+    self.request(Some(root), Command::Browser(command))
   }
 }

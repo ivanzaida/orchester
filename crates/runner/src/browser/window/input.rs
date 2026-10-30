@@ -5,18 +5,19 @@
 use orchester_ipc::browser::{KeyAction, Modifiers, MouseAction, MouseButton, PersonInput, SelectList};
 use serde_json::json;
 
-use super::select;
+use super::{order::Turn, select};
 use crate::browser::{
   BrowserError,
   cdp::{Cdp, SessionId},
 };
 
-/// Sends `input` to the tab of `session`. A left press on a `<select>` is not sent: its list, which a headless frame
-/// does not show, is returned for the window to draw.
+/// Sends `input` to the tab of `session`, holding `turn` until it has gone out, and waits for its answer. A left press
+/// on a `<select>` is not sent: its list, which a headless frame does not show, is returned for the window to draw.
 pub(super) async fn dispatch(
   cdp: &Cdp,
   session: &SessionId,
   input: &PersonInput,
+  turn: Turn,
 ) -> Result<Option<SelectList>, BrowserError> {
   let (method, params) = match input {
     PersonInput::Mouse {
@@ -85,7 +86,9 @@ pub(super) async fn dispatch(
       ("Input.imeSetComposition", params)
     }
   };
-  cdp.call(Some(session), method, params).await?;
+  let answered = cdp.call(Some(session), method, params);
+  drop(turn);
+  answered.await?;
   Ok(None)
 }
 

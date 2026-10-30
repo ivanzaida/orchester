@@ -85,9 +85,10 @@ async fn run_script(project: &TestProject) -> Script {
   let (scheduler, mut events) = scheduler(root);
   let scheduler = scheduler.with_browser_profile(profile.path().to_path_buf());
   let (desktop, mut window) = mpsc::unbounded_channel();
+  let subscribe = scheduler.browser().arrived(BrowserCommand::Subscribe);
   scheduler
     .browser()
-    .serve(BrowserCommand::Subscribe, &desktop)
+    .serve(subscribe, &desktop)
     .await
     .expect("subscribed");
   let site = site::serve().await;

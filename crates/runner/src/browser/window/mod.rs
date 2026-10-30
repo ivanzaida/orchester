@@ -1,10 +1,12 @@
 //! What the *Browser* window sees of the project's browser (`docs/design/browser.md`, "The *Browser* window"): the
 //! desktop that subscribed, the tab it shows, and that tab's latest screencast frame, which waits alone to be written:
 //! a newer frame replaces it, so frames are dropped rather than queued when the desktop reads slower than the page
-//! changes. Each tab's events are followed for it ([`follow`]), and the browser's state is sent whenever it changes.
+//! changes. Each tab's events are followed for it ([`follow`]), the person's inputs keep their order ([`order`]), and
+//! the browser's state is sent whenever it changes.
 
 mod follow;
 mod input;
+mod order;
 mod select;
 mod serve;
 
@@ -27,6 +29,8 @@ use tokio::{
 };
 
 pub(super) use self::follow::{Followed, follow_tab, follow_targets};
+pub use self::order::Arrived;
+use self::order::InputLines;
 use super::{
   cdp::{Cdp, SessionId, TargetId},
   tabs::Tabs,
@@ -47,6 +51,7 @@ pub(super) struct Window {
   generation: AtomicU64,
   /// Wakes the publisher of the running browser's state.
   changed: Notify,
+  inputs: InputLines,
 }
 
 /// The tab the window shows, screencast now.
@@ -94,6 +99,7 @@ impl Window {
 
   /// `target` is gone: the window shows nothing if it showed it.
   pub(super) fn forget(&self, target: &TargetId) {
+    self.inputs.forget(target);
     let mut shown = self.shown.lock();
     if shown.as_ref().is_some_and(|shown| &shown.target == target) {
       *shown = None;
@@ -132,6 +138,7 @@ impl Window {
 
   /// A browser starts: the number it ends with ([`Window::ended`]).
   pub(super) fn started(&self) -> u64 {
+    self.inputs.clear();
     self.generation.fetch_add(1, Ordering::AcqRel) + 1
   }
 

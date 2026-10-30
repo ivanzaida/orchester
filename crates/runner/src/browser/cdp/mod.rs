@@ -147,21 +147,52 @@ impl Cdp {
   }
 
   /// Sends `method` with `params`, to the target of `session` or to the browser itself, and waits up to
-  /// [`COMMAND_LIMIT`] for its result.
-  pub async fn call(&self, session: Option<&SessionId>, method: &str, params: Value) -> Result<Value, CdpError> {
-    self.call_within(session, method, params, COMMAND_LIMIT).await
+  /// [`COMMAND_LIMIT`] for its result. The command goes out at this call, before the future is awaited, so commands
+  /// reach the browser in the order of these calls whenever their answers come.
+  pub fn call(
+    &self,
+    session: Option<&SessionId>,
+    method: &str,
+    params: Value,
+  ) -> impl Future<Output = Result<Value, CdpError>> + Send + use<> {
+    self.call_within(session, method, params, COMMAND_LIMIT)
   }
 
   /// [`Cdp::call`] waiting up to `limit`.
-  pub async fn call_within(
+  pub fn call_within(
     &self,
     session: Option<&SessionId>,
     method: &str,
     params: Value,
     limit: Duration,
-  ) -> Result<Value, CdpError> {
+  ) -> impl Future<Output = Result<Value, CdpError>> + Send + use<> {
     let id = self.next_id.fetch_add(1, Ordering::Relaxed);
     let (answer, answered) = oneshot::channel();
+    let sent = self.send(id, answer, session, method, params);
+    let (routes, method) = (Arc::clone(&self.routes), method.to_owned());
+    async move {
+      sent?;
+      match tokio::time::timeout(limit, answered).await {
+        Ok(Ok(Ok(result))) => Ok(result),
+        Ok(Ok(Err((code, message)))) => Err(CdpError::Refused { method, code, message }),
+        Ok(Err(_)) => Err(CdpError::Closed),
+        Err(_) => {
+          routes.forget(id);
+          Err(CdpError::TimedOut { method, limit })
+        }
+      }
+    }
+  }
+
+  /// Puts command `id` on the way to the browser, with where its answer goes.
+  fn send(
+    &self,
+    id: u64,
+    answer: oneshot::Sender<Answer>,
+    session: Option<&SessionId>,
+    method: &str,
+    params: Value,
+  ) -> Result<(), CdpError> {
     {
       let mut state = self.routes.state.lock();
       if state.closed {
@@ -169,7 +200,8 @@ impl Cdp {
       }
       state.awaiting.insert(id, answer);
     }
-    let mut message = json!({ "id": id, "method": method, "params": params });
+    let mut message = json!({ "id": id, "method": method });
+    message["params"] = params;
     if let Some(session) = session {
       message["sessionId"] = json!(session.as_str());
     }
@@ -177,22 +209,7 @@ impl Cdp {
       self.routes.forget(id);
       return Err(CdpError::Closed);
     }
-    match tokio::time::timeout(limit, answered).await {
-      Ok(Ok(Ok(result))) => Ok(result),
-      Ok(Ok(Err((code, message)))) => Err(CdpError::Refused {
-        method: method.to_owned(),
-        code,
-        message,
-      }),
-      Ok(Err(_)) => Err(CdpError::Closed),
-      Err(_) => {
-        self.routes.forget(id);
-        Err(CdpError::TimedOut {
-          method: method.to_owned(),
-          limit,
-        })
-      }
-    }
+    Ok(())
   }
 
   /// The events of the target of `session` from now on, or the browser's own for `None`. The receiver ends with the

@@ -1,8 +1,8 @@
 //! The runner's DevTools Protocol client against a stand-in for the browser's debugging WebSocket, served by the test
-//! on loopback: answers that come out of order reach the commands they answer by id, an error answer becomes
-//! [`CdpError::Refused`], a command without an answer times out, events reach the listeners of their own session, and a
-//! connection the browser drops fails the commands awaiting an answer and every later one as closed. Run with
-//! `cargo test -p orchester-runner --test cdp cdp_`.
+//! on loopback: answers that come out of order reach the commands they answer by id, commands go out in the order of
+//! their calls, an error answer becomes [`CdpError::Refused`], a command without an answer times out, events reach the
+//! listeners of their own session, and a connection the browser drops fails the commands awaiting an answer and every
+//! later one as closed. Run with `cargo test -p orchester-runner --test cdp cdp_`.
 
 use std::time::Duration;
 
@@ -116,6 +116,28 @@ async fn cdp_answers_that_come_out_of_order_reach_the_commands_they_answer() {
 
   assert_eq!(first.expect("answered"), json!({ "product": "Fake/1.0" }));
   assert_eq!(second.expect("answered"), json!({ "result": { "value": 2 } }));
+}
+
+/// A command goes out when it is called, so commands whose futures run in any order reach the browser in the order of
+/// their calls.
+#[tokio::test]
+async fn cdp_commands_go_out_in_the_order_of_their_calls() {
+  let (cdp, mut browser) = connected().await;
+  let (first, second) = (
+    cdp.call(None, "Input.first", json!({})),
+    cdp.call(None, "Input.second", json!({})),
+  );
+
+  let (second, first, ()) = tokio::join!(second, first, async {
+    let (one, two) = (browser.command().await, browser.command().await);
+    assert_eq!(one["method"], "Input.first");
+    assert_eq!(two["method"], "Input.second");
+    browser.answer(&two["id"], json!({ "second": true })).await;
+    browser.answer(&one["id"], json!({ "first": true })).await;
+  });
+
+  assert_eq!(first.expect("answered"), json!({ "first": true }));
+  assert_eq!(second.expect("answered"), json!({ "second": true }));
 }
 
 #[tokio::test]

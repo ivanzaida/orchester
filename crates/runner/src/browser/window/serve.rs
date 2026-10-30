@@ -14,7 +14,11 @@ use orchester_ipc::{
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
-use super::{Shown, input, select};
+use super::{
+  Shown, input,
+  order::{Arrived, Turn},
+  select,
+};
 use crate::browser::{
   BrowserError, ProjectBrowser,
   cdp::{Cdp, CdpError, SessionId, TargetId},
@@ -33,12 +37,23 @@ struct WindowTab {
 }
 
 impl ProjectBrowser {
-  /// Carries out the window's `command`; `desktop` gets the browser's events once it subscribed.
+  /// The window's `command` as it arrives, to be carried out ([`Self::serve`]): the person's input takes its place in
+  /// its tab's line now, whenever it is carried out.
+  pub fn arrived(&self, command: BrowserCommand) -> Arrived {
+    let turn = match &command {
+      BrowserCommand::Input { tab, .. } => self.window.inputs.join(TargetId::from(tab.as_str())),
+      _ => Turn::default(),
+    };
+    Arrived { command, turn }
+  }
+
+  /// Carries out the window's command; `desktop` gets the browser's events once it subscribed.
   pub async fn serve(
     &self,
-    command: BrowserCommand,
+    arrived: Arrived,
     desktop: &mpsc::UnboundedSender<Event>,
   ) -> Result<BrowserReply, Rejection> {
+    let Arrived { command, turn } = arrived;
     let done = match command {
       BrowserCommand::Subscribe => {
         self.subscribe(desktop.clone()).await;
@@ -46,7 +61,7 @@ impl ProjectBrowser {
       }
       BrowserCommand::Show { tab, viewport } => self.show(&tab, viewport).await,
       BrowserCommand::StopShowing => self.stop_showing().await,
-      BrowserCommand::Input { tab, input } => self.input(&tab, &input).await,
+      BrowserCommand::Input { tab, input } => self.input(&tab, &input, turn).await,
       BrowserCommand::Navigate { tab, to } => self.navigate(&tab, &to).await,
       BrowserCommand::OpenTab { url } => {
         return match self.open_person_tab(url.as_deref()).await {
@@ -102,10 +117,11 @@ impl ProjectBrowser {
     Ok(())
   }
 
-  /// The person's `input` on `tab`; a press on a `<select>` opens its list in the window instead.
-  async fn input(&self, tab: &BrowserTabId, input: &PersonInput) -> Result<(), BrowserError> {
+  /// The person's `input` on `tab`, at its `turn`; a press on a `<select>` opens its list in the window instead.
+  async fn input(&self, tab: &BrowserTabId, input: &PersonInput, mut turn: Turn) -> Result<(), BrowserError> {
+    turn.come().await;
     let reached = self.window_tab(tab).await?;
-    if let Some(list) = input::dispatch(&reached.cdp, &reached.session, input).await? {
+    if let Some(list) = input::dispatch(&reached.cdp, &reached.session, input, turn).await? {
       self.window.send(BrowserEvent::SelectOpened { tab: tab.clone(), list });
     }
     Ok(())
