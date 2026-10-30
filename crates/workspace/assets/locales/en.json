@@ -347,6 +347,10 @@
     }
   },
   "tasks": {
+    "baseBranch": {
+      "gone": "{{branch}} no longer exists in the repository. The task was saved without it; choose another base branch.",
+      "changedMeanwhile": "The task changed while its base branch was saved. Open it again and choose the base branch once more."
+    },
     "board": {
       "hasRun": "This task already has a run.",
       "deletePersonOnly": "Only a person deletes tasks: input from an MCP client is not taken here."

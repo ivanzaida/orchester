@@ -45,6 +45,14 @@ fn task_form_roles_follow_the_composer() {
       1.3,
       PaletteColor::TextMuted,
     ),
+    // A branch's name in the Base branch menu (`f9wHj` in `fSsas`), in Geist Mono.
+    (
+      TaskFormText::OptionMono,
+      12.5,
+      FontWeight::Medium,
+      1.3,
+      PaletteColor::TextPrimary,
+    ),
     // The words of a note under the head, one 16 line in its 32 (`vpy3p` in `CvMGI`).
     (
       TaskFormText::Note,

@@ -6,6 +6,7 @@
 //! Create & run for a task that ran; the chips save what the task's runs deliver and its priority (`chips.rs`).
 //! Needs `git` (the seed).
 
+mod base_branch;
 mod chips;
 mod conflicts;
 mod harness;

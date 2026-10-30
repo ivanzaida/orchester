@@ -111,6 +111,13 @@
       },
       "blockedReason": "{{reason}} · {{waiting}}"
     },
+    "noBranch": {
+      "title": "Can't start: no branch checked out",
+      "moduleNone": "{{task}} has no base branch and its module none; set one, or check out a branch",
+      "noModule": "{{task}} has no base branch and is in no module; set one, or check out a branch",
+      "takesCheckedOut": "{{task}} takes the checked-out branch and none is checked out; set a base branch, or check out a branch",
+      "setBaseBranch": "Set base branch"
+    },
     "runAgain": {
       "action": "Run again",
       "title": "Run {{task}} again as run #{{run}}",

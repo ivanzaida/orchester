@@ -130,6 +130,8 @@ macro_rules! markers {
     impl $inspect for crate::tasks::browse::PipelineFilter {}
     impl $inspect for crate::tasks::browse::Selection {}
     impl $inspect for crate::tasks::browse::TaskSort {}
+    impl $inspect for crate::tasks::base_branch::BasePick {}
+    impl $inspect for crate::tasks::base_branch::BranchMenu {}
     impl $inspect for crate::tasks::cancel_run::Stop {}
     impl $inspect for crate::tasks::changes::Checkpointed {}
     impl $inspect for crate::tasks::changes::NotCheckpointed {}

@@ -1,11 +1,11 @@
 //! The task's properties beside the Summary's column (`Properties` `Sq8ss`, 260 wide, 24 inside its left hairline):
 //! a row each, 7 over and under it, what it is in 12 `text_muted` in an 84 column and its value 8 after it in 12 —
-//! Status and Priority with their glyphs, Pipeline, Tags, Depends on, Limits, Branch in Geist Mono and Created. They
-//! replace *Run #N setup* and *Task organization* and keep what those said: the pipeline and limits are those the
-//! latest run started with, and when the task has others now the value says *changed* and its tooltip what the task
-//! has; a run that cannot be read, or ran on a teammate's computer, has them *Not recorded*. Then what the shared
-//! project says of the task, the run's facts (`run_facts`), and last the link to the task's memory (`Memory link`
-//! `lJQcf`).
+//! Status and Priority with their glyphs, Pipeline, Tags, Depends on, Limits, Branch in Geist Mono, Base and where it
+//! came from (`base_branch`, `qg3JF`) and Created. They replace *Run #N setup* and *Task organization* and keep what
+//! those said: the pipeline and limits are those the latest run started with, and when the task has others now the
+//! value says *changed* and its tooltip what the task has; a run that cannot be read, or ran on a teammate's computer,
+//! has them *Not recorded*. Then what the shared project says of the task, the run's facts (`run_facts`), and last the
+//! link to the task's memory (`Memory link` `lJQcf`).
 
 use std::{sync::Arc, time::Duration};
 
@@ -139,6 +139,11 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
       branch(ctx, task),
     ),
     property(
+      "task-property-base",
+      &ctx.t("summary.properties.base.label"),
+      super::base_branch::base(ctx, task, tasks),
+    ),
+    property(
       "task-property-created",
       &ctx.t("summary.properties.created"),
       value(
@@ -270,7 +275,7 @@ fn pipeline(ctx: &mut Ctx, task: &TaskContext, tasks: Option<&ProjectTasks>) -> 
 }
 
 /// What the properties show of the latest run's setup.
-enum Setup<'a> {
+pub(super) enum Setup<'a> {
   /// No run yet: the task's own.
   None,
   /// The run cannot be read, or ran on another computer.
@@ -278,7 +283,7 @@ enum Setup<'a> {
   Run(&'a orchester_workspace::tasks::detail::RunView),
 }
 
-fn run_setup(task: &TaskContext) -> Setup<'_> {
+pub(super) fn run_setup(task: &TaskContext) -> Setup<'_> {
   let detail = &task.detail;
   match (detail.requirements.latest_run(), detail.run.as_ref()) {
     (LatestRun::Run(started), Some(run)) if started.run == run.id() => Setup::Run(run),

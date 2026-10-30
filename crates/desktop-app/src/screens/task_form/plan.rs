@@ -109,6 +109,7 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
         id: format!("task-form-pipeline-option-{index}"),
         icon: Icon::Workflow,
         title: choice_label(ctx, choice),
+        mono: false,
         help: Some(option_detail(ctx, choice)),
         help_place: HelpPlace::UnderIcon,
         chosen: chosen == Some(id),
