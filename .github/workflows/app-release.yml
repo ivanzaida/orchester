@@ -1,19 +1,26 @@
 # Releases the Windows app (crates/desktop-app, the program `orchester`) when its version changes on master: builds
 # `orchester.exe` and `orchester-runner.exe`, packs them as a portable zip and as an installer (Inno Setup,
-# tools/installer/orchester.iss), and creates the GitHub Release `app-v<version>` with both and their checksums. See
-# docs/stable-build.md, "Releases from CI".
+# tools/installer/orchester.iss), signs both with the release key and uploads them to Orchester Cloud, which publishes
+# the release on Beta (the staff promote it to Stable), and then tags the commit `app-v<version>`. The files no longer
+# go to a GitHub Release. See docs/stable-build.md, "Releases from CI".
 #
 # The version is crates/desktop-app/Cargo.toml's own `version`, apart from the workspace's `[workspace.package]`
 # version: bumping that one releases nothing. The team server's releases are in the private platform repository.
 # A push to master that changes the file releases only when neither the tag nor a release `app-v<version>` exists yet,
 # so other edits of that file, and the same run again, release nothing.
 #
-# A release uploads the programs' PDBs to GlitchTip before it is created, with the repository secret
-# GLITCHTIP_AUTH_TOKEN, and fails without it; a dry run skips the upload. The PDBs never go into the zip, the
-# installer or the release.
+# A release uploads the programs' PDBs to GlitchTip before the files go to the cloud, with the repository secret
+# GLITCHTIP_AUTH_TOKEN, and fails without it; a dry run skips the upload. The PDBs never go into the zip or the
+# installer.
 #
-# The programs and the installer are not signed, so Windows SmartScreen warns about them. Signing would be one step
-# before packing, with a certificate kept in the repository's secrets. macOS is not built here:
+# The cloud job's upload (`orchester-release`, crates/release, built by the Windows job) signs each file with the
+# Ed25519 release key in the secret ORCHESTER_RELEASE_SIGNING_KEY and uploads it with the release token in
+# ORCHESTER_CLOUD_RELEASE_TOKEN (`releases:write`). Both reach only that step's environment (and the Windows job's
+# check that they are set), never a command line, the log or an artifact. The job fails unless the cloud accepted both
+# files; only then is the tag made.
+#
+# The programs and the installer are not code-signed, so Windows SmartScreen warns about them. Code signing would be
+# one step before packing, with a certificate kept in the repository's secrets. macOS is not built here:
 # tools/package-macos.sh makes Orchester.app on a Mac, for a later job on a macOS runner.
 name: App release
 
@@ -46,13 +53,14 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
       build: ${{ steps.decide.outputs.build }}
       release: ${{ steps.decide.outputs.release }}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      # A pre-release (`0.3.0-rc.1`) and a release alike go to the cloud's Beta; the cloud never promotes a pre-release
+      # to Stable.
       - id: version
         name: Read the app's version
         run: |
@@ -61,10 +69,7 @@ jobs:
             echo "::error file=crates/desktop-app/Cargo.toml::Its [package] version \"$version\" is not <major>.<minor>.<patch>[-<pre-release>], e.g. 0.2.0 or 0.3.0-rc.1."
             exit 1
           fi
-          {
-            echo "version=$version"
-            if [[ "$version" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
-          } >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - id: decide
         name: Decide whether to release
         env:
@@ -122,24 +127,39 @@ jobs:
       # The C runtime linked into the programs, so they start on a Windows without the Visual C++ Redistributable.
       RUSTFLAGS: -C target-feature=+crt-static
     steps:
-      # A release without its PDBs in GlitchTip would show unreadable stacks, so a release stops here, before the
-      # build, when the token for the upload below is missing.
-      - name: Check the GlitchTip token
+      # A release without its PDBs in GlitchTip would show unreadable stacks, and one the cloud cannot take is no
+      # release, so a release stops here, before the build, when a secret for the uploads below is missing.
+      - name: Check the release secrets
         if: ${{ needs.prepare.outputs.release == 'true' }}
         env:
           GLITCHTIP_AUTH_TOKEN: ${{ secrets.GLITCHTIP_AUTH_TOKEN }}
+          ORCHESTER_RELEASE_SIGNING_KEY: ${{ secrets.ORCHESTER_RELEASE_SIGNING_KEY }}
+          ORCHESTER_CLOUD_RELEASE_TOKEN: ${{ secrets.ORCHESTER_CLOUD_RELEASE_TOKEN }}
         shell: bash
         run: |
+          missing=0
           if [ -z "$GLITCHTIP_AUTH_TOKEN" ]; then
             echo "::error title=No GlitchTip token::The repository secret GLITCHTIP_AUTH_TOKEN is missing; a release uploads its PDBs to GlitchTip with it (docs/stable-build.md, \"Releases from CI\")."
-            exit 1
+            missing=1
           fi
+          if [ -z "$ORCHESTER_RELEASE_SIGNING_KEY" ]; then
+            echo "::error title=No release signing key::The repository secret ORCHESTER_RELEASE_SIGNING_KEY is missing; a release signs its files with it (docs/stable-build.md, \"Releases from CI\")."
+            missing=1
+          fi
+          if [ -z "$ORCHESTER_CLOUD_RELEASE_TOKEN" ]; then
+            echo "::error title=No cloud release token::The repository secret ORCHESTER_CLOUD_RELEASE_TOKEN is missing; a release uploads its files to Orchester Cloud with it (docs/stable-build.md, \"Releases from CI\")."
+            missing=1
+          fi
+          exit "$missing"
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release --locked -p orchester-app -p orchester-runner
+      # A build of its own, so the tool's features (the cloud client, signing) do not join the app's build.
+      - name: Build the release tool
+        run: cargo build --release --locked -p orchester-release
       - name: Check the programs need no Visual C++ runtime
         shell: pwsh
         run: |
@@ -210,14 +230,14 @@ jobs:
 
           & $cli debug-files upload --no-sources --require-all @ids --wait-for 600 $files
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::error title=Debug files not uploaded::sentry-cli could not upload the PDBs to GlitchTip; the release is not created."
+            Write-Output "::error title=Debug files not uploaded::sentry-cli could not upload the PDBs to GlitchTip; nothing goes to Orchester Cloud."
             exit $LASTEXITCODE
           }
-      - name: Skip the debug files upload
+      - name: Skip the uploads
         if: ${{ needs.prepare.outputs.release != 'true' }}
         shell: bash
         run: |
-          echo "::notice title=No debug files upload::A dry run uploads no PDBs to GlitchTip; a release does."
+          echo "::notice title=No uploads::A dry run uploads no PDBs to GlitchTip and no files to Orchester Cloud; a release does."
       - name: Pack the zip and the installer
         shell: pwsh
         env:
@@ -263,6 +283,8 @@ jobs:
           }
           [System.IO.File]::WriteAllText((Join-Path $out "SHA256SUMS.txt"), (($sums -join "`n") + "`n"))
           Get-Content (Join-Path $out "SHA256SUMS.txt")
+      # The files as the cloud job below uploads them, so a run again of that job sends the same bytes; for a dry run,
+      # its result.
       - uses: actions/upload-artifact@v7
         with:
           name: orchester-${{ needs.prepare.outputs.version }}-windows
@@ -272,69 +294,107 @@ jobs:
             ${{ runner.temp }}/app-release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: ${{ needs.prepare.outputs.release == 'true' }}
+        with:
+          name: orchester-release-tool
+          path: target/release/orchester-release.exe
+          if-no-files-found: error
+          retention-days: 7
 
-  release:
-    name: GitHub Release
+  # Signs both files and uploads them to Orchester Cloud. A job of its own: only it sees the signing key and the release
+  # token (no checkout, no build), and a run again of it alone sends the same files and resumes the upload.
+  cloud:
+    name: Orchester Cloud
     needs: [prepare, windows]
     if: ${{ needs.prepare.outputs.release == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions: {}
     steps:
       - uses: actions/download-artifact@v8
         with:
           name: orchester-${{ needs.prepare.outputs.version }}-windows
-          path: ${{ runner.temp }}/assets
+          path: ${{ runner.temp }}/app-release
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-release-tool
+          path: ${{ runner.temp }}/release-tool
+      # The release's notes, which the app shows with its update offer; the staff can edit them in the cloud's admin.
       - name: Write the release notes
+        shell: pwsh
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
           COMMIT: ${{ github.sha }}
-          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          set -euo pipefail
-          setup="Orchester-$VERSION-setup.exe"
-          zip="Orchester-$VERSION-windows-x64.zip"
-          cat > "$RUNNER_TEMP/notes.md" <<NOTES
-          Orchester $VERSION for Windows 10 and 11 (x64), built from [\`${COMMIT:0:12}\`]($REPOSITORY_URL/commit/$COMMIT).
-
-          | File | What it is |
-          | --- | --- |
-          | \`$setup\` | **The installer.** Installs Orchester for your user, without administrator rights, to \`%LOCALAPPDATA%\\Programs\\Orchester\` (another folder can be chosen on the first install; an upgrade keeps it), with the Start menu shortcut *Orchester*, an optional desktop shortcut and an uninstaller (*Settings › Apps*). |
-          | \`$zip\` | **The portable app.** \`orchester.exe\` and \`orchester-runner.exe\` in one folder; keep them together, because the app starts its runner from beside itself (\`orchester.exe\` alone cannot open a project). Unpack it to a folder you can write to, outside *Program Files*, and start \`orchester.exe\`. |
-          | \`SHA256SUMS.txt\` | The SHA-256 checksums of both (\`sha256sum -c SHA256SUMS.txt\`, or \`Get-FileHash\` in PowerShell). |
+          $ErrorActionPreference = "Stop"
+          $notes = @'
+          Orchester {version} for Windows 10 and 11 (x64), built from commit `{commit}`.
 
           ### Your data stays
 
-          The app keeps its database (\`orchester.db\`) and its logs beside its program. Installing a newer version over an older one replaces only the two programs, and uninstalling removes only them: the database and the logs stay in the folder. Close Orchester first; the installer waits until it is closed and never closes it itself.
+          The app keeps its database (`orchester.db`) and its logs beside its program. Installing a newer version over an older one replaces only the two programs: the database and the logs stay in the folder. Close Orchester first; the installer waits until it is closed and never closes it itself.
 
-          **Back up before the first start of a newer version:** copy aside \`orchester.db\` (with \`orchester.db-wal\`, if any) and each project's \`.orchester\\orchester.db\`. A newer version migrates them, and an older one then refuses them.
+          **Back up before the first start of a newer version:** copy aside `orchester.db` (with `orchester.db-wal`, if any) and each project's `.orchester\orchester.db`. A newer version migrates them, and an older one then refuses them.
 
-          This is the installed app: its MCP server listens on the fixed address in *Settings › Automation* (default \`http://127.0.0.1:47821/mcp\`), with the token in Windows Credential Manager.
+          ### Not code-signed
 
-          ### Not signed
+          Neither the programs nor the installer are code-signed, so Windows SmartScreen may show *Windows protected your PC*: choose *More info*, then *Run anyway*.
+          '@
+          $notes = $notes.Replace("{version}", $env:VERSION).Replace("{commit}", $env:COMMIT.Substring(0, 12))
+          [System.IO.File]::WriteAllText((Join-Path $env:RUNNER_TEMP "notes.md"), $notes)
+          Write-Output $notes
+      # orchester-release signs both files with the release key and uploads them: it creates the draft (or takes up the
+      # one a failed run left), declares each file with its size, SHA-256, key id and signature, sends the parts the
+      # cloud does not have yet, and finalizes. It fails unless the cloud accepted both, and then the tag is not made.
+      # The key and the token are in this step's environment only, never on a command line; the tool never prints them.
+      - name: Sign and upload to Orchester Cloud
+        shell: pwsh
+        env:
+          ORCHESTER_RELEASE_SIGNING_KEY: ${{ secrets.ORCHESTER_RELEASE_SIGNING_KEY }}
+          ORCHESTER_CLOUD_RELEASE_TOKEN: ${{ secrets.ORCHESTER_CLOUD_RELEASE_TOKEN }}
+          CLOUD_API: https://api.orchester.cloud
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = Join-Path $env:RUNNER_TEMP "app-release"
+          $tool = Join-Path $env:RUNNER_TEMP "release-tool\orchester-release.exe"
+          & $tool publish --api $env:CLOUD_API --version $env:VERSION --platform windows --arch x86_64 `
+            --notes-file (Join-Path $env:RUNNER_TEMP "notes.md") `
+            (Join-Path $files "Orchester-$env:VERSION-setup.exe") (Join-Path $files "Orchester-$env:VERSION-windows-x64.zip")
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error title=Release not uploaded::Orchester Cloud did not accept Orchester $env:VERSION (the error above); no tag is made. See docs/stable-build.md, `"When the cloud rejects an upload`"."
+            exit $LASTEXITCODE
+          }
 
-          Neither the programs nor the installer are code-signed, so Windows SmartScreen may show *Windows protected your PC*: choose *More info*, then *Run anyway*. Check the download against \`SHA256SUMS.txt\` first.
-
-          macOS is not built here; on a Mac, \`tools/install-macos.sh\` builds and installs \`Orchester.app\` from the repository.
-          NOTES
-          cat "$RUNNER_TEMP/notes.md"
-      # A run again after this step failed half-way finds its own release: it uploads the files again instead.
-      - name: Create the release
+  # The tag `app-v<version>` on the released commit, once the cloud has published the release. No GitHub Release is
+  # made: the files and the notes live in Orchester Cloud.
+  tag:
+    name: Tag
+    needs: [prepare, cloud]
+    if: ${{ needs.prepare.outputs.release == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the commit
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          REPO: ${{ github.repository }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
           COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
           tag="app-v$VERSION"
-          flags=()
-          [ "$PRERELEASE" = false ] || flags+=(--prerelease)
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" "$RUNNER_TEMP/assets"/* --clobber
-          else
-            gh release create "$tag" --target "$COMMIT" --title "Orchester $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
-              "${flags[@]}" "$RUNNER_TEMP/assets"/*
+          # A run again after this job failed finds the tag it made: it leaves it.
+          if existing="$(gh api "repos/$REPO/git/ref/tags/$tag" --jq .object.sha 2>/dev/null)"; then
+            if [ "$existing" != "$COMMIT" ]; then
+              echo "::error::$tag exists already on $existing, not on $COMMIT."
+              exit 1
+            fi
+            echo "::notice title=Tagged::$tag is on $COMMIT already."
+            exit 0
           fi
+          gh api "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$COMMIT" --silent
+          echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta and tagged $tag."

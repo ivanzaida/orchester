@@ -4,14 +4,15 @@
 
 ### Windows — release installer
 
-Raising `version` in `crates/desktop-app/Cargo.toml` on `master` publishes a GitHub Release `app-v<version>` with:
+Raising `version` in `crates/desktop-app/Cargo.toml` on `master` signs and uploads a release to Orchester Cloud, where
+it is published on Beta, and tags the commit `app-v<version>` (no GitHub Release since 2026-10-31;
+`docs/stable-build.md`, "Releases from CI"). It has, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
 
 - `Orchester-<version>-setup.exe` — an installer for the current user, no admin rights. Installs into
   `%LOCALAPPDATA%\Programs\Orchester` by default (another folder can be chosen on the first install), adds a Start menu
   shortcut, an optional desktop shortcut and an uninstaller.
 - `Orchester-<version>-windows-x64.zip` — the portable app: `orchester.exe` + `orchester-runner.exe` (the app needs the
   runner beside it).
-- `SHA256SUMS.txt`.
 
 The installer is **not code-signed**, so SmartScreen warns (*More info* → *Run anyway*). An upgrade replaces the
 programs and keeps `orchester.db`, the logs and the MCP token. The installer and uninstaller ask you to close a running
