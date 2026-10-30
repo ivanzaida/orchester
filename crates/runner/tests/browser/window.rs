@@ -1,8 +1,9 @@
 //! The *Browser* window's side of the project's browser with a real browser: the state a subscribed desktop follows,
 //! a frame of the tab shown, the person's click and typing, `<select>` lists and dialogs drawn by the window, the
 //! person's own tabs apart from runs', frames dropped rather than queued, and the report that an agent started
-//! browsing; navigation and the restart that reopens the tabs are in [`restart`].
+//! browsing; navigation and the restart that reopens the tabs are in [`restart`], copy, cut and paste in [`clipboard`].
 
+mod clipboard;
 mod restart;
 
 use std::time::Duration;
@@ -36,6 +37,17 @@ pub const ANIMATED: &str = r#"<!doctype html><html><head><title>Page animated</t
 <div id="box" style="width:400px;height:400px"></div><script>let n=0;function step(){n++;
 const box=document.getElementById('box');box.style.background='hsl('+(n%360)+',80%,50%)';box.textContent=n;
 requestAnimationFrame(step)}requestAnimationFrame(step)</script></body></html>"#;
+
+/// The page of the clipboard tests: text to select, fields at fixed places, in CSS pixels, and each field's value read
+/// back through the events a page listens to.
+pub const CLIPBOARD: &str = r#"<!doctype html><html><head><title>Page clipboard</title><style>body{margin:0}</style></head>
+<body><p id="words" style="position:fixed;left:0;top:300px;margin:0">Quiet words on the page</p>
+<input id="field" style="position:fixed;left:0;top:0;width:300px;height:40px" oninput="document.title='changed'">
+<input id="secret" type="password" value="hunter2" style="position:fixed;left:0;top:50px;width:300px;height:40px">
+<input id="mail" type="email" value="ada@example.com" style="position:fixed;left:0;top:100px;width:300px;height:40px">
+<input id="fixed" readonly value="read only" style="position:fixed;left:0;top:150px;width:300px;height:40px">
+<div id="notes" contenteditable style="position:fixed;left:0;top:200px;width:300px;height:40px">editable notes</div>
+</body></html>"#;
 
 /// A page that asks with a prompt shortly after it loads and shows the answer in its title.
 pub const DIALOG: &str = r#"<!doctype html><html><head><title>Page dialog</title></head><body><script>

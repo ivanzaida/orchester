@@ -33,7 +33,7 @@ pub enum PersonInput {
     text: Option<String>,
     modifiers: Modifiers,
   },
-  /// Text committed by the keyboard or an input method, inserted at the caret.
+  /// Text committed by the keyboard or an input method, or pasted from the clipboard, inserted at the caret.
   Text { text: String },
   /// An input method's composition under way: its text so far and its selection, in characters.
   Composition {

@@ -8,6 +8,7 @@ mod follow;
 mod input;
 mod order;
 mod select;
+mod selection;
 mod serve;
 
 use std::{
