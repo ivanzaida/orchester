@@ -5,9 +5,11 @@
 //! with the stand-in set as the cloud (Advanced) so a person can sign in there. `--settings` (the `settings`
 //! scenario) also sets up the kept invites and installed app's MCP rows app Settings shows ([`settings`]).
 //! `--join-team` starts a stand-in team server on loopback that the stand-in cloud names as the account's, with an
-//! invite to one of its projects, and prints its address and codes, for *Join a team*.
-//! What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA, never shipped: an
-//! example is no part of the app's program.
+//! invite to one of its projects, and prints its address and codes, for *Join a team*. A marker the seed's `team-*`
+//! scenarios leave beside the database ([`team::State`]) sets up a stand-in team server on loopback that answers while
+//! the window is open ([`team`]); where a person's press is part of the state, the window opens there
+//! ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA,
+//! never shipped: an example is no part of the app's program.
 //!
 //!   qa_app [--signed-in | --signed-out] [--settings] [--join-team]
 
@@ -15,6 +17,8 @@
 
 mod agents;
 mod settings;
+mod team;
+mod team_window;
 
 use std::{error::Error, fs, sync::Arc};
 
@@ -55,6 +59,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   if let Some(folder) = location.database.parent() {
     fs::create_dir_all(folder)?;
   }
+  let team_state = team::State::beside(&location.database)?;
+  if signed_out && team_state.is_some() {
+    return Err("a team scenario joins a team while signed in: it cannot go with --signed-out".into());
+  }
   let runtime = Runtime::new()?;
   let launch = Launch::begin_with_vault(
     &location.database,
@@ -92,14 +100,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     (true, None) => return Err("--settings needs a started session".into()),
     (false, _) => None,
   };
+  // The team answers while the window is open.
+  let team_server = match (team_state, launch.services()) {
+    (Some(state), Some(services)) => Some(team::prepare(state, services, runtime.handle())?),
+    (Some(_), None) => return Err("a team scenario needs a started session".into()),
+    (None, _) => None,
+  };
   println!(
-    "cloud {} as {}\nsigned in {}\nsettings fixtures {}",
+    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nteam {}",
     cloud.url(),
     signed_in::account_cloud::EMAIL,
     !signed_out,
-    shown.is_some()
+    shown.is_some(),
+    team_server.as_ref().map_or_else(|| "none".to_owned(), TeamServer::url),
   );
-  window::open_showing(&runtime, &launch, position, shown);
+  match (team_state.filter(|state| state.drives()), &team_server) {
+    (Some(state), Some(server)) => team_window::open(&runtime, &launch, position, (state, server))?,
+    _ => window::open_showing(&runtime, &launch, position, shown),
+  }
   clipboard::clear_at_exit();
   launch.end();
   Ok(())

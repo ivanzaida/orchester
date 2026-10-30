@@ -4,11 +4,10 @@
 
 use std::{
   error::Error,
-  thread,
   time::{Duration, Instant},
 };
 
-use lurq::app::{App, Tree, events::MouseButton};
+use lurq::app::{App, Tree};
 use orchester_app::{
   mcp::WindowLink,
   routes::{OrchesterView, Route},
@@ -18,6 +17,7 @@ use orchester_app::{
 use super::{
   State,
   signed_in::account_cloud::{AccountCloud, EMAIL, PASSWORD, PAUSED, UNCONFIRMED},
+  window::Window,
 };
 
 /// Takes the window to `state`, then presses Tab `tabs` times.
@@ -116,61 +116,7 @@ fn code_step(window: &mut Window<'_>, state: State, cloud: &AccountCloud) -> Res
   window.until(shows)
 }
 
-struct Window<'a> {
-  app: &'a mut App,
-  tree: &'a mut Tree,
-}
-
 impl Window<'_> {
-  /// Lays the window out, delivering what its futures finished, until `id` shows; an error after 20 seconds.
-  fn until(&mut self, id: &str) -> Result<(), Box<dyn Error>> {
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-      self.tree.tick_futures();
-      self.tree.pass_headless(self.app);
-      if self.tree.get_element_by_id(id).is_some() {
-        return Ok(());
-      }
-      if Instant::now() > deadline {
-        return Err(format!("{id} did not show").into());
-      }
-      thread::sleep(Duration::from_millis(10));
-    }
-  }
-
-  fn center(&mut self, id: &str) -> Result<(f32, f32), Box<dyn Error>> {
-    let bounds = self
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .ok_or_else(|| format!("{id} is laid out"))?;
-    Ok((bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0))
-  }
-
-  /// Presses the middle of `id` with the pointer.
-  fn press(&mut self, id: &str) -> Result<(), Box<dyn Error>> {
-    let (x, y) = self.center(id)?;
-    self.tree.mouse_move(x, y);
-    self.tree.mouse_down(x, y, MouseButton::Left);
-    self.tree.mouse_up(x, y, MouseButton::Left);
-    // The pointer leaves for the panel's empty side, so what it pressed shows as it rests.
-    self.tree.mouse_move(1.0, y);
-    self.tree.pass_headless(self.app);
-    Ok(())
-  }
-
-  /// Types `value` into the text input `id`, in place of what it held.
-  fn set(&mut self, id: &str, value: &str) -> Result<(), Box<dyn Error>> {
-    self
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.as_text_input())
-      .ok_or_else(|| format!("{id} is a text input"))?
-      .set_value(value);
-    self.tree.pass_headless(self.app);
-    Ok(())
-  }
-
   /// Presses Tab on the keyboard.
   fn tab(&mut self) {
     self.tree.key_down("Tab".into(), "Tab".into(), false, false, false);
