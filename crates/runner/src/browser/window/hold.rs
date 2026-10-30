@@ -66,9 +66,9 @@ impl HoldClock for SystemClock {
 /// How a call's wait for the person came out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PersonWait {
-  /// The person was not using the tab: the call runs, and nothing waited.
+  /// The person was not using the tab: the call goes on, and nothing waited.
   NotHeld,
-  /// The person left the tab alone after this long: the call runs.
+  /// The person left the tab alone after this long: the call goes on.
   Over(Duration),
   /// The person was still using the tab after this long, the cap: the call does not act.
   Capped(Duration),
@@ -76,6 +76,14 @@ pub enum PersonWait {
   Stopped,
   /// The tab closed or the browser restarted after this long: there is nothing left to wait for on it.
   Gone(Duration),
+}
+
+impl PersonWait {
+  /// The call answers without acting, whatever its site: nobody is asked about it.
+  #[must_use]
+  pub const fn ends_the_call(self) -> bool {
+    matches!(self, Self::Capped(_) | Self::Stopped)
+  }
 }
 
 /// The agents' waits on the tabs and the person's input they wait on.

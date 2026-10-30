@@ -4,15 +4,15 @@
 //! the project's browser ([`crate::browser::ProjectBrowser`]), which its first call starts.
 //!
 //! Whether a call runs or asks is decided per call ([`StepBrowser::look`]), by P1's policy on the site it goes to or
-//! acts on: the URL `browser_open` opens, else the page of the tab it acts on. The reading tools and `browser_close`
-//! run; opening or acting on an allowed site or a local development host runs; any other site, or a page without a
-//! web host, asks; `browser_eval` asks at every call. The relay asks the person itself, as for any of Orchester's tools
-//! that asks, so every CLI runs these tools unasked.
+//! acts on: the URL `browser_open` opens, else the page of the tab it acts on, as it is once the call's wait for the
+//! person ([`person`]) is over. The reading tools and `browser_close` run; opening or acting on an allowed site or a
+//! local development host runs; any other site, or a page without a web host, asks; `browser_eval` asks at every call.
+//! The relay asks the person itself, as for any of Orchester's tools that asks, so every CLI runs these tools unasked.
 //!
 //! Every answer with page content starts with [`PAGE_DATA_NOTICE`], after the line that says the call waited for the
-//! person when it did ([`person`]), and a JavaScript dialog the page opened is dismissed and named in the next answer
-//! on its tab. Each call that acts on a page is reported to the person's *Browser* window once carried out, for *Agent
-//! is acting* ([`acted`]).
+//! person when it did, and a JavaScript dialog the page opened is dismissed and named in the next answer on its tab.
+//! Each call that acts on a page is reported to the person's *Browser* window once carried out, for *Agent is acting*
+//! ([`acted`]).
 
 mod act;
 mod acted;

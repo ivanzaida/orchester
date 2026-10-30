@@ -1,7 +1,8 @@
 //! The person's hold through the browser tools, end to end: the fake CLI's script `act_on_a_held_tab`
 //! (`support/fake_browser_tools.rs`), the real browser and a clock the test drives. Every call that acts waits and then
-//! says so, the reading tools never do, the cap and a stop of the run answer without acting, and the window hears it
-//! all. The clock stands still unless the test moves it, so a call that wrongly waits ends the test at its patience.
+//! says so, the reading tools never do, the cap and a stop of the run answer without acting, a call is judged by the
+//! site it acts on once its wait is over, and the window hears it all. The clock stands still unless the test moves it,
+//! so a call that wrongly waits ends the test at its patience.
 
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
@@ -9,11 +10,11 @@ use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, RunId},
   permission::browser::BrowserAccess,
-  run::{Answerer, ApprovalAnswer, PauseReason, RunStatus},
+  run::{Answerer, ApprovalAnswer, PauseReason, PendingToolApproval, RunStatus},
 };
 use orchester_ipc::{
   Event,
-  browser::{AgentWaitEnd, BrowserCommand, BrowserEvent, BrowserTabId},
+  browser::{AgentWaitEnd, BrowserCommand, BrowserEvent, BrowserTabId, Navigation},
 };
 use orchester_runner::{
   browser::{PERSON_HOLD, ProjectBrowser, WAIT_CAP},
@@ -23,6 +24,7 @@ use tokio::sync::mpsc;
 
 use super::{
   hold::{DrivenClock, moved},
+  pages::ELSEWHERE,
   site,
   tools::{answers, browsing, browsing_setup, call_of, calls},
 };
@@ -33,6 +35,9 @@ use crate::{
 
 /// The first line of an answer after a wait of ten seconds.
 const WAITED: &str = "The person was using this tab in the Browser window, so this call waited 10 s before it ran.";
+/// The first line of the answer of a call denied after a wait of ten seconds.
+const WAITED_NOT_RUN: &str =
+  "The person was using this tab in the Browser window, so this call waited 10 s and did not run.";
 
 /// A run on the fake's `script`, its form open in the tab the test uses as the person.
 struct HeldRun {
@@ -43,6 +48,8 @@ struct HeldRun {
   clock: Arc<DrivenClock>,
   id: RunId,
   tab: BrowserTabId,
+  /// The address of the pages, on a local host.
+  site: String,
   _profile: tempfile::TempDir,
 }
 
@@ -76,6 +83,7 @@ impl HeldRun {
       clock,
       id,
       tab: BrowserTabId::new(""),
+      site,
       _profile: profile,
     };
     let first = held
@@ -144,6 +152,67 @@ impl HeldRun {
     self.clock.advance(PERSON_HOLD);
     self.ended(AgentWaitEnd::Ran).await;
   }
+
+  /// The person goes on using the tab until the wait on it reaches its cap.
+  async fn use_tab_to_the_cap(&mut self) {
+    let step = Duration::from_secs(5);
+    let mut passed = Duration::ZERO;
+    while passed + step < WAIT_CAP {
+      self.clock.advance(step);
+      passed += step;
+      self.use_tab().await;
+    }
+    self.clock.advance(WAIT_CAP - passed);
+    self.ended(AgentWaitEnd::Capped).await;
+  }
+
+  /// The person sends the tab to `page` of `site` in the window, and its page is there.
+  async fn go_to(&mut self, site: &str, page: &str) {
+    let navigate = BrowserCommand::Navigate {
+      tab: self.tab.clone(),
+      to: Navigation::Address {
+        url: format!("{site}{page}"),
+      },
+    };
+    let browser = self.scheduler.browser();
+    browser
+      .serve(browser.arrived(navigate), &self.desktop)
+      .await
+      .expect("the tab goes there");
+    let tab = self.tab.clone();
+    self
+      .until(|event| {
+        matches!(event, BrowserEvent::Changed(state) if state.tabs.iter().any(|shown| {
+          shown.id == tab && shown.url.ends_with(page) && !shown.loading
+        }))
+      })
+      .await;
+  }
+
+  /// The approval the run waits for, which must be about `action` on `target`.
+  async fn asked(&mut self, root: &Path, (action, target): (&str, &str)) -> PendingToolApproval {
+    let asked = pending_approval(root, &mut self.events, self.id).await;
+    assert_eq!(
+      (asked.action.as_str(), asked.target.as_deref()),
+      (action, Some(target)),
+      "{:?}",
+      calls(root, self.id)
+    );
+    asked
+  }
+
+  async fn answer(&self, asked: PendingToolApproval, answer: ApprovalAnswer) {
+    self
+      .scheduler
+      .decide_tool_approval(self.id, asked.id, answer, Answerer::Person)
+      .await
+      .expect("answered");
+  }
+
+  async fn answer_ask(&mut self, root: &Path, about: (&str, &str), answer: ApprovalAnswer) {
+    let asked = self.asked(root, about).await;
+    self.answer(asked, answer).await;
+  }
 }
 
 fn say(root: &Path, name: &str) -> std::path::PathBuf {
@@ -166,19 +235,18 @@ async fn browser_hold_every_acting_call_waits_and_says_so_and_reading_tools_do_n
     held.step_waits_then_runs(root, step).await;
   }
 
-  // `browser_eval` asks first, and waits once approved.
+  // `browser_eval` waits first, and asks once the wait is over. Input before it ran would hold it again.
   held.use_tab().await;
   HeldRun::go(root, 7, "go");
-  let eval = pending_approval(root, &mut held.events, held.id).await;
-  assert_eq!(eval.action, "browser_eval");
-  held
-    .scheduler
-    .decide_tool_approval(held.id, eval.id, ApprovalAnswer::Once, Answerer::Person)
-    .await
-    .expect("approved");
   held.waits().await;
   held.clock.advance(PERSON_HOLD);
   held.ended(AgentWaitEnd::Ran).await;
+  held
+    .answer_ask(root, ("browser_eval", "127.0.0.1"), ApprovalAnswer::Once)
+    .await;
+  held
+    .until(|event| matches!(event, BrowserEvent::AgentActed { action, .. } if action.tool == "browser_eval"))
+    .await;
 
   // The tab is held again: `browser_open` of a new tab touches no tab the person uses, and its action comes while the
   // clock stands still. `browser_close` of the held tab waits.
@@ -244,6 +312,97 @@ fn every_call_said_so(root: &Path, id: RunId, called: &[String]) {
   );
 }
 
+/// The site is judged on the page the call acts on: the person's navigation starts the hold, so a call decided before
+/// its wait could act on a site nobody judged. A call on a local page asks about where the person went, and does not
+/// act when denied; an approval stands while the person only goes on using the page it named, but not once they go
+/// elsewhere; and a wait that reaches its cap asks nobody.
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_hold_judges_the_site_the_call_acts_on_once_its_wait_is_over() {
+  if !browser_installed() {
+    return;
+  }
+  let project = browsing(AgentProvider::CodexCli, BrowserAccess::On);
+  let root = project.repo.path();
+  let mut held = HeldRun::start(&project, "site-moves").await;
+  let elsewhere = held.site.replace("127.0.0.1", ELSEWHERE);
+
+  held.use_tab().await;
+  HeldRun::go(root, 0, "go");
+  held.waits().await;
+  held.go_to(&elsewhere, "form?away").await;
+  held.clock.advance(PERSON_HOLD);
+  held.ended(AgentWaitEnd::Ran).await;
+  held
+    .answer_ask(root, ("browser_key", ELSEWHERE), ApprovalAnswer::Deny)
+    .await;
+
+  // The person comes back to the page while the approval is pending: the call waits again, and is not asked about
+  // again.
+  HeldRun::go(root, 1, "go");
+  let asked = held.asked(root, ("browser_eval", ELSEWHERE)).await;
+  held.use_tab().await;
+  held.answer(asked, ApprovalAnswer::Once).await;
+  held.waits().await;
+  held.clock.advance(PERSON_HOLD);
+  held.ended(AgentWaitEnd::Ran).await;
+
+  // Now they go to another site while it is pending: what was approved was not that site.
+  HeldRun::go(root, 2, "go");
+  let asked = held.asked(root, ("browser_eval", ELSEWHERE)).await;
+  let home = held.site.clone();
+  held.go_to(&home, "home").await;
+  held.answer(asked, ApprovalAnswer::Once).await;
+  held.waits().await;
+  held.clock.advance(PERSON_HOLD);
+  held.ended(AgentWaitEnd::Ran).await;
+  held
+    .answer_ask(root, ("browser_eval", "127.0.0.1"), ApprovalAnswer::Deny)
+    .await;
+
+  // `browser_eval` always asks, yet not when its wait reaches the cap: the run ends with nobody asked.
+  held.use_tab().await;
+  HeldRun::go(root, 3, "go");
+  held.waits().await;
+  held.use_tab_to_the_cap().await;
+
+  let id = held.id;
+  let run = wait_for(root, &mut held.events, id, |run| run.status().is_terminal()).await;
+  let called = calls(root, id);
+  assert_eq!(run.status(), &RunStatus::Succeeded, "{called:?}");
+  held.scheduler.browser().stop().await;
+  judged_where_it_acted(root, id, &called);
+}
+
+fn judged_where_it_acted(root: &Path, id: RunId, called: &[String]) {
+  assert_eq!(
+    call_of(called, "browser_key", 0),
+    format!("browser_key error: {WAITED_NOT_RUN}"),
+    "denied, it did not act and still says it waited"
+  );
+  assert_eq!(
+    call_of(called, "browser_eval", 0),
+    format!("browser_eval ok: {WAITED}"),
+    "{called:?}"
+  );
+  assert!(
+    answers(root, id, "browser_eval")
+      .iter()
+      .any(|line| line.contains("BODY")),
+    "the denied key press did not move the focus: {:?}",
+    answers(root, id, "browser_eval")
+  );
+  assert_eq!(
+    call_of(called, "browser_eval", 1),
+    format!("browser_eval error: {WAITED_NOT_RUN}"),
+    "{called:?}"
+  );
+  assert_eq!(
+    call_of(called, "browser_eval", 2),
+    "browser_eval error: The person is still using this tab in the Browser window: this call waited 60 s and did not \
+     act. Try again later, or work in another tab."
+  );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn browser_hold_answers_without_acting_at_its_cap_and_a_later_call_runs() {
   if !browser_installed() {
@@ -255,15 +414,7 @@ async fn browser_hold_answers_without_acting_at_its_cap_and_a_later_call_runs() 
   held.use_tab().await;
   HeldRun::go(root, 0, "go");
   held.waits().await;
-  let step = Duration::from_secs(5);
-  let mut passed = Duration::ZERO;
-  while passed + step < WAIT_CAP {
-    held.clock.advance(step);
-    passed += step;
-    held.use_tab().await;
-  }
-  held.clock.advance(WAIT_CAP - passed);
-  held.ended(AgentWaitEnd::Capped).await;
+  held.use_tab_to_the_cap().await;
 
   // The person stops: the fake's next click runs without waiting.
   held.clock.advance(PERSON_HOLD);

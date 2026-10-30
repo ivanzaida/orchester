@@ -26,7 +26,7 @@ use crate::{
 
 /// The host the form is served at the second time, as the approvals name it: an IPv4-mapped IPv6 address of
 /// loopback, which reaches the test's pages but is no local development host.
-const ELSEWHERE: &str = "[::ffff:127.0.0.1]";
+pub(super) const ELSEWHERE: &str = "[::ffff:127.0.0.1]";
 
 /// The answers of the run's calls of `tool`, in order, each without the notice it starts with; for the tools whose
 /// every answer starts with [`PAGE_DATA_NOTICE`] and opens no dialog.

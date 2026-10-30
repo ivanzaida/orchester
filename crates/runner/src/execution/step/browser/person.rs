@@ -1,11 +1,12 @@
 //! An agent's call that acts on a tab the person uses in the *Browser* window waits first (`docs/design/browser.md`,
 //! "What the agent gets", decision 16): every call that reports what it did to the window ([`Acted`]) and
-//! `browser_close`, but for a `browser_open` of a new tab, which touches no tab the person could be using. What the
-//! wait came to is the first line of the call's answer, or the whole answer when the call did not act.
+//! `browser_close`, but for a `browser_open` of a new tab, which touches no tab the person could be using. Only then is
+//! it judged by its site. What the wait came to is the first line of the call's answer, or the whole answer when the
+//! call did not act.
 
 use std::time::Duration;
 
-use orchester_core::orchester_tools::browser::BrowserCall;
+use orchester_core::orchester_tools::{ToolResult, browser::BrowserCall};
 
 use super::{StepBrowser, acted::Acted};
 use crate::browser::PersonWait;
@@ -24,14 +25,17 @@ fn acts_on_a_tab(call: &BrowserCall) -> bool {
 }
 
 impl StepBrowser {
-  /// Waits while the person uses the tab `call` acts on, and what that came to. A tab that closed or a browser that
-  /// restarted meanwhile leaves the call to look again at the tab it now acts on. A tab that cannot be reached holds
-  /// nothing: the call's own answer says why.
-  pub(in crate::execution::step) async fn wait_for_person(&self, call: &BrowserCall) -> PersonWait {
+  /// Waits while the person uses the tab `call` acts on, and what that came to together with `before`, the waits of
+  /// this call so far. A tab that closed or a browser that restarted meanwhile leaves the call to look again at the tab
+  /// it now acts on. A tab that cannot be reached holds nothing: the call's own answer says why.
+  pub(in crate::execution::step) async fn wait_for_person(&self, call: &BrowserCall, before: PersonWait) -> PersonWait {
     if !acts_on_a_tab(call) {
-      return PersonWait::NotHeld;
+      return before;
     }
-    let mut waited = Duration::ZERO;
+    let mut waited = match before {
+      PersonWait::Over(waited) => waited,
+      _ => Duration::ZERO,
+    };
     loop {
       let wait = match self.tab(call.tab()).await {
         Ok(tab) => self.browser.wait_for_person(self.run, tab.id()).await,
@@ -45,6 +49,17 @@ impl StepBrowser {
         PersonWait::Capped(after) => return PersonWait::Capped(waited + after),
         PersonWait::Stopped => return PersonWait::Stopped,
       }
+    }
+  }
+
+  /// What a call refused or denied after `wait` answers: `why`, after the line that says it waited when it did.
+  pub(in crate::execution::step) fn not_run(wait: PersonWait, why: &str) -> ToolResult {
+    match wait {
+      PersonWait::Over(after) => ToolResult::unavailable(&format!(
+        "The person was using this tab in the Browser window, so this call waited {} and did not run.\n{why}",
+        seconds(after)
+      )),
+      _ => ToolResult::unavailable(why),
     }
   }
 }

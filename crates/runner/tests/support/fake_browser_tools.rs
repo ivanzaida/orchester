@@ -113,12 +113,16 @@ fn read_closely_and_act_elsewhere(site: &str, elsewhere: &str, call: Call<'_>) {
 }
 
 /// Acts on a tab the test uses as the person, each step when the test says so (`fake-browser-go-<step>`). `script` is
-/// `every-call`: all the reading tools and then one call of each that waits; or `one-click`: a click, the page's text,
-/// and both again.
+/// `every-call`: all the reading tools and then one call of each that waits; `site-moves`: a key press and scripts on a
+/// tab the person sends elsewhere; or `one-click`: a click, the page's text, and both again.
 fn act_on_a_held_tab(worktree: &Path, site: &str, script: &str, call: Call<'_>) {
   report(call, "browser_open", &json!({"url": format!("{site}form")}));
   if script == "every-call" {
     every_call(worktree, site, call);
+    return;
+  }
+  if script == "site-moves" {
+    site_moves(worktree, call);
     return;
   }
   let form = report(call, "browser_read_page", &json!({}));
@@ -129,6 +133,22 @@ fn act_on_a_held_tab(worktree: &Path, site: &str, script: &str, call: Call<'_>) 
   go_ahead(worktree, 1);
   report(call, "browser_click", &json!({"ref": save}));
   report(call, "browser_page_text", &json!({}));
+}
+
+/// A key press, then a script that shows whether it moved the focus, then two more.
+fn site_moves(worktree: &Path, call: Call<'_>) {
+  go_ahead(worktree, 0);
+  report(call, "browser_key", &json!({"keys": ["Tab"]}));
+  go_ahead(worktree, 1);
+  report(
+    call,
+    "browser_eval",
+    &json!({"expression": "document.activeElement.tagName"}),
+  );
+  for step in 2..=3 {
+    go_ahead(worktree, step);
+    report(call, "browser_eval", &json!({"expression": "location.pathname"}));
+  }
 }
 
 /// Reads every way there is, then makes one call of each tool that waits, the test holding the tab before each. The

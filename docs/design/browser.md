@@ -77,7 +77,9 @@ time.
     their limits are the CLIs' to change. What sets the cap is the run: the relay handles one request at a time, so a
     waiting call holds the invocation's other calls, reads included, and its time counts as the agent's active time.
     The hold itself stays 10 s after the last input, the design's number, and the cap counts from when the first call
-    on the tab began to wait.
+    on the tab began to wait. The site policy is applied after the wait, not before it: the person's navigation starts
+    the hold, so a tab can be on another site by the time the wait ends, and a call must not act on a page nobody judged
+    ("What the agent gets").
 
 Decision 3's *one browser profile per project* is the person's too (2026-10-29): the project's runs share its
 sign-ins, and the window's project switcher relies on it.
@@ -114,15 +116,21 @@ sign-ins, and the window's project switcher relies on it.
 - While the person drives a tab in the window (input in the last 10 seconds), the agent's actions on that tab wait,
   and its answer says the person was using it (decision 16). The runner notes when each input and each navigation of
   the window reaches a tab, a moving pointer's too. A call that reports what it did to the window (`browser_open` on the
-  current tab, `browser_navigate`, `browser_click`, `browser_type`, `browser_key`, `browser_scroll`, `browser_eval`,
-  the last once approved) and `browser_close` wait until 10 s after the last of them; `browser_open` of a new tab and
-  the reading tools never do. After a wait the answer starts with *The person was using this tab in the Browser
-  window, so this call waited 14 s before it ran.*, before the page data notice. A wait that reaches the cap answers
-  that the person is still using the tab and that the call did not act; so does a wait the run's stop ends. Cancelling
-  or pausing the run ends a wait at once, without acting, and a call that comes before its agents work again does not
-  wait either, since a pause lets a running tool finish and would wait for it. The relay handles one request at a
-  time (`docs/interactive-tool-approvals.md`), so a read the agent sends while a call of the same relay waits comes
-  after it, as it does behind a call waiting for a person.
+  current tab, `browser_navigate`, `browser_click`, `browser_type`, `browser_key`, `browser_scroll`, `browser_eval`)
+  and `browser_close` wait until 10 s after the last of them; `browser_open` of a new tab and the reading tools never
+  do. After a wait the answer starts with *The person was using this tab in the Browser window, so this call waited
+  14 s before it ran.*, before the page data notice. A wait that reaches the cap answers that the person is still using
+  the tab and that the call did not act; so does a wait the run's stop ends. Cancelling or pausing the run ends a wait
+  at once, without acting, and a call that comes before its agents work again does not wait either, since a pause lets
+  a running tool finish and would wait for it. The relay handles one request at a time
+  (`docs/interactive-tool-approvals.md`), so a read the agent sends while a call of the same relay waits comes after
+  it, as it does behind a call waiting for a person.
+- The site is decided when the wait is over, because the person's navigation is one of the things that holds a tab: the
+  policy judges the page the call will act on, and an approval names that site. A wait that reaches the cap or that the
+  run's stop ends asks nobody. A call the person is asked about may be held again while they answer: once approved it
+  waits again and is judged again, so it runs without another question only on the site the approval named, and asks
+  again on any other that asks. A call denied or refused after a wait answers *…so this call waited 14 s and did not
+  run.*, then why. Each wait between two questions has its own cap, as the person's answer lies between them.
 - `browser_eval` reads what the other tools deliberately hide (cookies not marked HttpOnly, local storage), so it is
   offered only as a tool whose every call asks the person (decision 9).
 

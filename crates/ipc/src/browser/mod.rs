@@ -273,7 +273,8 @@ pub enum BrowserReply {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentWaitEnd {
-  /// The person left the tab alone long enough, and the agent's call runs.
+  /// The person left the tab alone long enough, and the agent's call goes on: it runs, unless the site it then acts on
+  /// asks and the person denies it.
   Ran,
   /// The person was still using the tab when the wait reached its cap: the call answers without acting.
   Capped,
