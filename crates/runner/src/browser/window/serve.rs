@@ -34,6 +34,7 @@ struct WindowTab {
   cdp: Arc<Cdp>,
   target: TargetId,
   session: SessionId,
+  mode: BrowserMode,
 }
 
 impl ProjectBrowser {
@@ -89,13 +90,18 @@ impl ProjectBrowser {
   }
 
   /// Screencasts `tab` at `viewport` instead of the tab shown before: the page takes the window's size and scale,
-  /// and its frames are kept for the window from the first.
+  /// and its frames are kept for the window from the first. With the browser in a window of its own, which draws its
+  /// own pages, `tab` is only named as the one shown.
   async fn show(&self, tab: &BrowserTabId, viewport: Viewport) -> Result<(), BrowserError> {
     let shown = self.window_tab(tab).await?;
     let before = self.window.show(Some(Shown {
       target: shown.target.clone(),
       session: shown.session.clone(),
     }));
+    if shown.mode == BrowserMode::Headed {
+      self.window.changed();
+      return Ok(());
+    }
     if let Some(before) = before {
       stop_screencast(&shown.cdp, &before.session).await;
     }
@@ -190,12 +196,21 @@ impl ProjectBrowser {
   }
 
   /// Starts the browser again on the same profile, headless or in a window of its own as `mode` says, and reopens
-  /// its tabs by their addresses for the same owners. The tabs get new ids; the window shows none until it asks.
+  /// its tabs by their addresses for the same owners. The tabs get new ids, the tab shown stays the one shown, and the
+  /// window learns all of that at once when the tabs are back: until then it keeps what it shows. Nothing is
+  /// screencast until it asks.
   async fn restart(&self, mode: BrowserMode) -> Result<(), BrowserError> {
     let mut running = self.running.lock().await;
+    self.window.restarting();
+    let restarted = self.start_again(&mut running, mode).await;
+    self.window.restarted(running.is_some());
+    restarted
+  }
+
+  async fn start_again(&self, running: &mut Option<Running>, mode: BrowserMode) -> Result<(), BrowserError> {
     let reopen = match running.take() {
       Some(current) => {
-        let reopen = reopened(&current).await;
+        let reopen = reopened(&current, self.window.shown()).await;
         current.stop().await;
         reopen?
       }
@@ -206,10 +221,19 @@ impl ProjectBrowser {
     let found = self.program().await?;
     let started = running.insert(Running::start(&found, &profile, mode, &self.window).await?);
     let mut failed = None;
-    for (owner, url) in reopen {
-      let opened = match started.open(owner).await {
-        Ok((_, session)) if url != "about:blank" => go_to(&started.cdp, &session, &url).await,
-        Ok(_) => Ok(()),
+    for tab in reopen {
+      let opened = match started.open(tab.owner).await {
+        Ok((target, session)) => {
+          if tab.shown {
+            let session = session.clone();
+            self.window.show(Some(Shown { target, session }));
+          }
+          if tab.url == "about:blank" {
+            Ok(())
+          } else {
+            go_to(&started.cdp, &session, &tab.url).await
+          }
+        }
         Err(error) => Err(error),
       };
       if let Err(error) = opened {
@@ -228,17 +252,31 @@ impl ProjectBrowser {
       Some((
         Arc::clone(&running.cdp),
         running.tabs.lock().get(&target)?.session.clone(),
+        running.mode,
       ))
     });
     match session {
-      Some((cdp, session)) => Ok(WindowTab { cdp, target, session }),
+      Some((cdp, session, mode)) => Ok(WindowTab {
+        cdp,
+        target,
+        session,
+        mode,
+      }),
       None => Err(BrowserError::NoSuchTab(target)),
     }
   }
 }
 
-/// Each tab of `running` with its owner and address, to open again after a restart.
-async fn reopened(running: &Running) -> Result<Vec<(TabOwner, String)>, BrowserError> {
+/// A tab of a browser that restarts, to open again.
+struct Reopened {
+  owner: TabOwner,
+  url: String,
+  /// The window shows it.
+  shown: bool,
+}
+
+/// Each tab of `running` with its owner and address, and whether it is the tab `shown`.
+async fn reopened(running: &Running, shown: Option<Shown>) -> Result<Vec<Reopened>, BrowserError> {
   let listed = running.cdp.targets().await?;
   Ok(
     running
@@ -246,12 +284,13 @@ async fn reopened(running: &Running) -> Result<Vec<(TabOwner, String)>, BrowserE
       .lock()
       .all()
       .iter()
-      .map(|tab| {
-        let url = listed
+      .map(|tab| Reopened {
+        owner: tab.owner,
+        url: listed
           .iter()
           .find(|info| info.id == tab.target)
-          .map_or_else(|| "about:blank".to_owned(), |info| info.url.clone());
-        (tab.owner, url)
+          .map_or_else(|| "about:blank".to_owned(), |info| info.url.clone()),
+        shown: shown.as_ref().is_some_and(|shown| shown.target == tab.target),
       })
       .collect(),
   )

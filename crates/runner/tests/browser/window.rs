@@ -1,7 +1,9 @@
 //! The *Browser* window's side of the project's browser with a real browser: the state a subscribed desktop follows,
 //! a frame of the tab shown, the person's click and typing, `<select>` lists and dialogs drawn by the window, the
-//! person's own tabs apart from runs', frames dropped rather than queued, the report that an agent started browsing,
-//! navigation, and the restart that reopens the tabs.
+//! person's own tabs apart from runs', frames dropped rather than queued, and the report that an agent started
+//! browsing; navigation and the restart that reopens the tabs are in [`restart`].
+
+mod restart;
 
 use std::time::Duration;
 
@@ -10,7 +12,7 @@ use orchester_ipc::{
   Event, Rejection,
   browser::{
     BrowserCommand, BrowserEvent, BrowserReply, BrowserState, BrowserTabId, DialogKind, KeyAction, Modifiers,
-    MouseAction, MouseButton, Navigation, PersonInput, TabOwner, Viewport,
+    MouseAction, MouseButton, PersonInput, TabOwner, Viewport,
   },
 };
 use orchester_runner::browser::{BrowserError, ProjectBrowser, cdp::TargetId};
@@ -507,66 +509,5 @@ async fn browser_frames_are_dropped_rather_than_queued() {
     latest.sequence,
     first.sequence
   );
-  browser.stop().await;
-}
-
-/// The person's address line and history, and the restart that reopens the tabs by their addresses for their owners.
-#[tokio::test(flavor = "multi_thread")]
-async fn browser_person_navigates_and_the_restart_reopens_the_tabs() {
-  if !browser_installed() {
-    return;
-  }
-  let profile = tempfile::tempdir().expect("temporary folder");
-  let browser = ProjectBrowser::new(profile.path().to_path_buf());
-  let site = pages().await;
-  let mut desktop = Desktop::new();
-  desktop.serve(&browser, BrowserCommand::Subscribe).await;
-  let run = RunId::generate();
-  browser.open_tab(run, &format!("{site}kept")).await.expect("opened");
-  let tab = person_tab(&desktop, &browser, Some(format!("{site}first"))).await;
-  let at = |title: &'static str| move |state: &BrowserState| state.tabs.iter().any(|tab| tab.title == title);
-  desktop.state(at("Page first")).await;
-
-  let to = Navigation::Address {
-    url: format!("{site}second"),
-  };
-  desktop
-    .serve(&browser, BrowserCommand::Navigate { tab: tab.clone(), to })
-    .await;
-  desktop.state(at("Page second")).await;
-  let back = BrowserCommand::Navigate {
-    tab: tab.clone(),
-    to: Navigation::Back,
-  };
-  desktop.serve(&browser, back).await;
-  desktop.state(at("Page first")).await;
-  let forward = BrowserCommand::Navigate {
-    tab: tab.clone(),
-    to: Navigation::Forward,
-  };
-  desktop.serve(&browser, forward.clone()).await;
-  desktop.state(at("Page second")).await;
-  let none = browser.serve(browser.arrived(forward), &desktop.sender).await;
-  assert!(
-    matches!(none, Err(Rejection::Failed { .. })),
-    "no page forward: {none:?}"
-  );
-
-  desktop.serve(&browser, BrowserCommand::BackToOrchester).await;
-  let state = desktop
-    .state(|state| {
-      state.tabs.len() == 2
-        && state
-          .tabs
-          .iter()
-          .all(|listed| listed.title.starts_with("Page") && listed.id != tab)
-    })
-    .await;
-  let reopened: Vec<(TabOwner, &str)> = state.tabs.iter().map(|tab| (tab.owner, tab.title.as_str())).collect();
-  assert_eq!(
-    reopened,
-    [(TabOwner::Run { run }, "Page kept"), (TabOwner::Person, "Page second")]
-  );
-  assert_eq!(browser.tabs(run).await.expect("tabs").len(), 1, "the run keeps its tab");
   browser.stop().await;
 }

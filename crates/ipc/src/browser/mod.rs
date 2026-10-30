@@ -57,8 +57,8 @@ pub enum BrowserMode {
   Headed,
 }
 
-/// The project's browser as the window shows it: its tabs in the order they opened, the tab screencast now, and
-/// where it draws. No tabs while it does not run.
+/// The project's browser as the window shows it: its tabs in the order they opened, the tab shown (screencast now, or
+/// only named while the browser is in a window of its own), and where it draws. No tabs while it does not run.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BrowserState {
   pub tabs: Vec<BrowserTab>,
@@ -216,7 +216,8 @@ pub enum BrowserCommand {
   /// once and whenever it changes, with the other [`BrowserEvent`]s. Sent once a runner attached.
   Subscribe,
   /// Screencasts `tab`, at `viewport`, instead of the tab shown before; again with another viewport when the window's
-  /// size or scale changes. Frames come as [`crate::Event::BrowserFrame`], only of this tab.
+  /// size or scale changes. Frames come as [`crate::Event::BrowserFrame`], only of this tab. With the browser in a
+  /// window of its own no frames come: `tab` is only the one shown.
   Show {
     tab: BrowserTabId,
     viewport: Viewport,

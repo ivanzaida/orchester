@@ -4,8 +4,8 @@
 //! unless the person typed there); and *Open in a browser window*
 //! (decision 7). Under the toolbar the line that says what an agent did or that the person's input holds it
 //! (`page::activity`), and a line when the browser could not do what was asked; then the page. Without a browser the
-//! toolbar is faded and takes no input (`07` `YEv2c`); with the browser in a window of its own the address line shows
-//! the tab as it was and the button is gone (`05` `GjcAk`).
+//! toolbar is faded and takes no input (`07` `YEv2c`); with the browser in a window of its own it is faded too and the
+//! button is gone, and the address line shows the tab shown, which the runner keeps across the restart (`05` `GjcAk`).
 
 use std::sync::Arc;
 
@@ -136,16 +136,19 @@ fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
       .child(address)
       .into()
   };
-  // Without a browser there is no window to open the page in (`07`).
-  let open_in_window = usable.then(|| {
+  // Without a browser there is no window to open the page in (`07`). Once pressed it turns its loader until the browser
+  // restarted, which takes seconds; the toolbar is faded meanwhile.
+  let opening = showing.restarting && showing.mode() == BrowserMode::Headless;
+  let open_in_window = (usable || opening).then(|| {
     let commands = showing.commands.clone();
-    ActionButton::new(
+    let button = ActionButton::new(
       "browser-open-in-window",
       ButtonKind::Ghost,
       ctx.t("browser.toolbar.openInWindow"),
     )
     .icon(Icon::AppWindow)
-    .on_click(move || commands.send(BrowserCommand::OpenInWindow))
+    .on_click(move || commands.send(BrowserCommand::OpenInWindow));
+    if opening { button.loading() } else { button }
   });
   Row::new()
     .id("browser-toolbar")
@@ -196,7 +199,7 @@ impl Component for Address {
       .map(|tab| model::shown_address(&tab.url).to_owned())
       .filter(|address| address != "about:blank")
       .unwrap_or_default();
-    self.follow(shown.as_ref().map(|tab| tab.id.clone()), &address);
+    self.follow(showing.usable(), shown.as_ref().map(|tab| tab.id.clone()), &address);
     let input = self.input(ctx, &showing, shown.as_ref().map(|tab| tab.id.clone()));
     let owner = shown.as_ref().map(|tab| owner(ctx, &tab.owner));
     let stroke = if self.focused.get() {
@@ -223,18 +226,22 @@ impl Component for Address {
 
 impl Address {
   /// The value follows the tab shown and its address, unless the person is typing over it. The focus *Empty* gave the
-  /// line to wait for an address goes when a tab comes instead; text typed there keeps it.
-  fn follow(&self, tab: Option<BrowserTabId>, address: &str) {
+  /// line to wait for an address goes when a tab comes instead; text typed there keeps it. A line that takes no input
+  /// (`05`, `07`) keeps no focus.
+  fn follow(&self, usable: bool, tab: Option<BrowserTabId>, address: &str) {
     let focused = self.focused.get_untracked();
+    if focused && !usable {
+      *self.input_key.lock() += 1;
+    }
     let mut follows = self.follows.lock();
     let typed = follows
       .as_ref()
       .is_some_and(|(_, followed)| *followed != self.value.get_untracked());
-    if focused && typed {
+    if focused && typed && usable {
       return;
     }
     let next = (tab, address.to_owned());
-    if follows.as_ref() == Some(&next) {
+    if follows.as_ref() == Some(&next) && (usable || !typed) {
       return;
     }
     let tab_came = next.0.is_some() && follows.as_ref().is_some_and(|(tab, _)| tab.is_none());

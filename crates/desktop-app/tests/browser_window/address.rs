@@ -158,3 +158,26 @@ fn browser_address_line_keeps_the_focus_when_enter_has_nothing_to_open() {
   assert_eq!(browser.focused().as_deref(), FOCUSED);
   assert_eq!(browser.state.recorded_commands_for_test(), [], "nothing was asked");
 }
+
+#[test]
+fn browser_address_line_lets_go_of_the_focus_and_what_was_typed_in_a_browser_window() {
+  let Some(mut browser) = on_empty() else {
+    return;
+  };
+  type_in(&mut browser, "docs.rs/req");
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs: Vec::new(),
+    shown: None,
+    mode: BrowserMode::Headed,
+  }));
+  browser.until_shown("browser-headed");
+  // The strip is empty before and after, so the line hears of the new mode only with the browser's next revision.
+  browser.until("the typed text to go", |browser| value(browser).is_empty());
+  browser.pass();
+  browser.pass();
+  assert_eq!(
+    browser.focused(),
+    None,
+    "the faded line takes no input, so no caret (05)"
+  );
+}

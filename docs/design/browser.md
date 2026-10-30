@@ -300,7 +300,10 @@ not jump to another project by itself.
 - **Empty** (`06 · Empty` `eCCuU`): no tabs; the address line is focused (*Type an address*) and a card says when
   agents' tabs appear. **Not found** (`07 · Browser not found` `YEv2c`): the reason, *Open Settings › Browser*,
   *Look again*; toolbar and *+* unavailable. **Opened in a browser window** (`05` `GjcAk`): the page area is an
-  in-place notice with *Back to Orchester*.
+  in-place notice with *Back to Orchester*. The tab shown stays the one shown through the restart, under its new id, so
+  the strip keeps it selected and the faded toolbar its address and owner; the window hears of the restart only when the
+  tabs are back. Nothing is screencast meanwhile: a tab the person picks in the strip is only named as the one shown,
+  and it is the one *Back to Orchester* shows. Picking does not bring it forward in the browser's own window.
 - **The page.** `Page.startScreencast` on the tab shown, at the window's size and scale
   (`Emulation.setDeviceMetricsOverride` with the window's logical size and DPI); frames arrive only when the page
   changes, are acknowledged (`Page.screencastFrameAck`), decoded from JPEG to RGBA (`zune-jpeg`, already in the

@@ -13,7 +13,7 @@ mod serve;
 use std::{
   sync::{
     Arc,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
   },
   time::Duration,
 };
@@ -49,12 +49,15 @@ pub(super) struct Window {
   sequence: AtomicU64,
   /// Counts the browser's starts: a browser that ended on its own tells the window only while it is the latest.
   generation: AtomicU64,
+  /// The browser restarts: its state is not sent until its tabs are back.
+  restarting: AtomicBool,
   /// Wakes the publisher of the running browser's state.
   changed: Notify,
   inputs: InputLines,
 }
 
-/// The tab the window shows, screencast now.
+/// The tab the window shows: screencast now, or with the browser in a window of its own only named, since that window
+/// draws its own pages.
 #[derive(Clone)]
 pub(super) struct Shown {
   pub(super) target: TargetId,
@@ -148,6 +151,31 @@ impl Window {
     if self.generation.load(Ordering::Acquire) != generation {
       return;
     }
+    self.no_browser();
+  }
+
+  /// The browser restarts: until [`Self::restarted`] the window hears nothing of it, neither of the one stopping nor of
+  /// the one starting, and keeps what it shows.
+  pub(super) fn restarting(&self) {
+    self.restarting.store(true, Ordering::Release);
+    self.started();
+  }
+
+  /// The restart is over: the window learns the state of the browser `running`, or that none runs.
+  pub(super) fn restarted(&self, running: bool) {
+    self.restarting.store(false, Ordering::Release);
+    if running {
+      self.changed();
+    } else {
+      self.no_browser();
+    }
+  }
+
+  fn is_restarting(&self) -> bool {
+    self.restarting.load(Ordering::Acquire)
+  }
+
+  fn no_browser(&self) {
     self.show(None);
     self.send(BrowserEvent::Changed(BrowserState::default()));
   }
@@ -196,10 +224,14 @@ pub(super) async fn publish(cdp: Arc<Cdp>, tabs: Arc<Mutex<Tabs>>, window: Arc<W
       () = window.changed.notified() => true,
       _ = poll.tick() => false,
     };
-    if !window.subscribed() {
+    if !window.subscribed() || window.is_restarting() {
       continue;
     }
     let state = state(&cdp, &tabs, &window, mode).await;
+    // The restart may have begun while the tabs were read.
+    if window.is_restarting() {
+      continue;
+    }
     if told || sent.as_ref() != Some(&state) {
       window.send(BrowserEvent::Changed(state.clone()));
       sent = Some(state);

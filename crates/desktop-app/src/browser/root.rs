@@ -24,7 +24,7 @@ use orchester_ipc::browser::{BrowserCommand, BrowserMode, BrowserTabId, Viewport
 use parking_lot::Mutex;
 
 use super::{
-  commands::Commands,
+  commands::{Commands, Restarting},
   keys,
   link::{BrowserLink, Show},
   model::{self, Indicator},
@@ -40,6 +40,7 @@ const TICK: Duration = Duration::from_secs(1);
 pub struct BrowserRoot {
   marks: Signal<MarksByProject>,
   failed: Signal<bool>,
+  restarting: Signal<Restarting>,
   look: Signal<u64>,
   tick: Signal<u64>,
   interval: Interval,
@@ -86,7 +87,7 @@ impl Component for BrowserRoot {
           services.runners.clone(),
           services.runtime.clone(),
           project,
-          Signal::new(false),
+          (Signal::new(false), Signal::new(Restarting::default())),
         );
         commands.send_quietly(BrowserCommand::StopShowing);
       }
@@ -98,6 +99,7 @@ impl Component for BrowserRoot {
     Self {
       marks: ctx.signal(MarksByProject::default()),
       failed: ctx.signal(false),
+      restarting: ctx.signal(Restarting::default()),
       look: ctx.signal(0),
       interval: ctx.create_interval(TICK, move || next.update(|tick| *tick += 1)),
       tick,
@@ -152,9 +154,10 @@ impl Component for BrowserRoot {
       services.runners.clone(),
       services.runtime.clone(),
       project.clone(),
-      self.failed.clone(),
+      (self.failed.clone(), self.restarting.clone()),
     );
     let showing = Showing {
+      restarting: self.restarting.get().0.as_ref() == Some(&project),
       project: Arc::new(project.clone()),
       name,
       view,
@@ -214,8 +217,10 @@ impl BrowserRoot {
     )
   }
 
-  /// Asks the browser to screencast the tab to show at the page area's size, or to stop. The tab shown is the one the
-  /// window last asked for while it is open: the runner reports it only once it switched.
+  /// Asks the browser to show the tab to show at the page area's size, or to stop: it screencasts that tab, or with the
+  /// browser in a window of its own only names it, so the strip and the address line go on showing a tab (`05`
+  /// `GjcAk`). The tab shown is the one the window last asked for while it is open: the runner reports it only once it
+  /// switched.
   fn screencast(&self, ctx: &mut Ctx, showing: &Showing, now: Instant) {
     let window = ctx.window().info();
     let size = self.page_size(ctx);
@@ -233,7 +238,6 @@ impl BrowserRoot {
         (&opened, &showing.marks, now),
       )
     });
-    let headless = showing.mode() == BrowserMode::Headless && !window.is_minimized;
     let viewport = size.and_then(|(width, height)| {
       let scale = (window.scale_factor * 100.0).round() as u32;
       Viewport::new(
@@ -244,7 +248,7 @@ impl BrowserRoot {
     });
     let next = Sent {
       project: showing.project.as_ref().clone(),
-      tab: target.filter(|_| headless).zip(viewport),
+      tab: target.filter(|_| !window.is_minimized).zip(viewport),
     };
     if sent.as_ref() == Some(&next) {
       return;

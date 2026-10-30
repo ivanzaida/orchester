@@ -72,7 +72,8 @@ pub fn not_found(ctx: &mut Ctx, showing: &Showing) -> Element {
   )
 }
 
-/// *Kontur's browser is open in a window of its own* (`05 · Opened in a browser window` `GjcAk`).
+/// *Kontur's browser is open in a window of its own* (`05 · Opened in a browser window` `GjcAk`); *Back to Orchester*
+/// turns its loader and cannot be pressed again until the browser restarted, which takes seconds.
 pub fn headed(ctx: &mut Ctx, showing: &Showing) -> Element {
   let commands = showing.commands.clone();
   let back = ActionButton::new(
@@ -82,6 +83,7 @@ pub fn headed(ctx: &mut Ctx, showing: &Showing) -> Element {
   )
   .icon(Icon::Undo2)
   .on_click(move || commands.send(BrowserCommand::BackToOrchester));
+  let back = if showing.restarting { back.loading() } else { back };
   centered(
     EmptyState::new(
       "browser-headed",

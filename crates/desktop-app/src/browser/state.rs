@@ -51,6 +51,8 @@ pub struct Showing {
   pub revision: u64,
   pub strip: Strip,
   pub found: Lookup,
+  /// Its browser restarts at the person's request: the toolbar is faded and takes no input until the runner answers.
+  pub restarting: bool,
   pub commands: Commands,
   /// The person's own use of the project's tabs.
   pub marks: Marks,
@@ -69,6 +71,7 @@ impl PartialEq for Showing {
       && self.view.is_some() == other.view.is_some()
       && self.strip == other.strip
       && self.found == other.found
+      && self.restarting == other.restarting
       && self.marks == other.marks
   }
 }
@@ -76,7 +79,7 @@ impl PartialEq for Showing {
 impl DevtoolsInspectable for Showing {}
 
 impl Showing {
-  /// The tab the browser screencasts now.
+  /// The tab shown: screencast now, or only named with the browser in a window of its own (`05` `GjcAk`).
   pub fn shown(&self) -> Option<&BrowserTabId> {
     self.view.as_ref().and_then(BrowserView::shown)
   }
@@ -90,9 +93,9 @@ impl Showing {
     self.found == Lookup::Missing
   }
 
-  /// The window drives the browser: one was found and it is not in a window of its own.
+  /// The window drives the browser: one was found, it is not in a window of its own and it is not restarting.
   pub fn usable(&self) -> bool {
-    !self.unavailable() && self.mode() == BrowserMode::Headless
+    !self.unavailable() && !self.restarting && self.mode() == BrowserMode::Headless
   }
 }
 

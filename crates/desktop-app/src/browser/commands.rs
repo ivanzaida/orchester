@@ -14,6 +14,13 @@ use orchester_ipc::browser::{BrowserCommand, BrowserReply};
 use orchester_workspace::runner::Runners;
 use tokio::runtime::Handle;
 
+/// The project whose browser restarts at the person's request (*Open in a browser window*, *Back to Orchester*), until
+/// the runner answers. That takes seconds, while the window keeps showing what it showed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Restarting(pub Option<PathBuf>);
+
+impl DevtoolsInspectable for Restarting {}
+
 /// Sends the window's requests to the browser of one project.
 #[derive(Clone)]
 pub struct Commands {
@@ -22,6 +29,7 @@ pub struct Commands {
   root: Arc<PathBuf>,
   /// The person's last request was refused or lost.
   failed: Signal<bool>,
+  restarting: Signal<Restarting>,
 }
 
 /// Commands to the same project are the same.
@@ -34,12 +42,18 @@ impl PartialEq for Commands {
 impl DevtoolsInspectable for Commands {}
 
 impl Commands {
-  pub fn new(runners: Runners, runtime: Handle, root: PathBuf, failed: Signal<bool>) -> Self {
+  pub fn new(
+    runners: Runners,
+    runtime: Handle,
+    root: PathBuf,
+    (failed, restarting): (Signal<bool>, Signal<Restarting>),
+  ) -> Self {
     Self {
       runners,
       runtime,
       root: Arc::new(root),
       failed,
+      restarting,
     }
   }
 
@@ -68,12 +82,20 @@ impl Commands {
 
   fn dispatch(&self, command: BrowserCommand, said: bool, then: impl FnOnce(BrowserReply) + Send + 'static) {
     let what = command_name(&command);
+    let restarts = matches!(command, BrowserCommand::OpenInWindow | BrowserCommand::BackToOrchester);
+    if restarts {
+      self.restarting.set(Restarting(Some(self.root.as_ref().clone())));
+    }
     // Handed over here, not on the task below: the tasks start in no certain order, and the person's input reaches the
     // page in the order it was made.
     let answer = self.runners.browser(&self.root, command);
-    let (root, failed) = (Arc::clone(&self.root), self.failed.clone());
+    let (root, failed, restarting) = (Arc::clone(&self.root), self.failed.clone(), self.restarting.clone());
     self.runtime.spawn(async move {
-      match answer.await {
+      let answer = answer.await;
+      if restarts {
+        restarting.set(Restarting::default());
+      }
+      match answer {
         Ok(reply) => {
           if said && failed.get_untracked() {
             failed.set(false);

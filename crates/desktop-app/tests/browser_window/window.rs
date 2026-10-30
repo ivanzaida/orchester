@@ -14,8 +14,8 @@ use orchester_app::{
 };
 use orchester_core::id::RunId;
 use orchester_ipc::browser::{
-  AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTabId, DialogKind, ElementBox,
-  ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
+  AgentAction, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTabId, DialogKind,
+  ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
 };
 
 use super::support::{Browser, browser_installed, state, tab};
@@ -165,6 +165,142 @@ fn browser_window_stands_in_for_the_page_when_there_is_none() {
   );
   assert!(browser.shows("browser-back-to-orchester"));
   assert!(!browser.shows("browser-open-in-window"));
+}
+
+/// The requests the window made since the last look to name a tab as shown; nothing else it asks is expected.
+fn shown_asked(browser: &Browser) -> Vec<BrowserTabId> {
+  browser
+    .state
+    .recorded_commands_for_test()
+    .into_iter()
+    .map(|(_, command)| match command {
+      BrowserCommand::Show { tab, .. } => tab,
+      other => panic!("the window asks only to show a tab here, not {other:?}"),
+    })
+    .collect()
+}
+
+/// `05` as a real browser reaches it: it restarted in a window of its own, so its tabs have new ids and it may report
+/// none shown. The tab stays selected in the strip and the faded address line keeps its address and owner.
+#[test]
+fn browser_window_keeps_a_tab_shown_with_the_browser_in_a_window_of_its_own() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.state.record_commands_for_test();
+  let person = |id: &str| tab(id, TabOwner::Person, &format!("Page {id}"));
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs: vec![person("A"), person("B")],
+    shown: Some(BrowserTabId::new("B")),
+    mode: BrowserMode::Headless,
+  }));
+  browser.until_shown("browser-page");
+  browser.until("the page area to be measured", |browser| {
+    !browser.state.recorded_commands_for_test().is_empty()
+  });
+
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs: vec![person("A2"), person("B2")],
+    shown: Some(BrowserTabId::new("B2")),
+    mode: BrowserMode::Headed,
+  }));
+  browser.until_shown("browser-headed");
+  browser.until_shown("browser-tab-1-close");
+  assert!(!browser.shows("browser-tab-0-close"), "only the tab shown is selected");
+  assert_eq!(browser.text("browser-address-owner"), "Your tab");
+  assert_eq!(address(&mut browser), "localhost:5173/B2");
+  assert_eq!(browser.focused(), None);
+  assert!(!browser.shows("browser-page"), "no page under the notice");
+
+  // Named as shown, not stopped: the runner keeps that tab for *Back to Orchester*.
+  assert_eq!(shown_asked(&browser), [BrowserTabId::new("B2")]);
+
+  // A tab the person picks in the strip, once the runner reported it, is the one shown from then on.
+  let center = browser.bounds("browser-tab-0").center();
+  browser.tree.mouse_down(center.0, center.1, MouseButton::Left);
+  browser.tree.mouse_up(center.0, center.1, MouseButton::Left);
+  browser.pass();
+  browser.pass();
+  assert_eq!(shown_asked(&browser), [BrowserTabId::new("A2")]);
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs: vec![person("A2"), person("B2")],
+    shown: Some(BrowserTabId::new("A2")),
+    mode: BrowserMode::Headed,
+  }));
+  browser.until("the address line to follow the tab picked", |browser| {
+    address(browser) == "localhost:5173/A2"
+  });
+  assert!(!browser.shows("browser-tab-1-close"), "it is the only one selected now");
+}
+
+/// The window opened with the browser already in a window of its own, whose runner names no tab yet: it asks for one,
+/// and asks for nothing to stop.
+#[test]
+fn browser_window_names_a_tab_when_the_browser_in_a_window_of_its_own_reports_none() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.state.record_commands_for_test();
+  let tabs = vec![
+    tab("A", TabOwner::Person, "Page A"),
+    tab("B", TabOwner::Person, "Page B"),
+  ];
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs: tabs.clone(),
+    shown: None,
+    mode: BrowserMode::Headed,
+  }));
+  browser.until_shown("browser-headed");
+  browser.until("the window to name a tab", |browser| {
+    shown_asked(browser) == [BrowserTabId::new("A")]
+  });
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs,
+    shown: Some(BrowserTabId::new("A")),
+    mode: BrowserMode::Headed,
+  }));
+  browser.until_shown("browser-tab-0-close");
+  assert_eq!(address(&mut browser), "localhost:5173/A");
+  assert_eq!(browser.text("browser-address-owner"), "Your tab");
+}
+
+/// *Open in a browser window* asks once, and the toolbar takes input again with the answer. Here a request is answered
+/// as it is kept, so the seconds a runner takes, with the toolbar faded and the button's loader turning, are not seen.
+#[test]
+fn browser_open_in_a_browser_window_asks_once_and_the_toolbar_comes_back_with_the_answer() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.state.record_commands_for_test();
+  browser.feed(state("P1", BrowserMode::Headless).0);
+  browser.until_shown("browser-open-in-window");
+  let (x, y) = browser.bounds("browser-open-in-window").center();
+  browser.tree.mouse_down(x, y, MouseButton::Left);
+  browser.tree.mouse_up(x, y, MouseButton::Left);
+  browser.pass();
+  browser.until("the toolbar to take input again", |browser| {
+    browser.command("l");
+    browser.focused().as_deref() == Some("browser-address")
+  });
+  let opened = browser
+    .state
+    .recorded_commands_for_test()
+    .into_iter()
+    .filter(|(_, command)| *command == BrowserCommand::OpenInWindow)
+    .count();
+  assert_eq!(opened, 1);
+}
+
+fn address(browser: &mut Browser) -> String {
+  browser
+    .tree
+    .get_element_by_id_mut("browser-address")
+    .and_then(|element| element.as_text_input())
+    .expect("the address line is a text input")
+    .value()
 }
 
 #[test]

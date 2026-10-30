@@ -36,6 +36,7 @@ pub(super) struct Running {
   process: BrowserProcess,
   pub(super) cdp: Arc<Cdp>,
   pub(super) tabs: Arc<Mutex<Tabs>>,
+  pub(super) mode: BrowserMode,
   window: Arc<Window>,
   /// Sends the window the browser's state while it runs ([`window::publish`]).
   _publisher: Publisher,
@@ -99,6 +100,7 @@ impl Running {
       process,
       cdp,
       tabs,
+      mode,
       window: Arc::clone(window),
       _publisher: publisher,
     })
