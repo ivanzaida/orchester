@@ -1,9 +1,10 @@
 //! Settings › General (`hUaXB`): its sections, the theme it keeps in the application database and gives the window,
-//! the warning threshold it saves for every project, this computer's version and data, and the header's save state.
+//! the warning threshold it saves for every project, whether error reports are sent, this computer's version and data,
+//! and the header's save state.
 
 mod support;
 
-use orchester_app::{appearance::ThemeSetting, routes::Route};
+use orchester_app::{appearance::ThemeSetting, error_reports, routes::Route};
 use support::Window;
 
 /// Settings › General, once its rows have read what they show.
@@ -185,6 +186,55 @@ fn settings_general_keeps_the_last_theme_pressed_quickly() {
     ThemeSetting::Light,
     "the window has what is stored"
   );
+}
+
+/// *Privacy* › *Send error reports* (`tMyiy` in `01b` `Z322E`, off in `01c` `mWn0J`): the switch shows the stored
+/// setting, keeps the person's change, and the link opens what a report carries.
+#[test]
+fn settings_general_error_reports_show_the_stored_setting_and_keep_a_change() {
+  const SWITCH: &str = "settings-error-reports";
+  let mut window = general();
+  let workspace = window.launch.workspace().expect("the session started").clone();
+  window.until("the error reports switch", |window| {
+    window.tree.get_element_by_id(SWITCH).is_some()
+  });
+  assert_eq!(window.text("settings-privacy-title"), "Privacy");
+  assert_eq!(window.text(&format!("{SWITCH}-label")), "Send error reports");
+  assert_eq!(
+    window.text(&format!("{SWITCH}-hint")),
+    "Errors and crashes go to Orchester's error tracker, without secrets, prompts, file contents or project names"
+  );
+  assert!(workspace.sends_error_reports().expect("read"), "on until turned off");
+  window.until("the person's choice to be saved", |window| {
+    let stored = workspace.sends_error_reports().expect("read");
+    if stored {
+      window.press(SWITCH);
+    }
+    !stored
+  });
+  window.until("the saves to settle", |window| {
+    window.text("settings-save-state") == "All changes saved"
+  });
+
+  // Shown again from what is stored.
+  window.navigation().go(Route::AllProjects);
+  window.pass();
+  window.navigation().go(Route::General);
+  window.until("the stored switch", |window| {
+    window.tree.get_element_by_id(SWITCH).is_some()
+  });
+  window.until("the choice to be saved on again", |window| {
+    let stored = workspace.sends_error_reports().expect("read");
+    if !stored {
+      window.press(SWITCH);
+    }
+    stored
+  });
+
+  let links = window.launch.services().expect("services").links.clone();
+  links.record_instead();
+  window.press(&format!("{SWITCH}-link"));
+  assert_eq!(links.recorded(), [error_reports::WHAT_A_REPORT_CARRIES]);
 }
 
 #[test]

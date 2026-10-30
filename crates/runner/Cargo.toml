@@ -356,8 +356,9 @@ orchester-exec.workspace = true
 # The codebase index of each run's base revision, built before its first step.
 orchester-index.workspace = true
 orchester-ipc.workspace = true
-# The client options and the scrubber of the runner's error reports, the app's too (`error_reports`).
-orchester-report = { workspace = true, features = ["client"] }
+# The client options, the scrubber and the switch the app turns of the runner's error reports, the app's too
+# (`error_reports`).
+orchester-report = { workspace = true, features = ["switch"] }
 orchester-store.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
