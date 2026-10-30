@@ -47,6 +47,8 @@ fn seed_names_every_scenario_once() {
       "project-settings",
       "project-settings-shared",
       "shared-config",
+      "shared-config-member",
+      "shared-config-here",
       "shared-config-chosen",
       "shared-config-no-claude",
       "pipelines",

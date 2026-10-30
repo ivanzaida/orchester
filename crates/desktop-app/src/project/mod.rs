@@ -17,6 +17,7 @@ mod known;
 pub(crate) mod merge_queue;
 pub mod own;
 mod state;
+mod team;
 mod waits;
 
 use orchester_core::id::ProjectId;

@@ -314,6 +314,7 @@ impl Component for UseHere {
     )
     .sub(sub)
     .list(adds)
+    .actions_below()
     .foot(ctx.t("sharing.config.widens.personOnly"));
     if let Some(compare) = compare {
       bar = bar.action(compare);

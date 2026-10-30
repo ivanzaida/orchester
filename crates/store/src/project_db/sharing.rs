@@ -105,6 +105,7 @@ impl ProjectDb {
        DELETE FROM task_run_status;
        DELETE FROM shared_automatic_status;
        DELETE FROM shared_members;
+       DELETE FROM shared_server_admins;
        DELETE FROM shared_publishes;
        DELETE FROM shared_version_references;
        DELETE FROM reference_bindings;

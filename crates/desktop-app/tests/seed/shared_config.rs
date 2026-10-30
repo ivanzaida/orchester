@@ -1,123 +1,63 @@
-//! `shared-config` and its variants read back as Sharing › On this computer and a shared profile's page read them
-//! (`Here::read`, `sync::waiting`): every kind of reference and standing, Reviewer's v5 waiting with what it adds, and
-//! Builder's connection here.
-//! `cargo test -p orchester-app --test seed seed_shared_config`.
+//! `shared-config` and `shared-config-member`: the catalogue as the team's configuration of a shared project, as its
+//! libraries read it (ORC-390): every resource the team's with its publisher; as the owner, a draft, a version waiting
+//! for the server and one that met a teammate's; as a member, nothing to change.
 
-use orchester_core::{
-  id::ResourceId,
-  resource::ResourceKind,
-  sharing::{MemberRole, VersionWidening},
-  store::ResourceStore,
-};
-use orchester_store::{BoundBy, ProjectDb};
-use orchester_workspace::sharing::sync::{self, Here, Standing};
+use orchester_core::{resource::AgentProfile, store::ResourceStore};
+use orchester_store::{ProjectDb, PublishState, SharedStanding};
 
 use super::Seed;
 
-/// How each reference stands, by name, in the order the page lists them.
-fn standings(here: &Here) -> Vec<(&str, &str)> {
-  here
-    .references
-    .iter()
-    .map(|reference| {
-      let standing = match &reference.standing {
-        Standing::Bound { by: BoundBy::Name, .. } => "by name",
-        Standing::Bound { by: BoundBy::Role, .. } => "by role",
-        Standing::Bound {
-          by: BoundBy::Person, ..
-        } => "chosen",
-        Standing::Found { .. } => "found",
-        Standing::Missing => "missing",
-      };
-      (reference.binding.name.as_str(), standing)
-    })
-    .collect()
-}
-
-fn profile(db: &ProjectDb, named: &str) -> ResourceId {
-  db.resources(ResourceKind::AgentProfile)
-    .expect("profiles")
-    .iter()
-    .find(|resource| resource.name().as_str() == named)
-    .expect("the profile")
-    .id()
+/// How the profile called `role` stands.
+fn profile(db: &ProjectDb, role: &str) -> SharedStanding {
+  let standings = db.shared_standings().expect("the standings");
+  db.resources(orchester_core::resource::ResourceKind::AgentProfile)
+    .expect("the profiles")
+    .into_iter()
+    .find(|resource| resource.name().as_str() == role)
+    .and_then(|resource| standings.into_iter().find(|s| s.resource == resource.id()))
+    .unwrap_or_else(|| panic!("{role} is the team's"))
 }
 
 #[test]
-fn seed_shared_config_names_every_kind_of_reference_and_a_version_that_widens() {
-  let seed = Seed::of("shared-config");
-  let here = Here::read(seed.repo()).expect("read");
-  assert_eq!(
-    standings(&here),
-    [
-      ("Work", "by name"),
-      ("Default", "by role"),
-      ("DeepSeek", "missing"),
-      ("github", "found"),
-      ("linear", "missing"),
-      ("STAGING_DB_URL", "chosen"),
-      ("SENTRY_TOKEN", "missing"),
-    ],
-    "each kind in the order the publisher made them (04b)"
-  );
-  assert_eq!(here.needs_you(), 3, "04b: 3 need you");
-  assert_eq!(
-    here.connections_of("openai_api").len(),
-    2,
-    "DeepSeek and OpenRouter to choose"
-  );
-  assert_eq!(
-    here.connections_of("claude_code_cli").len(),
-    2,
-    "two Claude Code accounts"
-  );
-  assert_eq!(
-    here.secrets_of(Some("access_token")).len(),
-    1,
-    "a secret to give SENTRY_TOKEN"
-  );
-
-  let db = seed.db();
-  assert_eq!(
-    db.sharing().expect("link").expect("shared").role,
-    Some(MemberRole::Member)
-  );
-  let builder = profile(&db, "Builder");
-  let work = here.connection_of(builder).expect("Builder's connection");
-  assert!(matches!(&work.standing, Standing::Bound { local, .. } if local == "Claude Code · Work"));
-  let reviewer = profile(&db, "Reviewer");
-  let waiting = sync::waiting(seed.repo(), reviewer).expect("read").expect("v5 waits");
-  assert_eq!(
-    (waiting.number.get(), waiting.used.map(|used| used.get())),
-    (5, Some(4))
-  );
-  assert!(waiting.adds.contains(&VersionWidening::McpServer), "{:?}", waiting.adds);
-  assert_eq!(
-    waiting.adds.len(),
-    2,
-    "an MCP server and network (02d): {:?}",
-    waiting.adds
-  );
-  let added: Vec<_> = here
-    .added_in(reviewer, waiting.number, waiting.used)
-    .iter()
-    .map(|reference| reference.binding.name.as_str())
-    .collect();
-  assert_eq!(added, ["github"], "v5 names github, v4 doesn't");
+fn seed_shared_config_leaves_the_owners_draft_a_waiting_version_and_a_met_one() {
+  let db = Seed::of("shared-config").db();
+  assert!(db.may_change_configuration().expect("read"), "the owner changes it");
+  let standings = db.shared_standings().expect("the standings");
+  let published = standings.iter().filter(|standing| standing.confirmed.is_some()).count();
   assert!(
-    here.missing_for(reviewer).is_empty(),
-    "github waits for Confirm…, it isn't missing"
+    published > 5,
+    "the catalogue's versions, with their publishers: {standings:?}"
   );
-  let explorer = profile(&db, "Explorer");
-  assert_eq!(here.missing_for(explorer).len(), 1, "Explorer can't run here");
+
+  let builder = profile(&db, "Builder");
+  assert!(builder.waiting.is_empty());
+  let draft = db.draft::<AgentProfile>(builder.resource).expect("read");
+  assert!(draft.is_some(), "the owner's draft on Builder");
+
+  let planner = profile(&db, "Planner");
+  let states: Vec<_> = planner.waiting.iter().map(|waiting| waiting.state.clone()).collect();
+  assert_eq!(states, [PublishState::Waiting], "published here, not sent");
+
+  let reviewer = profile(&db, "Reviewer");
+  let confirmed = reviewer.confirmed.as_ref().expect("olha's version");
+  assert_eq!(confirmed.publisher.as_deref(), Some("olha"));
+  let states: Vec<_> = reviewer.waiting.iter().map(|waiting| waiting.state.clone()).collect();
+  assert_eq!(
+    states,
+    [PublishState::Conflict {
+      latest: confirmed.number
+    }]
+  );
 }
 
 #[test]
-fn seed_shared_config_variants_choose_work_here_or_have_no_claude_code() {
-  let chosen = Here::read(Seed::of("shared-config-chosen").repo()).expect("read");
-  assert!(standings(&chosen).contains(&("Work", "chosen")));
-  let none = Here::read(Seed::of("shared-config-no-claude").repo()).expect("read");
-  assert!(standings(&none).contains(&("Work", "missing")));
-  assert!(none.connections_of("claude_code_cli").is_empty());
-  assert_eq!(none.needs_you(), chosen.needs_you() + 1);
+fn seed_shared_config_member_reads_every_resource_and_changes_none() {
+  let db = Seed::of("shared-config-member").db();
+  assert!(!db.may_change_configuration().expect("read"), "a member");
+  let standings = db.shared_standings().expect("the standings");
+  assert!(!standings.is_empty());
+  assert!(
+    standings.iter().all(|standing| standing.waiting.is_empty()),
+    "nothing of a member's waits to be sent: {standings:?}"
+  );
 }

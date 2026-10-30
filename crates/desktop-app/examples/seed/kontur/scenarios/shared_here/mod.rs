@@ -1,4 +1,5 @@
-//! `shared-config`: Kontur shared with a team server as a member, with what the team's versions name of this computer
+//! `shared-config-here`: Kontur shared with a team server as a member, with what the team's versions name of this
+//! computer
 //! (`Shared configuration · redesign` `UC5xk`; the data `tests/project_settings/bindings.rs`, `tests/agents/shared.rs`
 //! and `tests/pipelines/missing_here.rs` build). The team's cached versions ([`resources`]) name seven references:
 //! - connections: Claude Code `Work` (Builder v4, Planner v2), bound by name to *Claude Code · Work*; Codex `Default`

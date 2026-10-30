@@ -26,3 +26,12 @@ WHEN NEW.id IS NOT OLD.id OR NEW.resource_id IS NOT OLD.resource_id
   OR NEW.body IS NOT OLD.body OR NEW.published_at IS NOT OLD.published_at OR OLD.publisher_id IS NOT NULL
 BEGIN SELECT RAISE(ABORT, 'published resource versions are immutable'); END;
 ";
+
+/// *Open my draft on vN* takes back a version published here that the server never numbered, which no run or task here
+/// uses: only such a version may be deleted. Every other version stays immutable.
+pub(super) const REOPEN_MIGRATION: &str = r"
+DROP TRIGGER resource_versions_no_delete;
+CREATE TRIGGER resource_versions_no_delete BEFORE DELETE ON resource_versions
+WHEN OLD.id NOT IN (SELECT version_id FROM shared_publishes)
+BEGIN SELECT RAISE(ABORT, 'published resource versions are immutable'); END;
+";
