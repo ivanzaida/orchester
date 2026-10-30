@@ -388,6 +388,58 @@ pub fn live(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Res
   })
 }
 
+/// *Review and verify* for live runs with `orchester-fake-codex`: Implement, then Review and Verify side by side, both
+/// working until stopped, then Report after both. "Keep working" is not their first sentence: a step's prompt shows
+/// that of each later step, and the fake would keep Implement working.
+pub fn slot_wait(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Result<Published, SeedError> {
+  let profiles = Profiles::publish(db, connection, now)?;
+  let with_instructions = |step: Step, instructions: &str| Step {
+    instructions: PromptText::new(instructions).expect("the steps' instructions are valid prompts"),
+    ..step
+  };
+  let pipeline = Pipeline::new(vec![
+    with_instructions(
+      agent_step(
+        ("implement", "Implement"),
+        profiles.builder,
+        RepositoryAccess::Write,
+        &[],
+      ),
+      "Implement the change.",
+    ),
+    with_instructions(
+      agent_step(
+        ("review", "Review"),
+        profiles.reviewer,
+        RepositoryAccess::ReadOnly,
+        &["implement"],
+      ),
+      "Review the work. Keep working.",
+    ),
+    with_instructions(
+      agent_step(
+        ("verify", "Verify"),
+        profiles.reviewer,
+        RepositoryAccess::ReadOnly,
+        &["implement"],
+      ),
+      "Verify the work. Keep working.",
+    ),
+    with_instructions(
+      agent_step(
+        ("report", "Report"),
+        profiles.builder,
+        RepositoryAccess::Write,
+        &["review", "verify"],
+      ),
+      "Sum up the work.",
+    ),
+  ])
+  .expect("the slot wait's pipeline is valid");
+  let (id, version) = publish(db, "Review and verify", vec![pipeline], now)?;
+  pinned(id, &version, &profiles, &BTreeMap::new())
+}
+
 /// The command line the tool of step `step` runs, as its transcript shows it.
 pub fn command_line(step: &str) -> String {
   if step == StarterStep::RunChecks.key() {

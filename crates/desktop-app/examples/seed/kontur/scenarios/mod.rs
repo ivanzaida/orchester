@@ -28,6 +28,7 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod settings;
+mod slot_wait;
 mod sources;
 mod task_states;
 mod tasks;
@@ -81,7 +82,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 53] = [
+pub const ALL: [Scenario; 54] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -113,6 +114,7 @@ pub const ALL: [Scenario; 53] = [
   Scenario::of("tasks-unreadable", tasks_unreadable::seed),
   Scenario::with_fake_codex("live", live::seed),
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
+  Scenario::with_fake_codex("slot-wait", slot_wait::seed),
   Scenario::of("connections", connections::seed),
   Scenario::of("api-providers", api_providers::seed),
   Scenario::of("native", native::seed),

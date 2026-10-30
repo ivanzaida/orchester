@@ -202,6 +202,13 @@ impl Kontur {
     catalogue::live(&mut self.db, connection, published)
   }
 
+  /// The pipeline of the `slot-wait` scenario ([`catalogue::slot_wait`]), published an hour before now.
+  fn slot_wait_catalogue(&mut self) -> Result<Published, SeedError> {
+    let published = self.ago(60);
+    let connection = catalogue::codex(&mut self.db, self.fake_codex.as_deref(), published)?;
+    catalogue::slot_wait(&mut self.db, connection, published)
+  }
+
   /// `minutes` before the seed's now.
   fn ago(&self, minutes: i64) -> Timestamp {
     Timestamp::from_unix_millis(self.now.unix_millis() - minutes * 60_000)
