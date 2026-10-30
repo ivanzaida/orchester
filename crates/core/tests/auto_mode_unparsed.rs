@@ -121,7 +121,7 @@ fn input(command: &str, permissions: &AgentPermissions) -> ReviewInput {
     ReviewedStep {
       name: "Review".to_owned(),
       repository: permissions.repository(),
-      network: permissions.network(),
+      network: permissions.network().clone(),
       writable_folders: Vec::new(),
     },
     ReviewedTask {

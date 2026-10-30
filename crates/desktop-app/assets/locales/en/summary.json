@@ -279,6 +279,7 @@
       "commandsListed": "{{count}} commands",
       "commandsAny": "Any command in the worktree",
       "networkOff": "Network off",
+      "networkHosts": "Network: {{count}} hosts",
       "networkOn": "Network on",
       "worktreeRemoved": "Removed at {{time}}",
       "noCheckpoint": "None yet",

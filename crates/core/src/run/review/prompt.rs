@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{ReviewError, ReviewInput, ReviewVerdict};
-use crate::permission::{NetworkAccess, RepositoryAccess};
+use crate::permission::{HostPattern, NetworkAccess, RepositoryAccess};
 
 /// The verdict the reviewer must give, as a JSON schema (Claude Code's `--json-schema`, Codex's
 /// `--output-schema`).
@@ -104,9 +104,13 @@ fn step_facts(input: &ReviewInput) -> String {
     }
     RepositoryAccess::Write => "may write in its worktree",
   };
-  let network = match step.network {
-    NetworkAccess::On => "on",
-    NetworkAccess::Off => "off: nothing may reach the network",
+  let network = match &step.network {
+    NetworkAccess::On => "on".to_owned(),
+    NetworkAccess::Hosts(hosts) => {
+      let hosts: Vec<&str> = hosts.entries().iter().map(HostPattern::as_str).collect();
+      format!("only these hosts may be reached: {}", hosts.join(", "))
+    }
+    NetworkAccess::Off => "off: nothing may reach the network".to_owned(),
   };
   let mut facts = json!({
     "step": step.name,

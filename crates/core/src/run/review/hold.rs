@@ -155,12 +155,12 @@ fn outside_permissions(
 }
 
 /// The step's limit a part breaks: in a read-only step a part that may write ([`may_write`]); the network or an
-/// install while it is off.
+/// install while it is not on. A host list counts as off here: Orchester does not read which host a command reaches.
 fn limits_hold(parts: &[CommandPart], permissions: &AgentPermissions, ignored: &[PathBuf]) -> Option<ReviewHold> {
   if permissions.repository() == RepositoryAccess::ReadOnly && parts.iter().any(|part| may_write(part, ignored)) {
     return Some(ReviewHold::ReadOnlyStep);
   }
-  (permissions.network() == NetworkAccess::Off
+  (*permissions.network() != NetworkAccess::On
     && parts
       .iter()
       .any(|part| part.category() == CommandCategory::Network || part.installs() || is_push(part)))
@@ -202,7 +202,7 @@ pub fn step_limit(
   if let Some(hold) = limits_hold(parts, permissions, build_output) {
     return StepLimit::Held(hold);
   }
-  let limited = permissions.repository() == RepositoryAccess::ReadOnly || permissions.network() == NetworkAccess::Off;
+  let limited = permissions.repository() == RepositoryAccess::ReadOnly || *permissions.network() != NetworkAccess::On;
   if limited && (parts.is_empty() || parts.iter().any(unread)) {
     StepLimit::Unread
   } else {
