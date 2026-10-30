@@ -1,9 +1,9 @@
 //! Connections with nothing yet (`07` `WYCDL`): *Connect an agent*, then a row per way to connect one — each CLI as
-//! found on this computer's search path, with Add when it is, Check again when it is not (only a copy found there can
-//! be chosen), and a CLI on an API provider; GitHub not linked, unavailable with why; and no MCP server yet with its
-//! Add.
+//! found on this computer's search path or chosen on the start page, with Add when it is, Check again when it is not
+//! (only a copy found there, or that file, can be chosen), and a CLI on an API provider; GitHub not linked, unavailable
+//! with why; and no MCP server yet with its Add.
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -12,7 +12,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::connection::AgentProvider;
-use orchester_workspace::{background, connections::probe};
+use orchester_workspace::{background, connections::missing_cli::known_copies};
 
 use crate::{
   navigation::{Navigation, link::Open},
@@ -22,6 +22,7 @@ use crate::{
     connections::words::provider_key,
     project_settings::kit::{EmptyRow, Glyph, Group, SettingRow, Tone, page_head, tile},
   },
+  services::Services,
   theme::ExtraSpacing,
   ui::{
     agent_mark::AgentMark,
@@ -44,20 +45,21 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
   let add = |kind: NewConnection| navigation.to(Route::Project(id, ProjectPage::NewConnection(kind)));
+  let workspace = Services::of(ctx).workspace;
   let found = ctx
-    .future(recheck.get(), |_| async move {
-      background::run(|| {
-        Found(Arc::new(
-          CLIS
-            .into_iter()
-            .map(|cli| {
-              let copies: Vec<PathBuf> = probe::detect_agent(cli);
-              (cli, !copies.is_empty())
-            })
-            .collect(),
-        ))
-      })
-      .await
+    .future(recheck.get(), move |_| {
+      let workspace = workspace.clone();
+      async move {
+        background::run(move || {
+          Found(Arc::new(
+            CLIS
+              .into_iter()
+              .map(|cli| (cli, !known_copies(&workspace, cli).copies.is_empty()))
+              .collect(),
+          ))
+        })
+        .await
+      }
     })
     .state()
     .get();

@@ -8,10 +8,11 @@
 //! `rustc` from `gh.rs`) answering as the state's GitHub state, and leaves out every folder holding a real `gh`, so
 //! no real GitHub sign-in is read. git reads the settings file of the QA folder only (`GIT_CONFIG_GLOBAL`, no system
 //! settings, no repository above the QA folder), with a QA author except in `setup-git-no-author`;
-//! `setup-git-not-found` leaves every folder holding git off the `PATH`. `returning-team` joins a stand-in team
-//! server first ([`team`]). The system's pickers are replaced: a folder picker hands over the state's folder and the
-//! file picker (*Choose program…*) the stand-in `gh`; Copy writes to `copied.txt` in the QA folder, never the
-//! clipboard. The verifier connects through the discovery file in `.tmp/qa/projects/mcp/`
+//! `setup-git-not-found` leaves every folder holding git off the `PATH`, and the `cli-…` states every folder holding a
+//! real `claude` or `codex`. `returning-team` joins a stand-in team server first ([`team`]). The system's pickers are
+//! replaced: a folder picker hands over the state's folder and the file picker the stand-in `gh` (*Choose program…*) or
+//! a stand-in `claude` (*Choose the claude file…*); Copy writes to `copied.txt` in the QA folder, never the clipboard.
+//! The verifier connects through the discovery file in `.tmp/qa/projects/mcp/`
 //! (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
 
 #[path = "../seed/kontur/mod.rs"]
@@ -38,10 +39,12 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{RootProps, Start},
   routes::{Route, RouteFolder},
+  services::cli_search::CliSearch,
   test_support::signed_in,
   theme::{self, Mode},
   ui::loader,
 };
+use orchester_exec::search_path::{SearchBasis, SearchPath};
 use orchester_workspace::workspace::Workspace;
 use tokio::runtime::Runtime;
 
@@ -69,10 +72,20 @@ enum State {
   Setup,
   /// A folder already chosen, with its GitHub state (`kkGWj`, `vJTcd` and the states of `gh5wV`).
   Detected(&'static str),
+  /// `SIbdo`, `U4QvYO` in 14 `mruEH`, in the frame's macOS words: a first start with no agent CLI, its login shell
+  /// taken as read (zsh); the file picker hands over a stand-in `claude`.
+  CliMissingMac,
+  /// The same in this system's words and with its real folders.
+  CliMissing,
+  /// The warning above the list: Atlas's Claude connection runs a file that is gone. The file picker hands over a
+  /// stand-in `claude`.
+  CliMissingList,
+  /// As [`Self::CliMissingList`], but the file picker hands over the stand-in `gh`, which is refused.
+  CliWrongFile,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 21] = [
+  const ALL: [(&'static str, Self); 25] = [
     ("welcome", Self::Welcome),
     ("list", Self::List),
     ("returning-team", Self::ReturningTeam),
@@ -94,6 +107,10 @@ impl State {
     ("setup-git-empty", Self::Detected("git-empty")),
     ("setup-git-no-author", Self::Detected("git-no-author")),
     ("setup-git-not-found", Self::Detected("git-not-found")),
+    ("cli-missing-mac", Self::CliMissingMac),
+    ("cli-missing", Self::CliMissing),
+    ("cli-missing-list", Self::CliMissingList),
+    ("cli-wrong-file", Self::CliWrongFile),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -114,13 +131,49 @@ impl State {
   /// The folder the folder picker hands over and, once chosen, Add project shows.
   fn folder(self) -> &'static str {
     match self {
-      Self::Welcome | Self::List | Self::ReturningTeam | Self::Empty | Self::Failed | Self::OpenFolder => "scratch",
+      Self::Welcome
+      | Self::List
+      | Self::ReturningTeam
+      | Self::Empty
+      | Self::Failed
+      | Self::OpenFolder
+      | Self::CliMissingMac
+      | Self::CliMissing
+      | Self::CliMissingList
+      | Self::CliWrongFile => "scratch",
       Self::Detected("local-only") => "local",
       Self::Detected("not-github") => "other-host",
       Self::Detected("not-repository" | "git-no-author" | "git-not-found") => "kontur-notes",
       Self::Detected("git-empty") => "kontur-empty",
       Self::Setup | Self::Detected(_) => "kontur",
     }
+  }
+
+  /// The file the file picker hands over: the stand-in `claude` where the warning asks for it, else the stand-in `gh`,
+  /// which *Choose program…* picks and the warning refuses.
+  fn file(self, folders: &Folders) -> PathBuf {
+    match self {
+      Self::CliMissingMac | Self::CliMissing | Self::CliMissingList => folders.claude(),
+      _ => folders.program(),
+    }
+  }
+
+  /// Whether the window must find no real agent CLI.
+  fn hides_clis(self) -> bool {
+    matches!(
+      self,
+      Self::CliMissingMac | Self::CliMissing | Self::CliMissingList | Self::CliWrongFile
+    )
+  }
+
+  /// The search that gives the macOS wording on any system; the other states search the real `PATH`.
+  fn cli_search(self) -> Option<CliSearch> {
+    (self == Self::CliMissingMac).then(|| {
+      CliSearch::new(|_| {
+        let shell = "zsh".to_owned();
+        (SearchPath::current(), SearchBasis::LoginShell { shell })
+      })
+    })
   }
 }
 
@@ -146,10 +199,16 @@ fn start(state: State) -> Result<(), Box<dyn Error>> {
     root: root.path().to_path_buf(),
   };
   data::stand_in(&folders, state.github())?;
+  data::claude(&folders)?;
   data::folders(&folders)?;
   data::git_settings(&folders, state != State::Detected("git-no-author"))?;
   let seeded = match state {
-    State::Welcome => data::empty(&folders)?,
+    State::Welcome | State::CliMissingMac | State::CliMissing => data::empty(&folders)?,
+    State::CliMissingList | State::CliWrongFile => {
+      let seeded = data::projects(&folders)?;
+      data::claude_gone(&folders)?;
+      seeded
+    }
     _ => data::projects(&folders)?,
   };
   let mut path = Vec::new();
@@ -157,9 +216,10 @@ fn start(state: State) -> Result<(), Box<dyn Error>> {
     path.push(folders.path());
   }
   let no_git = state == State::Detected("git-not-found");
+  let no_cli = state.hides_clis();
   path.extend(
     env::split_paths(&env::var_os("PATH").unwrap_or_default())
-      .filter(|folder| !(holds_gh(folder) || (no_git && holds_git(folder)))),
+      .filter(|folder| !(holds_gh(folder) || (no_git && holds_git(folder)) || (no_cli && holds_a_cli(folder)))),
   );
   let mut child = Command::new(env::current_exe()?)
     .args(env::args().skip(1))
@@ -207,6 +267,15 @@ fn holds_git(folder: &Path) -> bool {
   ["git", "git.exe", "git.cmd"]
     .iter()
     .any(|program| folder.join(program).is_file())
+}
+
+/// Whether `folder` holds a real `claude` or `codex`, which the window must not find in the `cli-…` states.
+fn holds_a_cli(folder: &Path) -> bool {
+  ["claude", "codex"].iter().any(|program| {
+    ["", ".exe", ".cmd", ".bat", ".ps1"]
+      .iter()
+      .any(|extension| folder.join(format!("{program}{extension}")).is_file())
+  })
 }
 
 /// The window on the seeded data at `state`; returns once it closed.
@@ -268,9 +337,9 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
     &mut app,
     host::props(
       root,
-      folders.folder(state.folder()),
-      folders.program(),
+      (folders.folder(state.folder()), state.file(folders)),
       folders.root.join("copied.txt"),
+      state.cli_search(),
     ),
   );
   WinitWindow::new(app, tree)

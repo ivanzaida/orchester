@@ -307,6 +307,7 @@
       "chooseFile": "Choose file…",
       "programMissing": "{{program}} was not found on the PATH. Install it, then check again.",
       "programFoundOne": "Found on the PATH",
+      "programChosen": "The file you chose on the start page",
       "programFoundMany": "Found {{count}} on the PATH; the first is used unless you choose another.",
       "check": "Check",
       "detectingWord": "Detecting",

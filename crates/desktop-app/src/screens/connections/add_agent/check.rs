@@ -1,7 +1,7 @@
 //! The Program row of Add provider (`Program` `lzSGF` in `10 · Add provider`): the copy found on the search path (a
 //! choice when there are several), whether it was found in the row's hint line, *Check* beside it, and under it what
 //! checking found in its tone (`Note` `mvJ49`); a CLI that is not signed in shows the command that signs it in, to run
-//! in a terminal. Only a copy on the search path can be chosen; the (i) says so.
+//! in a terminal. Only a copy on the search path, or the file chosen on the start page, can be chosen.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -99,7 +99,7 @@ pub(super) fn program_row(
   (state, recheck): (&Checked, &Signal<u64>),
 ) -> Element {
   let program = provider.program_name().unwrap_or_default();
-  let copies: &[PathBuf] = found.data.as_ref().map_or(&[], |copies| copies.0.as_slice());
+  let copies: &[PathBuf] = found.data.as_ref().map_or(&[], |copies| copies.0.copies.as_slice());
   let label = ctx.t("connections.dialog.program");
   let field: Element = match copies {
     [] | [_] => FieldInput::new("connection-program", label.clone(), chosen.clone())
@@ -131,14 +131,16 @@ pub(super) fn program_row(
     let recheck = recheck.clone();
     again.on_click(move || recheck.update(|count| *count += 1))
   };
-  let (hint, tone) = match copies.len() {
+  let on_search_path = found.data.as_ref().map_or(0, |copies| copies.0.on_search_path);
+  let (hint, tone) = match (copies.len(), on_search_path) {
     _ if found.is_pending() => (ctx.t("connections.dialog.detecting"), Tone::Muted),
-    0 => (
+    (0, _) => (
       ctx.t_args("connections.dialog.programMissing", [("program", program)]),
       Tone::Warning,
     ),
-    1 => (ctx.t("connections.dialog.programFoundOne"), Tone::Success),
-    count => (
+    (_, 0) => (ctx.t("connections.dialog.programChosen"), Tone::Success),
+    (1, _) => (ctx.t("connections.dialog.programFoundOne"), Tone::Success),
+    (_, count) => (
       ctx.t_args("connections.dialog.programFoundMany", [("count", count.to_string())]),
       Tone::Muted,
     ),

@@ -996,6 +996,11 @@
     }
   },
   "connections": {
+    "errors": {
+      "notTheCli": "{{file}} did not answer as {{program}}. Choose the {{program}} program file.",
+      "notRepointed": "{{project}}'s connection could not be changed. The log has the details.",
+      "programNotStorable": "{{file}} has characters Orchester can't store. Move it or choose a link with a plain name."
+    },
     "native": {
       "preset": {
         "notOffered": "This preset is not offered on this provider."

@@ -110,6 +110,64 @@ fn add_codex() {
   assert_eq!(seeded.selected(), Some(saved.id()));
 }
 
+/// The file chosen on the start page is offered as the program, and says that is where it came from. In a child whose
+/// `PATH` leaves out every folder holding a real CLI, so the file is the only copy.
+#[test]
+fn chosen_cli_file_is_offered_in_add_connection() {
+  if env::var_os(CHILD).is_some() {
+    offer_chosen_claude();
+    return;
+  }
+  let inherited = env::var_os("PATH").unwrap_or_default();
+  let path = env::split_paths(&inherited).filter(|folder| !holds_a_cli(folder));
+  let status = Command::new(env::current_exe().expect("the test binary"))
+    .args([
+      "--exact",
+      "add_cli::chosen_cli_file_is_offered_in_add_connection",
+      "--nocapture",
+    ])
+    .env("PATH", env::join_paths(path).expect("a search path"))
+    .env(CHILD, "1")
+    .status()
+    .expect("the test runs again");
+  assert!(status.success(), "the test without a real CLI on the PATH failed");
+}
+
+fn offer_chosen_claude() {
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  let chosen = write_claude(folder.path());
+  let mut seeded = Seeded::new("connections");
+  seeded
+    .window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_ui_state(
+      "orchester-app.agentProgram.claude",
+      chosen.to_str().expect("a plain path"),
+    )
+    .expect("kept");
+  seeded.add(NewConnection::AgentProvider);
+  seeded.click("connection-kind-claude");
+  seeded.until("the check", |seeded| {
+    seeded.exists("connection-check") && seeded.text("connection-check").contains("2.1.296")
+  });
+  assert_eq!(value(&mut seeded, "connection-program"), chosen.display().to_string());
+  assert_eq!(
+    seeded.text("connection-program-description"),
+    "The file you chose on the start page"
+  );
+}
+
+/// Whether `folder` holds a real `claude` or `codex`.
+fn holds_a_cli(folder: &Path) -> bool {
+  ["claude", "codex"].iter().any(|program| {
+    ["", ".exe", ".cmd", ".bat", ".ps1"]
+      .iter()
+      .any(|extension| folder.join(format!("{program}{extension}")).is_file())
+  })
+}
+
 fn value(seeded: &mut Seeded, id: &str) -> String {
   seeded
     .window
@@ -118,6 +176,26 @@ fn value(seeded: &mut Seeded, id: &str) -> String {
     .and_then(|element| element.as_text_input())
     .unwrap_or_else(|| panic!("{id} is a text input"))
     .value()
+}
+
+/// A stand-in Claude Code in `folder`.
+#[cfg(windows)]
+fn write_claude(folder: &Path) -> PathBuf {
+  let program = folder.join("claude.cmd");
+  let script = "@echo off\r\nif \"%1\"==\"--version\" goto version\r\nif \"%1\"==\"auth\" goto status\r\nexit /b 1\r\n:version\r\necho 2.1.296 ^(Claude Code^)\r\nexit /b 0\r\n:status\r\necho {\"loggedIn\":true}\r\nexit /b 0\r\n";
+  std::fs::write(&program, script).expect("the stand-in is written");
+  program
+}
+
+/// A stand-in Claude Code in `folder`.
+#[cfg(not(windows))]
+fn write_claude(folder: &Path) -> PathBuf {
+  use std::os::unix::fs::PermissionsExt;
+  let program = folder.join("claude");
+  let script = "#!/bin/sh\ncase \"$1\" in\n  --version) echo '2.1.296 (Claude Code)' ;;\n  auth) echo '{\"loggedIn\":true}' ;;\n  *) exit 1 ;;\nesac\n";
+  std::fs::write(&program, script).expect("the stand-in is written");
+  std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("the stand-in runs");
+  program
 }
 
 /// A stand-in Codex in `folder`.

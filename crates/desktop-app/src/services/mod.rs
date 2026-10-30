@@ -31,6 +31,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 pub mod accounts;
 pub mod attachment_picker;
+pub mod cli_search;
 pub mod links;
 pub mod path_picker;
 pub mod plan_limits;
