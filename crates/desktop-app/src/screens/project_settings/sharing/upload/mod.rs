@@ -32,7 +32,9 @@ use orchester_workspace::sharing::{
 
 use super::super::page;
 use crate::{
+  navigation::Navigation,
   project::{Projects, ShownProject},
+  routes::Route,
   screens::settings::orchester::{PersonOnly, Said, sharing_said, shown_address},
   services::Services,
   theme::{ExtraSpacing, TaskFormSpacing},
@@ -161,6 +163,9 @@ impl Component for UploadPage {
     let props = ctx.props::<Props>().clone();
     let (projects, feed, page) = (Projects::of(ctx), props.project.feed.clone(), props.page.clone());
     let project = props.project.open.project.id();
+    let navigation = Navigation::of(ctx);
+    // A link without tasks starts the project's first download, whose step shows how it goes (`YN6MO`).
+    let downloads = matches!(props.upload.plan.kind, LinkKind::Download { .. });
     ctx.watch(&link.state(), move |state| {
       if state.is_fulfilled() && state.error.is_none() {
         page.set(LinkPage::default());
@@ -168,6 +173,9 @@ impl Component for UploadPage {
         // or its first download brings them: both are read again, as after a join (`join::review`).
         projects.retry(project);
         feed.saved();
+        if downloads {
+          navigation.go(Route::FirstDownload(project));
+        }
       }
     });
     let (servers, root) = (Services::of(ctx).servers, props.project.open.repo_root.clone());

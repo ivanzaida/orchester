@@ -83,6 +83,11 @@ pub fn commit(dir: &Path, files: &[(&str, String)], message: &str) -> Result<Rev
   head(dir)
 }
 
+/// The repository at `root` has `url` as its `origin`.
+pub fn add_origin(root: &Path, url: &str) -> Result<(), GitError> {
+  git(root, &["remote", "add", "origin", url]).map(drop)
+}
+
 /// Makes `root` a repository on `main` with `files` in one commit, under a QA identity of its own so
 /// the user's global identity and signing settings stay out of it; the commit.
 pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError> {

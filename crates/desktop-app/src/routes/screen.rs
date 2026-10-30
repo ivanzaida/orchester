@@ -1,6 +1,6 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS,
-  files::FILES, join_team, project_screen_path,
+  ADD_PROJECT, CONNECTIONS, EDIT, FIRST_DOWNLOAD, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS,
+  SETTINGS, TASKS, files::FILES, join_team, project_screen_path,
 };
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
@@ -10,6 +10,8 @@ pub enum Screen {
   AddProject,
   /// Join a team, a step of the start page (`qzzYw`), which no sidebar item names.
   JoinTeam,
+  /// A shared project's first download, the last step of the start page (`YN6MO`), which no sidebar item names.
+  FirstDownload,
   Settings,
   Overview,
   Orchestrator,
@@ -41,10 +43,11 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 28] = [
+  pub const ALL: [Self; 29] = [
     Self::AllProjects,
     Self::AddProject,
     Self::JoinTeam,
+    Self::FirstDownload,
     Self::Settings,
     Self::Overview,
     Self::Orchestrator,
@@ -99,6 +102,7 @@ impl Screen {
       Self::AllProjects => "all_projects",
       Self::AddProject => "add_project",
       Self::JoinTeam => "join_team",
+      Self::FirstDownload => "first_download",
       Self::Settings => "settings",
       Self::Overview => "overview",
       Self::Orchestrator => "orchestrator",
@@ -137,6 +141,7 @@ impl Screen {
       Self::AllProjects => "shell.screens.allProjects",
       Self::AddProject => "shell.screens.addProject",
       Self::JoinTeam => "shell.screens.joinTeam",
+      Self::FirstDownload => "shell.screens.firstDownload",
       Self::Settings => "shell.screens.settings",
       Self::Overview => "shell.screens.overview",
       Self::Orchestrator => "shell.screens.orchestrator",
@@ -172,6 +177,7 @@ impl Screen {
       Self::AllProjects
       | Self::AddProject
       | Self::JoinTeam
+      | Self::FirstDownload
       | Self::Settings
       | Self::Overview
       | Self::NewTask
@@ -209,6 +215,7 @@ impl Screen {
       Self::AllProjects => "/".to_owned(),
       Self::AddProject => format!("/{ADD_PROJECT}"),
       Self::JoinTeam => format!("/{}", join_team::SEGMENT),
+      Self::FirstDownload => format!("/{FIRST_DOWNLOAD}"),
       Self::Settings => format!("/{SETTINGS}"),
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask => format!("{tasks}/:key/{EDIT}"),

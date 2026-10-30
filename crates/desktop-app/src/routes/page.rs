@@ -140,6 +140,7 @@ impl ProjectPage {
       Screen::AllProjects
       | Screen::AddProject
       | Screen::JoinTeam
+      | Screen::FirstDownload
       | Screen::Settings
       | Screen::EditTask
       | Screen::Task

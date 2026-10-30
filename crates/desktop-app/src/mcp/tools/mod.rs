@@ -111,6 +111,9 @@ pub fn route_json(route: &Route) -> Value {
         params.insert("way".to_owned(), json!("code"));
       }
     }
+    Route::FirstDownload(project) => {
+      params.insert("project".to_owned(), json!(project.to_string()));
+    }
     Route::AllProjects | Route::AddProject(_) | Route::Settings => {}
   }
   json!({ "name": name, "path": route.path(), "params": params })

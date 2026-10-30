@@ -75,6 +75,7 @@ fn every_route() -> Vec<Route> {
     Route::AddProject(RouteFolder::new(std::path::Path::new(AWKWARD))),
     Route::JoinTeam(JoinWay::Cloud),
     Route::JoinTeam(JoinWay::Code),
+    Route::FirstDownload(project()),
     Route::Settings,
     Route::General,
   ];

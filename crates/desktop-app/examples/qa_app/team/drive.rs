@@ -40,7 +40,7 @@ pub fn to(
     State::ExpiredCode => join_with(&mut window, LATER_CODE, WRONG),
     State::Unreachable => join_with(&mut window, CODE, "join-team-code-unreachable"),
     State::Joined => join_with(&mut window, CODE, "join-team-code-joined"),
-    State::Offer | State::Downloading | State::DownloadFailed => {
+    State::Offer | State::Downloading | State::DownloadFailed | State::DownloadProgress | State::DownloadStopped => {
       Err(format!("{state:?} opens the app's own window, with nothing to press").into())
     }
   }

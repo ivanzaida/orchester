@@ -165,6 +165,67 @@
           "body": "Ask its owner to invite this email, or join with a code."
         }
       }
+    },
+    "shared": {
+      "download": {
+        "title": {
+          "downloading": "Downloading {{project}}'s tasks",
+          "done": "{{project}}'s tasks are here",
+          "failed": "{{project}}'s tasks stopped downloading",
+          "idle": "{{project}} is linked"
+        },
+        "lead": "{{project}} is linked to {{folder}}. Its tasks and team settings come from {{address}}.",
+        "joined": {
+          "title": "Joined {{server}}",
+          "sub": "{{address}} · this computer has its own sign-in",
+          "signedOutTitle": "Not signed in to {{server}}",
+          "signedOutSub": "{{address}} · this computer has no sign-in there",
+          "noServerTitle": "Its team server is no longer in the list",
+          "noServerSub": "Add the server again in Settings › Orchester."
+        },
+        "linked": {
+          "title": "Linked to {{folder}}",
+          "matches": "origin {{origin}} matches the project",
+          "differs": "origin {{origin}} isn't the project's {{hint}}",
+          "noHint": "origin {{origin}} · the project names no repository",
+          "origin": "origin {{origin}}",
+          "noOrigin": "This checkout has no origin"
+        },
+        "tasks": {
+          "downloading": "Downloading tasks",
+          "done": "Tasks downloaded",
+          "failed": "Downloading tasks stopped",
+          "idle": "Tasks",
+          "count": "{{stored}} of {{total}}",
+          "soFar": {
+            "one": "1 task so far",
+            "other": "{{count}} tasks so far"
+          },
+          "asking": "Asking {{server}} for them…",
+          "idleSub": "Nothing is downloading now. They stay up to date with {{server}}."
+        },
+        "settings": {
+          "title": "Team settings",
+          "pending": "Pipelines, agent profiles, instructions, skills and tools · after the tasks",
+          "done": "Pipelines, agent profiles, instructions, skills and tools · downloaded",
+          "notAvailable": "Pipelines, agent profiles, instructions, skills and tools · not downloaded yet"
+        },
+        "canOpen": {
+          "title": "You can open {{project}} now",
+          "body": "Tasks keep arriving in the list as they download. No restart is needed."
+        },
+        "open": "Open {{project}}",
+        "stay": "Stay here",
+        "notShared": {
+          "title": "{{project}} isn't linked to a team",
+          "lead": "Nothing is downloading for it. Link it in its Project settings › Sharing."
+        },
+        "missing": {
+          "title": "This project is no longer on this computer",
+          "lead": "Add its folder again from All projects."
+        },
+        "unread": "This project could not be read"
+      }
     }
   }
 }

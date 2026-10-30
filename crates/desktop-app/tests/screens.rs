@@ -64,6 +64,7 @@ const BUILT: &[Screen] = &[
   Screen::EditConnection,
   Screen::EditTask,
   Screen::Files,
+  Screen::FirstDownload,
   Screen::ImportResources,
   Screen::JoinTeam,
   Screen::Instructions,
@@ -258,6 +259,7 @@ fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
     Route::AddProject(None),
     Route::JoinTeam(JoinWay::Cloud),
     Route::JoinTeam(JoinWay::Code),
+    Route::FirstDownload(PROJECT.parse().expect("a project id")),
     Route::Settings,
     Route::General,
   ]

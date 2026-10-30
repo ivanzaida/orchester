@@ -68,4 +68,11 @@ fn join_team_roles_follow_the_design() {
     FontWeight::Normal,
     (0.0, "Geist Mono"),
   );
+  check(
+    StartupText::ArrivalKey.role(),
+    (11.5, 15.0),
+    FontWeight::Normal,
+    (0.0, "Geist Mono"),
+  );
+  check(StartupText::ArrivalTitle.role(), (12.5, 17.0), FontWeight::Normal, sans);
 }

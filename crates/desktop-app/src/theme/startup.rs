@@ -1,7 +1,7 @@
 //! The design values of the startup screens (`Startup · Orchester is already open` `g0Kj1`, `Startup ·
 //! Orchester can't open its data` `kMM56` and the variants board `ut8NI`) and of the start page's steps (`Startup ·
-//! redesign` `qzzYw`: *Join a team* `B914L`, `drCQd`) that the UI kit's roles do not carry, registered as lurq
-//! `Extra` roles.
+//! redesign` `qzzYw`: *Join a team* `B914L`, `drCQd`, the first download `YN6MO`) that the UI kit's roles do not carry,
+//! registered as lurq `Extra` roles.
 
 use std::sync::Arc;
 
@@ -50,10 +50,14 @@ pub enum StartupText {
   RowAddress,
   /// Geist Mono 13 `text_primary`, line 17: a server address or a code typed in its field (`yK0dX`).
   FieldMono,
+  /// Geist Mono 11.5 `text_muted`, line 15: the key of a task that arrived (`M0Kt9C`).
+  ArrivalKey,
+  /// 12.5 `text_primary`, line 17: the title of a task that arrived (`DBOw1`).
+  ArrivalTitle,
 }
 
 impl StartupText {
-  pub const ALL: [Self; 16] = [
+  pub const ALL: [Self; 18] = [
     Self::TileIcon,
     Self::Crumb,
     Self::CrumbCurrent,
@@ -70,6 +74,8 @@ impl StartupText {
     Self::RowTitle,
     Self::RowAddress,
     Self::FieldMono,
+    Self::ArrivalKey,
+    Self::ArrivalTitle,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -94,6 +100,8 @@ impl StartupText {
       Self::RowTitle => "startup_row_title",
       Self::RowAddress => "startup_row_address",
       Self::FieldMono => "startup_field_mono",
+      Self::ArrivalKey => "startup_arrival_key",
+      Self::ArrivalTitle => "startup_arrival_title",
     }
   }
 
@@ -119,6 +127,8 @@ impl StartupText {
       Self::RowTitle => style(13.5, FontWeight::Medium, 18.0 / 13.5, 0.0, primary),
       Self::RowAddress => mono(style(12.0, FontWeight::Normal, 17.0 / 12.0, 0.0, muted)),
       Self::FieldMono => mono(style(13.0, FontWeight::Normal, 17.0 / 13.0, 0.0, primary)),
+      Self::ArrivalKey => mono(style(11.5, FontWeight::Normal, 15.0 / 11.5, 0.0, muted)),
+      Self::ArrivalTitle => style(12.5, FontWeight::Normal, 17.0 / 12.5, 0.0, primary),
     }
   }
 }

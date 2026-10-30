@@ -5,6 +5,7 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
+mod first_download;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 

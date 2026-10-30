@@ -28,20 +28,31 @@ use tokio::runtime::Handle;
 const TEAM: &str = "Acme";
 /// The team's Kontur.
 const SLUG: &str = "kontur";
+/// The repository of the team's Kontur, as frame 08 names it (`YN6MO`), where the state says so; the seed gives
+/// Kontur's checkout the same `origin`.
+const REMOTE: &str = "github.com/acme/kontur";
+/// How many tasks the team's Kontur has, and how many of them came down, as frame 08 counts them (`YN6MO`).
+const TASKS: (usize, usize) = (212, 84);
 /// The server's refusal, as the workspace words it.
 const REFUSED: &str = "servers.errors.refused";
 
 /// Sets `state` up for the session of `services`; the server, to hold while the window is open.
 pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<TeamServer, Box<dyn Error>> {
   let server = TeamServer::named(TEAM);
-  server.share(&[("Kontur", SLUG, None), ("Billing", "billing", None)]);
+  let paged = matches!(state, State::DownloadProgress | State::DownloadStopped);
+  server.share(&[("Kontur", SLUG, paged.then_some(REMOTE)), ("Billing", "billing", None)]);
+  if paged {
+    server.page_tasks(TASKS.0, TASKS.1);
+  }
   match state {
     State::Join | State::WrongCode | State::Joined => {}
     State::ExpiredCode => server.expire_later_code(),
     State::Unreachable => server.set_down(true),
     State::Offer => join_linked(&server, services, runtime, TasksAnswer::Serve).map(drop)?,
-    State::DownloadFailed => join_linked(&server, services, runtime, TasksAnswer::Fail).map(drop)?,
-    State::Downloading => {
+    State::DownloadFailed | State::DownloadStopped => {
+      join_linked(&server, services, runtime, TasksAnswer::Fail).map(drop)?;
+    }
+    State::Downloading | State::DownloadProgress => {
       let kontur = join_linked(&server, services, runtime, TasksAnswer::Hold)?;
       keep_downloading(services.servers.clone(), runtime, kontur);
     }
