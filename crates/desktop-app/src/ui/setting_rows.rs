@@ -190,6 +190,7 @@ pub struct SettingRow {
   label: Arc<str>,
   hint: Option<(Arc<str>, HintTone)>,
   info: Option<Arc<str>>,
+  link: Option<Element>,
   lead: Option<Element>,
   control: Option<Element>,
   below: Vec<Element>,
@@ -210,6 +211,7 @@ impl SettingRow {
       label: label.into(),
       hint: None,
       info: None,
+      link: None,
       lead: None,
       control: None,
       below: Vec::new(),
@@ -219,6 +221,12 @@ impl SettingRow {
       opens: None,
       bones: (None, None),
     }
+  }
+
+  /// A link under the hint, in the label's column, 2 further down (`Link` `ngNFb` in `tMyiy`).
+  pub fn link(mut self, link: impl Into<Element>) -> Self {
+    self.link = Some(link.into());
+    self
   }
 
   /// One short line under the label.
@@ -344,8 +352,13 @@ impl SettingRow {
       .with_children(hint)
   }
 
-  pub fn render(self, ctx: &mut Ctx) -> Element {
-    let text = self.text(ctx);
+  pub fn render(mut self, ctx: &mut Ctx) -> Element {
+    let link = self.link.take().map(|link| {
+      Row::new()
+        .padding(Padding::new().top(ExtraSpacing::Tight.role()))
+        .child(link)
+    });
+    let text = self.text(ctx).with_children(link);
     let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SettingsSpacing::RowY.role());
     let padding = if self.dependent {
       padding.left(SettingsSpacing::Dependent.role())
