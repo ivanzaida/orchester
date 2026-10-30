@@ -6,10 +6,10 @@
 //! head's *runs here: …* or *Can't run here*.
 
 mod adds;
+mod use_here;
 
 use std::{path::PathBuf, sync::Arc};
 
-use adds::adds_list;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -25,7 +25,6 @@ use orchester_core::{
   connection::AgentProvider,
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, VersionNumber},
-  run::Answerer,
   sharing::{ConnectionRole, VersionWidening},
 };
 use orchester_store::{Bound, BoundBy, BoundReference, ProjectDb};
@@ -33,11 +32,11 @@ use orchester_workspace::{
   background,
   sharing::sync::{self, Here, HereReference, Standing},
 };
+use use_here::{UseHere, UseHereProps};
 
 use crate::{
   screens::{
     hub::{
-      draft_bar::{DraftBar, Standing as BarStanding},
       parts::{Tone as DotTone, note},
       team::Here as HeadHere,
     },
@@ -51,7 +50,6 @@ use crate::{
   services::Services,
   theme::{ExtraColor, ExtraSpacing, HubSpacing, HubText},
   ui::{
-    button::{ActionButton, ButtonKind},
     chip::{BadgeTone, badge},
     field::field_error,
     icon::Icon,
@@ -60,8 +58,6 @@ use crate::{
 
 /// *Runs here use*'s select, as wide as the section's other dropdowns (`vxuTD` in `BzwDA`).
 const SELECT_WIDTH: f32 = 260.0;
-/// *Use v<N> here*, which only a person presses.
-const USE_HERE: &str = "agent-use-here";
 /// A connection chosen for *Runs here use*, which only a person chooses.
 const RUNS_HERE: &str = "agent-runs-here";
 
@@ -289,124 +285,6 @@ fn head_here(ctx: &Ctx, shared: &Shared, resource: ResourceId) -> Option<HeadHer
       colored: cli,
     },
   })
-}
-
-#[derive(Clone)]
-struct UseHereProps {
-  root: PathBuf,
-  resource: ResourceId,
-  waiting: Waiting,
-  revision: Signal<u64>,
-}
-
-impl PartialEq for UseHereProps {
-  fn eq(&self, other: &Self) -> bool {
-    self.root == other.root && self.resource == other.resource && self.waiting == other.waiting
-  }
-}
-
-impl DevtoolsInspectable for UseHereProps {}
-
-/// The widens bar with *Use v<N> here* (`V097I` in 02d).
-struct UseHere {
-  /// Takes the version the bar shows when pressed, so a newer version that arrives while it is mounted is the one
-  /// used.
-  use_here: FutureAction<VersionNumber, (), Said>,
-  person: PersonOnly,
-}
-
-impl Component for UseHere {
-  type Props = UseHereProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    let props = ctx.props::<UseHereProps>().clone();
-    let use_here = ctx.future_action(move |number: VersionNumber| {
-      let (root, resource, revision) = (props.root.clone(), props.resource, props.revision.clone());
-      async move {
-        background::run(move || sync::use_here(&root, resource, number, Answerer::Person))
-          .await
-          .map_err(|_| Said::new("cloud.errors.local"))?
-          .map_err(|error| sharing_said(&error))?;
-        revision.update(|count| *count += 1);
-        Ok(())
-      }
-    });
-    Self {
-      use_here,
-      person: PersonOnly::new(ctx),
-    }
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<UseHereProps>().clone();
-    let version = props.waiting.number.get().to_string();
-    let adds = adds_list(ctx, &props.waiting);
-    let state = self.use_here.state().get();
-    let button = ActionButton::new(
-      USE_HERE,
-      ButtonKind::Primary,
-      ctx.t_args("sharing.config.widens.use", [("version", version.as_str())]),
-    )
-    .icon(Icon::Check);
-    let button = if state.is_pending() {
-      button.loading()
-    } else {
-      let (action, person, number) = (self.use_here.clone(), self.person.clone(), props.waiting.number);
-      button.on_click(move || {
-        if person.allows(USE_HERE) {
-          action.run(number);
-        }
-      })
-    };
-    let names = |used: &str| {
-      [
-        ("publisher", props.waiting.publisher.clone()),
-        ("version", version.clone()),
-        ("used", used.to_owned()),
-      ]
-    };
-    let (sub, compare) = match props.waiting.used {
-      Some(used) => {
-        let used = used.get().to_string();
-        // Profiles have no compare view yet: the action is shown, unavailable, with why.
-        let compare = ActionButton::new(
-          "agent-widens-compare",
-          ButtonKind::Secondary,
-          ctx.t_args("sharing.config.widens.compare", names(&used)),
-        )
-        .unavailable(ctx.t("sharing.config.widens.compareLater"));
-        (
-          ctx.t_args("sharing.config.widens.bodyUsed", names(&used)),
-          Some(compare),
-        )
-      }
-      None => (ctx.t_args("sharing.config.widens.body", names("")), None),
-    };
-    let mut bar = DraftBar::new(
-      "agent-widens-bar",
-      BarStanding::Widens,
-      ctx.t_args("sharing.config.widens.title", [("version", version.as_str())]),
-    )
-    .sub(sub)
-    .list(adds)
-    .actions_below()
-    .foot(ctx.t("sharing.config.widens.personOnly"));
-    if let Some(compare) = compare {
-      bar = bar.action(compare);
-    }
-    let bar = bar.action(button);
-    let failed = state
-      .error
-      .clone()
-      .filter(|_| !state.is_pending())
-      .map(|reason| field_error("agent-use-here-error", &reason.text(ctx)));
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .child(bar)
-      .with_children(self.person.reason(ctx, USE_HERE))
-      .with_children(failed)
-  }
 }
 
 /// *Runs here use* as the last row of Connection & model, and the note under the section; `None` for a profile whose
