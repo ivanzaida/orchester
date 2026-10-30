@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::across,
+  base_branch,
   wire::{self, Delivers, Rank, Workflow, task_link},
   worktree::worktree_state,
 };
@@ -165,7 +166,7 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
 
 pub async fn get_task(services: &Services, args: GetTask, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (project, detail, tags, pipeline, worktrees) = blocking(move || {
+  let (project, detail, (tags, pipeline, base_branch), worktrees) = blocking(move || {
     let open = services.project(&args.project)?;
     let root = open.repo_root;
     let db = ProjectDb::open(&root)?;
@@ -173,13 +174,14 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     let tags = db.project_tags()?;
     let published = crate::tasks::data::published_pipelines(&db)?;
     let pipeline = PipelineLabel::of(task.details().pipeline, &published);
+    let base_branch = base_branch::task_json(&db, &task)?;
     let detail = TaskDetail::load_settled(&root, task.id(), &services.programs)?;
     let worktrees = detail
       .history
       .iter()
       .map(|record| Ok((record.id, worktree_state(&db, &root, record.id)?)))
       .collect::<Result<HashMap<_, _>, ToolError>>()?;
-    Ok((open.project.id(), detail, tags, pipeline, worktrees))
+    Ok((open.project.id(), detail, (tags, pipeline, base_branch), worktrees))
   })
   .await?;
   let task = &detail.task;
@@ -206,6 +208,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "story_points": wire::story_points(task.estimate()),
     "tags": tag_names,
     "module": task.module().map(|module| module.to_string()),
+    "base_branch": base_branch,
     "blocked_reason": task.organization().blocked_reason(),
     "blocked_by": &detail.blocked_by,
     "no_automatic_merge": task.organization().no_automatic_merge(),

@@ -130,11 +130,15 @@ which runs were merged outside Orchester; across projects, data is read as store
 
 ### `get_task` — read-only
 
-One task: title, brief, criteria, draft or submitted, workflow status, priority, story points, tags,
-`blocked_reason`, `blocked_by`, `no_automatic_merge`, `delivers` (`null` = as its pipeline says), pipeline, limits,
-where it stands, `result` (for a latest run that passed every step: what it delivers, whether it committed nothing,
-its completion, its report and the MCP tool calls it was let make outside the repository; `null` otherwise), its runs
-and its link (Details tab; each run links to the Summary).
+One task: title, brief, criteria, draft or submitted, workflow status, priority, story points, tags, module,
+`base_branch`, `blocked_reason`, `blocked_by`, `no_automatic_merge`, `delivers` (`null` = as its pipeline says),
+pipeline, limits, where it stands, `result` (for a latest run that passed every step: what it delivers, whether it
+committed nothing, its completion, its report and the MCP tool calls it was let make outside the repository; `null`
+otherwise), its runs and its link (Details tab; each run links to the Summary).
+
+`base_branch` holds `choice` (`inherit`, `checked_out` or `branch`) with the `branch` set, and `next_run`: the branch
+its next run takes as things stand (`null` = whatever the checkout has checked out), with its `source` (`task`,
+`module` with that `module`'s id, or `checked_out`). Each run's own base is in `get_run`.
 
 Parameters: `project` (req.), `key` (req.: key or id).
 
@@ -143,6 +147,10 @@ Parameters: `project` (req.), `key` (req.: key or id).
 Saves a new **draft** task. Limits left out take the project's defaults (as the *New task* form fills them); `null`
 is no limit. Any published pipeline may be chosen. Organization is checked as the task form checks it. The task's
 history records the organization as automation's.
+
+A task's **base branch** is the branch its runs start from and deliver into. It is kept on this computer only: in a
+shared project the tools set and read this computer's choice, which is never sent to the server, and teammates may
+choose differently.
 
 | Parameter            | Type                       | Req. | Description                                                                                       |
 |----------------------|----------------------------|------|---------------------------------------------------------------------------------------------------|
@@ -162,9 +170,11 @@ history records the organization as automation's.
 | `module`             | string \| null             | no   | Module id or name (`list_modules`).                                                               |
 | `no_automatic_merge` | boolean                    | no   | *Don't merge automatically*: the Orchestrator won't merge its runs on its own. Default `false`.   |
 | `delivers`           | Delivers \| null           | no   | Overrides the pipeline's `delivers`.                                                              |
+| `base_branch`        | string \| null             | no   | `inherit` (its module's; default), `checked_out` or a branch name; a name only a remote has (`release` or `origin/release`) creates its local branch, tracking it. |
 
 Refusals: `task_not_found` (unknown blocker), `invalid_organization` (blank reason, cycle), `shared_task`
-(`no_automatic_merge` in a shared project), `module_not_found`.
+(`no_automatic_merge` in a shared project), `module_not_found`, `branch_not_found` (the repository has the base branch
+nowhere; nothing is saved).
 
 ### `update_task` — changes data · gate AP for switching pipelines
 
@@ -183,6 +193,7 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`module`**: `null` takes it out of its module.
 - **`no_automatic_merge`**: `true`/`false`; in a shared project refused as `shared_task` before anything is saved.
 - **`delivers`**: `null` follows the pipeline again.
+- **`base_branch`**: the task's next runs take it; runs that started keep the base they recorded.
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
@@ -206,19 +217,23 @@ canceled). Parameters: `project`, `key` (both req.).
 
 Modules are epics, milestones or sprints that group a project's tasks. Shared projects have no modules.
 
+A module's **base branch** is the branch its tasks that inherit theirs start from and deliver into (`null` = whatever
+the checkout has checked out when a run starts). Like a task's, it is kept on this computer only and never sent to a
+server.
+
 ### `list_modules` — read-only
 
-Oldest first: name, description, start and target dates (`YYYY-MM-DD`, local days), state (`open`/`closed`), task
-count, progress (scope and done in its unit — tasks, until tasks have story points; Canceled tasks are out of scope),
-link. Parameter: `project` (req.).
+Oldest first: name, description, start and target dates (`YYYY-MM-DD`, local days), state (`open`/`closed`),
+`base_branch`, task count, progress (scope and done in its unit — tasks, until tasks have story points; Canceled tasks
+are out of scope), link. Parameter: `project` (req.).
 
 ### `get_module` — read-only
 
-One module as its page shows it: details, progress, tasks (key, title, workflow status, link), and its **burndown** by
-local day from its start (or its first task's day) to today or its target date (at most 366 days): scope and
-remaining work at each day's end (`null` for future days), the ideal line (`null` without a target), and work added
-and removed that day. *Done* is the task's Done (merging its run sets it, in Orchester or found merged outside by git,
-as does a person). `forecast`: 50% and 85% delivery dates, or `not_enough_history`.
+One module as its page shows it: details (`base_branch` among them), progress, tasks (key, title, workflow status,
+link), and its **burndown** by local day from its start (or its first task's day) to today or its target date (at most
+366 days): scope and remaining work at each day's end (`null` for future days), the ideal line (`null` without a
+target), and work added and removed that day. *Done* is the task's Done (merging its run sets it, in Orchester or found
+merged outside by git, as does a person). `forecast`: 50% and 85% delivery dates, or `not_enough_history`.
 
 Parameters: `project` (req.), `module` (req.: id or name).
 
@@ -233,13 +248,16 @@ Makes a new open module in a **local** project (refused as `shared_task` in a sh
 | `description` | string \| null | no   |                                           |
 | `start_date`  | string \| null | no   | `YYYY-MM-DD`.                             |
 | `target_date` | string \| null | no   | `YYYY-MM-DD`, not before the start.       |
+| `base_branch` | string \| null | no   | `checked_out` (default) or a branch name; a name only a remote has (`release` or `origin/release`) creates its local branch, tracking it. |
 
-Put tasks in it with `create_task`/`update_task`'s `module`.
+Put tasks in it with `create_task`/`update_task`'s `module`. Refusals: `branch_not_found` (the repository has the
+branch nowhere; nothing is made).
 
 ### `update_module` — changes data
 
-Changes `name`, `description`, `start_date`, `target_date` (`null` = no date) or `state` (`open` | `closed`); fields
-left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
+Changes `name`, `description`, `start_date`, `target_date` (`null` = no date), `state` (`open` | `closed`) or
+`base_branch` (as `create_module` takes it; the next runs of its tasks that inherit theirs take it, runs that started
+keep theirs); fields left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
 
 ---
 
@@ -278,6 +296,10 @@ The complete state of a run:
   what each agent wrote last (`awaiting.messages`); the plan waiting for a decision (version, step, whole text,
   excerpt).
 - **Decided plans** with decision, note, time and `decided_by` (person, or automation through MCP).
+- **`base`**: the base the run started from and delivers into, as it recorded it when it started — `branch` (`null`
+  when it took a detached HEAD's), `revision`, and `source`: `task` (the task's base branch), `module` (its module's,
+  with that `module`'s id), `checked_out` (whatever the checkout had checked out) or `project` (a run recorded before
+  tasks and modules had a base branch). A later change of the task's or module's base branch leaves it alone.
 - **`merge`**: `merged` by `orchester` (with the recorded merge) or `outside` (git proves the base holds the run's
   commits), `not_merged`, `nothing_to_merge`, or `null` for a run that has not succeeded.
 - **`base_moved`**: notices that the base branch moved — branch and revision, tasks and commits that landed, files

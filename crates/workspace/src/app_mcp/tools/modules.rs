@@ -1,9 +1,13 @@
 //! `list_modules`, `get_module`, `create_module` and `update_module`: a project's modules as the Modules list and a
 //! module's page show them (progress, tasks, the burndown by local day), and modules made and changed as the module
-//! form does, through the project's [`TaskWriter`], which makes a shared project's on its server.
+//! form does, through the project's [`TaskWriter`], which makes a shared project's on its server. A module's base
+//! branch is this computer's ([`base_branch`]).
+
+use std::path::Path;
 
 use orchester_core::{
   id::ProjectId,
+  integration::base::BaseChoice,
   module::{Module, ModuleDetails, ModuleState},
   store::TaskStore,
 };
@@ -13,6 +17,7 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
 use super::{
+  base_branch,
   task_write::write_error,
   wire::{self, Workflow, task_link},
 };
@@ -81,6 +86,11 @@ pub struct CreateModule {
   /// The day its work should be done by, `YYYY-MM-DD`.
   #[serde(default)]
   pub target_date: Option<String>,
+  /// The branch its tasks that inherit theirs start from and deliver into, kept on this computer only:
+  /// `checked_out` (the default: whatever branch the checkout has when a run starts) or a branch name; a name only a
+  /// remote has (`release` or `origin/release`) creates its local branch, tracking it.
+  #[serde(default)]
+  pub base_branch: Option<String>,
 }
 
 /// The fields to change; those left out stay as they are, and a null date is no date.
@@ -102,6 +112,10 @@ pub struct UpdateModule {
   pub target_date: Option<Option<String>>,
   #[serde(default)]
   pub state: Option<State>,
+  /// The branch the next runs of its tasks that inherit theirs start from, kept on this computer only: `checked_out`
+  /// or a branch name; a name only a remote has creates its local branch, tracking it. Runs that started keep theirs.
+  #[serde(default)]
+  pub base_branch: Option<String>,
 }
 
 /// An argument that may be given as `null` (`Some(None)`); one left out is `None`.
@@ -149,8 +163,10 @@ pub async fn create_module(services: &Services, args: CreateModule) -> Result<Va
       state: ModuleState::Open,
     };
     let details = form_details(&form)?;
+    let base = given_base(&services, &open.repo_root, args.base_branch.as_deref())?;
     let mut writer = TaskWriter::open(&open.repo_root, &services.servers).map_err(write_error)?;
     let module = writer.create_module(details).map_err(write_error)?;
+    let module = based(&open.repo_root, module, (&BaseChoice::CheckedOut, base))?;
     services.changes.record(open.project.id(), Outside::Tasks);
     Ok(json!({ "module": module_json(open.project.id(), &module) }))
   })
@@ -179,14 +195,32 @@ pub async fn update_module(services: &Services, args: UpdateModule) -> Result<Va
       state: args.state.map_or(current.state(), Into::into),
     };
     let details = form_details(&form)?;
+    let base = given_base(&services, &open.repo_root, args.base_branch.as_deref())?;
     let mut writer = TaskWriter::open(&open.repo_root, &services.servers).map_err(write_error)?;
-    let module = writer
+    let written = writer
       .update_module(module.id(), current, details)
       .map_err(write_error)?;
+    let written = based(&open.repo_root, written, (module.base(), base))?;
     services.changes.record(open.project.id(), Outside::Tasks);
-    Ok(json!({ "module": module_json(open.project.id(), &module) }))
+    Ok(json!({ "module": module_json(open.project.id(), &written) }))
   })
   .await
+}
+
+/// The base branch `given`, taken in the repository at `root` before anything of the module is saved.
+fn given_base(services: &Services, root: &Path, given: Option<&str>) -> Result<Option<BaseChoice>, ToolError> {
+  given
+    .map(|given| base_branch::module_base(&services.programs, root, given))
+    .transpose()
+}
+
+/// `module`, written, with its base branch: `after` when one was given, else `before`, as it was read. The base
+/// branch is this computer's: a shared module's is never sent to its server.
+fn based(root: &Path, module: Module, (before, after): (&BaseChoice, Option<BaseChoice>)) -> Result<Module, ToolError> {
+  match after {
+    Some(after) if &after != before => Ok(ProjectDb::open(root)?.set_module_base(module.id(), before, after)?),
+    _ => Ok(module.with_base(before.clone())),
+  }
 }
 
 /// The module of project database `db` named by its id or, ignoring case, its name.
@@ -216,6 +250,7 @@ fn module_json(project: ProjectId, module: &Module) -> Value {
       ModuleState::Open => "open",
       ModuleState::Closed => "closed",
     },
+    "base_branch": base_branch::module_json(module.base()),
     "created_at": wire::time(module.created_at()),
     "link": Link::Module(project, module.id()).path(),
   })
