@@ -115,12 +115,13 @@ impl AppServerSession {
 
   /// The selected MCP servers the agent works without, as activity, each with its state and Codex's
   /// reason; an error naming the server and the reason when the step needs them all (it asks before MCP
-  /// actions), or when the inventory cannot be read.
+  /// actions), or when the inventory cannot be read. A server Codex gets by another name is named as the
+  /// project names it.
   pub(super) fn check_servers(&self, result: &Value) -> Result<Vec<Update>, String> {
     verify_only_chosen_run(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
     if self.setup.tool_approvals {
       verify_selected_servers(result, &self.setup.expected_servers, |text| self.one_line(text))
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| self.project_named(error).to_string())?;
       return Ok(Vec::new());
     }
     let unavailable = unavailable_selected(result, &self.setup.expected_servers, |text| self.one_line(text))
@@ -131,7 +132,7 @@ impl AppServerSession {
         .map(|server| {
           let detail = server.detail();
           Update::Activity(AgentEvent::McpServer {
-            server: Some(server.name),
+            server: Some(self.project_name(server.name)),
             problem: McpServerProblem::FailedToStart { detail },
           })
         })

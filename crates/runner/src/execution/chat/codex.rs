@@ -11,7 +11,7 @@
 //! waits for more. A stopped or timed-out turn keeps what Codex reported it spent so far. On the connection's API
 //! provider App Server starts with the provider's overrides and key as a step's does ([`OnProvider`]).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use orchester_core::{
   agent_files::skills::RepositorySkills,
@@ -117,6 +117,7 @@ impl Turn {
       writable_roots: Vec::new(),
       resume: prepared.resumed,
       expected_servers: BTreeSet::from([SERVER.to_owned()]),
+      renamed: BTreeMap::new(),
       exemptions: InvocationExemptions::default(),
       output_schema: None,
       secrets,

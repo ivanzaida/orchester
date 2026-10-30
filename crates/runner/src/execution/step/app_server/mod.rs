@@ -6,7 +6,9 @@
 //! The MCP servers of the user's own configuration, read with `config/read` before the thread
 //! starts, are turned off for the thread, and the thread's inventory must show every server the step
 //! does not choose turned off; a configuration with hooks refuses the step
-//! (`orchester_core::connection::app_server_mcp`). The repository's own `.codex` folder must be left
+//! (`orchester_core::connection::app_server_mcp`). A chosen server Codex gets by another name, as the user's
+//! configuration has one of its name, is named as the project names it in what the step records ([`names`]). The
+//! repository's own `.codex` folder must be left
 //! out (a project layer Codex loaded refuses the step); one the worktree has is noted in the activity
 //! (`orchester_core::connection::app_server_config`). A step that asks before MCP
 //! actions needs its project-selected servers connected before the turn begins, any other step works
@@ -34,6 +36,7 @@ use thiserror::Error;
 use super::stderr::StderrLog;
 
 mod checks;
+mod names;
 mod setup;
 pub(in crate::execution) use self::setup::AppServerSetup;
 use crate::supervisor::Supervised;
@@ -223,7 +226,11 @@ impl AppServerSession {
           .and_then(Value::as_str)
           .map(str::to_owned);
       }
-      let updates = self.stream.parse(line).map_err(|error| error.to_string())?;
+      let renamed = self.by_project_names(&value);
+      let updates = self
+        .stream
+        .parse(renamed.as_deref().unwrap_or(line))
+        .map_err(|error| error.to_string())?;
       let updates = self.screen(updates)?;
       if updates.iter().any(|update| matches!(update, Update::TurnEnded { .. })) {
         self.phase = Phase::Complete;
