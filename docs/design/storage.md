@@ -18,8 +18,11 @@ status bar and the modal. Exports at scale 1: `.tmp/design/ORC-424/<node id>.png
 | --- | --- | --- |
 | Head | `AbCsw` | title and lead |
 | Row 1 · Storage, the low-disk item and Clean up | `mSu5E` | `Jsbd1` 01 Project settings › Runs › Storage while the guard holds; `SqEDB` 02 status bar · Low disk space (runs paused, hover with tooltip, new steps wait, narrow 960); `X9BwMn` 03 Clean up confirmation modal |
-| Row 2 · States | `LcKJr` | `yi3YU` 04 measuring sizes; `S5ek6a` 05 nothing to clean; `YwxsQ` 06 a worktree could not be removed; `MfINi` 08 loading (the page opens, nothing read yet); `ubeHK` 09 empty (a new project, Orchester keeps nothing) |
-| Row 3 · Entry and notes | `nHXUZ` | `meNMR` 07 the Runs tab's Storage row (calm, guard holds); `QU1YI` notes · what the design decides |
+| Row 2 · States | `LcKJr` | `yi3YU` 04 measuring sizes; `S5ek6a` 05 nothing to clean; `YwxsQ` 06 a worktree could not be removed |
+| Row 3 · Loading and empty | `K7ZwWg` | `MfINi` 08 loading (the page opens, nothing read yet); `ubeHK` 09 empty (a new project, Orchester keeps nothing) |
+| Row 4 · Entry and notes | `nHXUZ` | `meNMR` 07 the Runs tab's Storage row (calm, guard holds); `QU1YI` notes · what the design decides |
+
+Every row fits the board's 6200 width (the board is 4533 tall).
 
 ## Decisions (proposed)
 
