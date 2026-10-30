@@ -8,7 +8,10 @@ use std::{
 };
 
 use orchester_core::command::{Command, CommandRunner};
-use orchester_exec::search_path::macos::{extend, home_folders, usual_folders};
+use orchester_exec::search_path::{
+  SearchPath,
+  macos::{home_folders, usual_folders},
+};
 
 use super::RUNNER;
 
@@ -16,10 +19,13 @@ use super::RUNNER;
 fn search_path_appends_missing_folders_after_the_path() {
   let folders = [PathBuf::from("/opt/homebrew/bin"), PathBuf::from("/usr/bin")];
   assert_eq!(
-    extend(Some(OsStr::new("/usr/bin:/bin")), &folders),
+    SearchPath::merge(Some(OsStr::new("/usr/bin:/bin")), &[], &folders).joined(),
     OsStr::new("/usr/bin:/bin:/opt/homebrew/bin")
   );
-  assert_eq!(extend(None, &folders), OsStr::new("/opt/homebrew/bin:/usr/bin"));
+  assert_eq!(
+    SearchPath::merge(None, &[], &folders).joined(),
+    OsStr::new("/opt/homebrew/bin:/usr/bin")
+  );
 }
 
 #[test]

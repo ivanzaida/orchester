@@ -35,6 +35,8 @@ pub enum ProjectsText {
   Hint,
   /// 12.5 `text_primary`, 1.45: why *Open project folder…* failed (`OswfE` in `FV5pQ`).
   ErrorLine,
+  /// 12.5 `text_secondary`, 1.45: the team project offered above the list (`G1tpa` in `ZyS3T`, 09 `i5G19A`).
+  Offer,
   /// Geist Mono 11.5 `text_primary`, 1.3: a folder, a remote, a host or scopes (`JQkW2`, `Eyhjb`, `UtQHq`).
   Path,
   /// 13/500 `text_primary`, 1.35: the setup step under way (`KKdxf`).
@@ -52,7 +54,7 @@ pub enum ProjectsText {
 }
 
 impl ProjectsText {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 18] = [
     Self::Eyebrow,
     Self::WelcomeTitle,
     Self::WelcomeLead,
@@ -63,6 +65,7 @@ impl ProjectsText {
     Self::Initial,
     Self::Hint,
     Self::ErrorLine,
+    Self::Offer,
     Self::Path,
     Self::Step,
     Self::StepLocked,
@@ -88,6 +91,7 @@ impl ProjectsText {
       Self::Initial => "projects_initial",
       Self::Hint => "projects_hint",
       Self::ErrorLine => "projects_error_line",
+      Self::Offer => "projects_offer",
       Self::Path => "projects_path",
       Self::Step => "projects_step",
       Self::StepLocked => "projects_step_locked",
@@ -111,6 +115,7 @@ impl ProjectsText {
       Self::Initial => sans(12.0, FontWeight::SemiBold, 1.3, palette.text_primary),
       Self::Hint => sans(11.5, FontWeight::Normal, 1.45, palette.text_secondary),
       Self::ErrorLine => sans(12.5, FontWeight::Normal, 1.45, palette.text_primary),
+      Self::Offer => sans(12.5, FontWeight::Normal, 1.45, palette.text_secondary),
       Self::Path => mono(sans(11.5, FontWeight::Normal, 1.3, palette.text_primary)),
       Self::Step => sans(13.0, FontWeight::Medium, 1.35, palette.text_primary),
       Self::StepLocked => sans(13.0, FontWeight::Normal, 1.35, palette.text_muted),

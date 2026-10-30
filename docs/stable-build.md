@@ -108,16 +108,21 @@ more before Orchester reads the project secrets it keeps in the login keychain; 
 Allow*.
 
 **Programs from Finder.** An app started from Finder gets a minimal `PATH`
-(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore looks for the agent CLIs and `gh`, and
-starts every program, the runner included, with the usual install folders appended to it:
+(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore asks your login shell for its `PATH` once
+as it starts (`$SHELL -l -i -c`, or `/bin/zsh` without `$SHELL`, on a background thread; a shell
+that has not answered within 5 seconds is stopped and its `PATH` is not used, which the log says).
+It looks for the agent CLIs and `gh`, and starts every program, the runner included, with the
+inherited `PATH`, then the login shell's folders, then the usual install folders appended:
 `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, `~/.local/bin`, `~/.claude/local`,
 `~/.npm-global/bin`, `~/.volta/bin`, `~/.bun/bin`, `~/Library/pnpm`, `~/.cargo/bin`, the `bin` of
 npm's `prefix` in `~/.npmrc` and nvm's Node.js versions (newest first), each only if it exists; a
 program's own folder is appended for it too, so an npm-installed CLI finds the Node.js beside it.
-Your shell's start-up files are not read. A CLI installed elsewhere can be chosen as a file in
-*Connections*; a tool an agent needs from elsewhere is not found when the app was started from
-Finder (`open` starts it the same way). Starting the program itself from a terminal,
-`~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on.
+A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When a CLI is still not found,
+the app MCP tool `add_cli_connection` names the folders it searched; a CLI installed elsewhere can
+be added there by its file path (`program`): the app's *Connections* does not offer choosing a file
+in this version. Starting the program itself from a terminal,
+`~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on, and the
+login shell is not asked then.
 
 ## Releases from CI
 

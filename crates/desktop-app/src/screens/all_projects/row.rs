@@ -1,9 +1,9 @@
 //! A row of All projects (`Project list row` `JSey9`) and the column headings above the rows (`Project list
 //! header` `L5sps`): the project's initial on a tile, its name and folder — and why it cannot be opened —, where
-//! it stands, its active runs and the runs that need the person, when it was last opened, the × that asks
-//! whether to remove it from the list and, for a project that opens, the chevron. Selecting such a row opens
-//! the project's Overview. While its removal is asked, the question sits under it on the `hover` fill
-//! (`mykcc`).
+//! it is (`Where` `mmabW` in 09 `i5G19A`), where it stands, its active runs and the runs that need the person, when it
+//! was last opened, the × that asks whether to remove it from the list and, for a project that opens, the chevron.
+//! Selecting such a row opens the project's Overview. While its removal is asked, the question sits under it on the
+//! `hover` fill (`mykcc`).
 
 use lurq::{
   app::{
@@ -17,6 +17,7 @@ use lurq::{
 use orchester_workspace::{
   display,
   project_list::{ListedProject, RunnerShown, Standing},
+  sharing::Place,
 };
 
 use super::{Ask, remove};
@@ -26,6 +27,7 @@ use crate::{
   services::Services,
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectsText},
   ui::{
+    chip::{BadgeTone, badge, cut_badge},
     icon::{Icon, icon},
     icon_button::IconButton,
     message::message_text,
@@ -33,8 +35,9 @@ use crate::{
   },
 };
 
-/// The columns (`W8VSrP`, `ILPuo`, `QbqqK`, `gG64B`, `b45tkg`), the tile (`jmNIU`), the chevron's slot (`Sutrt`)
-/// and the headings' row (`L5sps`).
+/// The columns (`W8VSrP`, `l0DHM`, `ILPuo`, `QbqqK`, `gG64B`, `b45tkg`), the tile (`jmNIU`), the chevron's slot
+/// (`Sutrt`) and the headings' row (`L5sps`).
+const WHERE_WIDTH: f32 = 160.0;
 const STATUS_WIDTH: f32 = 168.0;
 const COUNT_WIDTH: f32 = 88.0;
 const OPENED_WIDTH: f32 = 96.0;
@@ -61,6 +64,7 @@ pub(super) fn headings(ctx: &Ctx) -> Row {
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(heading("projects.columns.project").flex(1.0))
+    .child(heading("projects.columns.where").width(Dimension::Px(WHERE_WIDTH)))
     .child(heading("projects.columns.status").width(Dimension::Px(STATUS_WIDTH)))
     .child(heading("projects.columns.activeRuns").width(Dimension::Px(COUNT_WIDTH)))
     .child(heading("projects.columns.needsYou").width(Dimension::Px(COUNT_WIDTH)))
@@ -68,8 +72,9 @@ pub(super) fn headings(ctx: &Ctx) -> Row {
     .child(Row::new().width(Dimension::Px(ACTIONS_WIDTH)))
 }
 
-/// The row of `listed`, with its removal question when it is asked; `last` draws no line under it.
-pub(super) fn row(ctx: &mut Ctx, listed: &ListedProject, ask: &Ask, last: bool) -> Element {
+/// The row of `listed` and where it is (`None` while that is not read, or cannot be), with its removal question when
+/// it is asked; `last` draws no line under it.
+pub(super) fn row(ctx: &mut Ctx, (listed, place): (&ListedProject, Option<&Place>), ask: &Ask, last: bool) -> Element {
   let id = listed.project.id;
   let asking = ask.removing.get().0 == Some(id);
   let now = Services::of(ctx).clock.now();
@@ -80,6 +85,7 @@ pub(super) fn row(ctx: &mut Ctx, listed: &ListedProject, ask: &Ask, last: bool) 
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(identity(ctx, listed))
+    .child(where_cell(ctx, listed, place))
     .child(Row::new().width(Dimension::Px(STATUS_WIDTH)).child(status(ctx, listed)))
     .child(count(ctx, listed, Count::Active))
     .child(count(ctx, listed, Count::NeedsYou))
@@ -169,6 +175,33 @@ fn identity(ctx: &Ctx, listed: &ListedProject) -> Row {
     .align_items(Alignment::Center)
     .child(tile)
     .child(text)
+}
+
+/// Where the project is (`Where` `mmabW`, `aDEWg`): a badge saying *Shared · Acme* in `info` (`MOCLi`) or *Local*
+/// in `text_secondary` (`eQqrn`); a dash while it is not read, and when its folder or data cannot be read. The team's
+/// name is the server's own, of any length: a long one is cut to the column, whole in a tooltip.
+fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> Row {
+  let id = format!("project-row-where-{}", listed.project.id);
+  let badge_id = format!("{id}-badge");
+  let shown: Element = match place {
+    None => Text::new(&ctx.t("projects.where.unknown"))
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .into(),
+    Some(Place::Local) => badge(&badge_id, BadgeTone::Neutral, &ctx.t("projects.where.local")).into(),
+    Some(Place::Shared { team: Some(team) }) => {
+      let words = ctx.t_args("projects.where.shared", [("team", team.as_str())]);
+      cut_badge(ctx, &badge_id, BadgeTone::Info, &words).into()
+    }
+    Some(Place::Shared { team: None }) => {
+      badge(&badge_id, BadgeTone::Info, &ctx.t("projects.where.sharedUnknown")).into()
+    }
+  };
+  Row::new()
+    .id(id)
+    .width(Dimension::Px(WHERE_WIDTH))
+    .align_items(Alignment::Center)
+    .child(shown)
 }
 
 /// Where the project stands (`Status cell` `mI3Vr`): its folder or data first, then its runner.

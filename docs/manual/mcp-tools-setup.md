@@ -119,6 +119,14 @@ Gates: a `program` that is not a copy found on the search path is `person_only` 
 on; any `api_provider` is `person_only` unless AP is on, because agents would send the project's prompts, code and
 command output to that host.
 
+A given `program` is examined before any gate, without running it, and saved as given (a link stays a link):
+`program_not_absolute` for a relative path, `program_not_local` for a path on another machine or a device (or reached
+through a link that leads there; refused before anything reads it), `program_not_found` when no file is there,
+`program_not_a_file` for a folder, `program_not_executable` on macOS for a file without an execute permission
+(`chmod +x`), and `program_unreadable` when it cannot be examined. Without `program`, when no copy is found, `program_not_found` names
+the folders searched, in search order (on macOS: the inherited `PATH`, the login shell's `PATH`, then the usual
+install folders).
+
 | Parameter      | Type                    | Req. | Description                                                                  |
 |----------------|-------------------------|------|------------------------------------------------------------------------------|
 | `project`      | string                  | yes  | The project's id, or its name.                                               |

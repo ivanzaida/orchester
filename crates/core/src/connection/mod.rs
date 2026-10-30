@@ -39,8 +39,8 @@ pub(crate) use self::github::gh_command;
 pub use self::{
   account::{AccountStartProblem, ConnectionAccount, moves_to_another_account},
   adapter::{
-    check, executable_candidates, parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status,
-    parse_version,
+    candidates_in, check, executable_candidates, parse_claude_auth_status, parse_codex_catalog,
+    parse_codex_login_status, parse_version, searched_folder,
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck, EngineVendor},
   api_provider::{ApiProvider, ApiProviderError, CLAUDE_EFFORTS, ProviderEffortError, SessionOrigin, provider_effort},

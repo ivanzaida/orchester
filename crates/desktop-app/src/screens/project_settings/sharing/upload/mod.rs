@@ -32,7 +32,7 @@ use orchester_workspace::sharing::{
 
 use super::super::page;
 use crate::{
-  project::ShownProject,
+  project::{Projects, ShownProject},
   screens::settings::orchester::{PersonOnly, Said, sharing_said, shown_address},
   services::Services,
   theme::{ExtraSpacing, TaskFormSpacing},
@@ -136,7 +136,7 @@ impl Component for UploadPage {
     let write = ctx.signal(true);
     let (wanted, root) = (write.clone(), props.project.open.repo_root.clone());
     let link = ctx.future_action(move |(): ()| {
-      let (servers, root, upload, page) = (servers.clone(), root.clone(), props.upload.clone(), props.page.clone());
+      let (servers, root, upload) = (servers.clone(), root.clone(), props.upload.clone());
       let write_discovery = wanted.get();
       async move {
         let request = LinkRequest {
@@ -150,7 +150,6 @@ impl Component for UploadPage {
               // The link stands; Sharing's discovery row says what the repository's file holds.
               tracing::warn!(%error, "orchester.toml was not written after linking");
             }
-            page.set(LinkPage::default());
             Ok(())
           }
           Err(ShareError::Sharing(SharingError::ProjectChanged)) => Err(Failure::Changed),
@@ -160,6 +159,17 @@ impl Component for UploadPage {
       }
     });
     let props = ctx.props::<Props>().clone();
+    let (projects, feed, page) = (Projects::of(ctx), props.project.feed.clone(), props.page.clone());
+    let project = props.project.open.project.id();
+    ctx.watch(&link.state(), move |state| {
+      if state.is_fulfilled() && state.error.is_none() {
+        page.set(LinkPage::default());
+        // The project has the server project's key now, and the tasks that came down are the server's: both are read
+        // again, as after a join (`join::review`).
+        projects.retry(project);
+        feed.saved();
+      }
+    });
     let (servers, root) = (Services::of(ctx).servers, props.project.open.repo_root.clone());
     let review = ctx.future_action(move |(): ()| {
       let (servers, root, upload, page) = (servers.clone(), root.clone(), props.upload.clone(), props.page.clone());

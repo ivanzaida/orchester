@@ -9,6 +9,7 @@ mod claim_ends;
 mod claims;
 pub mod convert;
 pub mod discovery;
+pub(super) mod download;
 pub mod first_link;
 pub mod folder;
 mod join;
@@ -38,6 +39,7 @@ use orchester_store::{ProjectDb, SharingLink};
 pub use self::{
   claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},
+  download::FirstDownload,
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
   members::{MemberChange, MembersRead, ProjectMembers},

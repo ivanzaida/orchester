@@ -1,8 +1,14 @@
 //! A desktop with no project open: an application database in a folder of its own, a keychain in memory, and the
 //! session's servers, Orchester Cloud account and team joins, as the app builds them. A Cloud sign-in goes to the
-//! stand-in cloud on loopback.
+//! stand-in cloud on loopback. Projects, local or linked to a team's, live in folders beside the database.
 
-use std::{collections::HashMap, future::Future, sync::Arc};
+use std::{
+  collections::HashMap,
+  fs,
+  future::Future,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use orchester_api::{
   Credential,
@@ -10,14 +16,19 @@ use orchester_api::{
   test_support::account_cloud::{AccountCloud, EMAIL, PASSWORD},
 };
 use orchester_core::{
-  id::ServerId,
+  id::{ProjectId, ServerId},
+  name::Name,
+  project::{Project, ProjectKey},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
+  sharing::MemberRole,
+  time::Timestamp,
 };
-use orchester_store::AppDb;
+use orchester_store::{AppDb, ProjectDb, SharingLink};
 use orchester_workspace::{
+  project_setup::NewProject,
   secrets::Vault,
   sharing::{ServerEntry, Servers, cloud::Cloud, team_join::TeamJoin},
-  workspace::Workspace,
+  workspace::{OpenProject, Workspace},
 };
 use parking_lot::Mutex;
 use tempfile::TempDir;
@@ -51,7 +62,8 @@ pub struct Desk {
   pub servers: Servers,
   pub cloud: Cloud,
   pub join: TeamJoin,
-  _data: TempDir,
+  /// The application database's folder, which the projects' folders are in too.
+  data: TempDir,
 }
 
 impl Desk {
@@ -70,7 +82,7 @@ impl Desk {
       vault,
       servers,
       cloud,
-      _data: data,
+      data,
     }
   }
 
@@ -112,6 +124,64 @@ impl Desk {
   pub fn assert_no_project(&self) {
     assert!(self.workspace.projects().expect("projects").is_empty());
   }
+
+  /// The servers of a later start: a new workspace on the same application database and keychain.
+  pub fn servers_again(&self) -> Servers {
+    let workspace = Workspace::new(AppDb::open(&self.database()).expect("database"));
+    Servers::new(workspace, Vault::with(self.vault.clone()))
+  }
+
+  fn database(&self) -> PathBuf {
+    self.data.path().join("orchester.db")
+  }
+
+  /// A local project `name` in the folder `folder` beside the database, in the list.
+  pub fn project(&self, folder: &str, name: &str) -> OpenProject {
+    let root = self.data.path().join(folder);
+    fs::create_dir_all(root.join(".git")).expect("the project's folder");
+    let project = Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("KON").expect("key"),
+      Name::new(name).expect("name"),
+    );
+    self
+      .workspace
+      .create(NewProject {
+        project,
+        repo_root: root,
+      })
+      .expect("the project is set up")
+  }
+
+  /// [`Self::project`] linked to the project `server_project` on `server`, as a checkout linked to a team's project.
+  pub fn linked_project(
+    &self,
+    folder: &str,
+    name: &str,
+    (server, server_project): (ServerId, ProjectId),
+  ) -> OpenProject {
+    let project = self.project(folder, name);
+    link(&project.repo_root, (server, server_project));
+    project
+  }
+}
+
+/// Links the project at `root` to `server_project` on `server`.
+fn link(root: &Path, (server, project): (ServerId, ProjectId)) {
+  let mut db = ProjectDb::open(root).expect("the project's data");
+  let link = SharingLink {
+    server,
+    project,
+    key: ProjectKey::new("KON").expect("key"),
+    role: Some(MemberRole::Member),
+    joined_at: Timestamp::from_unix_millis(100),
+    cursor: 1,
+    last_synced_at: Timestamp::from_unix_millis(100),
+    removed_at: None,
+    address: None,
+  };
+  db.start_sharing(&link, &[], (&[], &Default::default()))
+    .expect("linked");
 }
 
 /// An address nothing answers at: a port of this computer that was just closed.
