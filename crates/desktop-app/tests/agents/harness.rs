@@ -85,7 +85,8 @@ impl Agents {
   pub fn open(&mut self, id: ResourceId) {
     self.go();
     self.click(&format!("agent-{id}"));
-    self.until("editor", |s| s.exists("agent-role"));
+    // A member of a shared project reads the role as text, with no input: the row stands on both pages.
+    self.until("editor", |s| s.exists("agent-role-row"));
   }
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
     let deadline = std::time::Instant::now() + Duration::from_secs(15);

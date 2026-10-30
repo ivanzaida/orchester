@@ -21,8 +21,9 @@ use orchester_store::{
 
 use super::harness::Agents;
 
-/// Links the project and caches a teammate's v2 of profile `id`, which adds their MCP server `docs` (not here) and
-/// names their connection `Work`, bound here by role to the project's Codex connection; v2 waits for the person.
+/// Links the project as a member and caches the team's v1 of profile `id`, which names the teammate's connection
+/// `Work`, bound here by role to the project's Codex connection, and their v2, which adds their MCP server `docs` (not
+/// here); v2 waits for the person, so runs use v1.
 fn shared_v2(agents: &Agents, id: ResourceId) {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let v1 = db.latest_version::<AgentProfile>(id).expect("read").expect("v1");
@@ -44,35 +45,47 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
     address: None,
   };
   db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
-  let references = vec![
-    VersionReference {
-      target: ReferenceTarget::Connection(theirs),
-      name: "Work".to_owned(),
-      role: Some("codex_cli".to_owned()),
-    },
-    VersionReference {
-      target: ReferenceTarget::McpServer(docs),
-      name: "docs".to_owned(),
-      role: None,
-    },
-  ];
+  let work = VersionReference {
+    target: ReferenceTarget::Connection(theirs),
+    name: "Work".to_owned(),
+    role: Some("codex_cli".to_owned()),
+  };
+  let olha = SharedPerson {
+    id: UserId::generate(),
+    name: "olha".to_owned(),
+  };
+  let cached = |number: VersionNumber, body: &AgentProfile, references: Vec<VersionReference>, waits_here: bool| {
+    CachedVersion {
+      number,
+      published_at: Timestamp::now(),
+      publisher: olha.clone(),
+      server_body: serde_json::to_value(body).expect("a body"),
+      hash: ContentHash::new(&number.get().to_string().repeat(64)).expect("a hash"),
+      references,
+      local_body: body.clone(),
+      waits_here,
+    }
+  };
   db.cache_shared_version(
     id,
-    &CachedVersion {
-      number: VersionNumber::FIRST.next().expect("v2"),
-      published_at: Timestamp::now(),
-      publisher: SharedPerson {
-        id: UserId::generate(),
-        name: "olha".to_owned(),
-      },
-      server_body: serde_json::to_value(&v2).expect("a body"),
-      hash: ContentHash::new(&"b".repeat(64)).expect("a hash"),
-      references,
-      local_body: v2,
-      waits_here: true,
-    },
+    &cached(VersionNumber::FIRST, v1.body(), vec![work.clone()], false),
   )
-  .expect("cached");
+  .expect("v1 cached");
+  let docs_reference = VersionReference {
+    target: ReferenceTarget::McpServer(docs),
+    name: "docs".to_owned(),
+    role: None,
+  };
+  db.cache_shared_version(
+    id,
+    &cached(
+      VersionNumber::FIRST.next().expect("v2"),
+      &v2,
+      vec![work, docs_reference],
+      true,
+    ),
+  )
+  .expect("v2 cached");
   for (reference, name, role) in [
     (
       BoundReference::Connection {
@@ -111,11 +124,10 @@ fn shared_profile_says_what_is_missing_and_only_a_person_uses_the_waiting_versio
   shared_v2(&agents, id);
   agents.open(id);
   agents.until("the shared bars", |s| s.exists("agent-widens-bar"));
-  assert_eq!(
-    agents.text("agent-missing-bar-status"),
-    "Missing on this computer: MCP server “docs”"
+  assert!(
+    !agents.exists("agent-missing-bar"),
+    "runs use v1, which names nothing missing here"
   );
-  assert!(agents.exists("agent-missing-choose"));
   assert_eq!(
     agents.text("agent-widens-bar-status"),
     "v2 widens what agents may do here"
@@ -141,7 +153,9 @@ fn shared_profile_says_what_is_missing_and_only_a_person_uses_the_waiting_versio
   );
 
   agents.click("agent-use-here");
-  agents.until("v2 used here", |s| !s.exists("agent-widens-bar"));
+  agents.until("v2 used here", |s| {
+    !s.exists("agent-widens-bar") && s.exists("agent-missing-bar-status")
+  });
   assert_eq!(
     ProjectDb::open(&agents.root)
       .expect("database")
@@ -149,6 +163,12 @@ fn shared_profile_says_what_is_missing_and_only_a_person_uses_the_waiting_versio
       .expect("read"),
     None
   );
+  assert_eq!(
+    agents.text("agent-missing-bar-status"),
+    "Missing on this computer: MCP server “docs”",
+    "runs use v2 now, which names docs"
+  );
+  assert!(agents.exists("agent-missing-choose"));
 }
 
 /// Caches a teammate's v3 of profile `id`, the same as v2, which waits too.
