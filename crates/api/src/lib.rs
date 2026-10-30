@@ -2,6 +2,7 @@
 //! desktop uses, and with the `identity` feature the cloud's identity tokens and key sets and its two-factor codes.
 
 mod accounts;
+mod catalog;
 pub mod certificate;
 #[cfg(feature = "client")]
 pub mod client;
@@ -27,6 +28,7 @@ pub mod totp;
 pub mod wire;
 
 pub use accounts::*;
+pub use catalog::*;
 pub use credential::Credential;
 pub use error::{ApiError, ErrorCode, SharingError, SharingErrorDetails};
 pub use events::*;
