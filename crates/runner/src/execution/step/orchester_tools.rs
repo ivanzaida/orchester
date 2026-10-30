@@ -380,6 +380,7 @@ impl RunTask {
       host = host.with_images();
     }
     if host.tools.offers_browser() {
+      self.browser.person_waits_go_on(self.run.id());
       let browser = StepBrowser::new(
         Arc::clone(&self.browser),
         self.run.id(),

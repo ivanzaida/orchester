@@ -33,7 +33,7 @@ use tokio::sync::watch;
 pub use self::{
   frame::{FrameDecodeError, RgbaFrame},
   owners::{RunOwner, run_owners},
-  view::{AgentActing, BrowserView, OpenSelect},
+  view::{AgentActing, AgentWaiting, BrowserView, OpenSelect},
 };
 #[cfg(feature = "test-support")]
 use crate::runner::RequestError;

@@ -8,8 +8,8 @@
 //! the person's, and no run reaches them.
 //!
 //! The window sees and drives every tab through the runner (`window`): the browser's state, the screencast of the tab
-//! it shows, the person's input, dialogs and `<select>` lists, and the restart in a browser window of its own, which
-//! starts again headless with its tabs once the person closes that window.
+//! it shows, the person's input, which makes the agent of that tab wait, dialogs and `<select>` lists, and the restart
+//! in a browser window of its own, which starts again headless with its tabs once the person closes that window.
 //!
 //! The browser ends with the runner: on Windows its kill-on-close Job Object ends it however the runner ends; on macOS
 //! the runner closes it as it exits, and a runner killed with SIGKILL leaves it running, as it leaves agents
@@ -45,7 +45,7 @@ pub use self::{
   log::{ConsoleMessage, KEPT, Request, TabLog},
   running::LOAD_LIMIT,
   tab::Tab,
-  window::Arrived,
+  window::{Arrived, HoldClock, PERSON_HOLD, PersonWait, WAIT_CAP},
 };
 
 #[derive(Debug, Error)]
@@ -131,6 +131,15 @@ impl ProjectBrowser {
   #[must_use]
   pub fn with_windows_out_of_sight(mut self) -> Self {
     self.starter.out_of_sight = true;
+    self
+  }
+
+  /// This browser, before it is used, with the person's hold going by `clock`: what tests drive instead of sleeping.
+  #[must_use]
+  pub fn with_hold_clock(mut self, clock: Arc<dyn HoldClock>) -> Self {
+    let window = Arc::new(Window::with_clock(clock));
+    self.starter.window = Arc::clone(&window);
+    self.window = window;
     self
   }
 
@@ -266,8 +275,26 @@ impl ProjectBrowser {
     })
   }
 
+  /// Waits while the person uses `tab` in the window, for a call of `run` that acts on it; at once when they do not.
+  /// What it came to says whether the call may act.
+  pub async fn wait_for_person(&self, run: RunId, tab: &TargetId) -> PersonWait {
+    self.window.wait_for_person(run, tab).await
+  }
+
+  /// `run` is cancelled or pauses: its calls waiting for the person end at once, without acting, and until
+  /// [`Self::person_waits_go_on`] those to come end as they would have begun to wait.
+  pub fn stop_person_waits(&self, run: RunId) {
+    self.window.stop_waits(run);
+  }
+
+  /// `run`'s agents work again: their calls wait for the person again.
+  pub fn person_waits_go_on(&self, run: RunId) {
+    self.window.waits_go_on(run);
+  }
+
   /// `run` ended: its tabs are no longer its and close. Every tab is tried; the first failure is returned.
   pub async fn close_run_tabs(&self, run: RunId) -> Result<(), BrowserError> {
+    self.window.waits_go_on(run);
     let (cdp, ended) = {
       let running = self.running.lock().await;
       let Some(running) = running.as_ref() else {

@@ -24,7 +24,7 @@ pub(in crate::browser) struct Starter {
   profile: Result<PathBuf, BrowserUnavailable>,
   pub(in crate::browser) settings: Option<PathBuf>,
   pub(in crate::browser) out_of_sight: bool,
-  window: Arc<Window>,
+  pub(in crate::browser) window: Arc<Window>,
   /// Why the browser did not start again, until one starts: the answer to a run that still names its tab.
   unavailable: Arc<Mutex<Option<BrowserUnavailable>>>,
 }

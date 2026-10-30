@@ -1,7 +1,8 @@
 //! Plays a [`Fixture`] into the session's Browser window state, as the project's runner would report its browser: the
 //! scene's tabs with the one shown, the page's frame and what else the runner reports. An agent starting to browse
 //! opens the window, as the setting lets it by default. While the window is open the agent's action is reported again,
-//! so it stays *acting*, and a runner that reports its own browser over the fixture's is played over again.
+//! so it stays *acting*, an agent's wait is pushed back as a person who goes on using the tab would, and a runner that
+//! reports its own browser over the fixture's is played over again.
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -48,7 +49,7 @@ pub fn play(
     other_project(&window, &root);
     feed(BrowserEvent::Changed(scene.reported.clone()));
     open(&window, &root, runs.first().copied(), &feed).await;
-    let height = if fixture.state == BrowserState::Acting {
+    let height = if matches!(fixture.state, BrowserState::Acting | BrowserState::Waiting) {
       PAGE_HEIGHT - ACTIVITY_HEIGHT
     } else {
       PAGE_HEIGHT
@@ -90,12 +91,16 @@ pub fn play(
           window.receive_frame_for_test(&root, frame);
         }
       }
-      for event in scene
-        .events
-        .iter()
-        .filter(|event| matches!(event, BrowserEvent::AgentActed { .. }))
-      {
-        feed(event.clone());
+      for event in &scene.events {
+        match event {
+          BrowserEvent::AgentActed { .. } => feed(event.clone()),
+          BrowserEvent::AgentWaiting { run, tab, .. } => feed(BrowserEvent::AgentWaiting {
+            run: *run,
+            tab: tab.clone(),
+            until: tabs::until_after_input(),
+          }),
+          _ => {}
+        }
       }
     }
   })
