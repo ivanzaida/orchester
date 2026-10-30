@@ -7,16 +7,16 @@
 //! person turns reports off or on ([`orchester_ipc::Command::SetErrorReports`], [`Switch`]). Debug builds, the tests
 //! among them, never report. Its log file and stderr stay as they are.
 
-mod switch;
-
 use std::sync::Arc;
 
 use orchester_ipc::ErrorReports;
-use sentry::{Client, ClientOptions, Hub, TransportFactory, integrations::tracing::ErrorLayer};
+use sentry::{Client, ClientOptions, Hub, TransportFactory, integrations::tracing::ErrorLayer, protocol::Event};
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{Layer, filter::filter_fn, registry::LookupSpan};
 
-pub use self::switch::Switch;
+/// The transport of the runner's client, which the app turns on with the environment and release its reports name,
+/// and off (`orchester_report::switch`).
+pub type Switch = orchester_report::switch::Switch<ErrorReports>;
 
 /// Which of Orchester's programs a report comes from (the `process` tag the scrubber keeps).
 pub const PROCESS: &str = "runner";
@@ -93,7 +93,7 @@ impl Reports {
       .take()
       .expect("orchester_report's options scrub every report");
     let stamping = switch.clone();
-    options.before_send = Some(Arc::new(move |event| scrub(stamping.stamp(event)?)));
+    options.before_send = Some(Arc::new(move |event| scrub(stamp(&stamping, event)?)));
     options.transport = Some(Arc::new(switch.clone()));
     Self {
       client: Arc::new(Client::from(options)),
@@ -114,4 +114,13 @@ impl Drop for Reports {
   fn drop(&mut self) {
     self.client.close(None);
   }
+}
+
+/// `event` with the release and the environment of the reports while `switch` is on; `None` while it is off.
+fn stamp(switch: &Switch, mut event: Event<'static>) -> Option<Event<'static>> {
+  let (release, environment) =
+    switch.with(|reports| (reports.release().to_owned(), reports.environment().to_owned()))?;
+  event.release = Some(release.into());
+  event.environment = Some(environment.into());
+  Some(event)
 }

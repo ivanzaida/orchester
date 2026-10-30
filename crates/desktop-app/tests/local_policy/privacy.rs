@@ -76,6 +76,7 @@ fn local_policy_sensitive_recorded_base_branch_is_refused_before_legacy_job_meta
         branch: BranchName::new("private-new-run").expect("branch"),
         base: original.base().clone(),
         base_branch: Some(BranchName::new(PRIVATE_VALUE).expect("private fixture branch")),
+        base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
         budget: None,
         max_duration: None,
       },

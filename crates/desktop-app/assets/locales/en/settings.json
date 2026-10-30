@@ -303,6 +303,17 @@
         "unreadable": "The warning threshold can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}"
       },
+      "privacy": {
+        "title": "Privacy",
+        "errorReports": {
+          "label": "Send error reports",
+          "hint": "Errors and crashes go to Orchester's error tracker, without secrets, prompts, file contents or project names",
+          "link": "What a report carries",
+          "unreadable": "Whether to send error reports can't be read: {{reason}}",
+          "notSaved": "Changed until Orchester closes, but not saved, so it starts with the setting it had: {{reason}}",
+          "notOpened": "The page could not be opened. It is {{url}}"
+        }
+      },
       "version": {
         "title": "Version",
         "release": "Orchester {{version}}, release build.",

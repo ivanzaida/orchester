@@ -1,25 +1,26 @@
-//! The app's error reports (ORC-156, ORC-157, ORC-162): a panic becomes one scrubbed event with the release and the
-//! environment, and so does an ERROR log line, while a WARN line sends nothing; a panic names the loaded modules with
-//! their debug IDs and its frames' instruction addresses; debug builds and tests never start the client, and nothing
-//! starts while the person's setting is off.
+//! The app's error reports (ORC-156, ORC-157, ORC-162, ORC-161): a panic becomes one scrubbed event with the release
+//! and the environment, and so does an ERROR log line, while a WARN line sends nothing; a panic names the loaded
+//! modules with their debug IDs and its frames' instruction addresses; debug builds and tests never start the client;
+//! the client follows the person's setting, sending nothing while it is off and sending again once it is turned on.
 
 use std::{
   ffi::OsStr,
   panic,
   sync::{Arc, Mutex},
+  time::Duration,
 };
 
 use orchester_app::{
   app_log::{self, PANIC_LOG},
-  error_reports::{self, Environment, RELEASE},
+  error_reports::{self, Environment, RELEASE, Reports},
   mcp::Build,
 };
 use orchester_store::AppDb;
 use orchester_workspace::workspace::Workspace;
 use sentry::{
-  Hub,
+  Hub, Scope,
   protocol::{DebugImage, Event},
-  test::with_captured_events_options,
+  test::{TestTransport, with_captured_events_options},
 };
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{
@@ -217,21 +218,94 @@ fn error_reports_never_start_in_debug_builds_or_tests() {
     Some(Environment::Production)
   );
   assert!(Hub::main().client().is_none(), "nothing in the tests started a client");
+  assert!(
+    !error_reports::turned_off(),
+    "with no client of the app, nothing is turned off"
+  );
 }
 
 #[test]
-fn error_reports_with_the_setting_off_nothing_starts() {
+fn error_reports_follow_the_stored_setting() {
   let (_off_dir, off) = workspace(false);
-  assert!(error_reports::allowed_options(Environment::Qa, Some(&off)).is_none());
-  assert!(error_reports::start(Environment::Qa, Some(&off)).is_none());
+  assert_eq!(error_reports::allowed(Some(&off)), Some(false));
+  assert_eq!(error_reports::allowed(None), None, "no session, no setting");
   assert!(
     error_reports::start(Environment::Production, None).is_none(),
-    "no session, no setting"
+    "no session, no client"
   );
   assert!(Hub::current().client().is_none() && Hub::main().client().is_none());
 
   let (_on_dir, on) = workspace(true);
-  let options = error_reports::allowed_options(Environment::Production, Some(&on)).expect("on allows reports");
+  assert_eq!(error_reports::allowed(Some(&on)), Some(true));
+  on.set_sends_error_reports(false).expect("the person's choice is kept");
+  assert_eq!(error_reports::allowed(Some(&on)), Some(false), "turned off is kept");
+  let options = error_reports::options(Environment::Production);
   assert_eq!(options.environment.as_deref(), Some("production"));
   assert!(options.before_send.is_some() && !options.send_default_pii);
+}
+
+/// How long a test waits for its reports to leave.
+const PATIENCE: Duration = Duration::from_secs(10);
+
+/// The messages `transport` received, in order.
+fn sent(transport: &TestTransport) -> Vec<String> {
+  transport
+    .fetch_and_clear_events()
+    .into_iter()
+    .map(|event| event.message.unwrap_or_default())
+    .collect()
+}
+
+#[test]
+fn error_reports_turned_off_the_client_sends_nothing_and_turned_on_again_it_sends() {
+  let transport = TestTransport::new();
+  let reports = Reports::new(Environment::Qa, true, Arc::new(transport.clone()));
+  let hub = Arc::new(Hub::new(Some(reports.client().clone()), Arc::new(Scope::default())));
+  let switch = reports.switch();
+
+  hub.capture_message("while on", sentry::Level::Error);
+  assert!(reports.client().flush(Some(PATIENCE)), "the report leaves");
+  assert_eq!(sent(&transport), ["while on"]);
+
+  switch.set(None);
+  assert!(reports.for_runners().is_none(), "the runners are told to stop too");
+  hub.capture_message("while off", sentry::Level::Error);
+  Hub::run(hub.clone(), || {
+    let panicked = panic::catch_unwind(|| panic!("a panic while off"));
+    assert!(panicked.is_err(), "the closure panics");
+  });
+  assert!(reports.client().flush(Some(PATIENCE)));
+  assert!(sent(&transport).is_empty(), "off sends nothing");
+
+  switch.set(Some(()));
+  hub.capture_message("on again", sentry::Level::Error);
+  assert!(reports.client().flush(Some(PATIENCE)), "the report leaves");
+  let events = transport.fetch_and_clear_events();
+  assert_eq!(events.len(), 1, "{events:?}");
+  assert_eq!(events[0].message.as_deref(), Some("on again"));
+  assert_eq!(events[0].release.as_deref(), Some(RELEASE));
+  assert_eq!(events[0].environment.as_deref(), Some("qa"));
+  assert_eq!(events[0].tags.get("process").map(String::as_str), Some("app"));
+  assert_eq!(
+    reports.for_runners(),
+    Some(error_reports::for_runners(Environment::Qa)),
+    "the runners are told to send again"
+  );
+}
+
+#[test]
+fn error_reports_started_off_send_nothing_until_turned_on_without_a_restart() {
+  let transport = TestTransport::new();
+  let reports = Reports::new(Environment::Production, false, Arc::new(transport.clone()));
+  let hub = Hub::new(Some(reports.client().clone()), Arc::new(Scope::default()));
+
+  hub.capture_message("while off", sentry::Level::Error);
+  assert!(reports.client().flush(Some(PATIENCE)));
+  assert!(sent(&transport).is_empty(), "off sends nothing");
+  assert!(reports.for_runners().is_none());
+
+  reports.switch().set(Some(()));
+  hub.capture_message("turned on", sentry::Level::Error);
+  assert!(reports.client().flush(Some(PATIENCE)), "the report leaves");
+  assert_eq!(sent(&transport), ["turned on"]);
 }

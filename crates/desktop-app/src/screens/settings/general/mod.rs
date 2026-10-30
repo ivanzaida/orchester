@@ -1,10 +1,12 @@
-//! Settings › General (`01 · General` `l838Ty` in the new `orchester.pen`): *Appearance* with the window's theme and
-//! the honest note under it (`theme`), *Plan limits* with the warning threshold every project's Usage draws
-//! (`threshold`), and *This computer*: the app's version and whether it is a release or a development build, and where
-//! its application database and its log are, each with Copy. What a row is for is in its (i) tooltip. A change saves
-//! as it is made, off the UI thread, and the header's save state follows it (`super::save_state`). Nothing here widens
-//! what agents may do, so no control is a person's alone.
+//! Settings › General (`01 · General` `l838Ty` in the new `orchester.pen`, with *Privacy* as `01b` `Z322E` draws it):
+//! *Appearance* with the window's theme and the honest note under it (`theme`), *Plan limits* with the warning
+//! threshold every project's Usage draws (`threshold`), *Privacy* with whether error reports are sent
+//! (`error_reports`), and *This computer*: the app's version and whether it is a release or a development build, and
+//! where its application database and its log are, each with Copy. What a row is for is in its (i) tooltip. A change
+//! saves as it is made, off the UI thread, and the header's save state follows it (`super::save_state`). Nothing here
+//! widens what agents may do, so no control is a person's alone.
 
+mod error_reports;
 mod theme;
 mod threshold;
 
@@ -45,6 +47,10 @@ pub fn tab(ctx: &mut Ctx) -> Element {
     .child(
       SettingGroup::new("settings-plan-limits", ctx.t("settings.general.planLimits"))
         .row(ctx.mount_keyed::<threshold::ThresholdRow>("settings-threshold", ())),
+    )
+    .child(
+      SettingGroup::new("settings-privacy", ctx.t("settings.general.privacy.title"))
+        .row(ctx.mount_keyed::<error_reports::ErrorReportsRow>("settings-error-reports", ())),
     )
     .child(ctx.mount_keyed::<ThisComputer>("settings-computer", ()));
   frame::column("settings-general-scroll", pane)

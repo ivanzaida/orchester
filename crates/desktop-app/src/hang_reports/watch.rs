@@ -70,9 +70,10 @@ impl HangWatch {
     }
   }
 
-  /// Reports the hang since the `beat` when the thread has been `quiet` long enough.
+  /// Reports the hang since the `beat` when the thread has been `quiet` long enough, unless the person turned the
+  /// error reports off: then the window's thread is not even suspended to read its stack.
   fn not_responding(&mut self, beat: Duration, quiet: Duration) -> Option<Noted> {
-    if quiet < THRESHOLD || self.heartbeat.minimized() {
+    if quiet < THRESHOLD || self.heartbeat.minimized() || crate::error_reports::turned_off() {
       return None;
     }
     let hub = Hub::current();

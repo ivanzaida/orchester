@@ -301,6 +301,7 @@ fn local_integration_old_checkpoint_cannot_prove_a_changed_branch_was_fully_inte
         branch: BranchName::new("checkpoint-task").expect("branch"),
         base: original.base().clone(),
         base_branch: original.base_branch().cloned(),
+        base_source: original.base_source(),
         budget: None,
         max_duration: None,
       },

@@ -55,10 +55,8 @@ fn main() -> Result<(), Box<dyn Error>> {
   // database is open and while its setting allows; kept to the end of `main`. Its runners are told too, though a debug
   // runner never sends.
   let reports = error_reports::start(Environment::Qa, launch.workspace());
-  if let (Some(_), Some(services)) = (&reports, launch.services()) {
-    services
-      .runners
-      .set_error_reports(Some(&error_reports::for_runners(Environment::Qa)));
+  if let (Some(reports), Some(services)) = (&reports, launch.services()) {
+    services.runners.set_error_reports(reports.for_runners().as_ref());
   }
   // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
   // `trash` beside its data instead, never to the person's own.

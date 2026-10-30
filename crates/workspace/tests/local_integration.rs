@@ -572,6 +572,7 @@ fn local_integration_newer_run_invalidates_old_run_merge_authority() {
       branch: BranchName::new("later-task").expect("branch"),
       base: run.base().clone(),
       base_branch: run.base_branch().cloned(),
+      base_source: run.base_source(),
       budget: None,
       max_duration: None,
     },

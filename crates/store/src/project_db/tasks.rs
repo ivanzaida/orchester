@@ -27,7 +27,7 @@ use crate::{
 const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN \
   (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) \
   ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
-  (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id) \
+  (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id), base_choice, base_branch \
   FROM tasks";
 
 struct RunTaskSnapshot {
@@ -105,6 +105,7 @@ impl ProjectDb {
       .with_organization(organization)
       .with_estimate(estimate)
       .with_module(task.module())
+      .with_base(task.base().clone())
       .with_revision(task.revision()),
     ))
   }
@@ -390,6 +391,7 @@ struct TaskRow {
   revision: i64,
   kept_key: Option<String>,
   module: Option<String>,
+  base: (String, Option<String>),
 }
 
 impl TaskRow {
@@ -408,6 +410,7 @@ impl TaskRow {
       revision: row.get(10)?,
       kept_key: row.get(11)?,
       module: row.get(12)?,
+      base: (row.get(13)?, row.get(14)?),
     })
   }
 
@@ -430,6 +433,7 @@ impl TaskRow {
       None => project.clone(),
     };
     let module = self.module.as_deref().map(|id| parse("module id", id)).transpose()?;
+    let (choice, branch) = &self.base;
     Ok(
       Task::from_stored(
         parse("task id", &self.id)?,
@@ -440,6 +444,7 @@ impl TaskRow {
         Timestamp::from_unix_millis(self.created_at),
       )
       .with_module(module)
+      .with_base(super::base_branch::parse_task_base(choice, branch.as_deref())?)
       .with_revision(revision_value(self.revision)?),
     )
   }

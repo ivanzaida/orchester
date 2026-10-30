@@ -35,6 +35,7 @@ fn task_deletion_deletes_its_rows_and_keeps_other_tasks_and_the_guards() {
     branch: orchester_core::run::BranchName::new("orchester/orc-2-run-1").expect("branch"),
     base: run.base().clone(),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: None,
     max_duration: None,
   };

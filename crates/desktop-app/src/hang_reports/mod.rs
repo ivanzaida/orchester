@@ -8,10 +8,11 @@
 //! window is not watched: the heartbeat carries the window's minimized state as the window's thread last saw it.
 //! Nor is the time the computer slept or the OS suspended the process counted ([`watch::ASLEEP`]).
 //!
-//! The watchdog runs only while the app's error reports do (`error_reports::start`): only the installed app or a
-//! release build a QA harness started, with the person's setting on; never a debug build, a QA copy or the tests. It
-//! starts before the window opens and stops once it closed, so the work after the window (the runners stopping) is
-//! not watched; the window is watched from its first beat on.
+//! The watchdog runs only while the app's error reports client does (`error_reports::start`): only the installed app
+//! or a release build a QA harness started; never a debug build, a QA copy or the tests. While the person's setting is
+//! off it reads and sends nothing (`error_reports::turned_off`). It starts before the window opens and stops once it
+//! closed, so the work after the window (the runners stopping) is not watched; the window is watched from its first
+//! beat on.
 
 pub mod beat;
 pub mod event;

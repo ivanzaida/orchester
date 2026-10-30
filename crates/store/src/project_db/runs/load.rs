@@ -37,7 +37,7 @@ use crate::{
 const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, initial_budget_tokens, \
                            initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
                            status, status_reason, failed_step, limit_execution, last_sequence, created_at, \
-                           base_branch, failure_reason FROM runs";
+                           base_branch, failure_reason, base_source, base_module FROM runs";
 
 /// The runs `clause` selects, each read on its own. Only a run whose id or task cannot be read
 /// fails the listing: it cannot be told which run it is.
@@ -313,6 +313,7 @@ struct RunRow {
   created_at: i64,
   base_branch: Option<String>,
   failure_reason: Option<String>,
+  base_source: (String, Option<String>),
 }
 
 impl RunRow {
@@ -332,6 +333,7 @@ impl RunRow {
       created_at: row.get(17)?,
       base_branch: row.get(18)?,
       failure_reason: row.get(19)?,
+      base_source: (row.get(20)?, row.get(21)?),
     })
   }
 
@@ -339,6 +341,7 @@ impl RunRow {
   fn into_run(self, connection: &Connection, (id, task, number): (RunId, TaskId, i64)) -> Result<Run, StoreError> {
     let row = id.to_string();
     let [initial_budget, initial_duration, budget, duration] = self.limits;
+    let (source, module) = &self.base_source;
     let created = RunCreated {
       task,
       number: run_number(number)?,
@@ -351,6 +354,7 @@ impl RunRow {
         .map(BranchName::new)
         .transpose()
         .map_err(|error| corrupt("run base branch", error))?,
+      base_source: super::super::base_branch::parse_source(source, module.as_deref())?,
       budget: optional_budget_value("run budget", initial_budget)?,
       max_duration: optional_duration_value("run time limit", initial_duration)?,
     };

@@ -1,6 +1,7 @@
 # Roadmap and releases
 
-Status: draft for the person's review (2026-10-28). Nothing here is built yet.
+Status: draft for the person's review (2026-10-28); designed 2026-10-30 on the board `Roadmap · redesign` `ipCAf`
+(see *The screens*). Nothing here is built yet. Sprints, the Roadmap's fifth tab, are in `docs/design/sprints.md`.
 
 Planning in Orchester above single tasks: which work ships in which release, when, and how far along it is. Today a
 project has modules (epics, milestones, sprints) with start and target dates, a burndown and a delivery forecast
@@ -27,7 +28,8 @@ changelog.
    agent from the release's Done tasks, grouped by module (*Other* for tasks without one), a line per task with its
    title and key linking to it. The person edits it in place on the release's page; new Done tasks are added to the
    draft without losing the person's edits. *Mark released* freezes it. It lives in the release's record, never in
-   the repository, with *Copy as Markdown* (and *Save as doc* once Docs exist).
+   the repository, with *Copy as Markdown* (and *Save as doc* once Docs exist). It is edited in Docs' WYSIWYG block
+   editor (the person, 2026-10-30), not as a list of fields.
 4. **Unfinished tasks move to the next release on their own** (the person, 2026-10-28). *Mark released* keeps only
    the release's Done tasks and moves every other one (Canceled aside) to the next planned release (see *Releases*
    for which one). With no such release they are left without a release. The page then says what moved and where
@@ -62,7 +64,7 @@ changelog.
 
 ## Releases
 
-- A release has a name (decision 5), a description (optional, as a module's), a planned date (optional, a whole
+- A release has a name (decision 5), a description (optional, Markdown written in Docs' WYSIWYG editor, as the changelog is), a planned date (optional, a whole
   local day), a state *Planned* or *Released*, and once released the day it was released, who marked it and the
   commit (optional).
 - **Order.** Planned releases with a date come first by date, then those without one in the order they were
@@ -77,14 +79,17 @@ changelog.
   of the base branch's latest commits, newest first with their subject and day, or a hash typed in; either is
   checked to be a commit of the repository). *Mark released* in the dialog records it; *Cancel* or Esc closes it.
   It cannot be undone (decision 10), and the dialog says so.
-- **Changelog** (decision 3) is a list of entries, not free text, so new tasks join it without disturbing edits:
-  - a task entry for each Done task of the release, its text the task's title until the person edits it, under its
-    module's heading; the person may edit its text, hide it, or move it within its group;
-  - free entries the person adds (*Add line*), and an optional intro above the groups;
-  - a task that leaves the release, or is no longer Done, takes its entry out (an edited text is kept with the task
-    and comes back if it returns).
-  *Mark released* freezes the entries as they are. *Copy as Markdown* renders the intro, a `###` heading per module
-  and a `-` line per entry ending in the task's key.
+- **Changelog** (decision 3) is a block document in Docs' model (`orchester_core::docs::blocks`), edited with Docs'
+  WYSIWYG editor (`docs/design/docs.md`), so new tasks join it without disturbing edits:
+  - Orchester composes an optional intro, a Heading 2 per module (*Other* for tasks without one) and a list item per
+    Done task with its title and a task link; a list item that links a task is that task's entry, and its text
+    follows the task's title until the person edits it;
+  - the person edits any block in place, adds blocks with `/` and links tasks by typing their key;
+  - a task that becomes Done joins at the end of its module's list; one that leaves the release or is no longer Done
+    takes its untouched entry out, and an edited one is kept aside with the task and comes back if it returns;
+  - deleting a task's entry hides that task from the changelog (it stays in the release); *Show* brings it back.
+  *Mark released* freezes the document as it is. *Copy as Markdown* is the blocks' Markdown. Until Docs' editor is
+  built (ORC-221) the tab shows the document read-only.
 - **Delete** (decision 9), for a planned release only: `…` › *Delete release* opens a modal (decision 15): *Delete
   0.4.0? Its 7 tasks are left without a release and its changelog edits are lost. This cannot be undone.* with
   *Cancel* and *Delete release* (`danger`). Deleting takes its tasks out (each a
@@ -96,24 +101,36 @@ changelog.
 Pencil designs come first (on the *Orchester design* pipeline), in the desktop file
 `crates/desktop-app/design/orchester.pen`, using the Modules pages'
 geometry (`Modules · redesign` `oEELJ`, the task page's header). Confirmations are modals, new things are pages
-(decision 15). Rough wireframes for discussion (not a design to build from) are on the board `Roadmap ·
-wireframes` `HtxlM` of that file: 01 Timeline, 02 Now / Next / Later, 03 Releases, 03b Modules, 04 release Summary,
-05 Mark released (modal), 06 Changelog, 07 released with tasks moved, 08 Delete (modal), 09 New release, 10 a task's
-Release.
+(decision 15). The design to build from is the board `Roadmap · redesign` `ipCAf` of that file (2026-10-30): 01
+Timeline `ViD7I`, 02 Now / Next / Later `QE8a9`, 03 Releases `dxAnQ`, 04 Modules `Ydi52`, 05 release Summary
+`Sf0eO`, 06 Changelog `mCkvp`, 07 Mark released (modal) `x4Tkxm`, 08 released with tasks moved `GnmCC`, 09 Delete
+(modal) `R9lII`, 10 New release `C1h7ll`; parts: a task's Release `fCwnY`, a module's Horizon and releases `bcW4G`,
+Tasks' Filter and Display `XwAWe`, states `r3Pban`; empty states 11 Timeline `mpGBe`, 12 Now / Next / Later
+`gp0KK`, 13 Releases `Q91aG`, 14 Changelog `UKz3d`; loading and failure 15 Timeline `adXen`, 16 Releases `cB7nd`, 17
+release `ZfQ00`, 18 roadmap can't be read `UvoOb`, 19 release can't be read `ab8XY`; notes `tZxeN`, open choices
+`U55F9I`. The earlier wireframes (`Roadmap · wireframes` `HtxlM`) are superseded. Now / Next / Later uses the Tasks
+board's column header and card, made the components `Board/Column header` `w6FGn` and `Board/Card` `K0l0N`
+(Components › Board); states, chips, menus, metrics, empty states and notices are the shared components.
 
-- **Roadmap** (`/project/<id>/roadmap?view=timeline|horizons|modules|releases`), a sidebar entry right under *Docs*
-  (decision 8) with the views *Timeline*, *Now / Next / Later*, *Modules* and *Releases* as its tabs, and *New
-  release* and *New module* in its header.
+- **Roadmap** (`/project/<id>/roadmap?view=timeline|horizons|sprints|modules|releases`), a sidebar entry right under
+  *Docs* (decision 8) in place of *Modules*, with the views *Timeline*, *Now / Next / Later*, *Sprints*
+  (`docs/design/sprints.md`), *Modules* and *Releases* as its tabs. The header's actions follow the tab: *New module*
+  and *New release* on Timeline and Now / Next / Later, *New sprint* on Sprints, search and *New module* on Modules,
+  search and *New release* on Releases.
 - **Modules** (decision 14): the sidebar entry *Modules* goes; the Modules list as built (ORC-112: search, Open ·
-  Closed, a row per module) becomes the *Modules* tab, its Open · Closed views a switch under the tabs. A module's
+  Closed, a row per module) becomes the *Modules* tab, its Open · Closed views a switch under the tabs, each row with
+  its horizon (*Now*, *Next*, *Later*) before its name. A module's
   page and its new and edit pages keep their addresses and layout; their back row reads `← Roadmap / name` and
   returns to the tab. `/project/<id>/modules` opens the tab, and MCP `navigate` `modules` keeps working.
 - **Timeline** (`view=timeline`, `&scale=month|quarter`):
   - a row per open module, ordered by start date, its name and *N of M done* at the left; its bar runs from its
     start (or its first task's day) to its target date; without a target it runs to the 85 % date, dashed;
   - on the bar the forecast: the 50 % date as a tick, the 85 % as a whisker, both in `warning` past the target;
-  - releases as vertical markers across the rows with their name at the top: dashed while planned (in `warning` when
-    overdue), solid in `success` once released; a marker opens its release;
+  - a *Sprints* strip above the modules: each sprint as a band over its days, closed ones muted, the active one in
+    `info`, planned ones outlined; a band opens its sprint;
+  - releases as vertical markers across the rows with their name in a *Releases* row under them: a thin line while
+    planned (in `warning` when overdue), solid in `success` once released; a marker opens its release;
+  - a legend under the chart (done, 50 %, 85 %, after target, released, planned release, today, active sprint);
   - a line for today, *Today* to scroll to it, *Months* · *Quarters*; horizontal scroll and wheel with Shift;
   - modules without dates and without forecast in a last row *No dates*, as chips; a module opens its page;
   - *Show closed modules* adds closed ones, muted. Dates are not dragged on the timeline; they change on the
@@ -133,12 +150,12 @@ Release.
   - *Summary*: the description; the tasks grouped by module, one-line rows as a module's Summary; the properties
     column with State, Planned date (picked with `ui::date_picker`), Released, Created; once released, the notice
     of what moved where.
-  - *Changelog*: the entries edited in place (decision 3) with *Add line* and *Copy as Markdown*; read-only once
-    released.
+  - *Changelog*: the document in Docs' editor (decision 3) with *Copy as Markdown*; read-only once released.
   - *Burndown*: the module's burndown card over the release's tasks.
 - **New release / Edit release** (`/releases/new`, `/releases/<id>/edit`): pages in the module form's style; the name
   with the next patch / minor / major offered as chips when the latest release's name is a semantic version
-  (decision 5), the description, the planned date.
+  (decision 5), the description in Docs' editor (no frame around it; `/` for a block, a task key or `[[` to link),
+  the planned date.
 - **Task.** The task form and the task page's properties get *Release* beside *Module* (a picker of planned
   releases; a released one shows read-only). Tasks' Filter and the board's Display options take *Release* (columns
   and rows by release), as they take *Module*.
@@ -154,7 +171,7 @@ Beside the modules' tables in the project database, with the same shape (`docs/a
 | `releases` | id (UUIDv7), name (unique without regard to case), description, planned date, state, released on, released by, released commit, revision (shared projects; empty for a local one), created at and by |
 | `task_releases` | task, release; at most one per task |
 | `release_changes` | every move of a task into a release, out of one or from one to another: sequence, task, from, to, by, actor (`person` or `orchester`: decision 4's moves are Orchester's), at; append-only, read by the burndown and the task's history |
-| `release_changelog` | release, entry id, kind (task or line), task, text (null while it follows the task's title), hidden, group, position; the intro on the release |
+| `release_changelog` | release, the document (Markdown with its block ids, `orchester_core::docs::blocks`), the tasks hidden from it, and the edited entries kept aside for tasks that left |
 | `module_horizons` | module, horizon (`now`, `next`, `later`), position within the horizon |
 
 - Core: `orchester_core::release` (the release's details with their invariants, the order and the next planned

@@ -12,6 +12,7 @@ use thiserror::Error;
 
 use crate::{
   id::{ModuleId, ResourceId, TaskId},
+  integration::base::TaskBase,
   name::Name,
   project::TaskKey,
   resource::VersionNumber,
@@ -181,6 +182,7 @@ pub struct Task {
   estimate: Option<estimate::StoryEstimate>,
   /// The module the task belongs to ([`crate::module`]), if any.
   module: Option<ModuleId>,
+  base: TaskBase,
   revision: TaskRevision,
 }
 
@@ -229,6 +231,7 @@ impl Task {
       organization: organization::TaskOrganization::default(),
       estimate: None,
       module: None,
+      base: TaskBase::Inherit,
       revision: TaskRevision::FIRST,
     }
   }
@@ -280,6 +283,18 @@ impl Task {
   #[must_use]
   pub const fn with_module(mut self, module: Option<ModuleId>) -> Self {
     self.module = module;
+    self
+  }
+
+  /// The task's base branch ([`crate::integration::base`]); runs that started keep the one they recorded.
+  pub const fn base(&self) -> &TaskBase {
+    &self.base
+  }
+
+  /// Attaches the stored base branch.
+  #[must_use]
+  pub fn with_base(mut self, base: TaskBase) -> Self {
+    self.base = base;
     self
   }
 

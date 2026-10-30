@@ -3,6 +3,7 @@
 //! clearing its worktrees and branches.
 
 mod base_branch;
+mod base_branch_source;
 mod cleanup;
 mod forgotten;
 mod fork;

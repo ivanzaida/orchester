@@ -14,10 +14,10 @@ mod harness;
 use std::{fs, sync::Arc};
 
 use orchester_core::{
-  integration::base::BaseBranchSetting,
+  integration::base::RunBaseSource,
   merge_queue::{Blocked, Left, QueueEvent, QueueState},
   revision::Revision,
-  run::{Answerer, BranchName, Run},
+  run::{Answerer, Run},
   store::MergeStore,
   task::Task,
 };
@@ -298,37 +298,41 @@ fn merge_queue_blocks_on_a_dirty_checkout_and_goes_on_once_it_is_clean() {
   );
 }
 
-/// ORC-81: by default a checkout on another branch blocks delivery; with the project's base branch set, the run lands
-/// in its recorded base beside the checkout, which stays on its branch with its files as they were.
+/// ORC-81: a run that took the checked-out branch is blocked by a checkout on another branch; a run whose base branch
+/// was set (its task's) lands in its recorded base beside the checkout, which stays on its branch with its files as
+/// they were.
 #[test]
 fn merge_queue_lands_beside_a_checkout_on_another_branch_once_the_base_branch_is_set() {
+  let mut following = Repo::new();
+  let task = following.task("Sign in");
+  let run = following.succeeded((&task, "auto"), "orchester/orc-1-run-1", ("shared.txt", "run\n"), 100);
+  git(following.root(), &["switch", "--quiet", "-c", "feature"]);
+  following.drive();
+  assert_eq!(
+    following.state(&run),
+    QueueState::Blocked(Blocked::OtherBranch {
+      current: Some("feature".to_owned())
+    })
+  );
+
   let mut repo = Repo::new();
+  repo.base_source = RunBaseSource::Task;
   let task = repo.task("Sign in");
   let run = repo.succeeded((&task, "auto"), "orchester/orc-1-run-1", ("shared.txt", "run\n"), 100);
   let tip = git(repo.root(), &["rev-parse", "orchester/orc-1-run-1"]);
   git(repo.root(), &["switch", "--quiet", "-c", "feature"]);
   let feature = git(repo.root(), &["rev-parse", "feature"]);
   repo.drive();
-  assert_eq!(
-    repo.state(&run),
-    QueueState::Blocked(Blocked::OtherBranch {
-      current: Some("feature".to_owned())
-    })
-  );
-  ProjectDb::open(repo.root())
-    .expect("open")
-    .save_base_branch_setting(&BaseBranchSetting::Branch(BranchName::new("main").expect("branch")))
-    .expect("set");
-  let read = merge_queue::read(repo.root(), &repo.programs()).expect("read");
-  assert_eq!(
-    read.base.expect("a base").checkout,
-    merge_queue::CheckoutState::Beside(Some("feature".to_owned()))
-  );
-  repo.drive();
   assert!(
     matches!(repo.state(&run), QueueState::Merged(_)),
     "{:?}",
     repo.state(&run)
+  );
+  let read = merge_queue::read(repo.root(), &repo.programs()).expect("read");
+  assert_eq!(
+    read.base.expect("a base").checkout,
+    merge_queue::CheckoutState::Beside(Some("feature".to_owned())),
+    "the queue delivers into main beside the checkout, as the run recorded"
   );
   assert!(repo.main_holds(&tip));
   assert_eq!(git(repo.root(), &["symbolic-ref", "--short", "HEAD"]), "feature");
