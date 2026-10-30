@@ -1,7 +1,8 @@
 //! The Conversation tab's timeline as data (ORC-61, as a chat since the rail on the right): its tool
-//! events ([`tool_events`]), how a command's end reads ([`command_end`]), and what *Show*, the step picked in the
-//! rail, a search and the folds leave of the timeline.
+//! events ([`tool_events`]), how a command's end reads ([`command_end`]), the quiet rows of requests the run's mode
+//! approved ([`approval_rows`]), and what *Show*, the step picked in the rail, a search and the folds leave of it.
 
+mod approval_rows;
 mod command_end;
 mod tool_events;
 
@@ -164,6 +165,7 @@ fn kinds(rows: &[Row]) -> Vec<&str> {
       Row::Agent(AgentRow { text: Some(_), .. }) => "agent",
       Row::Agent(AgentRow { text: None, .. }) => "tools",
       Row::Item(_) => "item",
+      Row::Approvals { .. } => "approvals",
       Row::Entry { .. } => "entry",
       Row::Line(_) => "line",
     })
@@ -422,6 +424,7 @@ fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
       reviewing: false,
       for_project: false,
       note: None,
+      answer: None,
     }),
   };
   assert_eq!(kinds_of(&around(execution, card)), ["tools", "approval", "tools"]);

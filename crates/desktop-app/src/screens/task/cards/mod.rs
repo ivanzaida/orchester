@@ -32,6 +32,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
+pub(crate) use self::approval::quiet_line;
 pub use self::decisions::Decisions;
 use super::conversation::ComposerState;
 use crate::{navigation::link::Open, project::Projects, ui::markdown::LinkHandler};

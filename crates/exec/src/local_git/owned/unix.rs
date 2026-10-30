@@ -20,10 +20,13 @@ pub struct Directory {
 }
 
 impl Directory {
+  /// Holds `root` and each directory above it. The root is resolved to its real path first: a parent that is a
+  /// link, as macOS's `/var` and `/tmp` are, names the same folder git reports, and the walk below it follows no link.
   pub fn open(root: &Path) -> Result<Arc<Self>, LocalGitError> {
     if !root.is_absolute() {
       return Err(LocalError::Unsupported.into());
     }
+    let root = root.canonicalize().map_err(|_| LocalGitError::Io)?;
     let fd = openat(CWD, "/", dir_flags(), Mode::empty()).map_err(map)?;
     let mut directory = Arc::new(Self {
       file: fd.into(),
