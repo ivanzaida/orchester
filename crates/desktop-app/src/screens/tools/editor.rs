@@ -207,12 +207,15 @@ impl Component for ToolEditor {
     let shared = standing.map(|(team, standing, e)| {
       hub::team::head_line(ctx, "tool-team-state", team, standing, hub::team::draft_on(e.state))
     });
+    let versions = baseline
+      .as_ref()
+      .and_then(|e| hub::team::member_versions(ctx, "tool", (&p.project, team.as_ref()), e.id));
     let mut pane = Column::new()
       .id("tool-editor")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(head::crumb(ctx, &p))
-      .child(head::head(ctx, &p, (baseline.as_ref(), &title), more, shared))
+      .child(head::head(ctx, &p, (baseline.as_ref(), &title), more, (shared, versions)))
       .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
     pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
       _ if !may_change => pane.with_children(team.as_ref().map(|team| hub::team::line(ctx, "tool-team-line", team))),
@@ -246,9 +249,12 @@ impl Component for ToolEditor {
   }
 }
 
-/// In a shared project, a version of the tool published here that waits, in the draft bar's place (02b, 02c).
+/// In a shared project, a version of the tool published here that waits, in the draft bar's place (02b, 02c); after
+/// *Open my draft on vN* the editor reads the saved tool again.
 fn waiting(ctx: &mut Ctx, p: &EditorProps, standing: Option<(&TeamConfiguration, &SharedStanding)>) -> Option<Element> {
-  hub::team::waiting_bar(ctx, &p.project, standing?, ("tool", Outside::Tools))
+  let reload = p.reload.clone();
+  let reread: hub::team::Reread = Arc::new(move || reload.run());
+  hub::team::waiting_bar(ctx, &p.project, standing?, ("tool", Outside::Tools), reread)
 }
 
 impl ToolEditor {

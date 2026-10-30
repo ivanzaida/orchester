@@ -40,10 +40,13 @@ pub enum HubText {
   /// 12.5 `text_secondary`, 1.4: the line over a shared project's library and editor saying it is the team's
   /// (`Kk64E` in 01 `cHvkL`, `xUInm` in 03 `pjEjf`).
   TeamLine,
+  /// 11.5 `text_muted`, 1.4: what a bar says beside its actions, e.g. what a newer version changed (`xtJhx` in 02c
+  /// `JZFlA`).
+  Foot,
 }
 
 impl HubText {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 13] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -56,6 +59,7 @@ impl HubText {
     Self::Statement,
     Self::Code,
     Self::TeamLine,
+    Self::Foot,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -76,6 +80,7 @@ impl HubText {
       Self::Statement => "hub_statement",
       Self::Code => "hub_code",
       Self::TeamLine => "hub_team_line",
+      Self::Foot => "hub_foot",
     }
   }
 
@@ -93,6 +98,7 @@ impl HubText {
       Self::Statement => style(13.5, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
       Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
       Self::TeamLine => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
+      Self::Foot => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
     }
   }
 }

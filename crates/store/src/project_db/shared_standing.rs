@@ -116,4 +116,22 @@ impl ProjectDb {
     )?;
     Ok(Timestamp::from_unix_millis(at))
   }
+
+  /// Who published each version of `resource` the server numbered, by its name on the server, oldest first; `None`
+  /// for a version published here before the project was shared. A version published here that waits is left out.
+  pub fn version_publishers(&self, resource: ResourceId) -> Result<Vec<(VersionId, Option<String>)>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT id, publisher_name FROM resource_versions WHERE resource_id = ?1 \
+       AND id NOT IN (SELECT version_id FROM shared_publishes) ORDER BY number",
+    )?;
+    let rows = statement
+      .query_map([resource.to_string()], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(id, publisher)| Ok((parse("version id", &id)?, publisher)))
+      .collect()
+  }
 }

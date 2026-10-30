@@ -195,6 +195,7 @@ fn row(ctx: &Ctx, (p, team): (&PageProps, Option<&TeamConfiguration>), entry: &S
     .hint(hint);
   let row = match team.and_then(|team| Some((team, team.standing(entry.id)?))) {
     Some((team, standing)) => row
+      .one_line()
       .end(team::publisher(
         ctx,
         &format!("skill-publisher-{}", entry.id),

@@ -50,12 +50,13 @@ pub struct More {
 }
 
 /// The page head; in a shared project `shared`, the team's version and where it stands here, says what the
-/// permissions say otherwise (`Sub` `Du8OB` in 02).
+/// permissions say otherwise (`Sub` `Du8OB` in 02), and a member has `versions` at its end in the menu's place
+/// (`Versions` `EGuXw` in 03).
 pub fn head(
   ctx: &mut Ctx,
   (fields, listed): (&Fields, &ProjectAgents),
   more: Option<More>,
-  shared: Option<Row>,
+  (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let role = fields.role.get();
   let title = if role.trim().is_empty() {
@@ -111,6 +112,7 @@ pub fn head(
         .child(sub),
     )
     .with_children(menu)
+    .with_children(versions)
     .into()
 }
 

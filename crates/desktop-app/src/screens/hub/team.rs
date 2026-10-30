@@ -1,32 +1,29 @@
 //! The team's configuration in a shared project's five libraries and their editors (`Shared configuration · redesign`
 //! `UC5xk`, `docs/design/shared-configuration.md`): the line saying the library is the team's, or that only admins
 //! change it (01 `cHvkL`, 01b `P8tXS`, 03 `pjEjf`); each row's publisher and state (`Publisher` `RztmV`, `Status col`
-//! `oIW8j`); an editor's head line with its version, publisher and state (`Sub` `Du8OB` in 02 `Sflw7`); the draft bar's
-//! words and *Publish for the team* (02); and, in the draft bar's place, a version published here that was not sent
-//! (02b `iLwm9`) or met one someone published meanwhile (02c `JZFlA`). A local project shows none of it.
+//! `oIW8j`); an editor's head line with its version, publisher and state (`Sub` `Du8OB` in 02 `Sflw7`), and a member's
+//! *Versions* (`EGuXw` in 03, [`super::versions`]); the draft bar's words and *Publish for the team* (02); and, in the
+//! draft bar's place, a version published here that was not sent (02b `iLwm9`) or met one someone published meanwhile
+//! (02c `JZFlA`, [`super::waiting_bar`]). A local project shows none of it.
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::Ctx,
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::VersionId, resource::VersionNumber, time::Timestamp};
-use orchester_store::{PublishState, SharedStanding, WaitingVersion};
-use orchester_workspace::{
-  agents::data::VersionState, display, i18n::NAMESPACE, messages::Message, sharing::team::TeamConfiguration,
-  tasks::outside::Outside,
-};
+use orchester_core::{id::ResourceId, resource::VersionNumber, time::Timestamp};
+use orchester_store::{PublishState, SharedStanding};
+use orchester_workspace::{agents::data::VersionState, display, i18n::NAMESPACE, sharing::team::TeamConfiguration};
 
 use super::{
-  draft_bar::{DraftBar, Standing},
   parts::{Tone, note, status},
+  versions::{VersionsProps, versions_button},
 };
 use crate::{
   project::ShownProject,
@@ -34,10 +31,7 @@ use crate::{
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
     avatar::{initials, person_avatar},
-    button::{ActionButton, ButtonKind},
-    field::field_error,
     icon::{Icon, icon},
-    message::message_text,
   },
 };
 
@@ -107,6 +101,25 @@ pub(crate) fn may_change(team: Option<&TeamConfiguration>) -> bool {
   team.is_none_or(|team| team.may_change)
 }
 
+/// *Versions* in a member's editor head (`Versions` `EGuXw` in 03 `pjEjf`), with the element id `<id>-versions`; `None`
+/// for an admin, whose editor has the draft bar, and for a resource that is not the team's.
+pub(crate) fn member_versions(
+  ctx: &mut Ctx,
+  id: &str,
+  (project, team): (&ShownProject, Option<&TeamConfiguration>),
+  resource: ResourceId,
+) -> Option<Element> {
+  let standing = team.filter(|team| !team.may_change)?.standing(resource)?;
+  Some(versions_button(
+    ctx,
+    VersionsProps {
+      id: id.into(),
+      root: project.open.repo_root.clone(),
+      resource: (standing.kind, resource),
+    },
+  ))
+}
+
 /// The line over a library or a member's editor (`Shared line` `t3ABe9` in 01, `Read-only line` `z8Triu` in 03): an
 /// admin's says what publishing does, a member's who may change it.
 pub(crate) fn line(ctx: &Ctx, id: &str, team: &TeamConfiguration) -> Row {
@@ -138,26 +151,39 @@ pub(crate) fn line(ctx: &Ctx, id: &str, team: &TeamConfiguration) -> Row {
     )
 }
 
-/// `dana-k (owner) and the server's admins`: the owners as last read, then the server's admins, who are not listed to
-/// a member.
+/// `dana-k (owner) and olha (server admin)`: the owners and the server's admins as last read. A server that does not
+/// name its admins leaves them by their role: `dana-k (owner) and the server's admins`.
 fn admins(ctx: &Ctx, team: &TeamConfiguration) -> String {
-  if team.owners.is_empty() {
-    return ctx.t("sharing.config.noOwners").to_string();
+  let named = |key: &str, names: &[Arc<str>]| {
+    names
+      .iter()
+      .map(|name| ctx.t_args(key, [("name", name.to_string())]).to_string())
+      .collect::<Vec<_>>()
+  };
+  let owners = named("sharing.config.owner", &team.owners);
+  if team.admins.is_empty() {
+    if owners.is_empty() {
+      return ctx.t("sharing.config.noOwners").to_string();
+    }
+    let owners = owners.join(&ctx.t("sharing.config.separator"));
+    return ctx
+      .t_args("sharing.config.ownersAndAdmins", [("owners", owners)])
+      .to_string();
   }
-  let separator = ctx.t("sharing.config.separator");
-  let owners = team
-    .owners
-    .iter()
-    .map(|name| {
-      ctx
-        .t_args("sharing.config.owner", [("name", name.to_string())])
-        .to_string()
-    })
-    .collect::<Vec<_>>()
-    .join(&separator);
-  ctx
-    .t_args("sharing.config.ownersAndAdmins", [("owners", owners)])
-    .to_string()
+  let mut all = owners;
+  all.extend(named("sharing.config.serverAdmin", &team.admins));
+  match all.split_last() {
+    Some((last, rest)) if !rest.is_empty() => ctx
+      .t_args(
+        "sharing.config.and",
+        [
+          ("first", rest.join(&ctx.t("sharing.config.separator"))),
+          ("last", last.clone()),
+        ],
+      )
+      .to_string(),
+    _ => all.concat(),
+  }
 }
 
 /// The note under a library's rows (`Note` `w1TQp` in 01): what publishing sends, or for a member what runs here use.
@@ -171,7 +197,7 @@ pub(crate) fn foot(ctx: &Ctx, id: &str, team: &TeamConfiguration) -> Row {
 }
 
 /// When a version was published, as a row says it: `today 10:12`, or its day, `Oct 27`.
-fn when(ctx: &Ctx, at: Timestamp) -> String {
+pub(crate) fn when(ctx: &Ctx, at: Timestamp) -> String {
   if at.local_day_start() == Timestamp::now().local_day_start() {
     return ctx
       .t_args("sharing.config.today", [("time", display::clock(at))])
@@ -336,181 +362,4 @@ pub(crate) async fn send_published(services: &Services, root: &std::path::Path) 
   }
 }
 
-/// The bar in an admin's editor in place of the draft bar while a version published here waits (02b, 02c); `None`
-/// while none does.
-pub(crate) fn waiting_bar(
-  ctx: &mut Ctx,
-  project: &ShownProject,
-  (team, standing): (&TeamConfiguration, &SharedStanding),
-  (id, kind): (&str, Outside),
-) -> Option<Element> {
-  let waiting = standing.waiting.first()?.clone();
-  if !team.may_change {
-    return None;
-  }
-  Some(
-    ctx.mount_keyed::<WaitingBar>(
-      &format!("{id}-waiting-{}", waiting.version),
-      WaitingProps {
-        id: id.into(),
-        root: project.open.repo_root.clone(),
-        project: project.open.project.id(),
-        host: team.server.as_ref().map(|(_, host)| host.clone()),
-        confirmed: standing
-          .confirmed
-          .as_ref()
-          .map(|confirmed| (confirmed.number, confirmed.publisher.as_deref().map(Arc::from))),
-        waiting,
-        kind,
-      },
-    ),
-  )
-}
-
-/// What the waiting bar does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Act {
-  /// *Try again*.
-  Send,
-  /// *Publish mine as vN*.
-  PublishAgain(VersionId),
-}
-
-impl lurq::app::component::DevtoolsInspectable for Act {}
-
-#[derive(Clone, PartialEq)]
-pub(crate) struct WaitingProps {
-  id: Arc<str>,
-  root: PathBuf,
-  project: orchester_core::id::ProjectId,
-  host: Option<Arc<str>>,
-  /// The latest version the server numbered and its publisher.
-  confirmed: Option<(VersionNumber, Option<Arc<str>>)>,
-  waiting: WaitingVersion,
-  /// The library whose screens read their resources again after an action.
-  kind: Outside,
-}
-
-impl DevtoolsInspectable for WaitingProps {}
-
-pub(crate) struct WaitingBar {
-  act: FutureAction<Act, Act, Message>,
-}
-
-impl Component for WaitingBar {
-  type Props = WaitingProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    let props = ctx.props::<WaitingProps>().clone();
-    let services = Services::of(ctx);
-    let act = ctx.future_action(move |act: Act| {
-      let (services, root) = (services.clone(), props.root.clone());
-      let (project, kind) = (props.project, props.kind);
-      async move {
-        match act {
-          Act::Send => services.servers.send_published(&root).await?,
-          Act::PublishAgain(version) => services.servers.publish_again(&root, version).await?,
-        }
-        // The library's screens read the resource again, with the number the server gave it.
-        services.changes.record(project, kind);
-        Ok(act)
-      }
-    });
-    Self { act }
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<WaitingProps>().clone();
-    let state = self.act.state().get();
-    let busy = state.is_pending();
-    let id = props.id.as_ref();
-    let host = props
-      .host
-      .as_deref()
-      .map_or_else(|| ctx.t("sharing.config.bar.theServer").to_string(), str::to_owned);
-    let time = display::clock(props.waiting.published_at);
-    let bar = match &props.waiting.state {
-      PublishState::Waiting => {
-        let act = self.act.clone();
-        let retry = ActionButton::new(
-          format!("{id}-try-again"),
-          ButtonKind::Secondary,
-          ctx.t("sharing.config.bar.tryAgain"),
-        )
-        .icon(Icon::RefreshCw);
-        let retry = if busy {
-          retry.loading()
-        } else {
-          retry.on_click(move || act.run(Act::Send))
-        };
-        DraftBar::new(
-          format!("{id}-not-sent"),
-          Standing::NotSent,
-          ctx.t_args("sharing.config.bar.notSent", [("time", time)]),
-        )
-        .sub(ctx.t_args("sharing.config.bar.notSentBody", [("host", host)]))
-        .action(retry)
-      }
-      PublishState::Conflict { latest } => self.conflict(ctx, &props, *latest, busy),
-      PublishState::Refused { .. } => DraftBar::new(
-        format!("{id}-refused"),
-        Standing::Attention,
-        ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)]),
-      )
-      .sub(ctx.t("sharing.config.bar.refusedBody")),
-    };
-    let failure = state
-      .error
-      .as_ref()
-      .filter(|_| state.is_rejected())
-      .map(|error| field_error(&format!("{id}-send-error"), &message_text(ctx, error)));
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .child(bar)
-      .with_children(failure)
-  }
-}
-
-impl WaitingBar {
-  /// *olha published v5 while you edited v4*, with *Publish mine as v6* (`n9GgD` in 02c). Nothing is merged.
-  fn conflict(&self, ctx: &Ctx, props: &WaitingProps, latest: VersionNumber, busy: bool) -> DraftBar {
-    let id = props.id.as_ref();
-    let name = props
-      .confirmed
-      .as_ref()
-      .and_then(|(_, name)| name.clone())
-      .unwrap_or_else(|| ctx.t("sharing.config.bar.someone"));
-    let (latest_text, next) = (latest.get().to_string(), latest.get().saturating_add(1).to_string());
-    let status = match props.waiting.based_on {
-      Some(base) => ctx.t_args(
-        "sharing.config.bar.conflict",
-        [
-          ("name", name.to_string()),
-          ("latest", latest_text),
-          ("base", base.get().to_string()),
-        ],
-      ),
-      None => ctx.t_args(
-        "sharing.config.bar.conflictFirst",
-        [("name", name.to_string()), ("latest", latest_text)],
-      ),
-    };
-    let (version, again) = (props.waiting.version, self.act.clone());
-    let publish = ActionButton::new(
-      format!("{id}-publish-again"),
-      ButtonKind::Primary,
-      ctx.t_args("sharing.config.bar.publishMine", [("next", next.clone())]),
-    )
-    .icon(Icon::Upload);
-    let publish = if busy {
-      publish.loading()
-    } else {
-      publish.on_click(move || again.run(Act::PublishAgain(version)))
-    };
-    DraftBar::new(format!("{id}-conflict"), Standing::Conflict, status)
-      .sub(ctx.t_args("sharing.config.bar.conflictBody", [("next", next)]))
-      .action(publish)
-      .actions_below()
-  }
-}
+pub(crate) use super::waiting_bar::{Reread, waiting_bar};

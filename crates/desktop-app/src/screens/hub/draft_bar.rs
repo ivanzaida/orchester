@@ -64,6 +64,8 @@ pub(crate) struct DraftBar {
   actions: Vec<Element>,
   /// The actions go on a line of their own under the words.
   below: bool,
+  /// What that line says at its start, before the actions.
+  foot: Option<Arc<str>>,
 }
 
 impl DraftBar {
@@ -75,6 +77,7 @@ impl DraftBar {
       sub: None,
       actions: Vec::new(),
       below: false,
+      foot: None,
     }
   }
 
@@ -91,6 +94,13 @@ impl DraftBar {
   /// Puts the actions on a line under the words, at its end (`Actions` `lWkZn` in 02c).
   pub(crate) const fn actions_below(mut self) -> Self {
     self.below = true;
+    self
+  }
+
+  /// What the line under the words says before its actions, e.g. what a newer version changed (`Foot` `xtJhx` in
+  /// 02c); only with [`Self::actions_below`].
+  pub(crate) fn foot(mut self, foot: impl Into<Arc<str>>) -> Self {
+    self.foot = Some(foot.into());
     self
   }
 }
@@ -121,6 +131,13 @@ impl From<DraftBar> for Element {
       .child(icon(glyph, IconSize::Md, color).id(format!("{}-icon", bar.id)))
       .child(words);
     let (main, below) = if bar.below {
+      let foot = bar.foot.map(|foot| {
+        Text::new(&foot)
+          .id(format!("{}-foot", bar.id))
+          .variant(HubText::Foot.role())
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+      });
       let line = Row::new()
         .id(format!("{}-actions", bar.id))
         .width(Dimension::Pct(100.0))
@@ -128,6 +145,7 @@ impl From<DraftBar> for Element {
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .justify(Justify::End)
+        .with_children(foot)
         .with_children(bar.actions);
       (main, Some(line))
     } else {

@@ -33,13 +33,14 @@ pub(super) fn crumb(ctx: &mut Ctx, p: &EditorProps) -> Element {
 }
 
 /// The head: `title`, then the kind, whether it runs and how many steps call it; in a shared project `shared`, the
-/// team's version and where it stands here, in that line's place (`Sub` `Du8OB` in 02).
+/// team's version and where it stands here, in that line's place (`Sub` `Du8OB` in 02), and a member's `versions` at
+/// its end (`Versions` `EGuXw` in 03).
 pub(super) fn head(
   ctx: &mut Ctx,
   p: &EditorProps,
   (entry, title): (Option<&ToolEntry>, &str),
   more: Option<More>,
-  shared: Option<Row>,
+  (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let (glyph, sub) = match entry {
     Some(entry) => {
@@ -65,7 +66,7 @@ pub(super) fn head(
     None => (Icon::Terminal, ctx.t("tools.newDetail")),
   };
   match shared {
-    Some(shared) => page_head::head_with(ctx, "tool", (glyph, title, shared.into()), more),
+    Some(shared) => page_head::head_with(ctx, "tool", (glyph, title, shared.into()), (more, versions)),
     None => page_head::head(ctx, "tool", (glyph, title, &sub), more),
   }
 }

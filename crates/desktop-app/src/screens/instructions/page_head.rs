@@ -60,12 +60,13 @@ pub struct More {
 }
 
 /// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet. In a
-/// shared project `shared`, the team's version and where it stands here, takes the line's place (`Sub` `Du8OB` in 02).
+/// shared project `shared`, the team's version and where it stands here, takes the line's place (`Sub` `Du8OB` in 02),
+/// and a member has `versions` at its end in the menu's place (`Versions` `EGuXw` in 03).
 pub fn head(
   ctx: &mut Ctx,
   (title, sub, sub_id): (&str, &str, &str),
   more: Option<More>,
-  shared: Option<Row>,
+  (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let menu = more.map(|more| {
     let remove = more.remove.clone();
@@ -111,6 +112,7 @@ pub fn head(
         .child(sub),
     )
     .with_children(menu)
+    .with_children(versions)
     .into()
 }
 

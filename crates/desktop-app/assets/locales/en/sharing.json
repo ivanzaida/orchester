@@ -538,6 +538,8 @@
       "sharedNoServer": "Shared with your team. What you publish here is the version everyone's runs use.",
       "readOnly": "Only admins change the team's configuration: {{admins}}.",
       "owner": "{{name}} (owner)",
+      "serverAdmin": "{{name}} (server admin)",
+      "and": "{{first}} and {{last}}",
       "ownersAndAdmins": "{{owners}} and the server's admins",
       "noOwners": "the project's owners and the server's admins",
       "separator": ", ",
@@ -581,10 +583,51 @@
         "conflict": "{{name}} published v{{latest}} while you edited v{{base}}",
         "conflictFirst": "{{name}} published v{{latest}} while you wrote your first version",
         "someone": "Someone",
-        "conflictBody": "Your draft is kept on this computer and your new runs use it here. Nothing is merged: publish yours as v{{next}} anyway.",
+        "conflictBody": "Your draft is kept on this computer. Nothing is merged: open it on top of v{{latest}}, or publish yours as v{{next}} anyway.",
+        "latestChanged": "v{{latest}} changed: {{fields}}",
+        "compare": "Compare with v{{latest}}",
+        "openDraft": "Open my draft on v{{latest}}",
         "publishMine": "Publish mine as v{{next}}",
         "refused": "{{host}} didn't take this version · {{time}}",
         "refusedBody": "Your new runs use it here. It isn't sent again on its own: change it and publish again."
+      },
+      "compare": {
+        "title": "v{{latest}} and yours",
+        "latest": "v{{latest}}",
+        "mine": "Yours",
+        "none": "—",
+        "same": "Yours holds what v{{latest}} holds."
+      },
+      "versions": {
+        "button": "Versions",
+        "title": "Versions",
+        "line": "v{{version}} · {{name}} · {{when}}",
+        "first": "First version",
+        "changed": "Changed: {{fields}}",
+        "none": "No version has been published yet."
+      },
+      "field": {
+        "role": "role",
+        "responsibilities": "responsibilities",
+        "instructions": "role instructions",
+        "connection": "connection",
+        "model": "model",
+        "settings": "model settings",
+        "permissions": "permissions",
+        "mcpServers": "MCP servers",
+        "text": "text",
+        "targets": "agents it reaches",
+        "events": "when it applies",
+        "scope": "where it applies",
+        "description": "description",
+        "body": "skill text",
+        "files": "reference files",
+        "action": "what it runs",
+        "access": "access",
+        "sources": "sources",
+        "steps": "steps",
+        "deliver": "deliver step",
+        "delivers": "what it delivers"
       }
     }
   }

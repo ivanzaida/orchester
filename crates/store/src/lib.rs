@@ -29,7 +29,8 @@ pub use project_db::{
   CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion, ChatListing, ChatTurn,
   ConfirmedVersion, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NamingVersion, NotSent,
   ProjectDb, PublishState, ReadOnlyProjectDb, ReferenceBinding, ReferenceTarget, ResolutionStart, ResourceSharing,
-  ResourceUpdate, ReturnedTask, RunBranch, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding,
+  ResourceUpdate, ReturnedTask, RunBranch, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot,
+  SharedStanding,
   SharedTaskInfo, SharingLink, StartedQueued, TaskDeletionFacts, UnsentStatus, VersionReference, WaitingPublish,
   WaitingVersion, attachment_file, exclude_project_data,
 };

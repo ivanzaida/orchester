@@ -1,10 +1,11 @@
 //! `shared-config` and `shared-config-member`: the `connections` catalogue as the team's configuration of a project
 //! shared on `Acme team` at `orchester.acme.dev/kontur` (`Shared configuration · redesign` `UC5xk`). Every resource is
-//! the team's, each version published by dana-k (the owner) or olha (a member). In `shared-config` the person is
-//! dana-k: Builder has her draft on its latest version (02 `Sflw7`), Planner a version published here that waits for
-//! the server (02b `iLwm9`), and Reviewer a version that met v2, which olha published from the same base (02c
-//! `JZFlA`). In `shared-config-member` the person is ivan, a member, who reads them all (01b `P8tXS`, 03 `pjEjf`). No
-//! server answers: the server is in Settings › Orchester, signed in, with no token in any keychain.
+//! the team's, each version published by dana-k (the owner) or olha (a member and the server's admin). In
+//! `shared-config` the person is dana-k: Builder has her draft on its latest version (02 `Sflw7`), Planner a version
+//! published here that waits for the server (02b `iLwm9`), and Reviewer a version that met v2, which olha published
+//! from the same base (02c `JZFlA`). In `shared-config-member` the person is ivan, a member, who reads them all (01b
+//! `P8tXS`, 03 `pjEjf`). No server answers: the server is in Settings › Orchester, signed in, with no token in any
+//! keychain.
 
 use std::collections::HashMap;
 
@@ -19,7 +20,7 @@ use orchester_core::{
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
 };
-use orchester_store::{AppDb, CachedVersion, ServerAccount, SharedMember, SharingLink, StoredServer};
+use orchester_store::{AppDb, CachedVersion, ServerAccount, ServerAdmin, SharedMember, SharingLink, StoredServer};
 
 use super::connections;
 use crate::kontur::{Kontur, SeedError};
@@ -94,6 +95,12 @@ fn shared(kontur: &mut Kontur, role: MemberRole) -> Result<Team, SeedError> {
     added_at: added,
   });
   kontur.db.record_shared_members(&members, kontur.ago(5), Some(me.id))?;
+  let admin = ServerAdmin {
+    user: team.olha.id,
+    display_name: "Olha".to_owned(),
+    username: team.olha.name.clone(),
+  };
+  kontur.db.record_server_admins(&[admin])?;
   share::<AgentProfile>(kontur, &team)?;
   share::<Pipeline>(kontur, &team)?;
   share::<Instruction>(kontur, &team)?;

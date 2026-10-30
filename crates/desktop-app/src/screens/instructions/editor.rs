@@ -323,7 +323,7 @@ impl Editor {
           ctx,
           (&title, &sub, "instruction-save-status"),
           None,
-          None,
+          (None, None),
         ))
         .into();
     };
@@ -355,11 +355,17 @@ impl Editor {
       )
     });
     let bar = self.bar(ctx, props, (entry, team.as_ref()), (dirty, busy, invalid));
+    let versions = team::member_versions(ctx, "instruction", (&props.project, team.as_ref()), entry.id);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
       .child(page_head::crumb(ctx, &props.selection, false))
-      .child(page_head::head(ctx, (&title, &sub, "instruction-sub"), more, shared))
+      .child(page_head::head(
+        ctx,
+        (&title, &sub, "instruction-sub"),
+        more,
+        (shared, versions),
+      ))
       .with_children(editor_actions::remove_question(self, ctx, props, saved))
       .child(bar)
       .into()
@@ -380,9 +386,15 @@ impl Editor {
     if let Some(question) = editor_actions::question(self, ctx, props, Some(entry)) {
       return question;
     }
+    let (work, fields, id) = (self.work.clone(), self.fields.clone(), entry.id);
+    // The fields take the saved draft: the same reload a changed rule offers.
+    let reread: team::Reread =
+      std::sync::Arc::new(move || work.run(super::work::Write::Reload(id, fields.snapshot())));
     let waiting = team
       .and_then(|team| Some((team, team.standing(entry.id)?)))
-      .and_then(|shared| team::waiting_bar(ctx, &props.project, shared, ("instruction", Outside::Instructions)));
+      .and_then(|shared| {
+        team::waiting_bar(ctx, &props.project, shared, ("instruction", Outside::Instructions), reread)
+      });
     if let Some(waiting) = waiting {
       return waiting;
     }

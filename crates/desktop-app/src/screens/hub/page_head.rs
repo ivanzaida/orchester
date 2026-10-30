@@ -62,15 +62,16 @@ pub(crate) struct More {
 /// The head of the item `id` names (`<id>-page-head`, `<id>-title`, `<id>-sub`, `<id>-more`, `<id>-remove`).
 pub(crate) fn head(ctx: &mut Ctx, id: &str, (glyph, title, sub): (Icon, &str, &str), more: Option<More>) -> Element {
   let sub = Text::new(sub).id(format!("{id}-sub")).variant(HubText::Hint.role());
-  head_with(ctx, id, (glyph, title, sub.into()), more)
+  head_with(ctx, id, (glyph, title, sub.into()), (more, None))
 }
 
-/// [`head`] with `sub` under the title, e.g. a team resource's version and where it stands (`Sub` `Du8OB` in 02).
+/// [`head`] with `sub` under the title, e.g. a team resource's version and where it stands (`Sub` `Du8OB` in 02), and
+/// a member's `versions` at its end in the menu's place (`Versions` `EGuXw` in 03).
 pub(crate) fn head_with(
   ctx: &mut Ctx,
   id: &str,
   (glyph, title, sub): (Icon, &str, Element),
-  more: Option<More>,
+  (more, versions): (Option<More>, Option<Element>),
 ) -> Element {
   let menu = more.map(|more| {
     let remove = more.remove.clone();
@@ -109,5 +110,6 @@ pub(crate) fn head_with(
         .child(sub),
     )
     .with_children(menu)
+    .with_children(versions)
     .into()
 }

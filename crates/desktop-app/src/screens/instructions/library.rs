@@ -260,6 +260,7 @@ fn rule_row(
   let row = Entry::new(format!("instruction-{}", entry.id), entry.name.clone()).hint(hint);
   let row = match team.and_then(|team| Some((team, team.standing(entry.id)?))) {
     Some((team, standing)) => row
+      .one_line()
       .end(team::publisher(
         ctx,
         &format!("instruction-publisher-{}", entry.id),

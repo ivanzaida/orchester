@@ -12,6 +12,7 @@
 mod account;
 pub mod address;
 pub mod cloud;
+pub mod compare;
 mod connect;
 mod connection;
 pub mod device;

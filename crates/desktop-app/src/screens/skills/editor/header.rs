@@ -82,8 +82,14 @@ impl Editor {
         team::draft_on(e.state),
       ))
     });
+    let versions = entry.and_then(|e| team::member_versions(ctx, "skill", (&p.page.project, team.as_ref()), e.id));
     match shared {
-      Some(shared) => page_head::head_with(ctx, "skill", (Icon::GraduationCap, title, shared.into()), more),
+      Some(shared) => page_head::head_with(
+        ctx,
+        "skill",
+        (Icon::GraduationCap, title, shared.into()),
+        (more, versions),
+      ),
       None => page_head::head(ctx, "skill", (Icon::GraduationCap, title, &sub), more),
     }
   }
@@ -101,11 +107,14 @@ impl Editor {
     if let Some(team) = team.as_ref().filter(|team| !team.may_change) {
       return team::line(ctx, "skill-team-line", team).into();
     }
+    let reset = p.page.view.reset.clone();
+    // The page reads the skill again and starts over from what is saved.
+    let reread: team::Reread = Arc::new(move || reset.update(|r| *r += 1));
     let waiting = team
       .as_ref()
       .zip(entry)
       .and_then(|(team, e)| Some((team, team.standing(e.id)?)))
-      .and_then(|shared| team::waiting_bar(ctx, &p.page.project, shared, ("skill", Outside::Skills)));
+      .and_then(|shared| team::waiting_bar(ctx, &p.page.project, shared, ("skill", Outside::Skills), reread));
     if let Some(waiting) = waiting {
       return waiting;
     }

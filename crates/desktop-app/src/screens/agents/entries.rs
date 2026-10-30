@@ -55,6 +55,7 @@ pub(super) fn row(
   let entry_row = Entry::new(format!("agent-{id}"), profile.role().as_str()).tile(provider_glyph(connection));
   let entry_row = match team.and_then(|team| Some((team, team.standing(id)?))) {
     Some((team, standing)) => entry_row
+      .one_line()
       .end(team::publisher(ctx, &format!("agent-publisher-{id}"), team, standing))
       .end(team::row_state(
         ctx,

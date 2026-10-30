@@ -150,6 +150,7 @@ fn row(
     .hint(hint);
   let row = match team.and_then(|team| Some((team, team.standing(entry.id)?))) {
     Some((team, standing)) => row
+      .one_line()
       .end(team::publisher(
         ctx,
         &format!("tool-publisher-{}", entry.id),

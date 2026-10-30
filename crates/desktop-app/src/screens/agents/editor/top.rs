@@ -52,11 +52,20 @@ impl Editor {
         team::draft_on(entry.state),
       ))
     });
+    let versions = state
+      .saved
+      .as_ref()
+      .and_then(|entry| team::member_versions(ctx, "agent", (&props.project, team), entry.id));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
       .child(page_head::crumb(ctx, &props.nav))
-      .child(page_head::head(ctx, (&self.fields, &props.listed), more, shared))
+      .child(page_head::head(
+        ctx,
+        (&self.fields, &props.listed),
+        more,
+        (shared, versions),
+      ))
       .with_children(self.remove_question(ctx, props, state))
       .child(self.bar_or_question(ctx, props, (state, team)))
       .with_children(self.notices(ctx, props, state))
@@ -102,8 +111,11 @@ impl Editor {
     let standing = team
       .zip(state.saved.as_ref())
       .and_then(|(team, entry)| Some((team, team.standing(entry.id)?)));
-    if let Some(bar) =
-      standing.and_then(|shared| team::waiting_bar(ctx, &props.project, shared, ("agent", Outside::Profiles)))
+    let revision = props.revision.clone();
+    // The page reads the saved profile anew into its fields, as after Discard draft.
+    let reread: team::Reread = std::sync::Arc::new(move || revision.update(|n| *n += 1));
+    if let Some(bar) = standing
+      .and_then(|shared| team::waiting_bar(ctx, &props.project, shared, ("agent", Outside::Profiles), reread))
     {
       return bar;
     }

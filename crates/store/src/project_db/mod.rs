@@ -123,7 +123,7 @@ pub use self::{
   run_ends::EndedRun,
   runs::RunBranch,
   shared_events::{SharedEvent, SharedSnapshot},
-  shared_members::SharedMember,
+  shared_members::{ServerAdmin, SharedMember},
   shared_modules::{CachedModule, CachedModuleChange},
   shared_publishes::{PublishState, WaitingPublish},
   shared_standing::{ConfirmedVersion, SharedStanding, WaitingVersion},

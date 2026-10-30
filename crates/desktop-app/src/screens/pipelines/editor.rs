@@ -185,11 +185,15 @@ impl Editor {
     let Some(standing) = team.standing(props.opened.id) else {
       return Vec::new();
     };
+    let reload = props.reload.clone();
+    // The page reads the saved pipeline again, as *Reload saved pipeline* does.
+    let reread: hub::team::Reread = std::sync::Arc::new(move || reload.update(|n| *n += 1));
     hub::team::waiting_bar(
       ctx,
       &props.project,
       (team, standing),
       ("pipeline", orchester_workspace::tasks::outside::Outside::Pipelines),
+      reread,
     )
     .into_iter()
     .collect()
