@@ -3,7 +3,7 @@
 //! its tab strip's overflow (`01d`, `01e`); and the main window opening it by itself when an agent starts browsing, and
 //! from its app menu.
 
-use std::io::Cursor;
+use std::{io::Cursor, ops::Range};
 
 use image::{ImageFormat, Rgb, RgbImage};
 use lurq::app::events::{MouseButton, ScrollPhase};
@@ -385,6 +385,83 @@ fn browser_tab_strip_scrolls_sideways_with_a_mouse_wheel() {
   browser.pass();
   assert_eq!(bounds(&mut browser, "browser-tab-0").x, first, "back at the first tab");
   assert!(!browser.shows("browser-tabs-fade-start"));
+}
+
+/// The person's tabs `P<numbers>`, `P15` shown, as a runner reports them.
+fn with_p15_shown(numbers: Range<usize>) -> BrowserEvent {
+  let tabs = numbers
+    .map(|number| tab(&format!("P{number}"), TabOwner::Person, "Pull requests · GitHub"))
+    .collect();
+  BrowserEvent::Changed(BrowserState {
+    tabs,
+    shown: Some(BrowserTabId::new("P15")),
+    mode: BrowserMode::Headless,
+  })
+}
+
+/// Tab 15 of twenty is wholly between the fades of both cut edges (`01d`), and the overflow button counts the tabs not
+/// wholly between the strip's start and itself.
+fn assert_tab_15_in_view(browser: &mut Browser) {
+  assert!(browser.shows("browser-tabs-fade-start"), "the cut start fades (01d)");
+  assert!(browser.shows("browser-tabs-fade-end"), "the cut end fades (01d)");
+  let (start, end, shown) = (
+    browser.bounds("browser-tabs-fade-start"),
+    browser.bounds("browser-tabs-fade-end"),
+    browser.bounds("browser-tab-15"),
+  );
+  assert!(
+    shown.x >= start.x + start.width && shown.x + shown.width <= end.x,
+    "the tab shown is clear of the fades: {shown:?} between {start:?} and {end:?}"
+  );
+  let (strip, button) = (browser.bounds("browser-strip"), browser.bounds("browser-overflow"));
+  let out_of_view = (0..20)
+    .map(|index| browser.bounds(&format!("browser-tab-{index}")))
+    .filter(|tab| tab.x < strip.x || tab.x + tab.width > button.x)
+    .count();
+  assert_eq!(browser.text("browser-overflow"), out_of_view.to_string());
+}
+
+#[test]
+fn browser_tab_strip_shows_the_shown_tab_again_when_the_tabs_go_and_come_back() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.feed(with_p15_shown(0..20));
+  browser.until_shown("browser-overflow");
+  browser.pass();
+  assert_tab_15_in_view(&mut browser);
+
+  browser.feed(BrowserEvent::Changed(BrowserState {
+    tabs: Vec::new(),
+    shown: None,
+    mode: BrowserMode::Headless,
+  }));
+  browser.until("the tabs to go", |browser| !browser.shows("browser-tab-0"));
+  browser.feed(with_p15_shown(0..20));
+  browser.until_shown("browser-overflow");
+  browser.pass();
+  assert_tab_15_in_view(&mut browser);
+}
+
+#[test]
+fn browser_tab_strip_forgets_its_scroll_when_its_tabs_fit_again() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.feed(with_p15_shown(0..20));
+  browser.until_shown("browser-overflow");
+  browser.pass();
+  assert_tab_15_in_view(&mut browser);
+
+  browser.feed(with_p15_shown(13..17));
+  browser.until("the tabs to fit", |browser| !browser.shows("browser-overflow"));
+  browser.pass();
+  assert!(
+    !browser.shows("browser-tabs-fade-start"),
+    "nothing is cut at the start of tabs that fit"
+  );
 }
 
 #[test]

@@ -146,24 +146,34 @@ impl Strip {
     self.room.get().unwrap_or(fit::TAB_MAX_WIDTH * 4.0)
   }
 
-  /// Scrolls the tab shown into view when it changes.
+  /// Scrolls the tab shown into view, clear of the fades, when it changes or comes back to the strip. Otherwise the
+  /// scroll stays, within what the strip has now: the scroller clamps itself when the tabs get fewer, and the fades and
+  /// the count go by this value.
   fn follow(
     &self,
     fitted: &StripFit,
     (shown, index, divider): (Option<&BrowserTabId>, Option<usize>, Option<usize>),
     room: f32,
   ) {
-    let (Some(shown), Some(index)) = (shown, index) else {
-      return;
-    };
+    let scrolled = self.scrolled.get_untracked();
+    let most = (fitted.content_width(divider) - room).max(0.0);
     let mut followed = self.followed.lock();
-    if followed.as_ref() == Some(shown) {
-      return;
+    let to = match shown.zip(index) {
+      Some((shown, index)) if followed.as_ref() != Some(shown) => {
+        *followed = Some(shown.clone());
+        let clear = (self.scroll.scroll_x() + FADE_WIDTH, room - 2.0 * FADE_WIDTH);
+        (fitted.scroll_to(index, divider, clear) - FADE_WIDTH).clamp(0.0, most)
+      }
+      Some(_) => scrolled.min(most),
+      None => {
+        *followed = None;
+        scrolled.min(most)
+      }
+    };
+    if (to - scrolled).abs() > f32::EPSILON {
+      self.scroll.set_scroll_pending(to, 0.0);
+      self.scrolled.set(to);
     }
-    *followed = Some(shown.clone());
-    let to = fitted.scroll_to(index, divider, (self.scroll.scroll_x(), room));
-    self.scroll.set_scroll_pending(to, 0.0);
-    self.scrolled.set(to);
   }
 
   fn tabs(
