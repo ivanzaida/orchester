@@ -142,6 +142,7 @@ fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<DeliversPic
       help: Some(help),
       help_place: HelpPlace::BesideIcon,
       chosen: delivers == chosen,
+      mono: false,
     }
     .render(&state.open, move || pick.set(DeliversPick(delivers)))
   };

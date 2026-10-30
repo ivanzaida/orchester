@@ -141,6 +141,7 @@ impl Verified {
       branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
       base: Revision::new(&"a".repeat(40)).expect("revision"),
       base_branch: Some(BranchName::new("main").expect("branch")),
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
       budget: None,
       max_duration: None,
     };

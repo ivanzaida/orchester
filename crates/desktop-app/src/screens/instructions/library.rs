@@ -1,7 +1,8 @@
 //! The Instructions tab's list (`02 Instructions` `jtiqe`): the order note, then the groups in assembly order
 //! ([`super::library_groups`]), each in its box: a role's or pipeline's head row with its count, numbered step rows,
 //! and a row per rule with its agents, its event and where its version stands. An empty group says so in a quiet row
-//! (06b); a rule removed on this page leaves a *Removed* line in its group.
+//! (06b); a rule removed on this page leaves a *Removed* line in its group. In a shared project the line over the list
+//! says it is the team's, and each rule's row its publisher (`Shared configuration · redesign`, 01 `cHvkL`).
 use std::sync::Arc;
 
 use lurq::{
@@ -16,6 +17,7 @@ use orchester_workspace::{
     data::{InstructionEntry, ProjectInstructions},
     form::Events,
   },
+  sharing::team::TeamConfiguration,
 };
 
 use super::{
@@ -25,30 +27,114 @@ use super::{
 };
 use crate::{
   screens::hub::{
-    self,
+    self, bones,
     parts::{Entry, Tone, boxed, group, head, note, status, sub_head},
+    team,
   },
   theme::HubSpacing,
-  ui::{icon::Icon, pressable::Press},
+  ui::{
+    icon::Icon,
+    pressable::Press,
+    skeleton::{Skeleton, fading},
+  },
 };
 
 pub fn list(ctx: &mut Ctx, data: &ProjectInstructions, selection: &Selection) -> Element {
   let removed = selection.removed.get().0;
   let groups = groups(ctx, data, &data.entries, &removed);
-  let project = ctx.props::<super::Props>().0.open.project.name().to_string();
+  let shown = ctx.props::<super::Props>().0.clone();
+  let project = shown.open.project.name().to_string();
+  let team = team::of(&shown);
   let mut pane = Column::new()
     .id("instruction-library")
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Groups.role())
+    .with_children(
+      team
+        .as_ref()
+        .map(|team| team::line(ctx, "instructions-team-line", team)),
+    )
     .child(note(
       "instructions-order-note",
       Icon::ListOrdered,
       &ctx.t("instructions.orderNote"),
     ));
   for group_of in groups {
-    pane = pane.child(section(ctx, (data, &project), &group_of, selection));
+    pane = pane.child(section(ctx, (data, &project, team.as_ref()), &group_of, selection));
+  }
+  if let Some(team) = &team {
+    pane = pane.child(team::foot(ctx, "instructions-team-note", team));
   }
   hub::list_body("instructions-list", pane)
+}
+
+/// One line of a group while the rules are read: a role's or a pipeline's sub-head, or a rule.
+#[derive(Clone, Copy)]
+enum Bone {
+  Head(f32),
+  Rule(f32, f32),
+}
+
+/// The groups' lines while the rules are read (`05 Agents · Instructions · loading` `pkDIG`).
+const READING: [(Tab, &[Bone]); 4] = [
+  (
+    Tab::Roles,
+    &[
+      Bone::Head(80.0),
+      Bone::Rule(72.0, 94.0),
+      Bone::Head(100.0),
+      Bone::Rule(98.0, 136.0),
+      Bone::Head(80.0),
+    ],
+  ),
+  (Tab::Project, &[Bone::Rule(74.0, 148.0), Bone::Rule(86.0, 150.0)]),
+  (
+    Tab::Pipelines,
+    &[Bone::Head(110.0), Bone::Rule(80.0, 150.0), Bone::Head(70.0)],
+  ),
+  (
+    Tab::Steps,
+    &[
+      Bone::Head(108.0),
+      Bone::Rule(80.0, 106.0),
+      Bone::Head(70.0),
+      Bone::Rule(68.0, 120.0),
+    ],
+  ),
+];
+
+/// The list while the rules are read: the order note and the four group headings real, the sub-heads, their counts
+/// and every rule bones, the lower groups fading. *Reading instructions…* (`instructions.reading`) names it.
+pub fn reading(ctx: &mut Ctx) -> Element {
+  let groups = READING
+    .iter()
+    .map(|(tab, lines)| {
+      let id = format!("instructions-reading-{}", tab.name());
+      let rows = lines.iter().map(|line| -> Element {
+        match *line {
+          Bone::Head(label) => bones::sub_head(ctx, label, 28.0).into(),
+          Bone::Rule(name, hint) => bones::entry(ctx, None, (name, hint), vec![bones::status(ctx, 66.0).into()]).into(),
+        }
+      });
+      let count = (*tab == Tab::Project).then_some(14.0);
+      group(
+        &id,
+        bones::head(ctx, &id, &ctx.t(tab.key()), count),
+        boxed(&format!("{id}-rows"), rows),
+      )
+    })
+    .collect();
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Groups.role())
+    .child(note(
+      "instructions-order-note",
+      Icon::ListOrdered,
+      &ctx.t("instructions.orderNote"),
+    ))
+    .with_children(fading(groups));
+  let body = Skeleton::new("instructions-loading", ctx.t("instructions.reading")).show(ctx, pane);
+  hub::list_body("instructions-reading-list", body)
 }
 
 const fn tab(part: PromptPart) -> Tab {
@@ -62,7 +148,7 @@ const fn tab(part: PromptPart) -> Tab {
 
 fn section(
   ctx: &Ctx,
-  (data, project): (&ProjectInstructions, &str),
+  (data, project, team): (&ProjectInstructions, &str, Option<&TeamConfiguration>),
   group_of: &Group,
   selection: &Selection,
 ) -> Element {
@@ -82,7 +168,7 @@ fn section(
       .rows
       .iter()
       .enumerate()
-      .map(|(index, line)| line_row(ctx, (data, tab), (index, line), selection))
+      .map(|(index, line)| line_row(ctx, (data, tab, team), (index, line), selection))
       .collect()
   };
   group(
@@ -95,10 +181,11 @@ fn section(
 
 fn line_row(
   ctx: &Ctx,
-  (data, tab): (&ProjectInstructions, Tab),
+  (data, tab, team): (&ProjectInstructions, Tab, Option<&TeamConfiguration>),
   (index, line): (usize, &Line),
   selection: &Selection,
 ) -> Element {
+  let data = (data, team);
   match line {
     Line::Head {
       label,
@@ -138,7 +225,7 @@ fn head_row(ctx: &Ctx, (tab, index): (Tab, usize), label: &str, (count, override
 
 fn rule_row(
   ctx: &Ctx,
-  data: &ProjectInstructions,
+  (data, team): (&ProjectInstructions, Option<&TeamConfiguration>),
   (entry, step): (&InstructionEntry, Option<&Arc<str>>),
   selection: &Selection,
   orphan: Option<Gone>,
@@ -169,12 +256,29 @@ fn rule_row(
       ],
     )
   };
-  let (tone, version) = version(ctx, entry.state);
   let tab = Tab::of(scope);
-  let row = Entry::new(format!("instruction-{}", entry.id), entry.name.clone())
-    .hint(hint)
-    .end(status(&format!("instruction-version-{}", entry.id), tone, &version))
-    .press(Press::Open(selection.to(View::rule(tab, Some(entry.id)))));
+  let row = Entry::new(format!("instruction-{}", entry.id), entry.name.clone()).hint(hint);
+  let row = match team.and_then(|team| Some((team, team.standing(entry.id)?))) {
+    Some((team, standing)) => row
+      .one_line()
+      .end(team::publisher(
+        ctx,
+        &format!("instruction-publisher-{}", entry.id),
+        team,
+        standing,
+      ))
+      .end(team::row_state(
+        ctx,
+        &format!("instruction-version-{}", entry.id),
+        standing,
+        team::draft_on(entry.state),
+      )),
+    None => {
+      let (tone, version) = version(ctx, entry.state);
+      row.end(status(&format!("instruction-version-{}", entry.id), tone, &version))
+    }
+  }
+  .press(Press::Open(selection.to(View::rule(tab, Some(entry.id)))));
   if step.is_some() { row.indented() } else { row }.into()
 }
 

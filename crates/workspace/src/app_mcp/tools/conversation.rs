@@ -134,6 +134,7 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<ReadRun, ToolErr
     pending: &requests.pending,
     reviewing: &requests.reviewing,
     decided: &requests.decided,
+    answers: &requests.answers,
     questions: &requests.questions,
     merge: detail.merge.as_ref(),
   });

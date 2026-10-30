@@ -7,7 +7,7 @@ mod runner_programs;
 use std::{fs, path::Path, time::Duration};
 
 use orchester_core::id::{IdempotencyKey, TaskId};
-use orchester_ipc::{Rejection, SessionEnd::Clean};
+use orchester_ipc::{ErrorReports, Rejection, SessionEnd::Clean};
 use orchester_store::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
@@ -313,4 +313,42 @@ async fn runner_process_forget_if_idle_starts_no_runner_for_a_removed_project_a_
     runners.status_of(project.path()).is_none(),
     "the removed project's runner is not started again"
   );
+}
+
+/// The person turns error reports off and on while the project's runner runs (ORC-159): each reaches the runner at
+/// once, which logs it. This debug runner sends no report either way.
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_error_reports_turned_off_and_on_reach_the_running_runner() {
+  let project = project();
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
+  let on = ErrorReports::new("qa", "orchester@9.8.7").expect("both are text");
+  runners.set_error_reports(Some(&on));
+  let mut updates = runners.subscribe();
+  runners.show(Some(&open(project.path())));
+  online_and_reported(&runners, &mut updates, project.path()).await;
+
+  runners.set_error_reports(None);
+  runner_logged(project.path(), "the app turned error reports off").await;
+  runners.set_error_reports(Some(&on));
+  runner_logged(project.path(), "the app turned error reports on").await;
+  assert_eq!(
+    runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await,
+    ShutdownOutcome::Stopped
+  );
+}
+
+/// Waits until today's log of `project`'s runner holds `line`.
+async fn runner_logged(project: &Path, line: &str) {
+  timeout(PATIENCE, async {
+    loop {
+      let log = orchester_ipc::runner_log_path(project, std::time::SystemTime::now());
+      // The runner may not have written today's log yet.
+      if fs::read_to_string(log).is_ok_and(|log| log.contains(line)) {
+        return;
+      }
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  })
+  .await
+  .unwrap_or_else(|_| panic!("the runner logs {line:?} in time"));
 }

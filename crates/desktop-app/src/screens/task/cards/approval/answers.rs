@@ -72,8 +72,9 @@ pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
 
 /// What the answers act on: the card's key and element id, the request, its choices once read, the run's
 /// number, the open project its runner takes the answer for, the tab's answers, *Approve once*, which
-/// takes the focus when the tab opens on the card, the wider answer the card asks to confirm, if any, and the
-/// message editor's state: whether it shows, what is written, its field and whether that takes the focus.
+/// takes the focus when the tab opens on the card, the wider answer the card asks to confirm, if any, the
+/// message editor's state: whether it shows, what is written, its field and whether that takes the focus, and
+/// whether a request that came to the person shows its other answers.
 pub(super) struct Answering<'a> {
   pub(super) card: (RunId, &'a Arc<str>),
   pub(super) id: &'a str,
@@ -88,6 +89,7 @@ pub(super) struct Answering<'a> {
   pub(super) message: &'a Signal<String>,
   pub(super) field: &'a ElementRef,
   pub(super) focus_field: &'a Arc<AtomicBool>,
+  pub(super) more: &'a Signal<bool>,
 }
 
 impl Answering<'_> {
@@ -145,6 +147,9 @@ impl Answering<'_> {
 }
 
 pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
+  if answering.shown.is_some_and(|shown| shown.came_to_person.is_some()) {
+    return came_answers(ctx, answering);
+  }
   let id = answering.id;
   let (with_message, reason) = with_message(ctx, answering);
   let deny = answering.button(
@@ -173,10 +178,68 @@ pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(row)
-    .with_children((answering.decisions.busy() && answering.sending().is_none()).then(|| held(ctx, id)))
+    .with_children(held_line(ctx, answering))
     .with_children(reason)
     .child(wider)
     .into()
+}
+
+/// The answers of a request that came to the person by the run's approval mode (`Actions` `Mq6Za` in `vO7CW`, 04
+/// `H6kPd`): the primary *Approve*, then *Deny*, 8 apart at the start; after them *More answers*, which opens under
+/// them the others the card gives as ever: *Deny with a message*, the wider answers and what automation may do.
+fn came_answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
+  let id = answering.id;
+  let once = answering
+    .button(
+      ctx,
+      Given::ApproveOnce,
+      (ButtonKind::Primary, Icon::Check, "cards.approval.approve"),
+    )
+    .element_ref(answering.once.clone());
+  let deny = answering.button(
+    ctx,
+    Given::Deny,
+    (ButtonKind::Secondary, Icon::X, "cards.approval.deny"),
+  );
+  let open = answering.more.get();
+  let more = answering.more.clone();
+  let toggle = ActionButton::new(
+    format!("{id}-more-answers"),
+    ButtonKind::Ghost,
+    ctx.t("cards.approval.moreAnswers"),
+  )
+  .icon(if open { Icon::ChevronUp } else { Icon::ChevronDown })
+  .held(open)
+  .in_form()
+  .on_click(move || more.update(|open| *open = !*open));
+  let row = Row::new()
+    .id(format!("{id}-answers"))
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(once)
+    .child(deny)
+    .child(toggle);
+  let column = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(row)
+    .with_children(held_line(ctx, answering));
+  if !open {
+    return column.into();
+  }
+  let (with_message, reason) = with_message(ctx, answering);
+  column
+    .child(Row::new().id(format!("{id}-more")).child(with_message))
+    .with_children(reason)
+    .child(wider(ctx, answering))
+    .child(automation(ctx, id, answering.shown))
+    .into()
+}
+
+/// Why the answers wait while another answer of the tab is on its way.
+fn held_line(ctx: &Ctx, answering: &Answering<'_>) -> Option<Element> {
+  (answering.decisions.busy() && answering.sending().is_none()).then(|| held(ctx, answering.id))
 }
 
 /// *Deny with a message*, which opens its editor; for a native agent's command, whose denial carries no words yet,

@@ -26,13 +26,11 @@ fn main() {
   let mut launch = Launch::begin(runtime.handle(), log);
   // Error reports start here, once the database that holds the person's setting is open: a panic before this line is
   // not reported. Kept to the end of `main`, whose drop sends what is still pending. The runners, which start once
-  // the window shows a project, report too.
+  // the window shows a project, report too while the setting is on.
   let environment = Environment::of_this_app();
   let reports = environment.and_then(|environment| error_reports::start(environment, launch.workspace()));
-  if let (Some(environment), Some(_), Some(services)) = (environment, &reports, launch.services()) {
-    services
-      .runners
-      .send_error_reports(error_reports::for_runners(environment));
+  if let (Some(reports), Some(services)) = (&reports, launch.services()) {
+    services.runners.set_error_reports(reports.for_runners().as_ref());
   }
   // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
   // a trash of their own.

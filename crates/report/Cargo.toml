@@ -14,6 +14,11 @@ workspace = true
 # contexts, and the loaded modules with their debug IDs (`debug-images`), by which GlitchTip matches a report's raw
 # frames to the uploaded PDBs. Without a transport: each program that sends turns on its own.
 client = ["sentry/backtrace", "sentry/contexts", "sentry/debug-images", "sentry/panic"]
+# The transport that turns a running client's reports on and off (`switch`), the app's by the person's setting and the
+# runner's by the app: sentry's queue thread, which its `reqwest` transport brings; both programs build it already.
+switch = ["client", "sentry/reqwest", "dep:parking_lot", "dep:tracing"]
 
 [dependencies]
+parking_lot = { workspace = true, optional = true }
 sentry.workspace = true
+tracing = { workspace = true, optional = true }

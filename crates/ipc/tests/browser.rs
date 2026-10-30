@@ -224,11 +224,11 @@ fn events(run: RunId) -> Vec<Event> {
   ]
 }
 
-/// The events of an agent waiting for the person came with protocol 34, so a runner of 33 is told apart at the
+/// The events of an agent waiting for the person came with protocol 35, so a runner of 34 is told apart at the
 /// handshake: where it waits and until when, and each way its wait ends.
 #[tokio::test]
 async fn browser_agent_waiting_events_round_trip_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 34);
+  assert_eq!(PROTOCOL_VERSION, 35);
   let (mut reader, mut writer) = connection();
   let run = RunId::generate();
   let ended = |end| {

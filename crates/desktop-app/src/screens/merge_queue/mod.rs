@@ -9,6 +9,7 @@ mod actions;
 mod empty;
 mod header;
 pub(crate) mod phases;
+mod reading;
 pub(crate) mod row;
 pub(crate) mod words;
 
@@ -41,7 +42,7 @@ use crate::{
   ui::{
     message::message_text,
     notice::{Notice, NoticeTone},
-    state::{load_error, loading},
+    state::load_error,
   },
 };
 
@@ -94,9 +95,7 @@ impl Component for MergeQueueScreen {
       )
       .spacing(DeliverySpacing::Sections.role());
     let read = match read(ctx, &project, self.retries.get()) {
-      Read::Reading => {
-        return Element::from(frame.child(loading("merge-queue-loading", &ctx.t("delivery.queue.reading"))));
-      }
+      Read::Reading => return Element::from(frame.child(reading::page(ctx))),
       Read::Failed(reason) => {
         let retries = self.retries.clone();
         let body = ctx.t_args(
@@ -308,11 +307,13 @@ fn read(ctx: &mut Ctx, project: &ShownProject, retries: u64) -> Read {
   let root = project.open.repo_root.clone();
   let changes = crate::project::merge_queue::changes(ctx, &root);
   let again = changes + project.feed.states.get() + project.feed.revision.get() + retries;
-  let programs = Services::of(ctx).programs;
+  let services = Services::of(ctx);
+  let (programs, hold) = (services.programs, services.hold);
   let loaded = ctx
     .future((root, again), move |(root, _)| {
-      let programs = programs.clone();
+      let (programs, hold) = (programs.clone(), hold.clone());
       async move {
+        hold.released().await;
         background::run(move || merge_queue::read(&root, &programs))
           .await?
           .map_err(|error| messages::store_error(&error))

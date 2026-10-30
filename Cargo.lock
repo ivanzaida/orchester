@@ -2985,7 +2985,9 @@ dependencies = [
 name = "orchester-report"
 version = "0.1.3"
 dependencies = [
+ "parking_lot",
  "sentry",
+ "tracing",
 ]
 
 [[package]]

@@ -112,6 +112,7 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
         help: Some(option_detail(ctx, choice)),
         help_place: HelpPlace::UnderIcon,
         chosen: chosen == Some(id),
+        mono: false,
       }
       .render(&state.open, move || pick.set(Pick(Some(id)))),
     );

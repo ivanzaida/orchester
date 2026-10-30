@@ -1,11 +1,11 @@
 //! `project-settings`: what Project settings' drawn states need beyond `connections` (`Project settings · redesign`
 //! `XGtkg` in the new `orchester.pen`). Kontur is linked to `acme/kontur` and expects the GitHub account `dana-k`,
-//! while `gh` is signed in as `ivanzaida`, so General and the GitHub connection offer *Use ivanzaida* (`01b`, `14`);
-//! its base branch is `release/2.4`, which the repository no longer has (`01b`). Secrets in Development, Staging and
-//! Production (`06`): `DEEPSEEK_API_KEY` used by the tool `deploy-preview`, `FIGMA_TOKEN` rotated and used by the MCP
-//! server `figma`, `GITHUB_APP_KEY` used by nothing, and `OLD_FIGMA_TOKEN` archived (`06b` opens `FIGMA_TOKEN`). The
-//! server `figma` (`13`) is a program that is on, with `FIGMA_API_KEY` from `FIGMA_TOKEN`, tools that run without
-//! asking, and the profile Design reviewer using it. Every secret is a record only: no value is in any keychain.
+//! while `gh` is signed in as `ivanzaida`, so General and the GitHub connection offer *Use ivanzaida* (`01b`, `14`).
+//! Secrets in Development, Staging and Production (`06`): `DEEPSEEK_API_KEY` used by the tool `deploy-preview`,
+//! `FIGMA_TOKEN` rotated and used by the MCP server `figma`, `GITHUB_APP_KEY` used by nothing, and `OLD_FIGMA_TOKEN`
+//! archived (`06b` opens `FIGMA_TOKEN`). The server `figma` (`13`) is a program that is on, with `FIGMA_API_KEY` from
+//! `FIGMA_TOKEN`, tools that run without asking, and the profile Design reviewer using it. Every secret is a record
+//! only: no value is in any keychain.
 //!
 //! `project-settings-shared` is the same project linked to a team server project at `orchester.example.com/kontur`
 //! (`04b`), as owner, with four members as last read; no server answers, and this computer's list of servers doesn't
@@ -21,7 +21,6 @@ use orchester_core::{
     },
   },
   id::{ConnectionId, ProjectId, SecretId, ServerId, UserId},
-  integration::base::BaseBranchSetting,
   project::ProjectKey,
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryLink, RepositoryView},
   resource::{
@@ -40,15 +39,11 @@ use crate::kontur::{Kontur, SeedError, catalogue, name};
 
 /// The account the project expects through GitHub; `gh` is signed in as another (`connections::github`).
 const EXPECTED: &str = "dana-k";
-/// The base branch set, which the repository doesn't have.
-const GONE_BRANCH: &str = "release/2.4";
 const DAY: i64 = 24 * 60;
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let connections = connections::seeded(kontur)?;
   link_repository(kontur, connections.github)?;
-  let gone = BranchName::new(GONE_BRANCH).map_err(invalid)?;
-  kontur.db.save_base_branch_setting(&BaseBranchSetting::Branch(gone))?;
   let secrets = secrets(kontur)?;
   deploy_preview(kontur, secrets.deepseek)?;
   let figma = figma(kontur, secrets.figma)?;

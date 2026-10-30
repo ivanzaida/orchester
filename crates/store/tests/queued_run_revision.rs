@@ -46,6 +46,7 @@ fn queued_run_of_a_task_edited_since_its_revision_was_confirmed_is_not_recorded(
     branch: BranchName::new(branch).expect("branch"),
     base: template.base().clone(),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: template.budget(),
     max_duration: template.max_duration(),
   };

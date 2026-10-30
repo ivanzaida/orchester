@@ -49,7 +49,7 @@ use crate::{
 };
 
 /// The place's room (`dRvuU`).
-const PLACE_WIDTH: f32 = 30.0;
+pub(super) const PLACE_WIDTH: f32 = 30.0;
 
 /// The section: `lines` in start order, with Hold new starts for the project at `root`, `held` while they are.
 pub(super) fn queue(ctx: &mut Ctx, (project, root): (ProjectId, PathBuf), lines: &[QueuedLine], held: bool) -> Column {
@@ -115,6 +115,17 @@ pub(super) fn queue(ctx: &mut Ctx, (project, root): (ProjectId, PathBuf), lines:
     .with_children(more)
 }
 
+/// *Hold new starts* while the tasks are read (`ae6PR`): real, as the hold is not known yet it offers to hold.
+pub(super) fn hold_reading(ctx: &mut Ctx, (project, root): (ProjectId, PathBuf)) -> Element {
+  ctx.mount_keyed::<HoldStarts>(
+    "overview-queue-hold",
+    HoldProps {
+      project,
+      root,
+      held: false,
+    },
+  )
+}
 #[derive(Clone, PartialEq)]
 struct HoldProps {
   project: ProjectId,

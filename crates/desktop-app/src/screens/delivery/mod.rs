@@ -40,7 +40,8 @@ use crate::{
   theme::UsageSpacing,
   ui::{
     message::message_text,
-    state::{load_error, loading},
+    skeleton::{self, Skeleton},
+    state::load_error,
   },
 };
 
@@ -130,7 +131,11 @@ impl Component for DeliveryScreen {
         )]
       }
       (None, Some(Read(delivery))) => self.sections(ctx, id, delivery),
-      (None, None) => vec![loading("delivery-loading", &ctx.t("delivery.reading")).into()],
+      (None, None) => {
+        // No loading frame draws Delivery: its charts' lines are bones until the period is read.
+        let bones = skeleton::lines(ctx, &[620.0, 480.0, 560.0, 400.0, 520.0]);
+        vec![Skeleton::new("delivery-loading", ctx.t("delivery.reading")).show(ctx, bones)]
+      }
     };
     Column::new()
       // The Delivery view belongs to the Usage screen, as a module's page does to Modules.

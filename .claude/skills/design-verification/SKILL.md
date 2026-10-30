@@ -100,7 +100,12 @@ run waits for the person instead, unless they ask for the step again.
 ## orchester-app: start, connect, reach the state
 
 **Design frames.** `crates/desktop-app/design/orchester.pen`, through the `pencil` MCP with the absolute path of
-that file in your own worktree as `filePath` (read-only: `get_app_state`, Get and Export only; never edit it). Its
+that file in the project's MAIN checkout as `filePath` — the folder that holds `.orchester/`, i.e. your worktree's
+path before `.orchester/worktrees/` (e.g. `H:/projects/orchester/crates/desktop-app/design/orchester.pen`), never
+your worktree's copy (read-only: `get_app_state`, Get and Export only; never edit it). Pencil has the main
+checkout's file open, active tab or not; a worktree copy is not open there, and the MCP then silently answers from
+the active tab (often `orchester-web.pen`) instead of refusing. Your first `execute` prints the file's top-level
+frame names: stop and say so if they are not the desktop boards. Its
 boards are named `<Area> · redesign` (Tasks, Task page, Project settings, Agents, Startup, Status bar, …); the brief
 names the board and frame ids, and the board's Notes row and `docs/design/<area>.md` say what each frame shows. A
 frame is the whole window at 1440 × 900 (exports are 1442 × 902 with the frame's 1 px outline); a

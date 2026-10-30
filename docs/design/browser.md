@@ -353,7 +353,7 @@ not jump to another project by itself.
   request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
   once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
   until the dialog is).
-- **IPC** (protocol 34, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+- **IPC** (protocol 35, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
   option, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its
   tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent started browsing; an agent

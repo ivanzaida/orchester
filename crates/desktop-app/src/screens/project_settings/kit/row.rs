@@ -23,6 +23,7 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     pressable::opening,
+    skeleton,
     tooltip::Tooltip,
   },
 };
@@ -57,11 +58,15 @@ pub(crate) struct SettingRow {
   cut_label: bool,
   info: Option<Arc<str>>,
   hint: Option<(Arc<str>, Tone)>,
+  /// Lines under the hint, in the words' column.
+  lines: Vec<Element>,
   lead: Option<Element>,
   controls: Vec<Element>,
   under: Vec<Element>,
   open: Option<Open>,
   item: bool,
+  /// The label's and the hint's bones, while they are read.
+  bones: (Option<f32>, Option<f32>),
 }
 
 impl SettingRow {
@@ -75,12 +80,21 @@ impl SettingRow {
       cut_label: false,
       info: None,
       hint: None,
+      lines: Vec::new(),
       lead: None,
       controls: Vec::new(),
       under: Vec::new(),
       open: None,
       item: false,
+      bones: (None, None),
     }
+  }
+
+  /// Lines of their own under the hint, in the words' column beside the control, the words then 4 apart (`Moved`
+  /// `HcizH` in 04b `NDTCw`).
+  pub(crate) fn lines(mut self, lines: impl IntoIterator<Item = Element>) -> Self {
+    self.lines.extend(lines);
+    self
   }
 
   /// A row of an item: 10 over and under, its parts 12 apart.
@@ -130,6 +144,18 @@ impl SettingRow {
     self
   }
 
+  /// The label is not read yet: its bone, `width` long, in its place.
+  pub(crate) fn label_reading(mut self, width: f32) -> Self {
+    self.bones.0 = Some(width);
+    self
+  }
+
+  /// The hint line is not read yet: its bone, `width` long, in its place.
+  pub(crate) fn hint_reading(mut self, width: f32) -> Self {
+    self.bones.1 = Some(width);
+    self
+  }
+
   /// What starts the row: an item's tile or glyph.
   pub(crate) fn lead(mut self, lead: impl Into<Element>) -> Self {
     self.lead = Some(lead.into());
@@ -164,35 +190,55 @@ impl SettingRow {
     self
   }
 
-  pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
-    let id = self.id;
+  /// The label, or its bone while it is read.
+  fn label(&self, ctx: &mut Ctx) -> Element {
+    if let Some(width) = self.bones.0 {
+      return skeleton::line(ctx, self.label_style, width).into();
+    }
     let label = Text::new(&self.label)
-      .id(format!("{id}-label"))
+      .id(format!("{}-label", self.id))
       .variant(self.label_style);
-    let label = match self.label_color {
-      Some(color) => label.color(color),
+    let label = match &self.label_color {
+      Some(color) => label.color(color.clone()),
       None => label,
     };
     // A label that is a list of names stays on its line and ends in an ellipsis where the row runs out.
-    let label = if self.cut_label {
+    if self.cut_label {
       label
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0))
+        .into()
     } else {
-      label
-    };
+      label.into()
+    }
+  }
+
+  /// The hint under the label, or its bone while it is read.
+  fn hint_line(&self, ctx: &mut Ctx) -> Option<Element> {
+    if let Some((hint, tone)) = &self.hint {
+      return Some(
+        Text::new(hint)
+          .id(format!("{}-hint", self.id))
+          .variant(ProjectSettingsText::Hint.role())
+          .color(tone.color())
+          .width(Dimension::Pct(100.0))
+          .into(),
+      );
+    }
+    self
+      .bones
+      .1
+      .map(|width| skeleton::line(ctx, ProjectSettingsText::Hint.role(), width).into())
+  }
+
+  pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
+    let (label, hint) = (self.label(ctx), self.hint_line(ctx));
+    let id = self.id;
     let info = self.info.map(|info| {
       let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
-    });
-    let hint = self.hint.map(|(hint, tone)| {
-      Text::new(&hint)
-        .id(format!("{id}-hint"))
-        .variant(ProjectSettingsText::Hint.role())
-        .color(tone.color())
-        .width(Dimension::Pct(100.0))
     });
     let heading = Row::new()
       .spacing(ExtraSpacing::Snug.role())
@@ -207,9 +253,14 @@ impl SettingRow {
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(if self.lines.is_empty() {
+        ExtraSpacing::Tight.role()
+      } else {
+        SpacingSize::Xs
+      })
       .child(heading)
-      .with_children(hint);
+      .with_children(hint)
+      .with_children(self.lines);
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(if self.item { SpacingSize::Md } else { SpacingSize::Lg })

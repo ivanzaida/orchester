@@ -5,6 +5,7 @@
 use orchester_core::{
   id::{RunId, TaskId},
   merge_queue::{CheckedOn, QueueEntry, QueueEvent, QueueState, RecordedQueueEvent},
+  run::BranchName,
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -21,11 +22,15 @@ const EVENT: (&str, u32) = ("merge queue event", 1);
 
 const COLUMNS: &str = "run_id, task_id, finished_at, position, state, since, resyncs, checked, approved_at";
 
+/// [`COLUMNS`] as read, with the base branch the entry's run recorded: the entry's lane.
+const READ_COLUMNS: &str = "run_id, task_id, finished_at, position, state, since, resyncs, checked, approved_at, \
+                            (SELECT r.base_branch FROM runs r WHERE r.id = merge_queue.run_id)";
+
 impl ProjectDb {
   /// Every entry of the merge queue, the runs that left it or were merged included, in the queue's order.
   pub fn merge_queue(&self) -> Result<Vec<QueueEntry>, StoreError> {
     let mut statement = self.connection.prepare(&format!(
-      "SELECT {COLUMNS} FROM merge_queue ORDER BY position, finished_at"
+      "SELECT {READ_COLUMNS} FROM merge_queue ORDER BY position, finished_at"
     ))?;
     let rows = statement.query_map([], read_row)?;
     rows.map(|row| entry(row?)).collect()
@@ -174,8 +179,19 @@ impl ProjectDb {
   }
 }
 
-/// The columns of a row, as read.
-type Stored = (String, String, i64, i64, String, i64, i64, Option<String>, Option<i64>);
+/// The columns of a row, as read ([`READ_COLUMNS`]).
+type Stored = (
+  String,
+  String,
+  i64,
+  i64,
+  String,
+  i64,
+  i64,
+  Option<String>,
+  Option<i64>,
+  Option<String>,
+);
 
 fn read_row(row: &Row<'_>) -> rusqlite::Result<Stored> {
   Ok((
@@ -188,11 +204,12 @@ fn read_row(row: &Row<'_>) -> rusqlite::Result<Stored> {
     row.get(6)?,
     row.get(7)?,
     row.get(8)?,
+    row.get(9)?,
   ))
 }
 
 fn entry(
-  (run, task, finished_at, position, state, since, resyncs, checked, approved_at): Stored,
+  (run, task, finished_at, position, state, since, resyncs, checked, approved_at, base): Stored,
 ) -> Result<QueueEntry, StoreError> {
   let checked: Option<CheckedOn> = checked
     .map(|checked| decode_json(CHECKED.0, CHECKED.1, &checked))
@@ -200,6 +217,11 @@ fn entry(
   Ok(QueueEntry {
     run: parse("run id", &run)?,
     task: parse("task id", &task)?,
+    base: base
+      .as_deref()
+      .map(BranchName::new)
+      .transpose()
+      .map_err(|error| crate::rows::corrupt("merge queue base branch", error))?,
     finished_at: Timestamp::from_unix_millis(finished_at),
     position,
     state: decode_json(STATE.0, STATE.1, &state)?,
@@ -213,7 +235,7 @@ fn entry(
 fn stored_entry(connection: &Connection, run: RunId) -> Result<Option<QueueEntry>, StoreError> {
   connection
     .query_row(
-      &format!("SELECT {COLUMNS} FROM merge_queue WHERE run_id = ?1"),
+      &format!("SELECT {READ_COLUMNS} FROM merge_queue WHERE run_id = ?1"),
       [run.to_string()],
       read_row,
     )

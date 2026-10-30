@@ -177,12 +177,14 @@ async fn run<T: Send + 'static>(work: impl FnOnce() -> Result<T, FilesError> + S
 
 /// The files of `at`.
 pub fn list(ctx: &mut Ctx, root: &Path, at: &Version, (wake, kept): (Wake, &Steady<FileList>)) -> Shown<FileList> {
-  let programs = Services::of(ctx).programs;
+  let services = Services::of(ctx);
+  let (programs, hold) = (services.programs, services.hold);
   let key = at.clone();
   let state = ctx
     .future((root.to_path_buf(), key.clone(), wake), move |(root, at, _)| {
-      let programs = programs.clone();
+      let (programs, hold) = (programs.clone(), hold.clone());
       async move {
+        hold.released().await;
         let read = at.clone();
         let value = run(move || list_files(programs.runner(), &root, &read)).await?;
         let digest = value.digest();
@@ -236,15 +238,17 @@ pub fn file(
   (at, path): (&Version, &FilePath),
   (wake, kept, reads, following): FileFollowing<'_>,
 ) -> (Shown<FileView>, Option<Failure>) {
-  let programs = Services::of(ctx).programs;
+  let services = Services::of(ctx);
+  let (programs, hold) = (services.programs, services.hold);
   let key = (at.clone(), path.clone());
   let counted = reads.clone();
   let state = ctx
     .future((root.to_path_buf(), key.clone(), wake), move |(root, key, _)| {
-      let programs = programs.clone();
+      let (programs, hold) = (programs.clone(), hold.clone());
       let reads = counted.clone();
       reads.started.fetch_add(1, Ordering::Relaxed);
       async move {
+        hold.released().await;
         let (at, path) = key.clone();
         let read = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await;
         reads.settled(&read);

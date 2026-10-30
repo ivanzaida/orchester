@@ -28,9 +28,12 @@ use crate::{
     icon::Icon,
     pressable::Press,
     row_group::{RowGroup, note},
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
+
+/// The version's changes' bones while it is read.
+const CHANGE_BONES: [(f32, f32); 3] = [(180.0, 120.0), (150.0, 140.0), (200.0, 100.0)];
 
 #[derive(Clone)]
 pub struct Props {
@@ -69,7 +72,10 @@ impl Component for Viewed {
     } else {
       match &version {
         Some(version) => changes_column(ctx, &editing, version),
-        None => loading("pipeline-history-loading", &ctx.t("pipelines.reading")).into(),
+        None => {
+          let rows = skeleton::list(ctx, "pipeline-history-reading", &CHANGE_BONES);
+          Skeleton::new("pipeline-history-loading", ctx.t("pipelines.reading")).show(ctx, rows)
+        }
       }
     };
     Column::new()

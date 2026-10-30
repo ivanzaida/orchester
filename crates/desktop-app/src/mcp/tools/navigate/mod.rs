@@ -3,7 +3,7 @@ mod modules;
 use std::num::NonZeroU64;
 
 use lurq::mcp::{McpTool, Scope};
-use modules::{module_page, new_task_page};
+use modules::{agent_page, module_page, new_task_page};
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
@@ -54,7 +54,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
-  five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: skills takes \
+  five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
+  `agent` (a profile's id, or new), skills takes \
   `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue and \
   pull_requests are the two tabs of one Review page, each its own route; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
@@ -126,6 +127,7 @@ fn schema() -> Value {
       "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings › Connections opens." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings › Connections." },
       "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings › Connections." },
+      "agent": { "type": "string", "description": "agents: a profile's id for its page, or new; omitted opens the list." },
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
@@ -199,7 +201,7 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
     Screen::PullRequests => pull_requests_page(args)?,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
-    Screen::Agents => ProjectPage::Agents,
+    Screen::Agents => agent_page(args)?,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
     Screen::Memory => ProjectPage::Memory(memory_tab(args)?),
     Screen::Skills => skills_page(args)?,
@@ -267,12 +269,10 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
-    Screen::MergeQueue
-    | Screen::Pipelines
-    | Screen::Agents
-    | Screen::Instructions
-    | Screen::Secrets
-    | Screen::OrchestratorSettings => &["project"],
+    Screen::Agents => &["project", "agent"],
+    Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
+      &["project"]
+    }
   }
 }
 

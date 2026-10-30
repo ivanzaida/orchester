@@ -32,12 +32,15 @@ use crate::{
     icon_button::IconButton,
     message::message_text,
     pressable::Focus,
+    skeleton::{self, Skeleton},
     tabs::{Segment, SegmentFace, segmented},
   },
 };
 
 /// The panel beside a rule (`Side` `CBvLu` in 02b), wider than the hub's side column.
 const PANEL_WIDTH: f32 = 424.0;
+/// The panel's lines while the catalog is read: each bone's width.
+const READING_LINES: &[f32] = &[320.0, 280.0, 340.0, 240.0, 300.0, 200.0];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CopyReceipt {
@@ -123,12 +126,10 @@ impl Component for Panels {
         .into();
     }
     let Some(catalog) = catalog.data else {
-      return frame
-        .child(crate::ui::state::loading(
-          "instruction-preview-loading",
-          &ctx.t("instructions.previewReading"),
-        ))
-        .into();
+      // The panel's head stays; what it shows of the rule is a bone while the catalog is read.
+      let bones = skeleton::lines(ctx, READING_LINES);
+      let bones = Skeleton::new("instruction-preview-loading", ctx.t("instructions.previewReading")).show(ctx, bones);
+      return frame.child(bones).into();
     };
     if panel == Panel::Full {
       return super::viewer::full(ctx, self, &props, &catalog);

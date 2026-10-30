@@ -41,12 +41,12 @@ Refusals: `not_a_git_repository` (not a repository's top), `no_commits` (runs ne
 
 A project's setup: id, key, name, folder, limits, code index, the environment variables its agents and command tools
 get (plain text by design — they never hold secrets), whether agents load the repository's own agent files
-(`AGENTS.md`, `CLAUDE.md`), its **base branch**, its GitHub link, how many connections, profiles, pipelines and
-instructions it has, and its app link (its Overview).
+(`AGENTS.md`, `CLAUDE.md`), its GitHub link, how many connections, profiles, pipelines and instructions it has, and its
+app link (its Overview).
 
-`base_branch.branch` is the branch new runs start from and deliver into (`null`: whatever branch the checkout has
-checked out). `base_branch.missing` is `true` when the chosen branch is gone — new runs are then refused — and `null`
-when git cannot tell. The base branch is kept on this computer only; each run's own base is in its reads.
+A project has no base branch: the branch runs start from is set on tasks (`create_task`/`update_task`'s `base_branch`,
+read by `get_task`) and modules (`create_module`/`update_module`'s, read by `list_modules` and `get_module`), on this
+computer only ([work tools](mcp-tools-work.md#2-tasks)); each run's own base is in `get_run`.
 
 | Parameter | Type   | Req. | Description                    |
 |-----------|--------|------|--------------------------------|

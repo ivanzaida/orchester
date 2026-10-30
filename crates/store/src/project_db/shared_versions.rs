@@ -59,6 +59,9 @@ pub struct CachedVersion<B> {
   pub references: Vec<VersionReference>,
   /// The body with the local connections, MCP servers and secrets the references are bound to here.
   pub local_body: B,
+  /// A teammate's version that widens what agents may do here: the latest version reads leave it out, so runs keep
+  /// the version before it, until the person's *Use v<N> here* ([`ProjectDb::use_shared_version`]).
+  pub waits_here: bool,
 }
 
 impl ProjectDb {
@@ -104,7 +107,7 @@ impl ProjectDb {
   /// Keeps `version` of `resource` as the server confirmed it. A version this computer has already, e.g. one published
   /// here before the project was shared, keeps its row and gets the publisher; its bodies and references are replaced.
   /// A version published here that still waits for the server and has its number moves up
-  /// ([`super::shared_publishes`]).
+  /// ([`super::shared_publishes`]). A version that does not wait here supersedes the versions before it that did.
   pub fn cache_shared_version<B: ResourceBody>(
     &mut self,
     resource: ResourceId,
@@ -114,6 +117,14 @@ impl ProjectDb {
     check_kind::<B>(&transaction, resource)?;
     super::shared_publishes::make_room(&transaction, resource, version.number)?;
     let cached = keep_version(&transaction, resource, version)?;
+    if version.waits_here {
+      transaction.execute(
+        "INSERT OR IGNORE INTO waiting_versions (version_id) VALUES (?1)",
+        [cached.id().to_string()],
+      )?;
+    } else {
+      stop_waiting(&transaction, resource, version.number)?;
+    }
     transaction.commit()?;
     Ok(cached)
   }
@@ -128,7 +139,8 @@ impl ProjectDb {
     let row: Option<CachedRow> = self
       .connection
       .query_row(
-        "SELECT id, published_at, publisher_id, publisher_name, server_body, sha256, local_body \
+        "SELECT id, published_at, publisher_id, publisher_name, server_body, sha256, local_body, \
+         EXISTS (SELECT 1 FROM waiting_versions WHERE waiting_versions.version_id = id) \
          FROM resource_versions JOIN shared_version_bodies ON version_id = id \
          WHERE resource_id = ?1 AND number = ?2",
         params![resource.to_string(), number.get()],
@@ -140,6 +152,7 @@ impl ProjectDb {
             server_body: row.get(4)?,
             hash: row.get(5)?,
             local_body: row.get(6)?,
+            waits_here: row.get(7)?,
           })
         },
       )
@@ -161,7 +174,36 @@ impl ProjectDb {
       hash: ContentHash::new(&row.hash).map_err(|error| corrupt("version hash", error))?,
       references: load_references(&self.connection, &row.id)?,
       local_body: decode(&row.local_body)?,
+      waits_here: row.waits_here,
     }))
+  }
+
+  /// The person's *Use v<N> here*: version `number` of `resource`, which waited, is the one runs use from now on, and
+  /// the versions before it wait no more. `false` when it did not wait. Only a person does this (row 35); the store
+  /// does not know who asks, so its caller refuses everyone else.
+  pub fn use_shared_version(&mut self, resource: ResourceId, number: VersionNumber) -> Result<bool, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let waited: bool = transaction.query_row(
+      "SELECT EXISTS (SELECT 1 FROM waiting_versions JOIN resource_versions ON resource_versions.id = version_id \
+       WHERE resource_id = ?1 AND number = ?2)",
+      params![resource.to_string(), number.get()],
+      |row| row.get(0),
+    )?;
+    if waited {
+      stop_waiting(&transaction, resource, number)?;
+    }
+    transaction.commit()?;
+    Ok(waited)
+  }
+
+  /// The newest version of `resource` that waits for the person's *Use v<N> here*; `None` when none waits.
+  pub fn waiting_version(&self, resource: ResourceId) -> Result<Option<VersionNumber>, StoreError> {
+    let number: Option<i64> = self.connection.query_row(
+      "SELECT MAX(number) FROM resource_versions JOIN waiting_versions ON version_id = id WHERE resource_id = ?1",
+      [resource.to_string()],
+      |row| row.get(0),
+    )?;
+    number.map(version_number).transpose()
   }
 
   /// Replaces the local body of cached version `number` of `resource`, e.g. when a reference it names is bound anew;
@@ -294,6 +336,21 @@ struct CachedRow {
   server_body: String,
   hash: String,
   local_body: String,
+  waits_here: bool,
+}
+
+/// Version `number` of `resource` and the versions before it wait no more.
+pub(super) fn stop_waiting(
+  connection: &Connection,
+  resource: ResourceId,
+  number: VersionNumber,
+) -> Result<(), StoreError> {
+  connection.execute(
+    "DELETE FROM waiting_versions WHERE version_id IN \
+     (SELECT id FROM resource_versions WHERE resource_id = ?1 AND number <= ?2)",
+    params![resource.to_string(), number.get()],
+  )?;
+  Ok(())
 }
 
 /// Keeps `version` of `resource` as the server confirmed it, in `connection`'s transaction: its row, both bodies and

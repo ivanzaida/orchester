@@ -17,6 +17,7 @@ use super::{
 };
 use crate::{
   id::{ResourceId, RunId, StepExecutionId, TaskId},
+  integration::base::RunBaseSource,
   resource::StepKey,
   revision::Revision,
   time::Timestamp,
@@ -30,8 +31,10 @@ pub struct NewRun {
   pub snapshot: RunSnapshot,
   pub branch: BranchName,
   pub base: Revision,
-  /// The branch the user's checkout had at `base`; `None` on a detached HEAD.
+  /// The branch the run starts from and delivers into; `None` when it took the checkout's branch on a detached HEAD.
   pub base_branch: Option<BranchName>,
+  /// Where `base_branch` came from.
+  pub base_source: RunBaseSource,
   /// `None`: the run has no token budget.
   pub budget: Option<TokenBudget>,
   /// Most active agent time the run may use; `None`: no time limit.
@@ -93,6 +96,7 @@ impl Run {
       branch: new.branch,
       base: new.base,
       base_branch: new.base_branch,
+      base_source: new.base_source,
       budget: new.budget,
       max_duration: new.max_duration,
     };
@@ -243,10 +247,16 @@ impl Run {
     &self.created.base
   }
 
-  /// The branch the user's checkout had when the run started: where merging the run brings its
-  /// work. `None` when it had a detached HEAD, or the run was recorded before Orchester kept it.
+  /// The branch the run started from: where merging the run brings its work. `None` when it took the checkout's
+  /// branch on a detached HEAD, or the run was recorded before Orchester kept it.
   pub fn base_branch(&self) -> Option<&BranchName> {
     self.created.base_branch.as_ref()
+  }
+
+  /// Where the run's base branch came from when it started; a later change of its task's or module's base branch
+  /// does not change it.
+  pub fn base_source(&self) -> RunBaseSource {
+    self.created.base_source
   }
 
   /// The token budget in force: the creation budget or the last raised one; `None` when the run

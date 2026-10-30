@@ -389,9 +389,10 @@ fn every_choice(
           .into_iter()
           .flat_map(move |network| {
             [false, true].into_iter().flat_map(move |tools| {
+              let network = network.clone();
               [Platform::Windows, Platform::MacOs]
                 .into_iter()
-                .map(move |platform| (commands, repository, network, tools, platform))
+                .map(move |platform| (commands, repository, network.clone(), tools, platform))
             })
           })
       })

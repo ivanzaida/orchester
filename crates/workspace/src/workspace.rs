@@ -458,14 +458,10 @@ impl Workspace {
     self.db.lock().sends_error_reports()
   }
 
-  /// Whether the *Browser* window opens by itself when an agent starts browsing (Settings › Browser,
-  /// `docs/design/browser.md` decision 14); on until a person turns it off.
-  pub fn browser_window_opens_itself(&self) -> Result<bool, StoreError> {
-    self.db.lock().browser_window_opens_itself()
-  }
-
-  pub fn set_browser_window_opens_itself(&self, opens: bool) -> Result<(), StoreError> {
-    self.db.lock().set_browser_window_opens_itself(opens)
+  /// Keeps a person's choice of *Send error reports* (Settings › General); the app's client and its runners follow it
+  /// at once (`orchester_app::error_reports::turn`), not through this.
+  pub fn set_sends_error_reports(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_sends_error_reports(allowed)
   }
 
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.

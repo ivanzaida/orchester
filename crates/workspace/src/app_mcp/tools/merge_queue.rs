@@ -1,12 +1,13 @@
 //! How the run reads (`get_run`, `list_runs`, `get_daily_report`) tell a run's place in its project's merge queue
-//! (ORC-19, `crate::merge_queue`): queued with its place, syncing, re-checking, integrating its conflicts, waiting for
-//! approval, blocked and why, failed or out of the queue and why, merged, or taken out by a person.
+//! (ORC-19, `crate::merge_queue`): the lane it delivers in, named by its base branch (ORC-406), queued with its place
+//! in that lane, syncing, re-checking, integrating its conflicts, waiting for approval, blocked and why, failed or out
+//! of the queue and why, merged, or taken out by a person.
 
 use std::collections::HashMap;
 
 use orchester_core::{
   id::RunId,
-  merge_queue::{Blocked, Left, QueueEntry, QueueState},
+  merge_queue::{Blocked, Left, QueueEntry, QueueState, lanes},
   store::TaskStore,
   time::Timestamp,
 };
@@ -15,9 +16,10 @@ use serde_json::{Value, json};
 
 use super::wire;
 
-/// `entry`, at `place` among the runs in the queue while it is in it, as the reads give it.
+/// `entry`, at `place` among the runs of its lane in the queue while it is in it, as the reads give it.
 pub(super) fn entry_json(entry: &QueueEntry, place: Option<usize>) -> Value {
   let mut answer = json!({
+    "lane": entry.base.as_ref().map(|base| base.as_str()),
     "state": state_name(&entry.state),
     "since": wire::time(entry.since),
     "place": place,
@@ -92,14 +94,17 @@ pub(super) fn queue_of_day(db: &ProjectDb, day_start: Timestamp) -> Result<Value
   Ok(json!(listed))
 }
 
-/// Each run's place among the runs in the queue, from 1: the one being delivered first.
+/// Each run's place among the runs of its lane in the queue, from 1: the one being delivered first.
 fn places(entries: &[QueueEntry]) -> HashMap<RunId, usize> {
-  let mut queue: Vec<&QueueEntry> = entries.iter().filter(|entry| entry.state.in_queue()).collect();
-  queue.sort_by_key(|entry| !entry.state.delivering());
-  queue
+  lanes(entries)
     .iter()
-    .enumerate()
-    .map(|(index, entry)| (entry.run, index + 1))
+    .flat_map(|lane| {
+      lane
+        .entries
+        .iter()
+        .filter_map(|entry| Some((entry.run, lane.place(entry.run)?)))
+        .collect::<Vec<_>>()
+    })
     .collect()
 }
 

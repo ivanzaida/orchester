@@ -88,7 +88,7 @@ pub fn browser(ctx: &Ctx, permissions: &AgentPermissions) -> Arc<str> {
 
 /// Whether the connection enforces every permission: *Enforced by …* in `success`, else why not in `warning`.
 pub fn status(ctx: &Ctx, permissions: &AgentPermissions, connection: &AgentConnection) -> (Tone, Arc<str>) {
-  let fallback = permissions.effective_network(connection.provider(), Platform::current()) != permissions.network();
+  let fallback = permissions.effective_network(connection.provider(), Platform::current()) != *permissions.network();
   if fallback {
     return (Tone::Warning, ctx.t("agents.cannotBlockNetwork"));
   }

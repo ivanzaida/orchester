@@ -165,7 +165,7 @@ pub enum Rejection {
   Failed {
     detail: String,
   },
-  /// The project's browser cannot be used (protocol 33): no Chromium-based browser is installed, or it could not
+  /// The project's browser cannot be used (protocol 34): no Chromium-based browser is installed, or it could not
   /// start, as `detail` says.
   BrowserUnavailable {
     detail: String,

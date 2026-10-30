@@ -22,6 +22,7 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+  ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   rejection::Rejection,
@@ -268,7 +269,12 @@ pub enum Command {
   /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
   /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.
   EstimateTask { task: TaskId },
-  /// A request of the *Browser* window to the project's browser (protocol 33). Answered with [`Reply::Browser`] once
+  /// The person turned error reports on, with the app's environment and release, or off (`None`), while this runner
+  /// runs (protocol 33): it applies at once. Off drops the reports still waiting to leave, and the runner sends none
+  /// until they are turned on again; a runner started later is told when it starts
+  /// ([`crate::error_reports`]). Answered with [`Reply::ErrorReportsSet`], whether this build sends reports or not.
+  SetErrorReports { reports: Option<ErrorReports> },
+  /// A request of the *Browser* window to the project's browser (protocol 34). Answered with [`Reply::Browser`] once
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
@@ -392,7 +398,7 @@ pub enum Event {
   QuestionChanged { run: RunId, task: TaskId },
   /// The project's browser changed, for a desktop that subscribed to it ([`BrowserCommand::Subscribe`]).
   Browser(BrowserEvent),
-  /// A frame of the tab the window shows: the one event written as a binary frame (`frame`, protocol 33). Only the
+  /// A frame of the tab the window shows: the one event written as a binary frame (`frame`, protocol 34). Only the
   /// latest waits to be written; a newer one replaces it.
   BrowserFrame(ScreencastFrame),
 }
@@ -457,6 +463,8 @@ pub enum Reply {
     task: TaskId,
     outcome: orchester_core::task::estimate::EstimateOutcome,
   },
+  /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
+  ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
   Rejected(Rejection),

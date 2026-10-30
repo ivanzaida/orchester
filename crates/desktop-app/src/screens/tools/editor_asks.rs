@@ -110,9 +110,12 @@ impl ToolEditor {
         discard.on_click(move || ask.set(Ask::Discard)).into()
       });
     }
-    let label = next_version(Some(&entry)).map_or(ctx.t("tools.versionLimit"), |v| {
-      ctx.t_args("tools.publish", [("version", v.get().to_string())])
-    });
+    let label = match next_version(Some(&entry)) {
+      None => ctx.t("tools.versionLimit"),
+      // *Publish for the team* in a shared project (02).
+      Some(_) if crate::screens::hub::team::of(&p.project).is_some() => crate::screens::hub::team::publish_label(ctx),
+      Some(v) => ctx.t_args("tools.publish", [("version", v.get().to_string())]),
+    };
     let publish = ActionButton::new("tool-publish", ButtonKind::Primary, label).icon(Icon::Upload);
     let edit =
       (publish_reason(ctx, Some(&entry), unchanged).is_none() && !outside).then(|| Edit::Publish(entry.clone()));

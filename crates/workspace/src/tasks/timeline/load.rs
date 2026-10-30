@@ -10,7 +10,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::RunId,
   question::AskedQuestions,
-  run::{DecidedToolApproval, PendingToolApproval},
+  run::{AnswerRecord, DecidedToolApproval, PendingToolApproval},
   store::ActivityStore,
 };
 use orchester_store::{KeptAction, ProjectDb, StoreError};
@@ -25,6 +25,8 @@ pub struct Loaded {
   /// The ids of the `pending` requests auto mode's reviewer is judging.
   pub reviewing: Arc<Vec<String>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
+  /// How each request was answered by the run's approval mode, as recorded.
+  pub answers: Arc<Vec<AnswerRecord>>,
   pub questions: Arc<Vec<AskedQuestions>>,
   /// The Orchestrator chat's actions that answer the run's agents, send them a message or continue the run.
   pub orchestrated: Arc<Vec<KeptAction>>,
@@ -37,6 +39,8 @@ pub struct Requests {
   /// The ids of the `pending` requests auto mode's reviewer is judging.
   pub reviewing: Arc<Vec<String>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
+  /// How each request was answered by the run's approval mode, as recorded.
+  pub answers: Arc<Vec<AnswerRecord>>,
   pub questions: Arc<Vec<AskedQuestions>>,
   pub orchestrated: Arc<Vec<KeptAction>>,
 }
@@ -49,6 +53,7 @@ impl Loaded {
       pending: requests.pending,
       reviewing: requests.reviewing,
       decided: requests.decided,
+      answers: requests.answers,
       questions: requests.questions,
       orchestrated: requests.orchestrated,
     }
@@ -74,6 +79,7 @@ pub fn requests_in(repo_root: &Path, run: RunId) -> Result<Requests, StoreError>
     pending: Arc::new(pending),
     reviewing: Arc::new(reviewing),
     decided: Arc::new(db.decided_tool_approvals(run)?),
+    answers: Arc::new(db.request_answers(run)?),
     questions: Arc::new(db.questions(run)?),
     orchestrated: Arc::new(db.run_answer_actions(run)?),
   })

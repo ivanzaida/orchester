@@ -11,13 +11,14 @@ mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
-mod names;
+mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;
 mod refusals;
 mod scenario_names;
 mod settings;
+mod shared_config;
 
 use std::{
   collections::BTreeMap,

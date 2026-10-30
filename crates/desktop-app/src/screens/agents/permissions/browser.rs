@@ -48,10 +48,10 @@ pub(super) fn browser(ctx: &mut Ctx, context: &Context<'_>, asked: Option<Elemen
 }
 
 /// *Browser* with *On* or *Off* and its switch; without Network access the switch stays off and says why.
-fn switch(ctx: &Ctx, context: &Context<'_>, on: bool, network: NetworkAccess) -> Element {
+fn switch(ctx: &Ctx, context: &Context<'_>, on: bool, network: &NetworkAccess) -> Element {
   let state = ctx.t(if on { "agents.on" } else { "agents.off" });
   let toggle = Toggle::new("agent-browser", ToggleKind::Switch, on, ctx.t("agents.browser")).hide_label();
-  let available = network == NetworkAccess::On;
+  let available = matches!(network, NetworkAccess::On);
   let toggle = if available {
     let value = context.fields.permissions.clone();
     toggle.on_change(move |on| {

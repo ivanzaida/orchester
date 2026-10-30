@@ -7,8 +7,7 @@
 //! resource's later versions wait behind it.
 
 use orchester_api::{
-  ErrorCode, Reference as SharedReference, ReferenceTarget as SharedTarget, ResourceCreate, SharedResource,
-  SharedVersion, SharingErrorDetails, VersionContent, VersionPublish,
+  ErrorCode, ResourceCreate, SharedResource, SharedVersion, SharingErrorDetails, VersionContent, VersionPublish,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -27,7 +26,7 @@ use super::{ConfigServer, RemoteResourceStore};
 use crate::sharing::{
   SharingError,
   project::convert,
-  sync::config::{bindings, cache_version, reference, resource as kept_resource},
+  sync::config::{bindings, cache_version, reference, resource as kept_resource, shared_reference},
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
@@ -96,7 +95,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       Err(SharingError::Client(error)) => match (error.code(), error.details()) {
         (Some(ErrorCode::VersionConflict), Some(SharingErrorDetails::Version { latest })) => {
           let latest = latest.number;
-          self.catch_up::<B>(waiting.resource)?;
+          self.catch_up(waiting.resource, waiting.kind)?;
           self.db.record_publish_conflict(waiting.version, latest)?;
           Err(SharingError::VersionConflict { latest })
         }
@@ -234,15 +233,17 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       hash: version.hash.clone(),
       references: version.references.iter().map(reference).collect(),
       local_body: local.body().clone(),
+      // A version this computer published itself never waits for *Use v<N> here*.
+      waits_here: false,
     };
     self.db.confirm_publish::<B>(waiting.version, &confirmed)?;
     Ok(())
   }
 
-  /// Caches the versions of `resource` the server has and this computer does not, as the stream would; a teammate's
-  /// skill is not kept here yet.
-  fn catch_up<B: ResourceBody>(&mut self, resource: ResourceId) -> Result<(), SharingError> {
-    if B::KIND == ResourceKind::Skill {
+  /// Caches the versions of `resource`, of `kind`, the server has and this computer does not, as the stream would: a
+  /// teammate's that widens what agents may do here waits for *Use v<N> here*. A teammate's skill is not kept here yet.
+  fn catch_up(&mut self, resource: ResourceId, kind: ResourceKind) -> Result<(), SharingError> {
+    if kind == ResourceKind::Skill {
       return Ok(());
     }
     let mut after = self.db.latest_version_number(resource)?;
@@ -257,7 +258,14 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
     for version in &versions {
       let bound = bindings::bind_new(&mut self.db, &version.references)?;
-      cache_version::<B>(&mut self.db, version, &bound)?;
+      match kind {
+        ResourceKind::Pipeline => cache_version::<Pipeline>(&mut self.db, version, &bound)?,
+        ResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut self.db, version, &bound)?,
+        ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version, &bound)?,
+        ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version, &bound)?,
+        // Skills are left out above, and agent testing's kinds are never shared.
+        ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => {}
+      }
     }
     Ok(())
   }
@@ -295,18 +303,5 @@ fn base_reference(kept: &VersionReference) -> Option<Reference> {
       role: kept.role.as_deref()?.parse::<SecretKind>().ok()?,
     }),
     ReferenceTarget::Tool(_) => None,
-  }
-}
-
-fn shared_reference(reference: &Reference) -> SharedReference {
-  let target = match reference {
-    Reference::Connection { id, .. } => SharedTarget::Connection { id: *id },
-    Reference::McpServer { id, .. } => SharedTarget::McpServer { id: *id },
-    Reference::Secret { id, .. } => SharedTarget::Secret { id: *id },
-  };
-  SharedReference {
-    target,
-    name: reference.name().to_owned(),
-    role: reference.role().map(str::to_owned),
   }
 }

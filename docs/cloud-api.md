@@ -1,10 +1,11 @@
 # Orchester Cloud API
 
-The JSON API of `orchester-cloud` (`crates/cloud`): accounts, devices, identity tokens, the team server registry and
-invites in flight (C1a, with SA's linking and admin sign-in).
+The JSON API of `orchester-cloud` (`crates/cloud`): accounts, devices, identity tokens, the team server registry,
+invites in flight (C1a, with SA's linking and admin sign-in) and app releases ([App releases](#app-releases)).
 The design is in [architecture/server.md](architecture/server.md), "Orchester Cloud" and "Identity tokens and keys";
 running it is in `docs/cloud-hosting.md` in the private repository `ivanzaida/orchester-cloud`. The wire types are in `orchester-api`'s `cloud` module, and
-the token and key set checks team servers use are in its `identity` feature.
+the token and key set checks team servers use are in its `identity` feature. The release types are in its `releases`
+module, and the check of a release file's signature in its `release-signature` feature.
 
 Two kinds of client call it:
 
@@ -65,14 +66,16 @@ whose pages the app opens in the browser.
 | `email_unconfirmed` | 403 | The password was right, but the email is not confirmed yet |
 | `mfa_required` | 403 | Accepting an invite (or stepping up) needs two-factor authentication, and the account has it off |
 | `session_without_mfa` | 403 | The account has two-factor authentication, but this device signed in without a code: step up with one, or sign in again |
+| `forbidden` | 403 | The token is valid but may not do this: a release token without the `releases:write` scope, or a release admin call from an account that is not Orchester staff ([App releases](#app-releases)) |
 | `not_found` | 404 | No such path, or no such device of the account |
 | `method_not_allowed` | 405 | |
 | `request_timeout` | 408 | The body did not arrive within 10 seconds |
-| `payload_too_large` | 413 | The body is over 1 MiB |
-| `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
+| `payload_too_large` | 413 | The body is over 1 MiB (a release file's part: over its `part_size`) |
+| `unsupported_media_type` | 415 | A body without `Content-Type: application/json` (a release file's part: without `application/octet-stream`) |
+| `range_not_satisfiable` | 416 | A download's `Range` starts at or past the end of the file, or is not one `bytes=<start>-[<end>]` range |
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
-| `conflict` | 409 | The team server is linked by a statement as new as this one, or this statement was used; or two-factor authentication is on already (`POST /me/two-factor`) |
+| `conflict` | 409 | The team server is linked by a statement as new as this one, or this statement was used; or two-factor authentication is on already (`POST /me/two-factor`); or a release's stage does not allow the change ([App releases](#app-releases)) |
 | `too_many_servers` | 409 | The person owns 5 linked team servers, ownerless ones they linked included |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now. The cloud renews its key set itself at every start and every minute while it serves (`docs/cloud-hosting.md` in `ivanzaida/orchester-cloud`, "Keys"), so this means it could not, for example its database failed for weeks |
@@ -402,6 +405,140 @@ the intruder's device out. The way back is the operator's: on proof of the accou
 turns it off, after which the person changes the password and signs the other devices out. Orchester Cloud adds no
 self-service path for this, since any path that skips the code is one an intruder could take as well.
 
+## App releases
+
+Added 2026-10-30 (ORC-411): how the desktop app learns of and fetches a new version, how CI uploads one, and how
+Orchester staff steer it. The types are in `orchester_api::releases`, the calls on `orchester_api::client::CloudClient`.
+Three kinds of caller:
+
+- **anonymous**: the update check and downloads need no sign-in, so an app used only locally updates too;
+- **`releases:write`**: CI, with `Authorization: Bearer <release token>`, a cloud API token whose scopes include
+  `releases:write`. The operator makes it (`docs/cloud-hosting.md` in `ivanzaida/orchester-platform`); it is not a
+  device token and signs nobody in. A device token, or a token without the scope, is `403 forbidden`;
+- **admin**: the device token of an Orchester staff account (the web front's session) that is a two-factor session.
+  An account that is not staff is `403 forbidden`; staff without two-factor authentication `403 mfa_required`, and a
+  device that signed in without a code `403 session_without_mfa`.
+
+### Versions, channels and stages
+
+- **Version**: `MAJOR.MINOR.PATCH` with an optional pre-release suffix (`0.5.0-beta.1`), ordered as Semantic Versioning
+  2.0.0 orders them. Numbers have no leading zeros and fit in 32 bits, pre-release parts are `[0-9A-Za-z-]+` joined by
+  `.`, build metadata (`+…`) is refused, at most 64 characters: every version has one spelling, which is also the one
+  in paths and in the signed message.
+- **Platforms** `windows`, `macos`; **architectures** `x86_64`, `aarch64` (Rust's `std::env::consts::ARCH`).
+- **File names**: 1–128 characters of ASCII letters, digits, `.`, `_`, `+` and `-`, not starting with `.` or `-`, so
+  they go into URL paths as they are.
+- **Channels** `stable` and `beta`. A Beta install is offered every published release; a Stable install only releases
+  staff promoted to Stable, at their rollout percentage. A version with a pre-release suffix is Beta only: it cannot be
+  promoted (`422 invalid`).
+- **Stages** (`stage` in the admin's shapes): `draft` while CI uploads; `beta` once finalized; `stable` with `percent`
+  (0–100) and `paused` once promoted (it stays on Beta for every Beta install); `withdrawn`, offered to nobody, its
+  files no longer served (`404`). Withdrawing is final; a fixed build is a new version.
+
+### The signed message
+
+CI signs each file with an Ed25519 release key. The signature is over these exact bytes (`SignedFile::message`):
+seven lines of ASCII, each ended by one `\n` (also the last), no other whitespace, the size in decimal without leading
+zeros, the SHA-256 of the file's bytes in lowercase hex:
+
+```text
+orchester-release-file-v1
+version=0.4.0
+platform=windows
+arch=x86_64
+name=Orchester-0.4.0-windows-x86_64.msi
+size=48213504
+sha256=1055256c88ce265e44b7f378877ffe1c8e85c7670c4fa552f69f2e691a682490
+```
+
+So a signature vouches for one file of one version for one platform and architecture: a valid file moved to another
+release, name or platform no longer verifies. Signatures travel as 128 lowercase hex characters, SHA-256 digests as
+64. The app checks the downloaded file's size and SHA-256 and then the signature with the release keys built into it,
+before it runs anything; the cloud checks the same at finalizing, with the same public keys
+(`AcceptedReleaseKeys::verify`). Fixed vectors (RFC 8032's first test key) are in `crates/api/tests/releases/`.
+
+**Key ids and rotation.** A release key's id is the first 8 bytes of SHA-256(`"orchester-release-key\0"` ‖ the public
+key's 32 bytes), as 16 lowercase hex characters. Every declared and offered file names the `key_id` its signature was
+made with. The app holds a short list of accepted public keys (the current one and, while it replaces another, the one
+before); a signature naming a key not on the list is refused (`unknown_key`), whatever it says. To rotate: ship an app
+version that accepts both keys, then sign with the new key; once installs have moved past the versions that know only
+the old key, drop it from the list. The private key lives only in CI's secret store.
+
+### Rollout
+
+An install is in a Stable release's rollout when `bucket < percent`, where `bucket` is the first 8 bytes, big-endian,
+of SHA-256(`"orchester-rollout-v1\0"` ‖ the install id as 36 lowercase hyphenated characters ‖ `"\0"` ‖ the version as
+written), modulo 100 (`releases::rollout_bucket`). Raising the percentage only adds installs; each version spreads its
+buckets anew, so the same installs are not always first. At 0 % nobody gets it, at 100 % everybody.
+
+**The install id** is the app's `InstallationId` (`orchester_core::id`), the UUID of its application database
+(`orchester.db`), which already names its secrets in the OS keychain. It names no person or computer. No other
+anonymous id existed before this contract: the active-installs count of Launch readiness (ORC-133, in the platform
+repository) counts the distinct install ids of update checks, so the two use this one id. A development build and a QA
+copy have databases, and so ids, of their own.
+
+### Endpoints
+
+| Method and path | Auth | Request | Response | Errors |
+| --- | --- | --- | --- | --- |
+| `GET /updates/check?version&platform&arch&channel&install_id` | anonymous | the query, every field required: the app's version, platform, architecture, channel and install id | `200 { update: null }` when nothing newer is offered; `200 { update: { version, channel, notes, critical, published_at, files: [{ name, platform, arch, url, size, sha256, key_id, signature }] } }` | `400 bad_request` (a field missing, unknown or repeated), `422 invalid` (a version, platform, architecture, channel or id that is not one), `429` |
+| `GET /releases/{version}/files/{name}` | anonymous | `Range: bytes=<start>-[<end>]` to resume, optional | `200` the whole file, or `206` with `Content-Range: bytes <start>-<end>/<size>`; both with `Content-Type: application/octet-stream`, `Content-Length`, `Accept-Ranges: bytes` and `ETag: "<sha256>"` | `404 not_found` (no such release or file, a draft, a withdrawn release, deleted files), `416 range_not_satisfiable`, `429` |
+| `POST /releases` | `releases:write` | `{ version, notes, critical? }`: notes in Markdown, at most 64 KiB | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` |
+| `POST /releases/{version}/files` | `releases:write` | `{ name, platform, arch, size, sha256, key_id, signature }` | `201 FileUpload` for a new file, `200 FileUpload` for the same declaration again (resume) | `403 forbidden`, `404` (no such draft), `409 conflict` (the release is not a draft, or another declaration under this name, or a second file for the same platform, architecture and name), `422 invalid` (size 0 or over 2 GiB) |
+| `PUT /releases/{version}/files/{name}/parts/{part}` | `releases:write` | the part's bytes, `Content-Type: application/octet-stream`: `part_size` bytes, the last part the rest | `200 FileUpload`; a part sent again replaces it | `403 forbidden`, `404` (no such draft or declared file), `409 conflict` (not a draft), `413 payload_too_large`, `415`, `422 invalid` (a part number past `parts`, or a part of the wrong length) |
+| `POST /releases/{version}/finalize` | `releases:write` | | `200 { version, files: [{ name, result: "accepted" }` or `{ name, result: "rejected", reason }] }` | `403 forbidden`, `404` (no such release), `409 conflict` (not a draft), `422 invalid` (no file declared) |
+| `GET /admin/releases` | admin | | `{ releases: [ReleaseSummary] }`, newest version first | `403 forbidden`, `403 mfa_required`, `403 session_without_mfa` |
+| `GET /admin/releases/{version}` | admin | | `{ release: ReleaseDetails }` | as above, `404` |
+| `POST /admin/releases/{version}/promote` | admin | `{ percent }` | `200 { release: ReleaseSummary }`, stage `stable`, not paused | as above, `404`, `409 conflict` (not `beta`), `422 invalid` (a pre-release version; a percent over 100) |
+| `PUT /admin/releases/{version}/rollout` | admin | `{ percent }` | `200 { release }` | as above, `404`, `409 conflict` (not `stable`), `422 invalid` |
+| `POST /admin/releases/{version}/pause` | admin | | `200 { release }`, `paused: true` | as above, `404`, `409 conflict` (not `stable`, or paused already) |
+| `POST /admin/releases/{version}/resume` | admin | | `200 { release }`, `paused: false` | as above, `404`, `409 conflict` (not `stable`, or not paused) |
+| `POST /admin/releases/{version}/withdraw` | admin | | `200 { release }`, stage `withdrawn` | as above, `404`, `409 conflict` (a draft, or withdrawn already) |
+| `PATCH /admin/releases/{version}` | admin | `{ notes?, critical? }` | `200 { release }` | as above, `404`, `409 conflict` (withdrawn), `422 invalid` (notes over 64 KiB) |
+| `DELETE /admin/releases/{version}/files` | admin | | `204`; the release stays in the list with `files_deleted: true` | as above, `404`, `409 conflict` (the release is still offered: see below) |
+
+Shapes of the admin:
+
+```text
+ReleaseSummary  { version, stage: "draft"|"beta"|"stable"|"withdrawn", percent?, paused? (with stable), critical,
+                  created_at, published_at: ms | null, installs, files_deleted }
+ReleaseDetails  { …ReleaseSummary, notes, files: [AdminFile], adoption: [{ day: "YYYY-MM-DD", installs }],
+                  activity: [{ at, actor: string | null, action, percent? | critical? }] }
+AdminFile       { name, platform, arch, size, sha256, key_id, downloads }
+FileUpload      { name, size, part_size, parts, received: [part numbers, ascending] }
+```
+
+`installs` counts the distinct install ids whose newest update check in the last 30 days named this version;
+`adoption` counts, for each of the last 30 days (UTC, oldest first), the install ids whose checks that day named it;
+`downloads` counts downloads that started at byte 0, so resumed ranges do not count twice. `activity` is newest first;
+`action` is one of `created`, `rejected` (a finalize that rejected a file), `published`, `promoted` and `percent_set`
+(with `percent`), `paused`, `resumed`, `withdrawn`, `critical_set` (with `critical`), `notes_edited`,
+`files_deleted`; `actor` is the staff member's display name, `null` for CI.
+
+**What the check offers.** Among releases newer than the asked version, for the asked platform and architecture
+(a release without a file for them is skipped): on Beta, the newest in stage `beta` or `stable`; on Stable, the newest
+in stage `stable` that is not paused and whose rollout includes the install. `critical` is true when the offered
+release or any release between the asked version and it that this install could have been offered is marked
+critical, so skipping a critical release still installs promptly. `files` are the offered release's files for that
+platform and architecture; `url` is the absolute URL of its download on the cloud's API address. An asked version the
+cloud does not know is still compared by order. Each check counts the install id toward `installs` and `adoption`.
+
+**Uploading a release.** CI creates the draft, then declares each file with its size, SHA-256, key id and signature.
+The answer gives the cloud's `part_size` (8 MiB) and the number of parts (`size / part_size`, rounded up). CI sends
+each part with `PUT …/parts/{part}`, numbered from 0, part `i` holding bytes `i * part_size` on. These bodies are exempt
+from the 1 MiB request limit up to `part_size`, and from the 10 seconds a body must arrive in (5 minutes). An
+interrupted upload resumes: declaring the same file again answers `received`, and CI sends only the parts missing.
+Then `POST …/finalize` checks every declared file: all its parts arrived (`incomplete` otherwise), the bytes' SHA-256 is
+the declared one (`sha256_mismatch`), the key id is one the cloud accepts (`unknown_key`) and that key verifies the
+signature over the signed message built from the version in the path and the declaration (`signature_mismatch`). When
+every file is accepted the release is published: stage `beta`, `published_at` set. Otherwise it stays a draft, each
+rejected file's parts and declaration are dropped, and CI declares and sends those again. A draft not finalized
+within 7 days is deleted with its parts.
+
+**Deleting an old release's files** frees their storage. It is allowed for a draft, a withdrawn release, and a release
+older than the newest `stable` release that is at 100 % and not paused; any other answers `409 conflict`. The
+release's row, counts and activity stay.
+
 ## Rate limits
 
 | What | Limit |
@@ -417,6 +554,8 @@ self-service path for this, since any path that skips the code is one an intrude
 | New invites | 100 a day for all the servers one person owns, ownerless ones they linked included |
 | Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
 | Linked servers | 5 per person (`409 too_many_servers`), ownerless ones they linked included; not a rate |
+| Update checks (`GET /updates/check`) | 12 an hour per install id, 600 an hour per client address and 3,000 per IPv6 /48 |
+| Downloads (`GET /releases/…/files/…`) | 60 an hour per client address and 300 per IPv6 /48, resumed ranges included |
 
 The counters are in memory, but for the daily cap on wrong two-factor codes. A restart clears them; the cloud runs as
 one instance in v1. A client address is its

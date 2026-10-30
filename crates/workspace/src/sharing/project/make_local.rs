@@ -1,7 +1,9 @@
 //! *Make local* (`docs/architecture/server.md`, "Migration"; design 10.14 G, H, `woioY`): the person's
 //! claims are released first when the server can be reached, and otherwise go stale on their own;
 //! then every cached task becomes a local task of the project with its id, number and organization
-//! as last synced. The membership stays: joining again later works. The server project is unchanged
+//! as last synced, and every resource of the team's a local resource with every cached version, so past runs keep
+//! what they pinned; the references the versions named on their publishers' computers and this computer's bindings of
+//! them go. The membership stays: joining again later works. The server project is unchanged
 //! for everyone else. The tasks kept *Not shared* when the project joined return to the list with
 //! numbers after the highest (10.26 C); they are returned with their keys before and after. It works without the
 //! server too: when this computer signed out of it, or it is no longer in the list, nothing is released.

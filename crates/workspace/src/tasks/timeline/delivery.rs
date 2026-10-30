@@ -74,7 +74,7 @@ pub fn places<R: AsRef<Row>>(rows: &[R], lines: &[DeliveryLine]) -> Vec<usize> {
             ItemKind::Mark(_) => item.at > line.at,
             _ => false,
           },
-          Row::NotStarted { .. } | Row::Agent(_) | Row::Entry { .. } => false,
+          Row::NotStarted { .. } | Row::Agent(_) | Row::Approvals { .. } | Row::Entry { .. } => false,
         })
         .unwrap_or(rows.len())
     })

@@ -1,36 +1,19 @@
-//! The project's base branch (Project settings › General › *Base branch*, ORC-81): the branch its new runs start
-//! from, and so the one they deliver into. By default it is the branch the person's checkout has checked out when a
-//! run starts, as before the setting existed; set, it is a branch of the repository, whose tip a new run starts from
-//! wherever the checkout is. A run records the branch it started from (`runs.base_branch`) and every delivery follows
-//! that record, so a change of the setting reaches only the runs that start after it. A project whose base branch is
-//! set lands a run beside the checkout while the checkout has another branch ([`Landing`]).
+//! A run's base branch: the branch it starts from, and so the one it delivers into. A task's base branch, else its
+//! module's, else the branch the person's checkout has checked out when the run starts ([`resolve`]); a branch set is
+//! a branch of the repository, whose tip a new run starts from wherever the checkout is. A run records the branch it
+//! started from and where it came from (`runs.base_branch`, `runs.base_source`) and every delivery follows that
+//! record, so a change of a task's or module's base branch reaches only the runs that start after it. A run whose
+//! base branch was set lands beside the checkout while the checkout has another branch ([`Landing`]).
+
+mod choice;
 
 use std::path::Path;
 
 use thiserror::Error;
 
+pub use self::choice::{BaseChoice, RunBaseSource, TaskBase, resolve};
 use super::{GitError, git::Git};
 use crate::{command::CommandRunner, revision::Revision, run::BranchName};
-
-/// Where the project's new runs start from.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum BaseBranchSetting {
-  /// The branch the checkout has checked out when a run starts, at its `HEAD`.
-  #[default]
-  CheckedOut,
-  /// This branch, at its tip, wherever the checkout is.
-  Branch(BranchName),
-}
-
-impl BaseBranchSetting {
-  /// The branch set; `None` for the checked-out branch.
-  pub const fn branch(&self) -> Option<&BranchName> {
-    match self {
-      Self::CheckedOut => None,
-      Self::Branch(branch) => Some(branch),
-    }
-  }
-}
 
 /// A remote-tracking branch with no local branch of its name: choosing it as the base branch creates that local
 /// branch, tracking it ([`create_tracking_branch`]).
@@ -124,6 +107,44 @@ pub fn create_tracking_branch(
     .map(drop)
 }
 
+/// A branch a person picks as a task's or a module's base branch among the repository's ([`branch_choices`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BranchPick {
+  Local(BranchName),
+  /// A remote-tracking branch, whose local branch the pick creates.
+  Remote(RemoteBranch),
+}
+
+/// Why a branch picked is not taken.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum BranchPickError {
+  /// The local branch picked is gone.
+  #[error("the branch {0} does not exist")]
+  Gone(BranchName),
+  #[error(transparent)]
+  Git(#[from] GitError),
+}
+
+/// The branch `pick` names in the repository at `repo`: a remote-tracking one creates its local branch first, unless
+/// the repository has it by now; a local branch that is gone is refused.
+pub fn take_branch(
+  runner: &impl CommandRunner,
+  git: &Path,
+  (repo, pick): (&Path, &BranchPick),
+) -> Result<BranchName, BranchPickError> {
+  let choices = branch_choices(runner, git, repo)?;
+  match pick {
+    BranchPick::Local(branch) if choices.has_local(branch) => Ok(branch.clone()),
+    BranchPick::Local(branch) => Err(BranchPickError::Gone(branch.clone())),
+    BranchPick::Remote(remote) => {
+      if !choices.has_local(&remote.local) {
+        create_tracking_branch(runner, git, (repo, remote))?;
+      }
+      Ok(remote.local.clone())
+    }
+  }
+}
+
 /// Why a new run does not start on the base branch set.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum RunBaseError {
@@ -146,20 +167,21 @@ pub fn set_branch_tip(
 /// Where merging a run may land it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Landing {
-  /// Only in the checkout, which must have the run's base branch checked out: a project that follows the
-  /// checked-out branch, as before the setting existed.
+  /// Only in the checkout, which must have the run's base branch checked out: a run that took the checked-out
+  /// branch.
   Checkout,
   /// In the checkout while it has the run's base branch checked out; else beside it, on the branch itself, without
-  /// switching or touching the checkout: a project whose base branch is set.
+  /// switching or touching the checkout: a run whose base branch was set.
   BesideOtherBranch,
 }
 
 impl Landing {
-  /// How a project with the base branch `setting` lands its runs.
-  pub const fn of(setting: &BaseBranchSetting) -> Self {
-    match setting {
-      BaseBranchSetting::CheckedOut => Self::Checkout,
-      BaseBranchSetting::Branch(_) => Self::BesideOtherBranch,
+  /// How a run whose base branch came from `source` lands.
+  pub const fn of(source: RunBaseSource) -> Self {
+    if source.set() {
+      Self::BesideOtherBranch
+    } else {
+      Self::Checkout
     }
   }
 
