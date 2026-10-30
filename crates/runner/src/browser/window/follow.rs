@@ -1,13 +1,19 @@
 //! Following the browser for the window: each tab's screencast frames, loading and dialogs, and the browser's own
 //! reports of tabs that changed or closed.
 
-use std::sync::Arc;
+use std::{
+  sync::{Arc, Weak},
+  time::Duration,
+};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use orchester_ipc::browser::{BrowserDialog, BrowserEvent, DialogKind, TabOwner};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
-use tokio::sync::mpsc;
+use tokio::{
+  sync::{mpsc, oneshot},
+  time::Instant,
+};
 
 use super::{Window, tab_id};
 use crate::browser::{
@@ -15,11 +21,20 @@ use crate::browser::{
   tabs::{ClosedBy, Tabs},
 };
 
+/// How long after a target closed in a browser's own window the rest of a closing window's tabs have to close too.
+const WINDOW_CLOSING: Duration = Duration::from_millis(500);
+
 /// One tab of the browser to follow: which, on what session, and whose.
 pub(in crate::browser) struct Followed {
   pub(in crate::browser) target: TargetId,
   pub(in crate::browser) session: SessionId,
   pub(in crate::browser) owner: TabOwner,
+}
+
+/// Who learns that a browser in a window of its own closed that window or ended ([`follow_window_targets`]).
+pub(in crate::browser) struct WindowWatch {
+  pub(in crate::browser) cdp: Weak<Cdp>,
+  pub(in crate::browser) closed: oneshot::Sender<()>,
 }
 
 /// Follows one tab's `events` until the tab is no longer kept: acknowledges and keeps its screencast frames, notes
@@ -125,23 +140,95 @@ pub(in crate::browser) async fn follow_targets(
   generation: u64,
 ) {
   while let Some(event) = events.recv().await {
-    let Some(target) = event
-      .params
-      .get("targetId")
-      .or_else(|| event.params.pointer("/targetInfo/targetId"))
-      .and_then(Value::as_str)
-      .map(TargetId::from)
-    else {
+    let Some(target) = target_of(&event) else {
       continue;
     };
     match event.method.as_str() {
-      "Target.targetDestroyed" if tabs.lock().closed_by(&target, ClosedBy::Browser) => {
-        window.forget(&target);
-        window.changed();
-      }
-      "Target.targetInfoChanged" if tabs.lock().get(&target).is_some() => window.changed(),
+      "Target.targetDestroyed" => forget_destroyed(&target, &tabs, &window),
+      "Target.targetInfoChanged" => page_reported(&event, &target, &tabs, &window),
       _ => {}
     }
   }
   window.ended(generation);
+}
+
+/// [`follow_targets`] for a browser in a window of its own, which the person can close. The window's tabs are reported
+/// closed one by one before anything else shows that it closed, and on macOS the browser even runs on without a window,
+/// so a closed target is only taken for the person's single tab once [`WINDOW_CLOSING`] passed and the browser still
+/// has a page. Otherwise, or when the connection ends, `watch` is told, with every tab still kept to reopen it.
+pub(in crate::browser) async fn follow_window_targets(
+  mut events: mpsc::UnboundedReceiver<CdpEvent>,
+  tabs: Arc<Mutex<Tabs>>,
+  window: Arc<Window>,
+  watch: WindowWatch,
+) {
+  let mut destroyed = Vec::new();
+  let mut settles = Instant::now();
+  loop {
+    let event = tokio::select! {
+      event = events.recv() => event,
+      () = tokio::time::sleep_until(settles), if !destroyed.is_empty() => {
+        if !has_a_page(&watch.cdp).await {
+          break;
+        }
+        for target in destroyed.drain(..) {
+          forget_destroyed(&target, &tabs, &window);
+        }
+        continue;
+      }
+    };
+    let Some(event) = event else {
+      break;
+    };
+    let Some(target) = target_of(&event) else {
+      continue;
+    };
+    match event.method.as_str() {
+      "Target.targetDestroyed" => {
+        destroyed.push(target);
+        settles = Instant::now() + WINDOW_CLOSING;
+      }
+      "Target.targetInfoChanged" => page_reported(&event, &target, &tabs, &window),
+      _ => {}
+    }
+  }
+  if watch.closed.send(()).is_err() {
+    tracing::debug!("nothing waits for the browser's window to close any more");
+  }
+}
+
+/// Whether the browser answers that it has a page; one that does not answer has none to go on with.
+async fn has_a_page(cdp: &Weak<Cdp>) -> bool {
+  let Some(cdp) = cdp.upgrade() else {
+    return false;
+  };
+  cdp
+    .targets()
+    .await
+    .is_ok_and(|listed| listed.iter().any(|target| target.kind == "page"))
+}
+
+/// The target a browser's event is about.
+fn target_of(event: &CdpEvent) -> Option<TargetId> {
+  event
+    .params
+    .get("targetId")
+    .or_else(|| event.params.pointer("/targetInfo/targetId"))
+    .and_then(Value::as_str)
+    .map(TargetId::from)
+}
+
+fn forget_destroyed(target: &TargetId, tabs: &Mutex<Tabs>, window: &Window) {
+  if tabs.lock().closed_by(target, ClosedBy::Browser) {
+    window.forget(target);
+    window.changed();
+  }
+}
+
+/// Keeps what the browser reports of `target`'s page, and tells the window when the tab is kept.
+fn page_reported(event: &CdpEvent, target: &TargetId, tabs: &Mutex<Tabs>, window: &Window) {
+  let info = |field: &str| event.params["targetInfo"][field].as_str().unwrap_or_default();
+  if tabs.lock().reported(target, info("title"), info("url")) {
+    window.changed();
+  }
 }

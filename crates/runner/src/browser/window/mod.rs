@@ -7,6 +7,7 @@
 mod follow;
 mod input;
 mod order;
+mod restart;
 mod select;
 mod serve;
 
@@ -28,9 +29,12 @@ use tokio::{
   time::MissedTickBehavior,
 };
 
-pub(super) use self::follow::{Followed, follow_tab, follow_targets};
 pub use self::order::Arrived;
 use self::order::InputLines;
+pub(super) use self::{
+  follow::{Followed, WindowWatch, follow_tab, follow_targets, follow_window_targets},
+  restart::Starter,
+};
 use super::{
   cdp::{Cdp, SessionId, TargetId},
   running::Running,
@@ -245,7 +249,7 @@ pub(super) async fn publish(cdp: Arc<Cdp>, tabs: Arc<Mutex<Tabs>>, window: Arc<W
 
 /// The browser's state now: its tabs with their titles and addresses as the browser lists them.
 async fn state(cdp: &Cdp, tabs: &Mutex<Tabs>, window: &Window, mode: BrowserMode) -> BrowserState {
-  // Unlisted, the tabs go without titles and addresses; the next change sends them again.
+  // Unlisted, the tabs keep the titles and addresses last reported; the next change sends them again.
   let listed = cdp.targets().await.unwrap_or_else(|error| {
     tracing::warn!(%error, "the browser's tabs could not be listed for the window");
     Vec::new()
@@ -259,8 +263,8 @@ async fn state(cdp: &Cdp, tabs: &Mutex<Tabs>, window: &Window, mode: BrowserMode
       BrowserTab {
         id: tab_id(&tab.target),
         owner: tab.owner,
-        title: info.map(|info| info.title.clone()).unwrap_or_default(),
-        url: info.map(|info| info.url.clone()).unwrap_or_default(),
+        title: info.map_or_else(|| tab.title.clone(), |info| info.title.clone()),
+        url: info.map_or_else(|| tab.url.clone(), |info| info.url.clone()),
         loading: tab.loading,
       }
     })

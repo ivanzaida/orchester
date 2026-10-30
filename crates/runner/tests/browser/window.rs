@@ -1,9 +1,11 @@
 //! The *Browser* window's side of the project's browser with a real browser: the state a subscribed desktop follows,
 //! a frame of the tab shown, the person's click and typing, `<select>` lists and dialogs drawn by the window, the
 //! person's own tabs apart from runs', frames dropped rather than queued, and the report that an agent started
-//! browsing; navigation and the restart that reopens the tabs are in [`restart`].
+//! browsing; navigation and the restart that reopens the tabs are in [`restart`], and the browser's own window closing
+//! in [`window_closed`].
 
 mod restart;
+mod window_closed;
 
 use std::time::Duration;
 

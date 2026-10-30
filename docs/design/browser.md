@@ -39,8 +39,8 @@ time.
    run ends (completed, merged, cancelled, failed); pausing keeps them.
 7. **A visible Chromium window only for what frames cannot do.** *Open in a browser window* restarts the project's
    browser headed with the same profile (a profile is held by one browser process at a time) for passkeys, a
-   password manager, a site that refuses headless browsers; *Back to Orchester* restarts it headless and reopens the
-   tabs by their URLs.
+   password manager, a site that refuses headless browsers; *Back to Orchester*, or the person closing that window,
+   restarts it headless and reopens the tabs by their URLs.
 8. **Off unless the profile allows it.** A new agent profile permission *Browser* (off by default) with a list of
    allowed sites. Turning it on or adding a site widens what agents may do, so over MCP only a person does it
    (`person_only`, as other widenings).
@@ -222,7 +222,11 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   cancels or stops it while no task runs it; a merged run had completed. Pausing, a limit, a wait for a person and an
   interruption keep them.
 - Stopping, as the runner exits: `Browser.close`, then the process tree if it has not exited within 5 s. A browser
-  that ended on its own starts again at the next use, without the tabs it had.
+  that ended on its own starts again at the next use, without the tabs it had. A browser in a window of its own that
+  ended, or has no page left (on macOS it runs on with its window closed), starts again at once, headless, with its
+  tabs, as *Back to Orchester* does; a run's next call by a tab's old id reaches the tab reopened. Tabs the browser
+  reports closed wait 500 ms for that: the tabs of a window that closes are reported one by one first. If it cannot
+  start again, the window hears that no tabs are left and a run's next call says why.
 - Platform code (finding the program) lives in `orchester-exec` behind `cfg(target_os)`; the process tree is held and
   ended as the runner's other children are.
 

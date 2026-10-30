@@ -22,7 +22,6 @@ use super::{
 use crate::browser::{
   BrowserError, ProjectBrowser,
   cdp::{Cdp, CdpError, SessionId, TargetId},
-  running::Running,
   tabs::ClosedBy,
 };
 
@@ -195,55 +194,6 @@ impl ProjectBrowser {
     select::choose(&reached.cdp, &reached.session, list, index).await
   }
 
-  /// Starts the browser again on the same profile, headless or in a window of its own as `mode` says, and reopens
-  /// its tabs by their addresses for the same owners. The tabs get new ids, the tab shown stays the one shown, and the
-  /// window learns all of that at once when the tabs are back, before this answers: until then it keeps what it shows.
-  /// Nothing is screencast until it asks.
-  async fn restart(&self, mode: BrowserMode) -> Result<(), BrowserError> {
-    let mut running = self.running.lock().await;
-    self.window.restarting();
-    let restarted = self.start_again(&mut running, mode).await;
-    self.window.restarted(running.as_ref()).await;
-    restarted
-  }
-
-  async fn start_again(&self, running: &mut Option<Running>, mode: BrowserMode) -> Result<(), BrowserError> {
-    let reopen = match running.take() {
-      Some(current) => {
-        let reopen = reopened(&current, self.window.shown()).await;
-        current.stop().await;
-        reopen?
-      }
-      None => Vec::new(),
-    };
-    self.window.show(None);
-    let profile = self.profile.clone()?;
-    let found = self.program().await?;
-    let started = running.insert(Running::start(&found, &profile, mode, &self.window).await?);
-    let mut failed = None;
-    for tab in reopen {
-      let opened = match started.open(tab.owner).await {
-        Ok((target, session)) => {
-          if tab.shown {
-            let session = session.clone();
-            self.window.show(Some(Shown { target, session }));
-          }
-          if tab.url == "about:blank" {
-            Ok(())
-          } else {
-            go_to(&started.cdp, &session, &tab.url).await
-          }
-        }
-        Err(error) => Err(error),
-      };
-      if let Err(error) = opened {
-        tracing::warn!(%error, "a tab was not reopened after the browser's restart");
-        failed.get_or_insert(error);
-      }
-    }
-    failed.map_or(Ok(()), Err)
-  }
-
   /// The connection and session of `tab`, any of the browser's tabs; none while the browser does not run.
   async fn window_tab(&self, tab: &BrowserTabId) -> Result<WindowTab, BrowserError> {
     let target = TargetId::from(tab.as_str());
@@ -265,35 +215,6 @@ impl ProjectBrowser {
       None => Err(BrowserError::NoSuchTab(target)),
     }
   }
-}
-
-/// A tab of a browser that restarts, to open again.
-struct Reopened {
-  owner: TabOwner,
-  url: String,
-  /// The window shows it.
-  shown: bool,
-}
-
-/// Each tab of `running` with its owner and address, and whether it is the tab `shown`.
-async fn reopened(running: &Running, shown: Option<Shown>) -> Result<Vec<Reopened>, BrowserError> {
-  let listed = running.cdp.targets().await?;
-  Ok(
-    running
-      .tabs
-      .lock()
-      .all()
-      .iter()
-      .map(|tab| Reopened {
-        owner: tab.owner,
-        url: listed
-          .iter()
-          .find(|info| info.id == tab.target)
-          .map_or_else(|| "about:blank".to_owned(), |info| info.url.clone()),
-        shown: shown.as_ref().is_some_and(|shown| shown.target == tab.target),
-      })
-      .collect(),
-  )
 }
 
 async fn start_screencast(cdp: &Cdp, session: &SessionId, viewport: Viewport) -> Result<(), BrowserError> {
@@ -335,7 +256,7 @@ async fn stop_screencast(cdp: &Cdp, session: &SessionId) {
 
 /// Sends the tab of `session` to `url` without waiting for its load: the window shows it loading. An address the
 /// network does not reach opens the browser's own error page in the tab, which the person sees there.
-async fn go_to(cdp: &Cdp, session: &SessionId, url: &str) -> Result<(), BrowserError> {
+pub(super) async fn go_to(cdp: &Cdp, session: &SessionId, url: &str) -> Result<(), BrowserError> {
   let navigated = cdp.call(Some(session), "Page.navigate", json!({ "url": url })).await?;
   if let Some(reason) = navigated.get("errorText").and_then(Value::as_str) {
     tracing::debug!(url, reason, "the person's address did not load");

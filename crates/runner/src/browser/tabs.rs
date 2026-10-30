@@ -30,8 +30,18 @@ pub(super) struct Tabs {
   current: HashMap<RunId, TargetId>,
   /// Each run's tabs that someone other than the run closed, until the run ends.
   closed: HashMap<RunId, Vec<(TargetId, ClosedBy)>>,
+  /// The tabs of the browsers before this one, by the id each has now: a run still names them so.
+  moved: HashMap<TargetId, TargetId>,
   /// Held by each run's tab's log follower while it runs.
   followers: Arc<()>,
+}
+
+/// What a browser that starts again keeps of the tabs of the one before, besides the tabs themselves.
+#[derive(Default)]
+pub(super) struct Remembered {
+  current: HashMap<RunId, TargetId>,
+  closed: HashMap<RunId, Vec<(TargetId, ClosedBy)>>,
+  moved: HashMap<TargetId, TargetId>,
 }
 
 /// Who closed a tab, other than the run whose it was.
@@ -47,6 +57,9 @@ pub(super) struct Tab {
   pub(super) target: TargetId,
   pub(super) owner: TabOwner,
   pub(super) session: SessionId,
+  /// The title and address the browser last reported, all that is left of them once it ended.
+  pub(super) title: String,
+  pub(super) url: String,
   state: Arc<TabState>,
   /// Its page is loading, as the tab's events last said.
   pub(super) loading: bool,
@@ -73,6 +86,7 @@ impl Tabs {
       tabs: Vec::new(),
       current: HashMap::new(),
       closed: HashMap::new(),
+      moved: HashMap::new(),
       followers: Arc::new(()),
     }
   }
@@ -92,11 +106,50 @@ impl Tabs {
       target,
       owner,
       session,
+      title: String::new(),
+      url: "about:blank".to_owned(),
       state,
       loading: false,
       window_follower,
       cdp: Weak::clone(&self.cdp),
     });
+  }
+
+  /// What a browser that starts again in place of this one keeps of its tabs ([`Tabs::remember`]).
+  pub(super) fn remembered(&self) -> Remembered {
+    Remembered {
+      current: self.current.clone(),
+      closed: self.closed.clone(),
+      moved: self.moved.clone(),
+    }
+  }
+
+  /// Takes over what the browser before kept of its tabs, `reopened` here under new ids: a run's next call by an old id
+  /// reaches the tab reopened from it, and its current tab stays the same page. An old id of a tab not reopened goes.
+  pub(super) fn remember(&mut self, before: Remembered, reopened: Vec<(TargetId, TargetId)>) {
+    let reopened: HashMap<TargetId, TargetId> = reopened.into_iter().collect();
+    let now = |tab: &TargetId| reopened.get(tab).cloned();
+    self.closed = before.closed;
+    let current = before.current.iter();
+    self.current = current.filter_map(|(run, tab)| Some((*run, now(tab)?))).collect();
+    let moved = before.moved.iter();
+    self.moved = moved.filter_map(|(old, tab)| Some((old.clone(), now(tab)?))).collect();
+    self.moved.extend(reopened);
+  }
+
+  /// The id `target` has now: a tab of a browser before this one by the id it was reopened under, any other as it is.
+  pub(super) fn now(&self, target: &TargetId) -> TargetId {
+    self.moved.get(target).unwrap_or(target).clone()
+  }
+
+  /// What the browser reports of `target`'s page now; whether the tab is kept.
+  pub(super) fn reported(&mut self, target: &TargetId, title: &str, url: &str) -> bool {
+    let Some(tab) = self.tabs.iter_mut().find(|tab| &tab.target == target) else {
+      return false;
+    };
+    title.clone_into(&mut tab.title);
+    url.clone_into(&mut tab.url);
+    true
   }
 
   /// What a run's tab's log follower holds while it runs, for [`Tabs::followed`].
@@ -162,6 +215,7 @@ impl Tabs {
     self.tabs.retain(|tab| tab.owner != TabOwner::Run { run });
     self.current.remove(&run);
     self.closed.remove(&run);
+    self.moved.retain(|_, tab| !taken.contains(tab));
     taken
   }
 

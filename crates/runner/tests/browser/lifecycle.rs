@@ -12,7 +12,7 @@ use super::site::serve as pages;
 use crate::{browser_installed, exited, listening, observer, open_in_browser, title};
 
 /// The process id of the browser running on `profile`, as the browser itself reports it.
-async fn browser_process(profile: &Path) -> u64 {
+pub async fn browser_process(profile: &Path) -> u64 {
   let info = observer(profile)
     .await
     .call(None, "SystemInfo.getProcessInfo", json!({}))
@@ -28,7 +28,7 @@ async fn browser_process(profile: &Path) -> u64 {
 }
 
 /// Kills the process `pid` at once, as a person or another program outside the runner might.
-fn kill(pid: u64) {
+pub fn kill(pid: u64) {
   let pid = pid.to_string();
   #[cfg(unix)]
   let killed = Command::new("kill").args(["-KILL", &pid]).status();

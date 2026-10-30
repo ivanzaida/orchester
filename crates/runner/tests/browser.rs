@@ -12,7 +12,7 @@
 mod browser {
   mod closed;
   mod input_order;
-  mod lifecycle;
+  pub mod lifecycle;
   mod logs;
   mod pages;
   pub mod site;

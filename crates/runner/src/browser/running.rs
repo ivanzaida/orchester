@@ -7,7 +7,7 @@ use orchester_exec::browser::{self as program, BrowserProgram, DevToolsActivePor
 use orchester_ipc::browser::{BrowserMode, TabOwner};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
-use tokio::{task::JoinHandle, time::Instant};
+use tokio::{sync::oneshot, task::JoinHandle, time::Instant};
 
 use super::{
   BrowserError,
@@ -37,6 +37,10 @@ pub(super) struct Running {
   pub(super) cdp: Arc<Cdp>,
   pub(super) tabs: Arc<Mutex<Tabs>>,
   pub(super) mode: BrowserMode,
+  /// Which of the browser's starts this is ([`Window::started`]).
+  pub(super) generation: u64,
+  /// Of a browser in a window of its own: answers once it ended or closed that window, until something waits for it.
+  pub(super) window_closes: Option<oneshot::Receiver<()>>,
   window: Arc<Window>,
   /// Sends the window the browser's state while it runs ([`window::publish`]).
   _publisher: Publisher,
@@ -53,11 +57,12 @@ impl Drop for Publisher {
 
 impl Running {
   /// Starts `found` on `profile`, headless or in a window of its own as `mode` says, and connects to it. A browser
-  /// that does not get as far as the connection is ended.
+  /// that does not get as far as the connection is ended. `out_of_sight`, a window of its own is headless all the same
+  /// ([`super::ProjectBrowser::with_windows_out_of_sight`]).
   pub(super) async fn start(
     found: &BrowserProgram,
     profile: &Path,
-    mode: BrowserMode,
+    (mode, out_of_sight): (BrowserMode, bool),
     window: &Arc<Window>,
   ) -> Result<Self, BrowserError> {
     fs::create_dir_all(profile).map_err(|error| {
@@ -69,8 +74,8 @@ impl Running {
     DevToolsActivePort::remove(profile)
       .map_err(|error| BrowserError::Start(format!("an earlier browser's debugging port file stays: {error}")))?;
     let command = match mode {
-      BrowserMode::Headless => program::headless(found, profile)?,
-      BrowserMode::Headed => program::headed(found, profile)?,
+      BrowserMode::Headed if !out_of_sight => program::headed(found, profile)?,
+      BrowserMode::Headed | BrowserMode::Headless => program::headless(found, profile)?,
     };
     let process = BrowserProcess::start(&command)?;
     tracing::info!(browser = found.name(), ?mode, "the project's browser started");
@@ -83,12 +88,22 @@ impl Running {
       .await?;
     block(&cdp).await?;
     let generation = window.started();
-    tokio::spawn(window::follow_targets(
-      targets,
-      Arc::clone(&tabs),
-      Arc::clone(window),
-      generation,
-    ));
+    let (followed, watched) = (Arc::clone(&tabs), Arc::clone(window));
+    let window_closes = match mode {
+      BrowserMode::Headless => {
+        tokio::spawn(window::follow_targets(targets, followed, watched, generation));
+        None
+      }
+      BrowserMode::Headed => {
+        let (closed, closes) = oneshot::channel();
+        let watch = window::WindowWatch {
+          cdp: Arc::downgrade(&cdp),
+          closed,
+        };
+        tokio::spawn(window::follow_window_targets(targets, followed, watched, watch));
+        Some(closes)
+      }
+    };
     let publisher = Publisher(tokio::spawn(window::publish(
       Arc::clone(&cdp),
       Arc::clone(&tabs),
@@ -101,6 +116,8 @@ impl Running {
       cdp,
       tabs,
       mode,
+      generation,
+      window_closes,
       window: Arc::clone(window),
       _publisher: publisher,
     })

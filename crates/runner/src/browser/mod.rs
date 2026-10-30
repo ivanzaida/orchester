@@ -8,7 +8,8 @@
 //! the person's, and no run reaches them.
 //!
 //! The window sees and drives every tab through the runner (`window`): the browser's state, the screencast of the tab
-//! it shows, the person's input, dialogs and `<select>` lists, and the restart in a browser window of its own.
+//! it shows, the person's input, dialogs and `<select>` lists, and the restart in a browser window of its own, which
+//! starts again headless with its tabs once the person closes that window.
 //!
 //! The browser ends with the runner: on Windows its kill-on-close Job Object ends it however the runner ends; on macOS
 //! the runner closes it as it exits, and a runner killed with SIGKILL leaves it running, as it leaves agents
@@ -38,7 +39,7 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use self::{
   cdp::{CdpError, TargetId, TargetInfo},
   running::Running,
-  window::Window,
+  window::{Starter, Window},
 };
 pub use self::{
   log::{ConsoleMessage, KEPT, Request, TabLog},
@@ -93,12 +94,13 @@ pub struct Listening {
   pub followed_logs: usize,
 }
 
+/// The running browser, if one does; the lock is held through a start or restart, so a use waits for its end.
+type RunningSlot = Mutex<Option<Running>>;
+
 /// The project's browser, started at its first use.
 pub struct ProjectBrowser {
-  profile: Result<PathBuf, BrowserUnavailable>,
-  /// The application database whose Settings › Browser may name the program; `None`: the one installed.
-  settings: Option<PathBuf>,
-  running: Mutex<Option<Running>>,
+  starter: Starter,
+  running: Arc<RunningSlot>,
   window: Arc<Window>,
 }
 
@@ -108,31 +110,36 @@ impl ProjectBrowser {
   pub fn of_project(project_root: &Path) -> Self {
     let profile = profile_of(project_root);
     // Without the application database the profile folder is unknown too, and its error says why.
-    let settings = app_database().ok();
-    Self {
-      settings,
-      ..Self::on(profile)
-    }
+    Self::on(profile, app_database().ok())
   }
 
   /// A browser on the profile folder `profile`, with the program installed.
   pub fn new(profile: PathBuf) -> Self {
-    Self::on(Ok(profile))
+    Self::on(Ok(profile), None)
   }
 
   /// This browser with the program Settings › Browser names in the application database `database`.
   #[must_use]
   pub fn with_settings(mut self, database: PathBuf) -> Self {
-    self.settings = Some(database);
+    self.starter.settings = Some(database);
     self
   }
 
-  fn on(profile: Result<PathBuf, BrowserUnavailable>) -> Self {
+  /// This browser with its own window, for a test, out of sight: *Open in a browser window* starts it headless, and to
+  /// everything else it is the browser in a window of its own, so that no window opens on the screen of whoever runs
+  /// the test.
+  #[must_use]
+  pub fn with_windows_out_of_sight(mut self) -> Self {
+    self.starter.out_of_sight = true;
+    self
+  }
+
+  fn on(profile: Result<PathBuf, BrowserUnavailable>, settings: Option<PathBuf>) -> Self {
+    let window = Arc::new(Window::default());
     Self {
-      profile,
-      settings: None,
-      running: Mutex::new(None),
-      window: Arc::new(Window::default()),
+      starter: Starter::new(profile, settings, Arc::clone(&window)),
+      running: Arc::new(Mutex::new(None)),
+      window,
     }
   }
 
@@ -155,16 +162,16 @@ impl ProjectBrowser {
   }
 
   /// `run`'s tab `tab`, or its current one for `None`; refused for a tab that is not the run's, the person's included,
-  /// for one someone other than the run closed, saying who, and when the run has none open. Does not start the
-  /// browser.
+  /// for one someone other than the run closed, saying who, and when the run has none open. A tab the browser reopened
+  /// as it started again is still reached by the id it had. Does not start the browser.
   pub async fn tab(&self, run: RunId, tab: Option<&TargetId>) -> Result<Tab, BrowserError> {
     let running = self.running.lock().await;
     let Some(running) = running.as_ref() else {
-      return Err(tab.map_or(BrowserError::NoTab, |tab| BrowserError::NotRunsTab(tab.clone())));
+      return Err(self.no_browser(tab));
     };
     let tabs = running.tabs.lock();
     let target = match tab {
-      Some(tab) => tab.clone(),
+      Some(tab) => tabs.now(tab),
       None => tabs.current(run).ok_or(BrowserError::NoTab)?,
     };
     let (session, state) = tabs.session(run, &target).ok_or_else(|| tabs.refused(run, &target))?;
@@ -196,19 +203,20 @@ impl ProjectBrowser {
 
   /// Closes `tab`, one of `run`'s tabs, which is no longer the run's; the window no longer shows it.
   pub async fn close_tab(&self, run: RunId, tab: &TargetId) -> Result<(), BrowserError> {
-    let cdp = {
+    let (cdp, tab) = {
       let running = self.running.lock().await;
-      let running = running.as_ref().ok_or_else(|| BrowserError::NotRunsTab(tab.clone()))?;
+      let running = running.as_ref().ok_or_else(|| self.no_browser(Some(tab)))?;
       let mut tabs = running.tabs.lock();
-      if tabs.session(run, tab).is_none() {
-        return Err(tabs.refused(run, tab));
+      let tab = tabs.now(tab);
+      if tabs.session(run, &tab).is_none() {
+        return Err(tabs.refused(run, &tab));
       }
-      tabs.forget(tab);
-      Arc::clone(&running.cdp)
+      tabs.forget(&tab);
+      (Arc::clone(&running.cdp), tab)
     };
-    self.window.forget(tab);
+    self.window.forget(&tab);
     self.window.changed();
-    Ok(cdp.close_target(tab).await?)
+    Ok(cdp.close_target(&tab).await?)
   }
 
   /// `run`'s open tabs, in the order they opened; none while the browser does not run, which this does not start.
@@ -311,33 +319,37 @@ impl ProjectBrowser {
     }
   }
 
-  /// The running browser, started first when it does not run: its first use, or it ended on its own, with its tabs.
-  /// One that starts so is headless.
+  /// The running browser, started first when it does not run: its first use, or it ended on its own, with its tabs,
+  /// except one in a window of its own, which comes back with them even if this use is the first to see it ended. One
+  /// that starts so is headless.
   async fn connection(&self) -> Result<MappedMutexGuard<'_, Running>, BrowserError> {
     let mut running = self.running.lock().await;
-    if running.as_ref().is_some_and(|current| !current.is_alive()) {
-      tracing::warn!("the project's browser ended on its own; starting it again");
-      running.take();
+    if let Some(current) = running.as_ref().filter(|current| !current.is_alive()) {
+      if current.mode == BrowserMode::Headed {
+        let back = self.starter.restart(&mut running, BrowserMode::Headless).await;
+        if running.is_none() {
+          back?;
+        }
+      } else {
+        tracing::warn!("the project's browser ended on its own; starting it again");
+        running.take();
+      }
     }
     if running.is_none() {
-      let profile = self.profile.clone()?;
-      let found = self.program().await?;
-      *running = Some(Running::start(&found, &profile, BrowserMode::Headless, &self.window).await?);
+      *running = Some(self.starter.start(BrowserMode::Headless).await?);
     }
     Ok(MutexGuard::map(running, |running| {
       running.as_mut().expect("a browser runs: it was kept or started above")
     }))
   }
 
-  /// The program the browser starts with: the one chosen in Settings › Browser, else the one installed
-  /// ([`chosen_or_found`]).
-  async fn program(&self) -> Result<BrowserProgram, BrowserError> {
-    let settings = self.settings.clone();
-    Ok(
-      tokio::task::spawn_blocking(move || chosen_or_found(settings.as_deref()))
-        .await
-        .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??,
-    )
+  /// What a run's call on a tab answers while no browser runs: why it could not start again, or else that the tab is
+  /// not the run's.
+  fn no_browser(&self, tab: Option<&TargetId>) -> BrowserError {
+    match self.starter.unavailable() {
+      Some(unavailable) => unavailable.into(),
+      None => tab.map_or(BrowserError::NoTab, |tab| BrowserError::NotRunsTab(tab.clone())),
+    }
   }
 }
 
