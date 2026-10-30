@@ -20,8 +20,8 @@ use orchester_core::{
   permission::{AgentPermissions, StepPermissions},
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, CommandProgram, DatabaseQuery,
-    DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, Step, StepKey,
-    StepKind, Tool, ToolAction, Version, VersionNumber,
+    DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, ResourceKind,
+    Step, StepKey, StepKind, Tool, ToolAction, Version, VersionNumber,
   },
   run::{Answerer, PreflightProblem},
   store::{ConnectionStore, McpServerStore, ResourceStore},
@@ -30,7 +30,7 @@ use orchester_core::{
 };
 use orchester_store::{Bound, BoundBy, BoundReference, ProjectDb, ReferenceBinding};
 use orchester_workspace::{
-  sharing::sync::{bind, use_here},
+  sharing::sync::{Here, Standing, bind, chosen_at, use_here},
   tasks::run::check,
 };
 use serde_json::Value;
@@ -473,5 +473,94 @@ async fn live_updates_a_binding_change_rewrites_the_local_bodies() {
     [unbound.their_docs],
     "unbound again: the publisher's id"
   );
+  stream.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() {
+  let unbound = Unbound::publish();
+  let (workspace, work, docs, stream) = unbound.cached().await;
+  let here = Here::read(&workspace.root).expect("read");
+  let standings: Vec<_> = here
+    .references
+    .iter()
+    .map(|reference| reference.standing.clone())
+    .collect();
+  assert_eq!(
+    standings,
+    [
+      Standing::Bound {
+        local: "work".into(),
+        by: BoundBy::Name
+      },
+      Standing::Found {
+        local: docs,
+        name: "docs".into()
+      },
+      Standing::Missing,
+    ],
+    "connections, then MCP servers, then secrets"
+  );
+  let needers: Vec<Vec<(String, ResourceKind, u32)>> = here
+    .references
+    .iter()
+    .map(|reference| {
+      (reference.needed_by.iter())
+        .map(|needer| (needer.name.clone(), needer.kind, needer.number.get()))
+        .collect()
+    })
+    .collect();
+  assert_eq!(
+    needers,
+    [
+      vec![("Builder".to_owned(), ResourceKind::AgentProfile, 1)],
+      vec![("Builder".to_owned(), ResourceKind::AgentProfile, 1)],
+      vec![("Lookup".to_owned(), ResourceKind::Tool, 1)],
+    ]
+  );
+  assert_eq!(
+    here.needs_you(),
+    2,
+    "the server found by name waits for the person, the secret is missing"
+  );
+  assert_eq!(here.missing_for(unbound.profile).len(), 1);
+  assert_eq!(here.missing_for(unbound.tool).len(), 1);
+  assert!(
+    here.missing_for(unbound.delivery).is_empty(),
+    "the pipeline names none itself"
+  );
+  let runs_here = here.connection_of(unbound.profile).expect("Builder names a connection");
+  assert_eq!(runs_here.binding.name, "Work");
+  assert_eq!(
+    here
+      .connections_of("codex_cli")
+      .iter()
+      .map(|connection| connection.id())
+      .collect::<Vec<_>>(),
+    [work]
+  );
+  assert!(
+    chosen_at(&runs_here.binding).is_none(),
+    "bound by its name, not by the person"
+  );
+
+  let chosen = BoundReference::McpServer {
+    reference: unbound.their_docs,
+    bound: Some(Bound {
+      local: docs,
+      by: BoundBy::Person,
+    }),
+  };
+  bind(&workspace.root, chosen, Answerer::Person).expect("bound");
+  let here = Here::read(&workspace.root).expect("read again");
+  assert_eq!(
+    here.references[1].standing,
+    Standing::Bound {
+      local: "docs".into(),
+      by: BoundBy::Person
+    }
+  );
+  assert!(chosen_at(&here.references[1].binding).is_some(), "the person chose it");
+  assert_eq!(here.needs_you(), 1);
   stream.abort();
 }

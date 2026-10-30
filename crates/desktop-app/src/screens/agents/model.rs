@@ -108,11 +108,13 @@ fn with_hint(input: FieldInput, hint: Option<Arc<str>>) -> FieldInput {
   }
 }
 
+/// The section, with `extra` rows after the effort (a shared profile's *Runs here use*, what a change asks) and
+/// `note` under it before the assignment note.
 pub(super) fn connection_model(
   ctx: &mut Ctx,
   fields: &Fields,
   listed: &ProjectAgents,
-  asked: Option<Element>,
+  (extra, note_under): (Vec<Element>, Option<Element>),
 ) -> Element {
   let connection = fields.connection(listed);
   let on_provider = connection.is_some_and(|c| c.api_provider().is_some());
@@ -167,7 +169,7 @@ pub(super) fn connection_model(
       .into(),
     );
   }
-  rows.extend(asked);
+  rows.extend(extra);
   Column::new()
     .id("agent-model-section")
     .width(Dimension::Pct(100.0))
@@ -185,6 +187,7 @@ pub(super) fn connection_model(
         &ctx.t("agents.connectionReset"),
       )
     }))
+    .with_children(note_under)
     .child(note(
       "agent-assignment-note",
       Icon::Info,

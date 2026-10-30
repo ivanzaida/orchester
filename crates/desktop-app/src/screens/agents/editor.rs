@@ -30,7 +30,7 @@ use super::{
   list, model, page_head,
   permissions::{self, Context, Section},
   questions::{self, Asking},
-  side,
+  shared, side,
   work::{self, Allowed, Asked, Follow, Pending, Saved, Work},
 };
 use crate::{
@@ -226,11 +226,13 @@ impl Editor {
         std::sync::Arc::new(move || ask.set(Ask::Remove))
       },
     });
+    let (shared_bars, runs_here) = shared::parts(ctx, props);
     let top = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
       .child(page_head::crumb(ctx, &props.nav))
       .child(page_head::head(ctx, (&self.fields, &props.listed), more))
+      .with_children(shared_bars)
       .with_children(self.remove_question(ctx, props, state))
       .child(self.bar_or_question(ctx, props, state))
       .with_children(self.notices(ctx, props, state));
@@ -256,7 +258,9 @@ impl Editor {
       .zip(state.saved.as_ref())
       .map(|(error, entry)| (&entry.profile, field_hint(ctx, &error)));
     let role = model::role(ctx, &self.fields, unsaved);
-    let connection = model::connection_model(ctx, &self.fields, &props.listed, connection_asked);
+    let (runs_here, runs_note) = runs_here.unzip();
+    let extra = runs_here.into_iter().chain(connection_asked).collect();
+    let connection = model::connection_model(ctx, &self.fields, &props.listed, (extra, runs_note));
     let context = Context {
       fields: &self.fields,
       listed: &props.listed,

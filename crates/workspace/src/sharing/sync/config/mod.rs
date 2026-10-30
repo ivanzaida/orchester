@@ -9,6 +9,7 @@
 //! from this computer through [`RemoteResourceStore`].
 
 mod bindings;
+mod here;
 mod publish;
 mod waiting;
 
@@ -32,6 +33,7 @@ use orchester_store::{
 use serde_json::Value;
 
 pub use self::{
+  here::{Here, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},
   waiting::{Waiting, use_here, waiting},
 };
