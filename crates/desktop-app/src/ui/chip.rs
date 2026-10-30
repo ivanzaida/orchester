@@ -2,12 +2,13 @@
 //! inside a `border` stroke, 2 over and under it and 8 at its sides; a removable one ends in an 11
 //! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`). A badge (`Badge`
 //! `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
-//! under them and 8 at their sides (`Saved` in `success`, `New` in `info`).
+//! under them and 8 at their sides (`Saved` in `success`, `New` in `info`); a cut one keeps to its room.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
+    ctx::Ctx,
     events::mouse_event::MouseEvent,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
@@ -16,7 +17,10 @@ use lurq::{
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::icon::{Icon, icon};
+use super::{
+  icon::{Icon, icon},
+  tooltip::Truncated,
+};
 use crate::theme::{ControlHeight, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// A badge's dot (`Vydkx`).
@@ -141,6 +145,33 @@ impl BadgeTone {
 
 /// A badge saying `word` in `tone`.
 pub fn badge(id: &str, tone: BadgeTone, word: &str) -> Row {
+  let color = tone.colors().0;
+  badge_frame(id, tone).child(
+    Text::new(word)
+      .id(format!("{id}-label"))
+      .variant(TypographyStyle::FieldLabel)
+      .color(color)
+      .nowrap(),
+  )
+}
+
+/// A badge saying `word` in `tone` that keeps to the room its row gives it: the word is cut with an ellipsis, and
+/// while it is cut its whole words show in a tooltip. A word the badge does not choose, such as a team's name, may
+/// be any length.
+pub fn cut_badge(ctx: &mut Ctx, id: &str, tone: BadgeTone, word: &str) -> Row {
+  let color = tone.colors().0;
+  badge_frame(id, tone)
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .child(
+      Truncated::new(format!("{id}-label"), word.to_owned(), TypographyStyle::FieldLabel)
+        .color(color)
+        .render(ctx),
+    )
+}
+
+/// A badge's pill and its dot, before its word.
+fn badge_frame(id: &str, tone: BadgeTone) -> Row {
   let (color, fill) = tone.colors();
   Row::new()
     .id(id.to_owned())
@@ -154,14 +185,8 @@ pub fn badge(id: &str, tone: BadgeTone, word: &str) -> Row {
         .id(format!("{id}-dot"))
         .width(Dimension::Px(DOT_SIZE))
         .height(Dimension::Px(DOT_SIZE))
+        .flex_shrink(0.0)
         .rounded(ExtraRadius::Full.role())
-        .background(color.clone()),
-    )
-    .child(
-      Text::new(word)
-        .id(format!("{id}-label"))
-        .variant(TypographyStyle::FieldLabel)
-        .color(color)
-        .nowrap(),
+        .background(color),
     )
 }

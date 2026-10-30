@@ -1,6 +1,6 @@
-//! The welcome, All projects and Add project (layer `Welcome & projects` `CGlZY`), for design verification:
-//! `cargo build -p orchester-runner` once, then `cargo run -p orchester-app --example projects_qa -- <state>`,
-//! `state` one of [`State::ALL`].
+//! The welcome, All projects and Add project (layer `Welcome & projects` `CGlZY`; the returning start's 09 `i5G19A`
+//! and 09b `dLOCJ`), for design verification: `cargo build -p orchester-runner` once, then
+//! `cargo run -p orchester-app --example projects_qa -- <state>`, `state` one of [`State::ALL`].
 //!
 //! Each start seeds a new folder under `.tmp/qa/projects/` ([`data`]): an application database (empty for the
 //! welcome, else the seed's `task-states` Kontur and projects in each state of the list) and the folders Add
@@ -8,16 +8,18 @@
 //! `rustc` from `gh.rs`) answering as the state's GitHub state, and leaves out every folder holding a real `gh`, so
 //! no real GitHub sign-in is read. git reads the settings file of the QA folder only (`GIT_CONFIG_GLOBAL`, no system
 //! settings, no repository above the QA folder), with a QA author except in `setup-git-no-author`;
-//! `setup-git-not-found` leaves every folder holding git off the `PATH`. The system's pickers are replaced: a folder
-//! picker hands over the state's folder and the file picker (*Choose program…*) the stand-in `gh`; Copy writes to
-//! `copied.txt` in the QA folder, never the clipboard. The verifier connects through the discovery file in
-//! `.tmp/qa/projects/mcp/` (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
+//! `setup-git-not-found` leaves every folder holding git off the `PATH`. `returning-team` joins a stand-in team
+//! server first ([`team`]). The system's pickers are replaced: a folder picker hands over the state's folder and the
+//! file picker (*Choose program…*) the stand-in `gh`; Copy writes to `copied.txt` in the QA folder, never the
+//! clipboard. The verifier connects through the discovery file in `.tmp/qa/projects/mcp/`
+//! (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
 
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
 
 mod data;
 mod host;
+mod team;
 
 use std::{
   env,
@@ -52,8 +54,11 @@ const DATABASE: &str = "ORCHESTER_PROJECTS_QA_DATABASE";
 enum State {
   /// `UQZRa`: a first launch.
   Welcome,
-  /// `S5HDKf`, `kwpO2`: the list in every state; the × of a row asks to remove it.
+  /// `S5HDKf`, `kwpO2`: the list in every state; the × of a row asks to remove it. With no team joined, as 09b
+  /// `dLOCJ` shows it.
   List,
+  /// 09 `i5G19A`: the list with a team joined, Kontur linked to the team's and Billing offered above the list.
+  ReturningTeam,
   /// `kwpO2` *Empty list*: every project was removed.
   Empty,
   /// `kwpO2` *The list can't be read*.
@@ -67,9 +72,10 @@ enum State {
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 20] = [
+  const ALL: [(&'static str, Self); 21] = [
     ("welcome", Self::Welcome),
     ("list", Self::List),
+    ("returning-team", Self::ReturningTeam),
     ("empty", Self::Empty),
     ("failed", Self::Failed),
     ("open-folder", Self::OpenFolder),
@@ -108,7 +114,7 @@ impl State {
   /// The folder the folder picker hands over and, once chosen, Add project shows.
   fn folder(self) -> &'static str {
     match self {
-      Self::Welcome | Self::List | Self::Empty | Self::Failed | Self::OpenFolder => "scratch",
+      Self::Welcome | Self::List | Self::ReturningTeam | Self::Empty | Self::Failed | Self::OpenFolder => "scratch",
       Self::Detected("local-only") => "local",
       Self::Detected("not-github") => "other-host",
       Self::Detected("not-repository" | "git-no-author" | "git-not-found") => "kontur-notes",
@@ -217,6 +223,11 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
   let launch = signed_in::launch(&database, runner, runtime.handle(), &cloud);
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
   prepare(state, &workspace, &database)?;
+  // The team answers while the window is open.
+  let team = match (state, launch.services()) {
+    (State::ReturningTeam, Some(services)) => Some(team::join(services, &runtime, &folders.kontur())?),
+    _ => None,
+  };
   let route = match state {
     State::Setup => Route::AddProject(None),
     State::Detected(_) => Route::AddProject(RouteFolder::new(&folders.folder(state.folder()))),
@@ -273,6 +284,7 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
     .run();
   server.shutdown();
   launch.end();
+  drop(team);
   Ok(())
 }
 
