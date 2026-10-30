@@ -52,6 +52,9 @@ pub struct BrowserRoot {
   /// The address line's text input, and Ctrl+L asking for its focus.
   address: ElementRef,
   focus_address: Signal<bool>,
+  /// The page's hidden text input and a JavaScript prompt's field.
+  page_text: ElementRef,
+  dialog_answer: ElementRef,
   /// Whether the window showed *Empty* at the last render: the address line takes the focus when it starts to.
   was_empty: Mutex<bool>,
   /// The request last acted on.
@@ -109,6 +112,8 @@ impl Component for BrowserRoot {
       wanted: ctx.signal(Wanted::default()),
       address: ctx.element_ref(),
       focus_address: ctx.signal(false),
+      page_text: ctx.element_ref(),
+      dialog_answer: ctx.element_ref(),
       was_empty: Mutex::new(false),
       handled: Mutex::new(None),
       sent: Mutex::new(None),
@@ -174,6 +179,8 @@ impl Component for BrowserRoot {
       waits_left,
       person: self.hooks(&project),
       address: self.address.clone(),
+      page_text: self.page_text.clone(),
+      dialog_answer: self.dialog_answer.clone(),
     };
     self.screencast(ctx, &showing, now);
     self.keep_ticking(&showing, now);
