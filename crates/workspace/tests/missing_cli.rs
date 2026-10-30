@@ -7,11 +7,15 @@
 use std::{
   fs,
   path::{Path, PathBuf},
+  time::{Duration, Instant},
 };
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, Connection, ConnectionStatus, GitHubConnection, GitHubHost},
-  id::{ConnectionId, ProjectId},
+  connection::{
+    AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, Connection, ConnectionStatus, EndpointPreset,
+    GitHubConnection, GitHubHost,
+  },
+  id::{ConnectionId, ProjectId, SecretId},
   name::Name,
   project::{Project, ProjectKey},
   store::ConnectionStore,
@@ -22,6 +26,7 @@ use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   connections::{
     choose_program::{ChooseProgramError, choose_program},
+    data::rename_in,
     missing_cli::{MissingCli, missing_cli_on},
   },
   project_setup::NewProject,
@@ -225,7 +230,7 @@ fn missing_cli_names_claude_before_codex_and_codex_once_claude_is_there() {
 }
 
 #[test]
-fn missing_cli_ignores_a_present_program_and_github() {
+fn missing_cli_ignores_a_present_program_a_native_connection_and_github() {
   let dir = TempDir::new().expect("a folder");
   let workspace = workspace(&dir);
   let (_, search) = empty_search(&dir);
@@ -240,10 +245,21 @@ fn missing_cli_ignores_a_present_program_and_github() {
     Timestamp::now(),
   )
   .expect("an absolute program");
-  ProjectDb::open(&atlas)
-    .expect("the project's data")
-    .create_connection(&github)
-    .expect("stored");
+  let native = AgentConnection::native(
+    ConnectionId::generate(),
+    Name::new("Native API").expect("a name"),
+    AgentProvider::AnthropicApi,
+    ApiEndpoint::new(
+      EndpointPreset::Official,
+      BaseUrl::new("https://api.anthropic.com").expect("a URL"),
+      SecretId::generate(),
+    ),
+    Timestamp::now(),
+  )
+  .expect("a native connection");
+  let mut db = ProjectDb::open(&atlas).expect("the project's data");
+  db.create_connection(&github).expect("stored");
+  db.create_connection(&native).expect("stored");
   assert_eq!(missing(&workspace, &search), None);
 }
 
@@ -313,6 +329,101 @@ fn missing_cli_chosen_file_repoints_every_needing_connection_and_records_its_che
     assert_eq!(connection.version(), Some("2.1.296"));
   }
   assert_eq!(missing(&workspace, &search), None, "the callout goes");
+}
+
+/// A stand-in Claude Code in `folder`. Asked its version a second time, as the check on the connection's own account
+/// does, it makes `asked` in `signals` and answers once `go` is there.
+#[cfg(windows)]
+fn write_waiting_claude(folder: &Path, signals: &Path) -> PathBuf {
+  let program = folder.join("claude.cmd");
+  let (first, asked, go) = (
+    signals.join("first").display().to_string(),
+    signals.join("asked").display().to_string(),
+    signals.join("go").display().to_string(),
+  );
+  let script = format!(
+    "@echo off\r\nif not \"%1\"==\"--version\" exit /b 1\r\nif exist \"{first}\" goto second\r\necho.>\"{first}\"\r\ngoto answer\r\n:second\r\necho.>\"{asked}\"\r\n:wait\r\nif exist \"{go}\" goto answer\r\nping -n 2 127.0.0.1 >nul\r\ngoto wait\r\n:answer\r\necho 2.1.296 ^(Claude Code^)\r\nexit /b 0\r\n"
+  );
+  fs::write(&program, script).expect("the stand-in is written");
+  program
+}
+
+/// A stand-in Claude Code in `folder`. Asked its version a second time, as the check on the connection's own account
+/// does, it makes `asked` in `signals` and answers once `go` is there.
+#[cfg(not(windows))]
+fn write_waiting_claude(folder: &Path, signals: &Path) -> PathBuf {
+  use std::os::unix::fs::PermissionsExt;
+  let program = folder.join("claude");
+  let (first, asked, go) = (
+    signals.join("first").display().to_string(),
+    signals.join("asked").display().to_string(),
+    signals.join("go").display().to_string(),
+  );
+  let script = format!(
+    "#!/bin/sh\n[ \"$1\" = \"--version\" ] || exit 1\nif [ -e \"{first}\" ]; then\n  touch \"{asked}\"\n  until [ -e \"{go}\" ]; do sleep 0.1; done\nelse\n  touch \"{first}\"\nfi\necho '2.1.296 (Claude Code)'\n"
+  );
+  fs::write(&program, script).expect("the stand-in is written");
+  fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("the stand-in runs");
+  program
+}
+
+/// The CLI may take long to answer, and a person may rename the connection meanwhile.
+#[test]
+fn missing_cli_chosen_file_keeps_a_rename_saved_during_its_check() {
+  let dir = TempDir::new().expect("a folder");
+  let workspace = workspace(&dir);
+  let (_, search) = empty_search(&dir);
+  let atlas = add_project(&dir, &workspace, ("ATL", "Atlas"));
+  let id = add_connection(&atlas, AgentProvider::ClaudeCodeCli, gone(&dir));
+  let signals = dir.path().join("signals");
+  fs::create_dir_all(&signals).expect("a folder");
+  let chosen = write_waiting_claude(&elsewhere(&dir), &signals);
+  let warned = expect_missing(&workspace, &search);
+  let choosing = {
+    let chosen = chosen.clone();
+    std::thread::spawn(move || choose_program(&workspace, &warned, &chosen))
+  };
+  let deadline = Instant::now() + Duration::from_secs(20);
+  while !signals.join("asked").exists() {
+    assert!(Instant::now() < deadline, "timed out waiting for the check");
+    std::thread::sleep(Duration::from_millis(5));
+  }
+  rename_in(&atlas, id, &Name::new("Renamed").expect("a name")).expect("renamed");
+  fs::write(signals.join("go"), "").expect("the stand-in answers");
+  choosing.join().expect("choosing ends").expect("it answers as the CLI");
+  let connection = stored(&atlas, id);
+  assert_eq!(connection.name().as_str(), "Renamed");
+  assert_eq!(connection.executable(), Some(chosen.as_path()));
+  assert_eq!(connection.version(), Some("2.1.296"), "its check is recorded");
+}
+
+/// One project that cannot be changed leaves the others with the file, and says which it was.
+#[test]
+fn missing_cli_project_that_fails_leaves_the_others_fixed_and_is_named() {
+  let dir = TempDir::new().expect("a folder");
+  let workspace = workspace(&dir);
+  let (_, search) = empty_search(&dir);
+  let atlas = add_project(&dir, &workspace, ("ATL", "Atlas"));
+  let notes = add_project(&dir, &workspace, ("NOT", "Notes"));
+  let first = add_connection(&atlas, AgentProvider::ClaudeCodeCli, gone(&dir));
+  add_connection(&notes, AgentProvider::ClaudeCodeCli, gone(&dir));
+  let chosen = write_claude(&elsewhere(&dir));
+  let warned = expect_missing(&workspace, &search);
+  let atlas_id = warned
+    .needing
+    .iter()
+    .find(|needing| needing.name.as_str() == "Atlas")
+    .expect("Atlas needs the CLI")
+    .project;
+  fs::remove_dir_all(&notes).expect("the folder goes");
+  let refused = choose_program(&workspace, &warned, &chosen).expect_err("Notes cannot be changed");
+  assert_eq!(refused.message().key, "connections.errors.notRepointed");
+  let ChooseProgramError::NotSaved { project, fixed, .. } = refused else {
+    panic!("{refused:?}");
+  };
+  assert_eq!(project, "Notes");
+  assert_eq!(fixed, [atlas_id]);
+  assert_eq!(stored(&atlas, first).executable(), Some(chosen.as_path()));
 }
 
 #[test]

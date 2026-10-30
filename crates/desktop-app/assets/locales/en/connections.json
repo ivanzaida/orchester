@@ -309,6 +309,7 @@
       "programFoundOne": "Found on the PATH",
       "programChosen": "The file you chose on the start page",
       "programFoundMany": "Found {{count}} on the PATH; the first is used unless you choose another.",
+      "programFoundAndChosen": "Found {{count}} on the PATH, and the file you chose on the start page; the first is used unless you choose another.",
       "check": "Check",
       "detectingWord": "Detecting",
       "detecting": "Looking for the program on the PATH…",
@@ -668,6 +669,7 @@
       "lead": "Tasks run on a CLI on this computer or on a model API with a project key. Each agent profile then chooses its connection and model.",
       "looking": "Looking for it on the search path…",
       "found": "Found on the search path · sign in with one of your accounts",
+      "foundChosen": "The file you chose on the start page · sign in with one of your accounts",
       "notFound": "Not found on the PATH · install it, then Check again",
       "apiProvider": "A CLI on an API provider",
       "apiProviderDetail": "Claude Code or Codex on a compatible API such as DeepSeek's, with a key from Secrets"

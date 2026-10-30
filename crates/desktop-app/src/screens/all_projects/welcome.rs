@@ -61,22 +61,27 @@ pub(super) fn welcome(ctx: &mut Ctx, open: &OpenAction, cli: Option<Element>) ->
     .child(inner);
   let main: Element = match cli {
     None => main.flex(1.0).into(),
-    // It does not fit at the window's smallest size with the warning, so only then the page scrolls; at least as high
-    // as the window, it stays centred.
-    Some(cli) => ScrollVertical::new(
-      main
-        .min_height(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Section)
-        .child(
-          Column::new()
-            .width(Dimension::Pct(100.0))
-            .max_width(Dimension::Px(INNER_WIDTH))
-            .child(cli),
-        ),
-    )
-    .id("welcome-scroll")
-    .flex(1.0)
-    .into(),
+    // It does not fit at the window's smallest size with the warning, so only then the page scrolls; as high as it is
+    // when it fits, centred in the panel.
+    Some(cli) => Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
+      .justify(Justify::Center)
+      .child(
+        ScrollVertical::new(
+          main.spacing(SpacingSize::Section).child(
+            Column::new()
+              .width(Dimension::Pct(100.0))
+              .max_width(Dimension::Px(INNER_WIDTH))
+              .child(cli),
+          ),
+        )
+        .id("welcome-scroll")
+        .width(Dimension::Pct(100.0))
+        .max_height(Dimension::Pct(100.0)),
+      )
+      .into(),
   };
   Column::new()
     .id(screen_id())

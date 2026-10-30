@@ -140,6 +140,13 @@ pub(super) fn program_row(
     ),
     (_, 0) => (ctx.t("connections.dialog.programChosen"), Tone::Success),
     (1, _) => (ctx.t("connections.dialog.programFoundOne"), Tone::Success),
+    (total, count) if total > count => (
+      ctx.t_args(
+        "connections.dialog.programFoundAndChosen",
+        [("count", count.to_string())],
+      ),
+      Tone::Muted,
+    ),
     (_, count) => (
       ctx.t_args("connections.dialog.programFoundMany", [("count", count.to_string())]),
       Tone::Muted,

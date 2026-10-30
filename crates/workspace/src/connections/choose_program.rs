@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::ProjectId, store::ConnectionStore};
+use orchester_core::{connection::Connection, id::ProjectId, store::ConnectionStore};
 use orchester_exec::search_path::{ChosenProgramError, chosen_program};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
@@ -115,14 +115,19 @@ pub fn choose_program(
 }
 
 /// Makes `program` the program of the connection `needing` names and records its check, on the connection's own
-/// account.
+/// account. The CLI may take long, so the row is read again to store it, and a rename saved meanwhile stays.
 fn repoint(needing: &NeedingConnection, program: &Path) -> Result<(), SaveError> {
   let mut db = ProjectDb::open(&needing.repo_root)?;
-  let mut connection = db
-    .connection(needing.connection)?
-    .ok_or(StoreError::ConnectionNotFound(needing.connection))?;
-  connection.set_executable(program.to_path_buf())?;
-  if let Some(check) = probe::recheck(&connection) {
+  let repointed = |db: &ProjectDb| -> Result<Connection, SaveError> {
+    let mut connection = db
+      .connection(needing.connection)?
+      .ok_or(StoreError::ConnectionNotFound(needing.connection))?;
+    connection.set_executable(program.to_path_buf())?;
+    Ok(connection)
+  };
+  let check = probe::recheck(&repointed(&db)?);
+  let mut connection = repointed(&db)?;
+  if let Some(check) = check {
     connection
       .record_check(check)
       .expect("the check was made for the connection's own kind");

@@ -118,35 +118,14 @@ fn chosen_cli_file_is_offered_in_add_connection() {
     offer_chosen_claude();
     return;
   }
-  let inherited = env::var_os("PATH").unwrap_or_default();
-  let path = env::split_paths(&inherited).filter(|folder| !holds_a_cli(folder));
-  let status = Command::new(env::current_exe().expect("the test binary"))
-    .args([
-      "--exact",
-      "add_cli::chosen_cli_file_is_offered_in_add_connection",
-      "--nocapture",
-    ])
-    .env("PATH", env::join_paths(path).expect("a search path"))
-    .env(CHILD, "1")
-    .status()
-    .expect("the test runs again");
-  assert!(status.success(), "the test without a real CLI on the PATH failed");
+  again_without_real_clis("add_cli::chosen_cli_file_is_offered_in_add_connection", None);
 }
 
 fn offer_chosen_claude() {
   let folder = tempfile::tempdir().expect("a temporary folder");
   let chosen = write_claude(folder.path());
   let mut seeded = Seeded::new("connections");
-  seeded
-    .window
-    .launch
-    .workspace()
-    .expect("the session started")
-    .set_ui_state(
-      "orchester-app.agentProgram.claude",
-      chosen.to_str().expect("a plain path"),
-    )
-    .expect("kept");
+  remember_claude(&seeded, &chosen);
   seeded.add(NewConnection::AgentProvider);
   seeded.click("connection-kind-claude");
   seeded.until("the check", |seeded| {
@@ -157,6 +136,110 @@ fn offer_chosen_claude() {
     seeded.text("connection-program-description"),
     "The file you chose on the start page"
   );
+}
+
+/// Connections with nothing yet say a file chosen on the start page is that, never that it was found on the search
+/// path, and offer its Add; the other CLI stays not found.
+#[test]
+fn chosen_cli_file_is_not_called_found_on_the_search_path() {
+  if env::var_os(CHILD).is_some() {
+    list_chosen_claude();
+    return;
+  }
+  again_without_real_clis("add_cli::chosen_cli_file_is_not_called_found_on_the_search_path", None);
+}
+
+fn list_chosen_claude() {
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  let chosen = write_claude(folder.path());
+  let mut seeded = Seeded::new("empty");
+  remember_claude(&seeded, &chosen);
+  seeded.list();
+  seeded.until("the CLIs looked for", |seeded| {
+    seeded.exists("connections-empty") && !seeded.text("connections-agents").contains("Looking")
+  });
+  let claude = seeded.text("connections-way-claude-row");
+  assert!(
+    claude.contains("The file you chose on the start page · sign in with one of your accounts"),
+    "{claude}"
+  );
+  assert!(!claude.contains("search path"), "{claude}");
+  assert!(seeded.exists("connections-way-claude-add"));
+  assert!(
+    seeded
+      .text("connections-way-codex-row")
+      .contains("Not found on the PATH")
+  );
+  assert!(seeded.exists("connections-way-codex-check"));
+}
+
+/// With a copy on the `PATH` as well, the empty page says it was found there, and Add connection's choice of the two
+/// says what it holds.
+#[test]
+fn chosen_cli_file_beside_a_copy_on_the_path() {
+  if env::var_os(CHILD).is_some() {
+    choose_between_copies();
+    return;
+  }
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  write_claude(folder.path());
+  again_without_real_clis(
+    "add_cli::chosen_cli_file_beside_a_copy_on_the_path",
+    Some(folder.path()),
+  );
+}
+
+fn choose_between_copies() {
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  let chosen = write_claude(folder.path());
+  let mut seeded = Seeded::new("empty");
+  remember_claude(&seeded, &chosen);
+  seeded.list();
+  seeded.until("the CLIs looked for", |seeded| {
+    seeded.exists("connections-empty") && !seeded.text("connections-agents").contains("Looking")
+  });
+  let claude = seeded.text("connections-way-claude-row");
+  assert!(claude.contains("Found on the search path"), "{claude}");
+  seeded.add(NewConnection::AgentProvider);
+  seeded.click("connection-kind-claude");
+  seeded.until("the copies found", |seeded| {
+    seeded
+      .text("connection-program-description")
+      .contains("the file you chose")
+  });
+  assert_eq!(
+    seeded.text("connection-program-description"),
+    "Found 1 on the PATH, and the file you chose on the start page; the first is used unless you choose another."
+  );
+}
+
+/// Keeps `chosen` as the file chosen on the start page for Claude Code.
+fn remember_claude(seeded: &Seeded, chosen: &Path) {
+  seeded
+    .window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_ui_state(
+      "orchester-app.agentProgram.claude",
+      chosen.to_str().expect("a plain path"),
+    )
+    .expect("kept");
+}
+
+/// Runs the test `name` again in a child whose `PATH` starts with `first`, if any, and leaves out every folder holding
+/// a real CLI.
+fn again_without_real_clis(name: &str, first: Option<&Path>) {
+  let inherited = env::var_os("PATH").unwrap_or_default();
+  let others = env::split_paths(&inherited).filter(|folder| !holds_a_cli(folder));
+  let path = first.map(Path::to_path_buf).into_iter().chain(others);
+  let status = Command::new(env::current_exe().expect("the test binary"))
+    .args(["--exact", name, "--nocapture"])
+    .env("PATH", env::join_paths(path).expect("a search path"))
+    .env(CHILD, "1")
+    .status()
+    .expect("the test runs again");
+  assert!(status.success(), "the test without a real CLI on the PATH failed");
 }
 
 /// Whether `folder` holds a real `claude` or `codex`.

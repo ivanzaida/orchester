@@ -27,6 +27,8 @@ use super::{
 const CLI: &str = "start-cli";
 const CALLOUT: &str = "start-cli-callout";
 const ERROR: &str = "start-cli-error";
+/// The welcome's footer (`N3VzU`), under what it centres.
+const FOOTER_HEIGHT: f32 = 56.0;
 
 /// A stand-in `name` in `folder` that answers `--version` with `version_line`.
 #[cfg(windows)]
@@ -308,6 +310,23 @@ fn all_projects_agent_cli_is_not_on_a_list_that_cannot_be_read() {
   assert!(!shows(&mut window, CLI));
 }
 
+/// Removing the last project is no first launch, but nothing names a CLI any more: the rule of a first start holds.
+#[test]
+fn all_projects_agent_cli_shows_on_an_emptied_list_as_at_a_first_start() {
+  let (mut window, stand_ins, ..) = kontur_without_claude();
+  window.press(&format!("project-remove-{}", project_id()));
+  window.press("remove-project-confirm");
+  window.until("the empty list", |window| shows(window, "all-projects-empty"));
+  window.until("the warning", |window| shows(window, CLI));
+  let (callout, empty) = (bounds(&mut window, CALLOUT), bounds(&mut window, "all-projects-empty"));
+  assert!(callout.y < empty.y, "{callout:?} {empty:?}");
+  let folder = TempDir::new().expect("a folder");
+  stand_ins.choose(Some(write_claude(folder.path())));
+  window.press("start-cli-choose");
+  window.until("the warning to go", |window| !shows(window, CLI));
+  assert!(shows(&mut window, "all-projects-empty"), "the empty list stays");
+}
+
 /// The welcome with the warning does not fit the window's smallest size, so only then it scrolls.
 #[test]
 fn all_projects_agent_cli_welcome_scrolls_at_the_smallest_window() {
@@ -322,5 +341,26 @@ fn all_projects_agent_cli_welcome_scrolls_at_the_smallest_window() {
   assert!(
     fix.y + fix.height > scroll.y + scroll.height,
     "the fix row is further down than the window shows: {fix:?} {scroll:?}"
+  );
+}
+
+/// In a window with room to spare the welcome and the warning stay centred above the footer, as the welcome alone does.
+#[test]
+fn all_projects_agent_cli_welcome_stays_centred_in_a_large_window() {
+  let (mut window, _stand_ins) = Window::with_stand_ins(Data::new());
+  window.until("the warning", |window| shows(window, CLI));
+  window.tree.resize(1440, 900);
+  window.pass();
+  let (screen, introduction, steps, fix) = (
+    bounds(&mut window, "screen-all_projects"),
+    bounds(&mut window, "welcome-introduction"),
+    bounds(&mut window, "welcome-steps"),
+    bounds(&mut window, "start-cli-fix"),
+  );
+  let above = introduction.y.min(steps.y) - screen.y;
+  let below = screen.y + screen.height - FOOTER_HEIGHT - (fix.y + fix.height);
+  assert!(
+    (above - below).abs() < 1.0,
+    "{above} above and {below} below: {screen:?} {introduction:?} {steps:?} {fix:?}"
   );
 }
