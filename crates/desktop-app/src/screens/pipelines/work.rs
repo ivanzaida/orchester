@@ -29,11 +29,17 @@ pub enum Work {
 }
 pub type Action = FutureAction<Work, OpenedPipeline, Message>;
 pub fn action(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Action {
-  let changes = crate::services::Services::of(ctx).changes;
+  let services = crate::services::Services::of(ctx);
   ctx.future_action(move |work: Work| {
-    let changes = changes.clone();
+    let services = services.clone();
     async move {
-      background::run(move || {
+      let changes = services.changes.clone();
+      // A version published in a shared project goes to its team server at once (02).
+      let published = match &work {
+        Work::Publish { root, .. } => Some(root.clone()),
+        Work::Save { .. } => None,
+      };
+      let result = background::run(move || {
         let publishing = matches!(work, Work::Publish { .. });
         let result = match work {
           Work::Save {
@@ -55,7 +61,11 @@ pub fn action(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Action {
         }
         result
       })
-      .await?
+      .await?;
+      if let Some(root) = published.filter(|_| result.is_ok()) {
+        crate::screens::hub::team::send_published(&services, &root).await;
+      }
+      result
     }
   })
 }

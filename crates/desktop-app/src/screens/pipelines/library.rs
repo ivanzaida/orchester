@@ -16,6 +16,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background, messages,
   pipelines::library::{LibraryEntry, VersionState, library_in},
+  sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
 
@@ -27,6 +28,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ImportTab, ProjectPage, Route},
+  screens::hub::team,
   services::Services,
   theme::{ExtraSpacing, GroupText, IconSize},
   ui::{
@@ -62,7 +64,8 @@ impl Component for Library {
       .state()
       .get();
     let id = project.open.project.id();
-    let page = parts::page().child(header(ctx, id));
+    let team = team::of(&project);
+    let page = parts::page().child(header(ctx, id, team::may_change(team.as_ref())));
     let pending = loaded.is_pending();
     let body = match (loaded.data, loaded.error) {
       (_, Some(error)) if !pending => {
@@ -75,7 +78,7 @@ impl Component for Library {
         )
       }
       (Some(entries), _) if entries.is_empty() => empty(ctx, id).into(),
-      (Some(entries), _) => populated(ctx, &project, &entries).into(),
+      (Some(entries), _) => populated(ctx, (&project, team.as_ref()), &entries).into(),
       (None, _) => reading(ctx),
     };
     page.child(parts::body("pipelines-body", body))
@@ -132,15 +135,19 @@ fn reading(ctx: &mut Ctx) -> Element {
   Skeleton::new("pipelines-loading", ctx.t("pipelines.reading")).show(ctx, pane)
 }
 
-/// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it.
-fn header(ctx: &mut Ctx, project: ProjectId) -> Element {
+/// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it; a member of a shared project imports
+/// and adds none of the team's pipelines.
+fn header(ctx: &mut Ctx, project: ProjectId, may_change: bool) -> Element {
   let nav = Navigation::of(ctx);
-  let import = ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
-    .icon(Icon::Download)
-    .opens(nav.to(Route::Project(project, ProjectPage::Import(ImportTab::Pipelines))));
-  let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
-    .icon(Icon::Plus)
-    .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline)));
+  let actions = may_change.then(|| {
+    let import = ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
+      .icon(Icon::Download)
+      .opens(nav.to(Route::Project(project, ProjectPage::Import(ImportTab::Pipelines))));
+    let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
+      .icon(Icon::Plus)
+      .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline)));
+    [import, new]
+  });
   parts::header()
     .padding(
       Padding::new()
@@ -149,19 +156,20 @@ fn header(ctx: &mut Ctx, project: ProjectId) -> Element {
         .left(ExtraSpacing::Roomy.role())
         .right(ExtraSpacing::Roomy.role()),
     )
-    .child(
-      parts::title_row("pipelines-title", &ctx.t("pipelines.title"))
-        .child(import)
-        .child(new),
-    )
+    .child(parts::title_row("pipelines-title", &ctx.t("pipelines.title")).with_children(actions.into_iter().flatten()))
     .into()
 }
 
-fn populated(ctx: &mut Ctx, shown: &ShownProject, entries: &[LibraryEntry]) -> lurq::components::Column {
+fn populated(
+  ctx: &mut Ctx,
+  (shown, team): (&ShownProject, Option<&TeamConfiguration>),
+  entries: &[LibraryEntry],
+) -> lurq::components::Column {
   let (published, drafts): (Vec<_>, Vec<_>) = entries
     .iter()
     .partition(|entry| !matches!(entry.state, VersionState::DraftOnly));
-  let mut pane = parts::pane("pipelines-library");
+  let mut pane =
+    parts::pane("pipelines-library").with_children(team.map(|team| team::line(ctx, "pipelines-team-line", team)));
   for (id, title, group) in [
     ("pipelines-published", "pipelines.groups.published", published.clone()),
     ("pipelines-drafts", "pipelines.groups.draftOnly", drafts),
@@ -178,6 +186,7 @@ fn populated(ctx: &mut Ctx, shown: &ShownProject, entries: &[LibraryEntry]) -> l
             project: shown.open.project.id(),
             root: shown.open.repo_root.clone(),
             entry: entry.clone(),
+            team: team.cloned(),
           },
         )
       })
