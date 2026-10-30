@@ -15,6 +15,7 @@
 mod catalog;
 mod input;
 mod policy;
+pub(super) mod prompt;
 mod url;
 mod values;
 

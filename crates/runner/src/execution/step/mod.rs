@@ -49,13 +49,13 @@ use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
 pub(super) use self::qa_app::QaApps;
-pub use self::qa_app::QaSlots;
 use self::{
   command_scope::command_scope,
   end::Taken,
   start::Driven,
   worker::{Stop, Worker},
 };
+pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},

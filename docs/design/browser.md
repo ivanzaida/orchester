@@ -158,8 +158,13 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   microphone, location, notifications: denied). A JavaScript dialog the agent meets (`alert`, `confirm`,
   `beforeunload`) is dismissed and reported in the tool's answer.
 - Secrets: no browser tool takes a secret reference or a secret's value, and `browser_network` never returns headers
-  or bodies. A sign-in with a password is the person's, in the window. The profile folder is never inside a worktree
-  and never offered to `read_external_file` (added to Orchester's own files there).
+  or bodies. A sign-in with a password is the person's, in the window; the step prompt tells the agent to ask a
+  question instead of typing one. The profile folder is never inside a worktree, and `read_external_file` and
+  `search_external_file` refuse `<application data>/browser/` as one of Orchester's own folders
+  (`execution::outside_read_refusals`).
+- The step prompt's browser lines (`orchester_tools::browser::prompt`) also name the step's allowed sites, at most 10
+  and the others counted, and say that local development hosts are always allowed, that the person may watch and take
+  over a tab, and that the agent's actions there then wait.
 - The window's page content is covered in the lurq MCP and DevTools trees, as the code viewer's file text is: MCP
   clients reach pages through the browser tools and their policy, not by reading the window.
 
