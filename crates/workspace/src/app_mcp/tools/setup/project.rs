@@ -9,6 +9,7 @@ use orchester_core::{
   resource::{CommandEnvironment, ResourceKind, VariableName},
   store::{ConnectionStore, RepositoryStore, ResourceStore, SettingsStore},
 };
+use orchester_exec::disk_space::LocalDisks;
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
@@ -16,6 +17,7 @@ use serde_json::{Value, json};
 
 use super::{
   super::{Translate, limits::limits_json, projects::InProject},
+  storage::guard_json,
   widening,
 };
 use crate::{
@@ -30,6 +32,7 @@ use crate::{
     self, DetectTarget,
     init::{LocalRepository, read_local},
   },
+  storage::DiskGuard,
   tools::form::variable_error,
   workspace::OpenProject,
 };
@@ -149,6 +152,7 @@ pub async fn get_project(services: &Services, args: InProject) -> Result<Value, 
     let resources = |kind| db.resources(kind).map(|listed| listed.len());
     let settings = json!({
       "limits": limits_json(db.project_limits()?),
+      "disk_guard": guard_json(&DiskGuard::read(&db, &open.repo_root, &LocalDisks)?),
       "code_index": db.code_index()?.is_on(),
       "environment": environment_json(&db.project_environment()?),
       "repository_agent_files": db.repository_agent_files()?.is_on(),
