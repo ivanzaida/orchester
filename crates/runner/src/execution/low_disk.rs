@@ -1,6 +1,7 @@
-//! The scheduler's side of the disk guard (ORC-114): no run starts or continues while the disk the workspaces are on
-//! has less free space than the project keeps, and runs paused for low disk space go on by themselves once there is
-//! room — each in the workspace it used last if that one is free, else the one idle longest.
+//! The scheduler's side of the disk guard (ORC-114, ORC-422): in every project, no run starts or continues while the
+//! repository's disk has less free space than the project keeps, and runs paused for low disk space go on by
+//! themselves once there is room — a borrowing run in the workspace it used last if that one is free, else the one
+//! idle longest.
 
 use std::{
   path::Path,
@@ -13,7 +14,7 @@ use std::{
 
 use orchester_core::{
   run::{PauseReason, RunStatus},
-  store::{RunStore, WorkspaceStore},
+  store::{RunStore, SettingsStore},
   workspaces::{DiskSpace, DiskSpaceError, DiskUsage, DiskVerdict, GIGABYTE},
 };
 use orchester_ipc::Rejection;
@@ -69,17 +70,13 @@ impl Scheduler {
     self
   }
 
-  /// Refused while the disk the workspaces are on has less free space than the project keeps, in a project that
-  /// turned warm workspaces on (in any other the guard holds nothing back). A disk that cannot be read holds nothing
-  /// back either; the guard logs it.
+  /// Refused while the repository's disk, where every run's folder is, has less free space than the project keeps,
+  /// whether its runs borrow warm workspaces or own a worktree. What it keeps is read at every check, so a change
+  /// applies without a restart. A disk that cannot be read holds nothing back; the guard logs it.
   pub(super) fn check_disk(&self, db: &ProjectDb) -> Result<(), Rejection> {
-    let settings = db
-      .workspace_settings()
-      .map_err(|error| failed("cannot read the workspace settings", &error))?;
-    if !settings.enabled {
-      return Ok(());
-    }
-    let keep = settings.keep_free;
+    let keep = db
+      .keep_free()
+      .map_err(|error| failed("cannot read the free space the project keeps", &error))?;
     match self.inner.disks.usage(&self.inner.project_root) {
       Ok(usage) => match keep.verdict(usage) {
         DiskVerdict::Room => Ok(()),

@@ -1,7 +1,7 @@
 //! Values of Delivery (ORC-19, the `Delivery` layer `p9aqZc`): the Merge queue screen (`seRYH`, `H7OHPT`, `mtrlT`)
-//! with its rows (`Queue row` `kcUhy`, `Queue phase` `ED8Ct`), the pipeline editor's Deliver step (`qukzW`,
-//! `OqgbW`), the task page's delivery (`ulEuh`, `RRk9E`, `lvupO`, `wN5Bz`, `hKct7`, `fAcWt`) with `Conflict file row`
-//! `Nanwh`, `Commit row` `wEWkY` and `Delivery check row` `QyqsJ`, and its Needs you cards (`K1d1mi`).
+//! with its lanes (ORC-410, 05 `S1pTL` of `Base branch · redesign`) and their rows, the pipeline editor's Deliver step
+//! (`qukzW`, `OqgbW`), the task page's delivery (`ulEuh`, `RRk9E`, `lvupO`, `wN5Bz`, `hKct7`, `fAcWt`) with `Conflict
+//! file row` `Nanwh`, `Commit row` `wEWkY` and `Delivery check row` `QyqsJ`, and its Needs you cards (`K1d1mi`).
 
 use std::sync::Arc;
 
@@ -32,10 +32,12 @@ pub enum DeliveryText {
   ReadBack,
   /// 12.5 `text_primary`: how a pipeline delivers, on the canvas's chip (`UVqgh` in `gURMA`).
   Chip,
+  /// Geist Mono 13/600 `text_primary`: the base branch in a lane's head (`TXA1k` in `BBL6x`).
+  LaneBranch,
 }
 
 impl DeliveryText {
-  pub const ALL: [Self; 9] = [
+  pub const ALL: [Self; 10] = [
     Self::Lead,
     Self::State,
     Self::Count,
@@ -45,6 +47,7 @@ impl DeliveryText {
     Self::Stage,
     Self::ReadBack,
     Self::Chip,
+    Self::LaneBranch,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -62,6 +65,7 @@ impl DeliveryText {
       Self::Stage => "delivery_stage",
       Self::ReadBack => "delivery_read_back",
       Self::Chip => "delivery_chip",
+      Self::LaneBranch => "delivery_lane_branch",
     }
   }
 
@@ -76,6 +80,7 @@ impl DeliveryText {
       Self::Stage => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::ReadBack => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
       Self::Chip => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
+      Self::LaneBranch => mono(style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary)),
     }
   }
 }
@@ -85,16 +90,26 @@ pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeliverySpacing {
-  /// 20: between the Merge queue screen's sections (`SMzTk`).
+  /// 20: between the parts of the Merge queue screen while it is read (`zMx0E`).
   Sections,
-  /// 40: the Merge queue screen's sides (`SMzTk`).
-  Page,
   /// 26: a file under the check that found it, in from the check's glyph (`File line` `mjqx2` in `e7geY3`).
   FileIndent,
+  /// 14: the Merge queue's info line, its lanes and its note apart, and under the hub's tabs (`YfZEw` in `S1pTL`).
+  Lanes,
+  /// 10: above a lane's head, and between its glyph, *Into*, its branch, its count and how it lands (`BBL6x`).
+  LaneHead,
+  /// 14: between a lane row's place, glyph, words, time and actions (`mTyPp`).
+  LaneRow,
 }
 
 impl DeliverySpacing {
-  pub const ALL: [Self; 3] = [Self::Sections, Self::Page, Self::FileIndent];
+  pub const ALL: [Self; 5] = [
+    Self::Sections,
+    Self::FileIndent,
+    Self::Lanes,
+    Self::LaneHead,
+    Self::LaneRow,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -103,16 +118,19 @@ impl DeliverySpacing {
   const fn name(self) -> &'static str {
     match self {
       Self::Sections => "delivery_sections",
-      Self::Page => "delivery_page",
       Self::FileIndent => "delivery_file_indent",
+      Self::Lanes => "delivery_lanes",
+      Self::LaneHead => "delivery_lane_head",
+      Self::LaneRow => "delivery_lane_row",
     }
   }
 
   pub const fn value(self) -> f32 {
     match self {
       Self::Sections => 20.0,
-      Self::Page => 40.0,
       Self::FileIndent => 26.0,
+      Self::Lanes | Self::LaneRow => 14.0,
+      Self::LaneHead => 10.0,
     }
   }
 }

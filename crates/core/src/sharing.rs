@@ -1,6 +1,7 @@
 //! Pure shared-task transitions. Storage serializes each transition with its task.
 
 mod cached;
+mod catalog;
 mod delta;
 mod references;
 mod similar;
@@ -11,6 +12,7 @@ use thiserror::Error;
 
 pub use self::{
   cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
+  catalog::{CATALOG_MODELS_PER_ROLE, CATALOG_REFERENCES, CatalogEntry, CatalogEntryKind, LocalCatalog, catalog},
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
   references::{
     Binding, BindingKindError, ConnectionRole, LocalEntities, Published, Reference, ReferenceKind, for_publishing,

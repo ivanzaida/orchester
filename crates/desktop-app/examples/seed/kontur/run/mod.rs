@@ -11,6 +11,7 @@ use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome, ToolCommandResult},
   conversation::{AgentMessage, Message, MessageBody},
   id::{IdempotencyKey, StepExecutionId},
+  integration::base::RunBaseSource,
   resource::{ModelId, RepositoryAccess, StepKey, StepKind},
   run::{
     Answerer, BranchName, InterruptCause, Invocation, InvocationKind, NewRun, PendingToolApproval, Plan, PlanDecision,
@@ -61,12 +62,29 @@ impl<'k> Drive<'k> {
     Self::start_from(kontur, (task, pipeline), at, None)
   }
 
+  /// [`Drive::start`] into `base`, a branch other than `main` set on the task, from the repository's first commit:
+  /// the run lands beside a checkout on `main`.
+  pub fn start_into(
+    kontur: &'k mut Kontur,
+    task: &Task,
+    pipeline: &Published,
+    (at, base): (Timestamp, BranchName),
+  ) -> Result<Self, SeedError> {
+    Self::start_from(kontur, (task, pipeline), at, Some(base))
+  }
+
   fn start_from(
     kontur: &'k mut Kontur,
     (task, pipeline): (&Task, &Published),
     at: Timestamp,
     base_branch: Option<BranchName>,
   ) -> Result<Self, SeedError> {
+    // A run into a branch other than `main` took a branch set on its task; the others the branch checked out.
+    let source = if base_branch.as_ref().is_some_and(|branch| branch.as_str() != MAIN) {
+      RunBaseSource::Task
+    } else {
+      RunBaseSource::CheckedOut
+    };
     let earlier = kontur.db.runs_of_task(task.id())?.len();
     let limits = task.details().limits;
     let new = NewRun {
@@ -75,7 +93,7 @@ impl<'k> Drive<'k> {
       branch: BranchName::for_next_run(task.key(), earlier),
       base: kontur.base.clone(),
       base_branch,
-      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
+      base_source: source,
       budget: limits.budget(),
       max_duration: limits.max_duration(),
     };
