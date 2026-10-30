@@ -84,7 +84,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 55] = [
+pub const ALL: [Scenario; 56] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
