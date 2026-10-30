@@ -1,11 +1,12 @@
 //! `run_worktree_removals`: when runs' own worktrees were removed, one row per run; `run_worktrees_not_removed`: the
 //! folder a removal that could not finish left, and why (ORC-418).
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use orchester_core::{
+  command::CommandRunner,
   id::{RunId, TaskId},
-  integration::{NotRemoved, RemovalStart},
+  integration::{NotRemoved, RemovalStart, sweep},
   store::WorktreeStore,
   time::Timestamp,
 };
@@ -52,6 +53,34 @@ impl ProjectDb {
     let mut statement = self.connection.prepare(&sql)?;
     let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)))?;
     Ok(rows.collect::<Result<_, _>>()?)
+  }
+
+  /// Sweeps the worktree folders of the repository at `repo` ([`sweep`]) that no git worktree, as the `git` program
+  /// run by `runner` lists them, and no run here that has not ended owns, each deletion logged. It only frees space:
+  /// what cannot be read or deleted is logged, and the next sweep tries again. The runner sweeps at its start, and
+  /// the runner and the desktop after each removal.
+  pub fn sweep_worktree_folders(&self, runner: &impl CommandRunner, (git, repo): (&Path, &Path)) {
+    let owners = match self.worktree_folder_owners() {
+      Ok(owners) => owners,
+      Err(error) => {
+        tracing::warn!(%error, "cannot read which runs own the worktree folders; none is swept");
+        return;
+      }
+    };
+    let ended = |name: &str| owners.get(name).copied().unwrap_or(false);
+    match sweep(runner, (git, repo), ended) {
+      Ok(swept) => {
+        for folder in swept {
+          match folder.outcome {
+            Ok(()) => tracing::info!(path = %folder.path.display(), "deleted a worktree folder no run uses"),
+            Err(error) => {
+              tracing::warn!(path = %folder.path.display(), %error, "cannot delete a worktree folder no run uses");
+            }
+          }
+        }
+      }
+      Err(error) => tracing::warn!(%error, "cannot sweep the worktree folders"),
+    }
   }
 }
 

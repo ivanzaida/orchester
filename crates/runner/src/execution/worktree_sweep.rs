@@ -9,7 +9,6 @@ use std::{
   time::Duration,
 };
 
-use orchester_core::integration::sweep;
 use orchester_exec::ProcessRunner;
 use orchester_store::ProjectDb;
 
@@ -27,25 +26,8 @@ pub(super) fn sweep_in_background(root: PathBuf) {
 }
 
 fn sweep_now(root: &Path) {
-  let owners = match ProjectDb::open(root).and_then(|db| db.worktree_folder_owners()) {
-    Ok(owners) => owners,
-    Err(error) => {
-      tracing::warn!(%error, "cannot read which runs own the worktree folders; none is swept");
-      return;
-    }
-  };
-  let ended = |name: &str| owners.get(name).copied().unwrap_or(false);
-  match sweep(&ProcessRunner::new(GIT_TIMEOUT), (Path::new("git"), root), ended) {
-    Ok(swept) => {
-      for folder in swept {
-        match folder.outcome {
-          Ok(()) => tracing::info!(path = %folder.path.display(), "deleted a worktree folder no run uses"),
-          Err(error) => {
-            tracing::warn!(path = %folder.path.display(), %error, "cannot delete a worktree folder no run uses");
-          }
-        }
-      }
-    }
-    Err(error) => tracing::warn!(%error, "cannot sweep the worktree folders"),
+  match ProjectDb::open(root) {
+    Ok(db) => db.sweep_worktree_folders(&ProcessRunner::new(GIT_TIMEOUT), (Path::new("git"), root)),
+    Err(error) => tracing::warn!(%error, "cannot read which runs own the worktree folders; none is swept"),
   }
 }

@@ -514,7 +514,7 @@ fn clear(
   if let Some(left) = cleanup.not_removed() {
     tracing::warn!(run = %run.id(), path = %left.path, reason = ?left.reason, "a worktree of the run was not removed");
   }
-  super::worktree_sweep::sweep_in(db, programs, repo_root);
+  super::worktree_sweep::sweep_in_background(programs, repo_root);
   prune_indexes(repo_root);
   Ok(cleanup)
 }

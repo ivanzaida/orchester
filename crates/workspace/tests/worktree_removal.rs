@@ -10,7 +10,8 @@ use std::{
   path::{Path, PathBuf},
   process::Command as Process,
   sync::{Arc, mpsc},
-  time::Duration,
+  thread,
+  time::{Duration, Instant},
 };
 
 use orchester_core::{
@@ -365,7 +366,12 @@ fn worktree_removal_sweeps_folders_no_run_uses_and_never_a_running_runs() {
   remove_in(&root, &programs, &removed, &seen).expect("removed");
 
   assert!(!folder.exists(), "the removed worktree is gone");
-  assert!(!orphan.exists(), "an ended run's folder git forgot is swept");
+  // The sweep runs on a thread of its own: the removal does not wait for it.
+  let deadline = Instant::now() + Duration::from_secs(60);
+  while orphan.exists() {
+    assert!(Instant::now() < deadline, "an ended run's folder git forgot is swept");
+    thread::sleep(Duration::from_millis(20));
+  }
   assert!(at_work.is_dir(), "a running run's folder is never touched");
   assert!(unknown.is_dir(), "a folder no run has is left alone");
   assert!(kept.is_dir(), "a worktree git lists stays");

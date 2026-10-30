@@ -189,15 +189,21 @@ fn edit(ctx: &mut Ctx, task: &TaskContext) -> Option<Control> {
 }
 
 /// *Open worktree in Files*: the code viewer at the latest run's worktree, while it has one; unavailable once it was
-/// removed.
+/// removed, or once its removal left the folder on disk without git's worktree (ORC-418): it is then not removed.
 fn open_worktree(ctx: &mut Ctx, task: &TaskContext) -> Option<Control> {
   let run = task.detail.run.as_ref()?;
   run.run.current_attempt()?;
   let look = ("task-open-worktree", "task.more.openWorktree", Icon::FolderTree);
   if run.worktree_removed.is_some() {
-    let reason = super::controls::Reason {
-      short: ctx.t("task.reasons.worktreeRemoved"),
-      full: ctx.t("task.more.worktreeRemoved"),
+    let reason = match &run.worktree_not_removed {
+      Some(left) => super::controls::Reason {
+        short: ctx.t("task.reasons.worktreeNotRemoved"),
+        full: ctx.t_args("task.more.worktreeNotRemoved", [("path", left.path.as_str())]),
+      },
+      None => super::controls::Reason {
+        short: ctx.t("task.reasons.worktreeRemoved"),
+        full: ctx.t("task.more.worktreeRemoved"),
+      },
     };
     return Some(Control::new(ctx, look, ButtonKind::Ghost, Offer::Unavailable(reason)));
   }
