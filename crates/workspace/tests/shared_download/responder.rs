@@ -1,10 +1,13 @@
-//! A loopback responder for a shared project's first download (ORC-282). It is not a team server: it answers only
-//! what joining with a code and reading one project need, `GET /server`, `POST /auth/code`, `GET /auth/me`, the
-//! project by its slug and by its id, and the project's tags, modules and tasks, with one fixed project of three
-//! tasks, one tag and one module. Its tasks can be held until the test lets them go, or refused with a `500`.
+//! A loopback responder for a shared project's first download (ORC-282, ORC-291). It is not a team server: it answers
+//! only what joining with a code and reading one project need, `GET /server`, `POST /auth/code`, `GET /auth/me`, the
+//! project by its slug and by its id, and the project's tags, modules and tasks, with one fixed project of one tag and
+//! one module. Its three fixed tasks ignore `after`, as a server without pages does; they can be held until the test
+//! lets them go, or refused with a `500`. A paged responder ([`Responder::paged`]) has as many tasks as the test says
+//! instead, read in pages each with an answer of its own, and the whole list unheld. The project can leave the server.
 //! Anything else is `404`. Each request has a connection of its own, answered on a thread of its own.
 
 use std::{
+  collections::HashMap,
   io::{BufRead, BufReader, Read, Write},
   net::{TcpListener, TcpStream},
   sync::Arc,
@@ -46,9 +49,42 @@ pub enum TasksAnswer {
   Fail,
 }
 
+/// How a paged responder answers the page after one number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PageAnswer {
+  Serve,
+  /// Held until the test says otherwise.
+  Hold,
+  /// `500 internal`.
+  Fail,
+  /// The connection breaks without an answer.
+  Drop,
+  /// A page whose `next` is where it started.
+  Stuck,
+  /// Every task as one page, as a server that does not know `after`.
+  Whole,
+}
+
+/// A paged responder's tasks and how each page is answered.
+struct Paging {
+  tasks: usize,
+  per_page: usize,
+  total: Option<usize>,
+  answers: HashMap<u32, PageAnswer>,
+}
+
+impl Paging {
+  fn answer(&self, after: u32) -> PageAnswer {
+    self.answers.get(&after).copied().unwrap_or(PageAnswer::Serve)
+  }
+}
+
 struct State {
   tasks: Mutex<TasksAnswer>,
   changed: Condvar,
+  paging: Mutex<Option<Paging>>,
+  page_changed: Condvar,
+  project_gone: Mutex<bool>,
   /// The request lines read, e.g. `GET /api/v1/projects/…/tasks`.
   seen: Mutex<Vec<String>>,
 }
@@ -61,11 +97,29 @@ pub struct Responder {
 impl Responder {
   /// Listens on a free loopback port and answers until the test program ends.
   pub fn start(tasks: TasksAnswer) -> Self {
+    Self::listen(tasks, None)
+  }
+
+  /// A responder whose project has `tasks` tasks, read `per_page` at a time, each page naming `total`.
+  pub fn paged(tasks: usize, per_page: usize, total: Option<usize>) -> Self {
+    let paging = Paging {
+      tasks,
+      per_page,
+      total,
+      answers: HashMap::new(),
+    };
+    Self::listen(TasksAnswer::Serve, Some(paging))
+  }
+
+  fn listen(tasks: TasksAnswer, paging: Option<Paging>) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen on loopback");
     let url = format!("http://localhost:{}", listener.local_addr().expect("address").port());
     let state = Arc::new(State {
       tasks: Mutex::new(tasks),
       changed: Condvar::new(),
+      paging: Mutex::new(paging),
+      page_changed: Condvar::new(),
+      project_gone: Mutex::new(false),
       seen: Mutex::new(Vec::new()),
     });
     let (serving, base) = (state.clone(), url.clone());
@@ -98,17 +152,50 @@ impl Responder {
     self.state.changed.notify_all();
   }
 
-  /// How often the project's tasks were asked for.
+  /// Answers the page after `after` as `answer` from now on, a held one too.
+  pub fn page(&self, after: u32, answer: PageAnswer) {
+    let mut paging = self.state.paging.lock();
+    paging
+      .as_mut()
+      .expect("a paged responder")
+      .answers
+      .insert(after, answer);
+    self.state.page_changed.notify_all();
+  }
+
+  /// From now on the project answers `404`, as for a person no longer a member.
+  pub fn project_gone(&self) {
+    *self.state.project_gone.lock() = true;
+  }
+
+  /// How often the project's tasks were asked for, whole or a page.
   pub fn tasks_asked(&self) -> usize {
     let tasks = format!("GET /api/v1/projects/{PROJECT}/tasks");
-    self.state.seen.lock().iter().filter(|line| **line == tasks).count()
+    let seen = self.state.seen.lock();
+    seen
+      .iter()
+      .filter(|line| line.split('?').next() == Some(tasks.as_str()))
+      .count()
+  }
+
+  /// Where each page asked for started, in the order they were asked for.
+  pub fn pages_asked(&self) -> Vec<u32> {
+    let tasks = format!("GET /api/v1/projects/{PROJECT}/tasks");
+    let seen = self.state.seen.lock();
+    seen
+      .iter()
+      .filter(|line| line.split('?').next() == Some(tasks.as_str()))
+      .filter_map(|line| after_of(line))
+      .collect()
   }
 }
 
 fn answer(mut stream: TcpStream, state: &State, base: &str) {
   let Some(line) = read(&stream) else { return };
   state.seen.lock().push(line.clone());
-  let (status, body) = route(&line, state, base);
+  let Some((status, body)) = route(&line, state, base) else {
+    return;
+  };
   let body = body.to_string();
   let head = format!(
     "HTTP/1.1 {status} Answer\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -144,26 +231,49 @@ fn read(stream: &TcpStream) -> Option<String> {
   Some(line)
 }
 
-fn route(line: &str, state: &State, base: &str) -> (u16, Value) {
+/// What `line` is answered with; `None` to break the connection instead.
+fn route(line: &str, state: &State, base: &str) -> Option<(u16, Value)> {
   let project = format!("/api/v1/projects/{PROJECT}");
   let (method, target) = line.split_once(' ').unwrap_or((line, ""));
   let path = target.split('?').next().unwrap_or(target);
-  match (method, path) {
+  if method == "GET" && path == format!("{project}/tasks") {
+    return tasks(target, state);
+  }
+  Some(match (method, path) {
     ("GET", "/api/v1/server") => (200, server()),
     ("POST", "/api/v1/auth/code") => (201, joined()),
     ("GET", "/api/v1/auth/me") => (200, json!({ "user": user() })),
     ("GET", "/api/v1/projects") if target.ends_with(&format!("slug={SLUG}")) => {
       (200, json!({ "project": shared_project(base) }))
     }
-    ("GET", path) if path == project => (200, json!({ "project": shared_project(base) })),
+    ("GET", path) if path == project && !*state.project_gone.lock() => {
+      (200, json!({ "project": shared_project(base) }))
+    }
     ("GET", path) if path == format!("{project}/tags") => (200, json!({ "tags": [{ "id": TAG_ID, "name": TAG }] })),
     ("GET", path) if path == format!("{project}/modules") => (200, json!({ "modules": [module()], "changes": [] })),
-    ("GET", path) if path == format!("{project}/tasks") => tasks(state),
     _ => (404, json!({ "error": "not_found", "message": "Not found" })),
+  })
+}
+
+/// The project's tasks as `target` asks: in pages when the responder has pages and it names where one starts.
+fn tasks(target: &str, state: &State) -> Option<(u16, Value)> {
+  let paged = state.paging.lock().is_some();
+  match (paged, after_of(target)) {
+    (true, Some(after)) => page(state, after),
+    (true, None) => {
+      let all = state.paging.lock().as_ref().map_or(0, |paging| paging.tasks);
+      Some((200, json!({ "tasks": numbered(1..=all), "cursor": 7 })))
+    }
+    (false, _) => Some(whole_list(state)),
   }
 }
 
-fn tasks(state: &State) -> (u16, Value) {
+fn after_of(target: &str) -> Option<u32> {
+  let (_, query) = target.split_once('?')?;
+  query.strip_prefix("after=")?.parse().ok()
+}
+
+fn whole_list(state: &State) -> (u16, Value) {
   let mut answer = state.tasks.lock();
   state
     .changed
@@ -178,8 +288,52 @@ fn tasks(state: &State) -> (u16, Value) {
         .collect();
       (200, json!({ "tasks": tasks, "cursor": 7 }))
     }
-    TasksAnswer::Hold | TasksAnswer::Fail => (500, json!({ "error": "internal", "message": "The server failed" })),
+    TasksAnswer::Hold | TasksAnswer::Fail => refused(),
   }
+}
+
+/// The page of the tasks numbered above `after`, as the test said to answer it.
+fn page(state: &State, after: u32) -> Option<(u16, Value)> {
+  let mut paging = state.paging.lock();
+  state.page_changed.wait_while_for(
+    &mut paging,
+    |paging| {
+      paging
+        .as_ref()
+        .is_some_and(|paging| paging.answer(after) == PageAnswer::Hold)
+    },
+    HOLD_AT_MOST,
+  );
+  let paging = paging.as_ref()?;
+  let first = after as usize + 1;
+  let last = (after as usize + paging.per_page).min(paging.tasks);
+  let mut body = match paging.answer(after) {
+    PageAnswer::Serve => json!({ "tasks": numbered(first..=last), "cursor": 7 }),
+    PageAnswer::Whole => return Some((200, json!({ "tasks": numbered(1..=paging.tasks), "cursor": 7 }))),
+    PageAnswer::Stuck => json!({ "tasks": numbered(first..=last), "cursor": 7, "next": after }),
+    PageAnswer::Hold | PageAnswer::Fail => return Some(refused()),
+    PageAnswer::Drop => return None,
+  };
+  if paging.answer(after) == PageAnswer::Serve && last < paging.tasks {
+    body["next"] = json!(last);
+  }
+  if let Some(total) = paging.total {
+    body["total"] = json!(total);
+  }
+  Some((200, body))
+}
+
+fn numbered(numbers: std::ops::RangeInclusive<usize>) -> Vec<Value> {
+  numbers
+    .map(|number| {
+      let id = format!("01a18f00-0000-7000-8000-{:012x}", 0xe00 + number);
+      task(&id, number, &format!("Task {number}"))
+    })
+    .collect()
+}
+
+fn refused() -> (u16, Value) {
+  (500, json!({ "error": "internal", "message": "The server failed" }))
 }
 
 fn server() -> Value {
