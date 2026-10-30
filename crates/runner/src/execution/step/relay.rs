@@ -467,7 +467,8 @@ impl Relay {
 
   /// The answer to a call of browser tool `name`: refused when the step is not offered the browser, the call is not
   /// valid or acts on a tab that is not the run's; asked about first when the site it goes to or acts on asks, or it
-  /// runs a script, showing the site; `None` when the relay closed its connection while the call waited.
+  /// runs a script, showing the site; waiting while the person uses its tab; `None` when the relay closed its
+  /// connection while the call waited.
   async fn browser_call(
     &self,
     name: &str,
@@ -494,7 +495,12 @@ impl Relay {
     {
       return Some(denied);
     }
-    Some(browser.run(call).await.redacted(tools.secrets()))
+    let waited = tokio::select! {
+      waited = browser.wait_for_person(&call) => waited,
+      // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait without acting.
+      _ = lines.next_line() => return None,
+    };
+    Some(browser.run(call, waited).await.redacted(tools.secrets()))
   }
 
   /// Asks a person about the call of `name` with `arguments` that reached the runner without an approval, the request

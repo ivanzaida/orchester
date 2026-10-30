@@ -1,7 +1,7 @@
 //! The Browser window headless (`support`): its tabs with their owners and the toolbar (`01`), the states drawn instead
-//! of a page (`05`, `06`, `07`), what Orchester draws over the page (`02`, `03`, `04`), its frame, its shortcuts and
-//! its tab strip's overflow (`01d`, `01e`); and the main window opening it by itself when an agent starts browsing, and
-//! from its app menu.
+//! of a page (`05`, `06`, `07`), what Orchester draws over the page (`02`, `02b`, `03`, `04`), its frame, its shortcuts
+//! and its tab strip's overflow (`01d`, `01e`); and the main window opening it by itself when an agent starts browsing,
+//! and from its app menu.
 
 use std::io::Cursor;
 
@@ -12,10 +12,10 @@ use orchester_app::{
   navigation::shortcuts::Keys,
   test_support::Window,
 };
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
-  AgentAction, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTabId, DialogKind,
-  ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
+  AgentAction, AgentWaitEnd, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTabId,
+  DialogKind, ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
 };
 
 use super::support::{Browser, browser_installed, state, tab};
@@ -58,6 +58,85 @@ fn browser_window_shows_the_tabs_with_their_owners_the_toolbar_and_the_frame() {
   browser.until_shown("browser-page-frame");
 }
 
+/// `02b` `k7xvx` as a runner reaches it: the line, its time left and the tab's dot come and go with the runner's
+/// events, and the person's input alone changes nothing.
+#[test]
+fn browser_window_says_an_agent_waits_only_while_the_runner_says_so() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  let (changed, run) = state("T1", BrowserMode::Headless);
+  let tab = BrowserTabId::new("T1");
+  browser.feed(changed);
+  browser.until_shown("browser-page");
+  browser.feed(BrowserEvent::AgentActed {
+    run,
+    tab: tab.clone(),
+    action: AgentAction {
+      tool: "browser_type".to_owned(),
+      summary: "typed 8 in Max attempts".to_owned(),
+      element: Some(ElementBox {
+        x: 55,
+        y: 377,
+        width: 268,
+        height: 34,
+      }),
+    },
+  });
+  browser.until_shown("browser-agent-mark");
+  browser.use_page();
+  assert!(
+    browser.text("browser-activity").contains("typed 8 in Max attempts"),
+    "the person's input alone makes no agent wait"
+  );
+  assert!(browser.shows("browser-agent-mark"));
+
+  let until = |left_ms: i64| Timestamp::from_unix_millis(Timestamp::now().unix_millis() + left_ms);
+  let left = |browser: &mut Browser| -> u32 {
+    let hint = browser.text("browser-activity-hint");
+    hint
+      .strip_suffix(" s left")
+      .and_then(|seconds| seconds.parse().ok())
+      .unwrap_or_else(|| panic!("seconds left, not {hint:?}"))
+  };
+  browser.feed(BrowserEvent::AgentWaiting {
+    run,
+    tab: tab.clone(),
+    until: until(7_500),
+  });
+  browser.until("the line to say the agent waits", |browser| {
+    browser.text("browser-activity").contains("You're using this tab")
+  });
+  assert_eq!(browser.text("browser-activity-title"), "You're using this tab");
+  assert_eq!(
+    browser.text("browser-activity-detail"),
+    "· An agent waits until 10 s after your last input"
+  );
+  assert!((6..=8).contains(&left(&mut browser)));
+  assert!(
+    !browser.shows("browser-agent-mark"),
+    "the agent waits for the person, so no mark"
+  );
+
+  browser.feed(BrowserEvent::AgentWaiting {
+    run,
+    tab: tab.clone(),
+    until: until(60_000),
+  });
+  browser.until("new input to push the wait back", |browser| left(browser) > 8);
+
+  browser.feed(BrowserEvent::AgentWaitEnded {
+    run,
+    tab,
+    end: AgentWaitEnd::Ran,
+  });
+  browser.until("the line to go back to the agent's action", |browser| {
+    browser.text("browser-activity").contains("typed 8 in Max attempts")
+  });
+  assert!(browser.shows("browser-agent-mark"));
+}
+
 #[test]
 fn browser_window_draws_what_frames_do_not_show() {
   if !browser_installed() {
@@ -88,12 +167,6 @@ fn browser_window_draws_what_frames_do_not_show() {
   assert_eq!(browser.on_page("browser-agent-ring"), (51.0, 373.0, 276.0, 42.0));
   let (left, top, ..) = browser.on_page("browser-agent-pointer");
   assert_eq!((left, top), (51.0 + 276.0 - 28.0, 373.0 + 42.0 - 16.0));
-  browser.use_page();
-  assert!(browser.text("browser-activity").contains("You're using this tab"));
-  assert!(
-    !browser.shows("browser-agent-mark"),
-    "the person's input holds the agent, so no mark (02b)"
-  );
 
   browser.feed(state("P1", BrowserMode::Headless).0);
   browser.feed(BrowserEvent::DialogOpened {

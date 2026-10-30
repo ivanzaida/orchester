@@ -9,20 +9,19 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_core::{id::RunId, run::RunNumber};
+use orchester_core::{id::RunId, run::RunNumber, time::Timestamp};
 use orchester_ipc::browser::{BrowserTab, BrowserTabId, TabOwner};
 use orchester_workspace::browser::{BrowserView, RunOwner};
 
-/// How long the person's input on a tab makes its agent wait (`02b · You use the tab` `k7xvx`), and how long the
-/// window does not follow an agent to its new tab after the person used the window.
-pub const PERSON_HOLD: Duration = Duration::from_secs(10);
+/// How long the window does not follow an agent to its new tab after the person used the window.
+pub const LEFT_ALONE_AFTER: Duration = Duration::from_secs(10);
 /// How long an agent's last action on a tab keeps it *acting*.
 pub const ACTING_FOR: Duration = Duration::from_secs(10);
 
 /// The dot on an agent's tab, strongest first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Indicator {
-  /// Amber: its run waits for the person, or the person's input holds its agent.
+  /// Amber: its run waits for the person, or its agent waits because the person uses the tab, as the runner says.
   Waits,
   /// Blue: its agent acted on it a moment ago.
   Acting,
@@ -85,6 +84,7 @@ impl StripTab {
 }
 
 /// What the window keeps of the person's own use of a project's tabs: the tabs looked at, and the last input on each.
+/// Whether an agent waits on a tab is the runner's to say ([`BrowserView::waiting`]), not judged from these.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Marks {
   seen: HashSet<BrowserTabId>,
@@ -102,18 +102,17 @@ impl Marks {
     self.input.insert(tab.clone(), at);
   }
 
-  /// Whether the person's input reached `tab` within [`PERSON_HOLD`] of `now`: its agent waits.
-  pub fn holds(&self, tab: &BrowserTabId, now: Instant) -> bool {
-    self
-      .input
-      .get(tab)
-      .is_some_and(|at| now.saturating_duration_since(*at) < PERSON_HOLD)
-  }
-
   /// When the person last used any tab, to decide whether the window follows an agent to its new tab.
   pub fn last_input(&self) -> Option<Instant> {
     self.input.values().max().copied()
   }
+}
+
+/// How many whole seconds are left of an agent's wait until `until`, at `now`, as the 02b line says it: rounded up, and
+/// at least one, since the wait goes on until the runner says it ended.
+pub fn seconds_left(until: Timestamp, now: Timestamp) -> u64 {
+  let left = u64::try_from(until.unix_millis().saturating_sub(now.unix_millis())).unwrap_or(0);
+  left.div_ceil(1000).max(1)
 }
 
 /// The strip of `view`: agents' tabs, then the person's. `owners` names the runs read so far.
@@ -209,7 +208,7 @@ fn indicator(
   marks: &Marks,
   now: Instant,
 ) -> Option<Indicator> {
-  if owner.is_some_and(|owner| owner.waits) || marks.holds(&tab.id, now) {
+  if owner.is_some_and(|owner| owner.waits) || view.waiting(&tab.id).is_some() {
     return Some(Indicator::Waits);
   }
   let acting = view
@@ -247,7 +246,7 @@ fn grouped(tabs: Vec<(Option<Arc<str>>, StripTab)>) -> Vec<StripTab> {
 
 /// The tab the window shows: `wanted`, asked for by the person or a request, while it is open; else the tab `shown`,
 /// unless an agent of its run just `opened` a tab, which the window follows only while the person has not used it for
-/// [`PERSON_HOLD`]; else the tab shown `last`; else the first.
+/// [`LEFT_ALONE_AFTER`]; else the tab shown `last`; else the first.
 pub fn tab_to_show(
   strip: &Strip,
   (wanted, shown, last): (Option<&BrowserTabId>, Option<&BrowserTabId>, Option<&BrowserTabId>),
@@ -260,7 +259,7 @@ pub fn tab_to_show(
   if let Some(shown) = open(shown) {
     let idle = marks
       .last_input()
-      .is_none_or(|at| now.saturating_duration_since(at) >= PERSON_HOLD);
+      .is_none_or(|at| now.saturating_duration_since(at) >= LEFT_ALONE_AFTER);
     let run = match strip.find(&shown).map(|tab| &tab.owner) {
       Some(Owner::Run { run, .. }) => Some(*run),
       _ => None,

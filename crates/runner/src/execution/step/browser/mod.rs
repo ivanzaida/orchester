@@ -9,9 +9,10 @@
 //! web host, asks; `browser_eval` asks at every call. The relay asks the person itself, as for any of Orchester's tools
 //! that asks, so every CLI runs these tools unasked.
 //!
-//! Every answer with page content starts with [`PAGE_DATA_NOTICE`], and a JavaScript dialog the page opened is
-//! dismissed and named in the next answer on its tab. Each call that acts on a page is reported to the person's
-//! *Browser* window once carried out, for *Agent is acting* ([`acted`]).
+//! Every answer with page content starts with [`PAGE_DATA_NOTICE`], after the line that says the call waited for the
+//! person when it did ([`person`]), and a JavaScript dialog the page opened is dismissed and named in the next answer
+//! on its tab. Each call that acts on a page is reported to the person's *Browser* window once carried out, for *Agent
+//! is acting* ([`acted`]).
 
 mod act;
 mod acted;
@@ -19,6 +20,7 @@ mod keys;
 mod logs;
 mod navigation;
 mod page;
+mod person;
 mod script;
 mod shot;
 
@@ -36,7 +38,7 @@ use thiserror::Error;
 
 use self::acted::Acted;
 use super::orchester_tools::Looked;
-use crate::browser::{BrowserError, ProjectBrowser, Tab, cdp::TargetId};
+use crate::browser::{BrowserError, PersonWait, ProjectBrowser, Tab, cdp::TargetId};
 
 /// Why a browser call did not do what it asked. The message is the error result the agent gets.
 #[derive(Debug, Error)]
@@ -132,15 +134,25 @@ impl StepBrowser {
     Ok(PageUrl::parse(&info.url).ok().map(|url| url.host().clone()))
   }
 
-  /// Runs `call`, approved or not needing an approval.
-  pub(in crate::execution::step) async fn run(&self, call: BrowserCall) -> ToolResult {
+  /// Runs `call`, approved or not needing an approval, after what its wait for the person came to
+  /// ([`Self::wait_for_person`]): it does not act when that says so, and otherwise its answer starts by saying it
+  /// waited.
+  pub(in crate::execution::step) async fn run(&self, call: BrowserCall, waited: PersonWait) -> ToolResult {
+    let line = match person::first_line(waited) {
+      Ok(line) => line,
+      Err(refused) => return ToolResult::unavailable(&refused),
+    };
+    let said = |text: String| match &line {
+      Some(line) => format!("{line}\n{text}"),
+      None => text,
+    };
     match self.answer(call).await {
       Ok(Answer {
         text,
         image: Some(image),
-      }) => ToolResult::with_image(text, image),
-      Ok(Answer { text, image: None }) => ToolResult::shown(text),
-      Err(error) => ToolResult::unavailable(&error.to_string()),
+      }) => ToolResult::with_image(said(text), image),
+      Ok(Answer { text, image: None }) => ToolResult::shown(said(text)),
+      Err(error) => ToolResult::unavailable(&said(error.to_string())),
     }
   }
 

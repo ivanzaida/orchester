@@ -1,16 +1,16 @@
-//! The *Browser* window's messages (protocol 33): every request, reply and event round-trips, a screencast frame
+//! The *Browser* window's messages (protocol 34): every request, reply and event round-trips, a screencast frame
 //! travels as a binary frame with its JPEG within the frame limit, malformed binary frames are refused, and a frame
 //! crosses the platform's real endpoint (the Unix socket on macOS, the named pipe on Windows).
 
 use std::time::Duration;
 
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::{
-  Command, Endpoint, Event, FrameError, Rejection, Reply, Request, RequestId,
+  Command, Endpoint, Event, FrameError, PROTOCOL_VERSION, Rejection, Reply, Request, RequestId,
   browser::{
-    AgentAction, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserReply, BrowserState, BrowserTab,
-    BrowserTabId, DialogKind, ElementBox, KeyAction, Modifiers, MouseAction, MouseButton, Navigation, PersonInput,
-    ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner, Viewport,
+    AgentAction, AgentWaitEnd, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserReply, BrowserState,
+    BrowserTab, BrowserTabId, DialogKind, ElementBox, KeyAction, Modifiers, MouseAction, MouseButton, Navigation,
+    PersonInput, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner, Viewport,
   },
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
 };
@@ -222,6 +222,47 @@ fn events(run: RunId) -> Vec<Event> {
     })),
     reply(Reply::Rejected(Rejection::NoSuchTab)),
   ]
+}
+
+/// The events of an agent waiting for the person came with protocol 34, so a runner of 33 is told apart at the
+/// handshake: where it waits and until when, and each way its wait ends.
+#[tokio::test]
+async fn browser_agent_waiting_events_round_trip_under_a_raised_protocol() {
+  assert_eq!(PROTOCOL_VERSION, 34);
+  let (mut reader, mut writer) = connection();
+  let run = RunId::generate();
+  let ended = |end| {
+    Event::Browser(BrowserEvent::AgentWaitEnded {
+      run,
+      tab: tab("T1"),
+      end,
+    })
+  };
+  let sent = [
+    Event::Browser(BrowserEvent::AgentWaiting {
+      run,
+      tab: tab("T1"),
+      until: Timestamp::from_unix_millis(1_793_372_042_138),
+    }),
+    ended(AgentWaitEnd::Ran),
+    ended(AgentWaitEnd::Capped),
+    ended(AgentWaitEnd::Cancelled),
+  ];
+  let written = async {
+    for event in &sent {
+      writer.write_event(event).await.expect("write event");
+    }
+    drop(writer);
+  };
+  let read = async {
+    let mut events = Vec::new();
+    while let Some(event) = reader.read_event().await.expect("read event") {
+      events.push(event);
+    }
+    events
+  };
+  let ((), received) = tokio::join!(written, read);
+  assert_eq!(received, sent);
 }
 
 #[tokio::test]

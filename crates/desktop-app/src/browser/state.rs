@@ -56,6 +56,8 @@ pub struct Showing {
   pub commands: Commands,
   /// The person's own use of the project's tabs.
   pub marks: Marks,
+  /// The whole seconds left of the wait of the agent of the tab shown, while the runner says it waits for the person.
+  pub waits_left: Option<u64>,
   /// What the person did in the window, which the root keeps.
   pub person: PersonHooks,
   /// The address line's text input, which Ctrl+L and the empty strip give the focus.
@@ -73,6 +75,7 @@ impl PartialEq for Showing {
       && self.found == other.found
       && self.restarting == other.restarting
       && self.marks == other.marks
+      && self.waits_left == other.waits_left
   }
 }
 

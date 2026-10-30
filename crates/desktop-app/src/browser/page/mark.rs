@@ -28,12 +28,12 @@ const RING_OUTSET: f32 = 4.0;
 const POINTER_IN: f32 = 28.0;
 const POINTER_UP: f32 = 16.0;
 
-/// The ring and the agent's name over the element the agent of `tab` acted on last, while it is recent and the
-/// person's input does not hold the agent (`02b · You use the tab` `k7xvx` has no mark).
+/// The ring and the agent's name over the element the agent of `tab` acted on last, while it is recent and the agent
+/// does not wait for the person (`02b · You use the tab` `k7xvx` has no mark).
 pub fn mark(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) -> Option<Element> {
   let view = showing.view.as_ref()?;
   let now = Instant::now();
-  if showing.marks.holds(tab, now) {
+  if view.waiting(tab).is_some() {
     return None;
   }
   let acting = view

@@ -6,7 +6,8 @@
 //! in a focused text input: the text one commits is sent as `PersonInput::Text`, and its candidates show where the
 //! page was pressed. A composition under way is not sent, as lurq shows it in the input and tells no handler of it;
 //! nor is a key event of the composition, though the text of a key the input method passes on goes as text, which lurq
-//! types in the input. Each input marks the tab as used, so its agent waits (`02b` `k7xvx`).
+//! types in the input. The runner makes the tab's agent wait on each input it gets (`02b` `k7xvx`); the window marks
+//! the tab as used only to know whether to follow an agent to its new tab.
 
 use std::{
   sync::Arc,

@@ -16,14 +16,14 @@ mod with_runner;
 use std::{io::Cursor, path::Path, time::Duration};
 
 use image::{ImageFormat, Rgb, RgbImage};
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
-  AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, DialogKind,
-  ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
+  AgentAction, AgentWaitEnd, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId,
+  DialogKind, ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
 };
 use orchester_store::AppDb;
 use orchester_workspace::{
-  browser::{BrowserView, BrowserWindow, StartedBrowsing},
+  browser::{AgentWaiting, BrowserView, BrowserWindow, StartedBrowsing},
   workspace::Workspace,
 };
 use tokio::time::timeout;
@@ -224,6 +224,80 @@ fn browser_window_keeps_what_belongs_to_a_tab_until_it_closes() {
   let view = window.view(root).expect("the browser");
   assert_eq!((view.acting(&tab("T1")), view.latest_acting()), (None, None));
   assert_eq!(view.last_shown(), None);
+}
+
+/// Each tab keeps whether an agent waits on it and until when: pushed back, ended whichever way, and gone with its tab.
+#[test]
+fn browser_window_keeps_the_agent_waiting_on_each_tab_until_its_wait_ends() {
+  let window = BrowserWindow::default();
+  let root = Path::new("/p/kontur");
+  let run = RunId::generate();
+  let tabs = |ids: &[&str]| {
+    ids
+      .iter()
+      .map(|id| browser_tab(id, TabOwner::Run { run }))
+      .collect::<Vec<_>>()
+  };
+  window.receive_for_test(root, "Kontur", state(tabs(&["T1", "T2"]), Some("T1")));
+  let moment = Timestamp::from_unix_millis;
+  let waits = |tab_id: &str, until| BrowserEvent::AgentWaiting {
+    run,
+    tab: tab(tab_id),
+    until,
+  };
+
+  let view = window.view(root).expect("the browser");
+  assert_eq!(view.waiting(&tab("T1")), None, "no agent waits yet");
+
+  window.receive_for_test(root, "Kontur", waits("T1", moment(10_000)));
+  window.receive_for_test(root, "Kontur", waits("T2", moment(20_000)));
+  let view = window.view(root).expect("the browser");
+  assert_eq!(
+    view.waiting(&tab("T1")),
+    Some(&AgentWaiting {
+      run,
+      until: moment(10_000)
+    })
+  );
+  assert_eq!(
+    view.waiting(&tab("T2")).map(|waiting| waiting.until),
+    Some(moment(20_000))
+  );
+
+  window.receive_for_test(root, "Kontur", waits("T1", moment(14_000)));
+  let pushed = window.view(root).expect("the browser");
+  assert_eq!(
+    pushed.waiting(&tab("T1")).map(|waiting| waiting.until),
+    Some(moment(14_000)),
+    "new input pushes it back"
+  );
+
+  for (at, end) in [
+    (1, AgentWaitEnd::Ran),
+    (2, AgentWaitEnd::Capped),
+    (3, AgentWaitEnd::Cancelled),
+  ] {
+    window.receive_for_test(root, "Kontur", waits("T1", moment(at)));
+    window.receive_for_test(
+      root,
+      "Kontur",
+      BrowserEvent::AgentWaitEnded {
+        run,
+        tab: tab("T1"),
+        end,
+      },
+    );
+    let view = window.view(root).expect("the browser");
+    assert_eq!(view.waiting(&tab("T1")), None, "{end:?} ends the wait on T1");
+    assert!(view.waiting(&tab("T2")).is_some(), "and not on T2");
+  }
+
+  window.receive_for_test(root, "Kontur", state(tabs(&["T1"]), Some("T1")));
+  assert_eq!(
+    window.view(root).expect("the browser").waiting(&tab("T2")),
+    None,
+    "it goes with its tab"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -15,6 +15,7 @@ fn seed_names_every_scenario_once() {
       "browser-window-many",
       "browser-window-overflow",
       "browser-window-acting",
+      "browser-window-waiting",
       "browser-window-dialog",
       "browser-window-select",
       "browser-window-headed",

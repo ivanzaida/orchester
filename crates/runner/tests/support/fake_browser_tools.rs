@@ -1,16 +1,21 @@
 //! How the fake CLIs use the browser tools ("Use the browser tools"), on the pages the test serves at the address it
 //! writes into `fake-browser-site` beside the worktrees; `fake-browser-other-tab` names a tab another run opened. With
 //! `fake-browser-elsewhere`, the same pages at an address whose host is not local, the fake reads and acts as
-//! [`read_closely_and_act_elsewhere`] says instead. Each answer is reported
+//! [`read_closely_and_act_elsewhere`] says instead. With `fake-browser-hold`, it acts on a tab the test uses as the
+//! person, step by step as the test says ([`act_on_a_held_tab`]). Each answer is reported
 //! (`browser-call: <tool> <ok|error>[ +image]: <first line>`), and each of its lines (`browser-answer: <tool> |
 //! <line>`). Without a site the fake only lists the run's tabs: the step may not have the browser.
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, thread, time::Duration};
 
 use serde_json::{Value, json};
 
 /// A call of a tool of Orchester's server: its whole MCP result, `None` when the server did not answer.
 type Call<'a> = &'a mut dyn FnMut(&str, &Value) -> Option<Value>;
+
+/// How long the fake waits for the test's word, and how often it looks.
+const GO_AHEAD_POLLS: u32 = 2400;
+const GO_AHEAD_POLL: Duration = Duration::from_millis(50);
 
 pub fn exercise(worktree: &Path, call: Call<'_>) {
   let Some(site) = written(worktree, "fake-browser-site") else {
@@ -19,6 +24,10 @@ pub fn exercise(worktree: &Path, call: Call<'_>) {
   };
   if let Some(elsewhere) = written(worktree, "fake-browser-elsewhere") {
     read_closely_and_act_elsewhere(&site, &elsewhere, call);
+    return;
+  }
+  if let Some(script) = written(worktree, "fake-browser-hold") {
+    act_on_a_held_tab(worktree, &site, &script, call);
     return;
   }
   report(call, "browser_tabs", &json!({}));
@@ -101,6 +110,78 @@ fn read_closely_and_act_elsewhere(site: &str, elsewhere: &str, call: Call<'_>) {
   report(call, "browser_click", &json!({"ref": save}));
   report(call, "browser_click", &json!({"ref": save}));
   report(call, "browser_type", &json!({"ref": field, "text": "Bo"}));
+}
+
+/// Acts on a tab the test uses as the person, each step when the test says so (`fake-browser-go-<step>`). `script` is
+/// `every-call`: all the reading tools and then one call of each that waits; or `one-click`: a click, the page's text,
+/// and both again.
+fn act_on_a_held_tab(worktree: &Path, site: &str, script: &str, call: Call<'_>) {
+  report(call, "browser_open", &json!({"url": format!("{site}form")}));
+  if script == "every-call" {
+    every_call(worktree, site, call);
+    return;
+  }
+  let form = report(call, "browser_read_page", &json!({}));
+  let save = element(&form, "button \"Save\"");
+  go_ahead(worktree, 0);
+  report(call, "browser_click", &json!({"ref": save}));
+  report(call, "browser_page_text", &json!({}));
+  go_ahead(worktree, 1);
+  report(call, "browser_click", &json!({"ref": save}));
+  report(call, "browser_page_text", &json!({}));
+}
+
+/// Reads every way there is, then makes one call of each tool that waits, the test holding the tab before each. The
+/// last closes the tab the test names, as a new tab became the current one before it.
+fn every_call(worktree: &Path, site: &str, call: Call<'_>) {
+  go_ahead(worktree, 0);
+  report(call, "browser_tabs", &json!({}));
+  report(call, "browser_read_page", &json!({}));
+  report(call, "browser_page_text", &json!({}));
+  report(call, "browser_screenshot", &json!({}));
+  report(call, "browser_console", &json!({}));
+  report(call, "browser_network", &json!({}));
+  report(call, "browser_wait", &json!({"text": "Guest book", "timeout": 5}));
+  go_ahead(worktree, 1);
+  report(call, "browser_open", &json!({"url": format!("{site}later")}));
+  go_ahead(worktree, 2);
+  report(call, "browser_navigate", &json!({"to": "back"}));
+  let fresh = report(call, "browser_read_page", &json!({}));
+  go_ahead(worktree, 3);
+  let field = element(&fresh, "textbox \"Name\"");
+  report(call, "browser_type", &json!({"ref": field, "text": "Ada"}));
+  go_ahead(worktree, 4);
+  report(
+    call,
+    "browser_click",
+    &json!({"ref": element(&fresh, "button \"Save\"")}),
+  );
+  go_ahead(worktree, 5);
+  report(call, "browser_key", &json!({"keys": ["Tab"]}));
+  go_ahead(worktree, 6);
+  report(call, "browser_scroll", &json!({"direction": "down", "pixels": 300}));
+  go_ahead(worktree, 7);
+  report(call, "browser_eval", &json!({"expression": "document.title"}));
+  go_ahead(worktree, 8);
+  report(
+    call,
+    "browser_open",
+    &json!({"url": format!("{site}other"), "new_tab": true}),
+  );
+  let first_tab = go_ahead(worktree, 9);
+  report(call, "browser_close", &json!({"tab": first_tab}));
+}
+
+/// Waits until the test wrote `fake-browser-go-<step>`; what it wrote.
+fn go_ahead(worktree: &Path, step: u32) -> String {
+  let name = format!("fake-browser-go-{step}");
+  for _ in 0..GO_AHEAD_POLLS {
+    if let Some(word) = written(worktree, &name) {
+      return word;
+    }
+    thread::sleep(GO_AHEAD_POLL);
+  }
+  panic!("the test did not say {name} in time");
 }
 
 /// What the test wrote into `name` beside the worktrees.

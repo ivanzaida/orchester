@@ -85,7 +85,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 67] = [
+pub const ALL: [Scenario; 68] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -93,6 +93,7 @@ pub const ALL: [Scenario; 67] = [
   Scenario::of("browser-window-many", browser_window::many),
   Scenario::of("browser-window-overflow", browser_window::overflow),
   Scenario::of("browser-window-acting", browser_window::acting),
+  Scenario::of("browser-window-waiting", browser_window::waiting),
   Scenario::of("browser-window-dialog", browser_window::dialog),
   Scenario::of("browser-window-select", browser_window::select),
   Scenario::of("browser-window-headed", browser_window::headed),
