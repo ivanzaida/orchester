@@ -72,6 +72,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::AlreadyInitialized(_) => Message::new("errors.alreadyInitialized"),
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),
     StoreError::ProjectOfAnotherAccount(_) => Message::new("errors.anotherAccountsProject"),
+    StoreError::ProjectOfSignedOutAccount(_) => Message::new("errors.accountsProjectSignedOut"),
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
     StoreError::SchemaTooOld { .. } => Message::new("errors.olderSchema"),
     StoreError::UnrepresentablePath(_) => Message::new("errors.unsupportedPath"),

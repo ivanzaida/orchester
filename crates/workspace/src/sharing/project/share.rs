@@ -214,6 +214,7 @@ impl Servers {
       });
     }
     let _in_progress = InProgress::start(self, repo_root);
+    self.keep_with_server(entry, repo_root).await?;
     let root = repo_root.to_owned();
     let (link, uploaded) = background::run(move || upload(&root, remote.as_ref(), key))
       .await

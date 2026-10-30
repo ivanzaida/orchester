@@ -1,12 +1,12 @@
-//! Whose each team server in the list is (the person's decision, 2026-10-16: servers per account, as projects are):
-//! the Orchester Cloud account that was signed in when this computer joined it, by the cloud's account id. Each account
-//! has its own entry for a server, with its own device token in the keychain, so the same address may be listed once
-//! per account. A server added while no account was signed in has no owner, and the next account to sign in takes it
-//! ([`AppDb::claim_unowned_servers`]). Which account's list is shown is the workspace's decision; these are the rows it
-//! reads and writes.
+//! Whose each team server in the list is (the person's decisions, 2026-10-16 and 2026-10-30: servers per account, as
+//! projects are): the Orchester Cloud account that was signed in when this computer joined it, by the cloud's account
+//! id, or nobody's: this computer's, like a project added with no account signed in. Each owner has its own entry for a
+//! server, with its own device token in the keychain, so the same address may be listed once per owner. No sign-in
+//! claims a server of this computer's: it shows beside the account's own. Which list is shown is the workspace's
+//! decision; these are the rows it reads and writes.
 
 use orchester_core::id::{CloudAccountId, ServerId};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use super::{
   AppDb,
@@ -48,15 +48,28 @@ ALTER TABLE servers_per_account RENAME TO servers;
 CREATE UNIQUE INDEX servers_address_per_account ON servers (url, ifnull(owner, ''));
 ";
 
-/// The condition on a `servers` row that it is the signed-in account's, read from the same database.
-const SIGNED_IN_ACCOUNTS: &str = "owner IS (SELECT account_id FROM cloud_account WHERE id = 1)";
+/// The condition on a `servers` row that the signed-in account uses it, read from the same database: this computer's,
+/// or the account's own.
+const SIGNED_IN_ACCOUNTS: &str = "(owner IS NULL OR owner = (SELECT account_id FROM cloud_account WHERE id = 1))";
 
 impl AppDb {
-  /// The servers of `owner`, in the order they were added; `None` lists those no account took yet.
+  /// The servers of `owner`, in the order they were added; `None` lists this computer's.
   pub fn servers_of(&self, owner: Option<&CloudAccountId>) -> Result<Vec<StoredServer>, StoreError> {
     let mut statement = self
       .connection
       .prepare(&format!("{COLUMNS} WHERE owner IS ?1 ORDER BY added_at, id"))?;
+    let rows = statement
+      .query_map([owner.map(ToString::to_string)], ServerRow::read)?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows.into_iter().map(ServerRow::into_server).collect()
+  }
+
+  /// The servers shown while `owner` is signed in (`None`: nobody), in the order they were added: this computer's and
+  /// `owner`'s own.
+  pub fn servers_visible_to(&self, owner: Option<&CloudAccountId>) -> Result<Vec<StoredServer>, StoreError> {
+    let mut statement = self.connection.prepare(&format!(
+      "{COLUMNS} WHERE owner IS NULL OR owner = ?1 ORDER BY added_at, id"
+    ))?;
     let rows = statement
       .query_map([owner.map(ToString::to_string)], ServerRow::read)?
       .collect::<Result<Vec<_>, _>>()?;
@@ -116,28 +129,26 @@ impl AppDb {
     Ok(())
   }
 
-  /// Gives `server` to `owner` while no account has it and `owner` has no entry at its address yet; whether it did.
-  /// Which account an unowned server goes to is the workspace's decision (`sharing::cloud`): the account whose
-  /// projects are linked to it, else the first to sign in.
-  pub fn give_unowned_server(&mut self, server: ServerId, owner: &CloudAccountId) -> Result<bool, StoreError> {
-    let changed = self.connection.execute(
-      "UPDATE servers SET owner = ?2 WHERE id = ?1 AND owner IS NULL AND NOT EXISTS        (SELECT 1 FROM servers AS own WHERE own.owner = ?2 AND own.url = servers.url)",
-      params![server.to_string(), owner.to_string()],
-    )?;
-    Ok(changed == 1)
+  /// Whose `server` is, `None` when it is not in the list.
+  pub fn server_owner(&self, server: ServerId) -> Result<Option<Option<CloudAccountId>>, StoreError> {
+    let owner: Option<Option<String>> = self
+      .connection
+      .query_row(
+        "SELECT owner FROM servers WHERE id = ?1",
+        [server.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    owner
+      .map(|owner| {
+        owner
+          .map(|owner| crate::rows::parse("cloud account id", &owner))
+          .transpose()
+      })
+      .transpose()
   }
 
-  /// Removes `server` while no account has it; whether it did. Its device token in the keychain is the caller's to
-  /// remove.
-  pub fn forget_unowned_server(&mut self, server: ServerId) -> Result<bool, StoreError> {
-    let changed = self.connection.execute(
-      "DELETE FROM servers WHERE id = ?1 AND owner IS NULL",
-      [server.to_string()],
-    )?;
-    Ok(changed == 1)
-  }
-
-  /// Whether `server` is the signed-in Orchester Cloud account's (nobody's while none is signed in).
+  /// Whether `server` is one the signed-in Orchester Cloud account uses: this computer's, or the account's own.
   pub fn is_signed_in_accounts_server(&self, server: ServerId) -> Result<bool, StoreError> {
     Ok(self.connection.query_row(
       &format!("SELECT EXISTS (SELECT 1 FROM servers WHERE id = ?1 AND {SIGNED_IN_ACCOUNTS})"),
@@ -146,9 +157,8 @@ impl AppDb {
     )?)
   }
 
-  /// Forgets who is signed in to `server` from this computer, in one statement with the check that `server` is the
-  /// signed-in Orchester Cloud account's (nobody's while none is signed in); whether it was, and so whether anything
-  /// changed.
+  /// Forgets who is signed in to `server` from this computer, in one statement with the check that it is one the
+  /// signed-in Orchester Cloud account uses; whether it was, and so whether anything changed.
   pub fn sign_out_of_server(&mut self, server: ServerId) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
       &format!(

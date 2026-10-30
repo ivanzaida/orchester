@@ -73,6 +73,10 @@ pub enum SharingError {
   /// by does this; the person connects to it by `own`.
   #[error("the server reported a project address on another server, {own}")]
   ForeignAddress { own: ServerAddress },
+  /// The project is the signed-in account's and the server is this computer's: a project and its server have the same
+  /// owner, so the person moves it to this computer first. Nothing was sent.
+  #[error("the project is in the account, and the server is this computer's")]
+  AccountProject,
 }
 
 impl From<Message> for SharingError {
@@ -114,6 +118,7 @@ impl SharingError {
       Self::ForeignAddress { own } => Message::new("sharing.errors.foreignAddress")
         .with("server", address.as_str().to_owned())
         .with("own", own.as_str().to_owned()),
+      Self::AccountProject => Message::new("sharing.errors.accountProject").with("server", address.host().to_owned()),
       Self::TwoFactorOff => Message::new("sharing.errors.twoFactorOff"),
       Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
       Self::UnprovenServer => Message::new("sharing.errors.unprovenServer"),

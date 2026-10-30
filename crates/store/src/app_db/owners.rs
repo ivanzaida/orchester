@@ -1,7 +1,8 @@
-//! Whose each known project is (the person's decision, 2026-10-16: projects per account): the Orchester Cloud account
-//! that was signed in when it was added, by the cloud's account id. A project added while no account was signed in has
-//! no owner, and the next account to sign in takes it ([`AppDb::claim_unowned_projects`]). Which account's list is
-//! shown is the workspace's decision; these are the rows it reads and writes.
+//! Whose each known project is (the person's decisions, 2026-10-16 and 2026-10-30): the Orchester Cloud account that
+//! was signed in when it was added, by the cloud's account id, or nobody's: this computer's. A project added while no
+//! account was signed in is this computer's, shows to whoever is signed in and is claimed by no sign-in; a person moves
+//! it into the account ([`AppDb::set_project_owner`]). Which list is shown is the workspace's decision; these are the
+//! rows it reads and writes.
 
 use std::path::Path;
 
@@ -18,62 +19,74 @@ use crate::{
   rows::{parse, path_text},
 };
 
-/// The projects known before this change belong to the account signed in then, if one was; the others wait for the
-/// first account to sign in.
+/// The projects known before this change belong to the account signed in then, if one was; the others are this
+/// computer's.
 pub(super) const MIGRATION: &str = r"
 ALTER TABLE projects ADD COLUMN owner TEXT;
 UPDATE projects SET owner = (SELECT account_id FROM cloud_account WHERE id = 1);
 ";
 
-const COLUMNS: &str = "SELECT id, name, repo_root, last_opened_at FROM projects";
+const COLUMNS: &str = "SELECT id, name, repo_root, last_opened_at, owner FROM projects";
 
 impl AppDb {
-  /// The projects of `owner`, most recently opened first; `None` lists those no account took yet.
+  /// The projects `owner` holds, most recently opened first; `None` lists this computer's.
   pub fn projects_of(&self, owner: Option<&CloudAccountId>) -> Result<Vec<RegisteredProject>, StoreError> {
-    let mut statement = self
-      .connection
-      .prepare(&format!("{COLUMNS} WHERE owner IS ?1 ORDER BY last_opened_at DESC"))?;
-    let rows = statement
-      .query_map([owner.map(ToString::to_string)], super::project_row)?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows.into_iter().map(super::registered).collect()
+    self.listed_projects("WHERE owner IS ?1", [owner.map(ToString::to_string)])
+  }
+
+  /// The projects shown while `owner` is signed in (`None`: nobody), most recently opened first: this computer's and
+  /// `owner`'s own.
+  pub fn projects_visible_to(&self, owner: Option<&CloudAccountId>) -> Result<Vec<RegisteredProject>, StoreError> {
+    self.listed_projects(
+      "WHERE owner IS NULL OR owner = ?1",
+      [owner.map(ToString::to_string)],
+    )
+  }
+
+  /// The projects any account holds, most recently opened first: what waits for a sign-in while nobody is signed in.
+  pub fn projects_of_accounts(&self) -> Result<Vec<RegisteredProject>, StoreError> {
+    self.listed_projects("WHERE owner IS NOT NULL", [])
   }
 
   /// Every known project, whoever's it is, most recently opened first: for the work that follows every project on
   /// this computer (an agent account's folders), never to show.
   pub fn every_project(&self) -> Result<Vec<RegisteredProject>, StoreError> {
+    self.listed_projects("", [])
+  }
+
+  fn listed_projects<const N: usize>(
+    &self,
+    condition: &str,
+    arguments: [Option<String>; N],
+  ) -> Result<Vec<RegisteredProject>, StoreError> {
     let mut statement = self
       .connection
-      .prepare(&format!("{COLUMNS} ORDER BY last_opened_at DESC"))?;
+      .prepare(&format!("{COLUMNS} {condition} ORDER BY last_opened_at DESC"))?;
     let rows = statement
-      .query_map([], super::project_row)?
+      .query_map(arguments, super::project_row)?
       .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter().map(super::registered).collect()
   }
 
-  /// Every known project with whose it is (`None`: no account's yet): for deciding whose a server nobody owns is, by
-  /// the projects linked to it, never to show.
-  pub fn owned_projects(&self) -> Result<Vec<(Option<CloudAccountId>, RegisteredProject)>, StoreError> {
-    let mut statement = self
+  /// Whose `project` is, `None` when it is not known.
+  pub fn project_owner(&self, project: ProjectId) -> Result<Option<Option<CloudAccountId>>, StoreError> {
+    let owner: Option<Option<String>> = self
       .connection
-      .prepare("SELECT id, name, repo_root, last_opened_at, owner FROM projects ORDER BY last_opened_at DESC")?;
-    let rows = statement
-      .query_map([], |row| {
-        Ok((super::project_row(row)?, row.get::<_, Option<String>>(4)?))
-      })?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows
-      .into_iter()
-      .map(|(project, owner)| {
-        let owner = owner.map(|owner| parse("cloud account id", &owner)).transpose()?;
-        Ok((owner, super::registered(project)?))
-      })
-      .collect()
+      .query_row(
+        "SELECT owner FROM projects WHERE id = ?1",
+        [project.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    owner
+      .map(|owner| owner.map(|owner| parse("cloud account id", &owner)).transpose())
+      .transpose()
   }
 
-  /// Adds the project for `owner` or, if it is already known, updates its name, location and last use; a project
-  /// no account took yet becomes `owner`'s. A project of another account is refused
-  /// ([`StoreError::ProjectOfAnotherAccount`]) and stays as it was.
+  /// Adds the project for `owner` or, if it is already known, updates its name, location and last use; it keeps whose
+  /// it is, so opening a project of this computer's claims nothing. One an account holds is refused to anyone else, and
+  /// stays as it was: [`StoreError::ProjectOfAnotherAccount`] to another account,
+  /// [`StoreError::ProjectOfSignedOutAccount`] while nobody is signed in.
   pub fn register_project(
     &mut self,
     project: &Project,
@@ -93,12 +106,16 @@ impl AppDb {
     if let Some(Some(known)) = known
       && Some(&known) != owner.as_ref()
     {
-      return Err(StoreError::ProjectOfAnotherAccount(project.id()));
+      return Err(if owner.is_some() {
+        StoreError::ProjectOfAnotherAccount(project.id())
+      } else {
+        StoreError::ProjectOfSignedOutAccount(project.id())
+      });
     }
     transaction.execute(
       "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at, owner) VALUES (?1, ?2, ?3, ?4, ?4, ?5) \
        ON CONFLICT (id) DO UPDATE SET name = excluded.name, repo_root = excluded.repo_root, \
-       last_opened_at = excluded.last_opened_at, owner = COALESCE(projects.owner, excluded.owner)",
+       last_opened_at = excluded.last_opened_at",
       params![
         project.id().to_string(),
         project.name().as_str(),
@@ -111,24 +128,33 @@ impl AppDb {
     Ok(())
   }
 
-  /// Forgets `owner`'s project `project`: it is no longer listed. Only this database changes; the project's folder
+  /// Forgets `project`, which `owner` sees: it is no longer listed. Only this database changes; the project's folder
   /// and its `.orchester` data stay as they are, so opening the folder again brings the project back. Forgetting a
-  /// project that is not known, or not `owner`'s, changes nothing.
+  /// project that is not known, or another account's, changes nothing.
   pub fn forget_project(&mut self, project: ProjectId, owner: Option<&CloudAccountId>) -> Result<(), StoreError> {
     self.connection.execute(
-      "DELETE FROM projects WHERE id = ?1 AND owner IS ?2",
+      "DELETE FROM projects WHERE id = ?1 AND (owner IS NULL OR owner = ?2)",
       params![project.to_string(), owner.map(ToString::to_string)],
     )?;
     Ok(())
   }
 
-  /// Gives `owner` every project no account took yet: those added while none was signed in, and those known before
-  /// projects had owners.
-  pub fn claim_unowned_projects(&mut self, owner: &CloudAccountId) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE projects SET owner = ?1 WHERE owner IS NULL",
-      [owner.to_string()],
+  /// Makes `project` `to`'s (`None`: this computer's) in one statement with the check that `signed_in` sees it; whether
+  /// it was, and so whether anything changed.
+  pub fn set_project_owner(
+    &mut self,
+    project: ProjectId,
+    to: Option<&CloudAccountId>,
+    signed_in: &CloudAccountId,
+  ) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE projects SET owner = ?2 WHERE id = ?1 AND (owner IS NULL OR owner = ?3)",
+      params![
+        project.to_string(),
+        to.map(ToString::to_string),
+        signed_in.to_string()
+      ],
     )?;
-    Ok(())
+    Ok(changed == 1)
   }
 }

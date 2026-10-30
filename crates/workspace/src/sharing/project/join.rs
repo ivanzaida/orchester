@@ -207,6 +207,10 @@ impl Servers {
     let failed = |uploaded: Option<bool>| move |error: SharingError| JoinFailed { uploaded, error };
     // A checkout linked meanwhile, or opened at another project's review, uploads nothing into this one.
     still_local(repo_root).await.map_err(failed(Some(false)))?;
+    self
+      .keep_with_server(entry, repo_root)
+      .await
+      .map_err(failed(Some(false)))?;
     let on_server: HashSet<TaskId> = self
       .with_token(
         entry,
